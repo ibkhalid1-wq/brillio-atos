@@ -33,6 +33,7 @@ export type V3MoreView =
   | "pattern-library"
   | "agent-activity"
   | "artifact-history"
+  | "access"
   | "closure";
 
 export interface V3Nudge {

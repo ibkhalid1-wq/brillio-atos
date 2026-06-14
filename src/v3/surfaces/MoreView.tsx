@@ -99,6 +99,7 @@ const WORKSPACE_GROUPS: Array<{
     label: "Governance & Closure",
     tiles: [
       { view: "decision-audit", label: "Decision Audit", description: "Full decision audit trail and history", icon: "⊟", accent: "amber" },
+      { view: "access", label: "Access & Sharing", description: "Invite collaborators and manage admin / editor / viewer roles", icon: "◐", accent: "blue" },
       { view: "closure", label: "Benefits & Closure", description: "Benefits realisation tracking, lessons learned, and programme closure pack", icon: "◈", accent: "green" },
       // Removed: Digital Twin, Retrospective, Pattern Library, Benchmarks (implementation details / low-frequency)
     ],

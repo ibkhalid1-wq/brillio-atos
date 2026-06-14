@@ -107,6 +107,7 @@ const MORE_ROUTE_MAP: Record<string, V3MoreView> = {
   "agent-activity": "agent-activity",
   "artifact-history": "artifact-history",
   schedules: "schedules",
+  access: "access",
   "closure-workspace": "closure",
 };
 
@@ -128,6 +129,7 @@ const MORE_VIEW_PATHS: Record<V3MoreView, string> = {
   twin: "/twin",
   accelerators: "/accelerators",
   schedules: "/schedules",
+  access: "/access",
   benchmark: "/benchmark",
   "decision-audit": "/decision-audit",
   "pattern-library": "/pattern-library",
@@ -278,6 +280,7 @@ const MORE_VIEW_LABELS: Partial<Record<string, string>> = {
   twin: "Digital Twin",
   accelerators: "Accelerators",
   schedules: "Agent Schedules",
+  access: "Access & Sharing",
   benchmark: "Benchmarks",
   "decision-audit": "Decision Audit",
   "pattern-library": "Pattern Library",
@@ -1077,7 +1080,7 @@ export default function AppShellV3() {
       : "local";
 
   const migrated = useLocalProgramMigration(userId);
-  const { programs, activeProgram, activeProgramId, setActiveProgramId, refreshPrograms, updateProgramData, resolveDecision, isLoading: programsLoading } = usePrograms({
+  const { programs, activeProgram, activeProgramId, setActiveProgramId, refreshPrograms, updateProgramData, resolveDecision, isLoading: programsLoading, activeProgramRole, canEditActiveProgram, isActiveProgramAdmin } = usePrograms({
     enabled: authChecked && migrated,
     userId,
   });
@@ -1268,6 +1271,12 @@ export default function AppShellV3() {
       return;
     }
 
+    // Guard: read-only access — viewers cannot run agents (which mutate the program)
+    if (!canEditActiveProgram) {
+      pushV3Toast("You have read-only access to this program and cannot run agents.", { tone: "warning", duration: 6000 });
+      return;
+    }
+
     // Guard: AI not connected — show actionable message instead of a cryptic error
     if (!aiStatus || aiStatus.status !== "connected") {
       pushV3Toast("AI is not connected. Open AI Settings to add a provider key.", {
@@ -1368,7 +1377,7 @@ export default function AppShellV3() {
     } finally {
       await refreshPrograms();
     }
-  }, [activeProgramId, activeProgram, userId, refreshPrograms, resolveAgentId, runAgent]);
+  }, [activeProgramId, activeProgram, userId, canEditActiveProgram, refreshPrograms, resolveAgentId, runAgent]);
 
   // Single shared run-agent handler for every surface (Cycle 7 dedup). Surfaces
   // may pass an explicit phaseId; otherwise we fall back to the active phase,
@@ -2535,6 +2544,22 @@ export default function AppShellV3() {
 
         {surface === "program" ? (
           <AdamErrorBoundary context={{ surface: "program", programId: activeProgramId, activePhaseId }}>
+            {activeProgram && activeProgramRole === "viewer" ? (
+              <div
+                role="status"
+                style={{
+                  margin: "0 0 12px",
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  background: "var(--v3-surface-2, rgba(255,255,255,0.04))",
+                  border: "1px solid var(--v3-border, rgba(255,255,255,0.12))",
+                  fontSize: 12,
+                  color: "var(--v3-text-secondary)",
+                }}
+              >
+                You have <strong>read-only</strong> access to this program. Editing and running agents are disabled. Ask a program admin for editor access.
+              </div>
+            ) : null}
             {/* Workspace browser — shows when no specific workspace is selected */}
             {!moreView && !reportId ? (
               <MoreView
@@ -2586,6 +2611,7 @@ export default function AppShellV3() {
                       await refreshPatterns();
                     }}
                     onRunAgent={handleRunAgent}
+                    currentUserId={userId}
                   />
                 )}
                 onOpenMoreView={openMoreView}

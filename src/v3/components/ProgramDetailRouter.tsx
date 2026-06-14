@@ -24,6 +24,7 @@ import DocumentList from "@/new/components/DocumentList";
 import MeetingNotesPanel from "@/v3/components/MeetingNotesPanel";
 import type { AppView, Milestone, ProgramSummary } from "@/new/types";
 import SchedulePanel from "@/v3/components/SchedulePanel";
+import ProgramAccessPanel from "@/v3/components/ProgramAccessPanel";
 import TwinGraphView from "@/v3/components/TwinGraphView";
 import { AdamCard, AdamCardBody, AdamCardHeader } from "@/v3/components/ui/AdamCard";
 import { EmptyState } from "@/v3/components/ui/EmptyState";
@@ -203,6 +204,7 @@ interface ProgramDetailRouterProps {
   patternsCount: number;
   onExtractPatterns: () => Promise<void>;
   onRunAgent?: (agentId: string, phaseId?: string) => void;
+  currentUserId?: string | null;
 }
 
 export default function ProgramDetailRouter({
@@ -233,6 +235,7 @@ export default function ProgramDetailRouter({
   onSavePhaseInputs,
   onSaveAllPhaseInputs,
   onRunAgent,
+  currentUserId,
 }: ProgramDetailRouterProps) {
   if (!view && reportId === "narrative") {
     return <NarrativeView program={program} onRefresh={triggers.triggerNarrative} isRunning={narrativeIsRunning} onSaveCorrection={onSaveNarrativeCorrection} onOpenIntelligence={onOpenIntelligence} />;
@@ -326,6 +329,8 @@ export default function ProgramDetailRouter({
       return <AcceleratorsView program={program} onNavigate={onNavigate} patternsCount={patternsCount} onExtractPatterns={onExtractPatterns} />;
     case "schedules":
       return <SchedulePanel programId={programId} program={program} />;
+    case "access":
+      return <ProgramAccessPanel programId={programId} currentUserId={currentUserId ?? null} />;
     case "benchmark":
       return <BenchmarkView program={program} onExtractPatterns={onExtractPatterns} />;
     case "decision-audit":
