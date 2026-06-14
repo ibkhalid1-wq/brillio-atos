@@ -4988,6 +4988,29 @@ Deno.serve(async (req) => {
       }, null, 2);
     }
 
+    // Idempotency / in-flight dedupe: if an equivalent run for this
+    // (program, agent, phase) is already queued or running and was started
+    // recently, return that run instead of launching a duplicate. Excludes the
+    // current runId so queued/triggered runs (which reuse their own id) and
+    // explicit retries of a known run are not stranded.
+    const inFlightCutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const { data: inFlightRuns } = await auth.admin
+      .from("adam_agent_runs")
+      .select("id")
+      .eq("program_id", request.programId)
+      .eq("agent_id", request.agentId)
+      .eq("phase_id", request.phaseId)
+      .in("status", ["queued", "running"])
+      .gt("started_at", inFlightCutoff)
+      .neq("id", runId)
+      .limit(1);
+    if (inFlightRuns && inFlightRuns.length > 0) {
+      return jsonResponse({
+        status: "running",
+        runId: inFlightRuns[0].id as string,
+      } satisfies RunAgentResponse);
+    }
+
     const { error: runUpsertError } = await auth.admin
       .from("adam_agent_runs")
       .upsert({
