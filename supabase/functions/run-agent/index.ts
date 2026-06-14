@@ -351,6 +351,17 @@ function extractAgentJson(raw: string): unknown {
   return safeJsonParse<unknown>(match ? match[0] : raw, {});
 }
 
+/**
+ * True when the model returned a non-empty JSON object. A response that yields no
+ * parseable object (empty {}, prose only, truncated stream) would otherwise let an
+ * agent "complete" with zero artifacts — a silent no-op indistinguishable from
+ * success. Callers use this to trigger a stricter retry, then fail loudly.
+ */
+function hasUsableAgentJson(raw: string): boolean {
+  const parsed = extractAgentJson(raw);
+  return isRecord(parsed) && Object.keys(parsed).length > 0;
+}
+
 function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
   const parsed = typeof value === "number" && Number.isFinite(value)
     ? value
@@ -5217,12 +5228,37 @@ Deno.serve(async (req) => {
       }
     }
 
-    const claudeResult = await streamClaudeText({
+    let claudeResult = await streamClaudeText({
       system: prompt.system,
       messages: [{ role: "user", content: prompt.user }],
       maxTokens: 4096,
       temperature: 0.2,
     });
+
+    // Resilience: if the model returned no parseable JSON object (prose-only,
+    // truncated stream, fenced markdown that broke extraction), retry once with a
+    // stricter instruction at temperature 0. If it still fails, throw so the run is
+    // recorded as failed rather than silently completing with zero artifacts.
+    if (!hasUsableAgentJson(claudeResult.text)) {
+      await logObservation(auth.admin, {
+        runId,
+        programId: request.programId,
+        agentId: request.agentId,
+        phaseId: request.phaseId,
+        observationType: "retry_unparseable",
+        payload: { preview: claudeResult.text.slice(0, 200) },
+      });
+      const retry = await streamClaudeText({
+        system: `${prompt.system}\n\nCRITICAL: Your previous response could not be parsed. Respond with ONLY a single valid JSON object matching the required schema — no markdown code fences, no commentary before or after the JSON.`,
+        messages: [{ role: "user", content: prompt.user }],
+        maxTokens: 4096,
+        temperature: 0,
+      });
+      if (!hasUsableAgentJson(retry.text)) {
+        throw new Error("AI returned no parseable output after a retry — the run produced no usable result.");
+      }
+      claudeResult = retry;
+    }
 
     await logObservation(auth.admin, {
       runId,
