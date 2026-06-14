@@ -7068,11 +7068,14 @@ button.v3-chip:disabled {
   font-family: var(--v3-font);
   outline: none;
   box-sizing: border-box;
-  transition: border-color 0.15s;
+  transition: border-color 0.12s, box-shadow 0.12s;
 }
 
+/* Premium focus ring promoted from AutoSaveField so every form field
+   across the platform shares one focus affordance (border + soft glow). */
 .v3-input:focus {
   border-color: var(--v3-accent);
+  box-shadow: 0 0 0 2px var(--v3-accent-soft);
 }
 
 .v3-textarea {

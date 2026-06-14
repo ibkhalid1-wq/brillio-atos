@@ -73,20 +73,8 @@ export function AutoSaveField({ value, onSave, placeholder, label, rows = 4, max
         rows={rows}
         maxLength={maxLength}
         disabled={disabled}
-        style={{
-          width: "100%", background: "var(--v3-surface)", border: "1px solid var(--v3-border)",
-          borderRadius: "var(--v3-radius)", padding: "8px 10px", fontFamily: "var(--v3-font)", fontSize: 14,
-          color: "var(--v3-text-primary)", lineHeight: 1.6, resize: "vertical", outline: "none",
-          transition: "border-color 0.12s, box-shadow 0.12s",
-        }}
-        onFocus={(e) => {
-          e.target.style.borderColor = "var(--v3-accent)";
-          e.target.style.boxShadow = "0 0 0 2px var(--v3-accent-soft)";
-        }}
-        onBlurCapture={(e) => {
-          e.target.style.borderColor = "var(--v3-border)";
-          e.target.style.boxShadow = "none";
-        }}
+        className="v3-input v3-textarea"
+        style={{ fontSize: 14 }}
       />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 16 }}>
         <span style={{ fontSize: 11, color: saveState === "saved" ? "var(--v3-green)" : saveState === "error" ? "var(--v3-red)" : saveState === "saving" ? "var(--v3-amber)" : "var(--v3-text-muted)" }}>
