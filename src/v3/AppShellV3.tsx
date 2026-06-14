@@ -27,9 +27,11 @@ import { CopilotPanel } from "@/new/components/shell/CopilotPanel";
 import type { AppView, DecisionSummary, Milestone, Persona, ProgramSummary } from "@/new/types";
 import type { PhaseAgentTask } from "@/lib/adamPhaseAgentTypes";
 import { buildCrossPhaseContext } from "@/lib/adamOrchestrator";
-import InsightFeedView from "@/v3/surfaces/InsightFeedView";
-import ExecutiveView from "@/v3/surfaces/ExecutiveView";
-import ProgrammeHealthView from "@/v3/surfaces/ProgrammeHealthView";
+// Surfaces are code-split: only one renders at a time, so lazy-loading keeps
+// them out of the initial shell chunk (see Suspense boundary around the layout).
+const InsightFeedView = React.lazy(() => import("@/v3/surfaces/InsightFeedView"));
+const ExecutiveView = React.lazy(() => import("@/v3/surfaces/ExecutiveView"));
+const ProgrammeHealthView = React.lazy(() => import("@/v3/surfaces/ProgrammeHealthView"));
 import CoPilotSidebar from "@/v3/components/CoPilotSidebar";
 import AgentTraceDrawer from "@/v3/components/AgentTraceDrawer";
 import { AIStatusBanner } from "@/v3/components/AIStatusBanner";
@@ -57,14 +59,14 @@ import { useProgramValidation } from "@/v3/hooks/useProgramValidation";
 import { getPhaseSequence } from "@/v3/lib/methodology";
 import { computePhaseReadiness, getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
 import { computeConfidenceScore, computeRiskPosture, getGateThreshold } from "@/v3/lib/confidenceScore";
-import DecideView from "@/v3/surfaces/DecideView";
+const DecideView = React.lazy(() => import("@/v3/surfaces/DecideView"));
 import GateReopenModal from "@/v3/components/GateReopenModal";
 import RemediationNoteModal from "@/v3/components/RemediationNoteModal";
-import MoreView from "@/v3/surfaces/MoreView";
-import PipelineView from "@/v3/surfaces/PipelineView";
-import PortfolioView from "@/v3/surfaces/PortfolioView";
-import ProgramView from "@/v3/surfaces/ProgramView";
-import StageView from "@/v3/surfaces/StageView";
+const MoreView = React.lazy(() => import("@/v3/surfaces/MoreView"));
+const PipelineView = React.lazy(() => import("@/v3/surfaces/PipelineView"));
+const PortfolioView = React.lazy(() => import("@/v3/surfaces/PortfolioView"));
+const ProgramView = React.lazy(() => import("@/v3/surfaces/ProgramView"));
+const StageView = React.lazy(() => import("@/v3/surfaces/StageView"));
 import type { AgentActivityItem } from "@/v3/components/AgentActivityFeed";
 import type { V3CommandMode, V3Mode, V3MoreView, V3ReportId, V3Surface } from "@/v3/types";
 import { isDecisionOpen, phaseNameById, pushV3Toast } from "@/v3/utils";
@@ -2468,6 +2470,7 @@ export default function AppShellV3() {
       )}
       <AgentSweepBar active={anyAgentRunning} />
       <div key={`${surface}:${moreView || "base"}:${reportId || "none"}`} className="v3-scroll v3-surface-enter">
+        <React.Suspense fallback={<div style={{ padding: 24 }}><SkeletonShimmer /></div>}>
         {surface === "stage" ? (
           <AdamErrorBoundary context={{ surface: "stage", programId: activeProgramId, activePhaseId }}>
             {isProgramEmpty ? (
@@ -2705,6 +2708,7 @@ export default function AppShellV3() {
             />
           </AdamErrorBoundary>
         ) : null}
+        </React.Suspense>
 
 
       </div>
