@@ -15,7 +15,7 @@
 -- ---------------------------------------------------------------------------
 create table if not exists adam_program_members (
   id uuid primary key default gen_random_uuid(),
-  program_id uuid not null references adam_programs(id) on delete cascade,
+  program_id text not null references adam_programs(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
   role text not null default 'viewer' check (role in ('admin', 'editor', 'viewer')),
   invited_by uuid references auth.users(id),
@@ -35,8 +35,11 @@ alter table adam_program_members enable row level security;
 -- These bypass RLS on adam_program_members / adam_programs so they can be used
 -- inside the policies of those very tables without infinite recursion. The
 -- program owner always resolves to 'admin' even if a membership row is missing.
+--
+-- adam_programs.id and every program-scoped table's program_id column are text,
+-- so all helpers are keyed on text. There are no uuid overloads.
 -- ---------------------------------------------------------------------------
-create or replace function adam_program_role(p_program uuid)
+create or replace function adam_program_role(p_program text)
 returns text
 language sql
 stable
@@ -59,52 +62,6 @@ as $$
       limit 1
     )
   );
-$$;
-
-create or replace function adam_can_read_program(p_program uuid)
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select adam_program_role(p_program) is not null;
-$$;
-
-create or replace function adam_can_write_program(p_program uuid)
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select adam_program_role(p_program) in ('admin', 'editor');
-$$;
-
-create or replace function adam_is_program_admin(p_program uuid)
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select adam_program_role(p_program) = 'admin';
-$$;
-
--- Text overloads for tables whose program_id column is text rather than uuid.
--- They safely no-op (return null/false) for values that are not valid uuids.
-create or replace function adam_program_role(p_program text)
-returns text
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select case
-    when p_program ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
-      then adam_program_role(p_program::uuid)
-    else null
-  end;
 $$;
 
 create or replace function adam_can_read_program(p_program text)
