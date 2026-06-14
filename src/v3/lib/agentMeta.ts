@@ -1,0 +1,58 @@
+export interface AgentMeta {
+  id: string;
+  label: string;
+  description: string;
+  estimatedSeconds: number;
+  category: "narrative" | "analysis" | "gate" | "compliance" | "twin" | "onboarding" | "quality" | "governance" | "briefing" | "strategy";
+  icon: string;
+  outputArtifact?: string;
+  confidence?: number;    // 0-100 score for how confident the agent's output typically is
+  reasoning?: string;     // Short explanation of how this agent reaches conclusions
+}
+
+export const AGENT_META: Record<string, AgentMeta> = {
+  "narrative": { id: "narrative", label: "Narrative", description: "Generates phase narrative summary", estimatedSeconds: 20, category: "narrative", icon: "✦", outputArtifact: "Phase Narrative" },
+  "plan": { id: "plan", label: "Plan", description: "Builds structured delivery plan", estimatedSeconds: 25, category: "narrative", icon: "◎", outputArtifact: "Delivery Plan" },
+  "risk": { id: "risk", label: "Risk", description: "Analyses and ranks programme risks", estimatedSeconds: 22, category: "analysis", icon: "⚑", outputArtifact: "Risk Register" },
+  "milestone": { id: "milestone", label: "Milestones", description: "Reviews milestone health and forecasts", estimatedSeconds: 18, category: "analysis", icon: "◆", outputArtifact: "Milestone Review" },
+  "budget": { id: "budget", label: "Budget", description: "Tracks budget variance and burn", estimatedSeconds: 20, category: "analysis", icon: "◈", outputArtifact: "Budget Report" },
+  "gate-review": { id: "gate-review", label: "Gate Review", description: "Produces phase gate pack and readiness assessment", estimatedSeconds: 35, category: "gate", icon: "⬡", outputArtifact: "Gate Pack" },
+  "gate-readiness-coach": { id: "gate-readiness-coach", label: "Gate Coach", description: "Identifies blocking actions before gate", estimatedSeconds: 28, category: "gate", icon: "⬡", outputArtifact: "Readiness Actions" },
+  "critical-path": { id: "critical-path", label: "Critical Path", description: "Maps critical path and slack", estimatedSeconds: 30, category: "analysis", icon: "⟶", outputArtifact: "Critical Path" },
+  "change-impact": { id: "change-impact", label: "Change Impact", description: "Assesses organisational change impact", estimatedSeconds: 28, category: "analysis", icon: "◫", outputArtifact: "Change Impact" },
+  "stakeholder": { id: "stakeholder", label: "Stakeholders", description: "Stakeholder engagement analysis", estimatedSeconds: 22, category: "analysis", icon: "⊕", outputArtifact: "Stakeholder Map" },
+  "health-heatmap": { id: "health-heatmap", label: "Health", description: "Programme health heatmap across phases", estimatedSeconds: 18, category: "analysis", icon: "◫", outputArtifact: "Health Heatmap" },
+  "pattern-extract": { id: "pattern-extract", label: "Pattern Extract", description: "Extracts reusable patterns to library", estimatedSeconds: 20, category: "quality", icon: "✧", outputArtifact: "Pattern Entry" },
+  "twin-sync": { id: "twin-sync", label: "Twin Sync", description: "Synchronises digital twin graph", estimatedSeconds: 15, category: "twin", icon: "⟳", outputArtifact: "Twin Graph" },
+  "compliance-checker": { id: "compliance-checker", label: "Compliance", description: "Checks regulatory compliance posture", estimatedSeconds: 30, category: "compliance", icon: "⊞", outputArtifact: "Compliance Report" },
+  "capacity-assessor": { id: "capacity-assessor", label: "Capacity", description: "Team capacity and demand assessment", estimatedSeconds: 25, category: "analysis", icon: "▤", outputArtifact: "Capacity Plan" },
+  "kpi-validator": { id: "kpi-validator", label: "KPI Validator", description: "Validates KPI definitions and tracking", estimatedSeconds: 22, category: "quality", icon: "◆", outputArtifact: "KPI Report" },
+  "lessons-synthesiser": { id: "lessons-synthesiser", label: "Lessons", description: "Synthesises lessons across phases", estimatedSeconds: 25, category: "narrative", icon: "✦", outputArtifact: "Lessons Report" },
+  "vendor-risk-assessor": { id: "vendor-risk-assessor", label: "Vendor Risk", description: "Assesses vendor and partner risk", estimatedSeconds: 28, category: "analysis", icon: "⚑", outputArtifact: "Vendor Risk Report" },
+  "phase-completion-estimator": { id: "phase-completion-estimator", label: "Completion Estimator", description: "Forecasts phase completion date", estimatedSeconds: 20, category: "analysis", icon: "◷", outputArtifact: "Completion Forecast" },
+  "agent-schedule-optimiser": { id: "agent-schedule-optimiser", label: "Schedule Optimiser", description: "Optimises agent trigger schedule", estimatedSeconds: 15, category: "analysis", icon: "⟳" },
+  "setup-prefill": { id: "setup-prefill", label: "Setup Pre-fill", description: "Pre-fills setup wizard from context", estimatedSeconds: 12, category: "onboarding", icon: "✧" },
+  "discovery-guide-generator": { id: "discovery-guide-generator", label: "Discovery Guide", description: "Generates interview and workshop guides", estimatedSeconds: 25, category: "narrative", icon: "✦", outputArtifact: "Discovery Pack" },
+  "sprint-planner": { id: "sprint-planner", label: "Sprint Planner", description: "Breaks phase into sprint plan", estimatedSeconds: 22, category: "narrative", icon: "◎", outputArtifact: "Sprint Plan" },
+  "stakeholder-comms-drafter": { id: "stakeholder-comms-drafter", label: "Comms Drafter", description: "Drafts stakeholder communications", estimatedSeconds: 20, category: "narrative", icon: "⊕", outputArtifact: "Comms Pack" },
+  "onboarding-briefer": { id: "onboarding-briefer", label: "Team Briefer", description: "Generates onboarding brief for new members", estimatedSeconds: 18, category: "onboarding", icon: "✦", outputArtifact: "Team Brief" },
+  "steerco-agenda-builder": { id: "steerco-agenda-builder", label: "SteerCo Agenda", description: "Builds SteerCo meeting agenda", estimatedSeconds: 20, category: "governance", icon: "⬡", outputArtifact: "SteerCo Agenda" },
+  "daily-briefing": { id: "daily-briefing", label: "Daily Briefing", description: "Generates your personalised 3 priorities for today", estimatedSeconds: 15, category: "briefing", icon: "☀", outputArtifact: "Daily Brief", confidence: 85, reasoning: "Analyses open decisions, overdue milestones, gate proximity, and risk changes since last briefing" },
+  "steerco-prep": { id: "steerco-prep", label: "SteerCo Prep", description: "Builds full SteerCo pack: agenda, status, risks, decisions", estimatedSeconds: 40, category: "governance", icon: "⬡", outputArtifact: "SteerCo Pack", confidence: 82, reasoning: "Synthesises programme narrative, open risks, pending decisions, and gate status into a structured meeting pack" },
+  "benefits-tracker": { id: "benefits-tracker", label: "Benefits Tracker", description: "Tracks benefits realisation against baseline from Strategy", estimatedSeconds: 22, category: "strategy", icon: "◆", outputArtifact: "Benefits Report", confidence: 78, reasoning: "Compares current KPI measurements against the value hypothesis established in the Strategy phase" },
+  "lite-gate-coach": { id: "lite-gate-coach", label: "Lite Gate Check", description: "5-question AI readiness check — lightweight gate alternative", estimatedSeconds: 10, category: "gate", icon: "✓", outputArtifact: "Lite Gate Result", confidence: 80, reasoning: "Evaluates five critical readiness signals: team capacity, artifact completeness, open blockers, stakeholder sign-off, and risk posture" },
+  "co-pilot": { id: "co-pilot", label: "Programme Co-pilot", description: "Continuously monitors your work and surfaces improvement suggestions", estimatedSeconds: 8, category: "quality", icon: "✦", confidence: 75, reasoning: "Watches for weak inputs, missing artifacts, unanswered questions, and approaching gates in real time" },
+  "portfolio-intelligence": { id: "portfolio-intelligence", label: "Portfolio Intelligence", description: "Cross-programme analysis: risk patterns, resource contention, gate forecasts", estimatedSeconds: 35, category: "analysis", icon: "◈", outputArtifact: "Portfolio Report", confidence: 72, reasoning: "Analyses all programmes in the portfolio to identify shared risks, delivery patterns, and resource conflicts" },
+  "executive-brief": { id: "executive-brief", label: "Executive Brief", description: "One-page executive summary: confidence, risks, decisions, forecast", estimatedSeconds: 18, category: "briefing", icon: "◇", outputArtifact: "Executive Brief", confidence: 88, reasoning: "Synthesises confidence score, top 3 risks, pending sponsor decisions, and programme forecast into a one-page brief" },
+};
+
+export function getAgentMeta(agentId: string): AgentMeta {
+  return AGENT_META[agentId] ?? {
+    id: agentId, label: agentId, description: "Agent run",
+    estimatedSeconds: 20, category: "narrative", icon: "◌",
+  };
+}
+
+export function getAgentsByCategory(category: AgentMeta["category"]): AgentMeta[] {
+  return Object.values(AGENT_META).filter((m) => m.category === category);
+}

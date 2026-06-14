@@ -1,0 +1,5845 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
+import {
+  streamClaudeText,
+} from "../_shared/claudeClient.ts";
+import { logger } from "../_shared/logger.ts";
+import type {
+  AgentHandoff,
+  AgentObservationRecord,
+  JsonValue,
+  RunAgentRequest,
+  RunAgentResponse,
+} from "../_shared/types.ts";
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+const JSON_HEADERS = { ...CORS_HEADERS, "Content-Type": "application/json" };
+const ATOS_PHASE_SEQUENCE = [
+  "strategy",
+  "mobilise",
+  "discover",
+  "design",
+  "build",
+  "operate",
+  "govern",
+  "optimize",
+  "valuerealize",
+];
+const VALID_AGENT_IDS = new Set([
+  ...ATOS_PHASE_SEQUENCE,
+  "agent_arch",
+  "delivery",
+  "adoption",
+  "titan",
+  "narrative",
+  "plan",
+  "risk",
+  "milestone",
+  "budget",
+  "critical-path",
+  "change-impact",
+  "stakeholder",
+  "health-heatmap",
+  "retro",
+  "deck",
+  "scope-pcr",
+  "gate-review",
+  "escalation",
+  "closure",
+  "pattern-extract",
+  "pattern-query",
+  "input-quality",
+  "artifact-reviewer",
+  "exit-criteria-generator",
+  "decision-advisor",
+  "contradiction-detector",
+  "dependency-check",
+  "benefits-tracker",
+  "handoff-quality",
+  "scope-creep-monitor",
+  "benchmark-comparator",
+  "meeting-notes",
+  "weekly-digest",
+  "twin-sync",
+  "phase-completion-estimator",
+  "gate-readiness-coach",
+  "agent-schedule-optimiser",
+  "setup-prefill",
+  "discovery-guide-generator",
+  "sprint-planner",
+  "stakeholder-comms-drafter",
+  "onboarding-briefer",
+  "steerco-agenda-builder",
+  "kpi-validator",
+  "compliance-checker",
+  "capacity-assessor",
+  "lessons-synthesiser",
+  "vendor-risk-assessor",
+  "daily-briefing",
+  "phase-readiness-monitor",
+  "workstream-health-scorer",
+  "budget-anomaly-detector",
+  "stakeholder-risk-assessor",
+  "benefit-forecast",
+  "artifact-staleness-check",
+  "meeting-notes-extractor",
+  "deck-section",
+  "narrative-refine",
+  "board-pack",
+]);
+
+const AGENT_DOWNSTREAM: Record<string, Array<{ agentId: string; phaseId: string }>> = {
+  "input-quality": [
+    { agentId: "exit-criteria-generator", phaseId: "{{phaseId}}" },
+    { agentId: "phase-readiness-monitor", phaseId: "{{phaseId}}" },
+    { agentId: "workstream-health-scorer", phaseId: "{{phaseId}}" },
+    { agentId: "artifact-staleness-check", phaseId: "program" },
+  ],
+  narrative: [
+    { agentId: "contradiction-detector", phaseId: "{{phaseId}}" },
+    { agentId: "twin-sync", phaseId: "program" },
+  ],
+  plan: [
+    { agentId: "health-heatmap", phaseId: "program" },
+    { agentId: "contradiction-detector", phaseId: "{{phaseId}}" },
+    { agentId: "scope-creep-monitor", phaseId: "{{phaseId}}" },
+  ],
+  risk: [
+    { agentId: "change-impact", phaseId: "program" },
+    { agentId: "scope-pcr", phaseId: "program" },
+    { agentId: "health-heatmap", phaseId: "program" },
+    { agentId: "contradiction-detector", phaseId: "{{phaseId}}" },
+  ],
+  milestone: [
+    { agentId: "adoption", phaseId: "program" },
+    { agentId: "health-heatmap", phaseId: "program" },
+    { agentId: "benefits-tracker", phaseId: "program" },
+    { agentId: "scope-creep-monitor", phaseId: "{{phaseId}}" },
+  ],
+  "gate-review": [
+    { agentId: "health-heatmap", phaseId: "program" },
+    { agentId: "dependency-check", phaseId: "{{phaseId}}" },
+  ],
+  escalation: [{ agentId: "health-heatmap", phaseId: "program" }],
+  closure: [
+    { agentId: "deck", phaseId: "program" },
+    { agentId: "pattern-extract", phaseId: "program" },
+    { agentId: "benefits-tracker", phaseId: "program" },
+  ],
+  handoff: [{ agentId: "handoff-quality", phaseId: "{{phaseId}}" }],
+  "pattern-extract": [{ agentId: "benchmark-comparator", phaseId: "{{phaseId}}" }],
+  "scope-pcr": [],
+  "stakeholder": [{ agentId: "stakeholder-risk-assessor", phaseId: "program" }],
+  "budget": [{ agentId: "budget-anomaly-detector", phaseId: "program" }],
+  "benefits-tracker": [{ agentId: "benefit-forecast", phaseId: "program" }],
+  "deck": [{ agentId: "board-pack", phaseId: "program" }],
+};
+
+type SupabaseClient = ReturnType<typeof createClient>;
+type ProgramState = Record<string, JsonValue>;
+
+interface AuthContext {
+  admin: SupabaseClient;
+  ownerId: string | null;
+  isService: boolean;
+}
+
+interface ParsedAgentPayload {
+  summary: string;
+  reasoningTrace: string[];
+  confidence: number;
+  artifacts: Array<{
+    id: string;
+    title: string;
+    content: string;
+    summary?: string;
+  }>;
+  decisions: Array<{
+    title: string;
+    question: string;
+    priority?: string;
+    options?: string[];
+  }>;
+  handoff: (AgentHandoff & { toPhaseId?: string }) | null;
+}
+
+interface PauseMarkerResult {
+  hasPause: boolean;
+  reason?: string;
+  question?: string;
+  options?: string[];
+  contentBeforePause?: string;
+}
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: JSON_HEADERS,
+  });
+}
+
+function getAdminClient(): SupabaseClient {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error("Supabase environment is not configured.");
+  }
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+}
+
+async function authenticateRequest(req: Request): Promise<AuthContext> {
+  const authHeader = req.headers.get("Authorization") || "";
+  if (!authHeader.startsWith("Bearer ")) {
+    throw new Error("Missing Bearer token.");
+  }
+  const token = authHeader.slice("Bearer ".length).trim();
+  const admin = getAdminClient();
+  if (token === SUPABASE_SERVICE_ROLE_KEY) {
+    return { admin, ownerId: null, isService: true };
+  }
+  const { data, error } = await admin.auth.getUser(token);
+  if (error || !data?.user) {
+    throw new Error(error?.message || "Authentication failed.");
+  }
+  return { admin, ownerId: data.user.id, isService: false };
+}
+
+async function logObservation(
+  admin: SupabaseClient,
+  observation: AgentObservationRecord,
+): Promise<void> {
+  const { error } = await admin
+    .from("adam_agent_observations")
+    .insert({
+      run_id: observation.runId,
+      program_id: observation.programId,
+      agent_id: observation.agentId,
+      phase_id: observation.phaseId,
+      observation_type: observation.observationType,
+      payload: observation.payload ?? null,
+      tokens: observation.tokens ?? null,
+      latency_ms: observation.latencyMs ?? null,
+    });
+  if (error) {
+    logger.warn("agent_observation_log_failed", {
+      runId: observation.runId,
+      programId: observation.programId,
+      agentId: observation.agentId,
+      phaseId: observation.phaseId,
+      errorMessage: error.message,
+    });
+  }
+}
+
+async function broadcastStatus(
+  admin: SupabaseClient,
+  payload: {
+    runId: string;
+    programId: string;
+    agentId: string;
+    phaseId: string;
+    status: string;
+    confidence?: number | null;
+    latestObservationType?: string;
+  },
+): Promise<void> {
+  try {
+    await admin.channel(`program-${payload.programId}-agents`).send({
+      type: "broadcast",
+      event: "agent_status",
+      payload: {
+        runId: payload.runId,
+        agentId: payload.agentId,
+        phaseId: payload.phaseId,
+        status: payload.status,
+        confidence: payload.confidence ?? null,
+        latestObservationType: payload.latestObservationType ?? null,
+        updatedAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    logger.warn("agent_status_broadcast_failed", {
+      runId: payload.runId,
+      programId: payload.programId,
+      agentId: payload.agentId,
+      phaseId: payload.phaseId,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+function safeJsonParse<T>(value: string, fallback: T): T {
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function stringifyJson(value: unknown): string {
+  try {
+    return JSON.stringify(value) ?? "null";
+  } catch {
+    return "{}";
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function formatPhaseName(phaseId: string): string {
+  return phaseId
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function extractStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => {
+      if (typeof entry === "string") return entry.trim();
+      if (isRecord(entry) && typeof entry.criterion === "string") return entry.criterion.trim();
+      return "";
+    })
+    .filter(Boolean);
+}
+
+function normalizeProgramData(raw: JsonValue | null): ProgramState {
+  return (raw && typeof raw === "object" && !Array.isArray(raw)) ? { ...(raw as ProgramState) } : {};
+}
+
+function getInnerProgramData(programData: ProgramState): ProgramState {
+  const nested = normalizeProgramData(programData.data as JsonValue | null);
+  return Object.keys(nested).length ? nested : programData;
+}
+
+function updateInnerProgramData(
+  programData: ProgramState,
+  updater: (inner: ProgramState) => ProgramState,
+): ProgramState {
+  const nested = normalizeProgramData(programData.data as JsonValue | null);
+  if (Object.keys(nested).length) {
+    return {
+      ...programData,
+      data: updater(nested) as JsonValue,
+    };
+  }
+  return updater(programData);
+}
+
+function coerceNumber(value: unknown, fallback = 0): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const cleaned = value.replace(/[^0-9.-]/g, "");
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  return fallback;
+}
+
+function extractAgentJson(raw: string): unknown {
+  const match = raw.match(/\{[\s\S]*\}/);
+  return safeJsonParse<unknown>(match ? match[0] : raw, {});
+}
+
+function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
+  const parsed = typeof value === "number" && Number.isFinite(value)
+    ? value
+    : typeof value === "string"
+      ? Number(value)
+      : fallback;
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, parsed));
+}
+
+function truncateText(value: unknown, maxLength: number): string {
+  if (typeof value !== "string") return "";
+  const compact = value.replace(/\s+/g, " ").trim();
+  if (!compact) return "";
+  return compact.length > maxLength ? `${compact.slice(0, Math.max(0, maxLength - 3))}...` : compact;
+}
+
+function uniqueStrings(value: unknown, maxItems = 10): string[] {
+  if (!Array.isArray(value)) return [];
+  return Array.from(new Set(
+    value
+      .map((entry) => typeof entry === "string" ? entry.trim() : "")
+      .filter(Boolean),
+  )).slice(0, maxItems);
+}
+
+function isProgramLevelAdoptionAgent(agentId: string, phaseId: string): boolean {
+  return agentId === "adoption" && phaseId === "program";
+}
+
+function isSpecialProgramAgent(agentId: string, phaseId: string): boolean {
+  return agentId === "narrative"
+    || agentId === "plan"
+    || agentId === "risk"
+    || agentId === "milestone"
+    || agentId === "budget"
+    || agentId === "critical-path"
+    || agentId === "change-impact"
+    || agentId === "stakeholder"
+    || agentId === "health-heatmap"
+    || agentId === "retro"
+    || agentId === "deck"
+    || agentId === "scope-pcr"
+    || agentId === "gate-review"
+    || agentId === "escalation"
+    || agentId === "closure"
+    || agentId === "pattern-extract"
+    || agentId === "input-quality"
+    || agentId === "artifact-reviewer"
+    || agentId === "exit-criteria-generator"
+    || agentId === "decision-advisor"
+    || agentId === "contradiction-detector"
+    || agentId === "dependency-check"
+    || agentId === "benefits-tracker"
+    || agentId === "handoff-quality"
+    || agentId === "scope-creep-monitor"
+    || agentId === "benchmark-comparator"
+    || agentId === "meeting-notes"
+    || agentId === "weekly-digest"
+    || agentId === "phase-completion-estimator"
+    || agentId === "gate-readiness-coach"
+    || agentId === "agent-schedule-optimiser"
+    || agentId === "setup-prefill"
+    || agentId === "discovery-guide-generator"
+    || agentId === "sprint-planner"
+    || agentId === "stakeholder-comms-drafter"
+    || agentId === "onboarding-briefer"
+    || agentId === "steerco-agenda-builder"
+    || agentId === "kpi-validator"
+    || agentId === "compliance-checker"
+    || agentId === "capacity-assessor"
+    || agentId === "lessons-synthesiser"
+    || agentId === "vendor-risk-assessor"
+    || agentId === "phase-readiness-monitor"
+    || agentId === "workstream-health-scorer"
+    || agentId === "budget-anomaly-detector"
+    || agentId === "stakeholder-risk-assessor"
+    || agentId === "benefit-forecast"
+    || agentId === "artifact-staleness-check"
+    || agentId === "meeting-notes-extractor"
+    || agentId === "deck-section"
+    || agentId === "narrative-refine"
+    || agentId === "board-pack"
+    || isProgramLevelAdoptionAgent(agentId, phaseId);
+}
+
+function getProgramPhaseContext(programData: ProgramState): Array<Record<string, unknown>> {
+  const inner = getInnerProgramData(programData);
+  const explicitPhases = Array.isArray(inner.phases) ? inner.phases : [];
+  const phaseGuidance = normalizeProgramData(inner.phaseGuidance as JsonValue | null);
+  if (explicitPhases.length) {
+    return explicitPhases.map((entry, index) => {
+      const record = isRecord(entry) ? entry : {};
+      const id = typeof record.id === "string" ? record.id : ATOS_PHASE_SEQUENCE[index] || `phase-${index + 1}`;
+      const guidance = normalizeProgramData(phaseGuidance[id] as JsonValue | null);
+      return {
+        id,
+        name: typeof record.name === "string"
+          ? record.name
+          : typeof record.displayName === "string"
+            ? record.displayName
+            : typeof record.label === "string"
+              ? record.label
+              : formatPhaseName(id),
+        pct: coerceNumber(record.pct, 0),
+        objective: typeof record.objective === "string" ? record.objective : "",
+        status: typeof record.status === "string" ? record.status : "",
+        exitCriteria: extractStringList(record.exitCriteria ?? guidance.exitCriteria),
+        lastUpdatedAt: typeof record.lastUpdatedAt === "string"
+          ? record.lastUpdatedAt
+          : typeof record.updatedAt === "string"
+            ? record.updatedAt
+            : typeof guidance.lastUpdatedAt === "string"
+              ? guidance.lastUpdatedAt
+              : "",
+      };
+    });
+  }
+
+  const phaseIds = Array.from(new Set([...ATOS_PHASE_SEQUENCE, ...Object.keys(phaseGuidance)]));
+  return phaseIds.map((phaseId) => {
+    const guidance = normalizeProgramData(phaseGuidance[phaseId] as JsonValue | null);
+    return {
+      id: phaseId,
+      name: typeof guidance.name === "string" ? guidance.name : formatPhaseName(phaseId),
+      pct: coerceNumber(guidance.readiness, 0),
+      objective: typeof guidance.objective === "string" ? guidance.objective : "",
+      status: typeof guidance.status === "string" ? guidance.status : "",
+      exitCriteria: extractStringList(guidance.exitCriteria),
+      lastUpdatedAt: typeof guidance.lastUpdatedAt === "string" ? guidance.lastUpdatedAt : "",
+    };
+  });
+}
+
+function getProgramArtifactContext(programData: ProgramState): Array<Record<string, unknown>> {
+  const inner = getInnerProgramData(programData);
+  const phaseArtifacts = normalizeProgramData(inner.phaseArtifacts as JsonValue | null);
+  const artifacts: Array<Record<string, unknown>> = [];
+
+  Object.entries(phaseArtifacts).forEach(([phaseId, bucket]) => {
+    const artifactBucket = normalizeProgramData(bucket as JsonValue | null);
+    Object.entries(artifactBucket).forEach(([artifactId, artifactValue]) => {
+      const artifact = normalizeProgramData(artifactValue as JsonValue | null);
+      artifacts.push({
+        id: artifactId,
+        phaseId,
+        title: typeof artifact.title === "string" ? artifact.title : artifactId,
+        status: typeof artifact.status === "string" ? artifact.status : "draft",
+      });
+    });
+  });
+
+  return artifacts;
+}
+
+function getProgramRiskContext(programData: ProgramState): Array<Record<string, unknown>> {
+  const inner = getInnerProgramData(programData);
+  if (Array.isArray(inner.risks)) {
+    return inner.risks.filter(isRecord).slice(0, 10);
+  }
+  const raidLog = normalizeProgramData(inner.raidLog as JsonValue | null);
+  const raidEntries = Array.isArray(raidLog.entries) ? raidLog.entries : [];
+  if (raidEntries.length) {
+    return raidEntries
+      .filter(isRecord)
+      .filter((entry) => entry.status !== "closed")
+      .slice(0, 10);
+  }
+  const raidRisks = Array.isArray(raidLog.risks) ? raidLog.risks : [];
+  return raidRisks.filter(isRecord).slice(0, 10);
+}
+
+async function queryPatternContext(
+  admin: SupabaseClient,
+  params: {
+    industry?: string | null;
+    phaseId?: string | null;
+    limit?: number;
+  },
+): Promise<Array<Record<string, unknown>>> {
+  let query = admin
+    .from("adam_pattern_library")
+    .select("*")
+    .order("used_count", { ascending: false })
+    .limit(params.limit || 5);
+
+  if (params.industry) {
+    query = query.eq("industry", params.industry);
+  }
+  if (params.phaseId) {
+    query = query.eq("phase_id", params.phaseId);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    console.warn("Pattern query failed:", error.message);
+    return [];
+  }
+
+  return (data || []).filter(isRecord).map((entry) => ({
+    id: typeof entry.id === "string" ? entry.id : crypto.randomUUID(),
+    patternType: typeof entry.pattern_type === "string" ? entry.pattern_type : "intervention",
+    phaseId: typeof entry.phase_id === "string" ? entry.phase_id : null,
+    industry: typeof entry.industry === "string" ? entry.industry : null,
+    title: typeof entry.pattern_title === "string" ? entry.pattern_title : "Pattern",
+    body: isRecord(entry.pattern_body) ? entry.pattern_body : {},
+    outcome: typeof entry.outcome === "string" ? entry.outcome : null,
+    confidence: typeof entry.confidence === "number" ? entry.confidence : 0.5,
+    usedCount: typeof entry.used_count === "number" ? entry.used_count : 0,
+  }));
+}
+
+function buildSpecialAgentInputContext(
+  programData: ProgramState,
+  meta: {
+    name?: string | null;
+    client?: string | null;
+    industry?: string | null;
+  },
+  target?: {
+    agentId?: string;
+    phaseId?: string;
+  },
+  options?: {
+    patternContext?: Array<Record<string, unknown>>;
+  },
+): string {
+  const inner = getInnerProgramData(programData);
+  const projectMeta = normalizeProgramData(inner.projectMeta as JsonValue | null);
+  const artifacts = getProgramArtifactContext(programData);
+  const artifactsByPhase = artifacts.reduce<Record<string, Array<Record<string, unknown>>>>((accumulator, artifact) => {
+    const phaseId = typeof artifact.phaseId === "string" ? artifact.phaseId : "strategy";
+    accumulator[phaseId] = [...(accumulator[phaseId] || []), artifact];
+    return accumulator;
+  }, {});
+  const phaseGuidance = normalizeProgramData(inner.phaseGuidance as JsonValue | null);
+  const phases = getProgramPhaseContext(programData).map((phase) => {
+    const phaseId = typeof phase.id === "string" ? phase.id : "strategy";
+    const guidance = normalizeProgramData(phaseGuidance[phaseId] as JsonValue | null);
+    return {
+      ...phase,
+      artifacts: artifactsByPhase[phaseId] || [],
+      eta: typeof guidance.targetDate === "string"
+        ? guidance.targetDate
+        : typeof guidance.eta === "string"
+          ? guidance.eta
+          : null,
+    };
+  });
+  const decisions = Array.isArray(inner.decisionQueue) ? inner.decisionQueue.filter(isRecord) : [];
+  const risks = getProgramRiskContext(programData);
+  const businessCase = normalizeProgramData(inner.businessCase as JsonValue | null);
+  const valueRealizeData = normalizeProgramData(inner.valueRealizeData as JsonValue | null);
+  const raidLog = normalizeProgramData(inner.raidLog as JsonValue | null);
+  const raidEntries = Array.isArray(raidLog.entries) ? raidLog.entries.filter(isRecord) : [];
+  const plan = isRecord(inner.plan) ? inner.plan : null;
+  const milestones = Array.isArray(inner.milestones) ? inner.milestones.filter(isRecord) : [];
+  const humanMilestones = milestones.filter((entry) => entry.source === "human");
+  const activeRaidEntries = raidEntries.filter((entry) => entry.status !== "closed");
+  const budget = isRecord(inner.budget) ? inner.budget : null;
+  const changeImpact = isRecord(inner.changeImpact) ? inner.changeImpact : null;
+  const healthHeatmap = isRecord(inner.healthHeatmap) ? inner.healthHeatmap : null;
+  const stakeholderEntries = Array.isArray(inner.stakeholders) ? inner.stakeholders.filter(isRecord) : [];
+  const adoption = isRecord(inner.adoption) ? inner.adoption : null;
+  const retros = isRecord(inner.retros) ? inner.retros : null;
+  const gateReviews = normalizeProgramData(inner.gateReviews as JsonValue | null);
+  const budgetTracking = isRecord(inner.budgetTracking) ? inner.budgetTracking : null;
+  const narrative = typeof inner.narrative === "string" ? inner.narrative : "";
+
+  if (target?.agentId === "change-impact") {
+    return JSON.stringify({
+      objective: typeof inner.objective === "string"
+        ? inner.objective
+        : typeof inner.programObjective === "string"
+          ? inner.programObjective
+          : typeof projectMeta.objective === "string"
+            ? projectMeta.objective
+            : "",
+      narrative,
+      phases,
+      decisions,
+      risks,
+      raidEntries: activeRaidEntries,
+    }, null, 2);
+  }
+
+  if (target?.agentId === "stakeholder") {
+    return JSON.stringify({
+      objective: typeof inner.objective === "string"
+        ? inner.objective
+        : typeof inner.programObjective === "string"
+          ? inner.programObjective
+          : typeof projectMeta.objective === "string"
+            ? projectMeta.objective
+            : "",
+      narrative,
+      phases,
+      decisions,
+      raidEntries: activeRaidEntries,
+      existingStakeholders: stakeholderEntries,
+    }, null, 2);
+  }
+
+  if (isProgramLevelAdoptionAgent(target?.agentId || "", target?.phaseId || "")) {
+    return JSON.stringify({
+      objective: typeof inner.objective === "string"
+        ? inner.objective
+        : typeof inner.programObjective === "string"
+          ? inner.programObjective
+          : typeof projectMeta.objective === "string"
+            ? projectMeta.objective
+            : "",
+      narrative,
+      phases,
+      changeImpact,
+      stakeholders: stakeholderEntries,
+      decisions,
+      raidEntries: activeRaidEntries,
+      previousAdoption: adoption,
+    }, null, 2);
+  }
+
+  if (target?.agentId === "health-heatmap") {
+    return JSON.stringify({
+      objective: typeof inner.objective === "string"
+        ? inner.objective
+        : typeof inner.programObjective === "string"
+          ? inner.programObjective
+          : typeof projectMeta.objective === "string"
+            ? projectMeta.objective
+            : "",
+      phases,
+      raidEntries: activeRaidEntries,
+      openDecisions: decisions.filter((entry) => entry.status !== "resolved"),
+      milestones,
+      previousHealthHeatmap: healthHeatmap,
+    }, null, 2);
+  }
+
+  if (target?.agentId === "retro") {
+    const phaseId = target.phaseId || "program";
+    const phase = phases.find((entry) => entry.id === phaseId) || null;
+    const phaseArtifacts = artifactsByPhase[phaseId] || [];
+    const phaseDecisions = decisions.filter((entry) => entry.status === "resolved" && (entry.phaseId === phaseId || entry.phase_id === phaseId));
+    const phaseRaidEntries = activeRaidEntries.filter((entry) => {
+      const riskPhaseId = typeof entry.phase === "string"
+        ? entry.phase
+        : typeof entry.phaseId === "string"
+          ? entry.phaseId
+          : "strategy";
+      return riskPhaseId === phaseId;
+    });
+    const phaseMilestones = milestones.filter((entry) => entry.phaseId === phaseId || entry.phase === phaseId);
+    const gateReview = normalizeProgramData(gateReviews[phaseId] as JsonValue | null);
+
+    return JSON.stringify({
+      phase,
+      artifacts: phaseArtifacts,
+      resolvedDecisions: phaseDecisions,
+      raidEntries: phaseRaidEntries,
+      milestones: phaseMilestones,
+      gateReview,
+    }, null, 2);
+  }
+
+  if (target?.agentId === "deck") {
+    return JSON.stringify({
+      objective: typeof inner.objective === "string"
+        ? inner.objective
+        : typeof inner.programObjective === "string"
+          ? inner.programObjective
+          : typeof projectMeta.objective === "string"
+            ? projectMeta.objective
+            : "",
+      narrative,
+      phases,
+      plan,
+      budgetTracking,
+      raidEntries: activeRaidEntries,
+      milestones,
+      closure: isRecord(inner.closure) ? inner.closure : null,
+      decisions,
+    }, null, 2);
+  }
+
+  if (target?.agentId === "scope-pcr") {
+    return JSON.stringify({
+      objective: typeof inner.objective === "string"
+        ? inner.objective
+        : typeof inner.programObjective === "string"
+          ? inner.programObjective
+          : typeof projectMeta.objective === "string"
+            ? projectMeta.objective
+            : "",
+      narrative,
+      phases,
+      decisions,
+      raidEntries: activeRaidEntries,
+      milestones,
+      changeImpact,
+      stakeholders: stakeholderEntries,
+      existingScopePcr: isRecord(inner.scopePcr) ? inner.scopePcr : null,
+    }, null, 2);
+  }
+
+  if (target?.agentId === "gate-review") {
+    const phaseId = target.phaseId || "program";
+    const phase = phases.find((entry) => entry.id === phaseId) || null;
+    const phaseArtifacts = artifactsByPhase[phaseId] || [];
+    const openDecisions = decisions.filter((entry) =>
+      entry.status !== "resolved"
+      && (entry.phaseId === phaseId || entry.phase_id === phaseId)
+    );
+    const openRisks = activeRaidEntries.filter((entry) => {
+      const riskPhaseId = typeof entry.phase === "string"
+        ? entry.phase
+        : typeof entry.phaseId === "string"
+          ? entry.phaseId
+          : "strategy";
+      return riskPhaseId === phaseId;
+    });
+
+    return JSON.stringify({
+      phase,
+      artifacts: phaseArtifacts,
+      exitCriteria: Array.isArray(phase?.exitCriteria) ? phase.exitCriteria : [],
+      openDecisions,
+      openDecisionCount: openDecisions.length,
+      openRisks,
+      openRiskCount: openRisks.length,
+    }, null, 2);
+  }
+
+  if (target?.agentId === "escalation") {
+    const existingEscalations = Array.isArray(inner.escalations)
+      ? inner.escalations.filter(isRecord).filter((entry) => entry.status === "open" || entry.status === "acknowledged")
+      : [];
+    return JSON.stringify({
+      now: new Date().toISOString(),
+      decisions: decisions.filter((entry) => entry.status !== "resolved"),
+      phases,
+      raidEntries: activeRaidEntries,
+      milestones,
+      openEscalations: existingEscalations,
+    }, null, 2);
+  }
+
+  if (target?.agentId === "closure") {
+    return JSON.stringify({
+      objective: typeof inner.objective === "string"
+        ? inner.objective
+        : typeof inner.programObjective === "string"
+          ? inner.programObjective
+          : typeof projectMeta.objective === "string"
+            ? projectMeta.objective
+            : "",
+      phases,
+      retros,
+      budgetTracking,
+      openRaidEntries: activeRaidEntries,
+      milestones,
+      decisions,
+    }, null, 2);
+  }
+
+  if (target?.agentId === "input-quality" || target?.agentId === "exit-criteria-generator") {
+    const phaseId = target.phaseId || "strategy";
+    const phaseInputs = normalizeProgramData(inner.phaseInputs as JsonValue | null);
+    const humanNotes = Array.isArray(inner.humanNotes) ? inner.humanNotes.filter(isRecord) : [];
+    return JSON.stringify({
+      programName: meta.name || (typeof projectMeta.name === "string" ? projectMeta.name : ""),
+      phaseId,
+      phaseInputs: normalizeProgramData(phaseInputs[phaseId] as JsonValue | null),
+      stageNotes: humanNotes.filter((entry) => entry.phaseId === phaseId),
+      priorPhaseContext: target.phaseId ? getPriorPhaseContext(programData, target.phaseId) : "",
+    }, null, 2);
+  }
+
+  if (target?.agentId === "decision-advisor") {
+    const queue = Array.isArray(inner.decisionQueue) ? inner.decisionQueue.filter(isRecord) : [];
+    return JSON.stringify({
+      objective: typeof inner.objective === "string" ? inner.objective : "",
+      risks: activeRaidEntries,
+      decisions: queue,
+    }, null, 2);
+  }
+
+  if (target?.agentId === "contradiction-detector") {
+    return JSON.stringify({
+      narrative,
+      plan,
+      raidEntries: activeRaidEntries,
+      gateReviews,
+    }, null, 2);
+  }
+
+  if (target?.agentId === "dependency-check" || target?.agentId === "handoff-quality") {
+    return JSON.stringify({
+      phaseId: target.phaseId || "program",
+      handoffs: normalizeProgramData(inner.phaseHandoffs as JsonValue | null),
+      gateReviews,
+      narrative,
+      plan,
+      phases,
+    }, null, 2);
+  }
+
+  if (target?.agentId === "benefits-tracker" || target?.agentId === "scope-creep-monitor") {
+    return JSON.stringify({
+      objective: typeof inner.objective === "string" ? inner.objective : "",
+      phaseInputs: normalizeProgramData(inner.phaseInputs as JsonValue | null),
+      milestones,
+      plan,
+      kpiActuals: isRecord(inner.valueRealization) ? inner.valueRealization : inner.kpiActuals,
+    }, null, 2);
+  }
+
+  if (target?.agentId === "benchmark-comparator") {
+    return JSON.stringify({
+      industry: meta.industry || projectMeta.industry || null,
+      phases,
+      risks: activeRaidEntries,
+      decisions,
+      phaseInputs: normalizeProgramData(inner.phaseInputs as JsonValue | null),
+      patternContext: options?.patternContext || [],
+    }, null, 2);
+  }
+
+  if (target?.agentId === "weekly-digest") {
+    return JSON.stringify({
+      narrative,
+      plan,
+      phases,
+      decisions,
+      risks: activeRaidEntries,
+      previousDigest: isRecord(inner.weeklyDigest) ? inner.weeklyDigest : null,
+    }, null, 2);
+  }
+
+  if (target?.agentId === "phase-completion-estimator" || target?.agentId === "gate-readiness-coach") {
+    const phaseId = target.phaseId || "strategy";
+    return JSON.stringify({
+      phaseId,
+      phases,
+      milestones,
+      phaseMilestones: milestones.filter((entry) => entry.phaseId === phaseId || entry.phase === phaseId),
+      exitCriteria: getExitCriteriaForPhase(inner, phaseId),
+      phaseInputs: normalizeProgramData(normalizeProgramData(inner.phaseInputs as JsonValue | null)[phaseId] as JsonValue | null),
+      phaseArtifacts: normalizeProgramData(normalizeProgramData(inner.phaseArtifacts as JsonValue | null)[phaseId] as JsonValue | null),
+      phaseTasks: Array.isArray(inner[`phaseAgentTasks_${phaseId}`]) ? inner[`phaseAgentTasks_${phaseId}`] : [],
+      readiness: computeReadinessForAgent(programData, phaseId),
+    }, null, 2);
+  }
+
+  if (target?.agentId === "discovery-guide-generator") {
+    return JSON.stringify({
+      programName: meta.name,
+      industry: meta.industry,
+      programType: projectMeta.programType || inner.programType || null,
+      objectives: inner.objectives || inner.objective || null,
+      stakeholders: stakeholderEntries.slice(0, 10),
+      scopeIn: projectMeta.scopeIn || normalizeProgramData(normalizeProgramData(inner.phaseInputs as JsonValue | null).discover as JsonValue | null).scopeInclusions || null,
+    }, null, 2);
+  }
+
+  if (target?.agentId === "sprint-planner") {
+    const buildInputs = normalizeProgramData(normalizeProgramData(inner.phaseInputs as JsonValue | null).build as JsonValue | null);
+    return JSON.stringify({
+      milestones: milestones.filter((entry) => entry.phaseId === "build" || entry.phase === "build"),
+      teamSize: buildInputs.teamSize || 5,
+      sprintLengthWeeks: buildInputs.sprintLengthWeeks || 2,
+      startDate: buildInputs.startDate || new Date().toISOString(),
+      endDate: buildInputs.endDate || null,
+      workstreams: Array.isArray(inner.workstreams) ? inner.workstreams : [],
+    }, null, 2);
+  }
+
+  if (target?.agentId === "stakeholder-comms-drafter") {
+    return JSON.stringify({
+      stakeholders: stakeholderEntries,
+      decisions,
+      healthHeatmap,
+      activePhase: inner.activePhase || target.phaseId || null,
+      gateReview: normalizeProgramData(gateReviews[String(inner.activePhase || target.phaseId || "")] as JsonValue | null),
+    }, null, 2);
+  }
+
+  if (target?.agentId === "onboarding-briefer") {
+    return JSON.stringify({
+      phases,
+      activePhase: inner.activePhase || target.phaseId || null,
+      healthHeatmap,
+      decisions,
+      milestones,
+      stakeholders: stakeholderEntries,
+      raidEntries: activeRaidEntries,
+    }, null, 2);
+  }
+
+  if (target?.agentId === "steerco-agenda-builder") {
+    return JSON.stringify({
+      decisions,
+      risks: activeRaidEntries,
+      milestones,
+      activePhase: inner.activePhase || target.phaseId || null,
+      gateReview: normalizeProgramData(gateReviews[String(inner.activePhase || target.phaseId || "")] as JsonValue | null),
+      healthHeatmap,
+    }, null, 2);
+  }
+
+  if (target?.agentId === "kpi-validator") {
+    const strategyInputs = normalizeProgramData(normalizeProgramData(inner.phaseInputs as JsonValue | null).strategy as JsonValue | null);
+    return JSON.stringify({
+      successMetrics: strategyInputs.successMetrics || inner.objectives || [],
+      objective: inner.objective || null,
+    }, null, 2);
+  }
+
+  if (target?.agentId === "compliance-checker") {
+    const strategyInputs = normalizeProgramData(normalizeProgramData(inner.phaseInputs as JsonValue | null).strategy as JsonValue | null);
+    return JSON.stringify({
+      programType: projectMeta.programType || inner.programType || null,
+      industry: meta.industry,
+      scopeIn: strategyInputs.scopeInclusions || strategyInputs.scopeIn || null,
+      decisions: decisions.slice(-10),
+      activePhase: inner.activePhase || target.phaseId || null,
+      regulatoryContext: strategyInputs.regulatoryContext || null,
+    }, null, 2);
+  }
+
+  if (target?.agentId === "capacity-assessor") {
+    const activePhase = String(inner.activePhase || target.phaseId || "strategy");
+    const phaseInputs = normalizeProgramData(normalizeProgramData(inner.phaseInputs as JsonValue | null)[activePhase] as JsonValue | null);
+    return JSON.stringify({
+      team: phaseInputs.team || inner.team || [],
+      milestones: milestones.filter((entry) => entry.status !== "complete"),
+      workstreams: Array.isArray(inner.workstreams) ? inner.workstreams : [],
+      timeline: { start: phaseInputs.startDate || null, end: phaseInputs.endDate || null },
+      programType: projectMeta.programType || inner.programType || null,
+    }, null, 2);
+  }
+
+  if (target?.agentId === "lessons-synthesiser") {
+    const retrosByPhase = normalizeProgramData(inner.retros as JsonValue | null);
+    return JSON.stringify({
+      phaseRetros: ATOS_PHASE_SEQUENCE.map((phaseId) => ({ phase: phaseId, retro: retrosByPhase[phaseId] || null })).filter((entry) => entry.retro),
+      programName: meta.name,
+    }, null, 2);
+  }
+
+  if (target?.agentId === "vendor-risk-assessor") {
+    const mobiliseInputs = normalizeProgramData(normalizeProgramData(inner.phaseInputs as JsonValue | null).mobilise as JsonValue | null);
+    return JSON.stringify({
+      vendors: [
+        ...(Array.isArray(mobiliseInputs.vendors) ? mobiliseInputs.vendors : []),
+        ...stakeholderEntries.filter((entry) => entry.type === "vendor" || entry.type === "partner"),
+      ],
+      programType: projectMeta.programType || inner.programType || null,
+      activePhase: inner.activePhase || target.phaseId || null,
+      milestones: milestones.filter((entry) => entry.status !== "complete").slice(0, 10),
+    }, null, 2);
+  }
+
+  if (target?.agentId === "phase-readiness-monitor") {
+    const phaseId = target.phaseId || "strategy";
+    const phaseInputs = normalizeProgramData(inner.phaseInputs as JsonValue | null);
+    const phaseData = normalizeProgramData(phaseInputs[phaseId] as JsonValue | null);
+    const phaseArtifacts = normalizeProgramData(normalizeProgramData(inner.phaseArtifacts as JsonValue | null)[phaseId] as JsonValue | null);
+    const phase = phases.find((p) => p.id === phaseId) || null;
+    return JSON.stringify({
+      phaseId,
+      phase,
+      phaseInputs: phaseData,
+      phaseArtifacts: Object.keys(phaseArtifacts),
+      exitCriteria: getExitCriteriaForPhase(inner, phaseId),
+      openRisks: activeRaidEntries.filter((e) => {
+        const rPhaseId = typeof e.phase === "string" ? e.phase : typeof e.phaseId === "string" ? e.phaseId : "";
+        return rPhaseId === phaseId;
+      }),
+      openDecisions: decisions.filter((d) => d.status !== "resolved" && (d.phaseId === phaseId || d.phase_id === phaseId)),
+      today: new Date().toISOString().slice(0, 10),
+    }, null, 2);
+  }
+
+  if (target?.agentId === "workstream-health-scorer") {
+    const phaseId = target.phaseId || "strategy";
+    const phaseInputs = normalizeProgramData(inner.phaseInputs as JsonValue | null);
+    const phaseData = normalizeProgramData(phaseInputs[phaseId] as JsonValue | null);
+    const workstreams = Array.isArray(phaseData.workstreams) ? phaseData.workstreams : Array.isArray(inner.workstreams) ? inner.workstreams.filter((w: unknown) => isRecord(w) && (w as Record<string,unknown>).phaseId === phaseId) : [];
+    return JSON.stringify({
+      phaseId,
+      workstreams,
+      openBlockers: activeRaidEntries.filter((e) => {
+        const rPhaseId = typeof e.phase === "string" ? e.phase : typeof e.phaseId === "string" ? e.phaseId : "";
+        return rPhaseId === phaseId;
+      }),
+      today: new Date().toISOString().slice(0, 10),
+    }, null, 2);
+  }
+
+  if (target?.agentId === "budget-anomaly-detector") {
+    const strategyInputs = normalizeProgramData(normalizeProgramData(inner.phaseInputs as JsonValue | null).strategy as JsonValue | null);
+    return JSON.stringify({
+      baselineBudget: strategyInputs.budget || strategyInputs.constraints || null,
+      currentBudget: budget,
+      budgetTracking,
+      phases,
+      milestones,
+      today: new Date().toISOString().slice(0, 10),
+    }, null, 2);
+  }
+
+  if (target?.agentId === "stakeholder-risk-assessor") {
+    return JSON.stringify({
+      stakeholders: stakeholderEntries,
+      recentDecisions: decisions.slice(-15),
+      raidEntries: activeRaidEntries,
+      today: new Date().toISOString().slice(0, 10),
+    }, null, 2);
+  }
+
+  if (target?.agentId === "benefit-forecast") {
+    const strategyInputs = normalizeProgramData(normalizeProgramData(inner.phaseInputs as JsonValue | null).strategy as JsonValue | null);
+    return JSON.stringify({
+      businessObjective: strategyInputs.businessObjective || typeof inner.objective === "string" ? inner.objective : "",
+      successMetric: strategyInputs.successMetric || null,
+      valueProjected: coerceNumber(inner.valueProjected, 0),
+      valueDelivered: coerceNumber(inner.valueDelivered, 0),
+      kpis: Array.isArray(inner.kpis) ? inner.kpis : [],
+      phases,
+      milestones,
+      today: new Date().toISOString().slice(0, 10),
+    }, null, 2);
+  }
+
+  if (target?.agentId === "artifact-staleness-check") {
+    const phaseArtifacts = normalizeProgramData(inner.phaseArtifacts as JsonValue | null);
+    const phaseInputs = normalizeProgramData(inner.phaseInputs as JsonValue | null);
+    const artifactTimestamps: Array<{ phaseId: string; artifactId: string; agentId: string; savedAt: string }> = [];
+    Object.entries(phaseArtifacts).forEach(([phId, bucket]) => {
+      const bkt = normalizeProgramData(bucket as JsonValue | null);
+      Object.entries(bkt).forEach(([aid, av]) => {
+        const art = normalizeProgramData(av as JsonValue | null);
+        if (typeof art.savedAt === "string") {
+          artifactTimestamps.push({ phaseId: phId, artifactId: aid, agentId: typeof art.agentId === "string" ? art.agentId : aid, savedAt: art.savedAt });
+        }
+      });
+    });
+    const inputTimestamps: Array<{ phaseId: string; savedAt: string }> = [];
+    Object.entries(phaseInputs).forEach(([phId, pv]) => {
+      const pi = normalizeProgramData(pv as JsonValue | null);
+      if (typeof pi.savedAt === "string") inputTimestamps.push({ phaseId: phId, savedAt: pi.savedAt });
+    });
+    return JSON.stringify({ artifactTimestamps, inputTimestamps, today: new Date().toISOString() }, null, 2);
+  }
+
+  if (target?.agentId === "meeting-notes-extractor") {
+    return JSON.stringify({
+      programName: meta.name || "",
+      phases,
+      stakeholders: stakeholderEntries.slice(0, 10),
+      today: new Date().toISOString().slice(0, 10),
+    }, null, 2);
+  }
+
+  if (target?.agentId === "deck-section") {
+    const sectionType = target.phaseId || "risks"; // phaseId is repurposed as sectionType here
+    const existingDeck = normalizeProgramData(inner.deck as JsonValue | null);
+    const existingSlides = Array.isArray(existingDeck.slides) ? existingDeck.slides : [];
+    const existingSlide = existingSlides.find((s: unknown) => isRecord(s) && (s as Record<string,unknown>).type === sectionType);
+    return JSON.stringify({
+      sectionType,
+      existingSlide: existingSlide || null,
+      phases,
+      risks: activeRaidEntries,
+      decisions,
+      milestones,
+      budget,
+      stakeholders: stakeholderEntries,
+      narrative,
+    }, null, 2);
+  }
+
+  if (target?.agentId === "narrative-refine") {
+    const instruction = target.phaseId || ""; // phaseId repurposed as instruction
+    const existingNarrative = typeof inner.narrative === "string" ? inner.narrative : "";
+    return JSON.stringify({
+      existingNarrative,
+      refinementInstruction: instruction,
+      phases,
+      risks: activeRaidEntries,
+      decisions,
+      milestones,
+    }, null, 2);
+  }
+
+  if (target?.agentId === "board-pack") {
+    const existingDeck = normalizeProgramData(inner.deck as JsonValue | null);
+    const existingNarrative = typeof inner.narrative === "string" ? inner.narrative : "";
+    const existingPlan = isRecord(inner.plan) ? inner.plan : null;
+    return JSON.stringify({
+      programName: meta.name,
+      client: meta.client,
+      narrative: existingNarrative,
+      deck: existingDeck,
+      plan: existingPlan,
+      phases,
+      risks: activeRaidEntries.slice(0, 8),
+      decisions: decisions.filter((d) => d.status !== "resolved").slice(0, 6),
+      milestones: milestones.slice(0, 10),
+      budget,
+      stakeholders: stakeholderEntries.slice(0, 8),
+      healthHeatmap: isRecord(inner.healthHeatmap) ? inner.healthHeatmap : null,
+    }, null, 2);
+  }
+
+  return JSON.stringify({
+    programName: meta.name || (typeof projectMeta.name === "string" ? projectMeta.name : ""),
+    client: meta.client || (typeof projectMeta.client === "string" ? projectMeta.client : ""),
+    industry: meta.industry || (typeof projectMeta.industry === "string" ? projectMeta.industry : ""),
+    objective: typeof inner.objective === "string"
+      ? inner.objective
+      : typeof inner.programObjective === "string"
+        ? inner.programObjective
+        : typeof projectMeta.objective === "string"
+          ? projectMeta.objective
+          : "",
+    sponsor: typeof inner.sponsor === "string"
+      ? inner.sponsor
+      : typeof projectMeta.sponsor === "string"
+        ? projectMeta.sponsor
+        : typeof projectMeta.executiveSponsor === "string"
+          ? projectMeta.executiveSponsor
+          : "",
+    narrative,
+    valueProjected: coerceNumber(inner.valueProjected ?? businessCase.projectedValue ?? valueRealizeData.projectedValue, 0),
+    valueDelivered: coerceNumber(inner.valueDelivered ?? valueRealizeData.valueDelivered ?? businessCase.valueDelivered, 0),
+    phases,
+    artifactCount: artifacts.length,
+    activeArtifacts: artifacts.slice(0, 10),
+    ...(target?.agentId !== "narrative" ? { plan } : {}),
+    milestones,
+    humanMilestones,
+    decisions,
+    decisionCount: decisions.length,
+    openDecisions: decisions
+      .filter((entry) => entry.status !== "resolved")
+      .slice(0, 10),
+    existingRisks: raidEntries.length,
+    raidEntries: activeRaidEntries,
+    risks,
+    budget,
+    changeImpact,
+    stakeholders: stakeholderEntries,
+    adoption,
+    patternContext: options?.patternContext || [],
+  }, null, 2);
+}
+
+function applyNarrativeResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
+  return updateInnerProgramData(programData, (inner) => ({
+    ...inner,
+    narrative: typeof result.narrative === "string" ? result.narrative : null,
+    narrativeGeneratedAt: typeof result.generatedAt === "string" ? result.generatedAt : new Date().toISOString(),
+    narrativeConfidence: typeof result.confidence === "number" ? Math.max(0, Math.min(1, result.confidence)) : null,
+  }));
+}
+
+function applyDeckSectionResultToProgramData(programData: ProgramState, result: Record<string, unknown>, sectionType: string): ProgramState {
+  return updateInnerProgramData(programData, (inner) => {
+    const existingDeck = normalizeProgramData(inner.deck as JsonValue | null);
+    const slides = Array.isArray(existingDeck.slides) ? existingDeck.slides : [];
+    const updatedSlide = isRecord(result.slide) ? result.slide : null;
+    if (!updatedSlide) return inner;
+    const updatedSlides = slides.map((s: unknown) => {
+      if (isRecord(s) && (s as Record<string,unknown>).type === sectionType) return { ...(s as Record<string,unknown>), ...updatedSlide };
+      return s;
+    });
+    return { ...inner, deck: { ...existingDeck, slides: updatedSlides, lastSectionUpdated: sectionType, lastSectionUpdatedAt: new Date().toISOString() } };
+  });
+}
+
+function applyBoardPackResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
+  return updateInnerProgramData(programData, (inner) => ({
+    ...inner,
+    boardPack: {
+      title: typeof result.title === "string" ? result.title : "Board Pack",
+      executiveSummary: typeof result.executiveSummary === "string" ? result.executiveSummary : "",
+      sections: Array.isArray(result.sections) ? result.sections : [],
+      generatedAt: new Date().toISOString(),
+      confidence: typeof result.confidence === "number" ? result.confidence : 0.8,
+    },
+  }));
+}
+
+function applyPlanResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
+  return updateInnerProgramData(programData, (inner) => ({
+    ...inner,
+    plan: isRecord(result.plan) ? (() => {
+      const p = result.plan as Record<string, unknown>;
+      return {
+        summary: typeof p.summary === "string" ? p.summary : "",
+        criticalPath: Array.isArray(p.criticalPath) ? p.criticalPath.filter((v): v is string => typeof v === "string") : [],
+        nextThreeActions: Array.isArray(p.nextThreeActions) ? p.nextThreeActions.filter(isRecord).map((a, i) => ({
+          action: typeof a.action === "string" ? a.action : `Action ${i + 1}`,
+          phase: typeof a.phase === "string" ? a.phase : "",
+          owner: typeof a.owner === "string" ? a.owner : null,
+          rationale: typeof a.rationale === "string" ? a.rationale : "",
+        })) : [],
+        milestones: Array.isArray(p.milestones) ? p.milestones.filter(isRecord).map((m) => ({
+          id: typeof m.id === "string" ? m.id : crypto.randomUUID(),
+          title: typeof m.title === "string" ? m.title : "",
+          phase: typeof m.phase === "string" ? m.phase : "",
+          dueDate: typeof m.dueDate === "string" ? m.dueDate : null,
+          status: ["on-track", "at-risk", "delayed", "complete"].includes(String(m.status)) ? m.status : "on-track",
+          owner: typeof m.owner === "string" ? m.owner : null,
+        })) : [],
+        blockerSummary: Array.isArray(p.blockerSummary) ? p.blockerSummary.filter(isRecord).map((b) => ({
+          blocker: typeof b.blocker === "string" ? b.blocker : "",
+          phase: typeof b.phase === "string" ? b.phase : "",
+          severity: ["critical", "high", "medium", "low"].includes(String(b.severity)) ? b.severity : "medium",
+          resolution: typeof b.resolution === "string" ? b.resolution : null,
+        })) : [],
+        confidence: typeof p.confidence === "number" ? Math.max(0, Math.min(1, p.confidence)) : 0.5,
+      } as JsonValue;
+    })() : null,
+    planGeneratedAt: typeof result.planGeneratedAt === "string" ? result.planGeneratedAt : new Date().toISOString(),
+    planConfidence: typeof result.confidence === "number"
+      ? Math.max(0, Math.min(1, result.confidence))
+      : isRecord(result.plan) && typeof result.plan.confidence === "number"
+        ? Math.max(0, Math.min(1, result.plan.confidence as number))
+        : null,
+  }));
+}
+
+function applyRiskResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
+  return updateInnerProgramData(programData, (inner) => {
+    const raidLog = normalizeProgramData(inner.raidLog as JsonValue | null);
+    const existingEntries = Array.isArray(raidLog.entries)
+      ? raidLog.entries.filter(isRecord)
+      : [];
+    const humanEntries = existingEntries.filter((entry) => entry.source === "human");
+    const agentEntries = Array.isArray(result.raidEntries)
+      ? result.raidEntries
+          .filter(isRecord)
+          .map((entry, index) => {
+            const type = typeof entry.type === "string" ? entry.type : "risk";
+            const severity = typeof entry.severity === "string" ? entry.severity : "medium";
+            const agentConfidence = typeof entry.agentConfidence === "number" ? entry.agentConfidence : null;
+            return {
+              id: typeof entry.id === "string" && entry.id
+                ? entry.id
+                : crypto.randomUUID?.() || `raid-agent-${Date.now()}-${index}`,
+              type: ["risk", "blocker", "assumption", "dependency"].includes(type) ? type : "risk",
+              title: typeof entry.title === "string" ? entry.title.slice(0, 80) : `Risk ${index + 1}`,
+              description: typeof entry.description === "string" ? entry.description : "",
+              severity: ["critical", "high", "medium", "low"].includes(severity) ? severity : "medium",
+              phase: typeof entry.phase === "string" && entry.phase ? entry.phase : "strategy",
+              owner: typeof entry.owner === "string" && entry.owner ? entry.owner : null,
+              mitigation: typeof entry.mitigation === "string" && entry.mitigation ? entry.mitigation : null,
+              status: "open",
+              source: "agent",
+              agentConfidence,
+              createdAt: typeof entry.createdAt === "string" ? entry.createdAt : new Date().toISOString(),
+              closedAt: null,
+              closedBy: null,
+              closureNote: null,
+            } as JsonValue;
+          })
+      : existingEntries.filter((entry) => entry.source !== "human");
+
+    return {
+      ...inner,
+      raidLog: {
+        ...raidLog,
+        entries: [...humanEntries, ...agentEntries] as JsonValue,
+        generatedAt: typeof result.generatedAt === "string" ? result.generatedAt : new Date().toISOString(),
+        riskSummary: typeof result.summary === "string" ? result.summary : (raidLog.riskSummary ?? null),
+        confidence: typeof result.confidence === "number" ? result.confidence : (raidLog.confidence ?? null),
+      },
+    };
+  });
+}
+
+function applyMilestoneResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
+  return updateInnerProgramData(programData, (inner) => {
+    const existingMilestones = Array.isArray(inner.milestones)
+      ? inner.milestones.filter(isRecord)
+      : [];
+    const humanMilestones = existingMilestones.filter((entry) => entry.source === "human");
+    const agentMilestones = Array.isArray(result.milestones)
+      ? result.milestones
+          .filter(isRecord)
+          .map((entry, index) => {
+            const status = typeof entry.status === "string" ? entry.status : "on-track";
+            const confidence = typeof entry.confidence === "number" ? Math.max(0, Math.min(1, entry.confidence)) : 0.65;
+            return {
+              id: typeof entry.id === "string" && entry.id
+                ? entry.id
+                : `m_${typeof entry.phaseId === "string" ? entry.phaseId : "program"}_${index + 1}`,
+              title: typeof entry.title === "string" ? entry.title : `Milestone ${index + 1}`,
+              phaseId: typeof entry.phaseId === "string" && entry.phaseId ? entry.phaseId : "strategy",
+              targetDate: typeof entry.targetDate === "string" && entry.targetDate ? entry.targetDate : null,
+              status: ["on-track", "at-risk", "delayed", "complete"].includes(status) ? status : "on-track",
+              dependsOn: Array.isArray(entry.dependsOn)
+                ? entry.dependsOn.filter((value): value is string => typeof value === "string")
+                : [],
+              exitCriteria: Array.isArray(entry.exitCriteria)
+                ? entry.exitCriteria.filter((value): value is string => typeof value === "string")
+                : [],
+              confidence,
+              source: "agent",
+              lastUpdatedAt: typeof entry.lastUpdatedAt === "string" ? entry.lastUpdatedAt : new Date().toISOString(),
+            } as JsonValue;
+          })
+      : [];
+
+    const agentIds = new Set(agentMilestones.map((m) => (m as Record<string, unknown>).id as string));
+    const dedupedHuman = humanMilestones.filter((m) => !agentIds.has((m as Record<string, unknown>).id as string));
+
+    return {
+      ...inner,
+      milestones: [...dedupedHuman, ...agentMilestones],
+      milestonesGeneratedAt: new Date().toISOString(),
+    };
+  });
+}
+
+function applyBudgetResultToProgramData(programData: ProgramState, result: Record<string, unknown> | null): ProgramState {
+  return updateInnerProgramData(programData, (inner) => {
+    if (!isRecord(result)) return { ...inner, budgetTracking: null, budgetGeneratedAt: new Date().toISOString() };
+    const validBurnRate = ["healthy", "at-risk", "overspend"].includes(String(result.burnRate));
+    const validValueDelivery = ["ahead", "on-track", "behind"].includes(String(result.valueDeliveryRate));
+    const validSignal = ["green", "amber", "red"].includes(String(result.healthSignal));
+    const normalized = {
+      projectedCost: typeof result.projectedCost === "number" ? result.projectedCost : null,
+      actualSpend: typeof result.actualSpend === "number" ? result.actualSpend : null,
+      projectedBenefits: typeof result.projectedBenefits === "number" ? result.projectedBenefits : null,
+      realisedBenefits: typeof result.realisedBenefits === "number" ? result.realisedBenefits : null,
+      roi: typeof result.roi === "number" ? result.roi : null,
+      burnRate: validBurnRate ? result.burnRate : "at-risk",
+      valueDeliveryRate: validValueDelivery ? result.valueDeliveryRate : "on-track",
+      phaseSpend: Array.isArray(result.phaseSpend) ? result.phaseSpend.filter(isRecord) : [],
+      benefitMilestones: Array.isArray(result.benefitMilestones) ? result.benefitMilestones.filter(isRecord) : [],
+      healthSignal: validSignal ? result.healthSignal : "amber",
+      healthReason: typeof result.healthReason === "string" ? result.healthReason : "",
+      confidence: typeof result.confidence === "number" ? Math.max(0, Math.min(1, result.confidence)) : 0.5,
+    };
+    return { ...inner, budgetTracking: normalized as JsonValue, budgetGeneratedAt: new Date().toISOString() };
+  });
+}
+
+function applyCriticalPathResultToProgramData(programData: ProgramState, result: Record<string, unknown> | null): ProgramState {
+  return updateInnerProgramData(programData, (inner) => {
+    const plan = isRecord(inner.plan) ? inner.plan : null;
+    const sequence = isRecord(result) && Array.isArray(result.sequence)
+      ? result.sequence.filter(isRecord).map((entry) => ({
+          phaseId: typeof entry.phaseId === "string" ? entry.phaseId : "",
+          phaseName: typeof entry.phaseName === "string" ? entry.phaseName : "",
+          status: ["complete", "in-progress", "blocked", "not-started"].includes(String(entry.status))
+            ? entry.status
+            : "not-started",
+          isBottleneck: entry.isBottleneck === true,
+          blockerSummary: typeof entry.blockerSummary === "string" ? entry.blockerSummary : null,
+          dependsOn: Array.isArray(entry.dependsOn) ? entry.dependsOn.filter((d) => typeof d === "string") : [],
+        })).filter((n) => n.phaseId)
+      : [];
+    const sequenceIds = sequence.map((n) => n.phaseId);
+
+    const criticalPathData = isRecord(result) ? {
+      sequence,
+      currentBottleneck: isRecord(result.currentBottleneck) ? {
+        phaseId: typeof result.currentBottleneck.phaseId === "string" ? result.currentBottleneck.phaseId : "",
+        phaseName: typeof result.currentBottleneck.phaseName === "string" ? result.currentBottleneck.phaseName : "",
+        blockerSummary: typeof result.currentBottleneck.blockerSummary === "string" ? result.currentBottleneck.blockerSummary : null,
+      } : null,
+      offCriticalPath: Array.isArray(result.offCriticalPath)
+        ? result.offCriticalPath.filter((v): v is string => typeof v === "string")
+        : [],
+      estimatedCompletionDelta: typeof result.estimatedCompletionDelta === "string" ? result.estimatedCompletionDelta : null,
+      confidence: typeof result.confidence === "number" ? Math.max(0, Math.min(1, result.confidence)) : 0.5,
+    } : null;
+
+    return {
+      ...inner,
+      criticalPath: criticalPathData as JsonValue,
+      criticalPathGeneratedAt: new Date().toISOString(),
+      plan: plan
+        ? {
+            ...plan,
+            criticalPath: sequenceIds,
+          } as JsonValue
+        : inner.plan,
+    };
+  });
+}
+
+function buildEscalationKey(entry: {
+  type?: unknown;
+  linkedDecisionId?: unknown;
+  linkedPhaseId?: unknown;
+  linkedRiskId?: unknown;
+}): string {
+  return [
+    typeof entry.type === "string" ? entry.type : "unknown",
+    typeof entry.linkedDecisionId === "string" && entry.linkedDecisionId ? entry.linkedDecisionId : "",
+    typeof entry.linkedPhaseId === "string" && entry.linkedPhaseId ? entry.linkedPhaseId : "",
+    typeof entry.linkedRiskId === "string" && entry.linkedRiskId ? entry.linkedRiskId : "",
+  ].join("|");
+}
+
+function getPhaseArtifactContext(programData: ProgramState, phaseId: string): Array<Record<string, unknown>> {
+  return getProgramArtifactContext(programData).filter((artifact) => artifact.phaseId === phaseId);
+}
+
+function applyGateReviewResultToProgramData(
+  programData: ProgramState,
+  phaseId: string,
+  result: Record<string, unknown> | null,
+): ProgramState {
+  return updateInnerProgramData(programData, (inner) => {
+    if (!isRecord(result)) {
+      return {
+        ...inner,
+        gateReviews: {
+          ...normalizeProgramData(inner.gateReviews as JsonValue | null),
+          [phaseId]: {
+            phaseId,
+            phaseName: formatPhaseName(phaseId),
+            status: "not-ready",
+            readinessScore: 0,
+            artifactsSummary: [],
+            openDecisions: 0,
+            openRisks: 0,
+            exitCriteriaStatus: [],
+            recommendation: "Insufficient data for gate review.",
+            generatedAt: new Date().toISOString(),
+          } as JsonValue,
+        },
+      };
+    }
+
+    const phases = getProgramPhaseContext(programData);
+    const phase = phases.find((entry) => entry.id === phaseId);
+    const gateReviews = normalizeProgramData(inner.gateReviews as JsonValue | null);
+    const existingReview = normalizeProgramData(gateReviews[phaseId] as JsonValue | null);
+    const queue = Array.isArray(inner.decisionQueue) ? inner.decisionQueue.filter(isRecord) : [];
+    const raidLog = normalizeProgramData(inner.raidLog as JsonValue | null);
+    const openDecisionCount = queue.filter((decision) =>
+      decision.status !== "resolved"
+      && (decision.phaseId === phaseId || decision.phase_id === phaseId)
+    ).length;
+    const openRiskCount = (Array.isArray(raidLog.entries) ? raidLog.entries : [])
+      .filter(isRecord)
+      .filter((entry) => entry.status !== "closed")
+      .filter((entry) => {
+        const riskPhaseId = typeof entry.phase === "string"
+          ? entry.phase
+          : typeof entry.phaseId === "string"
+            ? entry.phaseId
+            : "strategy";
+        return riskPhaseId === phaseId;
+      })
+      .length;
+    const agentStatus = typeof result.status === "string" ? result.status : "pending-review";
+    const finalStatus = existingReview.status === "approved"
+      ? "approved"
+      : agentStatus === "remediation-requested"
+        ? "remediation-requested"
+        : "pending-review";
+    const openGateDecision = queue.find((decision) =>
+      decision.type === "gate-approval"
+      && (decision.phaseId === phaseId || decision.phase_id === phaseId)
+      && decision.status !== "resolved"
+      && decision.status !== "approved"
+      && decision.status !== "rejected"
+    );
+
+    const review = {
+      phaseId,
+      phaseName: phase?.name || formatPhaseName(phaseId),
+      status: finalStatus,
+      readinessScore: typeof result.readinessScore === "number" ? Math.max(0, Math.min(1, Number(result.readinessScore))) : 0,
+      artifactsSummary: Array.isArray(result.artifactsSummary)
+        ? result.artifactsSummary.filter(isRecord).map((artifact) => ({
+            name: typeof artifact.name === "string" ? artifact.name : "Unnamed artifact",
+            status: typeof artifact.status === "string" && ["complete", "partial", "missing"].includes(artifact.status)
+              ? artifact.status
+              : "missing",
+            confidence: typeof artifact.confidence === "number" ? Math.max(0, Math.min(1, Number(artifact.confidence))) : 0,
+          }))
+        : [],
+      openDecisions: typeof result.openDecisions === "number"
+        ? Math.max(0, Math.round(Number(result.openDecisions)))
+        : openDecisionCount,
+      openRisks: typeof result.openRisks === "number"
+        ? Math.max(0, Math.round(Number(result.openRisks)))
+        : openRiskCount,
+      exitCriteriaStatus: Array.isArray(result.exitCriteriaStatus)
+        ? result.exitCriteriaStatus.filter(isRecord).map((criterion) => ({
+            criterion: typeof criterion.criterion === "string" ? criterion.criterion : "Unnamed criterion",
+            met: criterion.met === true,
+            evidence: typeof criterion.evidence === "string" ? criterion.evidence : null,
+          }))
+        : [],
+      recommendation: typeof result.recommendation === "string" ? result.recommendation : "",
+      generatedAt: new Date().toISOString(),
+      approvedAt: typeof existingReview.approvedAt === "string" ? existingReview.approvedAt : null,
+      approvedBy: typeof existingReview.approvedBy === "string" ? existingReview.approvedBy : null,
+      remediationNote: typeof existingReview.remediationNote === "string" ? existingReview.remediationNote : null,
+    };
+
+    let nextQueue = queue;
+    if (review.status === "ready" && !openGateDecision) {
+      const decisionId = `gate_${phaseId}_${Date.now()}`;
+      nextQueue = [
+        ...queue,
+        {
+          id: decisionId,
+          type: "gate-approval",
+          title: `${review.phaseName} gate ready`,
+          priority: "high",
+          phaseId,
+          question: `${review.phaseName} is gate-ready. Approve to unlock the next phase?`,
+          recommendation: review.recommendation,
+          options: ["Approve gate", "Request remediation"],
+          createdAt: new Date().toISOString(),
+          status: "pending",
+        },
+      ];
+    }
+    if (review.status === "not-ready") {
+      nextQueue = queue.filter((decision) => !(
+        decision.type === "gate-approval"
+        && (decision.phaseId === phaseId || decision.phase_id === phaseId)
+      ));
+    }
+
+    return {
+      ...inner,
+      gateReviews: {
+        ...gateReviews,
+        [phaseId]: review as JsonValue,
+      },
+      decisionQueue: nextQueue as JsonValue,
+    };
+  });
+}
+
+function applyEscalationResultToProgramData(programData: ProgramState, result: Record<string, unknown> | null): ProgramState {
+  return updateInnerProgramData(programData, (inner) => {
+    const existingEscalations = Array.isArray(inner.escalations) ? inner.escalations.filter(isRecord) : [];
+    const openEscalations = existingEscalations.filter((entry) => entry.status === "open" || entry.status === "acknowledged");
+    const existingKeys = new Set(openEscalations.map((entry) => buildEscalationKey(entry)));
+    const additions = isRecord(result) && Array.isArray(result.escalations)
+      ? result.escalations
+          .filter(isRecord)
+          .filter((entry) => !existingKeys.has(buildEscalationKey(entry)))
+          .map((entry) => ({
+            id: typeof entry.id === "string" ? entry.id : crypto.randomUUID(),
+            type: typeof entry.type === "string" ? entry.type : "critical-blocker",
+            severity: typeof entry.severity === "string" && ["high", "critical"].includes(entry.severity)
+              ? entry.severity
+              : "high",
+            title: typeof entry.title === "string" ? entry.title : "Escalation raised",
+            summary: typeof entry.summary === "string" ? entry.summary : "",
+            costOfDelay: typeof entry.costOfDelay === "string" ? entry.costOfDelay : "",
+            linkedDecisionId: typeof entry.linkedDecisionId === "string" ? entry.linkedDecisionId : null,
+            linkedPhaseId: typeof entry.linkedPhaseId === "string" ? entry.linkedPhaseId : null,
+            linkedRiskId: typeof entry.linkedRiskId === "string" ? entry.linkedRiskId : null,
+            raisedAt: typeof entry.raisedAt === "string" ? entry.raisedAt : new Date().toISOString(),
+            acknowledgedAt: null,
+            resolvedAt: null,
+            status: "open",
+            source: "agent",
+          }))
+      : [];
+
+    return {
+      ...inner,
+      escalations: [...existingEscalations, ...additions] as JsonValue,
+      escalationsLastCheckedAt: new Date().toISOString(),
+    };
+  });
+}
+
+function applyClosureResultToProgramData(programData: ProgramState, result: Record<string, unknown> | null): ProgramState {
+  return updateInnerProgramData(programData, (inner) => {
+    const existingClosure = normalizeProgramData(inner.closure as JsonValue | null);
+    const queue = Array.isArray(inner.decisionQueue) ? inner.decisionQueue.filter(isRecord) : [];
+    const existingDecisionId = typeof existingClosure.closureDecisionId === "string" ? existingClosure.closureDecisionId : null;
+
+    if (!isRecord(result)) {
+      return {
+        ...inner,
+        closure: {
+          ...existingClosure,
+          status: "not-ready",
+          notReadyReason: "Insufficient program data to assess closure readiness.",
+          generatedAt: new Date().toISOString(),
+        } as JsonValue,
+        closureGeneratedAt: new Date().toISOString(),
+      };
+    }
+
+    const rawStatus = typeof result.status === "string" && ["ready", "not-ready"].includes(result.status)
+      ? result.status
+      : "not-ready";
+    const finalStatus = existingClosure.status === "approved" || existingClosure.status === "archived"
+      ? existingClosure.status
+      : rawStatus;
+
+    let closureDecisionId = existingDecisionId;
+    let nextQueue = queue;
+    if (finalStatus === "ready" && !existingDecisionId) {
+      closureDecisionId = `dec_closure_${Date.now()}`;
+      nextQueue = [
+        ...queue,
+        {
+          id: closureDecisionId,
+          type: "program-closure",
+          title: "Program ready to close",
+          priority: "high",
+          phaseId: "program",
+          question: "Program is ready to close. Approve closure and archive?",
+          recommendation: "All phases are at or above 90% readiness. Review the closure pack and approve the final archive decision.",
+          options: ["Approve closure", "Hold for remediation"],
+          createdAt: new Date().toISOString(),
+          status: "pending",
+        },
+      ];
+    }
+    if (finalStatus === "not-ready") {
+      nextQueue = queue.filter((decision) => String(decision.id || "") !== String(existingDecisionId || ""));
+      closureDecisionId = null;
+    }
+
+    return {
+      ...inner,
+      closure: {
+        status: finalStatus,
+        readinessScore: typeof result.readinessScore === "number" ? Math.max(0, Math.min(1, Number(result.readinessScore))) : 0,
+        notReadyReason: typeof result.notReadyReason === "string"
+          ? result.notReadyReason
+          : typeof result.reason === "string"
+            ? result.reason
+            : undefined,
+        benefitsSummary: isRecord(result.benefitsSummary) ? {
+          delivered: typeof (result.benefitsSummary as Record<string, unknown>).delivered === "string"
+            ? (result.benefitsSummary as Record<string, unknown>).delivered : null,
+          roi: typeof (result.benefitsSummary as Record<string, unknown>).roi === "number"
+            ? (result.benefitsSummary as Record<string, unknown>).roi : null,
+          qualitative: typeof (result.benefitsSummary as Record<string, unknown>).qualitative === "string"
+            ? (result.benefitsSummary as Record<string, unknown>).qualitative : null,
+        } as JsonValue : null,
+        lessonsLearned: Array.isArray(result.lessonsLearned)
+          ? result.lessonsLearned.filter(isRecord).map((l) => ({
+              category: typeof l.category === "string" ? l.category : "general",
+              lesson: typeof l.lesson === "string" ? l.lesson : "",
+              recommendation: typeof l.recommendation === "string" ? l.recommendation : null,
+            })) as JsonValue
+          : [],
+        keyArtifacts: Array.isArray(result.keyArtifacts)
+          ? result.keyArtifacts.filter(isRecord).map((a) => ({
+              name: typeof a.name === "string" ? a.name : "Unnamed",
+              phaseId: typeof a.phaseId === "string" ? a.phaseId : null,
+              location: typeof a.location === "string" ? a.location : null,
+            })) as JsonValue
+          : [],
+        recommendations: Array.isArray(result.recommendations)
+          ? result.recommendations.filter((v): v is string => typeof v === "string") as JsonValue
+          : [],
+        closureDecisionId,
+        approvedAt: typeof existingClosure.approvedAt === "string" ? existingClosure.approvedAt : null,
+        approvedBy: typeof existingClosure.approvedBy === "string" ? existingClosure.approvedBy : null,
+        archivedAt: typeof existingClosure.archivedAt === "string" ? existingClosure.archivedAt : null,
+        generatedAt: new Date().toISOString(),
+        confidence: typeof result.confidence === "number" ? Math.max(0, Math.min(1, Number(result.confidence))) : 0,
+      } as JsonValue,
+      closureGeneratedAt: new Date().toISOString(),
+      decisionQueue: nextQueue as JsonValue,
+    };
+  });
+}
+
+function applyChangeImpactResultToProgramData(programData: ProgramState, result: Record<string, unknown> | null): ProgramState {
+  return updateInnerProgramData(programData, (inner) => {
+    if (!isRecord(result)) {
+      return {
+        ...inner,
+        changeImpact: null,
+        changeImpactGeneratedAt: new Date().toISOString(),
+      };
+    }
+
+    const impactedGroups = Array.isArray(result.impactedGroups)
+      ? result.impactedGroups
+          .filter(isRecord)
+          .filter((entry) => typeof entry.group === "string" && entry.group.trim().length > 0)
+          .map((entry) => ({
+            group: String(entry.group).trim(),
+            impactLevel: ["critical", "high", "medium", "low"].includes(String(entry.impactLevel))
+              ? entry.impactLevel
+              : "medium",
+            changeType: ["process", "technology", "culture", "structural"].includes(String(entry.changeType))
+              ? entry.changeType
+              : "process",
+            affectedHeadcount: entry.affectedHeadcount == null
+              ? null
+              : Math.max(0, Math.round(coerceNumber(entry.affectedHeadcount, 0))),
+            readinessScore: clampNumber(entry.readinessScore, 0, 1, 0.5),
+            interventions: uniqueStrings(entry.interventions, 5),
+            owner: typeof entry.owner === "string" && entry.owner.trim() ? entry.owner.trim() : null,
+          }))
+      : [];
+
+    return {
+      ...inner,
+      changeImpact: {
+        impactedGroups,
+        overallChangeLoad: ["high", "medium", "low"].includes(String(result.overallChangeLoad))
+          ? result.overallChangeLoad
+          : "medium",
+        peakChangeWindow: typeof result.peakChangeWindow === "string" ? result.peakChangeWindow : "",
+        resistanceRisk: ["high", "medium", "low"].includes(String(result.resistanceRisk))
+          ? result.resistanceRisk
+          : "medium",
+        topInterventions: uniqueStrings(result.topInterventions, 5),
+        confidence: clampNumber(result.confidence, 0, 1, 0.5),
+        summary: truncateText(result.summary, 320),
+      } as JsonValue,
+      changeImpactGeneratedAt: new Date().toISOString(),
+    };
+  });
+}
+
+function applyStakeholderResultToProgramData(programData: ProgramState, result: Record<string, unknown> | null): ProgramState {
+  return updateInnerProgramData(programData, (inner) => {
+    const existingStakeholders = Array.isArray(inner.stakeholders) ? inner.stakeholders.filter(isRecord) : [];
+    const humanStakeholders = existingStakeholders.filter((entry) => entry.source === "human");
+    const normalizedAgentStakeholders = isRecord(result) && Array.isArray(result.stakeholders)
+      ? result.stakeholders
+          .filter(isRecord)
+          .filter((entry) => typeof entry.id === "string" && entry.id.trim() && typeof entry.name === "string" && entry.name.trim())
+          .map((entry) => ({
+            id: String(entry.id).trim(),
+            name: String(entry.name).trim(),
+            role: typeof entry.role === "string" ? entry.role : "",
+            organisation: typeof entry.organisation === "string" && entry.organisation.trim() ? entry.organisation.trim() : null,
+            influence: ["high", "medium", "low"].includes(String(entry.influence)) ? entry.influence : "medium",
+            interest: ["high", "medium", "low"].includes(String(entry.interest)) ? entry.interest : "medium",
+            currentEngagement: ["champion", "supportive", "neutral", "resistant", "unknown"].includes(String(entry.currentEngagement))
+              ? entry.currentEngagement
+              : "unknown",
+            targetEngagement: ["champion", "supportive", "neutral"].includes(String(entry.targetEngagement))
+              ? entry.targetEngagement
+              : "supportive",
+            sentiment: ["positive", "neutral", "negative", "unknown"].includes(String(entry.sentiment))
+              ? entry.sentiment
+              : "unknown",
+            riskOfDisengagement: ["high", "medium", "low"].includes(String(entry.riskOfDisengagement))
+              ? entry.riskOfDisengagement
+              : "medium",
+            recommendedActions: uniqueStrings(entry.recommendedActions, 3),
+            owner: typeof entry.owner === "string" && entry.owner.trim() ? entry.owner.trim() : null,
+            source: "agent",
+          }))
+      : [];
+
+    const humanById = new Map(humanStakeholders.map((entry) => [String(entry.id), entry]));
+    const mergedStakeholders = [
+      ...humanStakeholders.filter((entry) => !normalizedAgentStakeholders.some((agentEntry) => agentEntry.id === String(entry.id))),
+      ...normalizedAgentStakeholders,
+    ];
+
+    return {
+      ...inner,
+      stakeholders: mergedStakeholders as JsonValue,
+      stakeholderGeneratedAt: new Date().toISOString(),
+      stakeholderSummary: isRecord(result)
+        ? {
+            engagementSummary: typeof result.engagementSummary === "string" ? result.engagementSummary : "",
+            criticalRelationships: uniqueStrings(result.criticalRelationships, 6),
+            confidence: clampNumber(result.confidence, 0, 1, 0.5),
+            humanCount: humanById.size,
+          } as JsonValue
+        : inner.stakeholderSummary,
+    };
+  });
+}
+
+function applyAdoptionResultToProgramData(programData: ProgramState, result: Record<string, unknown> | null): ProgramState {
+  return updateInnerProgramData(programData, (inner) => {
+    if (!isRecord(result)) {
+      return {
+        ...inner,
+        adoption: null,
+        adoptionGeneratedAt: new Date().toISOString(),
+      };
+    }
+
+    const adoptionGroups = Array.isArray(result.adoptionGroups)
+      ? result.adoptionGroups
+          .filter(isRecord)
+          .filter((entry) => typeof entry.group === "string" && entry.group.trim().length > 0)
+          .map((entry) => ({
+            group: String(entry.group).trim(),
+            adoptionRate: clampNumber(entry.adoptionRate, 0, 1, 0),
+            trainingCompletion: clampNumber(entry.trainingCompletion, 0, 1, 0),
+            toolUtilisation: clampNumber(entry.toolUtilisation, 0, 1, 0),
+            readinessGap: ["high", "medium", "low", "none"].includes(String(entry.readinessGap))
+              ? entry.readinessGap
+              : "medium",
+            barriers: uniqueStrings(entry.barriers, 5),
+            recommendedInterventions: uniqueStrings(entry.recommendedInterventions, 3),
+          }))
+      : [];
+
+    return {
+      ...inner,
+      adoption: {
+        adoptionGroups,
+        overallAdoptionRate: clampNumber(result.overallAdoptionRate, 0, 1, 0),
+        adoptionTrend: ["improving", "stable", "declining", "unknown"].includes(String(result.adoptionTrend))
+          ? result.adoptionTrend
+          : "unknown",
+        criticalAdoptionRisks: uniqueStrings(result.criticalAdoptionRisks, 6),
+        goLiveReadiness: ["ready", "at-risk", "not-ready"].includes(String(result.goLiveReadiness))
+          ? result.goLiveReadiness
+          : "at-risk",
+        confidence: clampNumber(result.confidence, 0, 1, 0.5),
+        summary: truncateText(result.summary, 320),
+      } as JsonValue,
+      adoptionGeneratedAt: new Date().toISOString(),
+    };
+  });
+}
+
+function applyHealthHeatmapResultToProgramData(programData: ProgramState, result: Record<string, unknown> | null): ProgramState {
+  return updateInnerProgramData(programData, (inner) => {
+    if (!isRecord(result)) {
+      return {
+        ...inner,
+        healthHeatmap: null,
+        healthHeatmapGeneratedAt: new Date().toISOString(),
+      };
+    }
+
+    const phaseHealth = Array.isArray(result.phaseHealth)
+      ? result.phaseHealth
+          .filter(isRecord)
+          .filter((entry) => typeof entry.phaseId === "string" && entry.phaseId.trim().length > 0)
+          .map((entry) => ({
+            phaseId: String(entry.phaseId).trim(),
+            phaseName: typeof entry.phaseName === "string" && entry.phaseName.trim()
+              ? entry.phaseName.trim()
+              : formatPhaseName(String(entry.phaseId)),
+            rag: ["green", "amber", "red", "grey"].includes(String(entry.rag))
+              ? entry.rag
+              : "grey",
+            score: Math.round(clampNumber(entry.score, 0, 100, 0)),
+            confidence: clampNumber(entry.confidence, 0, 1, 0.5),
+            healthNote: truncateText(entry.healthNote, 120),
+            topRisk: typeof entry.topRisk === "string" && entry.topRisk.trim() ? entry.topRisk.trim() : null,
+          }))
+      : [];
+
+    return {
+      ...inner,
+      healthHeatmap: {
+        phaseHealth,
+        overallHealthScore: Math.round(clampNumber(result.overallHealthScore, 0, 100, 0)),
+        overallRag: ["green", "amber", "red"].includes(String(result.overallRag))
+          ? result.overallRag
+          : "amber",
+        trend: ["improving", "stable", "declining"].includes(String(result.trend))
+          ? result.trend
+          : "stable",
+        programMomentum: ["accelerating", "steady", "slowing", "stalled"].includes(String(result.programMomentum))
+          ? result.programMomentum
+          : "steady",
+        confidence: clampNumber(result.confidence, 0, 1, 0.5),
+        summary: truncateText(result.summary, 320),
+      } as JsonValue,
+      healthHeatmapGeneratedAt: new Date().toISOString(),
+    };
+  });
+}
+
+function hasPendingDecision(
+  queue: Array<Record<string, unknown>>,
+  matcher: (decision: Record<string, unknown>) => boolean,
+): boolean {
+  return queue.some((decision) => {
+    const status = typeof decision.status === "string" ? decision.status : "pending";
+    return matcher(decision) && !["resolved", "approved", "rejected"].includes(status);
+  });
+}
+
+function applyRetroResultToProgramData(
+  programData: ProgramState,
+  phaseId: string,
+  result: Record<string, unknown> | null,
+): ProgramState {
+  return updateInnerProgramData(programData, (inner) => {
+    const queue = Array.isArray(inner.decisionQueue) ? inner.decisionQueue.filter(isRecord) : [];
+    const existingRetros = normalizeProgramData(inner.retros as JsonValue | null);
+    const existingGeneratedAt = normalizeProgramData(inner.retrosGeneratedAt as JsonValue | null);
+
+    if (!isRecord(result)) {
+      return {
+        ...inner,
+        retros: existingRetros,
+        retrosGeneratedAt: {
+          ...existingGeneratedAt,
+          [phaseId]: new Date().toISOString(),
+        } as JsonValue,
+      };
+    }
+
+    const wentWell = Array.isArray(result.wentWell)
+      ? result.wentWell
+          .filter(isRecord)
+          .filter((entry) => typeof entry.observation === "string" && entry.observation.trim().length > 0)
+          .map((entry) => ({
+            observation: String(entry.observation).trim(),
+            impact: typeof entry.impact === "string" ? entry.impact.trim() : "",
+            category: ["people", "process", "technology", "governance"].includes(String(entry.category))
+              ? entry.category
+              : "process",
+          }))
+      : [];
+    const improvements = Array.isArray(result.improvements)
+      ? result.improvements
+          .filter(isRecord)
+          .filter((entry) => typeof entry.observation === "string" && entry.observation.trim().length > 0)
+          .map((entry) => ({
+            observation: String(entry.observation).trim(),
+            rootCause: typeof entry.rootCause === "string" ? entry.rootCause.trim() : "",
+            category: ["people", "process", "technology", "governance"].includes(String(entry.category))
+              ? entry.category
+              : "process",
+          }))
+      : [];
+    const actionItems = Array.isArray(result.actionItems)
+      ? result.actionItems
+          .filter(isRecord)
+          .filter((entry) => typeof entry.action === "string" && entry.action.trim().length > 0)
+          .map((entry) => ({
+            action: String(entry.action).trim(),
+            owner: typeof entry.owner === "string" && entry.owner.trim() ? entry.owner.trim() : null,
+            targetPhase: typeof entry.targetPhase === "string" ? entry.targetPhase.trim() : "",
+            priority: ["high", "medium", "low"].includes(String(entry.priority))
+              ? entry.priority
+              : "medium",
+            effort: ["high", "medium", "low"].includes(String(entry.effort))
+              ? entry.effort
+              : "medium",
+          }))
+      : [];
+
+    const normalizedRetro = {
+      wentWell,
+      improvements,
+      actionItems,
+      overallSentiment: ["positive", "mixed", "negative"].includes(String(result.overallSentiment))
+        ? result.overallSentiment
+        : "mixed",
+      healthScore: Math.round(clampNumber(result.healthScore, 0, 100, 0)),
+      keyLearning: truncateText(result.keyLearning, 150),
+      confidence: clampNumber(result.confidence, 0, 1, 0.5),
+    };
+
+    const retroDecisions = actionItems
+      .filter((entry) => entry.priority === "high" && entry.targetPhase)
+      .filter((entry) => !hasPendingDecision(queue, (decision) =>
+        decision.type === "retro-action"
+        && decision.phaseId === entry.targetPhase
+        && decision.title === entry.action
+      ))
+      .map((entry) => ({
+        id: `retro_${phaseId}_${Date.now()}_${entry.action.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`,
+        type: "retro-action",
+        title: entry.action,
+        priority: "high",
+        phaseId: entry.targetPhase,
+        question: `Carry forward from ${formatPhaseName(phaseId)}: ${entry.action}`,
+        recommendation: `Apply this learning in ${formatPhaseName(entry.targetPhase)}.${entry.owner ? ` Suggested owner: ${entry.owner}.` : ""}`,
+        options: ["Accept action", "Defer action"],
+        createdAt: new Date().toISOString(),
+        status: "pending",
+      }));
+
+    return {
+      ...inner,
+      retros: {
+        ...existingRetros,
+        [phaseId]: normalizedRetro as JsonValue,
+      },
+      retrosGeneratedAt: {
+        ...existingGeneratedAt,
+        [phaseId]: new Date().toISOString(),
+      } as JsonValue,
+      decisionQueue: [...queue, ...retroDecisions] as JsonValue,
+    };
+  });
+}
+
+function applyDeckResultToProgramData(programData: ProgramState, result: Record<string, unknown> | null): ProgramState {
+  return updateInnerProgramData(programData, (inner) => {
+    if (!isRecord(result)) {
+      return {
+        ...inner,
+        deck: null,
+        deckGeneratedAt: new Date().toISOString(),
+      };
+    }
+
+    const slides = Array.isArray(result.slides)
+      ? result.slides
+          .filter(isRecord)
+          .filter((entry) => typeof entry.title === "string" && entry.title.trim().length > 0)
+          .map((entry, index) => ({
+            slideNumber: Math.max(1, Math.round(coerceNumber(entry.slideNumber, index + 1))),
+            title: String(entry.title).trim(),
+            type: [
+              "title",
+              "executive-summary",
+              "status",
+              "financials",
+              "risks",
+              "milestones",
+              "decisions",
+              "achievements",
+              "next-steps",
+              "appendix",
+            ].includes(String(entry.type))
+              ? entry.type
+              : "status",
+            talkingPoints: uniqueStrings(entry.talkingPoints, 4),
+            dataCallouts: uniqueStrings(entry.dataCallouts, 5),
+            recommendedVisual: typeof entry.recommendedVisual === "string" && entry.recommendedVisual.trim()
+              ? entry.recommendedVisual.trim()
+              : null,
+            speakerNotes: truncateText(entry.speakerNotes, 500),
+          }))
+          .sort((left, right) => left.slideNumber - right.slideNumber)
+      : [];
+
+    return {
+      ...inner,
+      deck: {
+        title: typeof result.title === "string" ? result.title : "Executive Program Update",
+        audience: typeof result.audience === "string" ? result.audience : "Executive Steering Group",
+        slides,
+        generatedAt: typeof result.generatedAt === "string" ? result.generatedAt : new Date().toISOString(),
+        confidence: clampNumber(result.confidence, 0, 1, 0.5),
+        programHealthSummary: truncateText(result.programHealthSummary, 240),
+      } as JsonValue,
+      deckGeneratedAt: new Date().toISOString(),
+    };
+  });
+}
+
+function applyScopePcrResultToProgramData(programData: ProgramState, result: Record<string, unknown> | null): ProgramState {
+  return updateInnerProgramData(programData, (inner) => {
+    const queue = Array.isArray(inner.decisionQueue) ? inner.decisionQueue.filter(isRecord) : [];
+    if (!isRecord(result)) {
+      return {
+        ...inner,
+        scopePcr: null,
+        scopePcrGeneratedAt: new Date().toISOString(),
+      };
+    }
+
+    const scopeSignals = Array.isArray(result.scopeSignals)
+      ? result.scopeSignals
+          .filter(isRecord)
+          .filter((entry) => typeof entry.id === "string" && entry.id.trim() && typeof entry.description === "string" && entry.description.trim())
+          .map((entry) => ({
+            id: String(entry.id).trim(),
+            description: String(entry.description).trim(),
+            source: ["decision", "risk", "phase-evidence", "stakeholder"].includes(String(entry.source))
+              ? entry.source
+              : "decision",
+            phase: typeof entry.phase === "string" && entry.phase.trim() ? entry.phase.trim() : "program",
+            severity: ["critical", "high", "medium", "low"].includes(String(entry.severity))
+              ? entry.severity
+              : "medium",
+            impactOnTimeline: typeof entry.impactOnTimeline === "string" && entry.impactOnTimeline.trim() ? entry.impactOnTimeline.trim() : null,
+            impactOnBudget: typeof entry.impactOnBudget === "string" && entry.impactOnBudget.trim() ? entry.impactOnBudget.trim() : null,
+            recommendPcr: entry.recommendPcr === true,
+            pcrRationale: typeof entry.pcrRationale === "string" && entry.pcrRationale.trim() ? entry.pcrRationale.trim() : null,
+          }))
+      : [];
+
+    const pcrDecisions = scopeSignals
+      .filter((entry) => entry.recommendPcr)
+      .filter((entry) => !hasPendingDecision(queue, (decision) =>
+        decision.type === "pcr-review"
+        && decision.agentId === entry.id
+      ))
+      .map((entry) => ({
+        id: `pcr_${entry.id}_${Date.now()}`,
+        type: "pcr-review",
+        title: `PCR recommended · ${entry.description}`,
+        priority: entry.severity === "critical" || entry.severity === "high" ? "high" : "medium",
+        phaseId: entry.phase,
+        question: `Raise a formal PCR for ${entry.description}?`,
+        recommendation: entry.pcrRationale || "ADAM detected a scope change signal that merits sponsor review.",
+        options: ["Raise PCR", "Monitor only"],
+        createdAt: new Date().toISOString(),
+        status: "pending",
+        agentId: entry.id,
+      }));
+
+    return {
+      ...inner,
+      scopePcr: {
+        scopeSignals,
+        overallScopeRisk: ["high", "medium", "low", "contained"].includes(String(result.overallScopeRisk))
+          ? result.overallScopeRisk
+          : "contained",
+        recommendedActions: uniqueStrings(result.recommendedActions, 5),
+        openPcrCount: Math.max(0, Math.round(coerceNumber(result.openPcrCount, pcrDecisions.length))),
+        confidence: clampNumber(result.confidence, 0, 1, 0.5),
+        summary: truncateText(result.summary, 320),
+      } as JsonValue,
+      scopePcrGeneratedAt: new Date().toISOString(),
+      decisionQueue: [...queue, ...pcrDecisions] as JsonValue,
+    };
+  });
+}
+
+function applyPatternExtractResultToProgramData(
+  programData: ProgramState,
+  result: Record<string, unknown> | null,
+): ProgramState {
+  return updateInnerProgramData(programData, (inner) => ({
+    ...inner,
+    patternExtractGeneratedAt: new Date().toISOString(),
+    patternExtractCount: isRecord(result) && Array.isArray(result.patterns)
+      ? result.patterns.filter(isRecord).length
+      : 0,
+  }));
+}
+
+function applyPatternQueryResultToProgramData(
+  programData: ProgramState,
+  result: Record<string, unknown> | null,
+): ProgramState {
+  return updateInnerProgramData(programData, (inner) => ({
+    ...inner,
+    patternQueryCache: isRecord(result) && Array.isArray(result.patterns)
+      ? result.patterns.filter(isRecord).slice(0, 10) as JsonValue
+      : (inner.patternQueryCache ?? null),
+    patternQueryCachedAt: new Date().toISOString(),
+  }));
+}
+
+function getPriorPhaseContext(programData: ProgramState, targetPhaseId: string, maxChars = 1200): string {
+  const targetIndex = ATOS_PHASE_SEQUENCE.indexOf(targetPhaseId);
+  if (targetIndex <= 0) return "";
+  const phaseArtifacts = (programData.phaseArtifacts as Record<string, Record<string, Record<string, JsonValue>>> | undefined) || {};
+  const lines: string[] = [];
+  for (const phaseId of ATOS_PHASE_SEQUENCE.slice(0, targetIndex)) {
+    const artifacts = phaseArtifacts[phaseId] || {};
+    for (const [artifactId, artifact] of Object.entries(artifacts)) {
+      if (artifact?.status !== "approved") continue;
+      const title = typeof artifact.title === "string" ? artifact.title : artifactId;
+      const content = typeof artifact.content === "string" ? artifact.content.replace(/\s+/g, " ").trim() : "";
+      if (!content) continue;
+      const line = `${phaseId}: ${title} — ${content.slice(0, 220)}`;
+      const next = [...lines, line].join("\n");
+      if (next.length > maxChars) {
+        return `Prior phase context:\n${lines.join("\n")}`.slice(0, maxChars);
+      }
+      lines.push(line);
+    }
+  }
+  return lines.length ? `Prior phase context:\n${lines.join("\n")}` : "";
+}
+
+async function getServerMemoryContext(
+  admin: SupabaseClient,
+  programId: string,
+  agentId: string,
+  phaseId: string,
+): Promise<string> {
+  const { data, error } = await admin
+    .from("adam_agent_runs")
+    .select("status, confidence, created_at, output, error_message")
+    .eq("program_id", programId)
+    .eq("agent_id", agentId)
+    .eq("phase_id", phaseId)
+    .order("created_at", { ascending: false })
+    .limit(5);
+
+  if (error || !(data || []).length) return "";
+
+  const entries = (data || []).map((run) => {
+    const outputSummary = (() => {
+      if (!run.output || typeof run.output !== "object" || Array.isArray(run.output)) return "";
+      const summary = (run.output as Record<string, JsonValue>).summary;
+      return typeof summary === "string" ? summary : "";
+    })();
+    const statusLabel = typeof run.status === "string" ? run.status : "unknown";
+    return `- ${run.created_at}: ${statusLabel}, confidence ${Number(run.confidence ?? 0).toFixed(2)}${outputSummary ? ` — ${outputSummary}` : ""}${run.error_message ? ` — ${run.error_message}` : ""}`;
+  });
+  return `Recent agent memory:\n${entries.join("\n")}`.slice(0, 800);
+}
+
+function checkForPauseMarker(response: string): PauseMarkerResult {
+  const markerMatch = response.match(/\[PAUSE_FOR_DECISION:\s*(\{[\s\S]*?\})\s*\]/);
+  if (!markerMatch) return { hasPause: false };
+
+  const payload = safeJsonParse<Record<string, unknown>>(markerMatch[1], {});
+  return {
+    hasPause: true,
+    reason: typeof payload.reason === "string" ? payload.reason : "Human input required.",
+    question: typeof payload.question === "string" ? payload.question : "Please review the pending agent question.",
+    options: Array.isArray(payload.options) ? payload.options.filter((item): item is string => typeof item === "string") : [],
+    contentBeforePause: response.slice(0, markerMatch.index).trim() || "",
+  };
+}
+
+function parseAgentPayload(raw: string, phaseId: string, agentId: string): ParsedAgentPayload {
+  const jsonMatch = raw.match(/\{[\s\S]*\}/);
+  const parsed = jsonMatch ? safeJsonParse<Record<string, unknown>>(jsonMatch[0], {}) : {};
+  const artifacts = Array.isArray(parsed.artifacts)
+    ? parsed.artifacts.map((entry, index) => {
+        const artifact = typeof entry === "object" && entry !== null ? entry as Record<string, unknown> : {};
+        const title = typeof artifact.title === "string" ? artifact.title : `Generated artifact ${index + 1}`;
+        const id = typeof artifact.id === "string"
+          ? artifact.id
+          : title.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+        return {
+          id: id || `${phaseId}_${agentId}_${index + 1}`,
+          title,
+          content: typeof artifact.content === "string" ? artifact.content : "",
+          summary: typeof artifact.summary === "string" ? artifact.summary : undefined,
+        };
+      }).filter((artifact) => artifact.content.trim())
+    : [];
+  const decisions = Array.isArray(parsed.decisions)
+    ? parsed.decisions.map((entry) => {
+        const decision = typeof entry === "object" && entry !== null ? entry as Record<string, unknown> : {};
+        return {
+          title: typeof decision.title === "string" ? decision.title : "Decision needed",
+          question: typeof decision.question === "string" ? decision.question : "Review the agent recommendation.",
+          priority: typeof decision.priority === "string" ? decision.priority : "medium",
+          options: Array.isArray(decision.options) ? decision.options.filter((item): item is string => typeof item === "string") : [],
+        };
+      })
+    : [];
+  const handoffValue = parsed.handoff;
+  const handoff = (handoffValue && typeof handoffValue === "object" && !Array.isArray(handoffValue))
+    ? {
+        fromAgentId: typeof (handoffValue as Record<string, unknown>).fromAgentId === "string"
+          ? String((handoffValue as Record<string, unknown>).fromAgentId)
+          : agentId,
+        fromPhaseId: typeof (handoffValue as Record<string, unknown>).fromPhaseId === "string"
+          ? String((handoffValue as Record<string, unknown>).fromPhaseId)
+          : phaseId,
+        toPhaseId: typeof (handoffValue as Record<string, unknown>).toPhaseId === "string"
+          ? String((handoffValue as Record<string, unknown>).toPhaseId)
+          : "",
+        completedAt: typeof (handoffValue as Record<string, unknown>).completedAt === "string"
+          ? String((handoffValue as Record<string, unknown>).completedAt)
+          : new Date().toISOString(),
+        summary: typeof (handoffValue as Record<string, unknown>).summary === "string"
+          ? String((handoffValue as Record<string, unknown>).summary)
+          : "",
+        keyDecisions: Array.isArray((handoffValue as Record<string, unknown>).keyDecisions)
+          ? ((handoffValue as Record<string, unknown>).keyDecisions as unknown[]).filter((item): item is string => typeof item === "string")
+          : [],
+        artifactIds: Array.isArray((handoffValue as Record<string, unknown>).artifactIds)
+          ? ((handoffValue as Record<string, unknown>).artifactIds as unknown[]).filter((item): item is string => typeof item === "string")
+          : artifacts.map((artifact) => artifact.id),
+        openQuestions: Array.isArray((handoffValue as Record<string, unknown>).openQuestions)
+          ? ((handoffValue as Record<string, unknown>).openQuestions as unknown[]).filter((item): item is string => typeof item === "string")
+          : [],
+        confidence: typeof (handoffValue as Record<string, unknown>).confidence === "number"
+          ? Number((handoffValue as Record<string, unknown>).confidence)
+          : 0.7,
+        recommendedNextAction: typeof (handoffValue as Record<string, unknown>).recommendedNextAction === "string"
+          ? String((handoffValue as Record<string, unknown>).recommendedNextAction)
+          : "Review the generated artifacts and continue the next phase.",
+      }
+    : null;
+
+  return {
+    summary: typeof parsed.summary === "string" ? parsed.summary : "",
+    reasoningTrace: Array.isArray(parsed.reasoningTrace)
+      ? parsed.reasoningTrace.filter((item): item is string => typeof item === "string")
+      : [],
+    confidence: typeof parsed.confidence === "number" ? Number(parsed.confidence) : 0.72,
+    artifacts,
+    decisions,
+    handoff,
+  };
+}
+
+function buildDefaultHandoff(
+  request: RunAgentRequest,
+  payload: ParsedAgentPayload,
+): AgentHandoff | null {
+  const currentIndex = ATOS_PHASE_SEQUENCE.indexOf(request.phaseId);
+  const nextPhaseId = payload.handoff?.toPhaseId || ATOS_PHASE_SEQUENCE[currentIndex + 1] || "";
+  if (!nextPhaseId) return null;
+
+  return {
+    fromAgentId: request.agentId,
+    fromPhaseId: request.phaseId,
+    toPhaseId: nextPhaseId,
+    completedAt: new Date().toISOString(),
+    summary: payload.handoff?.summary || payload.summary || `${request.phaseId} agent completed its current run.`,
+    keyDecisions: payload.handoff?.keyDecisions || payload.decisions.map((decision) => decision.title),
+    artifactIds: payload.handoff?.artifactIds || payload.artifacts.map((artifact) => artifact.id),
+    openQuestions: payload.handoff?.openQuestions || [],
+    confidence: payload.handoff?.confidence ?? payload.confidence,
+    recommendedNextAction: payload.handoff?.recommendedNextAction || `Continue into ${nextPhaseId}.`,
+  };
+}
+
+function applyArtifactsToProgramData(
+  programData: ProgramState,
+  phaseId: string,
+  artifacts: ParsedAgentPayload["artifacts"],
+): ProgramState {
+  const nextData = { ...programData };
+  const phaseArtifacts = {
+    ...((nextData.phaseArtifacts as Record<string, Record<string, JsonValue>>) || {}),
+  };
+  const currentPhaseArtifacts = {
+    ...(phaseArtifacts[phaseId] || {}),
+  };
+
+  for (const artifact of artifacts) {
+    currentPhaseArtifacts[artifact.id] = {
+      ...(typeof currentPhaseArtifacts[artifact.id] === "object" && currentPhaseArtifacts[artifact.id] !== null
+        ? currentPhaseArtifacts[artifact.id] as Record<string, JsonValue>
+        : {}),
+      title: artifact.title,
+      content: artifact.content,
+      status: "draft",
+      agentDrafted: true,
+      agentDraftedAt: new Date().toISOString(),
+    };
+  }
+
+  phaseArtifacts[phaseId] = currentPhaseArtifacts;
+  nextData.phaseArtifacts = phaseArtifacts;
+  return nextData;
+}
+
+function appendDecisionQueueItems(
+  programData: ProgramState,
+  items: Record<string, JsonValue>[],
+): ProgramState {
+  const nextData = { ...programData };
+  const queue = Array.isArray(nextData.decisionQueue) ? [...nextData.decisionQueue as JsonValue[]] : [];
+  nextData.decisionQueue = [...queue, ...items];
+  return nextData;
+}
+
+function createAgentReviewDecision(
+  agentId: string,
+  phaseId: string,
+  result: Record<string, unknown> | null,
+  reason: string,
+): Record<string, JsonValue> {
+  return {
+    id: crypto.randomUUID(),
+    type: "agent_review",
+    phaseId,
+    phase: phaseId,
+    agentId,
+    title: `Review ${agentId} output`,
+    question: `ADAM has generated a ${agentId} update. Review and approve or defer.`,
+    recommendation: `Confidence was below the trust threshold. Reason: ${reason}`,
+    createdAt: new Date().toISOString(),
+    priority: "medium",
+    status: "open",
+    previewContent: (result || {}) as JsonValue,
+  };
+}
+
+function buildOutputSummary(agentId: string, result: Record<string, unknown> | null): string {
+  if (!result) return `${agentId} completed`;
+  if (agentId === "plan") {
+    const plan = isRecord(result.plan) ? result.plan : null;
+    const milestones = plan && Array.isArray(plan.milestones) ? plan.milestones.length : 0;
+    return `Plan updated with ${milestones} milestones`;
+  }
+  if (agentId === "risk") {
+    return `Risk scan: ${Array.isArray(result.raidEntries) ? result.raidEntries.length : 0} items`;
+  }
+  if (agentId === "milestone") {
+    return `${Array.isArray(result.milestones) ? result.milestones.length : 0} milestones derived`;
+  }
+  if (agentId === "gate-review") {
+    return `Gate review: ${typeof result.status === "string" ? result.status : "complete"}`;
+  }
+  if (agentId === "escalation") {
+    return `${Array.isArray(result.escalations) ? result.escalations.length : 0} escalations raised`;
+  }
+  if (typeof result.summary === "string" && result.summary.trim()) {
+    return result.summary.trim().slice(0, 120);
+  }
+  return `${agentId} completed`;
+}
+
+async function emitAgentEvent(
+  admin: SupabaseClient,
+  params: {
+    programId: string;
+    agentId: string;
+    phaseId?: string | null;
+    eventType: "triggered" | "completed" | "failed" | "stale";
+    payload?: Record<string, unknown> | null;
+  },
+): Promise<void> {
+  const { error } = await admin
+    .from("adam_agent_events")
+    .insert({
+      program_id: params.programId,
+      agent_id: params.agentId,
+      phase_id: params.phaseId ?? null,
+      event_type: params.eventType,
+      payload: (params.payload || null) as JsonValue | null,
+    });
+  if (error) {
+    throw new Error(`Failed to emit agent event: ${error.message}`);
+  }
+}
+
+async function persistAgentArtifact(
+  admin: SupabaseClient,
+  programId: string,
+  agentId: string,
+  phaseId: string,
+  content: Record<string, unknown> | null,
+  confidence: number | null,
+): Promise<void> {
+  const normalizedContent = (content || {}) as JsonValue;
+  const prior = await admin
+    .from("adam_program_artifacts")
+    .select("id, version")
+    .eq("program_id", programId)
+    .eq("agent_id", agentId)
+    .eq("phase_id", phaseId)
+    .is("superseded_at", null)
+    .maybeSingle();
+
+  if (prior.error && prior.error.code !== "PGRST116") {
+    throw new Error(`Failed to read prior artifact: ${prior.error.message}`);
+  }
+
+  const inserted = await admin
+    .from("adam_program_artifacts")
+    .insert({
+      program_id: programId,
+      agent_id: agentId,
+      phase_id: phaseId,
+      version: (prior.data?.version || 0) + 1,
+      content: normalizedContent,
+      confidence,
+    })
+    .select("id")
+    .single();
+
+  if (inserted.error || !inserted.data?.id) {
+    throw new Error(inserted.error?.message || "Failed to persist agent artifact.");
+  }
+
+  if (prior.data?.id) {
+    const { error } = await admin
+      .from("adam_program_artifacts")
+      .update({
+        superseded_at: new Date().toISOString(),
+        superseded_by: inserted.data.id,
+      })
+      .eq("id", prior.data.id);
+    if (error) {
+      throw new Error(`Failed to supersede prior artifact: ${error.message}`);
+    }
+  }
+}
+
+async function autonomyGate(
+  admin: SupabaseClient,
+  programId: string,
+  agentId: string,
+  confidence: number | null,
+): Promise<{
+  actAutonomously: boolean;
+  applyWriteBack: boolean;
+  shouldQueueReview: boolean;
+  reason: string;
+}> {
+  const ALWAYS_HUMAN = ["gate-review", "closure", "escalation"];
+  if (ALWAYS_HUMAN.includes(agentId)) {
+    await admin.from("adam_autonomy_log").insert({
+      program_id: programId,
+      agent_id: agentId,
+      action_type: "write-back",
+      confidence,
+      acted_autonomously: false,
+      reason: "Agent always requires human confirmation",
+    });
+    return {
+      actAutonomously: false,
+      applyWriteBack: true,
+      shouldQueueReview: false,
+      reason: "Agent always requires human confirmation",
+    };
+  }
+
+  const { data: settings } = await admin
+    .from("adam_autonomy_settings")
+    .select("*")
+    .eq("program_id", programId)
+    .eq("agent_id", agentId)
+    .maybeSingle();
+
+  if (!settings) {
+    await admin.from("adam_autonomy_log").insert({
+      program_id: programId,
+      agent_id: agentId,
+      action_type: "write-back",
+      confidence,
+      acted_autonomously: false,
+      reason: "No autonomy settings configured; using default queued behavior.",
+    });
+    return {
+      actAutonomously: false,
+      applyWriteBack: true,
+      shouldQueueReview: false,
+      reason: "No autonomy settings configured; using default queued behavior.",
+    };
+  }
+
+  const threshold = typeof settings.trust_threshold === "number" ? settings.trust_threshold : 0.85;
+  const enabled = settings.enabled === true;
+  const maxDailyActions = typeof settings.max_autonomous_actions_per_day === "number" ? settings.max_autonomous_actions_per_day : 10;
+
+  // Check daily autonomy limit
+  const todayStart = new Date();
+  todayStart.setUTCHours(0, 0, 0, 0);
+  const { count: todayCount } = await admin
+    .from("adam_autonomy_log")
+    .select("*", { count: "exact", head: true })
+    .eq("program_id", programId)
+    .eq("acted_autonomously", true)
+    .gte("created_at", todayStart.toISOString());
+  const dailyLimitExceeded = enabled && typeof todayCount === "number" && todayCount >= maxDailyActions;
+
+  const actAutonomously = enabled && !dailyLimitExceeded && typeof confidence === "number" && confidence >= threshold;
+  const reason = actAutonomously
+    ? `Confidence ${confidence?.toFixed(2)} >= threshold ${threshold}`
+    : dailyLimitExceeded
+      ? `Daily autonomous action limit reached (${todayCount ?? 0}/${maxDailyActions})`
+      : !enabled
+        ? "Autonomy disabled for this agent"
+        : `Confidence ${confidence?.toFixed(2) ?? "0.00"} < threshold ${threshold}`;
+
+  await admin.from("adam_autonomy_log").insert({
+    program_id: programId,
+    agent_id: agentId,
+    action_type: "write-back",
+    confidence,
+    acted_autonomously: actAutonomously,
+    reason,
+  });
+
+  return {
+    actAutonomously,
+    applyWriteBack: actAutonomously || !enabled,
+    shouldQueueReview: enabled && !actAutonomously,
+    reason,
+  };
+}
+
+async function persistExtractedPatterns(
+  admin: SupabaseClient,
+  programId: string,
+  patterns: unknown,
+): Promise<number> {
+  if (!Array.isArray(patterns)) return 0;
+  const validPatternTypes = new Set(["risk", "intervention", "milestone-sequence", "adoption-tactic", "gate-criteria"]);
+  const validProgramSizes = new Set(["small", "medium", "large", "enterprise"]);
+  const validOutcomes = new Set(["successful", "failed", "neutral"]);
+  const rows = patterns
+    .filter(isRecord)
+    .map((entry) => ({
+      pattern_type: validPatternTypes.has(String(entry.pattern_type)) ? String(entry.pattern_type) : "risk",
+      phase_id: typeof entry.phase_id === "string" ? entry.phase_id : null,
+      industry: typeof entry.industry === "string" ? entry.industry : null,
+      program_size: validProgramSizes.has(String(entry.program_size)) ? String(entry.program_size) : null,
+      pattern_title: typeof entry.pattern_title === "string" && entry.pattern_title.trim()
+        ? entry.pattern_title.trim().slice(0, 120)
+        : "Unnamed pattern",
+      pattern_body: isRecord(entry.pattern_body) ? entry.pattern_body : { raw: entry },
+      outcome: validOutcomes.has(String(entry.outcome)) ? String(entry.outcome) : "neutral",
+      confidence: typeof entry.confidence === "number" ? Math.max(0, Math.min(1, entry.confidence)) : 0.5,
+      source_program_id: programId,
+    }));
+
+  if (!rows.length) return 0;
+
+  const { error } = await admin.from("adam_pattern_library").insert(rows);
+  if (error) {
+    throw new Error(`Failed to persist extracted patterns: ${error.message}`);
+  }
+  return rows.length;
+}
+
+async function persistProgramData(
+  admin: SupabaseClient,
+  programId: string,
+  data: ProgramState,
+): Promise<void> {
+  const { error } = await admin
+    .from("adam_programs")
+    .update({
+      data,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", programId);
+
+  if (error) {
+    throw new Error(`Failed to persist program state: ${error.message}`);
+  }
+}
+
+async function queueTriggeredRun(
+  admin: SupabaseClient,
+  run: {
+    programId: string;
+    agentId: string;
+    phaseId: string;
+    ownerId: string | null;
+    triggerEvent: string;
+    incomingHandoff?: AgentHandoff | null;
+  },
+): Promise<void> {
+  const inserted = await admin
+    .from("adam_agent_runs")
+    .insert({
+      program_id: run.programId,
+      agent_id: run.agentId,
+      phase_id: run.phaseId,
+      status: "queued",
+      trigger_event: run.triggerEvent,
+      scheduled_by: "handoff",
+      owner_id: run.ownerId,
+      handoff: (run.incomingHandoff || null) as JsonValue | null,
+    })
+    .select("id")
+    .single();
+
+  if (inserted.error || !inserted.data?.id) {
+    throw new Error(inserted.error?.message || "Failed to queue triggered run.");
+  }
+
+  await fetch(`${SUPABASE_URL}/functions/v1/run-agent`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+    },
+    body: JSON.stringify({
+      programId: run.programId,
+      agentId: run.agentId,
+      phaseId: run.phaseId,
+      triggeredBy: "handoff",
+      triggerEvent: run.triggerEvent,
+      incomingHandoff: run.incomingHandoff || null,
+      runId: inserted.data.id,
+    } satisfies RunAgentRequest),
+  }).catch((error) => {
+    console.warn("ADAM follow-on run invocation failed:", error);
+  });
+}
+
+async function triggerDownstreamAgents(
+  completedAgentId: string,
+  programId: string,
+  completedPhaseId: string,
+  /** Handoff from the completing agent — passed to each downstream so they know upstream context */
+  completedHandoff?: AgentHandoff | null,
+): Promise<void> {
+  const downstreamAgents = [...(AGENT_DOWNSTREAM[completedAgentId] || [])];
+  if (completedAgentId === "gate-review" && completedPhaseId && completedPhaseId !== "program") {
+    downstreamAgents.push({ agentId: "retro", phaseId: completedPhaseId });
+  }
+  // Pattern-query runs after gate-review and narrative to surface relevant precedents
+  if (completedAgentId === "gate-review" || completedAgentId === "narrative") {
+    downstreamAgents.push({ agentId: "pattern-query", phaseId: completedPhaseId });
+  }
+  if (!downstreamAgents.length) return;
+
+  await Promise.allSettled(downstreamAgents.map((target) => fetch(`${SUPABASE_URL}/functions/v1/run-agent`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+    },
+    body: JSON.stringify({
+      programId,
+      agentId: target.agentId,
+      phaseId: target.phaseId === "{{phaseId}}" ? completedPhaseId : target.phaseId,
+      triggeredBy: "trigger",
+      triggerEvent: `downstream:${completedAgentId}`,
+      // ── Cross-agent intelligence: pass upstream handoff so downstream agents
+      //    know what the completing agent found, its confidence, and open questions.
+      incomingHandoff: completedHandoff ?? null,
+    } satisfies RunAgentRequest),
+  })));
+}
+
+async function callJsonLLM(
+  system: string,
+  user: string,
+  maxTokens = 1200,
+): Promise<{ parsed: Record<string, unknown>; raw: string; inputTokens: number; outputTokens: number }> {
+  const result = await streamClaudeText({
+    system,
+    messages: [{ role: "user", content: user }],
+    maxTokens,
+    temperature: 0.2,
+  });
+  const parsed = extractAgentJson(result.text);
+  return {
+    parsed: isRecord(parsed) ? parsed : {},
+    raw: result.text,
+    inputTokens: result.inputTokens,
+    outputTokens: result.outputTokens,
+  };
+}
+
+function stringifyForReview(value: unknown, maxLength = 2000): string {
+  if (typeof value === "string") return value.slice(0, maxLength);
+  return stringifyJson(value).slice(0, maxLength);
+}
+
+async function reviewArtifact(
+  artifactLabel: string,
+  artifactContent: string,
+  phaseContext: string,
+  priorPhaseContext: string,
+): Promise<{ score: number; dimensions: Record<string, number>; improvements: string[] }> {
+  const systemPrompt = `You are an independent artifact quality reviewer for ADAM transformation programs.
+Score the artifact on these dimensions (0-100 each):
+- completeness: are all expected sections present with substantive content?
+- specificity: does it reference actual program data (names, metrics, dates) vs generic statements?
+- actionability: does it tell the reader what to do next, concretely?
+- consistency: is it consistent with the prior phase context provided?
+
+Return ONLY valid JSON:
+{ "score": 0-100, "dimensions": { "completeness": 0-100, "specificity": 0-100, "actionability": 0-100, "consistency": 0-100 }, "improvements": ["specific suggestion 1", "specific suggestion 2"] }`;
+  const userPrompt = `Artifact type: ${artifactLabel}
+Prior phase context: ${priorPhaseContext || "None"}
+Program context: ${phaseContext}
+
+Artifact to review:
+${artifactContent.slice(0, 2000)}`;
+  const { parsed } = await callJsonLLM(systemPrompt, userPrompt, 400);
+  return {
+    score: clampNumber(parsed.score, 0, 100, 70),
+    dimensions: isRecord(parsed.dimensions)
+      ? Object.fromEntries(
+          Object.entries(parsed.dimensions).map(([key, value]) => [key, Math.round(clampNumber(value, 0, 100, 70))]),
+        )
+      : {},
+    improvements: uniqueStrings(parsed.improvements, 4),
+  };
+}
+
+function setInnerField(programData: ProgramState, key: string, value: JsonValue): ProgramState {
+  return updateInnerProgramData(programData, (inner) => ({
+    ...inner,
+    [key]: value,
+  }));
+}
+
+function setPhaseArtifactValue(
+  programData: ProgramState,
+  phaseId: string,
+  artifactId: string,
+  content: Record<string, unknown>,
+  title: string,
+): ProgramState {
+  return updateInnerProgramData(programData, (inner) => {
+    const phaseArtifacts = normalizeProgramData(inner.phaseArtifacts as JsonValue | null);
+    const currentPhaseArtifacts = normalizeProgramData(phaseArtifacts[phaseId] as JsonValue | null);
+    return {
+      ...inner,
+      phaseArtifacts: {
+        ...phaseArtifacts,
+        [phaseId]: {
+          ...currentPhaseArtifacts,
+          [artifactId]: {
+            ...(normalizeProgramData(currentPhaseArtifacts[artifactId] as JsonValue | null)),
+            title,
+            content,
+            status: "draft",
+            agentDrafted: true,
+            agentDraftedAt: new Date().toISOString(),
+          } as JsonValue,
+        } as JsonValue,
+      } as JsonValue,
+    };
+  });
+}
+
+function getOpenRaidEntries(inner: ProgramState): Record<string, unknown>[] {
+  const raidLog = normalizeProgramData(inner.raidLog as JsonValue | null);
+  return Array.isArray(raidLog.entries)
+    ? raidLog.entries.filter(isRecord).filter((entry) => entry.status !== "closed")
+    : [];
+}
+
+function getExitCriteriaForPhase(inner: ProgramState, phaseId: string): Record<string, unknown>[] {
+  const gateReviews = normalizeProgramData(inner.gateReviews as JsonValue | null);
+  const review = normalizeProgramData(gateReviews[phaseId] as JsonValue | null);
+  return Array.isArray(review.exitCriteriaStatus) ? review.exitCriteriaStatus.filter(isRecord) : [];
+}
+
+function computeReadinessForAgent(programData: ProgramState, phaseId: string): {
+  score: number;
+  threshold: number;
+  failingChecks: Array<{ label: string; severity: "high" | "medium" | "low" }>;
+} {
+  const inner = getInnerProgramData(programData);
+  const phases = getProgramPhaseContext(programData);
+  const phase = phases.find((entry) => entry.id === phaseId);
+  const threshold = 70;
+  const failingChecks: Array<{ label: string; severity: "high" | "medium" | "low" }> = [];
+  let score = Math.round(clampNumber(phase?.pct ?? 0, 0, 100, 0));
+
+  const inputs = normalizeProgramData(normalizeProgramData(inner.phaseInputs as JsonValue | null)[phaseId] as JsonValue | null);
+  const hasInputs = Object.keys(inputs).filter((key) => !key.startsWith("_") && String(inputs[key] || "").trim()).length > 0;
+  if (!hasInputs) {
+    failingChecks.push({ label: "Structured phase inputs are missing", severity: "high" });
+    score -= 20;
+  }
+
+  const narrative = typeof inner.narrative === "string" ? inner.narrative.trim() : "";
+  if (!narrative) {
+    failingChecks.push({ label: "Narrative not generated", severity: "medium" });
+    score -= 10;
+  }
+
+  const openRisks = getOpenRaidEntries(inner).filter((entry) => {
+    const riskPhase = typeof entry.phase === "string" ? entry.phase : typeof entry.phaseId === "string" ? entry.phaseId : phaseId;
+    return riskPhase === phaseId && ["critical", "high"].includes(String(entry.severity || ""));
+  });
+  if (openRisks.length) {
+    failingChecks.push({ label: `${openRisks.length} unresolved high-severity risk(s)`, severity: "high" });
+    score -= Math.min(20, openRisks.length * 5);
+  }
+
+  const criteria = getExitCriteriaForPhase(inner, phaseId);
+  const unmetCriteria = criteria.filter((criterion) => criterion.met !== true);
+  if (unmetCriteria.length) {
+    failingChecks.push({ label: `${unmetCriteria.length} exit criteria still unmet`, severity: "high" });
+    score -= Math.min(25, unmetCriteria.length * 6);
+  }
+
+  const openDecisions = Array.isArray(inner.decisionQueue)
+    ? inner.decisionQueue.filter(isRecord).filter((entry) => (entry.phaseId === phaseId || entry.phase_id === phaseId) && entry.status !== "resolved" && entry.status !== "approved")
+    : [];
+  if (openDecisions.length) {
+    failingChecks.push({ label: `${openDecisions.length} open decision(s) still pending`, severity: "medium" });
+    score -= Math.min(15, openDecisions.length * 4);
+  }
+
+  return {
+    score: Math.max(0, Math.min(100, score)),
+    threshold,
+    failingChecks,
+  };
+}
+
+function applyInputQualityResultToProgramData(
+  programData: ProgramState,
+  phaseId: string,
+  result: Record<string, unknown>,
+): ProgramState {
+  return updateInnerProgramData(programData, (inner) => {
+    const existing = normalizeProgramData(inner.inputQuality as JsonValue | null);
+    const stateKey = `phaseAgentTasks_${phaseId}`;
+    const existingTasks = Array.isArray(inner[stateKey]) ? inner[stateKey] as JsonValue[] : [];
+    const newTasks = Array.isArray(result.tasks)
+      ? result.tasks.filter(isRecord).map((task, index) => ({
+          id: `input-quality-${Date.now()}-${index}`,
+          ...task,
+          phaseId,
+          status: "pending",
+          createdAt: Date.now(),
+        }) as JsonValue)
+      : [];
+    return {
+      ...inner,
+      inputQuality: {
+        ...existing,
+        [phaseId]: {
+          ...result,
+          overallScore: Math.round(clampNumber(result.overallScore, 0, 100, 0)),
+          verdict: ["sufficient", "partial", "insufficient"].includes(String(result.verdict))
+            ? result.verdict
+            : "partial",
+          missingCritical: uniqueStrings(result.missingCritical, 8),
+          readyToRun: uniqueStrings(result.readyToRun, 8),
+          blockedAgents: uniqueStrings(result.blockedAgents, 8),
+          assessedAt: new Date().toISOString(),
+        } as JsonValue,
+      } as JsonValue,
+      [stateKey]: [...existingTasks, ...newTasks] as JsonValue,
+    };
+  });
+}
+
+function applyGeneratedExitCriteriaToProgramData(programData: ProgramState, phaseId: string, result: Record<string, unknown>): ProgramState {
+  return updateInnerProgramData(programData, (inner) => {
+    const existing = normalizeProgramData(inner.generatedExitCriteria as JsonValue | null);
+    return {
+      ...inner,
+      generatedExitCriteria: {
+        ...existing,
+        [phaseId]: {
+          criteria: Array.isArray(result.criteria) ? result.criteria.filter(isRecord) : [],
+          confidence: clampNumber(result.confidence, 0, 1, 0.5),
+          generatedAt: new Date().toISOString(),
+        } as JsonValue,
+      } as JsonValue,
+    };
+  });
+}
+
+function applyDecisionAdvisorResultToProgramData(programData: ProgramState, decisionId: string, result: Record<string, unknown>): ProgramState {
+  return updateInnerProgramData(programData, (inner) => {
+    const queue = Array.isArray(inner.decisionQueue) ? inner.decisionQueue.filter(isRecord) : [];
+    return {
+      ...inner,
+      decisionQueue: queue.map((decision) => (
+        String(decision.id || "") === decisionId
+          ? { ...decision, advisorAnalysis: result, advisorRunAt: new Date().toISOString() }
+          : decision
+      )) as JsonValue,
+    };
+  });
+}
+
+function applyContradictionResultToProgramData(programData: ProgramState, phaseId: string, result: Record<string, unknown>): ProgramState {
+  return updateInnerProgramData(programData, (inner) => {
+    const contradictions = Array.isArray(result.contradictions) ? result.contradictions.filter(isRecord) : [];
+    const queue = Array.isArray(inner.decisionQueue) ? inner.decisionQueue.filter(isRecord) : [];
+    const nextQueue = [...queue];
+    contradictions
+      .filter((entry) => String(entry.severity || "") === "critical")
+      .forEach((entry) => {
+        const contradictionId = String(entry.id || "");
+        const alreadyExists = nextQueue.some((decision) => String(decision.sourceContradictionId || "") === contradictionId);
+        if (!alreadyExists) {
+          nextQueue.push({
+            id: `contradiction-${contradictionId || crypto.randomUUID()}`,
+            title: `Contradiction: ${truncateText(entry.description, 80)}`,
+            question: typeof entry.description === "string" ? entry.description : "Critical contradiction detected.",
+            type: "other",
+            priority: "critical",
+            status: "open",
+            recommendation: typeof entry.recommendation === "string" ? entry.recommendation : "",
+            phaseId,
+            source: "contradiction-detector",
+            sourceContradictionId: contradictionId,
+            createdAt: new Date().toISOString(),
+          });
+        }
+      });
+    return {
+      ...inner,
+      contradictions: contradictions as JsonValue,
+      contradictionsCheckedAt: new Date().toISOString(),
+      decisionQueue: nextQueue as JsonValue,
+    };
+  });
+}
+
+function applyDependencyCheckResultToProgramData(programData: ProgramState, phaseId: string, result: Record<string, unknown>): ProgramState {
+  return updateInnerProgramData(programData, (inner) => {
+    const existing = normalizeProgramData(inner.dependencyCheck as JsonValue | null);
+    return {
+      ...inner,
+      dependencyCheck: {
+        ...existing,
+        [phaseId]: {
+          passed: result.passed !== false,
+          issues: Array.isArray(result.issues) ? result.issues.filter(isRecord) : [],
+          summary: typeof result.summary === "string" ? result.summary : "",
+          checkedAt: new Date().toISOString(),
+        } as JsonValue,
+      } as JsonValue,
+    };
+  });
+}
+
+function applyBenefitsTrackerResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
+  return setInnerField(programData, "benefitsTracking", {
+    ...result,
+    trackedAt: new Date().toISOString(),
+  } as JsonValue);
+}
+
+function applyHandoffQualityResultToProgramData(programData: ProgramState, phaseId: string, result: Record<string, unknown>): ProgramState {
+  return updateInnerProgramData(programData, (inner) => {
+    const existing = normalizeProgramData(inner.handoffQuality as JsonValue | null);
+    return {
+      ...inner,
+      handoffQuality: {
+        ...existing,
+        [phaseId]: {
+          ...result,
+          score: Math.round(clampNumber(result.score, 0, 100, 70)),
+          passed: result.passed !== false,
+          missing: uniqueStrings(result.missing, 8),
+          strengths: uniqueStrings(result.strengths, 8),
+          reviewedAt: new Date().toISOString(),
+        } as JsonValue,
+      } as JsonValue,
+    };
+  });
+}
+
+function applyScopeDriftResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
+  return setInnerField(programData, "scopeDrift", {
+    ...result,
+    driftIndex: Math.round(clampNumber(result.driftIndex, 0, 100, 0)),
+    monitoredAt: new Date().toISOString(),
+  } as JsonValue);
+}
+
+function applyBenchmarkComparisonResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
+  return setInnerField(programData, "benchmarkComparison", {
+    ...result,
+    comparedAt: new Date().toISOString(),
+  } as JsonValue);
+}
+
+function applyWeeklyDigestResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
+  return setInnerField(programData, "weeklyDigest", {
+    ...result,
+    generatedAt: new Date().toISOString(),
+    weekOf: new Date().toISOString().slice(0, 10),
+  } as JsonValue);
+}
+
+function applyDailyBriefingResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
+  return setInnerField(programData, "dailyBriefing", {
+    ...result,
+    generatedAt: new Date().toISOString(),
+    dateOf: new Date().toISOString().slice(0, 10),
+  } as JsonValue);
+}
+
+function applyTwinSyncResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
+  return setInnerField(programData, "twinGraph", {
+    nodes: Array.isArray(result.nodes) ? result.nodes.filter(isRecord) as JsonValue[] : [],
+    edges: Array.isArray(result.edges) ? result.edges.filter(isRecord) as JsonValue[] : [],
+    syncedAt: new Date().toISOString(),
+    version: typeof normalizeProgramData(getInnerProgramData(programData).twinGraph as JsonValue | null).version === "number"
+      ? Number(normalizeProgramData(getInnerProgramData(programData).twinGraph as JsonValue | null).version) + 1
+      : 1,
+  } as JsonValue);
+}
+
+function applyCompletionEstimateResultToProgramData(programData: ProgramState, phaseId: string, result: Record<string, unknown>): ProgramState {
+  const estimate = Math.round(clampNumber(result.estimate, 0, 100, 0));
+  let next = updateInnerProgramData(programData, (inner) => ({
+    ...inner,
+    phasePct: {
+      ...(normalizeProgramData(inner.phasePct as JsonValue | null)),
+      [phaseId]: estimate,
+    } as JsonValue,
+    phaseCompletionEstimates: {
+      ...(normalizeProgramData(inner.phaseCompletionEstimates as JsonValue | null)),
+      [phaseId]: {
+        estimate,
+        signals: isRecord(result.signals) ? result.signals as JsonValue : {},
+        generatedAt: new Date().toISOString(),
+      } as JsonValue,
+    } as JsonValue,
+  }));
+  next = setPhaseArtifactValue(next, phaseId, "completion-estimate", {
+    estimate,
+    signals: isRecord(result.signals) ? result.signals : {},
+    generatedAt: new Date().toISOString(),
+  }, "Completion estimate");
+  return next;
+}
+
+function applyGateCoachResultToProgramData(programData: ProgramState, phaseId: string, result: Record<string, unknown>): ProgramState {
+  let next = updateInnerProgramData(programData, (inner) => ({
+    ...inner,
+    gateReadinessCoach: {
+      ...(normalizeProgramData(inner.gateReadinessCoach as JsonValue | null)),
+      [phaseId]: {
+        actions: Array.isArray(result.actions) ? result.actions.filter(isRecord) : [],
+        score: Math.round(clampNumber(result.score, 0, 100, 0)),
+        generatedAt: new Date().toISOString(),
+      } as JsonValue,
+    } as JsonValue,
+  }));
+  next = setPhaseArtifactValue(next, phaseId, "gate-readiness-coach", {
+    actions: Array.isArray(result.actions) ? result.actions.filter(isRecord) : [],
+    score: Math.round(clampNumber(result.score, 0, 100, 0)),
+    generatedAt: new Date().toISOString(),
+  }, "Gate readiness coach");
+  return next;
+}
+
+function applyAgentScheduleOptimiserResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
+  return setInnerField(programData, "agentScheduleOptimiser", {
+    schedule: isRecord(result.schedule) ? result.schedule : {},
+    velocity: isRecord(result.velocity) ? result.velocity : {},
+    generatedAt: new Date().toISOString(),
+  } as JsonValue);
+}
+
+function applyProgramSupportArtifact(
+  programData: ProgramState,
+  phaseId: string,
+  artifactId: string,
+  fieldKey: string,
+  result: Record<string, unknown>,
+  title: string,
+): ProgramState {
+  let next = setInnerField(programData, fieldKey, {
+    ...result,
+    generatedAt: typeof result.generatedAt === "string" ? result.generatedAt : new Date().toISOString(),
+  } as JsonValue);
+  next = setPhaseArtifactValue(next, phaseId, artifactId, {
+    ...result,
+    generatedAt: typeof result.generatedAt === "string" ? result.generatedAt : new Date().toISOString(),
+  }, title);
+  return next;
+}
+
+function applyArtifactQuality(programData: ProgramState, fieldKey: string, review: Record<string, unknown>, confidenceFieldKey?: string): ProgramState {
+  return updateInnerProgramData(programData, (inner) => ({
+    ...inner,
+    [fieldKey]: {
+      score: Math.round(clampNumber(review.score, 0, 100, 70)),
+      dimensions: isRecord(review.dimensions) ? review.dimensions as JsonValue : {},
+      improvements: uniqueStrings(review.improvements, 4),
+    } as JsonValue,
+    ...(confidenceFieldKey ? { [confidenceFieldKey]: clampNumber(review.score, 0, 100, 70) / 100 } : {}),
+  }));
+}
+
+function applyPhaseReadinessResultToProgramData(programData: ProgramState, result: Record<string, unknown>, phaseId: string): ProgramState {
+  return updateInnerProgramData(programData, (inner) => {
+    const existing = normalizeProgramData(inner.phaseReadinessScores as JsonValue | null);
+    return {
+      ...inner,
+      phaseReadinessScores: {
+        ...existing,
+        [phaseId]: {
+          score: typeof result.score === "number" ? Math.max(0, Math.min(100, result.score)) : null,
+          confidence: typeof result.confidence === "number" ? result.confidence : null,
+          blockers: Array.isArray(result.blockers) ? result.blockers.filter((b): b is string => typeof b === "string") : [],
+          computedAt: new Date().toISOString(),
+        },
+      },
+    };
+  });
+}
+
+function applyWorkstreamHealthResultToProgramData(programData: ProgramState, result: Record<string, unknown>, phaseId: string): ProgramState {
+  return updateInnerProgramData(programData, (inner) => {
+    const phaseInputs = normalizeProgramData(inner.phaseInputs as JsonValue | null);
+    const phaseData = normalizeProgramData(phaseInputs[phaseId] as JsonValue | null);
+    const workstreams = Array.isArray(phaseData.workstreams) ? phaseData.workstreams : [];
+    const scores = Array.isArray(result.workstreamScores) ? result.workstreamScores.filter(isRecord) : [];
+    const updatedWorkstreams = workstreams.map((ws) => {
+      if (!isRecord(ws)) return ws;
+      const match = scores.find((s) => s.id === ws.id || s.label === ws.label);
+      if (!match) return ws;
+      return { ...ws, health: typeof match.health === "number" ? match.health : null, healthColor: typeof match.color === "string" ? match.color : null, healthIssues: Array.isArray(match.issues) ? match.issues : [] };
+    });
+    return {
+      ...inner,
+      phaseInputs: { ...(isRecord(inner.phaseInputs) ? inner.phaseInputs : {}), [phaseId]: { ...phaseData, workstreams: updatedWorkstreams } },
+    };
+  });
+}
+
+function applyBudgetAnomalyResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
+  return updateInnerProgramData(programData, (inner) => ({
+    ...inner,
+    budgetAnomaly: {
+      hasAnomaly: result.hasAnomaly === true,
+      severity: typeof result.severity === "string" ? result.severity : "green",
+      findings: Array.isArray(result.findings) ? result.findings.filter((f): f is string => typeof f === "string") : [],
+      burnRateVariance: typeof result.burnRateVariance === "number" ? result.burnRateVariance : null,
+      recommendation: typeof result.recommendation === "string" ? result.recommendation : null,
+      checkedAt: new Date().toISOString(),
+    },
+  }));
+}
+
+function applyStakeholderRiskResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
+  return updateInnerProgramData(programData, (inner) => {
+    const existing = Array.isArray(inner.stakeholders) ? inner.stakeholders.filter(isRecord) : [];
+    const risks = Array.isArray(result.stakeholderRisks) ? result.stakeholderRisks.filter(isRecord) : [];
+    const updated = existing.map((s) => {
+      const match = risks.find((r) => r.name === s.name || r.id === s.id);
+      if (!match) return s;
+      return { ...s, engagementRisk: typeof match.risk === "string" ? match.risk : null, engagementRiskReason: typeof match.reason === "string" ? match.reason : null };
+    });
+    return { ...inner, stakeholders: updated, stakeholderRiskCheckedAt: new Date().toISOString() };
+  });
+}
+
+function applyBenefitForecastResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
+  return updateInnerProgramData(programData, (inner) => ({
+    ...inner,
+    benefitForecast: {
+      forecastedRealization: typeof result.forecastedRealization === "number" ? Math.max(0, Math.min(100, result.forecastedRealization)) : null,
+      trajectoryStatus: typeof result.trajectoryStatus === "string" ? result.trajectoryStatus : "unknown",
+      gaps: Array.isArray(result.gaps) ? result.gaps.filter((g): g is string => typeof g === "string") : [],
+      recommendation: typeof result.recommendation === "string" ? result.recommendation : null,
+      projectedFinalValue: typeof result.projectedFinalValue === "number" ? result.projectedFinalValue : null,
+      computedAt: new Date().toISOString(),
+    },
+  }));
+}
+
+function applyArtifactStalenessResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
+  return updateInnerProgramData(programData, (inner) => {
+    const phaseArtifacts = normalizeProgramData(inner.phaseArtifacts as JsonValue | null);
+    const staleList = Array.isArray(result.staleArtifacts) ? result.staleArtifacts.filter(isRecord) : [];
+    staleList.forEach((s) => {
+      const phId = typeof s.phaseId === "string" ? s.phaseId : "";
+      const aId = typeof s.artifactId === "string" ? s.artifactId : "";
+      if (!phId || !aId) return;
+      const bucket = normalizeProgramData(phaseArtifacts[phId] as JsonValue | null);
+      const art = normalizeProgramData(bucket[aId] as JsonValue | null);
+      (phaseArtifacts as Record<string, unknown>)[phId] = { ...bucket, [aId]: { ...art, isStale: true, staleReason: typeof s.reason === "string" ? s.reason : "Inputs updated after artifact was generated", staleCheckedAt: new Date().toISOString() } };
+    });
+    return { ...inner, phaseArtifacts };
+  });
+}
+
+function buildContextSnapshot(
+  request: RunAgentRequest,
+  programData: ProgramState,
+  memoryContext: string,
+  priorPhaseContext: string,
+): Record<string, JsonValue> {
+  return {
+    programName: typeof programData.programName === "string" ? programData.programName : "",
+    programObjective: typeof programData.programObjective === "string" ? programData.programObjective : "",
+    phaseId: request.phaseId,
+    agentId: request.agentId,
+    triggerEvent: request.triggerEvent || "",
+    memoryContext,
+    priorPhaseContext,
+    incomingHandoff: (request.incomingHandoff || null) as JsonValue | null,
+    readiness: (programData.phaseGuidance as Record<string, Record<string, JsonValue>> | undefined)?.[request.phaseId]?.readiness ?? null,
+  };
+}
+
+function buildAgentPrompt(
+  request: RunAgentRequest,
+  programData: ProgramState,
+  contextSnapshot: Record<string, JsonValue>,
+  specialAgentInputContext = "",
+): { system: string; user: string } {
+  if (request.agentId === "narrative") {
+    return {
+      system: `You are the ADAM Narrative Agent. Your job is to write a single, precise 2-3 sentence executive narrative for a transformation program.
+
+The narrative must answer three questions in plain English:
+1. Where is the transformation right now? (active phase, readiness %)
+2. What is the most important thing happening or blocking it?
+3. What should happen next to keep momentum?
+
+Rules:
+- Write in present tense. No jargon. No hedging.
+- If the program has less than one phase with measurable progress and no artifacts, respond with: { "narrative": null, "reason": "insufficient_data" }
+- Otherwise respond with: { "narrative": "<2-3 sentences>", "generatedAt": "<ISO timestamp>", "confidence": <0.0-1.0>, "dataPoints": ["<what you used>"] }
+
+Input context will be provided as JSON.`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "plan") {
+    return {
+      system: `You are the ADAM Plan Agent. Your job is to generate and maintain a structured transformation plan from the program's current state.
+
+The plan must contain:
+- milestones: Array of { id, phase, title, dueDate (ISO), status: "complete"|"on-track"|"at-risk"|"blocked"|"not-started", owner }
+- criticalPath: Array of phase IDs in sequence that must complete for value to land
+- nextThreeActions: Array of { action, owner, phase, rationale } — the most important immediate steps
+- blockerSummary: Array of { blocker, phase, severity: "critical"|"high"|"medium", resolution }
+- confidence: number (0.0-1.0)
+
+Rules:
+- Derive milestones from exit criteria and phase readiness. Do not fabricate dates — use the program's ETA fields if present, otherwise mark as TBD.
+- If objective is blank and no phase has measurable progress, respond with: { "plan": null, "reason": "insufficient_data" }
+- Otherwise respond with the full plan object plus "planGeneratedAt": "<ISO timestamp>"
+- Mark any field as null if data is genuinely unavailable rather than inventing it.
+
+Input context will be provided as JSON.`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "risk") {
+    return {
+      system: `You are the ADAM Risk Agent. Your job is to scan a transformation program and identify risks and blockers that the team should be aware of.
+
+For each item you identify, produce a structured entry. Focus on:
+- Risks: things that could go wrong if not addressed (probability x impact)
+- Blockers: things that are actively preventing progress right now
+- Assumptions: beliefs the program is built on that haven't been validated
+- Dependencies: external things the program needs that are not yet confirmed
+
+Severity rules:
+- critical: will stop the program or destroy value if not resolved in <48h
+- high: will cause phase failure if not resolved in <1 week
+- medium: slows down progress but has a workaround
+- low: worth tracking but not time-sensitive
+
+Confidence rules:
+- Only include items where you have evidence in the program data
+- Never fabricate risks that aren't supported by the context
+- If a phase has <10% readiness and no artifacts, flag it as a potential blocker
+
+Not-ready condition: if no phases have measurable progress and no artifacts exist, respond with:
+{ "raidEntries": null, "reason": "insufficient_data" }
+
+Otherwise respond with:
+{
+  "raidEntries": [
+    {
+      "id": "<uuid-style string>",
+      "type": "risk" | "blocker" | "assumption" | "dependency",
+      "title": "<concise title, max 80 chars>",
+      "description": "<1-2 sentences explaining the issue>",
+      "severity": "critical" | "high" | "medium" | "low",
+      "phase": "<phase ID>",
+      "owner": "<suggested owner or null>",
+      "mitigation": "<recommended action or null>",
+      "agentConfidence": <0.0-1.0>
+    }
+  ],
+  "generatedAt": "<ISO timestamp>",
+  "confidence": <overall confidence 0.0-1.0>,
+  "summary": "<1 sentence executive summary of the risk posture>"
+}
+
+Input context will be provided as JSON.`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "milestone") {
+    return {
+      system: `You are the Milestone Agent for an enterprise transformation program.
+
+Derive a milestone plan for this program. For each milestone:
+- Assign a clear title tied to a phase exit or value delivery event
+- Set status: "on-track" if phase pct >= 70 and no high blockers, "at-risk" if pct 40-69 or medium blocker exists, "delayed" if pct < 40 or high blocker on critical path, "complete" if phase pct >= 95
+- Estimate a target date based on phase progress, known timing signals, or explicit ETA fields if present. If there is no credible basis for a date, return null.
+- List exit criteria (2-4 specific conditions that must be true)
+- Note dependencies on other milestones
+- Assign confidence 0.0-1.0 based on phase readiness and blocker state
+
+Rules:
+- Preserve alignment with any existing plan milestones already present in the context
+- Human-created milestones will be preserved separately, so do not try to rewrite them
+- Return JSON only in this shape:
+{
+  "milestones": [
+    {
+      "id": "m_<phaseId>_<index>",
+      "title": string,
+      "phaseId": string,
+      "targetDate": "YYYY-MM-DD" | null,
+      "status": "on-track" | "at-risk" | "delayed" | "complete",
+      "dependsOn": string[],
+      "exitCriteria": string[],
+      "confidence": number,
+      "source": "agent"
+    }
+  ]
+}
+
+If the program has no phases with meaningful data (all pct = 0), return { "milestones": null }.`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "budget") {
+    return {
+      system: `You are the Budget & Benefits Agent for an enterprise transformation program.
+
+Assess the financial health of this program:
+
+1. Estimate burn rate health based on phase velocity versus plan.
+2. Assess value delivery rate — are benefits likely to land on schedule given current milestone status?
+3. Derive an overall budget health signal: green (on track), amber (at risk), red (likely overrun).
+4. Write a one-sentence health reason explaining the signal.
+5. For each phase, assess whether it appears on-budget, overspend, or underspend based on phase progress versus expected duration.
+6. Identify 2-4 benefit milestones tied to key phase exits.
+7. Estimate ROI directionally. If projected benefits and costs are known, calculate. Otherwise use qualitative signals.
+
+Return JSON only:
+{
+  "projectedCost": number | null,
+  "actualSpend": number | null,
+  "projectedBenefits": number | null,
+  "realisedBenefits": number | null,
+  "roi": number | null,
+  "burnRate": "healthy" | "at-risk" | "overspend",
+  "valueDeliveryRate": "ahead" | "on-track" | "behind",
+  "phaseSpend": [
+    {
+      "phaseId": string,
+      "phaseName": string,
+      "budgetedEffort": string | null,
+      "actualEffort": string | null,
+      "status": "underspend" | "on-budget" | "overspend" | "unknown"
+    }
+  ],
+  "benefitMilestones": [
+    {
+      "id": string,
+      "title": string,
+      "targetDate": string | null,
+      "estimatedValue": string,
+      "status": "pending" | "at-risk" | "realised",
+      "phaseId": string
+    }
+  ],
+  "healthSignal": "green" | "amber" | "red",
+  "healthReason": string,
+  "confidence": number
+}
+
+If the program has no phase data or objective, return null.`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "critical-path") {
+    return {
+      system: `You are the Critical Path Agent for an enterprise transformation program.
+
+Derive the critical path — the minimum ordered sequence of phases and decisions that must complete for the program's primary value to land.
+
+Rules:
+- Phases with pct >= 95 are complete — include them in the path but mark complete.
+- A phase is blocked if it has a high-severity RAID entry or an unresolved critical decision.
+- The bottleneck is the lowest-readiness phase on the critical path that has a blocker.
+- Off-critical-path phases can slip without delaying the value delivery date.
+- Estimate completion delta based on current velocity versus the number of at-risk or blocked phases.
+
+Return JSON only:
+{
+  "sequence": [
+    {
+      "phaseId": string,
+      "phaseName": string,
+      "status": "complete" | "in-progress" | "blocked" | "not-started",
+      "isBottleneck": boolean,
+      "blockerSummary": string | null,
+      "dependsOn": string[]
+    }
+  ],
+  "currentBottleneck": {
+    "phaseId": string,
+    "phaseName": string,
+    "reason": string,
+    "linkedRiskId": string | null,
+    "linkedDecisionId": string | null,
+    "recommendedAction": string
+  } | null,
+  "offCriticalPath": string[],
+  "estimatedCompletionDelta": string,
+  "confidence": number
+}
+
+If no phases have meaningful data, return null.`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "change-impact") {
+    return {
+      system: `You are ADAM's Change Impact Intelligence agent for a Brillio transformation program.
+
+Analyse the program context and return a JSON object with exactly this shape:
+{
+  "impactedGroups": [
+    {
+      "group": "string — team or org unit name",
+      "impactLevel": "critical|high|medium|low",
+      "changeType": "process|technology|culture|structural",
+      "affectedHeadcount": number | null,
+      "readinessScore": 0-1,
+      "interventions": ["string"],
+      "owner": "string | null"
+    }
+  ],
+  "overallChangeLoad": "high|medium|low",
+  "peakChangeWindow": "string — e.g. Q3 2026",
+  "resistanceRisk": "high|medium|low",
+  "topInterventions": ["string — max 5 cross-cutting interventions"],
+  "confidence": 0-1,
+  "summary": "string — 2-sentence executive summary"
+}
+
+Return ONLY valid JSON. No markdown fences.`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "stakeholder") {
+    return {
+      system: `You are ADAM's Stakeholder Intelligence agent for a Brillio transformation program.
+
+Return a JSON object with exactly this shape:
+{
+  "stakeholders": [
+    {
+      "id": "string — slug",
+      "name": "string",
+      "role": "string",
+      "organisation": "string | null",
+      "influence": "high|medium|low",
+      "interest": "high|medium|low",
+      "currentEngagement": "champion|supportive|neutral|resistant|unknown",
+      "targetEngagement": "champion|supportive|neutral",
+      "sentiment": "positive|neutral|negative|unknown",
+      "riskOfDisengagement": "high|medium|low",
+      "recommendedActions": ["string — max 3"],
+      "owner": "string | null"
+    }
+  ],
+  "engagementSummary": "string — 2 sentences",
+  "criticalRelationships": ["string — stakeholder IDs most critical to success"],
+  "confidence": 0-1
+}
+
+Return ONLY valid JSON. No markdown fences.`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (isProgramLevelAdoptionAgent(request.agentId, request.phaseId)) {
+    return {
+      system: `You are ADAM's Adoption Intelligence agent for a Brillio transformation program.
+
+Return a JSON object with exactly this shape:
+{
+  "adoptionGroups": [
+    {
+      "group": "string",
+      "adoptionRate": 0-1,
+      "trainingCompletion": 0-1,
+      "toolUtilisation": 0-1,
+      "readinessGap": "high|medium|low|none",
+      "barriers": ["string"],
+      "recommendedInterventions": ["string — max 3"]
+    }
+  ],
+  "overallAdoptionRate": 0-1,
+  "adoptionTrend": "improving|stable|declining|unknown",
+  "criticalAdoptionRisks": ["string"],
+  "goLiveReadiness": "ready|at-risk|not-ready",
+  "confidence": 0-1,
+  "summary": "string"
+}
+
+Return ONLY valid JSON.`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "health-heatmap") {
+    return {
+      system: `You are ADAM's Health Heatmap agent for a Brillio transformation program following the ATOS 13-phase lifecycle.
+
+Return a JSON object with exactly this shape:
+{
+  "phaseHealth": [
+    {
+      "phaseId": "string",
+      "phaseName": "string",
+      "rag": "green|amber|red|grey",
+      "score": 0-100,
+      "confidence": 0-1,
+      "healthNote": "string — max 120 chars",
+      "topRisk": "string | null"
+    }
+  ],
+  "overallHealthScore": 0-100,
+  "overallRag": "green|amber|red",
+  "trend": "improving|stable|declining",
+  "programMomentum": "accelerating|steady|slowing|stalled",
+  "confidence": 0-1,
+  "summary": "string"
+}
+
+Use "grey" for phases not yet started. Return ONLY valid JSON.`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "retro") {
+    return {
+      system: `You are ADAM's Retrospective agent for a Brillio ATOS transformation phase.
+Analyse the phase context and return a JSON object with exactly this shape:
+{
+  "wentWell": [
+    { "observation": "string", "impact": "string", "category": "people|process|technology|governance" }
+  ],
+  "improvements": [
+    { "observation": "string", "rootCause": "string", "category": "people|process|technology|governance" }
+  ],
+  "actionItems": [
+    {
+      "action": "string",
+      "owner": "string | null",
+      "targetPhase": "string",
+      "priority": "high|medium|low",
+      "effort": "high|medium|low"
+    }
+  ],
+  "overallSentiment": "positive|mixed|negative",
+  "healthScore": 0-100,
+  "keyLearning": "string",
+  "confidence": 0-1
+}
+Return ONLY valid JSON. No markdown fences.`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "deck") {
+    return {
+      system: `You are ADAM's Executive Deck agent for a Brillio transformation program.
+Generate a structured executive presentation and return a JSON object with exactly this shape:
+{
+  "title": "string",
+  "audience": "string",
+  "slides": [
+    {
+      "slideNumber": number,
+      "title": "string",
+      "type": "title|executive-summary|status|financials|risks|milestones|decisions|achievements|next-steps|appendix",
+      "talkingPoints": ["string"],
+      "dataCallouts": ["string"],
+      "recommendedVisual": "string | null",
+      "speakerNotes": "string"
+    }
+  ],
+  "generatedAt": "string",
+  "confidence": 0-1,
+  "programHealthSummary": "string"
+}
+Generate 8-12 slides. Return ONLY valid JSON.`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "deck-section") {
+    return {
+      system: `You are ADAM's Executive Deck section agent. Regenerate a SINGLE slide of a given type for a transformation programme.
+Return ONLY valid JSON (no markdown):
+{
+  "slide": {
+    "slideNumber": <preserve existing or use 1>,
+    "title": "string",
+    "type": "<same type as input sectionType>",
+    "talkingPoints": ["string"],
+    "dataCallouts": ["string"],
+    "recommendedVisual": "string | null",
+    "speakerNotes": "string"
+  }
+}
+Rules: Keep the same slideNumber as the existing slide. Focus ONLY on the requested section type. Use the programme data provided. Max 5 talking points, 4 data callouts.`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "narrative-refine") {
+    return {
+      system: `You are ADAM's Narrative Refinement agent. Refine an existing programme narrative based on a specific instruction.
+Return ONLY valid JSON (no markdown):
+{ "narrative": "string", "generatedAt": "<ISO>", "confidence": 0.0-1.0, "dataPoints": ["string"] }
+Rules: Apply the refinementInstruction to the existingNarrative. Keep it 2-3 sentences. Maintain factual accuracy from the programme data. If the instruction is empty, improve clarity and conciseness.`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "board-pack") {
+    return {
+      system: `You are ADAM's Board Pack Assembler. Synthesise all available programme data into a unified board-ready document with consistent tone and flow.
+Return ONLY valid JSON (no markdown):
+{
+  "title": "Board Pack — <Programme Name> — <Month Year>",
+  "executiveSummary": "string (3-4 sentences synthesising status, key risks, and outlook)",
+  "sections": [
+    {
+      "id": "string",
+      "title": "string",
+      "type": "executive-summary|status|financials|risks|milestones|decisions|outlook",
+      "content": "string (well-formatted prose, 100-300 words)",
+      "highlights": ["string (max 3 bullet points)"],
+      "ragStatus": "green|amber|red|null"
+    }
+  ],
+  "confidence": 0.0-1.0
+}
+Rules: Always include sections: executive-summary, status, risks, outlook. Add financials only if budget data present. Add milestones only if milestone data present. Write in third person, past tense for achievements, present tense for status. Max 7 sections. Each section should flow naturally from the previous. Avoid jargon.`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "scope-pcr") {
+    return {
+      system: `You are ADAM's Scope & PCR Intelligence agent for a Brillio transformation program.
+Analyse the program for scope creep and change request signals. Return a JSON object:
+{
+  "scopeSignals": [
+    {
+      "id": "string",
+      "description": "string",
+      "source": "decision|risk|phase-evidence|stakeholder",
+      "phase": "string",
+      "severity": "critical|high|medium|low",
+      "impactOnTimeline": "string | null",
+      "impactOnBudget": "string | null",
+      "recommendPcr": boolean,
+      "pcrRationale": "string | null"
+    }
+  ],
+  "overallScopeRisk": "high|medium|low|contained",
+  "recommendedActions": ["string"],
+  "openPcrCount": number,
+  "confidence": 0-1,
+  "summary": "string"
+}
+Return ONLY valid JSON.`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "gate-review") {
+    return {
+      system: `You are the Gate Review Agent for an enterprise transformation program.
+
+Evaluate gate readiness for the supplied phase.
+
+Rules:
+- For each artifact, assess completeness and confidence.
+- For each exit criterion, determine whether it is met based on the available evidence.
+- Derive an overall readiness score from 0.0 to 1.0.
+- If readiness is below threshold, explain specifically what is still missing.
+- If pct < 90, always return status "not-ready".
+- If pct >= 90, openDecisionCount === 0, openRiskCount === 0, and readinessScore >= 0.8, return status "ready".
+
+Return JSON only:
+{
+  "readinessScore": number,
+  "artifactsSummary": [
+    { "name": string, "status": "complete"|"partial"|"missing", "confidence": number }
+  ],
+  "exitCriteriaStatus": [
+    { "criterion": string, "met": boolean, "evidence": string | null }
+  ],
+  "openDecisions": number,
+  "openRisks": number,
+  "recommendation": string,
+  "status": "ready" | "not-ready"
+}
+
+If no meaningful phase data exists, return null.`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "escalation") {
+    return {
+      system: `You are the Escalation Agent for an enterprise transformation program.
+
+Apply these rules:
+1. Flag any decision pending for more than 48 hours (72 hours for gate approvals) as "stale-decision".
+2. Flag any phase whose pct has not changed in more than 5 days as "phase-stalled".
+3. Flag any high-severity risk or blocker older than 3 days as "critical-blocker".
+4. Flag any delayed milestone with a target date inside the next 7 days as "milestone-slipping".
+
+For each escalation:
+- title: concise subject line
+- summary: 2-3 sentences describing what is stuck and for how long
+- costOfDelay: one sentence on the likely consequence if it is not resolved today
+- severity: "critical" if timeline or value delivery is at risk; otherwise "high"
+
+Do not duplicate existing open escalations. Match on type plus linked identifier.
+
+Return JSON only:
+{
+  "escalations": [
+    {
+      "id": string,
+      "type": "stale-decision" | "phase-stalled" | "critical-blocker" | "milestone-slipping",
+      "severity": "high" | "critical",
+      "title": string,
+      "summary": string,
+      "costOfDelay": string,
+      "linkedDecisionId": string | null,
+      "linkedPhaseId": string | null,
+      "linkedRiskId": string | null,
+      "raisedAt": string,
+      "status": "open",
+      "source": "agent"
+    }
+  ]
+}
+
+If nothing meets the criteria, return { "escalations": [] }.`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "closure") {
+    return {
+      system: `You are the Closure Agent generating a program closure pack.
+
+Generate:
+1. Benefits summary: planned vs realised, gap analysis, and one short paragraph of commentary.
+2. Lessons learned: 6-10 lessons categorised as process, technology, people, or governance.
+3. Key artifacts: the 5-8 most important artifacts at close with confidence scores.
+4. Recommendations: 4-5 specific recommendations for the next similar program.
+5. Readiness score: 0.0-1.0 based on phase completeness, open items, and evidence coverage.
+
+Return JSON only:
+{
+  "status": "ready",
+  "readinessScore": number,
+  "benefitsSummary": {
+    "planned": string,
+    "realised": string,
+    "gap": string,
+    "commentary": string
+  },
+  "lessonsLearned": [
+    {
+      "category": "process"|"technology"|"people"|"governance",
+      "lesson": string,
+      "source": string,
+      "applicability": string
+    }
+  ],
+  "keyArtifacts": [
+    { "name": string, "phaseId": string, "confidenceAtClose": number }
+  ],
+  "recommendations": string[],
+  "confidence": number
+}`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "pattern-extract") {
+    return {
+      system: `You are ADAM's Pattern Extraction agent for a Brillio transformation program.
+Extract reusable patterns from the program history and return a JSON object with exactly this shape:
+{
+  "patterns": [
+    {
+      "pattern_type": "risk|intervention|milestone-sequence|adoption-tactic|gate-criteria",
+      "phase_id": "string | null",
+      "industry": "string | null",
+      "program_size": "small|medium|large|enterprise | null",
+      "pattern_title": "string",
+      "pattern_body": { "summary": "string", "evidence": ["string"] },
+      "outcome": "successful|failed|neutral",
+      "confidence": 0-1
+    }
+  ]
+}
+Return ONLY valid JSON.`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "input-quality") {
+    return {
+      system: `You are the ADAM Input Quality Assessor for the ${request.phaseId} phase of an ATOS transformation program.
+
+Your job is to evaluate whether the inputs provided are sufficient for agents to generate high-quality artifacts for this phase.
+
+Return ONLY valid JSON in this exact shape:
+{
+  "overallScore": 0-100,
+  "verdict": "sufficient|partial|insufficient",
+  "fieldAssessments": [
+    { "field": "fieldName", "score": 0-100, "issue": "what is missing or too vague", "suggestion": "specific improvement" }
+  ],
+  "missingCritical": ["list of critical missing information"],
+  "tasks": [
+    { "type": "populate_fields|ask_question", "priority": "critical|high|medium", "description": "what the user must provide", "reason": "why this matters for artifact quality" }
+  ],
+  "readyToRun": ["agentId list of agents that can run with current inputs"],
+  "blockedAgents": ["agentId list of agents that need more input first"]
+}`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "artifact-reviewer") {
+    return {
+      system: `You are an independent artifact quality reviewer for ADAM transformation programs.
+Return ONLY valid JSON:
+{ "score": 0-100, "dimensions": { "completeness": 0-100, "specificity": 0-100, "actionability": 0-100, "consistency": 0-100 }, "improvements": ["specific suggestion 1", "specific suggestion 2"] }`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "exit-criteria-generator") {
+    return {
+      system: `You are an ADAM exit criteria generator for ATOS transformation programs.
+
+Generate specific, measurable, program-tailored exit criteria for the ${request.phaseId} phase.
+Each criterion must reference actual program data where possible and never be generic.
+
+Return ONLY valid JSON:
+{
+  "criteria": [
+    {
+      "criterion": "specific measurable criterion",
+      "category": "artifact|decision|approval|metric|activity",
+      "owner": "role or name responsible",
+      "verificationMethod": "how to verify this is met",
+      "mandatory": true
+    }
+  ],
+  "confidence": 0.0
+}`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "decision-advisor") {
+    return {
+      system: `You are the ADAM Decision Advisor for transformation programs.
+Analyse the decision and generate structured option analysis to help the program team decide.
+
+Return ONLY valid JSON:
+{
+  "options": [
+    {
+      "label": "Option name",
+      "description": "what this option means in practice",
+      "pros": ["specific advantage 1", "specific advantage 2"],
+      "cons": ["specific downside 1"],
+      "effort": "low|medium|high",
+      "risk": "low|medium|high",
+      "timeImpactDays": 0
+    }
+  ],
+  "recommendation": "label of recommended option",
+  "recommendationRationale": "why this option is best given program context",
+  "confidence": 0.0,
+  "escalateTo": null
+}`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "contradiction-detector") {
+    return {
+      system: `You are the ADAM Contradiction Detector. Scan the provided program artifacts and identify logical contradictions.
+
+Return ONLY valid JSON:
+{
+  "contradictions": [
+    {
+      "id": "unique string",
+      "severity": "critical|high|medium",
+      "artifactA": "narrative|plan|risk|gate-review",
+      "artifactB": "narrative|plan|risk|gate-review",
+      "description": "what specifically contradicts what",
+      "recommendation": "how to resolve"
+    }
+  ],
+  "clean": true
+}`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "dependency-check") {
+    return {
+      system: `You are the ADAM Cross-Phase Dependency Checker.
+Verify that the current phase artifacts are consistent with and build upon the prior approved phase.
+
+Return ONLY valid JSON:
+{
+  "passed": true,
+  "issues": [
+    {
+      "severity": "blocking|warning",
+      "description": "what is inconsistent or missing",
+      "affectedArtifact": "which artifact has the issue",
+      "recommendation": "how to fix"
+    }
+  ],
+  "summary": "one sentence verdict"
+}`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "benefits-tracker") {
+    return {
+      system: `You are the ADAM Benefits Tracker for transformation programs.
+Compare the original program success metrics against current evidence and rate each KPI.
+
+Return ONLY valid JSON:
+{
+  "overallRag": "green|amber|red",
+  "summary": "one sentence verdict on benefits realisation progress",
+  "kpis": [
+    {
+      "name": "KPI name",
+      "baseline": "baseline value or description",
+      "target": "target value",
+      "current": "current value or evidence",
+      "rag": "green|amber|red|unknown",
+      "trend": "improving|stable|declining|unknown",
+      "commentary": "one sentence"
+    }
+  ],
+  "atRisk": ["list of KPIs at risk of not being achieved"],
+  "onTrack": ["list of KPIs on track"],
+  "confidence": 0.0
+}`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "handoff-quality") {
+    return {
+      system: `You are the ADAM Handoff Quality Reviewer.
+Assess whether this phase handoff document is complete enough to properly brief the next phase.
+
+Return ONLY valid JSON:
+{
+  "score": 0-100,
+  "passed": true,
+  "missing": ["what is missing from the handoff"],
+  "strengths": ["what is well covered"],
+  "recommendation": "one sentence on what to add before passing the gate"
+}`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "scope-creep-monitor") {
+    return {
+      system: `You are the ADAM Scope Creep Monitor.
+Compare the original program scope with current delivery artifacts and identify scope drift.
+
+Return ONLY valid JSON:
+{
+  "driftIndex": 0-100,
+  "driftLevel": "none|low|moderate|significant|critical",
+  "additions": ["items now in scope that were not in the original"],
+  "removals": ["items originally in scope now absent"],
+  "outOfScopeBreaches": ["items explicitly excluded now appearing"],
+  "summary": "one sentence verdict",
+  "recommendation": "what to do about the drift"
+}`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "benchmark-comparator") {
+    return {
+      system: `You are the ADAM Benchmark Comparator.
+Compare this program's profile against similar programs in the pattern library and provide calibrated assessment.
+
+Return ONLY valid JSON:
+{
+  "comparisons": [
+    {
+      "dimension": "timeline|team size|risk count|decision velocity|phase completion",
+      "programValue": "this program's value",
+      "benchmarkRange": "typical range from similar programs",
+      "percentile": "bottom 25%|middle 50%|top 25%",
+      "signal": "concerning|normal|strong",
+      "insight": "one sentence"
+    }
+  ],
+  "overallPositioning": "below average|average|above average",
+  "keyRisks": ["risk implied by the benchmark comparison"],
+  "keyStrengths": ["strength implied by the comparison"],
+  "summary": "two sentence benchmark verdict",
+  "confidence": 0.0,
+  "sampleSize": 0
+}`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "meeting-notes") {
+    return {
+      system: `You are the ADAM Meeting Notes Extractor for transformation programs.
+Extract structured program data from meeting notes or workshop outputs.
+
+Return ONLY valid JSON:
+{
+  "decisions": [
+    { "decision": "what was decided", "owner": "who owns it", "date": null, "context": "why" }
+  ],
+  "actions": [
+    { "title": "what must be done", "owner": "role or name", "dueDate": null, "priority": "high|medium|low" }
+  ],
+  "risks": [
+    { "title": "risk identified", "severity": "critical|high|medium|low", "owner": "role or null" }
+  ],
+  "openQuestions": [
+    { "question": "unresolved question", "raisedBy": "role or name or null" }
+  ],
+  "keyInsights": ["notable insight 1", "notable insight 2"],
+  "meetingType": "steering committee|team standup|workshop|client meeting|other",
+  "confidence": 0.0
+}`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "daily-briefing") {
+    return {
+      system: `You are the ADAM Daily Briefing Agent.
+Generate a concise, actionable briefing for the programme manager at the start of each day.
+
+Return ONLY valid JSON:
+{
+  "headline": "One crisp sentence summarising where the programme stands today",
+  "focusItems": [
+    { "item": "what needs attention today", "urgency": "now|today|this-week", "owner": "role or name", "action": "specific action to take" }
+  ],
+  "blockers": [
+    { "description": "what is blocked", "phase": "phaseId", "impact": "what happens if not resolved" }
+  ],
+  "decisionsNeeded": ["decisions required today to maintain momentum"],
+  "progressHighlight": "one sentence on what moved forward yesterday or most recently",
+  "ragStatus": "green|amber|red",
+  "generatedAt": "<ISO timestamp>",
+  "confidence": 0.0
+}
+
+Rules:
+- Keep focusItems to 3 or fewer. Be ruthlessly specific.
+- If insufficient data, return { "headline": null, "reason": "insufficient_data" }`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "weekly-digest") {
+    return {
+      system: `You are the ADAM Weekly Digest Generator.
+Produce a concise Monday morning summary for the program manager.
+
+Return ONLY valid JSON:
+{
+  "weekSummary": "2-3 sentences: what is the current state of the program",
+  "topPriorities": [
+    { "priority": "what to focus on this week", "reason": "why this week", "owner": "role" }
+  ],
+  "atRisk": [
+    { "item": "what is at risk", "severity": "critical|high", "mitigationSuggestion": "what to do" }
+  ],
+  "decisionsNeeded": ["decisions that must be made this week to maintain momentum"],
+  "lastWeekHighlights": ["what was completed or progressed"],
+  "weekHealthRag": "green|amber|red",
+  "motivationalNote": "one encouraging sentence acknowledging progress"
+}`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "twin-sync") {
+    return {
+      system: `You are the ADAM Transformation Twin synchroniser. Extract a knowledge graph from the program artifacts.
+
+Return ONLY valid JSON:
+{
+  "nodes": [
+    { "id": "unique-slug", "type": "Strategy|Outcome|KPI|Capability|Decision|Role|Agent|Skill|Data|Risk|Governance|Value|Learning", "label": "display name", "description": "one sentence", "status": "active|at-risk|complete|inactive", "phase": "phaseId or null" }
+  ],
+  "edges": [
+    { "source": "node-id", "target": "node-id", "type": "achieves|enables|governs|implements|requires|measures|depends_on|produces|consumed_by|risks|mitigates", "label": "optional description" }
+  ]
+}`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "phase-completion-estimator") {
+    return {
+      system: `You are the ADAM Phase Completion Estimator.
+Compute an evidence-based completion estimate for the requested phase.
+
+Return ONLY valid JSON:
+{
+  "estimate": 0-100,
+  "signals": {
+    "milestoneCompletion": 0.0,
+    "exitPass": 0.0,
+    "taskCompletion": 0.0,
+    "artifactSignal": 0.0
+  },
+  "generatedAt": "ISO timestamp"
+}`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "gate-readiness-coach") {
+    return {
+      system: `You are a transformation programme coach.
+Given a list of gate readiness gaps, produce a prioritised action plan.
+For each gap, output: action (string), effort ("quick" | "hours" | "days"), owner ("user" | "agent"), agentId (string | null).
+Return ONLY valid JSON:
+{ "actions": [{ "action": "string", "effort": "quick|hours|days", "owner": "user|agent", "agentId": null }], "score": 0-100, "generatedAt": "ISO timestamp" }`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "agent-schedule-optimiser") {
+    return {
+      system: `You are the ADAM Agent Schedule Optimiser.
+Recommend refresh cadences for monitoring agents based on recent programme activity.
+
+Return ONLY valid JSON:
+{
+  "schedule": {
+    "health-heatmap": 21600000,
+    "risk": 21600000,
+    "milestone": 21600000,
+    "critical-path": 21600000,
+    "scope-creep-monitor": 21600000
+  },
+  "velocity": {
+    "changesLast24h": 0,
+    "agentRunsLast24h": 0,
+    "activePhaseId": "string",
+    "daysSinceLastGate": 0
+  },
+  "generatedAt": "ISO timestamp"
+}`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "setup-prefill") {
+    return {
+      system: `Extract programme setup fields from this document.
+Return JSON with keys: programName, clientName, industry, sponsorName, objectives (array of strings),
+startDate (ISO), endDate (ISO), programType ("transformation"|"migration"|"implementation"|"other"),
+scopeIn (array), scopeOut (array), estimatedTeamSize (number|null).
+If a field cannot be determined, set it to null. Return JSON only.`,
+      user: request.docText?.slice(0, 8000) || "",
+    };
+  }
+
+  if (request.agentId === "discovery-guide-generator") {
+    return {
+      system: `You are an experienced transformation consultant.
+Generate a discovery pack for this programme.
+Return JSON with:
+{
+  "executiveInterviewGuide": { "purpose": "string", "duration": "string", "questions": ["string"] },
+  "operationalInterviewGuide": { "purpose": "string", "duration": "string", "questions": ["string"] },
+  "workshopAgenda": { "title": "string", "duration": "string", "objectives": ["string"], "activities": [{ "name": "string", "duration": "string", "facilitation": "string" }] },
+  "documentRequestList": ["string"],
+  "hypotheses": ["string"]
+}`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "sprint-planner") {
+    return {
+      system: `You are an agile delivery planner.
+Given milestones, team size, sprint length, and timeline, produce a sprint plan.
+Return JSON:
+{
+  "sprints": [{ "sprintNumber": 1, "startDate": "ISO", "endDate": "ISO", "goal": "string", "milestones": ["string"], "workstreams": ["string"], "capacity": 0, "risks": ["string"] }],
+  "criticalPath": ["milestone id"],
+  "bufferWeeks": 0
+}`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "stakeholder-comms-drafter") {
+    return {
+      system: `You are a transformation communications expert.
+Draft tailored stakeholder communications.
+Return JSON:
+{
+  "executiveSummary": { "subject": "string", "body": "string" },
+  "operationalUpdate": { "subject": "string", "body": "string" },
+  "talkingPoints": ["string"],
+  "messagesToAvoid": ["string"]
+}`,
+      user: `Audience group: ${request.audienceGroup || "all"}\nInput context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "onboarding-briefer") {
+    return {
+      system: `You are producing a programme onboarding briefing.
+Produce a concise onboarding briefing document for a new team member.
+Structure:
+1. Programme overview
+2. Where we are now
+3. What has been decided
+4. Key risks to be aware of
+5. Critical milestones coming up
+6. Your role and first steps
+7. Key people to meet
+Return JSON only:
+{ "content": "markdown string", "memberName": "string", "memberRole": "string" }`,
+      user: `Member name: ${request.memberName || "New team member"}\nMember role: ${request.memberRole || "Contributor"}\nInput context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "steerco-agenda-builder") {
+    return {
+      system: `You are a programme management expert. Build a SteerCo meeting agenda.
+Return JSON:
+{
+  "title": "string",
+  "date": "string",
+  "duration": "string",
+  "attendees": ["string"],
+  "agenda": [{ "item": "string", "type": "information|discussion|decision|escalation", "owner": "string", "durationMins": 10, "materials": "string", "context": "string" }],
+  "preReadItems": ["string"],
+  "parkingLot": ["string"]
+}`,
+      user: `Meeting date: ${request.meetingDate || new Date().toISOString().slice(0, 10)}\nMeeting duration: ${request.meetingDurationMins || 60}\nInput context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "kpi-validator") {
+    return {
+      system: `You are a measurement and evaluation expert.
+Validate each KPI/success metric against SMART criteria and measurement completeness.
+For each metric return:
+{
+  "original": "string",
+  "smartScore": 0,
+  "gaps": ["string"],
+  "improvedVersion": "string",
+  "baselineNeeded": true,
+  "suggestedDataSource": "string",
+  "measurementFrequency": "daily|weekly|monthly|quarterly",
+  "owner": "string"
+}
+Return a JSON array.`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "compliance-checker") {
+    return {
+      system: `You are a regulatory compliance expert.
+Given programme context and regulatory frameworks, identify compliance gaps.
+For each gap return:
+{
+  "framework": "string",
+  "articleId": "string",
+  "articleTitle": "string",
+  "gap": "string",
+  "severity": "critical|high|medium|low",
+  "requiredAction": "string",
+  "owner": "legal|it|programme|data-officer",
+  "duePhase": "string"
+}
+Return a JSON array. Only flag real gaps, not generic observations.`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "capacity-assessor") {
+    return {
+      system: `You are a resource management expert for large transformation programmes.
+Assess team capacity adequacy.
+Return JSON:
+{
+  "overallAdequacy": "sufficient|at-risk|insufficient",
+  "adequacyScore": 0,
+  "roleGaps": [{ "role": "string", "currentCount": 0, "requiredCount": 0, "gap": 0, "criticality": "critical|high|medium" }],
+  "skillGaps": ["string"],
+  "keyPersonDependencies": ["string"],
+  "recommendations": ["string"],
+  "hiringLeadTimeRisk": true
+}`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "lessons-synthesiser") {
+    return {
+      system: `You are a programme learning specialist.
+Synthesise retrospective findings across multiple programme phases.
+Return JSON:
+{
+  "recurringIssues": [{ "issue": "string", "phases": ["string"], "frequency": 0, "impact": "high|medium|low" }],
+  "systemicProblems": ["string"],
+  "consistentStrengths": ["string"],
+  "programmeLearnings": ["string"],
+  "recommendationsForRemainingPhases": ["string"],
+  "sentimentTrend": "improving|stable|declining"
+}`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "vendor-risk-assessor") {
+    return {
+      system: `You are a vendor risk management expert.
+For each vendor/partner, assess risk based on their role and programme dependency.
+Return JSON array:
+[{
+  "vendorName": "string",
+  "role": "string",
+  "dependencyCriticality": "critical|high|medium|low",
+  "riskFactors": ["string"],
+  "mitigations": ["string"],
+  "contractualCoverageAdequate": true,
+  "riskScore": 0,
+  "escalate": false,
+  "recommendedAction": "string"
+}]`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "phase-readiness-monitor") {
+    return {
+      system: `You are a programme readiness analyst. Analyse the provided phase inputs, artifacts, exit criteria, open risks, and open decisions. Return ONLY valid JSON (no markdown):
+{
+  "score": 72,
+  "confidence": 0.8,
+  "blockers": ["Missing exit criteria for Design sign-off", "2 critical open risks unmitigated"]
+}
+Rules: score 0-100 (0=not started, 100=gate-ready). blockers: max 5 specific blocking items. confidence 0-1.`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "workstream-health-scorer") {
+    return {
+      system: `You are a delivery health analyst. Analyse each workstream and return ONLY valid JSON (no markdown):
+{
+  "workstreamScores": [
+    { "id": "ws-id", "label": "Workstream name", "health": 75, "color": "amber", "issues": ["No owner assigned"] }
+  ]
+}
+Rules: health 0-100. color: "green" >=80, "amber" 50-79, "red" <50. issues: max 3 per workstream. Include ALL workstreams from input.`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "budget-anomaly-detector") {
+    return {
+      system: `You are a financial risk analyst. Compare the baseline budget against current tracking data and return ONLY valid JSON (no markdown):
+{
+  "hasAnomaly": true,
+  "severity": "amber",
+  "findings": ["Burn rate 18% above baseline"],
+  "burnRateVariance": 18,
+  "recommendation": "Review Build phase costs"
+}
+Rules: severity "green" (no issues), "amber" (>10% variance or minor scope creep), "red" (>25% variance or major scope change). findings: max 4. If insufficient data, return hasAnomaly: false with a finding explaining what data is missing.`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "stakeholder-risk-assessor") {
+    return {
+      system: `You are a stakeholder engagement analyst. Assess each stakeholder's engagement risk and return ONLY valid JSON (no markdown):
+{
+  "stakeholderRisks": [
+    { "name": "Full Name", "risk": "high", "reason": "No decision involvement in 45 days", "lastMentioned": "2026-04-01" }
+  ]
+}
+Rules: risk "high" | "medium" | "low". Include ALL stakeholders. Base on: decision involvement, time since last mention, number of open decisions they should be involved in.`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "benefit-forecast") {
+    return {
+      system: `You are a benefits realisation analyst. Based on programme progress, project benefit realisation and return ONLY valid JSON (no markdown):
+{
+  "forecastedRealization": 73,
+  "trajectoryStatus": "at-risk",
+  "gaps": ["KPI tracking 8% behind schedule"],
+  "recommendation": "Accelerate Build phase to recover timeline",
+  "projectedFinalValue": 4200000
+}
+Rules: forecastedRealization 0-100 (% of projected benefits likely to be realised). trajectoryStatus: "on-track" | "at-risk" | "off-track". gaps: max 4 specific gaps. projectedFinalValue: null if insufficient data.`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "artifact-staleness-check") {
+    return {
+      system: `You are an artifact freshness analyst. Compare artifact generation timestamps against input update timestamps and return ONLY valid JSON (no markdown):
+{
+  "staleArtifacts": [
+    { "phaseId": "strategy", "artifactId": "narrative", "reason": "Phase inputs updated 3 days after artifact was generated" }
+  ]
+}
+Rules: An artifact is stale if its savedAt timestamp is OLDER than the phaseInputs savedAt for the same phase. Return only artifacts that are genuinely stale. Return empty array if all artifacts are current.`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "meeting-notes-extractor") {
+    return {
+      system: `You are a meeting notes analyst. Extract all structured information from the provided meeting transcript and return ONLY valid JSON (no markdown):
+{
+  "decisions": [
+    { "title": "string", "description": "string", "owner": "string or null", "date": "YYYY-MM-DD or null" }
+  ],
+  "actionItems": [
+    { "text": "string", "owner": "string or null", "dueDate": "YYYY-MM-DD or null", "priority": "high|medium|low" }
+  ],
+  "blockers": [
+    { "description": "string", "severity": "critical|high|medium", "owner": "string or null" }
+  ],
+  "keyDiscussions": ["string"]
+}
+Rules: Extract verbatim or near-verbatim from transcript. Max 10 decisions, 15 action items, 8 blockers, 5 key discussions. If insufficient meeting content, return empty arrays with a keyDiscussions item explaining what the document contained.`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  const system = [
+    `You are the ADAM ${request.phaseId} phase agent running server-side for the transformation program "${String(programData.programName || "Untitled Program")}".`,
+    "You must produce structured, execution-ready output.",
+    "If you reach a decision point where you need human input to continue, output the following marker on its own line and stop:",
+    `[PAUSE_FOR_DECISION: {"reason": "...", "question": "...", "options": ["..."]}]`,
+    "Do not continue generating after this marker.",
+    "When you can proceed, return valid JSON only in this shape:",
+    stringifyJson({
+      summary: "2-3 sentence summary",
+      reasoningTrace: ["step 1", "step 2"],
+      confidence: 0.82,
+      artifacts: [{ id: "artifact_id", title: "Artifact title", content: "Full artifact draft", summary: "2 sentence summary" }],
+      decisions: [{ title: "Decision title", question: "Question", priority: "medium", options: ["option"] }],
+      handoff: {
+        fromAgentId: request.agentId,
+        fromPhaseId: request.phaseId,
+        toPhaseId: "next_phase",
+        completedAt: new Date().toISOString(),
+        summary: "What the next agent should know",
+        keyDecisions: ["..."],
+        artifactIds: ["artifact_id"],
+        openQuestions: ["..."],
+        confidence: 0.82,
+        recommendedNextAction: "What should happen next",
+      },
+    }),
+  ].join("\n\n");
+
+  const user = [
+    `Program context JSON: ${stringifyJson({
+      objective: programData.programObjective || "",
+      health: programData.currentHealthScore || null,
+      phaseGuidance: (programData.phaseGuidance as Record<string, JsonValue> | undefined)?.[request.phaseId] || {},
+    })}`,
+    `Execution context: ${stringifyJson(contextSnapshot)}`,
+    "Perform the next meaningful unit of work for this phase. Draft artifacts only when the context supports it. Queue decisions when human review is needed.",
+  ].join("\n\n");
+
+  return { system, user };
+}
+
+function isOlderThan(timestamp: string | null | undefined, maxAgeMs: number): boolean {
+  if (!timestamp) return true;
+  return Date.now() - new Date(timestamp).getTime() > maxAgeMs;
+}
+
+function extractHumanNotes(programData: ProgramState, agentId: string, phaseId: string): string {
+  const inner = isRecord(programData.data) ? programData.data : programData;
+  const notes = Array.isArray(inner.humanNotes) ? inner.humanNotes : [];
+  const relevant = (notes as Array<Record<string, unknown>>).filter((note) => {
+    if (typeof note.text !== "string") return false;
+    if (note.type === "narrative-correction" && agentId === "narrative") return true;
+    if (note.type === "gate-note" && note.phaseId === phaseId) return true;
+    if (!note.type) return true;
+    return false;
+  });
+  if (!relevant.length) return "";
+  const lines = relevant.map((note) => {
+    const when = typeof note.savedAt === "string" ? new Date(note.savedAt).toLocaleDateString() : "";
+    return `- [${when}] ${note.text}`;
+  });
+  return `\n\nHuman corrections and context (apply these when generating output):\n${lines.join("\n")}`;
+}
+
+function extractAgentServerMemory(programData: ProgramState, agentId: string): string {
+  const inner = getInnerProgramData(programData);
+  const memoryStore = isRecord(inner.agentServerMemory)
+    ? inner.agentServerMemory as Record<string, unknown>
+    : {};
+  const priorMemory = Array.isArray(memoryStore[agentId]) ? memoryStore[agentId] as unknown[] : [];
+  if (!priorMemory.length) return "";
+  return `\n\n## Your memory from prior runs on this program\n${priorMemory.slice(-10).map((entry, index) => `${index + 1}. ${JSON.stringify(entry)}`).join("\n")}`;
+}
+
+function appendAgentServerMemory(
+  programData: ProgramState,
+  agentId: string,
+  entry: Record<string, JsonValue>,
+): ProgramState {
+  return updateInnerProgramData(programData, (inner) => {
+    const memoryStore = isRecord(inner.agentServerMemory)
+      ? inner.agentServerMemory as Record<string, unknown>
+      : {};
+    const priorMemory = Array.isArray(memoryStore[agentId]) ? memoryStore[agentId] as JsonValue[] : [];
+    return {
+      ...inner,
+      agentServerMemory: {
+        ...memoryStore,
+        [agentId]: [...priorMemory, entry as JsonValue].slice(-20),
+      },
+    };
+  });
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: CORS_HEADERS });
+  }
+
+  if (req.method !== "POST") {
+    return jsonResponse({ error: "Method not allowed." }, 405);
+  }
+
+  let auth: AuthContext | null = null;
+  let request: RunAgentRequest | null = null;
+  let runId = "";
+
+  try {
+    auth = await authenticateRequest(req);
+    const rawRequest = await req.json() as Partial<RunAgentRequest> & Record<string, unknown>;
+    request = {
+      programId: typeof rawRequest.programId === "string" ? rawRequest.programId : "",
+      agentId: typeof rawRequest.agentId === "string" ? rawRequest.agentId : "",
+      phaseId: typeof rawRequest.phaseId === "string" && rawRequest.phaseId
+        ? rawRequest.phaseId
+        : "program",
+      triggeredBy: rawRequest.triggeredBy === "user"
+        || rawRequest.triggeredBy === "trigger"
+        || rawRequest.triggeredBy === "schedule"
+        || rawRequest.triggeredBy === "handoff"
+        ? rawRequest.triggeredBy
+        : "schedule",
+      triggerEvent: typeof rawRequest.triggerEvent === "string" ? rawRequest.triggerEvent : undefined,
+      incomingHandoff: isRecord(rawRequest.incomingHandoff) ? rawRequest.incomingHandoff as AgentHandoff : null,
+      runId: typeof rawRequest.runId === "string" ? rawRequest.runId : undefined,
+      crossPhaseContext: typeof rawRequest.crossPhaseContext === "string" ? rawRequest.crossPhaseContext : undefined,
+      decisionId: typeof rawRequest.decisionId === "string" ? rawRequest.decisionId : undefined,
+      documentId: typeof rawRequest.documentId === "string" ? rawRequest.documentId : undefined,
+      artifactId: typeof rawRequest.artifactId === "string" ? rawRequest.artifactId : undefined,
+    };
+    if (!request.programId || !request.agentId) {
+      return jsonResponse({ error: "programId and agentId are required." }, 400);
+    }
+
+    if (!VALID_AGENT_IDS.has(request.agentId)) {
+      return jsonResponse({ error: `Unknown agentId "${request.agentId}".` }, 400);
+    }
+
+    if (request.agentId === "escalation" && request.programId === "ALL") {
+      if (!auth.isService) {
+        return jsonResponse({ error: "Only the service role may run escalation checks for all programs." }, 403);
+      }
+
+      const { data: programs, error: programsError } = await auth.admin
+        .from("adam_programs")
+        .select("id")
+        .eq("is_deleted", false);
+      if (programsError) {
+        return jsonResponse({ error: programsError.message || "Failed to load programs." }, 500);
+      }
+
+      const results = await Promise.allSettled((programs || []).map((program) => fetch(
+        `${SUPABASE_URL}/functions/v1/run-agent`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          },
+          body: JSON.stringify({
+            programId: program.id,
+            agentId: "escalation",
+            phaseId: "program",
+            triggeredBy: "schedule",
+            triggerEvent: request.triggerEvent || "cron:escalation",
+          } satisfies RunAgentRequest),
+        },
+      )));
+
+      return jsonResponse({
+        status: "queued",
+        programsProcessed: programs?.length || 0,
+        successes: results.filter((result) => result.status === "fulfilled").length,
+        failures: results.filter((result) => result.status === "rejected").length,
+      });
+    }
+
+    const { data: programRow, error: programError } = await auth.admin
+      .from("adam_programs")
+      .select("id, owner_id, name, client, industry, data")
+      .eq("id", request.programId)
+      .maybeSingle();
+    if (programError || !programRow) {
+      return jsonResponse({
+        error: programError?.message || "Program not found or not visible to this user.",
+        programId: request.programId,
+      }, 404);
+    }
+
+    const ownerId = auth.ownerId || programRow.owner_id || null;
+    const now = new Date().toISOString();
+    runId = request.runId || crypto.randomUUID();
+    const contextProgramData = normalizeProgramData(programRow.data as JsonValue | null);
+    const innerContextProgramData = getInnerProgramData(contextProgramData);
+    const memoryContext = await getServerMemoryContext(auth.admin, request.programId, request.agentId, request.phaseId);
+    const priorPhaseContext = getPriorPhaseContext(contextProgramData, request.phaseId);
+    const contextSnapshot = buildContextSnapshot(request, contextProgramData, memoryContext, priorPhaseContext);
+    const cachedPatternContext = Array.isArray(innerContextProgramData.patternQueryCache)
+      ? innerContextProgramData.patternQueryCache.filter(isRecord).slice(0, 5)
+      : [];
+    const patternQueryCachedAt = typeof innerContextProgramData.patternQueryCachedAt === "string"
+      ? innerContextProgramData.patternQueryCachedAt
+      : null;
+    const shouldRefreshPatternContext = isOlderThan(patternQueryCachedAt, 1000 * 60 * 60 * 6);
+    // Expand pattern context to all major agents so prior-programme learning
+    // influences narrative, plan, gate review, and change impact (self-improvement)
+    const shouldUsePatternContext = request.agentId === "risk"
+      || request.agentId === "milestone"
+      || request.agentId === "pattern-query"
+      || request.agentId === "benchmark-comparator"
+      || request.agentId === "narrative"
+      || request.agentId === "plan"
+      || request.agentId === "gate-review"
+      || request.agentId === "gate-readiness-coach"
+      || request.agentId === "change-impact"
+      || request.agentId === "adoption"
+      || request.agentId === "health-heatmap";
+    const patternContext = shouldUsePatternContext
+      ? (!shouldRefreshPatternContext && cachedPatternContext.length
+        ? cachedPatternContext
+        : await queryPatternContext(auth.admin, {
+            industry: typeof programRow.industry === "string" ? programRow.industry : null,
+            phaseId: request.phaseId !== "program" ? request.phaseId : null,
+            limit: 5,
+          }))
+      : [];
+    let specialAgentInputContext = isSpecialProgramAgent(request.agentId, request.phaseId)
+      ? buildSpecialAgentInputContext(contextProgramData, {
+          name: typeof programRow.name === "string" ? programRow.name : "",
+          client: typeof programRow.client === "string" ? programRow.client : "",
+          industry: typeof programRow.industry === "string" ? programRow.industry : "",
+        }, {
+          agentId: request.agentId,
+          phaseId: request.phaseId,
+        }, {
+          patternContext,
+        })
+      : "";
+
+    if (request.agentId === "decision-advisor" && request.decisionId) {
+      const queue = Array.isArray(innerContextProgramData.decisionQueue)
+        ? innerContextProgramData.decisionQueue.filter(isRecord)
+        : [];
+      const selectedDecision = queue.find((entry) => String(entry.id || "") === request?.decisionId) || null;
+      specialAgentInputContext = JSON.stringify({
+        programName: programRow.name,
+        objective: innerContextProgramData.objective || "",
+        selectedDecision,
+        risks: getProgramRiskContext(contextProgramData),
+        phaseId: request.phaseId,
+      }, null, 2);
+    }
+
+    if (request.agentId === "meeting-notes" && request.documentId) {
+      const { data: documentRow } = await auth.admin
+        .from("adam_document_attachments")
+        .select("id, raw_text, file_name, phase_context")
+        .eq("id", request.documentId)
+        .maybeSingle();
+      specialAgentInputContext = JSON.stringify({
+        programName: programRow.name,
+        phaseId: request.phaseId,
+        documentId: request.documentId,
+        fileName: documentRow?.file_name || "",
+        phaseContext: documentRow?.phase_context || request.phaseId,
+        rawText: typeof documentRow?.raw_text === "string" ? documentRow.raw_text.slice(0, 4000) : "",
+      }, null, 2);
+    }
+
+    const { error: runUpsertError } = await auth.admin
+      .from("adam_agent_runs")
+      .upsert({
+        id: runId,
+        program_id: request.programId,
+        agent_id: request.agentId,
+        phase_id: request.phaseId,
+        status: "running",
+        trigger_event: request.triggerEvent || null,
+        input_context: contextSnapshot as JsonValue,
+        scheduled_by: request.triggeredBy,
+        started_at: now,
+        completed_at: null,
+        error_message: null,
+        awaiting_decision_id: null,
+        owner_id: ownerId,
+      }, { onConflict: "id" });
+
+    if (runUpsertError) {
+      return jsonResponse({ error: runUpsertError.message }, 500);
+    }
+
+    await emitAgentEvent(auth.admin, {
+      programId: request.programId,
+      agentId: request.agentId,
+      phaseId: request.phaseId,
+      eventType: "triggered",
+      payload: {
+        triggerEvent: request.triggerEvent || null,
+      },
+    });
+
+    await broadcastStatus(auth.admin, {
+      runId,
+      programId: request.programId,
+      agentId: request.agentId,
+      phaseId: request.phaseId,
+      status: "running",
+      latestObservationType: "context_built",
+    });
+    await logObservation(auth.admin, {
+      runId,
+      programId: request.programId,
+      agentId: request.agentId,
+      phaseId: request.phaseId,
+      observationType: "context_built",
+      payload: contextSnapshot,
+    });
+    await logObservation(auth.admin, {
+      runId,
+      programId: request.programId,
+      agentId: request.agentId,
+      phaseId: request.phaseId,
+      observationType: "memory_retrieved",
+      payload: {
+        memoryContext,
+        priorPhaseContext,
+        hasIncomingHandoff: !!request.incomingHandoff,
+      },
+    });
+
+    if (request.agentId === "pattern-query") {
+      const outputPayload = {
+        patterns: patternContext,
+      };
+      const nextProgramData = applyPatternQueryResultToProgramData(contextProgramData, outputPayload);
+      await persistAgentArtifact(auth.admin, request.programId, request.agentId, request.phaseId, outputPayload, patternContext.length ? 0.75 : 0.4);
+      await persistProgramData(auth.admin, request.programId, nextProgramData);
+      await auth.admin
+        .from("adam_agent_runs")
+        .update({
+          status: "complete",
+          output: outputPayload as JsonValue,
+          handoff: null,
+          reasoning_trace: null,
+          confidence: patternContext.length ? 0.75 : 0.4,
+          tokens_used: 0,
+          completed_at: new Date().toISOString(),
+          awaiting_decision_id: null,
+        })
+        .eq("id", runId);
+      await emitAgentEvent(auth.admin, {
+        programId: request.programId,
+        agentId: request.agentId,
+        phaseId: request.phaseId,
+        eventType: "completed",
+        payload: {
+          confidence: patternContext.length ? 0.75 : 0.4,
+          generatedAt: new Date().toISOString(),
+          outputSummary: `${patternContext.length} patterns matched`,
+        },
+      });
+      await broadcastStatus(auth.admin, {
+        runId,
+        programId: request.programId,
+        agentId: request.agentId,
+        phaseId: request.phaseId,
+        status: "complete",
+        confidence: patternContext.length ? 0.75 : 0.4,
+        latestObservationType: "response_received",
+      });
+      return jsonResponse({
+        status: "complete",
+        runId,
+        output: outputPayload,
+      } satisfies RunAgentResponse);
+    }
+
+    if (request.agentId === "closure") {
+      const phases = getProgramPhaseContext(contextProgramData);
+      const allPhasesReady = phases.every((phase) => phase.pct >= 90);
+      if (!allPhasesReady) {
+        const readinessScore = phases.reduce((sum, phase) => sum + phase.pct, 0) / Math.max(phases.length, 1) / 100;
+        const notReadyPayload = {
+          status: "not-ready",
+          readinessScore,
+          notReadyReason: "Not all phases are at 90% readiness.",
+          confidence: 1,
+        };
+        const nextProgramData = applyClosureResultToProgramData(contextProgramData, notReadyPayload);
+        await persistAgentArtifact(auth.admin, request.programId, request.agentId, request.phaseId, notReadyPayload, readinessScore);
+        await persistProgramData(auth.admin, request.programId, nextProgramData);
+        await auth.admin
+          .from("adam_agent_runs")
+          .update({
+            status: "complete",
+            output: notReadyPayload as JsonValue,
+            handoff: null,
+            reasoning_trace: null,
+            confidence: readinessScore,
+            tokens_used: 0,
+            completed_at: new Date().toISOString(),
+            awaiting_decision_id: null,
+          })
+          .eq("id", runId);
+        await broadcastStatus(auth.admin, {
+          runId,
+          programId: request.programId,
+          agentId: request.agentId,
+          phaseId: request.phaseId,
+          status: "complete",
+          confidence: readinessScore,
+          latestObservationType: "context_built",
+        });
+        await emitAgentEvent(auth.admin, {
+          programId: request.programId,
+          agentId: request.agentId,
+          phaseId: request.phaseId,
+          eventType: "completed",
+          payload: {
+            confidence: readinessScore,
+            generatedAt: new Date().toISOString(),
+            outputSummary: "Closure pack deferred — not all phases are ready",
+          },
+        });
+        return jsonResponse({
+          status: "complete",
+          runId,
+          output: notReadyPayload,
+        } satisfies RunAgentResponse);
+      }
+    }
+
+    const prompt = buildAgentPrompt(request, contextProgramData, contextSnapshot, specialAgentInputContext);
+    if (request.crossPhaseContext?.trim()) {
+      prompt.system += `\n\n## Context from prior phases\n${request.crossPhaseContext}`;
+    }
+    // ── Upstream agent handoff — cross-agent intelligence (Priority: agent collaboration) ──
+    if (request.incomingHandoff) {
+      const handoff = request.incomingHandoff;
+      prompt.system += `\n\n## Upstream agent findings (${handoff.fromAgentId} on ${handoff.fromPhaseId}, confidence ${Math.round((handoff.confidence ?? 0) * 100)}%)\n${handoff.summary}${handoff.openQuestions?.length ? `\nOpen questions from upstream: ${handoff.openQuestions.join("; ")}` : ""}`;
+    }
+    // ── Pattern context injection — self-improvement from prior programmes ──────
+    // For agents not already receiving patterns via buildSpecialAgentInputContext,
+    // inject the pattern context as a supplementary advisory section.
+    if (patternContext.length > 0 && !isSpecialProgramAgent(request.agentId, request.phaseId)) {
+      const patternSummary = patternContext
+        .slice(0, 3)
+        .map((p) => {
+          const label = typeof p.pattern_label === "string" ? p.pattern_label : "";
+          const outcome = typeof p.outcome === "string" ? p.outcome : "";
+          const confidence = typeof p.confidence === "number" ? Math.round(p.confidence * 100) : "?";
+          const tactic = typeof p.intervention_tactic === "string" ? p.intervention_tactic : "";
+          return `- ${label} (confidence ${confidence}%, outcome: ${outcome})${tactic ? ` — recommended tactic: ${tactic}` : ""}`;
+        })
+        .join("\n");
+      prompt.system += `\n\n## Relevant patterns from similar programmes\nThe following patterns from prior programmes of similar type are applicable to this phase. Reference them where relevant to improve the quality of your recommendations:\n${patternSummary}`;
+    }
+    prompt.system += extractAgentServerMemory(contextProgramData, request.agentId);
+    if (memoryContext) {
+      prompt.system += `\n\n## Recent run history for this agent on this programme\n${memoryContext}`;
+    }
+    prompt.user += extractHumanNotes(contextProgramData, request.agentId, request.phaseId);
+    await logObservation(auth.admin, {
+      runId,
+      programId: request.programId,
+      agentId: request.agentId,
+      phaseId: request.phaseId,
+      observationType: "prompt_sent",
+      payload: {
+        systemLength: prompt.system.length,
+        userLength: prompt.user.length,
+      },
+    });
+
+    const maxDailyTokens = typeof contextProgramData.adamAutonomySettings === "object" && contextProgramData.adamAutonomySettings !== null
+      ? Number((contextProgramData.adamAutonomySettings as Record<string, JsonValue>).maxDailyTokens || 0)
+      : 0;
+    if (maxDailyTokens > 0) {
+      const today = new Date().toISOString().slice(0, 10);
+      const { data: todayRuns } = await auth.admin
+        .from("adam_agent_runs")
+        .select("tokens_used")
+        .eq("program_id", request.programId)
+        .gte("created_at", `${today}T00:00:00Z`);
+      const tokensToday = (todayRuns || []).reduce((sum, row) => sum + Number(row.tokens_used || 0), 0);
+      if (tokensToday + 2000 > maxDailyTokens) {
+        const escalations = Array.isArray(getInnerProgramData(contextProgramData).escalations)
+          ? [...(getInnerProgramData(contextProgramData).escalations as JsonValue[])]
+          : [];
+        escalations.push({
+          id: `budget-${Date.now()}`,
+          type: "budget-exceeded",
+          summary: `Daily token budget (${maxDailyTokens.toLocaleString()} tokens) reached. Agent run blocked.`,
+          severity: "high",
+          status: "open",
+          createdAt: new Date().toISOString(),
+        } as JsonValue);
+        await persistProgramData(auth.admin, request.programId, updateInnerProgramData(contextProgramData, (inner) => ({
+          ...inner,
+          escalations: escalations as JsonValue,
+        })));
+        return new Response(JSON.stringify({
+          error: "Daily token budget exceeded",
+          tokensUsedToday: tokensToday,
+          budget: maxDailyTokens,
+        }), { status: 429, headers: JSON_HEADERS });
+      }
+    }
+
+    const claudeResult = await streamClaudeText({
+      system: prompt.system,
+      messages: [{ role: "user", content: prompt.user }],
+      maxTokens: 4096,
+      temperature: 0.2,
+    });
+
+    await logObservation(auth.admin, {
+      runId,
+      programId: request.programId,
+      agentId: request.agentId,
+      phaseId: request.phaseId,
+      observationType: "response_received",
+      payload: {
+        preview: claudeResult.text.slice(0, 300),
+      },
+      tokens: claudeResult.inputTokens + claudeResult.outputTokens,
+      latencyMs: claudeResult.latencyMs,
+    });
+
+    if (isSpecialProgramAgent(request.agentId, request.phaseId)) {
+      const parsedResult = extractAgentJson(claudeResult.text);
+      const result = isRecord(parsedResult) ? parsedResult : {};
+      const normalizedParsedResult = isRecord(parsedResult) ? parsedResult : null;
+      const outputPayload = (parsedResult ?? null) as JsonValue;
+      const confidence = typeof result.confidence === "number" ? Number(result.confidence) : null;
+      const outputSummary = buildOutputSummary(request.agentId, normalizedParsedResult);
+
+      if (request.agentId === "pattern-extract") {
+        const insertedCount = await persistExtractedPatterns(auth.admin, request.programId, result.patterns);
+        const memoryEntry = {
+          runAt: new Date().toISOString() as JsonValue,
+          runId: runId as JsonValue,
+          summary: outputSummary as JsonValue,
+          confidence: confidence,
+          keyFindings: Array.isArray(result.keyFindings) ? result.keyFindings.slice(0, 3) as JsonValue[] : [],
+        };
+        const nextProgramData = appendAgentServerMemory(
+          applyPatternExtractResultToProgramData(contextProgramData, normalizedParsedResult),
+          request.agentId,
+          memoryEntry,
+        );
+        await persistAgentArtifact(auth.admin, request.programId, request.agentId, request.phaseId, normalizedParsedResult, confidence);
+        await persistProgramData(auth.admin, request.programId, nextProgramData);
+        await auth.admin
+          .from("adam_agent_runs")
+          .update({
+            status: "complete",
+            output: outputPayload,
+            handoff: null,
+            reasoning_trace: null,
+            confidence,
+            tokens_used: claudeResult.inputTokens + claudeResult.outputTokens,
+            completed_at: new Date().toISOString(),
+            awaiting_decision_id: null,
+          })
+          .eq("id", runId);
+        await emitAgentEvent(auth.admin, {
+          programId: request.programId,
+          agentId: request.agentId,
+          phaseId: request.phaseId,
+          eventType: "completed",
+          payload: {
+            confidence,
+            generatedAt: new Date().toISOString(),
+            outputSummary: insertedCount ? `${insertedCount} patterns extracted` : "No reusable patterns extracted",
+          },
+        });
+        await broadcastStatus(auth.admin, {
+          runId,
+          programId: request.programId,
+          agentId: request.agentId,
+          phaseId: request.phaseId,
+          status: "complete",
+          confidence,
+          latestObservationType: "response_received",
+        });
+        return jsonResponse({
+          status: "complete",
+          runId,
+          output: outputPayload,
+        } satisfies RunAgentResponse);
+      }
+
+      const skipAutonomyReview = [
+        "input-quality",
+        "artifact-reviewer",
+        "exit-criteria-generator",
+        "decision-advisor",
+        "contradiction-detector",
+        "dependency-check",
+        "benefits-tracker",
+        "handoff-quality",
+        "scope-creep-monitor",
+        "benchmark-comparator",
+        "meeting-notes",
+        "weekly-digest",
+        "twin-sync",
+        "phase-completion-estimator",
+        "gate-readiness-coach",
+        "agent-schedule-optimiser",
+        "setup-prefill",
+        "discovery-guide-generator",
+        "sprint-planner",
+        "stakeholder-comms-drafter",
+        "onboarding-briefer",
+        "steerco-agenda-builder",
+        "kpi-validator",
+        "compliance-checker",
+        "capacity-assessor",
+        "lessons-synthesiser",
+        "vendor-risk-assessor",
+        "phase-readiness-monitor",
+        "workstream-health-scorer",
+        "budget-anomaly-detector",
+        "stakeholder-risk-assessor",
+        "benefit-forecast",
+        "artifact-staleness-check",
+        "meeting-notes-extractor",
+      ].includes(request.agentId);
+      const autonomy = skipAutonomyReview
+        ? {
+            actAutonomously: true,
+            applyWriteBack: true,
+            shouldQueueReview: false,
+            reason: "Structured support agent writes back automatically.",
+          }
+        : await autonomyGate(auth.admin, request.programId, request.agentId, confidence);
+      let nextProgramData = contextProgramData;
+
+      if (autonomy.shouldQueueReview) {
+        nextProgramData = appendDecisionQueueItems(contextProgramData, [
+          createAgentReviewDecision(request.agentId, request.phaseId, normalizedParsedResult, autonomy.reason),
+        ]);
+      } else if (request.agentId === "narrative") {
+        nextProgramData = applyNarrativeResultToProgramData(contextProgramData, result);
+      } else if (request.agentId === "plan") {
+        nextProgramData = applyPlanResultToProgramData(contextProgramData, result);
+      } else if (request.agentId === "risk") {
+        nextProgramData = applyRiskResultToProgramData(contextProgramData, result);
+      } else if (request.agentId === "milestone") {
+        nextProgramData = applyMilestoneResultToProgramData(contextProgramData, result);
+      } else if (request.agentId === "budget") {
+        nextProgramData = applyBudgetResultToProgramData(contextProgramData, normalizedParsedResult);
+      } else if (request.agentId === "critical-path") {
+        nextProgramData = applyCriticalPathResultToProgramData(contextProgramData, normalizedParsedResult);
+      } else if (request.agentId === "change-impact") {
+        nextProgramData = applyChangeImpactResultToProgramData(contextProgramData, normalizedParsedResult);
+      } else if (request.agentId === "stakeholder") {
+        nextProgramData = applyStakeholderResultToProgramData(contextProgramData, normalizedParsedResult);
+      } else if (isProgramLevelAdoptionAgent(request.agentId, request.phaseId)) {
+        nextProgramData = applyAdoptionResultToProgramData(contextProgramData, normalizedParsedResult);
+      } else if (request.agentId === "health-heatmap") {
+        nextProgramData = applyHealthHeatmapResultToProgramData(contextProgramData, normalizedParsedResult);
+      } else if (request.agentId === "retro") {
+        nextProgramData = applyRetroResultToProgramData(contextProgramData, request.phaseId, normalizedParsedResult);
+      } else if (request.agentId === "deck") {
+        nextProgramData = applyDeckResultToProgramData(contextProgramData, normalizedParsedResult);
+      } else if (request.agentId === "scope-pcr") {
+        nextProgramData = applyScopePcrResultToProgramData(contextProgramData, normalizedParsedResult);
+      } else if (request.agentId === "gate-review") {
+        nextProgramData = applyGateReviewResultToProgramData(contextProgramData, request.phaseId, normalizedParsedResult);
+      } else if (request.agentId === "escalation") {
+        nextProgramData = applyEscalationResultToProgramData(contextProgramData, normalizedParsedResult);
+      } else if (request.agentId === "closure") {
+        nextProgramData = applyClosureResultToProgramData(contextProgramData, normalizedParsedResult);
+      } else if (request.agentId === "input-quality") {
+        nextProgramData = applyInputQualityResultToProgramData(contextProgramData, request.phaseId, result);
+      } else if (request.agentId === "artifact-reviewer") {
+        nextProgramData = applyArtifactQuality(contextProgramData, "artifactReviewerQuality", result);
+      } else if (request.agentId === "exit-criteria-generator") {
+        nextProgramData = applyGeneratedExitCriteriaToProgramData(contextProgramData, request.phaseId, result);
+      } else if (request.agentId === "decision-advisor" && request.decisionId) {
+        nextProgramData = applyDecisionAdvisorResultToProgramData(contextProgramData, request.decisionId, result);
+      } else if (request.agentId === "contradiction-detector") {
+        nextProgramData = applyContradictionResultToProgramData(contextProgramData, request.phaseId, result);
+      } else if (request.agentId === "dependency-check") {
+        nextProgramData = applyDependencyCheckResultToProgramData(contextProgramData, request.phaseId, result);
+      } else if (request.agentId === "benefits-tracker") {
+        nextProgramData = applyBenefitsTrackerResultToProgramData(contextProgramData, result);
+      } else if (request.agentId === "handoff-quality") {
+        nextProgramData = applyHandoffQualityResultToProgramData(contextProgramData, request.phaseId, result);
+      } else if (request.agentId === "scope-creep-monitor") {
+        nextProgramData = applyScopeDriftResultToProgramData(contextProgramData, result);
+      } else if (request.agentId === "benchmark-comparator") {
+        nextProgramData = applyBenchmarkComparisonResultToProgramData(contextProgramData, result);
+      } else if (request.agentId === "meeting-notes") {
+        const documentId = request.documentId || "";
+        const queue = Array.isArray(getInnerProgramData(contextProgramData).decisionQueue)
+          ? getInnerProgramData(contextProgramData).decisionQueue.filter(isRecord)
+          : [];
+        const milestones = Array.isArray(getInnerProgramData(contextProgramData).milestones)
+          ? getInnerProgramData(contextProgramData).milestones.filter(isRecord)
+          : [];
+        const raidLog = normalizeProgramData(getInnerProgramData(contextProgramData).raidLog as JsonValue | null);
+        const raidEntries = Array.isArray(raidLog.entries) ? raidLog.entries.filter(isRecord) : [];
+        const extractedDecisions = Array.isArray(result.decisions) ? result.decisions.filter(isRecord) : [];
+        const extractedActions = Array.isArray(result.actions) ? result.actions.filter(isRecord) : [];
+        const extractedRisks = Array.isArray(result.risks) ? result.risks.filter(isRecord) : [];
+        nextProgramData = updateInnerProgramData(contextProgramData, (inner) => ({
+          ...inner,
+          decisionQueue: [
+            ...queue,
+            ...extractedDecisions.map((entry) => ({
+              id: `meeting-decision-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              title: typeof entry.decision === "string" ? entry.decision : "Meeting decision",
+              question: typeof entry.decision === "string" ? entry.decision : "Meeting decision",
+              type: "other",
+              priority: "medium",
+              status: "open",
+              recommendation: "",
+              phaseId: request.phaseId,
+              source: "meeting-notes",
+              sourceDocumentId: documentId,
+              createdAt: new Date().toISOString(),
+            })),
+          ] as JsonValue,
+          milestones: [
+            ...milestones,
+            ...extractedActions.map((entry) => ({
+              id: `meeting-action-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              title: typeof entry.title === "string" ? entry.title : "Meeting action",
+              status: "not-started",
+              phaseId: request.phaseId,
+              targetDate: typeof entry.dueDate === "string" ? entry.dueDate : null,
+              owner: typeof entry.owner === "string" ? entry.owner : null,
+              source: "meeting-notes",
+              sourceDocumentId: documentId,
+              lastUpdatedAt: new Date().toISOString(),
+            })),
+          ] as JsonValue,
+          raidLog: {
+            ...raidLog,
+            entries: [
+              ...raidEntries,
+              ...extractedRisks.map((entry) => ({
+                id: `meeting-risk-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                type: "risk",
+                title: typeof entry.title === "string" ? entry.title : "Meeting risk",
+                severity: ["critical", "high", "medium", "low"].includes(String(entry.severity)) ? entry.severity : "medium",
+                status: "open",
+                phase: request.phaseId,
+                source: "meeting-notes",
+                sourceDocumentId: documentId,
+              })),
+            ] as JsonValue,
+          } as JsonValue,
+          meetingNotesExtracted: {
+            ...(normalizeProgramData(inner.meetingNotesExtracted as JsonValue | null)),
+            [documentId]: {
+              ...result,
+              extractedAt: new Date().toISOString(),
+              decisionCount: extractedDecisions.length,
+              actionCount: extractedActions.length,
+              riskCount: extractedRisks.length,
+            },
+          } as JsonValue,
+        }));
+        if (documentId) {
+          await auth.admin
+            .from("adam_document_attachments")
+            .update({ extracted_data: result as JsonValue, extraction_status: "meeting-notes-extracted" })
+            .eq("id", documentId);
+        }
+      } else if (request.agentId === "weekly-digest") {
+        nextProgramData = applyWeeklyDigestResultToProgramData(contextProgramData, result);
+      } else if (request.agentId === "daily-briefing") {
+        nextProgramData = applyDailyBriefingResultToProgramData(contextProgramData, result);
+      } else if (request.agentId === "twin-sync") {
+        nextProgramData = applyTwinSyncResultToProgramData(contextProgramData, result);
+      } else if (request.agentId === "phase-completion-estimator") {
+        nextProgramData = applyCompletionEstimateResultToProgramData(contextProgramData, request.phaseId, result);
+      } else if (request.agentId === "gate-readiness-coach") {
+        nextProgramData = applyGateCoachResultToProgramData(contextProgramData, request.phaseId, result);
+      } else if (request.agentId === "agent-schedule-optimiser") {
+        nextProgramData = applyAgentScheduleOptimiserResultToProgramData(contextProgramData, result);
+      } else if (request.agentId === "discovery-guide-generator") {
+        nextProgramData = applyProgramSupportArtifact(contextProgramData, "discover", "discovery-guide-generator", "discoveryGuide", result, "Discovery pack");
+      } else if (request.agentId === "sprint-planner") {
+        nextProgramData = applyProgramSupportArtifact(contextProgramData, "build", "sprint-planner", "sprintPlan", result, "Sprint plan");
+      } else if (request.agentId === "stakeholder-comms-drafter") {
+        nextProgramData = applyProgramSupportArtifact(contextProgramData, request.phaseId, "stakeholder-comms-drafter", "stakeholderComms", { ...result, audienceGroup: request.audienceGroup || "all" }, "Stakeholder communications");
+      } else if (request.agentId === "onboarding-briefer") {
+        nextProgramData = updateInnerProgramData(contextProgramData, (inner) => ({
+          ...inner,
+          onboardingBriefings: [
+            ...(Array.isArray(inner.onboardingBriefings) ? inner.onboardingBriefings as JsonValue[] : []),
+            {
+              memberName: request.memberName || result.memberName || "New team member",
+              memberRole: request.memberRole || result.memberRole || "Contributor",
+              content: typeof result.content === "string" ? result.content : "",
+              generatedAt: new Date().toISOString(),
+            } as JsonValue,
+          ] as JsonValue,
+        }));
+      } else if (request.agentId === "steerco-agenda-builder") {
+        nextProgramData = applyProgramSupportArtifact(contextProgramData, "program", "steerco-agenda-builder", "steercoAgenda", result, "Steering committee agenda");
+      } else if (request.agentId === "kpi-validator") {
+        const validatedKPIs = Array.isArray(parsedResult) ? parsedResult.filter(isRecord) : Array.isArray(result.validatedKPIs) ? result.validatedKPIs.filter(isRecord) : [];
+        const avgScore = validatedKPIs.length
+          ? Math.round(validatedKPIs.reduce((sum, entry) => sum + clampNumber(entry.smartScore, 0, 100, 0), 0) / validatedKPIs.length)
+          : 0;
+        nextProgramData = applyProgramSupportArtifact(contextProgramData, "strategy", "kpi-validator", "kpiValidation", { validatedKPIs, avgScore, generatedAt: new Date().toISOString() }, "KPI validation");
+      } else if (request.agentId === "compliance-checker") {
+        nextProgramData = applyProgramSupportArtifact(contextProgramData, request.phaseId, "compliance-checker", "complianceCheck", { gaps: Array.isArray(parsedResult) ? parsedResult : result.gaps || [], generatedAt: new Date().toISOString() }, "Compliance check");
+      } else if (request.agentId === "capacity-assessor") {
+        nextProgramData = applyProgramSupportArtifact(contextProgramData, request.phaseId, "capacity-assessor", "capacityAssessment", result, "Capacity assessment");
+      } else if (request.agentId === "lessons-synthesiser") {
+        nextProgramData = applyProgramSupportArtifact(contextProgramData, "program", "lessons-synthesiser", "lessonsSynthesis", result, "Programme learnings");
+      } else if (request.agentId === "vendor-risk-assessor") {
+        nextProgramData = applyProgramSupportArtifact(contextProgramData, request.phaseId, "vendor-risk-assessor", "vendorRiskAssessment", { vendorAssessments: Array.isArray(parsedResult) ? parsedResult : result.vendorAssessments || [], generatedAt: new Date().toISOString() }, "Vendor risk assessment");
+      } else if (request.agentId === "phase-readiness-monitor") {
+        nextProgramData = applyPhaseReadinessResultToProgramData(contextProgramData, result, request.phaseId);
+      } else if (request.agentId === "workstream-health-scorer") {
+        nextProgramData = applyWorkstreamHealthResultToProgramData(contextProgramData, result, request.phaseId);
+      } else if (request.agentId === "budget-anomaly-detector") {
+        nextProgramData = applyBudgetAnomalyResultToProgramData(contextProgramData, result);
+      } else if (request.agentId === "stakeholder-risk-assessor") {
+        nextProgramData = applyStakeholderRiskResultToProgramData(contextProgramData, result);
+      } else if (request.agentId === "benefit-forecast") {
+        nextProgramData = applyBenefitForecastResultToProgramData(contextProgramData, result);
+      } else if (request.agentId === "artifact-staleness-check") {
+        nextProgramData = applyArtifactStalenessResultToProgramData(contextProgramData, result);
+      } else if (request.agentId === "meeting-notes-extractor") {
+        nextProgramData = applyProgramSupportArtifact(contextProgramData, request.phaseId, "meeting-notes-extractor", "meetingNotesExtraction", result, "Meeting notes extraction");
+      } else if (request.agentId === "deck-section") {
+        const sectionType = request.phaseId || "risks";
+        nextProgramData = applyDeckSectionResultToProgramData(contextProgramData, normalizedParsedResult, sectionType);
+      } else if (request.agentId === "narrative-refine") {
+        nextProgramData = applyNarrativeResultToProgramData(contextProgramData, result);
+      } else if (request.agentId === "board-pack") {
+        nextProgramData = applyBoardPackResultToProgramData(contextProgramData, normalizedParsedResult);
+      }
+
+      if (!autonomy.shouldQueueReview) {
+        const reviewTargets: Record<string, { fieldKey: string; confidenceFieldKey?: string; content: string }> = {
+          narrative: {
+            fieldKey: "narrativeQuality",
+            confidenceFieldKey: "narrativeConfidence",
+            content: typeof result.narrative === "string" ? result.narrative : "",
+          },
+          plan: {
+            fieldKey: "planQuality",
+            confidenceFieldKey: "planConfidence",
+            content: stringifyForReview(result.plan),
+          },
+          risk: {
+            fieldKey: "riskQuality",
+            content: stringifyForReview({ summary: result.summary, raidEntries: result.raidEntries }),
+          },
+          "gate-review": {
+            fieldKey: "gateReviewQuality",
+            content: stringifyForReview(result),
+          },
+          deck: {
+            fieldKey: "deckQuality",
+            content: stringifyForReview({ programHealthSummary: result.programHealthSummary, slides: result.slides }),
+          },
+          stakeholder: {
+            fieldKey: "stakeholderQuality",
+            content: stringifyForReview(result),
+          },
+          "change-impact": {
+            fieldKey: "changeImpactQuality",
+            content: stringifyForReview(result),
+          },
+          adoption: {
+            fieldKey: "adoptionQuality",
+            content: stringifyForReview(result),
+          },
+          "critical-path": {
+            fieldKey: "criticalPathQuality",
+            content: stringifyForReview(result),
+          },
+        };
+        const reviewTarget = reviewTargets[request.agentId];
+        if (reviewTarget?.content.trim()) {
+          const artifactReview = await reviewArtifact(
+            request.agentId,
+            reviewTarget.content,
+            `Program: ${programRow.name || "Unknown"}, Phase: ${request.phaseId}`,
+            request.crossPhaseContext || priorPhaseContext || "",
+          );
+          nextProgramData = applyArtifactQuality(nextProgramData, reviewTarget.fieldKey, artifactReview as unknown as Record<string, unknown>, reviewTarget.confidenceFieldKey);
+        }
+      }
+
+      nextProgramData = appendAgentServerMemory(nextProgramData, request.agentId, {
+        runAt: new Date().toISOString() as JsonValue,
+        runId: runId as JsonValue,
+        summary: outputSummary as JsonValue,
+        confidence: confidence,
+        keyFindings: Array.isArray(result.keyFindings) ? result.keyFindings.slice(0, 3) as JsonValue[] : [],
+      });
+
+      await persistAgentArtifact(auth.admin, request.programId, request.agentId, request.phaseId, normalizedParsedResult, confidence);
+      await persistProgramData(auth.admin, request.programId, nextProgramData);
+      await auth.admin
+        .from("adam_agent_runs")
+        .update({
+          status: "complete",
+          output: outputPayload,
+          handoff: null,
+          reasoning_trace: null,
+          confidence,
+          tokens_used: claudeResult.inputTokens + claudeResult.outputTokens,
+          completed_at: new Date().toISOString(),
+          awaiting_decision_id: null,
+        })
+        .eq("id", runId);
+
+      await emitAgentEvent(auth.admin, {
+        programId: request.programId,
+        agentId: request.agentId,
+        phaseId: request.phaseId,
+        eventType: "completed",
+        payload: {
+          confidence,
+          generatedAt: new Date().toISOString(),
+          queuedForReview: autonomy.shouldQueueReview,
+          outputSummary: autonomy.shouldQueueReview
+            ? `Queued for review — ${autonomy.reason}`
+            : outputSummary,
+        },
+      });
+
+      await broadcastStatus(auth.admin, {
+        runId,
+        programId: request.programId,
+        agentId: request.agentId,
+        phaseId: request.phaseId,
+        status: "complete",
+        confidence,
+        latestObservationType: "response_received",
+      });
+
+      if (!autonomy.shouldQueueReview) {
+        // Build and pass handoff so downstream agents know upstream confidence + findings
+        const completedHandoff: AgentHandoff = {
+          fromAgentId: request.agentId,
+          fromPhaseId: request.phaseId,
+          toPhaseId: request.phaseId,
+          completedAt: new Date().toISOString(),
+          summary: outputSummary,
+          keyDecisions: [],
+          artifactIds: [],
+          openQuestions: [],
+          confidence,
+          recommendedNextAction: "",
+        };
+        await triggerDownstreamAgents(request.agentId, request.programId, request.phaseId, completedHandoff);
+      }
+
+      return jsonResponse({
+        status: "complete",
+        runId,
+        output: outputPayload,
+      } satisfies RunAgentResponse);
+    }
+
+    const pauseMarker = checkForPauseMarker(claudeResult.text);
+    if (pauseMarker.hasPause) {
+      const decisionId = crypto.randomUUID();
+      let nextProgramData = contextProgramData;
+      if (pauseMarker.contentBeforePause) {
+        nextProgramData = applyArtifactsToProgramData(nextProgramData, request.phaseId, [{
+          id: `partial_${request.phaseId}_${runId.slice(0, 8)}`,
+          title: `${request.phaseId} partial draft`,
+          content: pauseMarker.contentBeforePause,
+          summary: pauseMarker.reason,
+        }]);
+      }
+      nextProgramData = appendDecisionQueueItems(nextProgramData, [{
+        id: decisionId,
+        type: "agent_clarification",
+        phase: request.phaseId,
+        title: `${request.agentId} needs input`,
+        body: pauseMarker.reason || pauseMarker.question || "Agent needs human clarification.",
+        question: pauseMarker.question || "Please clarify how the agent should proceed.",
+        options: pauseMarker.options || [],
+        runId,
+        createdAt: Date.now(),
+        status: "pending",
+      }]);
+      await persistProgramData(auth.admin, request.programId, nextProgramData);
+      await auth.admin
+        .from("adam_agent_runs")
+        .update({
+          status: "paused",
+          output: { partialContent: pauseMarker.contentBeforePause || "" } as JsonValue,
+          awaiting_decision_id: decisionId,
+          tokens_used: claudeResult.inputTokens + claudeResult.outputTokens,
+          confidence: null,
+        })
+        .eq("id", runId);
+      await logObservation(auth.admin, {
+        runId,
+        programId: request.programId,
+        agentId: request.agentId,
+        phaseId: request.phaseId,
+        observationType: "pause_requested",
+        payload: {
+          reason: pauseMarker.reason,
+          question: pauseMarker.question,
+          options: pauseMarker.options || [],
+          decisionId,
+        },
+      });
+      await logObservation(auth.admin, {
+        runId,
+        programId: request.programId,
+        agentId: request.agentId,
+        phaseId: request.phaseId,
+        observationType: "decision_queued",
+        payload: { decisionId, type: "agent_clarification" },
+      });
+      await broadcastStatus(auth.admin, {
+        runId,
+        programId: request.programId,
+        agentId: request.agentId,
+        phaseId: request.phaseId,
+        status: "paused",
+        latestObservationType: "pause_requested",
+      });
+      return jsonResponse({
+        status: "paused",
+        runId,
+        decisionId,
+      } satisfies RunAgentResponse);
+    }
+
+    const parsed = parseAgentPayload(claudeResult.text, request.phaseId, request.agentId);
+    const autonomy = await autonomyGate(auth.admin, request.programId, request.agentId, parsed.confidence);
+    let nextProgramData = contextProgramData;
+    const handoff = autonomy.shouldQueueReview ? null : buildDefaultHandoff(request, parsed);
+
+    if (autonomy.shouldQueueReview) {
+      nextProgramData = appendDecisionQueueItems(nextProgramData, [
+        createAgentReviewDecision(request.agentId, request.phaseId, {
+          summary: parsed.summary,
+          reasoningTrace: parsed.reasoningTrace,
+          confidence: parsed.confidence,
+          artifacts: parsed.artifacts,
+          decisions: parsed.decisions,
+          handoff: handoff as unknown as Record<string, unknown> | null,
+        }, autonomy.reason),
+      ]);
+    } else {
+      nextProgramData = applyArtifactsToProgramData(contextProgramData, request.phaseId, parsed.artifacts);
+      if (parsed.decisions.length) {
+        nextProgramData = appendDecisionQueueItems(nextProgramData, parsed.decisions.map((decision) => ({
+          id: crypto.randomUUID(),
+          type: "agent_recommendation",
+          phase: request.phaseId,
+          title: decision.title,
+          body: decision.question,
+          options: decision.options || [],
+          priority: decision.priority || "medium",
+          createdAt: Date.now(),
+          status: "pending",
+        })));
+      }
+
+      if (handoff) {
+        nextProgramData.phaseHandoffs = {
+          ...((nextProgramData.phaseHandoffs as Record<string, JsonValue>) || {}),
+          [request.phaseId]: handoff as JsonValue,
+        };
+        nextProgramData.phaseIncomingHandoffs = {
+          ...((nextProgramData.phaseIncomingHandoffs as Record<string, JsonValue>) || {}),
+          [handoff.toPhaseId]: handoff as JsonValue,
+        };
+      }
+    }
+
+    nextProgramData = appendAgentServerMemory(nextProgramData, request.agentId, {
+      runAt: new Date().toISOString() as JsonValue,
+      runId: runId as JsonValue,
+      summary: parsed.summary as JsonValue,
+      confidence: parsed.confidence,
+      keyFindings: parsed.artifacts.slice(0, 3).map((artifact) => artifact.title) as JsonValue[],
+    });
+
+    await persistAgentArtifact(auth.admin, request.programId, request.agentId, request.phaseId, {
+      summary: parsed.summary,
+      reasoningTrace: parsed.reasoningTrace as unknown as string[],
+      confidence: parsed.confidence,
+      artifacts: parsed.artifacts as unknown as Array<Record<string, unknown>>,
+      decisions: parsed.decisions as unknown as Array<Record<string, unknown>>,
+      handoff: handoff as unknown as Record<string, unknown> | null,
+    }, parsed.confidence);
+    await persistProgramData(auth.admin, request.programId, nextProgramData);
+
+    for (const artifact of parsed.artifacts) {
+      await logObservation(auth.admin, {
+        runId,
+        programId: request.programId,
+        agentId: request.agentId,
+        phaseId: request.phaseId,
+        observationType: "artifact_drafted",
+        payload: {
+          artifactId: artifact.id,
+          title: artifact.title,
+        },
+      });
+    }
+
+    await auth.admin
+      .from("adam_agent_runs")
+      .update({
+        status: "complete",
+        output: {
+          summary: parsed.summary,
+          artifacts: parsed.artifacts,
+          decisions: parsed.decisions,
+        } as JsonValue,
+        handoff: (handoff || null) as JsonValue | null,
+        reasoning_trace: parsed.reasoningTrace,
+        confidence: parsed.confidence,
+        tokens_used: claudeResult.inputTokens + claudeResult.outputTokens,
+        completed_at: new Date().toISOString(),
+        awaiting_decision_id: null,
+      })
+      .eq("id", runId);
+
+    await emitAgentEvent(auth.admin, {
+      programId: request.programId,
+      agentId: request.agentId,
+      phaseId: request.phaseId,
+      eventType: "completed",
+      payload: {
+        confidence: parsed.confidence,
+        generatedAt: new Date().toISOString(),
+        queuedForReview: autonomy.shouldQueueReview,
+        outputSummary: autonomy.shouldQueueReview
+          ? `Queued for review — ${autonomy.reason}`
+          : buildOutputSummary(request.agentId, { summary: parsed.summary }),
+      },
+    });
+
+    if (handoff) {
+      await logObservation(auth.admin, {
+        runId,
+        programId: request.programId,
+        agentId: request.agentId,
+        phaseId: request.phaseId,
+        observationType: "handoff_created",
+        payload: handoff as unknown as JsonValue,
+      });
+    }
+
+    await broadcastStatus(auth.admin, {
+      runId,
+      programId: request.programId,
+      agentId: request.agentId,
+      phaseId: request.phaseId,
+      status: "complete",
+      confidence: parsed.confidence,
+      latestObservationType: handoff ? "handoff_created" : "response_received",
+    });
+
+    if (handoff?.toPhaseId && !autonomy.shouldQueueReview) {
+      await logObservation(auth.admin, {
+        runId,
+        programId: request.programId,
+        agentId: request.agentId,
+        phaseId: request.phaseId,
+        observationType: "trigger_fired",
+        payload: {
+          targetPhaseId: handoff.toPhaseId,
+          triggerEvent: "handoff",
+        },
+      });
+      await queueTriggeredRun(auth.admin, {
+        programId: request.programId,
+        agentId: handoff.toPhaseId,
+        phaseId: handoff.toPhaseId,
+        ownerId,
+        triggerEvent: "handoff",
+        incomingHandoff: handoff,
+      });
+    }
+
+    return jsonResponse({
+      status: "complete",
+      runId,
+      output: {
+        summary: parsed.summary,
+        artifacts: parsed.artifacts,
+        decisions: parsed.decisions,
+      },
+      handoff,
+    } satisfies RunAgentResponse);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    if (auth && request && runId) {
+      await auth.admin
+        .from("adam_agent_runs")
+        .update({
+          status: "failed",
+          error_message: message,
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", runId);
+      try {
+        await emitAgentEvent(auth.admin, {
+          programId: request.programId,
+          agentId: request.agentId,
+          phaseId: request.phaseId,
+          eventType: "failed",
+          payload: { error: message },
+        });
+      } catch (eventError) {
+        console.warn("ADAM failure event emit failed:", eventError);
+      }
+    }
+    return jsonResponse({ error: message }, 500);
+  }
+});

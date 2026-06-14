@@ -1,0 +1,611 @@
+import React, { useState, useEffect, useRef } from "react";
+import {
+  Home,
+  Shield,
+  Crown,
+  BellDot,
+  MoreHorizontal,
+  PanelLeftClose,
+  PanelLeftOpen,
+  SlidersHorizontal,
+  Sun,
+  Moon,
+  HelpCircle,
+  LogOut,
+  ChevronDown,
+  ChevronUp,
+  Plus,
+  Trash2,
+  Inbox,
+} from "lucide-react";
+import type { V3Surface } from "@/v3/types";
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+type ProgramEntry = { id: string; name: string };
+
+type HealthSignal = "green" | "amber" | "red";
+
+type ProgramHealth = {
+  programme: HealthSignal;
+  ai: HealthSignal;
+  agents: HealthSignal;
+};
+
+type CommandRailProps = {
+  activeSurface: V3Surface;
+  moreView?: string | null;
+  onNavigate: (surface: V3Surface) => void;
+  programs?: ProgramEntry[];
+  activeProgramId?: string | null;
+  onSelectProgram?: (id: string) => void;
+  programName: string;
+  activePhaseLabel?: string | null;
+  confidenceScore?: number | null;
+  notificationCount: number;
+  anyAgentRunning?: boolean;
+  userInitial?: string | null;
+  userEmail?: string | null;
+  onOpenHelp?: () => void;
+  onOpenCommandPalette?: () => void;
+  onOpenCopilot?: () => void;
+  onOpenAISettings?: (tab?: string) => void;
+  onOpenWorkspaces?: () => void;
+  onSignOut?: () => void;
+  theme?: "dark" | "light";
+  onToggleTheme?: () => void;
+  pinned?: boolean;
+  onTogglePinned?: () => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
+  onCreateProgram?: () => void;
+  onDeleteProgram?: () => Promise<void> | void;
+  programHealth?: ProgramHealth;
+  openDecisionCount?: number;
+};
+
+// ─── Primary navigation ───────────────────────────────────────────────────────
+
+const PRIMARY_NAV: Array<{
+  id: string;
+  surface: V3Surface;
+  label: string;
+  sublabel: string;
+  Icon: React.FC<{ size?: number; strokeWidth?: number }>;
+}> = [
+  {
+    id: "today",
+    surface: "insight-feed",
+    label: "Home",
+    sublabel: "Morning brief & attention",
+    Icon: Home,
+  },
+  {
+    id: "governance",
+    surface: "stage",
+    label: "Programme",
+    sublabel: "Phase work & gate reviews",
+    Icon: Shield,
+  },
+  {
+    id: "executive",
+    surface: "executive",
+    label: "Executive",
+    sublabel: "One-page summary",
+    Icon: Crown,
+  },
+];
+
+function activeNavId(surface: V3Surface, moreView?: string | null): string {
+  if (surface === "insight-feed") return "today";
+  if (surface === "stage" || surface === "pipeline" || surface === "programme-health") return "governance";
+  if (surface === "decide") return "__decide"; // Decision Queue handles its own active state
+  if (surface === "executive") return "executive";
+  if (surface === "program") return moreView === "intelligence" ? "__ai" : "workspaces";
+  return "today";
+}
+
+const PROGRAMME_SURFACES = new Set<V3Surface>(["insight-feed", "pipeline", "stage", "program", "programme-health", "decide"]);
+
+function scoreColor(score: number): string {
+  if (score >= 80) return "var(--v3-green)";
+  if (score >= 60) return "var(--v3-amber)";
+  if (score >= 40) return "var(--v3-amber)";
+  return "var(--v3-red)";
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+type RailItemProps = {
+  icon: React.ReactNode;
+  label: string;
+  sublabel?: string;
+  active?: boolean;
+  badge?: React.ReactNode;
+  title?: string;
+  onClick?: () => void;
+};
+
+function RailItem({ icon, label, sublabel, active = false, badge, title, onClick }: RailItemProps) {
+  return (
+    <button
+      type="button"
+      className={`v3-command-rail-item${active ? " active" : ""}`}
+      onClick={onClick}
+      title={title || label}
+      aria-label={label}
+      aria-current={active ? "page" : undefined}
+    >
+      <span className="v3-command-rail-item-icon">
+        {icon}
+        {badge}
+      </span>
+      <span className="v3-command-rail-item-copy">
+        <span className="v3-command-rail-item-label">{label}</span>
+        {sublabel ? <span className="v3-command-rail-item-sub">{sublabel}</span> : null}
+      </span>
+    </button>
+  );
+}
+
+function RailDivider() {
+  return <div className="v3-command-rail-divider" role="separator" />;
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
+export function CommandRail({
+  activeSurface,
+  moreView,
+  onNavigate,
+  programs = [],
+  activeProgramId,
+  onSelectProgram,
+  programName,
+  activePhaseLabel,
+  confidenceScore,
+  notificationCount,
+  anyAgentRunning = false,
+  userInitial,
+  userEmail,
+  onOpenHelp,
+  onOpenCommandPalette,
+  onOpenAISettings,
+  onOpenWorkspaces,
+  onSignOut,
+  theme = "dark",
+  onToggleTheme,
+  pinned = false,
+  onTogglePinned,
+  collapsed = false,
+  onToggleCollapse,
+  onCreateProgram,
+  onDeleteProgram,
+  programHealth,
+  openDecisionCount = 0,
+}: CommandRailProps) {
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [programMenuOpen, setProgramMenuOpen] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [deletingProgram, setDeletingProgram] = useState(false);
+  const programMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close bottom menu when the rail collapses
+  useEffect(() => {
+    if (collapsed) setUserMenuOpen(false);
+  }, [collapsed]);
+
+  // Close programme menu when clicking outside
+  useEffect(() => {
+    if (!programMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (programMenuRef.current && !programMenuRef.current.contains(e.target as Node)) {
+        setProgramMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [programMenuOpen]);
+
+  const avatar = (programName || "?").trim().charAt(0).toUpperCase();
+  const activeId = activeNavId(activeSurface, moreView);
+  const aiSettingsActive = moreView === "intelligence";
+  const workspacesActive = activeSurface === "program" && !aiSettingsActive;
+  const showStatus = PROGRAMME_SURFACES.has(activeSurface) || moreView != null;
+  const railNavigate = (surface: V3Surface) => {
+    setUserMenuOpen(false);
+    setProgramMenuOpen(false);
+    onNavigate(surface);
+  };
+  const openBottomMenu = () => {
+    setProgramMenuOpen(false);
+    setUserMenuOpen((open) => !open);
+  };
+
+  return (
+    <>
+    <nav
+      className={`v3-command-rail${pinned ? " is-pinned" : ""}${collapsed ? " is-collapsed" : ""}`}
+      aria-label="Primary navigation"
+    >
+    {/* Panel is an inner overlay that expands visually without shifting the flex layout */}
+    <div className="v3-command-rail-panel">
+      {/* ── Brillio logo ── */}
+      <div className="v3-command-rail-brillio-logo" title="Brillio · ADAM Platform">
+        {/* Collapsed: small B mark, always visible when rail is narrow */}
+        <span className="v3-command-rail-brillio-mark" aria-hidden="true">B</span>
+        {/* Expanded: full wordmark + badge */}
+        <svg className="v3-command-rail-brillio-wordmark" viewBox="0 0 80 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Brillio">
+          <text x="0" y="15" fontFamily="'Inter', sans-serif" fontWeight="700" fontSize="14" letterSpacing="0.5" fill="currentColor">brillio</text>
+        </svg>
+        <span className="v3-command-rail-brillio-badge">ADAM</span>
+      </div>
+
+      {/* ── Programme identity + portfolio switcher ── */}
+      {/* brand-wrap is the positioning parent for both the chevron and the dropdown */}
+      <div className="v3-command-rail-brand-wrap" ref={programMenuRef}>
+        <button
+          type="button"
+          className="v3-command-rail-brand"
+          onClick={() => railNavigate("insight-feed")}
+          title={`${programName} — go to overview`}
+          aria-label={`${programName}: go to overview`}
+        >
+          <span className="v3-command-rail-brand-mark">{avatar}</span>
+          <span className="v3-command-rail-brand-copy">
+            <span className="v3-command-rail-brand-eyebrow">Programme</span>
+            <span className="v3-command-rail-brand-name">{programName}</span>
+            <span className="v3-command-rail-brand-kicker">
+              {confidenceScore != null ? (
+                <span style={{ color: scoreColor(confidenceScore) }}>
+                  {confidenceScore}% confidence
+                </span>
+              ) : (
+                "ADAM · Transformation OS"
+              )}
+            </span>
+          </span>
+        </button>
+
+        {/* Chevron button — always visible in brand-actions */}
+        <div className="v3-command-rail-brand-actions">
+          <button
+            type="button"
+            className="v3-command-rail-portfolio-toggle"
+            onClick={() => { setUserMenuOpen(false); setProgramMenuOpen((o) => !o); }}
+            title="Programme menu"
+            aria-label="Programme menu"
+            aria-expanded={programMenuOpen}
+          >
+            {programMenuOpen ? <ChevronUp size={14} strokeWidth={2.5} /> : <ChevronDown size={14} strokeWidth={2.5} />}
+          </button>
+        </div>
+
+        {/* Dropdown — sibling of brand-actions, anchored to brand-wrap, never inside brand-actions */}
+        {programMenuOpen ? (
+          <div className="v3-command-rail-program-menu" role="menu">
+            {/* Programme switcher — if more than one programme */}
+            {programs.length > 1 && onSelectProgram ? (
+              <>
+                <div className="v3-command-rail-program-menu-section-label">Switch programme</div>
+                {programs.map((prog) => (
+                  <button
+                    key={prog.id}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={prog.id === activeProgramId}
+                    className={`v3-command-rail-program-menu-item${prog.id === activeProgramId ? " is-active" : ""}`}
+                    onClick={() => { setProgramMenuOpen(false); onSelectProgram(prog.id); }}
+                  >
+                    <span style={{
+                      width: 18, height: 18, borderRadius: 5, flexShrink: 0,
+                      background: prog.id === activeProgramId ? "var(--v3-accent)" : "rgba(255,255,255,0.1)",
+                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 10, fontWeight: 700, color: "#fff",
+                    }}>
+                      {(prog.name || "?").charAt(0).toUpperCase()}
+                    </span>
+                    <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {prog.name}
+                    </span>
+                    {prog.id === activeProgramId ? <span style={{ fontSize: 10, opacity: 0.7 }}>✓</span> : null}
+                  </button>
+                ))}
+                <button type="button" role="menuitem" className="v3-command-rail-program-menu-item"
+                  style={{ fontSize: 11, opacity: 0.65 }}
+                  onClick={() => { setProgramMenuOpen(false); railNavigate("portfolio"); }}>
+                  View all →
+                </button>
+                <div className="v3-command-rail-program-menu-divider" />
+              </>
+            ) : null}
+
+            {/* Programme actions */}
+            {onCreateProgram ? (
+              <button type="button" role="menuitem" className="v3-command-rail-program-menu-item"
+                onClick={() => { setProgramMenuOpen(false); onCreateProgram(); }}>
+                <Plus size={12} strokeWidth={2} />
+                <span>New programme</span>
+              </button>
+            ) : null}
+            {onDeleteProgram ? (
+              <button type="button" role="menuitem" className="v3-command-rail-program-menu-item danger"
+                onClick={() => { setProgramMenuOpen(false); setConfirmDeleteOpen(true); }}>
+                <Trash2 size={12} strokeWidth={2} />
+                <span>Delete programme</span>
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+
+      {/* ── Primary navigation ── */}
+      <div className="v3-command-rail-modes" role="list">
+        {PRIMARY_NAV.map((item) => {
+          const active = item.id === activeId;
+          const decisionActive = activeSurface === "decide";
+          return (
+            <React.Fragment key={item.id}>
+              <RailItem
+                icon={<item.Icon size={16} strokeWidth={active ? 2.25 : 1.7} />}
+                label={item.label}
+                sublabel={item.sublabel}
+                active={active}
+                title={item.label}
+                onClick={() => railNavigate(item.surface)}
+              />
+              {/* ── Decision Queue — immediately after Today ── */}
+              {item.id === "today" && (
+                <RailItem
+                  icon={<Inbox size={16} strokeWidth={decisionActive ? 2.25 : 1.7} />}
+                  label="Decisions"
+                  sublabel={openDecisionCount > 0 ? `${openDecisionCount} awaiting review` : "Action centre"}
+                  active={decisionActive}
+                  title="Decision queue"
+                  onClick={() => railNavigate("decide")}
+                  badge={
+                    openDecisionCount > 0 ? (
+                      <span className="v3-command-rail-badge v3-command-rail-badge--decision">
+                        {openDecisionCount > 9 ? "9+" : openDecisionCount}
+                      </span>
+                    ) : undefined
+                  }
+                />
+              )}
+            </React.Fragment>
+          );
+        })}
+      </div>
+
+      {/* ── Agent activity + phase ── */}
+      {(anyAgentRunning || (showStatus && activePhaseLabel)) ? (
+        <>
+          <RailDivider />
+          {anyAgentRunning ? (
+            <div className="v3-command-rail-status-row v3-agent-running-row" title="Analysing programme data">
+              <span className="v3-radar-spinner" aria-hidden="true" />
+            </div>
+          ) : null}
+          {activeSurface === "stage" && activePhaseLabel ? (
+            <div className="v3-command-rail-status-row" title={`Active phase: ${activePhaseLabel}`}>
+              <span className="v3-command-rail-phase-indicator" />
+              <span className="v3-command-rail-status-label">{activePhaseLabel}</span>
+            </div>
+          ) : null}
+        </>
+      ) : null}
+
+      {/* ── Health ── */}
+      {programHealth ? (
+        <>
+          <RailDivider />
+          <div className="v3-command-rail-section-label">Health</div>
+          <div className="v3-command-rail-health-card">
+            {(["programme", "ai", "agents"] as const).map((key) => {
+              const sig = programHealth[key];
+              const label = key === "ai" ? "AI" : key === "programme" ? "Programme" : "Intelligence";
+              const badge = sig === "green" ? "OK" : sig === "amber" ? "Warn" : "Alert";
+              const handleClick =
+                key === "programme"
+                  ? () => railNavigate("stage")
+                  : key === "agents"
+                  ? () => { setUserMenuOpen(false); setProgramMenuOpen(false); onOpenAISettings?.("Status"); }
+                  : () => { setUserMenuOpen(false); setProgramMenuOpen(false); onOpenAISettings?.("Setup"); };
+                  // Programme → health view; Agents → AI Settings Status tab; AI → AI Settings Setup tab
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  className={`v3-health-row v3-health-row--clickable v3-health-row--${sig}`}
+                  onClick={handleClick}
+                  title={
+                    key === "programme"
+                      ? `Programme — ${badge} · View health`
+                      : key === "ai"
+                      ? `AI — ${badge} · Open AI Settings`
+                      : `Intelligence — ${badge} · Open AI Settings & Status`
+                  }
+                >
+                  <span className="v3-health-label">{label}</span>
+                  <span className={`v3-health-dot v3-health-dot--${sig}`} />
+                </button>
+              );
+            })}
+          </div>
+        </>
+      ) : null}
+
+      {/* ── More (overflow areas) ── */}
+      <RailDivider />
+      <div className="v3-command-rail-tools">
+        <RailItem
+          icon={<MoreHorizontal size={15} strokeWidth={workspacesActive ? 2.25 : 1.8} />}
+          label="More"
+          sublabel="Risks, budget, documents & more"
+          title="All programme areas"
+          active={workspacesActive}
+          onClick={() => {
+            setProgramMenuOpen(false);
+            setUserMenuOpen(false);
+            (onOpenWorkspaces ?? (() => onNavigate("program")))();
+          }}
+        />
+      </div>
+
+      {/* ── Alerts ── */}
+      {notificationCount > 0 ? (
+        <>
+          <RailDivider />
+          <div className="v3-command-rail-tools">
+            <RailItem
+              icon={<BellDot size={15} strokeWidth={1.8} />}
+              label="Alerts"
+              sublabel={`${notificationCount} need attention`}
+              title={`${notificationCount} active alerts`}
+              onClick={() => railNavigate("stage")}
+              badge={
+                <span className="v3-command-rail-badge">
+                  {notificationCount > 9 ? "9+" : notificationCount}
+                </span>
+              }
+            />
+          </div>
+        </>
+      ) : null}
+
+      {/* ── Spacer — pushes menu to bottom ── */}
+      <div className="v3-command-rail-spacer" />
+
+      {/* ── Bottom menu ── */}
+      <RailDivider />
+      <div className="v3-command-rail-user-wrap" style={{ position: "relative" }}>
+        <button
+          type="button"
+          className="v3-command-rail-usercard v3-command-rail-menu-button"
+          onClick={openBottomMenu}
+          title="Menu"
+          aria-label="Open rail menu"
+          aria-expanded={userMenuOpen}
+        >
+          <span className="v3-command-rail-usericon">
+            <MoreHorizontal size={16} strokeWidth={1.9} />
+          </span>
+          <span className="v3-command-rail-item-copy">
+            <span className="v3-command-rail-item-label">Menu</span>
+            <span className="v3-command-rail-item-sub">{userEmail ? userEmail.split("@")[0] : "Account, settings, theme"}</span>
+          </span>
+        </button>
+
+        {userMenuOpen ? (
+          <div className="v3-command-rail-user-menu" role="menu">
+            {userEmail ? (
+              <div className="v3-command-rail-user-menu-email">
+                <span className="v3-command-rail-user-menu-avatar">{userInitial || userEmail[0]?.toUpperCase()}</span>
+                <span>{userEmail}</span>
+              </div>
+            ) : null}
+
+            {onOpenCommandPalette ? (
+              <button type="button" role="menuitem" className="v3-command-rail-user-menu-item" onClick={() => { setUserMenuOpen(false); onOpenCommandPalette(); }}>
+                <span style={{ width: 13, textAlign: "center" }}>⌘</span>
+                <span>Command search</span>
+              </button>
+            ) : null}
+
+            <button type="button" role="menuitem" className="v3-command-rail-user-menu-item" onClick={() => { setUserMenuOpen(false); onOpenAISettings?.(); }}>
+              <SlidersHorizontal size={13} strokeWidth={1.8} />
+              <span>AI Settings</span>
+            </button>
+
+            <button type="button" role="menuitem" className="v3-command-rail-user-menu-item" onClick={() => { setUserMenuOpen(false); onToggleTheme?.(); }}>
+              {theme === "dark" ? <Sun size={13} strokeWidth={1.8} /> : <Moon size={13} strokeWidth={1.8} />}
+              <span>{theme === "dark" ? "Light mode" : "Dark mode"}</span>
+            </button>
+
+            <button type="button" role="menuitem" className="v3-command-rail-user-menu-item" onClick={() => { setUserMenuOpen(false); onOpenHelp?.(); }}>
+              <HelpCircle size={13} strokeWidth={1.8} />
+              <span>Help & guide</span>
+            </button>
+
+            {onTogglePinned ? (
+              <button type="button" role="menuitem" className="v3-command-rail-user-menu-item" onClick={() => { setUserMenuOpen(false); onTogglePinned(); }}>
+                {pinned ? <PanelLeftClose size={13} strokeWidth={1.8} /> : <PanelLeftOpen size={13} strokeWidth={1.8} />}
+                <span>{pinned ? "Collapse rail" : "Pin rail open"}</span>
+              </button>
+            ) : null}
+
+            {onSignOut ? (
+              <>
+                <div className="v3-command-rail-user-menu-divider" />
+                <button type="button" role="menuitem" className="v3-command-rail-user-menu-item danger" onClick={() => { setUserMenuOpen(false); onSignOut(); }}>
+                  <LogOut size={13} strokeWidth={1.8} />
+                  <span>Sign out</span>
+                </button>
+              </>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </div>{/* end v3-command-rail-panel */}
+    </nav>
+
+    {/* ── Delete programme confirmation overlay ── */}
+    {confirmDeleteOpen && onDeleteProgram && (
+      <div
+        style={{
+          position: "fixed", inset: 0, zIndex: 9999,
+          background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}
+        onClick={() => { if (!deletingProgram) { setConfirmDeleteOpen(false); } }}
+      >
+        <div
+          style={{
+            background: "var(--v3-surface)", border: "1px solid var(--v3-border)",
+            borderRadius: 16, padding: "28px 28px 24px", maxWidth: 380, width: "90%",
+            boxShadow: "0 24px 48px rgba(0,0,0,0.4)",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div style={{ fontSize: 15, fontWeight: 700, color: "var(--v3-text-primary)", marginBottom: 8, fontFamily: "var(--v3-font)" }}>
+            Delete programme?
+          </div>
+          <div style={{ fontSize: 13, color: "var(--v3-text-muted)", lineHeight: 1.6, marginBottom: 20, fontFamily: "var(--v3-font)" }}>
+            {programName ? <>This will permanently delete <strong style={{ color: "var(--v3-text-primary)" }}>{programName}</strong> and all associated data.</> : "This will permanently delete the programme and all associated data."} This cannot be undone.
+          </div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button
+              type="button"
+              className="v3-button ghost"
+              style={{ fontSize: 13 }}
+              disabled={deletingProgram}
+              onClick={() => setConfirmDeleteOpen(false)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="v3-button"
+              style={{ fontSize: 13, background: "var(--v3-red)", color: "#fff", border: "none", opacity: deletingProgram ? 0.6 : 1 }}
+              disabled={deletingProgram}
+              onClick={async () => {
+                setDeletingProgram(true);
+                try {
+                  await onDeleteProgram();
+                  setConfirmDeleteOpen(false);
+                } catch {
+                  // Error handled upstream — reset spinner so dialog is not stuck
+                } finally {
+                  setDeletingProgram(false);
+                }
+              }}
+            >
+              {deletingProgram ? "Deleting…" : "Delete programme"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
+  );
+}

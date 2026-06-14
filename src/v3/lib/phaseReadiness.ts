@@ -1,0 +1,347 @@
+import type { ExitCriterion, ProgramSummary } from "@/new/types";
+import { getGateThreshold, computeInputQualityScore } from "@/v3/lib/confidenceScore";
+import { getMandatoryCriteria } from "@/v3/lib/exitCriteriaLibrary";
+
+// ─── Readiness Action ─────────────────────────────────────────────────────────
+// Ranked action with estimated readiness impact — powers the "what to do next"
+// guidance across StageView, InsightFeedView, and ProgrammeHealthView.
+export interface ReadinessAction {
+  id: string;
+  label: string;
+  description: string;
+  estimatedImpact: number;   // Approximate readiness points this action could add
+  effort: "quick" | "hours" | "days";
+  agentId?: string;           // If an agent can execute this
+  workspaceId?: string;       // If user should navigate to a workspace
+  priority: "critical" | "high" | "medium";
+}
+
+export interface PhaseReadinessResult {
+  score: number;
+  gateScore: number | null;
+  artifactScore: number;
+  inputScore: number;
+  canApproveGate: boolean;
+  threshold: number;
+  missing: string[];
+  mandatoryExitsPassing: boolean;
+  mandatoryExitsTotal: number;
+  mandatoryExitsMet: number;
+  reviewScoresCount: number;
+  /** Ranked actions to improve readiness, highest impact first. */
+  recommendedActions: ReadinessAction[];
+  /** How many library exit criteria exist for this phase (including unmet). */
+  libraryExitCriteriaCount: number;
+  /** How many library mandatory criteria are not yet in the gate review. */
+  missingLibraryCriteria: number;
+}
+
+export function computePhaseReadiness(
+  program: ProgramSummary,
+  phaseId: string,
+  threshold?: number,
+): PhaseReadinessResult {
+  // Use phase-calibrated threshold (Priority 1 — phase-specific confidence thresholds)
+  const resolvedThreshold = threshold ?? getGateThreshold(phaseId);
+
+  const missing: string[] = [];
+  const recommendedActions: ReadinessAction[] = [];
+
+  const gateReview = program.gateReviews?.[phaseId] ?? null;
+  const gateScore = typeof gateReview?.readinessScore === "number" ? gateReview.readinessScore : null;
+
+  // Fast-path: gate already approved
+  if (gateReview?.status === "approved" && gateScore !== null) {
+    return {
+      score: gateScore,
+      gateScore,
+      artifactScore: 0,
+      inputScore: 100,
+      canApproveGate: true,
+      threshold: resolvedThreshold,
+      missing: [],
+      mandatoryExitsPassing: true,
+      mandatoryExitsTotal: 0,
+      mandatoryExitsMet: 0,
+      reviewScoresCount: 0,
+      recommendedActions: [],
+      libraryExitCriteriaCount: getMandatoryCriteria(phaseId).length,
+      missingLibraryCriteria: 0,
+    };
+  }
+
+  const source = (() => {
+    const raw = program.rawData as Record<string, unknown>;
+    if (!raw) return null;
+    return typeof raw.data === "object" && raw.data !== null
+      ? raw.data as Record<string, unknown>
+      : raw;
+  })();
+
+  // ── Artifact quality score ──────────────────────────────────────────────────
+  const reviewKeys = [
+    "narrativeQuality",
+    "planQuality",
+    "riskQuality",
+    "deckQuality",
+    "gateReviewQuality",
+    "stakeholderQuality",
+    "changeImpactQuality",
+    "adoptionQuality",
+    "criticalPathQuality",
+    "handoffQuality",
+  ] as const;
+
+  const reviewScores = reviewKeys
+    .map((key) => {
+      const candidate = source?.[key];
+      if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return null;
+      const directScore = (candidate as Record<string, unknown>).score;
+      if (typeof directScore === "number") return directScore;
+      const phaseBucket = (candidate as Record<string, unknown>)[phaseId];
+      if (phaseBucket && typeof phaseBucket === "object" && !Array.isArray(phaseBucket)) {
+        const phaseScore = (phaseBucket as Record<string, unknown>).score;
+        if (typeof phaseScore === "number") return phaseScore;
+      }
+      return null;
+    })
+    .filter((value): value is number => value !== null);
+
+  const phaseArtifacts = source && typeof source.phaseArtifacts === "object" && source.phaseArtifacts !== null
+    ? source.phaseArtifacts as Record<string, Record<string, { confidence?: number; status?: string }>>
+    : {};
+  const artifactsForPhase = Object.values(phaseArtifacts[phaseId] ?? {});
+
+  const artifactScore = reviewScores.length
+    ? Math.round(reviewScores.reduce((sum, value) => sum + value, 0) / reviewScores.length)
+    : (() => {
+        const confidenceValues = artifactsForPhase
+          .map((artifact) => typeof artifact.confidence === "number" ? artifact.confidence * 100 : null)
+          .filter((value): value is number => value !== null);
+        return confidenceValues.length
+          ? Math.round(confidenceValues.reduce((sum, value) => sum + value, 0) / confidenceValues.length)
+          : 0;
+      })();
+
+  if (!reviewScores.length && !artifactsForPhase.length) {
+    missing.push("No artifacts generated yet");
+    // Highest-impact action: run the phase narrative agent
+    recommendedActions.push({
+      id: "run-narrative",
+      label: "Generate phase narrative",
+      description: "Running the narrative agent produces the primary phase artifact and lifts artifact score by up to 20 readiness points.",
+      estimatedImpact: 20,
+      effort: "quick",
+      agentId: "narrative",
+      priority: "critical",
+    });
+  } else if (artifactScore < 60) {
+    recommendedActions.push({
+      id: "improve-artifacts",
+      label: "Improve artifact quality",
+      description: `Artifact quality is ${artifactScore}%. Re-running phase agents after adding more inputs can improve this significantly.`,
+      estimatedImpact: Math.round((70 - artifactScore) * 0.3),
+      effort: "hours",
+      agentId: "narrative",
+      priority: "high",
+    });
+  }
+
+  // ── Input quality score (Priority 1 — replaces binary 0/100) ──────────────
+  const humanNotes = Array.isArray(source?.humanNotes) ? source.humanNotes as Record<string, unknown>[] : [];
+  const hasStageNote = humanNotes.some(
+    (note) => note.phaseId === phaseId && (note.type === "stage-note" || note.type === "gate-note"),
+  );
+  const phaseInputs = source && typeof source.phaseInputs === "object" && source.phaseInputs !== null
+    ? source.phaseInputs as Record<string, Record<string, unknown>>
+    : {};
+  const phaseInputData = phaseInputs[phaseId] ?? {};
+  const extractionConfidence = typeof phaseInputData._extractionConfidence === "number"
+    ? Number(phaseInputData._extractionConfidence)
+    : 1.0;
+  const hasStructuredInputs = Object.keys(phaseInputData).filter((k) => !k.startsWith("_")).length > 0;
+
+  // Quality-weighted input score instead of old binary 0/100
+  const inputScore = hasStructuredInputs
+    ? computeInputQualityScore(phaseInputData, extractionConfidence, hasStageNote)
+    : hasStageNote ? 30 : 0;
+
+  if (!hasStructuredInputs && !hasStageNote) {
+    missing.push("No inputs provided for this phase");
+    recommendedActions.push({
+      id: "add-inputs",
+      label: "Complete phase inputs",
+      description: "Adding structured inputs for this phase lifts the input score from 0% and improves artifact quality when agents run.",
+      estimatedImpact: 10,
+      effort: "hours",
+      priority: "high",
+    });
+  } else if (inputScore < 50) {
+    recommendedActions.push({
+      id: "expand-inputs",
+      label: "Expand phase inputs",
+      description: `Input quality is low (${inputScore}%). Expanding field responses to at least 20 words each will improve the quality score.`,
+      estimatedImpact: 5,
+      effort: "hours",
+      priority: "medium",
+    });
+  }
+
+  // ── Exit criteria (Priority 4 — auto-populate from library if empty) ────────
+  const storedExitCriteria = Array.isArray(gateReview?.exitCriteriaStatus)
+    ? gateReview.exitCriteriaStatus as ExitCriterion[]
+    : [];
+
+  // Auto-seed from exit criteria library if no stored criteria exist yet
+  const libraryCriteria = getMandatoryCriteria(phaseId);
+  const effectiveExitCriteria: ExitCriterion[] =
+    storedExitCriteria.length > 0
+      ? storedExitCriteria
+      : libraryCriteria.map((lc) => ({
+          criterion: lc.label,
+          met: false,
+          evidence: null,
+          mandatory: true,
+        } as ExitCriterion));
+
+  const mandatoryExits = effectiveExitCriteria.filter(
+    (criterion) => (criterion as Record<string, unknown>).mandatory !== false,
+  );
+  const mandatoryExitsMet = mandatoryExits.filter((criterion) => criterion.met).length;
+  const mandatoryExitsTotal = mandatoryExits.length;
+  const mandatoryExitsPassing = mandatoryExitsTotal === 0 || mandatoryExitsMet === mandatoryExitsTotal;
+  const missingLibraryCriteria = libraryCriteria.length - Math.min(libraryCriteria.length, storedExitCriteria.length);
+
+  if (!mandatoryExitsPassing) {
+    const unmet = mandatoryExits
+      .filter((criterion) => !criterion.met)
+      .map((criterion) => criterion.criterion);
+    missing.push(`${unmet.length} mandatory exit criteria unmet: ${unmet.slice(0, 2).join("; ")}`);
+    recommendedActions.push({
+      id: "gate-review",
+      label: "Run gate review to assess exit criteria",
+      description: `${unmet.length} mandatory exit criteria are not yet met. The gate-review agent evaluates evidence and marks criteria met.`,
+      estimatedImpact: Math.round(unmet.length * 3),
+      effort: "quick",
+      agentId: "gate-review",
+      priority: "critical",
+    });
+  }
+
+  // ── Open decisions blocking gate (Priority 8 — decision-to-readiness linkage) ─
+  const openPhaseDecisions = (program.decisionQueue ?? []).filter(
+    (d) => (!d.status || d.status === "open") && (!d.phaseId || d.phaseId === phaseId),
+  );
+  if (openPhaseDecisions.length > 0) {
+    missing.push(`${openPhaseDecisions.length} unresolved decision(s) must be resolved before gate approval`);
+    recommendedActions.push({
+      id: "resolve-decisions",
+      label: `Resolve ${openPhaseDecisions.length} open decision${openPhaseDecisions.length > 1 ? "s" : ""}`,
+      description: `Open decisions create risk and uncertainty. Resolving them lifts gate confidence by approximately ${openPhaseDecisions.length * 4} readiness points.`,
+      estimatedImpact: Math.min(20, openPhaseDecisions.length * 4),
+      effort: openPhaseDecisions.length > 3 ? "days" : "hours",
+      workspaceId: "decision-audit",
+      priority: openPhaseDecisions.length >= 3 ? "critical" : "high",
+    });
+  }
+
+  // ── Unvalidated critical assumptions ─────────────────────────────────────────
+  const unvalidatedCriticalAssumptions = Array.isArray(source?.raidEntries)
+    ? (source.raidEntries as Array<{ type: string; criticality?: string; validatedAt?: string | null }>)
+        .filter((entry) => entry.type === "assumption" && entry.criticality === "critical" && !entry.validatedAt)
+    : [];
+
+  if (unvalidatedCriticalAssumptions.length) {
+    missing.push(`${unvalidatedCriticalAssumptions.length} critical assumption(s) not yet validated`);
+    recommendedActions.push({
+      id: "validate-assumptions",
+      label: "Validate critical assumptions",
+      description: `${unvalidatedCriticalAssumptions.length} critical assumption(s) are blocking gate approval. Add evidence to mark them validated.`,
+      estimatedImpact: 8,
+      effort: "hours",
+      workspaceId: "risks",
+      priority: "critical",
+    });
+  }
+
+  // ── RACI gaps ─────────────────────────────────────────────────────────────────
+  const raciGaps = (source?.raciGaps as Record<string, Array<{ artifact: string; missingRole: string }>> | undefined)?.[phaseId] ?? [];
+  const accountableGaps = raciGaps.filter((gap) => gap.missingRole === "Accountable");
+  if (accountableGaps.length) {
+    missing.push(`${accountableGaps.length} artifact(s) have no accountable owner`);
+    recommendedActions.push({
+      id: "assign-raci",
+      label: "Assign accountable owners",
+      description: `${accountableGaps.length} artifact(s) lack an accountable owner. Gate approval requires all artefacts to be owned.`,
+      estimatedImpact: 5,
+      effort: "quick",
+      priority: "high",
+    });
+  }
+
+  // ── Compute composite score ───────────────────────────────────────────────────
+  const rawScore = gateScore !== null
+    ? Math.round(gateScore * 0.6 + artifactScore * 0.3 + inputScore * 0.1)
+    : Math.round(artifactScore * 0.7 + inputScore * 0.3);
+
+  const score = Math.min(100, Math.max(0, rawScore));
+  const canApproveGate = score >= resolvedThreshold && mandatoryExitsPassing && unvalidatedCriticalAssumptions.length === 0;
+
+  if (!canApproveGate && score < resolvedThreshold) {
+    missing.push(`Score ${score}% is below the ${resolvedThreshold}% gate threshold for this phase`);
+    if (!recommendedActions.some((a) => a.agentId === "gate-readiness-coach")) {
+      recommendedActions.push({
+        id: "gate-coach",
+        label: "Run gate readiness coach",
+        description: `Score is ${resolvedThreshold - score} points below threshold. The gate readiness coach identifies the fastest path to approval.`,
+        estimatedImpact: Math.min(15, resolvedThreshold - score),
+        effort: "quick",
+        agentId: "gate-readiness-coach",
+        priority: score < resolvedThreshold - 20 ? "critical" : "high",
+      });
+    }
+  }
+
+  // Sort actions: critical first, then by estimated impact descending
+  recommendedActions.sort((a, b) => {
+    const priorityOrder = { critical: 0, high: 1, medium: 2 };
+    const pd = priorityOrder[a.priority] - priorityOrder[b.priority];
+    return pd !== 0 ? pd : b.estimatedImpact - a.estimatedImpact;
+  });
+
+  return {
+    score,
+    gateScore,
+    artifactScore,
+    inputScore,
+    canApproveGate,
+    threshold: resolvedThreshold,
+    missing,
+    mandatoryExitsPassing,
+    mandatoryExitsTotal,
+    mandatoryExitsMet,
+    reviewScoresCount: reviewScores.length,
+    recommendedActions,
+    libraryExitCriteriaCount: libraryCriteria.length,
+    missingLibraryCriteria,
+  };
+}
+
+export function getLockedPhaseIds(program: ProgramSummary): Set<string> {
+  const locked = new Set<string>();
+  const phases = program.phases || [];
+
+  for (let index = 1; index < phases.length; index += 1) {
+    const previousPhase = phases[index - 1];
+    const previousGate = program.gateReviews?.[previousPhase.id];
+    const previousApproved = previousGate?.status === "approved";
+    if (!previousApproved) {
+      for (let remaining = index; remaining < phases.length; remaining += 1) {
+        locked.add(phases[remaining].id);
+      }
+      break;
+    }
+  }
+
+  return locked;
+}

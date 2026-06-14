@@ -1,0 +1,56 @@
+@media print {
+  :root,
+  [data-theme="dark"],
+  [data-theme="light"] {
+    --v3-bg: #ffffff !important;
+    --v3-surface: #ffffff !important;
+    --v3-surface-2: #f8f9fa !important;
+    --v3-border: #dee2e6 !important;
+    --v3-text-primary: #212529 !important;
+    --v3-text-secondary: #495057 !important;
+    --v3-text-muted: #6c757d !important;
+    --v3-accent: #4f52e8 !important;
+    --v3-green: #198754 !important;
+    --v3-amber: #fd7e14 !important;
+    --v3-red: #dc3545 !important;
+  }
+
+  .v3-command-rail,
+  .v3-context-drawer,
+  .v3-command-palette,
+  .v3-help-panel,
+  .v3-escalation-panel,
+  .v3-toast-stack,
+  .v3-agent-trace-drawer,
+  .v3-copilot-panel,
+  [data-print="hide"],
+  button:not([data-print="show"]) {
+    display: none !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 20mm 16mm;
+  }
+
+  .adam-card,
+  .adam-prose p,
+  li { page-break-inside: avoid; }
+
+  h1, h2, h3 { page-break-after: avoid; }
+
+  .print-header { display: block !important; }
+  .print-header-title { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+  .print-header-meta { font-size: 11px; color: #6c757d; margin-bottom: 24px; }
+
+  body {
+    background: white;
+    color: #212529;
+    font-size: 11pt;
+  }
+
+  a[href]::after { content: " (" attr(href) ")"; font-size: 9pt; color: #6c757d; }
+  a[href^="#"]::after { content: none; }
+}
+
+.print-header { display: none; }
