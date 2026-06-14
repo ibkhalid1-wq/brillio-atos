@@ -18,6 +18,7 @@ interface ProgramViewProps {
   validation: Array<{ score: number; status: string }> | null;
   hasBlockers: boolean;
   warningCount: number;
+  narrativeIsRunning?: boolean;
   onNavigateToPipeline: () => void;
   onNavigateToProgrammeHealth: () => void;
   onNavigateToStage: (phaseId: string) => void;
@@ -202,6 +203,7 @@ export default function ProgramView({
   onOpenReport,
   hasBlockers,
   warningCount,
+  narrativeIsRunning = false,
   onNavigateToPipeline,
   onNavigateToProgrammeHealth,
   onNavigateToStage,
@@ -238,6 +240,8 @@ export default function ProgramView({
   const highRisks = openRisks.filter((entry) => entry.severity === "critical" || entry.severity === "high");
   const activeMembers = program.team?.members?.length || 0;
   const updatedAt = program.updatedAt || program.lastActiveAt || null;
+  const activePhase = (program.phases || []).find((phase) => phase.id === program.activePhaseId) || null;
+  const hasActivePhase = !!program.activePhaseId;
 
   return (
     <div className="v3-oversight-layout">
@@ -278,11 +282,14 @@ export default function ProgramView({
           </AdamCardBody>
         </AdamCard>
 
-        <AdamCard interactive onClick={() => program.activePhaseId ? onNavigateToStage(program.activePhaseId) : undefined}>
+        <AdamCard
+          interactive={hasActivePhase}
+          onClick={hasActivePhase ? () => onNavigateToStage(program.activePhaseId as string) : undefined}
+        >
           <AdamCardBody>
             <div className="v3-oversight-kpi-label">Active Phase</div>
             <div className="v3-oversight-kpi-value">{formatPhaseName(program.activePhaseId)}</div>
-            <div className="v3-oversight-kpi-sub">{(program.phases || []).find((phase) => phase.id === program.activePhaseId)?.objective || "Current execution focus"}</div>
+            <div className="v3-oversight-kpi-sub">{activePhase?.objective || (hasActivePhase ? "Current execution focus" : "No phase active yet")}</div>
           </AdamCardBody>
         </AdamCard>
 
@@ -306,13 +313,15 @@ export default function ProgramView({
       <AdamCard>
         <AdamCardHeader
           title="Programme Narrative"
-          subtitle={program.narrative ? "Latest executive summary" : "No narrative yet"}
+          subtitle={program.narrative ? "Latest executive summary" : narrativeIsRunning ? "Generating…" : "No narrative yet"}
           badge={<StatusBadge variant={healthVariant} size="sm" label={program.healthHeatmap?.overallRag || "forming"} />}
           action={<button type="button" className="v3-button ghost" style={{ fontSize: 12 }} onClick={() => onOpenReport("narrative")}>Open report</button>}
         />
         <AdamCardBody>
           {program.narrative ? (
             <div className="v3-oversight-narrative">{program.narrative}</div>
+          ) : narrativeIsRunning ? (
+            <div className="v3-oversight-empty-copy">Generating narrative from the latest programme signals…</div>
           ) : (
             <div className="v3-oversight-empty-copy">Generate a narrative to summarise status for stakeholders.</div>
           )}

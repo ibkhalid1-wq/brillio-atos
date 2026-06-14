@@ -2579,6 +2579,7 @@ export default function AppShellV3() {
                 validation={validation}
                 hasBlockers={hasBlockers}
                 warningCount={warningCount}
+                narrativeIsRunning={narrativeIsRunning}
                 renderView={() => (
                   <ProgramDetailRouter
                     view={moreView}
