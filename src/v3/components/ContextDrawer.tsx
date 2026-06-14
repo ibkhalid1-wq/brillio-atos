@@ -5,11 +5,10 @@ import PhaseInputsPanel from "@/v3/components/PhaseInputsPanel";
 import TaskQueuePanel from "@/v3/components/TaskQueuePanel";
 import { ArtifactLedger } from "@/v3/components/ArtifactLedger";
 import { KnowledgeGraphPanel } from "@/v3/components/KnowledgeGraphPanel";
-import { ReadinessExplainer } from "@/v3/components/ReadinessExplainer";
 import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
 
 type ContextSection = "inputs" | "tasks" | "intelligence";
-type IntelligenceView = "artifacts" | "readiness" | "graph";
+type IntelligenceView = "artifacts" | "graph";
 
 interface ContextDrawerProps {
   open: boolean;
@@ -107,7 +106,6 @@ export function ContextDrawer({
               <div className="v3-context-intel-switch" style={{ display: "flex", gap: 4, marginBottom: 12 }}>
                 {([
                   ["artifacts", "Artifacts"],
-                  ["readiness", "Readiness"],
                   ["graph", "Graph"],
                 ] as Array<[IntelligenceView, string]>).map(([view, label]) => (
                   <button
@@ -142,26 +140,14 @@ export function ContextDrawer({
                 </>
               ) : null}
 
-              {intelligenceView === "readiness" ? (
-                <>
-                  <div className="v3-card-title">Readiness explained</div>
-                  <div className="v3-context-docs-copy">
-                    Why this phase scores what it does — the drivers helping, the blockers holding it back, and the expected gain from each.
-                  </div>
-                  <div className="v3-context-artifacts">
-                    <ReadinessExplainer program={program} phaseId={phaseId} />
-                  </div>
-                </>
-              ) : null}
-
               {intelligenceView === "graph" ? (
                 <>
                   <div className="v3-card-title">Knowledge graph</div>
                   <div className="v3-context-docs-copy">
-                    The programme's system of record — every phase, artifact, decision, risk, milestone and gate, and how they connect.
+                    This phase's system of record — expand each entity to trace artifacts, decisions, risks, milestones and gates down to the final node.
                   </div>
                   <div className="v3-context-artifacts">
-                    <KnowledgeGraphPanel program={program} />
+                    <KnowledgeGraphPanel program={program} phaseId={phaseId} />
                   </div>
                 </>
               ) : null}

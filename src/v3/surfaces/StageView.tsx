@@ -8,6 +8,7 @@ import OnboardingCard from "@/v3/components/OnboardingCard";
 import { PhaseRail } from "@/v3/components/PhaseRail";
 import { PhaseFlowBar } from "@/v3/components/PhaseFlowBar";
 import { ReadinessArcGauge } from "@/v3/components/ReadinessArcGauge";
+import { ReadinessExplainer } from "@/v3/components/ReadinessExplainer";
 import { ReadinessBadge } from "@/v3/components/ui/ReadinessBadge";
 import { AdamCard, AdamCardBody, AdamCardHeader } from "@/v3/components/ui/AdamCard";
 import { EmptyState } from "@/v3/components/ui/EmptyState";
@@ -979,6 +980,16 @@ export default function StageView({
           <div className="v3-support-note">
             Quality assessed by {readiness.reviewScoresCount > 0 ? "independent artifact reviewer" : "self-reported confidence"}
             {readiness.reviewScoresCount === 0 ? " — complete more phase inputs to improve score accuracy" : ""}
+          </div>
+        ) : null}
+
+        {program && activePhase?.id ? (
+          <div className="v3-card" style={{ marginTop: 12 }}>
+            <div className="v3-card-title">Readiness explained</div>
+            <div style={{ fontSize: 11, color: "var(--v3-text-muted)", margin: "2px 0 10px", lineHeight: 1.4 }}>
+              Why this phase scores what it does — drivers, blockers, and the expected gain from each.
+            </div>
+            <ReadinessExplainer program={program} phaseId={activePhase.id} />
           </div>
         ) : null}
 
