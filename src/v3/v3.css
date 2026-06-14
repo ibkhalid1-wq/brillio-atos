@@ -5350,9 +5350,10 @@ button.v3-chip:focus-visible,
 
 .v3-focus-title {
   margin: 0;
-  font-size: 28px;
-  line-height: 1.05;
-  letter-spacing: -0.03em;
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
   color: var(--v3-text-primary);
 }
 
@@ -6125,8 +6126,10 @@ button.v3-chip:focus-visible,
 
 .v3-governance-title {
   margin: 0;
-  font-size: 20px;
-  line-height: 1.15;
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
   color: var(--v3-text-primary);
 }
 
@@ -6452,8 +6455,10 @@ button.v3-chip:focus-visible,
 
 .v3-oversight-title {
   margin: 0;
-  font-size: 20px;
-  line-height: 1.15;
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
   color: var(--v3-text-primary);
 }
 
@@ -8901,8 +8906,9 @@ button, [role="button"] {
 }
 
 .v3-workspaces-title {
-  font-size: 22px;
+  font-size: 26px;
   font-weight: 800;
+  line-height: 1.1;
   color: var(--v3-text-primary);
   margin: 0 0 6px;
   letter-spacing: -0.025em;
