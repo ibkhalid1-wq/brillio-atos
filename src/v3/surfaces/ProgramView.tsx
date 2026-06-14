@@ -7,6 +7,7 @@ import { ragLabel } from "@/v3/lib/uiHelpers";
 import { confidenceRag } from "@/v3/lib/confidenceScore";
 import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
 import { AdamCard, AdamCardBody, AdamCardHeader } from "@/v3/components/ui/AdamCard";
+import { EmptyState } from "@/v3/components/ui/EmptyState";
 import type { V3Mode, V3MoreView, V3ReportId } from "@/v3/types";
 
 interface ProgramViewProps {
@@ -227,10 +228,12 @@ export default function ProgramView({
   if (!program) {
     return (
       <div className="v3-section">
-        <div className="v3-empty" style={{ marginTop: 60 }}>
-          <div className="v3-empty-icon">◫</div>
-          <div className="v3-empty-title">No programme loaded</div>
-          <div className="v3-empty-body">Select a programme to review health, reports, and advanced workspaces.</div>
+        <div className="v3-empty-shell">
+          <EmptyState
+            illustration="default"
+            title="No programme loaded"
+            description="Select a programme to review health, reports, and advanced workspaces."
+          />
         </div>
       </div>
     );

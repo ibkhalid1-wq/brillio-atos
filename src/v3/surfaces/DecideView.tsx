@@ -4,6 +4,7 @@ import { PHASE_LABELS } from "@/v3/lib/uiHelpers";
 import type { DecisionSummary, GateReview, ProgramSummary } from "@/new/types";
 import type { Persona } from "@/new/types";
 import { AdamCard, AdamCardBody, AdamCardHeader } from "@/v3/components/ui/AdamCard";
+import { EmptyState } from "@/v3/components/ui/EmptyState";
 import { RelativeTime } from "@/v3/components/ui/RelativeTime";
 import { StatusBadge } from "@/v3/components/ui/StatusBadge";
 import type { V3Mode } from "@/v3/types";
@@ -448,7 +449,17 @@ export default function DecideView({
   }, [sortedOpen]);
 
   if (!program) {
-    return <div className="v3-section"><div className="v3-empty-title">No governance data available</div></div>;
+    return (
+      <div className="v3-section">
+        <div className="v3-empty-shell">
+          <EmptyState
+            illustration="decisions"
+            title="No governance data available"
+            description="Select a programme to review open decisions, gate readiness, and the governance register."
+          />
+        </div>
+      </div>
+    );
   }
 
   const addDecisionForm = addOpen ? (

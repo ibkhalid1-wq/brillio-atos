@@ -1,5 +1,6 @@
 import React from "react";
 import type { ProgramSummary } from "@/new/types";
+import { EmptyState } from "@/v3/components/ui/EmptyState";
 import { phaseName } from "@/v3/utils";
 
 interface PipelineViewProps {
@@ -55,10 +56,12 @@ export default function PipelineView({ program, activePhaseId, onSelectPhase, on
   if (!program || !phases.length) {
     return (
       <div className="v3-section">
-        <div className="v3-empty" style={{ marginTop: 60 }}>
-          <div className="v3-empty-icon">⋯</div>
-          <div className="v3-empty-title">No pipeline available yet</div>
-          <div className="v3-empty-body">Add phases to the programme to see the ATOS lifecycle and open phase work areas.</div>
+        <div className="v3-empty-shell">
+          <EmptyState
+            illustration="gates"
+            title="No pipeline available yet"
+            description="Add phases to the programme to see the ATOS lifecycle and open phase work areas."
+          />
         </div>
       </div>
     );
