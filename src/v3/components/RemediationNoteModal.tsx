@@ -44,13 +44,8 @@ export default function RemediationNoteModal({ open, phaseName, onClose, onConfi
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="Describe the issues requiring remediation (e.g. missing exit criteria, outstanding risks, incomplete artefacts)…"
-          style={{
-            width: "100%", minHeight: 96, resize: "vertical",
-            padding: "10px 12px", borderRadius: "var(--v3-radius)",
-            border: "1px solid var(--v3-border)", background: "var(--v3-surface-2)",
-            color: "var(--v3-text-primary)", fontFamily: "var(--v3-font)", fontSize: 13,
-            outline: "none", boxSizing: "border-box", lineHeight: 1.5,
-          }}
+          className="v3-input v3-textarea"
+          style={{ minHeight: 96, background: "var(--v3-surface-2)" }}
         />
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 16 }}>
           <button

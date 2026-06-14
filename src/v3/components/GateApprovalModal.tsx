@@ -112,12 +112,8 @@ export function GateApprovalModal({ phaseId, phaseLabel, review, onApprove, onRe
                 onChange={(e) => setRemediationNote(e.target.value)}
                 placeholder="Describe what needs to be remediated…"
                 rows={3}
-                style={{
-                  width: "100%", background: "var(--v3-surface-2)", border: "1px solid var(--v3-border)",
-                  borderRadius: "var(--v3-radius)", padding: "8px 10px", fontSize: 13,
-                  color: "var(--v3-text-primary)", fontFamily: "var(--v3-font)", resize: "vertical",
-                  outline: "none", boxSizing: "border-box",
-                }}
+                className="v3-input v3-textarea"
+                style={{ minHeight: 96, background: "var(--v3-surface-2)" }}
               />
             </div>
           )}

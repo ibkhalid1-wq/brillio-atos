@@ -44,13 +44,8 @@ export default function GateReopenModal({ open, phaseName, onClose, onConfirm }:
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           placeholder="Reason for reopening (e.g. exit criteria not fully met, new risk identified)…"
-          style={{
-            width: "100%", minHeight: 96, resize: "vertical",
-            padding: "10px 12px", borderRadius: "var(--v3-radius)",
-            border: "1px solid var(--v3-border)", background: "var(--v3-surface-2)",
-            color: "var(--v3-text-primary)", fontFamily: "var(--v3-font)", fontSize: 13,
-            outline: "none", boxSizing: "border-box", lineHeight: 1.5,
-          }}
+          className="v3-input v3-textarea"
+          style={{ minHeight: 96, background: "var(--v3-surface-2)" }}
         />
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 16 }}>
           <button
