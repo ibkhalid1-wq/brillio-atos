@@ -111,6 +111,41 @@ async function getProviderSettings(): Promise<{ provider: AIProvider; apiKey: st
   throw new Error("AI provider key is not configured. Open AI Settings and connect a provider.");
 }
 
+type ProviderSettings = { provider: AIProvider; apiKey: string; model: string };
+
+/**
+ * Ordered list of provider configurations to try, primary first. The primary
+ * respects ADAM_AI_PROVIDER / the active DB row; any other providers that have
+ * env keys are appended as failover targets so a single provider outage (auth
+ * error, sustained 5xx/429, network failure) doesn't sink the run. Distinct by
+ * provider — the same provider is never tried twice.
+ */
+async function getProviderFallbackChain(): Promise<ProviderSettings[]> {
+  const chain: ProviderSettings[] = [];
+  const seen = new Set<AIProvider>();
+  const push = (settings: ProviderSettings | null) => {
+    if (settings && settings.apiKey && !seen.has(settings.provider)) {
+      seen.add(settings.provider);
+      chain.push(settings);
+    }
+  };
+
+  try {
+    push(await getProviderSettings());
+  } catch {
+    // No primary configured — env fallbacks below may still apply.
+  }
+
+  const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY") || "";
+  const openAiKey = Deno.env.get("OPENAI_API_KEY") || "";
+  const googleKey = Deno.env.get("GOOGLE_GEMINI_API_KEY") || Deno.env.get("GEMINI_API_KEY") || "";
+  if (anthropicKey) push({ provider: "anthropic", apiKey: anthropicKey, model: defaultModelForProvider("anthropic") });
+  if (openAiKey) push({ provider: "openai", apiKey: openAiKey, model: defaultModelForProvider("openai") });
+  if (googleKey) push({ provider: "google", apiKey: googleKey, model: defaultModelForProvider("google") });
+
+  return chain;
+}
+
 async function fetchWithRetry(
   requestFactory: () => Promise<Response>,
   errorLabel: string,
@@ -234,8 +269,9 @@ function geminiPayload(options: ClaudeCompletionOptions): Record<string, unknown
 async function providerResponse(
   options: ClaudeCompletionOptions,
   stream: boolean,
+  settingsOverride?: ProviderSettings,
 ): Promise<{ response: Response; provider: AIProvider }> {
-  const settings = await getProviderSettings();
+  const settings = settingsOverride ?? await getProviderSettings();
   const providerOptions = { ...options, model: options.model || settings.model };
   if (settings.provider === "openai") {
     const response = await fetchWithRetry(
@@ -298,9 +334,12 @@ function parseGeminiText(parsed: { candidates?: Array<{ content?: { parts?: Arra
   };
 }
 
-export async function completeClaudeText(options: ClaudeCompletionOptions): Promise<ClaudeCompletionResult> {
+async function completeOnce(
+  options: ClaudeCompletionOptions,
+  settings: ProviderSettings,
+): Promise<ClaudeCompletionResult> {
   const startedAt = Date.now();
-  const { response, provider } = await providerResponse(options, false);
+  const { response, provider } = await providerResponse(options, false, settings);
 
   if (provider === "openai") {
     const parsed = await response.json() as {
@@ -337,6 +376,27 @@ export async function completeClaudeText(options: ClaudeCompletionOptions): Prom
   };
 }
 
+export async function completeClaudeText(options: ClaudeCompletionOptions): Promise<ClaudeCompletionResult> {
+  const chain = await getProviderFallbackChain();
+  if (!chain.length) {
+    throw new Error("AI provider key is not configured. Open AI Settings and connect a provider.");
+  }
+  let lastError: unknown;
+  for (let i = 0; i < chain.length; i++) {
+    if (options.signal?.aborted) throw new Error("AI provider call was aborted.");
+    // Fallback providers use their own default model — an explicit model is only
+    // valid for the primary provider it was chosen for.
+    const attemptOptions = i === 0 ? options : { ...options, model: undefined };
+    try {
+      return await completeOnce(attemptOptions, chain[i]);
+    } catch (error) {
+      lastError = error;
+      if (options.signal?.aborted) throw error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("AI provider call failed across all configured providers.");
+}
+
 function appendToken(token: string, state: { text: string; chunks: string[] }, onToken?: (token: string) => void) {
   if (!token) return;
   state.text += token;
@@ -344,12 +404,13 @@ function appendToken(token: string, state: { text: string; chunks: string[] }, o
   onToken?.(token);
 }
 
-export async function streamClaudeText(
+async function streamOnce(
   options: ClaudeCompletionOptions,
+  settings: ProviderSettings,
+  timeoutMs: number,
   onToken?: (token: string) => void,
 ): Promise<ClaudeStreamResult> {
   const startedAt = Date.now();
-  const timeoutMs = options.timeoutMs ?? DEFAULT_STREAM_TIMEOUT_MS;
 
   // Wall-clock guard: a stalled provider stream (no `done`, no error) would otherwise
   // hang the run until the platform kills it — leaving no terminal status. The timeout
@@ -367,7 +428,7 @@ export async function streamClaudeText(
   }, timeoutMs);
 
   try {
-    const { response, provider } = await providerResponse({ ...options, signal: controller.signal }, true);
+    const { response, provider } = await providerResponse({ ...options, signal: controller.signal }, true, settings);
     const reader = response.body?.getReader();
     if (!reader) {
       throw new Error(`${provider} streaming response body is unavailable.`);
@@ -455,6 +516,40 @@ export async function streamClaudeText(
     clearTimeout(timeoutId);
     if (options.signal) options.signal.removeEventListener("abort", onExternalAbort);
   }
+}
+
+const MIN_FAILOVER_BUDGET_MS = 5_000;
+
+export async function streamClaudeText(
+  options: ClaudeCompletionOptions,
+  onToken?: (token: string) => void,
+): Promise<ClaudeStreamResult> {
+  const totalBudgetMs = options.timeoutMs ?? DEFAULT_STREAM_TIMEOUT_MS;
+  const deadline = Date.now() + totalBudgetMs;
+  const chain = await getProviderFallbackChain();
+  if (!chain.length) {
+    throw new Error("AI provider key is not configured. Open AI Settings and connect a provider.");
+  }
+
+  let lastError: unknown;
+  for (let i = 0; i < chain.length; i++) {
+    if (options.signal?.aborted) throw new Error("AI provider call was aborted.");
+    const remaining = deadline - Date.now();
+    // Don't start another provider attempt once the shared time budget is spent —
+    // this bounds total wall-clock to ~timeoutMs regardless of how many providers fail.
+    if (i > 0 && remaining < MIN_FAILOVER_BUDGET_MS) break;
+    // Fallback providers use their own default model; an explicit model only
+    // applies to the primary provider it was chosen for.
+    const attemptOptions = i === 0 ? options : { ...options, model: undefined };
+    try {
+      return await streamOnce(attemptOptions, chain[i], Math.max(remaining, MIN_FAILOVER_BUDGET_MS), onToken);
+    } catch (error) {
+      lastError = error;
+      // An externally-requested abort is intentional — never failover past it.
+      if (options.signal?.aborted) throw error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("AI provider call failed across all configured providers.");
 }
 
 export function toClaudeMessages(messages: CopilotThreadMessage[]): ClaudeMessage[] {
