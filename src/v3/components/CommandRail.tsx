@@ -20,6 +20,7 @@ import {
   LayoutGrid,
 } from "lucide-react";
 import type { V3Surface } from "@/v3/types";
+import { getConfidenceColor } from "@/v3/lib/confidenceScore";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -110,11 +111,12 @@ function activeNavId(surface: V3Surface, moreView?: string | null): string {
 
 const PROGRAMME_SURFACES = new Set<V3Surface>(["insight-feed", "pipeline", "stage", "program", "programme-health", "decide"]);
 
+// Delegate to the canonical confidence colour so the brand "% confidence"
+// kicker never contradicts the Programme health dot on this same rail (e.g.
+// 76% must read green/"On Track", not amber). Single source of truth lives in
+// confidenceScore.ts — the 4-band model (≥80 accent, ≥60 green, ≥40 amber, red).
 function scoreColor(score: number): string {
-  if (score >= 80) return "var(--v3-green)";
-  if (score >= 60) return "var(--v3-amber)";
-  if (score >= 40) return "var(--v3-amber)";
-  return "var(--v3-red)";
+  return getConfidenceColor(score);
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
