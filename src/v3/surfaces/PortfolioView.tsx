@@ -424,17 +424,8 @@ export default function PortfolioView({
           {onCreateProgram && (
             <button
               type="button"
+              className="v3-button primary"
               onClick={onCreateProgram}
-              style={{
-                fontSize: 13,
-                fontWeight: 600,
-                padding: "9px 20px",
-                borderRadius: "var(--v3-radius, 8px)",
-                background: "var(--v3-accent)",
-                color: "#fff",
-                border: "none",
-                cursor: "pointer",
-              }}
             >
               Create your first programme →
             </button>
