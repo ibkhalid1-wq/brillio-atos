@@ -21,6 +21,44 @@ function lineageLabel(agentId: string): string {
   return meta.outputArtifact || meta.label || agentId;
 }
 
+/** Why agents can (or cannot) generate artifacts for this phase. */
+export interface GenerationHint {
+  canGenerate: boolean;
+  /** Plain-language reason — names the unmet precondition when blocked. */
+  reason: string;
+}
+
+function GenerationBanner({ hint }: { hint: GenerationHint }) {
+  const blocked = !hint.canGenerate;
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: 8,
+        alignItems: "flex-start",
+        padding: "8px 10px",
+        border: `1px solid ${blocked ? "var(--v3-amber)" : "var(--v3-border)"}`,
+        borderLeft: `3px solid ${blocked ? "var(--v3-amber)" : "var(--v3-accent)"}`,
+        borderRadius: "var(--v3-radius)",
+        background: "var(--v3-surface-2)",
+      }}
+    >
+      <span aria-hidden="true" style={{ fontSize: 12, color: blocked ? "var(--v3-amber)" : "var(--v3-accent)" }}>
+        {blocked ? "⚠" : "✨"}
+      </span>
+      <div style={{ fontSize: 11, color: "var(--v3-text-secondary)", lineHeight: 1.5 }}>
+        {blocked ? (
+          <>
+            <strong style={{ color: "var(--v3-text-primary)" }}>Agents can't generate artifacts yet.</strong> {hint.reason}
+          </>
+        ) : (
+          hint.reason
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ArtifactRow({ node, onOpen }: { node: ArtifactNode; onOpen?: (artifactId: string) => void }) {
   const state = STATE_META[node.state];
   const clickable = node.present && node.artifactId && onOpen;
@@ -87,9 +125,11 @@ function ArtifactRow({ node, onOpen }: { node: ArtifactNode; onOpen?: (artifactI
 export function ArtifactLedger({
   phase,
   onOpenArtifact,
+  generationHint,
 }: {
   phase: PhaseArtifactSummary | null;
   onOpenArtifact?: (artifactId: string) => void;
+  generationHint?: GenerationHint | null;
 }) {
   if (!phase) {
     return <div className="v3-context-artifacts-empty">No artifact data for this phase yet.</div>;
@@ -97,8 +137,15 @@ export function ArtifactLedger({
 
   const coverage = phase.required > 0 ? Math.round((phase.present / phase.required) * 100) : 100;
 
+  // Surface the generation hint when nothing has been generated yet but the phase
+  // still has gaps to fill — either explaining the blocker, or prompting a run.
+  const hasGenerated = phase.artifacts.some((node) => node.present && node.origin === "generated");
+  const hasGaps = phase.artifacts.some((node) => node.required && !node.present);
+  const showHint = !!generationHint && (!generationHint.canGenerate || (!hasGenerated && hasGaps));
+
   return (
     <div style={{ display: "grid", gap: 10 }}>
+      {showHint && generationHint ? <GenerationBanner hint={generationHint} /> : null}
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
         <span style={{ fontSize: 12, color: "var(--v3-text-secondary)" }}>
           <strong style={{ color: "var(--v3-text-primary)" }}>{phase.present}</strong> of {phase.required} required artifacts present

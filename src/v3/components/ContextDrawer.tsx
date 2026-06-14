@@ -3,7 +3,7 @@ import type { PhaseAgentTask } from "@/lib/adamPhaseAgentTypes";
 import type { ProgramSummary } from "@/new/types";
 import PhaseInputsPanel from "@/v3/components/PhaseInputsPanel";
 import TaskQueuePanel from "@/v3/components/TaskQueuePanel";
-import { ArtifactLedger } from "@/v3/components/ArtifactLedger";
+import { ArtifactLedger, type GenerationHint } from "@/v3/components/ArtifactLedger";
 import { KnowledgeGraphPanel } from "@/v3/components/KnowledgeGraphPanel";
 import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
 
@@ -23,6 +23,7 @@ interface ContextDrawerProps {
   onAcknowledgeTask: (taskId: string) => void;
   onRunAgent: (agentId: string) => void;
   onOpenDocuments: () => void;
+  generationHint?: GenerationHint | null;
 }
 
 export function ContextDrawer({
@@ -38,6 +39,7 @@ export function ContextDrawer({
   onAcknowledgeTask,
   onRunAgent,
   onOpenDocuments,
+  generationHint,
 }: ContextDrawerProps) {
   const [activeSection, setActiveSection] = React.useState<ContextSection>("inputs");
   const [intelligenceView, setIntelligenceView] = React.useState<IntelligenceView>("artifacts");
@@ -127,7 +129,7 @@ export function ContextDrawer({
                     What this phase needs, what exists, and how each piece connects — with quality and provenance.
                   </div>
                   <div className="v3-context-artifacts">
-                    <ArtifactLedger phase={phaseLedger} onOpenArtifact={() => onOpenDocuments()} />
+                    <ArtifactLedger phase={phaseLedger} onOpenArtifact={() => onOpenDocuments()} generationHint={generationHint} />
                   </div>
                   <div className="v3-context-docs-actions">
                     <button type="button" className="v3-button ghost" style={{ fontSize: 12 }} onClick={onUploadDocument}>

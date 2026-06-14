@@ -1438,6 +1438,21 @@ export default function AppShellV3() {
     closure: activeProgram?.closure || null,
   });
 
+  // Why agents can / cannot generate artifacts — the three preconditions, checked
+  // in the same order runProgramAgent enforces them, so the ledger names the exact blocker.
+  const artifactGenerationHint = useMemo<{ canGenerate: boolean; reason: string }>(() => {
+    if (!isSupabaseConfigured) {
+      return { canGenerate: false, reason: "This workspace isn't connected to the cloud backend (Supabase isn't configured), so agent runs can't be saved." };
+    }
+    if (!authed) {
+      return { canGenerate: false, reason: "Sign in to let agents run and generate the missing artifacts." };
+    }
+    if (aiStatus.status !== "connected") {
+      return { canGenerate: false, reason: "AI isn't connected — add a provider key in AI Settings to let agents generate artifacts." };
+    }
+    return { canGenerate: true, reason: "Run an agent to generate the missing artifacts for this phase." };
+  }, [authed, aiStatus.status]);
+
   const anyAgentRunning = agentIsRunning || triggers.gateReviewRunningPhaseSet.size > 0 || triggers.escalationIsRunning;
   // For ExecCommandPanel / ExecutiveView buttons: only block when the *user* triggered a run,
   // not when a background / proactive agent is sitting in the DB in "queued"/"running" state.
@@ -2652,6 +2667,7 @@ export default function AppShellV3() {
           onAcknowledgeTask={handleAcknowledgeTask}
           onRunAgent={handleRunAgent}
           onOpenDocuments={() => openMoreView("documents")}
+          generationHint={artifactGenerationHint}
         />
       ) : null}
       </div>
