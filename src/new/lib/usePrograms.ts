@@ -122,8 +122,11 @@ interface UseProgramsOptions {
   userId?: string | null;
 }
 
+export type ProgramRole = "admin" | "editor" | "viewer";
+
 export function usePrograms({ enabled = true, userId = null }: UseProgramsOptions = {}) {
   const [programs, setPrograms] = useState<ProgramSummary[]>([]);
+  const [programRoles, setProgramRoles] = useState<Record<string, ProgramRole>>({});
   const [activeProgramId, setActiveProgramIdState] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string>("");
@@ -145,6 +148,8 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
 
     if (!isSupabaseConfigured || !supabase) {
       setPrograms(localPrograms);
+      // Local-only programs are fully owned by this browser session.
+      setProgramRoles(Object.fromEntries(localPrograms.map((p) => [p.id, "admin" as ProgramRole])));
       setError(localPrograms.length ? "" : "Supabase is not configured for this workspace.");
       const storedId = typeof localStorage !== "undefined"
         ? localStorage.getItem(ACTIVE_PROGRAM_KEY) || ""
@@ -160,15 +165,14 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
     setError("");
 
     try {
-      let query = supabase
+      // No owner filter: row-level security scopes visibility to programs the
+      // signed-in user owns or has been granted membership on, so collaborators
+      // see shared programs too.
+      const query = supabase
         .from("adam_programs")
         .select("id, name, client, industry, updated_at, data, is_deleted, owner_id")
         .eq("is_deleted", false)
         .order("updated_at", { ascending: false });
-
-      if (userId) {
-        query = query.eq("owner_id", userId);
-      }
 
       const { data, error: loadError } = await query;
 
@@ -233,6 +237,34 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
       const effectivePrograms = allEffective.length ? allEffective : localPrograms;
       setPrograms(effectivePrograms);
 
+      // Resolve the signed-in user's role per program. The owner is always an
+      // admin; otherwise the role comes from adam_program_members. Local-only
+      // programs default to admin (full local control).
+      const roleMap: Record<string, ProgramRole> = {};
+      const ownerById = new Map(((data || []) as ProgramRow[]).map((row) => [row.id, row.owner_id]));
+      if (userId) {
+        const { data: memberships } = await supabase
+          .from("adam_program_members")
+          .select("program_id, role")
+          .eq("user_id", userId);
+        (memberships || []).forEach((m) => {
+          const role = m.role as ProgramRole;
+          if (role === "admin" || role === "editor" || role === "viewer") {
+            roleMap[m.program_id as string] = role;
+          }
+        });
+      }
+      effectivePrograms.forEach((program) => {
+        if (ownerById.get(program.id) && ownerById.get(program.id) === userId) {
+          roleMap[program.id] = "admin";
+        } else if (!roleMap[program.id]) {
+          // Visible but no explicit membership/ownership row (e.g. local-only) →
+          // treat as admin so the user retains control of their own data.
+          roleMap[program.id] = ownerById.has(program.id) ? "viewer" : "admin";
+        }
+      });
+      setProgramRoles(roleMap);
+
       const storedId = typeof localStorage !== "undefined"
         ? localStorage.getItem(ACTIVE_PROGRAM_KEY) || ""
         : "";
@@ -244,6 +276,7 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
     } catch (caughtError) {
       if (localPrograms.length) {
         setPrograms(localPrograms);
+        setProgramRoles(Object.fromEntries(localPrograms.map((p) => [p.id, "admin" as ProgramRole])));
         const storedId = typeof localStorage !== "undefined"
           ? localStorage.getItem(ACTIVE_PROGRAM_KEY) || ""
           : "";
@@ -253,6 +286,7 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
         hasResolvedOnce.current = true;
       } else {
         setPrograms([]);
+        setProgramRoles({});
         setError(caughtError instanceof Error ? caughtError.message : "Failed to load programs.");
       }
     } finally {
@@ -269,6 +303,19 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
     [activeProgramId, programs],
   );
 
+  const getProgramRole = useCallback(
+    (programId: string): ProgramRole => programRoles[programId] || "admin",
+    [programRoles],
+  );
+
+  const activeProgramRole = useMemo<ProgramRole>(
+    () => (activeProgramId ? (programRoles[activeProgramId] || "admin") : "admin"),
+    [activeProgramId, programRoles],
+  );
+
+  const canEditActiveProgram = activeProgramRole === "admin" || activeProgramRole === "editor";
+  const isActiveProgramAdmin = activeProgramRole === "admin";
+
   const setActiveProgramId = useCallback((programId: string) => {
     setActiveProgramIdState(programId);
     if (typeof localStorage !== "undefined") {
@@ -281,6 +328,12 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
       persistLocalProgram(programId, nextData);
       await refreshPrograms();
       return;
+    }
+    // Viewers have read-only access. Block the write up front rather than letting
+    // it fail at the RLS layer and fall back to a misleading local-only save.
+    if (programRoles[programId] === "viewer") {
+      pushV3Toast("You have read-only access to this program and cannot make changes.", { tone: "warning", duration: 6000 });
+      throw new Error("Read-only access: you cannot modify this program.");
     }
     const program = programs.find((entry) => entry.id === programId);
     if (!program) {
@@ -349,7 +402,7 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
     }
     localKnownUpdatedAt.current[programId] = nextUpdatedAt;
     await refreshPrograms();
-  }, [programs, refreshPrograms]);
+  }, [programs, programRoles, refreshPrograms]);
 
   const resolveDecision = useCallback(async (
     programId: string,
@@ -397,5 +450,10 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
     resolveDecision,
     isLoading,
     error,
+    programRoles,
+    getProgramRole,
+    activeProgramRole,
+    canEditActiveProgram,
+    isActiveProgramAdmin,
   };
 }

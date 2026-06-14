@@ -243,6 +243,36 @@ export interface Database {
         };
         Relationships: [];
       };
+      adam_program_members: {
+        Row: {
+          id: string;
+          program_id: string;
+          user_id: string;
+          role: string;
+          invited_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          program_id: string;
+          user_id: string;
+          role?: string;
+          invited_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          program_id?: string;
+          user_id?: string;
+          role?: string;
+          invited_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       adam_agent_schedules: {
         Row: {
           id: string;
