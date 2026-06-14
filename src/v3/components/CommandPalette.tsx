@@ -60,7 +60,7 @@ const PHASE_AGENTS: Record<string, string[]> = {
 const NAV_ITEMS: Array<{ mode: V3CommandMode; title: string; subtitle: string }> = [
   { mode: "delivery", title: "Go to Deliver", subtitle: "Phase work, pipeline and actions" },
   { mode: "governance", title: "Go to Gates", subtitle: "Gate approvals and decisions" },
-  { mode: "oversight", title: "Go to Monitor", subtitle: "Programme health and KPIs" },
+  { mode: "oversight", title: "Go to Executive", subtitle: "Executive summary and programme health" },
   { mode: "portfolio", title: "Go to Portfolio", subtitle: "All programmes" },
 ];
 
