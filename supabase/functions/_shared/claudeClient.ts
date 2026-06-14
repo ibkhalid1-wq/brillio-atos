@@ -29,7 +29,15 @@ export interface ClaudeCompletionOptions {
   model?: string;
   /** Native file attachment — sent as a document/image content block to the AI */
   fileAttachment?: FileAttachment;
+  /** Caller-supplied cancellation. Aborting interrupts the request and the stream read. */
+  signal?: AbortSignal;
+  /** Wall-clock budget for the whole call. Defaults to DEFAULT_STREAM_TIMEOUT_MS. */
+  timeoutMs?: number;
 }
+
+// Hard ceiling so a stalled provider stream can never hang a run indefinitely
+// without writing a terminal status. Generous enough for long generations.
+const DEFAULT_STREAM_TIMEOUT_MS = 90_000;
 
 export interface ClaudeCompletionResult {
   text: string;
@@ -238,6 +246,7 @@ async function providerResponse(
           "Content-Type": "application/json",
         },
         body: JSON.stringify(openAiPayload(providerOptions, stream)),
+        signal: providerOptions.signal,
       }),
       "OpenAI",
     );
@@ -254,6 +263,7 @@ async function providerResponse(
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(geminiPayload(providerOptions)),
+        signal: providerOptions.signal,
       }),
       "Google Gemini",
     );
@@ -269,6 +279,7 @@ async function providerResponse(
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify(anthropicPayload(providerOptions, stream)),
+      signal: providerOptions.signal,
     }),
     "Anthropic",
   );
@@ -338,19 +349,37 @@ export async function streamClaudeText(
   onToken?: (token: string) => void,
 ): Promise<ClaudeStreamResult> {
   const startedAt = Date.now();
-  const { response, provider } = await providerResponse(options, true);
-  const reader = response.body?.getReader();
-  if (!reader) {
-    throw new Error(`${provider} streaming response body is unavailable.`);
+  const timeoutMs = options.timeoutMs ?? DEFAULT_STREAM_TIMEOUT_MS;
+
+  // Wall-clock guard: a stalled provider stream (no `done`, no error) would otherwise
+  // hang the run until the platform kills it — leaving no terminal status. The timeout
+  // aborts the request + reader so the caller can write a clean failure.
+  const controller = new AbortController();
+  let timedOut = false;
+  const onExternalAbort = () => controller.abort();
+  if (options.signal) {
+    if (options.signal.aborted) controller.abort();
+    else options.signal.addEventListener("abort", onExternalAbort, { once: true });
   }
+  const timeoutId = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
 
-  const decoder = new TextDecoder();
-  const state = { text: "", chunks: [] as string[] };
-  let buffer = "";
-  let inputTokens = 0;
-  let outputTokens = 0;
+  try {
+    const { response, provider } = await providerResponse({ ...options, signal: controller.signal }, true);
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error(`${provider} streaming response body is unavailable.`);
+    }
 
-  while (true) {
+    const decoder = new TextDecoder();
+    const state = { text: "", chunks: [] as string[] };
+    let buffer = "";
+    let inputTokens = 0;
+    let outputTokens = 0;
+
+    while (true) {
     const { value, done } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
@@ -410,13 +439,22 @@ export async function streamClaudeText(
     }
   }
 
-  return {
-    text: state.text.trim(),
-    inputTokens,
-    outputTokens,
-    latencyMs: Date.now() - startedAt,
-    chunks: state.chunks,
-  };
+    return {
+      text: state.text.trim(),
+      inputTokens,
+      outputTokens,
+      latencyMs: Date.now() - startedAt,
+      chunks: state.chunks,
+    };
+  } catch (error) {
+    if (timedOut) {
+      throw new Error(`AI provider call timed out after ${Math.round(timeoutMs / 1000)}s.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+    if (options.signal) options.signal.removeEventListener("abort", onExternalAbort);
+  }
 }
 
 export function toClaudeMessages(messages: CopilotThreadMessage[]): ClaudeMessage[] {
