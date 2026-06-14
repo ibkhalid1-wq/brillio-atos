@@ -3,8 +3,10 @@ import BenefitsTrajectoryWidget from "@/v3/components/BenefitsTrajectoryWidget";
 import { PHASE_LABELS, confidenceColor, priorityChipClass } from "@/v3/lib/uiHelpers";
 import { ADAM_PHASE_SEQUENCE } from "@/lib/adamMethodology";
 import { getProgramState } from "@/new/lib/programState";
-import type { DecisionSummary, ExitCriterion, GateReview } from "@/new/types";
+import type { DecisionSummary, ExitCriterion, GateReview, ProgramSummary } from "@/new/types";
 import LiteGateModal from "@/v3/components/LiteGateModal";
+import { ReadinessExplainer } from "@/v3/components/ReadinessExplainer";
+import { getGateThreshold } from "@/v3/lib/confidenceScore";
 
 interface AgentActivityItem {
   runId: string;
@@ -17,6 +19,7 @@ interface AgentActivityItem {
 
 interface ProgrammeHealthViewProps {
   programId: string;
+  program: ProgramSummary | null;
   rawData: Record<string, unknown>;
   activePhaseId: string | null;
   /** Pre-processed phases from ProgramSummary — used in preference to raw DB phases to avoid stale pct values */
@@ -125,6 +128,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 function GatesTab({
   activePhaseId,
   gateReviews,
+  program,
   onApproveGate,
   onRequestRemediation,
   onRunAgent,
@@ -132,6 +136,7 @@ function GatesTab({
 }: {
   activePhaseId: string | null;
   gateReviews: Record<string, GateReview>;
+  program: ProgramSummary | null;
   onApproveGate: (phaseId: string) => Promise<void>;
   onRequestRemediation: (phaseId: string, note: string) => Promise<void>;
   onRunAgent: (agentId: string, phaseId?: string) => void;
@@ -146,14 +151,10 @@ function GatesTab({
   const phaseId = activePhaseId;
   const gate: GateReview | null = phaseId ? (gateReviews[phaseId] ?? null) : null;
   const phaseLabel = phaseId ? (PHASE_LABELS[phaseId] ?? phaseId) : "—";
-  const score = gate?.readinessScore ?? 0;
   const isApproved = gate?.status === "approved";
   const exitCriteria: ExitCriterion[] = gate?.exitCriteriaStatus?.length
     ? gate.exitCriteriaStatus
     : PLACEHOLDER_EXIT_CRITERIA.map((ec) => isApproved ? { ...ec, met: true } : ec);
-
-  const scoreColor =
-    score >= 80 ? "var(--v3-green)" : score >= 60 ? "var(--v3-amber)" : "var(--v3-red)";
 
   async function handleApprove() {
     if (!phaseId) return;
@@ -187,7 +188,9 @@ function GatesTab({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24, padding: 24 }}>
-      {/* Readiness gauge */}
+      {/* Readiness — gauge, projected score, and blockers ranked by expected gain.
+          Surfaces WHY the gate is where it is and WHICH action gains the most,
+          right at the approval decision point. */}
       <div>
         <SectionLabel>Gate Readiness — {phaseLabel}</SectionLabel>
         <div
@@ -196,60 +199,21 @@ function GatesTab({
             border: "1px solid var(--v3-border-soft)",
             borderRadius: "var(--v3-radius)",
             padding: "20px 24px",
-            display: "flex",
-            alignItems: "center",
-            gap: 24,
           }}
         >
-          {/* Arc-style gauge (simplified as a ring) */}
-          <div style={{ flexShrink: 0, position: "relative", width: 80, height: 80 }}>
-            <svg width={80} height={80} viewBox="0 0 80 80">
-              <circle cx={40} cy={40} r={32} fill="none" stroke="var(--v3-surface-3)" strokeWidth={8} />
-              <circle
-                cx={40}
-                cy={40}
-                r={32}
-                fill="none"
-                stroke={scoreColor}
-                strokeWidth={8}
-                strokeDasharray={`${2 * Math.PI * 32}`}
-                strokeDashoffset={`${2 * Math.PI * 32 * (1 - score / 100)}`}
-                strokeLinecap="round"
-                transform="rotate(-90 40 40)"
-                style={{ transition: "stroke-dashoffset 0.5s ease" }}
-              />
-            </svg>
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontFamily: "var(--v3-font)",
-                fontWeight: 800,
-                fontSize: 18,
-                color: scoreColor,
-              }}
-            >
-              {score}
-            </div>
-          </div>
-          <div>
-            <div
-              style={{
-                fontFamily: "var(--v3-font)",
-                fontSize: 20,
-                fontWeight: 700,
-                color: scoreColor,
-                marginBottom: 4,
-              }}
-            >
-              {score}% Readiness
-            </div>
-            <div style={{ fontSize: 13, color: "var(--v3-text-muted)", fontFamily: "var(--v3-font)" }}>
-              {gate ? gate.recommendation : "No gate check run yet."}
-            </div>
+          <ReadinessExplainer program={program} phaseId={phaseId} threshold={getGateThreshold(phaseId)} />
+          <div
+            style={{
+              marginTop: 14,
+              paddingTop: 12,
+              borderTop: "1px solid var(--v3-border-soft)",
+              fontSize: 12,
+              color: "var(--v3-text-muted)",
+              fontFamily: "var(--v3-font)",
+            }}
+          >
+            <strong style={{ color: "var(--v3-text-secondary)" }}>Gate review:</strong>{" "}
+            {gate ? gate.recommendation : "No gate check run yet — use “Check Gate Readiness” to generate an assessment."}
           </div>
         </div>
       </div>
@@ -910,6 +874,7 @@ function HealthTab({
 
 export default function ProgrammeHealthView({
   programId: _programId,
+  program,
   rawData,
   activePhaseId,
   processedPhases,
@@ -1232,6 +1197,7 @@ export default function ProgrammeHealthView({
             <GatesTab
               activePhaseId={activePhaseId}
               gateReviews={gateReviews}
+              program={program}
               onApproveGate={onApproveGate}
               onRequestRemediation={onRequestRemediation}
               onRunAgent={onRunAgent}

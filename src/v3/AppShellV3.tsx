@@ -2688,6 +2688,7 @@ export default function AppShellV3() {
           <AdamErrorBoundary context={{ surface: "programme-health", programId: activeProgramId }}>
             <ProgrammeHealthView
               programId={activeProgramId ?? ""}
+              program={activeProgram}
               rawData={rawData}
               processedPhases={activeProgram?.phases}
               activePhaseId={activePhaseId}
