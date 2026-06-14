@@ -174,7 +174,6 @@ function DecisionCard({
           <div className="v3-governance-decision-meta">
             <StatusBadge variant={priorityVariant(decision.priority)} size="sm" />
             <StatusBadge variant={decision.status === "resolved" ? "resolved" : decision.status === "escalated" ? "escalated" : "open"} size="sm" />
-            <span className="v3-governance-decision-phase">{decision.phaseId || "program"} </span>
           </div>
           <div className="v3-governance-decision-age" style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <RelativeTime date={decision.createdAt} />
@@ -533,11 +532,11 @@ export default function DecideView({
           borderRadius: "var(--v3-radius-lg)",
         }}
       >
-        {decision.phaseId && (
-          <div style={{ fontSize: 11, color: "var(--v3-text-muted)", padding: "4px 0 0 4px" }}>
-            Affects: <strong>{PHASE_LABELS[decision.phaseId] ?? decision.phaseId}</strong> phase
-          </div>
-        )}
+        <div style={{ fontSize: 11, color: "var(--v3-text-muted)", padding: "4px 0 0 4px" }}>
+          {decision.phaseId
+            ? <>Affects: <strong>{PHASE_LABELS[decision.phaseId] ?? decision.phaseId}</strong> phase</>
+            : <>Affects: <strong>Programme-level</strong></>}
+        </div>
         <DecisionCard
           decision={decision}
           previewOpen={!!previewMap.get(decision.id)}

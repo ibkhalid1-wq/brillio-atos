@@ -188,13 +188,7 @@ export default function PipelineView({ program, activePhaseId, onSelectPhase, on
                   );
                 })() : (
                 <>
-                  <div style={{ marginTop: 12 }}>
-                    <div className="v3-phase-progress-bar" style={{ width: "100%", height: 4 }}>
-                      <div className="v3-phase-progress-fill" style={{ width: `${Math.max(phase.pct, 2)}%` }} />
-                    </div>
-                  </div>
-
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12 }}>
                     <input
                       type="range"
                       className="v3-range"
