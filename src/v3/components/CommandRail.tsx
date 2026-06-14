@@ -78,31 +78,33 @@ const PRIMARY_NAV: Array<{
     id: "today",
     surface: "insight-feed",
     label: "Home",
-    sublabel: "Morning brief & attention",
+    sublabel: "Daily operating briefing",
     Icon: Home,
   },
   {
-    id: "governance",
-    surface: "stage",
-    label: "Programme",
-    sublabel: "Phase work & gate reviews",
-    Icon: Shield,
+    id: "action-center",
+    surface: "decide",
+    label: "Action Center",
+    sublabel: "What needs you now",
+    Icon: Inbox,
   },
   {
-    id: "executive",
-    surface: "executive",
-    label: "Executive",
-    sublabel: "One-page summary",
-    Icon: Crown,
+    id: "program",
+    surface: "stage",
+    label: "Program",
+    sublabel: "Where the work happens",
+    Icon: Shield,
   },
 ];
 
 function activeNavId(surface: V3Surface, moreView?: string | null): string {
   if (surface === "insight-feed") return "today";
-  if (surface === "stage" || surface === "pipeline" || surface === "programme-health") return "governance";
-  if (surface === "decide") return "__decide"; // Decision Queue handles its own active state
-  if (surface === "executive") return "executive";
+  if (surface === "decide") return "action-center";
+  if (surface === "stage" || surface === "pipeline" || surface === "programme-health") return "program";
   if (surface === "program") return moreView === "intelligence" ? "__ai" : "workspaces";
+  // executive folds out of primary nav — reachable via the Program menu / content links.
+  // Returns a sentinel so no primary item is falsely highlighted.
+  if (surface === "executive") return "__executive";
   return "today";
 }
 
@@ -294,6 +296,11 @@ export function CommandRail({
               <LayoutGrid size={12} strokeWidth={2} />
               <span>Portfolio overview</span>
             </button>
+            <button type="button" role="menuitem" className="v3-command-rail-program-menu-item"
+              onClick={() => { setProgramMenuOpen(false); railNavigate("executive"); }}>
+              <Crown size={12} strokeWidth={2} />
+              <span>Executive summary</span>
+            </button>
 
             {/* ── Recent programmes ── */}
             {programs.length > 1 && onSelectProgram ? (
@@ -354,40 +361,31 @@ export function CommandRail({
         ) : null}
       </div>
 
-      {/* ── Primary navigation ── */}
+      {/* ── Primary navigation: Home · Action Center · Program ── */}
       <div className="v3-command-rail-modes" role="list">
         {PRIMARY_NAV.map((item) => {
           const active = item.id === activeId;
-          const decisionActive = activeSurface === "decide";
+          const isActionCenter = item.id === "action-center";
+          const sublabel = isActionCenter && openDecisionCount > 0
+            ? `${openDecisionCount} awaiting you`
+            : item.sublabel;
           return (
-            <React.Fragment key={item.id}>
-              <RailItem
-                icon={<item.Icon size={16} strokeWidth={active ? 2.25 : 1.7} />}
-                label={item.label}
-                sublabel={item.sublabel}
-                active={active}
-                title={item.label}
-                onClick={() => railNavigate(item.surface)}
-              />
-              {/* ── Decision Queue — immediately after Today ── */}
-              {item.id === "today" && (
-                <RailItem
-                  icon={<Inbox size={16} strokeWidth={decisionActive ? 2.25 : 1.7} />}
-                  label="Decisions"
-                  sublabel={openDecisionCount > 0 ? `${openDecisionCount} awaiting review` : "Action centre"}
-                  active={decisionActive}
-                  title="Decision queue"
-                  onClick={() => railNavigate("decide")}
-                  badge={
-                    openDecisionCount > 0 ? (
-                      <span className="v3-command-rail-badge v3-command-rail-badge--decision">
-                        {openDecisionCount > 9 ? "9+" : openDecisionCount}
-                      </span>
-                    ) : undefined
-                  }
-                />
-              )}
-            </React.Fragment>
+            <RailItem
+              key={item.id}
+              icon={<item.Icon size={16} strokeWidth={active ? 2.25 : 1.7} />}
+              label={item.label}
+              sublabel={sublabel}
+              active={active}
+              title={item.label}
+              onClick={() => railNavigate(item.surface)}
+              badge={
+                isActionCenter && openDecisionCount > 0 ? (
+                  <span className="v3-command-rail-badge v3-command-rail-badge--decision">
+                    {openDecisionCount > 9 ? "9+" : openDecisionCount}
+                  </span>
+                ) : undefined
+              }
+            />
           );
         })}
       </div>
