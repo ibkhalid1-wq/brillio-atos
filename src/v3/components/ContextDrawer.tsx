@@ -5,9 +5,10 @@ import PhaseInputsPanel from "@/v3/components/PhaseInputsPanel";
 import TaskQueuePanel from "@/v3/components/TaskQueuePanel";
 import { ArtifactLedger } from "@/v3/components/ArtifactLedger";
 import { KnowledgeGraphPanel } from "@/v3/components/KnowledgeGraphPanel";
+import { ReadinessExplainer } from "@/v3/components/ReadinessExplainer";
 import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
 
-type ContextSection = "inputs" | "tasks" | "docs" | "graph";
+type ContextSection = "inputs" | "tasks" | "docs" | "graph" | "readiness";
 
 interface ContextDrawerProps {
   open: boolean;
@@ -64,6 +65,7 @@ export function ContextDrawer({
             ["inputs", "Inputs"],
             ["tasks", "Tasks"],
             ["docs", "Docs"],
+            ["readiness", "Readiness"],
             ["graph", "Graph"],
           ] as Array<[ContextSection, string]>).map(([section, label]) => (
             <button
@@ -116,6 +118,18 @@ export function ContextDrawer({
                 <button type="button" className="v3-button primary" style={{ fontSize: 12 }} onClick={onOpenDocuments}>
                   Open documents →
                 </button>
+              </div>
+            </div>
+          ) : null}
+
+          {activeSection === "readiness" ? (
+            <div className="v3-context-docs">
+              <div className="v3-card-title">Readiness explained</div>
+              <div className="v3-context-docs-copy">
+                Why this phase scores what it does — the drivers helping, the blockers holding it back, and the expected gain from each.
+              </div>
+              <div className="v3-context-artifacts">
+                <ReadinessExplainer program={program} phaseId={phaseId} />
               </div>
             </div>
           ) : null}
