@@ -35,9 +35,9 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       mandatoryExitCriteriaTemplates: [
         "Executive sponsor confirmed and mandate documented",
         "Business objective and primary success metric defined",
-        "Program budget approved",
+        "Programme budget approved",
       ],
-      entryGuards: ["Program created", "Sponsor identified"],
+      entryGuards: ["Programme created", "Sponsor identified"],
       recommendedAgents: ["narrative", "plan", "input-quality"],
       typicalDurationWeeks: { min: 2, max: 6 },
     },
@@ -146,7 +146,7 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       mandatoryExitCriteriaTemplates: [
         "Benefits measured against baseline",
         "Final lessons learned documented",
-        "Program closure approved by sponsor",
+        "Programme closure approved by sponsor",
       ],
       entryGuards: ["Optimize gate approved"],
       recommendedAgents: ["narrative", "closure", "benefits-tracker"],

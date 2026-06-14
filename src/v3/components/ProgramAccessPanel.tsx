@@ -117,7 +117,7 @@ export default function ProgramAccessPanel({ programId, currentUserId }: Program
     setBusy(true);
     try {
       await callManage({ action: "remove", programId, userId });
-      pushV3Toast(`Removed ${email || "member"} from this program.`, { tone: "success", duration: 5000 });
+      pushV3Toast(`Removed ${email || "member"} from this programme.`, { tone: "success", duration: 5000 });
       await loadMembers();
     } catch (caught) {
       pushV3Toast(caught instanceof Error ? caught.message : "Failed to remove member.", { tone: "error", duration: 7000 });
@@ -250,7 +250,7 @@ export default function ProgramAccessPanel({ programId, currentUserId }: Program
       ) : (
         <section className="v3-card">
           <div style={{ fontSize: 12, color: "var(--v3-text-muted)" }}>
-            Only program admins can invite collaborators or change roles.
+            Only programme admins can invite collaborators or change roles.
           </div>
         </section>
       )}

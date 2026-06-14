@@ -1276,7 +1276,7 @@ export default function AppShellV3() {
 
     // Guard: read-only access — viewers cannot run agents (which mutate the program)
     if (!canEditActiveProgram) {
-      pushV3Toast("You have read-only access to this program and cannot run agents.", { tone: "warning", duration: 6000 });
+      pushV3Toast("You have read-only access to this programme and cannot run agents.", { tone: "warning", duration: 6000 });
       return;
     }
 
@@ -1516,7 +1516,7 @@ export default function AppShellV3() {
     if (!activeProgram) return false;
     return (
       !activeProgram.objective &&
-      (!activeProgram.name || activeProgram.name === "New Program") &&
+      (!activeProgram.name || activeProgram.name === "New Program" || activeProgram.name === "New Programme") &&
       activeProgram.phases.every((phase) => (phase.pct ?? 0) === 0)
     );
   }, [activeProgram]);
@@ -1827,7 +1827,7 @@ export default function AppShellV3() {
           console.error("[handleCreateProgram] Cloud insert failed, persisting locally:", error.message);
           newId = persistLocalProgram(name);
           pushV3Toast(
-            "Program created locally only — could not save to the cloud. It may not appear on other devices. Check your connection and access.",
+            "Programme created locally only — could not save to the cloud. It may not appear on other devices. Check your connection and access.",
             { tone: "warning", duration: 8000 },
           );
         }
@@ -1891,7 +1891,7 @@ export default function AppShellV3() {
       pushV3Toast(isPCR && resolution === "approved" ? "PCR approved. Affected artifacts have been flagged for refresh." : "Decision resolved.", { tone: "success", duration: 3000 });
     } catch (error) {
       if (error instanceof ConflictError) {
-        const overwrite = window.confirm("This program was updated by another session since you last loaded it.\n\nClick OK to reload the latest version (your current changes will be lost), or Cancel to keep your changes and try saving again.");
+        const overwrite = window.confirm("This programme was updated by another session since you last loaded it.\n\nClick OK to reload the latest version (your current changes will be lost), or Cancel to keep your changes and try saving again.");
         if (overwrite) await refreshPrograms();
         return;
       }
@@ -2318,7 +2318,7 @@ export default function AppShellV3() {
           setActiveProgramId(id);
           commitNavigation({ surface: "insight-feed", moreView: null, activePhaseId: null, reportId: null });
         }}
-        programName={activeProgram?.name || "Program"}
+        programName={activeProgram?.name || "Programme"}
         activePhaseLabel={activePhaseId ? phaseNameById(activeProgram, activePhaseId) : null}
         confidenceScore={programConfidenceScore}
         notificationCount={openDecisions.length + openEscalations.length}
@@ -2377,8 +2377,8 @@ export default function AppShellV3() {
           <button
             className="v3-topbar-icon-btn"
             onClick={() => setWizardOpen(true)}
-            title="Edit program setup"
-            aria-label="Edit program setup"
+            title="Edit programme setup"
+            aria-label="Edit programme setup"
           >
             ✎
           </button>

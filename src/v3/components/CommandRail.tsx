@@ -92,7 +92,7 @@ const PRIMARY_NAV: Array<{
   {
     id: "program",
     surface: "stage",
-    label: "Program",
+    label: "Programme",
     sublabel: "Where the work happens",
     Icon: Shield,
   },

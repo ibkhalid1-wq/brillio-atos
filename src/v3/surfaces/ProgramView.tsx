@@ -267,7 +267,7 @@ export default function ProgramView({
 
       {hasBlockers ? (
         <div className="v3-validation-banner is-error">
-          <span>Program data has blocking issues — some agent outputs may be unreliable.</span>
+          <span>Programme data has blocking issues — some agent outputs may be unreliable.</span>
           <button type="button" className="v3-button ghost" style={{ fontSize: 11 }} onClick={() => onOpenMoreView("intelligence")}>View details →</button>
         </div>
       ) : warningCount > 0 ? (

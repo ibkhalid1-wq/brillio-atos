@@ -76,7 +76,7 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
   const [prefilling, setPrefilling] = useState(false);
   const [prefilledFields, setPrefilledFields] = useState<Set<string>>(new Set());
   const [prefillError, setPrefillError] = useState<string | null>(null);
-  const [name, setName] = useState(program.name === "New Program" ? "" : program.name || "");
+  const [name, setName] = useState(program.name === "New Program" || program.name === "New Programme" ? "" : program.name || "");
   const [client, setClient] = useState(typeof projectMeta.client === "string" ? projectMeta.client : program.client || "");
   const [industry, setIndustry] = useState(typeof projectMeta.industry === "string" ? projectMeta.industry : program.industry || "");
   const [startDate, setStartDate] = useState(typeof projectMeta.startDate === "string" ? projectMeta.startDate : "");
@@ -149,7 +149,7 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
   const prefillClass = (field: string) => prefilling || !prefilledFields.has(field) ? "v3-input" : "v3-input ring-1 ring-amber-400";
 
   return (
-    <div className="v3-wizard-overlay" role="dialog" aria-modal="true" aria-label="Program setup">
+    <div className="v3-wizard-overlay" role="dialog" aria-modal="true" aria-label="Programme setup">
       <div className="v3-wizard">
         {step === 0 ? (
           <>
@@ -224,7 +224,7 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
         ) : (
         <>
         <div>
-          <h2 className="v3-wizard-title">Program setup</h2>
+          <h2 className="v3-wizard-title">Programme setup</h2>
         </div>
 
         <section>
@@ -252,11 +252,11 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
         </section>
 
         <section>
-          <div className="v3-wizard-section-label">Program details</div>
+          <div className="v3-wizard-section-label">Programme details</div>
           <div className="v3-wizard-grid">
             <label>
-              <div className="v3-field-label">Program name</div>
-              <input className={prefillClass("name")} title={prefilledFields.has("name") ? "Extracted from uploaded document — verify before saving" : undefined} aria-label="Program name" type="text" placeholder="e.g. ERP Transformation" value={name} onChange={(event) => setName(event.target.value)} />
+              <div className="v3-field-label">Programme name</div>
+              <input className={prefillClass("name")} title={prefilledFields.has("name") ? "Extracted from uploaded document — verify before saving" : undefined} aria-label="Programme name" type="text" placeholder="e.g. ERP Transformation" value={name} onChange={(event) => setName(event.target.value)} />
             </label>
             <label>
               <div className="v3-field-label">Client / organisation</div>
@@ -267,8 +267,8 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
               <input className={prefillClass("industry")} title={prefilledFields.has("industry") ? "Extracted from uploaded document — verify before saving" : undefined} aria-label="Industry" type="text" placeholder="e.g. Financial Services" value={industry} onChange={(event) => setIndustry(event.target.value)} />
             </label>
             <label>
-              <div className="v3-field-label">Program start date</div>
-              <input className={prefillClass("startDate")} title={prefilledFields.has("startDate") ? "Extracted from uploaded document — verify before saving" : undefined} aria-label="Program start date" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+              <div className="v3-field-label">Programme start date</div>
+              <input className={prefillClass("startDate")} title={prefilledFields.has("startDate") ? "Extracted from uploaded document — verify before saving" : undefined} aria-label="Programme start date" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
             </label>
             <label>
               <div className="v3-field-label">Target end date</div>
@@ -278,11 +278,11 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
         </section>
 
         <section>
-          <div className="v3-wizard-section-label">Program objective</div>
+          <div className="v3-wizard-section-label">Programme objective</div>
           <label>
             <textarea
               className={`${prefillClass("objective")} v3-textarea`}
-              aria-label="Program objective"
+              aria-label="Programme objective"
               rows={4}
               maxLength={500}
               placeholder="Describe what this transformation is trying to achieve and why it matters."
@@ -337,7 +337,7 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
             className="v3-button primary"
             disabled={isSaving}
             onClick={() => onSave({
-              name: name.trim() || "New Program",
+              name: name.trim() || "New Programme",
               client: client.trim(),
               industry: industry.trim(),
               objective: objective.trim(),

@@ -19,7 +19,7 @@ const keyRolesField: PhaseInputField = {
   id: "keyRoles",
   label: "Key roles",
   type: "textarea",
-  placeholder: "Program Director: Jane Smith\nTech Lead: John Doe\nBusiness Owner: Acme Corp PMO",
+  placeholder: "Programme Director: Jane Smith\nTech Lead: John Doe\nBusiness Owner: Acme Corp PMO",
   required: false,
   hint: "Name the accountable person for each role active in this phase",
 };
@@ -30,7 +30,7 @@ export const PHASE_INPUT_SCHEMAS: Record<string, PhaseInputSchema> = {
     title: "Strategy inputs",
     description: "Provide the foundational context ADAM needs to generate strategy artifacts.",
     fields: [
-      { id: "businessObjective", label: "Business objective", type: "textarea", placeholder: "What outcome is this program trying to achieve?", required: true },
+      { id: "businessObjective", label: "Business objective", type: "textarea", placeholder: "What outcome is this programme trying to achieve?", required: true },
       { id: "sponsor", label: "Executive sponsor", type: "text", placeholder: "Name and title", required: true },
       { id: "constraints", label: "Key constraints", type: "textarea", placeholder: "Budget, timeline, regulatory, or technical constraints", required: false, hint: "e.g. Must go live before Q4 financial year end" },
       { id: "successMetric", label: "Primary success metric", type: "text", placeholder: "e.g. 20% reduction in processing time", required: true },
@@ -42,7 +42,7 @@ export const PHASE_INPUT_SCHEMAS: Record<string, PhaseInputSchema> = {
     title: "Mobilise inputs",
     description: "Define the team and governance structure for this phase.",
     fields: [
-      { id: "programDirector", label: "Program director", type: "text", placeholder: "Name", required: true },
+      { id: "programDirector", label: "Programme director", type: "text", placeholder: "Name", required: true },
       { id: "teamSize", label: "Team size", type: "number", placeholder: "Number of FTEs", required: false },
       { id: "governanceModel", label: "Governance model", type: "select", options: ["Steering committee", "PMO-led", "Agile squad", "Hybrid"], required: false },
       { id: "keyRisks", label: "Known risks at mobilisation", type: "textarea", placeholder: "Staffing, vendor readiness, budget approval…", required: false },

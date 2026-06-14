@@ -28,7 +28,7 @@ export default function EscalationPanel({ escalations, onAcknowledge, onResolve,
             <div key={escalation.id} className="v3-card-sm" style={{ marginBottom: 10 }}>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
                 <span className={`v3-chip ${escalation.severity === "critical" || escalation.severity === "high" ? "red" : "amber"}`}>{escalation.severity}</span>
-                <span className="v3-chip muted">{escalation.linkedPhaseId || "Program"}</span>
+                <span className="v3-chip muted">{escalation.linkedPhaseId || "Programme"}</span>
                 <span className="v3-chip muted">{timeAgo(escalation.raisedAt)}</span>
               </div>
               <div style={{ fontSize: 14, fontWeight: 600, color: "var(--v3-text-primary)", marginBottom: 4 }}>{escalation.title}</div>
