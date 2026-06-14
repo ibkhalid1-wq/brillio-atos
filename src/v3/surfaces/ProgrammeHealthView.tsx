@@ -1184,7 +1184,9 @@ export default function ProgrammeHealthView({
             <span style={{
               marginLeft: "auto",
               fontSize: 12, fontWeight: 600,
-              color: confidenceScore >= 80 ? "var(--v3-green)" : confidenceScore >= 60 ? "var(--v3-amber)" : "var(--v3-red)",
+              // Canonical band (same as the main gauge above) so this header
+              // "% confidence" never contradicts it — 76% reads green, not amber.
+              color: confidenceColor(confidenceScore),
             }}>
               {confidenceScore}% confidence
             </span>
