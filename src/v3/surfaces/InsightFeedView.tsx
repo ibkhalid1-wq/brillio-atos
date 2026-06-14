@@ -648,9 +648,14 @@ export default function InsightFeedView({
       });
     }
 
+    // "Active phase" must resolve to the same phase the rest of the app treats as
+    // active (the phase strip highlight and Quick Nav both key off activePhaseId).
+    // Prefer activePhaseId; only fall back to the in-progress heuristic when no
+    // phase is explicitly active, so Home never contradicts itself.
     const activePhase =
+      (activePhaseId ? program?.phases.find((p) => p.id === activePhaseId) : null) ??
       program?.phases.find((p) => p.pct >= 10 && p.pct <= 90) ??
-      (activePhaseId ? program?.phases.find((p) => p.id === activePhaseId) : null);
+      null;
 
     if (activePhase) {
       const label = PHASE_LABELS[activePhase.id] ?? activePhase.displayName;
