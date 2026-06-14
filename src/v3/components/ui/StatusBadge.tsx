@@ -59,7 +59,7 @@ export function StatusBadge({
         fontVariantNumeric: "tabular-nums",
         userSelect: "none",
         WebkitUserSelect: "none",
-        letterSpacing: "0.03em",
+        letterSpacing: "0.06em",
         fontSize: 11,
       } as React.CSSProperties}
     >
