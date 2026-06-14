@@ -212,6 +212,39 @@ async function authenticateRequest(req: Request): Promise<AuthContext> {
   return { admin, ownerId: data.user.id, isService: false };
 }
 
+type ProgramAccess = "none" | "viewer" | "editor" | "admin";
+
+// Resolve the caller's access level to a program using the membership model.
+// The service role always has full access. The program owner is always an admin
+// even if a membership row is missing. Otherwise the role comes from
+// adam_program_members. Reads use the service-role admin client (RLS-bypassing),
+// so we must enforce access explicitly here.
+async function resolveProgramAccess(
+  auth: AuthContext,
+  programOwnerId: string | null,
+  programId: string,
+): Promise<ProgramAccess> {
+  if (auth.isService) return "admin";
+  if (!auth.ownerId) return "none";
+  if (programOwnerId && programOwnerId === auth.ownerId) return "admin";
+  const { data, error } = await auth.admin
+    .from("adam_program_members")
+    .select("role")
+    .eq("program_id", programId)
+    .eq("user_id", auth.ownerId)
+    .maybeSingle();
+  if (error || !data) return "none";
+  const role = data.role as string;
+  if (role === "admin") return "admin";
+  if (role === "editor") return "editor";
+  if (role === "viewer") return "viewer";
+  return "none";
+}
+
+function canWrite(access: ProgramAccess): boolean {
+  return access === "admin" || access === "editor";
+}
+
 async function logObservation(
   admin: SupabaseClient,
   observation: AgentObservationRecord,
@@ -4900,6 +4933,27 @@ Deno.serve(async (req) => {
         error: programError?.message || "Program not found or not visible to this user.",
         programId: request.programId,
       }, 404);
+    }
+
+    // Membership-based access control: running an agent mutates program data, so
+    // the caller must be the owner, an admin, or an editor. Viewers and
+    // non-members are rejected. The service role bypasses this check.
+    const programAccess = await resolveProgramAccess(
+      auth,
+      (programRow.owner_id as string | null) ?? null,
+      request.programId,
+    );
+    if (programAccess === "none") {
+      return jsonResponse({
+        error: "Program not found or not visible to this user.",
+        programId: request.programId,
+      }, 404);
+    }
+    if (!canWrite(programAccess)) {
+      return jsonResponse({
+        error: "You have read-only access to this program and cannot run agents.",
+        programId: request.programId,
+      }, 403);
     }
 
     const ownerId = auth.ownerId || programRow.owner_id || null;

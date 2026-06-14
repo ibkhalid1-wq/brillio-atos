@@ -34,7 +34,13 @@ function getAdminClient(): SupabaseClient {
   });
 }
 
-async function authenticateRequest(req: Request): Promise<{ admin: SupabaseClient; ownerId: string | null }> {
+interface AuthContext {
+  admin: SupabaseClient;
+  ownerId: string | null;
+  isService: boolean;
+}
+
+async function authenticateRequest(req: Request): Promise<AuthContext> {
   const authHeader = req.headers.get("Authorization") || "";
   if (!authHeader.startsWith("Bearer ")) {
     throw new Error("Missing Bearer token.");
@@ -42,13 +48,35 @@ async function authenticateRequest(req: Request): Promise<{ admin: SupabaseClien
   const token = authHeader.slice("Bearer ".length).trim();
   const admin = getAdminClient();
   if (token === SUPABASE_SERVICE_ROLE_KEY) {
-    return { admin, ownerId: null };
+    return { admin, ownerId: null, isService: true };
   }
   const { data, error } = await admin.auth.getUser(token);
   if (error || !data?.user) {
     throw new Error(error?.message || "Authentication failed.");
   }
-  return { admin, ownerId: data.user.id };
+  return { admin, ownerId: data.user.id, isService: false };
+}
+
+// Resolve the caller's write access to a program via the membership model. The
+// service role and the program owner always have full access; otherwise an
+// admin/editor membership row is required. Resume mutates program data, so
+// viewers and non-members must be rejected.
+async function canWriteProgram(
+  auth: AuthContext,
+  programOwnerId: string | null,
+  programId: string,
+): Promise<boolean> {
+  if (auth.isService) return true;
+  if (!auth.ownerId) return false;
+  if (programOwnerId && programOwnerId === auth.ownerId) return true;
+  const { data, error } = await auth.admin
+    .from("adam_program_members")
+    .select("role")
+    .eq("program_id", programId)
+    .eq("user_id", auth.ownerId)
+    .maybeSingle();
+  if (error || !data) return false;
+  return data.role === "admin" || data.role === "editor";
 }
 
 async function logObservation(admin: SupabaseClient, observation: AgentObservationRecord): Promise<void> {
@@ -154,7 +182,8 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { admin } = await authenticateRequest(req);
+    const auth = await authenticateRequest(req);
+    const { admin } = auth;
     const payload = await req.json() as ResumeAgentRequest;
     if (!payload.runId || !payload.decisionId || !payload.resolution) {
       return jsonResponse({ error: "runId, decisionId, and resolution are required." }, 400);
@@ -177,11 +206,22 @@ Deno.serve(async (req) => {
 
     const { data: programRow, error: programError } = await admin
       .from("adam_programs")
-      .select("id, data")
+      .select("id, owner_id, data")
       .eq("id", run.program_id)
       .single();
     if (programError || !programRow) {
       return jsonResponse({ error: programError?.message || "Program not found." }, 404);
+    }
+
+    // Resolving a decision mutates program data, so the caller must have write
+    // access (owner/admin/editor). Viewers and non-members are rejected.
+    const allowedToWrite = await canWriteProgram(
+      auth,
+      (programRow.owner_id as string | null) ?? null,
+      run.program_id as string,
+    );
+    if (!allowedToWrite) {
+      return jsonResponse({ error: "You do not have permission to resolve decisions for this program." }, 403);
     }
 
     let programData = normalizeProgramData(programRow.data as JsonValue | null);
