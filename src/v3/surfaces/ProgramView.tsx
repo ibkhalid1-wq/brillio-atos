@@ -4,6 +4,8 @@ import { RelativeTime } from "@/v3/components/ui/RelativeTime";
 import { StatusBadge } from "@/v3/components/ui/StatusBadge";
 import ProgramUsagePanel from "@/v3/components/ProgramUsagePanel";
 import { ragLabel } from "@/v3/lib/uiHelpers";
+import { confidenceRag } from "@/v3/lib/confidenceScore";
+import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
 import { AdamCard, AdamCardBody, AdamCardHeader } from "@/v3/components/ui/AdamCard";
 import type { V3Mode, V3MoreView, V3ReportId } from "@/v3/types";
 
@@ -236,7 +238,12 @@ export default function ProgramView({
 
   const detailView = renderView();
   const benefits = program.benefitsTracking?.benefitMilestones || [];
-  const healthVariant = ragToBadgeVariant(program.healthHeatmap?.overallRag);
+  // Health reads from the computed confidence score (traceable, explainable) —
+  // the single source of truth shared with the rail badge and Portfolio cards —
+  // not the opaque agent-supplied overallRag, so this surface never contradicts
+  // the others on the same programme's health.
+  const healthRag = confidenceRag(deriveProgramConfidence(program).score);
+  const healthVariant = ragToBadgeVariant(healthRag);
   const openRisks = (program.raidEntries || []).filter((entry) => entry.type === "risk" && entry.status !== "closed");
   const highRisks = openRisks.filter((entry) => entry.severity === "critical" || entry.severity === "high");
   const activeMembers = program.team?.members?.length || 0;
@@ -278,7 +285,7 @@ export default function ProgramView({
         >
           <AdamCardBody>
             <div className="v3-oversight-kpi-label">Health Score</div>
-            <div className="v3-oversight-kpi-value">{program.healthHeatmap?.overallRag ? ragLabel(program.healthHeatmap.overallRag) : "--"}</div>
+            <div className="v3-oversight-kpi-value">{ragLabel(healthRag)}</div>
             <div className="v3-oversight-kpi-sub">{program.healthHeatmap?.summary || "Programme posture still forming."}</div>
           </AdamCardBody>
         </AdamCard>
@@ -315,7 +322,7 @@ export default function ProgramView({
         <AdamCardHeader
           title="Programme Narrative"
           subtitle={program.narrative ? "Latest executive summary" : narrativeIsRunning ? "Generating…" : "No narrative yet"}
-          badge={<StatusBadge variant={healthVariant} size="sm" label={program.healthHeatmap?.overallRag ? ragLabel(program.healthHeatmap.overallRag) : "Forming"} />}
+          badge={<StatusBadge variant={healthVariant} size="sm" label={ragLabel(healthRag)} />}
           action={<button type="button" className="v3-button ghost" style={{ fontSize: 12 }} onClick={() => onOpenReport("narrative")}>Open report</button>}
         />
         <AdamCardBody>

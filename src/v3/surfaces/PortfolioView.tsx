@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import PortfolioInsightPanel from "@/v3/components/PortfolioInsightPanel";
 import { ragLabel } from "@/v3/lib/uiHelpers";
+import { confidenceRag } from "@/v3/lib/confidenceScore";
+import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -27,11 +29,14 @@ type SummaryFilter = "all" | "at-risk" | "open-decisions";
 
 const RAG_ORDER: Record<string, number> = { red: 0, amber: 1, green: 2, muted: 3 };
 
-function ragTone(value: string | null | undefined): "green" | "amber" | "red" | "muted" {
-  if (value === "green") return "green";
-  if (value === "red") return "red";
-  if (value === "amber") return "amber";
-  return "muted";
+/**
+ * A program's health tone — derived from the computed confidence score, NOT the
+ * opaque agent-supplied `healthHeatmap.overallRag`. This guarantees a program's
+ * card here reads the same band ("On Track"/"At Risk"/"Critical") that the
+ * Executive header and rail badge show for it, instead of contradicting them.
+ */
+function programRag(program: ProgramSummary): "green" | "amber" | "red" | "muted" {
+  return confidenceRag(deriveProgramConfidence(program).score);
 }
 
 function ragChipStyle(tone: "green" | "amber" | "red" | "muted"): React.CSSProperties {
@@ -114,7 +119,7 @@ function ProgramCard({
   onSelect: () => void;
   onRequestDelete?: () => void;
 }) {
-  const tone = ragTone(program.healthHeatmap?.overallRag);
+  const tone = programRag(program);
   const pct = overallPct(program);
   const decisions = openDecisionCount(program);
   const atRisk = atRiskCount(program);
@@ -136,7 +141,7 @@ function ProgramCard({
             {program.name}
           </div>
           <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-            <span style={ragChipStyle(tone)}>{ragLabel(program.healthHeatmap?.overallRag)}</span>
+            <span style={ragChipStyle(tone)}>{ragLabel(tone)}</span>
             {isActive && (
               <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 999, background: "var(--v3-accent)", color: "#fff" }}>
                 Active
@@ -234,7 +239,7 @@ export default function PortfolioView({
     const q = search.trim().toLowerCase();
     const searched = q ? programs.filter((p) => p.name.toLowerCase().includes(q)) : programs;
     const list = searched.filter((program) => {
-      if (summaryFilter === "at-risk") return ragTone(program.healthHeatmap?.overallRag) === "red" || atRiskCount(program) > 0;
+      if (summaryFilter === "at-risk") return programRag(program) === "red" || atRiskCount(program) > 0;
       if (summaryFilter === "open-decisions") return openDecisionCount(program) > 0;
       return true;
     });
@@ -244,8 +249,8 @@ export default function PortfolioView({
         case "name":
           return a.name.localeCompare(b.name);
         case "health": {
-          const ra = RAG_ORDER[ragTone(a.healthHeatmap?.overallRag)] ?? 3;
-          const rb = RAG_ORDER[ragTone(b.healthHeatmap?.overallRag)] ?? 3;
+          const ra = RAG_ORDER[programRag(a)] ?? 3;
+          const rb = RAG_ORDER[programRag(b)] ?? 3;
           return ra - rb;
         }
         case "pct":
@@ -270,7 +275,7 @@ export default function PortfolioView({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [deleting, pendingDelete]);
-  const atRiskTotal = programs.filter((p) => ragTone(p.healthHeatmap?.overallRag) === "red" || atRiskCount(p) > 0).length;
+  const atRiskTotal = programs.filter((p) => programRag(p) === "red" || atRiskCount(p) > 0).length;
   const avgPct =
     totalPrograms > 0
       ? Math.round(programs.reduce((s, p) => s + overallPct(p), 0) / totalPrograms)

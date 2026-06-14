@@ -58,7 +58,8 @@ import { usePhaseAgentState } from "@/v3/hooks/usePhaseAgentState";
 import { useProgramValidation } from "@/v3/hooks/useProgramValidation";
 import { getPhaseSequence } from "@/v3/lib/methodology";
 import { computePhaseReadiness, getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
-import { computeConfidenceScore, computeRiskPosture, getGateThreshold } from "@/v3/lib/confidenceScore";
+import { confidenceRag, getGateThreshold } from "@/v3/lib/confidenceScore";
+import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
 const DecideView = React.lazy(() => import("@/v3/surfaces/DecideView"));
 import GateReopenModal from "@/v3/components/GateReopenModal";
 import RemediationNoteModal from "@/v3/components/RemediationNoteModal";
@@ -1483,69 +1484,19 @@ export default function AppShellV3() {
   // the rail badge, programme health RAG, and gate approval eligibility checks.
   const programConfidenceResult = useMemo(() => {
     if (!activeProgram) return null;
-    const phases = activeProgram.phases || [];
-    const approved = Object.values(activeProgram.gateReviews || {}).filter(
-      (g: Record<string, unknown>) => g?.status === "approved",
-    ).length;
-    const totalGates = phases.length;
-
-    // Gate readiness: active phase readiness score (or ratio of approved gates)
-    const activePhaseReadiness = activePhaseId
-      ? computePhaseReadiness(activeProgram, activePhaseId).score
-      : approved > 0
-      ? Math.round((approved / Math.max(totalGates, 1)) * 100)
-      : 0;
-
-    // Risk posture: severity-weighted open risk penalty
-    const riskEntries = Array.isArray((rawData as Record<string, unknown>)?.raidEntries)
-      ? (rawData as Record<string, unknown>).raidEntries as Array<{ type: string; severity?: string; status?: string }>
-      : [];
-    const openRisks = riskEntries.filter((r) => r.type === "risk");
-    const riskPosture = computeRiskPosture(openRisks);
-    const openCriticalRisks = openRisks.filter((r) => (r.severity || "").toLowerCase() === "critical" && r.status !== "closed").length;
-    const openHighRisks = openRisks.filter((r) => (r.severity || "").toLowerCase() === "high" && r.status !== "closed").length;
-
-    // Milestone health: on-track ratio
-    const milestones = activeProgram.milestones || [];
-    const onTrack = milestones.filter((m: Record<string, unknown>) => m.status === "on-track" || m.status === "complete").length;
-    const milestoneHealth = milestones.length > 0 ? Math.round((onTrack / milestones.length) * 100) : 70;
-    const milestonesAtRisk = milestones.filter((m: Record<string, unknown>) =>
-      m.status === "at-risk" || m.status === "overdue",
-    ).length;
-
-    // Input completeness: quality-weighted score for active phase
-    const phaseInputs = typeof (rawData as Record<string, unknown>)?.phaseInputs === "object"
-      ? (rawData as Record<string, unknown>).phaseInputs as Record<string, Record<string, unknown>>
-      : {};
-    const activeInputs = activePhaseId ? (phaseInputs[activePhaseId] ?? {}) : {};
-    const fieldCount = Object.keys(activeInputs).filter((k) => !k.startsWith("_")).length;
-    const inputCompleteness = fieldCount >= 5 ? 80 : fieldCount > 0 ? Math.round((fieldCount / 5) * 80) : 0;
-
-    // Decision metrics
-    const overdueDecisions = openDecisions.filter((d: Record<string, unknown>) => {
-      const created = d.createdAt as string | undefined;
-      return created && (Date.now() - new Date(created).getTime()) > 14 * 86_400_000;
-    }).length;
-
-    return computeConfidenceScore({
-      gateReadiness: activePhaseReadiness,
-      riskPosture,
-      milestoneHealth,
-      openDecisionCount: openDecisions.length,
-      inputCompleteness,
-      openCriticalRisks,
-      openHighRisks,
-      approvedGates: approved,
-      totalGates,
-      overdueDecisions,
-      milestonesAtRisk,
-    });
+    // Single source of truth — same derivation now reused by Portfolio cards and
+    // the Programme health KPI, so the active program's score here matches what
+    // every other surface shows for it. (rawData/openDecisions are derived from
+    // activeProgram inside the helper; listed here only to track recomputation.)
+    return deriveProgramConfidence(activeProgram, activePhaseId);
   }, [activeProgram, activePhaseId, rawData, openDecisions]);
 
   const programConfidenceScore = programConfidenceResult?.score ?? null;
   const programHealth = useMemo(() => {
     const score = programConfidenceScore;
-    const programme = score == null ? "amber" : score >= 60 ? "green" : score >= 40 ? "amber" : "red";
+    // null → "amber" preserves the rail badge's long-standing neutral-pending
+    // tone; a scored program routes through the canonical confidence→RAG band.
+    const programme = score == null ? "amber" : confidenceRag(score);
     const ai = aiStatus.status === "connected" ? "green" : aiStatus.status === "checking" ? "amber" : "red";
     const escalationCount = (activeProgram?.escalations || []).filter((e: any) => e.status === "open").length;
     const aiNotReady = aiStatus.status !== "connected" && aiStatus.status !== "checking";

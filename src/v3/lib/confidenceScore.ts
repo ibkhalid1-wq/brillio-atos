@@ -395,3 +395,21 @@ export function getConfidenceColor(score: number): string {
 export function confidenceLabel(score: number): ConfidenceScore["label"] {
   return score >= 80 ? "Strong" : score >= 60 ? "On Track" : score >= 40 ? "At Risk" : "Critical";
 }
+
+/**
+ * Canonical confidence → RAG tone. SINGLE SOURCE OF TRUTH for translating a
+ * computed confidence score into the green/amber/red traffic-light used on
+ * portfolio cards, programme-health KPIs and the rail badge. Program health
+ * must read from this (a traceable, explainable score) — never from opaque
+ * agent-supplied `overallRag`, which could contradict the headline confidence
+ * (e.g. a 76% "On Track" programme showing an "At Risk" amber card).
+ *
+ * Bands mirror confidenceLabel: ≥60 green ("On Track"+), ≥40 amber ("At Risk"),
+ * else red ("Critical"). A null/absent score reads "muted" (not yet scored).
+ */
+export function confidenceRag(score: number | null | undefined): "green" | "amber" | "red" | "muted" {
+  if (score == null) return "muted";
+  if (score >= 60) return "green";
+  if (score >= 40) return "amber";
+  return "red";
+}
