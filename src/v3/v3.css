@@ -3268,7 +3268,17 @@ select {
   border: 1px solid var(--v3-border);
 }
 
-/* ── Chip light-mode: override amber/red to meet WCAG AA at 11px ──────────── */
+/* ── Chip light-mode: override green/amber/red to meet WCAG AA at 11px ─────── */
+/* Green anchored to the adam-badge "approved" value (#16a34a) so the healthy/   */
+/* on-track green is identical across chip surfaces and badge surfaces, and to   */
+/* fix the bright token green (#2cc84d) failing AA on light tints.               */
+[data-theme="light"] .v3-chip.green,
+:root:not([data-theme="dark"]) .v3-chip.green {
+  color: #16a34a;
+  background: rgba(22, 163, 74, 0.10);
+  border-color: rgba(22, 163, 74, 0.24);
+}
+
 [data-theme="light"] .v3-chip.amber,
 :root:not([data-theme="dark"]) .v3-chip.amber {
   color: #92400e;
