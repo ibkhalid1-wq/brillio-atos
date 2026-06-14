@@ -964,32 +964,19 @@ export default function StageView({
           />
         ) : null}
 
-        {readiness ? (
-          <div className="v3-readiness-panel">
-            <ReadinessArcGauge score={readiness.score} showLegend threshold={readiness.threshold ?? 70} />
-            {readiness.missing.length && !readiness.canApproveGate ? (
-              <div className="v3-readiness-missing">
-                {readiness.missing.map((item, index) => (
-                  <div key={`${item}-${index}`} className="v3-readiness-missing-item">· {item}</div>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-        {readiness ? (
-          <div className="v3-support-note">
-            Quality assessed by {readiness.reviewScoresCount > 0 ? "independent artifact reviewer" : "self-reported confidence"}
-            {readiness.reviewScoresCount === 0 ? " — complete more phase inputs to improve score accuracy" : ""}
-          </div>
-        ) : null}
-
         {program && activePhase?.id ? (
           <div className="v3-card" style={{ marginTop: 12 }}>
-            <div className="v3-card-title">Readiness explained</div>
+            <div className="v3-card-title">Gate readiness</div>
             <div style={{ fontSize: 11, color: "var(--v3-text-muted)", margin: "2px 0 10px", lineHeight: 1.4 }}>
-              Why this phase scores what it does — drivers, blockers, and the expected gain from each.
+              Where this phase stands — the score, what's driving it, and the highest-leverage blockers to resolve.
             </div>
-            <ReadinessExplainer program={program} phaseId={activePhase.id} />
+            <ReadinessExplainer program={program} phaseId={activePhase.id} threshold={readiness?.threshold ?? 70} />
+            {readiness ? (
+              <div className="v3-support-note" style={{ marginTop: 10 }}>
+                Quality assessed by {readiness.reviewScoresCount > 0 ? "independent artifact reviewer" : "self-reported confidence"}
+                {readiness.reviewScoresCount === 0 ? " — complete more phase inputs to improve score accuracy" : ""}
+              </div>
+            ) : null}
           </div>
         ) : null}
 

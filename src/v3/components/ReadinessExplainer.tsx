@@ -1,5 +1,6 @@
 import React from "react";
 import type { ProgramSummary } from "@/new/types";
+import { ReadinessArcGauge } from "@/v3/components/ReadinessArcGauge";
 import { explainPhaseReadiness, type ReadinessFactor } from "@/v3/lib/readinessModel";
 
 function scoreColor(score: number): string {
@@ -39,9 +40,11 @@ function BlockerRow({ factor }: { factor: ReadinessFactor }) {
 export function ReadinessExplainer({
   program,
   phaseId,
+  threshold = 70,
 }: {
   program: ProgramSummary | null;
   phaseId: string | null;
+  threshold?: number;
 }) {
   const explanation = React.useMemo(
     () => (program && phaseId ? explainPhaseReadiness(program, phaseId) : null),
@@ -57,21 +60,21 @@ export function ReadinessExplainer({
 
   return (
     <div style={{ display: "grid", gap: 12 }}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 24, fontWeight: 700, color: scoreColor(score) }}>{score}%</span>
-        <span style={{ fontSize: 12, color: "var(--v3-text-secondary)" }}>readiness</span>
-        {gain > 0 ? (
-          <span style={{ fontSize: 11, color: "var(--v3-text-muted)", marginLeft: "auto" }}>
-            → <strong style={{ color: scoreColor(projectedScore) }}>{projectedScore}%</strong> if all resolved
-          </span>
-        ) : null}
-      </div>
-
-      <div style={{ fontSize: 11, color: "var(--v3-text-secondary)", lineHeight: 1.5 }}>
-        {summary}
-        {derived ? (
-          <span style={{ color: "var(--v3-text-muted)" }}> (derived from artifact coverage — no gate review yet)</span>
-        ) : null}
+      <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+        <ReadinessArcGauge score={score} size={132} threshold={threshold} showLabel={false} showLegend animate={false} />
+        <div style={{ flex: 1, minWidth: 170, display: "grid", gap: 6 }}>
+          {gain > 0 ? (
+            <div style={{ fontSize: 12, color: "var(--v3-text-secondary)" }}>
+              Projected <strong style={{ color: scoreColor(projectedScore) }}>{projectedScore}%</strong> once all open items are resolved
+            </div>
+          ) : null}
+          <div style={{ fontSize: 11, color: "var(--v3-text-secondary)", lineHeight: 1.5 }}>
+            {summary}
+            {derived ? (
+              <span style={{ color: "var(--v3-text-muted)" }}> (derived from artifact coverage — no gate review yet)</span>
+            ) : null}
+          </div>
+        </div>
       </div>
 
       {blockers.length ? (
