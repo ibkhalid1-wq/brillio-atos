@@ -1,40 +1,6 @@
 import React, { useMemo, useState } from "react";
 import type { V3MoreView } from "@/v3/types";
-
-// ---------------------------------------------------------------------------
-// Error boundary
-// ---------------------------------------------------------------------------
-
-class ViewErrorBoundary extends React.Component<
-  { children: React.ReactNode },
-  { hasError: boolean; error: string }
-> {
-  constructor(props: { children: React.ReactNode }) {
-    super(props);
-    this.state = { hasError: false, error: "" };
-  }
-
-  static getDerivedStateFromError(error: Error) {
-    return { hasError: true, error: error.message };
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div style={{ padding: 24, color: "var(--v3-red)", fontSize: 13 }}>
-          <strong>This view failed to load.</strong> {this.state.error}
-          <button
-            style={{ display: "block", marginTop: 12, color: "var(--v3-accent)", background: "none", border: "none", cursor: "pointer", fontSize: 13 }}
-            onClick={() => this.setState({ hasError: false, error: "" })}
-          >
-            Try again →
-          </button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
+import { AdamErrorBoundary } from "@/v3/components/AdamErrorBoundary";
 
 // ---------------------------------------------------------------------------
 // Workspace tile definitions
@@ -252,7 +218,7 @@ export default function MoreView({ currentView, onSelectView, renderView, active
           </button>
         </div>
         <div className="v3-embedded-view">
-          <ViewErrorBoundary>{renderView()}</ViewErrorBoundary>
+          <AdamErrorBoundary context={{ surface: "more", view: currentView }}>{renderView()}</AdamErrorBoundary>
         </div>
       </div>
     );
