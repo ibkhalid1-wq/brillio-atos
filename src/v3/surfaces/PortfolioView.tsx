@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import PortfolioInsightPanel from "@/v3/components/PortfolioInsightPanel";
+import { ragLabel } from "@/v3/lib/uiHelpers";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -31,13 +32,6 @@ function ragTone(value: string | null | undefined): "green" | "amber" | "red" | 
   if (value === "red") return "red";
   if (value === "amber") return "amber";
   return "muted";
-}
-
-function ragLabel(value: string | null | undefined): string {
-  if (value === "green") return "On Track";
-  if (value === "red") return "At Risk";
-  if (value === "amber") return "Caution";
-  return "Forming";
 }
 
 function ragChipStyle(tone: "green" | "amber" | "red" | "muted"): React.CSSProperties {

@@ -47,6 +47,18 @@ export function healthLabel(score: number | null): { text: string; cls: string }
   return { text, cls };
 }
 
+/** Canonical friendly label for a RAG health tone. SINGLE SOURCE OF TRUTH for
+ *  the word shown against a green/amber/red health chip, so the vocabulary never
+ *  contradicts the numeric confidence bands (amber always reads "At Risk", red
+ *  always reads "Critical" — never "Caution" on one surface and "At Risk" on
+ *  another for the same colour). */
+export function ragLabel(tone: string | null | undefined): string {
+  if (tone === "green") return "On Track";
+  if (tone === "amber") return "At Risk";
+  if (tone === "red") return "Critical";
+  return "Forming";
+}
+
 /** Returns chip class for RAID severity */
 export function severityChipClass(severity: string): string {
   if (severity === "critical") return "v3-chip red";
