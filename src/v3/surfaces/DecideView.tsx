@@ -50,6 +50,25 @@ function gateVariant(status: GateReview["status"] | undefined): "approved" | "re
   return "pending";
 }
 
+type ActionBucket = "blocking" | "attention" | "recommended";
+
+// Action Center buckets every open item into one of three sections so the user
+// never has to reason about decision vs. gate vs. risk taxonomy — just urgency.
+function classifyBucket(decision: ReviewDecision): ActionBucket {
+  const ageDays = decision.createdAt
+    ? (Date.now() - new Date(decision.createdAt).getTime()) / (1000 * 60 * 60 * 24)
+    : 0;
+  if (decision.priority === "critical" || ageDays >= 14) return "blocking";
+  if (decision.priority === "high" || ageDays >= 7) return "attention";
+  return "recommended";
+}
+
+const BUCKET_META: Record<ActionBucket, { title: string; sub: string; tone: string }> = {
+  blocking: { title: "Blocking progress", sub: "Resolve these to keep the programme moving", tone: "var(--v3-red)" },
+  attention: { title: "Needs attention", sub: "Important, not yet blocking", tone: "var(--v3-amber)" },
+  recommended: { title: "Recommended actions", sub: "Good next moves when you have capacity", tone: "var(--v3-text-muted)" },
+};
+
 function ArtifactPreview({ agentId, content }: { agentId: string; content: Record<string, unknown> }) {
   if (agentId === "narrative") {
     const text = typeof content.narrative === "string" ? content.narrative : JSON.stringify(content, null, 2);
@@ -422,7 +441,12 @@ export default function DecideView({
     const order: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
     return (order[a.priority as string] ?? 2) - (order[b.priority as string] ?? 2);
   });
-  const visible = sortedOpen.slice(0, visibleCount);
+
+  const buckets = useMemo(() => {
+    const grouped: Record<ActionBucket, ReviewDecision[]> = { blocking: [], attention: [], recommended: [] };
+    for (const decision of sortedOpen) grouped[classifyBucket(decision)].push(decision);
+    return grouped;
+  }, [sortedOpen]);
 
   if (!program) {
     return <div className="v3-section"><div className="v3-empty-title">No governance data available</div></div>;
@@ -500,12 +524,78 @@ export default function DecideView({
     </AdamCard>
   ) : null;
 
+  const renderDecision = (decision: ReviewDecision) => (
+    <div key={decision.id} style={{ marginBottom: 8 }}>
+      <div
+        style={{
+          borderLeft: decision.priority === "critical" ? "3px solid var(--v3-red)" :
+                      decision.priority === "high" ? "3px solid var(--v3-amber)" : "3px solid transparent",
+          borderRadius: "var(--v3-radius-lg)",
+        }}
+      >
+        {decision.phaseId && (
+          <div style={{ fontSize: 11, color: "var(--v3-text-muted)", padding: "4px 0 0 4px" }}>
+            Affects: <strong>{PHASE_LABELS[decision.phaseId] ?? decision.phaseId}</strong> phase
+          </div>
+        )}
+        <DecisionCard
+          decision={decision}
+          previewOpen={!!previewMap.get(decision.id)}
+          modifyOpen={!!modifyOpenMap.get(decision.id)}
+          modifyValue={modifyMap.get(decision.id) || ""}
+          onTogglePreview={() => setPreviewMap((prev) => {
+            const next = new Map(prev);
+            next.set(decision.id, !prev.get(decision.id));
+            return next;
+          })}
+          onToggleModify={() => setModifyOpenMap((prev) => {
+            const next = new Map(prev);
+            next.set(decision.id, !prev.get(decision.id));
+            return next;
+          })}
+          onChangeModify={(value) => setModifyMap((prev) => {
+            const next = new Map(prev);
+            next.set(decision.id, value);
+            return next;
+          })}
+          onResolveDecision={(resolution, modifiedContent) => void onResolveDecision(decision.id, resolution, modifiedContent)}
+        />
+      </div>
+    </div>
+  );
+
+  const renderBucket = (bucket: ActionBucket) => {
+    const items = buckets[bucket];
+    if (!items.length) return null;
+    const meta = BUCKET_META[bucket];
+    // Recommended is paginated; blocking/attention always show in full (they are the urgent few).
+    const shown = bucket === "recommended" ? items.slice(0, visibleCount) : items;
+    return (
+      <section key={bucket} className="v3-action-bucket" style={{ marginBottom: 24 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10, padding: "0 4px" }}>
+          <span style={{ width: 8, height: 8, borderRadius: "50%", background: meta.tone, display: "inline-block" }} aria-hidden="true" />
+          <h2 style={{ fontSize: 14, fontWeight: 700, color: "var(--v3-text-primary)", margin: 0 }}>{meta.title}</h2>
+          <span style={{ fontSize: 12, fontWeight: 600, color: meta.tone }}>{items.length}</span>
+          <span style={{ fontSize: 12, color: "var(--v3-text-muted)", marginLeft: "auto" }}>{meta.sub}</span>
+        </div>
+        <div className="v3-governance-card-list">
+          {shown.map(renderDecision)}
+        </div>
+        {bucket === "recommended" && items.length > visibleCount ? (
+          <button className="v3-button ghost" style={{ fontSize: 12, width: "100%", marginTop: 12 }} onClick={() => setVisibleCount((count) => count + 20)}>
+            Show {Math.min(20, items.length - visibleCount)} more
+          </button>
+        ) : null}
+      </section>
+    );
+  };
+
   return (
     <div className="v3-governance-layout">
       <div className="v3-governance-header">
         <div>
-          <h1 className="v3-governance-title">Governance</h1>
-          <p className="v3-governance-subtitle">Gate approvals and decision register</p>
+          <h1 className="v3-governance-title">Action Center</h1>
+          <p className="v3-governance-subtitle">Everything that needs you, in one place — sorted by urgency</p>
         </div>
         <div className="v3-governance-header-actions">
           <button type="button" className="v3-button primary" style={{ fontSize: 12 }} onClick={() => setAddOpen(true)}>
@@ -530,85 +620,22 @@ export default function DecideView({
         </div>
 
         <div className="v3-governance-main">
-          {open.length > 0 && (
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, padding: "0 4px" }}>
-              <span style={{ fontSize: 12, color: "var(--v3-text-muted)" }}>
-                {open.filter((d) => d.priority === "critical" || d.priority === "high").length} high-priority ·{" "}
-                {open.length} total
-              </span>
-              <span style={{ fontSize: 12, color: "var(--v3-text-muted)" }}>Sorted by priority</span>
-            </div>
-          )}
-          {visible.length ? (
-            <div className="v3-governance-card-list">
-              {visible.map((decision) => (
-                <div key={decision.id} style={{ marginBottom: 8 }}>
-                  {(decision.priority === "critical" || decision.priority === "high") && (
-                    <div style={{
-                      background: "var(--v3-surface-2)",
-                      border: `1px solid ${decision.priority === "critical" ? "var(--v3-red)" : "var(--v3-amber)"}`,
-                      borderRadius: "var(--v3-radius)",
-                      padding: "8px 12px",
-                      marginBottom: 4,
-                      fontSize: 12,
-                      color: "var(--v3-text-secondary)",
-                    }}>
-                      <span style={{ fontWeight: 600, color: decision.priority === "critical" ? "var(--v3-red)" : "var(--v3-amber)" }}>
-                        {decision.priority === "critical" ? "◉ Blocking" : "◆ High priority"} —
-                      </span>
-                      {" "}Deferring this decision will delay{" "}
-                      <strong>{decision.phaseId ? (PHASE_LABELS[decision.phaseId] ?? decision.phaseId) : "delivery"}</strong>
-                      {" "}progress and may affect the gate readiness score.
-                    </div>
-                  )}
-                  <div
-                    style={{
-                      borderLeft: decision.priority === "critical" ? "3px solid var(--v3-red)" :
-                                  decision.priority === "high" ? "3px solid var(--v3-amber)" : "3px solid transparent",
-                      borderRadius: "var(--v3-radius-lg)",
-                    }}
-                  >
-                    {decision.phaseId && (
-                      <div style={{ fontSize: 11, color: "var(--v3-text-muted)", padding: "4px 0 0 4px" }}>
-                        Affects: <strong>{PHASE_LABELS[decision.phaseId] ?? decision.phaseId}</strong> phase
-                      </div>
-                    )}
-                    <DecisionCard
-                      decision={decision}
-                      previewOpen={!!previewMap.get(decision.id)}
-                      modifyOpen={!!modifyOpenMap.get(decision.id)}
-                      modifyValue={modifyMap.get(decision.id) || ""}
-                      onTogglePreview={() => setPreviewMap((prev) => {
-                        const next = new Map(prev);
-                        next.set(decision.id, !prev.get(decision.id));
-                        return next;
-                      })}
-                      onToggleModify={() => setModifyOpenMap((prev) => {
-                        const next = new Map(prev);
-                        next.set(decision.id, !prev.get(decision.id));
-                        return next;
-                      })}
-                      onChangeModify={(value) => setModifyMap((prev) => {
-                        const next = new Map(prev);
-                        next.set(decision.id, value);
-                        return next;
-                      })}
-                      onResolveDecision={(resolution, modifiedContent) => void onResolveDecision(decision.id, resolution, modifiedContent)}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+          {sortedOpen.length ? (
+            <>
+              {renderBucket("blocking")}
+              {renderBucket("attention")}
+              {renderBucket("recommended")}
+            </>
           ) : (
             <div className="v3-empty" style={{ marginTop: 40 }}>
               <div className="v3-empty-icon" style={{ color: "var(--v3-green)", fontSize: 28 }}>✓</div>
               <div className="v3-empty-title">
-                {scope === "stage" ? "No open decisions for this phase" : "Decision queue is clear"}
+                {scope === "stage" ? "Nothing needs you in this phase" : "You're all caught up"}
               </div>
               <div className="v3-empty-body">
                 {scope === "stage"
-                  ? "This phase has no open decisions. Decisions are surfaced automatically during gate reviews and programme analysis."
-                  : "All decisions across the programme are resolved. Raise a new decision manually or run a gate review to surface new ones."}
+                  ? "This phase has no open actions. New items appear automatically as the programme progresses."
+                  : "Nothing across the programme needs your attention right now. New items appear automatically, or raise one yourself."}
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 14, justifyContent: "center" }}>
                 <button
@@ -622,12 +649,6 @@ export default function DecideView({
               </div>
             </div>
           )}
-
-          {sortedOpen.length > visibleCount ? (
-            <button className="v3-button ghost" style={{ fontSize: 12, width: "100%", marginTop: 12 }} onClick={() => setVisibleCount((count) => count + 20)}>
-              Show {Math.min(20, sortedOpen.length - visibleCount)} more
-            </button>
-          ) : null}
         </div>
       </div>
 
