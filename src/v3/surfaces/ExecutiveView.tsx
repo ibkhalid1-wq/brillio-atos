@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import type { ProgramSummary, RAIDEntry } from "@/new/types";
 import { PHASE_LABELS, confidenceColor, healthLabel, severityChipClass, priorityChipClass } from "@/v3/lib/uiHelpers";
 import AdamExplainsTooltip from "@/v3/components/AdamExplainsTooltip";
+import { Kpi } from "@/v3/components/ui/Kpi";
 
 interface ExecutiveViewProps {
   program: ProgramSummary | null;
@@ -33,102 +34,6 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
       }}
     >
       {children}
-    </div>
-  );
-}
-
-function MetricBlock({
-  label,
-  value,
-  color,
-  large,
-  onClick,
-}: {
-  label: string;
-  value: string | number;
-  color?: string;
-  large?: boolean;
-  onClick?: () => void;
-}) {
-  const content = (
-    <>
-      <div
-        style={{
-          fontSize: large ? 36 : 28,
-          fontWeight: 800,
-          color: color ?? "var(--v3-text-primary)",
-          lineHeight: 1,
-          fontFamily: "var(--v3-font)",
-          letterSpacing: "-0.02em",
-        }}
-      >
-        {value}
-      </div>
-      <div
-        style={{
-          fontSize: 11,
-          color: "var(--v3-text-muted)",
-          fontWeight: 500,
-          textTransform: "uppercase",
-          letterSpacing: "0.05em",
-          fontFamily: "var(--v3-font)",
-        }}
-      >
-        {label}
-      </div>
-    </>
-  );
-
-  if (onClick) {
-    return (
-      <button
-        type="button"
-        onClick={onClick}
-        style={{
-          flex: 1,
-          minWidth: 0,
-          padding: "16px 18px",
-          background: "var(--v3-surface)",
-          border: "1px solid var(--v3-border-soft)",
-          borderRadius: "var(--v3-radius)",
-          display: "flex",
-          flexDirection: "column",
-          gap: 4,
-          textAlign: "left",
-          cursor: "pointer",
-          transition: "background 0.15s, border-color 0.15s, transform 0.15s",
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = "var(--v3-surface-2)";
-          e.currentTarget.style.borderColor = "var(--v3-accent)";
-          e.currentTarget.style.boxShadow = "0 2px 10px rgba(0,0,0,0.15)";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = "var(--v3-surface)";
-          e.currentTarget.style.borderColor = "var(--v3-border-soft)";
-          e.currentTarget.style.boxShadow = "none";
-        }}
-      >
-        {content}
-      </button>
-    );
-  }
-
-  return (
-    <div
-      style={{
-        flex: 1,
-        minWidth: 0,
-        padding: "16px 18px",
-        background: "var(--v3-surface)",
-        border: "1px solid var(--v3-border-soft)",
-        borderRadius: "var(--v3-radius)",
-        display: "flex",
-        flexDirection: "column",
-        gap: 4,
-      }}
-    >
-      {content}
     </div>
   );
 }
@@ -497,22 +402,22 @@ export default function ExecutiveView({
         <SectionLabel>Programme Metrics</SectionLabel>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           {confidenceScore !== null && (
-            <MetricBlock
+            <Kpi
               label="Confidence"
               value={`${confidenceScore}%`}
               color={confidenceColor(confidenceScore)}
-              large
+              emphasis
               onClick={onNavigateToGates}
             />
           )}
-          <MetricBlock label="Gates Approved" value={`${approvedGates} of ${totalGates}`} onClick={onNavigateToGates} />
-          <MetricBlock label="Completion" value={`${avgPct}%`} onClick={onNavigateToPipeline} />
-          <MetricBlock
+          <Kpi label="Gates Approved" value={`${approvedGates} of ${totalGates}`} onClick={onNavigateToGates} />
+          <Kpi label="Completion" value={`${avgPct}%`} onClick={onNavigateToPipeline} />
+          <Kpi
             label="Open Decisions"
             value={program.decisionQueue?.filter((d) => d.status === "open").length ?? 0}
             color={
               (program.decisionQueue?.filter((d) => d.status === "open").length ?? 0) > 0
-                ? "var(--v3-red)"
+                ? "var(--v3-amber)"
                 : undefined
             }
             onClick={onNavigateToDecide}

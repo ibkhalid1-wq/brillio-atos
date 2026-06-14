@@ -6,6 +6,7 @@ import type { ConfidenceScore, ConfidenceForecast } from "@/v3/lib/confidenceSco
 import { forecastConfidence, getGateThreshold } from "@/v3/lib/confidenceScore";
 import type { V3MoreView } from "@/v3/types";
 import { ExecCommandPanel } from "@/v3/components/ExecCommandPanel";
+import { Kpi } from "@/v3/components/ui/Kpi";
 
 interface InsightFeedViewProps {
   program: ProgramSummary | null;
@@ -148,81 +149,6 @@ function InsightCard({ priority, accent, icon, title, description, actionLabel, 
 // ─── MetricPill ─────────────────────────────────────────────────────────────
 // Compact inline metric used in the welcome header strip (replaces the full Programme card).
 
-function MetricPill({
-  label,
-  value,
-  color,
-  onClick,
-}: {
-  label: string;
-  value: string | number;
-  color?: string;
-  onClick?: () => void;
-}) {
-  const style: React.CSSProperties = {
-    display: "inline-flex",
-    flexDirection: "column",
-    alignItems: "center",
-    padding: "10px 18px",
-    borderRadius: "var(--v3-radius)",
-    background: "var(--v3-surface)",
-    border: "1px solid var(--v3-border-soft)",
-    cursor: onClick ? "pointer" : "default",
-    transition: "border-color 0.15s, background 0.15s",
-    minWidth: 80,
-    textAlign: "center",
-  };
-
-  const inner = (
-    <>
-      <span
-        style={{
-          fontFamily: "var(--v3-font)",
-          fontSize: 22,
-          fontWeight: 700,
-          color: color ?? "var(--v3-text-primary)",
-          lineHeight: 1.1,
-        }}
-      >
-        {value}
-      </span>
-      <span
-        style={{
-          fontFamily: "var(--v3-font)",
-          fontSize: 10,
-          color: "var(--v3-text-muted)",
-          textTransform: "uppercase",
-          letterSpacing: "0.05em",
-          fontWeight: 500,
-          marginTop: 3,
-        }}
-      >
-        {label}
-      </span>
-    </>
-  );
-
-  if (onClick) {
-    return (
-      <button
-        type="button"
-        onClick={onClick}
-        style={style}
-        onMouseEnter={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--v3-accent)";
-          (e.currentTarget as HTMLButtonElement).style.background = "var(--v3-surface-2)";
-        }}
-        onMouseLeave={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--v3-border-soft)";
-          (e.currentTarget as HTMLButtonElement).style.background = "var(--v3-surface)";
-        }}
-      >
-        {inner}
-      </button>
-    );
-  }
-  return <div style={style}>{inner}</div>;
-}
 
 // ─── AgentActionButton ───────────────────────────────────────────────────────
 
@@ -968,10 +894,11 @@ export default function InsightFeedView({
 
         {/* Inline metric pills strip */}
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <MetricPill label="Completion" value={`${avgPct}%`} onClick={onNavigateToPipeline} />
-          <MetricPill label="Gates" value={`${gatesApproved}/${phases.length}`} onClick={onNavigateToGates} />
+          <Kpi variant="pill" label="Completion" value={`${avgPct}%`} onClick={onNavigateToPipeline} />
+          <Kpi variant="pill" label="Gates" value={`${gatesApproved}/${phases.length}`} onClick={onNavigateToGates} />
           <AdamExplainsTooltip metric="open-decisions" value={openDecisionCount} placement="top">
-            <MetricPill
+            <Kpi
+              variant="pill"
               label="Open Decisions"
               value={openDecisionCount}
               color={openDecisionCount > 0 ? "var(--v3-amber)" : undefined}
@@ -979,7 +906,8 @@ export default function InsightFeedView({
             />
           </AdamExplainsTooltip>
           {confidenceScore !== null && (
-            <MetricPill
+            <Kpi
+              variant="pill"
               label="Confidence"
               value={`${confidenceScore}%`}
               color={confidenceColor(confidenceScore)}
