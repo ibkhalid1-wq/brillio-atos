@@ -516,11 +516,14 @@ body {
 }
 
 .adam-card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  /* Shell tokens aligned to the dominant .v3-card system (radius, border, */
+  /* elevation) so AdamCard surfaces and v3-card surfaces read as one card  */
+  /* system. Cohesion audit: card consistency.                             */
+  background: var(--v3-surface);
+  border: 1px solid var(--v3-border);
+  border-radius: var(--v3-radius-lg);
   overflow: hidden;
-  box-shadow: var(--v3-shadow-card);
+  box-shadow: var(--v3-shadow-xs);
 }
 
 .adam-card--interactive {
