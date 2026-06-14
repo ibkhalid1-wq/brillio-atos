@@ -326,63 +326,28 @@ function GatesTab({
       {/* Actions */}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         <button
+          type="button"
+          className="v3-button ghost"
           disabled={anyAgentRunning}
           onClick={() => onRunAgent("gate-review", phaseId)}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "9px 16px",
-            background: "var(--v3-surface)",
-            border: "1px solid var(--v3-border)",
-            borderRadius: "var(--v3-radius)",
-            cursor: anyAgentRunning ? "not-allowed" : "pointer",
-            fontFamily: "var(--v3-font)",
-            fontSize: 13,
-            fontWeight: 600,
-            color: "var(--v3-text-primary)",
-            opacity: anyAgentRunning ? 0.55 : 1,
-          }}
         >
           ⬡ Check Gate Readiness
         </button>
 
         <button
+          type="button"
+          className="v3-button ghost"
           onClick={() => setLiteGateOpen(true)}
-          style={{
-            padding: "8px 14px",
-            background: "none",
-            border: "1px solid var(--v3-border)",
-            borderRadius: "var(--v3-radius)",
-            cursor: "pointer",
-            fontFamily: "var(--v3-font)",
-            fontSize: 12,
-            color: "var(--v3-text-secondary)",
-            fontWeight: 500,
-          }}
         >
           ✓ Quick Gate Check
         </button>
 
         {gate?.status !== "approved" && (
           <button
+            type="button"
+            className="v3-button primary"
             disabled={approving}
             onClick={handleApprove}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "9px 16px",
-              background: "var(--v3-accent)",
-              color: "#fff",
-              border: "none",
-              borderRadius: "var(--v3-radius)",
-              cursor: approving ? "not-allowed" : "pointer",
-              fontFamily: "var(--v3-font)",
-              fontSize: 13,
-              fontWeight: 600,
-              opacity: approving ? 0.6 : 1,
-            }}
           >
             ✓ {approving ? "Approving…" : "Approve & Unlock Next Phase"}
           </button>
@@ -390,17 +355,9 @@ function GatesTab({
 
         {gate?.status !== "approved" && (
           <button
+            type="button"
+            className="v3-button ghost"
             onClick={() => setShowRemediationInput(!showRemediationInput)}
-            style={{
-              padding: "9px 16px",
-              background: "transparent",
-              border: "1px solid var(--v3-border-soft)",
-              borderRadius: "var(--v3-radius)",
-              cursor: "pointer",
-              fontFamily: "var(--v3-font)",
-              fontSize: 13,
-              color: "var(--v3-text-secondary)",
-            }}
           >
             Request Remediation
           </button>
@@ -429,35 +386,17 @@ function GatesTab({
           />
           <div style={{ display: "flex", gap: 8 }}>
             <button
+              type="button"
+              className="v3-button danger"
               disabled={!remediationNote.trim() || submittingRemediation}
               onClick={handleRemediation}
-              style={{
-                padding: "7px 14px",
-                background: "var(--v3-red)",
-                color: "#fff",
-                border: "none",
-                borderRadius: "var(--v3-radius)",
-                cursor: !remediationNote.trim() || submittingRemediation ? "not-allowed" : "pointer",
-                fontFamily: "var(--v3-font)",
-                fontSize: 12,
-                fontWeight: 600,
-                opacity: !remediationNote.trim() ? 0.5 : 1,
-              }}
             >
               {submittingRemediation ? "Submitting…" : "Submit Remediation Request"}
             </button>
             <button
+              type="button"
+              className="v3-button ghost"
               onClick={() => { setShowRemediationInput(false); setRemediationNote(""); }}
-              style={{
-                padding: "7px 14px",
-                background: "transparent",
-                border: "1px solid var(--v3-border-soft)",
-                borderRadius: "var(--v3-radius)",
-                cursor: "pointer",
-                fontFamily: "var(--v3-font)",
-                fontSize: 12,
-                color: "var(--v3-text-muted)",
-              }}
             >
               Cancel
             </button>
@@ -650,37 +589,18 @@ function DecisionsTab({
                 {isOpen && (
                   <div style={{ display: "flex", gap: 8 }}>
                     <button
+                      type="button"
+                      className="v3-button primary"
                       disabled={deciding === d.id}
                       onClick={() => handleDecide(d.id)}
-                      style={{
-                        padding: "6px 14px",
-                        background: "var(--v3-accent)",
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: "var(--v3-radius)",
-                        cursor: deciding === d.id ? "not-allowed" : "pointer",
-                        fontFamily: "var(--v3-font)",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        opacity: deciding === d.id ? 0.6 : 1,
-                      }}
                     >
                       {deciding === d.id ? "Approving…" : "Approve"}
                     </button>
                     <button
+                      type="button"
+                      className="v3-button ghost"
                       disabled={deferring === d.id}
                       onClick={() => handleDefer(d.id)}
-                      style={{
-                        padding: "6px 14px",
-                        background: "transparent",
-                        border: "1px solid var(--v3-border-soft)",
-                        borderRadius: "var(--v3-radius)",
-                        cursor: deferring === d.id ? "not-allowed" : "pointer",
-                        fontFamily: "var(--v3-font)",
-                        fontSize: 12,
-                        color: "var(--v3-text-muted)",
-                        opacity: deferring === d.id ? 0.6 : 1,
-                      }}
                     >
                       {deferring === d.id ? "Deferring…" : "Defer"}
                     </button>
@@ -864,23 +784,10 @@ function HealthTab({
       {/* Run health check */}
       <div>
         <button
+          type="button"
+          className="v3-button ghost"
           disabled={anyAgentRunning}
           onClick={() => onRunAgent("health-heatmap", "program")}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "10px 18px",
-            background: "var(--v3-surface)",
-            border: "1px solid var(--v3-border)",
-            borderRadius: "var(--v3-radius)",
-            cursor: anyAgentRunning ? "not-allowed" : "pointer",
-            fontFamily: "var(--v3-font)",
-            fontSize: 13,
-            fontWeight: 600,
-            color: "var(--v3-text-primary)",
-            opacity: anyAgentRunning ? 0.55 : 1,
-          }}
         >
           🔬 {anyAgentRunning ? "Preparing…" : "Assess Programme Health"}
         </button>
