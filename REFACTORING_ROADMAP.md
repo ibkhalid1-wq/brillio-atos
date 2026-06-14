@@ -83,4 +83,17 @@
 
 ---
 
-_Status: Phase 0 complete. Proceeding with Cycle 1._
+## 8. Progress Log
+
+- ✅ **Phase 0** — git baseline (`001c039`), clean `vite build`, roadmap committed.
+- ✅ **Cycle 1** (`2711ff3`) — Program dropdown → File-style menu; Portfolio lives under Open.
+- ✅ **Cycle 2** (`7f2ce6d`) — primary nav reduced to **Home · Action Center · Program**; Executive folded out.
+- ✅ **Cycle 3** (`8a5f295`) — Action Center rebuilt as 3 urgency sections (Blocking / Needs attention / Recommended).
+- ⏳ **Cycle 4** — artifact-centric model + evidence/lineage (next; introduces new data shape — higher risk).
+- ⏳ **Cycle 5** — Program Knowledge Graph (system of record).
+- ⏳ **Cycle 6** — Confidence/Readiness explainability.
+- ⏳ **Cycle 7** — technical-debt elimination (dead surfaces `cockpit`/`governance-v2`/`oversight-v2`, duplicated run-agent wiring).
+
+Each completed cycle was validated with `npm run build` (exit 0) and committed independently for rollback.
+
+_Status: Cycles 1–3 complete & validated. Cycles 4–7 are data-layer changes (higher risk) — pending._
