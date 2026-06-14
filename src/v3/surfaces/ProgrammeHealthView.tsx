@@ -1265,26 +1265,37 @@ export default function ProgrammeHealthView({
               {/* KPI comparison */}
               {(() => {
                 const kpis = Array.isArray((inner as any).kpis) ? (inner as any).kpis as any[] : [];
-                const baseline = (inner as any).benefitsBaseline as Record<string, unknown> | undefined;
                 return kpis.length > 0 ? (
                   <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
                     {kpis.map((kpi: any, i: number) => {
-                      const current = typeof kpi.value === "number" ? kpi.value : 0;
-                      const target = typeof kpi.target === "number" ? kpi.target : 100;
-                      const pct = target > 0 ? Math.round((current / target) * 100) : 0;
-                      const achieved = pct >= 100;
+                      const hasCurrent = typeof kpi.value === "number";
+                      const hasTarget = typeof kpi.target === "number" && kpi.target > 0;
+                      const current = hasCurrent ? kpi.value : 0;
+                      const unit = typeof kpi.unit === "string" ? kpi.unit : "";
+                      // Only compute attainment when both current and a real target
+                      // exist — never fabricate a denominator or percentage.
+                      const pct = hasCurrent && hasTarget ? Math.round((current / kpi.target) * 100) : null;
+                      const achieved = pct !== null && pct >= 100;
                       return (
                         <div key={kpi.id ?? i} style={{ background: "var(--v3-surface)", border: "1px solid var(--v3-border)", borderRadius: "var(--v3-radius-lg)", padding: "12px 14px" }}>
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                             <span style={{ fontSize: 13, fontWeight: 600, color: "var(--v3-text-primary)" }}>{kpi.name ?? kpi.label ?? `KPI ${i + 1}`}</span>
-                            <span style={{ fontSize: 12, fontWeight: 600, color: achieved ? "var(--v3-green)" : pct >= 70 ? "var(--v3-accent)" : "var(--v3-amber)" }}>
-                              {current}{typeof kpi.unit === "string" ? kpi.unit : ""} / {target}{typeof kpi.unit === "string" ? kpi.unit : ""}
+                            <span style={{ fontSize: 12, fontWeight: 600, color: achieved ? "var(--v3-green)" : pct !== null && pct >= 70 ? "var(--v3-accent)" : pct !== null ? "var(--v3-amber)" : "var(--v3-text-muted)" }}>
+                              {hasCurrent ? `${current}${unit}` : "—"}{hasTarget ? ` / ${kpi.target}${unit}` : ""}
                             </span>
                           </div>
-                          <div style={{ height: 6, background: "var(--v3-surface-3)", borderRadius: 999, overflow: "hidden" }}>
-                            <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: achieved ? "var(--v3-green)" : "var(--v3-accent)", borderRadius: 999, transition: "width 0.4s" }} />
-                          </div>
-                          <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 4 }}>{pct}% of target achieved</div>
+                          {pct !== null ? (
+                            <>
+                              <div style={{ height: 6, background: "var(--v3-surface-3)", borderRadius: 999, overflow: "hidden" }}>
+                                <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: achieved ? "var(--v3-green)" : "var(--v3-accent)", borderRadius: 999, transition: "width 0.4s" }} />
+                              </div>
+                              <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 4 }}>{pct}% of target achieved</div>
+                            </>
+                          ) : (
+                            <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 4 }}>
+                              {hasTarget ? "Current value not yet measured" : "Target not set — define one in programme setup to track attainment"}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
