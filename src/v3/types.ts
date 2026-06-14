@@ -1,6 +1,10 @@
 import type { AppView } from "@/new/types";
 
-export type V3Surface = "stage" | "pipeline" | "decide" | "program" | "portfolio" | "cockpit" | "governance-v2" | "oversight-v2" | "insight-feed" | "executive" | "programme-health";
+// Legacy surfaces `cockpit` / `governance-v2` / `oversight-v2` were retired in
+// Cycle 7. Their old deep-link paths still redirect to live surfaces in
+// `pathToState` (AppShellV3) for backward compatibility, but they are no longer
+// renderable surface values.
+export type V3Surface = "stage" | "pipeline" | "decide" | "program" | "portfolio" | "insight-feed" | "executive" | "programme-health";
 export type V3Mode = "guided" | "power";
 export type V3CommandMode = "delivery" | "governance" | "oversight" | "portfolio";
 

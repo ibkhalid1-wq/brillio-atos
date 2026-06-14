@@ -1365,6 +1365,15 @@ export default function AppShellV3() {
     }
   }, [activeProgramId, activeProgram, userId, refreshPrograms, resolveAgentId, runAgent]);
 
+  // Single shared run-agent handler for every surface (Cycle 7 dedup). Surfaces
+  // may pass an explicit phaseId; otherwise we fall back to the active phase,
+  // then the "program"-level bucket.
+  const handleRunAgent = useCallback(
+    (agentId: string, phaseId?: string) =>
+      void runProgramAgent({ agentId, phaseId: phaseId || activePhaseId || "program", triggeredBy: "user" }),
+    [runProgramAgent, activePhaseId],
+  );
+
   const { addMilestone, completeMilestone, isSaving: milestoneSavePending } = useMilestones(activeProgramId || "", activeProgram?.rawData || {}, refreshPrograms);
   const { saveBudgetInputs, isSaving: budgetSavePending } = useBudgetTracking(activeProgramId || "", activeProgram?.rawData || {}, refreshPrograms);
   useClosure(activeProgramId || "", activeProgram?.rawData || {}, refreshPrograms);
@@ -2437,7 +2446,7 @@ export default function AppShellV3() {
                 onReopenGate={handleReopenGate}
                 onGenerateCriteria={() => void runProgramAgent({ agentId: "exit-criteria-generator", phaseId: activePhaseId || "program", triggeredBy: "user" })}
                 onRequestRemediation={requestRemediation}
-                onRunAgent={(agentId) => void runProgramAgent({ agentId, phaseId: activePhaseId || "program", triggeredBy: "user" })}
+                onRunAgent={handleRunAgent}
                 onSaveArtifact={handleSaveArtifact}
                 artifactPreviews={{
                   narrative: activeProgram?.narrative || null,
@@ -2533,7 +2542,7 @@ export default function AppShellV3() {
                       await runProgramAgent({ agentId: "pattern-extract", phaseId: "program", triggeredBy: "user" });
                       await refreshPatterns();
                     }}
-                    onRunAgent={(agentId, phaseId) => void runProgramAgent({ agentId, phaseId: phaseId || "program", triggeredBy: "user" })}
+                    onRunAgent={handleRunAgent}
                   />
                 )}
                 onOpenMoreView={openMoreView}
@@ -2559,7 +2568,7 @@ export default function AppShellV3() {
               loading={programsLoading || false}
               onCreateProgram={() => setWizardOpen(true)}
               anyAgentRunning={anyAgentRunning}
-              onRunAgent={(agentId, phaseId) => void runProgramAgent({ agentId, phaseId: phaseId || "program", triggeredBy: "user" })}
+              onRunAgent={handleRunAgent}
             />
           </AdamErrorBoundary>
         ) : null}
@@ -2580,7 +2589,7 @@ export default function AppShellV3() {
               onNavigateToPipeline={() => navigateSurface("pipeline")}
               onNavigateToPhase={openPhaseSheet}
               onOpenPhase={openPhaseSheet}
-              onRunAgent={(agentId, phaseId) => void runProgramAgent({ agentId, phaseId: phaseId || activePhaseId || "program", triggeredBy: "user" })}
+              onRunAgent={handleRunAgent}
               onNavigateToPortfolio={() => navigateSurface("portfolio")}
               onOpenMoreView={(view) => openMoreView(view)}
             />
@@ -2594,7 +2603,7 @@ export default function AppShellV3() {
               programs={programs}
               confidenceScore={programConfidenceScore}
               onApproveGate={handleApproveGate}
-              onRunAgent={(agentId, phaseId) => void runProgramAgent({ agentId, phaseId: phaseId || "program", triggeredBy: "user" })}
+              onRunAgent={handleRunAgent}
               anyAgentRunning={anyUserAgentRunning}
               onNavigateToDecide={() => navigateSurface("decide")}
               onNavigateToGates={() => navigateSurface("programme-health")}
@@ -2617,7 +2626,7 @@ export default function AppShellV3() {
               onRequestRemediation={requestRemediation}
               onDecideDecision={handleDecideDecision}
               onDeferDecision={handleDeferDecision}
-              onRunAgent={(agentId, phaseId) => void runProgramAgent({ agentId, phaseId: phaseId || "program", triggeredBy: "user" })}
+              onRunAgent={handleRunAgent}
               anyAgentRunning={anyAgentRunning}
               confidenceScore={programConfidenceScore}
               agentActivity={agentActivityItems}
@@ -2641,7 +2650,7 @@ export default function AppShellV3() {
           onUploadDocument={handleUploadDocument}
           onAnswerQuestion={handleAnswerAgentQuestion}
           onAcknowledgeTask={handleAcknowledgeTask}
-          onRunAgent={(agentId) => void runProgramAgent({ agentId, phaseId: activePhaseId || "program", triggeredBy: "user" })}
+          onRunAgent={handleRunAgent}
           onOpenDocuments={() => openMoreView("documents")}
         />
       ) : null}
@@ -2680,7 +2689,7 @@ export default function AppShellV3() {
         anyAgentRunning={anyAgentRunning}
         aiStatus={aiStatus.status}
         onOpenAISettings={openAISettings}
-        onRunAgent={(agentId, phaseId) => void runProgramAgent({ agentId, phaseId: phaseId || activePhaseId || "program", triggeredBy: "user" })}
+        onRunAgent={handleRunAgent}
         onSendMessage={activeProgramId ? async (msg) => {
           try {
             await sendCopilotMessage(msg);
@@ -2705,7 +2714,7 @@ export default function AppShellV3() {
         activeMode={activeMode}
         activePhaseId={activePhaseId}
         onModeChange={handleCommandModeChange}
-        onRunAgent={(agentId) => void runProgramAgent({ agentId, phaseId: activePhaseId || "program", triggeredBy: "user" })}
+        onRunAgent={handleRunAgent}
         onSelectPhase={handleSelectPhase}
         onQuery={async (query: string): Promise<string> => {
           // Attempt real AI via Supabase Edge Function

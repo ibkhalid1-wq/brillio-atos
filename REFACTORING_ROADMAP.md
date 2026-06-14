@@ -91,9 +91,9 @@
 - ✅ **Cycle 3** (`8a5f295`) — Action Center rebuilt as 3 urgency sections (Blocking / Needs attention / Recommended).
 - ⏳ **Cycle 4** — artifact-centric model + evidence/lineage (next; introduces new data shape — higher risk).
 - ✅ **Cycle 5** (`6bfef71`) — Program Knowledge Graph as system of record; `buildKnowledgeGraph` selector + `KnowledgeGraphPanel` in a new ContextDrawer "Graph" tab.
-- ⏳ **Cycle 6** — Confidence/Readiness explainability.
-- ⏳ **Cycle 7** — technical-debt elimination (dead surfaces `cockpit`/`governance-v2`/`oversight-v2`, duplicated run-agent wiring).
+- ✅ **Cycle 6** (`192bcd8`) — Readiness explainability; `explainPhaseReadiness` decomposes score into drivers/blockers with expected point gain, surfaced via `ReadinessExplainer` in a new ContextDrawer "Readiness" tab.
+- ✅ **Cycle 7** — technical-debt elimination: pruned dead `cockpit`/`governance-v2`/`oversight-v2` members from the `V3Surface` union (legacy deep-link paths still redirect to live surfaces for backward compat); collapsed 9 copy-pasted `onRunAgent` closures into one shared `handleRunAgent` callback.
 
 Each completed cycle was validated with `npm run build` (exit 0) and committed independently for rollback.
 
-_Status: Cycles 1–5 complete & validated. Cycles 6–7 pending._
+_Status: Cycles 1–7 complete & validated. Refactoring program complete._
