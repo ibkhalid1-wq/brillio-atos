@@ -593,10 +593,10 @@ export default function StageView({
   }, []);
   const staleArtifacts = Array.isArray(source?.staleArtifacts) ? source.staleArtifacts as string[] : [];
   const artifactsStaleReason = typeof source?.artifactsStaleReason === "string" ? source.artifactsStaleReason : null;
-  const phaseWorkstreams = (program.workstreams || []).filter((workstream: Workstream) => workstream.phaseId === activePhase.id);
+  const phaseWorkstreams = (program?.workstreams || []).filter((workstream: Workstream) => workstream.phaseId === activePhase?.id);
   const activeRun = activeRuns?.some(r => r.status === "running");
   const gateCoach = source?.gateReadinessCoach && typeof source.gateReadinessCoach === "object" && !Array.isArray(source.gateReadinessCoach)
-    ? (source.gateReadinessCoach as Record<string, { actions?: Array<{ action: string; effort: "quick" | "hours" | "days"; owner: "user" | "agent"; agentId: string | null }> }>)[activePhase.id]
+    ? (source.gateReadinessCoach as Record<string, { actions?: Array<{ action: string; effort: "quick" | "hours" | "days"; owner: "user" | "agent"; agentId: string | null }> }>)[activePhase?.id ?? ""]
     : null;
   const discoveryGuide = source?.discoveryGuide && typeof source.discoveryGuide === "object" && !Array.isArray(source.discoveryGuide)
     ? source.discoveryGuide as Record<string, unknown>
@@ -617,7 +617,7 @@ export default function StageView({
     ? source.vendorRiskAssessment as { vendorAssessments?: Array<{ vendorName?: string; riskScore?: number; dependencyCriticality?: string; recommendedAction?: string }> }
     : null;
   const phaseInputs = source?.phaseInputs && typeof source.phaseInputs === "object" && !Array.isArray(source.phaseInputs)
-    ? (source.phaseInputs as Record<string, unknown>)[activePhase.id]
+    ? (source.phaseInputs as Record<string, unknown>)[activePhase?.id ?? ""]
     : null;
   const hasPhaseInputs = !!(phaseInputs && typeof phaseInputs === "object" && Object.keys(phaseInputs as Record<string, unknown>).some((key) => key !== "savedAt"));
   const hasGateReview = !!gateReview;
@@ -682,7 +682,7 @@ export default function StageView({
       { label: "Confirm handover to BAU", why: "Without formal BAU handover, value erodes as programme team disengages." },
     ],
   };
-  const phaseSteps = PHASE_ONBOARDING_STEPS[activePhase.id] ?? [
+  const phaseSteps = PHASE_ONBOARDING_STEPS[activePhase?.id ?? ""] ?? [
     { label: "Complete phase setup", why: "ADAM needs phase data to generate insights and readiness assessments." },
     { label: "Check gate readiness", why: "Gate readiness check assesses what's complete and identifies gaps." },
     { label: "Review and confirm exit criteria", why: "Exit criteria define what 'done' looks like for this phase." },
