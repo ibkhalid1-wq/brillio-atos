@@ -310,11 +310,11 @@ function TopbarBreadcrumb({
     "insight-feed": "Today",
     pipeline: "Delivery",
     portfolio: "Portfolio",
-    "programme-health": "Governance",
-    decide: "Decisions",
+    "programme-health": "Programme Health",
+    decide: "Action Center",
     executive: "Executive",
     stage: activePhaseLabel || "Phase",
-    program: "Workspaces",
+    program: "Programme Overview",
   };
 
   const label = surfaceLabel[surface];
@@ -328,23 +328,10 @@ function TopbarBreadcrumb({
     return (
       <nav className="v3-topbar-breadcrumb" aria-label="Breadcrumb">
         <button type="button" className="v3-topbar-breadcrumb-link" onClick={onClearMoreView}>
-          Workspaces
+          Programme Overview
         </button>
         <span className="v3-topbar-breadcrumb-sep" aria-hidden="true">›</span>
         <span className="v3-topbar-breadcrumb-current" aria-current="page">{workspaceLabel}</span>
-      </nav>
-    );
-  }
-
-  // Decisions lives under governance
-  if (surface === "decide") {
-    return (
-      <nav className="v3-topbar-breadcrumb" aria-label="Breadcrumb">
-        <button type="button" className="v3-topbar-breadcrumb-link" onClick={() => onNavigate("programme-health")}>
-          Governance
-        </button>
-        <span className="v3-topbar-breadcrumb-sep" aria-hidden="true">›</span>
-        <span className="v3-topbar-breadcrumb-current" aria-current="page">Decisions</span>
       </nav>
     );
   }
