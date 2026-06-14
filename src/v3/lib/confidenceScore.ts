@@ -238,8 +238,7 @@ export function computeConfidenceScore(inputs: {
     Math.min(100, signals.reduce((sum, s) => sum + s.contribution, 0)),
   );
 
-  const label: ConfidenceScore["label"] =
-    score >= 80 ? "Strong" : score >= 60 ? "On Track" : score >= 40 ? "At Risk" : "Critical";
+  const label: ConfidenceScore["label"] = confidenceLabel(score);
   const color: ConfidenceScore["color"] =
     score >= 80 ? "indigo" : score >= 60 ? "green" : score >= 40 ? "amber" : "red";
 
@@ -385,4 +384,14 @@ export function getConfidenceColor(score: number): string {
   if (score >= 60) return "var(--v3-green)";
   if (score >= 40) return "var(--v3-amber)";
   return "var(--v3-red)";
+}
+
+/**
+ * Canonical confidence band label. SINGLE SOURCE OF TRUTH for the headline
+ * health word shown anywhere a confidence score is surfaced (Home verdict,
+ * Executive header, etc.). Any other label helper must delegate to this so
+ * surfaces never disagree on the same program's health.
+ */
+export function confidenceLabel(score: number): ConfidenceScore["label"] {
+  return score >= 80 ? "Strong" : score >= 60 ? "On Track" : score >= 40 ? "At Risk" : "Critical";
 }

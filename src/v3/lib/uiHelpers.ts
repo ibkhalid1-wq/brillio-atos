@@ -2,6 +2,7 @@
  * Shared UI helper functions and constants used across ADAM surfaces.
  * Single source of truth — do not duplicate these in individual components.
  */
+import { confidenceLabel, getConfidenceColor } from "@/v3/lib/confidenceScore";
 
 /** Client-facing phase display names (maps internal phase IDs → readable labels) */
 export const PHASE_LABELS: Record<string, string> = {
@@ -16,26 +17,34 @@ export const PHASE_LABELS: Record<string, string> = {
   valuerealize: "Value Realize",
 };
 
-/** Returns the CSS colour token matching a confidence score */
+/** Returns the CSS colour token matching a confidence score.
+ *  Delegates to the canonical confidence model so colour bands never diverge
+ *  from the headline label (e.g. a healthy 76% must not render amber here while
+ *  reading "On Track" elsewhere). */
 export function confidenceColor(score: number): string {
-  if (score >= 80) return "var(--v3-green)";
-  if (score >= 60) return "var(--v3-amber)";
-  return "var(--v3-red)";
+  return getConfidenceColor(score);
 }
 
-/** Returns the chip CSS class matching a confidence score */
+/** Returns the chip CSS class matching a confidence score.
+ *  Aligned to the canonical 4-band model (≥80 Strong, ≥60 On Track,
+ *  ≥40 At Risk, else Critical). */
 export function confidenceChipClass(score: number): string {
-  if (score >= 80) return "v3-chip green";
-  if (score >= 60) return "v3-chip amber";
+  if (score >= 80) return "v3-chip blue";
+  if (score >= 60) return "v3-chip green";
+  if (score >= 40) return "v3-chip amber";
   return "v3-chip red";
 }
 
 /** Returns health label text + chip class for a confidence score */
 export function healthLabel(score: number | null): { text: string; cls: string } {
   if (score === null) return { text: "Unknown", cls: "v3-chip muted" };
-  if (score >= 80) return { text: "On Track", cls: "v3-chip green" };
-  if (score >= 60) return { text: "Caution", cls: "v3-chip amber" };
-  return { text: "At Risk", cls: "v3-chip red" };
+  // Delegate the band word to the canonical confidence model so the Executive
+  // header never contradicts Home (e.g. 76% must read the same band everywhere,
+  // not "On Track" on one surface and "Caution" on another).
+  const text = confidenceLabel(score);
+  const cls =
+    score >= 80 ? "v3-chip blue" : score >= 60 ? "v3-chip green" : score >= 40 ? "v3-chip amber" : "v3-chip red";
+  return { text, cls };
 }
 
 /** Returns chip class for RAID severity */
