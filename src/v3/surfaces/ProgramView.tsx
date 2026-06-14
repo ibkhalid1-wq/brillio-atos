@@ -255,8 +255,8 @@ export default function ProgramView({
     <div className="v3-oversight-layout">
       <div className="v3-oversight-header">
         <div>
-          <h1 className="v3-oversight-title">Oversight</h1>
-          <p className="v3-oversight-subtitle">Programme health and performance</p>
+          <h1 className="v3-oversight-title">Programme Overview</h1>
+          <p className="v3-oversight-subtitle">Health, performance & all programme areas</p>
         </div>
         {updatedAt ? (
           <div className="v3-oversight-updated">
