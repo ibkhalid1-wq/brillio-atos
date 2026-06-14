@@ -686,69 +686,30 @@ export default function ExecutiveView({
         <SectionLabel>Actions</SectionLabel>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <button
+            type="button"
+            className="v3-button primary"
             disabled={anyAgentRunning}
             onClick={() => onRunAgent("executive-brief", "program")}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "10px 18px",
-              background: "var(--v3-accent)",
-              color: "#fff",
-              border: "none",
-              borderRadius: "var(--v3-radius)",
-              cursor: anyAgentRunning ? "not-allowed" : "pointer",
-              fontFamily: "var(--v3-font)",
-              fontSize: 13,
-              fontWeight: 600,
-              opacity: anyAgentRunning ? 0.55 : 1,
-              transition: "opacity 0.15s",
-            }}
           >
             <span>◇</span>
             <span>{anyAgentRunning ? "Preparing your brief…" : "What should I know today?"}</span>
           </button>
 
           <button
+            type="button"
+            className="v3-button ghost"
             disabled={anyAgentRunning}
             onClick={() => onRunAgent("steerco-prep", "program")}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "10px 18px",
-              background: "var(--v3-surface)",
-              color: "var(--v3-text-primary)",
-              border: "1px solid var(--v3-border)",
-              borderRadius: "var(--v3-radius)",
-              cursor: anyAgentRunning ? "not-allowed" : "pointer",
-              fontFamily: "var(--v3-font)",
-              fontSize: 13,
-              fontWeight: 600,
-              opacity: anyAgentRunning ? 0.55 : 1,
-              transition: "opacity 0.15s",
-            }}
           >
             <span>⬡</span>
             <span>{anyAgentRunning ? "Building agenda…" : "Prepare Leadership Review"}</span>
           </button>
 
           <button
+            type="button"
+            className="v3-button ghost"
             onClick={handleCopyBrief}
-            style={{
-              background: "none",
-              border: "1px solid var(--v3-border)",
-              borderRadius: "var(--v3-radius)",
-              padding: "8px 16px",
-              fontSize: 13,
-              color: copied ? "var(--v3-green)" : "var(--v3-text-secondary)",
-              cursor: "pointer",
-              fontFamily: "var(--v3-font)",
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              transition: "color 0.15s",
-            }}
+            style={copied ? { color: "var(--v3-green)", borderColor: "var(--v3-green)" } : undefined}
           >
             {copied ? "✓ Copied" : "⎘ Copy Summary"}
           </button>
