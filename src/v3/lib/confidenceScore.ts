@@ -13,8 +13,13 @@
 //   inputCompleteness 10%  — quality-weighted input score (not binary)
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Stable, machine-routable identity for each confidence signal so the UI can
+// deep-link the "Top Action" to the right surface (not a hardcoded guess).
+export type ConfidenceCategory = "gate" | "risk" | "milestone" | "decision" | "input";
+
 export interface ConfidenceSignal {
   label: string;
+  category: ConfidenceCategory;
   score: number;          // 0–100
   weight: number;         // 0–1, contribution to total
   contribution: number;   // score × weight (rounded)
@@ -40,6 +45,8 @@ export interface ConfidenceScore {
   explanation: string;
   /** The single highest-impact action to improve the score right now. */
   topRecommendation: string;
+  /** Category of the top recommendation, so the UI can route the action correctly. */
+  topRecommendationCategory?: ConfidenceCategory;
   computedAt: number;
 }
 
@@ -136,6 +143,7 @@ export function computeConfidenceScore(inputs: {
   const signals: ConfidenceSignal[] = [
     {
       label: "Gate readiness",
+      category: "gate",
       score: inputs.gateReadiness,
       weight: 0.30,
       contribution: Math.round(inputs.gateReadiness * 0.30),
@@ -151,6 +159,7 @@ export function computeConfidenceScore(inputs: {
     },
     {
       label: "Risk posture",
+      category: "risk",
       score: inputs.riskPosture,
       weight: 0.25,
       contribution: Math.round(inputs.riskPosture * 0.25),
@@ -168,6 +177,7 @@ export function computeConfidenceScore(inputs: {
     },
     {
       label: "Milestone health",
+      category: "milestone",
       score: inputs.milestoneHealth,
       weight: 0.20,
       contribution: Math.round(inputs.milestoneHealth * 0.20),
@@ -185,6 +195,7 @@ export function computeConfidenceScore(inputs: {
     },
     {
       label: "Decision backlog",
+      category: "decision",
       score: decisionBacklog,
       weight: 0.15,
       contribution: Math.round(decisionBacklog * 0.15),
@@ -204,6 +215,7 @@ export function computeConfidenceScore(inputs: {
     },
     {
       label: "Input completeness",
+      category: "input",
       score: inputs.inputCompleteness,
       weight: 0.10,
       contribution: Math.round(inputs.inputCompleteness * 0.10),
@@ -254,6 +266,7 @@ export function computeConfidenceScore(inputs: {
       return b.weight - a.weight; // Higher-weight signals take priority when tied
     }).find((s) => s.topAction);
   const topRecommendation = topSignal?.topAction ?? "Continue building programme momentum.";
+  const topRecommendationCategory = topSignal?.category;
 
   return {
     score,
@@ -270,6 +283,7 @@ export function computeConfidenceScore(inputs: {
     trend,
     explanation,
     topRecommendation,
+    topRecommendationCategory,
     computedAt: Date.now(),
   };
 }

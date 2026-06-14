@@ -707,6 +707,27 @@ export default function InsightFeedView({
     return cards.slice(0, 3).map((c, i) => ({ ...c, priority: (i + 1) as 1 | 2 | 3 }));
   }, [program, activePhaseId, openDecisionCount, onNavigateToDecide, onNavigateToGates, onNavigateToPhase, onRunAgent]);
 
+  // Route the confidence "Top Action" to the surface that actually owns the
+  // weakest signal, rather than always sending the user to Risks.
+  const topActionHandler = useMemo<(() => void) | null>(() => {
+    const category = confidenceResult?.topRecommendationCategory;
+    if (!category) return null;
+    switch (category) {
+      case "gate":
+        return onNavigateToGates;
+      case "decision":
+        return onNavigateToDecide;
+      case "risk":
+        return onOpenMoreView ? () => onOpenMoreView("risks") : null;
+      case "milestone":
+        return onOpenMoreView ? () => onOpenMoreView("milestones") : null;
+      case "input":
+        return activePhaseId ? () => onOpenPhase(activePhaseId) : onNavigateToPipeline;
+      default:
+        return null;
+    }
+  }, [confidenceResult?.topRecommendationCategory, activePhaseId, onNavigateToGates, onNavigateToDecide, onOpenMoreView, onOpenPhase, onNavigateToPipeline]);
+
   // ── Metrics ──────────────────────────────────────────────────────────────
   const phases = program?.phases ?? [];
   const avgPct =
@@ -1040,10 +1061,10 @@ export default function InsightFeedView({
                   {confidenceResult.topRecommendation}
                 </div>
               </div>
-              {onOpenMoreView && (
+              {topActionHandler && (
                 <button
                   type="button"
-                  onClick={() => onOpenMoreView("risks")}
+                  onClick={topActionHandler}
                   style={{
                     fontSize: 12,
                     padding: "5px 12px",
