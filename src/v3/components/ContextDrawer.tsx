@@ -3,6 +3,8 @@ import type { PhaseAgentTask } from "@/lib/adamPhaseAgentTypes";
 import type { ProgramSummary } from "@/new/types";
 import PhaseInputsPanel from "@/v3/components/PhaseInputsPanel";
 import TaskQueuePanel from "@/v3/components/TaskQueuePanel";
+import { ArtifactLedger } from "@/v3/components/ArtifactLedger";
+import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
 
 type ContextSection = "inputs" | "tasks" | "docs";
 
@@ -36,11 +38,9 @@ export function ContextDrawer({
   onOpenDocuments,
 }: ContextDrawerProps) {
   const [activeSection, setActiveSection] = React.useState<ContextSection>("inputs");
-  const phaseArtifacts = React.useMemo(() => {
-    if (!program || !phaseId) return [];
-    return (program.artifacts || [])
-      .filter((artifact) => artifact.phaseId === phaseId || (!artifact.phaseId && phaseId === "program"))
-      .slice(0, 6);
+  const phaseLedger = React.useMemo(() => {
+    if (!program || !phaseId) return null;
+    return buildPhaseArtifacts(program, phaseId);
   }, [program, phaseId]);
 
   return (
@@ -100,37 +100,12 @@ export function ContextDrawer({
 
           {activeSection === "docs" ? (
             <div className="v3-context-docs">
-              <div className="v3-card-title">Documents</div>
+              <div className="v3-card-title">Artifacts</div>
               <div className="v3-context-docs-copy">
-                Upload supporting material, review generated phase artifacts, or open the document workspace for this programme.
+                What this phase needs, what exists, and how each piece connects — with quality and provenance.
               </div>
               <div className="v3-context-artifacts">
-                <div className="v3-context-artifacts-header">
-                  <span>Phase artifacts</span>
-                  <span>{phaseArtifacts.length}</span>
-                </div>
-                {phaseArtifacts.length ? (
-                  <div className="v3-context-artifacts-list">
-                    {phaseArtifacts.map((artifact) => (
-                      <button
-                        key={`${artifact.phaseId}-${artifact.id}`}
-                        type="button"
-                        className="v3-context-artifact-row"
-                        onClick={onOpenDocuments}
-                      >
-                        <span>
-                          <strong>{artifact.title}</strong>
-                          <small>{artifact.status} · v{artifact.versionNumber}</small>
-                        </span>
-                        <span aria-hidden="true">›</span>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="v3-context-artifacts-empty">
-                    No artifacts generated for this phase yet.
-                  </div>
-                )}
+                <ArtifactLedger phase={phaseLedger} onOpenArtifact={() => onOpenDocuments()} />
               </div>
               <div className="v3-context-docs-actions">
                 <button type="button" className="v3-button ghost" style={{ fontSize: 12 }} onClick={onUploadDocument}>
