@@ -152,9 +152,14 @@ function GatesTab({
   const gate: GateReview | null = phaseId ? (gateReviews[phaseId] ?? null) : null;
   const phaseLabel = phaseId ? (PHASE_LABELS[phaseId] ?? phaseId) : "—";
   const isApproved = gate?.status === "approved";
-  const exitCriteria: ExitCriterion[] = gate?.exitCriteriaStatus?.length
-    ? gate.exitCriteriaStatus
-    : PLACEHOLDER_EXIT_CRITERIA.map((ec) => isApproved ? { ...ec, met: true } : ec);
+  // Exit criteria must reflect *recorded* status only. When a gate has no
+  // itemised exit-criteria evidence we fall back to the standard ATOS checklist
+  // as an explicitly-unverified template — never fabricating "met" ticks on
+  // approval, which would present false governance evidence.
+  const usingCriteriaTemplate = !gate?.exitCriteriaStatus?.length;
+  const exitCriteria: ExitCriterion[] = usingCriteriaTemplate
+    ? PLACEHOLDER_EXIT_CRITERIA
+    : (gate?.exitCriteriaStatus as ExitCriterion[]);
 
   async function handleApprove() {
     if (!phaseId) return;
@@ -221,6 +226,20 @@ function GatesTab({
       {/* Exit criteria */}
       <div>
         <SectionLabel>Exit Criteria</SectionLabel>
+        {usingCriteriaTemplate && (
+          <div
+            style={{
+              marginBottom: 8,
+              fontSize: 12,
+              color: "var(--v3-text-muted)",
+              fontFamily: "var(--v3-font)",
+            }}
+          >
+            {isApproved
+              ? "Standard ATOS exit criteria shown — this gate was approved without itemised evidence on record. Capture evidence to make sign-off auditable."
+              : "Standard ATOS exit criteria shown — no evidence recorded for this gate yet. Capture evidence against each item to verify readiness."}
+          </div>
+        )}
         <div
           style={{
             background: "var(--v3-surface)",
