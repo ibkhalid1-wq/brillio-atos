@@ -2669,21 +2669,108 @@ async function persistExtractedPatterns(
   return rows.length;
 }
 
+/**
+ * Three-way merge for the program-data document.
+ *
+ * Agents run in parallel (downstream/handoff cascades fan out as separate
+ * edge-function invocations). Each loads the same `base`, mutates its own slice,
+ * and would otherwise blind-overwrite the whole `data` blob — silently dropping a
+ * sibling agent's concurrent write. This merge starts from `fresh` (whatever is
+ * currently committed) and overlays only the changes this writer made (base→next),
+ * so keys the writer didn't touch keep the latest committed value.
+ *
+ * The apply* functions update immutably (object spreads), so untouched subtrees
+ * keep their reference identity — `base === next` is a fast, exact "unchanged" test.
+ */
+function mergeProgramDelta(base: JsonValue, next: JsonValue, fresh: JsonValue): JsonValue {
+  if (base === next) return fresh; // writer didn't touch this subtree → keep committed value
+  if (isRecord(base) && isRecord(next) && isRecord(fresh)) {
+    const out: Record<string, JsonValue> = { ...(fresh as Record<string, JsonValue>) };
+    const keys = new Set([...Object.keys(base), ...Object.keys(next)]);
+    for (const key of keys) {
+      const nextHas = Object.prototype.hasOwnProperty.call(next, key);
+      const baseHas = Object.prototype.hasOwnProperty.call(base, key);
+      if (!nextHas && baseHas) {
+        // writer deleted this key
+        delete out[key];
+        continue;
+      }
+      out[key] = mergeProgramDelta(
+        (base as Record<string, JsonValue>)[key],
+        (next as Record<string, JsonValue>)[key],
+        (fresh as Record<string, JsonValue>)[key],
+      );
+    }
+    return out as JsonValue;
+  }
+  // Writer changed a scalar / array / replaced the node → writer wins.
+  return next;
+}
+
 async function persistProgramData(
   admin: SupabaseClient,
   programId: string,
   data: ProgramState,
+  concurrency?: { base: ProgramState; expectedUpdatedAt: string | null },
 ): Promise<void> {
+  // Back-compat path: no concurrency token → blind last-write-wins.
+  if (!concurrency) {
+    const { error } = await admin
+      .from("adam_programs")
+      .update({ data, updated_at: new Date().toISOString() })
+      .eq("id", programId);
+    if (error) {
+      throw new Error(`Failed to persist program state: ${error.message}`);
+    }
+    return;
+  }
+
+  // Optimistic concurrency: only write if the row hasn't changed since we loaded it.
+  // On conflict, reload the latest committed data, re-merge just our delta, and retry.
+  // Postgres re-evaluates the WHERE against the freshly-committed row version under
+  // READ COMMITTED, so the updated_at predicate serialises concurrent writers.
+  const MAX_ATTEMPTS = 4;
+  let expectedUpdatedAt = concurrency.expectedUpdatedAt;
+  let toWrite: ProgramState = data;
+
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    let update = admin
+      .from("adam_programs")
+      .update({ data: toWrite, updated_at: new Date().toISOString() })
+      .eq("id", programId);
+    update = expectedUpdatedAt
+      ? update.eq("updated_at", expectedUpdatedAt)
+      : update.is("updated_at", null);
+    const { data: updatedRows, error } = await update.select("id");
+    if (error) {
+      throw new Error(`Failed to persist program state: ${error.message}`);
+    }
+    if (updatedRows && updatedRows.length > 0) {
+      return; // CAS succeeded
+    }
+
+    // Conflict — someone wrote since we loaded. Reload, re-merge, retry.
+    const { data: freshRow, error: readError } = await admin
+      .from("adam_programs")
+      .select("data, updated_at")
+      .eq("id", programId)
+      .maybeSingle();
+    if (readError || !freshRow) {
+      throw new Error(`Failed to reload program for merge: ${readError?.message || "row missing"}`);
+    }
+    const fresh = normalizeProgramData(freshRow.data as JsonValue | null);
+    toWrite = mergeProgramDelta(concurrency.base as JsonValue, data as JsonValue, fresh as JsonValue) as ProgramState;
+    expectedUpdatedAt = (freshRow.updated_at as string | null) ?? null;
+  }
+
+  // Exhausted retries (heavy contention) — fall back to a final merged write so the
+  // run doesn't hard-fail. toWrite already reflects the most recent merge.
   const { error } = await admin
     .from("adam_programs")
-    .update({
-      data,
-      updated_at: new Date().toISOString(),
-    })
+    .update({ data: toWrite, updated_at: new Date().toISOString() })
     .eq("id", programId);
-
   if (error) {
-    throw new Error(`Failed to persist program state: ${error.message}`);
+    throw new Error(`Failed to persist program state after ${MAX_ATTEMPTS} attempts: ${error.message}`);
   }
 }
 
@@ -4794,7 +4881,7 @@ Deno.serve(async (req) => {
 
     const { data: programRow, error: programError } = await auth.admin
       .from("adam_programs")
-      .select("id, owner_id, name, client, industry, data")
+      .select("id, owner_id, name, client, industry, data, updated_at")
       .eq("id", request.programId)
       .maybeSingle();
     if (programError || !programRow) {
@@ -4808,6 +4895,12 @@ Deno.serve(async (req) => {
     const now = new Date().toISOString();
     runId = request.runId || crypto.randomUUID();
     const contextProgramData = normalizeProgramData(programRow.data as JsonValue | null);
+    // Optimistic-concurrency token: every program-data write-back below uses this so
+    // parallel agent cascades merge instead of clobbering each other's slices.
+    const persistConcurrency = {
+      base: contextProgramData,
+      expectedUpdatedAt: (programRow.updated_at as string | null) ?? null,
+    };
     const innerContextProgramData = getInnerProgramData(contextProgramData);
     const memoryContext = await getServerMemoryContext(auth.admin, request.programId, request.agentId, request.phaseId);
     const priorPhaseContext = getPriorPhaseContext(contextProgramData, request.phaseId);
@@ -4951,7 +5044,7 @@ Deno.serve(async (req) => {
       };
       const nextProgramData = applyPatternQueryResultToProgramData(contextProgramData, outputPayload);
       await persistAgentArtifact(auth.admin, request.programId, request.agentId, request.phaseId, outputPayload, patternContext.length ? 0.75 : 0.4);
-      await persistProgramData(auth.admin, request.programId, nextProgramData);
+      await persistProgramData(auth.admin, request.programId, nextProgramData, persistConcurrency);
       await auth.admin
         .from("adam_agent_runs")
         .update({
@@ -5005,7 +5098,7 @@ Deno.serve(async (req) => {
         };
         const nextProgramData = applyClosureResultToProgramData(contextProgramData, notReadyPayload);
         await persistAgentArtifact(auth.admin, request.programId, request.agentId, request.phaseId, notReadyPayload, readinessScore);
-        await persistProgramData(auth.admin, request.programId, nextProgramData);
+        await persistProgramData(auth.admin, request.programId, nextProgramData, persistConcurrency);
         await auth.admin
           .from("adam_agent_runs")
           .update({
@@ -5115,7 +5208,7 @@ Deno.serve(async (req) => {
         await persistProgramData(auth.admin, request.programId, updateInnerProgramData(contextProgramData, (inner) => ({
           ...inner,
           escalations: escalations as JsonValue,
-        })));
+        })), persistConcurrency);
         return new Response(JSON.stringify({
           error: "Daily token budget exceeded",
           tokensUsedToday: tokensToday,
@@ -5167,7 +5260,7 @@ Deno.serve(async (req) => {
           memoryEntry,
         );
         await persistAgentArtifact(auth.admin, request.programId, request.agentId, request.phaseId, normalizedParsedResult, confidence);
-        await persistProgramData(auth.admin, request.programId, nextProgramData);
+        await persistProgramData(auth.admin, request.programId, nextProgramData, persistConcurrency);
         await auth.admin
           .from("adam_agent_runs")
           .update({
@@ -5520,7 +5613,7 @@ Deno.serve(async (req) => {
       });
 
       await persistAgentArtifact(auth.admin, request.programId, request.agentId, request.phaseId, normalizedParsedResult, confidence);
-      await persistProgramData(auth.admin, request.programId, nextProgramData);
+      await persistProgramData(auth.admin, request.programId, nextProgramData, persistConcurrency);
       await auth.admin
         .from("adam_agent_runs")
         .update({
@@ -5608,7 +5701,7 @@ Deno.serve(async (req) => {
         createdAt: Date.now(),
         status: "pending",
       }]);
-      await persistProgramData(auth.admin, request.programId, nextProgramData);
+      await persistProgramData(auth.admin, request.programId, nextProgramData, persistConcurrency);
       await auth.admin
         .from("adam_agent_runs")
         .update({
@@ -5715,7 +5808,7 @@ Deno.serve(async (req) => {
       decisions: parsed.decisions as unknown as Array<Record<string, unknown>>,
       handoff: handoff as unknown as Record<string, unknown> | null,
     }, parsed.confidence);
-    await persistProgramData(auth.admin, request.programId, nextProgramData);
+    await persistProgramData(auth.admin, request.programId, nextProgramData, persistConcurrency);
 
     for (const artifact of parsed.artifacts) {
       await logObservation(auth.admin, {
