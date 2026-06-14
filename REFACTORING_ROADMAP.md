@@ -68,10 +68,12 @@
 
 ## 6. Validation Strategy
 
-- After each cycle: `node node_modules/typescript/bin/tsc --noEmit` (must stay exit 0).
+- **Gate = `npm run build` (`vite build`).** This project ships no `typescript` package and `lint` only covers js/jsx, so `vite build` (esbuild bundle) is the authoritative compile/import gate. Must exit 0 after every cycle.
+- Optional deeper type check on demand: `npx -p typescript tsc --noEmit` (not wired into the repo).
+- `npm run test` (vitest) where tests cover touched logic.
 - Visual smoke test of touched surfaces.
 - Git commit per cycle with descriptive message → instant rollback point.
-- No cycle merges if it breaks an unrelated surface.
+- No cycle commits if it breaks an unrelated surface.
 
 ## 7. Regression Risks
 

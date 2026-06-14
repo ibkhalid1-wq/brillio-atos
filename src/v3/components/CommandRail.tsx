@@ -17,6 +17,7 @@ import {
   Plus,
   Trash2,
   Inbox,
+  LayoutGrid,
 } from "lucide-react";
 import type { V3Surface } from "@/v3/types";
 
@@ -283,12 +284,23 @@ export function CommandRail({
 
         {/* Dropdown — sibling of brand-actions, anchored to brand-wrap, never inside brand-actions */}
         {programMenuOpen ? (
+          // File-style Program menu: Open · Recent · New · Settings · Delete.
+          // Portfolio lives here (not in primary navigation).
           <div className="v3-command-rail-program-menu" role="menu">
-            {/* Programme switcher — if more than one programme */}
+            {/* ── Open ── */}
+            <div className="v3-command-rail-program-menu-section-label">Open</div>
+            <button type="button" role="menuitem" className="v3-command-rail-program-menu-item"
+              onClick={() => { setProgramMenuOpen(false); railNavigate("portfolio"); }}>
+              <LayoutGrid size={12} strokeWidth={2} />
+              <span>Portfolio overview</span>
+            </button>
+
+            {/* ── Recent programmes ── */}
             {programs.length > 1 && onSelectProgram ? (
               <>
-                <div className="v3-command-rail-program-menu-section-label">Switch programme</div>
-                {programs.map((prog) => (
+                <div className="v3-command-rail-program-menu-divider" />
+                <div className="v3-command-rail-program-menu-section-label">Recent programmes</div>
+                {programs.slice(0, 5).map((prog) => (
                   <button
                     key={prog.id}
                     type="button"
@@ -311,21 +323,24 @@ export function CommandRail({
                     {prog.id === activeProgramId ? <span style={{ fontSize: 10, opacity: 0.7 }}>✓</span> : null}
                   </button>
                 ))}
-                <button type="button" role="menuitem" className="v3-command-rail-program-menu-item"
-                  style={{ fontSize: 11, opacity: 0.65 }}
-                  onClick={() => { setProgramMenuOpen(false); railNavigate("portfolio"); }}>
-                  View all →
-                </button>
-                <div className="v3-command-rail-program-menu-divider" />
               </>
             ) : null}
 
-            {/* Programme actions */}
+            <div className="v3-command-rail-program-menu-divider" />
+
+            {/* ── Programme actions ── */}
             {onCreateProgram ? (
               <button type="button" role="menuitem" className="v3-command-rail-program-menu-item"
                 onClick={() => { setProgramMenuOpen(false); onCreateProgram(); }}>
                 <Plus size={12} strokeWidth={2} />
                 <span>New programme</span>
+              </button>
+            ) : null}
+            {onOpenAISettings ? (
+              <button type="button" role="menuitem" className="v3-command-rail-program-menu-item"
+                onClick={() => { setProgramMenuOpen(false); onOpenAISettings(); }}>
+                <SlidersHorizontal size={12} strokeWidth={2} />
+                <span>Settings</span>
               </button>
             ) : null}
             {onDeleteProgram ? (
