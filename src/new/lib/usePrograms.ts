@@ -332,9 +332,16 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
             : null,
         }, { onConflict: "id" });
       if (upsertError) {
-        // Upsert also failed — persist locally so data isn't lost
+        // Upsert also failed — persist locally so the change isn't lost from THIS
+        // session, but make the degradation visible: a local-only save will not
+        // survive on another device or after the browser cache is cleared, and
+        // agents (which read from the cloud) can't see it.
         console.error("[updateProgramData] Upsert failed, persisting locally:", upsertError.message);
         persistLocalProgram(programId, nextData);
+        pushV3Toast(
+          "Saved locally only — could not sync to the cloud. This change won't appear on other devices and may be lost. Check your access to this program.",
+          { tone: "warning", duration: 8000 },
+        );
       }
     }
     if (!expectedUpdatedAt && currentUpdatedAt && localKnownUpdatedAt.current[programId] && currentUpdatedAt !== localKnownUpdatedAt.current[programId]) {

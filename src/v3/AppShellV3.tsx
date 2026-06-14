@@ -1051,6 +1051,11 @@ export default function AppShellV3() {
   const [backendPanelOpen, setBackendPanelOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<{ id: string; email?: string } | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  // True once we've resolved the signed-in user's id from the session (or
+  // conclusively determined there's no session). Until this is true we must not
+  // create/save programs, because an owner_id of null is rejected by RLS and
+  // silently degrades to localStorage — the root cause of "history lost on relaunch".
+  const [userResolved, setUserResolved] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [authed, setAuthed] = useState(false);
   const [lastAuthEvent, setLastAuthEvent] = useState<string | null>(() => isRecoveryReturn() ? "PASSWORD_RECOVERY" : null);
@@ -1594,27 +1599,38 @@ export default function AppShellV3() {
     const fallbackTimer = window.setTimeout(() => {
       if (!settled) {
         setAuthChecked(true);
+        // Don't strand the render gate waiting on a session that never resolved.
+        setUserResolved(true);
       }
     }, 2500);
+
+    // Derive the user id directly from the session so it resolves atomically
+    // with `authed` — eliminating the race where the workspace rendered (and
+    // could create/save programs) before a separate getUser() call resolved.
+    const applySession = (session: { user?: { id: string; email?: string } | null } | null) => {
+      const user = session?.user ?? null;
+      setAuthed(!!session);
+      setUserId(user?.id ?? null);
+      setCurrentUser(user ? { id: user.id, email: user.email } : null);
+      setUserResolved(true);
+      setAuthChecked(true);
+    };
 
     void supabase.auth.getSession().then(({ data }) => {
       settled = true;
       window.clearTimeout(fallbackTimer);
-      setAuthed(!!data.session);
-      setAuthChecked(true);
+      applySession(data.session);
     }).catch(() => {
       settled = true;
       window.clearTimeout(fallbackTimer);
-      setAuthed(false);
-      setAuthChecked(true);
+      applySession(null);
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       settled = true;
       window.clearTimeout(fallbackTimer);
       setLastAuthEvent(event);
-      setAuthed(!!session);
-      setAuthChecked(true);
+      applySession(session);
     });
 
     return () => {
@@ -1625,22 +1641,13 @@ export default function AppShellV3() {
 
   useEffect(() => {
     if (!supabase) {
+      // No backend: nothing to resolve, let the local-only flow proceed.
       setUserId(null);
       setCurrentUser(null);
-      return;
+      setUserResolved(true);
     }
-    void supabase.auth.getUser().then(({ data }) => {
-      const nextUserId = data.user?.id || null;
-      setUserId(nextUserId);
-      if (data?.user) {
-        setCurrentUser({ id: data.user.id, email: data.user.email });
-      } else {
-        setCurrentUser(null);
-      }
-    }).catch(() => {
-      setUserId(null);
-      setCurrentUser(null);
-    });
+    // When Supabase is configured, userId/currentUser are derived from the
+    // session in the auth-state effect above (atomic with `authed`).
   }, []);
 
   useEffect(() => {
@@ -1843,12 +1850,25 @@ export default function AppShellV3() {
     try {
       let newId = "";
       if (isSupabaseConfigured && supabase) {
+        if (!userId) {
+          // Guard: never create a cloud program without an owner — RLS would
+          // reject it and it would silently become localStorage-only.
+          pushV3Toast("Still signing you in — please try again in a moment.", { tone: "warning", duration: 4000 });
+          return;
+        }
         newId = generateProgramId();
         const now = new Date().toISOString();
         const { error } = await supabase.from("adam_programs").insert({
           id: newId, name, updated_at: now, created_at: now, data: buildProgramSeed(name), is_deleted: false, owner_id: userId,
         });
-        if (error) newId = persistLocalProgram(name);
+        if (error) {
+          console.error("[handleCreateProgram] Cloud insert failed, persisting locally:", error.message);
+          newId = persistLocalProgram(name);
+          pushV3Toast(
+            "Program created locally only — could not save to the cloud. It may not appear on other devices. Check your connection and access.",
+            { tone: "warning", duration: 8000 },
+          );
+        }
       } else {
         newId = persistLocalProgram(name);
       }
@@ -2197,7 +2217,15 @@ export default function AppShellV3() {
     }
   }, [activeProgramId, refreshPrograms, updateProgramData]);
 
-  if (!authChecked || (authed && !!userId && !migrated)) {
+  if (
+    !authChecked
+    || !userResolved
+    || (authed && !!userId && !migrated)
+    // When signed in with the backend, never render the workspace until the
+    // user id has resolved — otherwise a create/save could insert owner_id:null,
+    // which RLS rejects and silently degrades to localStorage (data lost on relaunch).
+    || (isSupabaseConfigured && authed && !userId)
+  ) {
     return <div className="v3-splash">Loading…</div>;
   }
 
