@@ -4988,12 +4988,29 @@ Deno.serve(async (req) => {
       }, null, 2);
     }
 
+    // Reconciliation sweep: edge invocations are stateless and can die mid-run
+    // (timeout, cold-start kill, deploy) leaving rows stuck in queued/running
+    // forever. Before evaluating in-flight state, mark any run for this program
+    // older than the cutoff as failed so the queue self-heals and the dedupe
+    // check below never returns a dead run. Best-effort; errors are ignored.
+    const inFlightCutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    await auth.admin
+      .from("adam_agent_runs")
+      .update({
+        status: "failed",
+        completed_at: now,
+        error_message: "Reconciled: run exceeded maximum lifetime without completing.",
+      })
+      .eq("program_id", request.programId)
+      .in("status", ["queued", "running"])
+      .lt("started_at", inFlightCutoff)
+      .neq("id", runId);
+
     // Idempotency / in-flight dedupe: if an equivalent run for this
     // (program, agent, phase) is already queued or running and was started
     // recently, return that run instead of launching a duplicate. Excludes the
     // current runId so queued/triggered runs (which reuse their own id) and
     // explicit retries of a known run are not stranded.
-    const inFlightCutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     const { data: inFlightRuns } = await auth.admin
       .from("adam_agent_runs")
       .select("id")
