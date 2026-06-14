@@ -8,7 +8,8 @@ import { KnowledgeGraphPanel } from "@/v3/components/KnowledgeGraphPanel";
 import { ReadinessExplainer } from "@/v3/components/ReadinessExplainer";
 import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
 
-type ContextSection = "inputs" | "tasks" | "docs" | "graph" | "readiness";
+type ContextSection = "inputs" | "tasks" | "intelligence";
+type IntelligenceView = "artifacts" | "readiness" | "graph";
 
 interface ContextDrawerProps {
   open: boolean;
@@ -40,6 +41,7 @@ export function ContextDrawer({
   onOpenDocuments,
 }: ContextDrawerProps) {
   const [activeSection, setActiveSection] = React.useState<ContextSection>("inputs");
+  const [intelligenceView, setIntelligenceView] = React.useState<IntelligenceView>("artifacts");
   const phaseLedger = React.useMemo(() => {
     if (!program || !phaseId) return null;
     return buildPhaseArtifacts(program, phaseId);
@@ -64,9 +66,7 @@ export function ContextDrawer({
           {([
             ["inputs", "Inputs"],
             ["tasks", "Tasks"],
-            ["docs", "Docs"],
-            ["readiness", "Readiness"],
-            ["graph", "Graph"],
+            ["intelligence", "Intelligence"],
           ] as Array<[ContextSection, string]>).map(([section, label]) => (
             <button
               key={section}
@@ -102,47 +102,69 @@ export function ContextDrawer({
             />
           ) : null}
 
-          {activeSection === "docs" ? (
+          {activeSection === "intelligence" ? (
             <div className="v3-context-docs">
-              <div className="v3-card-title">Artifacts</div>
-              <div className="v3-context-docs-copy">
-                What this phase needs, what exists, and how each piece connects — with quality and provenance.
+              <div className="v3-context-intel-switch" style={{ display: "flex", gap: 4, marginBottom: 12 }}>
+                {([
+                  ["artifacts", "Artifacts"],
+                  ["readiness", "Readiness"],
+                  ["graph", "Graph"],
+                ] as Array<[IntelligenceView, string]>).map(([view, label]) => (
+                  <button
+                    key={view}
+                    type="button"
+                    className={`v3-context-drawer-tab ${intelligenceView === view ? "active" : ""}`}
+                    style={{ flex: 1, fontSize: 12 }}
+                    onClick={() => setIntelligenceView(view)}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
-              <div className="v3-context-artifacts">
-                <ArtifactLedger phase={phaseLedger} onOpenArtifact={() => onOpenDocuments()} />
-              </div>
-              <div className="v3-context-docs-actions">
-                <button type="button" className="v3-button ghost" style={{ fontSize: 12 }} onClick={onUploadDocument}>
-                  Upload document
-                </button>
-                <button type="button" className="v3-button primary" style={{ fontSize: 12 }} onClick={onOpenDocuments}>
-                  Open documents →
-                </button>
-              </div>
-            </div>
-          ) : null}
 
-          {activeSection === "readiness" ? (
-            <div className="v3-context-docs">
-              <div className="v3-card-title">Readiness explained</div>
-              <div className="v3-context-docs-copy">
-                Why this phase scores what it does — the drivers helping, the blockers holding it back, and the expected gain from each.
-              </div>
-              <div className="v3-context-artifacts">
-                <ReadinessExplainer program={program} phaseId={phaseId} />
-              </div>
-            </div>
-          ) : null}
+              {intelligenceView === "artifacts" ? (
+                <>
+                  <div className="v3-card-title">Artifacts</div>
+                  <div className="v3-context-docs-copy">
+                    What this phase needs, what exists, and how each piece connects — with quality and provenance.
+                  </div>
+                  <div className="v3-context-artifacts">
+                    <ArtifactLedger phase={phaseLedger} onOpenArtifact={() => onOpenDocuments()} />
+                  </div>
+                  <div className="v3-context-docs-actions">
+                    <button type="button" className="v3-button ghost" style={{ fontSize: 12 }} onClick={onUploadDocument}>
+                      Upload document
+                    </button>
+                    <button type="button" className="v3-button primary" style={{ fontSize: 12 }} onClick={onOpenDocuments}>
+                      Open documents →
+                    </button>
+                  </div>
+                </>
+              ) : null}
 
-          {activeSection === "graph" ? (
-            <div className="v3-context-docs">
-              <div className="v3-card-title">Knowledge graph</div>
-              <div className="v3-context-docs-copy">
-                The programme's system of record — every phase, artifact, decision, risk, milestone and gate, and how they connect.
-              </div>
-              <div className="v3-context-artifacts">
-                <KnowledgeGraphPanel program={program} />
-              </div>
+              {intelligenceView === "readiness" ? (
+                <>
+                  <div className="v3-card-title">Readiness explained</div>
+                  <div className="v3-context-docs-copy">
+                    Why this phase scores what it does — the drivers helping, the blockers holding it back, and the expected gain from each.
+                  </div>
+                  <div className="v3-context-artifacts">
+                    <ReadinessExplainer program={program} phaseId={phaseId} />
+                  </div>
+                </>
+              ) : null}
+
+              {intelligenceView === "graph" ? (
+                <>
+                  <div className="v3-card-title">Knowledge graph</div>
+                  <div className="v3-context-docs-copy">
+                    The programme's system of record — every phase, artifact, decision, risk, milestone and gate, and how they connect.
+                  </div>
+                  <div className="v3-context-artifacts">
+                    <KnowledgeGraphPanel program={program} />
+                  </div>
+                </>
+              ) : null}
             </div>
           ) : null}
         </div>
