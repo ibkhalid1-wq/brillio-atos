@@ -1,6 +1,6 @@
 import React, { useMemo, useEffect } from "react";
 import type { ProgramSummary } from "@/new/types";
-import { PHASE_LABELS, confidenceColor, confidenceChipClass } from "@/v3/lib/uiHelpers";
+import { PHASE_LABELS, confidenceChipClass } from "@/v3/lib/uiHelpers";
 import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
 import { derivePhaseStatusRings } from "@/v3/lib/phaseStatusRings";
 import AdamExplainsTooltip from "@/v3/components/AdamExplainsTooltip";
@@ -747,14 +747,11 @@ export default function InsightFeedView({
 
               const verdictColor = score >= 80 ? "var(--v3-green)" : score >= 60 ? "var(--v3-text-secondary)" : score >= 40 ? "var(--v3-amber)" : "var(--v3-red, #ef4444)";
               return (
-                <div style={{ fontSize: 13, color: verdictColor, marginTop: 8, lineHeight: 1.5, fontWeight: score < 60 ? 500 : 400, maxWidth: 420 }}>
+                <div style={{ fontSize: 13, color: verdictColor, marginTop: 8, lineHeight: 1.5, fontWeight: score < 60 ? 500 : 400, maxWidth: 460 }}>
                   {verdict}
                 </div>
               );
             })()}
-            <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 6, letterSpacing: "0.04em", textTransform: "uppercase", fontWeight: 500 }}>
-              Brillio ATOS · Agentic Transformation Operating System
-            </div>
           </div>
 
           {confidenceScore !== null && (
@@ -782,15 +779,6 @@ export default function InsightFeedView({
               onClick={onNavigateToDecide}
             />
           </AdamExplainsTooltip>
-          {confidenceScore !== null && (
-            <Kpi
-              variant="pill"
-              label="Confidence"
-              value={`${confidenceScore}%`}
-              color={confidenceColor(confidenceScore)}
-              onClick={onNavigateToGates}
-            />
-          )}
         </div>
       </div>
 
@@ -1127,7 +1115,7 @@ export default function InsightFeedView({
       {/* ── 7. Quick Navigation ───────────────────────────────────────────────── */}
       {program && (
         <div>
-          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--v3-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--v3-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 14 }}>
             Quick Navigation
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

@@ -76,7 +76,7 @@ const PRIMARY_NAV: Array<{
   {
     id: "today",
     surface: "insight-feed",
-    label: "Home",
+    label: "Today",
     sublabel: "Daily operating briefing",
     Icon: Home,
   },
