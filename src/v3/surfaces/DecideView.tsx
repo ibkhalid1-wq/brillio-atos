@@ -432,10 +432,13 @@ export default function DecideView({
 
   const open = useMemo(() => {
     const queue = synthesizedQueue.filter((decision) => isDecisionOpen({ status: "open", ...decision } as DecisionSummary));
-    const scoped = scope === "stage" && activePhaseId ? queue.filter((decision) => decision.phaseId === activePhaseId) : queue;
+    // "This phase" scope follows the phase selected in the Gate timeline (falling
+    // back to the active phase), so selecting a phase actually filters the feed.
+    const phaseFilterId = selectedPhaseId ?? activePhaseId;
+    const scoped = scope === "stage" && phaseFilterId ? queue.filter((decision) => decision.phaseId === phaseFilterId) : queue;
     const byId = new Map((program?.decisionQueue || []).map((decision) => [decision.id, decision]));
     return scoped.map((decision) => ({ ...decision, ...(byId.get(decision.id) || {}) })) as ReviewDecision[];
-  }, [activePhaseId, program?.decisionQueue, scope, synthesizedQueue]);
+  }, [activePhaseId, selectedPhaseId, program?.decisionQueue, scope, synthesizedQueue]);
 
   const sortedOpen = [...open].sort((a, b) => {
     const order: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
@@ -625,7 +628,11 @@ export default function DecideView({
             program={program}
             activePhaseId={activePhaseId}
             selectedPhaseId={selectedPhaseId}
-            onPhaseSelect={setSelectedPhaseId}
+            onPhaseSelect={(phaseId) => {
+              setSelectedPhaseId(phaseId);
+              // Selecting a phase focuses the feed on it; deselecting reopens all.
+              setScope(phaseId ? "stage" : "all");
+            }}
           />
         </div>
 
