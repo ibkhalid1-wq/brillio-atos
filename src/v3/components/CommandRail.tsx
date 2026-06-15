@@ -3,7 +3,6 @@ import {
   Home,
   Shield,
   Crown,
-  BellDot,
   MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
@@ -44,7 +43,6 @@ type CommandRailProps = {
   programName: string;
   activePhaseLabel?: string | null;
   confidenceScore?: number | null;
-  notificationCount: number;
   anyAgentRunning?: boolean;
   userInitial?: string | null;
   userEmail?: string | null;
@@ -175,7 +173,6 @@ export function CommandRail({
   programName,
   activePhaseLabel,
   confidenceScore,
-  notificationCount,
   anyAgentRunning = false,
   userInitial,
   userEmail,
@@ -467,27 +464,6 @@ export function CommandRail({
           }}
         />
       </div>
-
-      {/* ── Alerts ── */}
-      {notificationCount > 0 ? (
-        <>
-          <RailDivider />
-          <div className="v3-command-rail-tools">
-            <RailItem
-              icon={<BellDot size={15} strokeWidth={1.8} />}
-              label="Alerts"
-              sublabel={`${notificationCount} need attention`}
-              title={`${notificationCount} active alerts`}
-              onClick={() => railNavigate("stage")}
-              badge={
-                <span className="v3-command-rail-badge">
-                  {notificationCount > 9 ? "9+" : notificationCount}
-                </span>
-              }
-            />
-          </div>
-        </>
-      ) : null}
 
       {/* ── Spacer — pushes menu to bottom ── */}
       <div className="v3-command-rail-spacer" />

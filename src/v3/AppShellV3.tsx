@@ -2357,7 +2357,6 @@ export default function AppShellV3() {
         programName={activeProgram?.name || "Programme"}
         activePhaseLabel={activePhaseId ? phaseNameById(activeProgram, activePhaseId) : null}
         confidenceScore={programConfidenceScore}
-        notificationCount={openDecisions.length + openEscalations.length}
         anyAgentRunning={anyAgentRunning}
         userInitial={currentUser?.email?.[0]?.toUpperCase() || null}
         userEmail={currentUser?.email || null}
