@@ -450,11 +450,18 @@ export default function StageView({
     const byKey = new Map<string, { present: boolean; quality: number | null; state: string }>();
     if (!activePhase) return { byKey, present: 0, required: 0 };
     const summary = buildPhaseArtifacts(program, activePhase.id);
+    // Narrative leads as its own inline preview, so it is excluded from the
+    // artifact-chip list and its completeness counts on this screen (and the
+    // Intelligence rail) to keep both surfaces consistent.
+    let required = 0;
+    let present = 0;
     for (const node of summary?.artifacts ?? []) {
-      if (!node.required) continue;
+      if (!node.required || node.key === "narrative") continue;
       byKey.set(node.key, { present: node.present, quality: node.quality, state: node.state });
+      required += 1;
+      if (node.present) present += 1;
     }
-    return { byKey, present: summary?.present ?? 0, required: summary?.required ?? 0 };
+    return { byKey, present, required };
   }, [program, activePhase]);
 
   // Labels of required artifacts not yet produced — drives the artifacts-card summary.
