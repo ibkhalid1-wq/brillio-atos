@@ -7177,6 +7177,38 @@ button.v3-oversight-list-row:focus-visible {
   color: var(--br-green);
 }
 
+/* ─── PhaseStatusRings — canonical embedded 3-ring phase status ───────────────
+   Inner = Input · Middle = Artifact · Outer = Gate. Used on every surface. */
+.v3-phase-rings {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.v3-phase-rings-svg {
+  display: block;
+}
+
+.v3-phase-rings-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.v3-phase-rings-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--v3-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .v3-readiness-missing {
   width: 100%;
   display: grid;

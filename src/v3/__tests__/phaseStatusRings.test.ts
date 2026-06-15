@@ -1,0 +1,110 @@
+import { normalizeProgram } from "@/new/lib/programData";
+import {
+  derivePhaseStatusRings,
+  ringsFromReadiness,
+  ringTone,
+  ringToneColor,
+  ringColor,
+} from "@/v3/lib/phaseStatusRings";
+import type { PhaseReadinessResult } from "@/v3/lib/phaseReadiness";
+
+function readiness(partial: Partial<PhaseReadinessResult>): PhaseReadinessResult {
+  return {
+    score: 0,
+    gateScore: null,
+    artifactScore: 0,
+    inputScore: 0,
+    canApproveGate: false,
+    threshold: 70,
+    missing: [],
+    mandatoryExitsPassing: false,
+    mandatoryExitsTotal: 0,
+    mandatoryExitsMet: 0,
+    reviewScoresCount: 0,
+    recommendedActions: [],
+    libraryExitCriteriaCount: 0,
+    missingLibraryCriteria: 0,
+    ...partial,
+  };
+}
+
+describe("phaseStatusRings — tone bands", () => {
+  it("maps green ≥75, amber ≥50, red below, muted for null", () => {
+    expect(ringTone(90)).toBe("green");
+    expect(ringTone(75)).toBe("green");
+    expect(ringTone(74)).toBe("amber");
+    expect(ringTone(50)).toBe("amber");
+    expect(ringTone(49)).toBe("red");
+    expect(ringTone(0)).toBe("red");
+    expect(ringTone(null)).toBe("muted");
+  });
+
+  it("maps tones and raw values to CSS custom properties", () => {
+    expect(ringToneColor("green")).toBe("var(--v3-green)");
+    expect(ringToneColor("amber")).toBe("var(--v3-amber)");
+    expect(ringToneColor("red")).toBe("var(--v3-red)");
+    expect(ringToneColor("muted")).toBe("var(--v3-border)");
+    expect(ringColor(80)).toBe("var(--v3-green)");
+    expect(ringColor(null)).toBe("var(--v3-border)");
+  });
+});
+
+describe("phaseStatusRings — canonical KPI mapping", () => {
+  it("maps inner=input, middle=artifact, outer=gate, overall=score", () => {
+    const r = ringsFromReadiness(
+      readiness({ inputScore: 40, artifactScore: 60, gateScore: 80, score: 71, canApproveGate: true }),
+    );
+    expect(r.input).toBe(40);
+    expect(r.artifact).toBe(60);
+    expect(r.gate).toBe(80);
+    expect(r.overall).toBe(71);
+    expect(r.hasGate).toBe(true);
+    expect(r.canApproveGate).toBe(true);
+  });
+
+  it("reports gate=null and hasGate=false when no gate review exists", () => {
+    const r = ringsFromReadiness(readiness({ inputScore: 30, artifactScore: 20, gateScore: null, score: 23 }));
+    expect(r.gate).toBeNull();
+    expect(r.hasGate).toBe(false);
+  });
+
+  it("clamps and rounds out-of-range values", () => {
+    const r = ringsFromReadiness(readiness({ inputScore: 142.6, artifactScore: -10, gateScore: 99.4, score: 50.5 }));
+    expect(r.input).toBe(100);
+    expect(r.artifact).toBe(0);
+    expect(r.gate).toBe(99);
+    expect(r.overall).toBe(51);
+  });
+});
+
+describe("phaseStatusRings — end to end via computePhaseReadiness", () => {
+  it("derives muted gate ring for a barely-started phase", () => {
+    const program = normalizeProgram({
+      id: "p1",
+      name: "ERP",
+      data: { phases: [{ id: "mobilise", pct: 10 }] },
+    });
+    const r = derivePhaseStatusRings(program, "mobilise");
+    expect(r.hasGate).toBe(false);
+    expect(r.gate).toBeNull();
+    expect(r.input).toBeGreaterThanOrEqual(0);
+    expect(r.input).toBeLessThanOrEqual(100);
+    expect(ringTone(r.gate)).toBe("muted");
+  });
+
+  it("surfaces the gate score once a gate review is approved", () => {
+    const program = normalizeProgram({
+      id: "p1",
+      name: "ERP",
+      data: {
+        phases: [{ id: "mobilise", pct: 100 }],
+        gateReviews: { mobilise: { status: "approved", readinessScore: 88 } },
+      },
+    });
+    const r = derivePhaseStatusRings(program, "mobilise");
+    expect(r.hasGate).toBe(true);
+    expect(r.gate).toBe(88);
+    expect(r.overall).toBe(88);
+    expect(ringTone(r.gate)).toBe("green");
+  });
+});

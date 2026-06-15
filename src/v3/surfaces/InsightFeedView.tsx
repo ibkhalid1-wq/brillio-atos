@@ -1,6 +1,8 @@
 import React, { useMemo, useEffect } from "react";
-import type { GateReview, ProgramSummary } from "@/new/types";
+import type { ProgramSummary } from "@/new/types";
 import { PHASE_LABELS, confidenceColor, confidenceChipClass } from "@/v3/lib/uiHelpers";
+import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
+import { derivePhaseStatusRings, ringColor } from "@/v3/lib/phaseStatusRings";
 import AdamExplainsTooltip from "@/v3/components/AdamExplainsTooltip";
 import type { ConfidenceScore, ConfidenceForecast } from "@/v3/lib/confidenceScore";
 import { forecastConfidence, getGateThreshold } from "@/v3/lib/confidenceScore";
@@ -298,136 +300,31 @@ function DecisionQueueCard({
   );
 }
 
-// ─── Ring helpers ────────────────────────────────────────────────────────────
-
-function ringArc(cx: number, cy: number, r: number, pct: number): { dasharray: number; dashoffset: number } {
-  const circ = 2 * Math.PI * r;
-  return { dasharray: circ, dashoffset: circ - (Math.min(100, Math.max(0, pct)) / 100) * circ };
-}
-
-function progressColor(phase: ProgramSummary["phases"][number], active: boolean): string {
-  if (active) return "#6366f1";
-  if (phase.pct >= 100 || phase.status === "complete") return "#22c55e";
-  if (phase.status === "at-risk" || phase.status === "blocked") return "#f59e0b";
-  return "var(--v3-border)";
-}
-
-function readinessColor(score: number): string {
-  if (score >= 80) return "#22c55e";
-  if (score >= 50) return "#f59e0b";
-  return "#ef4444";
-}
-
-function qualityColor(): string {
-  return "#a78bfa";
-}
-
-function computeQualityScore(gate: GateReview | null | undefined): number {
-  if (!gate || !gate.artifactsSummary || gate.artifactsSummary.length === 0) return 0;
-  const total = gate.artifactsSummary.length;
-  const score = gate.artifactsSummary.reduce((s, a) => {
-    if (a.status === "complete") return s + 1;
-    if (a.status === "partial") return s + 0.5;
-    return s;
-  }, 0);
-  return Math.round((score / total) * 100);
-}
-
-// ─── ConcentricRings ─────────────────────────────────────────────────────────
-
-const CX = 26, CY = 26;
-const R_OUTER = 21, R_MID = 14, R_INNER = 7.5;
-const SW = 2.8;
-
-function ConcentricRings({
-  progress,
-  readiness,
-  quality,
-  progressCol,
-  hasGateData,
-}: {
-  progress: number;
-  readiness: number;
-  quality: number;
-  progressCol: string;
-  hasGateData: boolean;
-}) {
-  const outer = ringArc(CX, CY, R_OUTER, progress);
-  const mid   = ringArc(CX, CY, R_MID,   readiness);
-  const inner = ringArc(CX, CY, R_INNER, quality);
-
-  const trackCol = "var(--v3-surface-3)";
-  const readCol  = hasGateData ? readinessColor(readiness) : "var(--v3-border)";
-  const qualCol  = hasGateData && quality > 0 ? qualityColor() : "var(--v3-border)";
-
-  return (
-    <svg width={52} height={52} viewBox="0 0 52 52" aria-hidden="true" style={{ overflow: "visible" }}>
-      <circle cx={CX} cy={CY} r={R_OUTER} fill="none" stroke={trackCol} strokeWidth={SW} />
-      <circle cx={CX} cy={CY} r={R_MID}   fill="none" stroke={trackCol} strokeWidth={SW} />
-      <circle cx={CX} cy={CY} r={R_INNER} fill="none" stroke={trackCol} strokeWidth={SW} />
-
-      {progress > 0 && (
-        <circle
-          cx={CX} cy={CY} r={R_OUTER}
-          fill="none" stroke={progressCol} strokeWidth={SW}
-          strokeLinecap="round"
-          strokeDasharray={outer.dasharray}
-          strokeDashoffset={outer.dashoffset}
-          transform={`rotate(-90 ${CX} ${CY})`}
-        />
-      )}
-
-      {hasGateData && readiness > 0 && (
-        <circle
-          cx={CX} cy={CY} r={R_MID}
-          fill="none" stroke={readCol} strokeWidth={SW}
-          strokeLinecap="round"
-          strokeDasharray={mid.dasharray}
-          strokeDashoffset={mid.dashoffset}
-          transform={`rotate(-90 ${CX} ${CY})`}
-        />
-      )}
-
-      {hasGateData && quality > 0 && (
-        <circle
-          cx={CX} cy={CY} r={R_INNER}
-          fill="none" stroke={qualCol} strokeWidth={SW}
-          strokeLinecap="round"
-          strokeDasharray={inner.dasharray}
-          strokeDashoffset={inner.dashoffset}
-          transform={`rotate(-90 ${CX} ${CY})`}
-        />
-      )}
-    </svg>
-  );
-}
-
 // ─── PhaseStripCard ──────────────────────────────────────────────────────────
 
 function PhaseStripCard({
+  program,
   phase,
   active,
   isNext,
-  gate,
   onClick,
 }: {
+  program: ProgramSummary;
   phase: ProgramSummary["phases"][number];
   active: boolean;
   isNext: boolean;
-  gate: GateReview | null | undefined;
   onClick: () => void;
 }) {
-  const progressCol = progressColor(phase, active);
-  const hasGateData = Boolean(gate && gate.readinessScore != null);
-  const readiness   = gate?.readinessScore ?? 0;
-  const quality     = computeQualityScore(gate);
-  const label       = PHASE_LABELS[phase.id] ?? phase.displayName ?? phase.id;
+  const rings = derivePhaseStatusRings(program, phase.id);
+  const overallCol = ringColor(rings.overall);
+  const label = PHASE_LABELS[phase.id] ?? phase.displayName ?? phase.id;
 
-  // Rich tooltip — micro-numbers are removed from the card body (C3)
+  // Rich tooltip — canonical KPI breakdown (inner Input · middle Artifact · outer Gate)
   const tooltipLines = [
-    `Progress: ${phase.pct}%`,
-    hasGateData ? `Gate readiness: ${readiness}%` : "Gate: no review yet",
-    hasGateData && quality > 0 ? `Artifact quality: ${quality}%` : "Quality: no data",
+    rings.hasGate ? `Gate: ${rings.gate}%` : "Gate: no review yet",
+    `Artifact: ${rings.artifact}%`,
+    `Input: ${rings.input}%`,
+    `Overall: ${rings.overall}%`,
   ].join(" · ");
 
   return (
@@ -495,14 +392,8 @@ function PhaseStripCard({
         </span>
       )}
 
-      {/* Three concentric rings */}
-      <ConcentricRings
-        progress={phase.pct}
-        readiness={readiness}
-        quality={quality}
-        progressCol={progressCol}
-        hasGateData={hasGateData}
-      />
+      {/* Canonical 3-ring phase status — inner Input · middle Artifact · outer Gate */}
+      <PhaseStatusRings values={rings} size={52} />
 
       {/* Phase name */}
       <span style={{
@@ -516,14 +407,14 @@ function PhaseStripCard({
         {label}
       </span>
 
-      {/* C3: single prominent progress % only — gate / quality in tooltip */}
+      {/* C3: single prominent overall score — KPI breakdown in tooltip */}
       <span style={{
         fontSize: 11,
         fontWeight: 700,
-        color: progressCol,
+        color: overallCol,
         letterSpacing: "-0.01em",
       }}>
-        {phase.pct}%
+        {rings.overall}%
       </span>
     </button>
   );
@@ -1090,16 +981,16 @@ export default function InsightFeedView({
             <div style={{ fontSize: 13, fontWeight: 600, color: "var(--v3-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
               Programme Phases
             </div>
-            {/* Ring legend */}
+            {/* Ring legend — canonical KPI mapping (outer→inner) */}
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               {[
-                { color: "#6366f1", label: "Progress" },
-                { color: "#22c55e", label: "Gate" },
-                { color: "#a78bfa", label: "Quality" },
+                { color: "var(--v3-accent-b)", label: "Gate (outer)" },
+                { color: "#A78BFA", label: "Artifact (mid)" },
+                { color: "#2DD4BF", label: "Input (inner)" },
               ].map(({ color, label }) => (
                 <span key={label} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--v3-text-muted)" }}>
                   <svg width={10} height={10} viewBox="0 0 10 10" aria-hidden="true">
-                    <circle cx={5} cy={5} r={4} fill="none" stroke={color} strokeWidth={2} />
+                    <circle cx={5} cy={5} r={4} fill="none" stroke={color} strokeWidth={2.4} />
                   </svg>
                   {label}
                 </span>
@@ -1123,10 +1014,10 @@ export default function InsightFeedView({
               {phases.map((phase) => (
                 <PhaseStripCard
                   key={phase.id}
+                  program={program}
                   phase={phase}
                   active={phase.id === activePhaseId}
                   isNext={phase.id === nextPhaseId}
-                  gate={program.gateReviews?.[phase.id] ?? null}
                   onClick={() => onOpenPhase(phase.id)}
                 />
               ))}

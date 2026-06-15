@@ -7,6 +7,7 @@ import GateCoachPanel from "@/v3/components/GateCoachPanel";
 import OnboardingCard from "@/v3/components/OnboardingCard";
 import PhaseInputsPanel, { type FieldAssistRequest } from "@/v3/components/PhaseInputsPanel";
 import { PhaseProgressionCard } from "@/v3/components/PhaseProgressionCard";
+import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
 import { PhaseChangeSummary } from "@/v3/components/PhaseChangeSummary";
 import { PhaseExecutiveSummary } from "@/v3/components/PhaseExecutiveSummary";
 import { PhaseMethodologyChecklist } from "@/v3/components/PhaseMethodologyChecklist";
@@ -749,6 +750,8 @@ export default function StageView({
         flexShrink: 0,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {/* Canonical 3-ring phase status — inner Input · middle Artifact · outer Gate */}
+          <PhaseStatusRings program={program} phaseId={activePhase.id} size={48} showCenter />
           <div>
             {/* Program eyebrow — always-visible programme context above the phase */}
             <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginBottom: 2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>

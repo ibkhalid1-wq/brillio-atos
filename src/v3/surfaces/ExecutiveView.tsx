@@ -3,6 +3,8 @@ import type { ProgramSummary, RAIDEntry } from "@/new/types";
 import { PHASE_LABELS, confidenceColor, healthLabel, severityChipClass, priorityChipClass } from "@/v3/lib/uiHelpers";
 import AdamExplainsTooltip from "@/v3/components/AdamExplainsTooltip";
 import { Kpi } from "@/v3/components/ui/Kpi";
+import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
+import { derivePhaseStatusRings } from "@/v3/lib/phaseStatusRings";
 
 interface ExecutiveViewProps {
   program: ProgramSummary | null;
@@ -39,16 +41,21 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 function PhaseProgressRow({
+  program,
+  phaseId,
   label,
   pct,
   status,
   onClick,
 }: {
+  program: ProgramSummary;
+  phaseId: string;
   label: string;
   pct: number;
   status: string;
   onClick: () => void;
 }) {
+  const rings = derivePhaseStatusRings(program, phaseId);
   // Visual state is driven by phase STATUS, not by an arbitrary % threshold,
   // so two phases with the same status always read the same. The bar fill width
   // already communicates magnitude — colour encodes meaning: green = done,
@@ -104,6 +111,7 @@ function PhaseProgressRow({
       onMouseEnter={(e) => { e.currentTarget.style.background = "color-mix(in srgb, var(--v3-accent) 5%, transparent)"; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
     >
+      <PhaseStatusRings values={rings} size={34} />
       <div
         style={{
           width: 110,
@@ -678,6 +686,8 @@ export default function ExecutiveView({
           {phases.map((phase) => (
             <PhaseProgressRow
               key={phase.id}
+              program={program}
+              phaseId={phase.id}
               label={PHASE_LABELS[phase.id] ?? phase.displayName}
               pct={phase.pct}
               status={phase.status}

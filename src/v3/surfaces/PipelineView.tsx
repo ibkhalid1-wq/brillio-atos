@@ -2,6 +2,7 @@ import React from "react";
 import type { ProgramSummary } from "@/new/types";
 import { EmptyState } from "@/v3/components/ui/EmptyState";
 import { phaseName } from "@/v3/utils";
+import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
 
 interface PipelineViewProps {
   program: ProgramSummary | null;
@@ -16,38 +17,6 @@ interface PipelineViewProps {
 
 function phaseLabel(label: string): string {
   return label.split(" ").slice(0, 3).join(" ");
-}
-
-function strokeColor(phase: ProgramSummary["phases"][number], active: boolean): string {
-  if (active) return "var(--br-blue)";
-  if (phase.pct >= 100 || phase.status === "complete") return "var(--br-green)";
-  if (phase.status === "at-risk" || phase.status === "blocked") return "var(--v3-amber)";
-  return "var(--v3-border)";
-}
-
-function PhaseRing({ pct, color }: { pct: number; color: string }) {
-  const normalized = Math.min(100, Math.max(0, pct));
-  const radius = 13;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (normalized / 100) * circumference;
-
-  return (
-    <svg className="v3-stage-node-ring" viewBox="0 0 32 32" aria-hidden="true">
-      <circle cx="16" cy="16" r={radius} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="3" />
-      <circle
-        cx="16"
-        cy="16"
-        r={radius}
-        fill="none"
-        stroke={color}
-        strokeWidth="3"
-        strokeLinecap="round"
-        strokeDasharray={circumference}
-        strokeDashoffset={offset}
-        transform="rotate(-90 16 16)"
-      />
-    </svg>
-  );
 }
 
 export default function PipelineView({ program, activePhaseId, onSelectPhase, onOpenPhase, onUpdatePhasePct, lockedPhaseIds, completionEstimates = {}, gateReviews }: PipelineViewProps) {
@@ -125,7 +94,6 @@ export default function PipelineView({ program, activePhaseId, onSelectPhase, on
         {phases.map((phase) => {
           const active = phase.id === activePhaseId;
           const isLocked = lockedPhaseIds.has(phase.id);
-          const color = strokeColor(phase, active);
           return (
             <button
               key={phase.id}
@@ -137,7 +105,7 @@ export default function PipelineView({ program, activePhaseId, onSelectPhase, on
               title={isLocked ? "Approve the previous phase gate to unlock" : undefined}
               style={{ background: "transparent", border: "none", padding: 0, opacity: isLocked ? 0.45 : 1, cursor: isLocked ? "not-allowed" : "pointer" }}
             >
-              <PhaseRing pct={phase.pct} color={color} />
+              <PhaseStatusRings program={program} phaseId={phase.id} size={36} />
               <span className="v3-stage-node-label">{phaseLabel(phaseName(phase))}</span>
             </button>
           );

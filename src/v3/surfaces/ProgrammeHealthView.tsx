@@ -6,6 +6,7 @@ import { getProgramState } from "@/new/lib/programState";
 import type { DecisionSummary, ExitCriterion, GateReview, ProgramSummary } from "@/new/types";
 import LiteGateModal from "@/v3/components/LiteGateModal";
 import { ReadinessExplainer } from "@/v3/components/ReadinessExplainer";
+import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
 import { getGateThreshold } from "@/v3/lib/confidenceScore";
 
 interface AgentActivityItem {
@@ -667,6 +668,7 @@ function HealthTab({
                   borderBottom: "1px solid var(--v3-border-soft)",
                 }}
               >
+                {program && <PhaseStatusRings program={program} phaseId={phase.id} size={32} />}
                 <div
                   style={{
                     width: 100,
