@@ -1246,6 +1246,7 @@ export default function AppShellV3() {
     memberRole,
     meetingDate,
     meetingDurationMins,
+    skipPreSync,
   }: {
     agentId: string;
     phaseId: string;
@@ -1258,6 +1259,9 @@ export default function AppShellV3() {
     memberRole?: string;
     meetingDate?: string;
     meetingDurationMins?: number;
+    // Caller has already persisted fresh program data; skip the pre-sync upsert
+    // so it can't clobber that write with a stale closure snapshot.
+    skipPreSync?: boolean;
   }) => {
     if (!activeProgramId) return;
 
@@ -1292,7 +1296,7 @@ export default function AppShellV3() {
       // We always upsert (not just on missing row) so that data stays current.
       // rawData may be {} if it was previously synced from an empty Supabase row,
       // so fall back to reading the raw entry directly from localStorage.
-      if (isSupabaseConfigured && supabase && activeProgram && userId) {
+      if (!skipPreSync && isSupabaseConfigured && supabase && activeProgram && userId) {
         let programData: Record<string, unknown> = activeProgram.rawData || {};
         if (Object.keys(programData).length === 0 && typeof localStorage !== "undefined") {
           const LEGACY_KEYS = ["brillio-adam-projects", "brillio-atlas-projects"];
@@ -1974,7 +1978,7 @@ export default function AppShellV3() {
     existing[phaseId] = { ...((existing[phaseId] as Record<string, unknown>) ?? {}), ...inputs, savedAt: new Date().toISOString() };
     const payload = cloned.commit({ ...cloned.inner, phaseInputs: existing });
     await updateProgramData(activeProgram.id, payload, activeProgram.updatedAt);
-    await runProgramAgent({ agentId: "input-quality", phaseId, triggeredBy: "trigger" });
+    await runProgramAgent({ agentId: "input-quality", phaseId, triggeredBy: "trigger", skipPreSync: true });
     await refreshPrograms();
     pushV3Toast("Inputs saved. Ready to run agents.", { tone: "success", duration: 2500 });
   }, [activeProgram, refreshPrograms, runProgramAgent, updateProgramData]);
