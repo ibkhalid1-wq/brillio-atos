@@ -96,6 +96,13 @@ const PRIMARY_NAV: Array<{
     sublabel: "Where the work happens",
     Icon: Shield,
   },
+  {
+    id: "executive",
+    surface: "executive",
+    label: "Executive summary",
+    sublabel: "Leadership view",
+    Icon: Crown,
+  },
 ];
 
 function activeNavId(surface: V3Surface, moreView?: string | null): string {
@@ -103,9 +110,8 @@ function activeNavId(surface: V3Surface, moreView?: string | null): string {
   if (surface === "decide") return "action-center";
   if (surface === "stage" || surface === "pipeline" || surface === "programme-health") return "program";
   if (surface === "program") return moreView === "intelligence" ? "__ai" : "workspaces";
-  // executive folds out of primary nav — reachable via the Program menu / content links.
-  // Returns a sentinel so no primary item is falsely highlighted.
-  if (surface === "executive") return "__executive";
+  // Executive summary is a primary rail item (below Programme); highlight it when active.
+  if (surface === "executive") return "executive";
   return "today";
 }
 
@@ -297,11 +303,6 @@ export function CommandRail({
               onClick={() => { setProgramMenuOpen(false); railNavigate("portfolio"); }}>
               <LayoutGrid size={12} strokeWidth={2} />
               <span>Portfolio overview</span>
-            </button>
-            <button type="button" role="menuitem" className="v3-command-rail-program-menu-item"
-              onClick={() => { setProgramMenuOpen(false); railNavigate("executive"); }}>
-              <Crown size={12} strokeWidth={2} />
-              <span>Executive summary</span>
             </button>
 
             {/* ── Recent programmes ── */}
