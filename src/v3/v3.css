@@ -1478,10 +1478,19 @@ select {
   color: var(--v3-text-secondary);
 }
 
-/* Collapsed: centre the icon */
-.v3-command-rail.is-collapsed .v3-agent-running-row {
+/* Collapsed (explicit or auto): centre the spinner. The hidden label still
+   reserves width and, with the row gap, pushes the icon left of centre — so
+   drop the label from layout and remove the gap so the spinner sits dead
+   centre like the nav icons. */
+.v3-command-rail.is-collapsed .v3-agent-running-row,
+.v3-command-rail:not(:hover):not(:focus-within):not(.is-pinned) .v3-agent-running-row {
   justify-content: center;
+  gap: 0;
   padding: 0;
+}
+.v3-command-rail.is-collapsed .v3-agent-running-label,
+.v3-command-rail:not(:hover):not(:focus-within):not(.is-pinned) .v3-agent-running-label {
+  display: none;
 }
 
 .v3-command-rail-shortcut {
