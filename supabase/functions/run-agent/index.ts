@@ -3359,6 +3359,39 @@ async function queueTriggeredRun(
   });
 }
 
+/** Gap between consecutive downstream agent triggers, to smooth provider load. */
+const DOWNSTREAM_STAGGER_MS = 1500;
+
+/** True when a run-agent response indicates the AI provider is rate-limited. */
+async function isProviderRateLimited(res: Response): Promise<boolean> {
+  if (res.status === 429) return true;
+  if (res.ok) return false;
+  // The provider rate limit surfaces as a 500 with a rate-limit message in the body
+  // (the bare 429 from run-agent is the separate daily-token-budget guard).
+  try {
+    const body = await res.clone().json() as { error?: string };
+    return typeof body?.error === "string"
+      && /rate limit|temporarily busy|too many requests/i.test(body.error);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Schedules downstream agents after a parent agent completes.
+ *
+ * Fires them ONE AT A TIME with a short stagger rather than all at once. The old
+ * parallel fan-out (Promise.allSettled) made every downstream agent's LLM call land
+ * in the same instant, so a single trigger could spawn 4-7 simultaneous provider
+ * calls and trip a 429 that failed the whole chain. Sequential firing keeps the total
+ * work identical while smoothing the request rate. If any downstream run reports a
+ * rate limit, the remaining agents are skipped — the provider is already saturated, so
+ * firing them would only produce more failures (the user can re-trigger later).
+ *
+ * The caller runs this in the background (see scheduleBackground) so the user's own
+ * result returns immediately — downstream agents only persist follow-on intelligence
+ * and are never part of the response payload.
+ */
 async function triggerDownstreamAgents(
   completedAgentId: string,
   programId: string,
@@ -3376,23 +3409,51 @@ async function triggerDownstreamAgents(
   }
   if (!downstreamAgents.length) return;
 
-  await Promise.allSettled(downstreamAgents.map((target) => fetch(`${SUPABASE_URL}/functions/v1/run-agent`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-    },
-    body: JSON.stringify({
-      programId,
-      agentId: target.agentId,
-      phaseId: target.phaseId === "{{phaseId}}" ? completedPhaseId : target.phaseId,
-      triggeredBy: "trigger",
-      triggerEvent: `downstream:${completedAgentId}`,
-      // ── Cross-agent intelligence: pass upstream handoff so downstream agents
-      //    know what the completing agent found, its confidence, and open questions.
-      incomingHandoff: completedHandoff ?? null,
-    } satisfies RunAgentRequest),
-  })));
+  for (let i = 0; i < downstreamAgents.length; i++) {
+    const target = downstreamAgents[i];
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/run-agent`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+        body: JSON.stringify({
+          programId,
+          agentId: target.agentId,
+          phaseId: target.phaseId === "{{phaseId}}" ? completedPhaseId : target.phaseId,
+          triggeredBy: "trigger",
+          triggerEvent: `downstream:${completedAgentId}`,
+          // ── Cross-agent intelligence: pass upstream handoff so downstream agents
+          //    know what the completing agent found, its confidence, and open questions.
+          incomingHandoff: completedHandoff ?? null,
+        } satisfies RunAgentRequest),
+      });
+      if (await isProviderRateLimited(res)) {
+        console.warn(`ATOS downstream fan-out halted after ${target.agentId}: AI provider rate-limited.`);
+        break;
+      }
+    } catch (error) {
+      console.warn(`ATOS downstream run for ${target.agentId} failed:`, error);
+    }
+    if (i < downstreamAgents.length - 1) {
+      await new Promise((resolve) => setTimeout(resolve, DOWNSTREAM_STAGGER_MS));
+    }
+  }
+}
+
+/**
+ * Runs a follow-on task without blocking the response. Uses the Edge runtime's
+ * waitUntil when available (keeps the worker alive until the task settles after the
+ * response is sent); otherwise falls back to fire-and-forget so other runtimes still work.
+ */
+function scheduleBackground(task: Promise<void>): void {
+  const runtime = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
+  if (runtime?.waitUntil) {
+    runtime.waitUntil(task.catch((error) => console.warn("ATOS background task failed:", error)));
+  } else {
+    void task.catch((error) => console.warn("ATOS background task failed:", error));
+  }
 }
 
 async function callJsonLLM(
@@ -6395,7 +6456,7 @@ Deno.serve(async (req) => {
           confidence,
           recommendedNextAction: "",
         };
-        await triggerDownstreamAgents(request.agentId, request.programId, request.phaseId, completedHandoff);
+        scheduleBackground(triggerDownstreamAgents(request.agentId, request.programId, request.phaseId, completedHandoff));
       }
 
       return jsonResponse({
