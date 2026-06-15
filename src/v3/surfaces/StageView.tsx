@@ -5,10 +5,9 @@ import type { DecisionSummary, ExitCriterion, GateReview, PlanAction, ProgramSum
 import ArtifactEditor from "@/v3/components/ArtifactEditor";
 import GateCoachPanel from "@/v3/components/GateCoachPanel";
 import OnboardingCard from "@/v3/components/OnboardingCard";
+import { PhaseProgressionCard } from "@/v3/components/PhaseProgressionCard";
 import { PhaseRail } from "@/v3/components/PhaseRail";
 import { PhaseFlowBar } from "@/v3/components/PhaseFlowBar";
-import { ReadinessArcGauge } from "@/v3/components/ReadinessArcGauge";
-import { ReadinessExplainer } from "@/v3/components/ReadinessExplainer";
 import { ReadinessBadge } from "@/v3/components/ui/ReadinessBadge";
 import { AdamCard, AdamCardBody, AdamCardHeader } from "@/v3/components/ui/AdamCard";
 import { EmptyState } from "@/v3/components/ui/EmptyState";
@@ -964,72 +963,16 @@ export default function StageView({
           />
         ) : null}
 
-        {program && activePhase?.id ? (
-          <div className="v3-card" style={{ marginTop: 12 }}>
-            <div className="v3-card-title">Gate readiness</div>
-            <div style={{ fontSize: 11, color: "var(--v3-text-muted)", margin: "2px 0 10px", lineHeight: 1.4 }}>
-              Where this phase stands — the score, what's driving it, and the highest-leverage blockers to resolve.
-            </div>
-            <ReadinessExplainer program={program} phaseId={activePhase.id} threshold={readiness?.threshold ?? 70} />
-            {readiness ? (
-              <div className="v3-support-note" style={{ marginTop: 10 }}>
-                Quality assessed by {readiness.reviewScoresCount > 0 ? "independent artifact reviewer" : "self-reported confidence"}
-                {readiness.reviewScoresCount === 0 ? " — complete more phase inputs to improve score accuracy" : ""}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
-        {/* Priority 2 — Ranked action recommendations with estimated readiness impact */}
-        {readiness && !readiness.canApproveGate && readiness.recommendedActions.length > 0 ? (
-          <div className="v3-readiness-actions-panel">
-            <div className="v3-readiness-actions-header">
-              Top actions to reach {readiness.threshold}% — ranked by impact
-            </div>
-            <div className="v3-readiness-actions-list">
-              {readiness.recommendedActions.slice(0, 4).map((action, idx) => (
-                <div
-                  key={action.id}
-                  className={`v3-readiness-action-row ${action.priority}`}
-                >
-                  <div className="v3-readiness-action-rank">{idx + 1}</div>
-                  <div className="v3-readiness-action-body">
-                    <div className="v3-readiness-action-label">{action.label}</div>
-                    <div className="v3-readiness-action-desc">{action.description}</div>
-                    <div className="v3-readiness-action-meta">
-                      <span className={`v3-chip ${action.priority === "critical" ? "red" : action.priority === "high" ? "amber" : "muted"}`} style={{ fontSize: 10 }}>
-                        {action.priority}
-                      </span>
-                      <span className="v3-chip muted" style={{ fontSize: 10 }}>{action.effort}</span>
-                      {action.estimatedImpact > 0 && (
-                        <span className="v3-chip green" style={{ fontSize: 10 }}>
-                          +{action.estimatedImpact} pts
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  {action.agentId ? (
-                    <button
-                      type="button"
-                      className="v3-button ghost v3-button-inline-xs"
-                      onClick={() => onRunAgent(action.agentId!)}
-                    >
-                      Analyse →
-                    </button>
-                  ) : action.workspaceId ? (
-                    <button
-                      type="button"
-                      className="v3-button ghost v3-button-inline-xs"
-                      onClick={() => onOpenMoreView?.(action.workspaceId!)}
-                      title={`Open ${action.workspaceId} workspace`}
-                    >
-                      Open →
-                    </button>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          </div>
+        {program && activePhase?.id && readiness ? (
+          <PhaseProgressionCard
+            program={program}
+            phaseId={activePhase.id}
+            readiness={readiness}
+            gateStatus={gateReviewStatus}
+            onRunAgent={onRunAgent}
+            onOpenMoreView={onOpenMoreView}
+            onOpenDecide={onOpenDecide}
+          />
         ) : null}
 
         {readiness && readiness.score < 80 && gateCoach?.actions?.length ? (

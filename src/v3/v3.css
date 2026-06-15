@@ -5538,6 +5538,47 @@ button.v3-chip:focus-visible,
   margin-bottom: 4px;
 }
 
+/* ── Phase Progression Card (the phase decision widget) ── */
+.v3-progression-card .v3-readiness-action-rank {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--v3-surface-2);
+  color: var(--v3-text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+}
+.v3-progression-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+}
+.v3-progression-stat:hover .v3-progression-stat-label {
+  color: var(--v3-text-secondary);
+}
+.v3-progression-stat-num {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--v3-text-primary);
+  line-height: 1;
+}
+.v3-progression-stat-label {
+  font-size: 10px;
+  color: var(--v3-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .v3-inline-list {
   margin: 0;
   padding-left: 16px;
