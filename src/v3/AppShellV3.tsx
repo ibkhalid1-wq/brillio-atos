@@ -83,6 +83,38 @@ const V3_THEME_STORAGE_KEY = "atlas-v3-theme";
 const V3_COMMAND_RAIL_PINNED_KEY = "atlas-v3-command-rail-pinned";
 const V3_COMMAND_RAIL_COLLAPSED_KEY = "atlas-v3-rail-collapsed";
 const AUTH_RECOVERY_INTENT_STORAGE_KEY = "atlas-auth-recovery-intent";
+const PROACTIVE_FIRED_STORAGE_KEY = "atlas-v3-proactive-fired";
+
+// Persistent dedup for proactive (background) agent triggers. In-memory refs reset on
+// every reload, which let the proactive onboarding/gate-coach agents re-fire on each
+// page load — a major source of background AI volume that starves user generations.
+// Persisting the "already fired" keys makes each proactive trigger fire at most once
+// per (program, phase) ever, instead of once per browser session.
+function hasProactiveFired(key: string): boolean {
+  try {
+    const raw = window.localStorage.getItem(PROACTIVE_FIRED_STORAGE_KEY);
+    if (!raw) return false;
+    const fired = JSON.parse(raw) as unknown;
+    return Array.isArray(fired) && fired.includes(key);
+  } catch {
+    return false;
+  }
+}
+
+function markProactiveFired(key: string): void {
+  try {
+    const raw = window.localStorage.getItem(PROACTIVE_FIRED_STORAGE_KEY);
+    const fired = raw ? (JSON.parse(raw) as unknown) : [];
+    const list = Array.isArray(fired) ? (fired as string[]) : [];
+    if (!list.includes(key)) {
+      list.push(key);
+      // Cap the list so it can't grow unbounded across many programs/phases.
+      window.localStorage.setItem(PROACTIVE_FIRED_STORAGE_KEY, JSON.stringify(list.slice(-300)));
+    }
+  } catch {
+    /* storage unavailable — fall back to in-session behaviour */
+  }
+}
 
 const MORE_ROUTE_MAP: Record<string, V3MoreView> = {
   documents: "documents",
@@ -1132,8 +1164,8 @@ export default function AppShellV3() {
     const gateStatus = activeProgram.gateReviews?.[activePhaseId]?.status;
     if (gateStatus === "approved") return; // Skip if phase already done
 
-    const entryKey = `${activeProgramId}:${activePhaseId}`;
-    if (phaseEntryTriggeredRef.current.has(entryKey)) return;
+    const entryKey = `${activeProgramId}:${activePhaseId}:onboarding`;
+    if (phaseEntryTriggeredRef.current.has(entryKey) || hasProactiveFired(entryKey)) return;
 
     // Check if this phase has any data at all
     const rawSource = typeof activeProgram.rawData === "object" && activeProgram.rawData !== null
@@ -1151,6 +1183,7 @@ export default function AppShellV3() {
     // preventing the perception of the dashboard being immediately "frozen".
     if (!hasInputs && !hasArtifacts) {
       phaseEntryTriggeredRef.current.add(entryKey);
+      markProactiveFired(entryKey);
       const t = setTimeout(() => {
         void runProgramAgent({
           agentId: "onboarding-briefer",
@@ -1182,12 +1215,17 @@ export default function AppShellV3() {
     // Don't trigger if gate is already approved or already in review
     if (gateStatus === "approved" || gateStatus === "pending-review") return;
 
-    const triggerKey = `${activeProgramId}:${activePhaseId}:${Math.round(readiness.score / 10)}`;
-    if (lastProactiveTriggerRef.current === triggerKey) return;
+    // Fire at most once per (program, phase) ever — persisted across reloads. The old
+    // readiness-bucketed key re-fired every time the score crossed a 10% boundary and
+    // on every fresh page load, which made gate-readiness-coach the single largest
+    // source of background AI calls. Coaching stays available on demand via the panel.
+    const triggerKey = `${activeProgramId}:${activePhaseId}:gate-coach`;
+    if (lastProactiveTriggerRef.current === triggerKey || hasProactiveFired(triggerKey)) return;
 
     // Trigger when readiness is low but work is underway (score > 5 means some activity)
     if (readiness.score > 5 && readiness.score < Math.max(40, threshold - 20)) {
       lastProactiveTriggerRef.current = triggerKey;
+      markProactiveFired(triggerKey);
       pushV3Toast(
         `Gate readiness is ${readiness.score}% — ATOS is running a readiness assessment to identify blockers.`,
         { tone: "info", duration: 4000 },
@@ -1988,6 +2026,8 @@ export default function AppShellV3() {
     pushV3Toast("Note saved. ATOS will use it on the next run.", { tone: "success", duration: 3000 });
   }, [addProgramNote]);
 
+  // Per-phase debounce timers for the Tier-2 input-quality validation pass.
+  const inputQualityDebounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const handleSavePhaseInputs = useCallback(async (phaseId: string, inputs: Record<string, string>) => {
     if (!activeProgram) return;
     const cloned = cloneRawProgram(activeProgram);
@@ -1997,8 +2037,16 @@ export default function AppShellV3() {
     existing[phaseId] = { ...((existing[phaseId] as Record<string, unknown>) ?? {}), ...inputs, savedAt: new Date().toISOString() };
     const payload = cloned.commit({ ...cloned.inner, phaseInputs: existing });
     await updateProgramData(activeProgram.id, payload, activeProgram.updatedAt);
-    await runProgramAgent({ agentId: "input-quality", phaseId, triggeredBy: "trigger", skipPreSync: true });
     await refreshPrograms();
+    // Debounce input-quality (Tier 2 — no one is blocked on it) so a flurry of saves
+    // coalesces into a single validation run instead of firing input-quality and its
+    // downstream cascade on every save. A later save for the same phase resets the timer.
+    const timers = inputQualityDebounceRef.current;
+    if (timers[phaseId]) clearTimeout(timers[phaseId]);
+    timers[phaseId] = setTimeout(() => {
+      delete timers[phaseId];
+      void runProgramAgent({ agentId: "input-quality", phaseId, triggeredBy: "trigger", skipPreSync: true });
+    }, 8000);
     pushV3Toast("Inputs saved. Ready to run agents.", { tone: "success", duration: 2500 });
   }, [activeProgram, refreshPrograms, runProgramAgent, updateProgramData]);
 
