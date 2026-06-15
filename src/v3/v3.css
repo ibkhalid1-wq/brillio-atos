@@ -5579,6 +5579,118 @@ button.v3-chip:focus-visible,
   letter-spacing: 0.04em;
 }
 
+/* Executive snapshot — condensed 15-second phase read */
+.v3-exec-snapshot {
+  border: 1px solid var(--v3-border);
+  border-left: 3px solid var(--v3-border);
+  border-radius: var(--v3-radius);
+  background: var(--v3-surface);
+  margin: 0 0 10px;
+  overflow: hidden;
+}
+.v3-exec-snapshot.green { border-left-color: var(--v3-green); }
+.v3-exec-snapshot.amber { border-left-color: var(--v3-amber); }
+.v3-exec-snapshot.red { border-left-color: var(--v3-red); }
+.v3-exec-snapshot-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+.v3-exec-snapshot-head:hover { background: var(--v3-surface-2); }
+.v3-exec-snapshot-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--v3-text-muted);
+}
+.v3-exec-snapshot-dot.green { background: var(--v3-green); }
+.v3-exec-snapshot-dot.amber { background: var(--v3-amber); }
+.v3-exec-snapshot-dot.red { background: var(--v3-red); }
+.v3-exec-snapshot-verdict {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--v3-text-primary);
+  flex-shrink: 0;
+}
+.v3-exec-snapshot-headline {
+  font-size: 12px;
+  color: var(--v3-text-secondary);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.v3-exec-snapshot-scores {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+.v3-exec-snapshot-caret {
+  font-size: 11px;
+  color: var(--v3-text-muted);
+  flex-shrink: 0;
+}
+.v3-exec-snapshot-body {
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--v3-border-soft, var(--v3-border));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.v3-exec-snapshot-metrics {
+  display: flex;
+  gap: 24px;
+}
+.v3-exec-snapshot-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.v3-exec-snapshot-metric-val {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--v3-text-primary);
+}
+.v3-exec-snapshot-metric-lbl {
+  font-size: 10px;
+  color: var(--v3-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.v3-exec-snapshot-blocker,
+.v3-exec-snapshot-next {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+.v3-exec-snapshot-row-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--v3-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+  min-width: 92px;
+}
+.v3-exec-snapshot-row-value {
+  color: var(--v3-text-primary);
+  flex: 1;
+}
+.v3-exec-snapshot-cta {
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
 /* "Since your last visit" recap card */
 .v3-change-summary {
   border: 1px solid var(--v3-border);

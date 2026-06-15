@@ -8,6 +8,7 @@ import OnboardingCard from "@/v3/components/OnboardingCard";
 import PhaseInputsPanel, { type FieldAssistRequest } from "@/v3/components/PhaseInputsPanel";
 import { PhaseProgressionCard } from "@/v3/components/PhaseProgressionCard";
 import { PhaseChangeSummary } from "@/v3/components/PhaseChangeSummary";
+import { PhaseExecutiveSummary } from "@/v3/components/PhaseExecutiveSummary";
 import { PhaseRail } from "@/v3/components/PhaseRail";
 import { PhaseFlowBar } from "@/v3/components/PhaseFlowBar";
 import { ReadinessBadge } from "@/v3/components/ui/ReadinessBadge";
@@ -798,6 +799,15 @@ export default function StageView({
           activePhaseId={activePhase.id}
           lockedPhaseIds={lockedPhaseIds}
           onSelectPhase={onSelectPhase}
+        />
+      </div>
+      {/* Executive snapshot — condensed 15-second read of the phase, pinned above the zones */}
+      <div style={{ padding: "10px 20px 0" }}>
+        <PhaseExecutiveSummary
+          program={program}
+          phaseId={activePhase.id}
+          onRunAgent={onRunAgent}
+          onOpenMoreView={(view) => onOpenMoreView(view as V3MoreView)}
         />
       </div>
       {/* Priority 10 — "Where am I / What's next" guidance strip */}
