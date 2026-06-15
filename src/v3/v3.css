@@ -1156,6 +1156,15 @@ select {
   justify-content: center;
   padding-left: 0;
   padding-right: 0;
+  gap: 0;
+}
+
+/* Collapse the hidden label's width so the visible indicator dot lands on the
+   rail's true centre axis instead of being shifted left by the (invisible but
+   still laid-out) label and its flex gap. */
+.v3-command-rail:not(:hover):not(:focus-within):not(.is-pinned) .v3-command-rail-status-label {
+  width: 0;
+  overflow: hidden;
 }
 
 .v3-command-rail:not(:hover):not(:focus-within):not(.is-pinned) .v3-command-rail-divider {
@@ -2967,6 +2976,24 @@ select {
 
 .v3-phase-rail-connector.is-done {
   background: rgba(34, 197, 94, 0.4);
+}
+
+/* Light mode: the base hover/active pills are tuned for the dark rail and become
+   illegible on the light content surface (light-lavender text on near-white, or a
+   dark hover chip behind dark text). Re-tint both to the deep-purple brand accent
+   with dark, high-contrast text. */
+[data-theme="light"] .v3-phase-rail-pill:hover:not(:disabled),
+:root:not([data-theme="dark"]) .v3-phase-rail-pill:hover:not(:disabled) {
+  background: rgba(33, 23, 71, 0.06);
+  color: var(--v3-text-primary);
+}
+
+[data-theme="light"] .v3-phase-rail-pill.is-active,
+:root:not([data-theme="dark"]) .v3-phase-rail-pill.is-active {
+  background: rgba(33, 23, 71, 0.09);
+  border-color: rgba(33, 23, 71, 0.35);
+  color: #211747;
+  box-shadow: inset 0 0 0 1px rgba(33, 23, 71, 0.12);
 }
 
 [data-density="compact"] .v3-phase-rail-wrap {
