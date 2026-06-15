@@ -362,7 +362,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
             {prioritized.fields.map(({ field }) => {
               const verdict = assessField(values[field.id], field.type);
               return (
-              <div key={field.id}>
+              <div key={field.id} data-io-anchor={`input:${field.id}`}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                   <div className="v3-field-label">
                     {field.label}

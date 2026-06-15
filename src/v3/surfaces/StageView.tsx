@@ -6,7 +6,7 @@ import ArtifactEditor from "@/v3/components/ArtifactEditor";
 import GateCoachPanel from "@/v3/components/GateCoachPanel";
 import OnboardingCard from "@/v3/components/OnboardingCard";
 import PhaseInputsPanel, { type FieldAssistRequest } from "@/v3/components/PhaseInputsPanel";
-import PhaseInputArtifactMap from "@/v3/components/PhaseInputArtifactMap";
+import PhaseFlowOverlay from "@/v3/components/PhaseFlowOverlay";
 import { PhaseProgressionCard } from "@/v3/components/PhaseProgressionCard";
 import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
 import { PhaseChangeSummary } from "@/v3/components/PhaseChangeSummary";
@@ -446,6 +446,8 @@ export default function StageView({
   const [updatedArtifactId, setUpdatedArtifactId] = React.useState<"narrative" | "deck" | null>(null);
   const onboardingStorageKey = `adam_onboarding_stage_${program?.id || "local"}_${activePhaseId || "none"}`;
   const [guideDismissed, setGuideDismissed] = React.useState(false);
+  const [showWiring, setShowWiring] = React.useState(true);
+  const phaseMainRef = useRef<HTMLDivElement | null>(null);
   const previousNarrativeRef = useRef<string | null>(artifactPreviews?.narrative || null);
   const previousDeckRef = useRef<string | null>(artifactPreviews?.deck || null);
   const toggleOutput = (id: string) => {
@@ -1224,7 +1226,8 @@ export default function StageView({
                   <ActionList actions={stageActions} onOpenReport={() => onOpenReport("status")} />
       </section>
 
-      <div className="v3-phase-main">
+      <div className="v3-phase-main" ref={phaseMainRef}>
+      <PhaseFlowOverlay containerRef={phaseMainRef} program={program} phaseId={activePhase.id} enabled={showWiring} />
       {/* LEFT — input fields card (keeps upload-document + workstream buttons inside PhaseInputsPanel) */}
       <section className="v3-phase-col v3-phase-col--inputs">
         <div className="v3-zone-label">Input fields</div>
@@ -1253,10 +1256,28 @@ export default function StageView({
         ) : null}
       </section>
 
-      {/* MIDDLE — collapsible (collapsed by default) input ↔ artifact relationship map */}
+      {/* MIDDLE — wiring control: toggles the live connector lines that are pinned
+          to the real input-field and artifact elements in the side columns. */}
       <section className="v3-phase-col v3-phase-col--map">
         <div className="v3-zone-label">Flow</div>
-        <PhaseInputArtifactMap program={program} phaseId={activePhase.id} />
+        <div className="v3-flow-control">
+          <button
+            type="button"
+            className="v3-flow-toggle"
+            onClick={() => setShowWiring((current) => !current)}
+            aria-pressed={showWiring}
+          >
+            <span className="v3-flow-toggle-title">Input → artifact wiring</span>
+            <span className="v3-flow-toggle-sub">
+              {showWiring ? "Lines pinned to fields · hide" : "Show pinned connector lines"}
+            </span>
+          </button>
+          <div className="v3-iomap-legend">
+            <span className="v3-iomap-legend-item"><i style={{ background: "#2DD4BF" }} /> Captured input</span>
+            <span className="v3-iomap-legend-item"><i style={{ background: "var(--v3-border)" }} /> Empty input</span>
+            <span className="v3-iomap-legend-note">Each field links to the artifacts it feeds — lines stay attached as fields or artifacts resize.</span>
+          </div>
+        </div>
       </section>
 
       {/* BELOW — other phase-relevant cards, stretched full-width and stacked */}
@@ -1510,6 +1531,7 @@ export default function StageView({
             <button
               key={output.id}
               type="button"
+              data-io-anchor={`artifact:${output.id}`}
               className={`v3-chip ${output.available ? (output.tone || "blue") : "muted"} ${expandedOutput === output.id ? "is-active" : ""}`}
               onClick={() => {
                 if (output.id === "retro") {

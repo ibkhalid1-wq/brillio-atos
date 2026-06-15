@@ -5443,7 +5443,24 @@ button.v3-chip:focus-visible,
   flex: 1 1 auto; min-width: 0;
   display: flex; flex-wrap: wrap; align-content: flex-start;
   gap: 16px; padding: 16px;
+  position: relative;
 }
+/* Live wiring layer — pinned to the real input/artifact DOM, click-through. */
+.v3-flow-overlay {
+  position: absolute; top: 0; left: 0;
+  pointer-events: none; z-index: 2; overflow: visible;
+}
+.v3-flow-control {
+  border: 1px solid var(--v3-border); border-radius: var(--radius-md);
+  background: var(--v3-surface-2); padding: 10px 12px;
+}
+.v3-flow-toggle {
+  width: 100%; display: flex; flex-direction: column; gap: 2px; align-items: flex-start;
+  background: transparent; border: none; cursor: pointer; text-align: left; padding: 0;
+}
+.v3-flow-toggle-title { font-size: 12px; font-weight: 600; color: var(--v3-text-primary); }
+.v3-flow-toggle-sub { font-size: 11px; color: var(--v3-text-muted); }
+.v3-flow-control .v3-iomap-legend { margin-top: 10px; }
 .v3-phase-col { min-width: 0; }
 .v3-phase-col--inputs { order: 1; flex: 1 1 320px; }
 .v3-phase-col--map { order: 2; flex: 1 1 220px; }
