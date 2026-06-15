@@ -4,6 +4,7 @@ import type { AgentRun } from "@/lib/adamSync";
 import type { DecisionSummary, ExitCriterion, GateReview, PlanAction, ProgramSummary, RAIDEntry, Workstream } from "@/new/types";
 import ArtifactEditor from "@/v3/components/ArtifactEditor";
 import GateCoachPanel from "@/v3/components/GateCoachPanel";
+import { GateBlockingChecklist } from "@/v3/components/GateBlockingChecklist";
 import OnboardingCard from "@/v3/components/OnboardingCard";
 import PhaseInputsPanel, { type FieldAssistRequest } from "@/v3/components/PhaseInputsPanel";
 import PhaseFlowOverlay from "@/v3/components/PhaseFlowOverlay";
@@ -1079,6 +1080,17 @@ export default function StageView({
               }
               setGuideDismissed(true);
             }}
+          />
+        ) : null}
+
+        {program && activePhase?.id ? (
+          <GateBlockingChecklist
+            program={program}
+            phaseId={activePhase.id}
+            gateStatus={gateReviewStatus}
+            onRunAgent={onRunAgent}
+            onOpenMoreView={onOpenMoreView}
+            onOpenDecide={onOpenDecide}
           />
         ) : null}
 
