@@ -2147,6 +2147,9 @@ export default function AppShellV3() {
         startedAt: startTs ?? new Date().toISOString(),
         durationMs,
         phaseId: run.phase_id ?? undefined,
+        // Surface the failure reason inline (provider outage vs auth vs other) so a
+        // failed run isn't an opaque red ✗ — the feed classifies + renders it.
+        errorMessage: feedStatus === "failed" ? (run.error_message ?? undefined) : undefined,
       };
     }),
   [activeRuns]);
