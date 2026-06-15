@@ -93,11 +93,26 @@ function artifactLabel(agentId: string): string {
 }
 
 function normalize(text: string): string {
-  return text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  // Split camelCase ("raciMatrix" → "raci Matrix") so produced artifact keys
+  // line up with kebab-case agent ids and spaced human labels after lowercasing.
+  return text
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
-/** A present artifact satisfies a required one if its title matches the expected label. */
-function matchesRequirement(artifact: ArtifactSummary, expectedLabel: string): boolean {
+/**
+ * A present artifact satisfies a required one when EITHER its stable key matches
+ * the producing agent id (the reliable join — e.g. "raciMatrix" ↔ "raci-matrix"),
+ * OR its title matches the expected human label. Key matching is exact-only to
+ * avoid short ids like "plan" falsely absorbing unrelated artifacts; label
+ * matching keeps the looser substring behaviour for human-authored titles.
+ */
+function matchesRequirement(artifact: ArtifactSummary, agentId: string, expectedLabel: string): boolean {
+  const key = normalize(artifact.id);
+  const aid = normalize(agentId);
+  if (key && aid && key === aid) return true;
   const a = normalize(artifact.title);
   const b = normalize(expectedLabel);
   if (!a || !b) return false;
@@ -156,7 +171,7 @@ export function buildArtifactModel(
     // 1. Required artifacts (the spine of the phase).
     for (const agentId of phaseDef.requiredArtifacts) {
       const label = artifactLabel(agentId);
-      const match = present.find((a) => !consumed.has(a.id) && matchesRequirement(a, label));
+      const match = present.find((a) => !consumed.has(a.id) && matchesRequirement(a, agentId, label));
       if (match) consumed.add(match.id);
       nodes.push({
         key: agentId,
