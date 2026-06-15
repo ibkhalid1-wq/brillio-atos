@@ -26,6 +26,7 @@ export type V3MoreView =
   | "scope-pcr"
   | "intelligence"
   | "twin"
+  | "artifact-map"
   | "accelerators"
   | "schedules"
   | "benchmark"
