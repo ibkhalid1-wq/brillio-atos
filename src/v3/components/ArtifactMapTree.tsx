@@ -138,12 +138,34 @@ function TreeNode({
   );
 }
 
-export function ArtifactMapTree({ program }: { program: ProgramSummary | null }) {
+export function ArtifactMapTree({
+  program,
+  phaseId,
+}: {
+  program: ProgramSummary | null;
+  /** When set, render only this phase's branch (used in the phase rail). */
+  phaseId?: string | null;
+}) {
   const model = React.useMemo(() => buildArtifactModel(program), [program]);
+  const scoped = !!phaseId;
+
+  const phases = React.useMemo(
+    () => (phaseId ? model.phases.filter((p) => p.phaseId === phaseId) : model.phases),
+    [model.phases, phaseId],
+  );
+
+  const totals = React.useMemo(() => {
+    if (!scoped) return model.totals;
+    const present = phases.reduce((s, p) => s + p.present, 0);
+    const required = phases.reduce((s, p) => s + p.required, 0);
+    const quals = phases.map((p) => p.avgQuality).filter((q): q is number => typeof q === "number");
+    const avgQuality = quals.length ? Math.round(quals.reduce((a, b) => a + b, 0) / quals.length) : null;
+    return { ...model.totals, present, required, avgQuality };
+  }, [scoped, phases, model.totals]);
 
   const tree = React.useMemo<TreeNodeData[]>(() => {
     if (!program) return [];
-    return model.phases.map((phase) => {
+    return phases.map((phase) => {
       const fields: PhaseInputField[] = getPhaseInputSchema(phase.phaseId).fields;
       const values = readPhaseInputs(program, phase.phaseId);
       const inputs = fields.map((field) => {
@@ -214,16 +236,24 @@ export function ArtifactMapTree({ program }: { program: ProgramSummary | null })
         children: artifactNodes,
       };
     });
-  }, [program, model.phases]);
+  }, [program, phases]);
 
-  const phaseKeys = React.useMemo(() => tree.map((n) => n.key), [tree]);
   const allKeys = React.useMemo(() => collectKeys(tree), [tree]);
 
-  // Default: phase branches open, deeper levels collapsed — scannable overview.
+  // Default open set: phases always; when scoped to one phase, also open its
+  // artifacts so the rail shows the tree one level deep without a click.
+  const defaultKeys = React.useMemo(() => {
+    const keys = tree.map((n) => n.key);
+    if (scoped) {
+      for (const phase of tree) for (const child of phase.children ?? []) keys.push(child.key);
+    }
+    return keys;
+  }, [tree, scoped]);
+
   const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set());
   React.useEffect(() => {
-    setExpanded(new Set(phaseKeys));
-  }, [phaseKeys]);
+    setExpanded(new Set(defaultKeys));
+  }, [defaultKeys]);
 
   const toggle = React.useCallback((key: string) => {
     setExpanded((current) => {
@@ -239,12 +269,12 @@ export function ArtifactMapTree({ program }: { program: ProgramSummary | null })
   }
 
   return (
-    <div className="v3-amap">
+    <div className={`v3-amap${scoped ? " is-scoped" : ""}`}>
       <div className="v3-amap-toolbar">
         <span className="v3-amap-totals">
-          <strong>{model.totals.present}</strong> of <strong>{model.totals.required}</strong> required artifacts present
-          {model.totals.avgQuality != null ? <> · <strong>{model.totals.avgQuality}%</strong> avg quality</> : null}
-          {" "}across <strong>{tree.length}</strong> phases
+          <strong>{totals.present}</strong> of <strong>{totals.required}</strong> required artifacts present
+          {totals.avgQuality != null ? <> · <strong>{totals.avgQuality}%</strong> avg quality</> : null}
+          {scoped ? null : <> {" "}across <strong>{tree.length}</strong> phases</>}
         </span>
         <div className="v3-amap-toolbar-actions">
           <button type="button" className="v3-button ghost" onClick={() => setExpanded(new Set(allKeys))}>

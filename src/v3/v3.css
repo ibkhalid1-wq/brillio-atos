@@ -6456,6 +6456,51 @@ button.v3-phase-metric:focus-visible {
   box-shadow: var(--v3-shadow-md);
 }
 
+/* Compact variant for the phase rail (single phase, narrow column) */
+.v3-amap.is-scoped {
+  gap: 10px;
+}
+.v3-amap.is-scoped .v3-amap-toolbar {
+  padding-bottom: 10px;
+  gap: 8px;
+}
+.v3-amap.is-scoped .v3-amap-totals {
+  font-size: 11.5px;
+  flex: 1 1 100%;
+}
+.v3-amap.is-scoped .v3-amap-toolbar-actions .v3-button {
+  font-size: 10.5px;
+  padding: 2px 7px;
+}
+.v3-amap.is-scoped .v3-amap-tree {
+  gap: 0;
+}
+.v3-amap.is-scoped .v3-amap-phase {
+  border: none;
+  background: none;
+  box-shadow: none;
+  border-radius: 0;
+}
+.v3-amap.is-scoped .v3-amap-phase::before {
+  display: none;
+}
+.v3-amap.is-scoped .v3-amap-phase > .v3-amap-node > .v3-amap-row {
+  padding: 8px 4px;
+}
+.v3-amap.is-scoped .v3-amap-phase > .v3-amap-node > .v3-amap-row .v3-amap-node-label {
+  font-size: 13px;
+}
+.v3-amap.is-scoped .v3-amap-phase > .v3-amap-node > .v3-amap-children {
+  margin-left: 16px;
+}
+.v3-amap.is-scoped .v3-amap-row {
+  padding: 5px 6px;
+}
+.v3-amap.is-scoped .v3-amap-children {
+  margin-left: 16px;
+  padding-left: 10px;
+}
+
 /* Generic node + row (used at every depth) */
 .v3-amap-node {
   display: grid;
