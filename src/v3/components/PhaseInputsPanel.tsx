@@ -9,6 +9,39 @@ interface PhaseInputsPanelProps {
   onUploadDocument: () => void;
 }
 
+/**
+ * Structured baseline/target KPI captured at Strategy. Persisted as a JSON
+ * string under phaseInputs.strategy.kpis so the benefits-tracker agent can
+ * measure realisation against a human-entered baseline — closing the
+ * Inputs → Outcomes traceability loop.
+ */
+interface PhaseKpi {
+  id: string;
+  name: string;
+  baseline: string;
+  target: string;
+  unit: string;
+}
+
+function parseKpis(raw: unknown): PhaseKpi[] {
+  if (typeof raw !== "string" || !raw.trim()) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((entry): entry is Record<string, unknown> => typeof entry === "object" && entry !== null)
+      .map((entry) => ({
+        id: typeof entry.id === "string" ? entry.id : `kpi-${Math.random().toString(36).slice(2, 9)}`,
+        name: typeof entry.name === "string" ? entry.name : "",
+        baseline: typeof entry.baseline === "string" ? entry.baseline : String(entry.baseline ?? ""),
+        target: typeof entry.target === "string" ? entry.target : String(entry.target ?? ""),
+        unit: typeof entry.unit === "string" ? entry.unit : "",
+      }));
+  } catch {
+    return [];
+  }
+}
+
 export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDocument }: PhaseInputsPanelProps) {
   const schema = getPhaseInputSchema(phaseId);
   // useMemo prevents a new object reference on every render, which would cause an
@@ -27,6 +60,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
 
   const [values, setValues] = useState<Record<string, string>>(existingInputs);
   const [localWorkstreams, setLocalWorkstreams] = useState<Workstream[]>([]);
+  const [localKpis, setLocalKpis] = useState<PhaseKpi[]>([]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   // Always start expanded so document-imported data is immediately visible
@@ -42,7 +76,10 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
         ? program.workstreams.filter((entry) => entry.phaseId === phaseId)
         : [];
     setLocalWorkstreams(existingWorkstreams);
+    setLocalKpis(parseKpis((existingInputs as Record<string, unknown>).kpis));
   }, [existingInputs, phaseId]);
+
+  const showKpis = phaseId === "strategy";
 
   const hasAllRequired = schema.fields
     .filter((field) => field.required)
@@ -55,6 +92,9 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
       await onSave(phaseId, {
         ...values,
         workstreams: JSON.stringify(localWorkstreams),
+        // Strategy-only: persist baseline/target KPIs so benefits realisation
+        // is measured against the human-entered baseline downstream.
+        ...(showKpis ? { kpis: JSON.stringify(localKpis.filter((kpi) => kpi.name.trim())) } : {}),
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -91,6 +131,27 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
 
   function removeWorkstream(index: number) {
     setLocalWorkstreams((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  }
+
+  function addKpi() {
+    setLocalKpis((current) => [
+      ...current,
+      {
+        id: typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `kpi-${Date.now()}`,
+        name: "",
+        baseline: "",
+        target: "",
+        unit: "",
+      },
+    ]);
+  }
+
+  function updateKpi(index: number, key: keyof PhaseKpi, value: string) {
+    setLocalKpis((current) => current.map((kpi, itemIndex) => (itemIndex === index ? { ...kpi, [key]: value } : kpi)));
+  }
+
+  function removeKpi(index: number) {
+    setLocalKpis((current) => current.filter((_, itemIndex) => itemIndex !== index));
   }
 
   return (
@@ -210,6 +271,56 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
               + Add workstream
             </button>
           </div>
+
+          {showKpis ? (
+            <div style={{ marginTop: 12, marginBottom: 12 }}>
+              <div className="v3-field-label">Outcome KPIs (baseline → target)</div>
+              <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginBottom: 6 }}>
+                Define the measurable outcomes for this programme. Baseline and target captured here
+                anchor the Benefits Tracker so realisation is measured against your numbers — not estimates.
+              </div>
+              {localKpis.map((kpi, index) => (
+                <div key={kpi.id} style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
+                  <input
+                    type="text"
+                    className="v3-input"
+                    style={{ flex: 2 }}
+                    value={kpi.name}
+                    placeholder="KPI, e.g. Cost to serve"
+                    onChange={(event) => updateKpi(index, "name", event.target.value)}
+                  />
+                  <input
+                    type="text"
+                    className="v3-input"
+                    style={{ width: 80 }}
+                    value={kpi.baseline}
+                    placeholder="Baseline"
+                    onChange={(event) => updateKpi(index, "baseline", event.target.value)}
+                  />
+                  <input
+                    type="text"
+                    className="v3-input"
+                    style={{ width: 80 }}
+                    value={kpi.target}
+                    placeholder="Target"
+                    onChange={(event) => updateKpi(index, "target", event.target.value)}
+                  />
+                  <input
+                    type="text"
+                    className="v3-input"
+                    style={{ width: 64 }}
+                    value={kpi.unit}
+                    placeholder="Unit"
+                    onChange={(event) => updateKpi(index, "unit", event.target.value)}
+                  />
+                  <button type="button" className="v3-button ghost" style={{ fontSize: 11 }} onClick={() => removeKpi(index)}>✕</button>
+                </div>
+              ))}
+              <button type="button" className="v3-button ghost" style={{ fontSize: 11, marginTop: 4 }} onClick={addKpi}>
+                + Add KPI
+              </button>
+            </div>
+          ) : null}
 
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "space-between", alignItems: "center" }}>
             <button type="button" className="v3-button ghost" style={{ fontSize: 12 }} onClick={onUploadDocument}>

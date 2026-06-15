@@ -915,8 +915,18 @@ function buildSpecialAgentInputContext(
   }
 
   if (target?.agentId === "benefits-tracker" || target?.agentId === "scope-creep-monitor") {
+    const strategyInputs = normalizeProgramData(normalizeProgramData(inner.phaseInputs as JsonValue | null).strategy as JsonValue | null);
+    // Human-entered baseline/target KPIs captured at Strategy (persisted as a
+    // JSON string by PhaseInputsPanel). Parse them into structured anchors so
+    // benefits realisation is measured against real numbers, not estimates.
+    const kpiBaselines = typeof strategyInputs.kpis === "string"
+      ? safeJsonParse<unknown[]>(strategyInputs.kpis, []).filter(isRecord)
+      : Array.isArray(strategyInputs.kpis)
+        ? strategyInputs.kpis.filter(isRecord)
+        : [];
     return JSON.stringify({
       objective: typeof inner.objective === "string" ? inner.objective : "",
+      kpiBaselines,
       phaseInputs: normalizeProgramData(inner.phaseInputs as JsonValue | null),
       milestones,
       plan,
@@ -4307,6 +4317,13 @@ Return ONLY valid JSON:
       system: `You are the ADAM Benefits Tracker for transformation programs.
 Compare the original program success metrics against current evidence and rate each KPI.
 
+When the context contains "kpiBaselines" (human-entered KPIs from the Strategy
+phase, each with name/baseline/target/unit), treat those as the authoritative
+baseline and target — do NOT invent or estimate baselines. Produce one output
+KPI per kpiBaselines entry, carrying its name, baseline, target and unit
+through, and assess current/rag/trend against that anchor. Only fall back to
+inferring metrics from the objective when kpiBaselines is empty.
+
 Return ONLY valid JSON:
 {
   "overallRag": "green|amber|red",
@@ -4316,6 +4333,7 @@ Return ONLY valid JSON:
       "name": "KPI name",
       "baseline": "baseline value or description",
       "target": "target value",
+      "unit": "unit of measure (carry through from kpiBaselines when present)",
       "current": "current value or evidence",
       "rag": "green|amber|red|unknown",
       "trend": "improving|stable|declining|unknown",
