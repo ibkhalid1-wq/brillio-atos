@@ -10147,10 +10147,10 @@ button, [role="button"] {
    of just the status dots, so programme/AI/intelligence health stays glanceable
    on the slim rail. Labels hide; the dots remain clickable shortcuts. */
 .v3-command-rail:not(:hover):not(:focus-within):not(.is-pinned) .v3-command-rail-health-card {
-  flex-direction: row;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   margin: 2px auto 4px;
   padding: 6px 0;
   max-height: 120px;
