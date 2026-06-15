@@ -1128,6 +1128,7 @@ export default function AppShellV3() {
     if (!activeProgram || !activePhaseId || !activeProgramId) return;
     if (!authed || aiStatus.status !== "connected") return;
     if (anyAgentRunning) return;
+    if (Date.now() < rateLimitCooldownUntilRef.current) return; // AI throttled — don't pile on
     const gateStatus = activeProgram.gateReviews?.[activePhaseId]?.status;
     if (gateStatus === "approved") return; // Skip if phase already done
 
@@ -1172,6 +1173,7 @@ export default function AppShellV3() {
     if (!authed || !activeProgramId) return;
     // Only trigger when AI is connected
     if (aiStatus.status !== "connected") return;
+    if (Date.now() < rateLimitCooldownUntilRef.current) return; // AI throttled — don't pile on
 
     const readiness = computePhaseReadiness(activeProgram, activePhaseId);
     const threshold = getGateThreshold(activePhaseId);
@@ -1233,6 +1235,13 @@ export default function AppShellV3() {
     };
     return aliases[agentId] || agentId;
   }, []);
+
+  // When the AI provider rate-limits us (HTTP 429), background/proactive agents
+  // keep firing and failing, consuming the scarce provider budget so user-initiated
+  // generations get starved. We park a short cooldown after any 429 and suppress
+  // proactive auto-triggers during it, reserving the provider for explicit user actions.
+  const rateLimitCooldownUntilRef = useRef<number>(0);
+  const RATE_LIMIT_COOLDOWN_MS = 3 * 60 * 1000;
 
   const runProgramAgent = useCallback(async ({
     agentId,
@@ -1355,11 +1364,21 @@ export default function AppShellV3() {
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Agent run failed";
+      const isRateLimit = /rate limit|temporarily busy|429|too many requests/i.test(message);
+      if (isRateLimit) {
+        // Park the cooldown so background agents stop competing for the throttled budget.
+        rateLimitCooldownUntilRef.current = Date.now() + RATE_LIMIT_COOLDOWN_MS;
+      }
       if (typeof window === "undefined" || window.location.pathname !== "/auth") {
-        const isKeyError = /api key|not configured|provider|isOlderThan|connect/i.test(message);
+        const isKeyError = /api key|not configured|isOlderThan|connect your|connect a provider/i.test(message);
         const isAuthError = /jwt|invalid.*token|unauthorized|not authenticated|malformed/i.test(message);
         const isNotDeployed = /not deployed|edge function/i.test(message);
-        if (isAuthError) {
+        if (isRateLimit) {
+          pushV3Toast("AI is rate-limited right now — wait a moment, then try again. Background updates are paused to free up capacity.", {
+            tone: "warning",
+            duration: 7000,
+          });
+        } else if (isAuthError) {
           pushV3Toast("Sign in to use AI agents.", { tone: "warning", duration: 5000 });
         } else if (isNotDeployed) {
           pushV3Toast("Agent service not available in this environment.", { tone: "warning", duration: 6000 });
