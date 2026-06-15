@@ -10,6 +10,8 @@ export interface FieldAssistRequest {
   fieldHint?: string;
   mode: FieldAssistMode;
   currentValue: string;
+  /** For `merge` mode: the new value to reconcile with currentValue. */
+  incomingValue?: string;
 }
 
 interface PhaseInputsPanelProps {

@@ -197,6 +197,7 @@ interface ProgramDetailRouterProps {
   onSaveNarrativeCorrection: (note: string) => Promise<void>;
   onSavePhaseInputs: (phaseId: string, inputs: Record<string, string>) => Promise<void>;
   onSaveAllPhaseInputs?: (allInputs: Record<string, Record<string, string>>, firstPhaseId?: string) => Promise<void>;
+  onRefineImportField?: (phaseId: string, fieldId: string, fieldLabel: string, existingValue: string, incomingValue: string) => Promise<string>;
   onOpenIntelligence: () => void;
   intelligenceInitialTab?: string;
   onOpenTrace: (runId: string) => void;
@@ -235,6 +236,7 @@ export default function ProgramDetailRouter({
   onExtractPatterns,
   onSavePhaseInputs,
   onSaveAllPhaseInputs,
+  onRefineImportField,
   onRunAgent,
   currentUserId,
 }: ProgramDetailRouterProps) {
@@ -266,6 +268,7 @@ export default function ProgramDetailRouter({
               onOpenPhase(phaseId);
             }}
             onSaveAllPhaseInputs={onSaveAllPhaseInputs}
+            onRefineField={onRefineImportField}
             onComplete={async () => { await onRefresh(); }}
           />
           <DocumentList programId={programId} />

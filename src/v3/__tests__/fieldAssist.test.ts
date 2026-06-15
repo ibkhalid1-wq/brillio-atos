@@ -29,6 +29,12 @@ describe("fieldAssist mode availability", () => {
     expect(isModeAvailable("generate", "some text")).toBe(false);
     expect(isModeAvailable("rewrite", "some text")).toBe(true);
   });
+
+  it("never offers merge as a standalone inline action", () => {
+    expect(isModeAvailable("merge", "")).toBe(false);
+    expect(isModeAvailable("merge", "some text")).toBe(false);
+    expect(availableModes("some text")).not.toContain("merge");
+  });
 });
 
 describe("buildFieldAssistPrompt", () => {
@@ -47,6 +53,19 @@ describe("buildFieldAssistPrompt", () => {
     expect(prompt).toContain("CURRENT DRAFT:");
     expect(prompt).toContain("Migrate the GL.");
     expect(prompt).toContain("Improve the current draft");
+  });
+
+  it("includes both existing and incoming values for merge mode", () => {
+    const prompt = buildFieldAssistPrompt("merge", {
+      ...CTX,
+      currentValue: "Migrate the GL.",
+      incomingValue: "Also migrate AP and AR.",
+    });
+    expect(prompt).toContain("EXISTING VALUE");
+    expect(prompt).toContain("Migrate the GL.");
+    expect(prompt).toContain("NEW VALUE");
+    expect(prompt).toContain("Also migrate AP and AR.");
+    expect(prompt).toContain("Preserve every distinct");
   });
 
   it("omits optional context lines when absent", () => {

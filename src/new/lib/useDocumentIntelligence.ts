@@ -27,6 +27,15 @@ import type {
 
 export type { DocumentImportStage, DocumentImportResult, ReviewField, ApprovedInputs };
 
+/** AI merge-and-refine for a field whose imported value collides with an existing one. */
+export type RefineFieldFn = (
+  phaseId: string,
+  fieldId: string,
+  fieldLabel: string,
+  existingValue: string,
+  incomingValue: string,
+) => Promise<string>;
+
 // ─── File helpers ─────────────────────────────────────────────────────────────
 
 const AI_NATIVE_TYPES = new Set([
@@ -83,18 +92,65 @@ function buildReviewFields(
 
 // ─── Build approved inputs from reviewed fields ───────────────────────────────
 
-function buildApprovedInputs(reviewFields: ReviewField[]): ApprovedInputs {
+/** Deterministic merge used when AI refine is unavailable or fails — never loses data. */
+function localMerge(existing: string, incoming: string): string {
+  const a = existing.trim();
+  const b = incoming.trim();
+  if (!a) return b;
+  if (!b || a === b) return a;
+  return `${a}\n\n${b}`;
+}
+
+/**
+ * Build the set of inputs to persist from the reviewed fields. Fields the user
+ * rejected are dropped; manually edited fields are taken verbatim. When an
+ * accepted field collides with a value already in the programme, the existing
+ * and incoming values are merged-and-refined (AI when available, deterministic
+ * concatenation otherwise) so a document import never silently overwrites work
+ * the PM already entered.
+ */
+async function buildApprovedInputs(
+  reviewFields: ReviewField[],
+  refineField?: RefineFieldFn,
+): Promise<ApprovedInputs> {
   const result: ApprovedInputs = {};
-  for (const field of reviewFields) {
-    if (field.mapping.reviewState === "rejected") continue;
-    const value =
-      field.mapping.reviewState === "edited" && field.mapping.editedValue !== undefined
-        ? field.mapping.editedValue
-        : field.mapping.value;
-    if (!value?.trim()) continue;
-    if (!result[field.phaseId]) result[field.phaseId] = {};
-    result[field.phaseId][field.fieldId] = value.trim();
-  }
+  const add = (phaseId: string, fieldId: string, value: string) => {
+    if (!result[phaseId]) result[phaseId] = {};
+    result[phaseId][fieldId] = value;
+  };
+
+  await Promise.all(
+    reviewFields.map(async (field) => {
+      if (field.mapping.reviewState === "rejected") return;
+
+      // User hand-edited this field in the review panel — honour it verbatim.
+      if (field.mapping.reviewState === "edited" && field.mapping.editedValue !== undefined) {
+        const edited = field.mapping.editedValue.trim();
+        if (edited) add(field.phaseId, field.fieldId, edited);
+        return;
+      }
+
+      const incoming = field.mapping.value?.trim();
+      if (!incoming) return;
+
+      const existing = field.existingValue?.trim();
+      if (field.hasConflict && existing) {
+        let merged = "";
+        if (refineField) {
+          try {
+            merged = (await refineField(field.phaseId, field.fieldId, field.fieldLabel, existing, incoming)).trim();
+          } catch {
+            merged = "";
+          }
+        }
+        add(field.phaseId, field.fieldId, merged || localMerge(existing, incoming));
+        return;
+      }
+
+      add(field.phaseId, field.fieldId, incoming);
+    }),
+  );
+
   return result;
 }
 
@@ -278,13 +334,14 @@ export function useDocumentIntelligence({
   const save = useCallback(async (
     onSavePhaseInputs: (phaseId: string, inputs: Record<string, string>) => Promise<void>,
     onSaveAllPhaseInputs?: (allInputs: Record<string, Record<string, string>>, firstPhaseId?: string) => Promise<void>,
+    refineField?: RefineFieldFn,
   ) => {
     if (!result) return;
     setStage("saving");
     setProgress(90);
 
     try {
-      const approved = buildApprovedInputs(reviewFields);
+      const approved = await buildApprovedInputs(reviewFields, refineField);
       // Filter out empty phases
       const nonEmpty = Object.fromEntries(
         Object.entries(approved).filter(([, inputs]) => Object.keys(inputs).length > 0),

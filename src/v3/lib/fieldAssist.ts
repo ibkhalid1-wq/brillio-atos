@@ -9,7 +9,7 @@
  * the reply) is unit-tested even while the AI provider is unreachable.
  */
 
-export type FieldAssistMode = "generate" | "improve" | "expand" | "rewrite";
+export type FieldAssistMode = "generate" | "improve" | "expand" | "rewrite" | "merge";
 
 export interface FieldAssistContext {
   programName: string;
@@ -20,6 +20,8 @@ export interface FieldAssistContext {
   fieldLabel: string;
   fieldHint?: string | null;
   currentValue: string;
+  /** For `merge` mode: the new value (e.g. a document-extracted value) to reconcile with currentValue. */
+  incomingValue?: string;
 }
 
 /** Human-facing label for each mode (used by the inline action buttons). */
@@ -28,6 +30,7 @@ export const FIELD_ASSIST_MODE_LABEL: Record<FieldAssistMode, string> = {
   improve: "Improve",
   expand: "Expand",
   rewrite: "Rewrite",
+  merge: "Merge",
 };
 
 const MODE_INSTRUCTION: Record<FieldAssistMode, string> = {
@@ -39,10 +42,17 @@ const MODE_INSTRUCTION: Record<FieldAssistMode, string> = {
     "Expand the current draft with more relevant, concrete detail. Do not pad or repeat — every added clause must carry information.",
   rewrite:
     "Rewrite the current draft in clear, consultative, executive-ready language while preserving its meaning.",
+  merge:
+    "Reconcile the existing value and the new value into a single coherent field entry that preserves every distinct, accurate fact from both and reads as one polished statement.",
 };
 
-/** Modes that require existing text to act on. `generate` is the only empty-state mode. */
+/**
+ * Modes that require existing text to act on. `generate` is the only empty-state
+ * mode. `merge` needs both an existing and an incoming value, so it is never
+ * offered as a standalone inline action — it is invoked programmatically.
+ */
 export function isModeAvailable(mode: FieldAssistMode, currentValue: string): boolean {
+  if (mode === "merge") return false;
   const hasValue = currentValue.trim().length > 0;
   return mode === "generate" ? !hasValue : hasValue;
 }
@@ -70,6 +80,30 @@ export function buildFieldAssistPrompt(mode: FieldAssistMode, ctx: FieldAssistCo
   ].filter(Boolean);
 
   const current = ctx.currentValue.trim();
+
+  if (mode === "merge") {
+    const incoming = (ctx.incomingValue ?? "").trim();
+    return [
+      "You are ATOS, a senior delivery consultant helping a Program Manager complete a phase input field.",
+      "",
+      "PROGRAMME CONTEXT:",
+      ...contextLines,
+      "",
+      "EXISTING VALUE (already saved in the field):",
+      current || "(empty)",
+      "",
+      "NEW VALUE (extracted from an uploaded document):",
+      incoming || "(empty)",
+      "",
+      `TASK: ${MODE_INSTRUCTION.merge}`,
+      "",
+      "RULES:",
+      "- Return ONLY the field text — no preamble, no sign-off, no quotation marks, no markdown headers.",
+      "- Preserve every distinct, accurate fact from BOTH values; do not drop information.",
+      "- Reconcile overlaps into a single coherent statement and remove redundancy.",
+      "- Keep it concise and specific, in a professional, consultative tone suitable for an executive audience.",
+    ].join("\n");
+  }
 
   return [
     "You are ATOS, a senior delivery consultant helping a Program Manager complete a phase input field.",

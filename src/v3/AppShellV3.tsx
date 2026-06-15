@@ -2034,6 +2034,7 @@ export default function AppShellV3() {
       fieldLabel: request.fieldLabel,
       fieldHint: request.fieldHint,
       currentValue: request.currentValue,
+      incomingValue: request.incomingValue,
     });
     const { data, error } = await supabase.functions.invoke("copilot-chat", {
       body: { programId: activeProgram.id, workspaceId: `phase-input:${phaseId}`, message, stream: false },
@@ -2063,6 +2064,16 @@ export default function AppShellV3() {
     }
     return sanitiseFieldReply(content);
   }, [activeProgram]);
+
+  // Merge-and-refine for document import: when an imported field collides with a
+  // value the PM already entered, synthesise both into one coherent value via the
+  // field-assist endpoint instead of overwriting. Throws on failure so the import
+  // can fall back to a deterministic local merge.
+  const handleRefineImportField = useCallback(
+    (phaseId: string, fieldId: string, fieldLabel: string, existingValue: string, incomingValue: string) =>
+      handleAssistField(phaseId, { fieldId, fieldLabel, mode: "merge", currentValue: existingValue, incomingValue }),
+    [handleAssistField],
+  );
 
   const handleApproveGate = useCallback(async (phaseId: string) => {
     if (!activeProgram) return;
@@ -2609,6 +2620,7 @@ export default function AppShellV3() {
                     onSaveNarrativeCorrection={handleSaveNarrativeCorrection}
                     onSavePhaseInputs={handleSavePhaseInputs}
                     onSaveAllPhaseInputs={handleSaveAllPhaseInputs}
+                    onRefineImportField={handleRefineImportField}
                     onOpenIntelligence={() => { setIntelligenceInitialTab(undefined); openMoreView("intelligence"); }}
                     intelligenceInitialTab={intelligenceInitialTab}
                     onOpenTrace={(id) => setTraceRunId(id)}

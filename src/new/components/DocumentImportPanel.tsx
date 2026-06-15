@@ -32,6 +32,8 @@ interface DocumentImportPanelProps {
   onSavePhaseInputs?: (phaseId: string, inputs: Record<string, string>) => Promise<void>;
   /** Preferred: atomic save for all phases at once, avoids stale-closure overwrites */
   onSaveAllPhaseInputs?: (allInputs: Record<string, Record<string, string>>, firstPhaseId?: string) => Promise<void>;
+  /** AI merge-and-refine for fields that collide with an existing value. */
+  onRefineField?: (phaseId: string, fieldId: string, fieldLabel: string, existingValue: string, incomingValue: string) => Promise<string>;
   /** Called after a successful import (with or without extraction) */
   onComplete?: (result?: DocumentImportResult) => void | Promise<void>;
   onClose?: () => void;
@@ -42,6 +44,7 @@ export default function DocumentImportPanel({
   existingPhaseInputs = {},
   onSavePhaseInputs,
   onSaveAllPhaseInputs,
+  onRefineField,
   onComplete,
   onClose,
 }: DocumentImportPanelProps) {
@@ -333,6 +336,7 @@ export default function DocumentImportPanel({
               void save(
                 onSavePhaseInputs ?? (async () => { /* noop fallback */ }),
                 onSaveAllPhaseInputs,
+                onRefineField,
               );
             } else {
               // No save handler provided — just call onComplete and close
