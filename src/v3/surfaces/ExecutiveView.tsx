@@ -49,24 +49,35 @@ function PhaseProgressRow({
   status: string;
   onClick: () => void;
 }) {
-  const barColor =
-    pct >= 80
-      ? "var(--v3-green)"
+  // Visual state is driven by phase STATUS, not by an arbitrary % threshold,
+  // so two phases with the same status always read the same. The bar fill width
+  // already communicates magnitude — colour encodes meaning: green = done,
+  // blue = in progress, grey = not started.
+  const phaseState: "complete" | "in-progress" | "not-started" =
+    status === "complete" || pct >= 100
+      ? "complete"
       : pct > 0
+      ? "in-progress"
+      : "not-started";
+
+  const barColor =
+    phaseState === "complete"
+      ? "var(--v3-green)"
+      : phaseState === "in-progress"
       ? "var(--v3-accent)"
       : "var(--v3-border)";
 
   const chipCls =
-    pct >= 80
+    phaseState === "complete"
       ? "v3-chip green"
-      : pct > 0
-      ? "v3-chip muted"
+      : phaseState === "in-progress"
+      ? "v3-chip blue"
       : "v3-chip muted";
 
   const chipLabel =
-    status === "complete" || pct >= 100
+    phaseState === "complete"
       ? "Complete"
-      : pct > 0
+      : phaseState === "in-progress"
       ? "In Progress"
       : "Not Started";
 
