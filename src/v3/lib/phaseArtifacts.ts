@@ -6,8 +6,8 @@
  * Mobilise yields Governance Model and RACI Matrix, Design yields Solution
  * Architecture, etc., rather than a generic narrative/documents/risks set.
  *
- * The core Narrative and Status deck always lead (they exist in every phase and
- * carry live previews), followed by the phase's specialised required artifacts.
+ * The Narrative leads (it is a required artifact in every phase and carries a
+ * live inline preview); the phase's specialised required artifacts follow.
  * Labels resolve through the agent catalogue (`getAgentMeta(id).outputArtifact`).
  *
  * This is the single source of truth for both the rendered artifact chips and
@@ -22,21 +22,16 @@ export interface PhaseArtifactDef {
   label: string;
 }
 
-const CORE_LABELS: Record<string, string> = {
-  narrative: "Narrative",
-  deck: "Status deck",
-};
-
 function artifactLabel(id: string): string {
-  if (CORE_LABELS[id]) return CORE_LABELS[id];
+  if (id === "narrative") return "Narrative";
   const meta = getAgentMeta(id);
   return meta.outputArtifact || meta.label || id;
 }
 
-/** Ordered artifact definitions for a phase: core pair first, then required artifacts. */
+/** Ordered artifact definitions for a phase: Narrative first, then required artifacts. */
 export function getPhaseArtifactDefs(phaseId: string): PhaseArtifactDef[] {
   const phase = ATOS_STANDARD.phases.find((p) => p.id === phaseId);
-  const ordered: string[] = ["narrative", "deck"];
+  const ordered: string[] = ["narrative"];
   for (const id of phase?.requiredArtifacts ?? []) {
     if (!ordered.includes(id)) ordered.push(id);
   }

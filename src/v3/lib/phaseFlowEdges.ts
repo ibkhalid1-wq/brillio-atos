@@ -29,7 +29,7 @@ const PHASE_FIELD_ARTIFACTS: Record<string, Record<string, string[]>> = {
   },
   mobilise: {
     programDirector: ["governance-model", "raci-matrix"],
-    teamSize: ["raci-matrix", "deck"],
+    teamSize: ["raci-matrix"],
     governanceModel: ["governance-model"],
     keyRoles: ["raci-matrix", "stakeholder"],
   },
@@ -52,25 +52,23 @@ const PHASE_FIELD_ARTIFACTS: Record<string, Record<string, string[]>> = {
   operate: {
     goLivePlanOwner: ["runbook"],
     supportModel: ["support-model"],
-    trackedKpi: ["adoption", "deck"],
+    trackedKpi: ["adoption"],
     runbookReference: ["runbook"],
     adoptionApproach: ["adoption"],
   },
   govern: {
     complianceOwner: ["risk"],
     controlMatrix: ["risk"],
-    reportingCadence: ["deck"],
     auditEvidencePlan: ["risk"],
     escalationPath: ["risk"],
   },
   optimize: {
-    benefitBaseline: ["optimization-backlog", "deck"],
+    benefitBaseline: ["optimization-backlog"],
     improvementBacklog: ["optimization-backlog"],
-    adoptionTarget: ["deck"],
     experimentProposal: ["optimization-backlog"],
   },
   valuerealize: {
-    realisedBenefits: ["closure", "deck"],
+    realisedBenefits: ["closure"],
     lessonsLearnedReference: ["closure"],
     bauOwner: ["closure"],
     closurePackReference: ["closure"],

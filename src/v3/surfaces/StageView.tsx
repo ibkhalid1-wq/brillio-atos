@@ -482,15 +482,17 @@ export default function StageView({
   }, [activePhaseId, program]);
 
   // Methodology-declared artifacts for the active phase, keyed by producing-agent
-  // id (e.g. Mobilise → governance-model, raci-matrix), with live present/quality.
-  const phaseArtifactNodes = useMemo(() => {
-    const byKey = new Map<string, { present: boolean; quality: number | null }>();
-    if (!activePhase) return byKey;
+  // id (e.g. Mobilise → governance-model, raci-matrix), with live state/quality
+  // plus the phase's present/required completeness counts.
+  const phaseArtifacts = useMemo(() => {
+    const byKey = new Map<string, { present: boolean; quality: number | null; state: string }>();
+    if (!activePhase) return { byKey, present: 0, required: 0 };
     const summary = buildPhaseArtifacts(program, activePhase.id);
     for (const node of summary?.artifacts ?? []) {
-      byKey.set(node.key, { present: node.present, quality: node.quality });
+      if (!node.required) continue;
+      byKey.set(node.key, { present: node.present, quality: node.quality, state: node.state });
     }
-    return byKey;
+    return { byKey, present: summary?.present ?? 0, required: summary?.required ?? 0 };
   }, [program, activePhase]);
 
   const gateReview = activePhase ? program?.gateReviews?.[activePhase.id] || null : null;
@@ -1532,45 +1534,73 @@ export default function StageView({
 
       {/* RIGHT — artifacts card */}
       <section className="v3-phase-col v3-phase-col--artifacts" id="phase-artifacts-anchor" style={{ borderBottom: "none" }}>
-        <div className="v3-zone-label">Artifacts</div>
+        <div className="v3-zone-label">
+          Artifacts
+          {phaseArtifacts.required > 0 ? (
+            <span className={`v3-zone-label-meta ${phaseArtifacts.present === phaseArtifacts.required ? "is-complete" : ""}`}>
+              {phaseArtifacts.present}/{phaseArtifacts.required} produced
+            </span>
+          ) : null}
+        </div>
         <div className="v3-output-strip">
-          {[
-            { id: "narrative", kind: "preview" as const, label: `Narrative${narrativeQuality ? ` ${narrativeQuality.score}%` : ""}`, available: !!artifactPreviews?.narrative, tone: narrativeQuality ? (narrativeQuality.score >= 80 ? "green" : narrativeQuality.score >= 60 ? "blue" : "amber") : "blue" },
-            { id: "deck", kind: "preview" as const, label: `Status deck${deckQuality ? ` ${deckQuality.score}%` : ""}`, available: !!artifactPreviews?.deck, tone: deckQuality ? (deckQuality.score >= 80 ? "green" : deckQuality.score >= 60 ? "blue" : "amber") : "blue" },
-            ...(showRetro ? [{ id: "retro", kind: "retro" as const, label: isRetroRunning ? "Preparing…" : "Retrospective", available: false, tone: "muted" }] : []),
-            ...getPhaseArtifactDefs(activePhase.id)
-              .filter((def) => def.id !== "narrative" && def.id !== "deck")
-              .map((def) => {
-                const node = phaseArtifactNodes.get(def.id);
-                const present = !!node?.present;
-                const score = typeof node?.quality === "number" ? node.quality : null;
-                const tone = present ? (score != null ? (score >= 80 ? "green" : score >= 60 ? "blue" : "amber") : "blue") : "muted";
-                return { id: def.id, kind: "agent" as const, label: score != null ? `${def.label} ${score}%` : def.label, available: present, tone };
-              }),
-          ].map((output) => (
-            <button
-              key={output.id}
-              type="button"
-              data-io-anchor={`artifact:${output.id}`}
-              className={`v3-chip ${output.available ? (output.tone || "blue") : "muted"} ${expandedOutput === output.id ? "is-active" : ""}`}
-              onClick={() => {
-                if (output.kind === "retro") {
-                  triggers.triggerRetro(activePhase.id);
-                  return;
-                }
-                if (output.kind === "preview") {
-                  if (output.available) toggleOutput(output.id);
-                  return;
-                }
-                onRunAgent(output.id);
-              }}
-              disabled={output.kind === "retro" && isRetroRunning}
-              aria-expanded={output.kind === "preview" && output.available ? expandedOutput === output.id : undefined}
-            >
-              {output.label}
-              {output.kind === "preview" && output.available ? <span className="v3-output-toggle-glyph">{expandedOutput === output.id ? "▴" : "▾"}</span> : null}
+          {/* Narrative — phase synthesis, with inline preview */}
+          <button
+            type="button"
+            data-io-anchor="artifact:narrative"
+            className={`v3-chip ${artifactPreviews?.narrative ? (narrativeQuality ? (narrativeQuality.score >= 80 ? "green" : narrativeQuality.score >= 60 ? "blue" : "amber") : "blue") : "muted"} ${expandedOutput === "narrative" ? "is-active" : ""}`}
+            onClick={() => { if (artifactPreviews?.narrative) toggleOutput("narrative"); else onRunAgent("narrative"); }}
+            aria-expanded={artifactPreviews?.narrative ? expandedOutput === "narrative" : undefined}
+          >
+            <span>Narrative{narrativeQuality ? ` ${narrativeQuality.score}%` : ""}</span>
+            {artifactPreviews?.narrative
+              ? <span className="v3-output-toggle-glyph">{expandedOutput === "narrative" ? "▴" : "▾"}</span>
+              : <span className="v3-artifact-row-status muted">Generate</span>}
+          </button>
+
+          {showRetro ? (
+            <button type="button" className="v3-chip muted" disabled={isRetroRunning} onClick={() => triggers.triggerRetro(activePhase.id)}>
+              {isRetroRunning ? "Preparing…" : "Retrospective"}
             </button>
-          ))}
+          ) : null}
+
+          {getPhaseArtifactDefs(activePhase.id)
+            .filter((def) => def.id !== "narrative")
+            .map((def) => {
+              const node = phaseArtifacts.byKey.get(def.id);
+              const present = !!node?.present;
+              const state = node?.state ?? "missing";
+              const score = typeof node?.quality === "number" ? node.quality : null;
+              const statusLabel = !present
+                ? "Missing"
+                : state === "approved" ? "Approved"
+                : state === "ready" ? "Ready"
+                : state === "archived" ? "Archived"
+                : "Draft";
+              const tone = !present
+                ? "muted"
+                : state === "approved" ? "green"
+                : state === "ready" ? "blue"
+                : "amber";
+              return (
+                <div key={def.id} className="v3-artifact-row" data-io-anchor={`artifact:${def.id}`}>
+                  <div className="v3-artifact-row-head">
+                    <span className="v3-artifact-row-label">{def.label}</span>
+                    <span className={`v3-chip v3-chip-tight ${tone}`}>
+                      {statusLabel}{score != null ? ` · ${score}%` : ""}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="v3-button ghost v3-button-inline-xs v3-artifact-regen"
+                    onClick={() => onRunAgent(def.id)}
+                    disabled={!agentsAvailable}
+                    title={present ? `Regenerate ${def.label}` : `Generate ${def.label}`}
+                  >
+                    {present ? "↻ Regenerate" : "Generate"}
+                  </button>
+                </div>
+              );
+            })}
         </div>
         {!artifactPreviews?.narrative && !artifactPreviews?.deck && !expandedOutput ? (
           <div className="v3-output-empty-hint" style={{ fontSize: 12, color: "var(--v3-text-muted)", marginTop: 10, padding: "0 2px" }}>
