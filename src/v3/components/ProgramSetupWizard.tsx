@@ -14,6 +14,27 @@ const ARCHETYPE_VARIANT: Record<string, MethodologyVariant> = PROGRAM_ARCHETYPES
   {} as Record<string, MethodologyVariant>,
 );
 
+const INDUSTRY_OPTIONS = [
+  "Financial Services",
+  "Banking",
+  "Insurance",
+  "Healthcare",
+  "Life Sciences & Pharma",
+  "Retail & Consumer Goods",
+  "Manufacturing",
+  "Automotive",
+  "Energy & Utilities",
+  "Telecommunications",
+  "Media & Entertainment",
+  "Technology & Software",
+  "Transportation & Logistics",
+  "Public Sector & Government",
+  "Education",
+  "Travel & Hospitality",
+  "Professional Services",
+  "Other",
+];
+
 interface ProgramSetupWizardProps {
   program: ProgramSummary;
   onSave: (patch: ProgramSetupPatch) => Promise<void>;
@@ -98,7 +119,9 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
   const [startDate, setStartDate] = useState(typeof projectMeta.startDate === "string" ? projectMeta.startDate : "");
   const [targetEndDate, setTargetEndDate] = useState(typeof projectMeta.targetEndDate === "string" ? projectMeta.targetEndDate : "");
   const [objective, setObjective] = useState(program.objective || "");
-  const [phases, setPhases] = useState<PhaseForm[]>(
+  // Phases keep their existing progress/target dates; the wizard no longer edits
+  // them inline (the phase-progress section was removed), so the setter is unused.
+  const [phases] = useState<PhaseForm[]>(
     program.phases.map((phase) => ({
       id: phase.id,
       pct: Math.max(0, Math.min(100, Math.round(phase.pct ?? 0))),
@@ -280,7 +303,13 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
             </label>
             <label>
               <div className="v3-field-label">Industry</div>
-              <input className={prefillClass("industry")} title={prefilledFields.has("industry") ? "Extracted from uploaded document — verify before saving" : undefined} aria-label="Industry" type="text" placeholder="e.g. Financial Services" value={industry} onChange={(event) => setIndustry(event.target.value)} />
+              <select className={prefillClass("industry")} title={prefilledFields.has("industry") ? "Extracted from uploaded document — verify before saving" : undefined} aria-label="Industry" value={industry} onChange={(event) => setIndustry(event.target.value)}>
+                <option value="">Select an industry…</option>
+                {industry && !INDUSTRY_OPTIONS.includes(industry) ? <option value={industry}>{industry}</option> : null}
+                {INDUSTRY_OPTIONS.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
             </label>
             <label>
               <div className="v3-field-label">Programme start date</div>
@@ -307,41 +336,6 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
             />
           </label>
           <div className="v3-char-count">{objective.length} / 500</div>
-        </section>
-
-        <section>
-          <div className="v3-wizard-section-label">Phase progress</div>
-          <div style={{ display: "grid", gap: 4 }}>
-            {phases.map((phase) => (
-              <div key={phase.id} className="v3-wizard-phase-row">
-                <div className="v3-wizard-phase-row-name">{phase.label}</div>
-                <input
-                  className="v3-range"
-                  aria-label={`${phase.label} progress`}
-                  type="range"
-                  min={0}
-                  max={100}
-                  step={5}
-                  value={phase.pct}
-                  onChange={(event) => {
-                    const nextPct = Number(event.target.value);
-                    setPhases((current) => current.map((entry) => entry.id === phase.id ? { ...entry, pct: nextPct } : entry));
-                  }}
-                />
-                <div className="v3-wizard-phase-row-pct">{phase.pct}%</div>
-                <input
-                  className="v3-input"
-                  aria-label={`${phase.label} target date`}
-                  type="date"
-                  value={phase.targetDate}
-                  onChange={(event) => {
-                    const nextDate = event.target.value;
-                    setPhases((current) => current.map((entry) => entry.id === phase.id ? { ...entry, targetDate: nextDate } : entry));
-                  }}
-                />
-              </div>
-            ))}
-          </div>
         </section>
 
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
