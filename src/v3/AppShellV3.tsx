@@ -2492,6 +2492,9 @@ export default function AppShellV3() {
                 onSaveArtifact={handleSaveArtifact}
                 onSaveInputs={handleSavePhaseInputs}
                 onUploadDocument={handleUploadDocument}
+                onAddDecision={handleAddDecision}
+                onAddRaid={addRaidEntry}
+                onCloseRaid={closeRaidEntry}
                 onAssistField={handleAssistField}
                 artifactPreviews={{
                   narrative: activeProgram?.narrative || null,

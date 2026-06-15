@@ -9,6 +9,7 @@ import PhaseInputsPanel, { type FieldAssistRequest } from "@/v3/components/Phase
 import PhaseFlowOverlay from "@/v3/components/PhaseFlowOverlay";
 import { PhaseProgressionCard } from "@/v3/components/PhaseProgressionCard";
 import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
+import { PhaseRailPanels } from "@/v3/components/PhaseRailPanels";
 import { PhaseChangeSummary } from "@/v3/components/PhaseChangeSummary";
 import { PhaseExecutiveSummary } from "@/v3/components/PhaseExecutiveSummary";
 import { PhaseMethodologyChecklist } from "@/v3/components/PhaseMethodologyChecklist";
@@ -55,6 +56,9 @@ interface StageViewProps {
   onSaveArtifact: (artifactId: "narrative" | "deck", content: string) => Promise<void>;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>) => Promise<void>;
   onUploadDocument: () => void;
+  onAddDecision: (decision: Omit<DecisionSummary, "id" | "status" | "createdAt">) => Promise<void>;
+  onAddRaid: (draft: { type: RAIDEntry["type"]; title: string; description: string; severity: RAIDEntry["severity"]; phase: string; owner?: string; mitigation?: string }) => Promise<void>;
+  onCloseRaid: (entryId: string, note?: string) => Promise<void>;
   onAssistField?: (phaseId: string, request: FieldAssistRequest) => Promise<string>;
   artifactPreviews?: {
     narrative?: string | null;
@@ -218,50 +222,6 @@ function ExitCriteriaCard({
         />
       )}
     </div>
-  );
-}
-
-function RisksCard({ risks, onOpen }: { risks: RAIDEntry[]; onOpen: () => void }) {
-  return (
-    <AdamCard accent={risks.some((risk) => risk.severity === "critical" || risk.severity === "high") ? "danger" : "none"}>
-      <AdamCardHeader
-        title="Risks"
-        subtitle={risks.length ? `${risks.length} active in this phase` : "No risks in this phase"}
-        action={<button type="button" className="v3-button ghost v3-button-inline-xs" onClick={onOpen}>{risks.length ? "View all →" : "View programme risks →"}</button>}
-      />
-      <AdamCardBody>
-        {risks.length ? (
-          <div style={{ display: "grid", gap: 8 }}>
-            {risks.map((risk) => (
-              <ExpandableSection
-                key={risk.id}
-                title={risk.title}
-                subtitle={`${risk.phase || "programme"} · ${risk.owner ? `Owner: ${risk.owner}` : "No owner yet"}`}
-                defaultOpen={risk.severity === "critical" || risk.severity === "high"}
-                badge={
-                  <StatusBadge
-                    variant={risk.severity === "critical" ? "critical" : risk.severity === "high" ? "high" : risk.severity === "medium" ? "medium" : "low"}
-                    size="sm"
-                  />
-                }
-              >
-                <div className="v3-expandable-detail-copy">
-                  <div>{risk.description || "No additional risk detail captured yet."}</div>
-                  {risk.mitigation ? (
-                    <div>
-                      <div className="v3-expandable-detail-label">Mitigation</div>
-                      <div>{risk.mitigation}</div>
-                    </div>
-                  ) : null}
-                </div>
-              </ExpandableSection>
-            ))}
-          </div>
-        ) : (
-          <div className="v3-mini-card-empty">No active phase risks.</div>
-        )}
-      </AdamCardBody>
-    </AdamCard>
   );
 }
 
@@ -437,6 +397,9 @@ export default function StageView({
   onSaveArtifact,
   onSaveInputs,
   onUploadDocument,
+  onAddDecision,
+  onAddRaid,
+  onCloseRaid,
   onAssistField,
   artifactPreviews,
 }: StageViewProps) {
@@ -511,7 +474,6 @@ export default function StageView({
     )
     .slice(0, 3);
   const stageMilestones = sortByDate((program?.milestones || []).filter((milestone) => milestone.phaseId === activePhase?.id && milestone.status !== "complete")).slice(0, 2);
-  const stageRisks = (program?.raidEntries || []).filter((entry) => entry.phase === activePhase?.id && entry.type === "risk" && entry.status !== "closed").slice(0, 3);
   const phaseRationale = program?.plan?.nextThreeActions?.find((action) => action.phase === activePhase?.id)?.rationale || "";
   const verdict = firstSentence(
     activePhase?.objective ||
@@ -1167,43 +1129,22 @@ export default function StageView({
           </div>
         ) : null}
 
-        {/* Task queue — recommended next actions for this phase */}
-        {readiness && readiness.recommendedActions.length > 0 ? (
-          <div className="v3-rail-section">
-            <div className="v3-card-title v3-card-title--flush">Task queue</div>
-            <ol className="v3-task-queue">
-              {readiness.recommendedActions.slice(0, 5).map((action, index) => (
-                <li key={`${action.label}-${index}`} className="v3-task-queue-item">
-                  <div className="v3-task-queue-main">
-                    <span className={`v3-task-queue-dot ${action.priority === "critical" ? "red" : "amber"}`} />
-                    <span className="v3-task-queue-label">{action.label}</span>
-                    {action.estimatedImpact > 0 ? <span className="v3-task-queue-impact">+{action.estimatedImpact}</span> : null}
-                  </div>
-                  {action.agentId ? (
-                    <button type="button" className="v3-button ghost v3-button-inline-xs" onClick={() => onRunAgent(action.agentId!)}>Analyse →</button>
-                  ) : action.workspaceId ? (
-                    <button type="button" className="v3-button ghost v3-button-inline-xs" onClick={() => onOpenMoreView?.(action.workspaceId!)}>Open →</button>
-                  ) : null}
-                </li>
-              ))}
-            </ol>
-          </div>
+        {/* Actions (decisions/blockers/risks) + Intelligence (artifacts/graph/uploads) */}
+        {program && activePhase?.id ? (
+          <PhaseRailPanels
+            program={program}
+            phaseId={activePhase.id}
+            decisions={stageDecisions}
+            agentsAvailable={agentsAvailable}
+            onAddDecision={onAddDecision}
+            onAddRaid={onAddRaid}
+            onCloseRaid={onCloseRaid}
+            onOpenDecide={onOpenDecide}
+            onRunAgent={onRunAgent}
+            onOpenMoreView={onOpenMoreView}
+            onUploadDocument={onUploadDocument}
+          />
         ) : null}
-
-        {/* Blockers — what's standing between this phase and gate approval */}
-        {readiness && readiness.missing.length > 0 ? (
-          <div className="v3-rail-section">
-            <div className="v3-card-title v3-card-title--flush">Blockers</div>
-            <ul className="v3-inline-list">
-              {readiness.missing.slice(0, 5).map((item, index) => (
-                <li key={`${item}-${index}`}>{item}</li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-
-        {/* Risks — live phase RAID */}
-        <RisksCard risks={stageRisks} onOpen={() => onOpenMoreView("risks")} />
         {incomingHandoff ? (
           <div className="v3-handoff-banner">
             <div className="v3-eyebrow-label">
