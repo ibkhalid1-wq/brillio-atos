@@ -158,6 +158,8 @@ interface ParsedAgentPayload {
     title: string;
     content: string;
     summary?: string;
+    /** 0-100 quality/confidence to surface in the artifact ledger. */
+    confidence?: number;
   }>;
   decisions: Array<{
     title: string;
@@ -2420,6 +2422,44 @@ function buildDefaultHandoff(
   };
 }
 
+/**
+ * Canonical artifact titles for structured ("special program") agents. These MUST
+ * match the client `AGENT_META[agentId].outputArtifact` labels so the UI artifact
+ * ledger (which fuzzy-matches required slots by title) recognises agent output.
+ * Without this, structured agents persist only to dedicated top-level program keys
+ * and the ledger — which reads only `data.phaseArtifacts` — never sees them.
+ */
+const REQUIRED_ARTIFACT_LABELS: Record<string, string> = {
+  narrative: "Phase Narrative",
+  plan: "Delivery Plan",
+  risk: "Risk Register",
+  milestone: "Milestone Review",
+  budget: "Budget Report",
+  "critical-path": "Critical Path",
+  "change-impact": "Change Impact",
+  stakeholder: "Stakeholder Map",
+  "health-heatmap": "Health Heatmap",
+  adoption: "Adoption Plan",
+  closure: "Closure Report",
+};
+
+/**
+ * Some agents run program-level but the methodology assigns their artifact to a
+ * specific phase slot. Route the ledger entry to the phase the methodology
+ * expects so the required-artifact slot is satisfied. (The dedicated top-level
+ * program key written elsewhere is unaffected.)
+ */
+const ARTIFACT_LEDGER_PHASE_OVERRIDE: Record<string, string> = {
+  adoption: "operate",
+};
+
+/** Normalise an agent confidence (0-1 or 0-100) to a 0-100 ledger quality score. */
+function toLedgerConfidence(value: number | null | undefined): number | undefined {
+  if (typeof value !== "number" || Number.isNaN(value)) return undefined;
+  const scaled = value <= 1 ? value * 100 : value;
+  return Math.max(0, Math.min(100, Math.round(scaled)));
+}
+
 function applyArtifactsToProgramData(
   programData: ProgramState,
   phaseId: string,
@@ -2443,6 +2483,9 @@ function applyArtifactsToProgramData(
       status: "draft",
       agentDrafted: true,
       agentDraftedAt: new Date().toISOString(),
+      ...(typeof artifact.confidence === "number"
+        ? { agentConfidence: artifact.confidence as JsonValue }
+        : {}),
     };
   }
 
@@ -5679,6 +5722,21 @@ Deno.serve(async (req) => {
         nextProgramData = applyNarrativeResultToProgramData(contextProgramData, result);
       } else if (request.agentId === "board-pack") {
         nextProgramData = applyBoardPackResultToProgramData(contextProgramData, normalizedParsedResult);
+      }
+
+      // Surface structured agent output in the artifact ledger. The UI artifact
+      // model reads only `data.phaseArtifacts`, so a canonical entry (titled to
+      // match the methodology's required-artifact slot) is written here in
+      // addition to the dedicated top-level program keys above.
+      if (!autonomy.shouldQueueReview && REQUIRED_ARTIFACT_LABELS[request.agentId]) {
+        const ledgerPhase = ARTIFACT_LEDGER_PHASE_OVERRIDE[request.agentId] ?? request.phaseId;
+        nextProgramData = applyArtifactsToProgramData(nextProgramData, ledgerPhase, [{
+          id: request.agentId,
+          title: REQUIRED_ARTIFACT_LABELS[request.agentId],
+          content: outputSummary || "",
+          summary: outputSummary || "",
+          confidence: toLedgerConfidence(confidence),
+        }]);
       }
 
       if (!autonomy.shouldQueueReview) {
