@@ -91,9 +91,21 @@ const VALID_AGENT_IDS = new Set([
   "deck-section",
   "narrative-refine",
   "board-pack",
+  // Formal-artifact agents (kept in lockstep with FORMAL_ARTIFACT_AGENTS below).
   "charter",
   "business-case",
   "outcome-framework",
+  "strategic-roadmap",
+  "governance-model",
+  "raci-matrix",
+  "requirements-catalog",
+  "future-state-design",
+  "target-operating-model",
+  "solution-architecture",
+  "test-plan",
+  "runbook",
+  "support-model",
+  "optimization-backlog",
 ]);
 
 // Presentation-only agent ids surfaced in the UI that map onto an implemented
@@ -493,9 +505,7 @@ function isSpecialProgramAgent(agentId: string, phaseId: string): boolean {
     || agentId === "deck-section"
     || agentId === "narrative-refine"
     || agentId === "board-pack"
-    || agentId === "charter"
-    || agentId === "business-case"
-    || agentId === "outcome-framework"
+    || FORMAL_ARTIFACT_AGENTS[agentId] !== undefined
     || isProgramLevelAdoptionAgent(agentId, phaseId);
 }
 
@@ -623,6 +633,310 @@ async function queryPatternContext(
     confidence: typeof entry.confidence === "number" ? entry.confidence : 0.5,
     usedCount: typeof entry.used_count === "number" ? entry.used_count : 0,
   }));
+}
+
+/**
+ * Formal-artifact agents: deterministic generators for the methodology's
+ * document-style required artifacts (charter, business case, governance model,
+ * requirements, designs, test plan, runbooks, etc.). Each entry is data —
+ * the context builder, prompt builder and dispatch chain all read this registry
+ * generically, so adding a new formal artifact is a single registry entry plus
+ * its methodology slot + agentMeta label on the client.
+ *
+ * `phase`    — the phase whose required-artifact slot this satisfies.
+ * `fieldKey` — top-level program-data mirror key (must not collide with a
+ *              read-only value record such as `businessCase`).
+ * `title`    — ledger title; MUST match the agent's outputArtifact in agentMeta
+ *              so the client artifact model fuzzy-matches it to the slot.
+ * `system`   — the full system prompt (returns one JSON document).
+ */
+interface FormalArtifactSpec {
+  phase: string;
+  fieldKey: string;
+  title: string;
+  system: string;
+}
+
+const FORMAL_ARTIFACT_AGENTS: Record<string, FormalArtifactSpec> = {
+  "charter": {
+    phase: "strategy",
+    fieldKey: "transformationCharter",
+    title: "Transformation Charter",
+    system: `You are the ADAM Transformation Charter Agent. Produce the foundational programme mandate that authorises the transformation and sets its boundaries.
+
+Use the provided Strategy inputs (sponsor, business objective, success metric, scope, constraints, kpiBaselines). Do NOT invent a sponsor, budget, or scope that is not supported by the context — where an input is missing, say so explicitly in "gaps".
+
+Return ONLY valid JSON:
+{
+  "title": "Transformation Charter — <programme name>",
+  "mandate": "2-3 sentence statement of why this programme exists and what authority it holds",
+  "sponsor": "named executive sponsor or 'NOT SPECIFIED'",
+  "businessObjective": "the primary objective in one sentence",
+  "objectives": ["specific, outcome-oriented objectives"],
+  "inScope": ["what the programme will deliver"],
+  "outOfScope": ["explicit exclusions"],
+  "successCriteria": ["measurable criteria, anchored to the KPIs where present"],
+  "keyRisks": ["top strategic risks to the mandate"],
+  "governanceSummary": "one sentence on how decisions and escalations will be governed",
+  "gaps": ["inputs that are missing or too weak to charter confidently"],
+  "summary": "one sentence verdict on charter readiness",
+  "confidence": 0.0
+}`,
+  },
+  "business-case": {
+    phase: "strategy",
+    fieldKey: "businessCaseDoc",
+    title: "Business Case",
+    system: `You are the ADAM Business Case Agent. Build the investment justification linking cost, benefit, and the value hypothesis.
+
+Anchor benefits to the captured kpiBaselines (baseline → target) where present, and use valueProjected and constraints/budget for the investment side. Do NOT fabricate financial figures — when a number is unknown, mark it "TBD" and list it under "assumptions".
+
+Return ONLY valid JSON:
+{
+  "valueHypothesis": "the core 'we believe that...' statement",
+  "investmentAsk": "total investment required or 'TBD'",
+  "expectedBenefits": [ { "benefit": "string", "kpi": "linked KPI name or null", "baseline": "string or null", "target": "string or null", "value": "quantified value or 'TBD'" } ],
+  "costs": [ { "category": "string", "estimate": "string or 'TBD'" } ],
+  "roiNarrative": "2-3 sentence ROI / payback rationale",
+  "assumptions": ["key assumptions and unknowns"],
+  "recommendation": "proceed | proceed-with-conditions | revisit",
+  "summary": "one sentence verdict on the business case strength",
+  "confidence": 0.0
+}`,
+  },
+  "outcome-framework": {
+    phase: "strategy",
+    fieldKey: "outcomeFramework",
+    title: "Outcome Framework",
+    system: `You are the ADAM Outcome Framework Agent. Structure the programme's outcomes into a measurable hierarchy that makes benefits traceable from strategy to KPI.
+
+Build directly on the captured kpiBaselines (name/baseline/target/unit). For each strategic outcome, link the measurable KPIs that evidence it and the leading indicators that predict it. Do NOT invent KPIs when kpiBaselines is non-empty — carry those through and only add leading indicators.
+
+Return ONLY valid JSON:
+{
+  "strategicOutcomes": [
+    {
+      "outcome": "the outcome statement",
+      "kpis": [ { "name": "KPI name", "baseline": "string or null", "target": "string or null", "unit": "string or null" } ],
+      "leadingIndicators": ["early signals that predict this outcome"],
+      "owner": "accountable role or null"
+    }
+  ],
+  "benefitMap": "one sentence describing how outputs lead to outcomes to value",
+  "gaps": ["outcomes without a measurable KPI, or KPIs without a baseline"],
+  "summary": "one sentence verdict on outcome measurability",
+  "confidence": 0.0
+}`,
+  },
+  "strategic-roadmap": {
+    phase: "strategy",
+    fieldKey: "strategicRoadmap",
+    title: "Strategic Roadmap",
+    system: `You are the ADAM Strategic Roadmap Agent. Produce a phase-level roadmap sequencing the transformation from now to value realisation.
+
+Use the programme phases, milestones, and objective. Anchor dates to existing phase ETAs/milestones — do NOT fabricate dates; mark unknown dates "TBD".
+
+Return ONLY valid JSON:
+{
+  "horizon": "one sentence describing the overall timeframe",
+  "phases": [ { "phase": "phase id/name", "objective": "what this phase achieves", "start": "date or 'TBD'", "end": "date or 'TBD'", "keyMilestones": ["string"], "gate": "the decision gate that closes this phase" } ],
+  "dependencies": [ { "from": "phase", "to": "phase", "reason": "why" } ],
+  "criticalDecisions": ["decisions that gate progress along the roadmap"],
+  "gaps": ["sequencing or date gaps that need resolving"],
+  "summary": "one sentence verdict on roadmap coherence",
+  "confidence": 0.0
+}`,
+  },
+  "governance-model": {
+    phase: "mobilise",
+    fieldKey: "governanceModel",
+    title: "Governance Model",
+    system: `You are the ADAM Governance Model Agent. Define how the programme is governed: decision bodies, cadence, authority thresholds, and escalation.
+
+Use stakeholders, decisions, and the programme objective. Do NOT invent named individuals not present in context — use roles where names are unknown.
+
+Return ONLY valid JSON:
+{
+  "decisionBodies": [ { "name": "e.g. Steering Committee", "purpose": "string", "members": ["role or name"], "cadence": "e.g. monthly", "authority": "what it can decide" } ],
+  "decisionRights": [ { "decisionType": "string", "owner": "role/body", "threshold": "e.g. >£50k to SteerCo" } ],
+  "escalationPath": ["tier 1 -> tier 2 -> tier 3 with triggers"],
+  "reportingCadence": ["what is reported, to whom, how often"],
+  "gaps": ["governance roles or bodies not yet defined"],
+  "summary": "one sentence verdict on governance readiness",
+  "confidence": 0.0
+}`,
+  },
+  "raci-matrix": {
+    phase: "mobilise",
+    fieldKey: "raciMatrix",
+    title: "RACI Matrix",
+    system: `You are the ADAM RACI Matrix Agent. Map programme activities to roles with Responsible / Accountable / Consulted / Informed assignments.
+
+Use stakeholders and phase activities. Every activity MUST have exactly one Accountable. Use roles where named individuals are unknown.
+
+Return ONLY valid JSON:
+{
+  "roles": ["the roles/people across the columns"],
+  "activities": [ { "activity": "string", "responsible": ["role"], "accountable": "single role", "consulted": ["role"], "informed": ["role"] } ],
+  "gaps": ["activities missing an accountable, or roles not yet staffed"],
+  "summary": "one sentence verdict on accountability coverage",
+  "confidence": 0.0
+}`,
+  },
+  "requirements-catalog": {
+    phase: "discover",
+    fieldKey: "requirementsCatalog",
+    title: "Requirements Catalog",
+    system: `You are the ADAM Requirements Catalog Agent. Capture and structure the programme requirements with priority and traceability.
+
+Use the discover-phase inputs, scope, and objective. Prioritise with MoSCoW. Each requirement links to the outcome/KPI it serves where possible. Do NOT fabricate requirements with no basis in context — list coverage gaps instead.
+
+Return ONLY valid JSON:
+{
+  "requirements": [ { "id": "REQ-001", "title": "string", "type": "functional|non-functional", "priority": "must|should|could|wont", "description": "string", "source": "where it came from", "linkedOutcome": "outcome/KPI name or null", "acceptanceCriteria": ["testable criteria"] } ],
+  "gaps": ["areas of scope without requirements yet"],
+  "summary": "one sentence verdict on requirements completeness",
+  "confidence": 0.0
+}`,
+  },
+  "future-state-design": {
+    phase: "design",
+    fieldKey: "futureStateDesign",
+    title: "Future State Design",
+    system: `You are the ADAM Future State Design Agent. Describe the target future state: capabilities, processes, and the change from current state.
+
+Use requirements, objective, and design-phase inputs. Ground each future-state change in a requirement or outcome where possible.
+
+Return ONLY valid JSON:
+{
+  "designPrinciples": ["principles guiding the design"],
+  "futureCapabilities": [ { "capability": "string", "description": "string", "changeFromToday": "what changes", "enabledOutcome": "outcome/KPI or null" } ],
+  "processChanges": [ { "process": "string", "currentState": "string or 'unknown'", "futureState": "string" } ],
+  "gaps": ["design areas not yet resolved"],
+  "summary": "one sentence verdict on design completeness",
+  "confidence": 0.0
+}`,
+  },
+  "target-operating-model": {
+    phase: "design",
+    fieldKey: "targetOperatingModel",
+    title: "Target Operating Model",
+    system: `You are the ADAM Target Operating Model Agent. Define the TOM across people, process, technology, and governance dimensions.
+
+Use future-state design, stakeholders, and objective. Be specific about how the organisation runs in the future state.
+
+Return ONLY valid JSON:
+{
+  "people": { "structure": "string", "roles": ["key roles"], "capabilities": ["capabilities needed"] },
+  "process": { "coreProcesses": ["string"], "operatingPrinciples": ["string"] },
+  "technology": { "platforms": ["string"], "dataAndIntegration": "string" },
+  "governance": { "decisionRights": "string", "performanceManagement": "string" },
+  "transitionImpacts": ["what must change to reach the TOM"],
+  "gaps": ["TOM dimensions not yet defined"],
+  "summary": "one sentence verdict on TOM readiness",
+  "confidence": 0.0
+}`,
+  },
+  "solution-architecture": {
+    phase: "design",
+    fieldKey: "solutionArchitecture",
+    title: "Solution Architecture",
+    system: `You are the ADAM Solution Architecture Agent. Produce the solution architecture: components, integrations, data flows, NFRs, and key decisions.
+
+Use requirements, future-state design, and constraints. Do NOT invent vendor products not implied by context — describe capabilities generically where unknown.
+
+Return ONLY valid JSON:
+{
+  "components": [ { "name": "string", "responsibility": "string", "type": "e.g. service|datastore|ui" } ],
+  "integrations": [ { "from": "component", "to": "component", "mechanism": "e.g. REST/event", "data": "what flows" } ],
+  "nonFunctionalRequirements": [ { "category": "e.g. security|performance|availability", "requirement": "string" } ],
+  "architectureDecisions": [ { "decision": "string", "rationale": "string", "alternatives": ["string"] } ],
+  "gaps": ["architecture areas not yet resolved"],
+  "summary": "one sentence verdict on architecture completeness",
+  "confidence": 0.0
+}`,
+  },
+  "test-plan": {
+    phase: "build",
+    fieldKey: "testPlan",
+    title: "Test Plan",
+    system: `You are the ADAM Test Plan Agent. Define the test strategy: scope, types, environments, entry/exit criteria, and representative test cases.
+
+Use requirements and acceptance criteria. Each key requirement should map to at least one test case where possible.
+
+Return ONLY valid JSON:
+{
+  "scope": "what is in and out of test scope",
+  "testTypes": ["e.g. unit, integration, UAT, performance, security"],
+  "environments": ["test environments needed"],
+  "entryCriteria": ["criteria to begin testing"],
+  "exitCriteria": ["criteria to declare testing complete"],
+  "keyTestCases": [ { "id": "TC-001", "title": "string", "linkedRequirement": "REQ id or null", "steps": ["string"], "expected": "string" } ],
+  "gaps": ["requirements without test coverage"],
+  "summary": "one sentence verdict on test readiness",
+  "confidence": 0.0
+}`,
+  },
+  "runbook": {
+    phase: "operate",
+    fieldKey: "runbook",
+    title: "Runbook",
+    system: `You are the ADAM Runbook Agent. Produce the operational runbook for running the solution in live operation.
+
+Use the solution/operating context. Cover routine operations, monitoring, and incident response. Be concrete and actionable.
+
+Return ONLY valid JSON:
+{
+  "routineOperations": [ { "task": "string", "frequency": "string", "owner": "role", "procedure": "string" } ],
+  "monitoring": [ { "signal": "what to watch", "threshold": "string", "action": "what to do" } ],
+  "incidentResponse": [ { "scenario": "string", "severity": "critical|high|medium", "steps": ["string"], "escalateTo": "role" } ],
+  "gaps": ["operational procedures not yet defined"],
+  "summary": "one sentence verdict on operational readiness",
+  "confidence": 0.0
+}`,
+  },
+  "support-model": {
+    phase: "operate",
+    fieldKey: "supportModel",
+    title: "Support Model",
+    system: `You are the ADAM Support Model Agent. Define the post-go-live support model: tiers, SLAs, roles, escalation, and knowledge.
+
+Use stakeholders and operating context. Be specific about who supports what and to what service level.
+
+Return ONLY valid JSON:
+{
+  "supportTiers": [ { "tier": "e.g. L1/L2/L3", "scope": "string", "owner": "team/role", "hours": "e.g. 9-5 / 24x7" } ],
+  "slas": [ { "priority": "P1|P2|P3", "responseTime": "string", "resolutionTarget": "string" } ],
+  "escalation": ["escalation path with triggers"],
+  "knowledgeBase": ["key knowledge assets needed for support"],
+  "gaps": ["support areas not yet defined"],
+  "summary": "one sentence verdict on support readiness",
+  "confidence": 0.0
+}`,
+  },
+  "optimization-backlog": {
+    phase: "optimize",
+    fieldKey: "optimizationBacklog",
+    title: "Optimization Backlog",
+    system: `You are the ADAM Optimization Backlog Agent. Produce a prioritised backlog of continuous-improvement opportunities against baseline metrics.
+
+Use kpiBaselines, benefits tracking, risks, and operating signals. Prioritise by value vs effort. Ground each item in evidence where possible.
+
+Return ONLY valid JSON:
+{
+  "items": [ { "id": "OPT-001", "title": "string", "opportunity": "string", "linkedKpi": "KPI name or null", "value": "high|medium|low", "effort": "high|medium|low", "priority": "now|next|later" } ],
+  "themes": ["recurring improvement themes"],
+  "gaps": ["areas where improvement data is missing"],
+  "summary": "one sentence verdict on improvement pipeline",
+  "confidence": 0.0
+}`,
+  },
+};
+
+function parseKpiBaselines(raw: unknown): Record<string, unknown>[] {
+  if (typeof raw === "string") return safeJsonParse<unknown[]>(raw, []).filter(isRecord);
+  if (Array.isArray(raw)) return raw.filter(isRecord);
+  return [];
 }
 
 function buildSpecialAgentInputContext(
@@ -1239,17 +1553,15 @@ function buildSpecialAgentInputContext(
     }, null, 2);
   }
 
-  // Strategy-phase formal-artifact agents (charter / business-case /
-  // outcome-framework) all draw on the Strategy phase inputs — including the
-  // structured baseline/target KPIs captured in PhaseInputsPanel — plus the
-  // shared programme context. One block serves all three.
-  if (target?.agentId === "charter" || target?.agentId === "business-case" || target?.agentId === "outcome-framework") {
-    const strategyInputs = normalizeProgramData(normalizeProgramData(inner.phaseInputs as JsonValue | null).strategy as JsonValue | null);
-    const kpiBaselines = typeof strategyInputs.kpis === "string"
-      ? safeJsonParse<unknown[]>(strategyInputs.kpis, []).filter(isRecord)
-      : Array.isArray(strategyInputs.kpis)
-        ? strategyInputs.kpis.filter(isRecord)
-        : [];
+  // Formal-artifact agents draw on their phase inputs plus the shared programme
+  // context. The structured Strategy KPIs (captured in PhaseInputsPanel) are
+  // always surfaced as kpiBaselines so outcome/business-case/optimization agents
+  // can anchor to real numbers. One block serves every registry entry.
+  const formalSpec = FORMAL_ARTIFACT_AGENTS[target?.agentId || ""];
+  if (formalSpec) {
+    const phaseInputsAll = normalizeProgramData(inner.phaseInputs as JsonValue | null);
+    const strategyInputs = normalizeProgramData(phaseInputsAll.strategy as JsonValue | null);
+    const phaseInputs = normalizeProgramData(phaseInputsAll[formalSpec.phase] as JsonValue | null);
     const objective = typeof inner.objective === "string"
       ? inner.objective
       : typeof inner.programObjective === "string"
@@ -1258,6 +1570,8 @@ function buildSpecialAgentInputContext(
           ? projectMeta.objective
           : "";
     return JSON.stringify({
+      artifact: formalSpec.title,
+      phase: formalSpec.phase,
       programName: meta.name || (typeof projectMeta.name === "string" ? projectMeta.name : ""),
       client: meta.client || (typeof projectMeta.client === "string" ? projectMeta.client : ""),
       industry: meta.industry || (typeof projectMeta.industry === "string" ? projectMeta.industry : ""),
@@ -1269,14 +1583,17 @@ function buildSpecialAgentInputContext(
       budget: strategyInputs.budget || budget || null,
       scopeInclusions: strategyInputs.scopeInclusions || strategyInputs.scopeIn || null,
       scopeExclusions: strategyInputs.scopeExclusions || strategyInputs.scopeOut || null,
-      kpiBaselines,
+      kpiBaselines: parseKpiBaselines(strategyInputs.kpis),
+      phaseInputs,
       valueProjected: coerceNumber(inner.valueProjected ?? businessCase.projectedValue ?? valueRealizeData.projectedValue, 0),
       narrative,
       phases,
+      milestones: milestones.slice(0, 12),
       risks: activeRaidEntries.slice(0, 10),
       decisions: decisions.filter((d) => d.status !== "resolved").slice(0, 8),
-      stakeholders: stakeholderEntries.slice(0, 10),
+      stakeholders: stakeholderEntries.slice(0, 12),
       existingBusinessCase: businessCase,
+      existingArtifacts: artifactsByPhase[formalSpec.phase] || [],
     }, null, 2);
   }
 
@@ -4899,75 +5216,10 @@ Rules: Extract verbatim or near-verbatim from transcript. Max 10 decisions, 15 a
     };
   }
 
-  if (request.agentId === "charter") {
+  const formalArtifactSpec = FORMAL_ARTIFACT_AGENTS[request.agentId];
+  if (formalArtifactSpec) {
     return {
-      system: `You are the ADAM Transformation Charter Agent. Produce the foundational programme mandate that authorises the transformation and sets its boundaries.
-
-Use the provided Strategy inputs (sponsor, business objective, success metric, scope, constraints, KPIs). Do NOT invent a sponsor, budget, or scope that is not supported by the context — where an input is missing, say so explicitly in "gaps".
-
-Return ONLY valid JSON:
-{
-  "title": "Transformation Charter — <programme name>",
-  "mandate": "2-3 sentence statement of why this programme exists and what authority it holds",
-  "sponsor": "named executive sponsor or 'NOT SPECIFIED'",
-  "businessObjective": "the primary objective in one sentence",
-  "objectives": ["specific, outcome-oriented objectives"],
-  "inScope": ["what the programme will deliver"],
-  "outOfScope": ["explicit exclusions"],
-  "successCriteria": ["measurable criteria, anchored to the KPIs where present"],
-  "keyRisks": ["top strategic risks to the mandate"],
-  "governanceSummary": "one sentence on how decisions and escalations will be governed",
-  "gaps": ["inputs that are missing or too weak to charter confidently"],
-  "summary": "one sentence verdict on charter readiness",
-  "confidence": 0.0
-}`,
-      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
-    };
-  }
-
-  if (request.agentId === "business-case") {
-    return {
-      system: `You are the ADAM Business Case Agent. Build the investment justification linking cost, benefit, and the value hypothesis.
-
-Anchor benefits to the captured kpiBaselines (baseline → target) where present, and use valueProjected and constraints/budget for the investment side. Do NOT fabricate financial figures — when a number is unknown, mark it "TBD" and list it under "assumptions".
-
-Return ONLY valid JSON:
-{
-  "valueHypothesis": "the core 'we believe that...' statement",
-  "investmentAsk": "total investment required or 'TBD'",
-  "expectedBenefits": [ { "benefit": "string", "kpi": "linked KPI name or null", "baseline": "string or null", "target": "string or null", "value": "quantified value or 'TBD'" } ],
-  "costs": [ { "category": "string", "estimate": "string or 'TBD'" } ],
-  "roiNarrative": "2-3 sentence ROI / payback rationale",
-  "assumptions": ["key assumptions and unknowns"],
-  "recommendation": "proceed | proceed-with-conditions | revisit",
-  "summary": "one sentence verdict on the business case strength",
-  "confidence": 0.0
-}`,
-      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
-    };
-  }
-
-  if (request.agentId === "outcome-framework") {
-    return {
-      system: `You are the ADAM Outcome Framework Agent. Structure the programme's outcomes into a measurable hierarchy that makes benefits traceable from strategy to KPI.
-
-Build directly on the captured kpiBaselines (name/baseline/target/unit). For each strategic outcome, link the measurable KPIs that evidence it and the leading indicators that predict it. Do NOT invent KPIs when kpiBaselines is non-empty — carry those through and only add leading indicators.
-
-Return ONLY valid JSON:
-{
-  "strategicOutcomes": [
-    {
-      "outcome": "the outcome statement",
-      "kpis": [ { "name": "KPI name", "baseline": "string or null", "target": "string or null", "unit": "string or null" } ],
-      "leadingIndicators": ["early signals that predict this outcome"],
-      "owner": "accountable role or null"
-    }
-  ],
-  "benefitMap": "one sentence describing how outputs lead to outcomes to value",
-  "gaps": ["outcomes without a measurable KPI, or KPIs without a baseline"],
-  "summary": "one sentence verdict on outcome measurability",
-  "confidence": 0.0
-}`,
+      system: formalArtifactSpec.system,
       user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
     };
   }
@@ -5698,10 +5950,8 @@ Deno.serve(async (req) => {
         "benefit-forecast",
         "artifact-staleness-check",
         "meeting-notes-extractor",
-        "charter",
-        "business-case",
-        "outcome-framework",
-      ].includes(request.agentId);
+      ].includes(request.agentId)
+        || FORMAL_ARTIFACT_AGENTS[request.agentId] !== undefined;
       const autonomy = skipAutonomyReview
         ? {
             actAutonomously: true,
@@ -5916,14 +6166,13 @@ Deno.serve(async (req) => {
         nextProgramData = applyBoardPackResultToProgramData(contextProgramData, normalizedParsedResult);
       } else if (request.agentId === "setup-prefill") {
         nextProgramData = applySetupPrefillResultToProgramData(contextProgramData, result);
-      } else if (request.agentId === "charter") {
-        nextProgramData = applyProgramSupportArtifact(contextProgramData, "strategy", "charter", "transformationCharter", result, "Transformation Charter");
-      } else if (request.agentId === "business-case") {
-        // Distinct field key: inner.businessCase is a read-only value record
-        // (projectedValue/valueDelivered) consumed by context builders — do not clobber it.
-        nextProgramData = applyProgramSupportArtifact(contextProgramData, "strategy", "business-case", "businessCaseDoc", result, "Business Case");
-      } else if (request.agentId === "outcome-framework") {
-        nextProgramData = applyProgramSupportArtifact(contextProgramData, "strategy", "outcome-framework", "outcomeFramework", result, "Outcome Framework");
+      } else if (FORMAL_ARTIFACT_AGENTS[request.agentId]) {
+        // Formal-artifact agents persist one document to phaseArtifacts (so the
+        // methodology slot is satisfied) plus a top-level mirror under fieldKey.
+        // fieldKey is chosen to avoid clobbering read-only value records such as
+        // inner.businessCase (the business-case agent uses businessCaseDoc).
+        const spec = FORMAL_ARTIFACT_AGENTS[request.agentId];
+        nextProgramData = applyProgramSupportArtifact(contextProgramData, spec.phase, request.agentId, spec.fieldKey, result, spec.title);
       }
 
       // Surface structured agent output in the artifact ledger. The UI artifact
