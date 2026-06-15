@@ -43,6 +43,8 @@ export interface ClaudeCompletionResult {
   text: string;
   inputTokens: number;
   outputTokens: number;
+  /** Input tokens served from the prompt cache (billed at the discounted rate). */
+  cachedInputTokens?: number;
   latencyMs: number;
 }
 
@@ -198,10 +200,24 @@ function anthropicFileBlock(file: FileAttachment): Record<string, unknown> {
   return { type: "document", source: { type: "base64", media_type: file.mimeType, data: file.base64 } };
 }
 
+/**
+ * Build the `system` field as a cacheable content-block array. Marking the
+ * (large, stable) system prompt with `cache_control: ephemeral` lets Anthropic
+ * serve it from the prompt cache on repeat calls within the cache TTL, billing
+ * those prefix tokens at ~10% instead of full rate. It is a no-op for short
+ * prompts below the cache minimum (Anthropic silently ignores cache_control),
+ * and never changes what the model sees — pure cost reduction, zero quality
+ * impact. Token savings only materialise when the system prefix is identical
+ * across calls, which is the whole point of keeping static instructions there.
+ */
+function anthropicSystemBlocks(system: string): Array<Record<string, unknown>> {
+  return [{ type: "text", text: system, cache_control: { type: "ephemeral" } }];
+}
+
 function anthropicPayload(options: ClaudeCompletionOptions, stream: boolean): Record<string, unknown> {
   return {
     model: options.model || DEFAULT_ANTHROPIC_MODEL,
-    system: options.system,
+    system: anthropicSystemBlocks(options.system),
     messages: options.messages.map((message, idx) => {
       const textBlock = { type: "text", text: message.content };
       // Attach the file to the first user message
@@ -313,6 +329,8 @@ async function providerResponse(
         "Content-Type": "application/json",
         "x-api-key": settings.apiKey,
         "anthropic-version": "2023-06-01",
+        // Enable prompt caching for the cache_control-marked system prefix.
+        "anthropic-beta": "prompt-caching-2024-07-31",
       },
       body: JSON.stringify(anthropicPayload(providerOptions, stream)),
       signal: providerOptions.signal,
@@ -365,13 +383,14 @@ async function completeOnce(
 
   const parsed = await response.json() as {
     content?: { text?: string }[];
-    usage?: { input_tokens?: number; output_tokens?: number };
+    usage?: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number };
   };
 
   return {
     text: (parsed.content || []).map((item) => item?.text || "").join("").trim(),
     inputTokens: parsed.usage?.input_tokens ?? 0,
     outputTokens: parsed.usage?.output_tokens ?? 0,
+    cachedInputTokens: parsed.usage?.cache_read_input_tokens ?? 0,
     latencyMs: Date.now() - startedAt,
   };
 }
@@ -439,6 +458,7 @@ async function streamOnce(
     let buffer = "";
     let inputTokens = 0;
     let outputTokens = 0;
+    let cachedInputTokens = 0;
 
     while (true) {
     const { value, done } = await reader.read();
@@ -484,8 +504,9 @@ async function streamOnce(
 
       const parsedType = typeof parsed.type === "string" ? parsed.type : "";
       if (parsedType === "message_start") {
-        const usage = (parsed.message as { usage?: { input_tokens?: number } } | undefined)?.usage;
+        const usage = (parsed.message as { usage?: { input_tokens?: number; cache_read_input_tokens?: number } } | undefined)?.usage;
         inputTokens = usage?.input_tokens ?? inputTokens;
+        cachedInputTokens = usage?.cache_read_input_tokens ?? cachedInputTokens;
       }
 
       if (parsedType === "content_block_delta") {
@@ -504,6 +525,7 @@ async function streamOnce(
       text: state.text.trim(),
       inputTokens,
       outputTokens,
+      cachedInputTokens,
       latencyMs: Date.now() - startedAt,
       chunks: state.chunks,
     };

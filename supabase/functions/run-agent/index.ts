@@ -5930,6 +5930,11 @@ Deno.serve(async (req) => {
       observationType: "response_received",
       payload: {
         preview: claudeResult.text.slice(0, 300),
+        // Token-governance observability: full breakdown so the admin ledger can
+        // attribute spend and measure prompt-cache effectiveness per run.
+        inputTokens: claudeResult.inputTokens,
+        outputTokens: claudeResult.outputTokens,
+        cachedInputTokens: claudeResult.cachedInputTokens ?? 0,
       },
       tokens: claudeResult.inputTokens + claudeResult.outputTokens,
       latencyMs: claudeResult.latencyMs,
