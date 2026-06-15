@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
+import { derivePhaseFlowEdges } from "@/v3/lib/phaseFlowEdges";
 
 /**
  * PhaseFlowOverlay — draws connector lines that are *pinned to the real DOM*:
@@ -42,20 +43,18 @@ export default function PhaseFlowOverlay({ containerRef, program, phaseId, enabl
   const [size, setSize] = useState({ w: 0, h: 0 });
   const rafRef = useRef<number | null>(null);
 
-  // Every input feeds the Narrative; required inputs additionally feed the
-  // Status deck. Both artifacts are always present in the artifacts column, so
-  // the target anchors always resolve.
+  // Edges come from the declared per-phase input → artifact dependency model.
+  // Every target is an artifact chip that always renders, so each anchor
+  // resolves. `filled` reflects whether the source field has a value.
   const edges = useMemo(() => {
     const schema = getPhaseInputSchema(phaseId);
     const persisted = readPhaseInputs(program, phaseId);
-    const list: Array<{ from: string; to: string; filled: boolean }> = [];
-    schema.fields.forEach((field) => {
-      const value = persisted[field.id];
-      const filled = typeof value === "string" ? Boolean(value.trim()) : Boolean(value);
-      list.push({ from: field.id, to: "narrative", filled });
-      if (field.required) list.push({ from: field.id, to: "deck", filled });
-    });
-    return list;
+    const filledOf = (id: string) => {
+      const value = persisted[id];
+      return typeof value === "string" ? Boolean(value.trim()) : Boolean(value);
+    };
+    return derivePhaseFlowEdges(phaseId, schema.fields.map((field) => field.id))
+      .map((edge) => ({ ...edge, filled: filledOf(edge.from) }));
   }, [program, phaseId]);
 
   const measure = useCallback(() => {

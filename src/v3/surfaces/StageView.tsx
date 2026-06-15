@@ -22,6 +22,8 @@ import { RelativeTime } from "@/v3/components/ui/RelativeTime";
 import { StatusBadge } from "@/v3/components/ui/StatusBadge";
 import { computePhaseReadiness } from "@/v3/lib/phaseReadiness";
 import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
+import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
+import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
 import type { V3Mode, V3MoreView, V3ReportId } from "@/v3/types";
 
 interface StageViewProps {
@@ -478,6 +480,18 @@ export default function StageView({
     if (!program) return null;
     return program.phases.find((phase) => phase.id === activePhaseId) || program.phases[0] || null;
   }, [activePhaseId, program]);
+
+  // Methodology-declared artifacts for the active phase, keyed by producing-agent
+  // id (e.g. Mobilise → governance-model, raci-matrix), with live present/quality.
+  const phaseArtifactNodes = useMemo(() => {
+    const byKey = new Map<string, { present: boolean; quality: number | null }>();
+    if (!activePhase) return byKey;
+    const summary = buildPhaseArtifacts(program, activePhase.id);
+    for (const node of summary?.artifacts ?? []) {
+      byKey.set(node.key, { present: node.present, quality: node.quality });
+    }
+    return byKey;
+  }, [program, activePhase]);
 
   const gateReview = activePhase ? program?.gateReviews?.[activePhase.id] || null : null;
   const source = typeof program?.rawData === "object" && program.rawData !== null
@@ -1521,12 +1535,18 @@ export default function StageView({
         <div className="v3-zone-label">Artifacts</div>
         <div className="v3-output-strip">
           {[
-            { id: "narrative", label: `Narrative${narrativeQuality ? ` ${narrativeQuality.score}%` : ""}`, available: !!artifactPreviews?.narrative, tone: narrativeQuality ? (narrativeQuality.score >= 80 ? "green" : narrativeQuality.score >= 60 ? "blue" : "amber") : "blue" },
-            { id: "deck", label: `Status deck${deckQuality ? ` ${deckQuality.score}%` : ""}`, available: !!artifactPreviews?.deck, tone: deckQuality ? (deckQuality.score >= 80 ? "green" : deckQuality.score >= 60 ? "blue" : "amber") : "blue" },
-            ...(showRetro ? [{ id: "retro", label: isRetroRunning ? "Preparing…" : "Retrospective", available: false }] : []),
-            { id: "documents", label: "Documents", available: false },
-            { id: "milestones", label: "Milestones", available: false },
-            { id: "risks", label: "Risks", available: false },
+            { id: "narrative", kind: "preview" as const, label: `Narrative${narrativeQuality ? ` ${narrativeQuality.score}%` : ""}`, available: !!artifactPreviews?.narrative, tone: narrativeQuality ? (narrativeQuality.score >= 80 ? "green" : narrativeQuality.score >= 60 ? "blue" : "amber") : "blue" },
+            { id: "deck", kind: "preview" as const, label: `Status deck${deckQuality ? ` ${deckQuality.score}%` : ""}`, available: !!artifactPreviews?.deck, tone: deckQuality ? (deckQuality.score >= 80 ? "green" : deckQuality.score >= 60 ? "blue" : "amber") : "blue" },
+            ...(showRetro ? [{ id: "retro", kind: "retro" as const, label: isRetroRunning ? "Preparing…" : "Retrospective", available: false, tone: "muted" }] : []),
+            ...getPhaseArtifactDefs(activePhase.id)
+              .filter((def) => def.id !== "narrative" && def.id !== "deck")
+              .map((def) => {
+                const node = phaseArtifactNodes.get(def.id);
+                const present = !!node?.present;
+                const score = typeof node?.quality === "number" ? node.quality : null;
+                const tone = present ? (score != null ? (score >= 80 ? "green" : score >= 60 ? "blue" : "amber") : "blue") : "muted";
+                return { id: def.id, kind: "agent" as const, label: score != null ? `${def.label} ${score}%` : def.label, available: present, tone };
+              }),
           ].map((output) => (
             <button
               key={output.id}
@@ -1534,23 +1554,21 @@ export default function StageView({
               data-io-anchor={`artifact:${output.id}`}
               className={`v3-chip ${output.available ? (output.tone || "blue") : "muted"} ${expandedOutput === output.id ? "is-active" : ""}`}
               onClick={() => {
-                if (output.id === "retro") {
+                if (output.kind === "retro") {
                   triggers.triggerRetro(activePhase.id);
                   return;
                 }
-                if (output.available) {
-                  toggleOutput(output.id);
+                if (output.kind === "preview") {
+                  if (output.available) toggleOutput(output.id);
                   return;
                 }
-                if (output.id === "documents" || output.id === "milestones" || output.id === "risks") {
-                  onOpenMoreView(output.id as V3MoreView);
-                }
+                onRunAgent(output.id);
               }}
-              disabled={output.id === "retro" && isRetroRunning}
-              aria-expanded={output.available ? expandedOutput === output.id : undefined}
+              disabled={output.kind === "retro" && isRetroRunning}
+              aria-expanded={output.kind === "preview" && output.available ? expandedOutput === output.id : undefined}
             >
               {output.label}
-              {output.available ? <span className="v3-output-toggle-glyph">{expandedOutput === output.id ? "▴" : "▾"}</span> : null}
+              {output.kind === "preview" && output.available ? <span className="v3-output-toggle-glyph">{expandedOutput === output.id ? "▴" : "▾"}</span> : null}
             </button>
           ))}
         </div>
