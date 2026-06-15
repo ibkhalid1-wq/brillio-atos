@@ -33,6 +33,14 @@ export interface ClaudeCompletionOptions {
   signal?: AbortSignal;
   /** Wall-clock budget for the whole call. Defaults to DEFAULT_STREAM_TIMEOUT_MS. */
   timeoutMs?: number;
+  /**
+   * Request a strict JSON object back (OpenAI `response_format: json_object`).
+   * Only enable when the caller parses the reply as JSON AND the prompt mentions
+   * the word "json" — OpenAI rejects the request otherwise. Plain-text callers
+   * (chat, field assist, summaries) must leave this off or the model is forced
+   * to wrap its answer in JSON.
+   */
+  jsonResponse?: boolean;
 }
 
 // Hard ceiling so a stalled provider stream can never hang a run indefinitely
@@ -257,7 +265,7 @@ function openAiPayload(options: ClaudeCompletionOptions, stream: boolean): Recor
     temperature: options.temperature ?? 0.2,
     stream,
   };
-  if (!stream) {
+  if (!stream && options.jsonResponse) {
     payload.response_format = { type: "json_object" };
   }
   return payload;

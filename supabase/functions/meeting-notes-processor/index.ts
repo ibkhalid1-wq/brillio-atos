@@ -178,6 +178,7 @@ async function handleExtract(payload: ExtractPayload): Promise<Response> {
     ]),
     maxTokens: 6000,
     temperature: 0.1,
+    jsonResponse: true,
   });
 
   const latencyMs = Date.now() - startedAt;

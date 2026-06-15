@@ -182,6 +182,7 @@ Deno.serve(async (req) => {
       maxTokens: 8000,
       temperature: 0.1,
       fileAttachment: payload.fileAttachment,
+      jsonResponse: true,
     });
 
     const latencyMs = Date.now() - startedAt;
