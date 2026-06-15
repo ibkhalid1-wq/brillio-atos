@@ -242,22 +242,27 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
               })}
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
-              <button
-                type="button"
-                className="v3-button primary"
-                disabled={!selectedArchetype}
-                onClick={() => setStep(1)}
-              >
-                Next
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <button type="button" className="v3-button ghost" onClick={onClose}>
+                Cancel
               </button>
-              <button
-                type="button"
-                style={{ fontSize: 12, color: "var(--v3-text-muted)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
-                onClick={() => setStep(1)}
-              >
-                Skip — I&apos;ll configure manually
-              </button>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+                <button
+                  type="button"
+                  className="v3-button primary"
+                  disabled={!selectedArchetype}
+                  onClick={() => setStep(1)}
+                >
+                  Next
+                </button>
+                <button
+                  type="button"
+                  style={{ fontSize: 12, color: "var(--v3-text-muted)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                  onClick={() => setStep(1)}
+                >
+                  Skip — I&apos;ll configure manually
+                </button>
+              </div>
             </div>
           </>
         ) : (
