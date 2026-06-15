@@ -35,18 +35,22 @@ alter table adam_programs enable row level security;
 alter table adam_portfolio enable row level security;
 alter table adam_audit_log enable row level security;
 
+drop policy if exists "Users manage own programs" on adam_programs;
 create policy "Users manage own programs"
   on adam_programs for all
   using (owner_id = auth.uid());
 
+drop policy if exists "Users manage own portfolio" on adam_portfolio;
 create policy "Users manage own portfolio"
   on adam_portfolio for all
   using (owner_id = auth.uid());
 
+drop policy if exists "Users read own audit log" on adam_audit_log;
 create policy "Users read own audit log"
   on adam_audit_log for select
   using (user_id = auth.uid());
 
+drop policy if exists "System inserts audit log" on adam_audit_log;
 create policy "System inserts audit log"
   on adam_audit_log for insert
   with check (user_id = auth.uid());

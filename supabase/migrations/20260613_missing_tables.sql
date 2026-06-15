@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS public.adam_organisations (
 ALTER TABLE public.adam_organisations ENABLE ROW LEVEL SECURITY;
 
 -- Org members can read their org
+DROP POLICY IF EXISTS "members_read_own_org" ON public.adam_organisations;
 CREATE POLICY "members_read_own_org" ON public.adam_organisations
   FOR SELECT
   USING (
@@ -44,6 +45,7 @@ CREATE INDEX IF NOT EXISTS idx_adam_org_members_org_id  ON public.adam_org_membe
 ALTER TABLE public.adam_org_members ENABLE ROW LEVEL SECURITY;
 
 -- Users can only see their own membership row
+DROP POLICY IF EXISTS "users_read_own_membership" ON public.adam_org_members;
 CREATE POLICY "users_read_own_membership" ON public.adam_org_members
   FOR SELECT
   USING (user_id = auth.uid());
@@ -65,6 +67,7 @@ CREATE INDEX IF NOT EXISTS idx_adam_circuit_breakers_state ON public.adam_circui
 ALTER TABLE public.adam_circuit_breakers ENABLE ROW LEVEL SECURITY;
 
 -- All authenticated users can read (banner check)
+DROP POLICY IF EXISTS "auth_read_circuit_breakers" ON public.adam_circuit_breakers;
 CREATE POLICY "auth_read_circuit_breakers" ON public.adam_circuit_breakers
   FOR SELECT
   USING (auth.role() = 'authenticated');
@@ -90,6 +93,7 @@ CREATE INDEX IF NOT EXISTS idx_adam_decision_audit_resolved_at ON public.adam_de
 ALTER TABLE public.adam_decision_audit ENABLE ROW LEVEL SECURITY;
 
 -- Programme owner can read audit entries
+DROP POLICY IF EXISTS "owner_read_decision_audit" ON public.adam_decision_audit;
 CREATE POLICY "owner_read_decision_audit" ON public.adam_decision_audit
   FOR SELECT
   USING (
@@ -98,6 +102,7 @@ CREATE POLICY "owner_read_decision_audit" ON public.adam_decision_audit
     )
   );
 
+DROP POLICY IF EXISTS "owner_insert_decision_audit" ON public.adam_decision_audit;
 CREATE POLICY "owner_insert_decision_audit" ON public.adam_decision_audit
   FOR INSERT
   WITH CHECK (
@@ -132,6 +137,7 @@ CREATE INDEX IF NOT EXISTS idx_adam_doc_attachments_created_at  ON public.adam_d
 
 ALTER TABLE public.adam_document_attachments ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "owner_all_document_attachments" ON public.adam_document_attachments;
 CREATE POLICY "owner_all_document_attachments" ON public.adam_document_attachments
   FOR ALL
   USING (
@@ -160,6 +166,7 @@ CREATE INDEX IF NOT EXISTS idx_adam_phase_agent_states_prog ON public.adam_phase
 
 ALTER TABLE public.adam_phase_agent_states ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "owner_all_phase_agent_states" ON public.adam_phase_agent_states;
 CREATE POLICY "owner_all_phase_agent_states" ON public.adam_phase_agent_states
   FOR ALL
   USING (
@@ -195,6 +202,7 @@ CREATE INDEX IF NOT EXISTS idx_adam_program_events_type       ON public.adam_pro
 
 ALTER TABLE public.adam_program_events ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "owner_read_program_events" ON public.adam_program_events;
 CREATE POLICY "owner_read_program_events" ON public.adam_program_events
   FOR SELECT
   USING (
@@ -203,6 +211,7 @@ CREATE POLICY "owner_read_program_events" ON public.adam_program_events
     )
   );
 
+DROP POLICY IF EXISTS "owner_insert_program_events" ON public.adam_program_events;
 CREATE POLICY "owner_insert_program_events" ON public.adam_program_events
   FOR INSERT
   WITH CHECK (

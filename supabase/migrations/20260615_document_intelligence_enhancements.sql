@@ -54,6 +54,7 @@ create index if not exists idx_entity_audit_attachment
 -- 4. RLS on entity audit table — same permissive policy as attachments
 alter table public.adam_document_entity_audit enable row level security;
 
+drop policy if exists "program_members_entity_audit" on public.adam_document_entity_audit;
 create policy "program_members_entity_audit"
   on public.adam_document_entity_audit
   for all
