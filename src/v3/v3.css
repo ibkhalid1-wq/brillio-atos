@@ -3324,6 +3324,16 @@ select {
 
 .v3-button:disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
 
+/* Small size modifier — consolidates the compact inline pill CTAs
+   (dense AI-feed rows, section "view all" links) onto the button system
+   so they inherit the platform radius, hover lift, active scale, and
+   focus ring instead of each reinventing a smaller button inline. */
+.v3-button.sm {
+  padding: 4px 12px;
+  min-height: 28px;
+  font-size: 12px;
+}
+
 .v3-button:focus-visible,
 .v3-mode-toggle:focus-visible,
 .v3-nav-tab:focus-visible,

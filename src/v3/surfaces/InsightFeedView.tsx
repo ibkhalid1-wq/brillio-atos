@@ -245,7 +245,7 @@ function DecisionQueueCard({
             {openDecisions.length ? `${openDecisions.length} item${openDecisions.length === 1 ? "" : "s"} need review` : "No open decisions blocking progress"}
           </div>
         </div>
-        <button type="button" className="v3-button ghost" style={{ fontSize: 12 }} onClick={onNavigateToDecide}>
+        <button type="button" className="v3-button ghost sm" onClick={onNavigateToDecide}>
           View all →
         </button>
       </div>
@@ -799,12 +799,9 @@ export default function InsightFeedView({
                   {step.cta && step.action && (
                     <button
                       type="button"
+                      className="v3-button primary sm"
                       onClick={step.action}
-                      style={{
-                        fontSize: 11, padding: "4px 12px", borderRadius: 6,
-                        background: "var(--v3-accent)", color: "#fff",
-                        border: "none", cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap",
-                      }}
+                      style={{ flexShrink: 0 }}
                     >{step.cta}</button>
                   )}
                 </div>
@@ -997,18 +994,9 @@ export default function InsightFeedView({
               {topActionHandler && (
                 <button
                   type="button"
+                  className="v3-button primary sm"
                   onClick={topActionHandler}
-                  style={{
-                    fontSize: 12,
-                    padding: "5px 12px",
-                    borderRadius: 6,
-                    background: "var(--v3-accent)",
-                    color: "#fff",
-                    border: "none",
-                    cursor: "pointer",
-                    whiteSpace: "nowrap",
-                    flexShrink: 0,
-                  }}
+                  style={{ flexShrink: 0 }}
                 >
                   Open →
                 </button>
@@ -1216,8 +1204,7 @@ export default function InsightFeedView({
               {onOpenMoreView && (
                 <button
                   type="button"
-                  className="v3-button ghost"
-                  style={{ fontSize: 12 }}
+                  className="v3-button ghost sm"
                   onClick={() => onOpenMoreView("risks")}
                 >
                   See all →
