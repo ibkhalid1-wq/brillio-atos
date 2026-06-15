@@ -79,6 +79,15 @@ export function PhaseStatusRings(props: PhaseStatusRingsProps) {
   const artifactCol = RING_COLORS.artifact;
   const inputCol = RING_COLORS.input;
 
+  // Centre readout includes the unit ("78%") and is sized to fit inside the
+  // inner ring — narrower for longer values like "100%" so it never overflows.
+  const centerText = `${overall}%`;
+  const innerSpace = (rInner + sw / 2) * 2 * 0.92; // usable width up to the inner ring's outer edge
+  const centerFontSize = Math.max(
+    8,
+    Math.min(size * 0.26, innerSpace / (centerText.length * 0.62)),
+  );
+
   const tooltip =
     title ??
     [
@@ -148,14 +157,16 @@ export function PhaseStatusRings(props: PhaseStatusRingsProps) {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              fontSize: Math.max(10, size * 0.24),
+              fontSize: centerFontSize,
               fontWeight: 700,
               color: "var(--v3-text-primary)",
               fontFamily: "var(--v3-font)",
               letterSpacing: "-0.02em",
+              fontVariantNumeric: "tabular-nums",
+              lineHeight: 1,
             }}
           >
-            {overall}
+            {centerText}
           </span>
         )}
       </div>
