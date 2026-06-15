@@ -7,7 +7,6 @@ import GateCoachPanel from "@/v3/components/GateCoachPanel";
 import OnboardingCard from "@/v3/components/OnboardingCard";
 import PhaseInputsPanel, { type FieldAssistRequest } from "@/v3/components/PhaseInputsPanel";
 import PhaseFlowOverlay from "@/v3/components/PhaseFlowOverlay";
-import { PhaseProgressionCard } from "@/v3/components/PhaseProgressionCard";
 import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
 import { PhaseRailPanels } from "@/v3/components/PhaseRailPanels";
 import { PhaseChangeSummary } from "@/v3/components/PhaseChangeSummary";
@@ -1080,18 +1079,6 @@ export default function StageView({
               }
               setGuideDismissed(true);
             }}
-          />
-        ) : null}
-
-        {program && activePhase?.id && readiness ? (
-          <PhaseProgressionCard
-            program={program}
-            phaseId={activePhase.id}
-            readiness={readiness}
-            gateStatus={gateReviewStatus}
-            onRunAgent={onRunAgent}
-            onOpenMoreView={onOpenMoreView}
-            onOpenDecide={onOpenDecide}
           />
         ) : null}
 
