@@ -33,7 +33,6 @@ const InsightFeedView = React.lazy(() => import("@/v3/surfaces/InsightFeedView")
 const ExecutiveView = React.lazy(() => import("@/v3/surfaces/ExecutiveView"));
 const ProgrammeHealthView = React.lazy(() => import("@/v3/surfaces/ProgrammeHealthView"));
 import CoPilotSidebar from "@/v3/components/CoPilotSidebar";
-import SmokeTestButton from "@/v3/components/SmokeTestButton"; // SMOKE TEST — TEMPORARY
 import AgentTraceDrawer from "@/v3/components/AgentTraceDrawer";
 import { AIStatusBanner } from "@/v3/components/AIStatusBanner";
 import { useAIStatus } from "@/v3/hooks/useAIStatus";
@@ -2727,9 +2726,6 @@ export default function AppShellV3() {
           else if (view === "stage") navigateSurface("stage");
         }}
       />
-
-      {/* SMOKE TEST — TEMPORARY: floating button to verify formal-artifact agents (Cycle C). Remove this line + the import + SmokeTestButton.tsx. */}
-      <SmokeTestButton programId={activeProgramId} activePhaseId={activePhaseId} />
 
       {traceRunId ? <AgentTraceDrawer runId={traceRunId} onClose={() => setTraceRunId(null)} /> : null}
       <CommandPalette
