@@ -973,6 +973,7 @@ select {
   min-height: 44px;
   padding: 0;
   justify-content: center;
+  gap: 0;
   flex: 0 0 44px;
   border-radius: 12px;
   border-color: rgba(99,102,241,0.22);
@@ -1090,6 +1091,17 @@ select {
 .v3-command-rail.is-pinned .v3-command-rail-item-copy {
   opacity: 1;
   transform: translateX(0);
+}
+
+/* At rest (narrow, incl. is-collapsed): collapse the label box to zero width.
+   The label is only opacity:0, so it keeps its flex:1 footprint and pushes the
+   icon ~4–6px left of the card centre — justify-content:center was centring the
+   icon+label group, not the icon. Zeroing the box lets the icon truly centre. */
+.v3-command-rail:not(:hover):not(:focus-within):not(.is-pinned) .v3-command-rail-brand-copy,
+.v3-command-rail:not(:hover):not(:focus-within):not(.is-pinned) .v3-command-rail-item-copy {
+  flex: 0 0 0;
+  width: 0;
+  overflow: hidden;
 }
 
 .v3-command-rail.is-collapsed:not(:hover):not(:focus-within):not(.is-pinned) .v3-command-rail-brand-copy,
@@ -10131,15 +10143,28 @@ button, [role="button"] {
 
 /* ── Rail Health card ───────────────────────────────────────────────────────── */
 
-/* Hide health card when rail is narrow (not hovered / not pinned) */
+/* Narrow (not hovered / not pinned): collapse the health card into a centred row
+   of just the status dots, so programme/AI/intelligence health stays glanceable
+   on the slim rail. Labels hide; the dots remain clickable shortcuts. */
 .v3-command-rail:not(:hover):not(:focus-within):not(.is-pinned) .v3-command-rail-health-card {
-  opacity: 0;
-  max-height: 0;
-  overflow: hidden;
-  margin: 0;
-  padding: 0;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: 9px;
+  margin: 2px auto 4px;
+  padding: 6px 0;
+  max-height: 120px;
+  background: transparent;
   border-width: 0;
-  pointer-events: none;
+}
+.v3-command-rail:not(:hover):not(:focus-within):not(.is-pinned) .v3-health-label {
+  display: none;
+}
+.v3-command-rail:not(:hover):not(:focus-within):not(.is-pinned) .v3-health-row {
+  width: auto;
+  padding: 2px;
+  margin: 0;
+  justify-content: center;
 }
 
 .v3-command-rail-health-card {
