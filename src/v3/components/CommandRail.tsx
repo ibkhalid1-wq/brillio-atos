@@ -361,6 +361,18 @@ export function CommandRail({
         ) : null}
       </div>
 
+      {/* ── Current phase — pinned to the top, above primary nav ── */}
+      {activeSurface === "stage" && activePhaseLabel ? (
+        <>
+          <div className="v3-command-rail-section-label v3-command-rail-phase-label">Current phase</div>
+          <div className="v3-command-rail-status-row v3-command-rail-phase-top" title={`Active phase: ${activePhaseLabel}`}>
+            <span className="v3-command-rail-phase-indicator" />
+            <span className="v3-command-rail-status-label">{activePhaseLabel}</span>
+          </div>
+          <RailDivider />
+        </>
+      ) : null}
+
       {/* ── Primary navigation: Home · Action Center · Program ── */}
       <div className="v3-command-rail-modes" role="list">
         {PRIMARY_NAV.map((item) => {
@@ -390,8 +402,8 @@ export function CommandRail({
         })}
       </div>
 
-      {/* ── Agent activity + phase ── */}
-      {(showStatus || activePhaseLabel) ? (
+      {/* ── Agent activity ── */}
+      {showStatus ? (
         <>
           <RailDivider />
           <div
@@ -403,12 +415,6 @@ export function CommandRail({
               {anyAgentRunning ? "Agents running" : "Agents stopped"}
             </span>
           </div>
-          {activeSurface === "stage" && activePhaseLabel ? (
-            <div className="v3-command-rail-status-row" title={`Active phase: ${activePhaseLabel}`}>
-              <span className="v3-command-rail-phase-indicator" />
-              <span className="v3-command-rail-status-label">{activePhaseLabel}</span>
-            </div>
-          ) : null}
         </>
       ) : null}
 
