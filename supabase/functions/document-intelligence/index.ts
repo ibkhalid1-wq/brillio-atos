@@ -19,6 +19,10 @@ import {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
+// Upper bound on document text sent to the extractor in one shot. Capped to stay
+// within the model context window; large enough that typical documents pass whole.
+const MAX_EXTRACTION_CHARS = 400_000;
+
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -171,7 +175,10 @@ Deno.serve(async (req) => {
           payload.phaseHint ? `Programme phase hint: ${payload.phaseHint}` : "",
           "",
           "DOCUMENT CONTENT:",
-          (payload.text || "").slice(0, 60000),
+          // ~400k chars ≈ 100k tokens — comfortably within the model context
+          // (alongside the system prompt + 8k output) so whole documents, not
+          // just their opening pages, reach the extractor.
+          (payload.text || "").slice(0, MAX_EXTRACTION_CHARS),
         ].filter(Boolean).join("\n");
 
     const startedAt = Date.now();

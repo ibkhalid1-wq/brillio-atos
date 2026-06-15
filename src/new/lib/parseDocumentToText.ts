@@ -302,15 +302,92 @@ async function parseHtml(file: File): Promise<ParseResult> {
   const parser = new DOMParser();
   const documentNode = parser.parseFromString(html, "text/html");
 
+  // Recover embedded structured data BEFORE stripping scripts. Exported/SPA HTML
+  // is frequently a JS-rendered shell whose real content lives in a JSON
+  // bootstrap (<script type="application/json"> or `window.__DATA__ = {…}`),
+  // not in static elements — dropping scripts outright loses everything.
+  const dataBlocks = extractEmbeddedHtmlData(documentNode);
+
   ["script", "style", "nav", "footer", "header", "aside"].forEach((tag) => {
     documentNode.querySelectorAll(tag).forEach((element) => element.remove());
   });
 
-  const text = (documentNode.body?.innerText ?? documentNode.body?.textContent ?? "")
+  // innerText is empty on DOMParser-created (non-rendered) documents, so fall
+  // back to textContent. `??` would keep an empty string — use `||`.
+  const visible = (documentNode.body?.innerText || documentNode.body?.textContent || "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
+  const text = [visible, ...dataBlocks].filter(Boolean).join("\n\n");
+
   return finish(text, "html");
+}
+
+/**
+ * Pull machine-readable content out of an HTML document's scripts: JSON-LD and
+ * `application/json` blocks, plus well-known SPA bootstrap globals
+ * (window.__DATA__, __NEXT_DATA__, __NUXT__, __INITIAL_STATE__, __APP_DATA__).
+ * Returns readable, pretty-printed JSON strings; skips anything unparseable so
+ * minified app code is never dumped as noise.
+ */
+function extractEmbeddedHtmlData(documentNode: Document): string[] {
+  const blocks: string[] = [];
+
+  documentNode
+    .querySelectorAll('script[type="application/json"], script[type="application/ld+json"]')
+    .forEach((element) => {
+      const raw = element.textContent?.trim();
+      if (raw) blocks.push(normaliseJsonOrRaw(raw));
+    });
+
+  const BOOTSTRAP_GLOBALS = ["__DATA__", "__NEXT_DATA__", "__NUXT__", "__INITIAL_STATE__", "__APP_DATA__"];
+  documentNode.querySelectorAll("script:not([type]), script[type='text/javascript']").forEach((element) => {
+    const src = element.textContent ?? "";
+    for (const name of BOOTSTRAP_GLOBALS) {
+      const json = extractBalancedAssignment(src, name);
+      if (json) blocks.push(normaliseJsonOrRaw(json));
+    }
+  });
+
+  return blocks;
+}
+
+/** Find `…<name> = { … }` and return the brace-balanced object/array literal. */
+function extractBalancedAssignment(source: string, name: string): string | null {
+  const marker = new RegExp(`${name}\\s*=\\s*([\\[{])`);
+  const match = marker.exec(source);
+  if (!match) return null;
+
+  const open = match[1];
+  const close = open === "{" ? "}" : "]";
+  const start = match.index + match[0].length - 1;
+
+  let depth = 0;
+  let inString: '"' | "'" | null = null;
+  for (let i = start; i < source.length; i += 1) {
+    const ch = source[i];
+    if (inString) {
+      if (ch === "\\") { i += 1; continue; }
+      if (ch === inString) inString = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'") { inString = ch; continue; }
+    if (ch === open) depth += 1;
+    else if (ch === close) {
+      depth -= 1;
+      if (depth === 0) return source.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
+/** Validate + compact JSON (token-efficient so large blobs survive caps); raw on failure. */
+function normaliseJsonOrRaw(raw: string): string {
+  try {
+    return JSON.stringify(JSON.parse(raw));
+  } catch {
+    return raw;
+  }
 }
 
 async function parseXml(file: File): Promise<ParseResult> {
