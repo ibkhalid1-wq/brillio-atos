@@ -331,12 +331,17 @@ export function getLockedPhaseIds(program: ProgramSummary): Set<string> {
   const locked = new Set<string>();
   const phases = program.phases || [];
 
+  // Progression model: every prior gate must be approved to reach a phase, EXCEPT
+  // the immediate next phase (the "frontier"), which stays navigable so the team
+  // can step forward and start work without first approving the current gate.
+  // Only phases beyond the frontier are locked — this blocks skipping ahead while
+  // keeping normal forward navigation open.
   for (let index = 1; index < phases.length; index += 1) {
     const previousPhase = phases[index - 1];
     const previousGate = program.gateReviews?.[previousPhase.id];
     const previousApproved = previousGate?.status === "approved";
     if (!previousApproved) {
-      for (let remaining = index; remaining < phases.length; remaining += 1) {
+      for (let remaining = index + 1; remaining < phases.length; remaining += 1) {
         locked.add(phases[remaining].id);
       }
       break;
