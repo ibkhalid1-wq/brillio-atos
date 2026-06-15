@@ -5462,9 +5462,9 @@ button.v3-chip:focus-visible,
 .v3-flow-toggle-sub { font-size: 11px; color: var(--v3-text-muted); }
 .v3-flow-control .v3-iomap-legend { margin-top: 10px; }
 .v3-phase-col { min-width: 0; }
-.v3-phase-col--inputs { order: 1; flex: 1 1 320px; }
-.v3-phase-col--map { order: 2; flex: 1 1 220px; }
-.v3-phase-col--artifacts { order: 3; flex: 1 1 320px; }
+.v3-phase-col--inputs { order: 1; flex: 3 1 460px; }
+.v3-phase-col--map { order: 2; flex: 0 1 170px; }
+.v3-phase-col--artifacts { order: 3; flex: 1 1 260px; }
 .v3-phase-cards { order: 4; flex: 1 1 100%; width: 100%; }
 .v3-phase-cards-grid {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;

@@ -13,7 +13,6 @@ import { PhaseChangeSummary } from "@/v3/components/PhaseChangeSummary";
 import { PhaseExecutiveSummary } from "@/v3/components/PhaseExecutiveSummary";
 import { PhaseMethodologyChecklist } from "@/v3/components/PhaseMethodologyChecklist";
 import { PhaseRail } from "@/v3/components/PhaseRail";
-import { PhaseFlowBar } from "@/v3/components/PhaseFlowBar";
 import { ReadinessBadge } from "@/v3/components/ui/ReadinessBadge";
 import { AdamCard, AdamCardBody, AdamCardHeader } from "@/v3/components/ui/AdamCard";
 import { EmptyState } from "@/v3/components/ui/EmptyState";
@@ -448,7 +447,6 @@ export default function StageView({
   const [updatedArtifactId, setUpdatedArtifactId] = React.useState<"narrative" | "deck" | null>(null);
   const onboardingStorageKey = `adam_onboarding_stage_${program?.id || "local"}_${activePhaseId || "none"}`;
   const [guideDismissed, setGuideDismissed] = React.useState(false);
-  const [showWiring, setShowWiring] = React.useState(true);
   const [summaryExpanded, setSummaryExpanded] = React.useState(false);
   const phaseMainRef = useRef<HTMLDivElement | null>(null);
   const previousNarrativeRef = useRef<string | null>(artifactPreviews?.narrative || null);
@@ -806,13 +804,6 @@ export default function StageView({
               {verdict ? <div className="v3-phase-head-verdict">{verdict}</div> : null}
             </div>
           </div>
-          {/* Programme phase flow bar (Priority 5 — PhaseFlowBar) */}
-          <PhaseFlowBar
-            program={program}
-            activePhaseId={activePhase.id}
-            lockedPhaseIds={lockedPhaseIds}
-            onSelectPhase={onSelectPhase}
-          />
         </div>
 
         {/* Key metrics */}
@@ -905,6 +896,10 @@ export default function StageView({
               </button>
             </div>
           </div>
+        ) : null}
+
+        {program && activePhase?.id ? (
+          <PhaseChangeSummary program={program} phaseId={activePhase.id} />
         ) : null}
       </header>
       {/* Executive snapshot — condensed 15-second read of the phase, pinned above the zones */}
@@ -1098,10 +1093,6 @@ export default function StageView({
           />
         ) : null}
 
-        {program && activePhase?.id ? (
-          <PhaseChangeSummary program={program} phaseId={activePhase.id} />
-        ) : null}
-
         {program && activePhase?.id && readiness ? (
           <PhaseProgressionCard
             program={program}
@@ -1263,7 +1254,7 @@ export default function StageView({
       </section>
 
       <div className="v3-phase-main" ref={phaseMainRef}>
-      <PhaseFlowOverlay containerRef={phaseMainRef} program={program} phaseId={activePhase.id} enabled={showWiring} />
+      <PhaseFlowOverlay containerRef={phaseMainRef} program={program} phaseId={activePhase.id} enabled />
       {/* LEFT — input fields card (keeps upload-document + workstream buttons inside PhaseInputsPanel) */}
       <section className="v3-phase-col v3-phase-col--inputs">
         <div className="v3-zone-label">Input fields</div>
@@ -1292,22 +1283,12 @@ export default function StageView({
         ) : null}
       </section>
 
-      {/* MIDDLE — wiring control: toggles the live connector lines that are pinned
-          to the real input-field and artifact elements in the side columns. */}
+      {/* MIDDLE — live connector lines pinned to the real input-field and
+          artifact elements in the side columns (always shown). */}
       <section className="v3-phase-col v3-phase-col--map">
         <div className="v3-zone-label">Flow</div>
         <div className="v3-flow-control">
-          <button
-            type="button"
-            className="v3-flow-toggle"
-            onClick={() => setShowWiring((current) => !current)}
-            aria-pressed={showWiring}
-          >
-            <span className="v3-flow-toggle-title">Input → artifact wiring</span>
-            <span className="v3-flow-toggle-sub">
-              {showWiring ? "Lines pinned to fields · hide" : "Show pinned connector lines"}
-            </span>
-          </button>
+          <div className="v3-flow-toggle-title">Input → artifact wiring</div>
           <div className="v3-iomap-legend">
             <span className="v3-iomap-legend-item"><i style={{ background: "#2DD4BF" }} /> Captured input</span>
             <span className="v3-iomap-legend-item"><i style={{ background: "var(--v3-border)" }} /> Empty input</span>
