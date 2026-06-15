@@ -47,6 +47,28 @@ const AI_NATIVE_TYPES = new Set([
 ]);
 const AI_PARSE_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 
+/**
+ * supabase-js raises a FunctionsHttpError for any non-2xx response and exposes
+ * the underlying Response on `.context` while discarding the parsed body. Read
+ * that Response so callers can recover the function's real error payload.
+ */
+async function readFunctionErrorBody(
+  fnError: unknown,
+): Promise<{ error?: string; parseError?: string; isAIUnavailable?: boolean } | null> {
+  const context = (fnError as { context?: unknown } | null)?.context;
+  if (!(context instanceof Response)) return null;
+  try {
+    return await context.clone().json();
+  } catch {
+    try {
+      const txt = await context.clone().text();
+      return txt ? { error: txt } : null;
+    } catch {
+      return null;
+    }
+  }
+}
+
 async function fileToBase64(file: File): Promise<string> {
   const buffer = await file.arrayBuffer();
   const bytes = new Uint8Array(buffer);
@@ -227,7 +249,7 @@ export function useDocumentIntelligence({
 
     // ── Call document-intelligence edge function ──────────────────────────
     try {
-      const { data, error: fnError } = await supabase.functions.invoke("document-intelligence", {
+      const invoked = await supabase.functions.invoke("document-intelligence", {
         body: {
           programId,
           text: text || undefined,
@@ -237,8 +259,20 @@ export function useDocumentIntelligence({
         },
       });
 
+      let data = invoked.data;
+      const fnError = invoked.error;
+
       if (fnError) {
-        throw new Error(fnError.message || "Extraction request failed.");
+        // supabase-js collapses any non-2xx into an opaque "Edge Function
+        // returned a non-2xx status code" and drops the JSON body. Recover the
+        // real payload from the error context so the AI-unavailable degradation
+        // path still fires and the user sees the true error, not the generic one.
+        const body = await readFunctionErrorBody(fnError);
+        if (body?.isAIUnavailable) {
+          data = body;
+        } else {
+          throw new Error(body?.error || body?.parseError || fnError.message || "Extraction request failed.");
+        }
       }
 
       const response = data as {
