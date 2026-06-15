@@ -457,6 +457,17 @@ export default function StageView({
     return { byKey, present: summary?.present ?? 0, required: summary?.required ?? 0 };
   }, [program, activePhase]);
 
+  // Labels of required artifacts not yet produced — drives the artifacts-card summary.
+  const missingRequiredArtifacts = useMemo(() => {
+    if (!activePhase) return [] as string[];
+    return getPhaseArtifactDefs(activePhase.id)
+      .filter((def) => {
+        const node = phaseArtifacts.byKey.get(def.id);
+        return node && !node.present;
+      })
+      .map((def) => def.label);
+  }, [activePhase, phaseArtifacts]);
+
   const gateReview = activePhase ? program?.gateReviews?.[activePhase.id] || null : null;
   const source = typeof program?.rawData === "object" && program.rawData !== null
     ? ("data" in program.rawData && typeof program.rawData.data === "object" && program.rawData.data !== null
@@ -1474,6 +1485,19 @@ export default function StageView({
             </span>
           ) : null}
         </div>
+        {phaseArtifacts.required > 0 ? (
+          missingRequiredArtifacts.length ? (
+            <div className="v3-artifact-summary is-missing">
+              <span className="v3-chip amber v3-chip-tight">{missingRequiredArtifacts.length} required missing</span>
+              <span className="v3-artifact-summary-list">{missingRequiredArtifacts.join(" · ")}</span>
+            </div>
+          ) : (
+            <div className="v3-artifact-summary is-complete">
+              <span className="v3-chip green v3-chip-tight">Complete</span>
+              <span className="v3-artifact-summary-list">All required artifacts produced for this phase.</span>
+            </div>
+          )
+        ) : null}
         <div className="v3-output-strip">
           {/* Narrative — phase synthesis, with inline preview */}
           <button
