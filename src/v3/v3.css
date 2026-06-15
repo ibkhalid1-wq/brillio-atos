@@ -5432,11 +5432,11 @@ button.v3-chip:focus-visible,
 .v3-phase-head-actions-grp { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
 .v3-phase-body { display: flex; align-items: flex-start; min-height: 0; flex: 1; }
-.v3-phase-rail {
+.v3-phase-aside {
   order: 2;
-  flex: 0 0 320px; width: 320px; align-self: stretch;
+  flex: 0 0 320px; width: 320px; min-width: 0; align-self: stretch;
   border-left: 1px solid var(--v3-border-soft);
-  overflow-y: auto;
+  overflow: hidden auto;
 }
 .v3-phase-main {
   order: 1;
@@ -5492,7 +5492,7 @@ button.v3-chip:focus-visible,
 
 @media (max-width: 1100px) {
   .v3-phase-body { flex-direction: column; }
-  .v3-phase-rail { flex: 1 1 auto; width: 100%; border-left: none; border-top: 1px solid var(--v3-border-soft); }
+  .v3-phase-aside { flex: 1 1 auto; width: 100%; border-left: none; border-top: 1px solid var(--v3-border-soft); }
   .v3-phase-col--inputs, .v3-phase-col--map, .v3-phase-col--artifacts { flex: 1 1 100%; }
 }
 

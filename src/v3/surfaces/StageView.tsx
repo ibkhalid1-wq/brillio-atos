@@ -987,7 +987,7 @@ export default function StageView({
         </div>
       )}
       <div className="v3-phase-body">
-      <section className="v3-zone v3-zone--focus v3-phase-rail">
+      <section className="v3-zone v3-zone--focus v3-phase-aside">
         <div className="v3-zone-label">Task queue · blockers · risks</div>
         {weeklyDigest && weeklyDigest.weekOf === mondayOfCurrentWeek ? (
           <div className="v3-weekly-digest">
