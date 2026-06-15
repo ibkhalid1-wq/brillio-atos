@@ -953,6 +953,14 @@ select {
   justify-content: flex-start;
 }
 
+/* Expanded: reserve room on the right so a long programme name clips with an
+   ellipsis instead of running under the absolutely-positioned chevron. */
+.v3-command-rail:hover .v3-command-rail-brand,
+.v3-command-rail:focus-within .v3-command-rail-brand,
+.v3-command-rail.is-pinned .v3-command-rail-brand {
+  padding-right: 42px;
+}
+
 /* ── Narrow at rest: brand card → compact avatar chip, centered ── */
 .v3-command-rail:not(:hover):not(:focus-within):not(.is-pinned) .v3-command-rail-brand-wrap {
   display: flex;
@@ -1165,6 +1173,9 @@ select {
   font-weight: 600;
   line-height: 1.2;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .v3-command-rail-brand-kicker,
@@ -1174,6 +1185,9 @@ select {
   line-height: 1.2;
   color: var(--v3-text-muted);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .v3-command-rail-item {

@@ -113,8 +113,6 @@ function activeNavId(surface: V3Surface, moreView?: string | null): string {
   return "today";
 }
 
-const PROGRAMME_SURFACES = new Set<V3Surface>(["insight-feed", "pipeline", "stage", "program", "programme-health", "decide"]);
-
 // Delegate to the canonical confidence colour so the brand "% confidence"
 // kicker never contradicts the Programme health dot on this same rail (e.g.
 // 76% must read green/"On Track", not amber). Single source of truth lives in
@@ -219,7 +217,6 @@ export function CommandRail({
   const activeId = activeNavId(activeSurface, moreView);
   const aiSettingsActive = moreView === "intelligence";
   const workspacesActive = activeSurface === "program" && !aiSettingsActive;
-  const showStatus = PROGRAMME_SURFACES.has(activeSurface) || moreView != null;
   const railNavigate = (surface: V3Surface) => {
     setUserMenuOpen(false);
     setProgramMenuOpen(false);
@@ -402,21 +399,17 @@ export function CommandRail({
         })}
       </div>
 
-      {/* ── Agent activity ── */}
-      {showStatus ? (
-        <>
-          <RailDivider />
-          <div
-            className={`v3-command-rail-status-row v3-agent-running-row ${anyAgentRunning ? "is-running" : "is-stopped"}`}
-            title={anyAgentRunning ? "Agents analysing programme data" : "Agents stopped — no agent running"}
-          >
-            <span className={`v3-radar-spinner ${anyAgentRunning ? "" : "is-stopped"}`} aria-hidden="true" />
-            <span className="v3-command-rail-status-label v3-agent-running-label">
-              {anyAgentRunning ? "Agents running" : "Agents stopped"}
-            </span>
-          </div>
-        </>
-      ) : null}
+      {/* ── Agent activity — always present so the working spinner stays on the rail ── */}
+      <RailDivider />
+      <div
+        className={`v3-command-rail-status-row v3-agent-running-row ${anyAgentRunning ? "is-running" : "is-stopped"}`}
+        title={anyAgentRunning ? "Agents analysing programme data" : "Agents stopped — no agent running"}
+      >
+        <span className={`v3-radar-spinner ${anyAgentRunning ? "" : "is-stopped"}`} aria-hidden="true" />
+        <span className="v3-command-rail-status-label v3-agent-running-label">
+          {anyAgentRunning ? "Agents running" : "Agents stopped"}
+        </span>
+      </div>
 
       {/* ── Health ── */}
       {programHealth ? (
