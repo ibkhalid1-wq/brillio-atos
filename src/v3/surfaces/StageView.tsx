@@ -17,6 +17,7 @@ import { ExpandableSection } from "@/v3/components/ui/ExpandableSection";
 import { RelativeTime } from "@/v3/components/ui/RelativeTime";
 import { StatusBadge } from "@/v3/components/ui/StatusBadge";
 import { computePhaseReadiness } from "@/v3/lib/phaseReadiness";
+import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
 import type { V3Mode, V3MoreView, V3ReportId } from "@/v3/types";
 import { phaseName } from "@/v3/utils";
 
@@ -523,6 +524,10 @@ export default function StageView({
     () => (program && activePhase ? computePhaseReadiness(program, activePhase.id) : null),
     [activePhase, program],
   );
+  const phaseConfidence = useMemo(
+    () => (program && activePhase ? deriveProgramConfidence(program, activePhase.id) : null),
+    [activePhase, program],
+  );
   const gateHumanNote = gateReview && typeof (gateReview as unknown as Record<string, unknown>).humanNote === "string"
     ? ((gateReview as unknown as Record<string, unknown>).humanNote as string)
     : "";
@@ -743,7 +748,14 @@ export default function StageView({
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {/* Program eyebrow — always-visible programme context above the phase */}
+            <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginBottom: 2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <span style={{ fontWeight: 600, color: "var(--v3-text-secondary)" }}>{program.name}</span>
+              {program.client ? <span>· {program.client}</span> : null}
+              {program.sponsor ? <span>· Sponsor: {program.sponsor}</span> : null}
+              <span>· Updated <RelativeTime date={program.updatedAt} /></span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               <span style={{ fontSize: 15, fontWeight: 700, color: "var(--v3-text-primary)" }}>
                 {activePhase.label ?? activePhase.id}
               </span>
@@ -759,7 +771,20 @@ export default function StageView({
                   : undefined;
                 return <ReadinessBadge score={phaseReadiness?.score} blockers={phaseReadiness?.blockers} size="sm" />;
               })()}
+              {phaseConfidence ? (
+                <span
+                  className={`v3-chip ${phaseConfidence.score >= 75 ? "green" : phaseConfidence.score >= 50 ? "amber" : "red"}`}
+                  title={phaseConfidence.explanation}
+                >
+                  {phaseConfidence.score}% confidence
+                </span>
+              ) : null}
             </div>
+            {program.objective ? (
+              <div style={{ fontSize: 12, color: "var(--v3-text-secondary)", marginTop: 3, maxWidth: 560, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={program.objective}>
+                {program.objective}
+              </div>
+            ) : null}
             {PHASE_FOCUS_COPY[activePhase.id] && (
               <div style={{ fontSize: 12, color: "var(--v3-text-muted)", marginTop: 2 }}>
                 {PHASE_FOCUS_COPY[activePhase.id]}
