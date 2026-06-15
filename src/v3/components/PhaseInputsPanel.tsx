@@ -207,6 +207,23 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
     .every((field) => values[field.id]?.trim());
   const filledCount = schema.fields.filter((field) => values[field.id]?.trim()).length;
 
+  // Has the live buffer diverged from the persisted snapshot? Drives the Cancel
+  // (revert) affordance so it only enables when there are unsaved edits.
+  const isDirty = useMemo(() => {
+    for (const field of schema.fields) {
+      if ((values[field.id] ?? "") !== (((existingInputs as Record<string, unknown>)[field.id] as string) ?? "")) return true;
+    }
+    const existingWs = Array.isArray(existingInputs.workstreams)
+      ? existingInputs.workstreams
+      : Array.isArray(program.workstreams)
+        ? program.workstreams.filter((entry) => entry.phaseId === phaseId)
+        : [];
+    if (JSON.stringify(localWorkstreams) !== JSON.stringify(existingWs)) return true;
+    if (showKpis && JSON.stringify(localKpis) !== JSON.stringify(parseKpis((existingInputs as Record<string, unknown>).kpis))) return true;
+    if (showActuals && JSON.stringify(localActuals) !== JSON.stringify(parseKpiActuals((existingInputs as Record<string, unknown>).kpiActuals))) return true;
+    return false;
+  }, [schema.fields, values, existingInputs, localWorkstreams, localKpis, localActuals, program.workstreams, phaseId, showKpis, showActuals]);
+
   // Prioritise inputs by impact: required gaps first, then optional gaps, then
   // complete — so "what matters now" is at the top. Ranked from the *persisted*
   // snapshot (existingInputs), never the live edit buffer, so a field can't jump
@@ -250,6 +267,20 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
     } finally {
       setSaving(false);
     }
+  }
+
+  // Revert the live edit buffer back to the last persisted snapshot, mirroring
+  // the reset run by the existingInputs effect.
+  function handleCancel() {
+    setValues(existingInputs);
+    const existingWorkstreams = Array.isArray(existingInputs.workstreams)
+      ? existingInputs.workstreams.filter((entry): entry is Workstream => typeof entry === "object" && entry !== null)
+      : Array.isArray(program.workstreams)
+        ? program.workstreams.filter((entry) => entry.phaseId === phaseId)
+        : [];
+    setLocalWorkstreams(existingWorkstreams);
+    setLocalKpis(parseKpis((existingInputs as Record<string, unknown>).kpis));
+    setLocalActuals(parseKpiActuals((existingInputs as Record<string, unknown>).kpiActuals));
   }
 
   function addWorkstream() {
@@ -578,15 +609,26 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
             <button type="button" className="v3-button ghost" style={{ fontSize: 12 }} onClick={onUploadDocument}>
               ↑ Upload document instead
             </button>
-            <button
-              type="button"
-              className="v3-button primary"
-              style={{ fontSize: 12 }}
-              disabled={saving || !hasAllRequired}
-              onClick={() => void handleSave()}
-            >
-              {saved ? "Saved ✓" : saving ? "Saving…" : "Save inputs"}
-            </button>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <button
+                type="button"
+                className="v3-button ghost"
+                style={{ fontSize: 12 }}
+                disabled={saving || !isDirty}
+                onClick={handleCancel}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="v3-button primary"
+                style={{ fontSize: 12 }}
+                disabled={saving || !hasAllRequired}
+                onClick={() => void handleSave()}
+              >
+                {saved ? "Saved ✓" : saving ? "Saving…" : "Save inputs"}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
