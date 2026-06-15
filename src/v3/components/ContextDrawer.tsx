@@ -1,13 +1,14 @@
 import React from "react";
 import type { PhaseAgentTask } from "@/lib/adamPhaseAgentTypes";
 import type { ProgramSummary } from "@/new/types";
-import PhaseInputsPanel from "@/v3/components/PhaseInputsPanel";
 import TaskQueuePanel from "@/v3/components/TaskQueuePanel";
 import { ArtifactLedger, type GenerationHint } from "@/v3/components/ArtifactLedger";
 import { KnowledgeGraphPanel } from "@/v3/components/KnowledgeGraphPanel";
 import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
 
-type ContextSection = "inputs" | "tasks" | "intelligence";
+// Phase inputs now live inline as the primary working area in StageView, so the
+// drawer is a focused copilot: Tasks + Intelligence (artifacts / graph).
+type ContextSection = "tasks" | "intelligence";
 type IntelligenceView = "artifacts" | "graph";
 
 interface ContextDrawerProps {
@@ -17,7 +18,6 @@ interface ContextDrawerProps {
   phaseId: string | null;
   tasks: PhaseAgentTask[];
   pendingTaskCount: number;
-  onSaveInputs: (phaseId: string, inputs: Record<string, string>) => Promise<void>;
   onUploadDocument: () => void;
   onAnswerQuestion: (taskId: string, answer: string) => Promise<void>;
   onAcknowledgeTask: (taskId: string) => void;
@@ -33,7 +33,6 @@ export function ContextDrawer({
   phaseId,
   tasks,
   pendingTaskCount,
-  onSaveInputs,
   onUploadDocument,
   onAnswerQuestion,
   onAcknowledgeTask,
@@ -41,7 +40,7 @@ export function ContextDrawer({
   onOpenDocuments,
   generationHint,
 }: ContextDrawerProps) {
-  const [activeSection, setActiveSection] = React.useState<ContextSection>("inputs");
+  const [activeSection, setActiveSection] = React.useState<ContextSection>("tasks");
   const [intelligenceView, setIntelligenceView] = React.useState<IntelligenceView>("artifacts");
   const phaseLedger = React.useMemo(() => {
     if (!program || !phaseId) return null;
@@ -65,7 +64,6 @@ export function ContextDrawer({
       <aside className="v3-context-drawer" aria-label="Context drawer">
         <div className="v3-context-drawer-tabs">
           {([
-            ["inputs", "Inputs"],
             ["tasks", "Tasks"],
             ["intelligence", "Intelligence"],
           ] as Array<[ContextSection, string]>).map(([section, label]) => (
@@ -84,15 +82,6 @@ export function ContextDrawer({
         </div>
 
         <div className="v3-context-drawer-body">
-          {activeSection === "inputs" && program && phaseId ? (
-            <PhaseInputsPanel
-              program={program}
-              phaseId={phaseId}
-              onSave={onSaveInputs}
-              onUploadDocument={onUploadDocument}
-            />
-          ) : null}
-
           {activeSection === "tasks" && phaseId ? (
             <TaskQueuePanel
               tasks={tasks}

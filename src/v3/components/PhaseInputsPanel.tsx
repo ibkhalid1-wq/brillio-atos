@@ -49,6 +49,36 @@ function parseKpis(raw: unknown): PhaseKpi[] {
  * against real numbers instead of estimating. Persisted as a JSON string under
  * phaseInputs.valuerealize.kpiActuals.
  */
+/**
+ * Per-field quality verdict shown beside each input. Mirrors the field-quality
+ * heuristic in computeInputQualityScore (≈20 words = full quality) so the inline
+ * signal a PM sees agrees with the gate readiness score it feeds. Gives an
+ * at-a-glance answer to "is this field good enough?" without leaving the screen.
+ */
+function assessField(value: string | undefined, type: string): { label: string; tone: "green" | "amber" | "muted" } {
+  const v = (value ?? "").trim();
+  if (!v) return { label: "Empty", tone: "muted" };
+  if (type === "textarea") {
+    const words = v.split(/\s+/).filter(Boolean).length;
+    if (words < 8) return { label: "Brief", tone: "amber" };
+    if (words < 20) return { label: "Fair", tone: "amber" };
+    return { label: "Good", tone: "green" };
+  }
+  return { label: "Filled", tone: "green" };
+}
+
+/** Human-readable "last updated" for the phase inputs, from the persisted savedAt. */
+function freshnessLabel(savedAt: unknown): string | null {
+  if (typeof savedAt !== "string" || !savedAt.trim()) return null;
+  const ts = new Date(savedAt).getTime();
+  if (Number.isNaN(ts)) return null;
+  const diff = Math.floor((Date.now() - ts) / 1000);
+  if (diff < 60) return "Updated just now";
+  if (diff < 3600) return `Updated ${Math.floor(diff / 60)}m ago`;
+  if (diff < 86_400) return `Updated ${Math.floor(diff / 3600)}h ago`;
+  return `Updated ${Math.floor(diff / 86_400)}d ago`;
+}
+
 function parseKpiActuals(raw: unknown): Record<string, string> {
   if (typeof raw !== "string" || !raw.trim()) return {};
   try {
@@ -247,13 +277,23 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
           <div style={{ fontSize: 12, color: "var(--v3-text-muted)", marginBottom: 12, lineHeight: 1.55 }}>
             {schema.description}
           </div>
+          {freshnessLabel((existingInputs as Record<string, unknown>).savedAt) ? (
+            <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginBottom: 12 }}>
+              {freshnessLabel((existingInputs as Record<string, unknown>).savedAt)}
+            </div>
+          ) : null}
 
           <div style={{ display: "grid", gap: 12, marginBottom: 12 }}>
-            {schema.fields.map((field) => (
+            {schema.fields.map((field) => {
+              const verdict = assessField(values[field.id], field.type);
+              return (
               <div key={field.id}>
-                <div className="v3-field-label">
-                  {field.label}
-                  {field.required ? <span style={{ color: "var(--v3-accent)", marginLeft: 3 }}>*</span> : null}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                  <div className="v3-field-label">
+                    {field.label}
+                    {field.required ? <span style={{ color: "var(--v3-accent)", marginLeft: 3 }}>*</span> : null}
+                  </div>
+                  <span className={`v3-chip ${verdict.tone}`} style={{ fontSize: 10 }}>{verdict.label}</span>
                 </div>
                 {field.hint ? (
                   <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginBottom: 4 }}>{field.hint}</div>
@@ -285,7 +325,8 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
                   />
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
 
           <div style={{ marginTop: 12, marginBottom: 12 }}>

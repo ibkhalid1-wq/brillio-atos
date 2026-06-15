@@ -5,6 +5,7 @@ import type { DecisionSummary, ExitCriterion, GateReview, PlanAction, ProgramSum
 import ArtifactEditor from "@/v3/components/ArtifactEditor";
 import GateCoachPanel from "@/v3/components/GateCoachPanel";
 import OnboardingCard from "@/v3/components/OnboardingCard";
+import PhaseInputsPanel from "@/v3/components/PhaseInputsPanel";
 import { PhaseProgressionCard } from "@/v3/components/PhaseProgressionCard";
 import { PhaseRail } from "@/v3/components/PhaseRail";
 import { PhaseFlowBar } from "@/v3/components/PhaseFlowBar";
@@ -46,6 +47,8 @@ interface StageViewProps {
   onRequestRemediation: (phaseId: string, note: string) => Promise<void>;
   onRunAgent: (agentId: string) => void;
   onSaveArtifact: (artifactId: "narrative" | "deck", content: string) => Promise<void>;
+  onSaveInputs: (phaseId: string, inputs: Record<string, string>) => Promise<void>;
+  onUploadDocument: () => void;
   artifactPreviews?: {
     narrative?: string | null;
     plan?: Array<{ action?: string; rationale?: string }> | null;
@@ -425,6 +428,8 @@ export default function StageView({
   onRequestRemediation,
   onRunAgent,
   onSaveArtifact,
+  onSaveInputs,
+  onUploadDocument,
   artifactPreviews,
 }: StageViewProps) {
   const [remediationOpen, setRemediationOpen] = React.useState(false);
@@ -935,7 +940,8 @@ export default function StageView({
             }
             onCtaClick={() => {
               if (!hasPhaseInputs) {
-                window.dispatchEvent(new CustomEvent("atlas-v3-open-drawer"));
+                // Phase inputs are now the inline working area — scroll to them.
+                document.getElementById("phase-inputs-anchor")?.scrollIntoView({ behavior: "smooth", block: "center" });
                 return;
               }
               // If agents aren't available (no auth), skip gate review and go straight to approve
@@ -1178,6 +1184,17 @@ export default function StageView({
       <section className="v3-zone v3-zone--work">
         <div className="v3-zone-label">Working</div>
         <div className="v3-zone-working">
+          {program && activePhase?.id ? (
+            <div id="phase-inputs-anchor">
+              <PhaseInputsPanel
+                program={program}
+                phaseId={activePhase.id}
+                onSave={onSaveInputs}
+                onUploadDocument={onUploadDocument}
+              />
+            </div>
+          ) : null}
+
           <ExitCriteriaCard
             criteria={gateReview?.exitCriteriaStatus || []}
             generatedCriteria={generatedCriteria}

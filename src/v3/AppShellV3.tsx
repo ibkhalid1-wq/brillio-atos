@@ -2444,6 +2444,8 @@ export default function AppShellV3() {
                 onRequestRemediation={requestRemediation}
                 onRunAgent={handleRunAgent}
                 onSaveArtifact={handleSaveArtifact}
+                onSaveInputs={handleSavePhaseInputs}
+                onUploadDocument={handleUploadDocument}
                 artifactPreviews={{
                   narrative: activeProgram?.narrative || null,
                   plan: activeProgram?.plan?.nextThreeActions || null,
@@ -2666,7 +2668,6 @@ export default function AppShellV3() {
           phaseId={activePhaseId}
           tasks={currentPhaseTasks}
           pendingTaskCount={currentPhaseTasks.filter((task) => task.status === "pending" || task.status === "running").length}
-          onSaveInputs={handleSavePhaseInputs}
           onUploadDocument={handleUploadDocument}
           onAnswerQuestion={handleAnswerAgentQuestion}
           onAcknowledgeTask={handleAcknowledgeTask}
