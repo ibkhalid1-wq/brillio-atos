@@ -66,7 +66,9 @@ export function PhaseStatusRings(props: PhaseStatusRingsProps) {
   // value-arc width but stays visually subtle (low opacity) so the coloured
   // arcs dominate without the background reading as a heavy grey ring.
   const sw = Math.max(3.4, cx * 0.17);
-  const gap = sw * 1.45;
+  // Cluster the rings toward the outer edge (tighter gap) so the central hole
+  // stays large enough for the % readout to sit cleanly inside it.
+  const gap = sw * 1.1;
   const rOuter = cx - sw / 2 - 0.5;
   const rMid = rOuter - gap;
   const rInner = Math.max(sw, rMid - gap);
@@ -82,10 +84,10 @@ export function PhaseStatusRings(props: PhaseStatusRingsProps) {
   // Centre readout includes the unit ("78%") and is sized to fit inside the
   // inner ring — narrower for longer values like "100%" so it never overflows.
   const centerText = `${overall}%`;
-  const innerSpace = (rInner + sw / 2) * 2 * 0.92; // usable width up to the inner ring's outer edge
+  const innerSpace = (rInner - sw / 2) * 2 * 0.9; // usable width strictly inside the inner ring hole
   const centerFontSize = Math.max(
     8,
-    Math.min(size * 0.26, innerSpace / (centerText.length * 0.62)),
+    Math.min(size * 0.26, innerSpace / (centerText.length * 0.6)),
   );
 
   const tooltip =
