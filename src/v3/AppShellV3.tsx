@@ -13,6 +13,7 @@ import { useAgentTriggers } from "@/new/lib/useAgentTriggers";
 import { useBudgetTracking } from "@/new/lib/useBudgetTracking";
 import { useClosure } from "@/new/lib/useClosure";
 import { useDecisionQueue } from "@/new/lib/useDecisionQueue";
+import { useRaidLog } from "@/new/lib/useRaidLog";
 import { useEscalations } from "@/new/lib/useEscalations";
 import { useGateReview } from "@/new/lib/useGateReview";
 import { useMilestones } from "@/new/lib/useMilestones";
@@ -1388,6 +1389,7 @@ export default function AppShellV3() {
   const { acknowledgeEscalation, resolveEscalation } = useEscalations(activeProgramId || "", rawData, refreshPrograms);
   const { addNote: addProgramNote } = useProgramNotes(activeProgramId || "", rawData, refreshPrograms);
   const { addDecision } = useDecisionQueue(activeProgramId || "", rawData, refreshPrograms);
+  const { addEntry: addRaidEntry, closeEntry: closeRaidEntry } = useRaidLog(activeProgramId || "", rawData, refreshPrograms);
   const { updatePct: updatePhasePct } = usePhaseProgress(activeProgramId || "", rawData, refreshPrograms);
   const { save: saveSetup, isSaving: wizardSaving } = useProgramSetup(activeProgramId || "", rawData, refreshPrograms);
   const industry = useMemo(() => {
@@ -2528,6 +2530,8 @@ export default function AppShellV3() {
               onAddDecision={handleAddDecision}
               onApproveGate={handleApproveGate}
               onRequestRemediation={requestRemediation}
+              onAddRaid={addRaidEntry}
+              onCloseRaid={closeRaidEntry}
               persona={persona}
             />
           </AdamErrorBoundary>

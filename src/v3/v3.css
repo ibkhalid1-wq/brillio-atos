@@ -6926,9 +6926,65 @@ button.v3-chip:focus-visible,
   text-align: left;
 }
 
-.v3-governance-timeline-item:hover:not(:disabled),
+.v3-governance-timeline-item:hover:not(:disabled) {
+  background: var(--v3-surface-2);
+}
+
 .v3-governance-timeline-item.is-selected {
-  background: rgba(34, 38, 58, 0.65);
+  background: color-mix(in srgb, var(--v3-accent) 12%, transparent);
+}
+
+.v3-action-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--v3-border);
+  margin-bottom: 16px;
+}
+
+.v3-action-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 0;
+  background: transparent;
+  color: var(--v3-text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--v3-font);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.v3-action-tab:hover {
+  color: var(--v3-text-primary);
+}
+
+.v3-action-tab.is-active {
+  color: var(--v3-text-primary);
+  border-bottom-color: var(--v3-accent);
+}
+
+.v3-action-tab-count {
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 18px;
+  text-align: center;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--v3-surface-2);
+  color: var(--v3-text-muted);
+}
+
+.v3-action-tab.is-active .v3-action-tab-count {
+  background: color-mix(in srgb, var(--v3-accent) 16%, transparent);
+  color: var(--v3-accent);
+}
+
+@media (max-width: 640px) {
+  .v3-action-tabs { overflow-x: auto; }
+  .v3-action-tab { white-space: nowrap; }
 }
 
 .v3-governance-timeline-item.is-locked {

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { buildDecisionQueue } from "@/lib/adamDecisionUtils";
 import { PHASE_LABELS } from "@/v3/lib/uiHelpers";
-import type { DecisionSummary, GateReview, ProgramSummary } from "@/new/types";
+import type { DecisionSummary, GateReview, ProgramSummary, RAIDEntry, RAIDEntryType } from "@/new/types";
 import type { Persona } from "@/new/types";
 import { AdamCard, AdamCardBody, AdamCardHeader } from "@/v3/components/ui/AdamCard";
 import { EmptyState } from "@/v3/components/ui/EmptyState";
@@ -19,9 +19,20 @@ interface DecideViewProps {
   onAddDecision: (decision: Omit<DecisionSummary, "id" | "status" | "createdAt">) => Promise<void>;
   onApproveGate: (phaseId: string) => Promise<void>;
   onRequestRemediation: (phaseId: string, note: string) => Promise<void>;
+  onAddRaid: (draft: { type: RAIDEntryType; title: string; description: string; severity: RAIDEntry["severity"]; phase: string; owner?: string; mitigation?: string }) => Promise<void>;
+  onCloseRaid: (entryId: string, note?: string) => Promise<void>;
 }
 
 type Scope = "stage" | "all";
+type ActionTab = "blockers" | "actions" | "risks";
+
+const EMPTY_RAID = {
+  title: "",
+  description: "",
+  severity: "medium" as RAIDEntry["severity"],
+  phase: "",
+  mitigation: "",
+};
 type ReviewDecision = DecisionSummary & {
   previewContent?: Record<string, unknown>;
   agentId?: string;
@@ -50,25 +61,6 @@ function gateVariant(status: GateReview["status"] | undefined): "approved" | "re
   if (status === "not-ready") return "locked";
   return "pending";
 }
-
-type ActionBucket = "blocking" | "attention" | "recommended";
-
-// Action Center buckets every open item into one of three sections so the user
-// never has to reason about decision vs. gate vs. risk taxonomy — just urgency.
-function classifyBucket(decision: ReviewDecision): ActionBucket {
-  const ageDays = decision.createdAt
-    ? (Date.now() - new Date(decision.createdAt).getTime()) / (1000 * 60 * 60 * 24)
-    : 0;
-  if (decision.priority === "critical" || ageDays >= 14) return "blocking";
-  if (decision.priority === "high" || ageDays >= 7) return "attention";
-  return "recommended";
-}
-
-const BUCKET_META: Record<ActionBucket, { title: string; sub: string; tone: string }> = {
-  blocking: { title: "Blocking progress", sub: "Resolve these to keep the programme moving", tone: "var(--v3-red)" },
-  attention: { title: "Needs attention", sub: "Important, not yet blocking", tone: "var(--v3-amber)" },
-  recommended: { title: "Recommended actions", sub: "Good next moves when you have capacity", tone: "var(--v3-text-muted)" },
-};
 
 function ArtifactPreview({ agentId, content }: { agentId: string; content: Record<string, unknown> }) {
   if (agentId === "narrative") {
@@ -390,6 +382,128 @@ function GateDetailPanel({
   );
 }
 
+function RaidCard({
+  entry,
+  closing,
+  onClose,
+}: {
+  entry: RAIDEntry;
+  closing: boolean;
+  onClose: () => void;
+}) {
+  const isUrgent = entry.severity === "critical" || entry.severity === "high";
+  return (
+    <AdamCard accent={isUrgent ? "danger" : "none"} className="v3-governance-decision-card">
+      <AdamCardBody>
+        <div className="v3-governance-decision-top">
+          <div className="v3-governance-decision-meta">
+            <StatusBadge variant={priorityVariant(entry.severity)} size="sm" />
+            <StatusBadge variant={entry.status === "monitoring" ? "escalated" : "open"} size="sm" label={entry.status === "monitoring" ? "Monitoring" : "Open"} />
+            {entry.source === "agent" ? <StatusBadge variant="active" size="sm" label="ADAM" /> : null}
+          </div>
+          <div className="v3-governance-decision-age">
+            <RelativeTime date={entry.createdAt} />
+          </div>
+        </div>
+
+        <div className="v3-governance-decision-title">{entry.title}</div>
+        {entry.description ? <div className="v3-governance-decision-recommendation">{entry.description}</div> : null}
+        {entry.mitigation ? <div className="v3-governance-decision-analysis">Mitigation: {entry.mitigation}</div> : null}
+
+        <div className="v3-governance-decision-actions">
+          <button type="button" className="v3-button primary" style={{ fontSize: 12 }} disabled={closing} onClick={onClose}>
+            {closing ? "Resolving…" : "Mark resolved"}
+          </button>
+        </div>
+      </AdamCardBody>
+    </AdamCard>
+  );
+}
+
+function RaidRaiseForm({
+  kind,
+  program,
+  saving,
+  onCancel,
+  onSubmit,
+}: {
+  kind: "blocker" | "risk";
+  program: ProgramSummary;
+  saving: boolean;
+  onCancel: () => void;
+  onSubmit: (draft: typeof EMPTY_RAID) => void;
+}) {
+  const [form, setForm] = useState(EMPTY_RAID);
+  const label = kind === "blocker" ? "blocker" : "risk";
+  return (
+    <AdamCard accent="primary">
+      <AdamCardHeader title={`Raise a ${label}`} subtitle={`Add a ${label} to the RAID register`} />
+      <AdamCardBody>
+        <div style={{ display: "grid", gap: 12 }}>
+          <div>
+            <div className="v3-field-label">Title *</div>
+            <input
+              type="text"
+              className="v3-input"
+              aria-label={`${label} title`}
+              placeholder={kind === "blocker" ? "What is blocking progress?" : "What could go wrong?"}
+              value={form.title}
+              onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+            />
+          </div>
+          <div>
+            <div className="v3-field-label">Description</div>
+            <textarea
+              className="v3-input v3-textarea"
+              aria-label={`${label} description`}
+              rows={2}
+              placeholder="Add context, impact, and any detail the team needs…"
+              value={form.description}
+              onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
+            />
+          </div>
+          <div className="v3-wizard-grid">
+            <div>
+              <div className="v3-field-label">Severity</div>
+              <select className="v3-input" aria-label={`${label} severity`} value={form.severity} onChange={(event) => setForm((current) => ({ ...current, severity: event.target.value as RAIDEntry["severity"] }))}>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+            <div>
+              <div className="v3-field-label">Phase</div>
+              <select className="v3-input" aria-label={`${label} phase`} value={form.phase} onChange={(event) => setForm((current) => ({ ...current, phase: event.target.value }))}>
+                <option value="">Unassigned</option>
+                {(program.phases || []).map((phase) => <option key={phase.id} value={phase.id}>{phaseName(phase)}</option>)}
+              </select>
+            </div>
+            {kind === "risk" ? (
+              <div>
+                <div className="v3-field-label">Mitigation</div>
+                <input type="text" className="v3-input" aria-label="risk mitigation" placeholder="Optional" value={form.mitigation} onChange={(event) => setForm((current) => ({ ...current, mitigation: event.target.value }))} />
+              </div>
+            ) : null}
+          </div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button type="button" className="v3-button ghost" style={{ fontSize: 12 }} onClick={onCancel}>Cancel</button>
+            <button
+              type="button"
+              className="v3-button primary"
+              style={{ fontSize: 12 }}
+              disabled={!form.title.trim() || saving}
+              onClick={() => onSubmit(form)}
+            >
+              {saving ? "Saving…" : `Raise ${label}`}
+            </button>
+          </div>
+        </div>
+      </AdamCardBody>
+    </AdamCard>
+  );
+}
+
 export default function DecideView({
   program,
   activePhaseId,
@@ -399,6 +513,8 @@ export default function DecideView({
   onAddDecision,
   onApproveGate,
   onRequestRemediation,
+  onAddRaid,
+  onCloseRaid,
 }: DecideViewProps) {
   const [scope, setScope] = useState<Scope>(mode === "guided" ? "stage" : "all");
   const [addOpen, setAddOpen] = useState(false);
@@ -409,6 +525,10 @@ export default function DecideView({
   const [modifyOpenMap, setModifyOpenMap] = useState<Map<string, boolean>>(new Map());
   const [visibleCount, setVisibleCount] = useState(20);
   const [selectedPhaseId, setSelectedPhaseId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<ActionTab>("blockers");
+  const [raidFormOpen, setRaidFormOpen] = useState(false);
+  const [raidSaving, setRaidSaving] = useState(false);
+  const [closingRaidId, setClosingRaidId] = useState<string | null>(null);
 
   useEffect(() => {
     if (mode === "guided") setScope("stage");
@@ -445,11 +565,18 @@ export default function DecideView({
     return (order[a.priority as string] ?? 2) - (order[b.priority as string] ?? 2);
   });
 
-  const buckets = useMemo(() => {
-    const grouped: Record<ActionBucket, ReviewDecision[]> = { blocking: [], attention: [], recommended: [] };
-    for (const decision of sortedOpen) grouped[classifyBucket(decision)].push(decision);
-    return grouped;
-  }, [sortedOpen]);
+  const { blockers, risks } = useMemo(() => {
+    const phaseFilterId = selectedPhaseId ?? activePhaseId;
+    const severityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+    const entries = (program?.raidEntries || [])
+      .filter((entry) => entry.status !== "closed")
+      .filter((entry) => !(scope === "stage" && phaseFilterId) || entry.phase === phaseFilterId)
+      .sort((a, b) => (severityOrder[a.severity] ?? 2) - (severityOrder[b.severity] ?? 2));
+    return {
+      blockers: entries.filter((entry) => entry.type === "blocker"),
+      risks: entries.filter((entry) => entry.type === "risk"),
+    };
+  }, [program?.raidEntries, scope, selectedPhaseId, activePhaseId]);
 
   if (!program) {
     return (
@@ -467,7 +594,7 @@ export default function DecideView({
 
   const addDecisionForm = addOpen ? (
     <AdamCard accent="primary">
-      <AdamCardHeader title="Raise a decision" subtitle="Add a decision to the governance register" />
+      <AdamCardHeader title="Raise an action" subtitle="Add a decision or action to the governance register" />
       <AdamCardBody>
         <div style={{ display: "grid", gap: 12 }}>
           <div>
@@ -529,7 +656,7 @@ export default function DecideView({
                 }
               }}
             >
-              {addSaving ? "Saving…" : "Raise decision"}
+              {addSaving ? "Saving…" : "Raise action"}
             </button>
           </div>
         </div>
@@ -577,49 +704,96 @@ export default function DecideView({
     </div>
   );
 
-  const renderBucket = (bucket: ActionBucket) => {
-    const items = buckets[bucket];
-    if (!items.length) return null;
-    const meta = BUCKET_META[bucket];
-    // Recommended is paginated; blocking/attention always show in full (they are the urgent few).
-    const shown = bucket === "recommended" ? items.slice(0, visibleCount) : items;
-    return (
-      <section key={bucket} className="v3-action-bucket" style={{ marginBottom: 24 }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10, padding: "0 4px" }}>
-          <span style={{ width: 8, height: 8, borderRadius: "50%", background: meta.tone, display: "inline-block" }} aria-hidden="true" />
-          <h2 style={{ fontSize: 14, fontWeight: 700, color: "var(--v3-text-primary)", margin: 0 }}>{meta.title}</h2>
-          <span style={{ fontSize: 12, fontWeight: 600, color: meta.tone }}>{items.length}</span>
-          <span style={{ fontSize: 12, color: "var(--v3-text-muted)", marginLeft: "auto" }}>{meta.sub}</span>
-        </div>
-        <div className="v3-governance-card-list">
-          {shown.map(renderDecision)}
-        </div>
-        {bucket === "recommended" && items.length > visibleCount ? (
-          <button className="v3-button ghost" style={{ fontSize: 12, width: "100%", marginTop: 12 }} onClick={() => setVisibleCount((count) => count + 20)}>
-            Show {Math.min(20, items.length - visibleCount)} more
-          </button>
-        ) : null}
-      </section>
-    );
+  const submitRaid = async (kind: "blocker" | "risk", draft: typeof EMPTY_RAID) => {
+    setRaidSaving(true);
+    try {
+      await onAddRaid({
+        type: kind,
+        title: draft.title.trim(),
+        description: draft.description.trim(),
+        severity: draft.severity,
+        phase: draft.phase || (selectedPhaseId ?? activePhaseId ?? ""),
+        mitigation: kind === "risk" && draft.mitigation.trim() ? draft.mitigation.trim() : undefined,
+      });
+      setRaidFormOpen(false);
+    } finally {
+      setRaidSaving(false);
+    }
   };
+
+  const closeRaid = async (entryId: string) => {
+    setClosingRaidId(entryId);
+    try {
+      await onCloseRaid(entryId);
+    } finally {
+      setClosingRaidId(null);
+    }
+  };
+
+  const renderRaidList = (entries: RAIDEntry[], emptyLabel: string) => (
+    entries.length ? (
+      <div className="v3-governance-card-list">
+        {entries.map((entry) => (
+          <div key={entry.id} style={{ marginBottom: 8 }}>
+            <div style={{ fontSize: 11, color: "var(--v3-text-muted)", padding: "4px 0 0 4px" }}>
+              {entry.phase
+                ? <>Affects: <strong>{PHASE_LABELS[entry.phase] ?? entry.phase}</strong> phase</>
+                : <>Affects: <strong>Programme-level</strong></>}
+            </div>
+            <RaidCard entry={entry} closing={closingRaidId === entry.id} onClose={() => void closeRaid(entry.id)} />
+          </div>
+        ))}
+      </div>
+    ) : (
+      <div className="v3-empty" style={{ marginTop: 40 }}>
+        <div className="v3-empty-icon" style={{ color: "var(--v3-green)", fontSize: 28 }}>✓</div>
+        <div className="v3-empty-title">{emptyLabel}</div>
+      </div>
+    )
+  );
+
+  const tabs: { id: ActionTab; label: string; count: number }[] = [
+    { id: "blockers", label: "Blockers", count: blockers.length },
+    { id: "actions", label: "Recommended Actions", count: sortedOpen.length },
+    { id: "risks", label: "Risks", count: risks.length },
+  ];
+
+  const switchTab = (tab: ActionTab) => {
+    setActiveTab(tab);
+    setAddOpen(false);
+    setRaidFormOpen(false);
+  };
+
+  const raiseLabel = activeTab === "blockers" ? "blocker" : activeTab === "risks" ? "risk" : "action";
 
   return (
     <div className="v3-governance-layout">
       <div className="v3-governance-header">
         <div>
           <h1 className="v3-governance-title">Action Center</h1>
-          <p className="v3-governance-subtitle">Everything that needs you, in one place — sorted by urgency</p>
+          <p className="v3-governance-subtitle">Blockers, recommended actions, and risks — in one place</p>
         </div>
         <div className="v3-governance-header-actions">
-          <button type="button" className="v3-button primary" style={{ fontSize: 12 }} onClick={() => setAddOpen(true)}>
-            + Raise decision
-          </button>
           <button type="button" className={`v3-mode-toggle ${scope === "stage" ? "active" : ""}`} aria-pressed={scope === "stage"} onClick={() => setScope("stage")}>This phase</button>
           <button type="button" className={`v3-mode-toggle ${scope === "all" ? "active" : ""}`} aria-pressed={scope === "all"} onClick={() => setScope("all")}>All phases</button>
         </div>
       </div>
 
-      {addDecisionForm}
+      <div className="v3-action-tabs" role="tablist" aria-label="Action Center sections">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab.id}
+            className={`v3-action-tab ${activeTab === tab.id ? "is-active" : ""}`}
+            onClick={() => switchTab(tab.id)}
+          >
+            {tab.label}
+            <span className="v3-action-tab-count">{tab.count}</span>
+          </button>
+        ))}
+      </div>
 
       <div className="v3-governance-grid">
         <div className="v3-governance-sidebar">
@@ -637,35 +811,59 @@ export default function DecideView({
         </div>
 
         <div className="v3-governance-main">
-          {sortedOpen.length ? (
-            <>
-              {renderBucket("blocking")}
-              {renderBucket("attention")}
-              {renderBucket("recommended")}
-            </>
-          ) : (
-            <div className="v3-empty" style={{ marginTop: 40 }}>
-              <div className="v3-empty-icon" style={{ color: "var(--v3-green)", fontSize: 28 }}>✓</div>
-              <div className="v3-empty-title">
-                {scope === "stage" ? "Nothing needs you in this phase" : "You're all caught up"}
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+            <button
+              type="button"
+              className="v3-button primary"
+              style={{ fontSize: 12 }}
+              onClick={() => {
+                if (activeTab === "actions") { setAddOpen(true); setRaidFormOpen(false); }
+                else { setRaidFormOpen(true); setAddOpen(false); }
+              }}
+            >
+              + Raise {raiseLabel}
+            </button>
+          </div>
+
+          {activeTab === "actions" && addOpen ? addDecisionForm : null}
+          {activeTab !== "actions" && raidFormOpen ? (
+            <RaidRaiseForm
+              kind={activeTab === "blockers" ? "blocker" : "risk"}
+              program={program}
+              saving={raidSaving}
+              onCancel={() => setRaidFormOpen(false)}
+              onSubmit={(draft) => void submitRaid(activeTab === "blockers" ? "blocker" : "risk", draft)}
+            />
+          ) : null}
+
+          {activeTab === "blockers" ? renderRaidList(blockers, scope === "stage" ? "No blockers in this phase" : "No open blockers") : null}
+          {activeTab === "risks" ? renderRaidList(risks, scope === "stage" ? "No risks in this phase" : "No open risks") : null}
+          {activeTab === "actions" ? (
+            sortedOpen.length ? (
+              <>
+                <div className="v3-governance-card-list">
+                  {sortedOpen.slice(0, visibleCount).map(renderDecision)}
+                </div>
+                {sortedOpen.length > visibleCount ? (
+                  <button className="v3-button ghost" style={{ fontSize: 12, width: "100%", marginTop: 12 }} onClick={() => setVisibleCount((count) => count + 20)}>
+                    Show {Math.min(20, sortedOpen.length - visibleCount)} more
+                  </button>
+                ) : null}
+              </>
+            ) : (
+              <div className="v3-empty" style={{ marginTop: 40 }}>
+                <div className="v3-empty-icon" style={{ color: "var(--v3-green)", fontSize: 28 }}>✓</div>
+                <div className="v3-empty-title">
+                  {scope === "stage" ? "Nothing needs you in this phase" : "You're all caught up"}
+                </div>
+                <div className="v3-empty-body">
+                  {scope === "stage"
+                    ? "This phase has no open actions. New items appear automatically as the programme progresses."
+                    : "Nothing across the programme needs your attention right now. New items appear automatically, or raise one yourself."}
+                </div>
               </div>
-              <div className="v3-empty-body">
-                {scope === "stage"
-                  ? "This phase has no open actions. New items appear automatically as the programme progresses."
-                  : "Nothing across the programme needs your attention right now. New items appear automatically, or raise one yourself."}
-              </div>
-              <div style={{ display: "flex", gap: 8, marginTop: 14, justifyContent: "center" }}>
-                <button
-                  type="button"
-                  className="v3-button primary"
-                  style={{ fontSize: 12 }}
-                  onClick={() => setAddOpen(true)}
-                >
-                  + Raise decision
-                </button>
-              </div>
-            </div>
-          )}
+            )
+          ) : null}
         </div>
       </div>
 
