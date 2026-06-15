@@ -6387,6 +6387,202 @@ button.v3-phase-metric:focus-visible {
   align-self: flex-start;
 }
 
+/* ── Artifact Map tree ─────────────────────────────────────────── */
+.v3-amap {
+  display: grid;
+  gap: 14px;
+}
+.v3-amap-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.v3-amap-totals {
+  font-size: 12.5px;
+  color: var(--v3-text-secondary);
+}
+.v3-amap-totals strong {
+  color: var(--v3-text-primary);
+}
+.v3-amap-toolbar-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+.v3-amap-toolbar-actions .v3-button {
+  font-size: 11px;
+}
+.v3-amap-tree {
+  display: grid;
+  gap: 8px;
+}
+.v3-amap-phase {
+  border: 1px solid var(--v3-border);
+  border-radius: var(--v3-radius);
+  background: var(--v3-surface);
+  overflow: hidden;
+  transition: box-shadow 0.16s ease, border-color 0.16s ease;
+}
+.v3-amap-phase:hover {
+  border-color: var(--v3-border-strong, var(--v3-border));
+  box-shadow: var(--v3-shadow-card);
+}
+.v3-amap-phasehead {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 11px 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--v3-text-primary);
+}
+.v3-amap-phasehead:hover {
+  background: var(--v3-surface-2);
+}
+.v3-amap-phase-name {
+  font-size: 13.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.v3-amap-phase-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+.v3-amap-pill {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--v3-text-secondary);
+  background: var(--v3-surface-2);
+  border: 1px solid var(--v3-border);
+  border-radius: 20px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+.v3-amap-pill.subtle {
+  color: var(--v3-text-muted);
+  font-weight: 500;
+}
+.v3-amap-phasebody {
+  padding: 2px 14px 12px 34px;
+  display: grid;
+  gap: 4px;
+}
+.v3-amap-group {
+  display: grid;
+  gap: 2px;
+}
+.v3-amap-grouphead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+.v3-amap-grouphead:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+.v3-amap-group-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--v3-text-secondary);
+}
+.v3-amap-count {
+  font-size: 10.5px;
+  color: var(--v3-text-muted);
+  margin-left: auto;
+}
+.v3-amap-caret {
+  flex: 0 0 auto;
+  width: 14px;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--v3-text-secondary);
+  text-align: center;
+}
+.v3-amap-caret.is-leaf {
+  color: var(--v3-border);
+}
+.v3-amap-children {
+  display: grid;
+  gap: 1px;
+  margin-left: 6px;
+  padding-left: 11px;
+  border-left: 1px solid var(--v3-border);
+}
+.v3-amap-leaf {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 5px 0;
+}
+.v3-amap-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  margin-top: 6px;
+  border-radius: 50%;
+}
+.v3-amap-leaf-body {
+  flex: 1;
+  min-width: 0;
+}
+.v3-amap-leaf-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.v3-amap-leaf-label {
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--v3-text-primary);
+}
+.v3-amap-tag {
+  font-size: 10px;
+  font-weight: 600;
+}
+.v3-amap-tag.req {
+  color: var(--v3-text-secondary);
+  border: 1px solid var(--v3-border);
+  border-radius: 20px;
+  padding: 0 6px;
+  font-weight: 500;
+}
+.v3-amap-tag.muted {
+  color: var(--v3-text-muted);
+  font-weight: 500;
+}
+.v3-amap-tag.subtle {
+  color: var(--v3-text-muted);
+  font-weight: 500;
+}
+.v3-amap-leaf-source {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--v3-text-muted);
+  overflow-wrap: anywhere;
+}
+.v3-amap-leaf-source.subtle {
+  font-style: italic;
+  opacity: 0.85;
+}
+
 .v3-output-actions {
   display: flex;
   gap: 8px;

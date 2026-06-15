@@ -449,6 +449,7 @@ export function PhaseRailPanels({
                   </div>
                 );
               })}
+              <button type="button" className="v3-button ghost v3-button-inline-xs v3-rail-footer-link" onClick={() => onOpenMoreView("artifact-map")}>Open full artifact map →</button>
             </div>
           ) : null}
 

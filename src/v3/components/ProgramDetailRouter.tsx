@@ -26,7 +26,7 @@ import type { AppView, Milestone, ProgramSummary } from "@/new/types";
 import SchedulePanel from "@/v3/components/SchedulePanel";
 import ProgramAccessPanel from "@/v3/components/ProgramAccessPanel";
 import TwinGraphView from "@/v3/components/TwinGraphView";
-import { KnowledgeGraphPanel } from "@/v3/components/KnowledgeGraphPanel";
+import { ArtifactMapTree } from "@/v3/components/ArtifactMapTree";
 import { AdamCard, AdamCardBody, AdamCardHeader } from "@/v3/components/ui/AdamCard";
 import { EmptyState } from "@/v3/components/ui/EmptyState";
 import { RelativeTime } from "@/v3/components/ui/RelativeTime";
@@ -332,10 +332,10 @@ export default function ProgramDetailRouter({
           <AdamCard>
             <AdamCardHeader
               title="Artifact map"
-              subtitle="The full programme artifact tree — every phase, artifact, decision, risk and milestone and how they connect."
+              subtitle="The complete programme tree — every phase with its inputs, artifacts and a summary of where each came from."
             />
             <AdamCardBody>
-              <KnowledgeGraphPanel program={program} />
+              <ArtifactMapTree program={program} />
             </AdamCardBody>
           </AdamCard>
         </div>
