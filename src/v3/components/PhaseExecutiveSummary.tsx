@@ -35,12 +35,14 @@ export function PhaseExecutiveSummary({
   onRunAgent,
   onOpenMoreView,
   onReviewContradiction,
+  isAgentRunning,
 }: {
   program: ProgramSummary | null;
   phaseId: string | null;
   onRunAgent?: (agentId: string) => void;
   onOpenMoreView?: (view: string) => void;
   onReviewContradiction?: () => void;
+  isAgentRunning?: (agentId: string) => boolean;
 }) {
   const STORAGE_KEY = "atlas-v3-exec-snapshot-open";
   const [open, setOpen] = React.useState<boolean>(() => {
@@ -89,6 +91,8 @@ export function PhaseExecutiveSummary({
     (!!summary.nextAction.agentId && !!onRunAgent) ||
     (!!summary.nextAction.workspaceId && !!onOpenMoreView)
   );
+
+  const nextActionRunning = !!summary.nextAction?.agentId && !!isAgentRunning?.(summary.nextAction.agentId);
 
   return (
     <div className={`v3-exec-snapshot ${tone}`}>
@@ -174,8 +178,13 @@ export function PhaseExecutiveSummary({
               <span className="v3-exec-snapshot-row-label">Next best action</span>
               <span className="v3-exec-snapshot-row-value">{summary.nextAction.label}</span>
               {canActNext ? (
-                <button type="button" className="v3-button primary v3-exec-snapshot-cta" onClick={runNextAction}>
-                  Do it →
+                <button
+                  type="button"
+                  className="v3-button primary v3-exec-snapshot-cta"
+                  onClick={runNextAction}
+                  disabled={nextActionRunning}
+                >
+                  {nextActionRunning ? "Generating…" : "Do it →"}
                 </button>
               ) : null}
             </div>

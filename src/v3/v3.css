@@ -6458,6 +6458,22 @@ button.v3-phase-metric:focus-visible {
   line-height: 1.45;
   color: var(--v3-text-muted);
 }
+/* Stacked label for agent-trigger buttons when AI is offline: the action label
+   on top, a small muted "AI not available" note beneath it. */
+.v3-agent-btn-stack {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.2;
+}
+.v3-agent-btn-note {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+  margin-top: 1px;
+}
 .v3-artifact-regen {
   align-self: flex-start;
 }

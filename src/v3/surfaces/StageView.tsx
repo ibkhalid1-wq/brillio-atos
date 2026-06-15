@@ -599,6 +599,27 @@ export default function StageView({
   const artifactsStaleReason = typeof source?.artifactsStaleReason === "string" ? source.artifactsStaleReason : null;
   const phaseWorkstreams = (program?.workstreams || []).filter((workstream: Workstream) => workstream.phaseId === activePhase?.id);
   const activeRun = activeRuns?.some(r => r.status === "running");
+  // True while a given agent has an in-flight run (queued or running). Drives the
+  // per-button "Generating…" + disabled state so a user can't re-fire the same
+  // generation while it's already working.
+  const isAgentRunning = (agentId: string) =>
+    !!activeRuns?.some(r => (r.status === "running" || r.status === "queued") && r.agent_id === agentId);
+  // Unified label for any agent-trigger button: "Generating…" while in-flight,
+  // the idle label with a small "AI not available" note when agents are offline,
+  // otherwise the plain idle label.
+  const agentButtonContent = (agentId: string, idleLabel: React.ReactNode) => {
+    if (isAgentRunning(agentId)) return "Generating…";
+    if (!agentsAvailable) {
+      return (
+        <span className="v3-agent-btn-stack">
+          <span>{idleLabel}</span>
+          <span className="v3-agent-btn-note">AI not available</span>
+        </span>
+      );
+    }
+    return idleLabel;
+  };
+  const agentButtonDisabled = (agentId: string) => !agentsAvailable || isAgentRunning(agentId);
   const narrativeRunning = activeRuns?.some(r => r.status === "running" && r.agent_id === "narrative");
   const gateCoach = source?.gateReadinessCoach && typeof source.gateReadinessCoach === "object" && !Array.isArray(source.gateReadinessCoach)
     ? (source.gateReadinessCoach as Record<string, { actions?: Array<{ action: string; effort: "quick" | "hours" | "days"; owner: "user" | "agent"; agentId: string | null }> }>)[activePhase?.id ?? ""]
@@ -897,6 +918,7 @@ export default function StageView({
           program={program}
           phaseId={activePhase.id}
           onRunAgent={onRunAgent}
+          isAgentRunning={isAgentRunning}
           onOpenMoreView={(view) => onOpenMoreView(view as V3MoreView)}
           onReviewContradiction={() => {
             const firstId = (criticalContradictions[0] as Record<string, unknown> | undefined)?.id as string | undefined;
@@ -1323,8 +1345,8 @@ export default function StageView({
               ) : (
                 <div className="v3-mini-card-empty">Generate interview guides, workshop agenda, and document request list for discovery.</div>
               )}
-              <button type="button" className="v3-button ghost v3-mini-card-action" onClick={() => onRunAgent("discovery-guide-generator")}>
-                {discoveryGuide ? "Re-generate discovery pack" : "Generate discovery pack"}
+              <button type="button" className="v3-button ghost v3-mini-card-action" disabled={agentButtonDisabled("discovery-guide-generator")} onClick={() => onRunAgent("discovery-guide-generator")}>
+                {agentButtonContent("discovery-guide-generator", discoveryGuide ? "Re-generate discovery pack" : "Generate discovery pack")}
               </button>
             </div>
           ) : null}
@@ -1343,8 +1365,8 @@ export default function StageView({
               ) : (
                 <div className="v3-mini-card-empty">Plan build sprints from milestones, capacity, and workstreams.</div>
               )}
-              <button type="button" className="v3-button ghost v3-mini-card-action" onClick={() => onRunAgent("sprint-planner")}>
-                {sprintPlan ? "Re-plan sprints" : "Generate sprint plan"}
+              <button type="button" className="v3-button ghost v3-mini-card-action" disabled={agentButtonDisabled("sprint-planner")} onClick={() => onRunAgent("sprint-planner")}>
+                {agentButtonContent("sprint-planner", sprintPlan ? "Re-plan sprints" : "Generate sprint plan")}
               </button>
             </div>
           ) : null}
@@ -1365,8 +1387,8 @@ export default function StageView({
               ) : (
                 <div className="v3-mini-card-empty">Check whether your success metrics are truly SMART and measurable.</div>
               )}
-              <button type="button" className="v3-button ghost v3-mini-card-action" onClick={() => onRunAgent("kpi-validator")}>
-                {kpiValidation ? "Re-validate KPIs" : "Validate KPIs"}
+              <button type="button" className="v3-button ghost v3-mini-card-action" disabled={agentButtonDisabled("kpi-validator")} onClick={() => onRunAgent("kpi-validator")}>
+                {agentButtonContent("kpi-validator", kpiValidation ? "Re-validate KPIs" : "Validate KPIs")}
               </button>
             </div>
           ) : null}
@@ -1388,8 +1410,8 @@ export default function StageView({
               ) : (
                 <div className="v3-mini-card-empty">Assess whether current capacity matches the work ahead.</div>
               )}
-              <button type="button" className="v3-button ghost v3-mini-card-action" onClick={() => onRunAgent("capacity-assessor")}>
-                {capacityAssessment ? "Re-assess capacity" : "Assess capacity"}
+              <button type="button" className="v3-button ghost v3-mini-card-action" disabled={agentButtonDisabled("capacity-assessor")} onClick={() => onRunAgent("capacity-assessor")}>
+                {agentButtonContent("capacity-assessor", capacityAssessment ? "Re-assess capacity" : "Assess capacity")}
               </button>
             </div>
           ) : null}
@@ -1409,8 +1431,8 @@ export default function StageView({
               ) : (
                 <div className="v3-mini-card-empty">Check for framework-specific compliance gaps before governance sign-off.</div>
               )}
-              <button type="button" className="v3-button ghost v3-mini-card-action" onClick={() => onRunAgent("compliance-checker")}>
-                {complianceCheck ? "Re-check compliance" : "Run compliance check"}
+              <button type="button" className="v3-button ghost v3-mini-card-action" disabled={agentButtonDisabled("compliance-checker")} onClick={() => onRunAgent("compliance-checker")}>
+                {agentButtonContent("compliance-checker", complianceCheck ? "Re-check compliance" : "Run compliance check")}
               </button>
             </div>
           ) : null}
@@ -1429,8 +1451,8 @@ export default function StageView({
               ) : (
                 <div className="v3-mini-card-empty">Assess vendor and partner dependency risk for this phase.</div>
               )}
-              <button type="button" className="v3-button ghost v3-mini-card-action" onClick={() => onRunAgent("vendor-risk-assessor")}>
-                {vendorRiskAssessment ? "Re-assess vendor risk" : "Assess vendor risk"}
+              <button type="button" className="v3-button ghost v3-mini-card-action" disabled={agentButtonDisabled("vendor-risk-assessor")} onClick={() => onRunAgent("vendor-risk-assessor")}>
+                {agentButtonContent("vendor-risk-assessor", vendorRiskAssessment ? "Re-assess vendor risk" : "Assess vendor risk")}
               </button>
             </div>
           ) : null}
@@ -1510,8 +1532,14 @@ export default function StageView({
                 : state === "ready" ? "Ready"
                 : state === "archived" ? "Archived"
                 : "Draft";
+              const statusTone = !present
+                ? "muted"
+                : state === "approved" ? "green"
+                : state === "ready" ? "blue"
+                : state === "archived" ? "muted"
+                : "amber";
               const summary = present
-                ? `${statusLabel}${score != null ? ` · ${score}%` : ""} — ${def.description}`
+                ? def.description
                 : required
                   ? `Required for this phase, not yet generated. ${def.description}`
                   : `Optional. ${def.description}`;
@@ -1519,16 +1547,19 @@ export default function StageView({
                 <div key={def.id} className="v3-artifact-row" data-io-anchor={`artifact:${def.id}`}>
                   <div className="v3-artifact-row-head">
                     <span className="v3-artifact-row-label">{def.label}</span>
+                    <span className={`v3-chip ${statusTone}`} style={{ flex: "0 0 auto" }}>
+                      {statusLabel}{present && score != null ? ` · ${score}%` : ""}
+                    </span>
                   </div>
                   <p className="v3-artifact-row-desc">{summary}</p>
                   <button
                     type="button"
                     className="v3-button ghost v3-button-inline-xs v3-artifact-regen"
                     onClick={() => onRunAgent(def.id)}
-                    disabled={!agentsAvailable}
+                    disabled={agentButtonDisabled(def.id)}
                     title={present ? `Regenerate ${def.label}` : `Generate ${def.label}`}
                   >
-                    {present ? "↻ Regenerate" : "Generate"}
+                    {agentButtonContent(def.id, present ? "↻ Regenerate" : "Generate")}
                   </button>
                 </div>
               );
