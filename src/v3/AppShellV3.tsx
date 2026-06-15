@@ -61,7 +61,6 @@ import { getPhaseSequence } from "@/v3/lib/methodology";
 import { computePhaseReadiness, getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
 import { confidenceRag, getGateThreshold } from "@/v3/lib/confidenceScore";
 import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
-import { exportAsText } from "@/v3/lib/documentExport";
 import { buildFieldAssistPrompt, sanitiseFieldReply } from "@/v3/lib/fieldAssist";
 import type { FieldAssistRequest } from "@/v3/components/PhaseInputsPanel";
 const DecideView = React.lazy(() => import("@/v3/surfaces/DecideView"));
@@ -1449,19 +1448,6 @@ export default function AppShellV3() {
 
   // Why agents can / cannot generate artifacts — the three preconditions, checked
   // in the same order runProgramAgent enforces them, so the ledger names the exact blocker.
-  const artifactGenerationHint = useMemo<{ canGenerate: boolean; reason: string }>(() => {
-    if (!isSupabaseConfigured) {
-      return { canGenerate: false, reason: "This workspace isn't connected to the cloud backend (Supabase isn't configured), so agent runs can't be saved." };
-    }
-    if (!authed) {
-      return { canGenerate: false, reason: "Sign in to let agents run and generate the missing artifacts." };
-    }
-    if (aiStatus.status !== "connected") {
-      return { canGenerate: false, reason: "AI isn't connected — add a provider key in AI Settings to let agents generate artifacts." };
-    }
-    return { canGenerate: true, reason: "Run an agent to generate the missing artifacts for this phase." };
-  }, [authed, aiStatus.status]);
-
   const anyAgentRunning = agentIsRunning || triggers.gateReviewRunningPhaseSet.size > 0 || triggers.escalationIsRunning;
   // For ExecCommandPanel / ExecutiveView buttons: only block when the *user* triggered a run,
   // not when a background / proactive agent is sitting in the DB in "queued"/"running" state.
@@ -2012,12 +1998,6 @@ export default function AppShellV3() {
     openMoreView("documents");
   }, [openMoreView]);
 
-  const handleDownloadArtifact = useCallback((artifactId: string) => {
-    const artifact = activeProgram?.artifacts?.find((a) => a.id === artifactId);
-    if (!artifact) return;
-    exportAsText(artifact.title, artifact.contentSummary || "(No content summary available.)");
-  }, [activeProgram]);
-
   // Per-field AI assist for phase inputs — reuses the copilot-chat endpoint
   // (non-streaming) with a focused, field-scoped prompt. Returns clean text the
   // panel writes straight into the field; throws a friendly message on failure
@@ -2491,9 +2471,6 @@ export default function AppShellV3() {
                 onSaveArtifact={handleSaveArtifact}
                 onSaveInputs={handleSavePhaseInputs}
                 onUploadDocument={handleUploadDocument}
-                onAddDecision={handleAddDecision}
-                onAddRaid={addRaidEntry}
-                onCloseRaid={closeRaidEntry}
                 onAssistField={handleAssistField}
                 artifactPreviews={{
                   narrative: activeProgram?.narrative || null,
@@ -2719,15 +2696,19 @@ export default function AppShellV3() {
           phaseId={activePhaseId}
           tasks={currentPhaseTasks}
           pendingTaskCount={currentPhaseTasks.filter((task) => task.status === "pending" || task.status === "running").length}
+          decisions={(activeProgram?.decisionQueue || []).filter(
+            (decision) => (!decision.status || decision.status === "open") && (!decision.phaseId || decision.phaseId === activePhaseId),
+          )}
+          agentsAvailable={authed && isSupabaseConfigured}
           onUploadDocument={handleUploadDocument}
           onAnswerQuestion={handleAnswerAgentQuestion}
           onAcknowledgeTask={handleAcknowledgeTask}
           onRunAgent={handleRunAgent}
-          onOpenDocuments={() => openMoreView("documents")}
+          onAddDecision={handleAddDecision}
+          onAddRaid={addRaidEntry}
+          onCloseRaid={closeRaidEntry}
           onOpenMoreView={(view) => openMoreView(view)}
           onOpenDecide={() => navigateSurface("decide")}
-          onDownloadArtifact={handleDownloadArtifact}
-          generationHint={artifactGenerationHint}
         />
       ) : null}
       </div>

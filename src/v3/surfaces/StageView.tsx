@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef } from "react";
 import { getRiskTrend } from "@/lib/adamGateRisk";
 import type { AgentRun } from "@/lib/adamSync";
-import type { DecisionSummary, ExitCriterion, GateReview, PlanAction, ProgramSummary, RAIDEntry, Workstream } from "@/new/types";
+import type { DecisionSummary, ExitCriterion, GateReview, PlanAction, ProgramSummary, Workstream } from "@/new/types";
 import ArtifactEditor from "@/v3/components/ArtifactEditor";
 import GateCoachPanel from "@/v3/components/GateCoachPanel";
 import { GateBlockingChecklist } from "@/v3/components/GateBlockingChecklist";
@@ -9,10 +9,8 @@ import OnboardingCard from "@/v3/components/OnboardingCard";
 import PhaseInputsPanel, { type FieldAssistRequest } from "@/v3/components/PhaseInputsPanel";
 import PhaseFlowOverlay from "@/v3/components/PhaseFlowOverlay";
 import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
-import { PhaseRailPanels } from "@/v3/components/PhaseRailPanels";
 import { PhaseChangeSummary } from "@/v3/components/PhaseChangeSummary";
 import { PhaseExecutiveSummary } from "@/v3/components/PhaseExecutiveSummary";
-import { PhaseMethodologyChecklist } from "@/v3/components/PhaseMethodologyChecklist";
 import { PhaseRail } from "@/v3/components/PhaseRail";
 import { ReadinessBadge } from "@/v3/components/ui/ReadinessBadge";
 import { AdamCard, AdamCardBody, AdamCardHeader } from "@/v3/components/ui/AdamCard";
@@ -56,9 +54,6 @@ interface StageViewProps {
   onSaveArtifact: (artifactId: "narrative" | "deck", content: string) => Promise<void>;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>) => Promise<void>;
   onUploadDocument: () => void;
-  onAddDecision: (decision: Omit<DecisionSummary, "id" | "status" | "createdAt">) => Promise<void>;
-  onAddRaid: (draft: { type: RAIDEntry["type"]; title: string; description: string; severity: RAIDEntry["severity"]; phase: string; owner?: string; mitigation?: string }) => Promise<void>;
-  onCloseRaid: (entryId: string, note?: string) => Promise<void>;
   onAssistField?: (phaseId: string, request: FieldAssistRequest) => Promise<string>;
   artifactPreviews?: {
     narrative?: string | null;
@@ -397,9 +392,6 @@ export default function StageView({
   onSaveArtifact,
   onSaveInputs,
   onUploadDocument,
-  onAddDecision,
-  onAddRaid,
-  onCloseRaid,
   onAssistField,
   artifactPreviews,
 }: StageViewProps) {
@@ -1101,10 +1093,6 @@ export default function StageView({
           />
         ) : null}
 
-        {program && activePhase?.id ? (
-          <PhaseMethodologyChecklist program={program} phaseId={activePhase.id} />
-        ) : null}
-
         {readiness && readiness.score < 80 && gateCoach?.actions?.length ? (
           <GateCoachPanel actions={gateCoach.actions} onRunAgent={onRunAgent} />
         ) : null}
@@ -1163,22 +1151,6 @@ export default function StageView({
           </div>
         ) : null}
 
-        {/* Actions (decisions/blockers/risks) + Intelligence (artifacts/graph/uploads) */}
-        {program && activePhase?.id ? (
-          <PhaseRailPanels
-            program={program}
-            phaseId={activePhase.id}
-            decisions={stageDecisions}
-            agentsAvailable={agentsAvailable}
-            onAddDecision={onAddDecision}
-            onAddRaid={onAddRaid}
-            onCloseRaid={onCloseRaid}
-            onOpenDecide={onOpenDecide}
-            onRunAgent={onRunAgent}
-            onOpenMoreView={onOpenMoreView}
-            onUploadDocument={onUploadDocument}
-          />
-        ) : null}
         {incomingHandoff ? (
           <div className="v3-handoff-banner">
             <div className="v3-eyebrow-label">

@@ -6744,6 +6744,14 @@ button.v3-phase-metric:focus-visible {
   padding: 12px;
 }
 
+.v3-context-drawer-tasks {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--v3-border);
+}
+
 .v3-context-docs {
   display: grid;
   gap: 10px;
