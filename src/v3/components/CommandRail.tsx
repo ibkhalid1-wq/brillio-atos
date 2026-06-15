@@ -408,7 +408,7 @@ export function CommandRail({
         const status = agentStatus ?? (anyAgentRunning ? "running" : "idle");
         const meta = {
           running: { label: "Agents running", title: "Agents analysing programme data", spinner: "" },
-          idle: { label: "Agents idle", title: "Agents idle — ready to run", spinner: "is-idle" },
+          idle: { label: "Agents active", title: "Agents active — monitoring programme data", spinner: "is-idle" },
           stopped: { label: "Agents stopped", title: "An agent stopped — needs attention", spinner: "is-stopped" },
         }[status];
         return (
