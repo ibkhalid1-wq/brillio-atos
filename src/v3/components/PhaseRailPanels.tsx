@@ -3,6 +3,7 @@ import type { DecisionSummary, ProgramSummary, RAIDEntry, RAIDEntryType } from "
 import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
 import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
 import { AdamCard, AdamCardBody, AdamCardHeader } from "@/v3/components/ui/AdamCard";
+import { KnowledgeGraphPanel } from "@/v3/components/KnowledgeGraphPanel";
 import { RelativeTime } from "@/v3/components/ui/RelativeTime";
 import { StatusBadge } from "@/v3/components/ui/StatusBadge";
 import type { V3MoreView } from "@/v3/types";
@@ -453,9 +454,8 @@ export function PhaseRailPanels({
 
           {intelTab === "graph" ? (
             <div className="v3-rail-list">
-              <div className="v3-rail-empty">Explore how inputs, artifacts and decisions connect across the programme.</div>
-              <button type="button" className="v3-button ghost v3-button-inline-xs v3-rail-footer-link" onClick={() => onOpenMoreView("intelligence")}>Open knowledge graph →</button>
-              <button type="button" className="v3-button ghost v3-button-inline-xs v3-rail-footer-link" onClick={() => onOpenMoreView("twin")}>Open programme twin →</button>
+              <KnowledgeGraphPanel program={program} phaseId={phaseId} />
+              <button type="button" className="v3-button ghost v3-button-inline-xs v3-rail-footer-link" onClick={() => onOpenMoreView("twin")}>Open full programme twin →</button>
             </div>
           ) : null}
 
