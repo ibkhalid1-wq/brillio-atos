@@ -62,8 +62,11 @@ export function PhaseStatusRings(props: PhaseStatusRingsProps) {
   const { input, artifact, gate, overall, hasGate } = values;
 
   const cx = size / 2;
-  // Thicker strokes for a bolder, more legible donut.
+  // Thicker strokes for a bolder, more legible donut. The grey track is kept
+  // deliberately thin so the coloured value arcs read as the dominant, thick
+  // ring rather than competing with an equally-heavy background.
   const sw = Math.max(3.4, cx * 0.17);
+  const trackSw = Math.max(1.5, sw * 0.45);
   const gap = sw * 1.45;
   const rOuter = cx - sw / 2 - 0.5;
   const rMid = rOuter - gap;
@@ -95,10 +98,10 @@ export function PhaseStatusRings(props: PhaseStatusRingsProps) {
     >
       <div className="v3-phase-rings-svg" style={{ position: "relative", width: size, height: size }}>
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true" style={{ overflow: "visible" }}>
-          {/* Tracks */}
-          <circle cx={cx} cy={cx} r={rOuter} fill="none" stroke={TRACK} strokeWidth={sw} />
-          <circle cx={cx} cy={cx} r={rMid} fill="none" stroke={TRACK} strokeWidth={sw} />
-          <circle cx={cx} cy={cx} r={rInner} fill="none" stroke={TRACK} strokeWidth={sw} />
+          {/* Tracks — thin, subtle guides behind the bold value arcs */}
+          <circle cx={cx} cy={cx} r={rOuter} fill="none" stroke={TRACK} strokeWidth={trackSw} />
+          <circle cx={cx} cy={cx} r={rMid} fill="none" stroke={TRACK} strokeWidth={trackSw} />
+          <circle cx={cx} cy={cx} r={rInner} fill="none" stroke={TRACK} strokeWidth={trackSw} />
 
           {/* Outer — Gate */}
           {hasGate && (gate ?? 0) > 0 && (
