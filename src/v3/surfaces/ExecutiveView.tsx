@@ -419,7 +419,7 @@ export default function ExecutiveView({
       {/* ── 2. Confidence & Health row ─────────────────────────────────────── */}
       <div>
         <SectionLabel>Programme Metrics</SectionLabel>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <div className="v3-exec-metrics">
           {confidenceScore !== null && (
             <Kpi
               label="Confidence"
