@@ -2575,6 +2575,10 @@ export default function AppShellV3() {
                 setActiveProgramId(id);
                 commitNavigation({ surface: "insight-feed", moreView: null, activePhaseId: null, reportId: null });
               }}
+              onManageAccess={(id) => {
+                setActiveProgramId(id);
+                commitNavigation({ surface: "program", moreView: "access", activePhaseId: null, reportId: null });
+              }}
               onDeleteProgram={handleDeleteProgram}
               loading={programsLoading || false}
               onCreateProgram={() => setWizardOpen(true)}

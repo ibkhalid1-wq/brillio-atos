@@ -14,6 +14,7 @@ interface PortfolioViewProps {
   activeProgramId: string | null;
   onSelectProgram: (id: string) => void;
   onDeleteProgram?: (id: string) => Promise<boolean | void>;
+  onManageAccess?: (id: string) => void;
   onCreateProgram?: () => void;
   onRunAgent?: (agentId: string, phaseId?: string) => void;
   anyAgentRunning?: boolean;
@@ -113,11 +114,13 @@ function ProgramCard({
   isActive,
   onSelect,
   onRequestDelete,
+  onManageAccess,
 }: {
   program: ProgramSummary;
   isActive: boolean;
   onSelect: () => void;
   onRequestDelete?: () => void;
+  onManageAccess?: () => void;
 }) {
   const tone = programRag(program);
   const pct = overallPct(program);
@@ -191,17 +194,32 @@ function ProgramCard({
         )}
       </button>
 
-      {/* Delete button — sibling of the card button, never nested inside it */}
-      {onRequestDelete && (
-        <button
-          type="button"
-          className="v3-portfolio-card-delete"
-          aria-label={`Delete ${program.name}`}
-          title={`Delete ${program.name}`}
-          onClick={onRequestDelete}
-        >
-          Delete
-        </button>
+      {/* Action bar — siblings of the card button, never nested inside it */}
+      {(onManageAccess || onRequestDelete) && (
+        <div className="v3-portfolio-card-actions">
+          {onManageAccess && (
+            <button
+              type="button"
+              className="v3-portfolio-card-action"
+              aria-label={`Manage access for ${program.name}`}
+              title={`Manage access & sharing for ${program.name}`}
+              onClick={onManageAccess}
+            >
+              Manage access
+            </button>
+          )}
+          {onRequestDelete && (
+            <button
+              type="button"
+              className="v3-portfolio-card-action is-danger"
+              aria-label={`Delete ${program.name}`}
+              title={`Delete ${program.name}`}
+              onClick={onRequestDelete}
+            >
+              Delete
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
@@ -224,6 +242,7 @@ export default function PortfolioView({
   activeProgramId,
   onSelectProgram,
   onDeleteProgram,
+  onManageAccess,
   onCreateProgram,
   onRunAgent,
   anyAgentRunning,
@@ -469,6 +488,7 @@ export default function PortfolioView({
               isActive={program.id === activeProgramId}
               onSelect={() => onSelectProgram(program.id)}
               onRequestDelete={onDeleteProgram ? () => setPendingDelete({ id: program.id, name: program.name }) : undefined}
+              onManageAccess={onManageAccess ? () => onManageAccess(program.id) : undefined}
             />
           ))}
         </div>

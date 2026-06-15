@@ -7624,13 +7624,22 @@ button.v3-chip:disabled {
   background: var(--v3-surface);
 }
 
-/* Delete button — outside the card button, shown on card-wrap hover */
-.v3-portfolio-card-delete {
+/* Action bar — sits outside the card button, revealed on card-wrap hover */
+.v3-portfolio-card-actions {
   position: absolute;
-  top: 10px;
+  bottom: 10px;
   right: 10px;
-  background: none;
-  border: 1px solid transparent;
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.v3-portfolio-card-wrap:hover .v3-portfolio-card-actions {
+  opacity: 1;
+}
+.v3-portfolio-card-action {
+  background: var(--v3-surface-2);
+  border: 1px solid var(--v3-border);
   border-radius: 6px;
   padding: 3px 8px;
   font-size: 11px;
@@ -7638,14 +7647,15 @@ button.v3-chip:disabled {
   color: var(--v3-text-muted);
   cursor: pointer;
   font-family: var(--v3-font);
-  opacity: 0;
-  transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
   line-height: 1;
 }
-.v3-portfolio-card-wrap:hover .v3-portfolio-card-delete {
-  opacity: 1;
+.v3-portfolio-card-action:hover {
+  color: var(--v3-text-primary);
+  background: var(--v3-surface-3);
+  border-color: var(--v3-text-muted);
 }
-.v3-portfolio-card-delete:hover {
+.v3-portfolio-card-action.is-danger:hover {
   color: var(--v3-red);
   border-color: var(--v3-red);
 }
