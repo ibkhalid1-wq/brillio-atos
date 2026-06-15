@@ -40,6 +40,7 @@ type PhaseRailPanelsProps = {
   onUploadDocument: () => void;
 };
 
+type PrimaryTab = "actions" | "intelligence";
 type ActionTab = "actions" | "blockers" | "risks";
 type IntelTab = "artifacts" | "graph" | "uploads";
 
@@ -191,6 +192,7 @@ export function PhaseRailPanels({
   onOpenMoreView,
   onUploadDocument,
 }: PhaseRailPanelsProps) {
+  const [primaryTab, setPrimaryTab] = useState<PrimaryTab>("actions");
   const [actionTab, setActionTab] = useState<ActionTab>("actions");
   const [intelTab, setIntelTab] = useState<IntelTab>("artifacts");
   const [formOpen, setFormOpen] = useState(false);
@@ -213,9 +215,10 @@ export function PhaseRailPanels({
 
   const actionTabs: { id: ActionTab; label: string; count: number }[] = [
     { id: "actions", label: "Actions", count: decisions.length },
-    { id: "blockers", label: "Blockers", count: blockers.length },
     { id: "risks", label: "Risks", count: risks.length },
+    { id: "blockers", label: "Blockers", count: blockers.length },
   ];
+  const openActionCount = decisions.length + blockers.length + risks.length;
   const intelTabs: { id: IntelTab; label: string }[] = [
     { id: "artifacts", label: "Artifacts" },
     { id: "graph", label: "Graph" },
@@ -273,13 +276,35 @@ export function PhaseRailPanels({
 
   const raiseLabel = actionTab === "blockers" ? "blocker" : actionTab === "risks" ? "risk" : "action";
 
+  const primaryTabs: { id: PrimaryTab; label: string; count: number }[] = [
+    { id: "actions", label: "Action Center", count: openActionCount },
+    { id: "intelligence", label: "Intelligence", count: artifacts.required },
+  ];
+
   return (
     <div className="v3-rail-panels">
-      {/* ACTIONS */}
+      <div className="v3-rail-primary-tabs" role="tablist" aria-label="Phase rail sections">
+        {primaryTabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={primaryTab === tab.id}
+            className={`v3-rail-primary-tab ${primaryTab === tab.id ? "is-active" : ""}`}
+            onClick={() => setPrimaryTab(tab.id)}
+          >
+            {tab.label}
+            {tab.count > 0 ? <span className="v3-action-tab-count">{tab.count}</span> : null}
+          </button>
+        ))}
+      </div>
+
+      {/* ACTION CENTER */}
+      {primaryTab === "actions" ? (
       <AdamCard>
         <AdamCardHeader
-          title="Actions"
-          subtitle="Decisions, blockers and risks for this phase"
+          title="Action Center"
+          subtitle="Decisions, risks and blockers for this phase"
           action={<button type="button" className="v3-button ghost v3-button-inline-xs" onClick={() => setFormOpen((open) => !open)}>{formOpen ? "Close" : `+ ${raiseLabel}`}</button>}
         />
         <AdamCardBody>
@@ -371,8 +396,10 @@ export function PhaseRailPanels({
           ) : null}
         </AdamCardBody>
       </AdamCard>
+      ) : null}
 
       {/* INTELLIGENCE */}
+      {primaryTab === "intelligence" ? (
       <AdamCard>
         <AdamCardHeader title="Intelligence" subtitle="Artifacts, knowledge graph and source documents" />
         <AdamCardBody>
@@ -435,6 +462,7 @@ export function PhaseRailPanels({
           ) : null}
         </AdamCardBody>
       </AdamCard>
+      ) : null}
     </div>
   );
 }

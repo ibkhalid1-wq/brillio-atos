@@ -7049,6 +7049,42 @@ button.v3-phase-metric:focus-visible {
   gap: 12px;
 }
 
+.v3-rail-primary-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  background: var(--v3-surface-2);
+  border: 1px solid var(--v3-border);
+  border-radius: var(--radius-md);
+}
+.v3-rail-primary-tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--v3-text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.v3-rail-primary-tab:hover { color: var(--v3-text-primary); }
+.v3-rail-primary-tab.is-active {
+  background: var(--v3-surface);
+  color: var(--v3-text-primary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+.v3-rail-primary-tab:focus-visible {
+  outline: 2px solid var(--v3-accent);
+  outline-offset: 1px;
+}
+
 .v3-action-tabs--rail {
   gap: 2px;
   margin-bottom: 12px;
