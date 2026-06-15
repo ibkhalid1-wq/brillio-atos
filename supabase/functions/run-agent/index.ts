@@ -93,6 +93,16 @@ const VALID_AGENT_IDS = new Set([
   "board-pack",
 ]);
 
+// Presentation-only agent ids surfaced in the UI that map onto an implemented
+// agent. Kept in lockstep with AppShellV3's resolveAgentId so both layers agree.
+// (lite-gate-coach and co-pilot are intentionally absent: they are computed
+// UI features, not invocable agents, and are never sent to this function.)
+const AGENT_ID_ALIASES: Record<string, string> = {
+  "executive-brief": "daily-briefing",
+  "portfolio-intelligence": "health-heatmap",
+  "steerco-prep": "steerco-agenda-builder",
+};
+
 const AGENT_DOWNSTREAM: Record<string, Array<{ agentId: string; phaseId: string }>> = {
   "input-quality": [
     { agentId: "exit-criteria-generator", phaseId: "{{phaseId}}" },
@@ -3424,6 +3434,41 @@ function applyWorkstreamHealthResultToProgramData(programData: ProgramState, res
   });
 }
 
+// Persists the extra fields setup-prefill extracts that have no home in the
+// 2-field wizard (sponsor, scope in/out, team size, objectives). They are written
+// into phaseInputs — which the wizard's save patch never touches — so there is no
+// race with the user completing the wizard, and nothing extracted is dropped.
+// Existing non-empty human inputs are never overwritten.
+function applySetupPrefillResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
+  const asText = (value: unknown): string => {
+    if (typeof value === "string") return value.trim();
+    if (Array.isArray(value)) return value.filter((v): v is string => typeof v === "string" && v.trim().length > 0).join("\n");
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+    return "";
+  };
+  // phaseId → { fieldId → extracted value }
+  const mapping: Record<string, Record<string, string>> = {
+    strategy: { sponsor: asText(result.sponsorName), businessObjective: asText(result.objectives) },
+    discover: { scopeInclusions: asText(result.scopeIn), scopeExclusions: asText(result.scopeOut) },
+    mobilise: { teamSize: asText(result.estimatedTeamSize) },
+  };
+
+  return updateInnerProgramData(programData, (inner) => {
+    const phaseInputs = isRecord(inner.phaseInputs) ? { ...inner.phaseInputs } : {};
+    for (const [phaseId, fields] of Object.entries(mapping)) {
+      const existing = normalizeProgramData(phaseInputs[phaseId] as JsonValue | null);
+      const next = { ...existing };
+      let changed = false;
+      for (const [fieldId, value] of Object.entries(fields)) {
+        const current = typeof existing[fieldId] === "string" ? (existing[fieldId] as string).trim() : "";
+        if (value && !current) { next[fieldId] = value; changed = true; }
+      }
+      if (changed) phaseInputs[phaseId] = next;
+    }
+    return { ...inner, phaseInputs };
+  });
+}
+
 function applyBudgetAnomalyResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
   return updateInnerProgramData(programData, (inner) => ({
     ...inner,
@@ -4923,6 +4968,12 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "programId and agentId are required." }, 400);
     }
 
+    // Server-side alias resolution (defense in depth). The client (AppShellV3
+    // resolveAgentId) already remaps these "presentation" agent ids to their
+    // implemented equivalents, but mirroring it here guarantees any call path —
+    // direct invokes, scheduled triggers, future UI — never 400s on a known alias.
+    request.agentId = AGENT_ID_ALIASES[request.agentId] ?? request.agentId;
+
     if (!VALID_AGENT_IDS.has(request.agentId)) {
       return jsonResponse({ error: `Unknown agentId "${request.agentId}".` }, 400);
     }
@@ -5722,6 +5773,8 @@ Deno.serve(async (req) => {
         nextProgramData = applyNarrativeResultToProgramData(contextProgramData, result);
       } else if (request.agentId === "board-pack") {
         nextProgramData = applyBoardPackResultToProgramData(contextProgramData, normalizedParsedResult);
+      } else if (request.agentId === "setup-prefill") {
+        nextProgramData = applySetupPrefillResultToProgramData(contextProgramData, result);
       }
 
       // Surface structured agent output in the artifact ledger. The UI artifact

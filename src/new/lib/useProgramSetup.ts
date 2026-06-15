@@ -10,6 +10,10 @@ export interface ProgramSetupPatch {
   objective: string;
   startDate: string;
   targetEndDate: string;
+  /** Selected programme archetype, persisted to projectMeta when chosen. */
+  archetype?: string;
+  /** Methodology variant derived from the archetype, persisted to program data. */
+  methodology?: "atos-standard" | "atos-lite" | "atos-regulated";
   phases: Array<{ id: string; pct: number; targetDate: string }>;
 }
 
@@ -59,6 +63,9 @@ export function useProgramSetup(
         ...inner,
         objective: patch.objective,
         phases: updatedPhases,
+        // Only override methodology when the user explicitly selected an archetype,
+        // so editing details without re-picking a type never clobbers the variant.
+        ...(patch.methodology ? { methodology: patch.methodology } : {}),
         projectMeta: {
           ...existingMeta,
           name: patch.name,
@@ -66,6 +73,7 @@ export function useProgramSetup(
           industry: patch.industry,
           startDate: patch.startDate,
           targetEndDate: patch.targetEndDate,
+          ...(patch.archetype ? { archetype: patch.archetype } : {}),
         },
       };
       const payload = wrapProgramState(wrapper, nextInner, usesNestedData);

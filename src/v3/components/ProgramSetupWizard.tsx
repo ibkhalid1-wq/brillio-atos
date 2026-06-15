@@ -2,6 +2,17 @@ import React, { useMemo, useRef, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import { supabase } from "@/integrations/supabase/client";
 import { parseDocumentToText } from "@/new/lib/parseDocumentToText";
+import { PROGRAM_ARCHETYPES, type MethodologyVariant } from "@/v3/lib/methodology";
+
+// Single source of truth for archetype → methodology variant, derived from the
+// methodology registry so the wizard never drifts from PROGRAM_ARCHETYPES.
+const ARCHETYPE_VARIANT: Record<string, MethodologyVariant> = PROGRAM_ARCHETYPES.reduce(
+  (acc, archetype) => {
+    acc[archetype.id] = archetype.methodologyVariant;
+    return acc;
+  },
+  {} as Record<string, MethodologyVariant>,
+);
 
 interface ProgramSetupWizardProps {
   program: ProgramSummary;
@@ -17,6 +28,10 @@ export interface ProgramSetupPatch {
   objective: string;
   startDate: string;
   targetEndDate: string;
+  /** Selected programme archetype (only set when the user picks one in step 0). */
+  archetype?: string;
+  /** Methodology variant derived from the archetype. Persisted to program data. */
+  methodology?: MethodologyVariant;
   phases: Array<{
     id: string;
     pct: number;
@@ -69,9 +84,10 @@ const ARCHETYPES: Array<{ id: string; icon: string; label: string; description: 
 
 export default function ProgramSetupWizard({ program, onSave, onClose, isSaving }: ProgramSetupWizardProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [step, setStep] = useState(0);
-  const [selectedArchetype, setSelectedArchetype] = useState<string | null>(null);
   const projectMeta = useMemo(() => readProjectMeta(program), [program]);
+  const existingArchetype = typeof projectMeta.archetype === "string" ? projectMeta.archetype : null;
+  const [step, setStep] = useState(existingArchetype ? 1 : 0);
+  const [selectedArchetype, setSelectedArchetype] = useState<string | null>(existingArchetype);
   const targetDates = useMemo(() => phaseTargetDates(program), [program]);
   const [prefilling, setPrefilling] = useState(false);
   const [prefilledFields, setPrefilledFields] = useState<Set<string>>(new Set());
@@ -343,6 +359,10 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
               objective: objective.trim(),
               startDate,
               targetEndDate,
+              ...(selectedArchetype ? {
+                archetype: selectedArchetype,
+                methodology: ARCHETYPE_VARIANT[selectedArchetype] ?? "atos-standard",
+              } : {}),
               phases: phases.map((phase) => ({ id: phase.id, pct: phase.pct, targetDate: phase.targetDate })),
             })}
           >
