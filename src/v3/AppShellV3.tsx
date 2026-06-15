@@ -1113,7 +1113,7 @@ export default function AppShellV3() {
   // Update document title to reflect active programme
   useEffect(() => {
     const name = activeProgram?.name;
-    document.title = name ? `${name} — ADAM` : "ADAM — Transformation Platform";
+    document.title = name ? `${name} — ATOS` : "Brillio ATOS — Agentic Transformation OS";
   }, [activeProgram?.name]);
 
   // ── Phase-entry auto-trigger — brief the team when they first visit a fresh phase ──
@@ -2270,9 +2270,9 @@ export default function AppShellV3() {
             {/* Hero */}
             <div className="v3-welcome-hero">
               <div className="v3-welcome-hero-glyph" aria-hidden="true">✦</div>
-              <h1 className="v3-welcome-hero-title">Welcome to ADAM</h1>
+              <h1 className="v3-welcome-hero-title">Welcome to Brillio ATOS</h1>
               <p className="v3-welcome-hero-sub">
-                Brillio's AI-powered Transformation OS. Create your first programme to unlock agent-driven insights, gate reviews, and delivery intelligence.
+                Brillio's Agentic Transformation OS. Create your first programme to unlock agent-driven insights, gate reviews, and delivery intelligence.
               </p>
               <button
                 type="button"

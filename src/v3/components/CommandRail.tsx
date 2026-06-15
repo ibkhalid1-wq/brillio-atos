@@ -242,14 +242,14 @@ export function CommandRail({
     {/* Panel is an inner overlay that expands visually without shifting the flex layout */}
     <div className="v3-command-rail-panel">
       {/* ── Brillio logo ── */}
-      <div className="v3-command-rail-brillio-logo" title="Brillio · ADAM Platform">
+      <div className="v3-command-rail-brillio-logo" title="Brillio ATOS · Agentic Transformation OS">
         {/* Collapsed: small B mark, always visible when rail is narrow */}
         <span className="v3-command-rail-brillio-mark" aria-hidden="true">B</span>
         {/* Expanded: full wordmark + badge */}
         <svg className="v3-command-rail-brillio-wordmark" viewBox="0 0 80 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Brillio">
           <text x="0" y="15" fontFamily="'Inter', sans-serif" fontWeight="700" fontSize="14" letterSpacing="0.5" fill="currentColor">brillio</text>
         </svg>
-        <span className="v3-command-rail-brillio-badge">ADAM</span>
+        <span className="v3-command-rail-brillio-badge">ATOS</span>
       </div>
 
       {/* ── Programme identity + portfolio switcher ── */}
@@ -272,7 +272,7 @@ export function CommandRail({
                   {confidenceScore}% confidence
                 </span>
               ) : (
-                "ADAM · Transformation OS"
+                "ATOS · Agentic Transformation"
               )}
             </span>
           </span>

@@ -229,7 +229,7 @@ export default function HelpPanel({ onClose, initialQuery = "" }: HelpPanelProps
                 {selected ? selected.title : activeCategory ?? "Help & Guide"}
               </div>
               {!selected && !activeCategory && (
-                <div className="v3-help-subtitle">ADAM · AI Transformation OS</div>
+                <div className="v3-help-subtitle">Brillio ATOS · Agentic Transformation OS</div>
               )}
             </div>
           </div>
