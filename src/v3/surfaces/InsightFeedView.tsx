@@ -441,18 +441,8 @@ export default function InsightFeedView({
     type Card = InsightCardProps;
     const cards: Card[] = [];
 
-    if (openDecisionCount > 0) {
-      cards.push({
-        priority: 1,
-        accent: "var(--v3-amber)",
-        icon: "⊖",
-        title: `${openDecisionCount} decision${openDecisionCount !== 1 ? "s" : ""} awaiting your input`,
-        description:
-          "Unresolved decisions slow delivery and increase risk. Review and resolve the highest-priority items.",
-        actionLabel: "Review Decisions →",
-        onAction: onNavigateToDecide,
-      });
-    }
+    // Decisions are owned solely by the Decision Queue card below — no duplicate
+    // insight card here.
 
     // "Active phase" must resolve to the same phase the rest of the app treats as
     // active (the phase strip highlight and Quick Nav both key off activePhaseId).
@@ -545,6 +535,10 @@ export default function InsightFeedView({
     phases.length > 0
       ? Math.round(phases.reduce((s, p) => s + p.pct, 0) / phases.length)
       : 0;
+  // Fresh programme = no phase progress yet. Used to suppress confidence-heavy
+  // sections (they're noise before any signal exists) and to show the welcome guide.
+  const totalPct = phases.reduce((sum, p) => sum + (p.pct ?? 0), 0);
+  const isFresh = totalPct === 0 && phases.length > 0;
   const phaseIdSetFeed = new Set(program?.phases.map((p) => p.id) ?? []);
   const gatesApproved = program?.gateReviews
     ? Object.entries(program.gateReviews).filter(
@@ -637,8 +631,6 @@ export default function InsightFeedView({
     >
       {/* ── 0. Fresh-program entry guidance — shown only when programme is brand new ── */}
       {(() => {
-        const totalPct = phases.reduce((sum, p) => sum + (p.pct ?? 0), 0);
-        const isFresh = totalPct === 0 && phases.length > 0;
         if (!isFresh) return null;
         const firstPhase = phases[0];
         const ENTRY_STEPS = [
@@ -782,8 +774,86 @@ export default function InsightFeedView({
         </div>
       </div>
 
-      {/* ── 1b. Confidence Signal Breakdown (Priority 7) ─────────────────────── */}
-      {confidenceResult && confidenceResult.signals && confidenceResult.signals.length > 0 && (
+      {/* ── 1a. Today's Focus — lead with the one thing that needs attention ──── */}
+      <div>
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "var(--v3-text-primary)", marginBottom: 4 }}>
+            Today's Focus
+          </div>
+          {/* A2: dynamic subtitle */}
+          <div style={{ fontSize: 13, color: "var(--v3-text-muted)" }}>
+            {insights.length} thing{insights.length !== 1 ? "s" : ""} that need{insights.length === 1 ? "s" : ""} your attention
+          </div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {insights.map((card) => (
+            <InsightCard key={card.priority} {...card} />
+          ))}
+        </div>
+      </div>
+
+      {/* ── 1b. Phase Pipeline — horizontal scroll (C1) ──────────────────────── */}
+      {phases.length > 0 && (
+        <div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--v3-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              Programme Phases
+            </div>
+            {/* Ring legend — canonical KPI mapping (outer→inner) */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {[
+                { color: "var(--v3-accent-b)", label: "Gate Score" },
+                { color: "#A78BFA", label: "Artifact Quality" },
+                { color: "#2DD4BF", label: "Input Quality" },
+              ].map(({ color, label }) => (
+                <span key={label} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--v3-text-muted)" }}>
+                  <svg width={10} height={10} viewBox="0 0 10 10" aria-hidden="true">
+                    <circle cx={5} cy={5} r={4} fill="none" stroke={color} strokeWidth={2.4} />
+                  </svg>
+                  {label}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* C1: horizontal scroll container with fade-out at right edge */}
+          <div style={{ position: "relative" }}>
+            <div
+              className="adam-phase-scroll"
+              style={{
+                display: "flex",
+                gap: 8,
+                overflowX: "auto",
+                paddingBottom: 8,
+                paddingTop: 12,
+                scrollbarWidth: "none",
+              }}
+            >
+              {phases.map((phase) => (
+                <PhaseStripCard
+                  key={phase.id}
+                  program={program}
+                  phase={phase}
+                  active={phase.id === activePhaseId}
+                  isNext={phase.id === nextPhaseId}
+                  onClick={() => onOpenPhase(phase.id)}
+                />
+              ))}
+            </div>
+            {/* Fade-out gradient at right to hint at scrollability */}
+            {phases.length > 5 && (
+              <div style={{
+                position: "absolute", right: 0, top: 0, bottom: 8, width: 48, pointerEvents: "none",
+                background: "linear-gradient(to right, transparent, var(--v3-bg, var(--v3-surface-2)))",
+              }} />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── 1c. Confidence Signal Breakdown — hidden until the programme has signal ── */}
+      {!isFresh && confidenceResult && confidenceResult.signals && confidenceResult.signals.length > 0 && (
         <div
           style={{
             background: "var(--v3-surface)",
@@ -874,161 +944,42 @@ export default function InsightFeedView({
         </div>
       )}
 
-      {/* ── 1c. Confidence Trajectory — forecastConfidence integration ─────────── */}
-      {confidenceForecast && confidenceScore !== null && (
+      {/* ── 1c. Confidence Trajectory — compact one-line trend (full chart retired) ── */}
+      {!isFresh && confidenceForecast && confidenceScore !== null && (
         <div style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          flexWrap: "wrap",
+          padding: "10px 16px",
           background: "var(--v3-surface)",
           border: "1px solid var(--v3-border-soft)",
           borderRadius: "var(--v3-radius)",
-          padding: "16px 18px",
+          fontSize: 12.5,
         }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--v3-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              Confidence Trajectory
-            </span>
-            <span style={{
-              fontSize: 11,
-              padding: "2px 8px",
-              borderRadius: 10,
-              background: confidenceForecast.trend === "improving" ? "rgba(34,197,94,0.12)" : confidenceForecast.trend === "declining" ? "rgba(239,68,68,0.12)" : "rgba(148,163,184,0.12)",
-              color: confidenceForecast.trend === "improving" ? "var(--v3-green)" : confidenceForecast.trend === "declining" ? "var(--v3-red, #ef4444)" : "var(--v3-text-muted)",
-              fontWeight: 600,
-            }}>
-              {confidenceForecast.trend === "improving" ? "↑ Improving" : confidenceForecast.trend === "declining" ? "↓ Declining" : "→ Stable"}
-            </span>
-          </div>
-
-          {/* Progress bar: current → target */}
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--v3-text-muted)", marginBottom: 5 }}>
-              <span>Current: <strong style={{ color: "var(--v3-text-primary)" }}>{confidenceScore}%</strong></span>
-              <span>Gate target: <strong style={{ color: "var(--v3-text-primary)" }}>{confidenceForecast.targetScore}%</strong></span>
-            </div>
-            <div style={{ height: 8, background: "var(--v3-surface-3, var(--v3-border))", borderRadius: 4, overflow: "hidden", position: "relative" }}>
-              <div style={{
-                height: "100%",
-                width: `${Math.min(100, confidenceScore)}%`,
-                background: confidenceScore >= confidenceForecast.targetScore ? "var(--v3-green)" : confidenceScore >= confidenceForecast.targetScore - 15 ? "var(--v3-amber)" : "var(--v3-accent)",
-                borderRadius: 4,
-                transition: "width 0.5s",
-              }} />
-              {/* Target marker */}
-              <div style={{
-                position: "absolute",
-                top: 0, bottom: 0,
-                left: `${Math.min(100, confidenceForecast.targetScore)}%`,
-                width: 2,
-                background: "var(--v3-text-muted)",
-                opacity: 0.5,
-              }} />
-            </div>
-          </div>
-
-          {/* Stats row */}
-          <div style={{ display: "flex", gap: 20, fontSize: 13 }}>
-            <div>
-              <div style={{ fontSize: 10, color: "var(--v3-text-muted)", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 2 }}>Weekly velocity</div>
-              <div style={{ fontWeight: 700, color: confidenceForecast.weeklyVelocity > 0 ? "var(--v3-green)" : confidenceForecast.weeklyVelocity < 0 ? "var(--v3-red, #ef4444)" : "var(--v3-text-muted)" }}>
-                {confidenceForecast.weeklyVelocity > 0 ? "+" : ""}{confidenceForecast.weeklyVelocity.toFixed(1)} pts/wk
-              </div>
-            </div>
-            <div>
-              <div style={{ fontSize: 10, color: "var(--v3-text-muted)", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 2 }}>Days to target</div>
-              <div style={{ fontWeight: 700, color: confidenceForecast.estimatedDaysToTarget !== null && confidenceForecast.estimatedDaysToTarget <= 7 ? "var(--v3-green)" : "var(--v3-text-primary)" }}>
-                {confidenceScore >= confidenceForecast.targetScore
-                  ? <span style={{ color: "var(--v3-green)" }}>✓ At target</span>
-                  : confidenceForecast.estimatedDaysToTarget !== null
-                  ? `~${confidenceForecast.estimatedDaysToTarget} days`
-                  : "Not improving"}
-              </div>
-            </div>
-          </div>
-
-          {confidenceForecast.message && (
-            <div style={{ marginTop: 10, fontSize: 12, color: "var(--v3-text-secondary)", lineHeight: 1.55, paddingTop: 10, borderTop: "1px solid var(--v3-border-soft)" }}>
-              {confidenceForecast.message}
-            </div>
-          )}
+          <span style={{
+            fontSize: 11,
+            padding: "2px 8px",
+            borderRadius: 10,
+            fontWeight: 600,
+            background: confidenceForecast.trend === "improving" ? "rgba(34,197,94,0.12)" : confidenceForecast.trend === "declining" ? "rgba(239,68,68,0.12)" : "rgba(148,163,184,0.12)",
+            color: confidenceForecast.trend === "improving" ? "var(--v3-green)" : confidenceForecast.trend === "declining" ? "var(--v3-red, #ef4444)" : "var(--v3-text-muted)",
+          }}>
+            {confidenceForecast.trend === "improving" ? "↑ Improving" : confidenceForecast.trend === "declining" ? "↓ Declining" : "→ Stable"}
+          </span>
+          <strong style={{ color: confidenceForecast.weeklyVelocity > 0 ? "var(--v3-green)" : confidenceForecast.weeklyVelocity < 0 ? "var(--v3-red, #ef4444)" : "var(--v3-text-primary)" }}>
+            {confidenceForecast.weeklyVelocity > 0 ? "+" : ""}{confidenceForecast.weeklyVelocity.toFixed(1)} pts/wk
+          </strong>
+          <span style={{ color: "var(--v3-text-muted)" }}>·</span>
+          <span style={{ color: "var(--v3-text-secondary)" }}>
+            {confidenceScore >= confidenceForecast.targetScore
+              ? <span style={{ color: "var(--v3-green)", fontWeight: 600 }}>✓ At {confidenceForecast.targetScore}% gate target</span>
+              : confidenceForecast.estimatedDaysToTarget !== null
+              ? <>~<strong style={{ color: "var(--v3-text-primary)" }}>{confidenceForecast.estimatedDaysToTarget} days</strong> to {confidenceForecast.targetScore}% gate target</>
+              : <>Not improving toward {confidenceForecast.targetScore}% gate target</>}
+          </span>
         </div>
       )}
-
-      {/* ── 2. Phase Pipeline — horizontal scroll (C1) ───────────────────────── */}
-      {phases.length > 0 && (
-        <div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--v3-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              Programme Phases
-            </div>
-            {/* Ring legend — canonical KPI mapping (outer→inner) */}
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              {[
-                { color: "var(--v3-accent-b)", label: "Gate Score" },
-                { color: "#A78BFA", label: "Artifact Quality" },
-                { color: "#2DD4BF", label: "Input Quality" },
-              ].map(({ color, label }) => (
-                <span key={label} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--v3-text-muted)" }}>
-                  <svg width={10} height={10} viewBox="0 0 10 10" aria-hidden="true">
-                    <circle cx={5} cy={5} r={4} fill="none" stroke={color} strokeWidth={2.4} />
-                  </svg>
-                  {label}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          {/* C1: horizontal scroll container with fade-out at right edge */}
-          <div style={{ position: "relative" }}>
-            <div
-              className="adam-phase-scroll"
-              style={{
-                display: "flex",
-                gap: 8,
-                overflowX: "auto",
-                paddingBottom: 8,
-                paddingTop: 12,
-                scrollbarWidth: "none",
-              }}
-            >
-              {phases.map((phase) => (
-                <PhaseStripCard
-                  key={phase.id}
-                  program={program}
-                  phase={phase}
-                  active={phase.id === activePhaseId}
-                  isNext={phase.id === nextPhaseId}
-                  onClick={() => onOpenPhase(phase.id)}
-                />
-              ))}
-            </div>
-            {/* Fade-out gradient at right to hint at scrollability */}
-            {phases.length > 5 && (
-              <div style={{
-                position: "absolute", right: 0, top: 0, bottom: 8, width: 48, pointerEvents: "none",
-                background: "linear-gradient(to right, transparent, var(--v3-bg, var(--v3-surface-2)))",
-              }} />
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ── 3. Today's Focus ──────────────────────────────────────────────── */}
-      <div>
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "var(--v3-text-primary)", marginBottom: 4 }}>
-            Today's Focus
-          </div>
-          {/* A2: dynamic subtitle */}
-          <div style={{ fontSize: 13, color: "var(--v3-text-muted)" }}>
-            {insights.length} thing{insights.length !== 1 ? "s" : ""} that need{insights.length === 1 ? "s" : ""} your attention
-          </div>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {insights.map((card) => (
-            <InsightCard key={card.priority} {...card} />
-          ))}
-        </div>
-      </div>
 
       {/* ── 4. Executive Command Panel — consequence-driven next actions ─────── */}
       <ExecCommandPanel
@@ -1111,40 +1062,6 @@ export default function InsightFeedView({
           </div>
         );
       })()}
-
-      {/* ── 7. Quick Navigation ───────────────────────────────────────────────── */}
-      {program && (
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--v3-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 14 }}>
-            Quick Navigation
-          </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {[
-              ...(activePhaseId ? [{ label: "Active Phase", icon: "→", onClick: () => onNavigateToPhase(activePhaseId) }] : []),
-              { label: "Programme Health", icon: "⬡", onClick: onNavigateToGates },
-              { label: "Decisions", icon: "⊖", onClick: onNavigateToDecide },
-            ].map((item) => (
-              <button
-                key={item.label}
-                onClick={item.onClick}
-                style={{
-                  display: "flex", alignItems: "center", gap: 6,
-                  padding: "7px 14px", borderRadius: "var(--v3-radius)",
-                  background: "var(--v3-surface-2)", border: "1px solid var(--v3-border)",
-                  cursor: "pointer", fontFamily: "var(--v3-font)", fontSize: 12,
-                  color: "var(--v3-text-secondary)", fontWeight: 500,
-                  transition: "border-color 0.15s",
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--v3-accent)")}
-                onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--v3-border)")}
-              >
-                <span style={{ fontSize: 13 }}>{item.icon}</span>
-                {item.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* ── 8. Portfolio quick-link ───────────────────────────────────────────── */}
       {programs.length > 1 && (
