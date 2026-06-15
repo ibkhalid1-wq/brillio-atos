@@ -30,12 +30,15 @@ type FieldTone = "green" | "amber" | "muted";
 type Line = { x1: number; y1: number; x2: number; y2: number; tone: FieldTone; key: string };
 
 // Stroke styling per source-field status, mirroring the inline field-quality
-// badges (green = good/filled, amber = brief/fair, muted = empty).
-const TONE_STYLE: Record<FieldTone, { stroke: string; width: number; opacity: number }> = {
-  green: { stroke: "#2DD4BF", width: 1.6, opacity: 0.55 },
-  amber: { stroke: "#F59E0B", width: 1.6, opacity: 0.5 },
-  muted: { stroke: "var(--v3-border)", width: 1, opacity: 0.28 },
+// badges (green = good/filled, amber = brief/fair, muted = empty). Each tone
+// carries a brighter "soft" companion used for the source→target gradient.
+const TONE_STYLE: Record<FieldTone, { stroke: string; soft: string; width: number; glow: number; dot: number }> = {
+  green: { stroke: "#2DD4BF", soft: "#5EEAD4", width: 1.75, glow: 0.18, dot: 0.85 },
+  amber: { stroke: "#F59E0B", soft: "#FBBF24", width: 1.75, glow: 0.16, dot: 0.8 },
+  muted: { stroke: "#94A3B8", soft: "#CBD5E1", width: 1.1, glow: 0.0, dot: 0.32 },
 };
+
+const TONES: FieldTone[] = ["green", "amber", "muted"];
 
 function readPhaseInputs(program: ProgramSummary, phaseId: string): Record<string, unknown> {
   const raw = program.rawData as Record<string, unknown> | null;
@@ -131,18 +134,55 @@ export default function PhaseFlowOverlay({ containerRef, program, phaseId, enabl
       viewBox={`0 0 ${size.w} ${size.h}`}
       aria-hidden="true"
     >
+      <defs>
+        <filter id="v3-flow-glow" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="2.4" />
+        </filter>
+        {TONES.map((tone) => (
+          <linearGradient key={tone} id={`v3-flow-grad-${tone}`} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor={TONE_STYLE[tone].stroke} stopOpacity={0.12} />
+            <stop offset="24%" stopColor={TONE_STYLE[tone].stroke} stopOpacity={0.85} />
+            <stop offset="76%" stopColor={TONE_STYLE[tone].soft} stopOpacity={0.85} />
+            <stop offset="100%" stopColor={TONE_STYLE[tone].soft} stopOpacity={0.18} />
+          </linearGradient>
+        ))}
+      </defs>
+
+      {/* Soft glow underlay — gives the connectors depth without obscuring text. */}
       {lines.map((line) => {
-        const mx = (line.x1 + line.x2) / 2;
         const style = TONE_STYLE[line.tone];
+        if (style.glow === 0) return null;
+        const dx = Math.max(36, (line.x2 - line.x1) * 0.5);
         return (
           <path
-            key={line.key}
-            d={`M ${line.x1} ${line.y1} C ${mx} ${line.y1}, ${mx} ${line.y2}, ${line.x2} ${line.y2}`}
+            key={`glow-${line.key}`}
+            d={`M ${line.x1} ${line.y1} C ${line.x1 + dx} ${line.y1}, ${line.x2 - dx} ${line.y2}, ${line.x2} ${line.y2}`}
             fill="none"
-            stroke={style.stroke}
-            strokeWidth={style.width}
-            strokeOpacity={style.opacity}
+            stroke={style.soft}
+            strokeWidth={style.width + 3}
+            strokeOpacity={style.glow}
+            strokeLinecap="round"
+            filter="url(#v3-flow-glow)"
           />
+        );
+      })}
+
+      {/* Crisp gradient strokes + endpoint nodes. */}
+      {lines.map((line) => {
+        const style = TONE_STYLE[line.tone];
+        const dx = Math.max(36, (line.x2 - line.x1) * 0.5);
+        return (
+          <g key={line.key}>
+            <path
+              d={`M ${line.x1} ${line.y1} C ${line.x1 + dx} ${line.y1}, ${line.x2 - dx} ${line.y2}, ${line.x2} ${line.y2}`}
+              fill="none"
+              stroke={`url(#v3-flow-grad-${line.tone})`}
+              strokeWidth={style.width}
+              strokeLinecap="round"
+            />
+            <circle cx={line.x1} cy={line.y1} r={2.1} fill={style.stroke} fillOpacity={style.dot} />
+            <circle cx={line.x2} cy={line.y2} r={2.4} fill={style.soft} fillOpacity={style.dot} />
+          </g>
         );
       })}
     </svg>
