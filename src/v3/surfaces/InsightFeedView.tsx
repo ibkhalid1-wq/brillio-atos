@@ -2,7 +2,7 @@ import React, { useMemo, useEffect } from "react";
 import type { ProgramSummary } from "@/new/types";
 import { PHASE_LABELS, confidenceColor, confidenceChipClass } from "@/v3/lib/uiHelpers";
 import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
-import { derivePhaseStatusRings, ringColor } from "@/v3/lib/phaseStatusRings";
+import { derivePhaseStatusRings } from "@/v3/lib/phaseStatusRings";
 import AdamExplainsTooltip from "@/v3/components/AdamExplainsTooltip";
 import type { ConfidenceScore, ConfidenceForecast } from "@/v3/lib/confidenceScore";
 import { forecastConfidence, getGateThreshold } from "@/v3/lib/confidenceScore";
@@ -316,7 +316,6 @@ function PhaseStripCard({
   onClick: () => void;
 }) {
   const rings = derivePhaseStatusRings(program, phase.id);
-  const overallCol = ringColor(rings.overall);
   const label = PHASE_LABELS[phase.id] ?? phase.displayName ?? phase.id;
 
   // Rich tooltip — canonical KPI breakdown (inner Input · middle Artifact · outer Gate)
@@ -392,8 +391,9 @@ function PhaseStripCard({
         </span>
       )}
 
-      {/* Canonical 3-ring phase status — inner Input · middle Artifact · outer Gate */}
-      <PhaseStatusRings values={rings} size={52} />
+      {/* Canonical 3-ring phase status — inner Input · middle Artifact · outer Gate.
+          Overall score sits inside the rings for consistency with other screens. */}
+      <PhaseStatusRings values={rings} size={56} showCenter />
 
       {/* Phase name */}
       <span style={{
@@ -405,16 +405,6 @@ function PhaseStripCard({
         marginTop: 2,
       }}>
         {label}
-      </span>
-
-      {/* C3: single prominent overall score — KPI breakdown in tooltip */}
-      <span style={{
-        fontSize: 11,
-        fontWeight: 700,
-        color: overallCol,
-        letterSpacing: "-0.01em",
-      }}>
-        {rings.overall}%
       </span>
     </button>
   );
