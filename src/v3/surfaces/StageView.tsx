@@ -994,7 +994,7 @@ export default function StageView({
       </div>
       <div className="v3-phase-body">
       <section className="v3-zone v3-zone--focus v3-phase-aside">
-        <div className="v3-zone-label">Task queue · blockers · risks</div>
+        <div className="v3-zone-label">Actions · intelligence</div>
         {weeklyDigest && weeklyDigest.weekOf === mondayOfCurrentWeek ? (
           <div className="v3-weekly-digest">
             <div className="v3-digest-head">
@@ -1523,6 +1523,7 @@ export default function StageView({
             .filter((def) => def.id !== "narrative")
             .map((def) => {
               const node = phaseArtifacts.byKey.get(def.id);
+              const required = !!node;
               const present = !!node?.present;
               const state = node?.state ?? "missing";
               const score = typeof node?.quality === "number" ? node.quality : null;
@@ -1541,8 +1542,13 @@ export default function StageView({
                 <div key={def.id} className="v3-artifact-row" data-io-anchor={`artifact:${def.id}`}>
                   <div className="v3-artifact-row-head">
                     <span className="v3-artifact-row-label">{def.label}</span>
-                    <span className={`v3-chip v3-chip-tight ${tone}`}>
-                      {statusLabel}{score != null ? ` · ${score}%` : ""}
+                    <span className="v3-artifact-row-tags">
+                      <span className={`v3-chip v3-chip-tight ${required ? "v3-chip-outline" : "muted"}`}>
+                        {required ? "Required" : "Optional"}
+                      </span>
+                      <span className={`v3-chip v3-chip-tight ${tone}`}>
+                        {statusLabel}{score != null ? ` · ${score}%` : ""}
+                      </span>
                     </span>
                   </div>
                   <button

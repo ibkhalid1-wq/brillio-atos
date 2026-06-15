@@ -6314,6 +6314,17 @@ button.v3-chip:focus-visible,
   justify-content: space-between;
   gap: 8px;
 }
+.v3-artifact-row-tags {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+.v3-chip.v3-chip-outline {
+  background: transparent;
+  border: 1px solid var(--v3-border);
+  color: var(--v3-text-muted);
+}
 .v3-artifact-row-label {
   font-size: 13px;
   font-weight: 600;
