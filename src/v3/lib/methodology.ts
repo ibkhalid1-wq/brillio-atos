@@ -31,14 +31,14 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       id: "strategy",
       displayName: "Strategy",
       description: "Define the transformation mandate, value hypothesis, and success metrics.",
-      requiredArtifacts: ["narrative", "plan"],
+      requiredArtifacts: ["charter", "business-case", "outcome-framework", "narrative", "plan"],
       mandatoryExitCriteriaTemplates: [
         "Executive sponsor confirmed and mandate documented",
         "Business objective and primary success metric defined",
         "Programme budget approved",
       ],
       entryGuards: ["Programme created", "Sponsor identified"],
-      recommendedAgents: ["narrative", "plan", "input-quality"],
+      recommendedAgents: ["charter", "business-case", "outcome-framework", "narrative", "plan", "input-quality"],
       typicalDurationWeeks: { min: 2, max: 6 },
     },
     {

@@ -91,6 +91,9 @@ const VALID_AGENT_IDS = new Set([
   "deck-section",
   "narrative-refine",
   "board-pack",
+  "charter",
+  "business-case",
+  "outcome-framework",
 ]);
 
 // Presentation-only agent ids surfaced in the UI that map onto an implemented
@@ -490,6 +493,9 @@ function isSpecialProgramAgent(agentId: string, phaseId: string): boolean {
     || agentId === "deck-section"
     || agentId === "narrative-refine"
     || agentId === "board-pack"
+    || agentId === "charter"
+    || agentId === "business-case"
+    || agentId === "outcome-framework"
     || isProgramLevelAdoptionAgent(agentId, phaseId);
 }
 
@@ -1230,6 +1236,47 @@ function buildSpecialAgentInputContext(
       budget,
       stakeholders: stakeholderEntries.slice(0, 8),
       healthHeatmap: isRecord(inner.healthHeatmap) ? inner.healthHeatmap : null,
+    }, null, 2);
+  }
+
+  // Strategy-phase formal-artifact agents (charter / business-case /
+  // outcome-framework) all draw on the Strategy phase inputs — including the
+  // structured baseline/target KPIs captured in PhaseInputsPanel — plus the
+  // shared programme context. One block serves all three.
+  if (target?.agentId === "charter" || target?.agentId === "business-case" || target?.agentId === "outcome-framework") {
+    const strategyInputs = normalizeProgramData(normalizeProgramData(inner.phaseInputs as JsonValue | null).strategy as JsonValue | null);
+    const kpiBaselines = typeof strategyInputs.kpis === "string"
+      ? safeJsonParse<unknown[]>(strategyInputs.kpis, []).filter(isRecord)
+      : Array.isArray(strategyInputs.kpis)
+        ? strategyInputs.kpis.filter(isRecord)
+        : [];
+    const objective = typeof inner.objective === "string"
+      ? inner.objective
+      : typeof inner.programObjective === "string"
+        ? inner.programObjective
+        : typeof projectMeta.objective === "string"
+          ? projectMeta.objective
+          : "";
+    return JSON.stringify({
+      programName: meta.name || (typeof projectMeta.name === "string" ? projectMeta.name : ""),
+      client: meta.client || (typeof projectMeta.client === "string" ? projectMeta.client : ""),
+      industry: meta.industry || (typeof projectMeta.industry === "string" ? projectMeta.industry : ""),
+      objective,
+      businessObjective: strategyInputs.businessObjective || objective,
+      sponsor: strategyInputs.sponsor || inner.sponsor || projectMeta.sponsor || projectMeta.executiveSponsor || "",
+      successMetric: strategyInputs.successMetric || strategyInputs.successMetrics || null,
+      constraints: strategyInputs.constraints || null,
+      budget: strategyInputs.budget || budget || null,
+      scopeInclusions: strategyInputs.scopeInclusions || strategyInputs.scopeIn || null,
+      scopeExclusions: strategyInputs.scopeExclusions || strategyInputs.scopeOut || null,
+      kpiBaselines,
+      valueProjected: coerceNumber(inner.valueProjected ?? businessCase.projectedValue ?? valueRealizeData.projectedValue, 0),
+      narrative,
+      phases,
+      risks: activeRaidEntries.slice(0, 10),
+      decisions: decisions.filter((d) => d.status !== "resolved").slice(0, 8),
+      stakeholders: stakeholderEntries.slice(0, 10),
+      existingBusinessCase: businessCase,
     }, null, 2);
   }
 
@@ -4852,6 +4899,79 @@ Rules: Extract verbatim or near-verbatim from transcript. Max 10 decisions, 15 a
     };
   }
 
+  if (request.agentId === "charter") {
+    return {
+      system: `You are the ADAM Transformation Charter Agent. Produce the foundational programme mandate that authorises the transformation and sets its boundaries.
+
+Use the provided Strategy inputs (sponsor, business objective, success metric, scope, constraints, KPIs). Do NOT invent a sponsor, budget, or scope that is not supported by the context — where an input is missing, say so explicitly in "gaps".
+
+Return ONLY valid JSON:
+{
+  "title": "Transformation Charter — <programme name>",
+  "mandate": "2-3 sentence statement of why this programme exists and what authority it holds",
+  "sponsor": "named executive sponsor or 'NOT SPECIFIED'",
+  "businessObjective": "the primary objective in one sentence",
+  "objectives": ["specific, outcome-oriented objectives"],
+  "inScope": ["what the programme will deliver"],
+  "outOfScope": ["explicit exclusions"],
+  "successCriteria": ["measurable criteria, anchored to the KPIs where present"],
+  "keyRisks": ["top strategic risks to the mandate"],
+  "governanceSummary": "one sentence on how decisions and escalations will be governed",
+  "gaps": ["inputs that are missing or too weak to charter confidently"],
+  "summary": "one sentence verdict on charter readiness",
+  "confidence": 0.0
+}`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "business-case") {
+    return {
+      system: `You are the ADAM Business Case Agent. Build the investment justification linking cost, benefit, and the value hypothesis.
+
+Anchor benefits to the captured kpiBaselines (baseline → target) where present, and use valueProjected and constraints/budget for the investment side. Do NOT fabricate financial figures — when a number is unknown, mark it "TBD" and list it under "assumptions".
+
+Return ONLY valid JSON:
+{
+  "valueHypothesis": "the core 'we believe that...' statement",
+  "investmentAsk": "total investment required or 'TBD'",
+  "expectedBenefits": [ { "benefit": "string", "kpi": "linked KPI name or null", "baseline": "string or null", "target": "string or null", "value": "quantified value or 'TBD'" } ],
+  "costs": [ { "category": "string", "estimate": "string or 'TBD'" } ],
+  "roiNarrative": "2-3 sentence ROI / payback rationale",
+  "assumptions": ["key assumptions and unknowns"],
+  "recommendation": "proceed | proceed-with-conditions | revisit",
+  "summary": "one sentence verdict on the business case strength",
+  "confidence": 0.0
+}`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "outcome-framework") {
+    return {
+      system: `You are the ADAM Outcome Framework Agent. Structure the programme's outcomes into a measurable hierarchy that makes benefits traceable from strategy to KPI.
+
+Build directly on the captured kpiBaselines (name/baseline/target/unit). For each strategic outcome, link the measurable KPIs that evidence it and the leading indicators that predict it. Do NOT invent KPIs when kpiBaselines is non-empty — carry those through and only add leading indicators.
+
+Return ONLY valid JSON:
+{
+  "strategicOutcomes": [
+    {
+      "outcome": "the outcome statement",
+      "kpis": [ { "name": "KPI name", "baseline": "string or null", "target": "string or null", "unit": "string or null" } ],
+      "leadingIndicators": ["early signals that predict this outcome"],
+      "owner": "accountable role or null"
+    }
+  ],
+  "benefitMap": "one sentence describing how outputs lead to outcomes to value",
+  "gaps": ["outcomes without a measurable KPI, or KPIs without a baseline"],
+  "summary": "one sentence verdict on outcome measurability",
+  "confidence": 0.0
+}`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
   const system = [
     `You are the ADAM ${request.phaseId} phase agent running server-side for the transformation program "${String(programData.programName || "Untitled Program")}".`,
     "You must produce structured, execution-ready output.",
@@ -5578,6 +5698,9 @@ Deno.serve(async (req) => {
         "benefit-forecast",
         "artifact-staleness-check",
         "meeting-notes-extractor",
+        "charter",
+        "business-case",
+        "outcome-framework",
       ].includes(request.agentId);
       const autonomy = skipAutonomyReview
         ? {
@@ -5793,6 +5916,14 @@ Deno.serve(async (req) => {
         nextProgramData = applyBoardPackResultToProgramData(contextProgramData, normalizedParsedResult);
       } else if (request.agentId === "setup-prefill") {
         nextProgramData = applySetupPrefillResultToProgramData(contextProgramData, result);
+      } else if (request.agentId === "charter") {
+        nextProgramData = applyProgramSupportArtifact(contextProgramData, "strategy", "charter", "transformationCharter", result, "Transformation Charter");
+      } else if (request.agentId === "business-case") {
+        // Distinct field key: inner.businessCase is a read-only value record
+        // (projectedValue/valueDelivered) consumed by context builders — do not clobber it.
+        nextProgramData = applyProgramSupportArtifact(contextProgramData, "strategy", "business-case", "businessCaseDoc", result, "Business Case");
+      } else if (request.agentId === "outcome-framework") {
+        nextProgramData = applyProgramSupportArtifact(contextProgramData, "strategy", "outcome-framework", "outcomeFramework", result, "Outcome Framework");
       }
 
       // Surface structured agent output in the artifact ledger. The UI artifact
