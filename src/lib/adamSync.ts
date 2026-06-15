@@ -147,29 +147,44 @@ export async function saveProgramToSupabase(program: Record<string, unknown>): P
   return true;
 }
 
-export async function deleteProgramFromSupabase(programId: string): Promise<boolean> {
-  if (!isSupabaseConfigured || !supabase) {
-    if (typeof localStorage === "undefined") return false;
-    let removed = false;
-    for (const storageKey of LOCAL_PROGRAM_STORAGE_KEYS) {
-      const raw = localStorage.getItem(storageKey);
-      if (!raw) continue;
-      try {
-        const entries = JSON.parse(raw) as unknown[];
-        if (!Array.isArray(entries)) continue;
-        const nextEntries = entries.filter((entry) => {
-          const id = typeof entry === "object" && entry !== null ? (entry as Record<string, unknown>).id : null;
-          return id !== programId;
-        });
-        if (nextEntries.length !== entries.length) {
-          removed = true;
-          localStorage.setItem(storageKey, JSON.stringify(nextEntries));
-        }
-      } catch {
-        // Ignore malformed legacy caches; cloud deletion remains the source of truth.
+/**
+ * Purge a program from the legacy localStorage caches. Returns true if any
+ * cached copy was removed. Always run alongside the cloud delete: usePrograms
+ * merges localStorage programs with Supabase rows, so a leftover local copy
+ * resurrects a "deleted" program (and can even be re-upserted with
+ * is_deleted:false during the local→cloud migration on next load).
+ */
+function purgeProgramFromLocalStorage(programId: string): boolean {
+  if (typeof localStorage === "undefined") return false;
+  let removed = false;
+  for (const storageKey of LOCAL_PROGRAM_STORAGE_KEYS) {
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) continue;
+    try {
+      const entries = JSON.parse(raw) as unknown[];
+      if (!Array.isArray(entries)) continue;
+      const nextEntries = entries.filter((entry) => {
+        const id = typeof entry === "object" && entry !== null ? (entry as Record<string, unknown>).id : null;
+        return id !== programId;
+      });
+      if (nextEntries.length !== entries.length) {
+        removed = true;
+        localStorage.setItem(storageKey, JSON.stringify(nextEntries));
       }
+    } catch {
+      // Ignore malformed legacy caches; cloud deletion remains the source of truth.
     }
-    return removed;
+  }
+  return removed;
+}
+
+export async function deleteProgramFromSupabase(programId: string): Promise<boolean> {
+  // Always purge any local copy so a merged local-only program can't survive
+  // the delete regardless of whether Supabase is configured.
+  const removedLocally = purgeProgramFromLocalStorage(programId);
+
+  if (!isSupabaseConfigured || !supabase) {
+    return removedLocally;
   }
   const { error } = await supabase
     .from("adam_programs")
@@ -177,7 +192,9 @@ export async function deleteProgramFromSupabase(programId: string): Promise<bool
     .eq("id", programId);
   if (error) {
     console.error("ATOS sync delete error:", error);
-    return false;
+    // The cloud soft-delete failed, but if we removed a local copy the program
+    // is still gone from this session's view, so report success in that case.
+    return removedLocally;
   }
   return true;
 }
