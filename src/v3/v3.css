@@ -6390,7 +6390,10 @@ button.v3-phase-metric:focus-visible {
 /* ── Artifact Map tree ─────────────────────────────────────────── */
 .v3-amap {
   display: grid;
-  gap: 14px;
+  gap: 16px;
+  --amap-good: var(--v3-green);
+  --amap-warning: var(--v3-amber);
+  --amap-muted: var(--v3-text-muted);
 }
 .v3-amap-toolbar {
   display: flex;
@@ -6398,13 +6401,17 @@ button.v3-phase-metric:focus-visible {
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--v3-border);
 }
 .v3-amap-totals {
   font-size: 12.5px;
   color: var(--v3-text-secondary);
+  letter-spacing: -0.005em;
 }
 .v3-amap-totals strong {
   color: var(--v3-text-primary);
+  font-weight: 650;
 }
 .v3-amap-toolbar-actions {
   display: flex;
@@ -6416,18 +6423,37 @@ button.v3-phase-metric:focus-visible {
 }
 .v3-amap-tree {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
+
+/* ── Phase = premium card with a tone-accented spine ── */
 .v3-amap-phase {
+  position: relative;
   border: 1px solid var(--v3-border);
-  border-radius: var(--v3-radius);
-  background: var(--v3-surface);
+  border-radius: var(--v3-radius-lg);
+  background:
+    linear-gradient(180deg, var(--v3-surface-2) 0%, var(--v3-surface) 64px),
+    var(--v3-surface);
+  box-shadow: var(--v3-shadow-xs);
   overflow: hidden;
-  transition: box-shadow 0.16s ease, border-color 0.16s ease;
+  transition: box-shadow 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
 }
+.v3-amap-phase::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--amap-accent, var(--v3-text-muted));
+  opacity: 0.9;
+}
+.v3-amap-phase[data-tone="good"] { --amap-accent: var(--v3-green); }
+.v3-amap-phase[data-tone="warning"] { --amap-accent: var(--v3-amber); }
+.v3-amap-phase[data-tone="muted"] { --amap-accent: var(--v3-border-strong, var(--v3-border)); }
 .v3-amap-phase:hover {
   border-color: var(--v3-border-strong, var(--v3-border));
-  box-shadow: var(--v3-shadow-card);
+  box-shadow: var(--v3-shadow-md);
 }
 
 /* Generic node + row (used at every depth) */
@@ -6437,34 +6463,58 @@ button.v3-phase-metric:focus-visible {
 .v3-amap-row {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: 9px;
   width: 100%;
-  padding: 6px 12px;
+  padding: 6px 14px 6px 10px;
   background: none;
   border: none;
   cursor: pointer;
   text-align: left;
   color: var(--v3-text-primary);
-  border-radius: 6px;
+  border-radius: 7px;
   transition: background 0.12s ease;
 }
 .v3-amap-row:disabled {
   cursor: default;
 }
 .v3-amap-row:not(:disabled):hover {
-  background: var(--v3-surface-2);
+  background: var(--v3-accent-soft);
 }
 .v3-amap-caret {
   flex: 0 0 auto;
-  width: 14px;
-  margin-top: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+  margin-top: 0;
   font-size: 10px;
+  font-weight: 700;
   line-height: 1;
   color: var(--v3-text-secondary);
+  background: var(--v3-surface-2);
+  border: 1px solid var(--v3-border);
+  border-radius: 6px;
   text-align: center;
+  transition: color 0.16s ease, background 0.16s ease, border-color 0.16s ease, transform 0.16s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.v3-amap-caret.is-open {
+  transform: rotate(90deg);
+  color: var(--v3-accent);
+  background: var(--v3-accent-soft);
+  border-color: var(--v3-accent-soft);
+}
+.v3-amap-row:not(:disabled):hover .v3-amap-caret {
+  color: var(--v3-accent);
+  background: var(--v3-accent-soft);
+  border-color: var(--v3-accent-glow, var(--v3-accent-soft));
 }
 .v3-amap-caret.is-leaf {
-  color: var(--v3-border);
+  color: var(--v3-text-muted);
+  background: none;
+  border: none;
+  font-size: 8px;
+  opacity: 0.55;
 }
 .v3-amap-dot {
   flex: 0 0 auto;
@@ -6472,6 +6522,7 @@ button.v3-phase-metric:focus-visible {
   height: 7px;
   margin-top: 6px;
   border-radius: 50%;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 0%, transparent);
 }
 .v3-amap-node-body {
   flex: 1;
@@ -6482,7 +6533,7 @@ button.v3-phase-metric:focus-visible {
 .v3-amap-node-top {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   flex-wrap: wrap;
 }
 .v3-amap-node-label {
@@ -6490,6 +6541,14 @@ button.v3-phase-metric:focus-visible {
   font-weight: 550;
   color: var(--v3-text-primary);
   letter-spacing: -0.005em;
+}
+.v3-amap-count {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--v3-text-muted);
+  margin-left: auto;
+  white-space: nowrap;
+  padding-left: 8px;
 }
 .v3-amap-node-detail {
   font-size: 11.5px;
@@ -6499,28 +6558,49 @@ button.v3-phase-metric:focus-visible {
 }
 .v3-amap-node-detail.subtle {
   font-style: italic;
-  opacity: 0.85;
+  opacity: 0.8;
 }
 
 /* Top-level phase row reads as a header */
 .v3-amap-phase > .v3-amap-node > .v3-amap-row {
-  padding: 11px 14px;
+  padding: 12px 16px 12px 13px;
+}
+.v3-amap-phase > .v3-amap-node > .v3-amap-row:not(:disabled):hover {
+  background: transparent;
 }
 .v3-amap-phase > .v3-amap-node > .v3-amap-row .v3-amap-node-label {
-  font-size: 13.5px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
+  font-size: 14px;
+  font-weight: 680;
+  letter-spacing: -0.015em;
+}
+.v3-amap-phase > .v3-amap-node > .v3-amap-row .v3-amap-caret {
+  width: 22px;
+  height: 22px;
+  font-size: 11px;
+  color: var(--v3-text-primary);
+  box-shadow: var(--v3-shadow-xs);
+}
+.v3-amap-phase > .v3-amap-node > .v3-amap-row .v3-amap-dot {
+  width: 8px;
+  height: 8px;
+  margin-top: 7px;
 }
 .v3-amap-phase > .v3-amap-node > .v3-amap-row .v3-amap-node-top {
-  align-items: baseline;
+  align-items: center;
+}
+/* indent the phase's direct children to clear the accent spine */
+.v3-amap-phase > .v3-amap-node > .v3-amap-children {
+  margin-left: 24px;
+  margin-bottom: 8px;
+  padding-bottom: 2px;
 }
 
-/* Nested children get an indent guide */
+/* Nested children get a hairline indent guide */
 .v3-amap-children {
   display: grid;
   gap: 1px;
-  margin: 1px 0 4px 20px;
-  padding-left: 11px;
+  margin: 1px 0 4px 22px;
+  padding-left: 12px;
   border-left: 1px solid var(--v3-border);
 }
 
@@ -6528,13 +6608,17 @@ button.v3-phase-metric:focus-visible {
 .v3-amap-tag {
   font-size: 10px;
   font-weight: 600;
+  letter-spacing: 0.01em;
 }
 .v3-amap-tag.req {
   color: var(--v3-text-secondary);
   border: 1px solid var(--v3-border);
   border-radius: 20px;
-  padding: 0 6px;
+  padding: 0 7px;
   font-weight: 500;
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 .v3-amap-tag.muted,
 .v3-amap-tag.subtle {
@@ -6545,10 +6629,11 @@ button.v3-phase-metric:focus-visible {
   font-size: 10.5px;
   font-weight: 600;
   color: var(--v3-text-secondary);
-  background: var(--v3-surface-2);
+  background: var(--v3-surface);
   border: 1px solid var(--v3-border);
   border-radius: 20px;
-  padding: 1px 8px;
+  padding: 2px 9px;
+  box-shadow: var(--v3-shadow-xs);
 }
 
 .v3-output-actions {

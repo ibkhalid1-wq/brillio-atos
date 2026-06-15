@@ -37,6 +37,8 @@ interface TreeNodeData {
   label: string;
   tone: Tone;
   tags?: Tag[];
+  /** Right-aligned child-count hint shown on expandable rows. */
+  count?: string;
   /** Sub-text rendered under the label (provenance / value / hint). */
   detail?: string | null;
   detailSubtle?: boolean;
@@ -55,11 +57,11 @@ function readPhaseInputs(program: ProgramSummary, phaseId: string): Record<strin
   return phaseInputs[phaseId] ?? {};
 }
 
-function valuePreview(value: unknown): string | null {
+function valuePreview(value: unknown, max = 160): string | null {
   if (value == null) return null;
-  const text = typeof value === "string" ? value.trim() : String(value);
+  const text = typeof value === "string" ? value.trim().replace(/\s+/g, " ") : String(value);
   if (!text) return null;
-  return text.length > 160 ? `${text.slice(0, 157)}…` : text;
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
 function artifactTone(node: ArtifactNode): Tone {
@@ -102,8 +104,8 @@ function TreeNode({
         onClick={() => hasChildren && onToggle(node.key)}
         disabled={!hasChildren}
       >
-        <span className={`v3-amap-caret${hasChildren ? "" : " is-leaf"}`}>
-          {hasChildren ? (open ? "▾" : "▸") : "•"}
+        <span className={`v3-amap-caret${hasChildren ? (open ? " is-open" : "") : " is-leaf"}`} aria-hidden="true">
+          {hasChildren ? "❯" : "•"}
         </span>
         <span className="v3-amap-dot" style={{ background: TONE_COLOR[node.tone] }} />
         <span className="v3-amap-node-body">
@@ -118,6 +120,7 @@ function TreeNode({
                 {tag.text}
               </span>
             ))}
+            {node.count ? <span className="v3-amap-count">{node.count}</span> : null}
           </span>
           {node.detail ? (
             <span className={`v3-amap-node-detail${node.detailSubtle ? " subtle" : ""}`}>{node.detail}</span>
@@ -160,11 +163,15 @@ export function ArtifactMapTree({ program }: { program: ProgramSummary | null })
           const tags: Tag[] = [];
           if (field.required) tags.push({ text: "Required", variant: "req" });
           if (!filled) tags.push({ text: "Not provided", variant: "muted" });
+          const short = preview ? (preview.length > 72 ? `${preview.slice(0, 71)}…` : preview) : null;
           return {
             key: inputKey,
             label: field.label,
             tone: filled ? "good" : field.required ? "warning" : "muted",
             tags,
+            // Surface the value inline so it's scannable without drilling in.
+            detail: short ?? (field.hint ? field.hint : "Not provided"),
+            detailSubtle: !filled,
             children: [
               {
                 key: `${inputKey}>src`,
@@ -188,6 +195,7 @@ export function ArtifactMapTree({ program }: { program: ProgramSummary | null })
           label: node.label,
           tone,
           tags,
+          count: fields.length > 0 ? `${fields.length} inputs` : undefined,
           detail: node.evidence ?? (node.present ? null : "Not yet produced for this phase."),
           detailSubtle: !node.present,
           children: buildInputNodes(artifactKey),
@@ -250,7 +258,7 @@ export function ArtifactMapTree({ program }: { program: ProgramSummary | null })
 
       <div className="v3-amap-tree">
         {tree.map((node) => (
-          <div key={node.key} className="v3-amap-phase">
+          <div key={node.key} className="v3-amap-phase" data-tone={node.tone}>
             <TreeNode node={node} expanded={expanded} onToggle={toggle} />
           </div>
         ))}
