@@ -175,13 +175,41 @@ export function useGateReview(
         approvedBy: null,
       },
     };
+    // Surface remediation as an actionable item so the loop doesn't dead-end:
+    // without this, requesting remediation only sets a status + note and the PM
+    // has no queued next step. Mirrors reopenGate's pattern — push a gate-approval
+    // decision pointing at the blockers + re-run gate review, then re-approve.
+    // Carry the top blockers (if the gate review captured any) into the prompt so
+    // the PM sees *what* to fix, not just *that* something needs fixing.
+    const blockerLabels = Array.isArray((review as Record<string, unknown>).blockers)
+      ? ((review as Record<string, unknown>).blockers as unknown[])
+          .map((b) => (typeof b === "string" ? b : (b && typeof b === "object" ? String((b as Record<string, unknown>).label ?? (b as Record<string, unknown>).criterion ?? "") : "")))
+          .filter((label) => label.trim().length > 0)
+          .slice(0, 3)
+      : [];
+    const remediationDecision = {
+      id: `remediation-gate-${phaseId}-${Date.now()}`,
+      title: `Gate remediation: ${phaseId}`,
+      question: `The ${phaseId} gate needs remediation before it can be approved.${note ? ` Reason: ${note}.` : ""}${blockerLabels.length ? ` Open blockers: ${blockerLabels.join("; ")}.` : ""} Address the blockers, re-run the gate review, then re-submit for approval.`,
+      type: "gate-approval",
+      priority: "high",
+      status: "open",
+      phaseId,
+      source: "gate-remediation",
+      createdAt: new Date().toISOString(),
+      recommendation: "Resolve the noted blockers, re-run gate review, then approve.",
+    };
     const nextInner = {
       ...inner,
       gateReviews: nextReviews,
-      decisionQueue: decisionQueue.filter((decision) => !(
-        String(decision.type || "") === "gate-approval"
-        && String(decision.phaseId || decision.phase_id || "") === phaseId
-      )),
+      decisionQueue: [
+        // De-dupe any stale gate-approval item for this phase, then append the fresh one.
+        ...decisionQueue.filter((decision) => !(
+          String(decision.type || "") === "gate-approval"
+          && String(decision.phaseId || decision.phase_id || "") === phaseId
+        )),
+        remediationDecision,
+      ],
     };
     await persistState(nextInner);
     recordGateRiskSnapshot(phaseId, {
