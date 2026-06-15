@@ -5,6 +5,7 @@ import AdamExplainsTooltip from "@/v3/components/AdamExplainsTooltip";
 import { Kpi } from "@/v3/components/ui/Kpi";
 import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
 import { derivePhaseStatusRings } from "@/v3/lib/phaseStatusRings";
+import { PhaseStripCard } from "@/v3/components/PhaseStripCard";
 
 interface ExecutiveViewProps {
   program: ProgramSummary | null;
@@ -204,6 +205,23 @@ export default function ExecutiveView({
 
   const todayLabelCopy = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
   const phases = program?.phases ?? [];
+  // The programme's "current" phase = the first one not yet complete; if every
+  // phase is complete, highlight the last. Drives the active phase-strip card.
+  const currentPhaseId = useMemo(() => {
+    if (phases.length === 0) return "";
+    const inProgress = phases.find((p) => p.status !== "complete" && p.pct < 100);
+    return (inProgress ?? phases[phases.length - 1]).id;
+  }, [phases]);
+  // First upcoming phase after the current one (not yet started) — gets the "Next" badge.
+  const nextPhaseId = useMemo(() => {
+    if (!currentPhaseId || phases.length === 0) return null;
+    const idx = phases.findIndex((p) => p.id === currentPhaseId);
+    if (idx < 0) return null;
+    for (let i = idx + 1; i < phases.length; i++) {
+      if (phases[i].pct < 5 && phases[i].status !== "complete") return phases[i].id;
+    }
+    return null;
+  }, [phases, currentPhaseId]);
   const totalGates = program?.phases.length ?? 0;
   // Only count gate reviews that correspond to an actual phase in this programme —
   // stale/orphaned keys (e.g. from a prior methodology) must not inflate the count.
@@ -443,6 +461,52 @@ export default function ExecutiveView({
           />
         </div>
       </div>
+
+      {/* ── 2b. Programme phases — at-a-glance ring strip ──────────────────── */}
+      {phases.length > 0 && (
+        <div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 2 }}>
+            <SectionLabel>Programme Phases</SectionLabel>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              {[
+                { color: "var(--v3-accent-b)", label: "Gate Score" },
+                { color: "#A78BFA", label: "Artifact Quality" },
+                { color: "#2DD4BF", label: "Input Quality" },
+              ].map(({ color, label }) => (
+                <span key={label} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--v3-text-muted)" }}>
+                  <svg width={10} height={10} viewBox="0 0 10 10" aria-hidden="true">
+                    <circle cx={5} cy={5} r={4} fill="none" stroke={color} strokeWidth={2.4} />
+                  </svg>
+                  {label}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div style={{ position: "relative" }}>
+            <div
+              className="adam-phase-scroll"
+              style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 8, paddingTop: 12, scrollbarWidth: "none" }}
+            >
+              {phases.map((phase) => (
+                <PhaseStripCard
+                  key={phase.id}
+                  program={program}
+                  phase={phase}
+                  active={phase.id === currentPhaseId}
+                  isNext={phase.id === nextPhaseId}
+                  onClick={() => onNavigateToPhase(phase.id)}
+                />
+              ))}
+            </div>
+            {phases.length > 5 && (
+              <div style={{
+                position: "absolute", right: 0, top: 0, bottom: 8, width: 48, pointerEvents: "none",
+                background: "linear-gradient(to right, transparent, var(--v3-bg, var(--v3-surface-2)))",
+              }} />
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── 3. Critical risks ─────────────────────────────────────────────── */}
       <div>
