@@ -160,7 +160,7 @@ export function buildOrchestratorSystemPrompt(): string {
     .map((agent) => `- ${agent.id}: ${agent.description}`)
     .join("\n");
 
-  return `You are the ADAM Copilot Orchestrator. Select the minimum specialist agents to answer a user message accurately.
+  return `You are the ATOS Copilot Orchestrator. Select the minimum specialist agents to answer a user message accurately.
 
 Available agents:
 ${agentList}

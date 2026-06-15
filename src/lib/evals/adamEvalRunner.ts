@@ -366,7 +366,7 @@ async function executeAgent(
 ): Promise<{ agentOutput: string; parsedOutput: Record<string, unknown> | null; tokensUsed: number; latencyMs: number }> {
   const startedAt = Date.now();
   const user = [
-    "Run this ADAM phase agent for the following evaluation case.",
+    "Run this ATOS phase agent for the following evaluation case.",
     "Use the supplied context exactly as given. Return only the required JSON object or the pause marker if human input is required.",
     "",
     summarizeProgramInput(evalCase),

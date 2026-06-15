@@ -282,7 +282,7 @@ const SCENARIO_SEEDS: ScenarioSeed[] = [
     sponsor: "",
     sponsorRole: "",
     challenge: "Executives want an AI transformation for patient access, but the ask is still framed only as improve operations and no accountable sponsor has been confirmed.",
-    goal: "Explore whether ADAM can form a program shape once leadership provides enough clarity.",
+    goal: "Explore whether ATOS can form a program shape once leadership provides enough clarity.",
     budgetUsd: 1200000,
     timelineMonths: 6,
     baselineMetrics: [],

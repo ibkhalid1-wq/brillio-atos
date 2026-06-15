@@ -642,10 +642,10 @@ export default function InsightFeedView({
         if (!isFresh) return null;
         const firstPhase = phases[0];
         const ENTRY_STEPS = [
-          { n: 1, icon: "⊡", label: "Complete Strategy phase inputs", why: "Tell ADAM your programme objective, sponsor, and budget — this bootstraps all AI analysis.", action: firstPhase ? () => onOpenPhase(firstPhase.id) : undefined, cta: "Open Strategy phase →" },
+          { n: 1, icon: "⊡", label: "Complete Strategy phase inputs", why: "Tell ATOS your programme objective, sponsor, and budget — this bootstraps all AI analysis.", action: firstPhase ? () => onOpenPhase(firstPhase.id) : undefined, cta: "Open Strategy phase →" },
           { n: 2, icon: "◎", label: "Build your programme brief", why: "Creates the programme narrative — the primary summary referenced by all downstream analysis.", action: () => onRunAgent("narrative", firstPhase?.id ?? "strategy"), cta: "Build brief →" },
           { n: 3, icon: "⬡", label: "Check phase readiness", why: "Assesses what's missing before you can progress to Mobilise. Surfaces blockers early.", action: () => onRunAgent("gate-review", firstPhase?.id ?? "strategy"), cta: "Check readiness →" },
-          { n: 4, icon: "→", label: "Work through the phase checklist", why: "Each phase has specific exit criteria. ADAM will guide you step-by-step.", action: undefined, cta: null },
+          { n: 4, icon: "→", label: "Work through the phase checklist", why: "Each phase has specific exit criteria. ATOS will guide you step-by-step.", action: undefined, cta: null },
         ];
         return (
           <div style={{
@@ -658,7 +658,7 @@ export default function InsightFeedView({
               <span style={{ fontSize: 22 }}>◎</span>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 700, color: "var(--v3-text-primary)" }}>Welcome — let's get your programme started</div>
-                <div style={{ fontSize: 12, color: "var(--v3-text-muted)", marginTop: 2 }}>Follow these 4 steps and ADAM will guide you the rest of the way</div>
+                <div style={{ fontSize: 12, color: "var(--v3-text-muted)", marginTop: 2 }}>Follow these 4 steps and ATOS will guide you the rest of the way</div>
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>

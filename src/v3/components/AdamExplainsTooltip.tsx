@@ -34,7 +34,7 @@ function getExplanation(
     case "gate-readiness":
       return {
         title: "Gate Readiness",
-        body: "Measures whether this phase has met its exit criteria and is ready to proceed. ADAM calculates this from artifact completeness, exit criteria ticked, and open blockers.",
+        body: "Measures whether this phase has met its exit criteria and is ready to proceed. ATOS calculates this from artifact completeness, exit criteria ticked, and open blockers.",
         tip: "Aim for 70% or above before approving a gate.",
       };
     case "rag-status":
@@ -196,7 +196,7 @@ export default function AdamExplainsTooltip({
                 flexShrink: 0,
               }}
             >
-              ⓘ ADAM Explains
+              ⓘ ATOS Explains
             </span>
           </div>
 

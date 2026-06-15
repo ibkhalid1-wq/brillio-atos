@@ -29,7 +29,7 @@ export function registerAdamMethodologyRuntime(nextRuntime: RuntimeMap) {
 function invoke(name: string, args: any[]) {
   const fn = runtime[name];
   if (typeof fn !== "function") {
-    throw new Error(`ADAM methodology runtime not registered for ${name}`);
+    throw new Error(`ATOS methodology runtime not registered for ${name}`);
   }
   return fn(...args);
 }

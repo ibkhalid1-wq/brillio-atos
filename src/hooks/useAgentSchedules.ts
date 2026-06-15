@@ -76,7 +76,7 @@ export function useAgentSchedules(programId: string) {
       .eq("program_id", programId)
       .order("created_at", { ascending: false });
     if (error) {
-      console.warn("ADAM schedules load failed:", error.message);
+      console.warn("ATOS schedules load failed:", error.message);
       setSchedules([]);
       return;
     }

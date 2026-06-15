@@ -82,7 +82,7 @@ export function CommandBar({
           <div className="flex items-center gap-3">
             <button type="button" className="adam-button-ghost min-h-[36px]" onClick={() => onNavigate("home")}>
               <SparklesIcon className="h-4 w-4 text-blue-300" />
-              <span style={{ color: "var(--adam-cobalt-light)", fontWeight: 700 }}>ADAM</span>
+              <span style={{ color: "var(--adam-cobalt-light)", fontWeight: 700 }}>ATOS</span>
             </button>
             <div className="relative">
               <button

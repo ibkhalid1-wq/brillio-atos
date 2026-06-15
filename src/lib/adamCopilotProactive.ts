@@ -132,7 +132,7 @@ export function evaluateProactiveNudges(programState: unknown): ProactiveNudge[]
     nudges.push({
       id: `decision-backlog-${programId}`,
       type: "warning",
-      message: `${pendingHighPriority.length} high-priority decisions are still unresolved. ADAM recommends a focused decision-clearing pass now.`,
+      message: `${pendingHighPriority.length} high-priority decisions are still unresolved. ATOS recommends a focused decision-clearing pass now.`,
       actionLabel: "Review queue",
       actionViewId: "decisions",
       priority: "high",
@@ -182,7 +182,7 @@ export function evaluateProactiveNudges(programState: unknown): ProactiveNudge[]
         nudges.push({
           id: `value-milestone-${programId}-${milestone}`,
           type: "insight",
-          message: `Value delivered has crossed ${milestone}% of the projected target. ADAM recommends capturing the drivers behind that progress while they are still fresh.`,
+          message: `Value delivered has crossed ${milestone}% of the projected target. ATOS recommends capturing the drivers behind that progress while they are still fresh.`,
           actionLabel: "Review value",
           actionViewId: "valuerealize",
           priority: milestone >= 50 ? "high" : "medium",

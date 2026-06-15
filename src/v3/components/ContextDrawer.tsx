@@ -6,7 +6,7 @@ import TaskQueuePanel from "@/v3/components/TaskQueuePanel";
 import { PhaseRailPanels } from "@/v3/components/PhaseRailPanels";
 
 // The expandable right rail. Its body is the canonical two-section rail surface
-// (Action Center + Intelligence). Pending agent tasks — questions ADAM needs
+// (Action Center + Intelligence). Pending agent tasks — questions ATOS needs
 // answered — surface as a compact banner above it so nothing is lost.
 type RaidDraft = {
   type: RAIDEntryType;
@@ -74,7 +74,7 @@ export function ContextDrawer({
         <div className="v3-context-drawer-body">
           {pendingTaskCount > 0 && phaseId ? (
             <div className="v3-context-drawer-tasks">
-              <div className="v3-card-title v3-card-title--flush">ADAM needs you</div>
+              <div className="v3-card-title v3-card-title--flush">ATOS needs you</div>
               <TaskQueuePanel
                 tasks={tasks}
                 phaseId={phaseId}

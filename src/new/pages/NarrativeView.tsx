@@ -57,7 +57,7 @@ export function NarrativeView({
           <div className="adam-stack" style={{ gap: 6 }}>
             <div className="adam-heading-xl">Program Narrative</div>
             <div className="adam-body adam-muted">
-              ADAM’s executive summary of the current transformation posture and what matters next.
+              ATOS’s executive summary of the current transformation posture and what matters next.
             </div>
             {hasNarrative && program.narrativeGeneratedAt ? (
               <div className="adam-micro adam-muted">
@@ -157,7 +157,7 @@ export function NarrativeView({
           </div>
 
           <div className="mt-5 adam-stack" style={{ gap: 8 }}>
-            <div className="adam-title">ADAM confidence</div>
+            <div className="adam-title">ATOS confidence</div>
             <div style={{ height: 10, borderRadius: 999, background: "rgba(148,163,184,0.2)", overflow: "hidden" }}>
               <div
                 style={{
@@ -181,7 +181,7 @@ export function NarrativeView({
       ) : (
         <NotReadyCard
           title="Program narrative"
-          reason="ADAM will write a 2–3 sentence executive summary once a phase has measurable progress. No plan required."
+          reason="ATOS will write a 2–3 sentence executive summary once a phase has measurable progress. No plan required."
           onTrigger={onRefresh}
           triggerLabel="Generate narrative"
           isRunning={isRunning}
@@ -196,7 +196,7 @@ export function NarrativeView({
           <span className="adam-chip">{openDecisions} open decisions</span>
         </div>
         <div className="mt-4 adam-body adam-muted">
-          ADAM uses current phase progress, open decisions, active risks, milestones, and approved artifacts to shape the executive story.
+          ATOS uses current phase progress, open decisions, active risks, milestones, and approved artifacts to shape the executive story.
         </div>
       </section>
 
@@ -218,7 +218,7 @@ function CorrectionPanel({ onSave }: { onSave: (note: string) => Promise<void> }
         style={{ fontSize: 12, width: "100%", justifyContent: "space-between" }}
         onClick={() => setOpen((current) => !current)}
       >
-        <span>Add correction or context for ADAM</span>
+        <span>Add correction or context for ATOS</span>
         <span>{open ? "▴" : "▾"}</span>
       </button>
 

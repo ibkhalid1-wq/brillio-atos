@@ -65,7 +65,7 @@ function parseArgs(argv: string[]): ParsedArgs {
 
 function usage(): void {
   const message = `
-ADAM Eval CLI
+ATOS Eval CLI
 
 Usage:
   npx tsx src/lib/evals/adamEvalCLI.ts --agent strategy
@@ -84,7 +84,7 @@ function caseIdsForTags(agentId: AdamAgentId, tags: string[]): string[] {
 }
 
 function printSummary(summary: EvalRunSummary, baseline?: EvalRunSummary): void {
-  const header = `ADAM Eval Runner — ${summary.agentId} v${summary.promptVersion}`;
+  const header = `ATOS Eval Runner — ${summary.agentId} v${summary.promptVersion}`;
   console.log(colorize("bold", header));
   console.log("──────────────────────────────────────────");
   console.log(`Running ${summary.totalCases} test cases...\n`);
@@ -162,6 +162,6 @@ async function main(): Promise<void> {
 }
 
 void main().catch((error) => {
-  console.error(colorize("red", `ADAM Eval CLI failed: ${error instanceof Error ? error.message : "Unknown error"}`));
+  console.error(colorize("red", `ATOS Eval CLI failed: ${error instanceof Error ? error.message : "Unknown error"}`));
   process.exitCode = 1;
 });

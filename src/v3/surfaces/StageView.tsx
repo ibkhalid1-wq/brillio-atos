@@ -285,7 +285,7 @@ function StageBriefPanel({ phaseId, onSave }: { phaseId: string; onSave: (phaseI
         className="v3-button ghost v3-button-inline-sm v3-button-block-gap"
         onClick={() => setOpen(true)}
       >
-        ✎ Brief ADAM on this phase
+        ✎ Brief ATOS on this phase
       </button>
     );
   }
@@ -293,12 +293,12 @@ function StageBriefPanel({ phaseId, onSave }: { phaseId: string; onSave: (phaseI
   return (
     <div className="v3-brief-panel">
       <div className="v3-brief-panel-label">
-        Notes for ADAM — this phase
+        Notes for ATOS — this phase
         <span className="v3-brief-panel-hint">Corrections, context, constraints. Used to improve future analysis for this phase.</span>
       </div>
       <textarea
         className="v3-input v3-textarea"
-        aria-label="Phase note for ADAM"
+        aria-label="Phase note for ATOS"
         rows={3}
         placeholder="e.g. Vendor confirmed delay to 14 Aug. Ignore previous timeline assumption. Sponsor wants risk summary by Friday."
         value={text}
@@ -633,13 +633,13 @@ export default function StageView({
   // Phase-aware checklist — each phase has context-specific "why" guidance (Priority 10)
   const PHASE_ONBOARDING_STEPS: Record<string, Array<{ label: string; why: string }>> = {
     strategy:    [
-      { label: "Define programme objective and business case", why: "Without a clear objective, ADAM cannot generate meaningful summaries or action plans." },
+      { label: "Define programme objective and business case", why: "Without a clear objective, ATOS cannot generate meaningful summaries or action plans." },
       { label: "Upload existing strategy documents", why: "Document upload instantly bootstraps your programme data." },
       { label: "Generate your strategy brief", why: "Creates the foundation narrative that all downstream phase analysis references." },
       { label: "Approve gate to proceed to Mobilise", why: "Gate approval confirms strategic intent is clear before committing resources." },
     ],
     mobilise:    [
-      { label: "Enter team roster and governance structure", why: "ADAM needs to know who's accountable for each workstream to assign actions correctly." },
+      { label: "Enter team roster and governance structure", why: "ATOS needs to know who's accountable for each workstream to assign actions correctly." },
       { label: "Confirm budget baseline", why: "Budget data drives risk scoring and milestone health calculations." },
       { label: "Review mobilisation risks", why: "Early risk identification prevents cost overruns in later phases." },
       { label: "Approve gate to proceed to Discover", why: "Confirms the team is assembled and governance is in place." },
@@ -651,7 +651,7 @@ export default function StageView({
       { label: "Approve gate to proceed to Design", why: "Gate confirms discovery is complete before committing to solution design." },
     ],
     design:      [
-      { label: "Upload target operating model or solution architecture", why: "Architecture decisions are hard to reverse — ADAM will flag contradictions early." },
+      { label: "Upload target operating model or solution architecture", why: "Architecture decisions are hard to reverse — ATOS will flag contradictions early." },
       { label: "Assess change impact", why: "Identifies affected groups and resistance risks before build begins." },
       { label: "Get TOM approved by SteerCo", why: "Sponsor sign-off on design reduces rework risk in Build phase by ~40%." },
       { label: "Approve gate to proceed to Build", why: "Confirms design is locked before development investment." },
@@ -664,7 +664,7 @@ export default function StageView({
     ],
     operate:     [
       { label: "Confirm go-live plan and cutover approach", why: "Cutover failures are the #1 cause of programme escalations — plan early." },
-      { label: "Set up KPI tracking against baseline", why: "ADAM needs measurement data to calculate benefits realisation in Value Realise phase." },
+      { label: "Set up KPI tracking against baseline", why: "ATOS needs measurement data to calculate benefits realisation in Value Realise phase." },
       { label: "Confirm support model and hypercare plan", why: "Unplanned support demand after go-live is a top adoption risk." },
       { label: "Approve gate to proceed to Govern", why: "Confirms steady-state operations are established." },
     ],
@@ -682,13 +682,13 @@ export default function StageView({
     ],
     valuerealize:[
       { label: "Quantify and sign off benefits realised", why: "Sponsor-confirmed benefits are the primary deliverable of the programme." },
-      { label: "Complete programme retrospective", why: "Lessons learned feed ADAM's pattern library, making future programmes smarter." },
+      { label: "Complete programme retrospective", why: "Lessons learned feed ATOS's pattern library, making future programmes smarter." },
       { label: "Produce and approve closure pack", why: "Closure pack is the formal record of programme outcomes for the client and stakeholders." },
       { label: "Confirm handover to BAU", why: "Without formal BAU handover, value erodes as programme team disengages." },
     ],
   };
   const phaseSteps = PHASE_ONBOARDING_STEPS[activePhase?.id ?? ""] ?? [
-    { label: "Complete phase setup", why: "ADAM needs phase data to generate insights and readiness assessments." },
+    { label: "Complete phase setup", why: "ATOS needs phase data to generate insights and readiness assessments." },
     { label: "Check gate readiness", why: "Gate readiness check assesses what's complete and identifies gaps." },
     { label: "Review and confirm exit criteria", why: "Exit criteria define what 'done' looks like for this phase." },
     { label: "Approve gate to unlock the next phase", why: "Gate approval signals the team is ready to proceed." },
@@ -992,7 +992,7 @@ export default function StageView({
         {narrativeRunning ? (
           <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--v3-accent)" }}>
             <span style={{ animation: "v3-spin 1.2s linear infinite", display: "inline-block" }}>◎</span>
-            <span>ADAM is generating the summary…</span>
+            <span>ATOS is generating the summary…</span>
           </div>
         ) : artifactPreviews?.narrative ? (
           <div style={summaryExpanded
@@ -1004,7 +1004,7 @@ export default function StageView({
           </div>
         ) : (
           <div style={{ color: "var(--v3-text-muted)" }}>
-            No summary yet — click Generate summary to have ADAM analyse this programme.
+            No summary yet — click Generate summary to have ATOS analyse this programme.
           </div>
         )}
       </div>
@@ -1307,7 +1307,7 @@ export default function StageView({
                       badge={<StatusBadge variant={milestone.status === "at-risk" ? "at-risk" : milestone.status === "delayed" ? "delayed" : milestone.status === "complete" ? "complete" : "active"} size="sm" />}
                     >
                       <div className="v3-expandable-detail-copy">
-                        <div>{milestone.source === "human" ? "Added manually for this phase." : "Derived by ADAM from current phase evidence."}</div>
+                        <div>{milestone.source === "human" ? "Added manually for this phase." : "Derived by ATOS from current phase evidence."}</div>
                         {milestone.exitCriteria?.length ? (
                           <div>
                             <div className="v3-expandable-detail-label">Exit criteria</div>

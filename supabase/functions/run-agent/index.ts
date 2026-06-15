@@ -662,7 +662,7 @@ const FORMAL_ARTIFACT_AGENTS: Record<string, FormalArtifactSpec> = {
     phase: "strategy",
     fieldKey: "transformationCharter",
     title: "Transformation Charter",
-    system: `You are the ADAM Transformation Charter Agent. Produce the foundational programme mandate that authorises the transformation and sets its boundaries.
+    system: `You are the ATOS Transformation Charter Agent. Produce the foundational programme mandate that authorises the transformation and sets its boundaries.
 
 Use the provided Strategy inputs (sponsor, business objective, success metric, scope, constraints, kpiBaselines). Do NOT invent a sponsor, budget, or scope that is not supported by the context — where an input is missing, say so explicitly in "gaps".
 
@@ -687,7 +687,7 @@ Return ONLY valid JSON:
     phase: "strategy",
     fieldKey: "businessCaseDoc",
     title: "Business Case",
-    system: `You are the ADAM Business Case Agent. Build the investment justification linking cost, benefit, and the value hypothesis.
+    system: `You are the ATOS Business Case Agent. Build the investment justification linking cost, benefit, and the value hypothesis.
 
 Anchor benefits to the captured kpiBaselines (baseline → target) where present, and use valueProjected and constraints/budget for the investment side. Do NOT fabricate financial figures — when a number is unknown, mark it "TBD" and list it under "assumptions".
 
@@ -708,7 +708,7 @@ Return ONLY valid JSON:
     phase: "strategy",
     fieldKey: "outcomeFramework",
     title: "Outcome Framework",
-    system: `You are the ADAM Outcome Framework Agent. Structure the programme's outcomes into a measurable hierarchy that makes benefits traceable from strategy to KPI.
+    system: `You are the ATOS Outcome Framework Agent. Structure the programme's outcomes into a measurable hierarchy that makes benefits traceable from strategy to KPI.
 
 Build directly on the captured kpiBaselines (name/baseline/target/unit). For each strategic outcome, link the measurable KPIs that evidence it and the leading indicators that predict it. Do NOT invent KPIs when kpiBaselines is non-empty — carry those through and only add leading indicators.
 
@@ -732,7 +732,7 @@ Return ONLY valid JSON:
     phase: "strategy",
     fieldKey: "strategicRoadmap",
     title: "Strategic Roadmap",
-    system: `You are the ADAM Strategic Roadmap Agent. Produce a phase-level roadmap sequencing the transformation from now to value realisation.
+    system: `You are the ATOS Strategic Roadmap Agent. Produce a phase-level roadmap sequencing the transformation from now to value realisation.
 
 Use the programme phases, milestones, and objective. Anchor dates to existing phase ETAs/milestones — do NOT fabricate dates; mark unknown dates "TBD".
 
@@ -751,7 +751,7 @@ Return ONLY valid JSON:
     phase: "mobilise",
     fieldKey: "governanceModel",
     title: "Governance Model",
-    system: `You are the ADAM Governance Model Agent. Define how the programme is governed: decision bodies, cadence, authority thresholds, and escalation.
+    system: `You are the ATOS Governance Model Agent. Define how the programme is governed: decision bodies, cadence, authority thresholds, and escalation.
 
 Use stakeholders, decisions, and the programme objective. Do NOT invent named individuals not present in context — use roles where names are unknown.
 
@@ -770,7 +770,7 @@ Return ONLY valid JSON:
     phase: "mobilise",
     fieldKey: "raciMatrix",
     title: "RACI Matrix",
-    system: `You are the ADAM RACI Matrix Agent. Map programme activities to roles with Responsible / Accountable / Consulted / Informed assignments.
+    system: `You are the ATOS RACI Matrix Agent. Map programme activities to roles with Responsible / Accountable / Consulted / Informed assignments.
 
 Use stakeholders and phase activities. Every activity MUST have exactly one Accountable. Use roles where named individuals are unknown.
 
@@ -787,7 +787,7 @@ Return ONLY valid JSON:
     phase: "discover",
     fieldKey: "requirementsCatalog",
     title: "Requirements Catalog",
-    system: `You are the ADAM Requirements Catalog Agent. Capture and structure the programme requirements with priority and traceability.
+    system: `You are the ATOS Requirements Catalog Agent. Capture and structure the programme requirements with priority and traceability.
 
 Use the discover-phase inputs, scope, and objective. Prioritise with MoSCoW. Each requirement links to the outcome/KPI it serves where possible. Do NOT fabricate requirements with no basis in context — list coverage gaps instead.
 
@@ -803,7 +803,7 @@ Return ONLY valid JSON:
     phase: "design",
     fieldKey: "futureStateDesign",
     title: "Future State Design",
-    system: `You are the ADAM Future State Design Agent. Describe the target future state: capabilities, processes, and the change from current state.
+    system: `You are the ATOS Future State Design Agent. Describe the target future state: capabilities, processes, and the change from current state.
 
 Use requirements, objective, and design-phase inputs. Ground each future-state change in a requirement or outcome where possible.
 
@@ -821,7 +821,7 @@ Return ONLY valid JSON:
     phase: "design",
     fieldKey: "targetOperatingModel",
     title: "Target Operating Model",
-    system: `You are the ADAM Target Operating Model Agent. Define the TOM across people, process, technology, and governance dimensions.
+    system: `You are the ATOS Target Operating Model Agent. Define the TOM across people, process, technology, and governance dimensions.
 
 Use future-state design, stakeholders, and objective. Be specific about how the organisation runs in the future state.
 
@@ -841,7 +841,7 @@ Return ONLY valid JSON:
     phase: "design",
     fieldKey: "solutionArchitecture",
     title: "Solution Architecture",
-    system: `You are the ADAM Solution Architecture Agent. Produce the solution architecture: components, integrations, data flows, NFRs, and key decisions.
+    system: `You are the ATOS Solution Architecture Agent. Produce the solution architecture: components, integrations, data flows, NFRs, and key decisions.
 
 Use requirements, future-state design, and constraints. Do NOT invent vendor products not implied by context — describe capabilities generically where unknown.
 
@@ -860,7 +860,7 @@ Return ONLY valid JSON:
     phase: "build",
     fieldKey: "testPlan",
     title: "Test Plan",
-    system: `You are the ADAM Test Plan Agent. Define the test strategy: scope, types, environments, entry/exit criteria, and representative test cases.
+    system: `You are the ATOS Test Plan Agent. Define the test strategy: scope, types, environments, entry/exit criteria, and representative test cases.
 
 Use requirements and acceptance criteria. Each key requirement should map to at least one test case where possible.
 
@@ -881,7 +881,7 @@ Return ONLY valid JSON:
     phase: "operate",
     fieldKey: "runbook",
     title: "Runbook",
-    system: `You are the ADAM Runbook Agent. Produce the operational runbook for running the solution in live operation.
+    system: `You are the ATOS Runbook Agent. Produce the operational runbook for running the solution in live operation.
 
 Use the solution/operating context. Cover routine operations, monitoring, and incident response. Be concrete and actionable.
 
@@ -899,7 +899,7 @@ Return ONLY valid JSON:
     phase: "operate",
     fieldKey: "supportModel",
     title: "Support Model",
-    system: `You are the ADAM Support Model Agent. Define the post-go-live support model: tiers, SLAs, roles, escalation, and knowledge.
+    system: `You are the ATOS Support Model Agent. Define the post-go-live support model: tiers, SLAs, roles, escalation, and knowledge.
 
 Use stakeholders and operating context. Be specific about who supports what and to what service level.
 
@@ -918,7 +918,7 @@ Return ONLY valid JSON:
     phase: "optimize",
     fieldKey: "optimizationBacklog",
     title: "Optimization Backlog",
-    system: `You are the ADAM Optimization Backlog Agent. Produce a prioritised backlog of continuous-improvement opportunities against baseline metrics.
+    system: `You are the ATOS Optimization Backlog Agent. Produce a prioritised backlog of continuous-improvement opportunities against baseline metrics.
 
 Use kpiBaselines, benefits tracking, risks, and operating signals. Prioritise by value vs effort. Ground each item in evidence where possible.
 
@@ -2654,7 +2654,7 @@ function applyScopePcrResultToProgramData(programData: ProgramState, result: Rec
         priority: entry.severity === "critical" || entry.severity === "high" ? "high" : "medium",
         phaseId: entry.phase,
         question: `Raise a formal PCR for ${entry.description}?`,
-        recommendation: entry.pcrRationale || "ADAM detected a scope change signal that merits sponsor review.",
+        recommendation: entry.pcrRationale || "ATOS detected a scope change signal that merits sponsor review.",
         options: ["Raise PCR", "Monitor only"],
         createdAt: new Date().toISOString(),
         status: "pending",
@@ -2965,7 +2965,7 @@ function createAgentReviewDecision(
     phase: phaseId,
     agentId,
     title: `Review ${agentId} output`,
-    question: `ADAM has generated a ${agentId} update. Review and approve or defer.`,
+    question: `ATOS has generated a ${agentId} update. Review and approve or defer.`,
     recommendation: `Confidence was below the trust threshold. Reason: ${reason}`,
     createdAt: new Date().toISOString(),
     priority: "medium",
@@ -3355,7 +3355,7 @@ async function queueTriggeredRun(
       runId: inserted.data.id,
     } satisfies RunAgentRequest),
   }).catch((error) => {
-    console.warn("ADAM follow-on run invocation failed:", error);
+    console.warn("ATOS follow-on run invocation failed:", error);
   });
 }
 
@@ -3426,7 +3426,7 @@ async function reviewArtifact(
   phaseContext: string,
   priorPhaseContext: string,
 ): Promise<{ score: number; dimensions: Record<string, number>; improvements: string[] }> {
-  const systemPrompt = `You are an independent artifact quality reviewer for ADAM transformation programs.
+  const systemPrompt = `You are an independent artifact quality reviewer for ATOS transformation programs.
 Score the artifact on these dimensions (0-100 each):
 - completeness: are all expected sections present with substantive content?
 - specificity: does it reference actual program data (names, metrics, dates) vs generic statements?
@@ -3991,7 +3991,7 @@ function buildAgentPrompt(
 ): { system: string; user: string } {
   if (request.agentId === "narrative") {
     return {
-      system: `You are the ADAM Narrative Agent. Your job is to write a single, precise 2-3 sentence executive narrative for a transformation program.
+      system: `You are the ATOS Narrative Agent. Your job is to write a single, precise 2-3 sentence executive narrative for a transformation program.
 
 The narrative must answer three questions in plain English:
 1. Where is the transformation right now? (active phase, readiness %)
@@ -4010,7 +4010,7 @@ Input context will be provided as JSON.`,
 
   if (request.agentId === "plan") {
     return {
-      system: `You are the ADAM Plan Agent. Your job is to generate and maintain a structured transformation plan from the program's current state.
+      system: `You are the ATOS Plan Agent. Your job is to generate and maintain a structured transformation plan from the program's current state.
 
 The plan must contain:
 - milestones: Array of { id, phase, title, dueDate (ISO), status: "complete"|"on-track"|"at-risk"|"blocked"|"not-started", owner }
@@ -4032,7 +4032,7 @@ Input context will be provided as JSON.`,
 
   if (request.agentId === "risk") {
     return {
-      system: `You are the ADAM Risk Agent. Your job is to scan a transformation program and identify risks and blockers that the team should be aware of.
+      system: `You are the ATOS Risk Agent. Your job is to scan a transformation program and identify risks and blockers that the team should be aware of.
 
 For each item you identify, produce a structured entry. Focus on:
 - Risks: things that could go wrong if not addressed (probability x impact)
@@ -4213,7 +4213,7 @@ If no phases have meaningful data, return null.`,
 
   if (request.agentId === "change-impact") {
     return {
-      system: `You are ADAM's Change Impact Intelligence agent for a Brillio transformation program.
+      system: `You are ATOS's Change Impact Intelligence agent for a Brillio transformation program.
 
 Analyse the program context and return a JSON object with exactly this shape:
 {
@@ -4243,7 +4243,7 @@ Return ONLY valid JSON. No markdown fences.`,
 
   if (request.agentId === "stakeholder") {
     return {
-      system: `You are ADAM's Stakeholder Intelligence agent for a Brillio transformation program.
+      system: `You are ATOS's Stakeholder Intelligence agent for a Brillio transformation program.
 
 Return a JSON object with exactly this shape:
 {
@@ -4275,7 +4275,7 @@ Return ONLY valid JSON. No markdown fences.`,
 
   if (isProgramLevelAdoptionAgent(request.agentId, request.phaseId)) {
     return {
-      system: `You are ADAM's Adoption Intelligence agent for a Brillio transformation program.
+      system: `You are ATOS's Adoption Intelligence agent for a Brillio transformation program.
 
 Return a JSON object with exactly this shape:
 {
@@ -4305,7 +4305,7 @@ Return ONLY valid JSON.`,
 
   if (request.agentId === "health-heatmap") {
     return {
-      system: `You are ADAM's Health Heatmap agent for a Brillio transformation program following the ATOS 13-phase lifecycle.
+      system: `You are ATOS's Health Heatmap agent for a Brillio transformation program following the ATOS 13-phase lifecycle.
 
 Return a JSON object with exactly this shape:
 {
@@ -4335,7 +4335,7 @@ Use "grey" for phases not yet started. Return ONLY valid JSON.`,
 
   if (request.agentId === "retro") {
     return {
-      system: `You are ADAM's Retrospective agent for a Brillio ATOS transformation phase.
+      system: `You are ATOS's Retrospective agent for a Brillio ATOS transformation phase.
 Analyse the phase context and return a JSON object with exactly this shape:
 {
   "wentWell": [
@@ -4365,7 +4365,7 @@ Return ONLY valid JSON. No markdown fences.`,
 
   if (request.agentId === "deck") {
     return {
-      system: `You are ADAM's Executive Deck agent for a Brillio transformation program.
+      system: `You are ATOS's Executive Deck agent for a Brillio transformation program.
 Generate a structured executive presentation and return a JSON object with exactly this shape:
 {
   "title": "string",
@@ -4392,7 +4392,7 @@ Generate 8-12 slides. Return ONLY valid JSON.`,
 
   if (request.agentId === "deck-section") {
     return {
-      system: `You are ADAM's Executive Deck section agent. Regenerate a SINGLE slide of a given type for a transformation programme.
+      system: `You are ATOS's Executive Deck section agent. Regenerate a SINGLE slide of a given type for a transformation programme.
 Return ONLY valid JSON (no markdown):
 {
   "slide": {
@@ -4412,7 +4412,7 @@ Rules: Keep the same slideNumber as the existing slide. Focus ONLY on the reques
 
   if (request.agentId === "narrative-refine") {
     return {
-      system: `You are ADAM's Narrative Refinement agent. Refine an existing programme narrative based on a specific instruction.
+      system: `You are ATOS's Narrative Refinement agent. Refine an existing programme narrative based on a specific instruction.
 Return ONLY valid JSON (no markdown):
 { "narrative": "string", "generatedAt": "<ISO>", "confidence": 0.0-1.0, "dataPoints": ["string"] }
 Rules: Apply the refinementInstruction to the existingNarrative. Keep it 2-3 sentences. Maintain factual accuracy from the programme data. If the instruction is empty, improve clarity and conciseness.`,
@@ -4422,7 +4422,7 @@ Rules: Apply the refinementInstruction to the existingNarrative. Keep it 2-3 sen
 
   if (request.agentId === "board-pack") {
     return {
-      system: `You are ADAM's Board Pack Assembler. Synthesise all available programme data into a unified board-ready document with consistent tone and flow.
+      system: `You are ATOS's Board Pack Assembler. Synthesise all available programme data into a unified board-ready document with consistent tone and flow.
 Return ONLY valid JSON (no markdown):
 {
   "title": "Board Pack — <Programme Name> — <Month Year>",
@@ -4446,7 +4446,7 @@ Rules: Always include sections: executive-summary, status, risks, outlook. Add f
 
   if (request.agentId === "scope-pcr") {
     return {
-      system: `You are ADAM's Scope & PCR Intelligence agent for a Brillio transformation program.
+      system: `You are ATOS's Scope & PCR Intelligence agent for a Brillio transformation program.
 Analyse the program for scope creep and change request signals. Return a JSON object:
 {
   "scopeSignals": [
@@ -4591,7 +4591,7 @@ Return JSON only:
 
   if (request.agentId === "pattern-extract") {
     return {
-      system: `You are ADAM's Pattern Extraction agent for a Brillio transformation program.
+      system: `You are ATOS's Pattern Extraction agent for a Brillio transformation program.
 Extract reusable patterns from the program history and return a JSON object with exactly this shape:
 {
   "patterns": [
@@ -4627,7 +4627,7 @@ Return ONLY valid JSON.`,
 
   if (request.agentId === "input-quality") {
     return {
-      system: `You are the ADAM Input Quality Assessor for the ${request.phaseId} phase of an ATOS transformation program.
+      system: `You are the ATOS Input Quality Assessor for the ${request.phaseId} phase of an ATOS transformation program.
 
 Your job is to evaluate whether the inputs provided are sufficient for agents to generate high-quality artifacts for this phase.
 
@@ -4651,7 +4651,7 @@ Return ONLY valid JSON in this exact shape:
 
   if (request.agentId === "artifact-reviewer") {
     return {
-      system: `You are an independent artifact quality reviewer for ADAM transformation programs.
+      system: `You are an independent artifact quality reviewer for ATOS transformation programs.
 Return ONLY valid JSON:
 { "score": 0-100, "dimensions": { "completeness": 0-100, "specificity": 0-100, "actionability": 0-100, "consistency": 0-100 }, "improvements": ["specific suggestion 1", "specific suggestion 2"] }`,
       user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
@@ -4660,7 +4660,7 @@ Return ONLY valid JSON:
 
   if (request.agentId === "exit-criteria-generator") {
     return {
-      system: `You are an ADAM exit criteria generator for ATOS transformation programs.
+      system: `You are an ATOS exit criteria generator for ATOS transformation programs.
 
 Generate specific, measurable, program-tailored exit criteria for the ${request.phaseId} phase.
 Each criterion must reference actual program data where possible and never be generic.
@@ -4684,7 +4684,7 @@ Return ONLY valid JSON:
 
   if (request.agentId === "decision-advisor") {
     return {
-      system: `You are the ADAM Decision Advisor for transformation programs.
+      system: `You are the ATOS Decision Advisor for transformation programs.
 Analyse the decision and generate structured option analysis to help the program team decide.
 
 Return ONLY valid JSON:
@@ -4711,7 +4711,7 @@ Return ONLY valid JSON:
 
   if (request.agentId === "contradiction-detector") {
     return {
-      system: `You are the ADAM Contradiction Detector. Scan the provided program artifacts and identify logical contradictions.
+      system: `You are the ATOS Contradiction Detector. Scan the provided program artifacts and identify logical contradictions.
 
 Return ONLY valid JSON:
 {
@@ -4733,7 +4733,7 @@ Return ONLY valid JSON:
 
   if (request.agentId === "dependency-check") {
     return {
-      system: `You are the ADAM Cross-Phase Dependency Checker.
+      system: `You are the ATOS Cross-Phase Dependency Checker.
 Verify that the current phase artifacts are consistent with and build upon the prior approved phase.
 
 Return ONLY valid JSON:
@@ -4755,7 +4755,7 @@ Return ONLY valid JSON:
 
   if (request.agentId === "benefits-tracker") {
     return {
-      system: `You are the ADAM Benefits Tracker for transformation programs.
+      system: `You are the ATOS Benefits Tracker for transformation programs.
 Compare the original program success metrics against current evidence and rate each KPI.
 
 When the context contains "kpiBaselines" (human-entered KPIs from the Strategy
@@ -4798,7 +4798,7 @@ Return ONLY valid JSON:
 
   if (request.agentId === "handoff-quality") {
     return {
-      system: `You are the ADAM Handoff Quality Reviewer.
+      system: `You are the ATOS Handoff Quality Reviewer.
 Assess whether this phase handoff document is complete enough to properly brief the next phase.
 
 Return ONLY valid JSON:
@@ -4815,7 +4815,7 @@ Return ONLY valid JSON:
 
   if (request.agentId === "scope-creep-monitor") {
     return {
-      system: `You are the ADAM Scope Creep Monitor.
+      system: `You are the ATOS Scope Creep Monitor.
 Compare the original program scope with current delivery artifacts and identify scope drift.
 
 Return ONLY valid JSON:
@@ -4834,7 +4834,7 @@ Return ONLY valid JSON:
 
   if (request.agentId === "benchmark-comparator") {
     return {
-      system: `You are the ADAM Benchmark Comparator.
+      system: `You are the ATOS Benchmark Comparator.
 Compare this program's profile against similar programs in the pattern library and provide calibrated assessment.
 
 Return ONLY valid JSON:
@@ -4862,7 +4862,7 @@ Return ONLY valid JSON:
 
   if (request.agentId === "meeting-notes") {
     return {
-      system: `You are the ADAM Meeting Notes Extractor for transformation programs.
+      system: `You are the ATOS Meeting Notes Extractor for transformation programs.
 Extract structured program data from meeting notes or workshop outputs.
 
 Return ONLY valid JSON:
@@ -4889,7 +4889,7 @@ Return ONLY valid JSON:
 
   if (request.agentId === "daily-briefing") {
     return {
-      system: `You are the ADAM Daily Briefing Agent.
+      system: `You are the ATOS Daily Briefing Agent.
 Generate a concise, actionable briefing for the programme manager at the start of each day.
 
 Return ONLY valid JSON:
@@ -4917,7 +4917,7 @@ Rules:
 
   if (request.agentId === "weekly-digest") {
     return {
-      system: `You are the ADAM Weekly Digest Generator.
+      system: `You are the ATOS Weekly Digest Generator.
 Produce a concise Monday morning summary for the program manager.
 
 Return ONLY valid JSON:
@@ -4940,7 +4940,7 @@ Return ONLY valid JSON:
 
   if (request.agentId === "twin-sync") {
     return {
-      system: `You are the ADAM Transformation Twin synchroniser. Extract a knowledge graph from the program artifacts.
+      system: `You are the ATOS Transformation Twin synchroniser. Extract a knowledge graph from the program artifacts.
 
 Return ONLY valid JSON:
 {
@@ -4957,7 +4957,7 @@ Return ONLY valid JSON:
 
   if (request.agentId === "phase-completion-estimator") {
     return {
-      system: `You are the ADAM Phase Completion Estimator.
+      system: `You are the ATOS Phase Completion Estimator.
 Compute an evidence-based completion estimate for the requested phase.
 
 Return ONLY valid JSON:
@@ -4988,7 +4988,7 @@ Return ONLY valid JSON:
 
   if (request.agentId === "agent-schedule-optimiser") {
     return {
-      system: `You are the ADAM Agent Schedule Optimiser.
+      system: `You are the ATOS Agent Schedule Optimiser.
 Recommend refresh cadences for monitoring agents based on recent programme activity.
 
 Return ONLY valid JSON:
@@ -5309,7 +5309,7 @@ Rules: Extract verbatim or near-verbatim from transcript. Max 10 decisions, 15 a
   }
 
   const system = [
-    `You are the ADAM ${request.phaseId} phase agent running server-side for the transformation program "${String(programData.programName || "Untitled Program")}".`,
+    `You are the ATOS ${request.phaseId} phase agent running server-side for the transformation program "${String(programData.programName || "Untitled Program")}".`,
     "You must produce structured, execution-ready output.",
     "If you reach a decision point where you need human input to continue, output the following marker on its own line and stop:",
     `[PAUSE_FOR_DECISION: {"reason": "...", "question": "...", "options": ["..."]}]`,
@@ -6658,7 +6658,7 @@ Deno.serve(async (req) => {
           payload: { error: message },
         });
       } catch (eventError) {
-        console.warn("ADAM failure event emit failed:", eventError);
+        console.warn("ATOS failure event emit failed:", eventError);
       }
     }
     return jsonResponse({ error: message }, 500);

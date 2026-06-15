@@ -62,7 +62,7 @@ export function DecisionsView({ program, activeRuns, onResolve }: DecisionsViewP
     return (
       <EmptyState
         context="All decisions resolved"
-        explanation="ADAM has no open human-agent handoffs in this program right now."
+        explanation="ATOS has no open human-agent handoffs in this program right now."
         recommendation="Run the next agent or wait for the next escalation to arrive."
       />
     );

@@ -172,7 +172,7 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
             <div>
               <h2 className="v3-wizard-title">What kind of programme is this?</h2>
               <p style={{ fontSize: 13, color: "var(--v3-text-muted)", marginTop: 4 }}>
-                ADAM will tailor the methodology, gates, and suggested KPIs to match your programme type.
+                ATOS will tailor the methodology, gates, and suggested KPIs to match your programme type.
               </p>
             </div>
 

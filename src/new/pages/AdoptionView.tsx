@@ -41,7 +41,7 @@ export function AdoptionView({
     return (
       <NotReadyCard
         title="Adoption Readiness"
-        reason="ADAM needs phases beyond 50% completion to model adoption dynamics."
+        reason="ATOS needs phases beyond 50% completion to model adoption dynamics."
         onTrigger={onTriggerAdoption}
         triggerLabel="Assess adoption"
         isRunning={isRunning}

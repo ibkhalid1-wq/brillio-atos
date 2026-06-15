@@ -399,7 +399,7 @@ function RaidCard({
           <div className="v3-governance-decision-meta">
             <StatusBadge variant={priorityVariant(entry.severity)} size="sm" />
             <StatusBadge variant={entry.status === "monitoring" ? "escalated" : "open"} size="sm" label={entry.status === "monitoring" ? "Monitoring" : "Open"} />
-            {entry.source === "agent" ? <StatusBadge variant="active" size="sm" label="ADAM" /> : null}
+            {entry.source === "agent" ? <StatusBadge variant="active" size="sm" label="ATOS" /> : null}
           </div>
           <div className="v3-governance-decision-age">
             <RelativeTime date={entry.createdAt} />

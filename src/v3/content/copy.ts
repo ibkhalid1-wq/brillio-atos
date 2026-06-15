@@ -38,8 +38,8 @@ export const COPY = {
     switchConfirm: "Switch to a different programme?",
   },
   onboarding: {
-    welcomeTitle: "Welcome to ADAM",
-    welcomeBody: "ADAM guides your transformation programme from strategy to value realisation. Let's set up your programme.",
+    welcomeTitle: "Welcome to ATOS",
+    welcomeBody: "ATOS guides your transformation programme from strategy to value realisation. Let's set up your programme.",
     step1: "Name your programme",
     step2: "Define your objective",
     step3: "Set your phase timeline",

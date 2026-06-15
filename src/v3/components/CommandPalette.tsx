@@ -451,7 +451,7 @@ export function CommandPalette({
                 background: "var(--v3-accent)",
                 animation: "v3-pulse 1s ease-in-out infinite",
               }} />
-              ADAM is thinking…
+              ATOS is thinking…
             </div>
           )}
 

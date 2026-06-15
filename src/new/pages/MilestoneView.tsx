@@ -305,7 +305,7 @@ export function MilestoneView({
       {!milestones.length ? (
         <NotReadyCard
           title="Milestones"
-          reason="ADAM generates milestones once phases are underway. You can also add milestones manually."
+          reason="ATOS generates milestones once phases are underway. You can also add milestones manually."
           onTrigger={onTriggerMilestones}
           triggerLabel="Generate milestones"
           isRunning={milestonesIsRunning}

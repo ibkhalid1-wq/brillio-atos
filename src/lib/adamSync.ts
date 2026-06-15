@@ -84,7 +84,7 @@ export async function loadProgramsFromSupabase(): Promise<Record<string, unknown
     .eq("is_deleted", false)
     .order("updated_at", { ascending: false });
   if (error) {
-    console.error("ADAM sync load error:", error);
+    console.error("ATOS sync load error:", error);
     return [];
   }
   return (data || []).map(normalizeProgramShape);
@@ -100,7 +100,7 @@ export async function loadProgramFromSupabase(programId: string): Promise<Record
     .maybeSingle();
   if (error || !data) {
     if (error) {
-      console.error("ADAM sync single-program load error:", error);
+      console.error("ATOS sync single-program load error:", error);
     }
     return null;
   }
@@ -141,7 +141,7 @@ export async function saveProgramToSupabase(program: Record<string, unknown>): P
     .from("adam_programs")
     .upsert(upsertRecord, { onConflict: "id" });
   if (error) {
-    console.error("ADAM sync save error:", error);
+    console.error("ATOS sync save error:", error);
     return false;
   }
   return true;
@@ -176,7 +176,7 @@ export async function deleteProgramFromSupabase(programId: string): Promise<bool
     .update({ is_deleted: true, updated_at: new Date().toISOString() })
     .eq("id", programId);
   if (error) {
-    console.error("ADAM sync delete error:", error);
+    console.error("ATOS sync delete error:", error);
     return false;
   }
   return true;
@@ -204,7 +204,7 @@ export async function savePortfolioToSupabase(portfolioData: Record<string, unkn
       updated_at: new Date().toISOString(),
     }, { onConflict: "owner_id" });
   if (error) {
-    console.error("ADAM portfolio sync error:", error);
+    console.error("ATOS portfolio sync error:", error);
     return false;
   }
   return true;
@@ -233,14 +233,14 @@ export async function writeAuditLog(entry: {
   try {
     const { error } = await supabase.from("adam_audit_log").insert(auditRecord);
     if (error) {
-      console.warn("ADAM audit log write failed:", error.message);
+      console.warn("ATOS audit log write failed:", error.message);
       if (typeof localStorage !== "undefined") {
         const pending = JSON.parse(localStorage.getItem("adam_pending_audits") || "[]") as AuditLogInsert[];
         localStorage.setItem("adam_pending_audits", JSON.stringify([...pending, auditRecord]));
       }
     }
   } catch (err) {
-    console.warn("ADAM audit log exception:", err);
+    console.warn("ATOS audit log exception:", err);
   }
 }
 
@@ -293,7 +293,7 @@ export async function getAgentRuns(programId: string, limit = 50): Promise<Agent
     .limit(limit);
 
   if (error) {
-    console.error("ADAM agent runs load error:", error);
+    console.error("ATOS agent runs load error:", error);
     return [];
   }
 
@@ -310,7 +310,7 @@ export async function getPausedRuns(programId: string): Promise<AgentRun[]> {
     .order("created_at", { ascending: false });
 
   if (error) {
-    console.error("ADAM paused runs load error:", error);
+    console.error("ATOS paused runs load error:", error);
     return [];
   }
 

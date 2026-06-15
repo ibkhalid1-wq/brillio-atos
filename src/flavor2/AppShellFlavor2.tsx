@@ -197,7 +197,7 @@ function deriveMission(program: ProgramSummary | null, phases: PhaseRecord[]) {
   return {
     programName: program.name || "Unnamed program",
     objective: program.objective || "",
-    narrative: program.narrative || "ADAM will generate a program narrative once phases have measurable progress.",
+    narrative: program.narrative || "ATOS will generate a program narrative once phases have measurable progress.",
     currentFocus: activePhase.currentObjective || activePhase.nextAction || program.activePhaseName || "",
     expectedValue: projectedValue,
     readiness: program.readiness,
@@ -212,7 +212,7 @@ function deriveMission(program: ProgramSummary | null, phases: PhaseRecord[]) {
 function deriveMissionBrief(program: ProgramSummary | null, selectedPhase: PhaseRecord, recommendations: Array<{ title: string; body: string }>) {
   if (!program) {
     return {
-      title: "ADAM Recommendation",
+      title: "ATOS Recommendation",
       objective: "",
       risk: "",
       recommendation: "",
@@ -221,7 +221,7 @@ function deriveMissionBrief(program: ProgramSummary | null, selectedPhase: Phase
   }
 
   return {
-    title: "ADAM Recommendation",
+    title: "ATOS Recommendation",
     objective: selectedPhase.currentObjective,
     risk: selectedPhase.currentRisk,
     recommendation: recommendations[0]
@@ -282,7 +282,7 @@ function derivePhaseRecords(program: ProgramSummary | null): PhaseRecord[] {
         title: nextAction,
         body: planActions[0]?.rationale
           || gateReview?.recommendation
-          || "ADAM has identified the next best move based on current phase evidence.",
+          || "ATOS has identified the next best move based on current phase evidence.",
         actions: ["Run phase agent", "Refresh narrative"],
       },
       {
@@ -345,7 +345,7 @@ function derivePhaseRecommendations(
     .filter((action) => matchPhaseToken(selectedPhase.id, selectedPhase.name, action.phase))
     .map((action) => ({
       title: action.action,
-      body: action.rationale || "ADAM recommends this next move based on current phase evidence.",
+      body: action.rationale || "ATOS recommends this next move based on current phase evidence.",
       phaseId: selectedPhase.id,
     }));
 
@@ -1124,7 +1124,7 @@ export default function AppShellFlavor2() {
                 {primaryCopilotMoment ? (
                   <div className="f2-action-plan-callout">
                     <div>
-                      <span className="f2-eyebrow">ADAM can help now</span>
+                      <span className="f2-eyebrow">ATOS can help now</span>
                       <strong>{primaryCopilotMoment.title}</strong>
                       <p>{primaryCopilotMoment.body}</p>
                     </div>
@@ -1282,7 +1282,7 @@ export default function AppShellFlavor2() {
               <article className="f2-panel">
                 <div className="f2-panel-heading">
                   <span className="f2-eyebrow">Embedded copilot</span>
-                  <h3>ADAM inside the workflow</h3>
+                  <h3>ATOS inside the workflow</h3>
                 </div>
                 <div className="f2-copilot-stack">
                   {selectedPhase.copilotMoments.map((moment) => (
@@ -1506,7 +1506,7 @@ export default function AppShellFlavor2() {
     <div className="f2-shell">
       <header className="f2-topbar">
         <div className="f2-brand">
-          <span className="f2-brand-mark">ADAM</span>
+          <span className="f2-brand-mark">ATOS</span>
           <span className="f2-brand-subtitle">
             Primary Shell{activeProgram ? ` · ${activeProgram.name}` : ""}
           </span>

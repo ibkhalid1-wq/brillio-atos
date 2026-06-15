@@ -223,7 +223,7 @@ function buildWorkspacePrompt(
   const digest = buildProgramStateDigest(inner);
 
   return [
-    `You are ADAM Copilot acting as the ${identity} for the "${workspaceId}" workspace.`,
+    `You are ATOS Copilot acting as the ${identity} for the "${workspaceId}" workspace.`,
     `Program name: ${programName}`,
     `Program objective: ${objective}`,
     digest ? `Current program state:\n${digest}` : "",

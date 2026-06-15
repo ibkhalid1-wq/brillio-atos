@@ -49,7 +49,7 @@ export function AdvisorBar({ programId, workspaceId, persona, nudge, onNavigate 
       await sendMessage(input.trim());
       setInput("");
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "Unable to reach ADAM Copilot.");
+      setError(caughtError instanceof Error ? caughtError.message : "Unable to reach ATOS Copilot.");
       setPanelOpen(true);
     }
   };
@@ -121,7 +121,7 @@ export function AdvisorBar({ programId, workspaceId, persona, nudge, onNavigate 
                   onClick={() => {
                     setInput(prompt);
                     void sendMessage(prompt).catch((caughtError) => {
-                      setError(caughtError instanceof Error ? caughtError.message : "Unable to reach ADAM Copilot.");
+                      setError(caughtError instanceof Error ? caughtError.message : "Unable to reach ATOS Copilot.");
                     });
                   }}
                 >

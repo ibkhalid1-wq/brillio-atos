@@ -61,7 +61,7 @@ export function AcceleratorsView({ program, onNavigate, patternsCount, onExtract
     return (
       <EmptyState
         context="No accelerator context yet"
-        explanation="Accelerators become useful once a live program is available and ADAM can relate patterns, plans, and reusable playbooks to it."
+        explanation="Accelerators become useful once a live program is available and ATOS can relate patterns, plans, and reusable playbooks to it."
         recommendation="Choose a program first, then reopen Accelerators."
       />
     );
@@ -74,7 +74,7 @@ export function AcceleratorsView({ program, onNavigate, patternsCount, onExtract
           <div>
             <div className="adam-heading-lg">Accelerators</div>
             <div className="mt-2 adam-body adam-muted">
-              Reusable packs, patterns, and proven delivery assets are now surfaced through the new ADAM shell instead of the legacy marketplace.
+              Reusable packs, patterns, and proven delivery assets are now surfaced through the new ATOS shell instead of the legacy marketplace.
             </div>
           </div>
           <div className="adam-row" style={{ gap: 8, flexWrap: "wrap" }}>
@@ -87,7 +87,7 @@ export function AcceleratorsView({ program, onNavigate, patternsCount, onExtract
       <div className="adam-card p-5">
         <div className="adam-row adam-space-between" style={{ gap: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
           <div className="adam-stack" style={{ gap: 6 }}>
-            <div className="adam-heading-lg">Brillio ADAM Accelerators</div>
+            <div className="adam-heading-lg">Brillio ATOS Accelerators</div>
             <div className="adam-body adam-muted">
               Curated marketplace packs that bundle Brillio delivery methods, agent outputs, and reusable transformation playbooks into focused execution experiences.
             </div>
@@ -136,7 +136,7 @@ export function AcceleratorsView({ program, onNavigate, patternsCount, onExtract
         <div className="adam-card adam-stack p-5">
           <div className="adam-title">Organisation patterns</div>
           <div className="adam-body adam-muted">
-            Pattern extraction runs after closure and gate approvals, so ADAM can turn what worked here into reusable accelerators for the next program.
+            Pattern extraction runs after closure and gate approvals, so ATOS can turn what worked here into reusable accelerators for the next program.
           </div>
           <div className="adam-list">
             <div className="adam-list-item">

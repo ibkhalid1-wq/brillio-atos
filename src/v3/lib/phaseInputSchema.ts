@@ -28,7 +28,7 @@ export const PHASE_INPUT_SCHEMAS: Record<string, PhaseInputSchema> = {
   strategy: {
     phaseId: "strategy",
     title: "Strategy inputs",
-    description: "Provide the foundational context ADAM needs to generate strategy artifacts.",
+    description: "Provide the foundational context ATOS needs to generate strategy artifacts.",
     fields: [
       { id: "businessObjective", label: "Business objective", type: "textarea", placeholder: "What outcome is this programme trying to achieve?", required: true },
       { id: "sponsor", label: "Executive sponsor", type: "text", placeholder: "Name and title", required: true },
@@ -75,7 +75,7 @@ export const PHASE_INPUT_SCHEMAS: Record<string, PhaseInputSchema> = {
   build: {
     phaseId: "build",
     title: "Build inputs",
-    description: "Track build progress and highlight what ADAM should know.",
+    description: "Track build progress and highlight what ATOS should know.",
     fields: [
       { id: "sprintVelocity", label: "Current sprint velocity", type: "number", placeholder: "Story points per sprint", required: false },
       { id: "blockers", label: "Active blockers", type: "textarea", placeholder: "What is blocking delivery right now?", required: false },
@@ -139,7 +139,7 @@ export function getPhaseInputSchema(phaseId: string): PhaseInputSchema {
   return PHASE_INPUT_SCHEMAS[phaseId] ?? {
     phaseId,
     title: "Phase inputs",
-    description: "Provide any context ADAM needs to generate artifacts for this phase.",
+    description: "Provide any context ATOS needs to generate artifacts for this phase.",
     fields: [
       { id: "context", label: "Phase context", type: "textarea", placeholder: "Key information, decisions made, or constraints for this phase", required: false },
       { id: "objectives", label: "Phase objectives", type: "textarea", placeholder: "What must be achieved before this phase can close?", required: false },

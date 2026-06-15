@@ -25,7 +25,7 @@ export function NarrativeBlock({
           <div>
             <div className="adam-title" style={{ color: "var(--adam-slate-400)" }}>Program narrative</div>
             <div className="mt-2 adam-body adam-muted">
-              ADAM will write a 2–3 sentence executive summary once a phase has measurable progress.
+              ATOS will write a 2–3 sentence executive summary once a phase has measurable progress.
               It updates automatically as the program advances — no plan required.
             </div>
           </div>

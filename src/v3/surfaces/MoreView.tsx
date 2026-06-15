@@ -80,7 +80,7 @@ const WORKSPACE_GROUPS: Array<{
 ];
 
 // ---------------------------------------------------------------------------
-// ADAM Marketplace accelerators (Brillio's pre-built packs)
+// ATOS Marketplace accelerators (Brillio's pre-built packs)
 // ---------------------------------------------------------------------------
 
 type MarketplaceItem = {
@@ -351,13 +351,13 @@ export default function MoreView({ currentView, onSelectView, renderView, active
         </section>
       ) : null}
 
-      {/* ADAM Marketplace */}
+      {/* ATOS Marketplace */}
       {(!filtered || marketplaceItems.length > 0) ? (
         <section className="v3-workspace-group v3-marketplace-section">
           <div className="v3-marketplace-header">
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-                <h2 className="v3-workspace-group-label" style={{ margin: 0 }}>ADAM Marketplace</h2>
+                <h2 className="v3-workspace-group-label" style={{ margin: 0 }}>ATOS Marketplace</h2>
                 <span className="v3-chip blue" style={{ fontSize: 10 }}>Brillio Accelerators</span>
               </div>
               <p style={{ fontSize: 12, color: "var(--v3-text-muted)", margin: 0 }}>

@@ -188,7 +188,7 @@ export function GateReviewPanel({
           <div className="adam-list-item" style={{ background: "rgba(255,255,255,0.03)" }}>
             <div className="adam-micro adam-muted">Recommendation</div>
             <div className="mt-2 adam-body" style={{ fontStyle: "italic", color: "#dbe4f7" }}>
-              {review.recommendation || "ADAM did not return a recommendation yet."}
+              {review.recommendation || "ATOS did not return a recommendation yet."}
             </div>
           </div>
 

@@ -72,7 +72,7 @@ export function buildFieldAssistPrompt(mode: FieldAssistMode, ctx: FieldAssistCo
   const current = ctx.currentValue.trim();
 
   return [
-    "You are ADAM, a senior delivery consultant helping a Program Manager complete a phase input field.",
+    "You are ATOS, a senior delivery consultant helping a Program Manager complete a phase input field.",
     "",
     "PROGRAMME CONTEXT:",
     ...contextLines,

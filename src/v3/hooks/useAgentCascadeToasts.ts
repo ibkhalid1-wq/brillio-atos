@@ -40,7 +40,7 @@ export function useAgentCascadeToasts(activeRuns: AgentRun[]) {
         const reason = TRIGGER_REASONS[run.agent_id];
         window.dispatchEvent(new CustomEvent("atlas-v3-toast", {
           detail: {
-            message: `ADAM is updating ${label}${reason ? ` ${reason}` : ""}`,
+            message: `ATOS is updating ${label}${reason ? ` ${reason}` : ""}`,
             icon: "◎",
           },
         }));

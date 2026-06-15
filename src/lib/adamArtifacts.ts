@@ -15,7 +15,7 @@ export function registerAdamArtifactsRuntime(nextRuntime: RuntimeMap) {
 function invoke(name: string, args: any[]) {
   const fn = runtime[name];
   if (typeof fn !== "function") {
-    throw new Error(`ADAM artifact runtime not registered for ${name}`);
+    throw new Error(`ATOS artifact runtime not registered for ${name}`);
   }
   return fn(...args);
 }

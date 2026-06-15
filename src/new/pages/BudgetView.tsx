@@ -117,7 +117,7 @@ export function BudgetView({
               <div className="adam-stack" style={{ gap: 6 }}>
                 <div className="adam-heading-xl">Budget & Benefits</div>
                 <div className="adam-body adam-muted">
-                  ADAM is tracking financial health, value timing, and phase-level cost posture.
+                  ATOS is tracking financial health, value timing, and phase-level cost posture.
                 </div>
                 {program.budgetGeneratedAt ? (
                   <div className="adam-micro adam-muted">
@@ -131,7 +131,7 @@ export function BudgetView({
                 onClick={onTriggerBudget}
                 disabled={budgetIsRunning}
               >
-                {budgetIsRunning ? "Re-assessing…" : "Re-assess with ADAM"}
+                {budgetIsRunning ? "Re-assessing…" : "Re-assess with ATOS"}
               </button>
             </div>
 
@@ -318,7 +318,7 @@ export function BudgetView({
           <section className="adam-card p-5">
             <div className="adam-title">Seed budget inputs</div>
             <div className="mt-2 adam-body adam-muted">
-              You can still give ADAM cost and benefits context now so the next assessment is grounded in real program economics.
+              You can still give ATOS cost and benefits context now so the next assessment is grounded in real program economics.
             </div>
             <div className="adam-grid two" style={{ marginTop: 16 }}>
               <div className="adam-stack" style={{ gap: 6 }}>

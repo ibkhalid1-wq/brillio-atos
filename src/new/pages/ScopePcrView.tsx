@@ -29,7 +29,7 @@ export function ScopePcrView({
     return (
       <NotReadyCard
         title="Scope & PCR"
-        reason="ADAM monitors for scope changes once 2 or more phases are underway."
+        reason="ATOS monitors for scope changes once 2 or more phases are underway."
         onTrigger={onTriggerScopePcr}
         triggerLabel="Scan for scope creep"
         isRunning={isRunning}

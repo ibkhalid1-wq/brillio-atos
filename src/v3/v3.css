@@ -829,7 +829,7 @@ select {
     transform var(--v3-dur-fast) ease;
 }
 
-/* ── Ask ADAM button in rail ── */
+/* ── Ask ATOS button in rail ── */
 .v3-command-rail-adam-btn {
   display: flex;
   align-items: center;
@@ -8176,7 +8176,7 @@ button.v3-chip:disabled {
   border-color: rgba(33, 23, 71, 0.18);
 }
 
-/* ─── Topbar Ask ADAM button ─────────────────────────────────────────── */
+/* ─── Topbar Ask ATOS button ─────────────────────────────────────────── */
 .v3-topbar-ask-adam-btn {
   display: inline-flex;
   align-items: center;
@@ -8464,7 +8464,7 @@ button.v3-chip:disabled {
   color: #b42318;
 }
 
-/* ── ADAM Copilot trigger button ── */
+/* ── ATOS Copilot trigger button ── */
 .v3-copilot-btn {
   display: flex;
   align-items: center;
@@ -10102,7 +10102,7 @@ button, [role="button"] {
 }
 
 /* ==========================================================================
-   ADAM MARKETPLACE
+   ATOS MARKETPLACE
    ========================================================================== */
 
 .v3-marketplace-section {

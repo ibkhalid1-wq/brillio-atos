@@ -461,7 +461,7 @@ export function PhaseRailPanels({
 
           {intelTab === "uploads" ? (
             <div className="v3-rail-list">
-              <div className="v3-rail-empty">Import source documents to ground ADAM's analysis. Files are parsed into phase inputs automatically.</div>
+              <div className="v3-rail-empty">Import source documents to ground ATOS's analysis. Files are parsed into phase inputs automatically.</div>
               <button type="button" className="v3-button primary v3-button-inline-xs v3-rail-footer-link" onClick={onUploadDocument}>Upload document →</button>
               <button type="button" className="v3-button ghost v3-button-inline-xs v3-rail-footer-link" onClick={() => onOpenMoreView("documents")}>Manage documents →</button>
             </div>

@@ -115,7 +115,7 @@ export function RisksView({
       <div className="adam-stack" style={{ maxWidth: 800 }}>
         <NotReadyCard
           title="Risks & blockers"
-          reason="ADAM needs at least one phase with measurable progress before it can scan for risks and blockers."
+          reason="ATOS needs at least one phase with measurable progress before it can scan for risks and blockers."
           onTrigger={onTriggerRiskAgent}
           triggerLabel="Scan for risks"
           isRunning={raidAgentRunning}
@@ -196,7 +196,7 @@ export function RisksView({
               </div>
             ) : (
               <button type="button" className="adam-button-ghost" onClick={onTriggerRiskAgent}>
-                Re-scan with ADAM
+                Re-scan with ATOS
               </button>
             )}
             <button type="button" className="adam-button" onClick={() => setAddOpen(true)}>
@@ -237,8 +237,8 @@ export function RisksView({
 
         <div className="adam-risk-hero-footer adam-micro adam-muted">
           {program.raidGeneratedAt
-            ? `Last scanned by ADAM: ${new Date(program.raidGeneratedAt).toLocaleString()}`
-            : "ADAM scan has not run yet. Manual entries will still be preserved."}
+            ? `Last scanned by ATOS: ${new Date(program.raidGeneratedAt).toLocaleString()}`
+            : "ATOS scan has not run yet. Manual entries will still be preserved."}
         </div>
       </div>
 
@@ -424,7 +424,7 @@ export function RisksView({
                 <div className="adam-row adam-risk-entry-badges">
                   <span className={`adam-badge ${TYPE_BADGE[entry.type]}`}>{TYPE_LABELS[entry.type]}</span>
                   <span className={`adam-badge ${SEVERITY_BADGE[entry.severity]}`}>{entry.severity}</span>
-                  {entry.source === "agent" ? <span className="adam-badge slate">ADAM</span> : null}
+                  {entry.source === "agent" ? <span className="adam-badge slate">ATOS</span> : null}
                   {entry.status === "monitoring" ? <span className="adam-badge blue">Monitoring</span> : null}
                   {entry.status === "closed" ? <span className="adam-badge green">Closed</span> : null}
                 </div>
@@ -446,7 +446,7 @@ export function RisksView({
                 <div className="adam-risk-meta">
                   <span className="adam-risk-meta-chip">{getPhaseName(program, entry.phase)}</span>
                   {entry.owner ? <span className="adam-risk-meta-chip">Owner: {entry.owner}</span> : null}
-                  <span className="adam-risk-meta-chip">{entry.source === "human" ? "Logged manually" : "Detected by ADAM"}</span>
+                  <span className="adam-risk-meta-chip">{entry.source === "human" ? "Logged manually" : "Detected by ATOS"}</span>
                 </div>
                 {entry.mitigation ? <div className="adam-risk-note">Mitigation: {entry.mitigation}</div> : null}
                 {entry.status === "closed" && entry.closureNote ? (

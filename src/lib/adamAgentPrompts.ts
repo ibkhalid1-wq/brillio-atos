@@ -538,16 +538,16 @@ interface AgentPromptSpec {
   outputSchema: ObjectSchema;
 }
 
-const COMMON_PROMPT_BLOCK = `You are part of ADAM, an AI-native transformation operating system built to coordinate human leaders and specialist agents across the full transformation lifecycle. You are not writing a generic consulting memo. You are producing a decision-ready, machine-parseable artifact that downstream agents and human decision makers will rely on. Every statement must be grounded in the supplied context, prior phase evidence, your memory, and the incoming handoff. If the context is incomplete, say so through calibrated confidence or by pausing for human input; do not fabricate sponsor names, baselines, ROI numbers, regulatory requirements, systems, or approvals.
+const COMMON_PROMPT_BLOCK = `You are part of ATOS, an AI-native transformation operating system built to coordinate human leaders and specialist agents across the full transformation lifecycle. You are not writing a generic consulting memo. You are producing a decision-ready, machine-parseable artifact that downstream agents and human decision makers will rely on. Every statement must be grounded in the supplied context, prior phase evidence, your memory, and the incoming handoff. If the context is incomplete, say so through calibrated confidence or by pausing for human input; do not fabricate sponsor names, baselines, ROI numbers, regulatory requirements, systems, or approvals.
 
 Your audience is enterprise transformation leadership. Write with crisp professional language, precise nouns, and measurable claims. Prefer falsifiable statements over slogans. When asked for assumptions, make them explicit and testable. When asked for risks, state the risk, what it threatens, and why it matters now. When asked for recommendations, recommend the next best action for this program, not generic best practice. If an output field calls for a list, fill it with concrete items. If the available evidence is weak, narrow the recommendation rather than pretending certainty.
 
-You must always think in terms of transformation flow: business problem to outcome, outcome to capability, capability to agent design, agent design to delivery, delivery to controls, controls to value realization. The human should be able to take your output and immediately understand what ADAM should do next, what assumptions remain open, and where risk or ambiguity still sits. The JSON contract is mandatory because the ADAM runtime will parse your response directly.`;
+You must always think in terms of transformation flow: business problem to outcome, outcome to capability, capability to agent design, agent design to delivery, delivery to controls, controls to value realization. The human should be able to take your output and immediately understand what ATOS should do next, what assumptions remain open, and where risk or ambiguity still sits. The JSON contract is mandatory because the ATOS runtime will parse your response directly.`;
 
 function buildPrompt(spec: AgentPromptSpec): string {
   return [
     "IDENTITY",
-    `You are ${spec.identity} with ${spec.expertise}. You are operating within ADAM, an AI-native transformation operating system.`,
+    `You are ${spec.identity} with ${spec.expertise}. You are operating within ATOS, an AI-native transformation operating system.`,
     "",
     COMMON_PROMPT_BLOCK,
     "",
@@ -599,7 +599,7 @@ const AGENT_PROMPT_SPECS: Record<AdamAgentId, AgentPromptSpec> = {
     agentName: "Strategy Advisor",
     identity: "a Principal Transformation Strategist with 20 years of experience at McKinsey, Bain, and leading technology companies",
     expertise: "translating ambiguous executive ambition into falsifiable transformation theses, measurable outcomes, and investment-ready value stories",
-    mission: "Turn the business challenge into a transformation thesis that is specific enough to test, narrow enough to govern, and strong enough to justify enterprise action. The transformation thesis must explain what value will move, through which operating change, for which stakeholders, in what timeframe, and with what key assumptions. You are setting the strategic spine for every downstream ADAM agent, so clarity matters more than breadth.",
+    mission: "Turn the business challenge into a transformation thesis that is specific enough to test, narrow enough to govern, and strong enough to justify enterprise action. The transformation thesis must explain what value will move, through which operating change, for which stakeholders, in what timeframe, and with what key assumptions. You are setting the strategic spine for every downstream ATOS agent, so clarity matters more than breadth.",
     responsibilities: [
       "Restate the business challenge in precise language, isolate the underlying operating problem, and describe why the issue matters now rather than later.",
       "Define three to five measurable desired outcomes with named metrics, baselines, targets, owners, and timeframes that can anchor subsequent business cases.",
@@ -1239,7 +1239,7 @@ export const AGENT_OUTPUT_SCHEMAS: Record<AdamAgentId, ObjectSchema> = Object.fr
 export function getAgentPrompt(agentId: AdamAgentId): AgentPromptBundle {
   const prompt = ADAM_AGENT_PROMPTS[agentId];
   if (!prompt) {
-    throw new Error(`Unknown ADAM agent prompt: ${agentId}`);
+    throw new Error(`Unknown ATOS agent prompt: ${agentId}`);
   }
   return prompt;
 }
@@ -1247,7 +1247,7 @@ export function getAgentPrompt(agentId: AdamAgentId): AgentPromptBundle {
 export function getAgentOutputSchema(agentId: AdamAgentId): ObjectSchema {
   const schema = AGENT_OUTPUT_SCHEMAS[agentId];
   if (!schema) {
-    throw new Error(`Unknown ADAM agent output schema: ${agentId}`);
+    throw new Error(`Unknown ATOS agent output schema: ${agentId}`);
   }
   return schema;
 }

@@ -34,7 +34,7 @@ export function CriticalPathView({
     return (
       <NotReadyCard
         title="Critical path"
-        reason="ADAM needs meaningful phase progress before it can derive the path to value."
+        reason="ATOS needs meaningful phase progress before it can derive the path to value."
         onTrigger={onTriggerCriticalPath}
         triggerLabel="Derive critical path"
         isRunning={isRunning}
@@ -67,7 +67,7 @@ export function CriticalPathView({
               onClick={onTriggerCriticalPath}
               disabled={isRunning}
             >
-              {isRunning ? "Re-deriving…" : "Re-derive with ADAM"}
+              {isRunning ? "Re-deriving…" : "Re-derive with ATOS"}
             </button>
           </div>
         </div>

@@ -1,7 +1,7 @@
 /**
  * Program Knowledge Graph — the mandatory system of record.
  *
- * ADAM's truth is a connected graph of entities, not a set of disconnected
+ * ATOS's truth is a connected graph of entities, not a set of disconnected
  * surfaces. This module derives, from normalized programme data, a typed graph
  * of nodes (phases, artifacts, decisions, risks, milestones, gates) and edges
  * (contains, feeds, depends-on, affects, threatens, reviews) that captures full

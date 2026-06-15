@@ -39,7 +39,7 @@ export function HealthHeatmapView({
     return (
       <NotReadyCard
         title="Program Health"
-        reason="ADAM needs at least one phase in the lifecycle before it can score overall program health."
+        reason="ATOS needs at least one phase in the lifecycle before it can score overall program health."
         onTrigger={onTriggerHealthHeatmap}
         triggerLabel="Refresh health"
         isRunning={isRunning}

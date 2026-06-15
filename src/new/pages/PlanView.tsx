@@ -76,7 +76,7 @@ export function PlanView({
     return (
       <NotReadyCard
         title="Transformation plan"
-        reason="ADAM needs a program objective and at least one phase underway before it can generate the plan."
+        reason="ATOS needs a program objective and at least one phase underway before it can generate the plan."
         onTrigger={onTriggerPlan}
         triggerLabel="Generate plan"
         isRunning={planIsRunning}

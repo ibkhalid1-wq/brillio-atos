@@ -1,6 +1,13 @@
 import React from "react";
 import type { ProgramSummary } from "@/new/types";
 import { derivePhaseExecutiveSummary, type PhaseVerdict } from "@/v3/lib/phaseExecutiveSummary";
+import { derivePhaseMethodologyCompleteness } from "@/v3/lib/phaseMethodologyCompleteness";
+
+function methodologyTone(pct: number): "green" | "amber" | "red" {
+  if (pct >= 100) return "green";
+  if (pct >= 50) return "amber";
+  return "red";
+}
 
 const VERDICT_TONE: Record<PhaseVerdict, "green" | "amber" | "red"> = {
   ready: "green",
@@ -60,6 +67,11 @@ export function PhaseExecutiveSummary({
     [program, phaseId],
   );
 
+  const methodology = React.useMemo(
+    () => derivePhaseMethodologyCompleteness(program, phaseId),
+    [program, phaseId],
+  );
+
   if (!summary) return null;
 
   const tone = VERDICT_TONE[summary.verdict];
@@ -90,6 +102,14 @@ export function PhaseExecutiveSummary({
           {summary.blockerCount > 0 ? (
             <span className="v3-chip muted">{summary.blockerCount} blocker{summary.blockerCount === 1 ? "" : "s"}</span>
           ) : null}
+          {methodology && methodology.total > 0 ? (
+            <span
+              className={`v3-chip ${methodologyTone(methodology.pct)}`}
+              title={`Methodology · ${methodology.present} of ${methodology.total} requirements met`}
+            >
+              M {methodology.pct}%
+            </span>
+          ) : null}
         </span>
         <span className="v3-exec-snapshot-caret">{open ? "▴" : "▾"}</span>
       </button>
@@ -111,6 +131,14 @@ export function PhaseExecutiveSummary({
                 Blockers{summary.criticalCount > 0 ? ` · ${summary.criticalCount} critical` : ""}
               </span>
             </div>
+            {methodology && methodology.total > 0 ? (
+              <div className="v3-exec-snapshot-metric">
+                <span className="v3-exec-snapshot-metric-val">{methodology.pct}%</span>
+                <span className="v3-exec-snapshot-metric-lbl">
+                  Methodology · {methodology.present} of {methodology.total} met
+                </span>
+              </div>
+            ) : null}
           </div>
 
           {summary.topBlocker ? (

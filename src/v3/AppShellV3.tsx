@@ -1184,7 +1184,7 @@ export default function AppShellV3() {
     if (readiness.score > 5 && readiness.score < Math.max(40, threshold - 20)) {
       lastProactiveTriggerRef.current = triggerKey;
       pushV3Toast(
-        `Gate readiness is ${readiness.score}% — ADAM is running a readiness assessment to identify blockers.`,
+        `Gate readiness is ${readiness.score}% — ATOS is running a readiness assessment to identify blockers.`,
         { tone: "info", duration: 4000 },
       );
       void runProgramAgent({
@@ -1951,7 +1951,7 @@ export default function AppShellV3() {
 
   const handleSaveStageNote = useCallback(async (phaseId: string, note: string) => {
     await addProgramNote(note, "stage-note", { phaseId });
-    pushV3Toast("Note saved. ADAM will use it on the next run.", { tone: "success", duration: 3000 });
+    pushV3Toast("Note saved. ATOS will use it on the next run.", { tone: "success", duration: 3000 });
   }, [addProgramNote]);
 
   const handleSavePhaseInputs = useCallback(async (phaseId: string, inputs: Record<string, string>) => {
@@ -2113,7 +2113,7 @@ export default function AppShellV3() {
     await updateProgramData(activeProgram.id, payload, activeProgram.updatedAt);
     await refreshPrograms();
     await refreshPhaseTasks();
-    pushV3Toast("Answer saved. ADAM will continue from here.", { tone: "success", duration: 2500 });
+    pushV3Toast("Answer saved. ATOS will continue from here.", { tone: "success", duration: 2500 });
   }, [activePhaseId, activeProgram, activeProgramId, refreshPhaseTasks, refreshPrograms, updatePhaseTask, updateProgramData]);
 
   const handleAcknowledgeTask = useCallback((taskId: string) => {
@@ -2189,7 +2189,7 @@ export default function AppShellV3() {
         objective: WALKTHROUGH_PROGRAM.strategy?.desiredOutcome || "",
       });
       await refreshPrograms();
-      pushV3Toast("Demo programme loaded — ADAM is ready to explore.", { tone: "success", duration: 3000 });
+      pushV3Toast("Demo programme loaded — ATOS is ready to explore.", { tone: "success", duration: 3000 });
     } catch {
       pushV3Toast("Could not load demo programme.", { tone: "error", duration: 4000 });
     }
@@ -2268,7 +2268,7 @@ export default function AppShellV3() {
             {/* Capability tiles */}
             <div className="v3-welcome-tiles">
               {[
-                { icon: "◎", title: "Programme narrative", body: "ADAM reads your objective and generates a live status narrative updated by agents continuously." },
+                { icon: "◎", title: "Programme narrative", body: "ATOS reads your objective and generates a live status narrative updated by agents continuously." },
                 { icon: "⬡", title: "Gate readiness", body: "Automated gate checks surface blockers, missing artefacts, and approval confidence before each milestone." },
                 { icon: "⋯", title: "Action intelligence", body: "A prioritised action plan per phase, driven by risk signals, decisions, and delivery health." },
                 { icon: "◫", title: "Executive deck", body: "One-click SteerCo packs and closure reports generated from live programme data." },

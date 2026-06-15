@@ -34,7 +34,7 @@ export function ReadinessSignal({ canProceed, blockers, topRisks, phase, onActio
         </div>
         <div className="adam-body adam-muted">
           {canProceed
-            ? "ADAM sees enough evidence to move this phase forward cleanly."
+            ? "ATOS sees enough evidence to move this phase forward cleanly."
             : topBlocker
               ? topBlocker.label
               : "A few critical conditions still need attention."}

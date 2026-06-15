@@ -51,7 +51,7 @@ export function RetroView({
     return (
       <NotReadyCard
         title="Retrospectives"
-        reason="ADAM generates a retrospective once a phase reaches 90% completion."
+        reason="ATOS generates a retrospective once a phase reaches 90% completion."
       />
     );
   }
@@ -120,7 +120,7 @@ export function RetroView({
       {!retro ? (
         <NotReadyCard
           title={`${phase.displayName} retrospective`}
-          reason="ADAM generates a retrospective once a phase reaches 90% completion."
+          reason="ATOS generates a retrospective once a phase reaches 90% completion."
           onTrigger={() => onTriggerRetro(phase.id)}
           triggerLabel="Generate retrospective"
           isRunning={isRunning}

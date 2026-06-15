@@ -1,5 +1,5 @@
 /**
- * Shared UI helper functions and constants used across ADAM surfaces.
+ * Shared UI helper functions and constants used across ATOS surfaces.
  * Single source of truth — do not duplicate these in individual components.
  */
 import { confidenceLabel, getConfidenceColor } from "@/v3/lib/confidenceScore";

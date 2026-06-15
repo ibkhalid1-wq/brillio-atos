@@ -63,7 +63,7 @@ export function DeckView({
       <section className="adam-card p-8" style={{ maxWidth: 860, margin: "0 auto", textAlign: "center" }}>
         <div className="adam-heading-xl">Generate the executive deck</div>
         <div className="mt-3 adam-body adam-muted">
-          ADAM will draft the slide narrative, talking points, data callouts, and presenter notes for an executive-ready program update.
+          ATOS will draft the slide narrative, talking points, data callouts, and presenter notes for an executive-ready program update.
         </div>
         <button
           type="button"

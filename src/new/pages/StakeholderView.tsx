@@ -103,7 +103,7 @@ export function StakeholderView({
     return (
       <NotReadyCard
         title="Stakeholder Map"
-        reason="ADAM needs at least one phase underway to identify stakeholders and engagement signals."
+        reason="ATOS needs at least one phase underway to identify stakeholders and engagement signals."
         onTrigger={onTriggerStakeholders}
         triggerLabel="Generate stakeholder map"
         isRunning={isRunning}

@@ -33,7 +33,7 @@ export function ChangeImpactView({
     return (
       <NotReadyCard
         title="Change Impact Assessment"
-        reason="ADAM needs at least one phase underway to assess organisational change load."
+        reason="ATOS needs at least one phase underway to assess organisational change load."
         onTrigger={onTriggerChangeImpact}
         triggerLabel="Assess change impact"
         isRunning={isRunning}

@@ -110,7 +110,7 @@ export function MilestoneCard({
           disabled={isRunning}
           style={{ minHeight: 30, padding: "0 10px", fontSize: 12 }}
         >
-          {isRunning ? "Re-deriving…" : "Re-derive with ADAM"}
+          {isRunning ? "Re-deriving…" : "Re-derive with ATOS"}
         </button>
         <button
           type="button"
@@ -192,7 +192,7 @@ export function MilestoneCard({
         ) : null}
         <NotReadyCard
           title="Milestones"
-          reason="ADAM needs at least one phase with measurable progress before it can derive milestone timing and dependencies."
+          reason="ATOS needs at least one phase with measurable progress before it can derive milestone timing and dependencies."
           onTrigger={onTrigger}
           triggerLabel="Generate milestones"
           isRunning={isRunning}
@@ -312,7 +312,7 @@ export function MilestoneCard({
                             </span>
                           ) : null}
                           <span className="adam-micro adam-muted">
-                            {milestone.source === "human" ? "Human milestone" : "Derived by ADAM"}
+                            {milestone.source === "human" ? "Human milestone" : "Derived by ATOS"}
                           </span>
                         </div>
                       </div>

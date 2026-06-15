@@ -86,7 +86,7 @@ export function AppBar({
           <div className="acb-appbar-left">
             <button type="button" className="acb-brand" onClick={() => onNavigate("home")}>
               <SparklesIcon className="acb-brand-icon" />
-              <span className="acb-brand-name">ADAM</span>
+              <span className="acb-brand-name">ATOS</span>
             </button>
             <div className="acb-divider-v" />
             <div className="relative">

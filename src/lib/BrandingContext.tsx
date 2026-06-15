@@ -12,7 +12,7 @@ const DEFAULT_BRANDING: BrandingConfig = {
   primaryColor: "#6366f1",
   accentColor: "#00a0df",
   logoUrl: null,
-  orgName: "ADAM",
+  orgName: "ATOS",
 };
 
 export const BrandingContext = createContext<BrandingConfig>(DEFAULT_BRANDING);

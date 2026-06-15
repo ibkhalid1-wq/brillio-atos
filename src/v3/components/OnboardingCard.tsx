@@ -112,7 +112,7 @@ export default function OnboardingCard(props: OnboardingCardProps) {
           {programName === "New Program" || programName === "New Programme" || !programName ? "Let's set up your programme" : `Set up ${programName}`}
         </div>
         <div style={{ fontSize: 14, color: "var(--v3-text-muted)", lineHeight: 1.7, maxWidth: 380, margin: "0 auto 24px" }}>
-          ADAM needs a few details to get started — the programme objective, which phases you're in, and any existing documents.
+          ATOS needs a few details to get started — the programme objective, which phases you're in, and any existing documents.
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 280, margin: "0 auto" }}>
           <button type="button" className="v3-button primary" onClick={onSetup}>
@@ -128,7 +128,7 @@ export default function OnboardingCard(props: OnboardingCardProps) {
       </div>
 
       <div className="v3-card-sm" style={{ marginTop: 8 }}>
-        <div className="v3-card-title">What ADAM will do once set up</div>
+        <div className="v3-card-title">What ATOS will do once set up</div>
         {[
           { icon: "◎", text: "Generate a programme narrative from your objective and documents" },
           { icon: "⋯", text: "Build a prioritised action plan for each ATOS phase" },
