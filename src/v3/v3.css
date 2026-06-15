@@ -878,101 +878,87 @@ select {
   opacity: 1;
 }
 
-/* ── Brillio logo bar at top of rail ── */
+/* ── Brand lockup at top of rail ── */
 .v3-command-rail-brillio-logo {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 12px 4px;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px 8px;
   overflow: hidden;
   white-space: nowrap;
   flex-shrink: 0;
-  min-height: 34px;
+  min-height: 44px;
 }
 
-/* ── Collapsed "B" mark ── */
-.v3-command-rail-brillio-mark {
+/* ── Collapsed: "ATOS" wordmark, centered ── */
+.v3-command-rail-atos-mark {
   font-family: 'Inter', -apple-system, sans-serif;
   font-size: 13px;
   font-weight: 800;
-  color: rgba(255, 255, 255, 0.9);
-  letter-spacing: -0.01em;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.92);
   line-height: 1;
   flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
+  opacity: 1;
+  transition: opacity var(--v3-dur-mid) ease;
+}
+
+/* ── Expanded: large Brillio logo + ATOS badge ── */
+.v3-command-rail-brand-lockup {
+  display: none;
   align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.12);
-  /* visible only when narrow */
-  opacity: 1;
-  transition: opacity var(--v3-dur-mid) ease, transform var(--v3-dur-mid) ease;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
 }
-
-/* ── Full wordmark ── */
-.v3-command-rail-brillio-wordmark {
-  width: 52px;
-  height: 16px;
+.v3-command-rail-brillio-img {
+  height: 28px;
+  width: auto;
+  object-fit: contain;
   flex-shrink: 0;
-  color: rgba(255, 255, 255, 0.9);
-  /* hidden by default, shown when expanded */
-  opacity: 0;
-  transform: translateX(-4px);
-  transition: opacity var(--v3-dur-mid) ease, transform var(--v3-dur-mid) ease;
+  filter: brightness(0) invert(1);
+  opacity: 0.95;
 }
-
+/* ATOS reads identically in both states: same wordmark typography, divided
+   from the Brillio logo by a hairline when expanded. */
 .v3-command-rail-brillio-badge {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-family: 'Inter', -apple-system, sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.35);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  padding: 1px 5px;
-  line-height: 1.6;
-  opacity: 0;
-  transform: translateX(-4px);
-  transition: opacity var(--v3-dur-mid) ease, transform var(--v3-dur-mid) ease;
+  color: rgba(255, 255, 255, 0.92);
+  line-height: 1;
+  padding-left: 10px;
+  border-left: 1px solid rgba(255, 255, 255, 0.16);
   flex-shrink: 0;
 }
 
-/* When rail expands: hide B mark, show wordmark + badge */
-.v3-command-rail:hover .v3-command-rail-brillio-mark,
-.v3-command-rail:focus-within .v3-command-rail-brillio-mark,
-.v3-command-rail.is-pinned .v3-command-rail-brillio-mark {
-  opacity: 0;
-  transform: translateX(-4px);
+/* When rail expands: hide ATOS mark, reveal the full Brillio lockup */
+.v3-command-rail:hover .v3-command-rail-atos-mark,
+.v3-command-rail:focus-within .v3-command-rail-atos-mark,
+.v3-command-rail.is-pinned .v3-command-rail-atos-mark {
+  display: none;
+}
+.v3-command-rail:hover .v3-command-rail-brand-lockup,
+.v3-command-rail:focus-within .v3-command-rail-brand-lockup,
+.v3-command-rail.is-pinned .v3-command-rail-brand-lockup {
+  display: flex;
+}
+.v3-command-rail:hover .v3-command-rail-brillio-logo,
+.v3-command-rail:focus-within .v3-command-rail-brillio-logo,
+.v3-command-rail.is-pinned .v3-command-rail-brillio-logo {
+  justify-content: flex-start;
 }
 
-.v3-command-rail:hover .v3-command-rail-brillio-wordmark,
-.v3-command-rail:hover .v3-command-rail-brillio-badge,
-.v3-command-rail:focus-within .v3-command-rail-brillio-wordmark,
-.v3-command-rail:focus-within .v3-command-rail-brillio-badge,
-.v3-command-rail.is-pinned .v3-command-rail-brillio-wordmark,
-.v3-command-rail.is-pinned .v3-command-rail-brillio-badge {
-  opacity: 1;
-  transform: translateX(0);
-}
-
-/* ── Narrow at rest: logo area ── */
-.v3-command-rail:not(:hover):not(:focus-within):not(.is-pinned) .v3-command-rail-brillio-logo {
-  justify-content: center;
-  padding-left: 0;
-  padding-right: 0;
-  padding-bottom: 2px;
-}
-
-/* ── Narrow at rest: brand card → compact avatar chip ── */
+/* ── Narrow at rest: brand card → compact avatar chip, centered ── */
 .v3-command-rail:not(:hover):not(:focus-within):not(.is-pinned) .v3-command-rail-brand-wrap {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 2px;
+  padding: 0;
 }
 .v3-command-rail:not(:hover):not(:focus-within):not(.is-pinned) .v3-command-rail-brand {
   width: 44px;
@@ -989,6 +975,7 @@ select {
   width: 26px;
   height: 26px;
   border-radius: 8px;
+  margin: 0;
 }
 
 /* ── Narrow at rest: hide chevron + dropdown ── */
@@ -997,13 +984,6 @@ select {
 }
 .v3-command-rail:not(:hover):not(:focus-within):not(.is-pinned) .v3-command-rail-program-menu {
   display: none !important;
-}
-
-/* Collapsed class variant */
-.v3-command-rail.is-collapsed:not(:hover):not(:focus-within):not(.is-pinned) .v3-command-rail-brillio-logo {
-  justify-content: center;
-  padding-left: 0;
-  padding-right: 0;
 }
 
 /* ─────────────────────────────────────────────── */
@@ -1133,8 +1113,10 @@ select {
   display: none;
 }
 
-.v3-command-rail.is-collapsed:not(:hover):not(:focus-within):not(.is-pinned) .v3-command-rail-item,
-.v3-command-rail.is-collapsed:not(:hover):not(:focus-within):not(.is-pinned) .v3-command-rail-usercard {
+/* Narrow at rest (default OR explicitly collapsed): centre every control so
+   icons sit on a single vertical axis. */
+.v3-command-rail:not(:hover):not(:focus-within):not(.is-pinned) .v3-command-rail-item,
+.v3-command-rail:not(:hover):not(:focus-within):not(.is-pinned) .v3-command-rail-usercard {
   width: 48px;
   min-height: 48px;
   justify-content: center;
@@ -1144,18 +1126,36 @@ select {
   margin-right: auto;
 }
 
-.v3-command-rail.is-collapsed:not(:hover):not(:focus-within):not(.is-pinned) .v3-command-rail-status-row {
+.v3-command-rail:not(:hover):not(:focus-within):not(.is-pinned) .v3-command-rail-modes,
+.v3-command-rail:not(:hover):not(:focus-within):not(.is-pinned) .v3-command-rail-tools,
+.v3-command-rail:not(:hover):not(:focus-within):not(.is-pinned) .v3-command-rail-user-wrap {
+  align-items: center;
+}
+
+.v3-command-rail:not(:hover):not(:focus-within):not(.is-pinned) .v3-command-rail-status-row {
   justify-content: center;
   padding-left: 0;
   padding-right: 0;
 }
 
-.v3-command-rail.is-collapsed:not(:hover):not(:focus-within):not(.is-pinned) .v3-command-rail-divider {
+.v3-command-rail:not(:hover):not(:focus-within):not(.is-pinned) .v3-command-rail-divider {
   margin-left: auto;
   margin-right: auto;
 }
 
-.v3-command-rail.is-collapsed:not(:hover):not(:focus-within):not(.is-pinned) .v3-command-rail-badge {
+/* Centre the active-item accent bar around the icon instead of pinning it to
+   the panel edge, which reads as off-centre when collapsed. */
+.v3-command-rail:not(:hover):not(:focus-within):not(.is-pinned) .v3-command-rail-item.active::before {
+  left: 50%;
+  top: auto;
+  bottom: 4px;
+  width: 16px;
+  height: 2px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+}
+
+.v3-command-rail:not(:hover):not(:focus-within):not(.is-pinned) .v3-command-rail-badge {
   right: 6px;
 }
 
@@ -10009,73 +10009,101 @@ button, [role="button"] {
 /* Programme actions dropdown — always dark since rail is always dark */
 .v3-command-rail-program-menu {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 8px);
   left: 0;
   right: 0;
   z-index: 250;
-  background: #1e1541;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
-  padding: 5px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  background: linear-gradient(180deg, #221847 0%, #19113a 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 6px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 18px 44px rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
   gap: 1px;
-  min-width: 164px;
+  min-width: 208px;
+  transform-origin: top center;
+  animation: v3-rail-menu-in 0.16s var(--v3-ease);
+}
+
+@keyframes v3-rail-menu-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .v3-command-rail-program-menu-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
-  border-radius: 7px;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 9px;
   border: 0;
   background: transparent;
-  color: rgba(255, 255, 255, 0.65);
-  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12.5px;
   font-weight: 500;
   text-align: left;
   cursor: pointer;
-  transition: background 0.12s, color 0.12s;
+  transition: background 0.12s ease, color 0.12s ease;
   white-space: nowrap;
   font-family: var(--v3-font);
 }
 
+.v3-command-rail-program-menu-item svg {
+  color: rgba(255, 255, 255, 0.45);
+  flex-shrink: 0;
+  transition: color 0.12s ease;
+}
+
 .v3-command-rail-program-menu-item:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.07);
+  color: #ffffff;
+}
+
+.v3-command-rail-program-menu-item:hover svg {
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .v3-command-rail-program-menu-item.danger {
   color: #f87171;
 }
 
+.v3-command-rail-program-menu-item.danger svg {
+  color: #f87171;
+}
+
 .v3-command-rail-program-menu-item.danger:hover {
-  background: rgba(239, 68, 68, 0.15);
+  background: rgba(239, 68, 68, 0.14);
+  color: #fca5a5;
+}
+
+.v3-command-rail-program-menu-item.danger:hover svg {
   color: #fca5a5;
 }
 
 .v3-command-rail-program-menu-section-label {
-  font-size: 10px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.35);
+  font-size: 9.5px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.4);
   text-transform: uppercase;
-  letter-spacing: 0.07em;
-  padding: 4px 10px 2px;
+  letter-spacing: 0.1em;
+  padding: 8px 10px 3px;
   font-family: var(--v3-font);
   pointer-events: none;
 }
 
 .v3-command-rail-program-menu-divider {
   height: 1px;
-  background: rgba(255, 255, 255, 0.1);
-  margin: 4px 6px;
+  background: rgba(255, 255, 255, 0.09);
+  margin: 5px 8px;
 }
 
 .v3-command-rail-program-menu-item.is-active {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.95);
+  background: rgba(99, 102, 241, 0.16);
+  color: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.22);
 }
 
 /* ── Rail Health card ───────────────────────────────────────────────────────── */

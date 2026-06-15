@@ -238,15 +238,15 @@ export function CommandRail({
     >
     {/* Panel is an inner overlay that expands visually without shifting the flex layout */}
     <div className="v3-command-rail-panel">
-      {/* ── Brillio logo ── */}
+      {/* ── Brand lockup ── */}
       <div className="v3-command-rail-brillio-logo" title="Brillio ATOS · Agentic Transformation OS">
-        {/* Collapsed: small B mark, always visible when rail is narrow */}
-        <span className="v3-command-rail-brillio-mark" aria-hidden="true">B</span>
-        {/* Expanded: full wordmark + badge */}
-        <svg className="v3-command-rail-brillio-wordmark" viewBox="0 0 80 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Brillio">
-          <text x="0" y="15" fontFamily="'Inter', sans-serif" fontWeight="700" fontSize="14" letterSpacing="0.5" fill="currentColor">brillio</text>
-        </svg>
-        <span className="v3-command-rail-brillio-badge">ATOS</span>
+        {/* Collapsed: ATOS wordmark, centered */}
+        <span className="v3-command-rail-atos-mark" aria-hidden="true">ATOS</span>
+        {/* Expanded: large Brillio logo + ATOS badge */}
+        <span className="v3-command-rail-brand-lockup">
+          <img className="v3-command-rail-brillio-img" src="/brillio-logo.png" alt="Brillio" />
+          <span className="v3-command-rail-brillio-badge">ATOS</span>
+        </span>
       </div>
 
       {/* ── Programme identity + portfolio switcher ── */}
