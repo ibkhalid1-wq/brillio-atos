@@ -5579,6 +5579,80 @@ button.v3-chip:focus-visible,
   letter-spacing: 0.04em;
 }
 
+/* "Since your last visit" recap card */
+.v3-change-summary {
+  border: 1px solid var(--v3-border);
+  border-left: 3px solid var(--v3-accent);
+  border-radius: var(--v3-radius);
+  background: var(--v3-surface-2);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+.v3-change-summary-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.v3-change-summary-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--v3-text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.v3-change-summary-dismiss {
+  font-size: 11px;
+  color: var(--v3-text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+.v3-change-summary-dismiss:hover {
+  color: var(--v3-accent);
+}
+.v3-change-summary-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.v3-change-summary-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.v3-change-summary-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.v3-change-summary-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--v3-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.v3-change-summary-tag {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--v3-text-muted);
+}
+.v3-change-summary-more {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--v3-text-muted);
+}
+
 /* Context drawer — Blockers tab */
 .v3-context-blockers {
   display: flex;
