@@ -60,6 +60,7 @@ import { getPhaseSequence } from "@/v3/lib/methodology";
 import { computePhaseReadiness, getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
 import { confidenceRag, getGateThreshold } from "@/v3/lib/confidenceScore";
 import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
+import { exportAsText } from "@/v3/lib/documentExport";
 const DecideView = React.lazy(() => import("@/v3/surfaces/DecideView"));
 import GateReopenModal from "@/v3/components/GateReopenModal";
 import RemediationNoteModal from "@/v3/components/RemediationNoteModal";
@@ -2007,6 +2008,12 @@ export default function AppShellV3() {
     openMoreView("documents");
   }, [openMoreView]);
 
+  const handleDownloadArtifact = useCallback((artifactId: string) => {
+    const artifact = activeProgram?.artifacts?.find((a) => a.id === artifactId);
+    if (!artifact) return;
+    exportAsText(artifact.title, artifact.contentSummary || "(No content summary available.)");
+  }, [activeProgram]);
+
   const handleApproveGate = useCallback(async (phaseId: string) => {
     if (!activeProgram) return;
 
@@ -2675,6 +2682,7 @@ export default function AppShellV3() {
           onOpenDocuments={() => openMoreView("documents")}
           onOpenMoreView={(view) => openMoreView(view)}
           onOpenDecide={() => navigateSurface("decide")}
+          onDownloadArtifact={handleDownloadArtifact}
           generationHint={artifactGenerationHint}
         />
       ) : null}

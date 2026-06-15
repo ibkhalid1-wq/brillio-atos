@@ -11,7 +11,7 @@ import { derivePhaseBlockers, BLOCKER_CATEGORY_LABEL, type BlockerSeverity } fro
 // Phase inputs now live inline as the primary working area in StageView, so the
 // drawer is a focused copilot: Tasks + Blockers + Intelligence (artifacts / graph).
 type ContextSection = "tasks" | "blockers" | "intelligence";
-type IntelligenceView = "artifacts" | "graph";
+type IntelligenceView = "artifacts" | "graph" | "uploads";
 
 const SEVERITY_DOT: Record<BlockerSeverity, string> = {
   critical: "var(--v3-red)",
@@ -34,6 +34,7 @@ interface ContextDrawerProps {
   onOpenDocuments: () => void;
   onOpenMoreView?: (view: V3MoreView) => void;
   onOpenDecide?: () => void;
+  onDownloadArtifact?: (artifactId: string) => void;
   generationHint?: GenerationHint | null;
 }
 
@@ -51,6 +52,7 @@ export function ContextDrawer({
   onOpenDocuments,
   onOpenMoreView,
   onOpenDecide,
+  onDownloadArtifact,
   generationHint,
 }: ContextDrawerProps) {
   const [activeSection, setActiveSection] = React.useState<ContextSection>("tasks");
@@ -176,6 +178,7 @@ export function ContextDrawer({
                 {([
                   ["artifacts", "Artifacts"],
                   ["graph", "Graph"],
+                  ["uploads", "Uploads"],
                 ] as Array<[IntelligenceView, string]>).map(([view, label]) => (
                   <button
                     key={view}
@@ -196,7 +199,12 @@ export function ContextDrawer({
                     What this phase needs, what exists, and how each piece connects — with quality and provenance.
                   </div>
                   <div className="v3-context-artifacts">
-                    <ArtifactLedger phase={phaseLedger} onOpenArtifact={() => onOpenDocuments()} generationHint={generationHint} />
+                    <ArtifactLedger
+                      phase={phaseLedger}
+                      onOpenArtifact={() => onOpenDocuments()}
+                      onDownloadArtifact={onDownloadArtifact}
+                      generationHint={generationHint}
+                    />
                   </div>
                   <div className="v3-context-docs-actions">
                     <button type="button" className="v3-button ghost" style={{ fontSize: 12 }} onClick={onUploadDocument}>
@@ -217,6 +225,54 @@ export function ContextDrawer({
                   </div>
                   <div className="v3-context-artifacts">
                     <KnowledgeGraphPanel program={program} phaseId={phaseId} />
+                  </div>
+                </>
+              ) : null}
+
+              {intelligenceView === "uploads" ? (
+                <>
+                  <div className="v3-card-title">Uploads</div>
+                  <div className="v3-context-docs-copy">
+                    Documents the team provided for this phase — the evidence ADAM reads from. Upload more to enrich the phase.
+                  </div>
+                  {(() => {
+                    const uploads = (phaseLedger?.artifacts ?? []).filter((node) => node.present && node.origin === "uploaded");
+                    if (uploads.length === 0) {
+                      return (
+                        <div className="v3-context-blockers-empty">
+                          No uploaded documents yet. Upload source material to ground this phase's artifacts.
+                        </div>
+                      );
+                    }
+                    return (
+                      <ul className="v3-context-uploads-list">
+                        {uploads.map((node) => (
+                          <li key={node.key} className="v3-context-upload">
+                            <div className="v3-context-upload-main">
+                              <span className="v3-context-upload-label">{node.label}</span>
+                              {node.evidence ? (
+                                <span className="v3-context-upload-meta">{node.evidence}</span>
+                              ) : null}
+                            </div>
+                            {node.artifactId && onDownloadArtifact ? (
+                              <button
+                                type="button"
+                                className="v3-button ghost"
+                                style={{ fontSize: 11, padding: "3px 8px" }}
+                                onClick={() => onDownloadArtifact(node.artifactId!)}
+                              >
+                                Download
+                              </button>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    );
+                  })()}
+                  <div className="v3-context-docs-actions">
+                    <button type="button" className="v3-button primary" style={{ fontSize: 12 }} onClick={onUploadDocument}>
+                      Upload document
+                    </button>
                   </div>
                 </>
               ) : null}

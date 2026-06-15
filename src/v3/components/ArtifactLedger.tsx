@@ -59,7 +59,15 @@ function GenerationBanner({ hint }: { hint: GenerationHint }) {
   );
 }
 
-function ArtifactRow({ node, onOpen }: { node: ArtifactNode; onOpen?: (artifactId: string) => void }) {
+function ArtifactRow({
+  node,
+  onOpen,
+  onDownload,
+}: {
+  node: ArtifactNode;
+  onOpen?: (artifactId: string) => void;
+  onDownload?: (artifactId: string) => void;
+}) {
   const state = STATE_META[node.state];
   const clickable = node.present && node.artifactId && onOpen;
   return (
@@ -118,6 +126,31 @@ function ArtifactRow({ node, onOpen }: { node: ArtifactNode; onOpen?: (artifactI
           ) : null}
         </div>
       ) : null}
+
+      {node.present && node.artifactId ? (
+        <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
+          {onOpen ? (
+            <button
+              type="button"
+              className="v3-button ghost"
+              style={{ fontSize: 11, padding: "3px 8px" }}
+              onClick={(e) => { e.stopPropagation(); onOpen(node.artifactId!); }}
+            >
+              Open →
+            </button>
+          ) : null}
+          {onDownload ? (
+            <button
+              type="button"
+              className="v3-button ghost"
+              style={{ fontSize: 11, padding: "3px 8px" }}
+              onClick={(e) => { e.stopPropagation(); onDownload(node.artifactId!); }}
+            >
+              Download
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -125,10 +158,12 @@ function ArtifactRow({ node, onOpen }: { node: ArtifactNode; onOpen?: (artifactI
 export function ArtifactLedger({
   phase,
   onOpenArtifact,
+  onDownloadArtifact,
   generationHint,
 }: {
   phase: PhaseArtifactSummary | null;
   onOpenArtifact?: (artifactId: string) => void;
+  onDownloadArtifact?: (artifactId: string) => void;
   generationHint?: GenerationHint | null;
 }) {
   if (!phase) {
@@ -162,7 +197,7 @@ export function ArtifactLedger({
 
       <div style={{ display: "grid", gap: 8 }}>
         {phase.artifacts.map((node) => (
-          <ArtifactRow key={node.key} node={node} onOpen={onOpenArtifact} />
+          <ArtifactRow key={node.key} node={node} onOpen={onOpenArtifact} onDownload={onDownloadArtifact} />
         ))}
         {!phase.artifacts.length ? (
           <div className="v3-context-artifacts-empty">No artifacts defined for this phase.</div>

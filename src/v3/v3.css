@@ -5659,6 +5659,44 @@ button.v3-chip:focus-visible,
   color: var(--v3-green);
 }
 
+/* Context drawer — Intelligence → Uploads */
+.v3-context-uploads-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.v3-context-upload {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--v3-border);
+  border-radius: 10px;
+  background: var(--v3-surface);
+}
+.v3-context-upload-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.v3-context-upload-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--v3-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.v3-context-upload-meta {
+  font-size: 11px;
+  color: var(--v3-text-muted);
+}
+
 .v3-inline-list {
   margin: 0;
   padding-left: 16px;
