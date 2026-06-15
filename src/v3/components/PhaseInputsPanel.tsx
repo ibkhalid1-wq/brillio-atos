@@ -67,7 +67,7 @@ function parseKpis(raw: unknown): PhaseKpi[] {
  * signal a PM sees agrees with the gate readiness score it feeds. Gives an
  * at-a-glance answer to "is this field good enough?" without leaving the screen.
  */
-function assessField(value: string | undefined, type: string): { label: string; tone: "green" | "amber" | "muted" } {
+export function assessField(value: string | undefined, type: string): { label: string; tone: "green" | "amber" | "muted" } {
   const v = (value ?? "").trim();
   if (!v) return { label: "Empty", tone: "muted" };
   if (type === "textarea") {

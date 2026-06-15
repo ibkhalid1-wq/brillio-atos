@@ -1226,17 +1226,7 @@ export default function StageView({
 
       {/* MIDDLE — live connector lines pinned to the real input-field and
           artifact elements in the side columns (always shown). */}
-      <section className="v3-phase-col v3-phase-col--map">
-        <div className="v3-zone-label">Flow</div>
-        <div className="v3-flow-control">
-          <div className="v3-flow-toggle-title">Input → artifact wiring</div>
-          <div className="v3-iomap-legend">
-            <span className="v3-iomap-legend-item"><i style={{ background: "#2DD4BF" }} /> Captured input</span>
-            <span className="v3-iomap-legend-item"><i style={{ background: "var(--v3-border)" }} /> Empty input</span>
-            <span className="v3-iomap-legend-note">Each field links to the artifacts it feeds — lines stay attached as fields or artifacts resize.</span>
-          </div>
-        </div>
-      </section>
+      <section className="v3-phase-col v3-phase-col--map" aria-hidden="true" />
 
       {/* BELOW — other phase-relevant cards, stretched full-width and stacked */}
       <div className="v3-phase-cards">

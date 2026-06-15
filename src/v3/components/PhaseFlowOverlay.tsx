@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import type { ProgramSummary } from "@/new/types";
 import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
 import { derivePhaseFlowEdges } from "@/v3/lib/phaseFlowEdges";
+import { assessField } from "@/v3/components/PhaseInputsPanel";
 
 /**
  * PhaseFlowOverlay — draws connector lines that are *pinned to the real DOM*:
@@ -25,7 +26,16 @@ interface PhaseFlowOverlayProps {
   enabled: boolean;
 }
 
-type Line = { x1: number; y1: number; x2: number; y2: number; filled: boolean; key: string };
+type FieldTone = "green" | "amber" | "muted";
+type Line = { x1: number; y1: number; x2: number; y2: number; tone: FieldTone; key: string };
+
+// Stroke styling per source-field status, mirroring the inline field-quality
+// badges (green = good/filled, amber = brief/fair, muted = empty).
+const TONE_STYLE: Record<FieldTone, { stroke: string; width: number; opacity: number }> = {
+  green: { stroke: "#2DD4BF", width: 1.6, opacity: 0.55 },
+  amber: { stroke: "#F59E0B", width: 1.6, opacity: 0.5 },
+  muted: { stroke: "var(--v3-border)", width: 1, opacity: 0.28 },
+};
 
 function readPhaseInputs(program: ProgramSummary, phaseId: string): Record<string, unknown> {
   const raw = program.rawData as Record<string, unknown> | null;
@@ -49,12 +59,14 @@ export default function PhaseFlowOverlay({ containerRef, program, phaseId, enabl
   const edges = useMemo(() => {
     const schema = getPhaseInputSchema(phaseId);
     const persisted = readPhaseInputs(program, phaseId);
-    const filledOf = (id: string) => {
+    const typeOf = new Map(schema.fields.map((field) => [field.id, field.type]));
+    const toneOf = (id: string): FieldTone => {
       const value = persisted[id];
-      return typeof value === "string" ? Boolean(value.trim()) : Boolean(value);
+      const str = typeof value === "string" ? value : value != null ? String(value) : undefined;
+      return assessField(str, typeOf.get(id) ?? "text").tone;
     };
     return derivePhaseFlowEdges(phaseId, schema.fields.map((field) => field.id))
-      .map((edge) => ({ ...edge, filled: filledOf(edge.from) }));
+      .map((edge) => ({ ...edge, tone: toneOf(edge.from) }));
   }, [program, phaseId]);
 
   const measure = useCallback(() => {
@@ -77,7 +89,7 @@ export default function PhaseFlowOverlay({ containerRef, program, phaseId, enabl
       const from = anchor(`input:${edge.from}`, "right");
       const to = anchor(`artifact:${edge.to}`, "left");
       if (!from || !to || to.x <= from.x) return;
-      next.push({ x1: from.x, y1: from.y, x2: to.x, y2: to.y, filled: edge.filled, key: `${edge.from}-${edge.to}-${index}` });
+      next.push({ x1: from.x, y1: from.y, x2: to.x, y2: to.y, tone: edge.tone, key: `${edge.from}-${edge.to}-${index}` });
     });
     setSize({ w: container.clientWidth, h: container.scrollHeight });
     setLines(next);
@@ -121,14 +133,15 @@ export default function PhaseFlowOverlay({ containerRef, program, phaseId, enabl
     >
       {lines.map((line) => {
         const mx = (line.x1 + line.x2) / 2;
+        const style = TONE_STYLE[line.tone];
         return (
           <path
             key={line.key}
             d={`M ${line.x1} ${line.y1} C ${mx} ${line.y1}, ${mx} ${line.y2}, ${line.x2} ${line.y2}`}
             fill="none"
-            stroke={line.filled ? "#2DD4BF" : "var(--v3-border)"}
-            strokeWidth={line.filled ? 1.6 : 1}
-            strokeOpacity={line.filled ? 0.55 : 0.28}
+            stroke={style.stroke}
+            strokeWidth={style.width}
+            strokeOpacity={style.opacity}
           />
         );
       })}
