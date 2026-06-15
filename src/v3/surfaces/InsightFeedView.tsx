@@ -29,8 +29,7 @@ interface InsightFeedViewProps {
 }
 
 function getGreeting(): string {
-  const h = new Date().getHours();
-  return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+  return "Today's update";
 }
 
 /** Returns a human-readable relative time string, e.g. "2 hours ago". */
