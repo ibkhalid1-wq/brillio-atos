@@ -783,19 +783,36 @@ export default function StageView({
         {readiness ? (
           <div className="v3-phase-metrics">
             {[
-              { label: "Readiness", value: `${readiness.score}%`, tone: readiness.score >= 75 ? "green" : readiness.score >= 50 ? "amber" : "red" },
-              { label: "Input", value: `${readiness.inputScore}%`, tone: "" },
-              { label: "Artifact", value: `${readiness.artifactScore}%`, tone: "" },
-              { label: "Gate", value: readiness.gateScore != null ? `${readiness.gateScore}%` : "—", tone: "" },
-              { label: "Complete", value: `${Math.round(activePhase.pct)}%`, tone: "" },
-              ...(inputQuality ? [{ label: "Input quality", value: `${inputQuality.overallScore}%`, tone: inputQuality.verdict === "sufficient" ? "green" : inputQuality.verdict === "partial" ? "amber" : "red" }] : []),
-              ...(handoffQuality?.score ? [{ label: "Handoff", value: `${handoffQuality.score}%`, tone: handoffQuality.passed ? "green" : "amber" }] : []),
-            ].map((metric) => (
-              <div key={metric.label} className="v3-phase-metric">
-                <div className={`v3-phase-metric-value ${metric.tone}`}>{metric.value}</div>
-                <div className="v3-phase-metric-label">{metric.label}</div>
-              </div>
-            ))}
+              { label: "Readiness", value: `${readiness.score}%`, tone: readiness.score >= 75 ? "green" : readiness.score >= 50 ? "amber" : "red", anchor: "exit-criteria-anchor" },
+              { label: "Input", value: `${readiness.inputScore}%`, tone: "", anchor: "phase-inputs-anchor" },
+              { label: "Artifact", value: `${readiness.artifactScore}%`, tone: "", anchor: "phase-artifacts-anchor" },
+              { label: "Gate", value: readiness.gateScore != null ? `${readiness.gateScore}%` : "—", tone: "", anchor: "exit-criteria-anchor" },
+              { label: "Complete", value: `${Math.round(activePhase.pct)}%`, tone: "", anchor: null },
+              ...(inputQuality ? [{ label: "Input quality", value: `${inputQuality.overallScore}%`, tone: inputQuality.verdict === "sufficient" ? "green" : inputQuality.verdict === "partial" ? "amber" : "red", anchor: "phase-inputs-anchor" }] : []),
+              ...(handoffQuality?.score ? [{ label: "Handoff", value: `${handoffQuality.score}%`, tone: handoffQuality.passed ? "green" : "amber", anchor: "phase-artifacts-anchor" }] : []),
+            ].map((metric) => {
+              const cls = `v3-phase-metric-value ${metric.tone}`;
+              if (!metric.anchor) {
+                return (
+                  <div key={metric.label} className="v3-phase-metric">
+                    <div className={cls}>{metric.value}</div>
+                    <div className="v3-phase-metric-label">{metric.label}</div>
+                  </div>
+                );
+              }
+              return (
+                <button
+                  key={metric.label}
+                  type="button"
+                  className="v3-phase-metric is-clickable"
+                  aria-label={`${metric.label} ${metric.value} — jump to section`}
+                  onClick={() => document.getElementById(metric.anchor!)?.scrollIntoView({ behavior: "smooth", block: "center" })}
+                >
+                  <div className={cls}>{metric.value}</div>
+                  <div className="v3-phase-metric-label">{metric.label}</div>
+                </button>
+              );
+            })}
           </div>
         ) : null}
 

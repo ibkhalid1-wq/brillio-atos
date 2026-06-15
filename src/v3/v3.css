@@ -5422,6 +5422,16 @@ button.v3-chip:focus-visible,
   min-width: 70px; padding: 6px 12px;
   background: var(--v3-surface-2); border: 1px solid var(--v3-border); border-radius: var(--radius-md);
 }
+button.v3-phase-metric {
+  font: inherit; text-align: center; cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+}
+button.v3-phase-metric:hover {
+  border-color: var(--v3-accent); background: var(--v3-surface-3); transform: translateY(-1px);
+}
+button.v3-phase-metric:focus-visible {
+  outline: 2px solid var(--v3-accent); outline-offset: 2px;
+}
 .v3-phase-metric-value { font-size: 16px; font-weight: 700; color: var(--v3-text-primary); font-variant-numeric: tabular-nums; }
 .v3-phase-metric-value.green { color: var(--v3-green); }
 .v3-phase-metric-value.amber { color: var(--v3-amber); }
