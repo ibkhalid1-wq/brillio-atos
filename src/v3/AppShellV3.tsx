@@ -2673,6 +2673,8 @@ export default function AppShellV3() {
           onAcknowledgeTask={handleAcknowledgeTask}
           onRunAgent={handleRunAgent}
           onOpenDocuments={() => openMoreView("documents")}
+          onOpenMoreView={(view) => openMoreView(view)}
+          onOpenDecide={() => navigateSurface("decide")}
           generationHint={artifactGenerationHint}
         />
       ) : null}
