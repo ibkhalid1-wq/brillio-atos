@@ -3,6 +3,7 @@ import type { GateReview, ProgramSummary, RAIDEntry } from "@/new/types";
 import type { PhaseReadinessResult } from "@/v3/lib/phaseReadiness";
 import { explainPhaseReadiness } from "@/v3/lib/readinessModel";
 import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
+import { derivePhaseBlockers, BLOCKER_CATEGORY_LABEL } from "@/v3/lib/phaseBlockers";
 import { ReadinessArcGauge } from "@/v3/components/ReadinessArcGauge";
 import { isDecisionOpen } from "@/v3/utils";
 import type { V3MoreView } from "@/v3/types";
@@ -100,6 +101,7 @@ export function PhaseProgressionCard({
 }: PhaseProgressionCardProps) {
   const explanation = useMemo(() => explainPhaseReadiness(program, phaseId), [program, phaseId]);
   const confidence = useMemo(() => deriveProgramConfidence(program, phaseId), [program, phaseId]);
+  const consolidatedBlockers = useMemo(() => derivePhaseBlockers(program, phaseId), [program, phaseId]);
 
   // Open RAID/decisions scoped to this phase — the "why not" supporting signals.
   const raidEntries: RAIDEntry[] = program.raidEntries || [];
@@ -114,10 +116,9 @@ export function PhaseProgressionCard({
     .filter((d) => !d.phaseId || d.phaseId === phaseId);
 
   const verdict = deriveVerdict(readiness, gateStatus);
-  const blockers = explanation?.blockers ?? [];
+  const blockers = consolidatedBlockers.slice(0, 5);
   const topActions = readiness.recommendedActions.slice(0, 3);
   const effort = estimateEffortRemaining(readiness.recommendedActions);
-  const missing = readiness.missing.slice(0, 4);
 
   const canApprove = readiness.canApproveGate && gateStatus !== "approved";
 
@@ -190,25 +191,31 @@ export function PhaseProgressionCard({
         </div>
       </div>
 
-      {/* ── Why not: missing requirements + blockers ── */}
-      {!canApprove && (blockers.length > 0 || missing.length > 0) ? (
+      {/* ── Why not: consolidated blockers (readiness + confidence + risk + dependency + governance) ── */}
+      {!canApprove && blockers.length > 0 ? (
         <div style={{ marginTop: 14, borderTop: "1px solid var(--v3-border-soft)", paddingTop: 12 }}>
           <div className="v3-inline-list-label">What's holding the gate back</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
-            {(blockers.length > 0
-              ? blockers.slice(0, 4).map((b) => ({ key: b.id, label: b.label, detail: b.detail, gain: b.expectedGain }))
-              : missing.map((m, i) => ({ key: `missing-${i}`, label: m, detail: null as string | null, gain: 0 }))
-            ).map((item) => (
-              <div key={item.key} style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                <span style={{ color: "var(--v3-amber)", fontSize: 12, lineHeight: 1.5 }}>•</span>
+            {blockers.map((item) => (
+              <div key={item.id} style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                <span
+                  style={{
+                    color: item.severity === "critical" || item.severity === "high" ? "var(--v3-red)" : "var(--v3-amber)",
+                    fontSize: 12,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  •
+                </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <span style={{ fontSize: 12, color: "var(--v3-text-primary)" }}>{item.label}</span>
                   {item.detail ? (
                     <span style={{ fontSize: 11, color: "var(--v3-text-muted)", marginLeft: 6 }}>{item.detail}</span>
                   ) : null}
                 </div>
-                {item.gain > 0 ? (
-                  <span className="v3-chip green" style={{ fontSize: 10 }}>+{item.gain} pts</span>
+                <span className="v3-chip muted" style={{ fontSize: 9 }}>{BLOCKER_CATEGORY_LABEL[item.category]}</span>
+                {item.expectedGain > 0 ? (
+                  <span className="v3-chip green" style={{ fontSize: 10 }}>+{item.expectedGain} pts</span>
                 ) : null}
               </div>
             ))}
