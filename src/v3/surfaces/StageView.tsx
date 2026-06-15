@@ -1468,12 +1468,10 @@ export default function StageView({
           missingRequiredArtifacts.length ? (
             <div className="v3-artifact-summary is-missing">
               <span className="v3-chip amber v3-chip-tight">{missingRequiredArtifacts.length} required missing</span>
-              <span className="v3-artifact-summary-list">{missingRequiredArtifacts.join(" · ")}</span>
             </div>
           ) : (
             <div className="v3-artifact-summary is-complete">
-              <span className="v3-chip green v3-chip-tight">Complete</span>
-              <span className="v3-artifact-summary-list">All required artifacts produced for this phase.</span>
+              <span className="v3-chip green v3-chip-tight">All required produced</span>
             </div>
           )
         ) : null}
@@ -1512,24 +1510,17 @@ export default function StageView({
                 : state === "ready" ? "Ready"
                 : state === "archived" ? "Archived"
                 : "Draft";
-              const tone = !present
-                ? "muted"
-                : state === "approved" ? "green"
-                : state === "ready" ? "blue"
-                : "amber";
+              const summary = present
+                ? `${statusLabel}${score != null ? ` · ${score}%` : ""} — ${def.description}`
+                : required
+                  ? `Required for this phase, not yet generated. ${def.description}`
+                  : `Optional. ${def.description}`;
               return (
                 <div key={def.id} className="v3-artifact-row" data-io-anchor={`artifact:${def.id}`}>
                   <div className="v3-artifact-row-head">
                     <span className="v3-artifact-row-label">{def.label}</span>
-                    <span className="v3-artifact-row-tags">
-                      <span className={`v3-chip v3-chip-tight ${required ? "v3-chip-outline" : "muted"}`}>
-                        {required ? "Required" : "Optional"}
-                      </span>
-                      <span className={`v3-chip v3-chip-tight ${tone}`}>
-                        {statusLabel}{score != null ? ` · ${score}%` : ""}
-                      </span>
-                    </span>
                   </div>
+                  <p className="v3-artifact-row-desc">{summary}</p>
                   <button
                     type="button"
                     className="v3-button ghost v3-button-inline-xs v3-artifact-regen"

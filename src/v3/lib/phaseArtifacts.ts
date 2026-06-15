@@ -20,12 +20,19 @@ export interface PhaseArtifactDef {
   /** Stable id — the producing-agent id, or "narrative"/"deck" for the core pair. */
   id: string;
   label: string;
+  /** One-line plain-English summary of what this artifact captures. */
+  description: string;
 }
 
 function artifactLabel(id: string): string {
   if (id === "narrative") return "Narrative";
   const meta = getAgentMeta(id);
   return meta.outputArtifact || meta.label || id;
+}
+
+function artifactDescription(id: string): string {
+  if (id === "narrative") return "Synthesises this phase into a plain-English narrative summary.";
+  return getAgentMeta(id).description || "";
 }
 
 /** Ordered artifact definitions for a phase: Narrative first, then required artifacts. */
@@ -35,7 +42,7 @@ export function getPhaseArtifactDefs(phaseId: string): PhaseArtifactDef[] {
   for (const id of phase?.requiredArtifacts ?? []) {
     if (!ordered.includes(id)) ordered.push(id);
   }
-  return ordered.map((id) => ({ id, label: artifactLabel(id) }));
+  return ordered.map((id) => ({ id, label: artifactLabel(id), description: artifactDescription(id) }));
 }
 
 /** The set of artifact ids a phase renders — used to constrain flow-edge targets. */
