@@ -363,16 +363,18 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
               const verdict = assessField(values[field.id], field.type);
               return (
               <div key={field.id} data-io-anchor={`input:${field.id}`}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                  <div className="v3-field-label">
-                    {field.label}
-                    {field.required ? <span style={{ color: "var(--v3-accent)", marginLeft: 3 }}>*</span> : null}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 8, marginBottom: 4 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="v3-field-label">
+                      {field.label}
+                      {field.required ? <span style={{ color: "var(--v3-accent)", marginLeft: 3 }}>*</span> : null}
+                    </div>
+                    {field.hint ? (
+                      <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 2 }}>{field.hint}</div>
+                    ) : null}
                   </div>
-                  <span className={`v3-chip ${verdict.tone}`} style={{ fontSize: 10 }}>{verdict.label}</span>
+                  <span className={`v3-chip ${verdict.tone}`} style={{ fontSize: 10, flexShrink: 0 }}>{verdict.label}</span>
                 </div>
-                {field.hint ? (
-                  <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginBottom: 4 }}>{field.hint}</div>
-                ) : null}
                 {field.type === "textarea" ? (
                   <textarea
                     className="v3-input v3-textarea"
