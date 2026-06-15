@@ -3412,6 +3412,27 @@ button.v3-chip:focus-visible,
   transform: translateY(-1px);
 }
 
+/* Secondary variant — a filled, bordered neutral button. Brought over
+   from the Button.tsx component so its consumers can share the canonical
+   button class (radius, hover lift, active scale, focus ring). */
+.v3-button.secondary {
+  background: var(--v3-surface-2);
+  color: var(--v3-text-primary);
+  border: 1px solid var(--v3-border);
+}
+
+.v3-button.secondary:hover:not(:disabled) {
+  background: var(--v3-surface-3);
+  transform: translateY(-1px);
+}
+
+/* Large size modifier (counterpart to .v3-button.sm). */
+.v3-button.lg {
+  padding: 10px 20px;
+  min-height: 44px;
+  font-size: 14px;
+}
+
 .v3-phase-row {
   display: flex;
   align-items: center;
