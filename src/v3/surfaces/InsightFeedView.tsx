@@ -753,7 +753,7 @@ export default function InsightFeedView({
               );
             })()}
             <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 6, letterSpacing: "0.04em", textTransform: "uppercase", fontWeight: 500 }}>
-              ADAM · AI Transformation Operating System
+              Brillio ATOS · Agentic Transformation Operating System
             </div>
           </div>
 
