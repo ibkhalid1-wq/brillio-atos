@@ -1567,6 +1567,56 @@ function buildSpecialAgentInputContext(
     }, null, 2);
   }
 
+  // Pattern extraction distils reusable lessons for FUTURE programmes and labels
+  // each pattern's outcome (successful|failed|neutral). For that label to be
+  // trustworthy it must see how the programme actually performed — not just its
+  // narrative. Surface the realisation signal (baseline → target → measured
+  // actual, plus the benefits-tracker assessment and gate outcomes) so outcomes
+  // are judged against evidence, not guessed. This grounds the only real
+  // cross-programme learning loop.
+  if (target?.agentId === "pattern-extract") {
+    const phaseInputsAll = normalizeProgramData(inner.phaseInputs as JsonValue | null);
+    const strategyInputs = normalizeProgramData(phaseInputsAll.strategy as JsonValue | null);
+    const valueRealizeInputs = normalizeProgramData(phaseInputsAll.valuerealize as JsonValue | null);
+    const kpiActuals = typeof valueRealizeInputs.kpiActuals === "string"
+      ? safeJsonParse<unknown[]>(valueRealizeInputs.kpiActuals, []).filter(isRecord)
+      : Array.isArray(valueRealizeInputs.kpiActuals)
+        ? valueRealizeInputs.kpiActuals.filter(isRecord)
+        : [];
+    const gateReviewsRec = isRecord(inner.gateReviews) ? inner.gateReviews : {};
+    const gateOutcomes = Object.entries(gateReviewsRec).map(([gatePhaseId, review]) => ({
+      phaseId: gatePhaseId,
+      status: isRecord(review) ? (review.status ?? null) : null,
+      readinessScore: isRecord(review) && typeof review.readinessScore === "number" ? review.readinessScore : null,
+    }));
+    return JSON.stringify({
+      programName: meta.name || (typeof projectMeta.name === "string" ? projectMeta.name : ""),
+      industry: meta.industry || (typeof projectMeta.industry === "string" ? projectMeta.industry : ""),
+      objective: typeof inner.objective === "string"
+        ? inner.objective
+        : typeof inner.programObjective === "string"
+          ? inner.programObjective
+          : typeof projectMeta.objective === "string"
+            ? projectMeta.objective
+            : "",
+      narrative,
+      phases,
+      milestones,
+      decisions,
+      raidEntries: activeRaidEntries,
+      // Benefits realisation — the OUTCOME evidence that grounds pattern labels.
+      benefitsRealization: {
+        kpiBaselines: parseKpiBaselines(strategyInputs.kpis),
+        kpiActuals,
+        benefitsTracking: isRecord(inner.benefitsTracking) ? inner.benefitsTracking : null,
+        valueProjected: coerceNumber(inner.valueProjected ?? businessCase.projectedValue ?? valueRealizeData.projectedValue, 0),
+        valueDelivered: coerceNumber(inner.valueDelivered ?? valueRealizeData.valueDelivered ?? businessCase.valueDelivered, 0),
+        gateOutcomes,
+      },
+      patternContext: options?.patternContext || [],
+    }, null, 2);
+  }
+
   // Formal-artifact agents draw on their phase inputs plus the shared programme
   // context. The structured Strategy KPIs (captured in PhaseInputsPanel) are
   // always surfaced as kpiBaselines so outcome/business-case/optimization agents
@@ -4557,6 +4607,19 @@ Extract reusable patterns from the program history and return a JSON object with
     }
   ]
 }
+
+Judging "outcome" — base it on EVIDENCE, never a guess. The context includes a
+"benefitsRealization" block: kpiBaselines (baseline → target), kpiActuals (the
+human-entered measured value per KPI), benefitsTracking (RAG assessment), gate
+outcomes, and value projected vs delivered.
+- "successful": the measured actuals met or exceeded target (or benefitsTracking
+  RAG is green / value delivered ≥ projected). Cite the KPI and its numbers in evidence.
+- "failed": actuals fell materially short of target (or RAG red / value delivered
+  well below projected, or a gate ended in remediation). Cite the shortfall.
+- "neutral": mixed results, OR there is no realisation evidence (kpiActuals empty
+  and benefitsTracking absent). Do NOT infer success from narrative tone alone —
+  if outcomes were not measured, the pattern is "neutral".
+Set "confidence" lower when the outcome label rests on little or no realisation data.
 Return ONLY valid JSON.`,
       user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
     };
