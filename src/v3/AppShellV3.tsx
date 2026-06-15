@@ -328,7 +328,7 @@ function TopbarBreadcrumb({
     return (
       <nav className="v3-topbar-breadcrumb" aria-label="Breadcrumb">
         <button type="button" className="v3-topbar-breadcrumb-link" onClick={onClearMoreView}>
-          Programme Overview
+          Workspaces
         </button>
         <span className="v3-topbar-breadcrumb-sep" aria-hidden="true">›</span>
         <span className="v3-topbar-breadcrumb-current" aria-current="page">{workspaceLabel}</span>
