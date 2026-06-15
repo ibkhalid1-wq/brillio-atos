@@ -1,12 +1,23 @@
 import React, { useEffect, useMemo, useState } from "react";
 import type { ProgramSummary, Workstream } from "@/new/types";
 import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
+import { availableModes, FIELD_ASSIST_MODE_LABEL, type FieldAssistMode } from "@/v3/lib/fieldAssist";
+
+export interface FieldAssistRequest {
+  fieldId: string;
+  fieldLabel: string;
+  fieldHint?: string;
+  mode: FieldAssistMode;
+  currentValue: string;
+}
 
 interface PhaseInputsPanelProps {
   program: ProgramSummary;
   phaseId: string;
   onSave: (phaseId: string, inputs: Record<string, string>) => Promise<void>;
   onUploadDocument: () => void;
+  /** Optional AI assist for a single field; resolves with the new field text. */
+  onAssistField?: (phaseId: string, request: FieldAssistRequest) => Promise<string>;
 }
 
 /**
@@ -97,7 +108,7 @@ function parseKpiActuals(raw: unknown): Record<string, string> {
   }
 }
 
-export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDocument }: PhaseInputsPanelProps) {
+export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDocument, onAssistField }: PhaseInputsPanelProps) {
   const schema = getPhaseInputSchema(phaseId);
   // useMemo prevents a new object reference on every render, which would cause an
   // infinite loop: new existingInputs reference → useEffect fires → setValues → re-render → repeat.
@@ -137,6 +148,41 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
   const [saved, setSaved] = useState(false);
   // Always start expanded so document-imported data is immediately visible
   const [open, setOpen] = useState(true);
+  // Per-field AI assist: which field is currently generating, and any per-field error.
+  const [assistingField, setAssistingField] = useState<string | null>(null);
+  const [assistErrors, setAssistErrors] = useState<Record<string, string>>({});
+
+  async function runAssist(field: { id: string; label: string; hint?: string }, mode: FieldAssistMode) {
+    if (!onAssistField || assistingField) return;
+    setAssistingField(field.id);
+    setAssistErrors((current) => {
+      const next = { ...current };
+      delete next[field.id];
+      return next;
+    });
+    try {
+      const text = await onAssistField(phaseId, {
+        fieldId: field.id,
+        fieldLabel: field.label,
+        fieldHint: field.hint,
+        mode,
+        currentValue: values[field.id] ?? "",
+      });
+      const clean = (text ?? "").trim();
+      if (clean) {
+        setValues((current) => ({ ...current, [field.id]: clean }));
+      } else {
+        setAssistErrors((current) => ({ ...current, [field.id]: "No suggestion returned." }));
+      }
+    } catch (error) {
+      setAssistErrors((current) => ({
+        ...current,
+        [field.id]: error instanceof Error ? error.message : "AI assist failed.",
+      }));
+    } finally {
+      setAssistingField(null);
+    }
+  }
 
   useEffect(() => {
     setValues(existingInputs);
@@ -324,6 +370,28 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
                     onChange={(event) => setValues((current) => ({ ...current, [field.id]: event.target.value }))}
                   />
                 )}
+                {onAssistField && field.type === "textarea" ? (
+                  <div className="v3-field-assist">
+                    {assistingField === field.id ? (
+                      <span className="v3-field-assist-status">✨ Writing…</span>
+                    ) : (
+                      availableModes(values[field.id] ?? "").map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          className="v3-field-assist-btn"
+                          disabled={!!assistingField}
+                          onClick={() => void runAssist({ id: field.id, label: field.label, hint: field.hint }, mode)}
+                        >
+                          {mode === "generate" ? "✨ " : ""}{FIELD_ASSIST_MODE_LABEL[mode]}
+                        </button>
+                      ))
+                    )}
+                    {assistErrors[field.id] ? (
+                      <span className="v3-field-assist-error">{assistErrors[field.id]}</span>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
               );
             })}

@@ -5,7 +5,7 @@ import type { DecisionSummary, ExitCriterion, GateReview, PlanAction, ProgramSum
 import ArtifactEditor from "@/v3/components/ArtifactEditor";
 import GateCoachPanel from "@/v3/components/GateCoachPanel";
 import OnboardingCard from "@/v3/components/OnboardingCard";
-import PhaseInputsPanel from "@/v3/components/PhaseInputsPanel";
+import PhaseInputsPanel, { type FieldAssistRequest } from "@/v3/components/PhaseInputsPanel";
 import { PhaseProgressionCard } from "@/v3/components/PhaseProgressionCard";
 import { PhaseRail } from "@/v3/components/PhaseRail";
 import { PhaseFlowBar } from "@/v3/components/PhaseFlowBar";
@@ -49,6 +49,7 @@ interface StageViewProps {
   onSaveArtifact: (artifactId: "narrative" | "deck", content: string) => Promise<void>;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>) => Promise<void>;
   onUploadDocument: () => void;
+  onAssistField?: (phaseId: string, request: FieldAssistRequest) => Promise<string>;
   artifactPreviews?: {
     narrative?: string | null;
     plan?: Array<{ action?: string; rationale?: string }> | null;
@@ -430,6 +431,7 @@ export default function StageView({
   onSaveArtifact,
   onSaveInputs,
   onUploadDocument,
+  onAssistField,
   artifactPreviews,
 }: StageViewProps) {
   const [remediationOpen, setRemediationOpen] = React.useState(false);
@@ -1191,6 +1193,7 @@ export default function StageView({
                 phaseId={activePhase.id}
                 onSave={onSaveInputs}
                 onUploadDocument={onUploadDocument}
+                onAssistField={onAssistField}
               />
             </div>
           ) : null}

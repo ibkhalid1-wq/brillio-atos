@@ -61,6 +61,8 @@ import { computePhaseReadiness, getLockedPhaseIds } from "@/v3/lib/phaseReadines
 import { confidenceRag, getGateThreshold } from "@/v3/lib/confidenceScore";
 import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
 import { exportAsText } from "@/v3/lib/documentExport";
+import { buildFieldAssistPrompt, sanitiseFieldReply } from "@/v3/lib/fieldAssist";
+import type { FieldAssistRequest } from "@/v3/components/PhaseInputsPanel";
 const DecideView = React.lazy(() => import("@/v3/surfaces/DecideView"));
 import GateReopenModal from "@/v3/components/GateReopenModal";
 import RemediationNoteModal from "@/v3/components/RemediationNoteModal";
@@ -2014,6 +2016,41 @@ export default function AppShellV3() {
     exportAsText(artifact.title, artifact.contentSummary || "(No content summary available.)");
   }, [activeProgram]);
 
+  // Per-field AI assist for phase inputs — reuses the copilot-chat endpoint
+  // (non-streaming) with a focused, field-scoped prompt. Returns clean text the
+  // panel writes straight into the field; throws a friendly message on failure
+  // so the inline error state can surface it.
+  const handleAssistField = useCallback(async (phaseId: string, request: FieldAssistRequest): Promise<string> => {
+    if (!isSupabaseConfigured || !supabase) {
+      throw new Error("AI assist needs a connected workspace.");
+    }
+    if (!activeProgram) {
+      throw new Error("No active programme.");
+    }
+    const phaseLabel = activeProgram.phases.find((p) => p.id === phaseId)?.name ?? phaseId;
+    const message = buildFieldAssistPrompt(request.mode, {
+      programName: activeProgram.name,
+      client: activeProgram.client,
+      industry: activeProgram.industry,
+      objective: activeProgram.objective,
+      phaseLabel,
+      fieldLabel: request.fieldLabel,
+      fieldHint: request.fieldHint,
+      currentValue: request.currentValue,
+    });
+    const { data, error } = await supabase.functions.invoke("copilot-chat", {
+      body: { programId: activeProgram.id, workspaceId: `phase-input:${phaseId}`, message, stream: false },
+    });
+    if (error) {
+      throw new Error(error.message || "AI assist request failed.");
+    }
+    const content = (data as { message?: { content?: unknown } } | null)?.message?.content;
+    if (typeof content !== "string" || !content.trim()) {
+      throw new Error("AI assist returned no suggestion.");
+    }
+    return sanitiseFieldReply(content);
+  }, [activeProgram]);
+
   const handleApproveGate = useCallback(async (phaseId: string) => {
     if (!activeProgram) return;
 
@@ -2453,6 +2490,7 @@ export default function AppShellV3() {
                 onSaveArtifact={handleSaveArtifact}
                 onSaveInputs={handleSavePhaseInputs}
                 onUploadDocument={handleUploadDocument}
+                onAssistField={handleAssistField}
                 artifactPreviews={{
                   narrative: activeProgram?.narrative || null,
                   plan: activeProgram?.plan?.nextThreeActions || null,

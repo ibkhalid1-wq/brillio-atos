@@ -7256,6 +7256,43 @@ button.v3-chip:disabled {
   margin-bottom: 4px;
 }
 
+/* Per-field AI assist controls (phase inputs) */
+.v3-field-assist {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+}
+.v3-field-assist-btn {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--v3-text-secondary);
+  background: var(--v3-surface-2);
+  border: 1px solid var(--v3-border);
+  border-radius: 999px;
+  padding: 2px 9px;
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+.v3-field-assist-btn:hover:not(:disabled) {
+  color: var(--v3-accent);
+  border-color: var(--v3-accent);
+}
+.v3-field-assist-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.v3-field-assist-status {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--v3-accent);
+}
+.v3-field-assist-error {
+  font-size: 10px;
+  color: var(--v3-red);
+}
+
 .v3-input {
   width: 100%;
   background: var(--v3-bg-surface, var(--v3-surface));
