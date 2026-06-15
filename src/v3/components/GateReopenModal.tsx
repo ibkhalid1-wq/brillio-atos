@@ -48,27 +48,14 @@ export default function GateReopenModal({ open, phaseName, onClose, onConfirm }:
           style={{ minHeight: 96, background: "var(--v3-surface-2)" }}
         />
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 16 }}>
-          <button
-            onClick={onClose}
-            style={{
-              padding: "8px 18px", background: "var(--v3-surface-2)", border: "1px solid var(--v3-border)",
-              borderRadius: "var(--v3-radius)", cursor: "pointer", fontSize: 13,
-              color: "var(--v3-text-secondary)", fontFamily: "var(--v3-font)", fontWeight: 500,
-            }}
-          >
+          <button type="button" className="v3-button ghost" onClick={onClose}>
             Cancel
           </button>
           <button
+            type="button"
+            className="v3-button primary"
             disabled={!reason.trim()}
             onClick={() => { if (reason.trim()) { onConfirm(reason.trim()); onClose(); } }}
-            style={{
-              padding: "8px 18px", background: reason.trim() ? "var(--v3-accent)" : "var(--v3-surface-3)",
-              border: "none", borderRadius: "var(--v3-radius)",
-              cursor: reason.trim() ? "pointer" : "not-allowed", fontSize: 13,
-              color: reason.trim() ? "#fff" : "var(--v3-text-muted)",
-              fontFamily: "var(--v3-font)", fontWeight: 600,
-              transition: "background 0.15s",
-            }}
           >
             Reopen Gate
           </button>

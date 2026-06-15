@@ -48,27 +48,14 @@ export default function RemediationNoteModal({ open, phaseName, onClose, onConfi
           style={{ minHeight: 96, background: "var(--v3-surface-2)" }}
         />
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 16 }}>
-          <button
-            onClick={onClose}
-            style={{
-              padding: "8px 18px", background: "var(--v3-surface-2)", border: "1px solid var(--v3-border)",
-              borderRadius: "var(--v3-radius)", cursor: "pointer", fontSize: 13,
-              color: "var(--v3-text-secondary)", fontFamily: "var(--v3-font)", fontWeight: 500,
-            }}
-          >
+          <button type="button" className="v3-button ghost" onClick={onClose}>
             Cancel
           </button>
           <button
+            type="button"
+            className="v3-button danger"
             disabled={!note.trim()}
             onClick={() => { if (note.trim()) { onConfirm(note.trim()); onClose(); } }}
-            style={{
-              padding: "8px 18px", background: note.trim() ? "var(--v3-amber)" : "var(--v3-surface-3)",
-              border: "none", borderRadius: "var(--v3-radius)",
-              cursor: note.trim() ? "pointer" : "not-allowed", fontSize: 13,
-              color: note.trim() ? "#fff" : "var(--v3-text-muted)",
-              fontFamily: "var(--v3-font)", fontWeight: 600,
-              transition: "background 0.15s",
-            }}
           >
             Flag Issues
           </button>
