@@ -449,6 +449,7 @@ export default function StageView({
   const onboardingStorageKey = `adam_onboarding_stage_${program?.id || "local"}_${activePhaseId || "none"}`;
   const [guideDismissed, setGuideDismissed] = React.useState(false);
   const [showWiring, setShowWiring] = React.useState(true);
+  const [summaryExpanded, setSummaryExpanded] = React.useState(false);
   const phaseMainRef = useRef<HTMLDivElement | null>(null);
   const previousNarrativeRef = useRef<string | null>(artifactPreviews?.narrative || null);
   const previousDeckRef = useRef<string | null>(artifactPreviews?.deck || null);
@@ -628,6 +629,7 @@ export default function StageView({
   const artifactsStaleReason = typeof source?.artifactsStaleReason === "string" ? source.artifactsStaleReason : null;
   const phaseWorkstreams = (program?.workstreams || []).filter((workstream: Workstream) => workstream.phaseId === activePhase?.id);
   const activeRun = activeRuns?.some(r => r.status === "running");
+  const narrativeRunning = activeRuns?.some(r => r.status === "running" && r.agent_id === "narrative");
   const gateCoach = source?.gateReadinessCoach && typeof source.gateReadinessCoach === "object" && !Array.isArray(source.gateReadinessCoach)
     ? (source.gateReadinessCoach as Record<string, { actions?: Array<{ action: string; effort: "quick" | "hours" | "days"; owner: "user" | "agent"; agentId: string | null }> }>)[activePhase?.id ?? ""]
     : null;
@@ -762,7 +764,7 @@ export default function StageView({
         <div className="v3-phase-head-row">
           <div className="v3-phase-head-identity">
             {/* Canonical 3-ring phase status — inner Input · middle Artifact · outer Gate */}
-            <PhaseStatusRings program={program} phaseId={activePhase.id} size={56} showCenter />
+            <PhaseStatusRings program={program} phaseId={activePhase.id} size={84} showCenter />
             <div className="v3-phase-head-titles">
               <div className="v3-phase-head-eyebrow">
                 <span className="v3-phase-head-prog">{program.name}</span>
@@ -967,43 +969,61 @@ export default function StageView({
         </div>
       )}
 
-      {/* AI Intelligence Strip */}
-      {activeRun && (
-        <div style={{
-          margin: "0 0 16px",
-          padding: "10px 16px",
-          background: "var(--v3-accent-soft)",
-          border: "1px solid var(--v3-accent-glow)",
-          borderRadius: "var(--v3-radius)",
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          fontSize: 12,
-          color: "var(--v3-accent)",
-        }}>
-          <span style={{ animation: "v3-spin 1.2s linear infinite", display: "inline-block" }}>◎</span>
-          <span><strong>Analysing</strong> — ADAM is processing your programme data. Results will appear shortly.</span>
-        </div>
-      )}
-      {artifactPreviews?.narrative && !activeRun && (
-        <div style={{
-          margin: "0 0 16px",
-          padding: "12px 16px",
-          background: "var(--v3-surface-2)",
-          border: "1px solid var(--v3-border)",
-          borderRadius: "var(--v3-radius)",
-          fontSize: 12,
-          color: "var(--v3-text-secondary)",
-          lineHeight: 1.6,
-        }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--v3-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
-            ✦ Latest Summary
+      {/* Executive summary — generated on demand, never auto-run, so it stays stable */}
+      <div style={{
+        margin: "0 0 16px",
+        padding: "12px 16px",
+        background: "var(--v3-surface-2)",
+        border: "1px solid var(--v3-border)",
+        borderRadius: "var(--v3-radius)",
+        fontSize: 12,
+        color: "var(--v3-text-secondary)",
+        lineHeight: 1.6,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 6 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--v3-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            ✦ Executive summary
+          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {artifactPreviews?.narrative && !narrativeRunning ? (
+              <button
+                type="button"
+                className="v3-button ghost v3-button-inline-xs"
+                onClick={() => setSummaryExpanded((open) => !open)}
+                aria-expanded={summaryExpanded}
+              >
+                {summaryExpanded ? "Collapse" : "Expand"}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="v3-button ghost v3-button-inline-xs"
+              onClick={() => onRunAgent("narrative")}
+              disabled={narrativeRunning}
+            >
+              {narrativeRunning ? "Generating…" : artifactPreviews?.narrative ? "Refresh" : "Generate summary"}
+            </button>
           </div>
-          <div style={{ overflow: "hidden", maxHeight: 60, maskImage: "linear-gradient(to bottom, black 60%, transparent 100%)", WebkitMaskImage: "linear-gradient(to bottom, black 60%, transparent 100%)" }}>
-            {typeof artifactPreviews.narrative === "string" ? artifactPreviews.narrative.slice(0, 300) : ""}
-          </div>
         </div>
-      )}
+        {narrativeRunning ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--v3-accent)" }}>
+            <span style={{ animation: "v3-spin 1.2s linear infinite", display: "inline-block" }}>◎</span>
+            <span>ADAM is generating the summary…</span>
+          </div>
+        ) : artifactPreviews?.narrative ? (
+          <div style={summaryExpanded
+            ? { whiteSpace: "pre-wrap" }
+            : { overflow: "hidden", maxHeight: 60, maskImage: "linear-gradient(to bottom, black 60%, transparent 100%)", WebkitMaskImage: "linear-gradient(to bottom, black 60%, transparent 100%)" }}>
+            {typeof artifactPreviews.narrative === "string"
+              ? (summaryExpanded ? artifactPreviews.narrative : artifactPreviews.narrative.slice(0, 300))
+              : ""}
+          </div>
+        ) : (
+          <div style={{ color: "var(--v3-text-muted)" }}>
+            No summary yet — click Generate summary to have ADAM analyse this programme.
+          </div>
+        )}
+      </div>
       <div className="v3-phase-body">
       <section className="v3-zone v3-zone--focus v3-phase-aside">
         <div className="v3-zone-label">Task queue · blockers · risks</div>

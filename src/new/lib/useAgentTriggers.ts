@@ -6,7 +6,6 @@ import type { DecisionSummary, GateReview, Milestone, ProgramClosure, RAIDEntry,
 import { captureSnapshot, computeAgentInterval, hasWatchedFieldChanged } from "@/v3/lib/agentChangeSensitivity";
 import { computeProgramVelocity, type ProgramVelocity } from "@/v3/lib/programVelocity";
 
-const NARRATIVE_PHASES = new Set(["strategy", "mobilise", "discover", "design", "build", "operate"]);
 const PLAN_TRIGGER_PHASES = new Set(["strategy", "mobilise", "discover"]);
 const RISK_TRIGGER_PHASES = new Set(["discover", "design", "govern", "build"]);
 const MILESTONE_RISK_TYPES = new Set(["dependency", "risk"]);
@@ -73,7 +72,6 @@ export function useAgentTriggers({
   activeRuns,
   onRunAgent,
   onInvalidate,
-  narrativeGeneratedAt,
   planGeneratedAt,
   raidGeneratedAt,
   milestonesGeneratedAt,
@@ -323,19 +321,6 @@ export function useAgentTriggers({
 
   useEffect(() => {
     if (!canRunAgents) return;
-    if (!isAgentStale("narrative", narrativeGeneratedAt)) return;
-    if (loadTriggerRef.current.narrativeProgramId === programId || narrativeRunning.current) return;
-
-    loadTriggerRef.current.narrativeProgramId = programId;
-    narrativeRunning.current = true;
-    void runAgentSafely({ agentId: "narrative", phaseId: "program", triggeredBy: "trigger" }, () => {
-      lastRunSnapshots.current.narrative = captureSnapshot("narrative", rawData);
-      narrativeRunning.current = false;
-    });
-  }, [canRunAgents, isAgentStale, narrativeGeneratedAt, programId, rawData, runAgentSafely]);
-
-  useEffect(() => {
-    if (!canRunAgents) return;
     if (!isAgentStale("plan", planGeneratedAt)) return;
     if (loadTriggerRef.current.planProgramId === programId || planRunning.current) return;
 
@@ -579,7 +564,6 @@ export function useAgentTriggers({
     const adoptionIsStale = isOlderThan(adoptionGeneratedAt, ONE_DAY_MS);
     const healthIsStale = isOlderThan(healthHeatmapGeneratedAt, TWELVE_HOURS_MS);
     const scopePcrIsStale = isOlderThan(scopePcrGeneratedAt, FORTY_EIGHT_HOURS_MS);
-    let shouldTriggerNarrative = false;
     let shouldTriggerPlan = false;
     let shouldTriggerRisk = false;
     let shouldTriggerBudget = false;
@@ -594,7 +578,6 @@ export function useAgentTriggers({
       const previousStatus = previous.get(run.id);
       if (run.status !== "complete" || !previousStatus || previousStatus === "complete") continue;
 
-      if (NARRATIVE_PHASES.has(run.agent_id)) shouldTriggerNarrative = true;
       if (planIsStale && PLAN_TRIGGER_PHASES.has(run.agent_id)) shouldTriggerPlan = true;
       if (raidIsStale && RISK_TRIGGER_PHASES.has(run.agent_id)) shouldTriggerRisk = true;
       if (phaseAgentIds.has(run.agent_id) && budgetIsStale) shouldTriggerBudget = true;
@@ -607,13 +590,6 @@ export function useAgentTriggers({
     }
 
     previousRunStatuses.current = new Map(activeRuns.map((run) => [run.id, run.status]));
-
-    if (shouldTriggerNarrative && !narrativeRunning.current) {
-      narrativeRunning.current = true;
-      void runAgentSafely({ agentId: "narrative", phaseId: "program", triggeredBy: "trigger" }, () => {
-        narrativeRunning.current = false;
-      });
-    }
 
     if (shouldTriggerPlan && !planRunning.current) {
       planRunning.current = true;
