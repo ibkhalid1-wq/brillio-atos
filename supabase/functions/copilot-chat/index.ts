@@ -77,6 +77,120 @@ function extractOpenQuestions(text: string): string[] {
   return [...new Set(questions)].slice(0, 6);
 }
 
+// ── Program-state digest helpers ───────────────────────────────────────────
+// The copilot already fetches the FULL program state (programRow.data) but the
+// system prompt historically surfaced only name + objective, leaving the advisor
+// blind to decisions, risks, gate readiness, phase, milestones, and artifacts.
+// These helpers distil that state into a compact, capped digest so the copilot
+// can answer "what's blocking my gate?" / "what decisions are open?" grounded in
+// real program data — additive, no new query, bounded token cost.
+function asRecord(value: JsonValue | undefined | null): Record<string, JsonValue> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, JsonValue>
+    : {};
+}
+
+function asRecordArray(value: JsonValue | undefined | null): Record<string, JsonValue>[] {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is Record<string, JsonValue> =>
+        typeof entry === "object" && entry !== null && !Array.isArray(entry))
+    : [];
+}
+
+function asText(value: JsonValue | undefined | null): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return String(value);
+  return "";
+}
+
+function truncateText(value: string, max: number): string {
+  const trimmed = value.trim();
+  return trimmed.length > max ? `${trimmed.slice(0, max - 1).trimEnd()}…` : trimmed;
+}
+
+// Programmes may be stored flat OR nested under a `data` wrapper. Mirror the
+// app's getProgramState auto-detection so the digest works for both shapes.
+function getInnerState(programContext: Record<string, JsonValue>): Record<string, JsonValue> {
+  const nested = programContext.data;
+  if (nested && typeof nested === "object" && !Array.isArray(nested)) {
+    return nested as Record<string, JsonValue>;
+  }
+  return programContext;
+}
+
+const RAID_SEVERITY_ORDER: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+
+function buildProgramStateDigest(inner: Record<string, JsonValue>): string {
+  const sections: string[] = [];
+
+  // Active phase + gate readiness
+  const activePhase = asText(inner.activePhase);
+  if (activePhase) {
+    const gate = asRecord(asRecord(inner.gateReviews)[activePhase]);
+    const gateStatus = asText(gate.status) || "not started";
+    const readiness = typeof gate.readinessScore === "number" ? `${gate.readinessScore}%` : "n/a";
+    sections.push(`Active phase: ${activePhase} (gate: ${gateStatus}, readiness: ${readiness})`);
+  }
+
+  // Open decisions
+  const openDecisions = asRecordArray(inner.decisionQueue).filter((entry) => {
+    const status = asText(entry.status).toLowerCase();
+    return status !== "resolved" && status !== "approved" && status !== "rejected" && status !== "closed";
+  });
+  if (openDecisions.length) {
+    const rows = openDecisions.slice(0, 5).map((entry) => {
+      const priority = asText(entry.priority) || "normal";
+      const label = truncateText(asText(entry.title) || asText(entry.question), 110);
+      return `  - [${priority}] ${label}`;
+    });
+    sections.push(`Open decisions (${openDecisions.length}):\n${rows.join("\n")}`);
+  }
+
+  // Open RAID risks/issues (severity-ordered)
+  const openRaid = asRecordArray(asRecord(inner.raidLog).entries)
+    .filter((entry) => asText(entry.status).toLowerCase() !== "closed")
+    .sort((a, b) =>
+      (RAID_SEVERITY_ORDER[asText(a.severity).toLowerCase()] ?? 4) -
+      (RAID_SEVERITY_ORDER[asText(b.severity).toLowerCase()] ?? 4));
+  if (openRaid.length) {
+    const rows = openRaid.slice(0, 5).map((entry) => {
+      const severity = asText(entry.severity) || "?";
+      const type = asText(entry.type) || "risk";
+      const label = truncateText(asText(entry.title) || asText(entry.description), 110);
+      return `  - [${severity}/${type}] ${label}`;
+    });
+    sections.push(`Open RAID (${openRaid.length}):\n${rows.join("\n")}`);
+  }
+
+  // Upcoming milestones
+  const openMilestones = asRecordArray(inner.milestones).filter((entry) => {
+    const status = asText(entry.status).toLowerCase();
+    return status !== "complete" && status !== "completed" && status !== "done";
+  });
+  if (openMilestones.length) {
+    const rows = openMilestones.slice(0, 5).map((entry) => {
+      const label = truncateText(asText(entry.title) || asText(entry.name), 90);
+      const due = asText(entry.dueDate) || asText(entry.date) || asText(entry.targetDate);
+      return `  - ${label}${due ? ` (due ${due})` : ""}`;
+    });
+    sections.push(`Upcoming milestones (${openMilestones.length}):\n${rows.join("\n")}`);
+  }
+
+  // Artifact coverage by phase
+  const phaseArtifacts = asRecord(inner.phaseArtifacts);
+  const coverage = Object.entries(phaseArtifacts)
+    .map(([phase, slots]) => {
+      const count = Object.keys(asRecord(slots)).length;
+      return count ? `${phase}: ${count}` : "";
+    })
+    .filter(Boolean);
+  if (coverage.length) {
+    sections.push(`Artifacts produced by phase: ${coverage.join(", ")}`);
+  }
+
+  return sections.join("\n\n");
+}
+
 function buildWorkspacePrompt(
   workspaceId: string,
   programContext: Record<string, JsonValue>,
@@ -91,12 +205,31 @@ function buildWorkspacePrompt(
     return "Workspace Advisor";
   })();
 
+  const inner = getInnerState(programContext);
+  const programName = String(
+    programContext.programName
+    || asRecord(inner.meta).name
+    || asRecord(inner.projectMeta).name
+    || inner.programName
+    || "Untitled Program",
+  );
+  const objective = String(
+    programContext.programObjective
+    || inner.objective
+    || inner.programObjective
+    || asRecord(inner.projectMeta).objective
+    || "",
+  );
+  const digest = buildProgramStateDigest(inner);
+
   return [
     `You are ADAM Copilot acting as the ${identity} for the "${workspaceId}" workspace.`,
-    `Program name: ${String(programContext.programName || "Untitled Program")}`,
-    `Program objective: ${String(programContext.programObjective || "")}`,
+    `Program name: ${programName}`,
+    `Program objective: ${objective}`,
+    digest ? `Current program state:\n${digest}` : "",
     summary ? `Thread summary: ${summary}` : "",
     memoryContext ? `Agent memory context:\n${memoryContext}` : "",
+    "Ground every answer in the program state above — reference specific decisions, risks, gate readiness, and milestones by name when relevant. If the state lacks what's needed, say so rather than inventing it.",
     "Be concise, specific, and action-oriented.",
   ].filter(Boolean).join("\n\n");
 }
