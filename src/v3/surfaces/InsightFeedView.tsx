@@ -974,9 +974,9 @@ export default function InsightFeedView({
             {/* Ring legend — canonical KPI mapping (outer→inner) */}
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               {[
-                { color: "var(--v3-accent-b)", label: "Gate (outer)" },
-                { color: "#A78BFA", label: "Artifact (mid)" },
-                { color: "#2DD4BF", label: "Input (inner)" },
+                { color: "var(--v3-accent-b)", label: "Gate Score" },
+                { color: "#A78BFA", label: "Artifact Quality" },
+                { color: "#2DD4BF", label: "Input Quality" },
               ].map(({ color, label }) => (
                 <span key={label} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--v3-text-muted)" }}>
                   <svg width={10} height={10} viewBox="0 0 10 10" aria-hidden="true">

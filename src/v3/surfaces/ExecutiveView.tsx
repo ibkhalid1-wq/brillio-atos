@@ -674,7 +674,24 @@ export default function ExecutiveView({
 
       {/* ── 5. Stage progress ─────────────────────────────────────────────── */}
       <div>
-        <SectionLabel>Phase Progress</SectionLabel>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <SectionLabel>Phase Progress</SectionLabel>
+          {/* Ring legend — canonical KPI mapping */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+            {[
+              { color: "var(--v3-accent-b)", label: "Gate Score" },
+              { color: "#A78BFA", label: "Artifact Quality" },
+              { color: "#2DD4BF", label: "Input Quality" },
+            ].map(({ color, label }) => (
+              <span key={label} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--v3-text-muted)" }}>
+                <svg width={10} height={10} viewBox="0 0 10 10" aria-hidden="true">
+                  <circle cx={5} cy={5} r={4} fill="none" stroke={color} strokeWidth={2.4} />
+                </svg>
+                {label}
+              </span>
+            ))}
+          </div>
+        </div>
         <div
           style={{
             background: "var(--v3-surface)",
