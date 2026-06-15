@@ -16,9 +16,11 @@ function effortColor(effort: CoachAction["effort"]): string {
 export function GateCoachPanel({
   actions,
   onRunAgent,
+  isAgentRunning,
 }: {
   actions: CoachAction[];
   onRunAgent: (id: string) => void;
+  isAgentRunning?: (id: string) => boolean;
 }) {
   if (!actions.length) return null;
 
@@ -34,8 +36,14 @@ export function GateCoachPanel({
             <span>{action.action}</span>
           </div>
           {action.owner === "agent" && action.agentId ? (
-            <button type="button" className="v3-button ghost" style={{ fontSize: 11, flexShrink: 0 }} onClick={() => onRunAgent(action.agentId || "")}>
-              Run agent
+            <button
+              type="button"
+              className="v3-button ghost"
+              style={{ fontSize: 11, flexShrink: 0 }}
+              onClick={() => onRunAgent(action.agentId || "")}
+              disabled={!!isAgentRunning?.(action.agentId)}
+            >
+              {isAgentRunning?.(action.agentId) ? "Generating…" : "Run agent"}
             </button>
           ) : null}
         </div>

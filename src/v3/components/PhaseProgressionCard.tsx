@@ -34,6 +34,7 @@ interface PhaseProgressionCardProps {
   onRunAgent: (agentId: string) => void;
   onOpenMoreView?: (view: V3MoreView) => void;
   onOpenDecide: () => void;
+  anyAgentRunning?: boolean;
 }
 
 const EFFORT_HOURS: Record<string, number> = { quick: 1, hours: 4, days: 12 };
@@ -98,6 +99,7 @@ export function PhaseProgressionCard({
   onRunAgent,
   onOpenMoreView,
   onOpenDecide,
+  anyAgentRunning,
 }: PhaseProgressionCardProps) {
   const explanation = useMemo(() => explainPhaseReadiness(program, phaseId), [program, phaseId]);
   const confidence = useMemo(() => deriveProgramConfidence(program, phaseId), [program, phaseId]);
@@ -254,8 +256,9 @@ export function PhaseProgressionCard({
                     type="button"
                     className="v3-button ghost v3-button-inline-xs"
                     onClick={() => onRunAgent(action.agentId!)}
+                    disabled={anyAgentRunning}
                   >
-                    Analyse →
+                    {anyAgentRunning ? "Generating…" : "Analyse →"}
                   </button>
                 ) : action.workspaceId ? (
                   <button

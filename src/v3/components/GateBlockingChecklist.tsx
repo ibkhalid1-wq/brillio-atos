@@ -21,6 +21,7 @@ interface GateBlockingChecklistProps {
   onRunAgent: (agentId: string) => void;
   onOpenMoreView?: (view: V3MoreView) => void;
   onOpenDecide: () => void;
+  isAgentRunning?: (agentId: string) => boolean;
 }
 
 const SEVERITY_DOT: Record<string, string> = {
@@ -37,6 +38,7 @@ export function GateBlockingChecklist({
   onRunAgent,
   onOpenMoreView,
   onOpenDecide,
+  isAgentRunning,
 }: GateBlockingChecklistProps) {
   const blockers = useMemo(() => derivePhaseBlockers(program, phaseId), [program, phaseId]);
 
@@ -58,6 +60,7 @@ export function GateBlockingChecklist({
             if (item.id.startsWith("decision:")) { onOpenDecide(); return; }
           };
           const hasAction = !!(item.action?.agentId || item.action?.workspaceId || item.id.startsWith("decision:"));
+          const running = !!(item.action?.agentId && isAgentRunning?.(item.action.agentId));
           return (
             <div key={item.id} className="v3-gate-blocker-row">
               <span className="v3-gate-blocker-dot" style={{ color: SEVERITY_DOT[item.severity] ?? "var(--v3-amber)" }}>•</span>
@@ -72,8 +75,8 @@ export function GateBlockingChecklist({
                 </div>
               </div>
               {hasAction ? (
-                <button type="button" className="v3-button ghost v3-button-inline-xs" onClick={runAction}>
-                  {item.action?.label ?? "Resolve"} →
+                <button type="button" className="v3-button ghost v3-button-inline-xs" onClick={runAction} disabled={running}>
+                  {running ? "Generating…" : `${item.action?.label ?? "Resolve"} →`}
                 </button>
               ) : null}
             </div>

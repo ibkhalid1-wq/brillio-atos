@@ -1119,11 +1119,12 @@ export default function StageView({
             onRunAgent={onRunAgent}
             onOpenMoreView={onOpenMoreView}
             onOpenDecide={onOpenDecide}
+            isAgentRunning={isAgentRunning}
           />
         ) : null}
 
         {readiness && readiness.score < 80 && gateCoach?.actions?.length ? (
-          <GateCoachPanel actions={gateCoach.actions} onRunAgent={onRunAgent} />
+          <GateCoachPanel actions={gateCoach.actions} onRunAgent={onRunAgent} isAgentRunning={isAgentRunning} />
         ) : null}
         {phaseWorkstreams.length > 1 ? (
           <div className="v3-workstream-list v3-stack-sm">
