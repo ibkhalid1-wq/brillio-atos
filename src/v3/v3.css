@@ -5691,6 +5691,109 @@ button.v3-chip:focus-visible,
   flex-shrink: 0;
 }
 
+/* Methodology checklist — binds required inputs/artifacts/exit-criteria */
+.v3-method-checklist {
+  border: 1px solid var(--v3-border);
+  border-radius: var(--v3-radius);
+  background: var(--v3-surface);
+  margin: 0 0 12px;
+  overflow: hidden;
+}
+.v3-method-checklist-head {
+  width: 100%;
+  display: block;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 10px 12px 8px;
+}
+.v3-method-checklist-head:hover { background: var(--v3-surface-2); }
+.v3-method-checklist-headline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.v3-method-checklist-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--v3-text-primary);
+  flex: 1;
+}
+.v3-method-checklist-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--v3-text-muted);
+  margin-top: 3px;
+}
+.v3-method-checklist-caret {
+  margin-left: auto;
+  font-size: 11px;
+}
+.v3-method-checklist-bar {
+  height: 3px;
+  background: var(--v3-border);
+}
+.v3-method-checklist-bar-fill {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+.v3-method-checklist-bar-fill.green { background: var(--v3-green); }
+.v3-method-checklist-bar-fill.amber { background: var(--v3-amber); }
+.v3-method-checklist-bar-fill.red { background: var(--v3-red); }
+.v3-method-checklist-body {
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.v3-method-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+.v3-method-group-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--v3-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex: 1;
+}
+.v3-method-group-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.v3-method-item {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 12px;
+}
+.v3-method-item-mark {
+  flex-shrink: 0;
+  font-size: 11px;
+  width: 12px;
+}
+.v3-method-item.present .v3-method-item-mark { color: var(--v3-green); }
+.v3-method-item.missing .v3-method-item-mark { color: var(--v3-text-muted); }
+.v3-method-item.present .v3-method-item-label { color: var(--v3-text-secondary); }
+.v3-method-item.missing .v3-method-item-label { color: var(--v3-text-primary); font-weight: 500; }
+.v3-method-item-label { flex: 1; }
+.v3-method-item-hint {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--v3-text-muted);
+  font-style: italic;
+}
+
 /* "Since your last visit" recap card */
 .v3-change-summary {
   border: 1px solid var(--v3-border);

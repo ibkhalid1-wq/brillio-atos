@@ -9,6 +9,7 @@ import PhaseInputsPanel, { type FieldAssistRequest } from "@/v3/components/Phase
 import { PhaseProgressionCard } from "@/v3/components/PhaseProgressionCard";
 import { PhaseChangeSummary } from "@/v3/components/PhaseChangeSummary";
 import { PhaseExecutiveSummary } from "@/v3/components/PhaseExecutiveSummary";
+import { PhaseMethodologyChecklist } from "@/v3/components/PhaseMethodologyChecklist";
 import { PhaseRail } from "@/v3/components/PhaseRail";
 import { PhaseFlowBar } from "@/v3/components/PhaseFlowBar";
 import { ReadinessBadge } from "@/v3/components/ui/ReadinessBadge";
@@ -1021,6 +1022,10 @@ export default function StageView({
             onOpenMoreView={onOpenMoreView}
             onOpenDecide={onOpenDecide}
           />
+        ) : null}
+
+        {program && activePhase?.id ? (
+          <PhaseMethodologyChecklist program={program} phaseId={activePhase.id} />
         ) : null}
 
         {readiness && readiness.score < 80 && gateCoach?.actions?.length ? (
