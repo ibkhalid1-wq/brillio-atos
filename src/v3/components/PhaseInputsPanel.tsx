@@ -42,6 +42,31 @@ function parseKpis(raw: unknown): PhaseKpi[] {
   }
 }
 
+/**
+ * Parses persisted KPI actuals into a map keyed by KPI id. Actuals are the
+ * human-entered *measured* value captured at Value Realize, completing the
+ * baseline → target → actual record so the Benefits Tracker reports realisation
+ * against real numbers instead of estimating. Persisted as a JSON string under
+ * phaseInputs.valuerealize.kpiActuals.
+ */
+function parseKpiActuals(raw: unknown): Record<string, string> {
+  if (typeof raw !== "string" || !raw.trim()) return {};
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return {};
+    const map: Record<string, string> = {};
+    for (const entry of parsed) {
+      if (entry && typeof entry === "object" && typeof (entry as Record<string, unknown>).id === "string") {
+        const record = entry as Record<string, unknown>;
+        map[record.id as string] = typeof record.actual === "string" ? record.actual : String(record.actual ?? "");
+      }
+    }
+    return map;
+  } catch {
+    return {};
+  }
+}
+
 export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDocument }: PhaseInputsPanelProps) {
   const schema = getPhaseInputSchema(phaseId);
   // useMemo prevents a new object reference on every render, which would cause an
@@ -58,9 +83,26 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [program.rawData, phaseId]);
 
+  // KPI *definitions* always live at Strategy (baseline → target). At Value
+  // Realize we read them here so the user records actuals against the same KPIs
+  // they defined — never re-entering definitions. This is the bridge that closes
+  // the Inputs(KPI) → Outcomes(realisation) loop.
+  const strategyKpiDefs = useMemo(() => {
+    const raw = program.rawData as Record<string, unknown>;
+    const source = raw && typeof raw.data === "object" && raw.data !== null
+      ? raw.data as Record<string, unknown>
+      : raw ?? {};
+    const phaseInputs = typeof source.phaseInputs === "object" && source.phaseInputs !== null
+      ? source.phaseInputs as Record<string, Record<string, string>>
+      : {};
+    return parseKpis((phaseInputs.strategy ?? {}).kpis);
+  }, [program.rawData]);
+
   const [values, setValues] = useState<Record<string, string>>(existingInputs);
   const [localWorkstreams, setLocalWorkstreams] = useState<Workstream[]>([]);
   const [localKpis, setLocalKpis] = useState<PhaseKpi[]>([]);
+  // Map of KPI id → human-entered actual value (Value Realize only).
+  const [localActuals, setLocalActuals] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   // Always start expanded so document-imported data is immediately visible
@@ -77,9 +119,11 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
         : [];
     setLocalWorkstreams(existingWorkstreams);
     setLocalKpis(parseKpis((existingInputs as Record<string, unknown>).kpis));
+    setLocalActuals(parseKpiActuals((existingInputs as Record<string, unknown>).kpiActuals));
   }, [existingInputs, phaseId]);
 
   const showKpis = phaseId === "strategy";
+  const showActuals = phaseId === "valuerealize";
 
   const hasAllRequired = schema.fields
     .filter((field) => field.required)
@@ -95,6 +139,22 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
         // Strategy-only: persist baseline/target KPIs so benefits realisation
         // is measured against the human-entered baseline downstream.
         ...(showKpis ? { kpis: JSON.stringify(localKpis.filter((kpi) => kpi.name.trim())) } : {}),
+        // Value Realize-only: persist a full snapshot of each KPI plus its
+        // measured actual, so the Benefits Tracker reports realisation against
+        // human-entered numbers. Snapshotting baseline/target/unit keeps the
+        // record self-contained even if Strategy KPIs are later edited.
+        ...(showActuals ? {
+          kpiActuals: JSON.stringify(
+            strategyKpiDefs.map((def) => ({
+              id: def.id,
+              name: def.name,
+              baseline: def.baseline,
+              target: def.target,
+              unit: def.unit,
+              actual: localActuals[def.id] ?? "",
+            })),
+          ),
+        } : {}),
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -152,6 +212,10 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
 
   function removeKpi(index: number) {
     setLocalKpis((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  }
+
+  function updateActual(kpiId: string, value: string) {
+    setLocalActuals((current) => ({ ...current, [kpiId]: value }));
   }
 
   return (
@@ -319,6 +383,54 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
               <button type="button" className="v3-button ghost" style={{ fontSize: 11, marginTop: 4 }} onClick={addKpi}>
                 + Add KPI
               </button>
+            </div>
+          ) : null}
+
+          {showActuals ? (
+            <div style={{ marginTop: 12, marginBottom: 12 }}>
+              <div className="v3-field-label">KPI Realisation (record measured actuals)</div>
+              <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginBottom: 6 }}>
+                Enter the measured value for each outcome KPI. These actuals feed the Benefits Tracker,
+                which reports realisation against your Strategy baseline → target — closing the loop.
+              </div>
+              {strategyKpiDefs.length === 0 ? (
+                <div style={{
+                  fontSize: 11,
+                  color: "var(--v3-text-muted)",
+                  padding: "10px 12px",
+                  border: "1px dashed var(--v3-border)",
+                  borderRadius: 8,
+                }}>
+                  No outcome KPIs defined yet. Add them in the <strong>Strategy</strong> phase
+                  (Outcome KPIs · baseline → target) and they will appear here for measurement.
+                </div>
+              ) : (
+                strategyKpiDefs.map((def) => {
+                  const actual = localActuals[def.id] ?? "";
+                  return (
+                    <div key={def.id} style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
+                      <span style={{ flex: 2, fontSize: 12, color: "var(--v3-text)" }}>
+                        {def.name || <em style={{ color: "var(--v3-text-muted)" }}>(unnamed KPI)</em>}
+                        {def.unit ? <span style={{ color: "var(--v3-text-muted)" }}> ({def.unit})</span> : null}
+                      </span>
+                      <span title="Baseline (from Strategy)" style={{ width: 80, fontSize: 11, color: "var(--v3-text-muted)", textAlign: "center" }}>
+                        {def.baseline || "—"}
+                      </span>
+                      <span title="Target (from Strategy)" style={{ width: 80, fontSize: 11, color: "var(--v3-text-muted)", textAlign: "center" }}>
+                        → {def.target || "—"}
+                      </span>
+                      <input
+                        type="text"
+                        className="v3-input"
+                        style={{ width: 80 }}
+                        value={actual}
+                        placeholder="Actual"
+                        onChange={(event) => updateActual(def.id, event.target.value)}
+                      />
+                    </div>
+                  );
+                })
+              )}
             </div>
           ) : null}
 

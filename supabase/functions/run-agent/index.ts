@@ -1244,13 +1244,27 @@ function buildSpecialAgentInputContext(
       : Array.isArray(strategyInputs.kpis)
         ? strategyInputs.kpis.filter(isRecord)
         : [];
+    // Human-entered measured actuals captured at Value Realize (persisted as a
+    // JSON string by PhaseInputsPanel under phaseInputs.valuerealize.kpiActuals).
+    // Each record snapshots {id,name,baseline,target,unit,actual}, so the tracker
+    // reports realisation against real numbers. Falls back to the legacy
+    // valueRealization slot for backward compatibility.
+    const valueRealizeInputs = normalizeProgramData(normalizeProgramData(inner.phaseInputs as JsonValue | null).valuerealize as JsonValue | null);
+    const enteredActuals = typeof valueRealizeInputs.kpiActuals === "string"
+      ? safeJsonParse<unknown[]>(valueRealizeInputs.kpiActuals, []).filter(isRecord)
+      : Array.isArray(valueRealizeInputs.kpiActuals)
+        ? valueRealizeInputs.kpiActuals.filter(isRecord)
+        : [];
+    const kpiActuals = enteredActuals.length > 0
+      ? enteredActuals
+      : (isRecord(inner.valueRealization) ? inner.valueRealization : inner.kpiActuals);
     return JSON.stringify({
       objective: typeof inner.objective === "string" ? inner.objective : "",
       kpiBaselines,
       phaseInputs: normalizeProgramData(inner.phaseInputs as JsonValue | null),
       milestones,
       plan,
-      kpiActuals: isRecord(inner.valueRealization) ? inner.valueRealization : inner.kpiActuals,
+      kpiActuals,
     }, null, 2);
   }
 
@@ -4687,6 +4701,13 @@ baseline and target — do NOT invent or estimate baselines. Produce one output
 KPI per kpiBaselines entry, carrying its name, baseline, target and unit
 through, and assess current/rag/trend against that anchor. Only fall back to
 inferring metrics from the objective when kpiBaselines is empty.
+
+When the context contains "kpiActuals" (human-entered measured values recorded
+at Value Realize — an array of {id,name,baseline,target,unit,actual}), use the
+matching entry's "actual" verbatim as the "current" value for that KPI, matched
+by name (or id). These are real measurements: do NOT estimate or override them.
+Rate rag/trend by comparing that measured actual against the baseline → target.
+Only estimate "current" from evidence when no actual is recorded for a KPI.
 
 Return ONLY valid JSON:
 {
