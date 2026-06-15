@@ -45,6 +45,7 @@ type CommandRailProps = {
   activePhaseLabel?: string | null;
   confidenceScore?: number | null;
   anyAgentRunning?: boolean;
+  agentStatus?: "running" | "idle" | "stopped";
   userInitial?: string | null;
   userEmail?: string | null;
   onOpenHelp?: () => void;
@@ -173,6 +174,7 @@ export function CommandRail({
   activePhaseLabel,
   confidenceScore,
   anyAgentRunning = false,
+  agentStatus,
   userInitial,
   userEmail,
   onOpenHelp,
@@ -402,15 +404,25 @@ export function CommandRail({
 
       {/* ── Agent activity — always present so the working spinner stays on the rail ── */}
       <RailDivider />
-      <div
-        className={`v3-command-rail-status-row v3-agent-running-row ${anyAgentRunning ? "is-running" : "is-stopped"}`}
-        title={anyAgentRunning ? "Agents analysing programme data" : "Agents stopped — no agent running"}
-      >
-        <span className={`v3-radar-spinner ${anyAgentRunning ? "" : "is-stopped"}`} aria-hidden="true" />
-        <span className="v3-command-rail-status-label v3-agent-running-label">
-          {anyAgentRunning ? "Agents running" : "Agents stopped"}
-        </span>
-      </div>
+      {(() => {
+        const status = agentStatus ?? (anyAgentRunning ? "running" : "idle");
+        const meta = {
+          running: { label: "Agents running", title: "Agents analysing programme data", spinner: "" },
+          idle: { label: "Agents idle", title: "Agents idle — ready to run", spinner: "is-idle" },
+          stopped: { label: "Agents stopped", title: "An agent stopped — needs attention", spinner: "is-stopped" },
+        }[status];
+        return (
+          <div
+            className={`v3-command-rail-status-row v3-agent-running-row is-${status}`}
+            title={meta.title}
+          >
+            <span className={`v3-radar-spinner ${meta.spinner}`} aria-hidden="true" />
+            <span className="v3-command-rail-status-label v3-agent-running-label">
+              {meta.label}
+            </span>
+          </div>
+        );
+      })()}
 
       {/* ── Health ── */}
       {programHealth ? (

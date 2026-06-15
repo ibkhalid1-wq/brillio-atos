@@ -1452,6 +1452,14 @@ export default function AppShellV3() {
   // Why agents can / cannot generate artifacts — the three preconditions, checked
   // in the same order runProgramAgent enforces them, so the ledger names the exact blocker.
   const anyAgentRunning = agentIsRunning || triggers.gateReviewRunningPhaseSet.size > 0 || triggers.escalationIsRunning;
+  // Three-state rail indicator: running (working) → idle (at rest, ready) →
+  // stopped (a recent run ended abnormally — failed/cancelled — within the
+  // hook's terminal-run retention window, so it surfaces as needing attention).
+  const agentStatus: "running" | "idle" | "stopped" = anyAgentRunning
+    ? "running"
+    : activeRuns.some((run) => run.status === "failed" || run.status === "cancelled")
+    ? "stopped"
+    : "idle";
   // For ExecCommandPanel / ExecutiveView buttons: only block when the *user* triggered a run,
   // not when a background / proactive agent is sitting in the DB in "queued"/"running" state.
   // agentIsUserRunning === isLoading, which is true only during the runAgent() HTTP call itself
@@ -2357,6 +2365,7 @@ export default function AppShellV3() {
         activePhaseLabel={activePhaseId ? phaseNameById(activeProgram, activePhaseId) : null}
         confidenceScore={programConfidenceScore}
         anyAgentRunning={anyAgentRunning}
+        agentStatus={agentStatus}
         userInitial={currentUser?.email?.[0]?.toUpperCase() || null}
         userEmail={currentUser?.email || null}
         onOpenHelp={() => setHelpOpen(true)}
