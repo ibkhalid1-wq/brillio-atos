@@ -628,8 +628,8 @@ function AuthScreen({
     <div className="v3-auth-gate">
       <div className="v3-auth-shell">
         <div className="v3-auth-gate-inner">
-          <div className="v3-auth-kicker">Brillio ATLAS</div>
-          <div className="v3-auth-gate-logo">ATLAS</div>
+          <div className="v3-auth-kicker">Brillio</div>
+          <div className="v3-auth-gate-logo">ATOS</div>
           <h1 className="v3-auth-gate-title">{authTitle}</h1>
           <p className="v3-auth-gate-body">{authBody}</p>
 

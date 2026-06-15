@@ -2,7 +2,7 @@
   "name": "brillio-atlas",
   "private": true,
   "version": "1.0.0",
-  "description": "Brillio ATLAS™ — Agentic Transformation Operating System (ATOS). AI-Native Transformation Platform.",
+  "description": "Brillio ATOS™ — Agentic Transformation Operating System. AI-Native Transformation Platform.",
   "type": "module",
   "scripts": {
     "dev": "vite",
