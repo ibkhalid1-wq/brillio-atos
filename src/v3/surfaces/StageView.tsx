@@ -6,6 +6,7 @@ import ArtifactEditor from "@/v3/components/ArtifactEditor";
 import GateCoachPanel from "@/v3/components/GateCoachPanel";
 import OnboardingCard from "@/v3/components/OnboardingCard";
 import PhaseInputsPanel, { type FieldAssistRequest } from "@/v3/components/PhaseInputsPanel";
+import PhaseInputArtifactMap from "@/v3/components/PhaseInputArtifactMap";
 import { PhaseProgressionCard } from "@/v3/components/PhaseProgressionCard";
 import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
 import { PhaseChangeSummary } from "@/v3/components/PhaseChangeSummary";
@@ -22,7 +23,6 @@ import { StatusBadge } from "@/v3/components/ui/StatusBadge";
 import { computePhaseReadiness } from "@/v3/lib/phaseReadiness";
 import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
 import type { V3Mode, V3MoreView, V3ReportId } from "@/v3/types";
-import { phaseName } from "@/v3/utils";
 
 interface StageViewProps {
   program: ProgramSummary | null;
@@ -739,72 +739,154 @@ export default function StageView({
           if (onSelectPhase) onSelectPhase(phaseId);
         }}
       />
-      {/* Phase context banner */}
-      <div style={{
-        borderBottom: "1px solid var(--v3-border)",
-        background: "var(--v3-surface)",
-        padding: "10px 20px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        flexShrink: 0,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {/* Canonical 3-ring phase status — inner Input · middle Artifact · outer Gate */}
-          <PhaseStatusRings program={program} phaseId={activePhase.id} size={48} showCenter />
-          <div>
-            {/* Program eyebrow — always-visible programme context above the phase */}
-            <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginBottom: 2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-              <span style={{ fontWeight: 600, color: "var(--v3-text-secondary)" }}>{program.name}</span>
-              {program.client ? <span>· {program.client}</span> : null}
-              {program.sponsor ? <span>· Sponsor: {program.sponsor}</span> : null}
-              <span>· Updated <RelativeTime date={program.updatedAt} /></span>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 15, fontWeight: 700, color: "var(--v3-text-primary)" }}>
-                {activePhase.label ?? activePhase.id}
-              </span>
-              <span className={`v3-chip ${phaseTone.tone === "green" ? "green" : phaseTone.tone === "amber" ? "amber" : phaseTone.tone === "red" ? "red" : "muted"}`}>
-                {activePhase.status ? activePhase.status.replace(/-/g, " ") : `${Math.round(activePhase.pct ?? 0)}% complete`}
-              </span>
-              {(() => {
-                const readinessScores = (program?.rawData as Record<string,unknown>)?.data
-                  ? ((program?.rawData as Record<string,unknown>)?.data as Record<string,unknown>)?.phaseReadinessScores
-                  : (program?.rawData as Record<string,unknown>)?.phaseReadinessScores;
-                const phaseReadiness = readinessScores && typeof readinessScores === "object"
-                  ? (readinessScores as Record<string,unknown>)[activePhase.id] as { score?: number; blockers?: string[] } | undefined
-                  : undefined;
-                return <ReadinessBadge score={phaseReadiness?.score} blockers={phaseReadiness?.blockers} size="sm" />;
-              })()}
-              {phaseConfidence ? (
-                <span
-                  className={`v3-chip ${phaseConfidence.score >= 75 ? "green" : phaseConfidence.score >= 50 ? "amber" : "red"}`}
-                  title={phaseConfidence.explanation}
-                >
-                  {phaseConfidence.score}% confidence
+      {/* ===== COMPACT HEADER BLOCK — identity · key metrics · current focus · moved actions ===== */}
+      <header className="v3-phase-head">
+        <div className="v3-phase-head-row">
+          <div className="v3-phase-head-identity">
+            {/* Canonical 3-ring phase status — inner Input · middle Artifact · outer Gate */}
+            <PhaseStatusRings program={program} phaseId={activePhase.id} size={56} showCenter />
+            <div className="v3-phase-head-titles">
+              <div className="v3-phase-head-eyebrow">
+                <span className="v3-phase-head-prog">{program.name}</span>
+                {program.client ? <span>· {program.client}</span> : null}
+                {program.sponsor ? <span>· Sponsor: {program.sponsor}</span> : null}
+                <span>· Updated <RelativeTime date={program.updatedAt} /></span>
+              </div>
+              <div className="v3-phase-head-titlerow">
+                <span className="v3-phase-head-title">{activePhase.label ?? activePhase.id}</span>
+                <span className={`v3-chip ${phaseTone.tone === "green" ? "green" : phaseTone.tone === "amber" ? "amber" : phaseTone.tone === "red" ? "red" : "muted"}`}>
+                  {activePhase.status ? activePhase.status.replace(/-/g, " ") : `${Math.round(activePhase.pct ?? 0)}% complete`}
                 </span>
+                {(() => {
+                  const readinessScores = (program?.rawData as Record<string,unknown>)?.data
+                    ? ((program?.rawData as Record<string,unknown>)?.data as Record<string,unknown>)?.phaseReadinessScores
+                    : (program?.rawData as Record<string,unknown>)?.phaseReadinessScores;
+                  const phaseReadiness = readinessScores && typeof readinessScores === "object"
+                    ? (readinessScores as Record<string,unknown>)[activePhase.id] as { score?: number; blockers?: string[] } | undefined
+                    : undefined;
+                  return <ReadinessBadge score={phaseReadiness?.score} blockers={phaseReadiness?.blockers} size="sm" />;
+                })()}
+                {phaseConfidence ? (
+                  <span
+                    className={`v3-chip ${phaseConfidence.score >= 75 ? "green" : phaseConfidence.score >= 50 ? "amber" : "red"}`}
+                    title={phaseConfidence.explanation}
+                  >
+                    {phaseConfidence.score}% confidence
+                  </span>
+                ) : null}
+                {gateTrend && gateTrend !== "stable" ? (
+                  <span className={`v3-chip ${gateTrend === "improving" ? "green" : "amber"}`}>
+                    {gateTrend === "improving" ? "↑ readiness improving" : "↓ readiness declining"}
+                  </span>
+                ) : null}
+              </div>
+              {PHASE_FOCUS_COPY[activePhase.id] ? (
+                <div className="v3-phase-head-focus">{PHASE_FOCUS_COPY[activePhase.id]}</div>
               ) : null}
+              {verdict ? <div className="v3-phase-head-verdict">{verdict}</div> : null}
             </div>
-            {program.objective ? (
-              <div style={{ fontSize: 12, color: "var(--v3-text-secondary)", marginTop: 3, maxWidth: 560, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={program.objective}>
-                {program.objective}
+          </div>
+          {/* Programme phase flow bar (Priority 5 — PhaseFlowBar) */}
+          <PhaseFlowBar
+            program={program}
+            activePhaseId={activePhase.id}
+            lockedPhaseIds={lockedPhaseIds}
+            onSelectPhase={onSelectPhase}
+          />
+        </div>
+
+        {/* Key metrics */}
+        {readiness ? (
+          <div className="v3-phase-metrics">
+            {[
+              { label: "Readiness", value: `${readiness.score}%`, tone: readiness.score >= 75 ? "green" : readiness.score >= 50 ? "amber" : "red" },
+              { label: "Input", value: `${readiness.inputScore}%`, tone: "" },
+              { label: "Artifact", value: `${readiness.artifactScore}%`, tone: "" },
+              { label: "Gate", value: readiness.gateScore != null ? `${readiness.gateScore}%` : "—", tone: "" },
+              { label: "Complete", value: `${Math.round(activePhase.pct)}%`, tone: "" },
+              ...(inputQuality ? [{ label: "Input quality", value: `${inputQuality.overallScore}%`, tone: inputQuality.verdict === "sufficient" ? "green" : inputQuality.verdict === "partial" ? "amber" : "red" }] : []),
+              ...(handoffQuality?.score ? [{ label: "Handoff", value: `${handoffQuality.score}%`, tone: handoffQuality.passed ? "green" : "amber" }] : []),
+            ].map((metric) => (
+              <div key={metric.label} className="v3-phase-metric">
+                <div className={`v3-phase-metric-value ${metric.tone}`}>{metric.value}</div>
+                <div className="v3-phase-metric-label">{metric.label}</div>
               </div>
+            ))}
+          </div>
+        ) : null}
+
+        {/* Moved actions — gate decisions + artifact / nav jumps */}
+        <div className="v3-phase-head-actions">
+          <div className="v3-phase-head-actions-grp">
+            <StatusBadge
+              variant={gateReviewStatus === "approved" ? "approved" : gateReviewStatus === "remediation-requested" ? "remediation" : "pending"}
+              label={gateReviewStatus ? gateReviewStatus.replace(/-/g, " ") : "gate pending"}
+            />
+            {gateReviewStatus === "pending-review" || gateReviewStatus === "ready" ? (
+              <button
+                type="button"
+                className="v3-button primary v3-button-inline-sm"
+                disabled={!readiness?.canApproveGate}
+                title={!readiness?.canApproveGate ? `Gate readiness ${readiness?.score ?? 0}% — ${readiness?.threshold ?? 70}% required` : undefined}
+                aria-label={`Approve gate for ${activePhase?.label ?? activePhase.id}`}
+                onClick={async () => { try { await onApproveGate(activePhase.id); } catch { /* handled by AppShellV3 */ } }}
+              >
+                Approve & Unlock ✓
+              </button>
             ) : null}
-            {PHASE_FOCUS_COPY[activePhase.id] && (
-              <div style={{ fontSize: 12, color: "var(--v3-text-muted)", marginTop: 2 }}>
-                {PHASE_FOCUS_COPY[activePhase.id]}
-              </div>
-            )}
+            {gateReviewStatus === "pending-review" || gateReviewStatus === "ready" ? (
+              <button type="button" className="v3-button ghost v3-button-inline-sm" onClick={() => setRemediationOpen(true)}>Flag Issues</button>
+            ) : null}
+            <button
+              type="button"
+              className="v3-button ghost v3-button-inline-sm"
+              disabled={isGateRunning}
+              onClick={() => triggers.triggerGateReview(activePhase.id)}
+            >
+              {isGateRunning ? "Checking…" : gateReview ? "Re-check Gate Readiness" : "Check Gate Readiness"}
+            </button>
+            {gateReviewStatus === "approved" ? (
+              <button type="button" className="v3-button ghost v3-button-inline-xs" onClick={() => onReopenGate(activePhase.id)}>Reopen Gate</button>
+            ) : null}
+          </div>
+          <div className="v3-phase-head-actions-grp">
+            <button type="button" className="v3-button ghost v3-button-inline-sm" onClick={() => { setExpandedOutput("narrative"); document.getElementById("phase-artifacts-anchor")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Narrative</button>
+            <button type="button" className="v3-button ghost v3-button-inline-sm" onClick={() => { setExpandedOutput("deck"); document.getElementById("phase-artifacts-anchor")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Status deck</button>
+            <button type="button" className="v3-button ghost v3-button-inline-sm" onClick={() => document.getElementById("exit-criteria-anchor")?.scrollIntoView({ behavior: "smooth", block: "center" })}>Exit criteria</button>
+            <button type="button" className="v3-button ghost v3-button-inline-sm" onClick={() => onOpenMoreView("milestones")}>Milestones</button>
           </div>
         </div>
-        {/* Programme phase flow bar (Priority 5 — PhaseFlowBar) */}
-        <PhaseFlowBar
-          program={program}
-          activePhaseId={activePhase.id}
-          lockedPhaseIds={lockedPhaseIds}
-          onSelectPhase={onSelectPhase}
-        />
-      </div>
+
+        {remediationOpen ? (
+          <div className="v3-remediation-panel">
+            <textarea
+              className="v3-input v3-textarea"
+              aria-label="Gate remediation note"
+              rows={2}
+              value={remediationNote}
+              onChange={(event) => setRemediationNote(event.target.value)}
+              placeholder="Explain what must be fixed before this gate can be approved…"
+            />
+            <div className="v3-inline-actions">
+              <button type="button" className="v3-button ghost v3-button-inline-xs" onClick={() => setRemediationOpen(false)}>Cancel</button>
+              <button
+                type="button"
+                className="v3-button primary v3-button-inline-xs"
+                disabled={!remediationNote.trim()}
+                onClick={async () => {
+                  try {
+                    await onRequestRemediation(activePhase.id, remediationNote.trim());
+                    setRemediationOpen(false);
+                    setRemediationNote("");
+                  } catch { /* handled by AppShellV3 */ }
+                }}
+              >
+                Save remediation request
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </header>
       {/* Executive snapshot — condensed 15-second read of the phase, pinned above the zones */}
       <div style={{ padding: "10px 20px 0" }}>
         <PhaseExecutiveSummary
@@ -904,14 +986,9 @@ export default function StageView({
           </div>
         </div>
       )}
-      <div className="v3-cockpit-grid">
-      <section className="v3-zone v3-zone--focus">
-        <div className="v3-zone-label">This week's focus</div>
-        {activePhase?.id && PHASE_FOCUS_COPY[activePhase.id] && (
-          <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginBottom: 8, lineHeight: 1.4 }}>
-            {PHASE_FOCUS_COPY[activePhase.id]}
-          </div>
-        )}
+      <div className="v3-phase-body">
+      <section className="v3-zone v3-zone--focus v3-phase-rail">
+        <div className="v3-zone-label">Task queue · blockers · risks</div>
         {weeklyDigest && weeklyDigest.weekOf === mondayOfCurrentWeek ? (
           <div className="v3-weekly-digest">
             <div className="v3-digest-head">
@@ -937,34 +1014,6 @@ export default function StageView({
                 ))}
               </div>
             ) : null}
-          </div>
-        ) : null}
-        <div className="v3-focus-header">
-          <div>
-            <h1 className="v3-focus-title">{phaseName(activePhase)}</h1>
-            <div className="v3-focus-meta">
-              <span className={`v3-chip ${phaseTone.tone}`}>{phaseTone.label}</span>
-              <span className="v3-chip muted">{Math.round(activePhase.pct)}% complete</span>
-              {handoffQuality?.score ? (
-                <span className={`v3-chip ${handoffQuality.passed ? "green" : "amber"}`}>Handoff {handoffQuality.score}%</span>
-              ) : null}
-            </div>
-          </div>
-        </div>
-        {inputQuality ? (
-          <div className={`v3-input-quality-banner ${inputQuality.verdict}`}>
-            <span className={`v3-chip ${inputQuality.verdict === "sufficient" ? "green" : inputQuality.verdict === "partial" ? "amber" : "red"}`}>
-              Input quality {inputQuality.overallScore}%
-            </span>
-            {inputQuality.missingCritical?.length ? (
-              <span className="v3-banner-detail">
-                Missing: {inputQuality.missingCritical.slice(0, 2).join(" · ")}
-              </span>
-            ) : (
-              <span className="v3-banner-detail">
-                Ready: {inputQuality.readyToRun?.join(", ") || "all analysis"}
-              </span>
-            )}
           </div>
         ) : null}
         {showEmbeddedOnboarding ? (
@@ -1089,98 +1138,43 @@ export default function StageView({
           </div>
         ) : null}
 
-        <div className="v3-focus-actions">
-          <StatusBadge
-            variant={
-              gateReviewStatus === "approved"
-                ? "approved"
-                : gateReviewStatus === "remediation-requested"
-                  ? "remediation"
-                  : "pending"
-            }
-            label={gateReviewStatus ? gateReviewStatus.replace(/-/g, " ") : "gate pending"}
-          />
-          {gateReviewStatus === "pending-review" || gateReviewStatus === "ready" ? (
-            <button
-              type="button"
-              className="v3-button primary v3-button-inline-sm"
-              disabled={!readiness?.canApproveGate}
-              title={!readiness?.canApproveGate ? `Gate readiness ${readiness?.score ?? 0}% — ${readiness?.threshold ?? 70}% required` : undefined}
-              aria-label={`Approve gate for ${activePhase?.label ?? activePhase.id}`}
-              onClick={async () => {
-                try {
-                  await onApproveGate(activePhase.id);
-                } catch {
-                  // Error handled by AppShellV3 pushV3Toast
-                }
-              }}
-            >
-              Approve & Unlock Next Phase ✓
-            </button>
-          ) : null}
-          {gateReviewStatus === "pending-review" || gateReviewStatus === "ready" ? (
-            <button type="button" className="v3-button ghost v3-button-inline-sm" onClick={() => setRemediationOpen(true)}>
-              Flag Issues for Review
-            </button>
-          ) : null}
-          <button
-            type="button"
-            className="v3-button ghost v3-button-inline-sm"
-            disabled={isGateRunning}
-            onClick={() => triggers.triggerGateReview(activePhase.id)}
-          >
-            {isGateRunning ? "Checking…" : gateReview ? "Re-check Gate Readiness" : "Check Gate Readiness"}
-          </button>
-          {gateReviewStatus === "approved" ? (
-            <button
-              type="button"
-              className="v3-button ghost v3-button-inline-xs"
-              onClick={() => onReopenGate(activePhase.id)}
-            >
-              Reopen Gate Review
-            </button>
-          ) : null}
-        </div>
-        {gateTrend && gateTrend !== "stable" ? (
-          <div className={`v3-gate-trend ${gateTrend === "improving" ? "is-improving" : "is-softening"}`}>
-            {gateTrend === "improving" ? "↑ Gate readiness improving" : "↓ Gate readiness declining"}
-          </div>
-        ) : null}
-        {remediationOpen ? (
-          <div className="v3-remediation-panel">
-            <textarea
-              className="v3-input v3-textarea"
-              aria-label="Gate remediation note"
-              rows={2}
-              value={remediationNote}
-              onChange={(event) => setRemediationNote(event.target.value)}
-              placeholder="Explain what must be fixed before this gate can be approved…"
-            />
-            <div className="v3-inline-actions">
-              <button type="button" className="v3-button ghost v3-button-inline-xs" onClick={() => setRemediationOpen(false)}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="v3-button primary v3-button-inline-xs"
-                disabled={!remediationNote.trim()}
-                onClick={async () => {
-                  try {
-                    await onRequestRemediation(activePhase.id, remediationNote.trim());
-                    setRemediationOpen(false);
-                    setRemediationNote("");
-                  } catch {
-                    // Error handled by AppShellV3 pushV3Toast
-                  }
-                }}
-              >
-                Save remediation request
-              </button>
-            </div>
+        {/* Task queue — recommended next actions for this phase */}
+        {readiness && readiness.recommendedActions.length > 0 ? (
+          <div className="v3-rail-section">
+            <div className="v3-card-title v3-card-title--flush">Task queue</div>
+            <ol className="v3-task-queue">
+              {readiness.recommendedActions.slice(0, 5).map((action, index) => (
+                <li key={`${action.label}-${index}`} className="v3-task-queue-item">
+                  <div className="v3-task-queue-main">
+                    <span className={`v3-task-queue-dot ${action.priority === "critical" ? "red" : "amber"}`} />
+                    <span className="v3-task-queue-label">{action.label}</span>
+                    {action.estimatedImpact > 0 ? <span className="v3-task-queue-impact">+{action.estimatedImpact}</span> : null}
+                  </div>
+                  {action.agentId ? (
+                    <button type="button" className="v3-button ghost v3-button-inline-xs" onClick={() => onRunAgent(action.agentId!)}>Analyse →</button>
+                  ) : action.workspaceId ? (
+                    <button type="button" className="v3-button ghost v3-button-inline-xs" onClick={() => onOpenMoreView?.(action.workspaceId!)}>Open →</button>
+                  ) : null}
+                </li>
+              ))}
+            </ol>
           </div>
         ) : null}
 
-        {verdict ? <div className="v3-stage-verdict">{verdict}</div> : null}
+        {/* Blockers — what's standing between this phase and gate approval */}
+        {readiness && readiness.missing.length > 0 ? (
+          <div className="v3-rail-section">
+            <div className="v3-card-title v3-card-title--flush">Blockers</div>
+            <ul className="v3-inline-list">
+              {readiness.missing.slice(0, 5).map((item, index) => (
+                <li key={`${item}-${index}`}>{item}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {/* Risks — live phase RAID */}
+        <RisksCard risks={stageRisks} onOpen={() => onOpenMoreView("risks")} />
         {incomingHandoff ? (
           <div className="v3-handoff-banner">
             <div className="v3-eyebrow-label">
@@ -1230,28 +1224,53 @@ export default function StageView({
                   <ActionList actions={stageActions} onOpenReport={() => onOpenReport("status")} />
       </section>
 
-      <div className="v3-cockpit-main">
-      <section className="v3-zone v3-zone--work">
-        <div className="v3-zone-label">Working</div>
-        <div className="v3-zone-working">
-          {program && activePhase?.id ? (
-            <div id="phase-inputs-anchor">
-              <PhaseInputsPanel
-                program={program}
-                phaseId={activePhase.id}
-                onSave={onSaveInputs}
-                onUploadDocument={onUploadDocument}
-                onAssistField={onAssistField}
-              />
-            </div>
-          ) : null}
+      <div className="v3-phase-main">
+      {/* LEFT — input fields card (keeps upload-document + workstream buttons inside PhaseInputsPanel) */}
+      <section className="v3-phase-col v3-phase-col--inputs">
+        <div className="v3-zone-label">Input fields</div>
+        {inputQuality ? (
+          <div className={`v3-input-quality-banner ${inputQuality.verdict}`}>
+            <span className={`v3-chip ${inputQuality.verdict === "sufficient" ? "green" : inputQuality.verdict === "partial" ? "amber" : "red"}`}>
+              Input quality {inputQuality.overallScore}%
+            </span>
+            {inputQuality.missingCritical?.length ? (
+              <span className="v3-banner-detail">Missing: {inputQuality.missingCritical.slice(0, 2).join(" · ")}</span>
+            ) : (
+              <span className="v3-banner-detail">Ready: {inputQuality.readyToRun?.join(", ") || "all analysis"}</span>
+            )}
+          </div>
+        ) : null}
+        {program && activePhase?.id ? (
+          <div id="phase-inputs-anchor">
+            <PhaseInputsPanel
+              program={program}
+              phaseId={activePhase.id}
+              onSave={onSaveInputs}
+              onUploadDocument={onUploadDocument}
+              onAssistField={onAssistField}
+            />
+          </div>
+        ) : null}
+      </section>
 
-          <ExitCriteriaCard
-            criteria={gateReview?.exitCriteriaStatus || []}
-            generatedCriteria={generatedCriteria}
-            onGenerateCriteria={onGenerateCriteria}
-            gateApproved={gateApproved}
-          />
+      {/* MIDDLE — collapsible (collapsed by default) input ↔ artifact relationship map */}
+      <section className="v3-phase-col v3-phase-col--map">
+        <div className="v3-zone-label">Flow</div>
+        <PhaseInputArtifactMap program={program} phaseId={activePhase.id} />
+      </section>
+
+      {/* BELOW — other phase-relevant cards, stretched full-width and stacked */}
+      <div className="v3-phase-cards">
+        <div className="v3-zone-label">Phase workspace</div>
+        <div className="v3-phase-cards-grid">
+          <div id="exit-criteria-anchor">
+            <ExitCriteriaCard
+              criteria={gateReview?.exitCriteriaStatus || []}
+              generatedCriteria={generatedCriteria}
+              onGenerateCriteria={onGenerateCriteria}
+              gateApproved={gateApproved}
+            />
+          </div>
 
           <AdamCard accent={stageDecisions.length ? "warning" : "none"}>
             <AdamCardHeader
@@ -1299,8 +1318,6 @@ export default function StageView({
               )}
             </AdamCardBody>
           </AdamCard>
-
-          {mode === "power" ? <RisksCard risks={stageRisks} onOpen={() => onOpenMoreView("risks")} /> : null}
 
           {mode === "power" ? (
             <div className="v3-card-sm v3-mini-card">
@@ -1476,10 +1493,11 @@ export default function StageView({
             </div>
           ) : null}
         </div>
-      </section>
+      </div>
 
-      <section className="v3-zone v3-zone--outputs" style={{ borderBottom: "none" }}>
-        <div className="v3-zone-label">Outputs</div>
+      {/* RIGHT — artifacts card */}
+      <section className="v3-phase-col v3-phase-col--artifacts" id="phase-artifacts-anchor" style={{ borderBottom: "none" }}>
+        <div className="v3-zone-label">Artifacts</div>
         <div className="v3-output-strip">
           {[
             { id: "narrative", label: `Narrative${narrativeQuality ? ` ${narrativeQuality.score}%` : ""}`, available: !!artifactPreviews?.narrative, tone: narrativeQuality ? (narrativeQuality.score >= 80 ? "green" : narrativeQuality.score >= 60 ? "blue" : "amber") : "blue" },

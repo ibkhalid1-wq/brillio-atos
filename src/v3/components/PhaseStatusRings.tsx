@@ -160,10 +160,10 @@ export function PhaseStatusRings(props: PhaseStatusRingsProps) {
               alignItems: "center",
               justifyContent: "center",
               fontSize: centerFontSize,
-              fontWeight: 700,
-              color: "var(--v3-text-primary)",
+              fontWeight: 600,
+              color: "var(--v3-text-secondary)",
               fontFamily: "var(--v3-font)",
-              letterSpacing: "-0.02em",
+              letterSpacing: "-0.015em",
               fontVariantNumeric: "tabular-nums",
               lineHeight: 1,
             }}

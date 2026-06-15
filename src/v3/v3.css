@@ -5385,6 +5385,117 @@ button.v3-chip:focus-visible,
   box-shadow: inset -1px 0 0 rgba(23, 27, 43, 0.05);
 }
 
+/* ===================================================================== */
+/* Phase screen (StageView) redesign — compact header · triptych · rail   */
+/* ===================================================================== */
+.v3-phase-head {
+  border-bottom: 1px solid var(--v3-border);
+  background: var(--v3-surface);
+  padding: 12px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.v3-phase-head-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.v3-phase-head-identity { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.v3-phase-head-titles { min-width: 0; }
+.v3-phase-head-eyebrow {
+  font-size: 11px; color: var(--v3-text-muted);
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 3px;
+}
+.v3-phase-head-prog { font-weight: 600; color: var(--v3-text-secondary); }
+.v3-phase-head-titlerow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.v3-phase-head-title { font-size: 17px; font-weight: 800; letter-spacing: -0.02em; color: var(--v3-text-primary); }
+.v3-phase-head-focus { font-size: 12px; color: var(--v3-text-muted); margin-top: 3px; }
+.v3-phase-head-verdict { font-size: 12px; color: var(--v3-text-secondary); margin-top: 3px; max-width: 640px; line-height: 1.45; }
+
+.v3-phase-metrics { display: flex; gap: 8px; flex-wrap: wrap; }
+.v3-phase-metric {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  min-width: 70px; padding: 6px 12px;
+  background: var(--v3-surface-2); border: 1px solid var(--v3-border); border-radius: var(--radius-md);
+}
+.v3-phase-metric-value { font-size: 16px; font-weight: 700; color: var(--v3-text-primary); font-variant-numeric: tabular-nums; }
+.v3-phase-metric-value.green { color: var(--v3-green); }
+.v3-phase-metric-value.amber { color: var(--v3-amber); }
+.v3-phase-metric-value.red { color: var(--v3-red); }
+.v3-phase-metric-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--v3-text-muted); }
+
+.v3-phase-head-actions { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+.v3-phase-head-actions-grp { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+.v3-phase-body { display: flex; align-items: flex-start; min-height: 0; flex: 1; }
+.v3-phase-rail {
+  order: 2;
+  flex: 0 0 320px; width: 320px; align-self: stretch;
+  border-left: 1px solid var(--v3-border-soft);
+  overflow-y: auto;
+}
+.v3-phase-main {
+  order: 1;
+  flex: 1 1 auto; min-width: 0;
+  display: flex; flex-wrap: wrap; align-content: flex-start;
+  gap: 16px; padding: 16px;
+}
+.v3-phase-col { min-width: 0; }
+.v3-phase-col--inputs { order: 1; flex: 1 1 320px; }
+.v3-phase-col--map { order: 2; flex: 1 1 220px; }
+.v3-phase-col--artifacts { order: 3; flex: 1 1 320px; }
+.v3-phase-cards { order: 4; flex: 1 1 100%; width: 100%; }
+.v3-phase-cards-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;
+  align-items: start;
+}
+
+.v3-rail-section { margin-bottom: 14px; }
+.v3-task-queue { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.v3-task-queue-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 8px 10px; background: var(--v3-surface-2); border: 1px solid var(--v3-border); border-radius: var(--radius-md);
+}
+.v3-task-queue-main { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12px; }
+.v3-task-queue-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: var(--v3-amber); }
+.v3-task-queue-dot.red { background: var(--v3-red); }
+.v3-task-queue-dot.amber { background: var(--v3-amber); }
+.v3-task-queue-label { color: var(--v3-text-primary); overflow: hidden; text-overflow: ellipsis; }
+.v3-task-queue-impact { color: var(--v3-green); font-weight: 600; flex-shrink: 0; }
+
+/* Input → artifact relationship map (collapsible, middle column) */
+.v3-iomap { border: 1px solid var(--v3-border); border-radius: var(--radius-md); background: var(--v3-surface-2); }
+.v3-iomap-toggle {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 10px 12px; background: transparent; border: none; cursor: pointer; text-align: left;
+}
+.v3-iomap-toggle-titles { display: flex; flex-direction: column; gap: 2px; }
+.v3-iomap-toggle-title { font-size: 12px; font-weight: 600; color: var(--v3-text-primary); }
+.v3-iomap-toggle-sub { font-size: 11px; color: var(--v3-text-muted); }
+.v3-iomap-toggle-glyph { color: var(--v3-text-muted); }
+.v3-iomap-body { padding: 4px 10px 12px; }
+.v3-iomap-ends {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 9px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--v3-text-muted); margin-bottom: 4px;
+}
+.v3-iomap-svg { display: block; }
+.v3-iomap-node-text { font-size: 8.5px; font-family: var(--v3-font); }
+.v3-iomap-legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; font-size: 10px; color: var(--v3-text-muted); }
+.v3-iomap-legend-item { display: inline-flex; align-items: center; gap: 5px; }
+.v3-iomap-legend-item i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+.v3-iomap-legend-note { flex-basis: 100%; }
+
+@media (max-width: 1100px) {
+  .v3-phase-body { flex-direction: column; }
+  .v3-phase-rail { flex: 1 1 auto; width: 100%; border-left: none; border-top: 1px solid var(--v3-border-soft); }
+  .v3-phase-col--inputs, .v3-phase-col--map, .v3-phase-col--artifacts { flex: 1 1 100%; }
+}
+
 .v3-zone-label {
   font-size: 11px;
   font-weight: 700;
