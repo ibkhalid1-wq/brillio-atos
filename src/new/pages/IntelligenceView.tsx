@@ -816,7 +816,7 @@ export function IntelligenceView({ program, onRefreshProgram, initialTab }: Inte
   const [providerMessage, setProviderMessage] = useState<string | null>(null);
 
   // Autonomy
-  const { settings, log, isLoading: autonomyLoading, refresh: refreshAutonomy, upsertSetting, autonomousActionsToday } = useAutonomy(program?.id || "");
+  const { settings, isLoading: autonomyLoading, refresh: refreshAutonomy, upsertSetting, autonomousActionsToday } = useAutonomy(program?.id || "");
 
   const providerMeta = AI_PROVIDERS.find((p) => p.id === selectedProvider) ?? AI_PROVIDERS[0];
   const selectedProviderStatus = providerStatuses[selectedProvider];
@@ -1159,25 +1159,6 @@ export function IntelligenceView({ program, onRefreshProgram, initialTab }: Inte
               })}
             </div>
           )}
-
-          <div className="adam-stack">
-            <div className="adam-title">Autonomy Log</div>
-            {log.length ? log.map((entry) => (
-              <div key={entry.id} className="adam-card p-4">
-                <div className="adam-row adam-space-between" style={{ alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                  <div className="adam-row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                    <div className="adam-title">{prettyAgent(entry.agentId)}</div>
-                    <span className={`adam-badge ${entry.actedAutonomously ? "green" : "amber"}`}>{entry.actedAutonomously ? "Autonomous" : "Queued"}</span>
-                  </div>
-                  <div className="adam-micro adam-muted">{timeAgo(entry.createdAt)}</div>
-                </div>
-                <div className="mt-2 adam-body adam-muted">{entry.reason || entry.actionType}</div>
-                {entry.confidence !== null ? <div className="mt-2 adam-micro adam-muted">Confidence {(entry.confidence * 100).toFixed(0)}%</div> : null}
-              </div>
-            )) : (
-              <div className="adam-card p-5"><div className="adam-body adam-muted">No autonomy decisions have been logged yet.</div></div>
-            )}
-          </div>
         </div>
       ) : null}
     </div>
