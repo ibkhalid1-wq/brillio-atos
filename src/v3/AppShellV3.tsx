@@ -2027,7 +2027,23 @@ export default function AppShellV3() {
       body: { programId: activeProgram.id, workspaceId: `phase-input:${phaseId}`, message, stream: false },
     });
     if (error) {
-      throw new Error(error.message || "AI assist request failed.");
+      // supabase-js collapses any non-2xx into the opaque "Edge Function returned
+      // a non-2xx status code". The real reason (provider key, program not synced,
+      // invalid id, AI error) lives in the Response body it stashes on `.context`.
+      let detail = error.message || "AI assist request failed.";
+      const ctx = (error as { context?: Response }).context;
+      if (ctx && typeof ctx.json === "function") {
+        try {
+          const body = await ctx.clone().json() as { error?: string };
+          if (body?.error) detail = body.error;
+        } catch {
+          try {
+            const text = await ctx.text();
+            if (text) detail = text;
+          } catch { /* body unreadable — keep generic message */ }
+        }
+      }
+      throw new Error(detail);
     }
     const content = (data as { message?: { content?: unknown } } | null)?.message?.content;
     if (typeof content !== "string" || !content.trim()) {
