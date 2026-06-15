@@ -6867,6 +6867,16 @@ button.v3-chip:focus-visible,
   min-width: 0;
 }
 
+@media (max-width: 640px) {
+  .v3-governance-grid {
+    grid-template-columns: 1fr;
+  }
+  .v3-governance-sidebar {
+    border-right: none;
+    border-bottom: 1px solid var(--v3-border);
+  }
+}
+
 .v3-governance-card-list {
   display: grid;
   gap: 12px;
