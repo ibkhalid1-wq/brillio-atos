@@ -10143,6 +10143,23 @@ button, [role="button"] {
 
 /* ── Rail Health card ───────────────────────────────────────────────────────── */
 
+/* Health heading: "Health" text when expanded, a compact health icon when
+   narrow. The icon sits above the status dots so the slim rail still labels
+   what the dot column means. */
+.v3-command-rail-health-icon {
+  display: none;
+}
+.v3-command-rail:not(:hover):not(:focus-within):not(.is-pinned) .v3-command-rail-health-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 2px auto 0;
+  color: var(--v3-text-muted);
+}
+.v3-command-rail:not(:hover):not(:focus-within):not(.is-pinned) .v3-command-rail-health-heading {
+  display: none;
+}
+
 /* Narrow (not hovered / not pinned): collapse the health card into a centred row
    of just the status dots, so programme/AI/intelligence health stays glanceable
    on the slim rail. Labels hide; the dots remain clickable shortcuts. */

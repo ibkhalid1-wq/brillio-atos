@@ -17,6 +17,7 @@ import {
   Trash2,
   Inbox,
   LayoutGrid,
+  Activity,
 } from "lucide-react";
 import type { V3Surface } from "@/v3/types";
 import { getConfidenceColor } from "@/v3/lib/confidenceScore";
@@ -415,7 +416,10 @@ export function CommandRail({
       {programHealth ? (
         <>
           <RailDivider />
-          <div className="v3-command-rail-section-label">Health</div>
+          <div className="v3-command-rail-section-label v3-command-rail-health-heading">Health</div>
+          <div className="v3-command-rail-health-icon" aria-hidden="true" title="Programme health">
+            <Activity size={15} strokeWidth={1.8} />
+          </div>
           <div className="v3-command-rail-health-card">
             {(["programme", "ai", "agents"] as const).map((key) => {
               const sig = programHealth[key];
