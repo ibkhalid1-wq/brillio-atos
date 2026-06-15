@@ -246,10 +246,13 @@ export function useAgentRun(programId: string, enabled = true, onRunComplete?: (
       setIsUserLoading(true);
     }
 
-    // Client-side safety net: if the edge function doesn't respond within 50 s,
-    // release the loading state so buttons don't stay permanently disabled.
-    // The run record in Supabase will still complete in the background.
-    const USER_TIMEOUT_MS = 50_000;
+    // Client-side safety net: abort only as a last resort, comfortably past the
+    // edge function's own wall-clock budget (DEFAULT_STREAM_TIMEOUT_MS ~130s).
+    // Aborting earlier than the server budget killed the request mid-generation,
+    // so large artifact runs (~95-110s) never returned a result. The server's
+    // timeout guard always writes a terminal status, so this only fires if the
+    // platform itself hangs.
+    const USER_TIMEOUT_MS = 150_000;
     const abortCtrl = new AbortController();
     const timeoutId = window.setTimeout(() => abortCtrl.abort(), USER_TIMEOUT_MS);
 

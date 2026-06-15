@@ -44,8 +44,11 @@ export interface ClaudeCompletionOptions {
 }
 
 // Hard ceiling so a stalled provider stream can never hang a run indefinitely
-// without writing a terminal status. Generous enough for long generations.
-const DEFAULT_STREAM_TIMEOUT_MS = 90_000;
+// without writing a terminal status. Sized to use the available platform
+// wall-clock (Supabase edge limit ~150s) with margin for the post-stream DB
+// writes: large artifact generations (4096-token JSON over a big cross-phase
+// context) were exceeding the previous 90s cap and failing with a timeout.
+const DEFAULT_STREAM_TIMEOUT_MS = 130_000;
 
 export interface ClaudeCompletionResult {
   text: string;
