@@ -69,6 +69,26 @@ function loadLocalPrograms(): ProgramSummary[] {
     ));
 }
 
+/**
+ * Remove a program from the legacy localStorage caches. Used to self-heal stale
+ * copies of programs that were soft-deleted in the cloud (e.g. deleted before the
+ * delete path purged localStorage) so they can't be re-surfaced or resurrected.
+ */
+function purgeLocalPrograms(programIds: Set<string>) {
+  if (typeof localStorage === "undefined" || programIds.size === 0) return;
+  LEGACY_PROGRAM_STORAGE_KEYS.forEach((storageKey) => {
+    const entries = safeJsonParse<unknown[]>(localStorage.getItem(storageKey), []);
+    if (!Array.isArray(entries) || entries.length === 0) return;
+    const nextEntries = entries.filter((entry) => {
+      const id = isRecord(entry) ? asString(entry.id) : "";
+      return !programIds.has(id);
+    });
+    if (nextEntries.length !== entries.length) {
+      localStorage.setItem(storageKey, JSON.stringify(nextEntries));
+    }
+  });
+}
+
 function persistLocalProgram(programId: string, nextData: Record<string, unknown>) {
   if (typeof localStorage === "undefined") return;
 
@@ -167,18 +187,29 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
     try {
       // No owner filter: row-level security scopes visibility to programs the
       // signed-in user owns or has been granted membership on, so collaborators
-      // see shared programs too.
+      // see shared programs too. We fetch deleted rows too (no is_deleted filter)
+      // so we can reconcile stale local caches against cloud deletions below.
       const query = supabase
         .from("adam_programs")
         .select("id, name, client, industry, updated_at, data, is_deleted, owner_id")
-        .eq("is_deleted", false)
         .order("updated_at", { ascending: false });
 
-      const { data, error: loadError } = await query;
+      const { data: allRows, error: loadError } = await query;
 
       if (loadError) {
         throw new Error(loadError.message || "Failed to load programs.");
       }
+
+      // Split cloud rows into live vs soft-deleted. Purge any local cache copy of
+      // a soft-deleted program so it can't be re-surfaced as "local-only" or
+      // resurrected by the migration upsert below (this caused deleted programs
+      // to reappear and flicker on the rail).
+      const deletedIds = new Set(
+        ((allRows || []) as ProgramRow[]).filter((row) => row.is_deleted).map((row) => row.id),
+      );
+      if (deletedIds.size) purgeLocalPrograms(deletedIds);
+      const data = ((allRows || []) as ProgramRow[]).filter((row) => !row.is_deleted);
+      const liveLocalPrograms = localPrograms.filter((program) => !deletedIds.has(program.id));
 
       const normalized = ((data || []) as ProgramRow[]).map((row) => {
         const cacheKey = `${row.id}:${row.updated_at}`;
@@ -197,9 +228,10 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
       });
 
       // If DB returned no programs but we have local ones, migrate them up to Supabase
-      // so agent edge-function calls can find them by ID.
-      if (normalized.length === 0 && localPrograms.length > 0 && userId) {
-        const upsertRows = localPrograms.map((program) => ({
+      // so agent edge-function calls can find them by ID. Only migrate programs not
+      // soft-deleted in the cloud, so a delete can't be undone by re-upserting.
+      if (normalized.length === 0 && liveLocalPrograms.length > 0 && userId) {
+        const upsertRows = liveLocalPrograms.map((program) => ({
           id: program.id,
           name: program.name,
           client: program.client || null,
@@ -221,7 +253,7 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
       // Merge: if a local program is newer than the Supabase version (e.g. after a
       // failed RLS UPSERT that fell back to localStorage), prefer the local copy so
       // gate approvals and other saves are immediately visible in the UI.
-      const localById = new Map(localPrograms.map((lp) => [lp.id, lp]));
+      const localById = new Map(liveLocalPrograms.map((lp) => [lp.id, lp]));
       const mergedNormalized = normalized.map((remoteProgram) => {
         const localProgram = localById.get(remoteProgram.id);
         if (!localProgram) return remoteProgram;
@@ -231,10 +263,10 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
       });
       // Include programs that exist only in localStorage (not yet in Supabase)
       const remoteIds = new Set(normalized.map((p) => p.id));
-      const localOnlyPrograms = localPrograms.filter((lp) => !remoteIds.has(lp.id));
+      const localOnlyPrograms = liveLocalPrograms.filter((lp) => !remoteIds.has(lp.id));
       const allEffective = [...mergedNormalized, ...localOnlyPrograms];
 
-      const effectivePrograms = allEffective.length ? allEffective : localPrograms;
+      const effectivePrograms = allEffective.length ? allEffective : liveLocalPrograms;
       setPrograms(effectivePrograms);
 
       // Resolve the signed-in user's role per program. The owner is always an
