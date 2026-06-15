@@ -1461,12 +1461,8 @@ select {
   to   { transform: rotate(360deg); }
 }
 
-/* Idle: agents at rest, ready to run. Keep the full green active dial — same
-   colours and glowing centre as the running state — but freeze the sweep so it
-   reads as "live and ready, just not spinning". */
-.v3-radar-spinner.is-idle::before {
-  animation: none;
-}
+/* Idle: agents at rest, ready to run. Keep the full green active dial with the
+   sweep spinning — same as the running state — only the label differs. */
 
 /* Stopped: a recent run ended abnormally — amber dial, sweep frozen, signals
    that an agent needs attention rather than sitting quietly idle. */
