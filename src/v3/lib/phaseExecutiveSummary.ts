@@ -38,6 +38,10 @@ export interface PhaseExecutiveSummary {
   topBlocker: PhaseBlocker | null;
   /** The single highest-impact next action, if any. */
   nextAction: { label: string; agentId?: string; workspaceId?: string } | null;
+  /** Count of critical logical contradictions ATOS has detected programme-wide. */
+  contradictionCount: number;
+  /** One-line description of the most pressing contradiction, if any. */
+  topContradiction: string | null;
 }
 
 /**
@@ -70,6 +74,20 @@ export function derivePhaseExecutiveSummary(
       ? { label: topBlocker.action.label, agentId: topBlocker.action.agentId, workspaceId: topBlocker.action.workspaceId }
       : null;
 
+  // Critical contradictions are surfaced from the programme's raw agent output
+  // (same source the detailed surfaces read) so the header carries the signal.
+  const rawData = program.rawData;
+  const source = typeof rawData === "object" && rawData !== null
+    ? ("data" in rawData && typeof (rawData as Record<string, unknown>).data === "object" && (rawData as Record<string, unknown>).data !== null
+        ? (rawData as Record<string, unknown>).data as Record<string, unknown>
+        : rawData as Record<string, unknown>)
+    : null;
+  const criticalContradictions = Array.isArray(source?.contradictions)
+    ? (source!.contradictions as Array<{ severity?: string; description?: string }>).filter((item) => item?.severity === "critical")
+    : [];
+  const contradictionCount = criticalContradictions.length;
+  const topContradiction = criticalContradictions[0]?.description?.slice(0, 140) ?? null;
+
   let verdict: PhaseVerdict;
   if (readiness.canApproveGate) verdict = "ready";
   else if (criticalCount > 0) verdict = "blocked";
@@ -100,5 +118,7 @@ export function derivePhaseExecutiveSummary(
     criticalCount,
     topBlocker,
     nextAction,
+    contradictionCount,
+    topContradiction,
   };
 }

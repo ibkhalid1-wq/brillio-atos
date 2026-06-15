@@ -34,11 +34,13 @@ export function PhaseExecutiveSummary({
   phaseId,
   onRunAgent,
   onOpenMoreView,
+  onReviewContradiction,
 }: {
   program: ProgramSummary | null;
   phaseId: string | null;
   onRunAgent?: (agentId: string) => void;
   onOpenMoreView?: (view: string) => void;
+  onReviewContradiction?: () => void;
 }) {
   const STORAGE_KEY = "atlas-v3-exec-snapshot-open";
   const [open, setOpen] = React.useState<boolean>(() => {
@@ -102,6 +104,11 @@ export function PhaseExecutiveSummary({
           {summary.blockerCount > 0 ? (
             <span className="v3-chip muted">{summary.blockerCount} blocker{summary.blockerCount === 1 ? "" : "s"}</span>
           ) : null}
+          {summary.contradictionCount > 0 ? (
+            <span className="v3-chip red" title={summary.topContradiction ?? undefined}>
+              {summary.contradictionCount} contradiction{summary.contradictionCount === 1 ? "" : "s"}
+            </span>
+          ) : null}
           {methodology && methodology.total > 0 ? (
             <span
               className={`v3-chip ${methodologyTone(methodology.pct)}`}
@@ -145,6 +152,20 @@ export function PhaseExecutiveSummary({
             <div className="v3-exec-snapshot-blocker">
               <span className="v3-exec-snapshot-row-label">Top blocker</span>
               <span className="v3-exec-snapshot-row-value">{summary.topBlocker.label}</span>
+            </div>
+          ) : null}
+
+          {summary.contradictionCount > 0 ? (
+            <div className="v3-exec-snapshot-blocker">
+              <span className="v3-exec-snapshot-row-label">
+                {summary.contradictionCount} contradiction{summary.contradictionCount === 1 ? "" : "s"}
+              </span>
+              <span className="v3-exec-snapshot-row-value">{summary.topContradiction ?? "Conflicting evidence detected across the programme."}</span>
+              {onReviewContradiction ? (
+                <button type="button" className="v3-button ghost v3-exec-snapshot-cta" onClick={onReviewContradiction}>
+                  Review →
+                </button>
+              ) : null}
             </div>
           ) : null}
 

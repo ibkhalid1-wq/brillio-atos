@@ -5441,16 +5441,20 @@ button.v3-phase-metric:focus-visible {
 .v3-phase-head-actions { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
 .v3-phase-head-actions-grp { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
-.v3-phase-body { display: flex; align-items: flex-start; min-height: 0; flex: 1; }
+.v3-phase-body { display: flex; flex-wrap: wrap; align-items: flex-start; min-height: 0; flex: 1; }
+/* Phase context (carried-forward handoff, gate readiness, briefing notes) — a
+   full-width band below the working columns. No longer a dedicated right column. */
 .v3-phase-aside {
-  order: 2;
-  flex: 0 0 320px; width: 320px; min-width: 0; align-self: stretch;
-  border-left: 1px solid var(--v3-border-soft);
-  overflow: hidden auto;
+  order: 3;
+  flex: 1 1 100%; width: 100%; min-width: 0;
+  border-top: 1px solid var(--v3-border-soft);
+  padding: 16px;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px; align-items: start;
 }
 .v3-phase-main {
   order: 1;
-  flex: 1 1 auto; min-width: 0;
+  flex: 1 1 100%; min-width: 0;
   display: flex; flex-wrap: wrap; align-content: flex-start;
   gap: 16px; padding: 16px;
   position: relative;

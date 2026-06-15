@@ -898,6 +898,14 @@ export default function StageView({
           phaseId={activePhase.id}
           onRunAgent={onRunAgent}
           onOpenMoreView={(view) => onOpenMoreView(view as V3MoreView)}
+          onReviewContradiction={() => {
+            const firstId = (criticalContradictions[0] as Record<string, unknown> | undefined)?.id as string | undefined;
+            if (firstId && typeof onOpenDecide === "function") {
+              (onOpenDecide as (id?: string) => void)(firstId);
+            } else {
+              onOpenDecide();
+            }
+          }}
         />
       </div>
       {/* Priority 10 — "Where am I / What's next" guidance strip */}
@@ -1010,7 +1018,6 @@ export default function StageView({
       </div>
       <div className="v3-phase-body">
       <section className="v3-zone v3-zone--focus v3-phase-aside">
-        <div className="v3-zone-label">Actions · intelligence</div>
         {weeklyDigest && weeklyDigest.weekOf === mondayOfCurrentWeek ? (
           <div className="v3-weekly-digest">
             <div className="v3-digest-head">
@@ -1109,29 +1116,6 @@ export default function StageView({
                 </div>
               </div>
             ))}
-          </div>
-        ) : null}
-        {criticalContradictions.length ? (
-          <div className="v3-contradiction-banner">
-            <span style={{ color: "var(--v3-amber)", fontWeight: 700 }}>!</span>
-            <div>
-              <div className="v3-banner-title">
-                {criticalContradictions.length} contradiction{criticalContradictions.length > 1 ? "s" : ""} detected
-              </div>
-              <div className="v3-banner-detail v3-banner-detail--spaced">
-                {criticalContradictions[0].description?.slice(0, 120)}
-              </div>
-            </div>
-            <button type="button" className="v3-button ghost v3-button-inline-xs" onClick={() => {
-              const firstId = (criticalContradictions[0] as Record<string, unknown> | undefined)?.id as string | undefined;
-              if (firstId && typeof onOpenDecide === "function") {
-                (onOpenDecide as (id?: string) => void)(firstId);
-              } else {
-                onOpenDecide();
-              }
-            }}>
-              Review →
-            </button>
           </div>
         ) : null}
         {scopeDrift && scopeDrift.driftIndex > 15 ? (
