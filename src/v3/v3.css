@@ -1350,6 +1350,11 @@ select {
   margin-left: 10px;
 }
 
+.v3-command-rail-divider.is-centered {
+  margin-left: auto;
+  margin-right: auto;
+}
+
 [data-theme="light"] .v3-command-rail-divider,
 :root:not([data-theme="dark"]) .v3-command-rail-divider {
   background: rgba(255, 255, 255, 0.20);
@@ -1404,6 +1409,7 @@ select {
 /* ── Agent running — radar sweep ── */
 .v3-agent-running-row {
   gap: 9px;
+  justify-content: center;
 }
 
 /* ── Radar spinner ── */

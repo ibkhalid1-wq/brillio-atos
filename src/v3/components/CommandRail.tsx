@@ -157,8 +157,8 @@ function RailItem({ icon, label, sublabel, active = false, badge, title, onClick
   );
 }
 
-function RailDivider() {
-  return <div className="v3-command-rail-divider" role="separator" />;
+function RailDivider({ centered = false }: { centered?: boolean }) {
+  return <div className={`v3-command-rail-divider${centered ? " is-centered" : ""}`} role="separator" />;
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -403,7 +403,7 @@ export function CommandRail({
       </div>
 
       {/* ── Agent activity — always present so the working spinner stays on the rail ── */}
-      <RailDivider />
+      <RailDivider centered />
       {(() => {
         const status = agentStatus ?? (anyAgentRunning ? "running" : "idle");
         const meta = {
@@ -427,7 +427,7 @@ export function CommandRail({
       {/* ── Health ── */}
       {programHealth ? (
         <>
-          <RailDivider />
+          <RailDivider centered />
           <div className="v3-command-rail-section-label v3-command-rail-health-heading">Health</div>
           <div className="v3-command-rail-health-icon" aria-hidden="true" title="Programme health">
             <Activity size={15} strokeWidth={1.8} />
