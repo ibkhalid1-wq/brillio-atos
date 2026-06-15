@@ -391,14 +391,18 @@ export function CommandRail({
       </div>
 
       {/* ── Agent activity + phase ── */}
-      {(anyAgentRunning || (showStatus && activePhaseLabel)) ? (
+      {(showStatus || activePhaseLabel) ? (
         <>
           <RailDivider />
-          {anyAgentRunning ? (
-            <div className="v3-command-rail-status-row v3-agent-running-row" title="Analysing programme data">
-              <span className="v3-radar-spinner" aria-hidden="true" />
-            </div>
-          ) : null}
+          <div
+            className={`v3-command-rail-status-row v3-agent-running-row ${anyAgentRunning ? "is-running" : "is-stopped"}`}
+            title={anyAgentRunning ? "Agents analysing programme data" : "Agents stopped — no agent running"}
+          >
+            <span className={`v3-radar-spinner ${anyAgentRunning ? "" : "is-stopped"}`} aria-hidden="true" />
+            <span className="v3-command-rail-status-label v3-agent-running-label">
+              {anyAgentRunning ? "Agents running" : "Agents stopped"}
+            </span>
+          </div>
           {activeSurface === "stage" && activePhaseLabel ? (
             <div className="v3-command-rail-status-row" title={`Active phase: ${activePhaseLabel}`}>
               <span className="v3-command-rail-phase-indicator" />
