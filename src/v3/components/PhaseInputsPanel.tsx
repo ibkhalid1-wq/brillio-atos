@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import type { ProgramSummary, Workstream } from "@/new/types";
 import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
 import { availableModes, FIELD_ASSIST_MODE_LABEL, type FieldAssistMode } from "@/v3/lib/fieldAssist";
+import { prioritizePhaseFields } from "@/v3/lib/phaseInputPriority";
 
 export interface FieldAssistRequest {
   fieldId: string;
@@ -206,6 +207,18 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
     .every((field) => values[field.id]?.trim());
   const filledCount = schema.fields.filter((field) => values[field.id]?.trim()).length;
 
+  // Prioritise inputs by impact: required gaps first, then optional gaps, then
+  // complete — so "what matters now" is at the top. Ranked from the *persisted*
+  // snapshot (existingInputs), never the live edit buffer, so a field can't jump
+  // under the cursor while the user is typing into it.
+  const prioritized = useMemo(
+    () => prioritizePhaseFields(schema.fields, existingInputs as Record<string, string | undefined>),
+    [schema.fields, existingInputs],
+  );
+  const firstGapLabel = prioritized.firstGapId
+    ? schema.fields.find((field) => field.id === prioritized.firstGapId)?.label ?? null
+    : null;
+
   async function handleSave() {
     setSaving(true);
     try {
@@ -329,8 +342,24 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
             </div>
           ) : null}
 
+          {prioritized.requiredGaps > 0 ? (
+            <div className="v3-input-priority-banner">
+              <span className="v3-chip red" style={{ fontSize: 10 }}>
+                {prioritized.requiredGaps} required {prioritized.requiredGaps === 1 ? "field" : "fields"} left
+              </span>
+              {firstGapLabel ? (
+                <span className="v3-input-priority-detail">Start with <strong>{firstGapLabel}</strong> — sorted to the top.</span>
+              ) : null}
+            </div>
+          ) : prioritized.optionalGaps > 0 ? (
+            <div className="v3-input-priority-banner">
+              <span className="v3-chip amber" style={{ fontSize: 10 }}>All required complete</span>
+              <span className="v3-input-priority-detail">{prioritized.optionalGaps} optional {prioritized.optionalGaps === 1 ? "field" : "fields"} can add depth.</span>
+            </div>
+          ) : null}
+
           <div style={{ display: "grid", gap: 12, marginBottom: 12 }}>
-            {schema.fields.map((field) => {
+            {prioritized.fields.map(({ field }) => {
               const verdict = assessField(values[field.id], field.type);
               return (
               <div key={field.id}>
