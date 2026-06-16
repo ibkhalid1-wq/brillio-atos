@@ -67,6 +67,7 @@ const VALID_AGENT_IDS = new Set([
   "exit-criteria-generator",
   "decision-advisor",
   "contradiction-detector",
+  "cross-artifact-validator",
   "dependency-check",
   "benefits-tracker",
   "handoff-quality",
@@ -158,6 +159,7 @@ const AGENT_DOWNSTREAM: Record<string, Array<{ agentId: string; phaseId: string 
   "gate-review": [
     { agentId: "health-heatmap", phaseId: "program" },
     { agentId: "dependency-check", phaseId: "{{phaseId}}" },
+    { agentId: "cross-artifact-validator", phaseId: "{{phaseId}}" },
   ],
   escalation: [{ agentId: "health-heatmap", phaseId: "program" }],
   closure: [
@@ -483,6 +485,7 @@ function isSpecialProgramAgent(agentId: string, phaseId: string): boolean {
     || agentId === "exit-criteria-generator"
     || agentId === "decision-advisor"
     || agentId === "contradiction-detector"
+    || agentId === "cross-artifact-validator"
     || agentId === "dependency-check"
     || agentId === "benefits-tracker"
     || agentId === "handoff-quality"
@@ -1077,6 +1080,34 @@ function buildSpecialAgentInputContext(
   const gateReviews = normalizeProgramData(inner.gateReviews as JsonValue | null);
   const budgetTracking = isRecord(inner.budgetTracking) ? inner.budgetTracking : null;
   const narrative = typeof inner.narrative === "string" ? inner.narrative : "";
+
+  if (target?.agentId === "cross-artifact-validator") {
+    // Lean structural skeleton only — the model reasons over traceability gaps
+    // the deterministic layer can't see (semantics), so we ship the artifact
+    // inventory + key item lists rather than full bodies to keep tokens low.
+    const benefitsTracking = isRecord(inner.benefitsTracking) ? inner.benefitsTracking : null;
+    const workstreams = Array.isArray(inner.workstreams) ? inner.workstreams.filter(isRecord) : [];
+    return JSON.stringify({
+      objective: typeof inner.objective === "string"
+        ? inner.objective
+        : typeof inner.programObjective === "string"
+          ? inner.programObjective
+          : typeof projectMeta.objective === "string"
+            ? projectMeta.objective
+            : "",
+      phases,
+      artifacts,
+      milestones,
+      workstreams,
+      stakeholders: stakeholderEntries,
+      changeImpact,
+      businessCase,
+      benefitsTracking,
+      budgetTracking,
+      gateReviews,
+      raidEntries: activeRaidEntries,
+    }, null, 2);
+  }
 
   if (target?.agentId === "change-impact") {
     return JSON.stringify({
@@ -3114,6 +3145,10 @@ function buildOutputSummary(agentId: string, result: Record<string, unknown> | n
   if (agentId === "escalation") {
     return `${Array.isArray(result.escalations) ? result.escalations.length : 0} escalations raised`;
   }
+  if (agentId === "cross-artifact-validator") {
+    const count = Array.isArray(result.findings) ? result.findings.length : 0;
+    return count === 0 ? "Cross-artifact validation: no semantic gaps" : `Cross-artifact validation: ${count} traceability gap(s)`;
+  }
   if (typeof result.summary === "string" && result.summary.trim()) {
     return result.summary.trim().slice(0, 120);
   }
@@ -3967,6 +4002,34 @@ function applyContradictionResultToProgramData(programData: ProgramState, phaseI
       contradictions: contradictions as JsonValue,
       contradictionsCheckedAt: new Date().toISOString(),
       decisionQueue: nextQueue as JsonValue,
+    };
+  });
+}
+
+function applyCrossArtifactValidationResultToProgramData(programData: ProgramState, phaseId: string, result: Record<string, unknown>): ProgramState {
+  return updateInnerProgramData(programData, (inner) => {
+    const findings = (Array.isArray(result.findings) ? result.findings.filter(isRecord) : [])
+      .map((entry) => ({
+        findingId: typeof entry.findingId === "string" && entry.findingId ? entry.findingId : crypto.randomUUID(),
+        severity: ["critical", "high", "medium", "low"].includes(String(entry.severity)) ? entry.severity : "medium",
+        domain: typeof entry.domain === "string" ? entry.domain : "delivery-readiness",
+        phaseId: typeof entry.phaseId === "string" ? entry.phaseId : null,
+        sourceArtifact: typeof entry.sourceArtifact === "string" ? entry.sourceArtifact : "",
+        targetArtifact: typeof entry.targetArtifact === "string" ? entry.targetArtifact : "",
+        sourceItem: typeof entry.sourceItem === "string" ? entry.sourceItem : "",
+        issue: typeof entry.issue === "string" ? entry.issue : "",
+        recommendation: typeof entry.recommendation === "string" ? entry.recommendation : "",
+        confidence: clampNumber(entry.confidence, 0, 1, 0.6),
+        source: "cross-artifact-validator",
+      }));
+    return {
+      ...inner,
+      crossArtifactValidation: {
+        findings: findings as JsonValue,
+        validatedPhaseId: phaseId,
+        validatedAt: new Date().toISOString(),
+        clean: findings.length === 0,
+      } as JsonValue,
     };
   });
 }
@@ -5035,6 +5098,45 @@ Return ONLY valid JSON:
       "artifactB": "narrative|plan|risk|gate-review",
       "description": "what specifically contradicts what",
       "recommendation": "how to resolve"
+    }
+  ],
+  "clean": true
+}`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
+  if (request.agentId === "cross-artifact-validator") {
+    return {
+      system: `You are the ATOS Cross-Artifact Validator — Layer 2 semantic validation.
+
+A deterministic Layer 1 already covers structural gaps (missing owners, risks
+without mitigations, milestones without exit criteria, KPIs without baselines,
+gate criteria marked met without evidence). DO NOT repeat those. Focus ONLY on
+semantic traceability the deterministic layer cannot judge:
+- Solution Design / Architecture that does not actually support stated requirements or NFRs.
+- Business Case benefits that are not reflected in tracked KPIs.
+- Milestones / workstreams that do not advance the program objective or phase objectives.
+- Stakeholder change actions or interventions that do not address the stated impact.
+- Scope present in objectives but absent from workstreams.
+
+Be conservative: only emit a finding when the gap is real and supported by the
+context. Prefer fewer, high-confidence findings over speculation.
+
+Return ONLY valid JSON:
+{
+  "findings": [
+    {
+      "findingId": "stable-slug-unique-per-issue",
+      "severity": "critical|high|medium|low",
+      "domain": "requirements-coverage|architecture-consistency|delivery-readiness|benefits-traceability|stakeholder-readiness|scope-coverage|governance",
+      "phaseId": "phase id this is attributable to, or omit for program-wide",
+      "sourceArtifact": "artifact that should support something",
+      "targetArtifact": "artifact it fails to support",
+      "sourceItem": "specific item id/name at issue",
+      "issue": "one sentence: what is not traceable/supported",
+      "recommendation": "one sentence: how to close the gap",
+      "confidence": 0.0
     }
   ],
   "clean": true
@@ -6369,6 +6471,7 @@ Deno.serve(async (req) => {
         "exit-criteria-generator",
         "decision-advisor",
         "contradiction-detector",
+        "cross-artifact-validator",
         "dependency-check",
         "benefits-tracker",
         "handoff-quality",
@@ -6469,6 +6572,8 @@ Deno.serve(async (req) => {
         nextProgramData = applyDecisionAdvisorResultToProgramData(contextProgramData, request.decisionId, result);
       } else if (request.agentId === "contradiction-detector") {
         nextProgramData = applyContradictionResultToProgramData(contextProgramData, request.phaseId, result);
+      } else if (request.agentId === "cross-artifact-validator") {
+        nextProgramData = applyCrossArtifactValidationResultToProgramData(contextProgramData, request.phaseId, result);
       } else if (request.agentId === "dependency-check") {
         nextProgramData = applyDependencyCheckResultToProgramData(contextProgramData, request.phaseId, result);
       } else if (request.agentId === "benefits-tracker") {
