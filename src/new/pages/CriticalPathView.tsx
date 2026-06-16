@@ -106,15 +106,19 @@ export function CriticalPathView({
         <section className="adam-card p-5" style={{ borderColor: "rgba(217,119,6,0.25)", background: "rgba(217,119,6,0.08)" }}>
           <div className="adam-title">Current bottleneck</div>
           <div className="mt-3 adam-heading-lg">{criticalPath.currentBottleneck.phaseName}</div>
-          <div className="mt-2 adam-body">{criticalPath.currentBottleneck.reason}</div>
+          {criticalPath.currentBottleneck.reason ? (
+            <div className="mt-2 adam-body">{criticalPath.currentBottleneck.reason}</div>
+          ) : null}
           <div className="mt-3 adam-micro adam-muted">
             {criticalPath.currentBottleneck.linkedRiskId ? `Risk ${criticalPath.currentBottleneck.linkedRiskId}` : "No linked risk"}
             {criticalPath.currentBottleneck.linkedDecisionId ? ` · Decision ${criticalPath.currentBottleneck.linkedDecisionId}` : ""}
           </div>
-          <div className="mt-3 adam-list-item">
-            <div className="adam-micro adam-muted">Recommended action</div>
-            <div className="mt-2 adam-body">{criticalPath.currentBottleneck.recommendedAction}</div>
-          </div>
+          {criticalPath.currentBottleneck.recommendedAction ? (
+            <div className="mt-3 adam-list-item">
+              <div className="adam-micro adam-muted">Recommended action</div>
+              <div className="mt-2 adam-body">{criticalPath.currentBottleneck.recommendedAction}</div>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
