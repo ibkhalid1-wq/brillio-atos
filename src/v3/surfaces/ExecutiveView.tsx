@@ -286,8 +286,8 @@ export default function ExecutiveView({
         : "CRITICAL RISKS: None",
       ``,
       topDecisions.length > 0
-        ? `DECISIONS AWAITING INPUT:\n${topDecisions.map((d) => `• ${(d.title || d.question)} [${d.priority}]`).join("\n")}`
-        : "DECISIONS AWAITING INPUT: None",
+        ? `ACTIONS AWAITING INPUT:\n${topDecisions.map((d) => `• ${(d.title || d.question)} [${d.priority}]`).join("\n")}`
+        : "ACTIONS AWAITING INPUT: None",
       ``,
       `PHASE PROGRESS:`,
       ...phases.map((p) => `• ${PHASE_LABELS[p.id] ?? (p as { displayName?: string }).displayName ?? p.id}: ${p.pct}%`),
@@ -346,7 +346,7 @@ export default function ExecutiveView({
           Executive View
         </div>
         <div style={{ fontSize: 13, color: "var(--v3-text-secondary)", lineHeight: 1.6, maxWidth: 360 }}>
-          Select a programme from the top bar to view the executive summary, confidence score, critical risks, and decisions awaiting your input.
+          Select a programme from the top bar to view the executive summary, confidence score, critical risks, and actions awaiting your input.
         </div>
       </div>
     );
@@ -436,7 +436,7 @@ export default function ExecutiveView({
           <Kpi label="Gates Approved" value={`${approvedGates} of ${totalGates}`} onClick={onNavigateToGates} />
           <Kpi label="Completion" value={`${avgPct}%`} onClick={onNavigateToPipeline} />
           <Kpi
-            label="Open Decisions"
+            label="Open Actions"
             value={openDecisionCount}
             color={openDecisionCount > 0 ? "var(--v3-amber)" : undefined}
             onClick={onNavigateToDecide}
@@ -593,9 +593,9 @@ export default function ExecutiveView({
         </div>
       </div>
 
-      {/* ── 4. Decisions awaiting executive input ─────────────────────────── */}
+      {/* ── 4. Actions awaiting executive input ───────────────────────────── */}
       <div>
-        <SectionLabel>Decisions Awaiting Executive Input</SectionLabel>
+        <SectionLabel>Actions Awaiting Executive Input</SectionLabel>
         {shownDecisions.length === 0 ? (
           <div
             style={{

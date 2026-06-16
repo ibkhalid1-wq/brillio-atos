@@ -49,9 +49,9 @@ function getExplanation(
       };
     case "open-decisions":
       return {
-        title: "Open Decisions",
-        body: "Decisions that have been raised but not yet resolved. Unresolved decisions can block gate approvals and delay delivery.",
-        tip: "Resolve critical and high-priority decisions first.",
+        title: "Open Actions",
+        body: "Actions that have been raised but not yet resolved — decisions to make, reviews to run, revisions to apply. Unresolved actions can block gate approvals and delay delivery.",
+        tip: "Resolve critical and high-priority actions first.",
       };
     case "completion":
       return {

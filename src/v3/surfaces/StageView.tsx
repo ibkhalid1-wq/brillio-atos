@@ -12,6 +12,7 @@ import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
 import { PhaseChangeSummary } from "@/v3/components/PhaseChangeSummary";
 import { PhaseExecutiveSummary } from "@/v3/components/PhaseExecutiveSummary";
 import { PhaseRail } from "@/v3/components/PhaseRail";
+import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
 import { ReadinessBadge } from "@/v3/components/ui/ReadinessBadge";
 import { AdamCard, AdamCardBody, AdamCardHeader } from "@/v3/components/ui/AdamCard";
 import { EmptyState } from "@/v3/components/ui/EmptyState";
@@ -545,8 +546,9 @@ export default function StageView({
     return map;
   }, [source, activePhase]);
   const gateReviewStatus = getRawGateStatus(program, activePhase?.id) || gateReview?.status || null;
-  const stageDecisions = (program?.decisionQueue || [])
-    .filter((decision) => !decision.status || decision.status === "open")
+  // Same canonical action queue the rail and Action Center count, so the
+  // Programme screen never shows two different "open" numbers for one phase.
+  const stageDecisions = deriveOpenRecommendedActions(program, "delivery_lead")
     .filter((decision) => !decision.phaseId || decision.phaseId === activePhase?.id);
   const stageActions = (program?.plan?.nextThreeActions || [])
     .filter((action) =>
@@ -1333,8 +1335,8 @@ export default function StageView({
 
           <AdamCard accent={stageDecisions.length ? "warning" : "none"}>
             <AdamCardHeader
-              title="Open decisions"
-              subtitle={stageDecisions.length ? `${stageDecisions.length} awaiting resolution` : "No open decisions"}
+              title="Open actions"
+              subtitle={stageDecisions.length ? `${stageDecisions.length} awaiting resolution` : "No open actions"}
               action={<button type="button" className="v3-button ghost v3-button-inline-xs" onClick={onOpenDecide}>View all →</button>}
             />
             <AdamCardBody>

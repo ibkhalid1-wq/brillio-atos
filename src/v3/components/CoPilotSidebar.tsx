@@ -313,7 +313,7 @@ export default function CoPilotSidebar({
               }}
             >
               <span style={{ fontSize: 12, color: "var(--v3-text-secondary)" }}>
-                ◆ {openDecisionCount} decision{openDecisionCount !== 1 ? "s" : ""} awaiting review
+                ◆ {openDecisionCount} action{openDecisionCount !== 1 ? "s" : ""} awaiting review
               </span>
             </div>
           )}

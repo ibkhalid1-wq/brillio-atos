@@ -261,9 +261,9 @@ function DecisionQueueCard({
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--v3-text-primary)" }}>Decision Queue</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--v3-text-primary)" }}>Action Queue</div>
           <div style={{ fontSize: 12, color: "var(--v3-text-muted)", marginTop: 2 }}>
-            {openDecisions.length ? `${openDecisions.length} item${openDecisions.length === 1 ? "" : "s"} need review` : "No open decisions blocking progress"}
+            {openDecisions.length ? `${openDecisions.length} item${openDecisions.length === 1 ? "" : "s"} need review` : "No open actions blocking progress"}
           </div>
         </div>
         <button type="button" className="v3-button ghost sm" onClick={onNavigateToDecide}>
@@ -313,7 +313,7 @@ function DecisionQueueCard({
         </div>
       ) : (
         <div style={{ padding: "12px 14px", borderRadius: 12, background: "var(--v3-surface-2)", color: "var(--v3-text-muted)", fontSize: 12 }}>
-          Decision queue is clear. New gate, risk, or sponsor decisions will appear here.
+          Action queue is clear. New gate, risk, or sponsor actions will appear here.
         </div>
       )}
     </div>
@@ -658,7 +658,7 @@ export default function InsightFeedView({
               } else if (score >= 60) {
                 verdict = `${label} — ${gatesApproved} of ${phases.length} gates approved. ${topSignal?.status !== "good" ? `Focus area: ${topSignal?.label.toLowerCase()}.` : ""}`;
               } else if (score >= 40) {
-                verdict = `At Risk (${score}%) — ${topSignal?.explanation ?? "Key signals need attention before gate progression."} ${openDecisions > 0 ? `${openDecisions} open decision${openDecisions > 1 ? "s" : ""} contributing to risk.` : ""}`;
+                verdict = `At Risk (${score}%) — ${topSignal?.explanation ?? "Key signals need attention before gate progression."} ${openDecisions > 0 ? `${openDecisions} open action${openDecisions > 1 ? "s" : ""} contributing to risk.` : ""}`;
               } else {
                 verdict = `Critical (${score}%) — Immediate attention required. ${topSignal?.topAction ?? "Run gate readiness coach to identify blockers."}`;
               }
@@ -691,7 +691,7 @@ export default function InsightFeedView({
           <AdamExplainsTooltip metric="open-decisions" value={openDecisionCount} placement="top">
             <Kpi
               variant="pill"
-              label="Open Decisions"
+              label="Open Actions"
               value={openDecisionCount}
               color={openDecisionCount > 0 ? "var(--v3-amber)" : undefined}
               onClick={onNavigateToDecide}
