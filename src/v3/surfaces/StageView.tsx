@@ -907,11 +907,14 @@ export default function StageView({
           <div className="v3-phase-metrics">
             {([
               { label: "Readiness", value: `${readiness.score}%`, tone: readiness.score >= 75 ? "green" : readiness.score >= 50 ? "amber" : "red", anchor: "exit-criteria-anchor" },
-              { label: "Inputs", value: `${readiness.inputScore}%`, tone: "", anchor: "phase-inputs-anchor" },
+              // One input signal — quality (toned, matches the input-panel label) when
+              // measured, else raw completeness — instead of two near-identical percentages.
+              inputQuality
+                ? { label: "Input quality", value: `${inputQuality.overallScore}%`, tone: inputQuality.verdict === "sufficient" ? "green" : inputQuality.verdict === "partial" ? "amber" : "red", anchor: "phase-inputs-anchor" }
+                : { label: "Inputs", value: `${readiness.inputScore}%`, tone: "", anchor: "phase-inputs-anchor" },
               { label: "Documents", value: `${readiness.artifactScore}%`, tone: "", anchor: "phase-artifacts-anchor" },
               { label: "Gate score", value: readiness.gateScore != null ? `${readiness.gateScore}%` : "—", tone: "", anchor: "exit-criteria-anchor" },
               { label: "Progress", value: `${Math.round(activePhase.pct)}%`, tone: "", anchor: null },
-              ...(inputQuality ? [{ label: "Input quality", value: `${inputQuality.overallScore}%`, tone: inputQuality.verdict === "sufficient" ? "green" : inputQuality.verdict === "partial" ? "amber" : "red", anchor: "phase-inputs-anchor" }] : []),
               ...(handoffQuality?.score ? [{ label: "Handoff", value: `${handoffQuality.score}%`, tone: handoffQuality.passed ? "green" : "amber", anchor: "phase-artifacts-anchor" }] : []),
               { label: "Blockers", value: phaseBlockers.length, tone: phaseBlockers.length ? "red" : "green", onClick: () => onOpenMoreView("risks") },
               { label: "Risks", value: phaseRiskCount, tone: phaseRiskCount ? "amber" : "", onClick: () => onOpenMoreView("risks") },
