@@ -7028,6 +7028,22 @@ button.v3-phase-metric:focus-visible {
   color: var(--v3-text-muted);
 }
 
+.v3-quality-issue-list {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.v3-quality-issue {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 12px; border: 1px solid var(--v3-border-soft);
+  border-radius: var(--radius-md); background: var(--v3-surface-2);
+}
+.v3-quality-issue-title {
+  font-size: 13px; font-weight: 600; color: var(--v3-text-primary);
+}
+.v3-quality-issue-detail {
+  font-size: 12px; line-height: 1.5; color: var(--v3-text-secondary); margin-top: 2px;
+}
+
 .v3-output-preview-body--animated {
   display: grid;
   gap: 12px;

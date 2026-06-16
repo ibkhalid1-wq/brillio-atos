@@ -63,6 +63,68 @@ function firstSentence(text: string, maxLength = 160): string {
   return first.length > maxLength ? `${first.slice(0, maxLength - 1).trimEnd()}…` : first;
 }
 
+interface ArtifactQualityIssue {
+  title: string;
+  detail: string;
+  severity: "high" | "medium" | "low";
+}
+
+// Deterministic, signal-grounded quality assessment for a produced artifact.
+// Combines the AI quality score, the phase inputs the document still lacks, any
+// model-suggested improvements, and approval state into a concrete punch list —
+// no extra model call, so the "Improve quality" modal can only ever name real,
+// actionable gaps for this artifact.
+function deriveArtifactQualityIssues(opts: {
+  score: number | null;
+  state: string;
+  missingInputs: string[];
+  improvements?: string[];
+}): ArtifactQualityIssue[] {
+  const { score, state, missingInputs, improvements } = opts;
+  const issues: ArtifactQualityIssue[] = [];
+  if (typeof score === "number") {
+    if (score < 60) {
+      issues.push({ severity: "high", title: `Low quality score — ${score}%`, detail: "ATOS rated this document below the quality bar. Regenerate it with richer phase inputs to lift the score." });
+    } else if (score < 80) {
+      issues.push({ severity: "medium", title: `Quality score ${score}% — room to improve`, detail: "The document is usable but ATOS sees headroom. Add detail to the phase inputs and regenerate." });
+    }
+  }
+  if (missingInputs.length) {
+    issues.push({ severity: "medium", title: `${missingInputs.length} input${missingInputs.length > 1 ? "s" : ""} missing`, detail: `Add these phase inputs to strengthen the next generation: ${missingInputs.join(", ")}.` });
+  }
+  for (const improvement of improvements ?? []) {
+    if (improvement && improvement.trim()) issues.push({ severity: "low", title: "Suggested improvement", detail: improvement.trim() });
+  }
+  if (state !== "approved" && state !== "archived") {
+    issues.push({ severity: "low", title: "Not yet approved", detail: "Review the document and approve it to lock this artifact and run the gate check." });
+  }
+  return issues;
+}
+
+function StageModal({ title, onClose, children, maxWidth = 560 }: { title: string; onClose: () => void; children: React.ReactNode; maxWidth?: number }) {
+  return (
+    <div
+      role="presentation"
+      onClick={onClose}
+      style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onClick={(e) => e.stopPropagation()}
+        style={{ background: "var(--v3-surface)", borderRadius: "var(--v3-radius)", border: "1px solid var(--v3-border)", maxWidth, width: "100%", maxHeight: "82vh", overflowY: "auto", boxShadow: "0 16px 48px rgba(0,0,0,0.4)" }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "16px 20px", borderBottom: "1px solid var(--v3-border-soft)", position: "sticky", top: 0, background: "var(--v3-surface)", zIndex: 1 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--v3-text-primary)" }}>{title}</div>
+          <button type="button" className="v3-button ghost v3-button-inline-xs" aria-label="Close" onClick={onClose}>✕</button>
+        </div>
+        <div style={{ padding: 20 }}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
 function phaseStatusTone(phase: ProgramSummary["phases"][number]): { label: string; tone: "green" | "amber" | "red" } {
   if (phase.pct >= 100 || phase.status === "complete") return { label: "Complete", tone: "green" };
   if (phase.status === "at-risk" || phase.status === "blocked") return { label: "At risk", tone: "red" };
@@ -346,11 +408,10 @@ export default function StageView({
   const [editingArtifact, setEditingArtifact] = React.useState<"narrative" | "deck" | null>(null);
   const [updatedArtifactId, setUpdatedArtifactId] = React.useState<"narrative" | "deck" | null>(null);
   const [exitCriteriaOpen, setExitCriteriaOpen] = React.useState(false);
+  const [previewArtifact, setPreviewArtifact] = React.useState<{ label: string; description?: string; content: string; score: number | null; statusTone: string } | null>(null);
+  const [qualityArtifact, setQualityArtifact] = React.useState<{ label: string; defId: string; score: number | null; issues: ArtifactQualityIssue[] } | null>(null);
   const phaseMainRef = useRef<HTMLDivElement | null>(null);
   const previousDeckRef = useRef<string | null>(artifactPreviews?.deck || null);
-  const toggleOutput = (id: string) => {
-    setExpandedOutput((previous) => previous === id ? null : id);
-  };
   useEffect(() => {
     const nextDeck = artifactPreviews?.deck || null;
     if (previousDeckRef.current && nextDeck && previousDeckRef.current !== nextDeck) {
@@ -952,7 +1013,6 @@ export default function StageView({
               const previewContent = (stringContent && stringContent.trim())
                 ? stringContent
                 : getFormalArtifactContent(source, def.id);
-              const isExpanded = expandedOutput === def.id;
               const preflight = runPreFlight(activePhase.id, preFlightInputs);
               const inputsIncomplete = !preflight.pass;
               return (
@@ -983,11 +1043,20 @@ export default function StageView({
                     <button
                       type="button"
                       className="v3-button ghost v3-button-inline-xs"
-                      onClick={() => toggleOutput(def.id)}
-                      aria-expanded={isExpanded}
-                      title={isExpanded ? `Hide ${def.label}` : `Preview ${def.label}`}
+                      onClick={() => setPreviewArtifact({ label: def.label, description: def.description, content: previewContent, score, statusTone })}
+                      title={`Preview ${def.label}`}
                     >
-                      {isExpanded ? "▴ Hide" : "▾ Preview"}
+                      ▾ Preview
+                    </button>
+                  ) : null}
+                  {present ? (
+                    <button
+                      type="button"
+                      className="v3-button ghost v3-button-inline-xs"
+                      onClick={() => setQualityArtifact({ label: def.label, defId: def.id, score, issues: deriveArtifactQualityIssues({ score, state, missingInputs: preflight.missingFields }) })}
+                      title={`Review and improve the quality of ${def.label}`}
+                    >
+                      ✦ Improve quality
                     </button>
                   ) : null}
                   <button
@@ -1012,24 +1081,6 @@ export default function StageView({
                     </button>
                   ) : null}
                   </div>
-                  {isExpanded && previewContent ? (
-                    <div className="v3-output-preview" style={{ marginTop: 8 }}>
-                      <div className="v3-output-preview-head">
-                        <div>
-                          <div className="v3-output-preview-label">{def.label}</div>
-                          {def.description ? (
-                            <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 2 }}>
-                              {def.description}
-                            </div>
-                          ) : null}
-                        </div>
-                        {score != null ? (
-                          <span className={`v3-chip ${statusTone}`}>Quality {score}%</span>
-                        ) : null}
-                      </div>
-                      <AnimatedArtifactContent content={previewContent} />
-                    </div>
-                  ) : null}
                 </div>
               );
             })}
@@ -1144,6 +1195,69 @@ export default function StageView({
             />
           </div>
         </div>
+      ) : null}
+
+      {previewArtifact ? (
+        <StageModal title={previewArtifact.label} onClose={() => setPreviewArtifact(null)} maxWidth={720}>
+          {previewArtifact.description ? (
+            <div style={{ fontSize: 12, color: "var(--v3-text-muted)", marginBottom: 12 }}>{previewArtifact.description}</div>
+          ) : null}
+          {previewArtifact.score != null ? (
+            <div style={{ marginBottom: 12 }}>
+              <span className={`v3-chip ${previewArtifact.statusTone}`}>Quality {previewArtifact.score}%</span>
+            </div>
+          ) : null}
+          <AnimatedArtifactContent content={previewArtifact.content} />
+        </StageModal>
+      ) : null}
+
+      {qualityArtifact ? (
+        <StageModal title={`Improve quality — ${qualityArtifact.label}`} onClose={() => setQualityArtifact(null)}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+            <span className={`v3-chip ${qualityArtifact.score == null ? "muted" : qualityArtifact.score >= 80 ? "green" : qualityArtifact.score >= 60 ? "blue" : "amber"}`}>
+              {qualityArtifact.score == null ? "Quality —" : `Quality ${qualityArtifact.score}%`}
+            </span>
+            <span style={{ fontSize: 12, color: "var(--v3-text-muted)" }}>
+              {qualityArtifact.issues.length
+                ? `${qualityArtifact.issues.length} issue${qualityArtifact.issues.length > 1 ? "s" : ""} to address`
+                : "No outstanding issues"}
+            </span>
+          </div>
+          {qualityArtifact.issues.length ? (
+            <ul className="v3-quality-issue-list">
+              {qualityArtifact.issues.map((issue, index) => (
+                <li key={index} className="v3-quality-issue">
+                  <span className={`v3-chip v3-chip-tight ${issue.severity === "high" ? "red" : issue.severity === "medium" ? "amber" : "muted"}`}>{issue.severity}</span>
+                  <div>
+                    <div className="v3-quality-issue-title">{issue.title}</div>
+                    <div className="v3-quality-issue-detail">{issue.detail}</div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div style={{ fontSize: 13, color: "var(--v3-text-secondary)" }}>
+              ATOS found no outstanding quality issues for this artifact. You can still regenerate it to fold in the latest programme context.
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
+            <button
+              type="button"
+              className="v3-button primary v3-button-inline-sm"
+              disabled={agentButtonDisabled(qualityArtifact.defId)}
+              onClick={() => { onRunAgent(qualityArtifact.defId); setQualityArtifact(null); }}
+            >
+              {agentButtonContent(qualityArtifact.defId, "↻ Regenerate to improve")}
+            </button>
+            <button
+              type="button"
+              className="v3-button ghost v3-button-inline-sm"
+              onClick={() => { document.getElementById("phase-inputs-anchor")?.scrollIntoView({ behavior: "smooth", block: "start" }); setQualityArtifact(null); }}
+            >
+              Add inputs →
+            </button>
+          </div>
+        </StageModal>
       ) : null}
     </div>
   );
