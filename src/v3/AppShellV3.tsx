@@ -2660,7 +2660,6 @@ export default function AppShellV3() {
                 onOpenReport={openReport}
                 onSaveGateNote={handleSaveGateNote}
                 onSaveStageNote={handleSaveStageNote}
-                onApproveGate={handleApproveGate}
                 onReopenGate={handleReopenGate}
                 onRunAgent={handleRunAgent}
                 onSaveArtifact={handleSaveArtifact}
@@ -2703,7 +2702,6 @@ export default function AppShellV3() {
               mode={mode}
               onResolveDecision={handleResolveDecision}
               onAddDecision={handleAddDecision}
-              onApproveGate={handleApproveGate}
               onRequestRemediation={requestRemediation}
               onAddRaid={addRaidEntry}
               onCloseRaid={closeRaidEntry}

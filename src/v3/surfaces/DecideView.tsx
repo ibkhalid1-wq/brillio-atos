@@ -20,7 +20,6 @@ interface DecideViewProps {
   persona?: Persona;
   onResolveDecision: (decisionId: string, resolution: "approved" | "deferred" | "rejected" | "modified", modifiedContent?: string, decisionPayload?: DecisionSummary) => Promise<void> | void;
   onAddDecision: (decision: Omit<DecisionSummary, "id" | "status" | "createdAt">) => Promise<void>;
-  onApproveGate: (phaseId: string) => Promise<void>;
   onRequestRemediation: (phaseId: string, note: string) => Promise<void>;
   onAddRaid: (draft: { type: RAIDEntryType; title: string; description: string; severity: RAIDEntry["severity"]; phase: string; owner?: string; mitigation?: string }) => Promise<void>;
   onCloseRaid: (entryId: string, note?: string) => Promise<void>;
@@ -308,14 +307,12 @@ function GateDetailPanel({
   gateReview,
   readiness,
   onClose,
-  onApprove,
   onRemediation,
 }: {
   phaseId: string;
   gateReview: GateReview | null;
   readiness: number | null;
   onClose: () => void;
-  onApprove: () => Promise<void>;
   onRemediation: (note: string) => Promise<void>;
 }) {
   const [note, setNote] = useState("");
@@ -330,14 +327,9 @@ function GateDetailPanel({
         </div>
         <div className="v3-governance-detail-actions">
           {gateReview?.status !== "approved" ? (
-            <>
-              <button type="button" className="v3-button ghost" style={{ fontSize: 12 }} onClick={() => setShowRemediationInput((current) => !current)}>
-                Request remediation
-              </button>
-              <button type="button" className="v3-button primary" style={{ fontSize: 12 }} onClick={() => void onApprove()}>
-                Approve gate
-              </button>
-            </>
+            <button type="button" className="v3-button ghost" style={{ fontSize: 12 }} onClick={() => setShowRemediationInput((current) => !current)}>
+              Request remediation
+            </button>
           ) : null}
           <button type="button" className="v3-button ghost" style={{ fontSize: 12 }} onClick={onClose}>
             Close
@@ -519,7 +511,6 @@ export default function DecideView({
   persona,
   onResolveDecision,
   onAddDecision,
-  onApproveGate,
   onRequestRemediation,
   onAddRaid,
   onCloseRaid,
@@ -880,7 +871,6 @@ export default function DecideView({
           gateReview={program.gateReviews?.[selectedPhaseId] || null}
           readiness={selectPhaseMetrics(program, selectedPhaseId).readiness}
           onClose={() => setSelectedPhaseId(null)}
-          onApprove={() => onApproveGate(selectedPhaseId)}
           onRemediation={async (note) => {
             await onRequestRemediation(selectedPhaseId, note);
             setSelectedPhaseId(null);

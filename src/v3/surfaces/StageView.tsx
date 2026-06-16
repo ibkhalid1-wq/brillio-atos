@@ -49,7 +49,6 @@ interface StageViewProps {
   onOpenReport: (reportId: V3ReportId) => void;
   onSaveGateNote: (phaseId: string, note: string) => Promise<void>;
   onSaveStageNote: (phaseId: string, note: string) => Promise<void>;
-  onApproveGate: (phaseId: string) => Promise<void>;
   onReopenGate: (phaseId: string) => void;
   onRunAgent: (agentId: string) => void;
   onSaveArtifact: (artifactId: "narrative" | "deck", content: string) => Promise<void>;
@@ -436,7 +435,6 @@ export default function StageView({
   onOpenReport,
   onSaveGateNote,
   onSaveStageNote,
-  onApproveGate,
   onReopenGate,
   onRunAgent,
   onSaveArtifact,
@@ -727,49 +725,49 @@ export default function StageView({
       { label: "Define programme objective and business case", why: "Without a clear objective, ATOS cannot generate meaningful summaries or action plans." },
       { label: "Upload existing strategy documents", why: "Document upload instantly bootstraps your programme data." },
       { label: "Generate your strategy brief", why: "Creates the foundation narrative that all downstream phase analysis references." },
-      { label: "Approve gate to proceed to Mobilise", why: "Gate approval confirms strategic intent is clear before committing resources." },
+      { label: "Gate approval unlocks Mobilise", why: "Gate approval confirms strategic intent is clear before committing resources." },
     ],
     mobilise:    [
       { label: "Enter team roster and governance structure", why: "ATOS needs to know who's accountable for each workstream to assign actions correctly." },
       { label: "Confirm budget baseline", why: "Budget data drives risk scoring and milestone health calculations." },
       { label: "Review mobilisation risks", why: "Early risk identification prevents cost overruns in later phases." },
-      { label: "Approve gate to proceed to Discover", why: "Confirms the team is assembled and governance is in place." },
+      { label: "Gate approval unlocks Discover", why: "Confirms the team is assembled and governance is in place." },
     ],
     discover:    [
       { label: "Log stakeholder interviews and as-is findings", why: "Discovery outputs are required for Design phase architecture decisions." },
       { label: "Analyse stakeholder engagement", why: "Identifies engagement gaps that can delay delivery if not addressed early." },
       { label: "Document pain points and capability gaps", why: "Gaps drive the change impact assessment in Design phase." },
-      { label: "Approve gate to proceed to Design", why: "Gate confirms discovery is complete before committing to solution design." },
+      { label: "Gate approval unlocks Design", why: "Gate confirms discovery is complete before committing to solution design." },
     ],
     design:      [
       { label: "Upload target operating model or solution architecture", why: "Architecture decisions are hard to reverse — ATOS will flag contradictions early." },
       { label: "Assess change impact", why: "Identifies affected groups and resistance risks before build begins." },
       { label: "Get TOM approved by SteerCo", why: "Sponsor sign-off on design reduces rework risk in Build phase by ~40%." },
-      { label: "Approve gate to proceed to Build", why: "Confirms design is locked before development investment." },
+      { label: "Gate approval unlocks Build", why: "Confirms design is locked before development investment." },
     ],
     build:       [
       { label: "Enter build milestones and delivery workstreams", why: "Milestone tracking is the primary health signal for this phase." },
       { label: "Generate prioritised action plan", why: "Identifies the critical path and sequences work to reduce delivery risk." },
       { label: "Complete UAT criteria and testing", why: "Gate approval requires evidence that the solution meets acceptance criteria." },
-      { label: "Approve gate to proceed to Operate", why: "Confirms the solution is ready to go live." },
+      { label: "Gate approval unlocks Operate", why: "Confirms the solution is ready to go live." },
     ],
     operate:     [
       { label: "Confirm go-live plan and cutover approach", why: "Cutover failures are the #1 cause of programme escalations — plan early." },
       { label: "Set up KPI tracking against baseline", why: "ATOS needs measurement data to calculate benefits realisation in Value Realise phase." },
       { label: "Confirm support model and hypercare plan", why: "Unplanned support demand after go-live is a top adoption risk." },
-      { label: "Approve gate to proceed to Govern", why: "Confirms steady-state operations are established." },
+      { label: "Gate approval unlocks Govern", why: "Confirms steady-state operations are established." },
     ],
     govern:      [
       { label: "Complete compliance framework review", why: "Regulatory non-compliance discovered late creates programme-halting risk." },
       { label: "Approve control matrix with internal audit", why: "Controls sign-off is required for closure in regulated environments." },
       { label: "Test escalation routes and decision rights", why: "Untested escalation paths cause decision delays and governance failures." },
-      { label: "Approve gate to proceed to Optimize", why: "Confirms the operating model is governed and auditable." },
+      { label: "Gate approval unlocks Optimize", why: "Confirms the operating model is governed and auditable." },
     ],
     optimize:    [
       { label: "Establish benefits baseline measurement", why: "Without a baseline, value realisation cannot be demonstrated to stakeholders." },
       { label: "Prioritise improvement backlog by business value", why: "Post-go-live improvements compete for limited capacity — prioritisation is essential." },
       { label: "Run adoption metrics report", why: "Low adoption is the most common reason benefits are not realised." },
-      { label: "Approve gate to proceed to Value Realise", why: "Confirms the solution is optimised and adoption is sufficient for value measurement." },
+      { label: "Gate approval unlocks Value Realise", why: "Confirms the solution is optimised and adoption is sufficient for value measurement." },
     ],
     valuerealize:[
       { label: "Quantify and sign off benefits realised", why: "Sponsor-confirmed benefits are the primary deliverable of the programme." },
@@ -782,7 +780,7 @@ export default function StageView({
     { label: "Complete phase setup", why: "ATOS needs phase data to generate insights and readiness assessments." },
     { label: "Generate phase documents", why: "ATOS assesses gate readiness automatically once this phase's documents are generated." },
     { label: "Review and confirm exit criteria", why: "Exit criteria define what 'done' looks like for this phase." },
-    { label: "Approve gate to unlock the next phase", why: "Gate approval signals the team is ready to proceed." },
+    { label: "Gate approval unlocks the next phase", why: "Gate approval signals the team is ready to proceed." },
   ];
   const onboardingItems = phaseSteps.map((step, idx) => ({
     label: step.label,
@@ -1143,7 +1141,7 @@ export default function StageView({
               !hasPhaseInputs ? "Open phase inputs →"
               : (!hasGateReview && agentsAvailable) ? "Generate phase documents →"
               : !confirmedCriteria ? "Review exit criteria →"
-              : "Approve gate"
+              : "Review gate readiness →"
             }
             onCtaClick={() => {
               if (!hasPhaseInputs) {
@@ -1162,7 +1160,9 @@ export default function StageView({
                 setExitCriteriaOpen(true);
                 return;
               }
-              void onApproveGate(activePhase.id);
+              // Guided setup is complete; gate approval lives on the Programme Health
+              // surface. Surface the readiness signal here rather than approving.
+              document.getElementById("phase-artifacts-anchor")?.scrollIntoView({ behavior: "smooth", block: "center" });
             }}
             onDismiss={() => {
               if (typeof window !== "undefined") {
