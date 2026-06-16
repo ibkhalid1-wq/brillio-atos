@@ -16,6 +16,19 @@ export type AgentRunStatus =
 
 export type RunTriggeredBy = "user" | "trigger" | "schedule" | "handoff";
 
+/**
+ * How a generation request should be interpreted. Lets a producing agent (and
+ * the prompt) distinguish a first draft from the various flavours of redraw,
+ * so regeneration can stay deterministic and targeted instead of rewriting the
+ * whole document every time.
+ */
+export type RunMode =
+  | "initial_generation"
+  | "input_change_refresh"
+  | "cascade_refresh"
+  | "gate_remediation"
+  | "manual_regeneration";
+
 export interface AgentHandoff {
   fromAgentId: string;
   fromPhaseId: string;
@@ -27,6 +40,14 @@ export interface AgentHandoff {
   openQuestions: string[];
   confidence: number;
   recommendedNextAction: string;
+  /** Field key of the artifact that produced this handoff (cascade refreshes). */
+  sourceArtifact?: string;
+  /** Sections of the source artifact that materially changed, when known. */
+  changedSections?: string[];
+  /** Why this cascade fired (e.g. "Budget input changed"). */
+  reason?: string;
+  /** Downstream sections/fields the source change is expected to impact. */
+  recommendedImpacts?: string[];
 }
 
 export interface RunAgentRequest {
@@ -34,6 +55,8 @@ export interface RunAgentRequest {
   agentId: string;
   phaseId: string;
   triggeredBy: RunTriggeredBy;
+  /** Explicit generation intent; defaults are derived server-side when omitted. */
+  runMode?: RunMode;
   triggerEvent?: string;
   incomingHandoff?: AgentHandoff | null;
   runId?: string;

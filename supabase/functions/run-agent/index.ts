@@ -9,7 +9,16 @@ import type {
   JsonValue,
   RunAgentRequest,
   RunAgentResponse,
+  RunMode,
 } from "../_shared/types.ts";
+
+const VALID_RUN_MODES: ReadonlySet<RunMode> = new Set<RunMode>([
+  "initial_generation",
+  "input_change_refresh",
+  "cascade_refresh",
+  "gate_remediation",
+  "manual_regeneration",
+]);
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -933,6 +942,77 @@ Return ONLY valid JSON:
   },
 };
 
+/**
+ * Shared generation discipline appended to every formal-artifact system prompt.
+ * It encodes the determinism / source-of-truth / regeneration rules (spec
+ * Changes 2, 4, 5, 6, 8) once, rather than duplicating them across all 14
+ * registry entries. The model reads `runMode` and `changedInputs` from the input
+ * context JSON to decide how aggressively to redraw.
+ */
+const FORMAL_ARTIFACT_DISCIPLINE = `
+## ATOS generation discipline
+
+Structured inputs are the system of record. This document is a generated VIEW of
+the program's structured data, never an independently authored source.
+
+### Source priority order
+When information conflicts, always trust the higher-priority source and never let
+a lower one override it:
+1. Current phase inputs
+2. KPI baselines
+3. Current cross-phase context
+4. Upstream agent findings
+5. Existing business case
+6. Existing artifacts
+7. Agent memory
+8. Prior run history
+Never allow memory or a prior artifact to override current structured inputs.
+
+### Regeneration rules
+The input context carries a "runMode" (initial_generation | input_change_refresh |
+cascade_refresh | gate_remediation | manual_regeneration) and, on redraws, a
+"changedInputs" delta. When runMode is not initial_generation:
+- Treat current structured inputs as authoritative; existing artifacts are
+  reference material ONLY (for formatting, terminology, and narrative continuity).
+- Where current inputs conflict with the prior artifact, update the artifact to
+  reflect the current inputs. Do not preserve outdated facts or stale assumptions.
+- Focus your changes on the fields named in "changedInputs" and anything that
+  logically depends on them; leave unaffected sections as they were.
+
+### Deterministic output rule
+If inputs have not materially changed, reproduce the prior artifact's structure,
+section ordering, naming conventions, terminology, and output shape. Repeated runs
+on identical inputs must produce substantially identical output — do not rephrase
+content solely for stylistic variation or introduce unnecessary rewrites.
+
+### Memory constraint
+Agent memory and run history are supplemental context only. They may aid
+continuity, terminology, and narrative consistency, but must never override
+current inputs, KPI baselines, cross-phase context, or upstream findings. When
+they conflict with current inputs, ignore memory.`;
+
+/**
+ * Downstream areas a formal artifact's change is most likely to impact (Change 7).
+ * Surfaced on the cascade handoff so the plan / risk / gate-review agents focus on
+ * what actually moved instead of redrawing everything. Keyed by producing agent id.
+ */
+const FORMAL_ARTIFACT_IMPACTS: Record<string, string[]> = {
+  "charter": ["scope", "governance", "success criteria"],
+  "business-case": ["success metrics", "benefits realization", "budget assumptions"],
+  "outcome-framework": ["success metrics", "benefits realization", "KPI tracking"],
+  "strategic-roadmap": ["milestones", "phase sequencing", "gate timing"],
+  "governance-model": ["decision rights", "escalation path", "controls"],
+  "raci-matrix": ["roles", "accountability", "stakeholders"],
+  "requirements-catalog": ["scope", "design inputs", "test coverage"],
+  "future-state-design": ["solution architecture", "integration points", "requirements"],
+  "target-operating-model": ["roles", "support model", "adoption"],
+  "solution-architecture": ["integration points", "test plan", "build scope"],
+  "test-plan": ["build readiness", "go-live criteria", "quality gates"],
+  "runbook": ["support model", "operational controls", "go-live readiness"],
+  "support-model": ["adoption", "operational controls", "hypercare"],
+  "optimization-backlog": ["benefits realization", "adoption", "continuous improvement"],
+};
+
 function parseKpiBaselines(raw: unknown): Record<string, unknown>[] {
   if (typeof raw === "string") return safeJsonParse<unknown[]>(raw, []).filter(isRecord);
   if (Array.isArray(raw)) return raw.filter(isRecord);
@@ -952,6 +1032,8 @@ function buildSpecialAgentInputContext(
   },
   options?: {
     patternContext?: Array<Record<string, unknown>>;
+    /** Effective generation intent for a formal artifact (Change 1). */
+    runMode?: RunMode;
   },
 ): string {
   const inner = getInnerProgramData(programData);
@@ -1633,9 +1715,17 @@ function buildSpecialAgentInputContext(
         : typeof projectMeta.objective === "string"
           ? projectMeta.objective
           : "";
+    // Run mode + input delta (Changes 1 & 3): tell the model what kind of run
+    // this is and exactly which structured inputs moved since the last draft.
+    const runMode = options?.runMode ?? "initial_generation";
+    const changedInputs = runMode === "initial_generation"
+      ? []
+      : computeInputDelta(readPriorInputSnapshot(inner, formalSpec.fieldKey), buildFormalInputSnapshot(inner, formalSpec.phase));
     return JSON.stringify({
       artifact: formalSpec.title,
       phase: formalSpec.phase,
+      runMode,
+      changedInputs,
       programName: meta.name || (typeof projectMeta.name === "string" ? projectMeta.name : ""),
       client: meta.client || (typeof projectMeta.client === "string" ? projectMeta.client : ""),
       industry: meta.industry || (typeof projectMeta.industry === "string" ? projectMeta.industry : ""),
@@ -3390,6 +3480,78 @@ async function queueTriggeredRun(
   });
 }
 
+/**
+ * Structured human inputs that feed a formal artifact, flattened to a stable
+ * key→string map. This is the snapshot we persist alongside a generated artifact
+ * (under `_generationMetadata.inputSnapshot`) so the next regeneration can diff
+ * it against current inputs and tell the model exactly what changed.
+ */
+function buildFormalInputSnapshot(inner: Record<string, unknown>, phase: string): Record<string, string> {
+  const phaseInputsAll = normalizeProgramData(inner.phaseInputs as JsonValue | null);
+  const strategyInputs = normalizeProgramData(phaseInputsAll.strategy as JsonValue | null);
+  const phaseInputs = normalizeProgramData(phaseInputsAll[phase] as JsonValue | null);
+  const snapshot: Record<string, string> = {};
+  const put = (key: string, value: unknown) => {
+    if (value === null || value === undefined || value === "") return;
+    snapshot[key] = typeof value === "string" ? value : JSON.stringify(value);
+  };
+  // Strategy-level inputs every artifact may anchor to.
+  for (const key of ["businessObjective", "sponsor", "successMetric", "constraints", "budget", "scopeInclusions", "scopeExclusions", "kpis"]) {
+    put(`strategy.${key}`, strategyInputs[key]);
+  }
+  // The artifact's own phase inputs.
+  for (const [key, value] of Object.entries(phaseInputs)) {
+    if (key === "savedAt") continue;
+    put(`${phase}.${key}`, value);
+  }
+  return snapshot;
+}
+
+/** Diff a prior input snapshot against current inputs (Change 3 — delta awareness). */
+function computeInputDelta(
+  prev: Record<string, string> | null,
+  curr: Record<string, string>,
+): Array<{ field: string; previousValue: string | null; newValue: string | null }> {
+  if (!prev) return [];
+  const delta: Array<{ field: string; previousValue: string | null; newValue: string | null }> = [];
+  const keys = new Set([...Object.keys(prev), ...Object.keys(curr)]);
+  for (const key of keys) {
+    const before = key in prev ? prev[key] : null;
+    const after = key in curr ? curr[key] : null;
+    if (before !== after) delta.push({ field: key, previousValue: before, newValue: after });
+  }
+  return delta;
+}
+
+/** The input snapshot persisted with the last generation of a formal artifact, if any. */
+function readPriorInputSnapshot(inner: Record<string, unknown>, fieldKey: string): Record<string, string> | null {
+  const artifact = isRecord(inner[fieldKey]) ? inner[fieldKey] as Record<string, unknown> : null;
+  const meta = artifact && isRecord(artifact._generationMetadata) ? artifact._generationMetadata as Record<string, unknown> : null;
+  const snap = meta && isRecord(meta.inputSnapshot) ? meta.inputSnapshot as Record<string, unknown> : null;
+  if (!snap) return null;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(snap)) if (typeof v === "string") out[k] = v;
+  return out;
+}
+
+/**
+ * Derive the effective run mode for a formal-artifact generation (Change 1).
+ * An explicit request.runMode always wins; otherwise we infer from whether the
+ * artifact already exists and how the run was triggered.
+ */
+function deriveFormalRunMode(
+  request: RunAgentRequest,
+  inner: Record<string, unknown>,
+  fieldKey: string,
+): RunMode {
+  if (request.runMode) return request.runMode;
+  const exists = isRecord(inner[fieldKey]) && Object.keys(inner[fieldKey] as Record<string, unknown>).length > 0;
+  if (!exists) return "initial_generation";
+  if (request.triggeredBy === "handoff") return "cascade_refresh";
+  if (request.triggeredBy === "user") return "manual_regeneration";
+  return "input_change_refresh";
+}
+
 /** Gap between consecutive downstream agent triggers, to smooth provider load. */
 const DOWNSTREAM_STAGGER_MS = 1500;
 
@@ -3956,15 +4118,20 @@ function applyProgramSupportArtifact(
   fieldKey: string,
   result: Record<string, unknown>,
   title: string,
+  /**
+   * Internal traceability metadata (Change 9). Stored under the `_`-prefixed key
+   * so the renderer skips it — never surfaced to users, only kept for provenance.
+   */
+  generationMetadata?: Record<string, unknown>,
 ): ProgramState {
-  let next = setInnerField(programData, fieldKey, {
+  const generatedAt = typeof result.generatedAt === "string" ? result.generatedAt : new Date().toISOString();
+  const payload = {
     ...result,
-    generatedAt: typeof result.generatedAt === "string" ? result.generatedAt : new Date().toISOString(),
-  } as JsonValue);
-  next = setPhaseArtifactValue(next, phaseId, artifactId, {
-    ...result,
-    generatedAt: typeof result.generatedAt === "string" ? result.generatedAt : new Date().toISOString(),
-  }, title);
+    generatedAt,
+    ...(generationMetadata ? { _generationMetadata: generationMetadata as JsonValue } : {}),
+  };
+  let next = setInnerField(programData, fieldKey, payload as JsonValue);
+  next = setPhaseArtifactValue(next, phaseId, artifactId, payload, title);
   return next;
 }
 
@@ -5448,7 +5615,7 @@ Rules: Extract verbatim or near-verbatim from transcript. Max 10 decisions, 15 a
   const formalArtifactSpec = FORMAL_ARTIFACT_AGENTS[request.agentId];
   if (formalArtifactSpec) {
     return {
-      system: formalArtifactSpec.system,
+      system: `${formalArtifactSpec.system}\n${FORMAL_ARTIFACT_DISCIPLINE}`,
       user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
     };
   }
@@ -5575,6 +5742,9 @@ Deno.serve(async (req) => {
         || rawRequest.triggeredBy === "handoff"
         ? rawRequest.triggeredBy
         : "schedule",
+      runMode: typeof rawRequest.runMode === "string" && VALID_RUN_MODES.has(rawRequest.runMode as RunMode)
+        ? rawRequest.runMode as RunMode
+        : undefined,
       triggerEvent: typeof rawRequest.triggerEvent === "string" ? rawRequest.triggerEvent : undefined,
       incomingHandoff: isRecord(rawRequest.incomingHandoff) ? rawRequest.incomingHandoff as AgentHandoff : null,
       runId: typeof rawRequest.runId === "string" ? rawRequest.runId : undefined,
@@ -5739,6 +5909,10 @@ Deno.serve(async (req) => {
             limit: 5,
           }))
       : [];
+    const formalSpecForRun = FORMAL_ARTIFACT_AGENTS[request.agentId];
+    const formalRunMode = formalSpecForRun
+      ? deriveFormalRunMode(request, getInnerProgramData(contextProgramData), formalSpecForRun.fieldKey)
+      : undefined;
     let specialAgentInputContext = isSpecialProgramAgent(request.agentId, request.phaseId)
       ? buildSpecialAgentInputContext(contextProgramData, {
           name: typeof programRow.name === "string" ? programRow.name : "",
@@ -5749,6 +5923,7 @@ Deno.serve(async (req) => {
           phaseId: request.phaseId,
         }, {
           patternContext,
+          runMode: formalRunMode,
         })
       : "";
 
@@ -5992,7 +6167,19 @@ Deno.serve(async (req) => {
     // ── Upstream agent handoff — cross-agent intelligence (Priority: agent collaboration) ──
     if (request.incomingHandoff) {
       const handoff = request.incomingHandoff;
-      prompt.system += `\n\n## Upstream agent findings (${handoff.fromAgentId} on ${handoff.fromPhaseId}, confidence ${Math.round((handoff.confidence ?? 0) * 100)}%)\n${handoff.summary}${handoff.openQuestions?.length ? `\nOpen questions from upstream: ${handoff.openQuestions.join("; ")}` : ""}`;
+      let handoffBlock = `\n\n## Upstream agent findings (${handoff.fromAgentId} on ${handoff.fromPhaseId}, confidence ${Math.round((handoff.confidence ?? 0) * 100)}%)\n${handoff.summary}${handoff.openQuestions?.length ? `\nOpen questions from upstream: ${handoff.openQuestions.join("; ")}` : ""}`;
+      // Targeted cascade refresh (Change 7): when the handoff identifies the
+      // changed source artifact and its likely impacts, scope this run to only
+      // the affected sections instead of redrawing everything.
+      if (handoff.sourceArtifact || handoff.reason || handoff.changedSections?.length || handoff.recommendedImpacts?.length) {
+        handoffBlock += `\n\n### Targeted update`;
+        if (handoff.sourceArtifact) handoffBlock += `\nSource artifact changed: ${handoff.sourceArtifact}`;
+        if (handoff.reason) handoffBlock += `\nReason: ${handoff.reason}`;
+        if (handoff.changedSections?.length) handoffBlock += `\nChanged sections: ${handoff.changedSections.join(", ")}`;
+        if (handoff.recommendedImpacts?.length) handoffBlock += `\nLikely impacted here: ${handoff.recommendedImpacts.join(", ")}`;
+        handoffBlock += `\nOnly update sections impacted by this handoff. Avoid unnecessary changes to unrelated sections.`;
+      }
+      prompt.system += handoffBlock;
     }
     // ── Pattern context injection — self-improvement from prior programmes ──────
     // For agents not already receiving patterns via buildSpecialAgentInputContext,
@@ -6223,6 +6410,19 @@ Deno.serve(async (req) => {
         : await autonomyGate(auth.admin, request.programId, request.agentId, confidence);
       let nextProgramData = contextProgramData;
 
+      // Formal-artifact generation metadata (Changes 1, 3, 7, 9), computed once
+      // from the pre-write inputs so both the persisted `_generationMetadata` and
+      // the downstream cascade handoff describe the same change.
+      let formalGenChangedInputs: Array<{ field: string; previousValue: string | null; newValue: string | null }> = [];
+      let formalGenRunMode: RunMode | null = null;
+      if (formalSpecForRun) {
+        const innerForMeta = getInnerProgramData(contextProgramData);
+        formalGenRunMode = formalRunMode ?? deriveFormalRunMode(request, innerForMeta, formalSpecForRun.fieldKey);
+        formalGenChangedInputs = formalGenRunMode === "initial_generation"
+          ? []
+          : computeInputDelta(readPriorInputSnapshot(innerForMeta, formalSpecForRun.fieldKey), buildFormalInputSnapshot(innerForMeta, formalSpecForRun.phase));
+      }
+
       if (autonomy.shouldQueueReview) {
         nextProgramData = appendDecisionQueueItems(contextProgramData, [
           createAgentReviewDecision(request.agentId, request.phaseId, normalizedParsedResult, autonomy.reason),
@@ -6433,7 +6633,18 @@ Deno.serve(async (req) => {
         // fieldKey is chosen to avoid clobbering read-only value records such as
         // inner.businessCase (the business-case agent uses businessCaseDoc).
         const spec = FORMAL_ARTIFACT_AGENTS[request.agentId];
-        nextProgramData = applyProgramSupportArtifact(contextProgramData, spec.phase, request.agentId, spec.fieldKey, result, spec.title);
+        // Traceability metadata + a fresh input snapshot for the NEXT regen's
+        // delta (Changes 1, 3, 9). Snapshot taken pre-write from the inputs this
+        // run was grounded on.
+        const inputSnapshot = buildFormalInputSnapshot(getInnerProgramData(contextProgramData), spec.phase);
+        const generationMetadata = {
+          runMode: formalGenRunMode ?? "initial_generation",
+          changedInputs: formalGenChangedInputs.map((c) => c.field),
+          conflictsResolved: formalGenChangedInputs.map((c) => ({ field: c.field, sourceUsed: "currentInput", sourceIgnored: "existingArtifact" })),
+          inputSnapshot,
+          generatedAt: new Date().toISOString(),
+        };
+        nextProgramData = applyProgramSupportArtifact(contextProgramData, spec.phase, request.agentId, spec.fieldKey, result, spec.title, generationMetadata);
       }
 
       // Surface structured agent output in the artifact ledger. The UI artifact
@@ -6567,6 +6778,18 @@ Deno.serve(async (req) => {
           confidence,
           recommendedNextAction: "",
         };
+        // Targeted cascade enrichment (Change 7): when a formal artifact drove
+        // this run, tell downstream agents which artifact changed, why, and where
+        // to focus — so they update only the impacted sections.
+        if (formalSpecForRun) {
+          const changedFields = formalGenChangedInputs.map((c) => c.field.split(".").pop() || c.field);
+          completedHandoff.sourceArtifact = formalSpecForRun.fieldKey;
+          completedHandoff.reason = changedFields.length
+            ? `${formalSpecForRun.title} regenerated (${formalGenRunMode ?? "manual_regeneration"}); inputs changed: ${changedFields.join(", ")}`
+            : `${formalSpecForRun.title} regenerated (${formalGenRunMode ?? "initial_generation"}); no structured input changes`;
+          if (changedFields.length) completedHandoff.changedSections = changedFields;
+          completedHandoff.recommendedImpacts = FORMAL_ARTIFACT_IMPACTS[request.agentId] ?? [];
+        }
         scheduleBackground(triggerDownstreamAgents(request.agentId, request.programId, request.phaseId, completedHandoff, nextProgramData));
       }
 
