@@ -958,12 +958,32 @@ export default function StageView({
           return (
             <div className="v3-phase-metrics">
               <div className="v3-phase-pipeline" role="group" aria-label="Gate readiness pipeline">
-                {pipeline.map((metric, i) => (
-                  <React.Fragment key={metric.label}>
-                    {i > 0 ? <span className="v3-phase-pipeline-chevron" aria-hidden="true">›</span> : null}
-                    {renderMetric(metric)}
-                  </React.Fragment>
-                ))}
+                {pipeline.map((metric, i) => {
+                  const isGate = i === pipeline.length - 1;
+                  return (
+                    <React.Fragment key={metric.label}>
+                      {i > 0 ? <span className="v3-phase-pipeline-chevron" aria-hidden="true">›</span> : null}
+                      {isGate ? (
+                        <div className="v3-phase-gate-col">
+                          {renderMetric(metric)}
+                          {gateReview ? (
+                            <button
+                              type="button"
+                              className="v3-button ghost v3-button-inline-xs v3-phase-gate-recheck"
+                              disabled={isGateRunning}
+                              title="ATOS re-checks gate readiness automatically after each document is generated — use this only to force a manual refresh."
+                              onClick={() => triggers.triggerGateReview(activePhase.id)}
+                            >
+                              {isGateRunning ? "Checking…" : "Re-check"}
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : (
+                        renderMetric(metric)
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </div>
               <span className="v3-phase-metrics-divider" aria-hidden="true" />
               <div className="v3-phase-metric-group" role="group" aria-label="Open work items">
@@ -994,17 +1014,6 @@ export default function StageView({
             ) : null}
             {gateReviewStatus === "pending-review" || gateReviewStatus === "ready" ? (
               <button type="button" className="v3-button ghost v3-button-inline-sm" onClick={() => setRemediationOpen(true)}>Flag Issues</button>
-            ) : null}
-            {gateReview ? (
-              <button
-                type="button"
-                className="v3-button ghost v3-button-inline-sm"
-                disabled={isGateRunning}
-                title="ATOS re-checks gate readiness automatically after each document is generated — use this only to force a manual refresh."
-                onClick={() => triggers.triggerGateReview(activePhase.id)}
-              >
-                {isGateRunning ? "Checking…" : "Re-check gate readiness"}
-              </button>
             ) : null}
             {gateReviewStatus === "approved" ? (
               <button type="button" className="v3-button ghost v3-button-inline-xs" onClick={() => onReopenGate(activePhase.id)}>Reopen Gate</button>

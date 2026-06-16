@@ -5521,10 +5521,13 @@ button.v3-chip:focus-visible,
 .v3-phase-head-focus { font-size: 13px; color: var(--v3-text-secondary); line-height: 1.4; }
 .v3-phase-head-verdict { font-size: 12px; color: var(--v3-text-muted); max-width: 640px; line-height: 1.45; }
 
-.v3-phase-metrics { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.v3-phase-pipeline { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.v3-phase-metric-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.v3-phase-metrics { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.v3-phase-pipeline { display: flex; align-items: flex-start; gap: 6px; flex-wrap: wrap; }
+.v3-phase-metric-group { display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
+.v3-phase-gate-col { display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
+.v3-phase-gate-recheck { width: 100%; justify-content: center; }
 .v3-phase-pipeline-chevron {
+  height: 46px; display: flex; align-items: center;
   font-size: 18px; line-height: 1; color: var(--v3-text-muted); opacity: 0.55;
   padding: 0 1px; user-select: none;
 }
