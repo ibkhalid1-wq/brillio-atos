@@ -5944,6 +5944,15 @@ button.v3-phase-metric:focus-visible {
   flex-shrink: 0;
 }
 
+/* On narrow viewports the badge row and metric row wrap instead of being
+   clipped by the card's overflow:hidden, keeping every stat reachable. */
+@media (max-width: 640px) {
+  .v3-exec-snapshot-head { flex-wrap: wrap; }
+  .v3-exec-snapshot-headline { flex: 1 1 100%; white-space: normal; }
+  .v3-exec-snapshot-scores { flex-wrap: wrap; flex-shrink: 1; min-width: 0; }
+  .v3-exec-snapshot-metrics { flex-wrap: wrap; gap: 12px 20px; }
+}
+
 /* Methodology checklist — binds required inputs/artifacts/exit-criteria */
 .v3-method-checklist {
   border: 1px solid var(--v3-border);
