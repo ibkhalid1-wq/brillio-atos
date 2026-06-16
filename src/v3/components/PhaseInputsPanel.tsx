@@ -29,6 +29,13 @@ interface PhaseInputsPanelProps {
 }
 
 /**
+ * Companion phaseInput keys that anchor the Primary success metric with a
+ * baseline → target → unit, mirroring the Outcome KPIs grid. Persisted as
+ * plain strings alongside `successMetric`.
+ */
+const SUCCESS_METRIC_ANCHOR_KEYS = ["successMetricBaseline", "successMetricTarget", "successMetricUnit"] as const;
+
+/**
  * Structured baseline/target KPI captured at Strategy. Persisted as a JSON
  * string under phaseInputs.strategy.kpis so the benefits-tracker agent can
  * measure realisation against a human-entered baseline — closing the
@@ -261,6 +268,11 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
         ? program.workstreams.filter((entry) => entry.phaseId === phaseId)
         : [];
     if (JSON.stringify(localWorkstreams) !== JSON.stringify(existingWs)) return true;
+    if (showKpis) {
+      for (const key of SUCCESS_METRIC_ANCHOR_KEYS) {
+        if ((values[key] ?? "") !== (((existingInputs as Record<string, unknown>)[key] as string) ?? "")) return true;
+      }
+    }
     if (showKpis && JSON.stringify(localKpis) !== JSON.stringify(parseKpis((existingInputs as Record<string, unknown>).kpis))) return true;
     if (showActuals && JSON.stringify(localActuals) !== JSON.stringify(parseKpiActuals((existingInputs as Record<string, unknown>).kpiActuals))) return true;
     return false;
@@ -466,6 +478,35 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
                     onChange={(event) => setValues((current) => ({ ...current, [field.id]: event.target.value }))}
                   />
                 )}
+                {field.id === "successMetric" ? (
+                  <div style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center" }}>
+                    <input
+                      type="text"
+                      className="v3-input"
+                      style={{ flex: 1 }}
+                      placeholder="Baseline"
+                      value={values.successMetricBaseline ?? ""}
+                      onChange={(event) => setValues((current) => ({ ...current, successMetricBaseline: event.target.value }))}
+                    />
+                    <span style={{ fontSize: 12, color: "var(--v3-text-muted)", flexShrink: 0 }}>→</span>
+                    <input
+                      type="text"
+                      className="v3-input"
+                      style={{ flex: 1 }}
+                      placeholder="Target"
+                      value={values.successMetricTarget ?? ""}
+                      onChange={(event) => setValues((current) => ({ ...current, successMetricTarget: event.target.value }))}
+                    />
+                    <input
+                      type="text"
+                      className="v3-input"
+                      style={{ width: 64 }}
+                      placeholder="Unit"
+                      value={values.successMetricUnit ?? ""}
+                      onChange={(event) => setValues((current) => ({ ...current, successMetricUnit: event.target.value }))}
+                    />
+                  </div>
+                ) : null}
                 {onAssistField && field.type === "textarea" ? (
                   <div className="v3-field-assist">
                     {assistingField === field.id ? (
