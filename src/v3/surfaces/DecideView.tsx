@@ -3,6 +3,7 @@ import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
 import { selectPhaseMetrics } from "@/v3/lib/programMetrics";
 import { selectBlockers, selectRisks, type RaidScope } from "@/v3/lib/programRaid";
 import { PHASE_LABELS } from "@/v3/lib/uiHelpers";
+import { getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
 import type { DecisionSummary, GateReview, ProgramSummary, RAIDEntry, RAIDEntryType } from "@/new/types";
 import type { Persona } from "@/new/types";
 import { AdamCard, AdamCardBody, AdamCardHeader } from "@/v3/components/ui/AdamCard";
@@ -107,13 +108,14 @@ function GateTimeline({
   selectedPhaseId: string | null;
   onPhaseSelect: (phaseId: string | null) => void;
 }) {
+  const lockedPhaseIds = getLockedPhaseIds(program);
   return (
     <div className="v3-governance-timeline">
       {(program.phases || []).map((phase) => {
         const gate = program.gateReviews?.[phase.id];
         const isActive = phase.id === activePhaseId;
         const isSelected = phase.id === selectedPhaseId;
-        const isLocked = phase.status === "inactive";
+        const isLocked = lockedPhaseIds.has(phase.id);
         const variant = gateVariant(gate?.status);
 
         return (
