@@ -663,9 +663,11 @@ export default function DecideView({
         }}
       >
         <div style={{ fontSize: 11, color: "var(--v3-text-muted)", padding: "4px 0 0 4px" }}>
-          {decision.phaseId
-            ? <>Affects: <strong>{PHASE_LABELS[decision.phaseId] ?? decision.phaseId}</strong> phase</>
-            : <>Affects: <strong>Programme-level</strong></>}
+          {!decision.phaseId
+            ? <>Affects: <strong>Programme-level</strong></>
+            : decision.phaseId === "all"
+            ? <>Affects: <strong>All phases</strong></>
+            : <>Affects: <strong>{PHASE_LABELS[decision.phaseId] ?? decision.phaseId}</strong> phase</>}
         </div>
         <DecisionCard
           decision={decision}
@@ -725,9 +727,11 @@ export default function DecideView({
         {entries.map((entry) => (
           <div key={entry.id} style={{ marginBottom: 8 }}>
             <div style={{ fontSize: 11, color: "var(--v3-text-muted)", padding: "4px 0 0 4px" }}>
-              {entry.phase
-                ? <>Affects: <strong>{PHASE_LABELS[entry.phase] ?? entry.phase}</strong> phase</>
-                : <>Affects: <strong>Programme-level</strong></>}
+              {!entry.phase
+                ? <>Affects: <strong>Programme-level</strong></>
+                : entry.phase === "all"
+                ? <>Affects: <strong>All phases</strong></>
+                : <>Affects: <strong>{PHASE_LABELS[entry.phase] ?? entry.phase}</strong> phase</>}
             </div>
             <RaidCard entry={entry} closing={closingRaidId === entry.id} onClose={() => void closeRaid(entry.id)} />
           </div>
