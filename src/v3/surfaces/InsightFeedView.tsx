@@ -375,31 +375,25 @@ export default function InsightFeedView({
       });
     }
 
-    if (program?.gateReviews) {
-      const atRiskGate = Object.entries(program.gateReviews).find(
-        ([, gate]) =>
-          typeof gate === "object" &&
-          gate !== null &&
-          (gate as { readinessScore?: number; status?: string }).readinessScore !== undefined &&
-          ((gate as { readinessScore: number }).readinessScore < 70) &&
-          (gate as { status: string }).status !== "approved",
-      );
-
-      if (atRiskGate) {
-        const [gatePhaseId, gate] = atRiskGate as [string, { readinessScore: number; status: string }];
-        const score = gate.readinessScore;
-        const gateAccent = score < 50 ? "var(--v3-red)" : "var(--v3-amber)";
-        const phaseLabel = PHASE_LABELS[gatePhaseId] ?? gatePhaseId;
-        cards.push({
-          priority: 3 as 1 | 2 | 3,
-          accent: gateAccent,
-          icon: "⬡",
-          title: "Gate Readiness Alert",
-          description: `The ${phaseLabel} gate shows ${score}% readiness — below the 70% threshold. Check gate readiness to identify what's blocking progress.`,
-          actionLabel: "View Gates →",
-          onAction: onNavigateToGates,
-        });
-      }
+    // Gate readiness uses the same canonical signal the rest of the app shows
+    // (confidence breakdown for the active phase, 60% minimum) so Home never
+    // contradicts the command panel or phase strip with a different number.
+    const gateReadiness = confidenceResult?.breakdown?.gateReadiness;
+    const activeGateApproved =
+      (activePhase && (program?.gateReviews?.[activePhase.id] as { status?: string } | undefined)?.status === "approved") || false;
+    if (typeof gateReadiness === "number" && gateReadiness < 60 && !activeGateApproved) {
+      const score = Math.round(gateReadiness);
+      const gateAccent = score < 40 ? "var(--v3-red)" : "var(--v3-amber)";
+      const phaseLabel = activePhase ? (PHASE_LABELS[activePhase.id] ?? activePhase.displayName) : "current";
+      cards.push({
+        priority: 3 as 1 | 2 | 3,
+        accent: gateAccent,
+        icon: "⬡",
+        title: "Gate Readiness Alert",
+        description: `The ${phaseLabel} gate shows ${score}% readiness — below the 60% threshold. Check gate readiness to identify what's blocking progress.`,
+        actionLabel: "View Gates →",
+        onAction: onNavigateToGates,
+      });
     }
 
     if (cards.length === 0) {
@@ -415,7 +409,7 @@ export default function InsightFeedView({
     }
 
     return cards.slice(0, 3).map((c, i) => ({ ...c, priority: (i + 1) as 1 | 2 | 3 }));
-  }, [program, activePhaseId, openDecisionCount, onNavigateToDecide, onNavigateToGates, onNavigateToPhase, onRunAgent]);
+  }, [program, activePhaseId, confidenceResult, openDecisionCount, onNavigateToDecide, onNavigateToGates, onNavigateToPhase, onRunAgent]);
 
   // Route the confidence "Top Action" to the surface that actually owns the
   // weakest signal, rather than always sending the user to Risks.
