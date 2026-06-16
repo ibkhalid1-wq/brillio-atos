@@ -849,15 +849,11 @@ export default function StageView({
                 <span className={`v3-chip ${phaseTone.tone === "green" ? "green" : phaseTone.tone === "amber" ? "amber" : phaseTone.tone === "red" ? "red" : "muted"}`}>
                   {activePhase.status ? activePhase.status.replace(/-/g, " ") : `${Math.round(activePhase.pct ?? 0)}% complete`}
                 </span>
-                {(() => {
-                  const readinessScores = (program?.rawData as Record<string,unknown>)?.data
-                    ? ((program?.rawData as Record<string,unknown>)?.data as Record<string,unknown>)?.phaseReadinessScores
-                    : (program?.rawData as Record<string,unknown>)?.phaseReadinessScores;
-                  const phaseReadiness = readinessScores && typeof readinessScores === "object"
-                    ? (readinessScores as Record<string,unknown>)[activePhase.id] as { score?: number; blockers?: string[] } | undefined
-                    : undefined;
-                  return <ReadinessBadge score={phaseReadiness?.score} blockers={phaseReadiness?.blockers} size="sm" />;
-                })()}
+                <ReadinessBadge
+                  score={readiness?.score}
+                  blockers={readiness?.recommendedActions.map((a) => a.label)}
+                  size="sm"
+                />
                 {phaseConfidence ? (
                   <span
                     className={`v3-chip ${phaseConfidence.score >= 75 ? "green" : phaseConfidence.score >= 50 ? "amber" : "red"}`}

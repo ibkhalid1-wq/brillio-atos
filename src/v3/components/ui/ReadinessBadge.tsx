@@ -22,7 +22,7 @@ function getScoreConfig(score: number | null | undefined): {
   }
   if (score >= 85) {
     return {
-      label: `${score} Ready`,
+      label: `Ready · ${score}%`,
       background: "rgba(34,197,94,0.12)",
       color: "#16a34a",
       borderColor: "rgba(34,197,94,0.25)",
@@ -30,14 +30,14 @@ function getScoreConfig(score: number | null | undefined): {
   }
   if (score >= 70) {
     return {
-      label: `${score} At Risk`,
+      label: `At Risk · ${score}%`,
       background: "rgba(245,158,11,0.12)",
       color: "#d97706",
       borderColor: "rgba(245,158,11,0.25)",
     };
   }
   return {
-    label: `${score} At Risk`,
+    label: `At Risk · ${score}%`,
     background: "rgba(239,68,68,0.12)",
     color: "#dc2626",
     borderColor: "rgba(239,68,68,0.25)",
