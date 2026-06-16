@@ -71,7 +71,7 @@ export function ClosureView({
           <div className="adam-closure-readiness-bar mt-4">
             <span
               className="adam-closure-readiness-fill"
-              style={{ width: `${Math.max(6, Math.round((readyPhaseCount / Math.max(program.phases.length, 1)) * 100))}%` }}
+              style={{ width: readyPhaseCount === 0 ? "0%" : `${Math.max(6, Math.round((readyPhaseCount / Math.max(program.phases.length, 1)) * 100))}%` }}
             />
           </div>
         </section>
