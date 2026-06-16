@@ -3,7 +3,7 @@ import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 import type { Database, Json } from "@/integrations/supabase/types";
 import { normalizeProgram, updateDecisionInProgram } from "@/new/lib/programData";
 import { ConflictError } from "@/new/lib/conflicts";
-import type { ProgramSummary } from "@/new/types";
+import type { ProgramSummary, DecisionSummary } from "@/new/types";
 import { pushV3Toast } from "@/v3/utils";
 
 type ProgramRow = Database["public"]["Tables"]["adam_programs"]["Row"];
@@ -443,6 +443,7 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
     actorOrNote?: string,
     modifiedContent?: string,
     note?: string,
+    decisionPayload?: DecisionSummary,
   ) => {
     const program = programs.find((entry) => entry.id === programId);
     if (!program) throw new Error("Program not found.");
@@ -468,7 +469,7 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
         throw new Error(error.message || "Failed to resume agent.");
       }
     }
-    const nextData = updateDecisionInProgram(program, decisionId, resolution, humanNote, actorEmail, modifiedContent);
+    const nextData = updateDecisionInProgram(program, decisionId, resolution, humanNote, actorEmail, modifiedContent, decisionPayload);
     await updateProgramData(programId, nextData);
   }, [programs, updateProgramData]);
 

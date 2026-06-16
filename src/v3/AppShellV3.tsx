@@ -1940,6 +1940,7 @@ export default function AppShellV3() {
     decisionId: string,
     resolution: "approved" | "deferred" | "rejected" | "modified",
     modifiedContent?: string,
+    decisionPayload?: DecisionSummary,
   ) => {
     if (!activeProgram) return;
     const source = getProgramState(activeProgram.rawData || {}).inner;
@@ -1948,7 +1949,7 @@ export default function AppShellV3() {
     const isPCR = decision?.type === "pcr-review" || decision?.source === "scope-pcr";
 
     try {
-      await resolveDecision(activeProgram.id, decisionId, resolution, currentUser?.email, modifiedContent);
+      await resolveDecision(activeProgram.id, decisionId, resolution, currentUser?.email, modifiedContent, undefined, decisionPayload);
       if (isPCR && resolution === "approved") {
         const cloned = cloneRawProgram(activeProgram);
         const nextInner = { ...cloned.inner };

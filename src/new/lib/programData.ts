@@ -1272,19 +1272,49 @@ export function updateDecisionInProgram(
   note?: string,
   actorEmail?: string,
   modifiedContent?: string,
+  decisionPayload?: DecisionSummary,
 ): Record<string, unknown> {
-  const decisionQueue = program.decisionQueue.map((decision) => (
+  const exists = program.decisionQueue.some((decision) => decision.id === decisionId);
+  const resolvedAt = new Date().toISOString();
+  let decisionQueue = program.decisionQueue.map((decision) => (
     decision.id === decisionId
       ? {
           ...decision,
           status: resolution,
-          resolvedAt: new Date().toISOString(),
+          resolvedAt,
           humanNote: note || "",
           resolvedBy: actorEmail || decision.resolvedBy || "",
           modifiedContent: modifiedContent || "",
         }
       : decision
   ));
+  // Recommended Actions in DecideView are synthesised on the fly (escalations,
+  // draft reviews, etc.) and never live in the persisted queue, so resolving one
+  // would otherwise be a silent no-op. Persist a resolved record so the action
+  // drops out of the open feed and shows in the decided history.
+  if (!exists && decisionPayload) {
+    const rawCreatedAt = (decisionPayload as { createdAt?: unknown }).createdAt;
+    const createdAt = typeof rawCreatedAt === "number"
+      ? new Date(rawCreatedAt).toISOString()
+      : typeof rawCreatedAt === "string" && rawCreatedAt
+        ? rawCreatedAt
+        : resolvedAt;
+    decisionQueue = [
+      ...decisionQueue,
+      {
+        ...decisionPayload,
+        id: decisionId,
+        question: decisionPayload.question ?? "",
+        options: decisionPayload.options ?? [],
+        createdAt,
+        status: resolution,
+        resolvedAt,
+        humanNote: note || "",
+        resolvedBy: actorEmail || "",
+        modifiedContent: modifiedContent || "",
+      },
+    ];
+  }
   const rawData = program.rawData || {};
   const wrapper = asRecord(rawData as Json);
   const nested = asRecord(wrapper.data);

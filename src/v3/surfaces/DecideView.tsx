@@ -15,7 +15,7 @@ interface DecideViewProps {
   activePhaseId: string | null;
   mode: V3Mode;
   persona?: Persona;
-  onResolveDecision: (decisionId: string, resolution: "approved" | "deferred" | "rejected" | "modified", modifiedContent?: string) => Promise<void> | void;
+  onResolveDecision: (decisionId: string, resolution: "approved" | "deferred" | "rejected" | "modified", modifiedContent?: string, decisionPayload?: DecisionSummary) => Promise<void> | void;
   onAddDecision: (decision: Omit<DecisionSummary, "id" | "status" | "createdAt">) => Promise<void>;
   onApproveGate: (phaseId: string) => Promise<void>;
   onRequestRemediation: (phaseId: string, note: string) => Promise<void>;
@@ -551,13 +551,17 @@ export default function DecideView({
   }, [persona, program]);
 
   const open = useMemo(() => {
-    const queue = synthesizedQueue.filter((decision) => isDecisionOpen({ status: "open", ...decision } as DecisionSummary));
+    // Merge any persisted resolution onto the synthesised decision BEFORE
+    // filtering, so a decision the user has resolved (recorded in the persisted
+    // queue) drops out of the open feed instead of reappearing every render.
+    const byId = new Map((program?.decisionQueue || []).map((decision) => [decision.id, decision]));
+    const merged = synthesizedQueue.map((decision) =>
+      ({ status: "open", ...decision, ...(byId.get(decision.id) || {}) } as ReviewDecision));
+    const queue = merged.filter((decision) => isDecisionOpen(decision as DecisionSummary));
     // "This phase" scope follows the phase selected in the Gate timeline (falling
     // back to the active phase), so selecting a phase actually filters the feed.
     const phaseFilterId = selectedPhaseId ?? activePhaseId;
-    const scoped = scope === "stage" && phaseFilterId ? queue.filter((decision) => decision.phaseId === phaseFilterId) : queue;
-    const byId = new Map((program?.decisionQueue || []).map((decision) => [decision.id, decision]));
-    return scoped.map((decision) => ({ ...decision, ...(byId.get(decision.id) || {}) })) as ReviewDecision[];
+    return scope === "stage" && phaseFilterId ? queue.filter((decision) => decision.phaseId === phaseFilterId) : queue;
   }, [activePhaseId, selectedPhaseId, program?.decisionQueue, scope, synthesizedQueue]);
 
   const sortedOpen = [...open].sort((a, b) => {
@@ -698,7 +702,7 @@ export default function DecideView({
             next.set(decision.id, value);
             return next;
           })}
-          onResolveDecision={(resolution, modifiedContent) => void onResolveDecision(decision.id, resolution, modifiedContent)}
+          onResolveDecision={(resolution, modifiedContent) => void onResolveDecision(decision.id, resolution, modifiedContent, decision)}
         />
       </div>
     </div>
