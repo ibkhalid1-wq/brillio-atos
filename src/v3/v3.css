@@ -5362,6 +5362,13 @@ button.v3-chip:focus-visible,
   color: #0c1118;
 }
 
+/* Light theme accent is a deep indigo (#211747); near-black text would be
+   illegible on it, so flip the active label to white. */
+[data-theme="light"] .v3-mode-toggle.active,
+:root:not([data-theme="dark"]) .v3-mode-toggle.active {
+  color: #ffffff;
+}
+
 .v3-stage-rail {
   display: flex;
   gap: 0;
