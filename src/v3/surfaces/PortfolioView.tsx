@@ -4,6 +4,7 @@ import PortfolioInsightPanel from "@/v3/components/PortfolioInsightPanel";
 import { ragLabel } from "@/v3/lib/uiHelpers";
 import { confidenceRag } from "@/v3/lib/confidenceScore";
 import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
+import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -66,7 +67,7 @@ function phaseDotColor(phase: { pct: number; status: string }): string {
 }
 
 function openDecisionCount(program: ProgramSummary): number {
-  return (program.decisionQueue || []).filter((d) => !d.status || d.status === "open").length;
+  return deriveOpenRecommendedActions(program).length;
 }
 
 function atRiskCount(program: ProgramSummary): number {
@@ -159,7 +160,7 @@ function ProgramCard({
             {phases.length} phase{phases.length !== 1 ? "s" : ""}
           </span>
           <span style={{ fontSize: 11, color: decisions > 2 ? "var(--v3-amber)" : "var(--v3-text-muted)", background: decisions > 2 ? "rgba(245,158,11,0.10)" : "var(--v3-surface-2)", borderRadius: 6, padding: "2px 7px", fontWeight: decisions > 2 ? 600 : 400 }}>
-            {decisions} decision{decisions !== 1 ? "s" : ""}
+            {decisions} action{decisions !== 1 ? "s" : ""}
           </span>
           {atRisk > 0 && (
             <span style={{ fontSize: 11, color: "var(--v3-red)", background: "rgba(239,68,68,0.10)", borderRadius: 6, padding: "2px 7px", fontWeight: 600 }}>
@@ -233,7 +234,7 @@ const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
   { value: "name", label: "Name" },
   { value: "health", label: "Health" },
   { value: "pct", label: "Overall %" },
-  { value: "decisions", label: "Open Decisions" },
+  { value: "decisions", label: "Open Actions" },
   { value: "modified", label: "Last Modified" },
 ];
 
@@ -322,7 +323,7 @@ export default function PortfolioView({
             { label: "Programmes", value: totalPrograms, filter: "all" as SummaryFilter, onClick: () => { setSummaryFilter("all"); setSortKey("name"); } },
             { label: "At Risk", value: atRiskTotal, warn: atRiskTotal > 0, filter: "at-risk" as SummaryFilter, onClick: () => { setSummaryFilter("at-risk"); setSortKey("health"); } },
             { label: "Avg Completion", value: `${avgPct}%`, filter: "all" as SummaryFilter, onClick: () => { setSummaryFilter("all"); setSortKey("pct"); } },
-            { label: "Open Decisions", value: totalDecisions, warn: totalDecisions > 5, filter: "open-decisions" as SummaryFilter, onClick: () => { setSummaryFilter("open-decisions"); setSortKey("decisions"); } },
+            { label: "Open Actions", value: totalDecisions, warn: totalDecisions > 5, filter: "open-decisions" as SummaryFilter, onClick: () => { setSummaryFilter("open-decisions"); setSortKey("decisions"); } },
           ].map((stat) => (
             <button
               type="button"

@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import type { ProgramSummary } from "@/new/types";
 import { confidenceColor } from "@/v3/lib/uiHelpers";
+import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
 
 interface PortfolioInsightPanelProps {
   programs: ProgramSummary[];
@@ -22,7 +23,7 @@ export default function PortfolioInsightPanel({ programs, anyAgentRunning, onRun
     const atRisk = programs.filter((p) => {
       const phases = p.phases ?? [];
       const avg = phases.length > 0 ? phases.reduce((s, ph) => s + (ph.pct || 0), 0) / phases.length : 0;
-      const openD = (p.decisionQueue || []).filter((d) => d.status === "open").length;
+      const openD = deriveOpenRecommendedActions(p).length;
       const score = Math.round((avg * 0.4) + (openD > 0 ? Math.max(0, 100 - openD * 10) * 0.25 : 25));
       return score < 60;
     });
@@ -36,7 +37,7 @@ export default function PortfolioInsightPanel({ programs, anyAgentRunning, onRun
 
     // Cross-programme decision load
     const totalOpenDecisions = programs.reduce((s, p) => {
-      return s + (p.decisionQueue || []).filter((d) => d.status === "open").length;
+      return s + deriveOpenRecommendedActions(p).length;
     }, 0);
 
     return [
@@ -58,12 +59,12 @@ export default function PortfolioInsightPanel({ programs, anyAgentRunning, onRun
       },
       {
         icon: "⊖",
-        label: "Open Decisions",
+        label: "Open Actions",
         value: totalOpenDecisions,
         color: totalOpenDecisions > 0 ? "var(--v3-amber)" : undefined,
         description: totalOpenDecisions > 0
-          ? `${totalOpenDecisions} decision${totalOpenDecisions !== 1 ? "s" : ""} awaiting resolution across ${programs.length} programmes`
-          : "No open decisions",
+          ? `${totalOpenDecisions} action${totalOpenDecisions !== 1 ? "s" : ""} awaiting resolution across ${programs.length} programmes`
+          : "No open actions",
       },
     ];
   }, [programs]);
@@ -83,7 +84,7 @@ export default function PortfolioInsightPanel({ programs, anyAgentRunning, onRun
             Portfolio Intelligence
           </div>
           <div style={{ fontSize: 11, color: "var(--v3-text-muted)", fontFamily: "var(--v3-font)", marginTop: 2 }}>
-            Cross-programme risk, gate coverage, and decision load
+            Cross-programme risk, gate coverage, and action load
           </div>
         </div>
         <button
