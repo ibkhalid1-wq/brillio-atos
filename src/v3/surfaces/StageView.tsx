@@ -23,6 +23,7 @@ import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
 import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
 import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
 import { runPreFlight } from "@/v3/lib/phaseInputPreFlight";
+import { getFormalArtifactContent } from "@/v3/lib/formalArtifacts";
 import type { V3Mode, V3MoreView, V3ReportId } from "@/v3/types";
 
 interface StageViewProps {
@@ -1575,7 +1576,13 @@ export default function StageView({
                   ? `Required for this phase, not yet generated. ${def.description}`
                   : `Optional. ${def.description}`;
               const artifactId = node?.artifactId ?? null;
-              const previewContent = artifactId ? phaseArtifactContentById.get(artifactId) ?? null : null;
+              const stringContent = artifactId ? phaseArtifactContentById.get(artifactId) ?? null : null;
+              // Formal document artifacts (charter, business case, etc.) store their
+              // body as a structured object at the top level of program data, not as
+              // a string in phaseArtifacts — resolve and format it as a fallback.
+              const previewContent = (stringContent && stringContent.trim())
+                ? stringContent
+                : getFormalArtifactContent(source, def.id);
               const isExpanded = expandedOutput === def.id;
               const preflight = runPreFlight(activePhase.id, preFlightInputs);
               const inputsIncomplete = !preflight.pass;
