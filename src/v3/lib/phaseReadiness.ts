@@ -34,6 +34,14 @@ export interface PhaseReadinessResult {
   libraryExitCriteriaCount: number;
   /** How many library mandatory criteria are not yet in the gate review. */
   missingLibraryCriteria: number;
+  /**
+   * Persisted cross-phase dependency-check verdict: true = consistent with the
+   * prior approved phase, false = blocked, null = not yet run. Read from stored
+   * agent output, so it costs no model tokens to evaluate here.
+   */
+  dependencyCheckPassed: boolean | null;
+  /** Count of blocking-severity cross-phase dependency issues. */
+  dependencyBlockingIssues: number;
 }
 
 export function computePhaseReadiness(
@@ -67,6 +75,8 @@ export function computePhaseReadiness(
       recommendedActions: [],
       libraryExitCriteriaCount: getMandatoryCriteria(phaseId).length,
       missingLibraryCriteria: 0,
+      dependencyCheckPassed: true,
+      dependencyBlockingIssues: 0,
     };
   }
 
@@ -264,6 +274,39 @@ export function computePhaseReadiness(
     });
   }
 
+  // ── Cross-phase dependency check (hard gate condition) ───────────────────────
+  // Read the PERSISTED dependency-check verdict (the agent auto-runs downstream of
+  // gate-review) instead of invoking the model here — so enforcing cross-phase
+  // consistency costs zero tokens. A failing verdict with a blocking-severity
+  // issue hard-blocks the gate, ensuring a phase cannot pass while its artifacts
+  // contradict or fail to build on the prior approved phase. An absent verdict
+  // (never run) does not block here — the approve handler guarantees a check runs.
+  const dependencyCheckResult = source && typeof source.dependencyCheck === "object" && source.dependencyCheck !== null
+    ? (source.dependencyCheck as Record<string, { passed?: boolean; issues?: Array<{ severity?: string; description?: string }> }>)[phaseId]
+    : undefined;
+  const dependencyBlockingIssues = Array.isArray(dependencyCheckResult?.issues)
+    ? dependencyCheckResult.issues.filter((issue) => issue?.severity === "blocking")
+    : [];
+  const dependencyCheckPassed: boolean | null = dependencyCheckResult
+    ? dependencyCheckResult.passed !== false && dependencyBlockingIssues.length === 0
+    : null;
+  const dependencyCheckBlocking = dependencyCheckPassed === false;
+
+  if (dependencyCheckBlocking) {
+    const firstIssue = dependencyBlockingIssues[0]?.description;
+    const count = dependencyBlockingIssues.length || 1;
+    missing.push(`Cross-phase dependency check failed${firstIssue ? `: ${firstIssue}` : ""}`);
+    recommendedActions.push({
+      id: "dependency-check",
+      label: "Resolve cross-phase dependency issues",
+      description: `${count} blocking dependency issue${count > 1 ? "s" : ""} mean this phase's artifacts are not consistent with the prior approved phase. Resolve them, then re-run the dependency check.`,
+      estimatedImpact: 10,
+      effort: "hours",
+      agentId: "dependency-check",
+      priority: "critical",
+    });
+  }
+
   // ── RACI gaps ─────────────────────────────────────────────────────────────────
   const raciGaps = (source?.raciGaps as Record<string, Array<{ artifact: string; missingRole: string }>> | undefined)?.[phaseId] ?? [];
   const accountableGaps = raciGaps.filter((gap) => gap.missingRole === "Accountable");
@@ -285,7 +328,7 @@ export function computePhaseReadiness(
     : Math.round(artifactScore * 0.7 + inputScore * 0.3);
 
   const score = Math.min(100, Math.max(0, rawScore));
-  const canApproveGate = score >= resolvedThreshold && mandatoryExitsPassing && unvalidatedCriticalAssumptions.length === 0;
+  const canApproveGate = score >= resolvedThreshold && mandatoryExitsPassing && unvalidatedCriticalAssumptions.length === 0 && !dependencyCheckBlocking;
 
   if (!canApproveGate && score < resolvedThreshold) {
     missing.push(`Score ${score}% is below the ${resolvedThreshold}% gate threshold for this phase`);
@@ -324,6 +367,8 @@ export function computePhaseReadiness(
     recommendedActions,
     libraryExitCriteriaCount: libraryCriteria.length,
     missingLibraryCriteria,
+    dependencyCheckPassed,
+    dependencyBlockingIssues: dependencyBlockingIssues.length,
   };
 }
 

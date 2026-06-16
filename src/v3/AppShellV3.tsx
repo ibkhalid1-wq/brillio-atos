@@ -2145,18 +2145,28 @@ export default function AppShellV3() {
   const handleApproveGate = useCallback(async (phaseId: string) => {
     if (!activeProgram) return;
 
-    // Only run dependency-check agent if Supabase is available (may be absent in local/anon mode)
+    // Cross-phase dependency check is a hard gate condition. Token optimization:
+    // reuse the verdict already persisted (dependency-check auto-runs downstream of
+    // gate-review), and only invoke the model when no verdict exists yet — so a
+    // routine approve click costs zero tokens instead of one model call each time.
     if (supabase) {
       try {
-        const dependencyResponse = await supabase.functions.invoke("run-agent", {
-          body: {
-            programId: activeProgram.id,
-            agentId: "dependency-check",
-            phaseId,
-            triggeredBy: "trigger",
-          },
-        });
-        const dependencyCheck = (dependencyResponse.data as { output?: { passed?: boolean; issues?: Array<{ severity?: string; description?: string }> } } | undefined)?.output;
+        type DependencyVerdict = { passed?: boolean; issues?: Array<{ severity?: string; description?: string }> };
+        const persisted = getProgramState(activeProgram.rawData || {}).inner.dependencyCheck;
+        let dependencyCheck = persisted && typeof persisted === "object"
+          ? (persisted as Record<string, DependencyVerdict>)[phaseId]
+          : undefined;
+        if (!dependencyCheck) {
+          const dependencyResponse = await supabase.functions.invoke("run-agent", {
+            body: {
+              programId: activeProgram.id,
+              agentId: "dependency-check",
+              phaseId,
+              triggeredBy: "trigger",
+            },
+          });
+          dependencyCheck = (dependencyResponse.data as { output?: DependencyVerdict } | undefined)?.output;
+        }
         const blockingIssue = dependencyCheck?.issues?.find((issue) => issue.severity === "blocking");
         if (dependencyCheck && dependencyCheck.passed === false && blockingIssue?.description) {
           pushV3Toast(`Gate blocked: ${blockingIssue.description}`, { tone: "error", duration: 5000 });
