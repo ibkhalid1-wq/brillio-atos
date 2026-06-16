@@ -53,6 +53,7 @@ interface StageViewProps {
   onRequestRemediation: (phaseId: string, note: string) => Promise<void>;
   onRunAgent: (agentId: string) => void;
   onSaveArtifact: (artifactId: "narrative" | "deck", content: string) => Promise<void>;
+  onApproveArtifact: (phaseId: string, artifactId: string) => Promise<void>;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>) => Promise<void>;
   onUploadDocument: () => void;
   onAssistField?: (phaseId: string, request: FieldAssistRequest) => Promise<string>;
@@ -439,6 +440,7 @@ export default function StageView({
   onRequestRemediation,
   onRunAgent,
   onSaveArtifact,
+  onApproveArtifact,
   onSaveInputs,
   onUploadDocument,
   onAssistField,
@@ -1575,6 +1577,16 @@ export default function StageView({
                   >
                     {agentButtonContent(def.id, present ? "↻ Regenerate" : "Generate")}
                   </button>
+                  {present && artifactId && state !== "approved" && state !== "archived" ? (
+                    <button
+                      type="button"
+                      className="v3-button primary v3-button-inline-xs v3-artifact-approve"
+                      onClick={() => { void onApproveArtifact(activePhase.id, artifactId); }}
+                      title={`Approve ${def.label} — approving the final document runs the gate check`}
+                    >
+                      ✓ Approve
+                    </button>
+                  ) : null}
                   </div>
                   {isExpanded && previewContent ? (
                     <div className="v3-output-preview" style={{ marginTop: 8 }}>

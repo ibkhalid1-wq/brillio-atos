@@ -51,6 +51,7 @@ import ProgramDetailRouter from "@/v3/components/ProgramDetailRouter";
 import ProgramSetupWizard from "@/v3/components/ProgramSetupWizard";
 import { reportError } from "@/lib/errorReporter";
 import { sanitizeMarkdown } from "@/lib/sanitize";
+import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
 import { useRelativeTimeTick } from "@/lib/useRelativeTimeTick";
 import { useAgentCascadeToasts } from "@/v3/hooks/useAgentCascadeToasts";
 import { useCriticalEventAlerts } from "@/v3/hooks/useCriticalEventAlerts";
@@ -2310,6 +2311,34 @@ export default function AppShellV3() {
     pushV3Toast("Artifact saved. Your version will be used on the next agent run.", { tone: "success", duration: 3000 });
   }, [activePhaseId, activeProgram, refreshPrograms, updateProgramData]);
 
+  const handleApproveArtifact = useCallback(async (phaseId: string, artifactId: string) => {
+    if (!activeProgram) return;
+    const cloned = cloneRawProgram(activeProgram);
+    const nextInner = { ...cloned.inner };
+    const buckets = { ...(nextInner.phaseArtifacts as Record<string, Record<string, Record<string, unknown>>> | undefined ?? {}) };
+    const phaseBucket = { ...(buckets[phaseId] ?? {}) };
+    const entry = phaseBucket[artifactId];
+    if (!entry) return;
+    phaseBucket[artifactId] = { ...entry, status: "approved", updatedAt: new Date().toISOString() };
+    buckets[phaseId] = phaseBucket;
+    nextInner.phaseArtifacts = buckets;
+    await updateProgramData(activeProgram.id, cloned.commit(nextInner), activeProgram.updatedAt);
+    await refreshPrograms();
+
+    // Gate runs automatically once the last required document is approved — every
+    // required artifact (narrative is reviewed separately) must read "approved",
+    // counting the one just approved which the stale activeProgram doesn't yet reflect.
+    const ledger = buildPhaseArtifacts(activeProgram, phaseId);
+    const required = (ledger?.artifacts ?? []).filter((node) => node.required && node.key !== "narrative");
+    const allApproved = required.length > 0 && required.every((node) => node.state === "approved" || node.artifactId === artifactId);
+    if (allApproved) {
+      triggers.triggerGateReview(phaseId);
+      pushV3Toast("Final document approved — running the gate check.", { tone: "success", duration: 4000 });
+    } else {
+      pushV3Toast("Document approved.", { tone: "success", duration: 2500 });
+    }
+  }, [activeProgram, refreshPrograms, updateProgramData, triggers]);
+
   const handleDecideDecision = useCallback(async (id: string, decision: string) => {
     await handleResolveDecision(id, "approved", decision);
   }, [handleResolveDecision]);
@@ -2634,6 +2663,7 @@ export default function AppShellV3() {
                 onRequestRemediation={requestRemediation}
                 onRunAgent={handleRunAgent}
                 onSaveArtifact={handleSaveArtifact}
+                onApproveArtifact={handleApproveArtifact}
                 onSaveInputs={handleSavePhaseInputs}
                 onUploadDocument={handleUploadDocument}
                 onAssistField={handleAssistField}
