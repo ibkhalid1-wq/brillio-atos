@@ -4,7 +4,7 @@ import { getPhaseInputSchema, type GridColumn } from "@/v3/lib/phaseInputSchema"
 import { availableModes, FIELD_ASSIST_MODE_LABEL, type FieldAssistMode } from "@/v3/lib/fieldAssist";
 import { prioritizePhaseFields } from "@/v3/lib/phaseInputPriority";
 import StructuredGrid, { type GridRow, parseRows, serializeRows, filledRowCount } from "@/v3/components/StructuredGrid";
-import { PROVENANCE_KEY, parseProvenance, type FieldProvenance } from "@/new/lib/fieldProvenance";
+import { PROVENANCE_KEY, parseProvenance, provenanceMatches, type FieldProvenance } from "@/new/lib/fieldProvenance";
 import { EXTRACTION_TYPE_COLORS, EXTRACTION_TYPE_LABELS, confidenceLabel } from "@/new/lib/documentIntelligenceTypes";
 
 /** Columns for the canonical roles roster (mirrors ROLE_COLS in phaseInputSchema). */
@@ -488,7 +488,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
                     ) : null}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                    {provenance[field.id] && provenance[field.id].value.trim() === (values[field.id] ?? "").trim()
+                    {provenanceMatches(provenance[field.id], values[field.id])
                       ? <ProvenanceChip prov={provenance[field.id]} />
                       : null}
                     <span className={`v3-chip ${verdict.tone}`} style={{ fontSize: 10 }}>{verdict.label}</span>
@@ -624,7 +624,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
             <div style={{ marginTop: 12, marginBottom: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <div className="v3-field-label">Outcome KPIs (baseline → target)</div>
-                {provenance.kpis && provenance.kpis.value.trim() === (((existingInputs as Record<string, unknown>).kpis as string) ?? "").trim()
+                {provenanceMatches(provenance.kpis, (existingInputs as Record<string, unknown>).kpis)
                   ? <ProvenanceChip prov={provenance.kpis} />
                   : null}
               </div>

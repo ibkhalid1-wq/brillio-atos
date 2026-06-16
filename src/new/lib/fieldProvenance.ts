@@ -74,3 +74,16 @@ export function mergeProvenance(existingRaw: unknown, incomingRaw: unknown): str
   const merged: ProvenanceMap = { ...parseProvenance(existingRaw), ...parseProvenance(incomingRaw) };
   return Object.keys(merged).length > 0 ? serializeProvenance(merged) : undefined;
 }
+
+/**
+ * Whether a field's provenance badge should still show. True only when the field
+ * has recorded provenance AND the live value still equals the imported snapshot —
+ * so the moment a PM hand-edits the value, the badge silently drops and never
+ * mislabels content the PM has since rewritten. Trimmed compare ignores
+ * whitespace-only differences.
+ */
+export function provenanceMatches(prov: FieldProvenance | undefined, liveValue: unknown): boolean {
+  if (!prov) return false;
+  const live = typeof liveValue === "string" ? liveValue : "";
+  return prov.value.trim() === live.trim();
+}

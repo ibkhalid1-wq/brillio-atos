@@ -1,5 +1,6 @@
 import { buildApprovedInputs } from "@/new/lib/useDocumentIntelligence";
-import { parseProvenance, mergeProvenance, PROVENANCE_KEY } from "@/new/lib/fieldProvenance";
+import { parseProvenance, mergeProvenance, provenanceMatches, PROVENANCE_KEY } from "@/new/lib/fieldProvenance";
+import type { FieldProvenance } from "@/new/lib/fieldProvenance";
 import type { ReviewField, FieldMapping, ExtractionType } from "@/new/lib/documentIntelligenceTypes";
 
 /**
@@ -47,6 +48,19 @@ describe("fieldProvenance helpers", () => {
 
   it("mergeProvenance returns undefined when neither side has provenance", () => {
     expect(mergeProvenance("", "")).toBeUndefined();
+  });
+
+  it("provenanceMatches gates the badge to imported-and-unmodified values", () => {
+    const prov: FieldProvenance = { source: "p.2", confidence: 0.9, extractionType: "extracted", value: "Jane Doe, CFO" };
+    // Unmodified import → badge shows; whitespace-only diff still matches.
+    expect(provenanceMatches(prov, "Jane Doe, CFO")).toBe(true);
+    expect(provenanceMatches(prov, "  Jane Doe, CFO  ")).toBe(true);
+    // Hand-edited away from the snapshot → badge drops.
+    expect(provenanceMatches(prov, "Jane Doe, CEO")).toBe(false);
+    expect(provenanceMatches(prov, "")).toBe(false);
+    // No provenance recorded, or a non-string live value → never shows.
+    expect(provenanceMatches(undefined, "Jane Doe, CFO")).toBe(false);
+    expect(provenanceMatches(prov, undefined)).toBe(false);
   });
 });
 
