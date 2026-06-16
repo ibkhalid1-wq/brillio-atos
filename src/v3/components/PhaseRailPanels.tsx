@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import type { DecisionSummary, ProgramSummary, RAIDEntry, RAIDEntryType } from "@/new/types";
 import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
+import { selectBlockers, selectRisks } from "@/v3/lib/programRaid";
 import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
 import { AdamCard, AdamCardBody, AdamCardHeader } from "@/v3/components/ui/AdamCard";
 import { ArtifactMapTree } from "@/v3/components/ArtifactMapTree";
@@ -200,14 +201,8 @@ export function PhaseRailPanels({
   const [saving, setSaving] = useState(false);
   const [closingId, setClosingId] = useState<string | null>(null);
 
-  const blockers = useMemo(
-    () => (program.raidEntries || []).filter((entry) => entry.phase === phaseId && entry.type === "blocker" && entry.status !== "closed"),
-    [program.raidEntries, phaseId],
-  );
-  const risks = useMemo(
-    () => (program.raidEntries || []).filter((entry) => entry.phase === phaseId && entry.type === "risk" && entry.status !== "closed"),
-    [program.raidEntries, phaseId],
-  );
+  const blockers = useMemo(() => selectBlockers(program, { phaseId }), [program, phaseId]);
+  const risks = useMemo(() => selectRisks(program, { phaseId }), [program, phaseId]);
   const artifacts = useMemo(() => {
     const summary = buildPhaseArtifacts(program, phaseId);
     const byKey = new Map((summary?.artifacts ?? []).map((node) => [node.key, node]));

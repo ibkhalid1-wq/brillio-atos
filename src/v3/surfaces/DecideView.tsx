@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
 import { selectPhaseMetrics } from "@/v3/lib/programMetrics";
+import { selectBlockers, selectRisks, type RaidScope } from "@/v3/lib/programRaid";
 import { PHASE_LABELS } from "@/v3/lib/uiHelpers";
 import type { DecisionSummary, GateReview, ProgramSummary, RAIDEntry, RAIDEntryType } from "@/new/types";
 import type { Persona } from "@/new/types";
@@ -559,16 +560,12 @@ export default function DecideView({
 
   const { blockers, risks } = useMemo(() => {
     const phaseFilterId = selectedPhaseId ?? activePhaseId;
-    const severityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
-    const entries = (program?.raidEntries || [])
-      .filter((entry) => entry.status !== "closed")
-      .filter((entry) => !(scope === "stage" && phaseFilterId) || entry.phase === phaseFilterId)
-      .sort((a, b) => (severityOrder[a.severity] ?? 2) - (severityOrder[b.severity] ?? 2));
+    const raidScope: RaidScope = scope === "stage" && phaseFilterId ? { phaseId: phaseFilterId } : "programme";
     return {
-      blockers: entries.filter((entry) => entry.type === "blocker"),
-      risks: entries.filter((entry) => entry.type === "risk"),
+      blockers: selectBlockers(program, raidScope),
+      risks: selectRisks(program, raidScope),
     };
-  }, [program?.raidEntries, scope, selectedPhaseId, activePhaseId]);
+  }, [program, scope, selectedPhaseId, activePhaseId]);
 
   if (!program) {
     return (

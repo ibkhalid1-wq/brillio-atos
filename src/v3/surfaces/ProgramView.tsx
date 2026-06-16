@@ -6,6 +6,7 @@ import ProgramUsagePanel from "@/v3/components/ProgramUsagePanel";
 import { ragLabel } from "@/v3/lib/uiHelpers";
 import { confidenceRag } from "@/v3/lib/confidenceScore";
 import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
+import { selectHighRisks, selectRisks } from "@/v3/lib/programRaid";
 import { AdamCard, AdamCardBody, AdamCardHeader } from "@/v3/components/ui/AdamCard";
 import { EmptyState } from "@/v3/components/ui/EmptyState";
 import type { V3Mode, V3MoreView, V3ReportId } from "@/v3/types";
@@ -247,8 +248,8 @@ export default function ProgramView({
   // the others on the same programme's health.
   const healthRag = confidenceRag(deriveProgramConfidence(program).score);
   const healthVariant = ragToBadgeVariant(healthRag);
-  const openRisks = (program.raidEntries || []).filter((entry) => entry.type === "risk" && entry.status !== "closed");
-  const highRisks = openRisks.filter((entry) => entry.severity === "critical" || entry.severity === "high");
+  const openRisks = selectRisks(program);
+  const highRisks = selectHighRisks(program);
   const activeMembers = program.team?.members?.length || 0;
   const updatedAt = program.updatedAt || program.lastActiveAt || null;
   const activePhase = (program.phases || []).find((phase) => phase.id === program.activePhaseId) || null;

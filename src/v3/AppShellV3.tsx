@@ -2795,7 +2795,7 @@ export default function AppShellV3() {
               activePhaseId={activePhaseId}
               confidenceScore={programConfidenceScore}
               confidenceResult={programConfidenceResult ?? undefined}
-              openDecisionCount={openDecisions.length}
+              openDecisionCount={actionCenterCount}
               anyAgentRunning={anyUserAgentRunning}
               agentsAvailable={authed && isSupabaseConfigured}
               onNavigateToDecide={() => navigateSurface("decide")}
@@ -2908,7 +2908,7 @@ export default function AppShellV3() {
         activePhaseId={activePhaseId}
         programName={activeProgram?.name || "Programme"}
         confidenceScore={programConfidenceScore}
-        openDecisionCount={openDecisions.length}
+        openDecisionCount={actionCenterCount}
         anyAgentRunning={anyAgentRunning}
         aiStatus={aiStatus.status}
         onOpenAISettings={openAISettings}

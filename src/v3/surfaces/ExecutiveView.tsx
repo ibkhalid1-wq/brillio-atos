@@ -6,6 +6,7 @@ import { Kpi } from "@/v3/components/ui/Kpi";
 import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
 import { derivePhaseStatusRings } from "@/v3/lib/phaseStatusRings";
 import { PhaseStripCard } from "@/v3/components/PhaseStripCard";
+import { selectDecisions, selectEscalatedDecisions, selectHighRisks } from "@/v3/lib/programRaid";
 
 interface ExecutiveViewProps {
   program: ProgramSummary | null;
@@ -244,32 +245,21 @@ export default function ExecutiveView({
   const todayLabel = todayLabelCopy;
 
   // ── Critical risks (severity high/critical, capped at 3) ─────────────────
-  const criticalRisks = useMemo<RAIDEntry[]>(() => {
-    if (!program?.raidEntries) return [];
-    return program.raidEntries
-      .filter(
-        (r) =>
-          r.type === "risk" &&
-          (r.severity === "high" || r.severity === "critical") &&
-          r.status !== "closed",
-      )
-      .slice(0, 3);
-  }, [program]);
+  const criticalRisks = useMemo<RAIDEntry[]>(() => selectHighRisks(program).slice(0, 3), [program]);
 
-  // ── Decision escalations (open + critical/high, capped at 3) ─────────────
-  const escalatedDecisions = useMemo(() => {
-    if (!program?.decisionQueue) return [];
-    return program.decisionQueue
-      .filter(
-        (d) =>
-          d.status === "open" &&
-          (d.priority === "critical" || d.priority === "high"),
-      )
-      .sort((a, b) => {
-        const order: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
-        return (order[a.priority] ?? 9) - (order[b.priority] ?? 9);
-      });
-  }, [program]);
+  // ── Decision escalations (open + critical/high) — the high-priority slice of
+  //    the SAME open-decisions set the Action Center shows, so counts agree. ───
+  const escalatedDecisions = useMemo(
+    () => selectEscalatedDecisions(program, "programme", "executive"),
+    [program],
+  );
+
+  // Total open decisions for this persona — the SAME canonical set the escalation
+  // list below slices from, so the KPI can never read lower than the list it caps.
+  const openDecisionCount = useMemo(
+    () => selectDecisions(program, "programme", "executive").length,
+    [program],
+  );
 
   const shownDecisions = escalatedDecisions.slice(0, 3);
   const extraDecisions = escalatedDecisions.length - shownDecisions.length;
@@ -283,12 +273,8 @@ export default function ExecutiveView({
   // ── Copy brief to clipboard ───────────────────────────────────────────────
   const handleCopyBrief = () => {
     if (!program) return;
-    const topRisks = (program.raidEntries || [])
-      .filter((r) => r.type === "risk" && (r.severity === "high" || r.severity === "critical") && r.status !== "closed")
-      .slice(0, 3);
-    const topDecisions = (program.decisionQueue || [])
-      .filter((d) => d.status === "open" && (d.priority === "critical" || d.priority === "high"))
-      .slice(0, 3);
+    const topRisks = selectHighRisks(program).slice(0, 3);
+    const topDecisions = selectEscalatedDecisions(program, "programme", "executive").slice(0, 3);
     const lines = [
       `EXECUTIVE BRIEF — ${program.name}`,
       `As of ${todayLabelCopy}`,
@@ -451,12 +437,8 @@ export default function ExecutiveView({
           <Kpi label="Completion" value={`${avgPct}%`} onClick={onNavigateToPipeline} />
           <Kpi
             label="Open Decisions"
-            value={program.decisionQueue?.filter((d) => d.status === "open").length ?? 0}
-            color={
-              (program.decisionQueue?.filter((d) => d.status === "open").length ?? 0) > 0
-                ? "var(--v3-amber)"
-                : undefined
-            }
+            value={openDecisionCount}
+            color={openDecisionCount > 0 ? "var(--v3-amber)" : undefined}
             onClick={onNavigateToDecide}
           />
         </div>

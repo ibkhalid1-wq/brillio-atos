@@ -8,6 +8,7 @@ import type { V3MoreView } from "@/v3/types";
 import { ExecCommandPanel } from "@/v3/components/ExecCommandPanel";
 import { Kpi } from "@/v3/components/ui/Kpi";
 import { PhaseStripCard } from "@/v3/components/PhaseStripCard";
+import { selectHighRisks } from "@/v3/lib/programRaid";
 import {
   runDeterministicValidation,
   selectModelValidationFindings,
@@ -924,10 +925,8 @@ export default function InsightFeedView({
       ) : null}
 
       {/* ── 6. Top Risks — inline summary (eliminates navigation trip to Risks workspace) ── */}
-      {program && program.risks && program.risks.filter((r) => r.severity === "high" || r.severity === "critical").length > 0 && (() => {
-        const topRisks = program.risks
-          .filter((r) => r.severity === "high" || r.severity === "critical")
-          .slice(0, 3);
+      {program && selectHighRisks(program).length > 0 && (() => {
+        const topRisks = selectHighRisks(program).slice(0, 3);
         return (
           <div
             style={{
@@ -976,7 +975,7 @@ export default function InsightFeedView({
                       {risk.severity}
                     </span>
                     <span style={{ flex: 1, fontSize: 13, color: "var(--v3-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {risk.label}
+                      {risk.title}
                     </span>
                     {risk.owner && (
                       <span style={{ fontSize: 11, color: "var(--v3-text-muted)", flexShrink: 0 }}>{risk.owner}</span>
