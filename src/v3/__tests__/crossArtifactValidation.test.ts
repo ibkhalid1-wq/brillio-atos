@@ -3,7 +3,9 @@ import {
   runDeterministicValidation,
   summariseValidation,
   decideValidation,
+  selectFindingsForPhase,
   type ValidatableProgram,
+  type ValidationFinding,
 } from "@/v3/lib/crossArtifactValidation";
 
 const risk = (over: Partial<ValidatableProgram["raidEntries"][number]> = {}) => ({
@@ -228,6 +230,28 @@ describe("summariseValidation", () => {
     const onlyRisk = runDeterministicValidation(program, { domains: ["risk-controls"] });
     expect(onlyRisk.every((f) => f.domain === "risk-controls")).toBe(true);
     expect(onlyRisk).toHaveLength(1);
+  });
+});
+
+describe("selectFindingsForPhase", () => {
+  const findings: ValidationFinding[] = [
+    { findingId: "a", severity: "high", domain: "delivery-readiness", phaseId: "design", sourceArtifact: "milestones", targetArtifact: "", sourceItem: "M-1", issue: "", recommendation: "", confidence: 1, evidence: [] },
+    { findingId: "b", severity: "low", domain: "delivery-readiness", phaseId: "build", sourceArtifact: "milestones", targetArtifact: "", sourceItem: "M-2", issue: "", recommendation: "", confidence: 1, evidence: [] },
+    { findingId: "c", severity: "critical", domain: "benefits-traceability", sourceArtifact: "businessCaseDoc", targetArtifact: "", sourceItem: "x", issue: "", recommendation: "", confidence: 1, evidence: [] },
+    { findingId: "d", severity: "medium", domain: "risk-controls", phaseId: "design", sourceArtifact: "raidEntries", targetArtifact: "", sourceItem: "R-1", issue: "", recommendation: "", confidence: 1, evidence: [] },
+  ];
+
+  it("returns only findings attributed to the phase by default", () => {
+    const out = selectFindingsForPhase(findings, "design");
+    expect(out.map((f) => f.findingId).sort()).toEqual(["a", "d"]);
+  });
+
+  it("can exclude domains and pull in severe program-wide findings", () => {
+    const out = selectFindingsForPhase(findings, "design", {
+      excludeDomains: ["risk-controls"],
+      includeProgramWideAtLeast: "high",
+    });
+    expect(out.map((f) => f.findingId).sort()).toEqual(["a", "c"]);
   });
 });
 

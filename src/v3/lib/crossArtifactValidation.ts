@@ -43,6 +43,8 @@ export interface ValidationFinding {
   severity: ValidationSeverity;
   /** Validation domain this finding belongs to (for grouping / incremental runs). */
   domain: ValidationDomain;
+  /** Phase the finding is attributable to, when derivable; omitted for program-wide gaps. */
+  phaseId?: string;
   /** Artifact/field the issue originates from (e.g. "raidEntries"). */
   sourceArtifact: string;
   /** Artifact/field the issue points at; "" when intra-artifact. */
@@ -101,6 +103,7 @@ const RULES: ValidationRule[] = [
           findingId: `risk-mitigation:${e.id}`,
           severity: e.severity,
           domain: "risk-controls",
+          phaseId: e.phase,
           sourceArtifact: "raidEntries",
           targetArtifact: "",
           sourceItem: e.id,
@@ -120,6 +123,7 @@ const RULES: ValidationRule[] = [
           findingId: `owner:${e.id}`,
           severity: "medium",
           domain: "risk-controls",
+          phaseId: e.phase,
           sourceArtifact: "raidEntries",
           targetArtifact: "",
           sourceItem: e.id,
@@ -229,6 +233,7 @@ const RULES: ValidationRule[] = [
           findingId: `milestone-exit:${m.id}`,
           severity: "low",
           domain: "delivery-readiness",
+          phaseId: m.phaseId,
           sourceArtifact: "milestones",
           targetArtifact: "",
           sourceItem: m.id,
@@ -252,6 +257,7 @@ const RULES: ValidationRule[] = [
               findingId: `milestone-dep:${m.id}:${dep}`,
               severity: "medium",
               domain: "delivery-readiness",
+              phaseId: m.phaseId,
               sourceArtifact: "milestones",
               targetArtifact: "",
               sourceItem: m.id,
@@ -278,6 +284,7 @@ const RULES: ValidationRule[] = [
               findingId: `gate-evidence:${review.phaseId}:${c.criterion}`,
               severity: "high",
               domain: "governance",
+              phaseId: review.phaseId,
               sourceArtifact: "gateReviews",
               targetArtifact: "",
               sourceItem: `${review.phaseId}:${c.criterion}`,
@@ -305,6 +312,7 @@ const RULES: ValidationRule[] = [
           findingId: `scope-workstream:${ph.id}`,
           severity: "medium",
           domain: "scope-coverage",
+          phaseId: ph.id,
           sourceArtifact: "phases",
           targetArtifact: "workstreams",
           sourceItem: ph.id,
@@ -337,6 +345,34 @@ export function runDeterministicValidation(
     findings.push(...rule.run(program));
   }
   return findings;
+}
+
+export interface PhaseSelectOptions {
+  /** Exclude these domains (e.g. ones already surfaced by another engine). */
+  excludeDomains?: ValidationDomain[];
+  /** Also include program-wide findings (no phaseId) at or above this severity. */
+  includeProgramWideAtLeast?: ValidationSeverity;
+}
+
+/**
+ * Select the findings relevant to a single phase: those attributed to the phase,
+ * plus optionally program-wide findings above a severity floor. Used to fold
+ * cross-artifact gaps into a phase's gate-blocker list without repeating
+ * program-wide findings on every phase.
+ */
+export function selectFindingsForPhase(
+  findings: ValidationFinding[],
+  phaseId: string,
+  options: PhaseSelectOptions = {},
+): ValidationFinding[] {
+  const exclude = options.excludeDomains ? new Set(options.excludeDomains) : null;
+  const floor = options.includeProgramWideAtLeast ? SEVERITY_RANK[options.includeProgramWideAtLeast] : null;
+  return findings.filter((f) => {
+    if (exclude?.has(f.domain)) return false;
+    if (f.phaseId === phaseId) return true;
+    if (floor != null && f.phaseId == null && SEVERITY_RANK[f.severity] >= floor) return true;
+    return false;
+  });
 }
 
 const SEVERITY_RANK: Record<ValidationSeverity, number> = { critical: 4, high: 3, medium: 2, low: 1 };

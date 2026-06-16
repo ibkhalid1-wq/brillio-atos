@@ -19,6 +19,7 @@ import type { V3MoreView } from "@/v3/types";
 import { explainPhaseReadiness } from "@/v3/lib/readinessModel";
 import type { ReadinessFactorKind } from "@/v3/lib/readinessModel";
 import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
+import { runDeterministicValidation, selectFindingsForPhase } from "@/v3/lib/crossArtifactValidation";
 import { isDecisionOpen } from "@/v3/utils";
 
 export type BlockerCategory =
@@ -27,7 +28,8 @@ export type BlockerCategory =
   | "governance"
   | "dependency"
   | "artifact"
-  | "risk";
+  | "risk"
+  | "traceability";
 
 export type BlockerSeverity = "critical" | "high" | "medium" | "low";
 
@@ -162,6 +164,22 @@ export function derivePhaseBlockers(
     });
   }
 
+  // 6) Cross-artifact traceability gaps (deterministic, zero-token validation).
+  //    Exclude risk-controls — risks/dependencies are already covered above.
+  const validationFindings = selectFindingsForPhase(runDeterministicValidation(program), phaseId, {
+    excludeDomains: ["risk-controls"],
+  });
+  for (const finding of validationFindings) {
+    blockers.push({
+      id: `validation:${finding.findingId}`,
+      category: "traceability",
+      severity: finding.severity,
+      label: finding.issue,
+      detail: finding.recommendation,
+      expectedGain: 0,
+    });
+  }
+
   // Rank: severity first, then recoverable readiness gain.
   return blockers.sort((a, b) => {
     const sev = SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity];
@@ -178,4 +196,5 @@ export const BLOCKER_CATEGORY_LABEL: Record<BlockerCategory, string> = {
   dependency: "Dependency",
   artifact: "Artifact",
   risk: "Risk",
+  traceability: "Traceability",
 };
