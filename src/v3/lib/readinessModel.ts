@@ -195,15 +195,3 @@ export function explainPhaseReadiness(
     summary,
   };
 }
-
-/** Programme-wide rollup: one explanation per phase, ordered by methodology. */
-export function explainProgramReadiness(
-  program: ProgramSummary | null,
-  methodology: MethodologyDefinition = ATOS_STANDARD,
-): ReadinessExplanation[] {
-  if (!program) return [];
-  const model = buildArtifactModel(program, methodology);
-  return model.phases
-    .map((phase) => explainPhaseReadiness(program, phase.phaseId, methodology))
-    .filter((e): e is ReadinessExplanation => e !== null);
-}

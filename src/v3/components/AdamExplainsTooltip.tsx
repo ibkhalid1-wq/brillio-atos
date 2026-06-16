@@ -232,13 +232,3 @@ export default function AdamExplainsTooltip({
     </>
   );
 }
-
-export function withExplanation(metric: string, value?: number | string | null) {
-  return function Wrapper({ children }: { children: React.ReactNode }) {
-    return (
-      <AdamExplainsTooltip metric={metric} value={value}>
-        {children}
-      </AdamExplainsTooltip>
-    );
-  };
-}

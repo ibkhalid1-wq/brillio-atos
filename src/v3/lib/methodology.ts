@@ -166,18 +166,6 @@ export const ATOS_LITE: MethodologyDefinition = {
   ),
 };
 
-export const CLIENT_PHASE_NAMES: Record<string, string> = {
-  strategy: "Strategy",
-  mobilise: "Mobilise",
-  discover: "Discover",
-  design: "Design",
-  build: "Build",
-  operate: "Operate",
-  govern: "Govern",
-  optimize: "Optimize",
-  valuerealize: "Value Realize",
-};
-
 export const METHODOLOGY_REGISTRY: Record<MethodologyVariant, MethodologyDefinition> = {
   "atos-standard": ATOS_STANDARD,
   "atos-lite": ATOS_LITE,
@@ -233,8 +221,4 @@ export function getMethodology(variant: MethodologyVariant = "atos-lite"): Metho
 
 export function getPhaseSequence(variant: MethodologyVariant = "atos-lite"): string[] {
   return getMethodology(variant).phases.map((phase) => phase.id);
-}
-
-export function getPhaseDefinition(variant: MethodologyVariant = "atos-lite", phaseId: string): PhaseDefinition | null {
-  return getMethodology(variant).phases.find((phase) => phase.id === phaseId) ?? null;
 }

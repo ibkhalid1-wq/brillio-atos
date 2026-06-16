@@ -37,13 +37,6 @@ export type V3MoreView =
   | "access"
   | "closure";
 
-export interface V3Nudge {
-  id: string;
-  message: string;
-  actionLabel?: string;
-  actionView?: AppView;
-}
-
 export type ProgramArchetype = "technology-implementation" | "business-transformation" | "regulatory-programme" | "agile-delivery";
 
 export interface ArchetypeDefinition {

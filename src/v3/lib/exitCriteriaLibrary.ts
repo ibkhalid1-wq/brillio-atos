@@ -51,11 +51,3 @@ export const EXIT_CRITERIA_LIBRARY: ExitCriterion[] = [
 export function getMandatoryCriteria(phaseId: string): ExitCriterion[] {
   return EXIT_CRITERIA_LIBRARY.filter((c) => c.phaseId === phaseId && c.mandatory);
 }
-
-export function getAllCriteria(phaseId: string): ExitCriterion[] {
-  return EXIT_CRITERIA_LIBRARY.filter((c) => c.phaseId === phaseId);
-}
-
-export function getCriterionById(id: string): ExitCriterion | undefined {
-  return EXIT_CRITERIA_LIBRARY.find((c) => c.id === id);
-}

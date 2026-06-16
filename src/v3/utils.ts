@@ -57,20 +57,6 @@ export function confidenceLabel(value: number | null | undefined): string {
   return `${Math.round(value * 100)}% confidence`;
 }
 
-export function nextActionForPhase(program: ProgramSummary | null, phaseId: string): string {
-  if (!program) return "";
-  const planAction = program.plan?.nextThreeActions.find((action) => (
-    typeof action.phase === "string" && action.phase.toLowerCase().includes(phaseId.toLowerCase())
-  ));
-  if (planAction?.action) return planAction.action;
-  const decision = program.decisionQueue.find((entry) => entry.phaseId === phaseId && isDecisionOpen(entry));
-  if (decision?.question) return decision.question;
-  if (decision?.title) return decision.title;
-  const gateReview = program.gateReviews?.[phaseId];
-  if (gateReview?.recommendation) return gateReview.recommendation;
-  return "";
-}
-
 export function pushV3Toast(
   message: string,
   options: { tone?: V3ToastTone; icon?: string; duration?: number; action?: { label: string; onClick: () => void } } = {},

@@ -69,7 +69,3 @@ export function getAgentMeta(agentId: string): AgentMeta {
     estimatedSeconds: 20, category: "narrative", icon: "◌",
   };
 }
-
-export function getAgentsByCategory(category: AgentMeta["category"]): AgentMeta[] {
-  return Object.values(AGENT_META).filter((m) => m.category === category);
-}
