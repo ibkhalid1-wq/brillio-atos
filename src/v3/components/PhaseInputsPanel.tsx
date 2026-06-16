@@ -217,10 +217,10 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
 
   const showKpis = phaseId === "strategy";
   const showActuals = phaseId === "valuerealize";
-  // Roles are defined once at Mobilise (canonical roster). Every other phase
-  // references that roster read-only — single source of truth for people,
-  // mirroring the Strategy→Value Realize KPI define-once/reference pattern.
-  const showRolesReference = phaseId !== "mobilise";
+  // Roles are defined once at Mobilise (canonical roster). Phases after Mobilise
+  // reference that roster read-only — single source of truth for people. Strategy
+  // runs before Mobilise, so the roster doesn't exist there yet.
+  const showRolesReference = phaseId !== "mobilise" && phaseId !== "strategy";
   const mobiliseRoles = useMemo(() => {
     const raw = program.rawData as Record<string, unknown>;
     const source = raw && typeof raw.data === "object" && raw.data !== null
