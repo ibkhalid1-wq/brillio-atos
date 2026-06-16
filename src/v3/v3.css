@@ -5526,6 +5526,8 @@ button.v3-chip:focus-visible,
 .v3-phase-metric-group { display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
 .v3-phase-gate-col { display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
 .v3-phase-gate-recheck { width: 100%; justify-content: center; }
+.v3-phase-work-col { display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
+.v3-phase-work-add { width: 100%; justify-content: center; }
 .v3-phase-pipeline-chevron {
   height: 46px; display: flex; align-items: center;
   font-size: 18px; line-height: 1; color: var(--v3-text-muted); opacity: 0.55;

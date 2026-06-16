@@ -45,6 +45,7 @@ interface StageViewProps {
   onSelectPhase?: (phaseId: string) => void;
   onResolveDecision: (id: string, resolution: "approved" | "deferred" | "rejected" | "modified", modifiedContent?: string) => void | Promise<void>;
   onOpenDecide: () => void;
+  onAddItem?: (tab: "blockers" | "risks" | "actions") => void;
   onOpenReport: (reportId: V3ReportId) => void;
   onSaveGateNote: (phaseId: string, note: string) => Promise<void>;
   onSaveStageNote: (phaseId: string, note: string) => Promise<void>;
@@ -432,6 +433,7 @@ export default function StageView({
   onSelectPhase,
   onResolveDecision,
   onOpenDecide,
+  onAddItem,
   onOpenReport,
   onSaveGateNote,
   onSaveStageNote,
@@ -922,10 +924,12 @@ export default function StageView({
             { label: "Gate score", value: readiness.gateScore != null ? `${readiness.gateScore}%` : "—", tone: readiness.gateScore != null ? pctTone(readiness.gateScore) : "", onClick: () => setExitCriteriaOpen(true) },
           ];
           // Live work counts — distinct from the pipeline, shown as a separated group.
-          const work: Array<{ label: string; value: string | number; tone: string; anchor?: string | null; onClick?: () => void }> = [
-            { label: "Blockers", value: phaseBlockers.length, tone: phaseBlockers.length ? "red" : "green", onClick: () => onOpenMoreView("risks") },
-            { label: "Risks", value: phaseRiskCount, tone: phaseRiskCount ? "amber" : "", onClick: () => onOpenMoreView("risks") },
-            { label: "Actions", value: stageDecisions.length, tone: stageDecisions.length ? "amber" : "", onClick: onOpenDecide },
+          // Each carries an `addTab` so the "+ Add" button under it opens the right
+          // Action Center add form.
+          const work: Array<{ label: string; value: string | number; tone: string; anchor?: string | null; onClick?: () => void; addTab: "blockers" | "risks" | "actions" }> = [
+            { label: "Blockers", value: phaseBlockers.length, tone: phaseBlockers.length ? "red" : "green", onClick: () => onOpenMoreView("risks"), addTab: "blockers" },
+            { label: "Risks", value: phaseRiskCount, tone: phaseRiskCount ? "amber" : "", onClick: () => onOpenMoreView("risks"), addTab: "risks" },
+            { label: "Actions", value: stageDecisions.length, tone: stageDecisions.length ? "amber" : "", onClick: onOpenDecide, addTab: "actions" },
           ];
           const renderMetric = (metric: { label: string; value: string | number; tone: string; anchor?: string | null; onClick?: () => void }) => {
             const cls = `v3-phase-metric-value ${metric.tone}`;
@@ -960,6 +964,7 @@ export default function StageView({
               <div className="v3-phase-pipeline" role="group" aria-label="Gate readiness pipeline">
                 {pipeline.map((metric, i) => {
                   const isGate = i === pipeline.length - 1;
+                  const isArtifactQuality = metric.label === "Artifact quality";
                   return (
                     <React.Fragment key={metric.label}>
                       {i > 0 ? <span className="v3-phase-pipeline-chevron" aria-hidden="true">›</span> : null}
@@ -978,6 +983,18 @@ export default function StageView({
                             </button>
                           ) : null}
                         </div>
+                      ) : isArtifactQuality ? (
+                        <div className="v3-phase-gate-col">
+                          {renderMetric(metric)}
+                          <button
+                            type="button"
+                            className="v3-button ghost v3-button-inline-xs v3-phase-gate-recheck"
+                            aria-label="Open exit criteria"
+                            onClick={() => setExitCriteriaOpen(true)}
+                          >
+                            Exit criteria
+                          </button>
+                        </div>
                       ) : (
                         renderMetric(metric)
                       )}
@@ -987,7 +1004,23 @@ export default function StageView({
               </div>
               <span className="v3-phase-metrics-divider" aria-hidden="true" />
               <div className="v3-phase-metric-group" role="group" aria-label="Open work items">
-                {work.map(renderMetric)}
+                {work.map((metric) => (
+                  onAddItem ? (
+                    <div key={metric.label} className="v3-phase-work-col">
+                      {renderMetric(metric)}
+                      <button
+                        type="button"
+                        className="v3-button ghost v3-button-inline-xs v3-phase-work-add"
+                        aria-label={`Add ${metric.label.replace(/s$/, "").toLowerCase()}`}
+                        onClick={() => onAddItem(metric.addTab)}
+                      >
+                        + Add
+                      </button>
+                    </div>
+                  ) : (
+                    renderMetric(metric)
+                  )
+                ))}
               </div>
             </div>
           );
@@ -1022,7 +1055,6 @@ export default function StageView({
           <div className="v3-phase-head-actions-grp">
             <button type="button" className="v3-button ghost v3-button-inline-sm" onClick={() => { setExpandedOutput("narrative"); document.getElementById("phase-artifacts-anchor")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Narrative</button>
             <button type="button" className="v3-button ghost v3-button-inline-sm" onClick={() => { setExpandedOutput("deck"); document.getElementById("phase-artifacts-anchor")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Status deck</button>
-            <button type="button" className="v3-button ghost v3-button-inline-sm" onClick={() => setExitCriteriaOpen(true)}>Exit criteria</button>
           </div>
           {phaseAgentActions.length ? (
             <div className="v3-phase-head-actions-grp">

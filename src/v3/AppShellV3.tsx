@@ -1037,6 +1037,7 @@ export default function AppShellV3() {
   const [surface, setSurface] = useState<V3Surface>(initialRoute.surface);
   const [activeMode, setActiveMode] = useState<V3CommandMode>(surfaceToCommandMode(initialRoute.surface));
   const [moreView, setMoreView] = useState<V3MoreView | null>(initialRoute.moreView);
+  const [decideIntent, setDecideIntent] = useState<{ tab: "blockers" | "risks" | "actions"; nonce: number } | null>(null);
   const [reportId, setReportId] = useState<V3ReportId | null>(initialRoute.reportId);
   const [activePhaseId, setActivePhaseId] = useState<string | null>(initialRoute.activePhaseId);
   const mode: V3Mode = DEFAULT_V3_MODE;
@@ -2655,6 +2656,7 @@ export default function AppShellV3() {
                 onSelectPhase={handleSelectPhase}
                 onResolveDecision={handleResolveDecision}
                 onOpenDecide={() => navigateSurface("decide")}
+                onAddItem={(tab) => { setDecideIntent({ tab, nonce: Date.now() }); navigateSurface("decide"); }}
                 onOpenReport={openReport}
                 onSaveGateNote={handleSaveGateNote}
                 onSaveStageNote={handleSaveStageNote}
@@ -2707,6 +2709,7 @@ export default function AppShellV3() {
               onAddRaid={addRaidEntry}
               onCloseRaid={closeRaidEntry}
               persona={persona}
+              initialIntent={decideIntent}
             />
           </AdamErrorBoundary>
         ) : null}

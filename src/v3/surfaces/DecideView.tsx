@@ -24,6 +24,8 @@ interface DecideViewProps {
   onRequestRemediation: (phaseId: string, note: string) => Promise<void>;
   onAddRaid: (draft: { type: RAIDEntryType; title: string; description: string; severity: RAIDEntry["severity"]; phase: string; owner?: string; mitigation?: string }) => Promise<void>;
   onCloseRaid: (entryId: string, note?: string) => Promise<void>;
+  /** Deep-link intent: select a tab and open its add form (nonce forces re-fire). */
+  initialIntent?: { tab: ActionTab; nonce: number } | null;
 }
 
 type Scope = "stage" | "all";
@@ -521,6 +523,7 @@ export default function DecideView({
   onRequestRemediation,
   onAddRaid,
   onCloseRaid,
+  initialIntent,
 }: DecideViewProps) {
   const [scope, setScope] = useState<Scope>(mode === "guided" ? "stage" : "all");
   const [addOpen, setAddOpen] = useState(false);
@@ -539,6 +542,15 @@ export default function DecideView({
   useEffect(() => {
     if (mode === "guided") setScope("stage");
   }, [mode]);
+
+  // React to a deep-link intent from the phase header "+ Add" buttons: focus the
+  // requested tab and open its add form. Keyed on nonce so repeat clicks re-fire.
+  useEffect(() => {
+    if (!initialIntent) return;
+    setActiveTab(initialIntent.tab);
+    if (initialIntent.tab === "actions") { setAddOpen(true); setRaidFormOpen(false); }
+    else { setRaidFormOpen(true); setAddOpen(false); }
+  }, [initialIntent?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!selectedPhaseId && activePhaseId) setSelectedPhaseId(activePhaseId);
