@@ -862,7 +862,7 @@ export default function StageView({
         <div className="v3-phase-head-row">
           <div className="v3-phase-head-identity">
             {/* Canonical 3-ring phase status — inner Input · middle Artifact · outer Gate */}
-            <PhaseStatusRings program={program} phaseId={activePhase.id} size={84} showCenter />
+            <PhaseStatusRings program={program} phaseId={activePhase.id} size={116} showCenter />
             <div className="v3-phase-head-titles">
               <div className="v3-phase-head-eyebrow">
                 <span className="v3-phase-head-prog">{program.name}</span>
