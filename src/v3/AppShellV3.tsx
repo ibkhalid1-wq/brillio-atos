@@ -2444,7 +2444,6 @@ export default function AppShellV3() {
           commitNavigation({ surface: "insight-feed", moreView: null, activePhaseId: null, reportId: null });
         }}
         programName={activeProgram?.name || "Programme"}
-        activePhaseLabel={activePhaseId ? phaseNameById(activeProgram, activePhaseId) : null}
         confidenceScore={programConfidenceScore}
         anyAgentRunning={anyAgentRunning}
         agentStatus={agentStatus}

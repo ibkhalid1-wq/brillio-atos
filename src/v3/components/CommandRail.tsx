@@ -42,7 +42,6 @@ type CommandRailProps = {
   activeProgramId?: string | null;
   onSelectProgram?: (id: string) => void;
   programName: string;
-  activePhaseLabel?: string | null;
   confidenceScore?: number | null;
   anyAgentRunning?: boolean;
   agentStatus?: "running" | "idle" | "stopped";
@@ -171,7 +170,6 @@ export function CommandRail({
   activeProgramId,
   onSelectProgram,
   programName,
-  activePhaseLabel,
   confidenceScore,
   anyAgentRunning = false,
   agentStatus,
@@ -360,18 +358,6 @@ export function CommandRail({
           </div>
         ) : null}
       </div>
-
-      {/* ── Current phase — pinned to the top, above primary nav ── */}
-      {activeSurface === "stage" && activePhaseLabel ? (
-        <>
-          <div className="v3-command-rail-section-label v3-command-rail-phase-label">Current phase</div>
-          <div className="v3-command-rail-status-row v3-command-rail-phase-top" title={`Active phase: ${activePhaseLabel}`}>
-            <span className="v3-command-rail-phase-indicator" />
-            <span className="v3-command-rail-status-label">{activePhaseLabel}</span>
-          </div>
-          <RailDivider />
-        </>
-      ) : null}
 
       {/* ── Primary navigation: Home · Action Center · Program ── */}
       <div className="v3-command-rail-modes" role="list">
