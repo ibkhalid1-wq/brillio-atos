@@ -55,69 +55,75 @@ function isObject(value: unknown): value is Record<string, unknown> {
 // Field names that make the best bullet header for an object, in priority order.
 const LEAD_KEYS = ["outcome", "name", "title", "benefit", "category", "phase", "role", "area", "item", "requirement", "control", "step", "risk"];
 
-/** Inline an object's primitive fields as "Label: value, …". */
+const INDENT = "  ";
+
+/** Inline an object's primitive fields as "**Label:** value, …". */
 function inlineObject(obj: Record<string, unknown>): string {
   return Object.entries(obj)
     .filter(([k, v]) => !isSkippable(k) && v !== null && v !== undefined && v !== "" && typeof v !== "object")
-    .map(([k, v]) => `${humanize(k)}: ${primitive(v)}`)
+    .map(([k, v]) => `**${humanize(k)}:** ${primitive(v)}`)
     .join(", ");
 }
 
-/** Render one object as an indented bullet group; a meaningful field leads. */
-function renderObjectAsBullet(obj: Record<string, unknown>, pad: string): string[] {
+/** Render one object as a markdown bullet group; a meaningful field leads. */
+function renderObjectAsBullet(obj: Record<string, unknown>, depth: number): string[] {
+  const pad = INDENT.repeat(depth);
+  const sub = INDENT.repeat(depth + 1);
   const entries = Object.entries(obj).filter(([k, v]) => !isSkippable(k) && v !== null && v !== undefined && v !== "");
   const lead = entries.find(([k, v]) => LEAD_KEYS.includes(k.toLowerCase()) && typeof v === "string" && v.trim())
     ?? entries.find(([, v]) => typeof v === "string" && v.trim());
-  const lines: string[] = [`${pad}• ${lead ? primitive(lead[1]) : ""}`.trimEnd()];
+  const lines: string[] = [`${pad}- ${lead ? primitive(lead[1]) : ""}`.trimEnd()];
   for (const [k, v] of entries) {
     if (lead && k === lead[0]) continue;
     if (Array.isArray(v)) {
       const prims = v.filter((x) => x !== null && x !== undefined && typeof x !== "object").map(primitive).filter(Boolean);
-      if (prims.length) lines.push(`${pad}   ${humanize(k)}: ${prims.join(", ")}`);
+      if (prims.length) lines.push(`${sub}- **${humanize(k)}:** ${prims.join(", ")}`);
       for (const o of v.filter(isObject)) {
         const kv = inlineObject(o);
-        if (kv) lines.push(`${pad}   ${humanize(k)} — ${kv}`);
+        if (kv) lines.push(`${sub}- **${humanize(k)}** — ${kv}`);
       }
     } else if (isObject(v)) {
       const kv = inlineObject(v);
-      if (kv) lines.push(`${pad}   ${humanize(k)}: ${kv}`);
+      if (kv) lines.push(`${sub}- **${humanize(k)}:** ${kv}`);
     } else {
       const s = primitive(v);
-      if (s) lines.push(`${pad}   ${humanize(k)}: ${s}`);
+      if (s) lines.push(`${sub}- **${humanize(k)}:** ${s}`);
     }
   }
   return lines;
 }
 
-/** Render a nested object's fields as "Label: value" / sub-bullets. */
+/** Render a nested object's fields as subheaders / "Label: value" / bullets. */
 function renderObjectLines(obj: Record<string, unknown>, depth: number): string[] {
-  const pad = "  ".repeat(depth);
+  const pad = INDENT.repeat(depth);
   const lines: string[] = [];
   for (const [k, v] of Object.entries(obj)) {
     if (isSkippable(k) || v === null || v === undefined || v === "") continue;
     if (Array.isArray(v)) {
       const items = v.filter((x) => x !== null && x !== undefined);
       if (!items.length) continue;
-      lines.push(`${pad}${humanize(k)}:`);
+      lines.push(`${pad}### ${humanize(k)}`);
       for (const it of items) {
-        if (isObject(it)) lines.push(...renderObjectAsBullet(it, `${pad}  `));
-        else if (typeof it !== "object") { const s = primitive(it); if (s) lines.push(`${pad}  • ${s}`); }
+        if (isObject(it)) lines.push(...renderObjectAsBullet(it, depth));
+        else if (typeof it !== "object") { const s = primitive(it); if (s) lines.push(`${pad}- ${s}`); }
       }
     } else if (isObject(v)) {
       const sub = renderObjectLines(v, depth + 1);
-      if (sub.length) { lines.push(`${pad}${humanize(k)}:`); lines.push(...sub); }
+      if (sub.length) { lines.push(`${pad}### ${humanize(k)}`); lines.push(...sub); }
     } else {
       const s = primitive(v);
-      if (s) lines.push(`${pad}${humanize(k)}: ${s}`);
+      if (s) lines.push(`${pad}**${humanize(k)}:** ${s}`);
     }
   }
   return lines;
 }
 
 /**
- * Turn a structured formal-artifact object into readable text. Top-level keys
- * become section headings (blank-line separated) so AnimatedArtifactContent can
- * stagger them. Returns "" when there is nothing renderable.
+ * Turn a structured formal-artifact object into markdown-lite text. Top-level
+ * keys become "## " section headings; nested keys "### "; arrays become "- "
+ * bullets (indented by two spaces per depth); "**Label:**" marks inline labels.
+ * Blocks are blank-line separated so the renderer can stagger them. Returns ""
+ * when there is nothing renderable.
  */
 export function formatStructuredDoc(value: unknown): string {
   if (typeof value === "string") return value.trim();
@@ -126,14 +132,14 @@ export function formatStructuredDoc(value: unknown): string {
   const blocks: string[] = [];
   for (const [k, v] of Object.entries(value)) {
     if (isSkippable(k) || v === null || v === undefined || v === "") continue;
-    const heading = humanize(k);
+    const heading = `## ${humanize(k)}`;
     if (Array.isArray(v)) {
       const items = v.filter((x) => x !== null && x !== undefined);
       if (!items.length) continue;
       const lines: string[] = [];
       for (const it of items) {
-        if (isObject(it)) lines.push(...renderObjectAsBullet(it, ""));
-        else if (typeof it !== "object") { const s = primitive(it); if (s) lines.push(`• ${s}`); }
+        if (isObject(it)) lines.push(...renderObjectAsBullet(it, 0));
+        else if (typeof it !== "object") { const s = primitive(it); if (s) lines.push(`- ${s}`); }
       }
       if (lines.length) blocks.push(`${heading}\n${lines.join("\n")}`);
     } else if (isObject(v)) {

@@ -324,22 +324,78 @@ function StageBriefPanel({ phaseId, onSave }: { phaseId: string; onSave: (phaseI
   );
 }
 
+/** Render inline **bold** spans within a markdown-lite line. */
+function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
+  return parts.map((part, i) => {
+    const m = part.match(/^\*\*([^*]+)\*\*$/);
+    if (m) return <strong key={`${keyPrefix}-b${i}`} className="v3-doc-label">{m[1]}</strong>;
+    return <React.Fragment key={`${keyPrefix}-t${i}`}>{part}</React.Fragment>;
+  });
+}
+
+type DocBlock =
+  | { kind: "h2" | "h3" | "p"; text: string }
+  | { kind: "ul"; items: { text: string; depth: number }[] };
+
+/** Parse markdown-lite (## / ### / - bullets / paragraphs) into typed blocks. */
+function parseDoc(content: string): DocBlock[] {
+  const blocks: DocBlock[] = [];
+  const lines = content.replace(/\r/g, "").split("\n");
+  let list: { text: string; depth: number }[] | null = null;
+  const flush = () => { if (list && list.length) blocks.push({ kind: "ul", items: list }); list = null; };
+
+  for (const raw of lines) {
+    if (!raw.trim()) { flush(); continue; }
+    const bullet = raw.match(/^(\s*)- (.*)$/);
+    if (bullet) {
+      const depth = Math.floor(bullet[1].replace(/\t/g, "  ").length / 2);
+      (list ??= []).push({ text: bullet[2], depth });
+      continue;
+    }
+    flush();
+    const trimmed = raw.trim();
+    if (trimmed.startsWith("## ")) blocks.push({ kind: "h2", text: trimmed.slice(3) });
+    else if (trimmed.startsWith("### ")) blocks.push({ kind: "h3", text: trimmed.slice(4) });
+    else blocks.push({ kind: "p", text: trimmed });
+  }
+  flush();
+  return blocks;
+}
+
+function DocBlockView({ block, keyPrefix }: { block: DocBlock; keyPrefix: string }) {
+  if (block.kind === "h2") return <h2 className="v3-doc-h2">{renderInline(block.text, keyPrefix)}</h2>;
+  if (block.kind === "h3") return <h3 className="v3-doc-h3">{renderInline(block.text, keyPrefix)}</h3>;
+  if (block.kind === "p") return <p className="v3-doc-p">{renderInline(block.text, keyPrefix)}</p>;
+  return (
+    <ul className="v3-doc-ul">
+      {block.items.map((it, i) => (
+        <li key={`${keyPrefix}-li${i}`} className="v3-doc-li" data-depth={Math.min(it.depth, 4)}>
+          {renderInline(it.text, `${keyPrefix}-li${i}`)}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function AnimatedArtifactContent({ content }: { content: string }) {
   const sections = content.split("\n\n").map((section) => section.trim()).filter(Boolean);
 
-  if (sections.length <= 1) {
-    return <div className="v3-output-preview-body">{content}</div>;
+  if (sections.length === 0) {
+    return <div className="v3-output-preview-body v3-output-preview-body--doc" />;
   }
 
   return (
-    <div className="v3-output-preview-body v3-output-preview-body--animated">
+    <div className="v3-output-preview-body v3-output-preview-body--doc v3-output-preview-body--animated">
       {sections.map((section, index) => (
         <div
           key={`${section.slice(0, 32)}-${index}`}
           className="v3-output-preview-section"
           style={{ animationDelay: `${index * 70}ms` }}
         >
-          {section}
+          {parseDoc(section).map((block, bi) => (
+            <DocBlockView key={`s${index}-b${bi}`} block={block} keyPrefix={`s${index}-b${bi}`} />
+          ))}
         </div>
       ))}
     </div>

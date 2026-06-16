@@ -7000,6 +7000,80 @@ button.v3-phase-metric:focus-visible {
   white-space: pre-wrap;
 }
 
+/* ── Rich document typography (formal artifact previews) ─────────────── */
+.v3-output-preview-body--doc {
+  white-space: normal;
+}
+
+.v3-output-preview-body--doc .v3-output-preview-section {
+  white-space: normal;
+}
+
+.v3-doc-h2 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--v3-text-primary);
+}
+
+.v3-doc-h3 {
+  margin: 10px 0 4px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--v3-text-secondary);
+}
+
+.v3-doc-p {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--v3-text-secondary);
+}
+
+.v3-doc-p:last-child {
+  margin-bottom: 0;
+}
+
+.v3-doc-ul {
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+
+.v3-doc-li {
+  position: relative;
+  padding-left: 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--v3-text-secondary);
+}
+
+.v3-doc-li::before {
+  content: "•";
+  position: absolute;
+  left: 4px;
+  color: var(--v3-text-muted);
+}
+
+.v3-doc-li[data-depth="1"] { padding-left: 32px; }
+.v3-doc-li[data-depth="1"]::before { left: 20px; content: "◦"; }
+.v3-doc-li[data-depth="2"] { padding-left: 48px; }
+.v3-doc-li[data-depth="2"]::before { left: 36px; content: "‣"; }
+.v3-doc-li[data-depth="3"],
+.v3-doc-li[data-depth="4"] { padding-left: 64px; }
+.v3-doc-li[data-depth="3"]::before,
+.v3-doc-li[data-depth="4"]::before { left: 52px; content: "·"; }
+
+.v3-doc-label {
+  font-weight: 600;
+  color: var(--v3-text-primary);
+}
+
 @media (max-width: 720px) {
   .v3-output-preview-head {
     flex-direction: column;
