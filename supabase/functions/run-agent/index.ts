@@ -5552,6 +5552,33 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Coalesce redundant background runs. Tier-2/3 agents (downstream fan-out,
+    // scheduled, handoff, proactive) fire far more often than needed and starve
+    // user-initiated runs of provider quota. If an identical agent+program+phase
+    // already completed or is running within the dedup window, skip the LLM call.
+    // User runs (triggeredBy === "user") are never coalesced. The check runs
+    // before this run's row is inserted, so it cannot match itself.
+    const BACKGROUND_DEDUP_WINDOW_MS = 5 * 60 * 1000;
+    if (request.triggeredBy !== "user") {
+      const since = new Date(Date.now() - BACKGROUND_DEDUP_WINDOW_MS).toISOString();
+      const { data: recentRuns } = await auth.admin
+        .from("adam_agent_runs")
+        .select("id")
+        .eq("program_id", request.programId)
+        .eq("agent_id", request.agentId)
+        .eq("phase_id", request.phaseId)
+        .in("status", ["complete", "running"])
+        .gte("created_at", since)
+        .limit(1);
+      if (recentRuns && recentRuns.length > 0) {
+        return jsonResponse({
+          status: "skipped",
+          reason: "A recent run for this agent already exists; coalesced to protect provider quota.",
+          runId: null,
+        });
+      }
+    }
+
     const { data: programRow, error: programError } = await auth.admin
       .from("adam_programs")
       .select("id, owner_id, name, client, industry, data, updated_at")
