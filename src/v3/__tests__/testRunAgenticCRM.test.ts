@@ -224,6 +224,22 @@ describe("Test Run — Agentic CRM: blockers hard-stop and then clear", () => {
     expect(computePhaseReadiness(program, "strategy").canApproveGate).toBe(true);
   });
 
+  it("a closed critical assumption does not block — closeEntry never stamps validatedAt", () => {
+    const program = buildCrm({
+      raidLog: [assumption({ id: "asm", title: "Legacy CRM can be decommissioned", status: "closed" })],
+    });
+    // status:"closed" with validatedAt still null must not deadlock the gate.
+    expect(computePhaseReadiness(program, "strategy").canApproveGate).toBe(true);
+  });
+
+  it("a critical assumption is scoped to its own phase — a design assumption does not block strategy", () => {
+    const program = buildCrm({
+      raidLog: [assumption({ id: "asm", title: "Microservice split is feasible", phase: "design" })],
+    });
+    expect(computePhaseReadiness(program, "strategy").canApproveGate).toBe(true);
+    expect(computePhaseReadiness(program, "design").canApproveGate).toBe(false);
+  });
+
   it("a blocking cross-phase dependency check hard-stops the gate; clearing it restores approval", () => {
     const blocked = buildCrm({
       dependencyCheck: { strategy: { passed: false, issues: [{ severity: "blocking", description: "Charter contradicts the value roadmap" }] } },

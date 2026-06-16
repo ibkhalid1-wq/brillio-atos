@@ -260,9 +260,17 @@ export function computePhaseReadiness(
   // where useRaidLog actually writes), keyed on the persisted `severity` and the
   // `validatedAt` flag set by validateAssumption. The old read of raw
   // `data.raidEntries` / `criticality` never matched real data, so this gate never
-  // fired in production.
+  // fired in production. Scope to this phase (consistent with how risks/decisions
+  // gate) and ignore closed entries — closeEntry resolves an assumption without
+  // stamping validatedAt, so an unscoped/closed-blind check would let a single
+  // closed assumption deadlock every gate.
   const unvalidatedCriticalAssumptions = (program.raidEntries ?? []).filter(
-    (entry) => entry.type === "assumption" && entry.severity === "critical" && !entry.validatedAt,
+    (entry) =>
+      entry.type === "assumption" &&
+      entry.severity === "critical" &&
+      entry.phase === phaseId &&
+      entry.status !== "closed" &&
+      !entry.validatedAt,
   );
 
   if (unvalidatedCriticalAssumptions.length) {
