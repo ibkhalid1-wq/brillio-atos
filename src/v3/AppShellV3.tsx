@@ -2956,7 +2956,7 @@ export default function AppShellV3() {
                     avgCompletion: activeProgram?.phases?.length
                       ? Math.round(activeProgram.phases.reduce((s, p) => s + (p.pct || 0), 0) / activeProgram.phases.length)
                       : 0,
-                    openDecisions: openDecisions.length,
+                    openDecisions: actionCenterCount,
                     activePhaseId,
                   },
                 },
@@ -2972,14 +2972,14 @@ export default function AppShellV3() {
           const lower = query.toLowerCase();
           const phases = activeProgram?.phases ?? [];
           const avgPct = phases.length > 0 ? Math.round(phases.reduce((s, p) => s + (p.pct || 0), 0) / phases.length) : 0;
-          const openD = openDecisions.length;
+          const openD = actionCenterCount;
           const score = programConfidenceScore;
           if (lower.includes("risk")) {
             const raidCount = (activeProgram?.raidEntries || []).length;
             return `There are ${raidCount} risks recorded. Programme confidence is ${score ?? "unknown"}%. Run the Risk agent for a full assessment.`;
           }
           if (lower.includes("track") || lower.includes("status") || lower.includes("health")) {
-            return `Programme is ${avgPct}% complete overall. Confidence: ${score ?? "calculating"}%. ${openD} decisions are open. ${activePhaseId ? `Currently active in phase: ${activePhaseId}.` : ""}`;
+            return `Programme is ${avgPct}% complete overall. Confidence: ${score ?? "calculating"}%. ${openD} action${openD !== 1 ? "s" : ""} are open. ${activePhaseId ? `Currently active in phase: ${activePhaseId}.` : ""}`;
           }
           if (lower.includes("gate") || lower.includes("ready")) {
             const gateCount = Object.keys(activeProgram?.gateReviews ?? {}).length;
@@ -2987,14 +2987,14 @@ export default function AppShellV3() {
             const gateThreshold = getGateThreshold(activePhaseId);
             return `${approvedCount} of ${gateCount} gates approved. ${score && score < gateThreshold ? `Gate readiness is below ${gateThreshold}% — run an AI Gate Check to identify blockers.` : "Gate readiness looks healthy."}`;
           }
-          if (lower.includes("decision")) {
-            return `${openD} decision${openD !== 1 ? "s" : ""} currently open. ${openD > 0 ? "Navigate to Decisions to review and resolve them." : "No pending decisions."}`;
+          if (lower.includes("decision") || lower.includes("action")) {
+            return `${openD} action${openD !== 1 ? "s" : ""} currently open. ${openD > 0 ? "Navigate to the Action Center to review and resolve them." : "No pending actions."}`;
           }
           if (lower.includes("phase") || lower.includes("stage")) {
             const phaseList = phases.map(p => `${p.displayName ?? p.id} (${p.pct}%)`).join(", ");
             return `Phases: ${phaseList || "No phases configured"}.`;
           }
-          return `Programme: ${activeProgram?.name ?? "Unknown"}. Confidence: ${score ?? "N/A"}%. Completion: ${avgPct}%. Open decisions: ${openD}. Use specific queries like "status", "risks", "gate readiness", or "decisions" for more detail.`;
+          return `Programme: ${activeProgram?.name ?? "Unknown"}. Confidence: ${score ?? "N/A"}%. Completion: ${avgPct}%. Open actions: ${openD}. Use specific queries like "status", "risks", "gate readiness", or "actions" for more detail.`;
         }}
       />
       {escalationPanelOpen ? (
