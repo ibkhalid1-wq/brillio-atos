@@ -2,9 +2,10 @@ import { normalizeProgram } from "@/new/lib/programData";
 import { derivePhaseMethodologyCompleteness } from "@/v3/lib/phaseMethodologyCompleteness";
 
 /**
- * Strategy phase requires 3 inputs (businessObjective, sponsor, successMetric),
- * a set of required artifacts, and 3 mandatory exit criteria. We fill one input
- * and leave the rest, then assert the binding reconciles all three sources.
+ * Strategy phase requires 4 inputs (businessObjective, sponsor, constraints,
+ * successMetric), a set of required artifacts, and 3 mandatory exit criteria.
+ * We fill one input and leave the rest, then assert the binding reconciles all
+ * three sources.
  */
 function makeProgram() {
   return normalizeProgram({
@@ -47,7 +48,7 @@ describe("derivePhaseMethodologyCompleteness", () => {
     expect(kinds).toContain("exit-criterion");
 
     const inputGroup = result.groups.find((g) => g.kind === "input")!;
-    expect(inputGroup.total).toBe(3);          // businessObjective, sponsor, successMetric
+    expect(inputGroup.total).toBe(4);          // businessObjective, sponsor, constraints, successMetric
     expect(inputGroup.present).toBe(1);          // only businessObjective filled
 
     const exitGroup = result.groups.find((g) => g.kind === "exit-criterion")!;
