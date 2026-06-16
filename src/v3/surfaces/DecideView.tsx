@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
+import { selectPhaseMetrics } from "@/v3/lib/programMetrics";
 import { PHASE_LABELS } from "@/v3/lib/uiHelpers";
 import type { DecisionSummary, GateReview, ProgramSummary, RAIDEntry, RAIDEntryType } from "@/new/types";
 import type { Persona } from "@/new/types";
@@ -132,7 +133,7 @@ function GateTimeline({
               </div>
             </div>
             {gate?.readinessScore !== undefined ? (
-              <div className="v3-governance-timeline-score">{gate.readinessScore}%</div>
+              <div className="v3-governance-timeline-score">{selectPhaseMetrics(program, phase.id).readiness}%</div>
             ) : null}
           </button>
         );
@@ -300,12 +301,14 @@ function DecisionCard({
 function GateDetailPanel({
   phaseId,
   gateReview,
+  readiness,
   onClose,
   onApprove,
   onRemediation,
 }: {
   phaseId: string;
   gateReview: GateReview | null;
+  readiness: number | null;
   onClose: () => void;
   onApprove: () => Promise<void>;
   onRemediation: (note: string) => Promise<void>;
@@ -372,10 +375,10 @@ function GateDetailPanel({
         ) : null}
       </div>
 
-      {gateReview?.readinessScore !== undefined ? (
+      {readiness !== null ? (
         <div className="v3-governance-readiness-summary">
           <span>Readiness score</span>
-          <strong>{gateReview.readinessScore}%</strong>
+          <strong>{readiness}%</strong>
         </div>
       ) : null}
     </div>
@@ -864,6 +867,7 @@ export default function DecideView({
         <GateDetailPanel
           phaseId={phaseNameById(program, selectedPhaseId)}
           gateReview={program.gateReviews?.[selectedPhaseId] || null}
+          readiness={selectPhaseMetrics(program, selectedPhaseId).readiness}
           onClose={() => setSelectedPhaseId(null)}
           onApprove={() => onApproveGate(selectedPhaseId)}
           onRemediation={async (note) => {
