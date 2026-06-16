@@ -9,13 +9,11 @@ import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
 import { PhaseRail } from "@/v3/components/PhaseRail";
 import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
 import { derivePhaseBlockers } from "@/v3/lib/phaseBlockers";
-import { ReadinessBadge } from "@/v3/components/ui/ReadinessBadge";
 import { EmptyState } from "@/v3/components/ui/EmptyState";
 import { ExpandableSection } from "@/v3/components/ui/ExpandableSection";
 import { RelativeTime } from "@/v3/components/ui/RelativeTime";
 import { StatusBadge } from "@/v3/components/ui/StatusBadge";
 import { computePhaseReadiness } from "@/v3/lib/phaseReadiness";
-import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
 import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
 import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
 import { runPreFlight } from "@/v3/lib/phaseInputPreFlight";
@@ -455,10 +453,6 @@ export default function StageView({
     () => (program && activePhase ? computePhaseReadiness(program, activePhase.id) : null),
     [activePhase, program],
   );
-  const phaseConfidence = useMemo(
-    () => (program && activePhase ? deriveProgramConfidence(program, activePhase.id) : null),
-    [activePhase, program],
-  );
   // Schema-grounded, deterministic input-quality assessment. Derived from the
   // phase's declared input fields (the single source of truth), so the banner's
   // "Missing:" list can only ever name inputs that genuinely belong to this
@@ -615,19 +609,6 @@ export default function StageView({
                 <span className={`v3-chip ${phaseTone.tone === "green" ? "green" : phaseTone.tone === "amber" ? "amber" : phaseTone.tone === "red" ? "red" : "muted"}`}>
                   {activePhase.status ? activePhase.status.replace(/-/g, " ") : `${Math.round(activePhase.pct ?? 0)}% complete`}
                 </span>
-                <ReadinessBadge
-                  score={readiness?.score}
-                  blockers={readiness?.recommendedActions.map((a) => a.label)}
-                  size="sm"
-                />
-                {phaseConfidence ? (
-                  <span
-                    className={`v3-chip ${phaseConfidence.score >= 75 ? "green" : phaseConfidence.score >= 50 ? "amber" : "red"}`}
-                    title={phaseConfidence.explanation}
-                  >
-                    {phaseConfidence.score}% confidence
-                  </span>
-                ) : null}
                 {gateTrend && gateTrend !== "stable" ? (
                   <span className={`v3-chip ${gateTrend === "improving" ? "green" : "amber"}`}>
                     {gateTrend === "improving" ? "↑ readiness improving" : "↓ readiness declining"}
@@ -799,6 +780,10 @@ export default function StageView({
 
       <div className="v3-phase-body">
 
+      <div className="v3-workspace-divider" role="separator" aria-label="Phase workspace">
+        <span className="v3-workspace-divider-label">Phase workspace</span>
+      </div>
+
       <div className="v3-phase-main" ref={phaseMainRef}>
       <PhaseFlowOverlay containerRef={phaseMainRef} program={program} phaseId={activePhase.id} enabled />
       {/* LEFT — input fields card (keeps upload-document + workstream buttons inside PhaseInputsPanel) */}
@@ -835,7 +820,7 @@ export default function StageView({
 
       {/* BELOW — other phase-relevant cards, stretched full-width and stacked */}
       <div className="v3-phase-cards">
-        <div className="v3-zone-label">Phase workspace</div>
+        <div className="v3-zone-label">Phase insights</div>
         <div className="v3-phase-cards-grid">
           {activePhase.id === "discover" && discoveryGuide ? (
             <div className="v3-card-sm v3-mini-card">

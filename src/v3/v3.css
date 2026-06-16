@@ -5562,15 +5562,22 @@ button.v3-phase-metric:focus-visible {
 .v3-phase-head-actions-grp { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
 .v3-phase-body { display: flex; flex-wrap: wrap; align-items: flex-start; min-height: 0; flex: 1; }
-/* Phase context (carried-forward handoff, gate readiness, briefing notes) — a
-   full-width band below the working columns. No longer a dedicated right column. */
-.v3-phase-aside {
-  order: 3;
-  flex: 1 1 100%; width: 100%; min-width: 0;
-  border-top: 1px solid var(--v3-border-soft);
-  padding: 16px;
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 12px; align-items: start;
+/* Full-width labelled divider that separates the header card from the working
+   columns below it. Sits first in the flex order so it spans the whole body. */
+.v3-workspace-divider {
+  order: 0;
+  flex: 1 1 100%; width: 100%;
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 16px; margin: 6px 0 2px;
+}
+.v3-workspace-divider::after {
+  content: ""; flex: 1; height: 1px;
+  background: linear-gradient(90deg, var(--v3-border) 0%, transparent 92%);
+}
+.v3-workspace-divider-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.09em;
+  text-transform: uppercase; color: var(--v3-text-muted);
+  white-space: nowrap;
 }
 .v3-phase-main {
   order: 1;
@@ -5643,7 +5650,6 @@ button.v3-phase-metric:focus-visible {
 
 @media (max-width: 1100px) {
   .v3-phase-body { flex-direction: column; }
-  .v3-phase-aside { flex: 1 1 auto; width: 100%; border-left: none; border-top: 1px solid var(--v3-border-soft); }
   .v3-phase-col--inputs, .v3-phase-col--map, .v3-phase-col--artifacts { flex: 1 1 100%; }
 }
 
