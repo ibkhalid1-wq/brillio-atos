@@ -1,11 +1,26 @@
+/** One column of a structured `grid` input. */
+export interface GridColumn {
+  key: string;
+  label: string;
+  type?: "text" | "number" | "select";
+  /** Fixed pixel width; omit to let the column flex. */
+  width?: number;
+  options?: string[];
+  placeholder?: string;
+}
+
 export interface PhaseInputField {
   id: string;
   label: string;
-  type: "text" | "textarea" | "number" | "date" | "select";
+  type: "text" | "textarea" | "number" | "date" | "select" | "grid";
   placeholder?: string;
   required: boolean;
   options?: string[];
   hint?: string;
+  /** Required when `type === "grid"`: the columns each row exposes. */
+  columns?: GridColumn[];
+  /** Soft-required threshold: warn when a grid has fewer than this many rows. */
+  minRows?: number;
 }
 
 export interface PhaseInputSchema {
@@ -15,11 +30,20 @@ export interface PhaseInputSchema {
   fields: PhaseInputField[];
 }
 
+// ── Reusable grid column presets ─────────────────────────────────────────────
+// Three shapes cover ~15 free-text fields across phases: a roles/people grid, a
+// measurable grid, and a RAID/entity grid (with per-field column labels).
+const ROLE_COLS: GridColumn[] = [
+  { key: "role", label: "Role", placeholder: "Programme Director" },
+  { key: "person", label: "Person", placeholder: "Jane Smith" },
+  { key: "org", label: "Org/Team", width: 130, placeholder: "PMO" },
+];
+
 const keyRolesField: PhaseInputField = {
   id: "keyRoles",
   label: "Key roles",
-  type: "textarea",
-  placeholder: "Programme Director: Jane Smith\nTech Lead: John Doe\nBusiness Owner: Acme Corp PMO",
+  type: "grid",
+  columns: ROLE_COLS,
   required: false,
   hint: "Name the accountable person for each role active in this phase",
 };
@@ -34,7 +58,6 @@ export const PHASE_INPUT_SCHEMAS: Record<string, PhaseInputSchema> = {
       { id: "sponsor", label: "Executive sponsor", type: "text", placeholder: "Name and title", required: true },
       { id: "constraints", label: "Key constraints", type: "textarea", placeholder: "Budget, timeline, regulatory, or technical constraints", required: false, hint: "e.g. Must go live before Q4 financial year end" },
       { id: "successMetric", label: "Primary success metric", type: "text", placeholder: "e.g. 20% reduction in processing time", required: true },
-      keyRolesField,
     ],
   },
   mobilise: {
@@ -58,7 +81,6 @@ export const PHASE_INPUT_SCHEMAS: Record<string, PhaseInputSchema> = {
       { id: "scopeInclusions", label: "In scope", type: "textarea", placeholder: "Business units, processes, systems", required: true },
       { id: "scopeExclusions", label: "Out of scope", type: "textarea", placeholder: "What is explicitly excluded", required: false },
       { id: "keyStakeholders", label: "Key stakeholders", type: "textarea", placeholder: "Names, departments, roles", required: false },
-      keyRolesField,
     ],
   },
   design: {
@@ -69,7 +91,6 @@ export const PHASE_INPUT_SCHEMAS: Record<string, PhaseInputSchema> = {
       { id: "solutionApproach", label: "Solution approach", type: "textarea", placeholder: "High-level technical or process design direction", required: true },
       { id: "integrationPoints", label: "Integration points", type: "textarea", placeholder: "Systems that must connect to the solution", required: false },
       { id: "designConstraints", label: "Design constraints", type: "textarea", placeholder: "Architecture standards, security requirements", required: false },
-      keyRolesField,
     ],
   },
   build: {
@@ -80,7 +101,6 @@ export const PHASE_INPUT_SCHEMAS: Record<string, PhaseInputSchema> = {
       { id: "sprintVelocity", label: "Current sprint velocity", type: "number", placeholder: "Story points per sprint", required: false },
       { id: "blockers", label: "Active blockers", type: "textarea", placeholder: "What is blocking delivery right now?", required: false },
       { id: "testCoverage", label: "Test coverage %", type: "number", placeholder: "0–100", required: false },
-      keyRolesField,
     ],
   },
   operate: {
@@ -93,7 +113,6 @@ export const PHASE_INPUT_SCHEMAS: Record<string, PhaseInputSchema> = {
       { id: "trackedKpi", label: "KPI being tracked", type: "textarea", placeholder: "Which KPI is actively measured against baseline, and where is it reported?", required: true, hint: "At least one KPI must be tracked against baseline to exit Operate" },
       { id: "runbookReference", label: "Runbook reference", type: "text", placeholder: "Link or reference to the operational runbook", required: false },
       { id: "adoptionApproach", label: "Adoption approach", type: "textarea", placeholder: "How is user adoption being driven and measured in early live operation?", required: false },
-      keyRolesField,
     ],
   },
   govern: {
@@ -106,7 +125,6 @@ export const PHASE_INPUT_SCHEMAS: Record<string, PhaseInputSchema> = {
       { id: "reportingCadence", label: "Reporting cadence", type: "select", options: ["Weekly", "Fortnightly", "Monthly", "Quarterly"], required: true, hint: "Ongoing governance reporting rhythm" },
       { id: "auditEvidencePlan", label: "Audit evidence plan", type: "textarea", placeholder: "How and when audit evidence is collected, and who owns it", required: false },
       { id: "escalationPath", label: "Escalation path", type: "textarea", placeholder: "Escalation routes and decision rights confirmed as operational", required: false },
-      keyRolesField,
     ],
   },
   optimize: {
@@ -118,7 +136,6 @@ export const PHASE_INPUT_SCHEMAS: Record<string, PhaseInputSchema> = {
       { id: "improvementBacklog", label: "Improvement backlog reference", type: "text", placeholder: "Link or reference to the prioritised improvement backlog", required: true, hint: "Post-go-live improvements logged and prioritised by business value" },
       { id: "adoptionTarget", label: "Adoption vs target", type: "text", placeholder: "e.g. 84% of adoption-plan target", required: false, hint: "Adoption should track to ≥ 80% of plan" },
       { id: "experimentProposal", label: "Experiment recommendation", type: "textarea", placeholder: "Summarise at least one proposed optimisation experiment and its expected value", required: false },
-      keyRolesField,
     ],
   },
   valuerealize: {
@@ -130,7 +147,6 @@ export const PHASE_INPUT_SCHEMAS: Record<string, PhaseInputSchema> = {
       { id: "lessonsLearnedReference", label: "Lessons learned reference", type: "text", placeholder: "Link or reference to the lessons-learned register", required: true, hint: "Retrospective completed with lessons documented across phases" },
       { id: "bauOwner", label: "BAU owner", type: "text", placeholder: "Name and title of the business-as-usual owner accepting handover", required: true, hint: "Programme outputs and responsibilities formally handed to BAU" },
       { id: "closurePackReference", label: "Closure pack reference", type: "text", placeholder: "Link or reference to the approved programme closure pack", required: false },
-      keyRolesField,
     ],
   },
 };
@@ -143,7 +159,6 @@ export function getPhaseInputSchema(phaseId: string): PhaseInputSchema {
     fields: [
       { id: "context", label: "Phase context", type: "textarea", placeholder: "Key information, decisions made, or constraints for this phase", required: false },
       { id: "objectives", label: "Phase objectives", type: "textarea", placeholder: "What must be achieved before this phase can close?", required: false },
-      keyRolesField,
     ],
   };
 }

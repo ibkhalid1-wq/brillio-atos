@@ -1,8 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import type { ProgramSummary, Workstream } from "@/new/types";
-import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
+import { getPhaseInputSchema, type GridColumn } from "@/v3/lib/phaseInputSchema";
 import { availableModes, FIELD_ASSIST_MODE_LABEL, type FieldAssistMode } from "@/v3/lib/fieldAssist";
 import { prioritizePhaseFields } from "@/v3/lib/phaseInputPriority";
+import StructuredGrid, { type GridRow, parseRows, serializeRows, filledRowCount } from "@/v3/components/StructuredGrid";
+
+/** Columns for the canonical roles roster (mirrors ROLE_COLS in phaseInputSchema). */
+const ROLE_COLS: GridColumn[] =
+  getPhaseInputSchema("mobilise").fields.find((field) => field.id === "keyRoles")?.columns ?? [];
 
 export interface FieldAssistRequest {
   fieldId: string;
@@ -147,6 +152,9 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
   const [localKpis, setLocalKpis] = useState<PhaseKpi[]>([]);
   // Map of KPI id → human-entered actual value (Value Realize only).
   const [localActuals, setLocalActuals] = useState<Record<string, string>>({});
+  // Structured grid fields (e.g. key roles), keyed by field id. Persisted as a
+  // JSON string under the field id — same convention as KPIs/workstreams.
+  const [grids, setGrids] = useState<Record<string, GridRow[]>>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   // Always start expanded so document-imported data is immediately visible
@@ -199,20 +207,52 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
     setLocalWorkstreams(existingWorkstreams);
     setLocalKpis(parseKpis((existingInputs as Record<string, unknown>).kpis));
     setLocalActuals(parseKpiActuals((existingInputs as Record<string, unknown>).kpiActuals));
+    const nextGrids: Record<string, GridRow[]> = {};
+    for (const field of schema.fields) {
+      if (field.type === "grid") nextGrids[field.id] = parseRows((existingInputs as Record<string, unknown>)[field.id], field.columns ?? []);
+    }
+    setGrids(nextGrids);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existingInputs, phaseId]);
 
   const showKpis = phaseId === "strategy";
   const showActuals = phaseId === "valuerealize";
+  // Roles are defined once at Mobilise (canonical roster). Every other phase
+  // references that roster read-only — single source of truth for people,
+  // mirroring the Strategy→Value Realize KPI define-once/reference pattern.
+  const showRolesReference = phaseId !== "mobilise";
+  const mobiliseRoles = useMemo(() => {
+    const raw = program.rawData as Record<string, unknown>;
+    const source = raw && typeof raw.data === "object" && raw.data !== null
+      ? raw.data as Record<string, unknown>
+      : raw ?? {};
+    const phaseInputs = typeof source.phaseInputs === "object" && source.phaseInputs !== null
+      ? source.phaseInputs as Record<string, Record<string, string>>
+      : {};
+    return parseRows((phaseInputs.mobilise ?? {}).keyRoles, ROLE_COLS);
+  }, [program.rawData]);
+
+  /** Grid-aware "is this field filled?" — counts non-empty rows for grids. */
+  const isFieldFilled = (field: { id: string; type: string; columns?: GridColumn[] }): boolean =>
+    field.type === "grid"
+      ? filledRowCount(grids[field.id] ?? [], field.columns ?? []) > 0
+      : !!values[field.id]?.trim();
 
   const hasAllRequired = schema.fields
     .filter((field) => field.required)
-    .every((field) => values[field.id]?.trim());
-  const filledCount = schema.fields.filter((field) => values[field.id]?.trim()).length;
+    .every((field) => isFieldFilled(field));
+  const filledCount = schema.fields.filter((field) => isFieldFilled(field)).length;
 
   // Has the live buffer diverged from the persisted snapshot? Drives the Cancel
   // (revert) affordance so it only enables when there are unsaved edits.
   const isDirty = useMemo(() => {
     for (const field of schema.fields) {
+      if (field.type === "grid") {
+        const persisted = serializeRows(parseRows((existingInputs as Record<string, unknown>)[field.id], field.columns ?? []), field.columns ?? []);
+        const live = serializeRows(grids[field.id] ?? [], field.columns ?? []);
+        if (persisted !== live) return true;
+        continue;
+      }
       if ((values[field.id] ?? "") !== (((existingInputs as Record<string, unknown>)[field.id] as string) ?? "")) return true;
     }
     const existingWs = Array.isArray(existingInputs.workstreams)
@@ -224,7 +264,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
     if (showKpis && JSON.stringify(localKpis) !== JSON.stringify(parseKpis((existingInputs as Record<string, unknown>).kpis))) return true;
     if (showActuals && JSON.stringify(localActuals) !== JSON.stringify(parseKpiActuals((existingInputs as Record<string, unknown>).kpiActuals))) return true;
     return false;
-  }, [schema.fields, values, existingInputs, localWorkstreams, localKpis, localActuals, program.workstreams, phaseId, showKpis, showActuals]);
+  }, [schema.fields, values, existingInputs, localWorkstreams, localKpis, localActuals, grids, program.workstreams, phaseId, showKpis, showActuals]);
 
   // Prioritise inputs by impact: required gaps first, then optional gaps, then
   // complete — so "what matters now" is at the top. Ranked from the *persisted*
@@ -243,6 +283,12 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
     try {
       await onSave(phaseId, {
         ...values,
+        // Serialize structured grid fields (overrides any stale string in values).
+        ...Object.fromEntries(
+          schema.fields
+            .filter((field) => field.type === "grid")
+            .map((field) => [field.id, serializeRows(grids[field.id] ?? [], field.columns ?? [])]),
+        ),
         workstreams: JSON.stringify(localWorkstreams),
         // Strategy-only: persist baseline/target KPIs so benefits realisation
         // is measured against the human-entered baseline downstream.
@@ -283,6 +329,11 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
     setLocalWorkstreams(existingWorkstreams);
     setLocalKpis(parseKpis((existingInputs as Record<string, unknown>).kpis));
     setLocalActuals(parseKpiActuals((existingInputs as Record<string, unknown>).kpiActuals));
+    const nextGrids: Record<string, GridRow[]> = {};
+    for (const field of schema.fields) {
+      if (field.type === "grid") nextGrids[field.id] = parseRows((existingInputs as Record<string, unknown>)[field.id], field.columns ?? []);
+    }
+    setGrids(nextGrids);
   }
 
   function addWorkstream() {
@@ -393,7 +444,11 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
 
           <div style={{ display: "grid", gap: 12, marginBottom: 12 }}>
             {prioritized.fields.map(({ field }) => {
-              const verdict = assessField(values[field.id], field.type);
+              const verdict = field.type === "grid"
+                ? (filledRowCount(grids[field.id] ?? [], field.columns ?? []) > 0
+                    ? { label: "Complete", tone: "green" as const }
+                    : { label: "Empty", tone: "muted" as const })
+                : assessField(values[field.id], field.type);
               return (
               <div key={field.id} data-io-anchor={`input:${field.id}`}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 8, marginBottom: 4 }}>
@@ -408,7 +463,14 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
                   </div>
                   <span className={`v3-chip ${verdict.tone}`} style={{ fontSize: 10, flexShrink: 0 }}>{verdict.label}</span>
                 </div>
-                {field.type === "textarea" ? (
+                {field.type === "grid" ? (
+                  <StructuredGrid
+                    columns={field.columns ?? []}
+                    rows={grids[field.id] ?? []}
+                    onChange={(rows) => setGrids((current) => ({ ...current, [field.id]: rows }))}
+                    addLabel={`+ Add ${field.label.toLowerCase()}`}
+                  />
+                ) : field.type === "textarea" ? (
                   <textarea
                     className="v3-input v3-textarea"
                     rows={2}
@@ -460,6 +522,30 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
               );
             })}
           </div>
+
+          {showRolesReference ? (
+            <div style={{ marginTop: 12, marginBottom: 12 }}>
+              <div className="v3-field-label">Key roles (from Mobilise)</div>
+              <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginBottom: 6 }}>
+                Roles are defined once in the Mobilise phase and referenced here, so the team roster
+                stays a single source of truth across phases.
+              </div>
+              {mobiliseRoles.length === 0 ? (
+                <div style={{
+                  fontSize: 11,
+                  color: "var(--v3-text-muted)",
+                  padding: "10px 12px",
+                  border: "1px dashed var(--v3-border)",
+                  borderRadius: 8,
+                }}>
+                  No roles defined yet. Add them in the <strong>Mobilise</strong> phase
+                  (Key roles) and they will appear here.
+                </div>
+              ) : (
+                <StructuredGrid columns={ROLE_COLS} rows={mobiliseRoles} onChange={() => {}} readOnly />
+              )}
+            </div>
+          ) : null}
 
           <div style={{ marginTop: 12, marginBottom: 12 }}>
             <div className="v3-field-label">Workstreams (optional)</div>

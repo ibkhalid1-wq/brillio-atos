@@ -8550,6 +8550,36 @@ button.v3-chip:disabled {
   margin-bottom: 4px;
 }
 
+/* Structured grid input (roles, metrics, RAID rows) */
+.v3-grid-input {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.v3-grid-input-head {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 0 2px;
+}
+.v3-grid-input-col-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--v3-text-muted);
+  min-width: 0;
+}
+.v3-grid-input-col-spacer {
+  width: 24px;
+  flex-shrink: 0;
+}
+.v3-grid-input-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
 /* Phase input prioritisation banner — "what matters now" */
 .v3-input-priority-banner {
   display: flex;
