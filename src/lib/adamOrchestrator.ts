@@ -40,6 +40,10 @@ type PhaseAgentRunParams = {
   meetingDate?: string;
   meetingDurationMins?: number;
   signal?: AbortSignal;
+  // Wall-clock budget for the actual HTTP call. The timer starts when the call
+  // leaves the serialization queue and fires, NOT when it is enqueued — otherwise
+  // time spent waiting behind another queued call would eat into the budget.
+  timeoutMs?: number;
 };
 
 type StoredProject = {
@@ -417,40 +421,108 @@ export async function orchestrateCopilotAgents(
   }
 }
 
+// Global client-side agent-call queue. The AI provider is rate-limited per minute,
+// so firing several edge-function calls at once (e.g. a user-initiated artifact plus
+// the proactive/auto triggers that fire on the same interaction) reliably trips a 429
+// and ALL of them fail. We serialize every run-agent invocation to one in-flight at a
+// time. A small priority ordering lets user-initiated calls jump ahead of background
+// ones, so an interactive generation waits at most for the single call already running.
+type QueuedAgentCall = {
+  priority: number;
+  run: () => Promise<AgentRunResponse>;
+  resolve: (value: AgentRunResponse) => void;
+  reject: (reason: unknown) => void;
+};
+
+const agentCallQueue: QueuedAgentCall[] = [];
+let agentCallDraining = false;
+
+function agentCallPriority(triggeredBy: PhaseAgentRunParams["triggeredBy"]): number {
+  if (triggeredBy === "user") return 2;
+  if (triggeredBy === "trigger") return 1;
+  return 0; // proactive / background
+}
+
+async function drainAgentCallQueue(): Promise<void> {
+  if (agentCallDraining) return;
+  agentCallDraining = true;
+  try {
+    while (agentCallQueue.length > 0) {
+      // Stable sort keeps FIFO order within a priority tier.
+      agentCallQueue.sort((a, b) => b.priority - a.priority);
+      const task = agentCallQueue.shift();
+      if (!task) break;
+      try {
+        task.resolve(await task.run());
+      } catch (err) {
+        task.reject(err);
+      }
+    }
+  } finally {
+    agentCallDraining = false;
+  }
+}
+
+function enqueueAgentCall(priority: number, run: () => Promise<AgentRunResponse>): Promise<AgentRunResponse> {
+  return new Promise<AgentRunResponse>((resolve, reject) => {
+    agentCallQueue.push({ priority, run, resolve, reject });
+    void drainAgentCallQueue();
+  });
+}
+
 export async function runPhaseAgent(params: PhaseAgentRunParams): Promise<AgentRunResponse> {
   if (!isSupabaseConfigured || !supabase) {
     throw new Error("Supabase is not configured.");
   }
-  const { data, error } = await supabase.functions.invoke("run-agent", {
-    body: {
-      programId: params.programId,
-      agentId: params.agentId,
-      phaseId: params.phaseId,
-      triggeredBy: params.triggeredBy,
-      triggerEvent: params.triggerEvent,
-      incomingHandoff: params.incomingHandoff || null,
-      runId: params.runId,
-      crossPhaseContext: params.crossPhaseContext,
-      decisionId: params.decisionId,
-      documentId: params.documentId,
-      docText: params.docText,
-      audienceGroup: params.audienceGroup,
-      memberName: params.memberName,
-      memberRole: params.memberRole,
-      meetingDate: params.meetingDate,
-      meetingDurationMins: params.meetingDurationMins,
-    },
-    signal: params.signal,
-  });
-
-  if (error) {
-    const context = (error as { context?: unknown }).context;
-    // 404 means the edge function is not deployed to this Supabase project
-    if (context instanceof Response && context.status === 404) {
-      throw new Error("AI agent service is not deployed. Deploy the run-agent edge function to enable agents.");
+  return enqueueAgentCall(agentCallPriority(params.triggeredBy), async () => {
+    // Arm the wall-clock timeout here, when the call actually fires after any queue
+    // wait. Combine it with the caller's signal so either can abort the request.
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let signal = params.signal;
+    if (params.timeoutMs && params.timeoutMs > 0) {
+      const timeoutCtrl = new AbortController();
+      if (params.signal) {
+        if (params.signal.aborted) timeoutCtrl.abort();
+        else params.signal.addEventListener("abort", () => timeoutCtrl.abort(), { once: true });
+      }
+      timeoutId = setTimeout(() => timeoutCtrl.abort(), params.timeoutMs);
+      signal = timeoutCtrl.signal;
     }
-    throw new Error(await getSupabaseFunctionErrorMessage(error, "Failed to invoke run-agent."));
-  }
+    try {
+      const { data, error } = await supabase.functions.invoke("run-agent", {
+        body: {
+          programId: params.programId,
+          agentId: params.agentId,
+          phaseId: params.phaseId,
+          triggeredBy: params.triggeredBy,
+          triggerEvent: params.triggerEvent,
+          incomingHandoff: params.incomingHandoff || null,
+          runId: params.runId,
+          crossPhaseContext: params.crossPhaseContext,
+          decisionId: params.decisionId,
+          documentId: params.documentId,
+          docText: params.docText,
+          audienceGroup: params.audienceGroup,
+          memberName: params.memberName,
+          memberRole: params.memberRole,
+          meetingDate: params.meetingDate,
+          meetingDurationMins: params.meetingDurationMins,
+        },
+        signal,
+      });
 
-  return (data || {}) as AgentRunResponse;
+      if (error) {
+        const context = (error as { context?: unknown }).context;
+        // 404 means the edge function is not deployed to this Supabase project
+        if (context instanceof Response && context.status === 404) {
+          throw new Error("AI agent service is not deployed. Deploy the run-agent edge function to enable agents.");
+        }
+        throw new Error(await getSupabaseFunctionErrorMessage(error, "Failed to invoke run-agent."));
+      }
+
+      return (data || {}) as AgentRunResponse;
+    } finally {
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
+    }
+  });
 }

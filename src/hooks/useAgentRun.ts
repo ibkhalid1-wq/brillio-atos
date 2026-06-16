@@ -251,10 +251,10 @@ export function useAgentRun(programId: string, enabled = true, onRunComplete?: (
     // Aborting earlier than the server budget killed the request mid-generation,
     // so large artifact runs (~95-110s) never returned a result. The server's
     // timeout guard always writes a terminal status, so this only fires if the
-    // platform itself hangs.
+    // platform itself hangs. The timer is armed inside runPhaseAgent when the call
+    // actually fires (it may wait in the global serialization queue first), so queue
+    // wait time never eats into this budget.
     const USER_TIMEOUT_MS = 150_000;
-    const abortCtrl = new AbortController();
-    const timeoutId = window.setTimeout(() => abortCtrl.abort(), USER_TIMEOUT_MS);
 
     try {
       const response = await runPhaseAgent({
@@ -271,7 +271,7 @@ export function useAgentRun(programId: string, enabled = true, onRunComplete?: (
         memberRole: params.memberRole,
         meetingDate: params.meetingDate,
         meetingDurationMins: params.meetingDurationMins,
-        signal: abortCtrl.signal,
+        timeoutMs: USER_TIMEOUT_MS,
       });
       await refreshRuns();
       if (response.status === "paused" && response.decisionId) {
@@ -289,7 +289,6 @@ export function useAgentRun(programId: string, enabled = true, onRunComplete?: (
         status: response.status,
       };
     } finally {
-      window.clearTimeout(timeoutId);
       setIsLoading(false);
       if (isUserCall) {
         userLoadingCount.current = Math.max(0, userLoadingCount.current - 1);
