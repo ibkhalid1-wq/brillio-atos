@@ -346,11 +346,10 @@ async function parseHtml(file: File): Promise<ParseResult> {
     documentNode.querySelectorAll(tag).forEach((element) => element.remove());
   });
 
-  // innerText is empty on DOMParser-created (non-rendered) documents, so fall
-  // back to textContent. `??` would keep an empty string — use `||`.
-  const visible = (documentNode.body?.innerText || documentNode.body?.textContent || "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  // Route through the shared table-aware extractor so HTML tables survive as
+  // pipe-delimited rows (innerText/textContent would flatten them into a blob —
+  // the same metric-loss bug fixed for docx).
+  const visible = htmlToStructuredText(documentNode.body?.innerHTML ?? "");
 
   const text = [visible, ...dataBlocks].filter(Boolean).join("\n\n");
 
