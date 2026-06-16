@@ -17,6 +17,7 @@
 import type { ProgramSummary } from "@/new/types";
 import { computeConfidenceScore, computeRiskPosture, type ConfidenceScore } from "@/v3/lib/confidenceScore";
 import { computePhaseReadiness } from "@/v3/lib/phaseReadiness";
+import { derivePhaseInputQuality } from "@/v3/lib/phaseInputQuality";
 import { isDecisionOpen } from "@/v3/utils";
 
 /**
@@ -42,9 +43,12 @@ export function deriveProgramConfidence(
   ).length;
   const totalGates = phases.length;
 
-  // Gate readiness: active phase readiness score (or ratio of approved gates)
-  const activePhaseReadiness = phaseId
-    ? computePhaseReadiness(program, phaseId).score
+  // Gate readiness: active phase readiness score (or ratio of approved gates).
+  // Computed once and reused below so the Today confidence breakdown reads the
+  // exact same readiness object the phase header KPIs render from.
+  const phaseReadiness = phaseId ? computePhaseReadiness(program, phaseId) : null;
+  const activePhaseReadiness = phaseReadiness
+    ? phaseReadiness.score
     : approved > 0
     ? Math.round((approved / Math.max(totalGates, 1)) * 100)
     : 0;
@@ -72,14 +76,20 @@ export function deriveProgramConfidence(
     (m: Record<string, unknown>) => m.status === "at-risk" || m.status === "overdue",
   ).length;
 
-  // Input completeness: quality-weighted score for active phase
+  // Input completeness: read from the SAME schema-grounded assessment the phase
+  // header "Input quality" KPI renders (derivePhaseInputQuality.overallScore),
+  // falling back to readiness.inputScore exactly as the header does. This keeps
+  // the Today confidence breakdown in sync with the phase page header — they no
+  // longer compute input quality two different ways.
   const phaseInputs =
     typeof rawData?.phaseInputs === "object"
       ? (rawData.phaseInputs as Record<string, Record<string, unknown>>)
       : {};
   const activeInputs = phaseId ? phaseInputs[phaseId] ?? {} : {};
-  const fieldCount = Object.keys(activeInputs).filter((k) => !k.startsWith("_")).length;
-  const inputCompleteness = fieldCount >= 5 ? 80 : fieldCount > 0 ? Math.round((fieldCount / 5) * 80) : 0;
+  const inputQuality = phaseId ? derivePhaseInputQuality(phaseId, activeInputs) : null;
+  const inputCompleteness = inputQuality
+    ? inputQuality.overallScore
+    : phaseReadiness?.inputScore ?? 0;
 
   // Decision metrics
   const openDecisions = (program.decisionQueue || []).filter(isDecisionOpen);
