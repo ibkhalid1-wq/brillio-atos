@@ -25,6 +25,12 @@ import type {
   MethodologyMappings,
   ReviewField,
 } from "@/new/lib/documentIntelligenceTypes";
+import {
+  PROVENANCE_KEY,
+  serializeProvenance,
+  type FieldProvenance,
+  type ProvenanceMap,
+} from "@/new/lib/fieldProvenance";
 
 export type { DocumentImportStage, DocumentImportResult, ReviewField, ApprovedInputs };
 
@@ -222,14 +228,29 @@ function localMerge(existing: string, incoming: string): string {
  * concatenation otherwise) so a document import never silently overwrites work
  * the PM already entered.
  */
-async function buildApprovedInputs(
+export async function buildApprovedInputs(
   reviewFields: ReviewField[],
   refineField?: RefineFieldFn,
 ): Promise<ApprovedInputs> {
   const result: ApprovedInputs = {};
-  const add = (phaseId: string, fieldId: string, value: string) => {
+  const provByPhase: Record<string, ProvenanceMap> = {};
+  const add = (
+    phaseId: string,
+    fieldId: string,
+    value: string,
+    mapping: FieldMapping,
+    extractionType: FieldProvenance["extractionType"],
+  ) => {
     if (!result[phaseId]) result[phaseId] = {};
     result[phaseId][fieldId] = value;
+    // Record where this value came from so the input grid can show provenance.
+    if (!provByPhase[phaseId]) provByPhase[phaseId] = {};
+    provByPhase[phaseId][fieldId] = {
+      source: mapping.source ?? "",
+      confidence: typeof mapping.confidence === "number" ? mapping.confidence : 0,
+      extractionType,
+      value,
+    };
   };
 
   await Promise.all(
@@ -237,9 +258,10 @@ async function buildApprovedInputs(
       if (field.mapping.reviewState === "rejected") return;
 
       // User hand-edited this field in the review panel — honour it verbatim.
+      // The PM restructured the extracted text, so record it as "enriched".
       if (field.mapping.reviewState === "edited" && field.mapping.editedValue !== undefined) {
         const edited = field.mapping.editedValue.trim();
-        if (edited) add(field.phaseId, field.fieldId, edited);
+        if (edited) add(field.phaseId, field.fieldId, edited, field.mapping, "enriched");
         return;
       }
 
@@ -251,7 +273,7 @@ async function buildApprovedInputs(
         // KPIs are JSON arrays — merge structurally; the text refine/concat path
         // below would corrupt the JSON and wipe existing rows.
         if (field.fieldId === "kpis") {
-          add(field.phaseId, field.fieldId, mergeKpiJson(existing, incoming));
+          add(field.phaseId, field.fieldId, mergeKpiJson(existing, incoming), field.mapping, "enriched");
           return;
         }
         let merged = "";
@@ -262,13 +284,21 @@ async function buildApprovedInputs(
             merged = "";
           }
         }
-        add(field.phaseId, field.fieldId, merged || localMerge(existing, incoming));
+        // A merged value blends existing PM text with the import — "enriched".
+        add(field.phaseId, field.fieldId, merged || localMerge(existing, incoming), field.mapping, "enriched");
         return;
       }
 
-      add(field.phaseId, field.fieldId, incoming);
+      add(field.phaseId, field.fieldId, incoming, field.mapping, field.mapping.extractionType);
     }),
   );
+
+  // Fold each phase's provenance map into its input bucket under the metadata key.
+  for (const [phaseId, prov] of Object.entries(provByPhase)) {
+    if (result[phaseId] && Object.keys(prov).length > 0) {
+      result[phaseId][PROVENANCE_KEY] = serializeProvenance(prov);
+    }
+  }
 
   return result;
 }

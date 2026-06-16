@@ -4,6 +4,8 @@ import { getPhaseInputSchema, type GridColumn } from "@/v3/lib/phaseInputSchema"
 import { availableModes, FIELD_ASSIST_MODE_LABEL, type FieldAssistMode } from "@/v3/lib/fieldAssist";
 import { prioritizePhaseFields } from "@/v3/lib/phaseInputPriority";
 import StructuredGrid, { type GridRow, parseRows, serializeRows, filledRowCount } from "@/v3/components/StructuredGrid";
+import { PROVENANCE_KEY, parseProvenance, type FieldProvenance } from "@/new/lib/fieldProvenance";
+import { EXTRACTION_TYPE_COLORS, EXTRACTION_TYPE_LABELS, confidenceLabel } from "@/new/lib/documentIntelligenceTypes";
 
 /** Columns for the canonical roles roster (mirrors ROLE_COLS in phaseInputSchema). */
 const ROLE_COLS: GridColumn[] =
@@ -93,6 +95,40 @@ export function assessField(value: string | undefined, type: string): { label: s
   return { label: "Complete", tone: "green" };
 }
 
+/**
+ * Compact source-provenance badge shown beside an imported field. A coloured dot
+ * encodes the extraction type (extracted/enriched/inferred) and the confidence
+ * label sits next to it; the source quote is in the title tooltip. Keeps the
+ * traceability the document importer captured visible at the point of use,
+ * without crowding the field row.
+ */
+function ProvenanceChip({ prov }: { prov: FieldProvenance }) {
+  const conf = confidenceLabel(prov.confidence);
+  const typeLabel = EXTRACTION_TYPE_LABELS[prov.extractionType];
+  const title = prov.source
+    ? `${typeLabel} from import · ${conf.label} confidence\nSource: "${prov.source}"`
+    : `${typeLabel} from import · ${conf.label} confidence`;
+  return (
+    <span
+      className="v3-chip"
+      title={title}
+      style={{ fontSize: 9, flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 4 }}
+    >
+      <span
+        aria-hidden
+        style={{
+          width: 6,
+          height: 6,
+          borderRadius: "50%",
+          background: EXTRACTION_TYPE_COLORS[prov.extractionType],
+          display: "inline-block",
+        }}
+      />
+      {typeLabel}
+    </span>
+  );
+}
+
 /** Human-readable "last updated" for the phase inputs, from the persisted savedAt. */
 function freshnessLabel(savedAt: unknown): string | null {
   if (typeof savedAt !== "string" || !savedAt.trim()) return null;
@@ -138,6 +174,14 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
     return phaseInputs[phaseId] ?? {};
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [program.rawData, phaseId]);
+
+  // Per-field source provenance recorded by the document importer. Keyed by
+  // fieldId; a field's badge only renders while its live value still matches the
+  // imported snapshot (see render below), so hand-edits drop the badge.
+  const provenance = useMemo(
+    () => parseProvenance((existingInputs as Record<string, unknown>)[PROVENANCE_KEY]),
+    [existingInputs],
+  );
 
   // KPI *definitions* always live at Strategy (baseline → target). At Value
   // Realize we read them here so the user records actuals against the same KPIs
@@ -443,7 +487,12 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
                       <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 2 }}>{field.hint}</div>
                     ) : null}
                   </div>
-                  <span className={`v3-chip ${verdict.tone}`} style={{ fontSize: 10, flexShrink: 0 }}>{verdict.label}</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                    {provenance[field.id] && provenance[field.id].value.trim() === (values[field.id] ?? "").trim()
+                      ? <ProvenanceChip prov={provenance[field.id]} />
+                      : null}
+                    <span className={`v3-chip ${verdict.tone}`} style={{ fontSize: 10 }}>{verdict.label}</span>
+                  </div>
                 </div>
                 {field.type === "grid" ? (
                   <StructuredGrid

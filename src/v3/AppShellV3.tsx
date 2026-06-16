@@ -62,6 +62,7 @@ import { computePhaseReadiness, getLockedPhaseIds } from "@/v3/lib/phaseReadines
 import { confidenceRag, getGateThreshold } from "@/v3/lib/confidenceScore";
 import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
 import { buildFieldAssistPrompt, sanitiseFieldReply } from "@/v3/lib/fieldAssist";
+import { PROVENANCE_KEY, mergeProvenance } from "@/new/lib/fieldProvenance";
 import type { FieldAssistRequest } from "@/v3/components/PhaseInputsPanel";
 const DecideView = React.lazy(() => import("@/v3/surfaces/DecideView"));
 import GateReopenModal from "@/v3/components/GateReopenModal";
@@ -250,6 +251,23 @@ function cloneRawProgram(program: ProgramSummary) {
       return wrapProgramState(wrapper, nextInner, usesNestedData);
     },
   };
+}
+
+/**
+ * Merge a freshly-saved phase-input bucket onto the persisted one. Plain fields
+ * are overwritten last-write-wins; the `_provenance` metadata map is deep-merged
+ * so a second document import keeps the source traceability the first recorded.
+ */
+function mergePhaseInputBucket(
+  prevBucket: unknown,
+  inputs: Record<string, string>,
+): Record<string, unknown> {
+  const prev = (typeof prevBucket === "object" && prevBucket !== null ? prevBucket : {}) as Record<string, unknown>;
+  const mergedProvenance = mergeProvenance(prev[PROVENANCE_KEY], inputs[PROVENANCE_KEY]);
+  const bucket: Record<string, unknown> = { ...prev, ...inputs, savedAt: new Date().toISOString() };
+  if (mergedProvenance) bucket[PROVENANCE_KEY] = mergedProvenance;
+  else delete bucket[PROVENANCE_KEY];
+  return bucket;
 }
 
 type ShellToast = {
@@ -2034,7 +2052,7 @@ export default function AppShellV3() {
     const existing = typeof cloned.inner.phaseInputs === "object" && cloned.inner.phaseInputs !== null
       ? { ...(cloned.inner.phaseInputs as Record<string, unknown>) }
       : {};
-    existing[phaseId] = { ...((existing[phaseId] as Record<string, unknown>) ?? {}), ...inputs, savedAt: new Date().toISOString() };
+    existing[phaseId] = mergePhaseInputBucket(existing[phaseId], inputs);
     const payload = cloned.commit({ ...cloned.inner, phaseInputs: existing });
     await updateProgramData(activeProgram.id, payload, activeProgram.updatedAt);
     await refreshPrograms();
@@ -2058,7 +2076,7 @@ export default function AppShellV3() {
       ? { ...(cloned.inner.phaseInputs as Record<string, unknown>) }
       : {};
     for (const [phaseId, inputs] of Object.entries(allInputs)) {
-      existing[phaseId] = { ...((existing[phaseId] as Record<string, unknown>) ?? {}), ...inputs, savedAt: new Date().toISOString() };
+      existing[phaseId] = mergePhaseInputBucket(existing[phaseId], inputs);
     }
     const payload = cloned.commit({ ...cloned.inner, phaseInputs: existing });
     await updateProgramData(activeProgram.id, payload, activeProgram.updatedAt);
