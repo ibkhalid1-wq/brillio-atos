@@ -622,7 +622,12 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
 
           {showKpis ? (
             <div style={{ marginTop: 12, marginBottom: 12 }}>
-              <div className="v3-field-label">Outcome KPIs (baseline → target)</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <div className="v3-field-label">Outcome KPIs (baseline → target)</div>
+                {provenance.kpis && provenance.kpis.value.trim() === (((existingInputs as Record<string, unknown>).kpis as string) ?? "").trim()
+                  ? <ProvenanceChip prov={provenance.kpis} />
+                  : null}
+              </div>
               <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginBottom: 6 }}>
                 Define the measurable outcomes for this programme. Baseline and target captured here
                 anchor the Benefits Tracker so realisation is measured against your numbers — not estimates.
