@@ -2662,7 +2662,6 @@ export default function AppShellV3() {
                 onSaveStageNote={handleSaveStageNote}
                 onApproveGate={handleApproveGate}
                 onReopenGate={handleReopenGate}
-                onRequestRemediation={requestRemediation}
                 onRunAgent={handleRunAgent}
                 onSaveArtifact={handleSaveArtifact}
                 onApproveArtifact={handleApproveArtifact}

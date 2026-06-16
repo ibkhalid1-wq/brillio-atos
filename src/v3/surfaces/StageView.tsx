@@ -51,7 +51,6 @@ interface StageViewProps {
   onSaveStageNote: (phaseId: string, note: string) => Promise<void>;
   onApproveGate: (phaseId: string) => Promise<void>;
   onReopenGate: (phaseId: string) => void;
-  onRequestRemediation: (phaseId: string, note: string) => Promise<void>;
   onRunAgent: (agentId: string) => void;
   onSaveArtifact: (artifactId: "narrative" | "deck", content: string) => Promise<void>;
   onApproveArtifact: (phaseId: string, artifactId: string) => Promise<void>;
@@ -439,7 +438,6 @@ export default function StageView({
   onSaveStageNote,
   onApproveGate,
   onReopenGate,
-  onRequestRemediation,
   onRunAgent,
   onSaveArtifact,
   onApproveArtifact,
@@ -448,8 +446,6 @@ export default function StageView({
   onAssistField,
   artifactPreviews,
 }: StageViewProps) {
-  const [remediationOpen, setRemediationOpen] = React.useState(false);
-  const [remediationNote, setRemediationNote] = React.useState("");
   const [expandedOutput, setExpandedOutput] = React.useState<string | null>(null);
   const [editingArtifact, setEditingArtifact] = React.useState<"narrative" | "deck" | null>(null);
   const [updatedArtifactId, setUpdatedArtifactId] = React.useState<"narrative" | "deck" | null>(null);
@@ -458,7 +454,6 @@ export default function StageView({
   const [exitCriteriaOpen, setExitCriteriaOpen] = React.useState(false);
   const [summaryExpanded, setSummaryExpanded] = React.useState(false);
   const phaseMainRef = useRef<HTMLDivElement | null>(null);
-  const previousNarrativeRef = useRef<string | null>(artifactPreviews?.narrative || null);
   const previousDeckRef = useRef<string | null>(artifactPreviews?.deck || null);
   const toggleOutput = (id: string) => {
     setExpandedOutput((previous) => previous === id ? null : id);
@@ -467,15 +462,6 @@ export default function StageView({
     if (typeof window === "undefined") return;
     setGuideDismissed(window.localStorage.getItem(onboardingStorageKey) === "done");
   }, [onboardingStorageKey]);
-  useEffect(() => {
-    const nextNarrative = artifactPreviews?.narrative || null;
-    if (previousNarrativeRef.current && nextNarrative && previousNarrativeRef.current !== nextNarrative) {
-      setUpdatedArtifactId("narrative");
-      setExpandedOutput("narrative");
-    }
-    previousNarrativeRef.current = nextNarrative;
-  }, [artifactPreviews?.narrative]);
-
   useEffect(() => {
     const nextDeck = artifactPreviews?.deck || null;
     if (previousDeckRef.current && nextDeck && previousDeckRef.current !== nextDeck) {
@@ -663,9 +649,6 @@ export default function StageView({
   const handoffQuality = source?.handoffQuality && typeof source.handoffQuality === "object" && !Array.isArray(source.handoffQuality)
     ? (source.handoffQuality as Record<string, unknown>)[activePhase?.id || ""] as { score?: number; passed?: boolean } | undefined
     : undefined;
-  const narrativeQuality = source?.narrativeQuality && typeof source.narrativeQuality === "object" && !Array.isArray(source.narrativeQuality)
-    ? source.narrativeQuality as { score: number; improvements?: string[] }
-    : null;
   const deckQuality = source?.deckQuality && typeof source.deckQuality === "object" && !Array.isArray(source.deckQuality)
     ? source.deckQuality as { score: number; improvements?: string[] }
     : null;
@@ -1041,34 +1024,11 @@ export default function StageView({
 
         {/* Moved actions — gate decisions + artifact / nav jumps */}
         <div className="v3-phase-head-actions">
-          <div className="v3-phase-head-actions-grp">
-            <StatusBadge
-              variant={gateReviewStatus === "approved" ? "approved" : gateReviewStatus === "remediation-requested" ? "remediation" : "pending"}
-              label={gateReviewStatus ? gateReviewStatus.replace(/-/g, " ") : "gate pending"}
-            />
-            {gateReviewStatus === "pending-review" || gateReviewStatus === "ready" ? (
-              <button
-                type="button"
-                className="v3-button primary v3-button-inline-sm"
-                disabled={!readiness?.canApproveGate}
-                title={!readiness?.canApproveGate ? `Gate readiness ${readiness?.score ?? 0}% — ${readiness?.threshold ?? 70}% required` : undefined}
-                aria-label={`Approve gate for ${activePhase?.label ?? activePhase.id}`}
-                onClick={async () => { try { await onApproveGate(activePhase.id); } catch { /* handled by AppShellV3 */ } }}
-              >
-                Approve & Unlock ✓
-              </button>
-            ) : null}
-            {gateReviewStatus === "pending-review" || gateReviewStatus === "ready" ? (
-              <button type="button" className="v3-button ghost v3-button-inline-sm" onClick={() => setRemediationOpen(true)}>Flag Issues</button>
-            ) : null}
-            {gateReviewStatus === "approved" ? (
+          {gateReviewStatus === "approved" ? (
+            <div className="v3-phase-head-actions-grp">
               <button type="button" className="v3-button ghost v3-button-inline-xs" onClick={() => onReopenGate(activePhase.id)}>Reopen Gate</button>
-            ) : null}
-          </div>
-          <div className="v3-phase-head-actions-grp">
-            <button type="button" className="v3-button ghost v3-button-inline-sm" onClick={() => { setExpandedOutput("narrative"); document.getElementById("phase-artifacts-anchor")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Narrative</button>
-            <button type="button" className="v3-button ghost v3-button-inline-sm" onClick={() => { setExpandedOutput("deck"); document.getElementById("phase-artifacts-anchor")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Status deck</button>
-          </div>
+            </div>
+          ) : null}
           {phaseAgentActions.length ? (
             <div className="v3-phase-head-actions-grp">
               {phaseAgentActions.map((action) => (
@@ -1080,89 +1040,7 @@ export default function StageView({
           ) : null}
         </div>
 
-        {remediationOpen ? (
-          <div className="v3-remediation-panel">
-            <textarea
-              className="v3-input v3-textarea"
-              aria-label="Gate remediation note"
-              rows={2}
-              value={remediationNote}
-              onChange={(event) => setRemediationNote(event.target.value)}
-              placeholder="Explain what must be fixed before this gate can be approved…"
-            />
-            <div className="v3-inline-actions">
-              <button type="button" className="v3-button ghost v3-button-inline-xs" onClick={() => setRemediationOpen(false)}>Cancel</button>
-              <button
-                type="button"
-                className="v3-button primary v3-button-inline-xs"
-                disabled={!remediationNote.trim()}
-                onClick={async () => {
-                  try {
-                    await onRequestRemediation(activePhase.id, remediationNote.trim());
-                    setRemediationOpen(false);
-                    setRemediationNote("");
-                  } catch { /* handled by AppShellV3 */ }
-                }}
-              >
-                Save remediation request
-              </button>
-            </div>
-          </div>
-        ) : null}
-
       </header>
-      {/* Priority 10 — "Where am I / What's next" guidance strip */}
-      {readiness && !readiness.canApproveGate && readiness.recommendedActions.length > 0 && !activeRun && (
-        <div style={{
-          margin: "0 0 8px",
-          padding: "8px 16px",
-          background: "var(--v3-surface)",
-          borderBottom: "1px solid var(--v3-border-soft)",
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          fontSize: 12,
-        }}>
-          <span style={{ color: "var(--v3-text-muted)", flexShrink: 0 }}>Next:</span>
-          <span style={{ color: "var(--v3-text-primary)", fontWeight: 500, flex: 1 }}>
-            {readiness.recommendedActions[0].label}
-          </span>
-          {readiness.recommendedActions[0].estimatedImpact > 0 && (
-            <span style={{ color: "var(--v3-green)", fontWeight: 600, flexShrink: 0 }}>
-              +{readiness.recommendedActions[0].estimatedImpact} pts
-            </span>
-          )}
-          {readiness.recommendedActions[0].agentId && (
-            <button
-              type="button"
-              style={{ fontSize: 11, padding: "3px 10px", borderRadius: 5, background: "var(--v3-accent)", color: "#fff", border: "none", cursor: "pointer", flexShrink: 0 }}
-              onClick={() => onRunAgent(readiness.recommendedActions[0].agentId!)}
-            >
-              Analyse now →
-            </button>
-          )}
-          {!readiness.recommendedActions[0].agentId && readiness.recommendedActions[0].workspaceId && (
-            <button
-              type="button"
-              style={{ fontSize: 11, padding: "3px 10px", borderRadius: 5, background: "var(--v3-surface-2)", color: "var(--v3-text-primary)", border: "1px solid var(--v3-border)", cursor: "pointer", flexShrink: 0 }}
-              onClick={() => onOpenMoreView?.(readiness.recommendedActions[0].workspaceId!)}
-            >
-              Open →
-            </button>
-          )}
-          <span style={{
-            fontSize: 10,
-            padding: "2px 7px",
-            borderRadius: 10,
-            background: readiness.recommendedActions[0].priority === "critical" ? "rgba(239,68,68,0.12)" : "rgba(245,158,11,0.12)",
-            color: readiness.recommendedActions[0].priority === "critical" ? "var(--v3-red, #ef4444)" : "var(--v3-amber)",
-            fontWeight: 600,
-            flexShrink: 0,
-          }}>
-            {readiness.recommendedActions[0].priority}
-          </span>
-        </div>
-      )}
 
       {/* Executive summary — generated on demand, never auto-run, so it stays stable */}
       <div style={{
@@ -1190,6 +1068,13 @@ export default function StageView({
                 {summaryExpanded ? "Collapse" : "Expand"}
               </button>
             ) : null}
+            <button
+              type="button"
+              className="v3-button ghost v3-button-inline-xs"
+              onClick={() => { setExpandedOutput("deck"); document.getElementById("phase-artifacts-anchor")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+            >
+              Status deck
+            </button>
             <button
               type="button"
               className="v3-button ghost v3-button-inline-xs"
@@ -1513,20 +1398,6 @@ export default function StageView({
           )
         ) : null}
         <div className="v3-output-strip">
-          {/* Narrative — phase synthesis, with inline preview */}
-          <button
-            type="button"
-            data-io-anchor="artifact:narrative"
-            className={`v3-chip ${artifactPreviews?.narrative ? (narrativeQuality ? (narrativeQuality.score >= 80 ? "green" : narrativeQuality.score >= 60 ? "blue" : "amber") : "blue") : "muted"} ${expandedOutput === "narrative" ? "is-active" : ""}`}
-            onClick={() => { if (artifactPreviews?.narrative) toggleOutput("narrative"); else onRunAgent("narrative"); }}
-            aria-expanded={artifactPreviews?.narrative ? expandedOutput === "narrative" : undefined}
-          >
-            <span>Narrative{narrativeQuality ? ` ${narrativeQuality.score}%` : ""}</span>
-            {artifactPreviews?.narrative
-              ? <span className="v3-output-toggle-glyph">{expandedOutput === "narrative" ? "▴" : "▾"}</span>
-              : <span className="v3-artifact-row-status muted">Generate</span>}
-          </button>
-
           {showRetro ? (
             <button type="button" className="v3-chip muted" disabled={isRetroRunning} onClick={() => triggers.triggerRetro(activePhase.id)}>
               {isRetroRunning ? "Preparing…" : "Retrospective"}
@@ -1655,65 +1526,6 @@ export default function StageView({
               : activePhase?.id === "build"
               ? "Generate milestone tracking for delivery progress"
               : "Generate your first artifact for this phase to get started"}
-          </div>
-        ) : null}
-        {expandedOutput === "narrative" && artifactPreviews?.narrative ? (
-          <div className="v3-output-preview">
-            {updatedArtifactId === "narrative" ? (
-              <div className="v3-artifact-update-banner">
-                <div>
-                  <div className="v3-artifact-update-banner-title">This artifact was updated</div>
-                  <div className="v3-artifact-update-banner-copy">Review the refreshed narrative before sharing or editing it.</div>
-                </div>
-                <button type="button" className="v3-button ghost v3-button-inline-xs" onClick={() => setUpdatedArtifactId(null)}>
-                  Dismiss
-                </button>
-              </div>
-            ) : null}
-            {editingArtifact === "narrative" ? (
-              <ArtifactEditor
-                label="Narrative"
-                content={artifactPreviews.narrative}
-                generatedAt={generatedAt}
-                onSave={(content) => onSaveArtifact("narrative", content)}
-                onClose={() => setEditingArtifact(null)}
-              />
-            ) : (
-              <>
-                <div className="v3-output-preview-head">
-                  <div>
-                    <div className="v3-output-preview-label">Narrative</div>
-                    {ARTIFACT_DESCRIPTIONS["narrative"] && (
-                      <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 2 }}>
-                        {ARTIFACT_DESCRIPTIONS["narrative"]}
-                      </div>
-                    )}
-                  </div>
-                  {narrativeQuality ? (
-                    <span className={`v3-chip ${narrativeQuality.score >= 80 ? "green" : narrativeQuality.score >= 60 ? "blue" : "amber"}`}>
-                      Quality {narrativeQuality.score}%
-                    </span>
-                  ) : null}
-                </div>
-                <AnimatedArtifactContent content={artifactPreviews.narrative} />
-                {narrativeQuality?.improvements?.length ? (
-                  <div className="v3-output-improvements">
-                    <div className="v3-output-improvements-label">Suggested improvements</div>
-                    {narrativeQuality.improvements.map((item, index) => (
-                      <div key={`${item}-${index}`} className="v3-output-improvements-item">· {item}</div>
-                    ))}
-                  </div>
-                ) : null}
-                <div className="v3-output-actions">
-                  <button type="button" className="v3-button ghost v3-button-inline-xs" onClick={() => setEditingArtifact("narrative")}>
-                    ✎ Edit
-                  </button>
-                  <button type="button" className="v3-button ghost v3-button-inline-xs" onClick={() => onOpenReport("narrative")}>
-                    Open full →
-                  </button>
-                </div>
-              </>
-            )}
           </div>
         ) : null}
         {expandedOutput === "deck" && artifactPreviews?.deck ? (
