@@ -8,6 +8,25 @@ import type { V3MoreView } from "@/v3/types";
 import { ExecCommandPanel } from "@/v3/components/ExecCommandPanel";
 import { Kpi } from "@/v3/components/ui/Kpi";
 import { PhaseStripCard } from "@/v3/components/PhaseStripCard";
+import {
+  runDeterministicValidation,
+  summariseValidation,
+  type ValidationDomain,
+  type ValidationSeverity,
+} from "@/v3/lib/crossArtifactValidation";
+
+const VALIDATION_DOMAIN_LABEL: Record<ValidationDomain, string> = {
+  "risk-controls": "Risk & controls",
+  "stakeholder-readiness": "Stakeholder readiness",
+  "benefits-traceability": "Benefits traceability",
+  "delivery-readiness": "Delivery readiness",
+  governance: "Governance",
+  "scope-coverage": "Scope coverage",
+  "requirements-coverage": "Requirements coverage",
+  "architecture-consistency": "Architecture consistency",
+};
+
+const VALIDATION_SEVERITY_RANK: Record<ValidationSeverity, number> = { critical: 0, high: 1, medium: 2, low: 3 };
 
 interface InsightFeedViewProps {
   program: ProgramSummary | null;
@@ -494,6 +513,17 @@ export default function InsightFeedView({
     return forecastConfidence(history, target);
   }, [confidenceScore, program, activePhaseId]);
 
+  // ── Transformation integrity — deterministic, zero-token cross-artifact validation ──
+  const integrity = useMemo(() => {
+    if (!program) return null;
+    const findings = runDeterministicValidation(program);
+    if (findings.length === 0) return null;
+    const ordered = [...findings].sort(
+      (a, b) => VALIDATION_SEVERITY_RANK[a.severity] - VALIDATION_SEVERITY_RANK[b.severity],
+    );
+    return { summary: summariseValidation(findings), top: ordered.slice(0, 4) };
+  }, [program]);
+
   if (!program) {
     return (
       <div style={{ maxWidth: 860, margin: "0 auto", padding: "32px 24px 64px", fontFamily: "var(--v3-font)" }}>
@@ -951,6 +981,63 @@ export default function InsightFeedView({
           </div>
         );
       })()}
+
+      {/* ── 7. Transformation Integrity — cross-artifact validation gaps ──────── */}
+      {integrity && (
+        <div
+          style={{
+            padding: 18,
+            borderRadius: "var(--v3-radius)",
+            border: "1px solid var(--v3-border-soft)",
+            background: "var(--v3-surface)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "var(--v3-text-primary)" }}>
+                ◇ Transformation Integrity
+              </div>
+              <div style={{ fontSize: 12, color: "var(--v3-text-muted)", marginTop: 2 }}>
+                {integrity.summary.total} traceability gap{integrity.summary.total !== 1 ? "s" : ""} across artifacts · {integrity.summary.recommendation}
+              </div>
+            </div>
+            <span className={`v3-chip ${integrity.summary.coverageScore >= 85 ? "green" : integrity.summary.coverageScore >= 60 ? "amber" : "red"}`} style={{ flex: "0 0 auto" }}>
+              {integrity.summary.coverageScore}%
+            </span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {integrity.top.map((finding) => {
+              const severityColor = finding.severity === "critical" || finding.severity === "high"
+                ? "var(--v3-red)"
+                : finding.severity === "medium" ? "var(--v3-amber)" : "var(--v3-text-muted)";
+              return (
+                <div
+                  key={finding.findingId}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "8px 12px",
+                    borderRadius: 10,
+                    background: "var(--v3-surface-2)",
+                    border: "1px solid var(--v3-border-soft)",
+                  }}
+                >
+                  <span style={{ fontSize: 10, fontWeight: 700, color: severityColor, textTransform: "uppercase", letterSpacing: "0.05em", flexShrink: 0 }}>
+                    {finding.severity}
+                  </span>
+                  <span style={{ flex: 1, fontSize: 13, color: "var(--v3-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={finding.issue}>
+                    {finding.issue}
+                  </span>
+                  <span style={{ fontSize: 11, color: "var(--v3-text-muted)", flexShrink: 0 }}>
+                    {VALIDATION_DOMAIN_LABEL[finding.domain]}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── 8. Portfolio quick-link ───────────────────────────────────────────── */}
       {programs.length > 1 && (
