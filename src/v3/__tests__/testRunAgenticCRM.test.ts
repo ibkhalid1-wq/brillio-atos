@@ -22,10 +22,11 @@ import { derivePhaseBlockers } from "@/v3/lib/phaseBlockers";
  *                  and cannot pass its gate; resolving the recommended action flips
  *                  the gate to approvable (action → gate coupling).
  *
- * Storage note: the gate's critical-assumption check reads raw `data.raidEntries`
- * (entries carry `criticality`/`validatedAt`), whereas risk/blocker surfacing reads
- * the normalized `program.raidEntries` derived from `data.raidLog.entries`. Both
- * keys are populated deliberately below.
+ * Storage note: assumptions are stored exactly where the app writes them —
+ * `data.raidLog.entries`, with a `severity` and (once validated) a `validatedAt`
+ * field. The gate's critical-assumption check reads the same normalized
+ * `program.raidEntries` that risk/blocker surfacing uses, so the test exercises the
+ * real production storage path rather than a parallel key.
  */
 
 const PHASES = ATOS_STANDARD.phases.map((p) => p.id);
@@ -67,10 +68,9 @@ interface CrmOpts {
   gateStatuses?: Record<string, "ready" | "approved">;
   /** Phases left empty (no inputs/artifacts/gate) — used to simulate an unstarted phase. */
   skipProvision?: string[];
-  /** data.raidLog.entries — feeds normalized risks/dependencies → derivePhaseBlockers. */
+  /** data.raidLog.entries — the canonical store for all RAID entries (risks,
+   *  dependencies and assumptions), feeding normalized program.raidEntries. */
   raidLog?: Array<Record<string, unknown>>;
-  /** data.raidEntries — raw assumptions read by computePhaseReadiness's gate check. */
-  raidEntries?: Array<Record<string, unknown>>;
   /** data.dependencyCheck — persisted cross-phase verdict, a hard gate condition. */
   dependencyCheck?: Record<string, unknown>;
 }
@@ -81,7 +81,7 @@ interface CrmOpts {
  * can be isolated as the one with an outstanding risk/blocker/action.
  */
 function buildCrm(opts: CrmOpts = {}) {
-  const { gateStatuses = {}, skipProvision = [], raidLog = [], raidEntries = [], dependencyCheck } = opts;
+  const { gateStatuses = {}, skipProvision = [], raidLog = [], dependencyCheck } = opts;
   const phaseInputs: Record<string, Record<string, string>> = {};
   const phaseArtifacts: Record<string, Record<string, unknown>> = {};
   const gateReviews: Record<string, unknown> = {};
@@ -104,7 +104,6 @@ function buildCrm(opts: CrmOpts = {}) {
       phaseArtifacts,
       gateReviews,
       raidLog: { entries: raidLog, generatedAt: new Date().toISOString() },
-      raidEntries,
       ...(dependencyCheck ? { dependencyCheck } : {}),
     },
   });
@@ -176,11 +175,21 @@ describe("Test Run — Agentic CRM: risks behave as expected", () => {
 });
 
 describe("Test Run — Agentic CRM: blockers hard-stop and then clear", () => {
+  // An assumption stored exactly as useRaidLog.addEntry writes it: in
+  // data.raidLog.entries, with a `severity` field and no `validatedAt` yet.
+  const assumption = (over: Record<string, unknown>) => ({
+    type: "assumption",
+    phase: "strategy",
+    status: "open",
+    severity: "critical",
+    description: "",
+    mitigation: null,
+    ...over,
+  });
+
   it("an unvalidated critical assumption blocks the gate and recommends a validate action", () => {
     const program = buildCrm({
-      raidEntries: [
-        { id: "asm", type: "assumption", criticality: "critical", validatedAt: null, title: "Sales team adopts agent suggestions", phase: "strategy", status: "open" },
-      ],
+      raidLog: [assumption({ id: "asm", title: "Sales team adopts agent suggestions" })],
     });
     const readiness = computePhaseReadiness(program, "strategy");
 
@@ -190,15 +199,29 @@ describe("Test Run — Agentic CRM: blockers hard-stop and then clear", () => {
   });
 
   it("validating that assumption unblocks the gate (action → gate coupling)", () => {
+    // validateAssumption stamps `validatedAt` (and flips status to monitoring) onto
+    // the same raidLog entry — the gate keys off the persisted validatedAt flag.
     const validated = buildCrm({
-      raidEntries: [
-        { id: "asm", type: "assumption", criticality: "critical", validatedAt: "2026-06-16T00:00:00.000Z", title: "Sales team adopts agent suggestions", phase: "strategy", status: "open" },
+      raidLog: [
+        assumption({
+          id: "asm",
+          title: "Sales team adopts agent suggestions",
+          status: "monitoring",
+          validatedAt: "2026-06-16T00:00:00.000Z",
+        }),
       ],
     });
     const readiness = computePhaseReadiness(validated, "strategy");
 
     expect(readiness.canApproveGate).toBe(true);
     expect(readiness.missing.some((m) => m.includes("critical assumption"))).toBe(false);
+  });
+
+  it("a non-critical (high) assumption does not hard-stop the gate", () => {
+    const program = buildCrm({
+      raidLog: [assumption({ id: "asm", title: "Data quality is adequate", severity: "high" })],
+    });
+    expect(computePhaseReadiness(program, "strategy").canApproveGate).toBe(true);
   });
 
   it("a blocking cross-phase dependency check hard-stops the gate; clearing it restores approval", () => {

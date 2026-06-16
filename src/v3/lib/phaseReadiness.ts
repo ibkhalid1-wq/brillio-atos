@@ -256,10 +256,14 @@ export function computePhaseReadiness(
   }
 
   // ── Unvalidated critical assumptions ─────────────────────────────────────────
-  const unvalidatedCriticalAssumptions = Array.isArray(source?.raidEntries)
-    ? (source.raidEntries as Array<{ type: string; criticality?: string; validatedAt?: string | null }>)
-        .filter((entry) => entry.type === "assumption" && entry.criticality === "critical" && !entry.validatedAt)
-    : [];
+  // Read the canonical normalized RAID entries (derived from data.raidLog.entries —
+  // where useRaidLog actually writes), keyed on the persisted `severity` and the
+  // `validatedAt` flag set by validateAssumption. The old read of raw
+  // `data.raidEntries` / `criticality` never matched real data, so this gate never
+  // fired in production.
+  const unvalidatedCriticalAssumptions = (program.raidEntries ?? []).filter(
+    (entry) => entry.type === "assumption" && entry.severity === "critical" && !entry.validatedAt,
+  );
 
   if (unvalidatedCriticalAssumptions.length) {
     missing.push(`${unvalidatedCriticalAssumptions.length} critical assumption(s) not yet validated`);

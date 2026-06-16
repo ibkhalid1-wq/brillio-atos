@@ -385,6 +385,7 @@ function deriveRAIDEntries(data: JsonRecord): RAIDEntry[] {
           : "open") as RAIDEntryStatus,
         source: sourceValue === "human" ? "human" : "agent",
         agentConfidence: Number.isFinite(agentConfidence) ? agentConfidence : undefined,
+        validatedAt: asString(entry.validatedAt) || null,
         createdAt: asString(entry.createdAt, new Date().toISOString()),
         closedAt: asString(entry.closedAt) || null,
         closedBy: closedByValue === "agent" || closedByValue === "human" ? closedByValue : null,

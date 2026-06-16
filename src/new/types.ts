@@ -105,6 +105,7 @@ export interface RAIDEntry {
   status: RAIDEntryStatus;
   source: RAIDEntrySource;
   agentConfidence?: number;
+  validatedAt?: string | null;
   createdAt: string;
   closedAt: string | null;
   closedBy: "agent" | "human" | null;
