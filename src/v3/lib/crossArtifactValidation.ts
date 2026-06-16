@@ -30,6 +30,7 @@ import type {
   PhaseSummary,
   BudgetTracking,
 } from "@/new/types";
+import { getProgramState } from "@/new/lib/programState";
 
 export type ValidationSeverity = "critical" | "high" | "medium" | "low";
 
@@ -559,3 +560,52 @@ export const VALIDATION_AGENTS: ValidationAgentSpec[] = [
     gates: ["strategy", "operate", "valuerealize"],
   },
 ];
+
+const VALID_DOMAINS = new Set<ValidationDomain>([
+  "risk-controls",
+  "stakeholder-readiness",
+  "benefits-traceability",
+  "delivery-readiness",
+  "governance",
+  "scope-coverage",
+  "requirements-coverage",
+  "architecture-consistency",
+]);
+const VALID_SEVERITIES = new Set<ValidationSeverity>(["critical", "high", "medium", "low"]);
+
+/**
+ * Read the model-backed validation findings the cross-artifact-validator agent
+ * persisted into program data at the last gate review. These complement the
+ * deterministic findings with semantic traceability gaps; both share the
+ * ValidationFinding shape so callers can merge them freely.
+ */
+export function selectModelValidationFindings(
+  program: { rawData?: Record<string, unknown> } | null,
+): ValidationFinding[] {
+  if (!program?.rawData) return [];
+  const { inner } = getProgramState(program.rawData);
+  const block = inner.crossArtifactValidation;
+  if (typeof block !== "object" || block === null) return [];
+  const raw = (block as Record<string, unknown>).findings;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((f): f is Record<string, unknown> => typeof f === "object" && f !== null)
+    .map((f) => {
+      const domain = f.domain as ValidationDomain;
+      const severity = f.severity as ValidationSeverity;
+      return {
+        findingId: typeof f.findingId === "string" ? f.findingId : crypto.randomUUID(),
+        severity: VALID_SEVERITIES.has(severity) ? severity : "medium",
+        domain: VALID_DOMAINS.has(domain) ? domain : "delivery-readiness",
+        phaseId: typeof f.phaseId === "string" ? f.phaseId : undefined,
+        sourceArtifact: typeof f.sourceArtifact === "string" ? f.sourceArtifact : "",
+        targetArtifact: typeof f.targetArtifact === "string" ? f.targetArtifact : "",
+        sourceItem: typeof f.sourceItem === "string" ? f.sourceItem : "",
+        issue: typeof f.issue === "string" ? f.issue : "",
+        recommendation: typeof f.recommendation === "string" ? f.recommendation : "",
+        confidence: typeof f.confidence === "number" ? f.confidence : 0.6,
+        evidence: Array.isArray(f.evidence) ? f.evidence.filter((e): e is string => typeof e === "string") : [],
+      } satisfies ValidationFinding;
+    })
+    .filter((f) => f.issue.length > 0);
+}

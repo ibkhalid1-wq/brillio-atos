@@ -19,7 +19,7 @@ import type { V3MoreView } from "@/v3/types";
 import { explainPhaseReadiness } from "@/v3/lib/readinessModel";
 import type { ReadinessFactorKind } from "@/v3/lib/readinessModel";
 import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
-import { runDeterministicValidation, selectFindingsForPhase } from "@/v3/lib/crossArtifactValidation";
+import { runDeterministicValidation, selectFindingsForPhase, selectModelValidationFindings } from "@/v3/lib/crossArtifactValidation";
 import { isDecisionOpen } from "@/v3/utils";
 
 export type BlockerCategory =
@@ -164,9 +164,14 @@ export function derivePhaseBlockers(
     });
   }
 
-  // 6) Cross-artifact traceability gaps (deterministic, zero-token validation).
+  // 6) Cross-artifact traceability gaps — deterministic (zero-token) plus any
+  //    model-backed findings the validator persisted at the last gate review.
   //    Exclude risk-controls — risks/dependencies are already covered above.
-  const validationFindings = selectFindingsForPhase(runDeterministicValidation(program), phaseId, {
+  const allValidationFindings = [
+    ...runDeterministicValidation(program),
+    ...selectModelValidationFindings(program),
+  ];
+  const validationFindings = selectFindingsForPhase(allValidationFindings, phaseId, {
     excludeDomains: ["risk-controls"],
   });
   for (const finding of validationFindings) {

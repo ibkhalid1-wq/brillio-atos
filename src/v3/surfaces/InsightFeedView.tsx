@@ -10,6 +10,7 @@ import { Kpi } from "@/v3/components/ui/Kpi";
 import { PhaseStripCard } from "@/v3/components/PhaseStripCard";
 import {
   runDeterministicValidation,
+  selectModelValidationFindings,
   summariseValidation,
   type ValidationDomain,
   type ValidationSeverity,
@@ -513,10 +514,11 @@ export default function InsightFeedView({
     return forecastConfidence(history, target);
   }, [confidenceScore, program, activePhaseId]);
 
-  // ── Transformation integrity — deterministic, zero-token cross-artifact validation ──
+  // ── Transformation integrity — deterministic (zero-token) cross-artifact
+  //    validation, merged with any model findings persisted at gate review ──
   const integrity = useMemo(() => {
     if (!program) return null;
-    const findings = runDeterministicValidation(program);
+    const findings = [...runDeterministicValidation(program), ...selectModelValidationFindings(program)];
     if (findings.length === 0) return null;
     const ordered = [...findings].sort(
       (a, b) => VALIDATION_SEVERITY_RANK[a.severity] - VALIDATION_SEVERITY_RANK[b.severity],
