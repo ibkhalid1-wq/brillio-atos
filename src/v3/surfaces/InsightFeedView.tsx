@@ -422,27 +422,6 @@ export default function InsightFeedView({
     return cards.slice(0, 3).map((c, i) => ({ ...c, priority: (i + 1) as 1 | 2 | 3 }));
   }, [program, activePhaseId, gateThreshold, confidenceResult, openDecisionCount, onNavigateToDecide, onNavigateToGates, onNavigateToPhase, onRunAgent]);
 
-  // Route the confidence "Top Action" to the surface that actually owns the
-  // weakest signal, rather than always sending the user to Risks.
-  const topActionHandler = useMemo<(() => void) | null>(() => {
-    const category = confidenceResult?.topRecommendationCategory;
-    if (!category) return null;
-    switch (category) {
-      case "gate":
-        return onNavigateToGates;
-      case "decision":
-        return onNavigateToDecide;
-      case "risk":
-        return onOpenMoreView ? () => onOpenMoreView("risks") : null;
-      case "milestone":
-        return onOpenMoreView ? () => onOpenMoreView("milestones") : null;
-      case "input":
-        return activePhaseId ? () => onOpenPhase(activePhaseId) : onNavigateToPipeline;
-      default:
-        return null;
-    }
-  }, [confidenceResult?.topRecommendationCategory, activePhaseId, onNavigateToGates, onNavigateToDecide, onOpenMoreView, onOpenPhase, onNavigateToPipeline]);
-
   // ── Metrics ──────────────────────────────────────────────────────────────
   const phases = program?.phases ?? [];
   const avgPct =
@@ -834,43 +813,10 @@ export default function InsightFeedView({
               );
             })}
           </div>
-
-          {confidenceResult.topRecommendation && (
-            <div style={{
-              marginTop: 14,
-              padding: "10px 14px",
-              background: "rgba(99,102,241,0.07)",
-              borderRadius: 8,
-              borderLeft: "3px solid var(--v3-accent)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 12,
-            }}>
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--v3-accent)", textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 2 }}>
-                  Top Action
-                </div>
-                <div style={{ fontSize: 13, color: "var(--v3-text-primary)" }}>
-                  {confidenceResult.topRecommendation}
-                </div>
-              </div>
-              {topActionHandler && (
-                <button
-                  type="button"
-                  className="v3-button primary sm"
-                  onClick={topActionHandler}
-                  style={{ flexShrink: 0 }}
-                >
-                  Open →
-                </button>
-              )}
-            </div>
-          )}
         </div>
       )}
 
-      {/* ── 1c. Confidence Trajectory — compact one-line trend (full chart retired) ── */}
+      {/* ── 1d. Confidence Trajectory — compact one-line trend (full chart retired) ── */}
       {!isFresh && confidenceForecast && confidenceScore !== null && (
         <div style={{
           display: "flex",
