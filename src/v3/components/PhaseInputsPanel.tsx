@@ -505,6 +505,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
                   <textarea
                     className="v3-input v3-textarea"
                     rows={2}
+                    aria-label={field.label}
                     placeholder={field.placeholder}
                     value={values[field.id] ?? ""}
                     onChange={(event) => setValues((current) => ({ ...current, [field.id]: event.target.value }))}
@@ -512,6 +513,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
                 ) : field.type === "select" ? (
                   <select
                     className="v3-input"
+                    aria-label={field.label}
                     value={values[field.id] ?? ""}
                     onChange={(event) => setValues((current) => ({ ...current, [field.id]: event.target.value }))}
                   >
@@ -528,6 +530,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
                       type="text"
                       className="v3-input"
                       style={{ flex: 2 }}
+                      aria-label={field.label}
                       placeholder={field.placeholder}
                       value={values[field.id] ?? ""}
                       onChange={(event) => setValues((current) => ({ ...current, [field.id]: event.target.value }))}
@@ -536,6 +539,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
                       type="text"
                       className="v3-input"
                       style={{ width: 80 }}
+                      aria-label={`${field.label} baseline`}
                       placeholder="Baseline"
                       value={values.successMetricBaseline ?? ""}
                       onChange={(event) => setValues((current) => ({ ...current, successMetricBaseline: event.target.value }))}
@@ -544,6 +548,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
                       type="text"
                       className="v3-input"
                       style={{ width: 80 }}
+                      aria-label={`${field.label} target`}
                       placeholder="Target"
                       value={values.successMetricTarget ?? ""}
                       onChange={(event) => setValues((current) => ({ ...current, successMetricTarget: event.target.value }))}
@@ -552,6 +557,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
                       type="text"
                       className="v3-input"
                       style={{ width: 64 }}
+                      aria-label={`${field.label} unit`}
                       placeholder="Unit"
                       value={values.successMetricUnit ?? ""}
                       onChange={(event) => setValues((current) => ({ ...current, successMetricUnit: event.target.value }))}
@@ -564,6 +570,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
                   <input
                     type={field.type}
                     className="v3-input"
+                    aria-label={field.label}
                     placeholder={field.placeholder}
                     value={values[field.id] ?? ""}
                     onChange={(event) => setValues((current) => ({ ...current, [field.id]: event.target.value }))}
