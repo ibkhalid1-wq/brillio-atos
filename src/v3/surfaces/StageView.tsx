@@ -22,6 +22,7 @@ import { computePhaseReadiness } from "@/v3/lib/phaseReadiness";
 import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
 import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
 import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
+import { runPreFlight } from "@/v3/lib/phaseInputPreFlight";
 import type { V3Mode, V3MoreView, V3ReportId } from "@/v3/types";
 
 interface StageViewProps {
@@ -439,7 +440,7 @@ export default function StageView({
   // id (e.g. Mobilise → governance-model, raci-matrix), with live state/quality
   // plus the phase's present/required completeness counts.
   const phaseArtifacts = useMemo(() => {
-    const byKey = new Map<string, { present: boolean; quality: number | null; state: string }>();
+    const byKey = new Map<string, { present: boolean; quality: number | null; state: string; artifactId: string | null }>();
     if (!activePhase) return { byKey, present: 0, required: 0 };
     const summary = buildPhaseArtifacts(program, activePhase.id);
     // Narrative leads as its own inline preview, so it is excluded from the
@@ -449,7 +450,7 @@ export default function StageView({
     let present = 0;
     for (const node of summary?.artifacts ?? []) {
       if (!node.required || node.key === "narrative") continue;
-      byKey.set(node.key, { present: node.present, quality: node.quality, state: node.state });
+      byKey.set(node.key, { present: node.present, quality: node.quality, state: node.state, artifactId: node.artifactId });
       required += 1;
       if (node.present) present += 1;
     }
@@ -473,6 +474,27 @@ export default function StageView({
       ? program.rawData.data as Record<string, unknown>
       : program.rawData as Record<string, unknown>)
     : null;
+  // Full content for each produced artifact in the active phase, keyed by its
+  // underlying artifact id (rawData.phaseArtifacts[phaseId][artifactId].content).
+  // Powers the inline preview on every artifact row — the truncated 180-char
+  // contentSummary on ArtifactSummary is too short to read, so we read the raw body.
+  const phaseArtifactContentById = useMemo(() => {
+    const map = new Map<string, string>();
+    if (!source || !activePhase) return map;
+    const bucket = source.phaseArtifacts && typeof source.phaseArtifacts === "object" && !Array.isArray(source.phaseArtifacts)
+      ? (source.phaseArtifacts as Record<string, unknown>)[activePhase.id]
+      : null;
+    if (!bucket || typeof bucket !== "object") return map;
+    for (const [artifactId, value] of Object.entries(bucket as Record<string, unknown>)) {
+      const entry = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+      if (!entry) continue;
+      const content = typeof entry.content === "string" && entry.content.trim()
+        ? entry.content
+        : typeof entry.contentSummary === "string" ? entry.contentSummary : "";
+      if (content.trim()) map.set(artifactId, content);
+    }
+    return map;
+  }, [source, activePhase]);
   const gateReviewStatus = getRawGateStatus(program, activePhase?.id) || gateReview?.status || null;
   const stageDecisions = (program?.decisionQueue || [])
     .filter((decision) => !decision.status || decision.status === "open")
@@ -646,6 +668,14 @@ export default function StageView({
     ? (source.phaseInputs as Record<string, unknown>)[activePhase?.id ?? ""]
     : null;
   const hasPhaseInputs = !!(phaseInputs && typeof phaseInputs === "object" && Object.keys(phaseInputs as Record<string, unknown>).some((key) => key !== "savedAt"));
+  // Pre-flight input gating: the captured inputs for this phase, normalised for
+  // runPreFlight so each artifact row can warn (before a ~90s run that would burn
+  // provider quota) when the producing agent's required inputs are missing.
+  const preFlightInputs = useMemo<Record<string, unknown>>(() => (
+    phaseInputs && typeof phaseInputs === "object" && !Array.isArray(phaseInputs)
+      ? phaseInputs as Record<string, unknown>
+      : {}
+  ), [phaseInputs]);
   const hasGateReview = !!gateReview;
   const gateApproved = gateReviewStatus === "approved";
   const confirmedCriteria =
@@ -1544,6 +1574,11 @@ export default function StageView({
                 : required
                   ? `Required for this phase, not yet generated. ${def.description}`
                   : `Optional. ${def.description}`;
+              const artifactId = node?.artifactId ?? null;
+              const previewContent = artifactId ? phaseArtifactContentById.get(artifactId) ?? null : null;
+              const isExpanded = expandedOutput === def.id;
+              const preflight = runPreFlight(def.id, preFlightInputs);
+              const inputsIncomplete = !preflight.pass;
               return (
                 <div key={def.id} className="v3-artifact-row" data-io-anchor={`artifact:${def.id}`}>
                   <div className="v3-artifact-row-head">
@@ -1553,15 +1588,60 @@ export default function StageView({
                     </span>
                   </div>
                   <p className="v3-artifact-row-desc">{summary}</p>
+                  {inputsIncomplete ? (
+                    <div className="v3-artifact-preflight">
+                      <span className="v3-chip amber v3-chip-tight">Needs: {preflight.missingFields.join(" · ")}</span>
+                      <button
+                        type="button"
+                        className="v3-button ghost v3-button-inline-xs"
+                        onClick={() => document.getElementById("phase-inputs-anchor")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                      >
+                        Add inputs →
+                      </button>
+                    </div>
+                  ) : null}
+                  <div className="v3-artifact-row-actions">
+                  {present && previewContent ? (
+                    <button
+                      type="button"
+                      className="v3-button ghost v3-button-inline-xs"
+                      onClick={() => toggleOutput(def.id)}
+                      aria-expanded={isExpanded}
+                      title={isExpanded ? `Hide ${def.label}` : `Preview ${def.label}`}
+                    >
+                      {isExpanded ? "▴ Hide" : "▾ Preview"}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className="v3-button ghost v3-button-inline-xs v3-artifact-regen"
                     onClick={() => onRunAgent(def.id)}
                     disabled={agentButtonDisabled(def.id)}
-                    title={present ? `Regenerate ${def.label}` : `Generate ${def.label}`}
+                    title={inputsIncomplete
+                      ? `${present ? "Regenerate" : "Generate"} ${def.label} — missing inputs may limit quality: ${preflight.missingFields.join(", ")}`
+                      : present ? `Regenerate ${def.label}` : `Generate ${def.label}`}
                   >
                     {agentButtonContent(def.id, present ? "↻ Regenerate" : "Generate")}
                   </button>
+                  </div>
+                  {isExpanded && previewContent ? (
+                    <div className="v3-output-preview" style={{ marginTop: 8 }}>
+                      <div className="v3-output-preview-head">
+                        <div>
+                          <div className="v3-output-preview-label">{def.label}</div>
+                          {def.description ? (
+                            <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 2 }}>
+                              {def.description}
+                            </div>
+                          ) : null}
+                        </div>
+                        {score != null ? (
+                          <span className={`v3-chip ${statusTone}`}>Quality {score}%</span>
+                        ) : null}
+                      </div>
+                      <AnimatedArtifactContent content={previewContent} />
+                    </div>
+                  ) : null}
                 </div>
               );
             })}
