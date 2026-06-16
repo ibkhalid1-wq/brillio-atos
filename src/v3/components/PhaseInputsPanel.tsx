@@ -76,9 +76,9 @@ export function assessField(value: string | undefined, type: string): { label: s
     const words = v.split(/\s+/).filter(Boolean).length;
     if (words < 8) return { label: "Brief", tone: "amber" };
     if (words < 20) return { label: "Fair", tone: "amber" };
-    return { label: "Good", tone: "green" };
+    return { label: "Complete", tone: "green" };
   }
-  return { label: "Filled", tone: "green" };
+  return { label: "Complete", tone: "green" };
 }
 
 /** Human-readable "last updated" for the phase inputs, from the persisted savedAt. */
@@ -406,9 +406,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
                       <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 2 }}>{field.hint}</div>
                     ) : null}
                   </div>
-                  {verdict.tone === "green" ? null : (
-                    <span className={`v3-chip ${verdict.tone}`} style={{ fontSize: 10, flexShrink: 0 }}>{verdict.label}</span>
-                  )}
+                  <span className={`v3-chip ${verdict.tone}`} style={{ fontSize: 10, flexShrink: 0 }}>{verdict.label}</span>
                 </div>
                 {field.type === "textarea" ? (
                   <textarea
