@@ -34,6 +34,7 @@ export function PhaseRail({
                 type="button"
                 onClick={() => !isLocked && onPhaseClick(phase.id)}
                 disabled={isLocked}
+                title={isLocked ? `${phaseName(phase)} unlocks once the preceding gate is approved` : undefined}
                 aria-current={isActive ? "page" : undefined}
                 aria-label={`${phaseName(phase)} phase${isActive ? ", active" : ""}${isDone ? ", completed" : ""}${isLocked ? ", locked" : ""}`}
                 className={[
