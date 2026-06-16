@@ -2584,7 +2584,6 @@ export default function AppShellV3() {
                 onSaveStageNote={handleSaveStageNote}
                 onApproveGate={handleApproveGate}
                 onReopenGate={handleReopenGate}
-                onGenerateCriteria={() => void runProgramAgent({ agentId: "exit-criteria-generator", phaseId: activePhaseId || "program", triggeredBy: "user" })}
                 onRequestRemediation={requestRemediation}
                 onRunAgent={handleRunAgent}
                 onSaveArtifact={handleSaveArtifact}

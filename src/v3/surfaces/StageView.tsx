@@ -50,7 +50,6 @@ interface StageViewProps {
   onSaveStageNote: (phaseId: string, note: string) => Promise<void>;
   onApproveGate: (phaseId: string) => Promise<void>;
   onReopenGate: (phaseId: string) => void;
-  onGenerateCriteria: () => void;
   onRequestRemediation: (phaseId: string, note: string) => Promise<void>;
   onRunAgent: (agentId: string) => void;
   onSaveArtifact: (artifactId: "narrative" | "deck", content: string) => Promise<void>;
@@ -145,12 +144,10 @@ function ActionList({ actions, onOpenReport }: { actions: PlanAction[]; onOpenRe
 function ExitCriteriaCard({
   criteria,
   generatedCriteria,
-  onGenerateCriteria,
   gateApproved = false,
 }: {
   criteria: ExitCriterion[];
   generatedCriteria: Array<{ criterion: string; category: string; owner: string; mandatory: boolean }>;
-  onGenerateCriteria: () => void;
   gateApproved?: boolean;
 }) {
   const display = criteria.length
@@ -162,11 +159,7 @@ function ExitCriteriaCard({
     <div className="v3-card-sm">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
         <div className="v3-card-title v3-card-title--flush">Exit criteria</div>
-        {!display.length ? (
-          <button type="button" className="v3-button ghost v3-button-inline-xs" onClick={onGenerateCriteria}>
-            Generate →
-          </button>
-        ) : mandatoryUnmet.length > 0 ? (
+        {!display.length ? null : mandatoryUnmet.length > 0 ? (
           <span className="v3-chip red v3-chip-tight">
             {mandatoryUnmet.length} mandatory unmet
           </span>
@@ -213,9 +206,8 @@ function ExitCriteriaCard({
         <EmptyState
           icon="✓"
           title="No exit criteria yet"
-          description="Generate the draft criteria for this phase, then review and confirm what must be true before approval."
+          description="ATOS drafts exit criteria automatically as this phase's artifacts are generated. Review and confirm them here once they appear."
           compact
-          action={{ label: "Generate criteria", onClick: onGenerateCriteria }}
         />
       )}
     </div>
@@ -444,7 +436,6 @@ export default function StageView({
   onSaveStageNote,
   onApproveGate,
   onReopenGate,
-  onGenerateCriteria,
   onRequestRemediation,
   onRunAgent,
   onSaveArtifact,
@@ -797,7 +788,7 @@ export default function StageView({
   };
   const phaseSteps = PHASE_ONBOARDING_STEPS[activePhase?.id ?? ""] ?? [
     { label: "Complete phase setup", why: "ATOS needs phase data to generate insights and readiness assessments." },
-    { label: "Check gate readiness", why: "Gate readiness check assesses what's complete and identifies gaps." },
+    { label: "Generate phase documents", why: "ATOS assesses gate readiness automatically once this phase's documents are generated." },
     { label: "Review and confirm exit criteria", why: "Exit criteria define what 'done' looks like for this phase." },
     { label: "Approve gate to unlock the next phase", why: "Gate approval signals the team is ready to proceed." },
   ];
@@ -945,14 +936,17 @@ export default function StageView({
             {gateReviewStatus === "pending-review" || gateReviewStatus === "ready" ? (
               <button type="button" className="v3-button ghost v3-button-inline-sm" onClick={() => setRemediationOpen(true)}>Flag Issues</button>
             ) : null}
-            <button
-              type="button"
-              className="v3-button ghost v3-button-inline-sm"
-              disabled={isGateRunning}
-              onClick={() => triggers.triggerGateReview(activePhase.id)}
-            >
-              {isGateRunning ? "Checking…" : gateReview ? "Re-check Gate Readiness" : "Check Gate Readiness"}
-            </button>
+            {gateReview ? (
+              <button
+                type="button"
+                className="v3-button ghost v3-button-inline-sm"
+                disabled={isGateRunning}
+                title="ATOS re-checks gate readiness automatically after each document is generated — use this only to force a manual refresh."
+                onClick={() => triggers.triggerGateReview(activePhase.id)}
+              >
+                {isGateRunning ? "Checking…" : "Re-check gate readiness"}
+              </button>
+            ) : null}
             {gateReviewStatus === "approved" ? (
               <button type="button" className="v3-button ghost v3-button-inline-xs" onClick={() => onReopenGate(activePhase.id)}>Reopen Gate</button>
             ) : null}
@@ -1162,9 +1156,8 @@ export default function StageView({
             items={onboardingItems}
             ctaLabel={
               !hasPhaseInputs ? "Open phase inputs →"
-              : (!hasGateReview && agentsAvailable) ? "Check gate readiness"
-              : (!hasGateReview && !agentsAvailable) ? "Approve gate"
-              : !confirmedCriteria ? "Review criteria"
+              : (!hasGateReview && agentsAvailable) ? "Generate phase documents →"
+              : !confirmedCriteria ? "Review exit criteria →"
               : "Approve gate"
             }
             onCtaClick={() => {
@@ -1173,18 +1166,15 @@ export default function StageView({
                 document.getElementById("phase-inputs-anchor")?.scrollIntoView({ behavior: "smooth", block: "center" });
                 return;
               }
-              // If agents aren't available (no auth), skip gate review and go straight to approve
+              // Gate review + exit criteria are now produced automatically once the
+              // phase's documents are generated. Guide the user to the work area
+              // rather than offering a manual trigger.
               if (!hasGateReview && agentsAvailable) {
-                triggers.triggerGateReview(activePhase.id);
-                return;
-              }
-              if (!hasGateReview && !agentsAvailable) {
-                // Manual gate approval without AI review
-                void onApproveGate(activePhase.id);
+                document.getElementById("phase-artifacts-anchor")?.scrollIntoView({ behavior: "smooth", block: "center" });
                 return;
               }
               if (!confirmedCriteria) {
-                onGenerateCriteria();
+                document.getElementById("exit-criteria-anchor")?.scrollIntoView({ behavior: "smooth", block: "center" });
                 return;
               }
               void onApproveGate(activePhase.id);
@@ -1336,7 +1326,6 @@ export default function StageView({
             <ExitCriteriaCard
               criteria={gateReview?.exitCriteriaStatus || []}
               generatedCriteria={generatedCriteria}
-              onGenerateCriteria={onGenerateCriteria}
               gateApproved={gateApproved}
             />
           </div>
