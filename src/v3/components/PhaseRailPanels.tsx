@@ -3,7 +3,9 @@ import type { DecisionSummary, ProgramSummary, RAIDEntry, RAIDEntryType } from "
 import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
 import { selectBlockers, selectRisks } from "@/v3/lib/programRaid";
 import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
-import { AdamCard, AdamCardBody, AdamCardHeader } from "@/v3/components/ui/AdamCard";
+import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
+import { PROVENANCE_KEY, parseProvenance, provenanceMatches } from "@/new/lib/fieldProvenance";
+import { AdamCard, AdamCardBody } from "@/v3/components/ui/AdamCard";
 import { ArtifactMapTree } from "@/v3/components/ArtifactMapTree";
 import { RelativeTime } from "@/v3/components/ui/RelativeTime";
 import { StatusBadge } from "@/v3/components/ui/StatusBadge";
@@ -13,10 +15,10 @@ import type { V3MoreView } from "@/v3/types";
  * PhaseRailPanels — the canonical Programme right-rail surface. Two tabbed
  * sections, each self-contained:
  *
- *   • Actions      → Actions (open decisions) · Blockers · Risks, with inline
- *                    create flows that write to the decision queue / RAID log.
- *   • Intelligence → Artifacts · Graph · Uploads, surfacing phase artifacts and
- *                    deep-links to the knowledge graph / document import.
+ *   • Actions      → Actions (open decisions) · Risks · Blockers, read-only
+ *                    lists that deep-link to the decision queue / RAID log.
+ *   • Intelligence → Artifacts · Graph · Uploads. Artifacts open a content
+ *                    modal; uploads list imported source content for download.
  */
 
 type RaidDraft = {
@@ -33,8 +35,10 @@ type PhaseRailPanelsProps = {
   phaseId: string;
   decisions: DecisionSummary[];
   agentsAvailable?: boolean;
-  onAddDecision: (decision: Omit<DecisionSummary, "id" | "status" | "createdAt">) => Promise<void>;
-  onAddRaid: (draft: RaidDraft) => Promise<void>;
+  /** Retained for call-site compatibility; the rail no longer raises items inline. */
+  onAddDecision?: (decision: Omit<DecisionSummary, "id" | "status" | "createdAt">) => Promise<void>;
+  /** Retained for call-site compatibility; the rail no longer raises items inline. */
+  onAddRaid?: (draft: RaidDraft) => Promise<void>;
   onCloseRaid: (entryId: string, note?: string) => Promise<void>;
   onOpenDecide: () => void;
   onRunAgent: (agentId: string) => void;
@@ -45,6 +49,10 @@ type PhaseRailPanelsProps = {
 type PrimaryTab = "actions" | "intelligence";
 type ActionTab = "actions" | "blockers" | "risks";
 type IntelTab = "artifacts" | "graph" | "uploads";
+
+type UploadItem = { fieldId: string; label: string; source: string; value: string };
+
+type ArtifactModalData = { label: string; statusLabel: string; tone: string; score: number | null; content: string };
 
 function priorityVariant(value: string): "critical" | "high" | "medium" | "low" {
   if (value === "critical") return "critical";
@@ -59,123 +67,40 @@ function severityTone(value: string): "red" | "amber" | "blue" {
   return "blue";
 }
 
-function RaidForm({
-  kind,
-  saving,
-  onCancel,
-  onSubmit,
-}: {
-  kind: "blocker" | "risk";
-  saving: boolean;
-  onCancel: () => void;
-  onSubmit: (draft: { title: string; description: string; severity: RAIDEntry["severity"]; mitigation: string }) => void;
-}) {
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [severity, setSeverity] = useState<RAIDEntry["severity"]>("medium");
-  const [mitigation, setMitigation] = useState("");
-  return (
-    <div className="v3-rail-form">
-      <div>
-        <div className="v3-field-label">Title *</div>
-        <input
-          type="text"
-          className="v3-input"
-          aria-label={`${kind} title`}
-          placeholder={kind === "blocker" ? "What is blocking progress?" : "What could go wrong?"}
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-        />
-      </div>
-      <div>
-        <div className="v3-field-label">Description</div>
-        <textarea
-          className="v3-input v3-textarea"
-          aria-label={`${kind} description`}
-          rows={2}
-          placeholder="Context, impact, detail the team needs…"
-          value={description}
-          onChange={(event) => setDescription(event.target.value)}
-        />
-      </div>
-      <div>
-        <div className="v3-field-label">Severity</div>
-        <select className="v3-input" aria-label={`${kind} severity`} value={severity} onChange={(event) => setSeverity(event.target.value as RAIDEntry["severity"])}>
-          <option value="critical">Critical</option>
-          <option value="high">High</option>
-          <option value="medium">Medium</option>
-          <option value="low">Low</option>
-        </select>
-      </div>
-      {kind === "risk" ? (
-        <div>
-          <div className="v3-field-label">Mitigation</div>
-          <input type="text" className="v3-input" aria-label="risk mitigation" placeholder="Optional" value={mitigation} onChange={(event) => setMitigation(event.target.value)} />
-        </div>
-      ) : null}
-      <div className="v3-rail-form-actions">
-        <button type="button" className="v3-button ghost v3-button-inline-xs" onClick={onCancel}>Cancel</button>
-        <button
-          type="button"
-          className="v3-button primary v3-button-inline-xs"
-          disabled={!title.trim() || saving}
-          onClick={() => onSubmit({ title: title.trim(), description: description.trim(), severity, mitigation: mitigation.trim() })}
-        >
-          {saving ? "Saving…" : `Raise ${kind}`}
-        </button>
-      </div>
-    </div>
-  );
+// Resolve the programme's nested data bucket (rawData or rawData.data).
+function getDataBucket(program: ProgramSummary): Record<string, unknown> | null {
+  const raw = program.rawData as Record<string, unknown> | undefined;
+  if (!raw || typeof raw !== "object") return null;
+  return raw.data && typeof raw.data === "object" && !Array.isArray(raw.data)
+    ? (raw.data as Record<string, unknown>)
+    : raw;
 }
 
-function DecisionForm({
-  saving,
-  onCancel,
-  onSubmit,
-}: {
-  saving: boolean;
-  onCancel: () => void;
-  onSubmit: (draft: { question: string; priority: DecisionSummary["priority"]; recommendation: string }) => void;
-}) {
-  const [question, setQuestion] = useState("");
-  const [priority, setPriority] = useState<DecisionSummary["priority"]>("medium");
-  const [recommendation, setRecommendation] = useState("");
+function triggerDownload(filename: string, text: string) {
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+function slugify(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "document";
+}
+
+function RailModal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    <div className="v3-rail-form">
-      <div>
-        <div className="v3-field-label">Question *</div>
-        <textarea
-          className="v3-input v3-textarea"
-          aria-label="Decision question"
-          rows={2}
-          placeholder="What decision needs to be made?"
-          value={question}
-          onChange={(event) => setQuestion(event.target.value)}
-        />
-      </div>
-      <div>
-        <div className="v3-field-label">Priority</div>
-        <select className="v3-input" aria-label="Decision priority" value={priority} onChange={(event) => setPriority(event.target.value as DecisionSummary["priority"])}>
-          <option value="critical">Critical</option>
-          <option value="high">High</option>
-          <option value="medium">Medium</option>
-          <option value="low">Low</option>
-        </select>
-      </div>
-      <div>
-        <div className="v3-field-label">Recommended path</div>
-        <input type="text" className="v3-input" aria-label="Recommended path" placeholder="Optional" value={recommendation} onChange={(event) => setRecommendation(event.target.value)} />
-      </div>
-      <div className="v3-rail-form-actions">
-        <button type="button" className="v3-button ghost v3-button-inline-xs" onClick={onCancel}>Cancel</button>
-        <button
-          type="button"
-          className="v3-button primary v3-button-inline-xs"
-          disabled={!question.trim() || saving}
-          onClick={() => onSubmit({ question: question.trim(), priority, recommendation: recommendation.trim() })}
-        >
-          {saving ? "Saving…" : "Raise action"}
-        </button>
+    <div className="v3-rail-modal-overlay" role="presentation" onClick={onClose}>
+      <div className="v3-rail-modal" role="dialog" aria-modal="true" aria-label={title} onClick={(event) => event.stopPropagation()}>
+        <div className="v3-rail-modal-head">
+          <span className="v3-rail-modal-title">{title}</span>
+          <button type="button" className="v3-rail-modal-close" aria-label="Close" onClick={onClose}>✕</button>
+        </div>
+        <div className="v3-rail-modal-body">{children}</div>
       </div>
     </div>
   );
@@ -186,8 +111,6 @@ export function PhaseRailPanels({
   phaseId,
   decisions,
   agentsAvailable = true,
-  onAddDecision,
-  onAddRaid,
   onCloseRaid,
   onOpenDecide,
   onRunAgent,
@@ -197,12 +120,31 @@ export function PhaseRailPanels({
   const [primaryTab, setPrimaryTab] = useState<PrimaryTab>("actions");
   const [actionTab, setActionTab] = useState<ActionTab>("actions");
   const [intelTab, setIntelTab] = useState<IntelTab>("artifacts");
-  const [formOpen, setFormOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [closingId, setClosingId] = useState<string | null>(null);
+  const [openArtifact, setOpenArtifact] = useState<ArtifactModalData | null>(null);
 
   const blockers = useMemo(() => selectBlockers(program, { phaseId }), [program, phaseId]);
   const risks = useMemo(() => selectRisks(program, { phaseId }), [program, phaseId]);
+
+  // Full artifact bodies for the current phase, keyed by artifact/def id.
+  const artifactContentById = useMemo(() => {
+    const map = new Map<string, string>();
+    const bucket = getDataBucket(program);
+    const phaseBucket = bucket?.phaseArtifacts && typeof bucket.phaseArtifacts === "object" && !Array.isArray(bucket.phaseArtifacts)
+      ? (bucket.phaseArtifacts as Record<string, unknown>)[phaseId]
+      : null;
+    if (!phaseBucket || typeof phaseBucket !== "object") return map;
+    for (const [artifactId, value] of Object.entries(phaseBucket as Record<string, unknown>)) {
+      const entry = value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+      if (!entry) continue;
+      const content = typeof entry.content === "string" && entry.content.trim()
+        ? entry.content
+        : typeof entry.contentSummary === "string" ? entry.contentSummary : "";
+      if (content.trim()) map.set(artifactId, content);
+    }
+    return map;
+  }, [program, phaseId]);
+
   const artifacts = useMemo(() => {
     const summary = buildPhaseArtifacts(program, phaseId);
     const byKey = new Map((summary?.artifacts ?? []).map((node) => [node.key, node]));
@@ -213,6 +155,25 @@ export function PhaseRailPanels({
     const required = defs.length;
     const present = defs.filter((def) => byKey.get(def.id)?.present).length;
     return { defs, byKey, present, required };
+  }, [program, phaseId]);
+
+  // Imported source content for this phase, derived from field provenance. Only
+  // values that still match the imported snapshot are listed (a hand-edit drops
+  // the entry), so the uploads list never mislabels content the PM rewrote.
+  const uploads = useMemo<UploadItem[]>(() => {
+    const bucket = getDataBucket(program);
+    const phaseInputs = bucket?.phaseInputs && typeof bucket.phaseInputs === "object" && !Array.isArray(bucket.phaseInputs)
+      ? (bucket.phaseInputs as Record<string, Record<string, string>>)[phaseId] ?? {}
+      : {};
+    const provenance = parseProvenance((phaseInputs as Record<string, unknown>)[PROVENANCE_KEY]);
+    const labels = new Map(getPhaseInputSchema(phaseId).fields.map((field) => [field.id, field.label]));
+    const items: UploadItem[] = [];
+    for (const [fieldId, prov] of Object.entries(provenance)) {
+      const live = phaseInputs[fieldId];
+      if (!provenanceMatches(prov, live)) continue;
+      items.push({ fieldId, label: labels.get(fieldId) ?? fieldId, source: prov.source, value: typeof live === "string" ? live : prov.value });
+    }
+    return items;
   }, [program, phaseId]);
 
   const actionTabs: { id: ActionTab; label: string; count: number }[] = [
@@ -227,46 +188,6 @@ export function PhaseRailPanels({
     { id: "uploads", label: "Uploads" },
   ];
 
-  const switchAction = (tab: ActionTab) => {
-    setActionTab(tab);
-    setFormOpen(false);
-  };
-
-  const submitRaid = async (kind: "blocker" | "risk", draft: { title: string; description: string; severity: RAIDEntry["severity"]; mitigation: string }) => {
-    setSaving(true);
-    try {
-      await onAddRaid({
-        type: kind,
-        title: draft.title,
-        description: draft.description,
-        severity: draft.severity,
-        phase: phaseId,
-        mitigation: kind === "risk" && draft.mitigation ? draft.mitigation : undefined,
-      });
-      setFormOpen(false);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const submitDecision = async (draft: { question: string; priority: DecisionSummary["priority"]; recommendation: string }) => {
-    setSaving(true);
-    try {
-      await onAddDecision({
-        title: draft.question,
-        question: draft.question,
-        type: "other",
-        priority: draft.priority,
-        phaseId,
-        recommendation: draft.recommendation || undefined,
-        options: [],
-      });
-      setFormOpen(false);
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const closeRaid = async (entryId: string) => {
     setClosingId(entryId);
     try {
@@ -276,12 +197,20 @@ export function PhaseRailPanels({
     }
   };
 
-  const raiseLabel = actionTab === "blockers" ? "blocker" : actionTab === "risks" ? "risk" : "action";
-
   const primaryTabs: { id: PrimaryTab; label: string; count: number }[] = [
     { id: "actions", label: "Action Center", count: openActionCount },
     { id: "intelligence", label: "Intelligence", count: artifacts.required },
   ];
+
+  const openArtifactModal = (defLabel: string, defId: string, statusLabel: string, tone: string, score: number | null) => {
+    setOpenArtifact({
+      label: defLabel,
+      statusLabel,
+      tone,
+      score,
+      content: artifactContentById.get(defId) ?? "",
+    });
+  };
 
   return (
     <div className="v3-rail-panels">
@@ -304,11 +233,6 @@ export function PhaseRailPanels({
       {/* ACTION CENTER */}
       {primaryTab === "actions" ? (
       <AdamCard>
-        <AdamCardHeader
-          title="Action Center"
-          subtitle="Decisions, risks and blockers for this phase"
-          action={<button type="button" className="v3-button ghost v3-button-inline-xs" onClick={() => setFormOpen((open) => !open)}>{formOpen ? "Close" : `+ ${raiseLabel}`}</button>}
-        />
         <AdamCardBody>
           <div className="v3-action-tabs v3-action-tabs--rail" role="tablist" aria-label="Phase actions">
             {actionTabs.map((tab) => (
@@ -318,20 +242,13 @@ export function PhaseRailPanels({
                 role="tab"
                 aria-selected={actionTab === tab.id}
                 className={`v3-action-tab ${actionTab === tab.id ? "is-active" : ""}`}
-                onClick={() => switchAction(tab.id)}
+                onClick={() => setActionTab(tab.id)}
               >
                 {tab.label}
                 <span className="v3-action-tab-count">{tab.count}</span>
               </button>
             ))}
           </div>
-
-          {formOpen && actionTab === "actions" ? (
-            <DecisionForm saving={saving} onCancel={() => setFormOpen(false)} onSubmit={submitDecision} />
-          ) : null}
-          {formOpen && actionTab !== "actions" ? (
-            <RaidForm kind={actionTab === "blockers" ? "blocker" : "risk"} saving={saving} onCancel={() => setFormOpen(false)} onSubmit={(draft) => void submitRaid(actionTab === "blockers" ? "blocker" : "risk", draft)} />
-          ) : null}
 
           {actionTab === "actions" ? (
             decisions.length ? (
@@ -427,7 +344,6 @@ export function PhaseRailPanels({
       {/* INTELLIGENCE */}
       {primaryTab === "intelligence" ? (
       <AdamCard>
-        <AdamCardHeader title="Intelligence" subtitle="Artifacts, knowledge graph and source documents" />
         <AdamCardBody>
           <div className="v3-action-tabs v3-action-tabs--rail" role="tablist" aria-label="Phase intelligence">
             {intelTabs.map((tab) => (
@@ -456,13 +372,22 @@ export function PhaseRailPanels({
                 const state = node?.state ?? "missing";
                 const statusLabel = !present ? "Missing" : state === "approved" ? "Approved" : state === "ready" ? "Ready" : "Draft";
                 const tone = !present ? "muted" : state === "approved" ? "green" : state === "ready" ? "blue" : "amber";
+                const hasContent = present && artifactContentById.has(def.id);
                 return (
-                  <div key={def.id} className="v3-rail-item v3-rail-item--row">
+                  <div
+                    key={def.id}
+                    className={`v3-rail-item v3-rail-item--row${hasContent ? " is-clickable" : ""}`}
+                    role={hasContent ? "button" : undefined}
+                    tabIndex={hasContent ? 0 : undefined}
+                    aria-label={hasContent ? `Open ${def.label}` : undefined}
+                    onClick={hasContent ? () => openArtifactModal(def.label, def.id, statusLabel, tone, score) : undefined}
+                    onKeyDown={hasContent ? (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openArtifactModal(def.label, def.id, statusLabel, tone, score); } } : undefined}
+                  >
                     <div className="v3-rail-item-head">
                       <span className="v3-rail-item-title">{def.label}</span>
                       <span className={`v3-chip v3-chip-tight ${tone}`}>{statusLabel}{score != null ? ` · ${score}%` : ""}</span>
                     </div>
-                    <button type="button" className="v3-button ghost v3-button-inline-xs" disabled={!agentsAvailable} onClick={() => onRunAgent(def.id)} title={present ? `Regenerate ${def.label}` : `Generate ${def.label}`}>
+                    <button type="button" className="v3-button ghost v3-button-inline-xs" disabled={!agentsAvailable} onClick={(event) => { event.stopPropagation(); onRunAgent(def.id); }} title={present ? `Regenerate ${def.label}` : `Generate ${def.label}`}>
                       {present ? "↻ Regenerate" : "Generate"}
                     </button>
                   </div>
@@ -481,13 +406,51 @@ export function PhaseRailPanels({
 
           {intelTab === "uploads" ? (
             <div className="v3-rail-list">
-              <div className="v3-rail-empty">Import source documents to ground ATOS's analysis. Files are parsed into phase inputs automatically.</div>
+              {uploads.length ? (
+                <>
+                  <div className="v3-rail-meta">{uploads.length} imported {uploads.length === 1 ? "document" : "documents"}</div>
+                  {uploads.map((item) => (
+                    <div key={item.fieldId} className="v3-rail-item">
+                      <div className="v3-rail-item-head">
+                        <span className="v3-rail-item-title">{item.label}</span>
+                        <button
+                          type="button"
+                          className="v3-button ghost v3-button-inline-xs"
+                          title={`Download ${item.label}`}
+                          onClick={() => triggerDownload(`${slugify(item.label)}.txt`, item.source ? `${item.label}\n\nSource: ${item.source}\n\n${item.value}` : `${item.label}\n\n${item.value}`)}
+                        >
+                          ↓ Download
+                        </button>
+                      </div>
+                      {item.source ? <div className="v3-rail-item-sub">Source: {item.source}</div> : null}
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <div className="v3-rail-empty">Import source documents to ground ATOS's analysis. Files are parsed into phase inputs automatically.</div>
+              )}
               <button type="button" className="v3-button primary v3-button-inline-xs v3-rail-footer-link" onClick={onUploadDocument}>Upload document →</button>
               <button type="button" className="v3-button ghost v3-button-inline-xs v3-rail-footer-link" onClick={() => onOpenMoreView("documents")}>Manage documents →</button>
             </div>
           ) : null}
         </AdamCardBody>
       </AdamCard>
+      ) : null}
+
+      {openArtifact ? (
+        <RailModal title={openArtifact.label} onClose={() => setOpenArtifact(null)}>
+          <div className="v3-rail-modal-meta">
+            <span className={`v3-chip v3-chip-tight ${openArtifact.tone}`}>{openArtifact.statusLabel}{openArtifact.score != null ? ` · ${openArtifact.score}%` : ""}</span>
+            <button
+              type="button"
+              className="v3-button ghost v3-button-inline-xs"
+              onClick={() => triggerDownload(`${slugify(openArtifact.label)}.txt`, `${openArtifact.label}\n\n${openArtifact.content}`)}
+            >
+              ↓ Download
+            </button>
+          </div>
+          <div className="v3-rail-modal-content">{openArtifact.content || "No content captured for this artifact yet."}</div>
+        </RailModal>
       ) : null}
     </div>
   );
