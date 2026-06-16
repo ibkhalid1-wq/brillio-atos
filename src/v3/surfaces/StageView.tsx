@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef } from "react";
 import { getRiskTrend } from "@/lib/adamGateRisk";
 import type { AgentRun } from "@/lib/adamSync";
-import type { DecisionSummary, ExitCriterion, GateReview, PlanAction, ProgramSummary, Workstream } from "@/new/types";
+import type { ExitCriterion, GateReview, PlanAction, ProgramSummary, Workstream } from "@/new/types";
 import ArtifactEditor from "@/v3/components/ArtifactEditor";
 import GateCoachPanel from "@/v3/components/GateCoachPanel";
 import { GateBlockingChecklist } from "@/v3/components/GateBlockingChecklist";
@@ -9,12 +9,10 @@ import OnboardingCard from "@/v3/components/OnboardingCard";
 import PhaseInputsPanel, { type FieldAssistRequest } from "@/v3/components/PhaseInputsPanel";
 import PhaseFlowOverlay from "@/v3/components/PhaseFlowOverlay";
 import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
-import { PhaseChangeSummary } from "@/v3/components/PhaseChangeSummary";
-import { PhaseExecutiveSummary } from "@/v3/components/PhaseExecutiveSummary";
 import { PhaseRail } from "@/v3/components/PhaseRail";
 import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
+import { derivePhaseBlockers } from "@/v3/lib/phaseBlockers";
 import { ReadinessBadge } from "@/v3/components/ui/ReadinessBadge";
-import { AdamCard, AdamCardBody, AdamCardHeader } from "@/v3/components/ui/AdamCard";
 import { EmptyState } from "@/v3/components/ui/EmptyState";
 import { ExpandableSection } from "@/v3/components/ui/ExpandableSection";
 import { RelativeTime } from "@/v3/components/ui/RelativeTime";
@@ -550,6 +548,13 @@ export default function StageView({
   // Programme screen never shows two different "open" numbers for one phase.
   const stageDecisions = deriveOpenRecommendedActions(program, "delivery_lead")
     .filter((decision) => !decision.phaseId || decision.phaseId === activePhase?.id);
+  // Canonical phase blocker + risk counts for the header metric strip — same
+  // engine the right-rail Blockers tab reads from, so the numbers never disagree.
+  const phaseBlockers = useMemo(() => derivePhaseBlockers(program, activePhase?.id ?? ""), [program, activePhase?.id]);
+  const phaseRiskCount = useMemo(
+    () => (program?.raidEntries || []).filter((e) => e.phase === activePhase?.id && e.status !== "closed" && e.type === "risk").length,
+    [program?.raidEntries, activePhase?.id],
+  );
   const stageActions = (program?.plan?.nextThreeActions || [])
     .filter((action) =>
       action.phase === activePhase?.id ||
@@ -702,9 +707,6 @@ export default function StageView({
     : null;
   const sprintPlan = source?.sprintPlan && typeof source.sprintPlan === "object" && !Array.isArray(source.sprintPlan)
     ? source.sprintPlan as Record<string, unknown>
-    : null;
-  const kpiValidation = source?.kpiValidation && typeof source.kpiValidation === "object" && !Array.isArray(source.kpiValidation)
-    ? source.kpiValidation as { avgScore?: number; validatedKPIs?: Array<{ original?: string; smartScore?: number; improvedVersion?: string; gaps?: string[] }> }
     : null;
   const complianceCheck = source?.complianceCheck && typeof source.complianceCheck === "object" && !Array.isArray(source.complianceCheck)
     ? source.complianceCheck as { gaps?: Array<{ framework?: string; articleId?: string; gap?: string; severity?: string; requiredAction?: string }> }
@@ -876,20 +878,28 @@ export default function StageView({
           </div>
         </div>
 
-        {/* Key metrics */}
+        {/* Key metrics — readiness signals + live blocker/risk/action counts, each click-through to its detail */}
         {readiness ? (
           <div className="v3-phase-metrics">
-            {[
+            {([
               { label: "Readiness", value: `${readiness.score}%`, tone: readiness.score >= 75 ? "green" : readiness.score >= 50 ? "amber" : "red", anchor: "exit-criteria-anchor" },
-              { label: "Input", value: `${readiness.inputScore}%`, tone: "", anchor: "phase-inputs-anchor" },
-              { label: "Artifact", value: `${readiness.artifactScore}%`, tone: "", anchor: "phase-artifacts-anchor" },
-              { label: "Gate", value: readiness.gateScore != null ? `${readiness.gateScore}%` : "—", tone: "", anchor: "exit-criteria-anchor" },
-              { label: "Complete", value: `${Math.round(activePhase.pct)}%`, tone: "", anchor: null },
+              { label: "Inputs", value: `${readiness.inputScore}%`, tone: "", anchor: "phase-inputs-anchor" },
+              { label: "Documents", value: `${readiness.artifactScore}%`, tone: "", anchor: "phase-artifacts-anchor" },
+              { label: "Gate score", value: readiness.gateScore != null ? `${readiness.gateScore}%` : "—", tone: "", anchor: "exit-criteria-anchor" },
+              { label: "Progress", value: `${Math.round(activePhase.pct)}%`, tone: "", anchor: null },
               ...(inputQuality ? [{ label: "Input quality", value: `${inputQuality.overallScore}%`, tone: inputQuality.verdict === "sufficient" ? "green" : inputQuality.verdict === "partial" ? "amber" : "red", anchor: "phase-inputs-anchor" }] : []),
               ...(handoffQuality?.score ? [{ label: "Handoff", value: `${handoffQuality.score}%`, tone: handoffQuality.passed ? "green" : "amber", anchor: "phase-artifacts-anchor" }] : []),
-            ].map((metric) => {
+              { label: "Blockers", value: phaseBlockers.length, tone: phaseBlockers.length ? "red" : "green", onClick: () => onOpenMoreView("risks") },
+              { label: "Risks", value: phaseRiskCount, tone: phaseRiskCount ? "amber" : "", onClick: () => onOpenMoreView("risks") },
+              { label: "Actions", value: stageDecisions.length, tone: stageDecisions.length ? "amber" : "", onClick: onOpenDecide },
+            ] as Array<{ label: string; value: string | number; tone: string; anchor?: string | null; onClick?: () => void }>).map((metric) => {
               const cls = `v3-phase-metric-value ${metric.tone}`;
-              if (!metric.anchor) {
+              const handler = metric.onClick
+                ? metric.onClick
+                : metric.anchor
+                ? () => document.getElementById(metric.anchor!)?.scrollIntoView({ behavior: "smooth", block: "center" })
+                : null;
+              if (!handler) {
                 return (
                   <div key={metric.label} className="v3-phase-metric">
                     <div className={cls}>{metric.value}</div>
@@ -902,8 +912,8 @@ export default function StageView({
                   key={metric.label}
                   type="button"
                   className="v3-phase-metric is-clickable"
-                  aria-label={`${metric.label} ${metric.value} — jump to section`}
-                  onClick={() => document.getElementById(metric.anchor!)?.scrollIntoView({ behavior: "smooth", block: "center" })}
+                  aria-label={`${metric.label} ${metric.value} — open detail`}
+                  onClick={handler}
                 >
                   <div className={cls}>{metric.value}</div>
                   <div className="v3-phase-metric-label">{metric.label}</div>
@@ -988,28 +998,7 @@ export default function StageView({
           </div>
         ) : null}
 
-        {program && activePhase?.id ? (
-          <PhaseChangeSummary program={program} phaseId={activePhase.id} />
-        ) : null}
       </header>
-      {/* Executive snapshot — condensed 15-second read of the phase, pinned above the zones */}
-      <div style={{ padding: "10px 20px 0" }}>
-        <PhaseExecutiveSummary
-          program={program}
-          phaseId={activePhase.id}
-          onRunAgent={onRunAgent}
-          isAgentRunning={isAgentRunning}
-          onOpenMoreView={(view) => onOpenMoreView(view as V3MoreView)}
-          onReviewContradiction={() => {
-            const firstId = (criticalContradictions[0] as Record<string, unknown> | undefined)?.id as string | undefined;
-            if (firstId && typeof onOpenDecide === "function") {
-              (onOpenDecide as (id?: string) => void)(firstId);
-            } else {
-              onOpenDecide();
-            }
-          }}
-        />
-      </div>
       {/* Priority 10 — "Where am I / What's next" guidance strip */}
       {readiness && !readiness.canApproveGate && readiness.recommendedActions.length > 0 && !activeRun && (
         <div style={{
@@ -1329,53 +1318,6 @@ export default function StageView({
             />
           </div>
 
-          <AdamCard accent={stageDecisions.length ? "warning" : "none"}>
-            <AdamCardHeader
-              title="Open actions"
-              subtitle={stageDecisions.length ? `${stageDecisions.length} awaiting resolution` : "No open actions"}
-              action={<button type="button" className="v3-button ghost v3-button-inline-xs" onClick={onOpenDecide}>View all →</button>}
-            />
-            <AdamCardBody>
-              {stageDecisions.length ? (
-                <div style={{ display: "grid", gap: 10 }}>
-                  {stageDecisions.slice(0, 3).map((decision: DecisionSummary) => (
-                    <ExpandableSection
-                      key={decision.id}
-                      title={decision.question || decision.title || "Open decision"}
-                      subtitle={`${decision.phaseId || activePhase.id} · decision pending`}
-                      badge={<StatusBadge variant="open" size="sm" />}
-                    >
-                      <div className="v3-expandable-detail-copy">
-                        {decision.recommendation ? (
-                          <div>
-                            <div className="v3-expandable-detail-label">Recommendation</div>
-                            <div>{decision.recommendation}</div>
-                          </div>
-                        ) : null}
-                        {decision.advisorAnalysis?.recommendationRationale ? (
-                          <div>
-                            <div className="v3-expandable-detail-label">Rationale</div>
-                            <div>{decision.advisorAnalysis.recommendationRationale}</div>
-                          </div>
-                        ) : null}
-                        <div className="v3-decision-actions v3-decision-actions--inline">
-                          <button type="button" className="v3-button ghost v3-button-inline-xs" title="Mark this decision as approved and resolved" onClick={() => void onResolveDecision(decision.id, "approved")}>
-                            Approve
-                          </button>
-                          <button type="button" className="v3-button ghost v3-button-inline-xs" title="Defer this decision — it will return to your queue in the next gate review" onClick={() => void onResolveDecision(decision.id, "deferred")}>
-                            Defer
-                          </button>
-                        </div>
-                      </div>
-                    </ExpandableSection>
-                  ))}
-                </div>
-              ) : (
-                <div className="v3-mini-card-empty">No open decisions.</div>
-              )}
-            </AdamCardBody>
-          </AdamCard>
-
           {mode === "power" ? (
             <div className="v3-card-sm v3-mini-card">
               <div className="v3-card-title v3-mini-card-title">Key milestones</div>
@@ -1443,28 +1385,6 @@ export default function StageView({
               )}
               <button type="button" className="v3-button ghost v3-mini-card-action" disabled={agentButtonDisabled("sprint-planner")} onClick={() => onRunAgent("sprint-planner")}>
                 {agentButtonContent("sprint-planner", sprintPlan ? "Re-plan sprints" : "Generate sprint plan")}
-              </button>
-            </div>
-          ) : null}
-
-          {activePhase.id === "strategy" ? (
-            <div className="v3-card-sm v3-mini-card">
-              <div className="v3-card-title v3-mini-card-title">KPI validation</div>
-              {kpiValidation?.validatedKPIs?.length ? (
-                <div className="v3-mini-card-list">
-                  <span className={`v3-chip ${Number(kpiValidation.avgScore || 0) >= 80 ? "green" : Number(kpiValidation.avgScore || 0) >= 60 ? "amber" : "red"}`}>Average SMART score {Math.round(Number(kpiValidation.avgScore || 0))}%</span>
-                  {kpiValidation.validatedKPIs.slice(0, 2).map((kpi, index) => (
-                    <div key={index}>
-                      {kpi.original}
-                      {kpi.gaps?.length ? <div className="v3-mini-card-subcopy">Gaps: {kpi.gaps.join(", ")}</div> : null}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="v3-mini-card-empty">Check whether your success metrics are truly SMART and measurable.</div>
-              )}
-              <button type="button" className="v3-button ghost v3-mini-card-action" disabled={agentButtonDisabled("kpi-validator")} onClick={() => onRunAgent("kpi-validator")}>
-                {agentButtonContent("kpi-validator", kpiValidation ? "Re-validate KPIs" : "Validate KPIs")}
               </button>
             </div>
           ) : null}
