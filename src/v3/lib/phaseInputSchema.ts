@@ -57,7 +57,7 @@ export const PHASE_INPUT_SCHEMAS: Record<string, PhaseInputSchema> = {
       { id: "businessObjective", label: "Business objective", type: "textarea", placeholder: "What outcome is this programme trying to achieve?", required: true },
       { id: "sponsor", label: "Executive sponsor", type: "text", placeholder: "Name and title", required: true },
       { id: "constraints", label: "Key constraints", type: "textarea", placeholder: "Budget, timeline, regulatory, or technical constraints", required: true, hint: "e.g. Must go live before Q4 financial year end" },
-      { id: "successMetric", label: "Primary success metric", type: "text", placeholder: "e.g. 20% reduction in processing time", required: true },
+      { id: "successMetric", label: "Primary success metric", type: "text", placeholder: "KPI name, e.g. Cost to serve", required: true },
     ],
   },
   mobilise: {

@@ -505,6 +505,9 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
                       value={values.successMetricUnit ?? ""}
                       onChange={(event) => setValues((current) => ({ ...current, successMetricUnit: event.target.value }))}
                     />
+                    {/* Mirror the KPI grid's remove-button column so the baseline/target/unit
+                        inputs line up vertically with the Outcome KPIs grid below. */}
+                    <button type="button" className="v3-button ghost" style={{ fontSize: 11, visibility: "hidden" }} tabIndex={-1} aria-hidden>✕</button>
                   </div>
                 ) : null}
                 {onAssistField && field.type === "textarea" ? (
