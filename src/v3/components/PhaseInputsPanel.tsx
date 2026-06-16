@@ -480,19 +480,19 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
                 )}
                 {field.id === "successMetric" ? (
                   <div style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center" }}>
+                    <span style={{ flex: 2, fontSize: 11, color: "var(--v3-text-muted)" }}>Baseline → target</span>
                     <input
                       type="text"
                       className="v3-input"
-                      style={{ flex: 1 }}
+                      style={{ width: 80 }}
                       placeholder="Baseline"
                       value={values.successMetricBaseline ?? ""}
                       onChange={(event) => setValues((current) => ({ ...current, successMetricBaseline: event.target.value }))}
                     />
-                    <span style={{ fontSize: 12, color: "var(--v3-text-muted)", flexShrink: 0 }}>→</span>
                     <input
                       type="text"
                       className="v3-input"
-                      style={{ flex: 1 }}
+                      style={{ width: 80 }}
                       placeholder="Target"
                       value={values.successMetricTarget ?? ""}
                       onChange={(event) => setValues((current) => ({ ...current, successMetricTarget: event.target.value }))}
