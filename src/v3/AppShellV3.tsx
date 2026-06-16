@@ -61,6 +61,7 @@ import { getPhaseSequence } from "@/v3/lib/methodology";
 import { computePhaseReadiness, getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
 import { confidenceRag, getGateThreshold } from "@/v3/lib/confidenceScore";
 import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
+import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
 import { buildFieldAssistPrompt, sanitiseFieldReply } from "@/v3/lib/fieldAssist";
 import { PROVENANCE_KEY, mergeProvenance } from "@/new/lib/fieldProvenance";
 import type { FieldAssistRequest } from "@/v3/components/PhaseInputsPanel";
@@ -1546,6 +1547,12 @@ export default function AppShellV3() {
   const anyUserAgentRunning = agentIsUserRunning;
   const showConnectionStatus = !authRoute && authed && !!activeProgramId && channelStatus !== "connected";
   const openDecisions = useMemo(() => (activeProgram?.decisionQueue || []).filter(isDecisionOpen), [activeProgram?.decisionQueue]);
+  // Rail badge count for the Action Center. Mirrors the surface's own derivation
+  // (synthesised recommended actions for the delivery-lead persona it renders
+  // with) so "N awaiting you" matches what the user sees when they open it —
+  // distinct from openDecisions, which counts persisted decisions for the
+  // confidence model and must stay untouched.
+  const actionCenterCount = useMemo(() => deriveOpenRecommendedActions(activeProgram, "delivery_lead").length, [activeProgram]);
   // ── Unified confidence score (Priority 1) ────────────────────────────────────
   // Replaces the old inline weighted average with the full multi-signal model
   // from confidenceScore.ts. This is the single authoritative score used for
@@ -2514,7 +2521,7 @@ export default function AppShellV3() {
         onCreateProgram={() => void handleCreateProgram()}
         onDeleteProgram={activeProgramId ? () => handleDeleteProgram(activeProgramId) : undefined}
         programHealth={activeProgram ? programHealth : undefined}
-        openDecisionCount={openDecisions.length}
+        openDecisionCount={actionCenterCount}
       />
 
       <div className="v3-main-frame">

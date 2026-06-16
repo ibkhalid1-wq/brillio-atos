@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { buildDecisionQueue } from "@/lib/adamDecisionUtils";
+import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
 import { PHASE_LABELS } from "@/v3/lib/uiHelpers";
 import type { DecisionSummary, GateReview, ProgramSummary, RAIDEntry, RAIDEntryType } from "@/new/types";
 import type { Persona } from "@/new/types";
@@ -8,7 +8,7 @@ import { EmptyState } from "@/v3/components/ui/EmptyState";
 import { RelativeTime } from "@/v3/components/ui/RelativeTime";
 import { StatusBadge } from "@/v3/components/ui/StatusBadge";
 import type { V3Mode } from "@/v3/types";
-import { isDecisionOpen, phaseName, phaseNameById } from "@/v3/utils";
+import { phaseName, phaseNameById } from "@/v3/utils";
 
 interface DecideViewProps {
   program: ProgramSummary | null;
@@ -538,31 +538,16 @@ export default function DecideView({
     if (!selectedPhaseId && activePhaseId) setSelectedPhaseId(activePhaseId);
   }, [activePhaseId, selectedPhaseId]);
 
-  const synthesizedQueue = useMemo(() => {
-    if (!program) return [];
-    const raw = (program.rawData || {}) as Record<string, unknown>;
-    const nested = typeof raw.data === "object" && raw.data !== null ? raw.data as Record<string, unknown> : raw;
-    const phaseAgentStates = typeof nested.phaseAgentStates === "object" && nested.phaseAgentStates !== null
-      ? nested.phaseAgentStates as Record<string, unknown>
-      : {};
-    const phaseAgents = Object.fromEntries((program.phases || []).map((phase) => [phase.id, { agentState: phaseAgentStates[phase.id] ?? null }]));
-    const personaId = persona === "executive" ? "executive" : persona === "architect" ? "architect" : "delivery_lead";
-    return buildDecisionQueue(phaseAgents, nested, personaId);
-  }, [persona, program]);
-
   const open = useMemo(() => {
-    // Merge any persisted resolution onto the synthesised decision BEFORE
-    // filtering, so a decision the user has resolved (recorded in the persisted
-    // queue) drops out of the open feed instead of reappearing every render.
-    const byId = new Map((program?.decisionQueue || []).map((decision) => [decision.id, decision]));
-    const merged = synthesizedQueue.map((decision) =>
-      ({ status: "open", ...decision, ...(byId.get(decision.id) || {}) } as ReviewDecision));
-    const queue = merged.filter((decision) => isDecisionOpen(decision as DecisionSummary));
+    // Shared derivation (synthesise → merge persisted resolution → open filter)
+    // so this feed and the rail badge count cannot drift apart.
+    const personaId = persona === "executive" ? "executive" : persona === "architect" ? "architect" : "delivery_lead";
+    const queue = deriveOpenRecommendedActions(program, personaId) as ReviewDecision[];
     // "This phase" scope follows the phase selected in the Gate timeline (falling
     // back to the active phase), so selecting a phase actually filters the feed.
     const phaseFilterId = selectedPhaseId ?? activePhaseId;
     return scope === "stage" && phaseFilterId ? queue.filter((decision) => decision.phaseId === phaseFilterId) : queue;
-  }, [activePhaseId, selectedPhaseId, program?.decisionQueue, scope, synthesizedQueue]);
+  }, [activePhaseId, selectedPhaseId, persona, program, scope]);
 
   const sortedOpen = [...open].sort((a, b) => {
     const order: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
