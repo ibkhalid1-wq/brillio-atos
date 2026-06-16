@@ -337,7 +337,15 @@ export function PhaseRailPanels({
             decisions.length ? (
               <div className="v3-rail-list">
                 {decisions.slice(0, 5).map((decision) => (
-                  <div key={decision.id} className="v3-rail-item">
+                  <div
+                    key={decision.id}
+                    className="v3-rail-item is-clickable"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Open action: ${decision.question || decision.title || "Open decision"}`}
+                    onClick={() => onOpenDecide()}
+                    onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpenDecide(); } }}
+                  >
                     <div className="v3-rail-item-head">
                       <StatusBadge variant={priorityVariant(decision.priority)} size="sm" />
                       <span className="v3-rail-item-title">{decision.question || decision.title || "Open decision"}</span>
@@ -356,7 +364,15 @@ export function PhaseRailPanels({
             blockers.length ? (
               <div className="v3-rail-list">
                 {blockers.map((entry) => (
-                  <div key={entry.id} className="v3-rail-item">
+                  <div
+                    key={entry.id}
+                    className="v3-rail-item is-clickable"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Open blocker in RAID log: ${entry.title}`}
+                    onClick={() => onOpenMoreView("risks")}
+                    onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpenMoreView("risks"); } }}
+                  >
                     <div className="v3-rail-item-head">
                       <span className={`v3-chip v3-chip-tight ${severityTone(entry.severity)}`}>{entry.severity}</span>
                       <span className="v3-rail-item-title">{entry.title}</span>
@@ -364,7 +380,7 @@ export function PhaseRailPanels({
                     {entry.description ? <div className="v3-rail-item-sub">{entry.description}</div> : null}
                     <div className="v3-rail-item-foot">
                       <span className="v3-rail-item-age"><RelativeTime date={entry.createdAt} /></span>
-                      <button type="button" className="v3-button ghost v3-button-inline-xs" disabled={closingId === entry.id} onClick={() => void closeRaid(entry.id)}>{closingId === entry.id ? "Resolving…" : "Resolve"}</button>
+                      <button type="button" className="v3-button ghost v3-button-inline-xs" disabled={closingId === entry.id} onClick={(event) => { event.stopPropagation(); void closeRaid(entry.id); }}>{closingId === entry.id ? "Resolving…" : "Resolve"}</button>
                     </div>
                   </div>
                 ))}
@@ -378,7 +394,15 @@ export function PhaseRailPanels({
             risks.length ? (
               <div className="v3-rail-list">
                 {risks.map((entry) => (
-                  <div key={entry.id} className="v3-rail-item">
+                  <div
+                    key={entry.id}
+                    className="v3-rail-item is-clickable"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Open risk in RAID log: ${entry.title}`}
+                    onClick={() => onOpenMoreView("risks")}
+                    onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpenMoreView("risks"); } }}
+                  >
                     <div className="v3-rail-item-head">
                       <span className={`v3-chip v3-chip-tight ${severityTone(entry.severity)}`}>{entry.severity}</span>
                       <span className="v3-rail-item-title">{entry.title}</span>
@@ -387,7 +411,7 @@ export function PhaseRailPanels({
                     {entry.mitigation ? <div className="v3-rail-item-sub">Mitigation: {entry.mitigation}</div> : null}
                     <div className="v3-rail-item-foot">
                       <span className="v3-rail-item-age"><RelativeTime date={entry.createdAt} /></span>
-                      <button type="button" className="v3-button ghost v3-button-inline-xs" disabled={closingId === entry.id} onClick={() => void closeRaid(entry.id)}>{closingId === entry.id ? "Resolving…" : "Resolve"}</button>
+                      <button type="button" className="v3-button ghost v3-button-inline-xs" disabled={closingId === entry.id} onClick={(event) => { event.stopPropagation(); void closeRaid(entry.id); }}>{closingId === entry.id ? "Resolving…" : "Resolve"}</button>
                     </div>
                   </div>
                 ))}
