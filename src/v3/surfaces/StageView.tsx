@@ -902,53 +902,76 @@ export default function StageView({
           </div>
         </div>
 
-        {/* Key metrics — readiness signals + live blocker/risk/action counts, each click-through to its detail */}
-        {readiness ? (
-          <div className="v3-phase-metrics">
-            {([
-              { label: "Readiness", value: `${readiness.score}%`, tone: readiness.score >= 75 ? "green" : readiness.score >= 50 ? "amber" : "red", onClick: () => setExitCriteriaOpen(true) },
-              // One input signal — quality (toned, matches the input-panel label) when
-              // measured, else raw completeness — instead of two near-identical percentages.
-              inputQuality
-                ? { label: "Input quality", value: `${inputQuality.overallScore}%`, tone: inputQuality.verdict === "sufficient" ? "green" : inputQuality.verdict === "partial" ? "amber" : "red", anchor: "phase-inputs-anchor" }
-                : { label: "Inputs", value: `${readiness.inputScore}%`, tone: "", anchor: "phase-inputs-anchor" },
-              { label: "Documents", value: `${readiness.artifactScore}%`, tone: "", anchor: "phase-artifacts-anchor" },
-              { label: "Gate score", value: readiness.gateScore != null ? `${readiness.gateScore}%` : "—", tone: "", onClick: () => setExitCriteriaOpen(true) },
-              { label: "Progress", value: `${Math.round(activePhase.pct)}%`, tone: "", anchor: null },
-              ...(handoffQuality?.score ? [{ label: "Handoff", value: `${handoffQuality.score}%`, tone: handoffQuality.passed ? "green" : "amber", anchor: "phase-artifacts-anchor" }] : []),
-              { label: "Blockers", value: phaseBlockers.length, tone: phaseBlockers.length ? "red" : "green", onClick: () => onOpenMoreView("risks") },
-              { label: "Risks", value: phaseRiskCount, tone: phaseRiskCount ? "amber" : "", onClick: () => onOpenMoreView("risks") },
-              { label: "Actions", value: stageDecisions.length, tone: stageDecisions.length ? "amber" : "", onClick: onOpenDecide },
-            ] as Array<{ label: string; value: string | number; tone: string; anchor?: string | null; onClick?: () => void }>).map((metric) => {
-              const cls = `v3-phase-metric-value ${metric.tone}`;
-              const handler = metric.onClick
-                ? metric.onClick
-                : metric.anchor
-                ? () => document.getElementById(metric.anchor!)?.scrollIntoView({ behavior: "smooth", block: "center" })
-                : null;
-              if (!handler) {
-                return (
-                  <div key={metric.label} className="v3-phase-metric">
-                    <div className={cls}>{metric.value}</div>
-                    <div className="v3-phase-metric-label">{metric.label}</div>
-                  </div>
-                );
-              }
+        {/* Key metrics — the gate pipeline (inputs → quality → artifacts → quality → gate)
+            in workflow order with chevrons between stages, then a separated work-count
+            group (blockers/risks/actions). Each tile clicks through to its detail. */}
+        {readiness ? (() => {
+          const inputsComplete = inputQuality && inputQuality.total > 0
+            ? Math.round((inputQuality.present / inputQuality.total) * 100)
+            : readiness.inputScore;
+          const artifactsComplete = phaseArtifacts.required > 0
+            ? Math.round((phaseArtifacts.present / phaseArtifacts.required) * 100)
+            : readiness.artifactScore;
+          const pctTone = (v: number) => (v >= 75 ? "green" : v >= 50 ? "amber" : "red");
+          // The gate pipeline, in the order work flows toward the gate.
+          const pipeline: Array<{ label: string; value: string | number; tone: string; anchor?: string | null; onClick?: () => void }> = [
+            { label: "Inputs complete", value: `${inputsComplete}%`, tone: pctTone(inputsComplete), anchor: "phase-inputs-anchor" },
+            { label: "Input quality", value: inputQuality ? `${inputQuality.overallScore}%` : "—", tone: inputQuality ? pctTone(inputQuality.overallScore) : "", anchor: "phase-inputs-anchor" },
+            { label: "Artifacts complete", value: `${artifactsComplete}%`, tone: pctTone(artifactsComplete), anchor: "phase-artifacts-anchor" },
+            { label: "Artifact quality", value: `${readiness.artifactScore}%`, tone: pctTone(readiness.artifactScore), anchor: "phase-artifacts-anchor" },
+            { label: "Gate score", value: readiness.gateScore != null ? `${readiness.gateScore}%` : "—", tone: readiness.gateScore != null ? pctTone(readiness.gateScore) : "", onClick: () => setExitCriteriaOpen(true) },
+          ];
+          // Live work counts — distinct from the pipeline, shown as a separated group.
+          const work: Array<{ label: string; value: string | number; tone: string; anchor?: string | null; onClick?: () => void }> = [
+            { label: "Blockers", value: phaseBlockers.length, tone: phaseBlockers.length ? "red" : "green", onClick: () => onOpenMoreView("risks") },
+            { label: "Risks", value: phaseRiskCount, tone: phaseRiskCount ? "amber" : "", onClick: () => onOpenMoreView("risks") },
+            { label: "Actions", value: stageDecisions.length, tone: stageDecisions.length ? "amber" : "", onClick: onOpenDecide },
+          ];
+          const renderMetric = (metric: { label: string; value: string | number; tone: string; anchor?: string | null; onClick?: () => void }) => {
+            const cls = `v3-phase-metric-value ${metric.tone}`;
+            const handler = metric.onClick
+              ? metric.onClick
+              : metric.anchor
+              ? () => document.getElementById(metric.anchor!)?.scrollIntoView({ behavior: "smooth", block: "center" })
+              : null;
+            if (!handler) {
               return (
-                <button
-                  key={metric.label}
-                  type="button"
-                  className="v3-phase-metric is-clickable"
-                  aria-label={`${metric.label} ${metric.value} — open detail`}
-                  onClick={handler}
-                >
+                <div key={metric.label} className="v3-phase-metric">
                   <div className={cls}>{metric.value}</div>
                   <div className="v3-phase-metric-label">{metric.label}</div>
-                </button>
+                </div>
               );
-            })}
-          </div>
-        ) : null}
+            }
+            return (
+              <button
+                key={metric.label}
+                type="button"
+                className="v3-phase-metric is-clickable"
+                aria-label={`${metric.label} ${metric.value} — open detail`}
+                onClick={handler}
+              >
+                <div className={cls}>{metric.value}</div>
+                <div className="v3-phase-metric-label">{metric.label}</div>
+              </button>
+            );
+          };
+          return (
+            <div className="v3-phase-metrics">
+              <div className="v3-phase-pipeline" role="group" aria-label="Gate readiness pipeline">
+                {pipeline.map((metric, i) => (
+                  <React.Fragment key={metric.label}>
+                    {i > 0 ? <span className="v3-phase-pipeline-chevron" aria-hidden="true">›</span> : null}
+                    {renderMetric(metric)}
+                  </React.Fragment>
+                ))}
+              </div>
+              <span className="v3-phase-metrics-divider" aria-hidden="true" />
+              <div className="v3-phase-metric-group" role="group" aria-label="Open work items">
+                {work.map(renderMetric)}
+              </div>
+            </div>
+          );
+        })() : null}
 
         {/* Moved actions — gate decisions + artifact / nav jumps */}
         <div className="v3-phase-head-actions">

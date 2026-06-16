@@ -21,6 +21,10 @@ export interface PhaseInputQuality {
   verdict: "sufficient" | "partial" | "insufficient";
   missingCritical: string[];
   readyToRun?: string[];
+  /** Count of required input fields that are filled (completeness numerator). */
+  present: number;
+  /** Total required input fields for the phase (completeness denominator). */
+  total: number;
 }
 
 interface QualityItem {
@@ -102,5 +106,5 @@ export function derivePhaseInputQuality(
   const verdict: PhaseInputQuality["verdict"] =
     missingCritical.length === 0 ? "sufficient" : overallScore >= 40 ? "partial" : "insufficient";
 
-  return { overallScore, verdict, missingCritical };
+  return { overallScore, verdict, missingCritical, present: present.length, total: items.length };
 }
