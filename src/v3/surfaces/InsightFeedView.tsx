@@ -345,6 +345,15 @@ export default function InsightFeedView({
     year: "numeric",
   });
 
+  // Phase-calibrated minimum gate readiness. Resolved from the same active phase
+  // the insight alert below uses, so the command panel and the "Gate Readiness
+  // Alert" always quote the same threshold number for the phase the user is on.
+  const gateThresholdPhase =
+    (activePhaseId ? program?.phases.find((p) => p.id === activePhaseId) : null) ??
+    program?.phases.find((p) => p.pct >= 10 && p.pct <= 90) ??
+    null;
+  const gateThreshold = getGateThreshold(gateThresholdPhase?.id ?? "");
+
   // ── Derive insight cards ─────────────────────────────────────────────────
   const insights = useMemo(() => {
     type Card = InsightCardProps;
@@ -376,12 +385,13 @@ export default function InsightFeedView({
     }
 
     // Gate readiness uses the same canonical signal the rest of the app shows
-    // (confidence breakdown for the active phase, 60% minimum) so Home never
-    // contradicts the command panel or phase strip with a different number.
+    // (confidence breakdown for the active phase) against the phase-calibrated
+    // threshold from getGateThreshold, so Home never contradicts the command
+    // panel or phase strip with a different number.
     const gateReadiness = confidenceResult?.breakdown?.gateReadiness;
     const activeGateApproved =
       (activePhase && (program?.gateReviews?.[activePhase.id] as { status?: string } | undefined)?.status === "approved") || false;
-    if (typeof gateReadiness === "number" && gateReadiness < 60 && !activeGateApproved) {
+    if (typeof gateReadiness === "number" && gateReadiness < gateThreshold && !activeGateApproved) {
       const score = Math.round(gateReadiness);
       const gateAccent = score < 40 ? "var(--v3-red)" : "var(--v3-amber)";
       const phaseLabel = activePhase ? (PHASE_LABELS[activePhase.id] ?? activePhase.displayName) : "current";
@@ -390,7 +400,7 @@ export default function InsightFeedView({
         accent: gateAccent,
         icon: "⬡",
         title: "Gate Readiness Alert",
-        description: `The ${phaseLabel} gate shows ${score}% readiness — below the 60% threshold. Check gate readiness to identify what's blocking progress.`,
+        description: `The ${phaseLabel} gate shows ${score}% readiness — below the ${gateThreshold}% threshold. Check gate readiness to identify what's blocking progress.`,
         actionLabel: "View Gates →",
         onAction: onNavigateToGates,
       });
@@ -409,7 +419,7 @@ export default function InsightFeedView({
     }
 
     return cards.slice(0, 3).map((c, i) => ({ ...c, priority: (i + 1) as 1 | 2 | 3 }));
-  }, [program, activePhaseId, confidenceResult, openDecisionCount, onNavigateToDecide, onNavigateToGates, onNavigateToPhase, onRunAgent]);
+  }, [program, activePhaseId, gateThreshold, confidenceResult, openDecisionCount, onNavigateToDecide, onNavigateToGates, onNavigateToPhase, onRunAgent]);
 
   // Route the confidence "Top Action" to the surface that actually owns the
   // weakest signal, rather than always sending the user to Risks.
@@ -905,6 +915,7 @@ export default function InsightFeedView({
         onRunAgent={(agentId) => onRunAgent(agentId, activePhaseId ?? "program")}
         onOpenMoreView={onOpenMoreView}
         anyAgentRunning={anyAgentRunning}
+        gateThreshold={gateThreshold}
       />
 
       {/* ── 5. Decision Queue (D: moved below agent actions) ─────────────────── */}

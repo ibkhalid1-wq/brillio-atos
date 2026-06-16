@@ -29,6 +29,8 @@ interface ExecCommandPanelProps {
   onOpenMoreView?: (view: V3MoreView) => void;
   /** When an agent is already running, action buttons should be disabled */
   anyAgentRunning?: boolean;
+  /** Phase-calibrated minimum gate readiness for the active phase (getGateThreshold). */
+  gateThreshold: number;
 }
 
 export function ExecCommandPanel({
@@ -39,18 +41,19 @@ export function ExecCommandPanel({
   onRunAgent,
   onOpenMoreView,
   anyAgentRunning = false,
+  gateThreshold,
 }: ExecCommandPanelProps) {
   // Build ranked action list from signals
   const actions: ExecAction[] = [];
 
   // 1. Gate readiness — highest weight signal
   const gateReadiness = confidenceResult?.breakdown.gateReadiness ?? 0;
-  if (gateReadiness < 60) {
+  if (gateReadiness < gateThreshold) {
     actions.push({
       id: "gate-check",
       label: "Check phase readiness",
       icon: "⬡",
-      reason: `Gate readiness is ${gateReadiness}% — below the minimum 60% to proceed`,
+      reason: `Gate readiness is ${gateReadiness}% — below the minimum ${gateThreshold}% to proceed`,
       consequence: "Cannot approve any phase gate until readiness improves",
       agentId: "gate-review",
       urgency: gateReadiness < 40 ? "critical" : "high",

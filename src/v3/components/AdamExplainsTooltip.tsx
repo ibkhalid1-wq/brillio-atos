@@ -1,4 +1,5 @@
 import React, { useRef, useState } from "react";
+import { getGateThreshold } from "@/v3/lib/confidenceScore";
 
 interface AdamExplainsTooltipProps {
   metric: string;
@@ -17,7 +18,7 @@ interface Explanation {
 function getExplanation(
   metric: string,
   value: number | string | null | undefined,
-  _context?: Record<string, unknown>
+  context?: Record<string, unknown>
 ): Explanation {
   switch (metric) {
     case "confidence": {
@@ -31,12 +32,15 @@ function getExplanation(
             : "Continue resolving decisions and progressing milestones to maintain this level.",
       };
     }
-    case "gate-readiness":
+    case "gate-readiness": {
+      const phaseId = typeof context?.phaseId === "string" ? context.phaseId : "";
+      const threshold = getGateThreshold(phaseId);
       return {
         title: "Gate Readiness",
         body: "Measures whether this phase has met its exit criteria and is ready to proceed. ATOS calculates this from artifact completeness, exit criteria ticked, and open blockers.",
-        tip: "Aim for 70% or above before approving a gate.",
+        tip: `Aim for ${threshold}% or above before approving a gate.`,
       };
+    }
     case "rag-status":
       return {
         title: "RAG Health Status",

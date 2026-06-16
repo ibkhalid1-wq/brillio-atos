@@ -2984,7 +2984,8 @@ export default function AppShellV3() {
           if (lower.includes("gate") || lower.includes("ready")) {
             const gateCount = Object.keys(activeProgram?.gateReviews ?? {}).length;
             const approvedCount = Object.values(activeProgram?.gateReviews ?? {}).filter((g: any) => g?.status === "approved").length;
-            return `${approvedCount} of ${gateCount} gates approved. ${score && score < 70 ? "Gate readiness is below 70% — run an AI Gate Check to identify blockers." : "Gate readiness looks healthy."}`;
+            const gateThreshold = getGateThreshold(activePhaseId);
+            return `${approvedCount} of ${gateCount} gates approved. ${score && score < gateThreshold ? `Gate readiness is below ${gateThreshold}% — run an AI Gate Check to identify blockers.` : "Gate readiness looks healthy."}`;
           }
           if (lower.includes("decision")) {
             return `${openD} decision${openD !== 1 ? "s" : ""} currently open. ${openD > 0 ? "Navigate to Decisions to review and resolve them." : "No pending decisions."}`;
