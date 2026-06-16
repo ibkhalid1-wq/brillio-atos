@@ -336,36 +336,6 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
     setGrids(nextGrids);
   }
 
-  function addWorkstream() {
-    setLocalWorkstreams((current) => [
-      ...current,
-      {
-        id: typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `ws-${Date.now()}`,
-        label: "",
-        phaseId,
-        weight: 0,
-        pct: 0,
-        gateScore: null,
-        owner: null,
-        status: "active",
-      },
-    ]);
-  }
-
-  function updateWorkstream(index: number, key: keyof Workstream, value: string | number | null) {
-    setLocalWorkstreams((current) => current.map((workstream, itemIndex) => {
-      if (itemIndex !== index) return workstream;
-      return {
-        ...workstream,
-        [key]: value,
-      };
-    }));
-  }
-
-  function removeWorkstream(index: number) {
-    setLocalWorkstreams((current) => current.filter((_, itemIndex) => itemIndex !== index));
-  }
-
   function addKpi() {
     setLocalKpis((current) => [
       ...current,
@@ -546,54 +516,6 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
               )}
             </div>
           ) : null}
-
-          <div style={{ marginTop: 12, marginBottom: 12 }}>
-            <div className="v3-field-label">Workstreams (optional)</div>
-            <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginBottom: 6 }}>
-              Define parallel workstreams if this phase runs concurrent tracks.
-            </div>
-            {localWorkstreams.map((workstream, index) => (
-              <div key={workstream.id} style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
-                <input
-                  type="text"
-                  className="v3-input"
-                  style={{ flex: 1 }}
-                  value={workstream.label}
-                  placeholder="e.g. Technology"
-                  onChange={(event) => updateWorkstream(index, "label", event.target.value)}
-                />
-                <input
-                  type="number"
-                  className="v3-input"
-                  style={{ width: 64 }}
-                  min={0}
-                  max={100}
-                  value={Math.round(workstream.pct)}
-                  onChange={(event) => updateWorkstream(index, "pct", Number(event.target.value))}
-                  placeholder="%"
-                />
-                {typeof (workstream as Record<string,unknown>).health === "number" ? (
-                  <span
-                    title={Array.isArray((workstream as Record<string,unknown>).healthIssues) ? ((workstream as Record<string,unknown>).healthIssues as string[]).join(" · ") : ""}
-                    style={{
-                      display: "inline-block",
-                      width: 10,
-                      height: 10,
-                      borderRadius: "50%",
-                      flexShrink: 0,
-                      background: (workstream as Record<string,unknown>).healthColor === "red" ? "var(--v3-red)"
-                        : (workstream as Record<string,unknown>).healthColor === "amber" ? "#f59e0b"
-                        : "var(--v3-green)",
-                    }}
-                  />
-                ) : null}
-                <button type="button" className="v3-button ghost" style={{ fontSize: 11 }} onClick={() => removeWorkstream(index)}>✕</button>
-              </div>
-            ))}
-            <button type="button" className="v3-button ghost" style={{ fontSize: 11, marginTop: 4 }} onClick={addWorkstream}>
-              + Add workstream
-            </button>
-          </div>
 
           {showKpis ? (
             <div style={{ marginTop: 12, marginBottom: 12 }}>

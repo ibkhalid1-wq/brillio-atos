@@ -44,7 +44,7 @@ const keyRolesField: PhaseInputField = {
   label: "Key roles",
   type: "grid",
   columns: ROLE_COLS,
-  required: false,
+  required: true,
   hint: "Name the accountable person for each role active in this phase",
 };
 
@@ -56,7 +56,7 @@ export const PHASE_INPUT_SCHEMAS: Record<string, PhaseInputSchema> = {
     fields: [
       { id: "businessObjective", label: "Business objective", type: "textarea", placeholder: "What outcome is this programme trying to achieve?", required: true },
       { id: "sponsor", label: "Executive sponsor", type: "text", placeholder: "Name and title", required: true },
-      { id: "constraints", label: "Key constraints", type: "textarea", placeholder: "Budget, timeline, regulatory, or technical constraints", required: false, hint: "e.g. Must go live before Q4 financial year end" },
+      { id: "constraints", label: "Key constraints", type: "textarea", placeholder: "Budget, timeline, regulatory, or technical constraints", required: true, hint: "e.g. Must go live before Q4 financial year end" },
       { id: "successMetric", label: "Primary success metric", type: "text", placeholder: "e.g. 20% reduction in processing time", required: true },
     ],
   },
@@ -66,9 +66,9 @@ export const PHASE_INPUT_SCHEMAS: Record<string, PhaseInputSchema> = {
     description: "Define the team and governance structure for this phase.",
     fields: [
       { id: "programDirector", label: "Programme director", type: "text", placeholder: "Name", required: true },
-      { id: "teamSize", label: "Team size", type: "number", placeholder: "Number of FTEs", required: false },
-      { id: "governanceModel", label: "Governance model", type: "select", options: ["Steering committee", "PMO-led", "Agile squad", "Hybrid"], required: false },
-      { id: "keyRisks", label: "Known risks at mobilisation", type: "textarea", placeholder: "Staffing, vendor readiness, budget approval…", required: false },
+      { id: "teamSize", label: "Team size", type: "number", placeholder: "Number of FTEs", required: true },
+      { id: "governanceModel", label: "Governance model", type: "select", options: ["Steering committee", "PMO-led", "Agile squad", "Hybrid"], required: true },
+      { id: "keyRisks", label: "Known risks at mobilisation", type: "textarea", placeholder: "Staffing, vendor readiness, budget approval…", required: true },
       keyRolesField,
     ],
   },
@@ -79,8 +79,8 @@ export const PHASE_INPUT_SCHEMAS: Record<string, PhaseInputSchema> = {
     fields: [
       { id: "currentState", label: "Current state summary", type: "textarea", placeholder: "What is being replaced or improved?", required: true },
       { id: "scopeInclusions", label: "In scope", type: "textarea", placeholder: "Business units, processes, systems", required: true },
-      { id: "scopeExclusions", label: "Out of scope", type: "textarea", placeholder: "What is explicitly excluded", required: false },
-      { id: "keyStakeholders", label: "Key stakeholders", type: "textarea", placeholder: "Names, departments, roles", required: false },
+      { id: "scopeExclusions", label: "Out of scope", type: "textarea", placeholder: "What is explicitly excluded", required: true },
+      { id: "keyStakeholders", label: "Key stakeholders", type: "textarea", placeholder: "Names, departments, roles", required: true },
     ],
   },
   design: {
@@ -89,8 +89,8 @@ export const PHASE_INPUT_SCHEMAS: Record<string, PhaseInputSchema> = {
     description: "Provide the solution design context for this phase.",
     fields: [
       { id: "solutionApproach", label: "Solution approach", type: "textarea", placeholder: "High-level technical or process design direction", required: true },
-      { id: "integrationPoints", label: "Integration points", type: "textarea", placeholder: "Systems that must connect to the solution", required: false },
-      { id: "designConstraints", label: "Design constraints", type: "textarea", placeholder: "Architecture standards, security requirements", required: false },
+      { id: "integrationPoints", label: "Integration points", type: "textarea", placeholder: "Systems that must connect to the solution", required: true },
+      { id: "designConstraints", label: "Design constraints", type: "textarea", placeholder: "Architecture standards, security requirements", required: true },
     ],
   },
   build: {
@@ -98,9 +98,9 @@ export const PHASE_INPUT_SCHEMAS: Record<string, PhaseInputSchema> = {
     title: "Build inputs",
     description: "Track build progress and highlight what ATOS should know.",
     fields: [
-      { id: "sprintVelocity", label: "Current sprint velocity", type: "number", placeholder: "Story points per sprint", required: false },
-      { id: "blockers", label: "Active blockers", type: "textarea", placeholder: "What is blocking delivery right now?", required: false },
-      { id: "testCoverage", label: "Test coverage %", type: "number", placeholder: "0–100", required: false },
+      { id: "sprintVelocity", label: "Current sprint velocity", type: "number", placeholder: "Story points per sprint", required: true },
+      { id: "blockers", label: "Active blockers", type: "textarea", placeholder: "What is blocking delivery right now?", required: true },
+      { id: "testCoverage", label: "Test coverage %", type: "number", placeholder: "0–100", required: true },
     ],
   },
   operate: {
@@ -111,8 +111,8 @@ export const PHASE_INPUT_SCHEMAS: Record<string, PhaseInputSchema> = {
       { id: "goLivePlanOwner", label: "Go-live plan owner", type: "text", placeholder: "Name and title of the person accountable for cutover / go-live", required: true, hint: "Aligns to the approved go-live plan exit criterion" },
       { id: "supportModel", label: "Support model", type: "select", options: ["Hypercare team", "Dedicated support desk", "Vendor-managed", "Internal BAU team", "Hybrid"], required: true, hint: "Confirmed hypercare and steady-state support arrangement" },
       { id: "trackedKpi", label: "KPI being tracked", type: "textarea", placeholder: "Which KPI is actively measured against baseline, and where is it reported?", required: true, hint: "At least one KPI must be tracked against baseline to exit Operate" },
-      { id: "runbookReference", label: "Runbook reference", type: "text", placeholder: "Link or reference to the operational runbook", required: false },
-      { id: "adoptionApproach", label: "Adoption approach", type: "textarea", placeholder: "How is user adoption being driven and measured in early live operation?", required: false },
+      { id: "runbookReference", label: "Runbook reference", type: "text", placeholder: "Link or reference to the operational runbook", required: true },
+      { id: "adoptionApproach", label: "Adoption approach", type: "textarea", placeholder: "How is user adoption being driven and measured in early live operation?", required: true },
     ],
   },
   govern: {
@@ -123,8 +123,8 @@ export const PHASE_INPUT_SCHEMAS: Record<string, PhaseInputSchema> = {
       { id: "complianceOwner", label: "Compliance owner", type: "text", placeholder: "Name and title of the person accountable for compliance sign-off", required: true, hint: "Owner who validates the compliance framework" },
       { id: "controlMatrix", label: "Control matrix reference", type: "text", placeholder: "Link or reference to the approved control matrix", required: true, hint: "Key operational controls documented, tested, and approved" },
       { id: "reportingCadence", label: "Reporting cadence", type: "select", options: ["Weekly", "Fortnightly", "Monthly", "Quarterly"], required: true, hint: "Ongoing governance reporting rhythm" },
-      { id: "auditEvidencePlan", label: "Audit evidence plan", type: "textarea", placeholder: "How and when audit evidence is collected, and who owns it", required: false },
-      { id: "escalationPath", label: "Escalation path", type: "textarea", placeholder: "Escalation routes and decision rights confirmed as operational", required: false },
+      { id: "auditEvidencePlan", label: "Audit evidence plan", type: "textarea", placeholder: "How and when audit evidence is collected, and who owns it", required: true },
+      { id: "escalationPath", label: "Escalation path", type: "textarea", placeholder: "Escalation routes and decision rights confirmed as operational", required: true },
     ],
   },
   optimize: {
@@ -134,8 +134,8 @@ export const PHASE_INPUT_SCHEMAS: Record<string, PhaseInputSchema> = {
     fields: [
       { id: "benefitBaseline", label: "Benefit baseline", type: "textarea", placeholder: "Which benefit has an agreed baseline, and what is the measured starting value?", required: true, hint: "Baseline measurement for at least one benefit must be confirmed" },
       { id: "improvementBacklog", label: "Improvement backlog reference", type: "text", placeholder: "Link or reference to the prioritised improvement backlog", required: true, hint: "Post-go-live improvements logged and prioritised by business value" },
-      { id: "adoptionTarget", label: "Adoption vs target", type: "text", placeholder: "e.g. 84% of adoption-plan target", required: false, hint: "Adoption should track to ≥ 80% of plan" },
-      { id: "experimentProposal", label: "Experiment recommendation", type: "textarea", placeholder: "Summarise at least one proposed optimisation experiment and its expected value", required: false },
+      { id: "adoptionTarget", label: "Adoption vs target", type: "text", placeholder: "e.g. 84% of adoption-plan target", required: true, hint: "Adoption should track to ≥ 80% of plan" },
+      { id: "experimentProposal", label: "Experiment recommendation", type: "textarea", placeholder: "Summarise at least one proposed optimisation experiment and its expected value", required: true },
     ],
   },
   valuerealize: {
@@ -146,7 +146,7 @@ export const PHASE_INPUT_SCHEMAS: Record<string, PhaseInputSchema> = {
       { id: "realisedBenefits", label: "Realised benefits", type: "textarea", placeholder: "Which benefits have been realised and quantified, and who signed them off?", required: true, hint: "At least one benefit realised, measured, and signed off by the sponsor" },
       { id: "lessonsLearnedReference", label: "Lessons learned reference", type: "text", placeholder: "Link or reference to the lessons-learned register", required: true, hint: "Retrospective completed with lessons documented across phases" },
       { id: "bauOwner", label: "BAU owner", type: "text", placeholder: "Name and title of the business-as-usual owner accepting handover", required: true, hint: "Programme outputs and responsibilities formally handed to BAU" },
-      { id: "closurePackReference", label: "Closure pack reference", type: "text", placeholder: "Link or reference to the approved programme closure pack", required: false },
+      { id: "closurePackReference", label: "Closure pack reference", type: "text", placeholder: "Link or reference to the approved programme closure pack", required: true },
     ],
   },
 };
@@ -157,8 +157,8 @@ export function getPhaseInputSchema(phaseId: string): PhaseInputSchema {
     title: "Phase inputs",
     description: "Provide any context ATOS needs to generate artifacts for this phase.",
     fields: [
-      { id: "context", label: "Phase context", type: "textarea", placeholder: "Key information, decisions made, or constraints for this phase", required: false },
-      { id: "objectives", label: "Phase objectives", type: "textarea", placeholder: "What must be achieved before this phase can close?", required: false },
+      { id: "context", label: "Phase context", type: "textarea", placeholder: "Key information, decisions made, or constraints for this phase", required: true },
+      { id: "objectives", label: "Phase objectives", type: "textarea", placeholder: "What must be achieved before this phase can close?", required: true },
     ],
   };
 }
