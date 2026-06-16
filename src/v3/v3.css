@@ -7644,6 +7644,8 @@ button.v3-phase-metric:focus-visible {
 }
 
 .v3-action-tabs--rail .v3-action-tab {
+  flex: 1 1 0;
+  justify-content: center;
   padding: 7px 10px;
   font-size: 12px;
   gap: 6px;
@@ -7739,25 +7741,8 @@ button.v3-phase-metric:focus-visible {
   padding: 4px 2px;
 }
 
-.v3-rail-meta + .v3-rail-item,
-.v3-rail-form {
+.v3-rail-meta + .v3-rail-item {
   margin-top: 0;
-}
-
-.v3-rail-form {
-  display: grid;
-  gap: 10px;
-  padding: 10px;
-  margin-bottom: 12px;
-  border: 1px solid var(--v3-border);
-  border-radius: var(--v3-radius);
-  background: var(--v3-surface-1);
-}
-
-.v3-rail-form-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
 }
 
 .v3-rail-footer-link {
