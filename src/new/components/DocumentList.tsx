@@ -19,7 +19,11 @@ export default function DocumentList({ programId }: { programId: string | null }
   }
 
   if (error) {
-    return <div style={{ color: "var(--v3-red)", fontSize: 13 }}>{error instanceof Error ? error.message : "Unable to load documents."}</div>;
+    return (
+      <div style={{ color: "var(--v3-red)", fontSize: 13, textAlign: "center", padding: "24px 0" }}>
+        {error || "Unable to load documents."}
+      </div>
+    );
   }
 
   if (!docs?.length) {
