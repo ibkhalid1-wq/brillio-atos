@@ -1780,6 +1780,11 @@ function applyPlanResultToProgramData(programData: ProgramState, result: Record<
   }));
 }
 
+/** Collapse a RAID title to a stable dedupe key (lowercased, whitespace-normalized). */
+function normalizeRaidTitle(value: unknown): string {
+  return typeof value === "string" ? value.trim().toLowerCase().replace(/\s+/g, " ") : "";
+}
+
 function applyRiskResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
   return updateInnerProgramData(programData, (inner) => {
     const raidLog = normalizeProgramData(inner.raidLog as JsonValue | null);
@@ -1787,6 +1792,19 @@ function applyRiskResultToProgramData(programData: ProgramState, result: Record<
       ? raidLog.entries.filter(isRecord)
       : [];
     const humanEntries = existingEntries.filter((entry) => entry.source === "human");
+
+    // Reconcile-don't-replace: index prior agent entries so regenerated risks can
+    // inherit any human triage (resolve / reopen / validate) applied to the same
+    // finding. Match on id first, then on normalized title.
+    const priorAgentEntries = existingEntries.filter((entry) => entry.source !== "human");
+    const priorById = new Map<string, Record<string, unknown>>();
+    const priorByTitle = new Map<string, Record<string, unknown>>();
+    for (const entry of priorAgentEntries) {
+      if (typeof entry.id === "string" && entry.id) priorById.set(entry.id, entry);
+      const key = normalizeRaidTitle(entry.title);
+      if (key && !priorByTitle.has(key)) priorByTitle.set(key, entry);
+    }
+
     const agentEntries = Array.isArray(result.raidEntries)
       ? result.raidEntries
           .filter(isRecord)
@@ -1794,27 +1812,40 @@ function applyRiskResultToProgramData(programData: ProgramState, result: Record<
             const type = typeof entry.type === "string" ? entry.type : "risk";
             const severity = typeof entry.severity === "string" ? entry.severity : "medium";
             const agentConfidence = typeof entry.agentConfidence === "number" ? entry.agentConfidence : null;
+            const id = typeof entry.id === "string" && entry.id
+              ? entry.id
+              : crypto.randomUUID?.() || `raid-agent-${Date.now()}-${index}`;
+            const title = typeof entry.title === "string" ? entry.title.slice(0, 80) : `Risk ${index + 1}`;
+            const prior = priorById.get(id) ?? priorByTitle.get(normalizeRaidTitle(title));
+            const humanTriaged = !!prior && (
+              prior.closedBy === "human"
+              || (typeof prior.status === "string" && prior.status !== "open")
+              || (typeof prior.validatedAt === "string" && !!prior.validatedAt)
+            );
             return {
-              id: typeof entry.id === "string" && entry.id
-                ? entry.id
-                : crypto.randomUUID?.() || `raid-agent-${Date.now()}-${index}`,
+              id,
               type: ["risk", "blocker", "assumption", "dependency"].includes(type) ? type : "risk",
-              title: typeof entry.title === "string" ? entry.title.slice(0, 80) : `Risk ${index + 1}`,
+              title,
               description: typeof entry.description === "string" ? entry.description : "",
               severity: ["critical", "high", "medium", "low"].includes(severity) ? severity : "medium",
               phase: typeof entry.phase === "string" && entry.phase ? entry.phase : "strategy",
               owner: typeof entry.owner === "string" && entry.owner ? entry.owner : null,
               mitigation: typeof entry.mitigation === "string" && entry.mitigation ? entry.mitigation : null,
-              status: "open",
+              status: humanTriaged && typeof prior!.status === "string" ? prior!.status : "open",
               source: "agent",
               agentConfidence,
-              createdAt: typeof entry.createdAt === "string" ? entry.createdAt : new Date().toISOString(),
-              closedAt: null,
-              closedBy: null,
-              closureNote: null,
+              createdAt: typeof entry.createdAt === "string"
+                ? entry.createdAt
+                : (humanTriaged && typeof prior!.createdAt === "string" ? prior!.createdAt : new Date().toISOString()),
+              closedAt: humanTriaged ? (prior!.closedAt ?? null) : null,
+              closedBy: humanTriaged ? (prior!.closedBy ?? null) : null,
+              closureNote: humanTriaged ? (prior!.closureNote ?? null) : null,
+              ...(humanTriaged && typeof prior!.validatedAt === "string" && prior!.validatedAt
+                ? { validatedAt: prior!.validatedAt }
+                : {}),
             } as JsonValue;
           })
-      : existingEntries.filter((entry) => entry.source !== "human");
+      : priorAgentEntries;
 
     return {
       ...inner,
