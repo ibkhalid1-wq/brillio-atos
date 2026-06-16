@@ -23,6 +23,7 @@ import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
 import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
 import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
 import { runPreFlight } from "@/v3/lib/phaseInputPreFlight";
+import { derivePhaseInputQuality } from "@/v3/lib/phaseInputQuality";
 import { getFormalArtifactContent } from "@/v3/lib/formalArtifacts";
 import type { V3Mode, V3MoreView, V3ReportId } from "@/v3/types";
 
@@ -605,18 +606,18 @@ export default function StageView({
       .slice(-3)
       .reverse();
   }, [activePhase?.id, source]);
+  // Schema-grounded, deterministic input-quality assessment. Derived from the
+  // phase's declared input fields (the single source of truth), so the banner's
+  // "Missing:" list can only ever name inputs that genuinely belong to this
+  // phase — never spurious items like workstreams on Strategy.
   const inputQuality = useMemo(() => {
-    const bucket = source?.inputQuality;
-    if (!bucket || typeof bucket !== "object" || Array.isArray(bucket)) return null;
-    const entry = (bucket as Record<string, unknown>)[activePhase?.id || ""];
-    return entry && typeof entry === "object" && !Array.isArray(entry)
-      ? entry as {
-          overallScore: number;
-          verdict: string;
-          missingCritical?: string[];
-          readyToRun?: string[];
-        }
+    const bucket = source?.phaseInputs && typeof source.phaseInputs === "object" && !Array.isArray(source.phaseInputs)
+      ? (source.phaseInputs as Record<string, unknown>)[activePhase?.id ?? ""]
       : null;
+    const inputs = bucket && typeof bucket === "object" && !Array.isArray(bucket)
+      ? (bucket as Record<string, unknown>)
+      : {};
+    return derivePhaseInputQuality(activePhase?.id, inputs);
   }, [activePhase?.id, source]);
   const generatedCriteria = useMemo(() => {
     const bucket = source?.generatedExitCriteria;
