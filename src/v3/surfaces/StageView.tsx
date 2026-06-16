@@ -564,7 +564,6 @@ export default function StageView({
       action.phase?.toLowerCase().includes(activePhase?.id?.toLowerCase() ?? "__")
     )
     .slice(0, 3);
-  const stageMilestones = sortByDate((program?.milestones || []).filter((milestone) => milestone.phaseId === activePhase?.id && milestone.status !== "complete")).slice(0, 2);
   const phaseRationale = program?.plan?.nextThreeActions?.find((action) => action.phase === activePhase?.id)?.rationale || "";
   const verdict = firstSentence(
     activePhase?.objective ||
@@ -992,7 +991,6 @@ export default function StageView({
             <button type="button" className="v3-button ghost v3-button-inline-sm" onClick={() => { setExpandedOutput("narrative"); document.getElementById("phase-artifacts-anchor")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Narrative</button>
             <button type="button" className="v3-button ghost v3-button-inline-sm" onClick={() => { setExpandedOutput("deck"); document.getElementById("phase-artifacts-anchor")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Status deck</button>
             <button type="button" className="v3-button ghost v3-button-inline-sm" onClick={() => setExitCriteriaOpen(true)}>Exit criteria</button>
-            <button type="button" className="v3-button ghost v3-button-inline-sm" onClick={() => onOpenMoreView("milestones")}>Milestones</button>
           </div>
           {phaseAgentActions.length ? (
             <div className="v3-phase-head-actions-grp">
@@ -1347,39 +1345,6 @@ export default function StageView({
       <div className="v3-phase-cards">
         <div className="v3-zone-label">Phase workspace</div>
         <div className="v3-phase-cards-grid">
-          {mode === "power" ? (
-            <div className="v3-card-sm v3-mini-card">
-              <div className="v3-card-title v3-mini-card-title">Key milestones</div>
-              {stageMilestones.length ? (
-                <div style={{ display: "grid", gap: 10 }}>
-                  {stageMilestones.map((milestone) => (
-                    <ExpandableSection
-                      key={milestone.id}
-                      title={milestone.title}
-                      subtitle={`${formatShortDate(milestone.targetDate)}${milestone.owner ? ` · ${milestone.owner}` : ""}`}
-                      badge={<StatusBadge variant={milestone.status === "at-risk" ? "at-risk" : milestone.status === "delayed" ? "delayed" : milestone.status === "complete" ? "complete" : "active"} size="sm" />}
-                    >
-                      <div className="v3-expandable-detail-copy">
-                        <div>{milestone.source === "human" ? "Added manually for this phase." : "Derived by ATOS from current phase evidence."}</div>
-                        {milestone.exitCriteria?.length ? (
-                          <div>
-                            <div className="v3-expandable-detail-label">Exit criteria</div>
-                            <div>{milestone.exitCriteria.join(" · ")}</div>
-                          </div>
-                        ) : null}
-                      </div>
-                    </ExpandableSection>
-                  ))}
-                </div>
-              ) : (
-                <div className="v3-mini-card-empty">No upcoming milestones in this phase.</div>
-              )}
-              <button type="button" className="v3-button ghost v3-mini-card-action" onClick={() => onOpenMoreView("milestones")}>
-                View all →
-              </button>
-            </div>
-          ) : null}
-
           {activePhase.id === "discover" && discoveryGuide ? (
             <div className="v3-card-sm v3-mini-card">
               <div className="v3-card-title v3-mini-card-title">Discovery pack</div>
