@@ -903,23 +903,30 @@ export function buildDecisionQueue(
   const handoffSequence = Array.isArray(projectData?.adamPhaseSequence) && projectData.adamPhaseSequence.length
     ? projectData.adamPhaseSequence
     : ADAM_PHASE_SEQUENCE_FALLBACK;
-  for (const phaseId of handoffSequence) {
+  for (const [index, phaseId] of handoffSequence.entries()) {
     const handoff = projectData?.phaseHandoffs?.[phaseId];
     if (!handoff || handoff?.dismissed) continue;
-    const nextPhaseGuidance = projectData?.phaseGuidance?.[handoff.toPhase]?.fields ?? {};
+    // Agent data sometimes omits toPhaseId or echoes the current phase; fall back
+    // to the next phase in the sequence so the card never shows "→ undefined" or
+    // a nonsensical self-handoff.
+    const targetPhaseId = handoff.toPhaseId && handoff.toPhaseId !== phaseId
+      ? handoff.toPhaseId
+      : handoffSequence[index + 1];
+    if (!targetPhaseId) continue;
+    const nextPhaseGuidance = projectData?.phaseGuidance?.[targetPhaseId]?.fields ?? {};
     const nextPhaseStarted = Object.values(nextPhaseGuidance)
       .some((value: any) => typeof value === "string" && value.length > 5)
-      || getCreatedAt(projectData?.phaseIncomingHandoffs?.[handoff.toPhase]?.generatedAt) > getCreatedAt(handoff.generatedAt);
+      || getCreatedAt(projectData?.phaseIncomingHandoffs?.[targetPhaseId]?.generatedAt) > getCreatedAt(handoff.generatedAt);
     if (nextPhaseStarted) continue;
     queue.push({
       id: `handoff-${phaseId}`,
       type: "handoff_ready",
       phaseId,
       priority: "medium",
-      title: `Handoff Ready: ${phaseId} → ${handoff.toPhase}`,
+      title: `Handoff Ready: ${phaseId} → ${targetPhaseId}`,
       summary: `${handoff.approvedArtifactCount} artifacts · ${handoff.openRiskCount} open risk(s)`,
       createdAt: getCreatedAt(handoff.generatedAt),
-      actionLabel: `Open ${handoff.toPhase}`,
+      actionLabel: `Open ${targetPhaseId}`,
       dismissable: true,
       payload: handoff,
     });
