@@ -15,6 +15,8 @@
 import type { ProgramSummary, GateReview } from "@/new/types";
 import { ATOS_STANDARD, type MethodologyDefinition } from "@/v3/lib/methodology";
 import { buildArtifactModel, type PhaseArtifactSummary } from "@/v3/lib/artifactModel";
+import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
+import { selectRisks } from "@/v3/lib/programRaid";
 
 export type ReadinessFactorKind = "artifact" | "decision" | "risk" | "exit-criterion" | "quality" | "coverage";
 
@@ -143,22 +145,30 @@ export function explainPhaseReadiness(
         });
       }
     }
-    if (gate.openDecisions > 0) {
+    // Open decisions / risks are counted from the LIVE queues — not the gate
+    // record's frozen openDecisions/openRisks snapshot, which drifts out of date
+    // the moment the team resolves something. Using the same selectors the Action
+    // Center and RAID rail use keeps every surface on one number.
+    const openDecisionCount = deriveOpenRecommendedActions(program).filter(
+      (d) => !d.phaseId || d.phaseId === phaseId,
+    ).length;
+    if (openDecisionCount > 0) {
       rawBlockers.push({
         id: "decisions:open",
-        label: `${gate.openDecisions} open decision${gate.openDecisions === 1 ? "" : "s"}`,
+        label: `${openDecisionCount} open action${openDecisionCount === 1 ? "" : "s"}`,
         kind: "decision",
         detail: "Resolve to unblock the gate",
-        weight: BLOCKER_WEIGHT.decision * Math.min(gate.openDecisions, 3),
+        weight: BLOCKER_WEIGHT.decision * Math.min(openDecisionCount, 3),
       });
     }
-    if (gate.openRisks > 0) {
+    const openRiskCount = selectRisks(program, { phaseId }).length;
+    if (openRiskCount > 0) {
       rawBlockers.push({
         id: "risks:open",
-        label: `${gate.openRisks} open risk${gate.openRisks === 1 ? "" : "s"}`,
+        label: `${openRiskCount} open risk${openRiskCount === 1 ? "" : "s"}`,
         kind: "risk",
         detail: "Mitigate or accept to raise readiness",
-        weight: BLOCKER_WEIGHT.risk * Math.min(gate.openRisks, 3),
+        weight: BLOCKER_WEIGHT.risk * Math.min(openRiskCount, 3),
       });
     }
   }

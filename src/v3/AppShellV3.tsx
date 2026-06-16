@@ -2862,8 +2862,8 @@ export default function AppShellV3() {
           phaseId={activePhaseId}
           tasks={currentPhaseTasks}
           pendingTaskCount={currentPhaseTasks.filter((task) => task.status === "pending" || task.status === "running").length}
-          decisions={(activeProgram?.decisionQueue || []).filter(
-            (decision) => (!decision.status || decision.status === "open") && (!decision.phaseId || decision.phaseId === activePhaseId),
+          decisions={deriveOpenRecommendedActions(activeProgram, "delivery_lead").filter(
+            (decision) => !decision.phaseId || decision.phaseId === activePhaseId,
           )}
           agentsAvailable={authed && isSupabaseConfigured}
           onUploadDocument={handleUploadDocument}

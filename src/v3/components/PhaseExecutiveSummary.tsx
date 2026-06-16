@@ -106,7 +106,7 @@ export function PhaseExecutiveSummary({
             C {summary.confidenceScore}%
           </span>
           {summary.blockerCount > 0 ? (
-            <span className="v3-chip muted">{summary.blockerCount} blocker{summary.blockerCount === 1 ? "" : "s"}</span>
+            <span className="v3-chip muted">{summary.blockerCount} gate blocker{summary.blockerCount === 1 ? "" : "s"}</span>
           ) : null}
           {summary.contradictionCount > 0 ? (
             <span className="v3-chip red" title={summary.topContradiction ?? undefined}>
@@ -139,7 +139,7 @@ export function PhaseExecutiveSummary({
             <div className="v3-exec-snapshot-metric">
               <span className="v3-exec-snapshot-metric-val">{summary.blockerCount}</span>
               <span className="v3-exec-snapshot-metric-lbl">
-                Blockers{summary.criticalCount > 0 ? ` · ${summary.criticalCount} critical` : ""}
+                Gate blockers{summary.criticalCount > 0 ? ` · ${summary.criticalCount} critical` : ""}
               </span>
             </div>
             {methodology && methodology.total > 0 ? (
@@ -154,7 +154,7 @@ export function PhaseExecutiveSummary({
 
           {summary.topBlocker ? (
             <div className="v3-exec-snapshot-blocker">
-              <span className="v3-exec-snapshot-row-label">Top blocker</span>
+              <span className="v3-exec-snapshot-row-label">Top gate blocker</span>
               <span className="v3-exec-snapshot-row-value">{summary.topBlocker.label}</span>
             </div>
           ) : null}
