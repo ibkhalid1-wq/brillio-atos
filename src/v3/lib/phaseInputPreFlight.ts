@@ -1,3 +1,5 @@
+import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
+
 export interface PreFlightResult {
   pass: boolean;
   completeness: number;
@@ -6,48 +8,40 @@ export interface PreFlightResult {
   blockingCount: number;
 }
 
-interface PhaseInputs {
-  objective?: string;
-  scope?: string;
-  risks?: unknown[];
-  milestones?: unknown[];
-  narrative?: string;
-  stakeholders?: unknown[];
-  budget?: unknown;
-  kpis?: unknown[];
-  [key: string]: unknown;
+function isEmptyValue(value: unknown): boolean {
+  if (value === undefined || value === null) return true;
+  if (typeof value === "string") return value.trim().length === 0;
+  if (Array.isArray(value)) return value.length === 0;
+  return false;
 }
 
-const REQUIRED_FIELDS_BY_AGENT: Record<string, Array<{ key: keyof PhaseInputs; label: string }>> = {
-  "narrative":      [{ key: "objective", label: "Programme objective" }, { key: "scope", label: "Scope" }],
-  "risk":           [{ key: "objective", label: "Programme objective" }, { key: "milestones", label: "Milestones" }],
-  "gate-review":    [{ key: "objective", label: "Programme objective" }, { key: "risks", label: "Risk register" }, { key: "milestones", label: "Milestones" }],
-  "stakeholder":    [{ key: "stakeholders", label: "Stakeholder list" }, { key: "objective", label: "Programme objective" }],
-  "budget":         [{ key: "budget", label: "Budget baseline" }, { key: "milestones", label: "Milestones" }],
-  "critical-path":  [{ key: "milestones", label: "Milestones" }],
-  "kpi-validator":  [{ key: "kpis", label: "KPI definitions" }, { key: "objective", label: "Programme objective" }],
-  "capacity-assessor": [{ key: "milestones", label: "Milestones" }],
-};
-
-export function runPreFlight(agentId: string, inputs: PhaseInputs): PreFlightResult {
-  const required = REQUIRED_FIELDS_BY_AGENT[agentId] ?? [{ key: "objective" as keyof PhaseInputs, label: "Programme objective" }];
+/**
+ * Validates a phase's persisted inputs against its real input schema
+ * (PHASE_INPUT_SCHEMAS) — the same fields the user fills in PhaseInputsPanel.
+ * A required field counts as missing only when blank, so the "Needs: …" warning
+ * always names fields that genuinely have no value (no phantom keys).
+ */
+export function runPreFlight(phaseId: string, inputs: Record<string, unknown>): PreFlightResult {
+  const schema = getPhaseInputSchema(phaseId);
+  const required = schema.fields.filter((field) => field.required);
   const missingFields: string[] = [];
   const warnings: string[] = [];
 
   for (const field of required) {
-    const val = inputs[field.key];
-    const isEmpty = val === undefined || val === null || val === ""
-      || (Array.isArray(val) && val.length === 0)
-      || (typeof val === "string" && val.trim().length < 10);
-    if (isEmpty) missingFields.push(field.label);
+    if (isEmptyValue(inputs[field.id])) missingFields.push(field.label);
   }
 
-  if (typeof inputs.narrative === "string" && inputs.narrative.trim().length < 50) {
-    warnings.push("Phase narrative is sparse — output quality may be limited");
+  for (const field of schema.fields) {
+    if (field.type !== "textarea") continue;
+    const val = inputs[field.id];
+    if (typeof val === "string" && val.trim().length > 0 && val.trim().split(/\s+/).length < 8) {
+      warnings.push(`${field.label} is brief — output quality may be limited`);
+    }
   }
 
-  const completeness = required.length === 0 ? 100 :
-    Math.round(((required.length - missingFields.length) / required.length) * 100);
+  const completeness = required.length === 0
+    ? 100
+    : Math.round(((required.length - missingFields.length) / required.length) * 100);
 
   return { pass: missingFields.length === 0, completeness, missingFields, warnings, blockingCount: missingFields.length };
 }

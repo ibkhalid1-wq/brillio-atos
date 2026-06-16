@@ -1577,7 +1577,7 @@ export default function StageView({
               const artifactId = node?.artifactId ?? null;
               const previewContent = artifactId ? phaseArtifactContentById.get(artifactId) ?? null : null;
               const isExpanded = expandedOutput === def.id;
-              const preflight = runPreFlight(def.id, preFlightInputs);
+              const preflight = runPreFlight(activePhase.id, preFlightInputs);
               const inputsIncomplete = !preflight.pass;
               return (
                 <div key={def.id} className="v3-artifact-row" data-io-anchor={`artifact:${def.id}`}>
