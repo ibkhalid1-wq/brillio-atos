@@ -965,10 +965,23 @@ export default function StageView({
                 {pipeline.map((metric, i) => {
                   const isGate = i === pipeline.length - 1;
                   const isArtifactQuality = metric.label === "Artifact quality";
+                  const isInputsComplete = metric.label === "Inputs complete";
                   return (
                     <React.Fragment key={metric.label}>
                       {i > 0 ? <span className="v3-phase-pipeline-chevron" aria-hidden="true">›</span> : null}
-                      {isGate ? (
+                      {isInputsComplete ? (
+                        <div className="v3-phase-gate-col">
+                          {renderMetric(metric)}
+                          <button
+                            type="button"
+                            className="v3-button ghost v3-button-inline-xs v3-phase-gate-recheck"
+                            aria-label="Attach a document to bootstrap inputs"
+                            onClick={onUploadDocument}
+                          >
+                            Attach doc
+                          </button>
+                        </div>
+                      ) : isGate ? (
                         <div className="v3-phase-gate-col">
                           {renderMetric(metric)}
                           {gateReview ? (
