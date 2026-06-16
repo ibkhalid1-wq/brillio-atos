@@ -9,6 +9,7 @@ import { ExecCommandPanel } from "@/v3/components/ExecCommandPanel";
 import { Kpi } from "@/v3/components/ui/Kpi";
 import { PhaseStripCard } from "@/v3/components/PhaseStripCard";
 import { selectHighRisks } from "@/v3/lib/programRaid";
+import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
 import {
   runDeterministicValidation,
   selectModelValidationFindings,
@@ -244,9 +245,9 @@ function DecisionQueueCard({
   program: ProgramSummary;
   onNavigateToDecide: () => void;
 }) {
-  const openDecisions = (program.decisionQueue || [])
-    .filter((decision) => decision.status !== "resolved" && decision.status !== "approved" && decision.status !== "rejected")
-    .slice(0, 4);
+  // Same source as the "Open Actions" pill, the rail badge, and DecideView, so
+  // the count the card shows always matches what opens when "View all" is clicked.
+  const openDecisions = deriveOpenRecommendedActions(program).slice(0, 4);
 
   return (
     <div
