@@ -469,18 +469,20 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
                     <option value="">Select…</option>
                     {field.options?.map((option) => <option key={option} value={option}>{option}</option>)}
                   </select>
-                ) : (
-                  <input
-                    type={field.type}
-                    className="v3-input"
-                    placeholder={field.placeholder}
-                    value={values[field.id] ?? ""}
-                    onChange={(event) => setValues((current) => ({ ...current, [field.id]: event.target.value }))}
-                  />
-                )}
-                {field.id === "successMetric" ? (
-                  <div style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center" }}>
-                    <span style={{ flex: 2, fontSize: 11, color: "var(--v3-text-muted)" }}>Baseline → target</span>
+                ) : field.id === "successMetric" ? (
+                  // Render the Primary success metric on a single row in the same
+                  // column layout as the secondary Outcome KPIs below
+                  // (name · baseline · target · unit), so the primary and
+                  // secondary metrics read as one consistent system.
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <input
+                      type="text"
+                      className="v3-input"
+                      style={{ flex: 2 }}
+                      placeholder={field.placeholder}
+                      value={values[field.id] ?? ""}
+                      onChange={(event) => setValues((current) => ({ ...current, [field.id]: event.target.value }))}
+                    />
                     <input
                       type="text"
                       className="v3-input"
@@ -505,11 +507,19 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
                       value={values.successMetricUnit ?? ""}
                       onChange={(event) => setValues((current) => ({ ...current, successMetricUnit: event.target.value }))}
                     />
-                    {/* Mirror the KPI grid's remove-button column so the baseline/target/unit
-                        inputs line up vertically with the Outcome KPIs grid below. */}
+                    {/* Hidden spacer mirroring the KPI grid's remove button so the
+                        columns line up with the Outcome KPIs rows beneath. */}
                     <button type="button" className="v3-button ghost" style={{ fontSize: 11, visibility: "hidden" }} tabIndex={-1} aria-hidden>✕</button>
                   </div>
-                ) : null}
+                ) : (
+                  <input
+                    type={field.type}
+                    className="v3-input"
+                    placeholder={field.placeholder}
+                    value={values[field.id] ?? ""}
+                    onChange={(event) => setValues((current) => ({ ...current, [field.id]: event.target.value }))}
+                  />
+                )}
                 {onAssistField && field.type === "textarea" ? (
                   <div className="v3-field-assist">
                     {assistingField === field.id ? (
