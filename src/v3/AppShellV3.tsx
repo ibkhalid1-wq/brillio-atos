@@ -1469,7 +1469,7 @@ export default function AppShellV3() {
   const { addMilestone, completeMilestone, isSaving: milestoneSavePending } = useMilestones(activeProgramId || "", activeProgram?.rawData || {}, refreshPrograms);
   const { saveBudgetInputs, isSaving: budgetSavePending } = useBudgetTracking(activeProgramId || "", activeProgram?.rawData || {}, refreshPrograms);
   useClosure(activeProgramId || "", activeProgram?.rawData || {}, refreshPrograms);
-  const { approveGate, requestRemediation, saveNote: saveGateNote, reopenGate } = useGateReview(activeProgramId || "", rawData, refreshPrograms);
+  const { approveGate, requestRemediation, reopenGate } = useGateReview(activeProgramId || "", rawData, refreshPrograms);
   const { acknowledgeEscalation, resolveEscalation } = useEscalations(activeProgramId || "", rawData, refreshPrograms);
   const { addNote: addProgramNote } = useProgramNotes(activeProgramId || "", rawData, refreshPrograms);
   const { addDecision } = useDecisionQueue(activeProgramId || "", rawData, refreshPrograms);
@@ -2049,16 +2049,6 @@ export default function AppShellV3() {
 
   const handleSaveNarrativeCorrection = useCallback(async (note: string) => {
     await addProgramNote(note, "narrative-correction");
-  }, [addProgramNote]);
-
-  const handleSaveGateNote = useCallback(async (phaseId: string, note: string) => {
-    await saveGateNote(phaseId, note);
-    await addProgramNote(note, "gate-note", { phaseId });
-  }, [addProgramNote, saveGateNote]);
-
-  const handleSaveStageNote = useCallback(async (phaseId: string, note: string) => {
-    await addProgramNote(note, "stage-note", { phaseId });
-    pushV3Toast("Note saved. ATOS will use it on the next run.", { tone: "success", duration: 3000 });
   }, [addProgramNote]);
 
   // Per-phase debounce timers for the Tier-2 input-quality validation pass.
@@ -2658,8 +2648,6 @@ export default function AppShellV3() {
                 onOpenDecide={() => navigateSurface("decide")}
                 onAddItem={(tab) => { setDecideIntent({ tab, nonce: Date.now() }); navigateSurface("decide"); }}
                 onOpenReport={openReport}
-                onSaveGateNote={handleSaveGateNote}
-                onSaveStageNote={handleSaveStageNote}
                 onReopenGate={handleReopenGate}
                 onRunAgent={handleRunAgent}
                 onSaveArtifact={handleSaveArtifact}
@@ -2849,6 +2837,7 @@ export default function AppShellV3() {
               onApproveGate={handleApproveGate}
               onRunAgent={handleRunAgent}
               anyAgentRunning={anyUserAgentRunning}
+              narrativeRunning={narrativeIsRunning}
               onNavigateToDecide={() => navigateSurface("decide")}
               onNavigateToGates={() => navigateSurface("programme-health")}
               onNavigateToPipeline={() => navigateSurface("pipeline")}

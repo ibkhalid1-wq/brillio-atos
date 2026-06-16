@@ -1,11 +1,8 @@
 import React, { useEffect, useMemo, useRef } from "react";
 import { getRiskTrend } from "@/lib/adamGateRisk";
 import type { AgentRun } from "@/lib/adamSync";
-import type { ExitCriterion, GateReview, PlanAction, ProgramSummary, Workstream } from "@/new/types";
+import type { ExitCriterion, GateReview, ProgramSummary } from "@/new/types";
 import ArtifactEditor from "@/v3/components/ArtifactEditor";
-import GateCoachPanel from "@/v3/components/GateCoachPanel";
-import { GateBlockingChecklist } from "@/v3/components/GateBlockingChecklist";
-import OnboardingCard from "@/v3/components/OnboardingCard";
 import PhaseInputsPanel, { type FieldAssistRequest } from "@/v3/components/PhaseInputsPanel";
 import PhaseFlowOverlay from "@/v3/components/PhaseFlowOverlay";
 import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
@@ -47,8 +44,6 @@ interface StageViewProps {
   onOpenDecide: () => void;
   onAddItem?: (tab: "blockers" | "risks" | "actions") => void;
   onOpenReport: (reportId: V3ReportId) => void;
-  onSaveGateNote: (phaseId: string, note: string) => Promise<void>;
-  onSaveStageNote: (phaseId: string, note: string) => Promise<void>;
   onReopenGate: (phaseId: string) => void;
   onRunAgent: (agentId: string) => void;
   onSaveArtifact: (artifactId: "narrative" | "deck", content: string) => Promise<void>;
@@ -112,33 +107,6 @@ function getRawGateStatus(program: ProgramSummary | null, phaseId: string | null
   const review = gateReviews?.[phaseId];
   const status = review && typeof review === "object" && "status" in review ? review.status : null;
   return typeof status === "string" ? status as GateReview["status"] : null;
-}
-
-function ActionList({ actions, onOpenReport }: { actions: PlanAction[]; onOpenReport: () => void }) {
-  if (!actions.length) {
-    return (
-      <EmptyState
-        icon="→"
-        title="No priority actions yet"
-        description="Generate or refresh the delivery plan to surface the next actions for this phase."
-        compact
-        action={{ label: "Open plan", onClick: onOpenReport }}
-      />
-    );
-  }
-
-  return (
-    <ol className="v3-action-list">
-      {actions.map((action, index) => (
-        <li key={`${action.action}-${index}`} className="v3-action-list-item">
-          <div>{action.action}</div>
-          {action.rationale ? (
-            <div className="v3-action-list-rationale">{action.rationale}</div>
-          ) : null}
-        </li>
-      ))}
-    </ol>
-  );
 }
 
 function ExitCriteriaCard({
@@ -246,72 +214,6 @@ function GateNotePanel({ phaseId, existing, onSave }: { phaseId: string; existin
           </div>
         </div>
       ) : null}
-    </div>
-  );
-}
-
-function StageBriefPanel({ phaseId, onSave }: { phaseId: string; onSave: (phaseId: string, note: string) => Promise<void> }) {
-  const [open, setOpen] = React.useState(false);
-  const [text, setText] = React.useState("");
-  const [saving, setSaving] = React.useState(false);
-  const [saved, setSaved] = React.useState(false);
-
-  async function handleSave() {
-    if (!text.trim()) return;
-    setSaving(true);
-    try {
-      await onSave(phaseId, text.trim());
-      setSaved(true);
-      setText("");
-      setTimeout(() => {
-        setSaved(false);
-        setOpen(false);
-      }, 1200);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  if (!open) {
-    return (
-      <button
-        type="button"
-        className="v3-button ghost v3-button-inline-sm v3-button-block-gap"
-        onClick={() => setOpen(true)}
-      >
-        ✎ Brief ATOS on this phase
-      </button>
-    );
-  }
-
-  return (
-    <div className="v3-brief-panel">
-      <div className="v3-brief-panel-label">
-        Notes for ATOS — this phase
-        <span className="v3-brief-panel-hint">Corrections, context, constraints. Used to improve future analysis for this phase.</span>
-      </div>
-      <textarea
-        className="v3-input v3-textarea"
-        aria-label="Phase note for ATOS"
-        rows={3}
-        placeholder="e.g. Vendor confirmed delay to 14 Aug. Ignore previous timeline assumption. Sponsor wants risk summary by Friday."
-        value={text}
-        onChange={(event) => setText(event.target.value)}
-        autoFocus
-      />
-      <div className="v3-inline-actions v3-inline-actions--end">
-        <button type="button" className="v3-button ghost v3-button-inline-sm" onClick={() => { setOpen(false); setText(""); }}>
-          Cancel
-        </button>
-        <button
-          type="button"
-          className="v3-button primary v3-button-inline-sm"
-          disabled={!text.trim() || saving}
-          onClick={() => void handleSave()}
-        >
-          {saved ? "Saved ✓" : saving ? "Saving…" : "Save note"}
-        </button>
-      </div>
     </div>
   );
 }
@@ -433,8 +335,6 @@ export default function StageView({
   onOpenDecide,
   onAddItem,
   onOpenReport,
-  onSaveGateNote,
-  onSaveStageNote,
   onReopenGate,
   onRunAgent,
   onSaveArtifact,
@@ -447,19 +347,12 @@ export default function StageView({
   const [expandedOutput, setExpandedOutput] = React.useState<string | null>(null);
   const [editingArtifact, setEditingArtifact] = React.useState<"narrative" | "deck" | null>(null);
   const [updatedArtifactId, setUpdatedArtifactId] = React.useState<"narrative" | "deck" | null>(null);
-  const onboardingStorageKey = `adam_onboarding_stage_${program?.id || "local"}_${activePhaseId || "none"}`;
-  const [guideDismissed, setGuideDismissed] = React.useState(false);
   const [exitCriteriaOpen, setExitCriteriaOpen] = React.useState(false);
-  const [summaryExpanded, setSummaryExpanded] = React.useState(false);
   const phaseMainRef = useRef<HTMLDivElement | null>(null);
   const previousDeckRef = useRef<string | null>(artifactPreviews?.deck || null);
   const toggleOutput = (id: string) => {
     setExpandedOutput((previous) => previous === id ? null : id);
   };
-  React.useEffect(() => {
-    if (typeof window === "undefined") return;
-    setGuideDismissed(window.localStorage.getItem(onboardingStorageKey) === "done");
-  }, [onboardingStorageKey]);
   useEffect(() => {
     const nextDeck = artifactPreviews?.deck || null;
     if (previousDeckRef.current && nextDeck && previousDeckRef.current !== nextDeck) {
@@ -544,12 +437,6 @@ export default function StageView({
     () => (program?.raidEntries || []).filter((e) => e.phase === activePhase?.id && e.status !== "closed" && e.type === "risk").length,
     [program?.raidEntries, activePhase?.id],
   );
-  const stageActions = (program?.plan?.nextThreeActions || [])
-    .filter((action) =>
-      action.phase === activePhase?.id ||
-      action.phase?.toLowerCase().includes(activePhase?.id?.toLowerCase() ?? "__")
-    )
-    .slice(0, 3);
   const phaseRationale = program?.plan?.nextThreeActions?.find((action) => action.phase === activePhase?.id)?.rationale || "";
   const verdict = firstSentence(
     activePhase?.objective ||
@@ -558,20 +445,6 @@ export default function StageView({
     program?.narrative ||
     ""
   );
-  const incomingHandoff = useMemo(() => {
-    if (!program || !activePhase) return null;
-    const source = typeof program.rawData === "object" && program.rawData !== null
-      ? ("data" in program.rawData && typeof program.rawData.data === "object" && program.rawData.data !== null
-        ? program.rawData.data
-        : program.rawData)
-      : null;
-    if (!source || typeof source !== "object") return null;
-    const handoffs = "phaseIncomingHandoffs" in source && typeof source.phaseIncomingHandoffs === "object" && source.phaseIncomingHandoffs !== null
-      ? source.phaseIncomingHandoffs as Record<string, unknown>
-      : null;
-    const handoff = handoffs?.[activePhase.id];
-    return handoff && typeof handoff === "object" ? handoff as Record<string, unknown> : null;
-  }, [program, activePhase]);
   const isGateRunning = activePhase ? triggers.gateReviewRunningPhaseSet.has(activePhase.id) : false;
   const isRetroRunning = activePhase ? triggers.retroRunningPhases.has(activePhase.id) : false;
   const gateTrend = useMemo(() => {
@@ -586,21 +459,6 @@ export default function StageView({
     () => (program && activePhase ? deriveProgramConfidence(program, activePhase.id) : null),
     [activePhase, program],
   );
-  const gateHumanNote = gateReview && typeof (gateReview as unknown as Record<string, unknown>).humanNote === "string"
-    ? ((gateReview as unknown as Record<string, unknown>).humanNote as string)
-    : "";
-  const existingStageNotes = useMemo(() => {
-    if (!source) return [];
-    const notes = Array.isArray(source.humanNotes) ? source.humanNotes : [];
-    return notes
-      .filter((note): note is Record<string, unknown> =>
-        typeof note === "object" && note !== null &&
-        (note.type === "stage-note" || note.type === "gate-note") &&
-        note.phaseId === activePhase?.id
-      )
-      .slice(-3)
-      .reverse();
-  }, [activePhase?.id, source]);
   // Schema-grounded, deterministic input-quality assessment. Derived from the
   // phase's declared input fields (the single source of truth), so the banner's
   // "Missing:" list can only ever name inputs that genuinely belong to this
@@ -632,35 +490,12 @@ export default function StageView({
     ? source.contradictions as Array<{ severity: string; description: string }>
     : [];
   const criticalContradictions = contradictions.filter((item) => item.severity === "critical");
-  const scopeDrift = source?.scopeDrift && typeof source.scopeDrift === "object" && !Array.isArray(source.scopeDrift)
-    ? source.scopeDrift as { driftIndex: number; driftLevel: string; summary: string }
-    : null;
-  const weeklyDigest = source?.weeklyDigest && typeof source.weeklyDigest === "object" && !Array.isArray(source.weeklyDigest)
-    ? source.weeklyDigest as {
-        weekSummary: string;
-        topPriorities: Array<{ priority: string; reason: string }>;
-        weekHealthRag: string;
-        weekOf: string;
-        generatedAt: string;
-      }
-    : null;
   const handoffQuality = source?.handoffQuality && typeof source.handoffQuality === "object" && !Array.isArray(source.handoffQuality)
     ? (source.handoffQuality as Record<string, unknown>)[activePhase?.id || ""] as { score?: number; passed?: boolean } | undefined
     : undefined;
   const deckQuality = source?.deckQuality && typeof source.deckQuality === "object" && !Array.isArray(source.deckQuality)
     ? source.deckQuality as { score: number; improvements?: string[] }
     : null;
-  const mondayOfCurrentWeek = useMemo(() => {
-    const today = new Date();
-    const monday = new Date(today);
-    const day = monday.getDay();
-    const delta = day === 0 ? -6 : 1 - day;
-    monday.setDate(monday.getDate() + delta);
-    return monday.toISOString().slice(0, 10);
-  }, []);
-  const staleArtifacts = Array.isArray(source?.staleArtifacts) ? source.staleArtifacts as string[] : [];
-  const artifactsStaleReason = typeof source?.artifactsStaleReason === "string" ? source.artifactsStaleReason : null;
-  const phaseWorkstreams = (program?.workstreams || []).filter((workstream: Workstream) => workstream.phaseId === activePhase?.id);
   const activeRun = activeRuns?.some(r => r.status === "running");
   // True while a given agent has an in-flight run (queued or running). Drives the
   // per-button "Generating…" + disabled state so a user can't re-fire the same
@@ -683,10 +518,6 @@ export default function StageView({
     return idleLabel;
   };
   const agentButtonDisabled = (agentId: string) => !agentsAvailable || isAgentRunning(agentId);
-  const narrativeRunning = activeRuns?.some(r => r.status === "running" && r.agent_id === "narrative");
-  const gateCoach = source?.gateReadinessCoach && typeof source.gateReadinessCoach === "object" && !Array.isArray(source.gateReadinessCoach)
-    ? (source.gateReadinessCoach as Record<string, { actions?: Array<{ action: string; effort: "quick" | "hours" | "days"; owner: "user" | "agent"; agentId: string | null }> }>)[activePhase?.id ?? ""]
-    : null;
   const discoveryGuide = source?.discoveryGuide && typeof source.discoveryGuide === "object" && !Array.isArray(source.discoveryGuide)
     ? source.discoveryGuide as Record<string, unknown>
     : null;
@@ -705,7 +536,6 @@ export default function StageView({
   const phaseInputs = source?.phaseInputs && typeof source.phaseInputs === "object" && !Array.isArray(source.phaseInputs)
     ? (source.phaseInputs as Record<string, unknown>)[activePhase?.id ?? ""]
     : null;
-  const hasPhaseInputs = !!(phaseInputs && typeof phaseInputs === "object" && Object.keys(phaseInputs as Record<string, unknown>).some((key) => key !== "savedAt"));
   // Pre-flight input gating: the captured inputs for this phase, normalised for
   // runPreFlight so each artifact row can warn (before a ~90s run that would burn
   // provider quota) when the producing agent's required inputs are missing.
@@ -714,80 +544,7 @@ export default function StageView({
       ? phaseInputs as Record<string, unknown>
       : {}
   ), [phaseInputs]);
-  const hasGateReview = !!gateReview;
   const gateApproved = gateReviewStatus === "approved";
-  const confirmedCriteria =
-    (gateReview?.exitCriteriaStatus || []).filter((criterion) => criterion.met).length > 0 ||
-    gateApproved; // Gate approval implies criteria were met, even when exitCriteriaStatus wasn't written
-  // Phase-aware checklist — each phase has context-specific "why" guidance (Priority 10)
-  const PHASE_ONBOARDING_STEPS: Record<string, Array<{ label: string; why: string }>> = {
-    strategy:    [
-      { label: "Define programme objective and business case", why: "Without a clear objective, ATOS cannot generate meaningful summaries or action plans." },
-      { label: "Upload existing strategy documents", why: "Document upload instantly bootstraps your programme data." },
-      { label: "Generate your strategy brief", why: "Creates the foundation narrative that all downstream phase analysis references." },
-      { label: "Gate approval unlocks Mobilise", why: "Gate approval confirms strategic intent is clear before committing resources." },
-    ],
-    mobilise:    [
-      { label: "Enter team roster and governance structure", why: "ATOS needs to know who's accountable for each workstream to assign actions correctly." },
-      { label: "Confirm budget baseline", why: "Budget data drives risk scoring and milestone health calculations." },
-      { label: "Review mobilisation risks", why: "Early risk identification prevents cost overruns in later phases." },
-      { label: "Gate approval unlocks Discover", why: "Confirms the team is assembled and governance is in place." },
-    ],
-    discover:    [
-      { label: "Log stakeholder interviews and as-is findings", why: "Discovery outputs are required for Design phase architecture decisions." },
-      { label: "Analyse stakeholder engagement", why: "Identifies engagement gaps that can delay delivery if not addressed early." },
-      { label: "Document pain points and capability gaps", why: "Gaps drive the change impact assessment in Design phase." },
-      { label: "Gate approval unlocks Design", why: "Gate confirms discovery is complete before committing to solution design." },
-    ],
-    design:      [
-      { label: "Upload target operating model or solution architecture", why: "Architecture decisions are hard to reverse — ATOS will flag contradictions early." },
-      { label: "Assess change impact", why: "Identifies affected groups and resistance risks before build begins." },
-      { label: "Get TOM approved by SteerCo", why: "Sponsor sign-off on design reduces rework risk in Build phase by ~40%." },
-      { label: "Gate approval unlocks Build", why: "Confirms design is locked before development investment." },
-    ],
-    build:       [
-      { label: "Enter build milestones and delivery workstreams", why: "Milestone tracking is the primary health signal for this phase." },
-      { label: "Generate prioritised action plan", why: "Identifies the critical path and sequences work to reduce delivery risk." },
-      { label: "Complete UAT criteria and testing", why: "Gate approval requires evidence that the solution meets acceptance criteria." },
-      { label: "Gate approval unlocks Operate", why: "Confirms the solution is ready to go live." },
-    ],
-    operate:     [
-      { label: "Confirm go-live plan and cutover approach", why: "Cutover failures are the #1 cause of programme escalations — plan early." },
-      { label: "Set up KPI tracking against baseline", why: "ATOS needs measurement data to calculate benefits realisation in Value Realise phase." },
-      { label: "Confirm support model and hypercare plan", why: "Unplanned support demand after go-live is a top adoption risk." },
-      { label: "Gate approval unlocks Govern", why: "Confirms steady-state operations are established." },
-    ],
-    govern:      [
-      { label: "Complete compliance framework review", why: "Regulatory non-compliance discovered late creates programme-halting risk." },
-      { label: "Approve control matrix with internal audit", why: "Controls sign-off is required for closure in regulated environments." },
-      { label: "Test escalation routes and decision rights", why: "Untested escalation paths cause decision delays and governance failures." },
-      { label: "Gate approval unlocks Optimize", why: "Confirms the operating model is governed and auditable." },
-    ],
-    optimize:    [
-      { label: "Establish benefits baseline measurement", why: "Without a baseline, value realisation cannot be demonstrated to stakeholders." },
-      { label: "Prioritise improvement backlog by business value", why: "Post-go-live improvements compete for limited capacity — prioritisation is essential." },
-      { label: "Run adoption metrics report", why: "Low adoption is the most common reason benefits are not realised." },
-      { label: "Gate approval unlocks Value Realise", why: "Confirms the solution is optimised and adoption is sufficient for value measurement." },
-    ],
-    valuerealize:[
-      { label: "Quantify and sign off benefits realised", why: "Sponsor-confirmed benefits are the primary deliverable of the programme." },
-      { label: "Complete programme retrospective", why: "Lessons learned feed ATOS's pattern library, making future programmes smarter." },
-      { label: "Produce and approve closure pack", why: "Closure pack is the formal record of programme outcomes for the client and stakeholders." },
-      { label: "Confirm handover to BAU", why: "Without formal BAU handover, value erodes as programme team disengages." },
-    ],
-  };
-  const phaseSteps = PHASE_ONBOARDING_STEPS[activePhase?.id ?? ""] ?? [
-    { label: "Complete phase setup", why: "ATOS needs phase data to generate insights and readiness assessments." },
-    { label: "Generate phase documents", why: "ATOS assesses gate readiness automatically once this phase's documents are generated." },
-    { label: "Review and confirm exit criteria", why: "Exit criteria define what 'done' looks like for this phase." },
-    { label: "Gate approval unlocks the next phase", why: "Gate approval signals the team is ready to proceed." },
-  ];
-  const onboardingItems = phaseSteps.map((step, idx) => ({
-    label: step.label,
-    why: step.why,
-    done: idx === 0 ? hasPhaseInputs : idx === 1 ? hasGateReview : idx === 2 ? confirmedCriteria : gateApproved,
-  }));
-  const showEmbeddedOnboarding = !guideDismissed && !gateApproved;
 
   if (!program || !activePhase) {
     return (
@@ -1040,234 +797,7 @@ export default function StageView({
 
       </header>
 
-      {/* Executive summary — generated on demand, never auto-run, so it stays stable */}
-      <div style={{
-        margin: "0 0 16px",
-        padding: "12px 16px",
-        background: "var(--v3-surface-2)",
-        border: "1px solid var(--v3-border)",
-        borderRadius: "var(--v3-radius)",
-        fontSize: 12,
-        color: "var(--v3-text-secondary)",
-        lineHeight: 1.6,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 6 }}>
-          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--v3-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-            ✦ Executive summary
-          </span>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            {artifactPreviews?.narrative && !narrativeRunning ? (
-              <button
-                type="button"
-                className="v3-button ghost v3-button-inline-xs"
-                onClick={() => setSummaryExpanded((open) => !open)}
-                aria-expanded={summaryExpanded}
-              >
-                {summaryExpanded ? "Collapse" : "Expand"}
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="v3-button ghost v3-button-inline-xs"
-              onClick={() => { setExpandedOutput("deck"); document.getElementById("phase-artifacts-anchor")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
-            >
-              Status deck
-            </button>
-            <button
-              type="button"
-              className="v3-button ghost v3-button-inline-xs"
-              onClick={() => onRunAgent("narrative")}
-              disabled={narrativeRunning}
-            >
-              {narrativeRunning ? "Generating…" : artifactPreviews?.narrative ? "Refresh" : "Generate summary"}
-            </button>
-          </div>
-        </div>
-        {narrativeRunning ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--v3-accent)" }}>
-            <span style={{ animation: "v3-spin 1.2s linear infinite", display: "inline-block" }}>◎</span>
-            <span>ATOS is generating the summary…</span>
-          </div>
-        ) : artifactPreviews?.narrative ? (
-          <div style={summaryExpanded
-            ? { whiteSpace: "pre-wrap" }
-            : { overflow: "hidden", maxHeight: 60, maskImage: "linear-gradient(to bottom, black 60%, transparent 100%)", WebkitMaskImage: "linear-gradient(to bottom, black 60%, transparent 100%)" }}>
-            {typeof artifactPreviews.narrative === "string"
-              ? (summaryExpanded ? artifactPreviews.narrative : artifactPreviews.narrative.slice(0, 300))
-              : ""}
-          </div>
-        ) : (
-          <div style={{ color: "var(--v3-text-muted)" }}>
-            No summary yet — click Generate summary to have ATOS analyse this programme.
-          </div>
-        )}
-      </div>
       <div className="v3-phase-body">
-      <section className="v3-zone v3-zone--focus v3-phase-aside">
-        {weeklyDigest && weeklyDigest.weekOf === mondayOfCurrentWeek ? (
-          <div className="v3-weekly-digest">
-            <div className="v3-digest-head">
-              <div className="v3-card-title v3-card-title--flush">Week of {weeklyDigest.weekOf}</div>
-              <span className={`v3-chip ${weeklyDigest.weekHealthRag}`}>{weeklyDigest.weekHealthRag}</span>
-            </div>
-            <div className="v3-digest-summary">
-              {weeklyDigest.weekSummary}
-            </div>
-            {weeklyDigest.topPriorities?.length ? (
-              <div className="v3-digest-priorities">
-                <div className="v3-inline-list-label">
-                  This week's priorities
-                </div>
-                {weeklyDigest.topPriorities.slice(0, 3).map((priority, index) => (
-                  <div key={`${priority.priority}-${index}`} className="v3-digest-priority-row">
-                    <span className="v3-digest-priority-index">{index + 1}</span>
-                    <div>
-                      <div className="v3-digest-priority-title">{priority.priority}</div>
-                      <div className="v3-digest-priority-reason">{priority.reason}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-        {showEmbeddedOnboarding ? (
-          <OnboardingCard
-            variant="checklist"
-            title="Start here"
-            subtitle={`${onboardingItems.filter((item) => item.done).length} of ${onboardingItems.length} complete`}
-            items={onboardingItems}
-            ctaLabel={
-              !hasPhaseInputs ? "Open phase inputs →"
-              : (!hasGateReview && agentsAvailable) ? "Generate phase documents →"
-              : !confirmedCriteria ? "Review exit criteria →"
-              : "Review gate readiness →"
-            }
-            onCtaClick={() => {
-              if (!hasPhaseInputs) {
-                // Phase inputs are now the inline working area — scroll to them.
-                document.getElementById("phase-inputs-anchor")?.scrollIntoView({ behavior: "smooth", block: "center" });
-                return;
-              }
-              // Gate review + exit criteria are now produced automatically once the
-              // phase's documents are generated. Guide the user to the work area
-              // rather than offering a manual trigger.
-              if (!hasGateReview && agentsAvailable) {
-                document.getElementById("phase-artifacts-anchor")?.scrollIntoView({ behavior: "smooth", block: "center" });
-                return;
-              }
-              if (!confirmedCriteria) {
-                setExitCriteriaOpen(true);
-                return;
-              }
-              // Guided setup is complete; gate approval lives on the Programme Health
-              // surface. Surface the readiness signal here rather than approving.
-              document.getElementById("phase-artifacts-anchor")?.scrollIntoView({ behavior: "smooth", block: "center" });
-            }}
-            onDismiss={() => {
-              if (typeof window !== "undefined") {
-                window.localStorage.setItem(onboardingStorageKey, "done");
-              }
-              setGuideDismissed(true);
-            }}
-          />
-        ) : null}
-
-        {program && activePhase?.id ? (
-          <GateBlockingChecklist
-            program={program}
-            phaseId={activePhase.id}
-            gateStatus={gateReviewStatus}
-            onRunAgent={onRunAgent}
-            onOpenMoreView={onOpenMoreView}
-            onOpenDecide={onOpenDecide}
-            isAgentRunning={isAgentRunning}
-          />
-        ) : null}
-
-        {readiness && readiness.score < 80 && gateCoach?.actions?.length ? (
-          <GateCoachPanel actions={gateCoach.actions} onRunAgent={onRunAgent} isAgentRunning={isAgentRunning} />
-        ) : null}
-        {phaseWorkstreams.length > 1 ? (
-          <div className="v3-workstream-list v3-stack-sm">
-            {phaseWorkstreams.map((workstream) => (
-              <div key={workstream.id} className="v3-workstream-row">
-                <div className="v3-workstream-row-head">
-                  <span className="v3-workstream-row-label">{workstream.label}</span>
-                  <span className="v3-workstream-row-value">{Math.round(workstream.pct)}%</span>
-                </div>
-                <div className="v3-phase-progress-bar">
-                  <div className="v3-phase-progress-fill" style={{ width: `${workstream.pct}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : null}
-        {scopeDrift && scopeDrift.driftIndex > 15 ? (
-          <div className="v3-scope-drift-chip">
-            <span className={`v3-chip ${scopeDrift.driftIndex > 40 ? "red" : "amber"}`}>
-              Scope drift {scopeDrift.driftIndex}%
-            </span>
-            <span className="v3-banner-detail">{scopeDrift.summary}</span>
-          </div>
-        ) : null}
-        {staleArtifacts.length > 0 && artifactsStaleReason ? (
-          <div className="v3-stale-banner">
-            <span>↻</span>
-            <span className="v3-banner-copy">
-              Artifacts refreshing after scope change: {artifactsStaleReason}
-            </span>
-          </div>
-        ) : null}
-
-        {incomingHandoff ? (
-          <div className="v3-handoff-banner">
-            <div className="v3-eyebrow-label">
-              Carried forward from {String(incomingHandoff.fromPhaseId || "previous phase")}
-            </div>
-            {typeof incomingHandoff.summary === "string" ? (
-              <div className="v3-banner-copy v3-banner-copy--spaced">
-                {incomingHandoff.summary}
-              </div>
-            ) : null}
-            {Array.isArray(incomingHandoff.openQuestions) && incomingHandoff.openQuestions.length ? (
-              <div>
-                <div className="v3-inline-list-label">Open questions inherited:</div>
-                <ul className="v3-inline-list">
-                  {(incomingHandoff.openQuestions as string[]).slice(0, 3).map((question, index) => (
-                    <li key={`${question}-${index}`}>{question}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            {typeof incomingHandoff.recommendedNextAction === "string" ? (
-              <div className="v3-banner-accent-copy">
-                → {incomingHandoff.recommendedNextAction}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-        {generatedAt ? (
-          <div className="v3-generated-at">
-            Last updated <RelativeTime date={generatedAt} />
-          </div>
-        ) : null}
-        {gateReview ? <GateNotePanel phaseId={activePhase.id} existing={gateHumanNote} onSave={onSaveGateNote} /> : null}
-        {existingStageNotes.length > 0 ? (
-          <div className="v3-brief-history">
-            <div className="v3-brief-history-label">Briefed</div>
-            {existingStageNotes.map((note, index) => (
-              <div key={`${String(note.savedAt)}-${index}`} className="v3-brief-history-item">
-                <span className="v3-brief-history-text">{String(note.text)}</span>
-                <span className="v3-brief-history-age"><RelativeTime date={String(note.savedAt)} /></span>
-              </div>
-            ))}
-          </div>
-        ) : null}
-        <StageBriefPanel phaseId={activePhase.id} onSave={onSaveStageNote} />
-
-                  <ActionList actions={stageActions} onOpenReport={() => onOpenReport("status")} />
-      </section>
 
       <div className="v3-phase-main" ref={phaseMainRef}>
       <PhaseFlowOverlay containerRef={phaseMainRef} program={program} phaseId={activePhase.id} enabled />

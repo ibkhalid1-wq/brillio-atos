@@ -15,6 +15,7 @@ interface ExecutiveViewProps {
   onApproveGate: (phaseId: string) => Promise<void>;
   onRunAgent: (agentId: string, phaseId?: string) => void;
   anyAgentRunning: boolean;
+  narrativeRunning: boolean;
   onNavigateToDecide: () => void;
   onNavigateToGates: () => void;
   onNavigateToPipeline: () => void;
@@ -157,6 +158,7 @@ export default function ExecutiveView({
   onApproveGate,
   onRunAgent,
   anyAgentRunning,
+  narrativeRunning,
   onNavigateToDecide,
   onNavigateToGates,
   onNavigateToPipeline,
@@ -165,6 +167,7 @@ export default function ExecutiveView({
 }: ExecutiveViewProps) {
   const [approvingPhase, setApprovingPhase] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [summaryExpanded, setSummaryExpanded] = useState(false);
 
   // ── Extract inner program data for agent-generated artifacts ─────────────
   const innerData = useMemo<Record<string, unknown>>(() => {
@@ -417,6 +420,61 @@ export default function ExecutiveView({
               </div>
             </div>
           </AdamExplainsTooltip>
+        )}
+      </div>
+
+      {/* ── Executive summary — generated on demand, never auto-run ─────────── */}
+      <div style={{
+        padding: "12px 16px",
+        background: "var(--v3-surface-2)",
+        border: "1px solid var(--v3-border)",
+        borderRadius: "var(--v3-radius)",
+        fontSize: 12,
+        color: "var(--v3-text-secondary)",
+        lineHeight: 1.6,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 6 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--v3-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            ✦ Executive summary
+          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {program.narrative && !narrativeRunning ? (
+              <button
+                type="button"
+                className="v3-button ghost v3-button-inline-xs"
+                onClick={() => setSummaryExpanded((open) => !open)}
+                aria-expanded={summaryExpanded}
+              >
+                {summaryExpanded ? "Collapse" : "Expand"}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="v3-button ghost v3-button-inline-xs"
+              onClick={() => onRunAgent("narrative", "program")}
+              disabled={narrativeRunning}
+            >
+              {narrativeRunning ? "Generating…" : program.narrative ? "Refresh" : "Generate summary"}
+            </button>
+          </div>
+        </div>
+        {narrativeRunning ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--v3-accent)" }}>
+            <span style={{ animation: "v3-spin 1.2s linear infinite", display: "inline-block" }}>◎</span>
+            <span>ATOS is generating the summary…</span>
+          </div>
+        ) : program.narrative ? (
+          <div style={summaryExpanded
+            ? { whiteSpace: "pre-wrap" }
+            : { overflow: "hidden", maxHeight: 60, maskImage: "linear-gradient(to bottom, black 60%, transparent 100%)", WebkitMaskImage: "linear-gradient(to bottom, black 60%, transparent 100%)" }}>
+            {typeof program.narrative === "string"
+              ? (summaryExpanded ? program.narrative : program.narrative.slice(0, 300))
+              : ""}
+          </div>
+        ) : (
+          <div style={{ color: "var(--v3-text-muted)" }}>
+            No summary yet — click Generate summary to have ATOS analyse this programme.
+          </div>
         )}
       </div>
 
