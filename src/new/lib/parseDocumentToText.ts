@@ -206,10 +206,44 @@ async function parsePdf(file: File): Promise<ParseResult> {
   return finish(rawText, "pdf", { pageCount: pdf.numPages });
 }
 
+/**
+ * Convert a mammoth-produced HTML fragment to plain text while preserving table
+ * structure as pipe-delimited rows. `mammoth.extractRawText` flattens tables —
+ * every cell becomes its own paragraph with no row/column pairing — so a metrics
+ * table (Metric · Baseline · Target · Unit) is unrecoverable downstream. Tables
+ * are rendered row-by-row (cells joined with " | ") and surrounding prose keeps
+ * its paragraph boundaries, in document order.
+ */
+export function htmlToStructuredText(html: string): string {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+
+  doc.querySelectorAll("table").forEach((table) => {
+    const lines: string[] = [];
+    table.querySelectorAll("tr").forEach((tr) => {
+      const cells = [...tr.querySelectorAll("th, td")].map(
+        (cell) => (cell.textContent ?? "").replace(/\s+/g, " ").trim(),
+      );
+      if (cells.some((cell) => cell.length > 0)) lines.push(cells.join(" | "));
+    });
+    table.replaceWith(doc.createTextNode(`\n${lines.join("\n")}\n`));
+  });
+
+  doc.querySelectorAll("br").forEach((br) => br.replaceWith(doc.createTextNode("\n")));
+  doc.querySelectorAll("p, h1, h2, h3, h4, h5, h6, li, div").forEach((el) => {
+    el.appendChild(doc.createTextNode("\n"));
+  });
+
+  return (doc.body?.textContent ?? "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 async function parseDocx(file: File): Promise<ParseResult> {
   const mammoth = await import("mammoth");
-  const result = await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
-  return finish(result.value, "docx");
+  // convertToHtml (not extractRawText) so tables survive — see htmlToStructuredText.
+  const result = await mammoth.convertToHtml({ arrayBuffer: await file.arrayBuffer() });
+  return finish(htmlToStructuredText(result.value), "docx");
 }
 
 async function parsePptx(file: File): Promise<ParseResult> {
