@@ -4,12 +4,10 @@ import { EmptyState } from "@/new/components/ui/EmptyState";
 import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
 import { useAgentEvents } from "@/new/lib/useAgentEvents";
 import { useArtifactHistory } from "@/new/lib/useArtifactHistory";
-import { useAutonomy } from "@/new/lib/useAutonomy";
 import { usePatternLibrary } from "@/new/lib/usePatternLibrary";
 import type {
   AgentEventSummary,
   ArtifactVersionSummary,
-  AutonomyLevel,
   PatternLibraryEntry,
   ProgramSummary,
 } from "@/new/types";
@@ -723,7 +721,7 @@ export function ArtifactHistoryView({
 
 // ─── AI Settings tabs: Agents / Provider / Autonomy ──────────────────────────
 
-const TABS = ["Status", "Autonomy", "Setup"] as const;
+const TABS = ["Status", "Setup"] as const;
 type AISettingsTab = typeof TABS[number];
 
 type AIProviderId = "anthropic" | "openai" | "google";
@@ -775,19 +773,6 @@ const AI_PROVIDERS: Array<{
   },
 ];
 
-const AUTONOMY_AGENTS = [
-  "narrative", "plan", "risk", "milestone", "budget", "critical-path",
-  "change-impact", "stakeholder", "adoption", "health-heatmap", "retro",
-  "deck", "scope-pcr", "gate-review", "escalation", "closure",
-] as const;
-
-function badgeToneForAutonomy(level: AutonomyLevel): string {
-  if (level === "autonomous") return "green";
-  if (level === "supervised") return "amber";
-  if (level === "manual") return "slate";
-  return "blue";
-}
-
 interface IntelligenceViewProps {
   program: ProgramSummary | null;
   onRefreshProgram?: () => Promise<void> | void;
@@ -814,9 +799,6 @@ export function IntelligenceView({ program, onRefreshProgram, initialTab }: Inte
   const [providerLoading, setProviderLoading] = useState(false);
   const [providerSaving, setProviderSaving] = useState(false);
   const [providerMessage, setProviderMessage] = useState<string | null>(null);
-
-  // Autonomy
-  const { settings, isLoading: autonomyLoading, refresh: refreshAutonomy, upsertSetting, autonomousActionsToday } = useAutonomy(program?.id || "");
 
   const providerMeta = AI_PROVIDERS.find((p) => p.id === selectedProvider) ?? AI_PROVIDERS[0];
   const selectedProviderStatus = providerStatuses[selectedProvider];
@@ -1104,61 +1086,6 @@ export function IntelligenceView({ program, onRefreshProgram, initialTab }: Inte
               </div>
             </div>
           </div>
-        </div>
-      ) : null}
-
-      {/* ── Autonomy ── */}
-      {tab === "Autonomy" ? (
-        <div className="adam-stack">
-          <div className="adam-card p-5" style={{ borderColor: "rgba(245,158,11,0.28)", background: "rgba(245,158,11,0.08)" }}>
-            <div className="adam-title">Autonomy boundary</div>
-            <div className="mt-2 adam-body adam-muted">
-              Enabling autonomy means ATOS can apply agent outputs without human confirmation. Only enable this for agents you fully trust.
-            </div>
-          </div>
-
-          <div className="adam-row adam-space-between" style={{ alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <div className="adam-stack" style={{ gap: 4 }}>
-              <div className="adam-title">Autonomy Settings</div>
-              <div className="adam-body adam-muted">{autonomousActionsToday} autonomous action{autonomousActionsToday === 1 ? "" : "s"} today</div>
-            </div>
-            <button type="button" className="adam-button-ghost" onClick={() => void refreshAutonomy()}>Refresh</button>
-          </div>
-
-          {autonomyLoading ? (
-            <div className="adam-card p-5"><div className="adam-body adam-muted">Loading autonomy settings…</div></div>
-          ) : (
-            <div className="adam-stack">
-              {AUTONOMY_AGENTS.map((agentId) => {
-                const setting = settings.find((s) => s.agentId === agentId);
-                const enabled = setting?.enabled === true;
-                const threshold = setting?.trustThreshold ?? 0.85;
-                const level: AutonomyLevel = ["gate-review", "closure", "escalation"].includes(agentId) ? "manual" : enabled ? "supervised" : "queued";
-                return (
-                  <div key={agentId} className="adam-card p-4">
-                    <div className="adam-row adam-space-between" style={{ alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                      <div className="adam-stack" style={{ gap: 4 }}>
-                        <div className="adam-title">{prettyAgent(agentId)}</div>
-                        <div className="adam-body adam-muted">Threshold {(threshold * 100).toFixed(0)}% · Daily cap {setting?.maxAutonomousActionsPerDay ?? 10}</div>
-                      </div>
-                      <span className={`adam-badge ${badgeToneForAutonomy(level)}`}>{level}</span>
-                    </div>
-                    <div className="mt-4 adam-row" style={{ gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-                      <label className="adam-row" style={{ gap: 8, alignItems: "center" }}>
-                        <input type="checkbox" checked={enabled} disabled={level === "manual"} onChange={(e) => { void upsertSetting(agentId, { enabled: e.target.checked }); }} />
-                        <span className="adam-body">Enable autonomy</span>
-                      </label>
-                      <label className="adam-row" style={{ gap: 8, alignItems: "center", flex: 1, minWidth: 220 }}>
-                        <span className="adam-micro adam-muted">Trust threshold</span>
-                        <input type="range" min={0} max={1} step={0.05} value={threshold} disabled={level === "manual"} onChange={(e) => { void upsertSetting(agentId, { trustThreshold: Number(e.target.value) }); }} style={{ flex: 1 }} />
-                        <span className="adam-micro">{threshold.toFixed(2)}</span>
-                      </label>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </div>
       ) : null}
     </div>

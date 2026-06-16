@@ -1049,7 +1049,7 @@ export default function AppShellV3() {
   });
   const [intelligenceInitialTab, setIntelligenceInitialTab] = useState<string | undefined>(() => {
     if (typeof window === "undefined") return undefined;
-    return window.location.pathname.replace(/^\/+/, "") === "ai-settings" ? "Provider" : undefined;
+    return window.location.pathname.replace(/^\/+/, "") === "ai-settings" ? "Setup" : undefined;
   });
   const [commandRailPinned, setCommandRailPinned] = useState(() => {
     if (typeof window === "undefined") return false;
