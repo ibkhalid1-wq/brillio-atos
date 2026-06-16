@@ -3392,14 +3392,67 @@ async function isProviderRateLimited(res: Response): Promise<boolean> {
  * result returns immediately — downstream agents only persist follow-on intelligence
  * and are never part of the response payload.
  */
+/** True when every formal document a phase requires has been generated. */
+function phaseFormalArtifactsComplete(programData: ProgramState, phaseId: string): boolean {
+  const requiredFieldKeys = Object.values(FORMAL_ARTIFACT_AGENTS)
+    .filter((spec) => spec.phase === phaseId)
+    .map((spec) => spec.fieldKey);
+  if (!requiredFieldKeys.length) return true;
+  const inner = getInnerProgramData(programData);
+  return requiredFieldKeys.every((key) => isRecord(inner[key]) && Object.keys(inner[key] as Record<string, unknown>).length > 0);
+}
+
+/**
+ * True when an existing gate review already post-dates the phase's newest formal
+ * artifact — i.e. the inputs have not changed since the last check, so re-running
+ * the gate review would only reproduce the same verdict (skip-if-unchanged).
+ */
+function gateReviewIsFresherThanArtifacts(programData: ProgramState, phaseId: string): boolean {
+  const inner = getInnerProgramData(programData);
+  const gateReviews = isRecord(inner.gateReviews) ? inner.gateReviews as Record<string, unknown> : {};
+  const review = isRecord(gateReviews[phaseId]) ? gateReviews[phaseId] as Record<string, unknown> : null;
+  const reviewAt = review && typeof review.generatedAt === "string" ? new Date(review.generatedAt).getTime() : NaN;
+  if (!Number.isFinite(reviewAt)) return false;
+  let newestArtifact = 0;
+  for (const spec of Object.values(FORMAL_ARTIFACT_AGENTS)) {
+    if (spec.phase !== phaseId) continue;
+    const value = inner[spec.fieldKey];
+    if (isRecord(value) && typeof value.generatedAt === "string") {
+      const t = new Date(value.generatedAt).getTime();
+      if (Number.isFinite(t) && t > newestArtifact) newestArtifact = t;
+    }
+  }
+  if (newestArtifact === 0) return false;
+  return reviewAt >= newestArtifact;
+}
+
 async function triggerDownstreamAgents(
   completedAgentId: string,
   programId: string,
   completedPhaseId: string,
   /** Handoff from the completing agent — passed to each downstream so they know upstream context */
   completedHandoff?: AgentHandoff | null,
+  /** Post-completion program state — used to gate the formal-artifact cascade. */
+  programData?: ProgramState,
 ): Promise<void> {
   const downstreamAgents = [...(AGENT_DOWNSTREAM[completedAgentId] || [])];
+
+  // ── Formal-artifact cascade ────────────────────────────────────────────────
+  // When a document artifact is (re)generated, ATOS automatically refreshes the
+  // intelligence that document feeds: the plan's next actions, the risk register,
+  // and — once the phase's documents are complete — the gate review (which itself
+  // cascades to the cross-phase dependency check). This is what replaces the
+  // removed manual "Check Gate Readiness" / "Generate criteria" buttons.
+  if (FORMAL_ARTIFACT_AGENTS[completedAgentId] && completedPhaseId && completedPhaseId !== "program") {
+    downstreamAgents.push({ agentId: "plan", phaseId: "program" });
+    downstreamAgents.push({ agentId: "risk", phaseId: "program" });
+    const phaseComplete = !programData || phaseFormalArtifactsComplete(programData, completedPhaseId);
+    const gateReviewFresh = !!programData && gateReviewIsFresherThanArtifacts(programData, completedPhaseId);
+    if (phaseComplete && !gateReviewFresh) {
+      downstreamAgents.push({ agentId: "gate-review", phaseId: completedPhaseId });
+    }
+  }
+
   if (completedAgentId === "gate-review" && completedPhaseId && completedPhaseId !== "program") {
     downstreamAgents.push({ agentId: "retro", phaseId: completedPhaseId });
   }
@@ -6483,7 +6536,7 @@ Deno.serve(async (req) => {
           confidence,
           recommendedNextAction: "",
         };
-        scheduleBackground(triggerDownstreamAgents(request.agentId, request.programId, request.phaseId, completedHandoff));
+        scheduleBackground(triggerDownstreamAgents(request.agentId, request.programId, request.phaseId, completedHandoff, nextProgramData));
       }
 
       return jsonResponse({
