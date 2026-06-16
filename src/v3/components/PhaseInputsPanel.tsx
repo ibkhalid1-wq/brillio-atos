@@ -406,7 +406,9 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
                       <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 2 }}>{field.hint}</div>
                     ) : null}
                   </div>
-                  <span className={`v3-chip ${verdict.tone}`} style={{ fontSize: 10, flexShrink: 0 }}>{verdict.label}</span>
+                  {verdict.tone === "green" ? null : (
+                    <span className={`v3-chip ${verdict.tone}`} style={{ fontSize: 10, flexShrink: 0 }}>{verdict.label}</span>
+                  )}
                 </div>
                 {field.type === "textarea" ? (
                   <textarea
