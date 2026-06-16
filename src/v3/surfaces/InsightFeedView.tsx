@@ -5,11 +5,9 @@ import AdamExplainsTooltip from "@/v3/components/AdamExplainsTooltip";
 import type { ConfidenceScore, ConfidenceForecast } from "@/v3/lib/confidenceScore";
 import { forecastConfidence, getGateThreshold } from "@/v3/lib/confidenceScore";
 import type { V3MoreView } from "@/v3/types";
-import { ExecCommandPanel } from "@/v3/components/ExecCommandPanel";
 import { Kpi } from "@/v3/components/ui/Kpi";
 import { PhaseStripCard } from "@/v3/components/PhaseStripCard";
 import { selectHighRisks } from "@/v3/lib/programRaid";
-import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
 import {
   runDeterministicValidation,
   selectModelValidationFindings,
@@ -235,89 +233,6 @@ function AgentActionButton({ icon, label, estimate, disabled, agentsAvailable, o
         {disabled ? "Working…" : offline ? "Sign in required" : estimate}
       </span>
     </button>
-  );
-}
-
-function DecisionQueueCard({
-  program,
-  onNavigateToDecide,
-}: {
-  program: ProgramSummary;
-  onNavigateToDecide: () => void;
-}) {
-  // Same source as the "Open Actions" pill, the rail badge, and DecideView, so
-  // the count the card shows always matches what opens when "View all" is clicked.
-  const openDecisions = deriveOpenRecommendedActions(program).slice(0, 4);
-
-  return (
-    <div
-      style={{
-        display: "grid",
-        gap: 12,
-        padding: 18,
-        borderRadius: "var(--v3-radius)",
-        border: "1px solid var(--v3-border-soft)",
-        background: "var(--v3-surface)",
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--v3-text-primary)" }}>Action Queue</div>
-          <div style={{ fontSize: 12, color: "var(--v3-text-muted)", marginTop: 2 }}>
-            {openDecisions.length ? `${openDecisions.length} item${openDecisions.length === 1 ? "" : "s"} need review` : "No open actions blocking progress"}
-          </div>
-        </div>
-        <button type="button" className="v3-button ghost sm" onClick={onNavigateToDecide}>
-          View all →
-        </button>
-      </div>
-
-      {openDecisions.length ? (
-        <div style={{ display: "grid", gap: 8 }}>
-          {openDecisions.map((decision) => {
-            const phase = decision.phaseId ? (PHASE_LABELS[decision.phaseId] ?? decision.phaseId) : "Programme";
-            const priorityColor = decision.priority === "critical" || decision.priority === "high"
-              ? "var(--v3-amber)"
-              : "var(--v3-text-muted)";
-            return (
-              <button
-                key={decision.id}
-                type="button"
-                onClick={onNavigateToDecide}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr auto",
-                  gap: 10,
-                  alignItems: "center",
-                  padding: "10px 12px",
-                  borderRadius: 12,
-                  border: "1px solid var(--v3-border-soft)",
-                  background: "var(--v3-surface-2)",
-                  textAlign: "left",
-                  cursor: "pointer",
-                }}
-              >
-                <span style={{ minWidth: 0 }}>
-                  <span style={{ display: "block", fontSize: 13, fontWeight: 650, color: "var(--v3-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {decision.title || decision.question || "Untitled decision"}
-                  </span>
-                  <span style={{ display: "block", fontSize: 11, color: "var(--v3-text-muted)", marginTop: 3 }}>
-                    {phase} · {decision.type || "decision"}
-                  </span>
-                </span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: priorityColor, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                  {decision.priority || "medium"}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      ) : (
-        <div style={{ padding: "12px 14px", borderRadius: 12, background: "var(--v3-surface-2)", color: "var(--v3-text-muted)", fontSize: 12 }}>
-          Action queue is clear. New gate, risk, or sponsor actions will appear here.
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -854,24 +769,7 @@ export default function InsightFeedView({
         </div>
       )}
 
-      {/* ── 4. Executive Command Panel — consequence-driven next actions ─────── */}
-      <ExecCommandPanel
-        program={program}
-        confidenceResult={confidenceResult}
-        confidenceScore={confidenceScore}
-        decisionQueue={(program as unknown as { decisionQueue?: import("@/new/types").DecisionSummary[] }).decisionQueue ?? []}
-        onRunAgent={(agentId) => onRunAgent(agentId, activePhaseId ?? "program")}
-        onOpenMoreView={onOpenMoreView}
-        anyAgentRunning={anyAgentRunning}
-        gateThreshold={gateThreshold}
-      />
-
-      {/* ── 5. Decision Queue (D: moved below agent actions) ─────────────────── */}
-      {program ? (
-        <DecisionQueueCard program={program} onNavigateToDecide={onNavigateToDecide} />
-      ) : null}
-
-      {/* ── 6. Top Risks — inline summary (eliminates navigation trip to Risks workspace) ── */}
+      {/* ── 4. Top Risks — inline summary (eliminates navigation trip to Risks workspace) ── */}
       {program && selectHighRisks(program).length > 0 && (() => {
         const topRisks = selectHighRisks(program).slice(0, 3);
         return (
