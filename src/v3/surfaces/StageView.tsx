@@ -1642,7 +1642,9 @@ export default function StageView({
                   <p className="v3-artifact-row-desc">{summary}</p>
                   {inputsIncomplete ? (
                     <div className="v3-artifact-preflight">
-                      <span className="v3-chip amber v3-chip-tight">Needs: {preflight.missingFields.join(" · ")}</span>
+                      {present ? (
+                        <span className="v3-chip amber v3-chip-tight">Needs: {preflight.missingFields.join(" · ")}</span>
+                      ) : null}
                       <button
                         type="button"
                         className="v3-button ghost v3-button-inline-xs"
