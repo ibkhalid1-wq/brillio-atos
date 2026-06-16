@@ -105,6 +105,20 @@ export interface ExtractedEntities {
   recommendations: RecommendationEntity[];
 }
 
+/**
+ * A structured KPI extracted from a metrics table or quantified target. Maps to
+ * one row of the Strategy phase's `kpis` grid (name · baseline · target · unit).
+ */
+export interface ExtractedKpi {
+  name: string;
+  baseline: string;
+  target: string;
+  unit: string;
+  source: string;
+  confidence: number;
+  extractionType: ExtractionType;
+}
+
 /** A single methodology field mapping with traceability */
 export interface FieldMapping {
   value: string;
@@ -129,6 +143,8 @@ export interface DocumentIntelligence {
   overallConfidence: number;
   entities: ExtractedEntities;
   methodologyMappings: MethodologyMappings;
+  /** Structured KPIs (baseline/target/unit) — populates the Strategy KPI grid. */
+  kpis?: ExtractedKpi[];
   gaps: string;
 }
 

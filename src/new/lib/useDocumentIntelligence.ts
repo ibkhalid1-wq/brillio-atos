@@ -20,6 +20,7 @@ import type {
   DocumentImportResult,
   DocumentImportStage,
   DocumentIntelligence,
+  ExtractedKpi,
   FieldMapping,
   MethodologyMappings,
   ReviewField,
@@ -112,6 +113,96 @@ function buildReviewFields(
   return fields;
 }
 
+// ─── Structured KPIs → Strategy KPI grid ──────────────────────────────────────
+
+type KpiRow = { id: string; name: string; baseline: string; target: string; unit: string };
+
+function kpiRowId(): string {
+  return typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `kpi-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function parseKpiRows(raw: string): KpiRow[] {
+  if (!raw.trim()) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((entry): entry is Record<string, unknown> => typeof entry === "object" && entry !== null)
+      .map((entry) => ({
+        id: typeof entry.id === "string" ? entry.id : kpiRowId(),
+        name: String(entry.name ?? "").trim(),
+        baseline: String(entry.baseline ?? "").trim(),
+        target: String(entry.target ?? "").trim(),
+        unit: String(entry.unit ?? "").trim(),
+      }))
+      .filter((row) => row.name);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Merge two serialized KPI grids without data loss. Rows are keyed by
+ * case-insensitive name; incoming values fill blank cells on an existing row and
+ * genuinely new KPIs are appended. Used on import conflict — a naive string
+ * concat (the default merge) would corrupt the JSON and silently wipe KPIs the
+ * PM already entered.
+ */
+export function mergeKpiJson(existingJson: string, incomingJson: string): string {
+  const byName = new Map<string, KpiRow>();
+  for (const row of parseKpiRows(existingJson)) byName.set(row.name.toLowerCase(), row);
+  for (const row of parseKpiRows(incomingJson)) {
+    const key = row.name.toLowerCase();
+    const prior = byName.get(key);
+    byName.set(key, prior
+      ? { ...prior, baseline: prior.baseline || row.baseline, target: prior.target || row.target, unit: prior.unit || row.unit }
+      : row);
+  }
+  return JSON.stringify([...byName.values()]);
+}
+
+/**
+ * Build a single Strategy `kpis` review field from the structured KPIs the AI
+ * extracted, serialized to the JSON shape PhaseInputsPanel persists
+ * (`[{id,name,baseline,target,unit}]`) so approving it populates the KPI grid
+ * rather than dropping the numbers into a free-text field.
+ */
+export function deriveKpiReviewField(
+  kpis: ExtractedKpi[] | undefined,
+  existingPhaseInputs: Record<string, Record<string, string>>,
+): ReviewField | null {
+  const named = (kpis ?? []).filter((kpi) => kpi.name?.trim());
+  if (named.length === 0) return null;
+
+  const rows: KpiRow[] = named.map((kpi) => ({
+    id: kpiRowId(),
+    name: kpi.name.trim(),
+    baseline: (kpi.baseline ?? "").trim(),
+    target: (kpi.target ?? "").trim(),
+    unit: (kpi.unit ?? "").trim(),
+  }));
+  const value = JSON.stringify(rows);
+  const existingValue = existingPhaseInputs.strategy?.kpis ?? "";
+  const avgConfidence = named.reduce((sum, kpi) => sum + (Number(kpi.confidence) || 0), 0) / named.length;
+
+  return {
+    phaseId: "strategy",
+    fieldId: "kpis",
+    fieldLabel: "Outcome KPIs",
+    mapping: {
+      value,
+      confidence: avgConfidence > 0 ? avgConfidence : 0.75,
+      source: named.find((kpi) => kpi.source?.trim())?.source ?? "",
+      extractionType: "extracted",
+      reviewState: "pending",
+    },
+    existingValue: existingValue || undefined,
+    hasConflict: Boolean(existingValue && existingValue.trim() !== value),
+  };
+}
+
 // ─── Build approved inputs from reviewed fields ───────────────────────────────
 
 /** Deterministic merge used when AI refine is unavailable or fails — never loses data. */
@@ -157,6 +248,12 @@ async function buildApprovedInputs(
 
       const existing = field.existingValue?.trim();
       if (field.hasConflict && existing) {
+        // KPIs are JSON arrays — merge structurally; the text refine/concat path
+        // below would corrupt the JSON and wipe existing rows.
+        if (field.fieldId === "kpis") {
+          add(field.phaseId, field.fieldId, mergeKpiJson(existing, incoming));
+          return;
+        }
         let merged = "";
         if (refineField) {
           try {
@@ -301,12 +398,15 @@ export function useDocumentIntelligence({
       const intel = response.intelligence;
       setIntelligence(intel);
 
-      // Build review fields for user approval
+      // Build review fields for user approval. Structured KPIs become a single
+      // Strategy `kpis` grid field so quantified metrics land in the KPI table
+      // rather than a free-text mapping.
       const fields = buildReviewFields(
         intel.methodologyMappings ?? {},
         existingPhaseInputs,
       );
-      setReviewFields(fields);
+      const kpiField = deriveKpiReviewField(intel.kpis, existingPhaseInputs);
+      setReviewFields(kpiField ? [...fields, kpiField] : fields);
 
       // Store the attachmentId so we can link it after approval
       setResult({

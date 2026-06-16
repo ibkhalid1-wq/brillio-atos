@@ -20,6 +20,36 @@ import {
 } from "@/new/lib/documentIntelligenceTypes";
 import { PHASE_INPUT_SCHEMAS } from "@/v3/lib/phaseInputSchema";
 
+// ─── KPI value formatting ─────────────────────────────────────────────────────
+
+/**
+ * Render a serialized KPI grid (`[{name,baseline,target,unit}]`) as readable
+ * lines so the review panel shows "Name: baseline → target (unit)" instead of
+ * raw JSON. Returns null when the value is not a KPI array.
+ */
+function formatKpiDisplay(raw: string): string | null {
+  if (!raw.trim().startsWith("[")) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    const lines = parsed
+      .filter((entry): entry is Record<string, unknown> => typeof entry === "object" && entry !== null)
+      .map((entry) => {
+        const name = String(entry.name ?? "").trim();
+        if (!name) return "";
+        const baseline = String(entry.baseline ?? "").trim();
+        const target = String(entry.target ?? "").trim();
+        const unit = String(entry.unit ?? "").trim();
+        const movement = [baseline || "—", target || "—"].join(" → ");
+        return `${name}: ${movement}${unit ? ` (${unit})` : ""}`;
+      })
+      .filter(Boolean);
+    return lines.length > 0 ? lines.join("\n") : null;
+  } catch {
+    return null;
+  }
+}
+
 // ─── Confidence bar ───────────────────────────────────────────────────────────
 
 function ConfidenceBar({ score }: { score: number }) {
@@ -97,6 +127,7 @@ function ReviewFieldRow({
   const state = field.mapping.reviewState ?? "pending";
   const displayValue =
     state === "edited" ? (field.mapping.editedValue ?? field.mapping.value) : field.mapping.value;
+  const kpiDisplay = formatKpiDisplay(displayValue);
 
   return (
     <div
@@ -284,7 +315,7 @@ function ReviewFieldRow({
             whiteSpace: "pre-wrap",
           }}
         >
-          {displayValue}
+          {kpiDisplay ?? displayValue}
         </div>
       )}
 

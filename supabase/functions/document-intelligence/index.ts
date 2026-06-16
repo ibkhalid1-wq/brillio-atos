@@ -120,10 +120,14 @@ Return ONLY valid JSON in the exact structure below. Do not include markdown fen
       "keyRoles": { "value": "string", "confidence": 0.8, "source": "string", "extractionType": "extracted" }
     }
   },
+  "kpis": [
+    { "name": "string — the metric/KPI name", "baseline": "string — current value, or empty", "target": "string — target value, or empty", "unit": "string — unit of measure, or empty", "source": "brief quote or section ref", "confidence": 0.85, "extractionType": "extracted" }
+  ],
   "gaps": "string — brief description of what information appears to be missing from this document"
 }
 
 RULES:
+- kpis: populate ONLY when the document states quantified metrics with current and/or target values (e.g. a metrics table, OKRs, or "X → Y" targets). Each KPI must have a name; leave baseline/target/unit as empty strings when not stated. Do not duplicate the same metric across entities.successMetrics and kpis — prefer kpis for anything with a numeric baseline or target. Omit the kpis array entirely when there are no quantified metrics.
 - extractionType values: "extracted" = verbatim or near-verbatim from document; "enriched" = you restructured/formatted raw text; "inferred" = logically derived from context
 - confidence: 0.9+ for verbatim, 0.75-0.9 for paraphrased/enriched, 0.5-0.75 for inferred
 - source: short quote (under 60 chars) from the document, or a section/page reference
