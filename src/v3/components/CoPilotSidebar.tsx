@@ -1,6 +1,15 @@
 import React, { useRef, useState } from "react";
 import type { AIConnectionStatus } from "@/v3/hooks/useAIStatus";
-import { parseDocument, type ParsedDocument } from "@/v3/lib/documentParser";
+import { parseDocumentToText } from "@/new/lib/parseDocumentToText";
+
+const MAX_ATTACHMENT_CHARS = 20_000;
+
+type ParsedAttachment = {
+  filename: string;
+  text: string;
+  wordCount: number;
+  truncated: boolean;
+};
 
 interface CoPilotSidebarProps {
   open: boolean;
@@ -38,7 +47,7 @@ export default function CoPilotSidebar({
 }: CoPilotSidebarProps) {
   const [inputText, setInputText] = useState("");
   const [attachments, setAttachments] = useState<File[]>([]);
-  const [parsedDocs, setParsedDocs] = useState<ParsedDocument[]>([]);
+  const [parsedDocs, setParsedDocs] = useState<ParsedAttachment[]>([]);
   const [parsing, setParsing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -54,7 +63,14 @@ export default function CoPilotSidebar({
       console.warn("[CoPilotSidebar] onSendMessage not wired — message discarded.");
       return;
     }
-    onSendMessage(msg, attachments);
+    const docContext = parsedDocs
+      .filter((doc) => doc.text.trim().length > 0)
+      .map((doc) =>
+        `--- Document: ${doc.filename} (${doc.wordCount.toLocaleString()} words${doc.truncated ? ", truncated" : ""}) ---\n${doc.text.slice(0, MAX_ATTACHMENT_CHARS)}`,
+      )
+      .join("\n\n");
+    const combined = [msg, docContext].filter(Boolean).join("\n\n");
+    onSendMessage(combined, attachments);
     setInputText("");
     setAttachments([]);
     setParsedDocs([]);
@@ -394,7 +410,18 @@ export default function CoPilotSidebar({
                 // Parse documents in background
                 setParsing(true);
                 try {
-                  const parsed = await Promise.all(files.map(parseDocument));
+                  const parsed = await Promise.all(
+                    files.map(async (file): Promise<ParsedAttachment> => {
+                      const result = await parseDocumentToText(file);
+                      const text = result.ok ? result.text : "";
+                      return {
+                        filename: file.name,
+                        text,
+                        wordCount: result.ok ? (result.wordCount ?? 0) : 0,
+                        truncated: text.length > MAX_ATTACHMENT_CHARS,
+                      };
+                    }),
+                  );
                   setParsedDocs((prev) => [...prev, ...parsed]);
                 } finally {
                   setParsing(false);
