@@ -453,6 +453,7 @@ export default function StageView({
   const [updatedArtifactId, setUpdatedArtifactId] = React.useState<"narrative" | "deck" | null>(null);
   const onboardingStorageKey = `adam_onboarding_stage_${program?.id || "local"}_${activePhaseId || "none"}`;
   const [guideDismissed, setGuideDismissed] = React.useState(false);
+  const [exitCriteriaOpen, setExitCriteriaOpen] = React.useState(false);
   const [summaryExpanded, setSummaryExpanded] = React.useState(false);
   const phaseMainRef = useRef<HTMLDivElement | null>(null);
   const previousNarrativeRef = useRef<string | null>(artifactPreviews?.narrative || null);
@@ -906,14 +907,14 @@ export default function StageView({
         {readiness ? (
           <div className="v3-phase-metrics">
             {([
-              { label: "Readiness", value: `${readiness.score}%`, tone: readiness.score >= 75 ? "green" : readiness.score >= 50 ? "amber" : "red", anchor: "exit-criteria-anchor" },
+              { label: "Readiness", value: `${readiness.score}%`, tone: readiness.score >= 75 ? "green" : readiness.score >= 50 ? "amber" : "red", onClick: () => setExitCriteriaOpen(true) },
               // One input signal — quality (toned, matches the input-panel label) when
               // measured, else raw completeness — instead of two near-identical percentages.
               inputQuality
                 ? { label: "Input quality", value: `${inputQuality.overallScore}%`, tone: inputQuality.verdict === "sufficient" ? "green" : inputQuality.verdict === "partial" ? "amber" : "red", anchor: "phase-inputs-anchor" }
                 : { label: "Inputs", value: `${readiness.inputScore}%`, tone: "", anchor: "phase-inputs-anchor" },
               { label: "Documents", value: `${readiness.artifactScore}%`, tone: "", anchor: "phase-artifacts-anchor" },
-              { label: "Gate score", value: readiness.gateScore != null ? `${readiness.gateScore}%` : "—", tone: "", anchor: "exit-criteria-anchor" },
+              { label: "Gate score", value: readiness.gateScore != null ? `${readiness.gateScore}%` : "—", tone: "", onClick: () => setExitCriteriaOpen(true) },
               { label: "Progress", value: `${Math.round(activePhase.pct)}%`, tone: "", anchor: null },
               ...(handoffQuality?.score ? [{ label: "Handoff", value: `${handoffQuality.score}%`, tone: handoffQuality.passed ? "green" : "amber", anchor: "phase-artifacts-anchor" }] : []),
               { label: "Blockers", value: phaseBlockers.length, tone: phaseBlockers.length ? "red" : "green", onClick: () => onOpenMoreView("risks") },
@@ -990,7 +991,7 @@ export default function StageView({
           <div className="v3-phase-head-actions-grp">
             <button type="button" className="v3-button ghost v3-button-inline-sm" onClick={() => { setExpandedOutput("narrative"); document.getElementById("phase-artifacts-anchor")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Narrative</button>
             <button type="button" className="v3-button ghost v3-button-inline-sm" onClick={() => { setExpandedOutput("deck"); document.getElementById("phase-artifacts-anchor")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Status deck</button>
-            <button type="button" className="v3-button ghost v3-button-inline-sm" onClick={() => document.getElementById("exit-criteria-anchor")?.scrollIntoView({ behavior: "smooth", block: "center" })}>Exit criteria</button>
+            <button type="button" className="v3-button ghost v3-button-inline-sm" onClick={() => setExitCriteriaOpen(true)}>Exit criteria</button>
             <button type="button" className="v3-button ghost v3-button-inline-sm" onClick={() => onOpenMoreView("milestones")}>Milestones</button>
           </div>
           {phaseAgentActions.length ? (
@@ -1198,7 +1199,7 @@ export default function StageView({
                 return;
               }
               if (!confirmedCriteria) {
-                document.getElementById("exit-criteria-anchor")?.scrollIntoView({ behavior: "smooth", block: "center" });
+                setExitCriteriaOpen(true);
                 return;
               }
               void onApproveGate(activePhase.id);
@@ -1346,14 +1347,6 @@ export default function StageView({
       <div className="v3-phase-cards">
         <div className="v3-zone-label">Phase workspace</div>
         <div className="v3-phase-cards-grid">
-          <div id="exit-criteria-anchor">
-            <ExitCriteriaCard
-              criteria={gateReview?.exitCriteriaStatus || []}
-              generatedCriteria={generatedCriteria}
-              gateApproved={gateApproved}
-            />
-          </div>
-
           {mode === "power" ? (
             <div className="v3-card-sm v3-mini-card">
               <div className="v3-card-title v3-mini-card-title">Key milestones</div>
@@ -1743,6 +1736,46 @@ export default function StageView({
       </section>
       </div>
       </div>
+
+      {exitCriteriaOpen ? (
+        <div
+          role="presentation"
+          onClick={() => setExitCriteriaOpen(false)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 500,
+            background: "rgba(0,0,0,0.55)", display: "flex",
+            alignItems: "center", justifyContent: "center", padding: 24,
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Exit criteria — ${activePhase.label ?? activePhase.id}`}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "var(--v3-surface)", borderRadius: "var(--v3-radius)",
+              border: "1px solid var(--v3-border)", padding: 20, maxWidth: 560, width: "100%",
+              maxHeight: "82vh", overflowY: "auto", boxShadow: "0 16px 48px rgba(0,0,0,0.4)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4 }}>
+              <button
+                type="button"
+                className="v3-button ghost v3-button-inline-xs"
+                aria-label="Close exit criteria"
+                onClick={() => setExitCriteriaOpen(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <ExitCriteriaCard
+              criteria={gateReview?.exitCriteriaStatus || []}
+              generatedCriteria={generatedCriteria}
+              gateApproved={gateApproved}
+            />
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
