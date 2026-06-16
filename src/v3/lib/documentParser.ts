@@ -93,6 +93,68 @@ async function parsePptx(buffer: ArrayBuffer): Promise<string> {
 
 // ── DOCX parser ──────────────────────────────────────────────────────────────
 
+/** Decode the handful of XML entities that appear in OOXML text runs. */
+function decodeXmlEntities(text: string): string {
+  return text
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)));
+}
+
+/** Concatenate the <w:t> runs inside an XML fragment into a single trimmed string. */
+function runsToText(fragment: string): string {
+  const texts = [...fragment.matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/g)].map((m) => m[1]);
+  return decodeXmlEntities(texts.join("")).replace(/\s+/g, " ").trim();
+}
+
+/** Render a single <w:tbl> block as pipe-delimited rows so structure survives. */
+function tableToText(tableXml: string): string {
+  const rows = [...tableXml.matchAll(/<w:tr\b[\s\S]*?<\/w:tr>/g)].map((m) => m[0]);
+  const lines: string[] = [];
+  for (const row of rows) {
+    const cells = [...row.matchAll(/<w:tc\b[\s\S]*?<\/w:tc>/g)].map((m) => runsToText(m[0]));
+    if (cells.some((cell) => cell.length > 0)) lines.push(cells.join(" | "));
+  }
+  return lines.join("\n");
+}
+
+/** Render the stand-alone paragraphs in an XML fragment, one per line. */
+function paragraphsToText(fragment: string): string {
+  return fragment
+    .split(/<\/w:p>/)
+    .map(runsToText)
+    .filter(Boolean)
+    .join("\n");
+}
+
+/**
+ * Structure-preserving DOCX-XML → text. Tables are the reason this exists:
+ * a metrics table (Metric · Baseline · Target · Unit) flattened into one
+ * space-joined blob is unrecoverable downstream, so each table row is emitted
+ * as a pipe-delimited line and surrounding paragraphs are kept on their own
+ * lines, in document order.
+ */
+export function extractDocxText(xml: string): string {
+  const blocks: string[] = [];
+  const tableRe = /<w:tbl>[\s\S]*?<\/w:tbl>/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = tableRe.exec(xml)) !== null) {
+    const before = paragraphsToText(xml.slice(lastIndex, match.index));
+    if (before) blocks.push(before);
+    const table = tableToText(match[0]);
+    if (table) blocks.push(table);
+    lastIndex = tableRe.lastIndex;
+  }
+  const tail = paragraphsToText(xml.slice(lastIndex));
+  if (tail) blocks.push(tail);
+  return blocks.join("\n\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 async function parseDocx(buffer: ArrayBuffer): Promise<string> {
   const JSZip = await loadJSZip();
   if (!JSZip) throw new Error("JSZip not available");
@@ -102,9 +164,7 @@ async function parseDocx(buffer: ArrayBuffer): Promise<string> {
   if (!docFile) throw new Error("word/document.xml not found in DOCX");
 
   const xml = await docFile.async("string");
-  // Extract <w:t> text runs
-  const texts = [...xml.matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/g)].map((m) => m[1]);
-  return stripXml(texts.join(" "));
+  return extractDocxText(xml);
 }
 
 // ── PDF parser (best-effort) ──────────────────────────────────────────────────
