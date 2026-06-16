@@ -293,15 +293,21 @@ export function computePhaseReadiness(
   // issue hard-blocks the gate, ensuring a phase cannot pass while its artifacts
   // contradict or fail to build on the prior approved phase. An absent verdict
   // (never run) does not block here — the approve handler guarantees a check runs.
+  // The first phase has no prior approved phase, so a cross-phase dependency check
+  // is meaningless there — never let it block (the agent can still emit a spurious
+  // "inconsistent with prior phase" verdict when given empty prior context).
+  const isFirstPhase = (program.phases?.[0]?.id ?? null) === phaseId;
   const dependencyCheckResult = source && typeof source.dependencyCheck === "object" && source.dependencyCheck !== null
     ? (source.dependencyCheck as Record<string, { passed?: boolean; issues?: Array<{ severity?: string; description?: string }> }>)[phaseId]
     : undefined;
-  const dependencyBlockingIssues = Array.isArray(dependencyCheckResult?.issues)
-    ? dependencyCheckResult.issues.filter((issue) => issue?.severity === "blocking")
-    : [];
-  const dependencyCheckPassed: boolean | null = dependencyCheckResult
-    ? dependencyCheckResult.passed !== false && dependencyBlockingIssues.length === 0
-    : null;
+  const dependencyBlockingIssues = isFirstPhase || !Array.isArray(dependencyCheckResult?.issues)
+    ? []
+    : dependencyCheckResult.issues.filter((issue) => issue?.severity === "blocking");
+  const dependencyCheckPassed: boolean | null = isFirstPhase
+    ? true
+    : dependencyCheckResult
+      ? dependencyCheckResult.passed !== false && dependencyBlockingIssues.length === 0
+      : null;
   const dependencyCheckBlocking = dependencyCheckPassed === false;
 
   if (dependencyCheckBlocking) {

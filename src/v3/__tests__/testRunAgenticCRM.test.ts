@@ -242,17 +242,26 @@ describe("Test Run — Agentic CRM: blockers hard-stop and then clear", () => {
 
   it("a blocking cross-phase dependency check hard-stops the gate; clearing it restores approval", () => {
     const blocked = buildCrm({
-      dependencyCheck: { strategy: { passed: false, issues: [{ severity: "blocking", description: "Charter contradicts the value roadmap" }] } },
+      dependencyCheck: { mobilise: { passed: false, issues: [{ severity: "blocking", description: "Plan contradicts the strategy charter" }] } },
     });
-    const blockedReadiness = computePhaseReadiness(blocked, "strategy");
+    const blockedReadiness = computePhaseReadiness(blocked, "mobilise");
     expect(blockedReadiness.canApproveGate).toBe(false);
     expect(blockedReadiness.dependencyCheckPassed).toBe(false);
     expect(blockedReadiness.missing.some((m) => m.includes("dependency check failed"))).toBe(true);
 
-    const cleared = buildCrm({ dependencyCheck: { strategy: { passed: true, issues: [] } } });
-    const clearedReadiness = computePhaseReadiness(cleared, "strategy");
+    const cleared = buildCrm({ dependencyCheck: { mobilise: { passed: true, issues: [] } } });
+    const clearedReadiness = computePhaseReadiness(cleared, "mobilise");
     expect(clearedReadiness.canApproveGate).toBe(true);
     expect(clearedReadiness.dependencyCheckPassed).toBe(true);
+  });
+
+  it("never lets a cross-phase dependency check block the first phase — it has no prior phase", () => {
+    const blocked = buildCrm({
+      dependencyCheck: { strategy: { passed: false, issues: [{ severity: "blocking", description: "spurious first-phase verdict" }] } },
+    });
+    const readiness = computePhaseReadiness(blocked, "strategy");
+    expect(readiness.dependencyCheckPassed).toBe(true);
+    expect(readiness.missing.some((m) => m.includes("dependency check failed"))).toBe(false);
   });
 });
 
