@@ -2163,6 +2163,20 @@ export default function AppShellV3() {
   const handleApproveGate = useCallback(async (phaseId: string) => {
     if (!activeProgram) return;
 
+    // Authoritative hard gate: re-verify readiness at the single chokepoint both
+    // StageView and ProgrammeHealthView route through, so a stale-enabled button
+    // or a view that doesn't disable its own button can never approve a phase
+    // whose score, mandatory exit criteria, or critical assumptions still fail.
+    const approvalReadiness = computePhaseReadiness(activeProgram, phaseId);
+    if (!approvalReadiness.canApproveGate) {
+      pushV3Toast(
+        approvalReadiness.missing[0]
+          || `Gate readiness ${approvalReadiness.score}% is below the ${approvalReadiness.threshold}% threshold.`,
+        { tone: "error", duration: 5000 },
+      );
+      return;
+    }
+
     // Cross-phase dependency check is a hard gate condition. Token optimization:
     // reuse the verdict already persisted (dependency-check auto-runs downstream of
     // gate-review), and only invoke the model when no verdict exists yet — so a
