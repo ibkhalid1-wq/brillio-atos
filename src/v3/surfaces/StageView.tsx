@@ -822,6 +822,28 @@ export default function StageView({
   const phaseTone = phaseStatusTone(activePhase);
   const showRetro = activePhase.pct >= 90;
 
+  // Phase-specific agent actions — consolidated into the header so the workspace
+  // below shows only generated results, never a wall of "Generate X" buttons.
+  const phaseAgentActions: Array<{ key: string; label: React.ReactNode; disabled: boolean; onClick: () => void }> = [];
+  if (activePhase.id === "discover") {
+    phaseAgentActions.push({ key: "discovery-guide-generator", label: agentButtonContent("discovery-guide-generator", discoveryGuide ? "Re-generate discovery pack" : "Generate discovery pack"), disabled: agentButtonDisabled("discovery-guide-generator"), onClick: () => onRunAgent("discovery-guide-generator") });
+  }
+  if (activePhase.id === "build") {
+    phaseAgentActions.push({ key: "sprint-planner", label: agentButtonContent("sprint-planner", sprintPlan ? "Re-plan sprints" : "Generate sprint plan"), disabled: agentButtonDisabled("sprint-planner"), onClick: () => onRunAgent("sprint-planner") });
+  }
+  if (["mobilise", "build"].includes(activePhase.id)) {
+    phaseAgentActions.push({ key: "capacity-assessor", label: agentButtonContent("capacity-assessor", capacityAssessment ? "Re-assess capacity" : "Assess capacity"), disabled: agentButtonDisabled("capacity-assessor"), onClick: () => onRunAgent("capacity-assessor") });
+  }
+  if (["design", "govern"].includes(activePhase.id)) {
+    phaseAgentActions.push({ key: "compliance-checker", label: agentButtonContent("compliance-checker", complianceCheck ? "Re-check compliance" : "Run compliance check"), disabled: agentButtonDisabled("compliance-checker"), onClick: () => onRunAgent("compliance-checker") });
+  }
+  if (["design", "build", "operate"].includes(activePhase.id)) {
+    phaseAgentActions.push({ key: "vendor-risk-assessor", label: agentButtonContent("vendor-risk-assessor", vendorRiskAssessment ? "Re-assess vendor risk" : "Assess vendor risk"), disabled: agentButtonDisabled("vendor-risk-assessor"), onClick: () => onRunAgent("vendor-risk-assessor") });
+  }
+  if (showRetro) {
+    phaseAgentActions.push({ key: "retro", label: isRetroRunning ? "Preparing…" : "Generate retrospective", disabled: isRetroRunning, onClick: () => triggers.triggerRetro(activePhase.id) });
+  }
+
   return (
     <div className="v3-work-area v3-surface-enter">
       <PhaseRail
@@ -966,6 +988,15 @@ export default function StageView({
             <button type="button" className="v3-button ghost v3-button-inline-sm" onClick={() => document.getElementById("exit-criteria-anchor")?.scrollIntoView({ behavior: "smooth", block: "center" })}>Exit criteria</button>
             <button type="button" className="v3-button ghost v3-button-inline-sm" onClick={() => onOpenMoreView("milestones")}>Milestones</button>
           </div>
+          {phaseAgentActions.length ? (
+            <div className="v3-phase-head-actions-grp">
+              {phaseAgentActions.map((action) => (
+                <button key={action.key} type="button" className="v3-button ghost v3-button-inline-sm" disabled={action.disabled} onClick={action.onClick}>
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         {remediationOpen ? (
@@ -1351,122 +1382,70 @@ export default function StageView({
             </div>
           ) : null}
 
-          {activePhase.id === "discover" ? (
+          {activePhase.id === "discover" && discoveryGuide ? (
             <div className="v3-card-sm v3-mini-card">
               <div className="v3-card-title v3-mini-card-title">Discovery pack</div>
-              {discoveryGuide ? (
-                <div className="v3-mini-card-list">
-                  <div>{Array.isArray((discoveryGuide.executiveInterviewGuide as { questions?: string[] } | undefined)?.questions) ? (discoveryGuide.executiveInterviewGuide as { questions: string[] }).questions.length : 0} executive interview prompts</div>
-                  <div>{Array.isArray((discoveryGuide.operationalInterviewGuide as { questions?: string[] } | undefined)?.questions) ? (discoveryGuide.operationalInterviewGuide as { questions: string[] }).questions.length : 0} operational interview prompts</div>
-                  <div>{Array.isArray((discoveryGuide.documentRequestList as string[] | undefined)) ? (discoveryGuide.documentRequestList as string[]).length : 0} requested documents</div>
-                </div>
-              ) : (
-                <div className="v3-mini-card-empty">Generate interview guides, workshop agenda, and document request list for discovery.</div>
-              )}
-              <button type="button" className="v3-button ghost v3-mini-card-action" disabled={agentButtonDisabled("discovery-guide-generator")} onClick={() => onRunAgent("discovery-guide-generator")}>
-                {agentButtonContent("discovery-guide-generator", discoveryGuide ? "Re-generate discovery pack" : "Generate discovery pack")}
-              </button>
+              <div className="v3-mini-card-list">
+                <div>{Array.isArray((discoveryGuide.executiveInterviewGuide as { questions?: string[] } | undefined)?.questions) ? (discoveryGuide.executiveInterviewGuide as { questions: string[] }).questions.length : 0} executive interview prompts</div>
+                <div>{Array.isArray((discoveryGuide.operationalInterviewGuide as { questions?: string[] } | undefined)?.questions) ? (discoveryGuide.operationalInterviewGuide as { questions: string[] }).questions.length : 0} operational interview prompts</div>
+                <div>{Array.isArray((discoveryGuide.documentRequestList as string[] | undefined)) ? (discoveryGuide.documentRequestList as string[]).length : 0} requested documents</div>
+              </div>
             </div>
           ) : null}
 
-          {activePhase.id === "build" ? (
+          {activePhase.id === "build" && Array.isArray(sprintPlan?.sprints) && sprintPlan.sprints.length ? (
             <div className="v3-card-sm v3-mini-card">
               <div className="v3-card-title v3-mini-card-title">Sprint plan</div>
-              {Array.isArray(sprintPlan?.sprints) && sprintPlan.sprints.length ? (
-                <div className="v3-mini-card-list">
-                  {(sprintPlan.sprints as Array<{ sprintNumber?: number; goal?: string; startDate?: string; endDate?: string }>).slice(0, 3).map((sprint, index) => (
-                    <div key={index}>
-                      <strong>Sprint {sprint.sprintNumber || index + 1}:</strong> {sprint.goal || "Goal forming"} {sprint.startDate ? `(${formatShortDate(sprint.startDate)} → ${formatShortDate(sprint.endDate)})` : ""}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="v3-mini-card-empty">Plan build sprints from milestones, capacity, and workstreams.</div>
-              )}
-              <button type="button" className="v3-button ghost v3-mini-card-action" disabled={agentButtonDisabled("sprint-planner")} onClick={() => onRunAgent("sprint-planner")}>
-                {agentButtonContent("sprint-planner", sprintPlan ? "Re-plan sprints" : "Generate sprint plan")}
-              </button>
+              <div className="v3-mini-card-list">
+                {(sprintPlan.sprints as Array<{ sprintNumber?: number; goal?: string; startDate?: string; endDate?: string }>).slice(0, 3).map((sprint, index) => (
+                  <div key={index}>
+                    <strong>Sprint {sprint.sprintNumber || index + 1}:</strong> {sprint.goal || "Goal forming"} {sprint.startDate ? `(${formatShortDate(sprint.startDate)} → ${formatShortDate(sprint.endDate)})` : ""}
+                  </div>
+                ))}
+              </div>
             </div>
           ) : null}
 
-          {["mobilise", "build"].includes(activePhase.id) ? (
+          {["mobilise", "build"].includes(activePhase.id) && capacityAssessment ? (
             <div className="v3-card-sm v3-mini-card">
               <div className="v3-card-title v3-mini-card-title">Capacity</div>
-              {capacityAssessment ? (
-                <div className="v3-mini-card-list">
-                  <span className={`v3-chip ${capacityAssessment.overallAdequacy === "sufficient" ? "green" : capacityAssessment.overallAdequacy === "at-risk" ? "amber" : "red"}`}>
-                    {capacityAssessment.overallAdequacy} {Math.round(Number(capacityAssessment.adequacyScore || 0))}%
-                  </span>
-                  {(capacityAssessment.roleGaps || []).slice(0, 3).map((gap, index) => (
-                    <div key={index}>
-                      {gap.role}: have {gap.currentCount || 0}, need {gap.requiredCount || 0}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="v3-mini-card-empty">Assess whether current capacity matches the work ahead.</div>
-              )}
-              <button type="button" className="v3-button ghost v3-mini-card-action" disabled={agentButtonDisabled("capacity-assessor")} onClick={() => onRunAgent("capacity-assessor")}>
-                {agentButtonContent("capacity-assessor", capacityAssessment ? "Re-assess capacity" : "Assess capacity")}
-              </button>
+              <div className="v3-mini-card-list">
+                <span className={`v3-chip ${capacityAssessment.overallAdequacy === "sufficient" ? "green" : capacityAssessment.overallAdequacy === "at-risk" ? "amber" : "red"}`}>
+                  {capacityAssessment.overallAdequacy} {Math.round(Number(capacityAssessment.adequacyScore || 0))}%
+                </span>
+                {(capacityAssessment.roleGaps || []).slice(0, 3).map((gap, index) => (
+                  <div key={index}>
+                    {gap.role}: have {gap.currentCount || 0}, need {gap.requiredCount || 0}
+                  </div>
+                ))}
+              </div>
             </div>
           ) : null}
 
-          {["design", "govern"].includes(activePhase.id) ? (
+          {["design", "govern"].includes(activePhase.id) && complianceCheck?.gaps?.length ? (
             <div className="v3-card-sm v3-mini-card">
               <div className="v3-card-title v3-mini-card-title">Compliance gaps</div>
-              {complianceCheck?.gaps?.length ? (
-                <div className="v3-mini-card-list">
-                  {complianceCheck.gaps.slice(0, 3).map((gap, index) => (
-                    <div key={index}>
-                      <span className={`v3-chip ${gap.severity === "critical" ? "red" : gap.severity === "high" ? "amber" : "muted"}`} style={{ marginRight: 6 }}>{gap.framework} {gap.articleId}</span>
-                      {gap.gap}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="v3-mini-card-empty">Check for framework-specific compliance gaps before governance sign-off.</div>
-              )}
-              <button type="button" className="v3-button ghost v3-mini-card-action" disabled={agentButtonDisabled("compliance-checker")} onClick={() => onRunAgent("compliance-checker")}>
-                {agentButtonContent("compliance-checker", complianceCheck ? "Re-check compliance" : "Run compliance check")}
-              </button>
+              <div className="v3-mini-card-list">
+                {complianceCheck.gaps.slice(0, 3).map((gap, index) => (
+                  <div key={index}>
+                    <span className={`v3-chip ${gap.severity === "critical" ? "red" : gap.severity === "high" ? "amber" : "muted"}`} style={{ marginRight: 6 }}>{gap.framework} {gap.articleId}</span>
+                    {gap.gap}
+                  </div>
+                ))}
+              </div>
             </div>
           ) : null}
 
-          {["design", "build", "operate"].includes(activePhase.id) ? (
+          {["design", "build", "operate"].includes(activePhase.id) && vendorRiskAssessment?.vendorAssessments?.length ? (
             <div className="v3-card-sm v3-mini-card">
               <div className="v3-card-title v3-mini-card-title">Vendor risk</div>
-              {vendorRiskAssessment?.vendorAssessments?.length ? (
-                <div className="v3-mini-card-list">
-                  {vendorRiskAssessment.vendorAssessments.slice(0, 3).map((vendor, index) => (
-                    <div key={index}>
-                      <strong>{vendor.vendorName}</strong> · {Math.round(Number(vendor.riskScore || 0))}% risk · {vendor.dependencyCriticality}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="v3-mini-card-empty">Assess vendor and partner dependency risk for this phase.</div>
-              )}
-              <button type="button" className="v3-button ghost v3-mini-card-action" disabled={agentButtonDisabled("vendor-risk-assessor")} onClick={() => onRunAgent("vendor-risk-assessor")}>
-                {agentButtonContent("vendor-risk-assessor", vendorRiskAssessment ? "Re-assess vendor risk" : "Assess vendor risk")}
-              </button>
-            </div>
-          ) : null}
-
-          {showRetro ? (
-            <div className="v3-card-sm v3-mini-card">
-              <div className="v3-card-title v3-mini-card-title">Retrospective</div>
-              <div className="v3-mini-card-empty">
-                This phase is nearly complete. Capture learnings.
+              <div className="v3-mini-card-list">
+                {vendorRiskAssessment.vendorAssessments.slice(0, 3).map((vendor, index) => (
+                  <div key={index}>
+                    <strong>{vendor.vendorName}</strong> · {Math.round(Number(vendor.riskScore || 0))}% risk · {vendor.dependencyCriticality}
+                  </div>
+                ))}
               </div>
-              <button
-                type="button"
-                className="v3-button ghost v3-mini-card-action"
-                disabled={isRetroRunning}
-                onClick={() => triggers.triggerRetro(activePhase.id)}
-              >
-                {isRetroRunning ? "Preparing…" : "Generate retrospective"}
-              </button>
             </div>
           ) : null}
         </div>
