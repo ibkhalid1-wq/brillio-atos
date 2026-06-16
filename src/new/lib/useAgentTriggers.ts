@@ -453,7 +453,13 @@ export function useAgentTriggers({
   useEffect(() => {
     if (!canRunAgents || !activePhaseId) return;
     const activeMilestones = milestones.filter((milestone) => milestone.phaseId === activePhaseId || milestone.phase === activePhaseId);
-    if (!activeMilestones.length && !(gateReviews[activePhaseId]?.exitCriteriaStatus || []).length) return;
+    // The estimator derives completion from milestones, exit criteria AND produced
+    // artifacts (artifactSignal). A phase with generated artifacts but no milestones
+    // or captured exit criteria still has real progress to estimate — without this
+    // it stays stuck at 0%, which forces the gate-review score to "not-ready".
+    const phaseArtifactBucket = (rawData.phaseArtifacts as Record<string, Record<string, unknown>> | undefined)?.[activePhaseId];
+    const hasPhaseArtifacts = Boolean(phaseArtifactBucket && Object.keys(phaseArtifactBucket).length > 0);
+    if (!activeMilestones.length && !(gateReviews[activePhaseId]?.exitCriteriaStatus || []).length && !hasPhaseArtifacts) return;
     void runAgentSafely({ agentId: "phase-completion-estimator", phaseId: activePhaseId, triggeredBy: "trigger" }, () => {
       lastRunSnapshots.current["phase-completion-estimator"] = captureSnapshot("phase-completion-estimator", rawData);
     });
