@@ -1718,13 +1718,20 @@ export default function AppShellV3() {
     });
   }, []);
 
+  const lastLandedProgramIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!activeProgram) return;
+    // Phase ids are shared across programmes, so a stale phase from the previous
+    // programme stays "valid" and would otherwise be kept. Always land on the new
+    // programme's frontier phase when the active programme changes.
+    const programChanged = lastLandedProgramIdRef.current !== activeProgramId;
+    lastLandedProgramIdRef.current = activeProgramId;
     const validCurrent = activeProgram.phases.some((phase) => phase.id === activePhaseId);
-    if (validCurrent) return;
+    if (validCurrent && !programChanged) return;
     const inProgress = activeProgram.phases.find((phase) => (phase.pct ?? 0) > 0 && (phase.pct ?? 0) < 100);
-    setActivePhaseId(inProgress?.id || activeProgram.phases[0]?.id || null);
-  }, [activePhaseId, activeProgram]);
+    const firstIncomplete = activeProgram.phases.find((phase) => (phase.pct ?? 0) < 100);
+    setActivePhaseId(inProgress?.id || firstIncomplete?.id || activeProgram.phases[0]?.id || null);
+  }, [activeProgramId, activePhaseId, activeProgram]);
 
   useEffect(() => {
     if (!activeProgram) return;
