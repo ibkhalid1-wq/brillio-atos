@@ -820,7 +820,6 @@ export default function ProgrammeHealthView({
   onNavigateToPhase,
 }: ProgrammeHealthViewProps) {
   const [rightTab, setRightTab] = useState<RightTab>("gates");
-  const [approvingGateFromLeft, setApprovingGateFromLeft] = useState(false);
 
   const { inner } = useMemo(() => getProgramState(rawData), [rawData]);
 
@@ -848,18 +847,6 @@ export default function ProgrammeHealthView({
   const approvedCount = ADAM_PHASE_SEQUENCE.filter(
     (id) => gateReviews[id]?.status === "approved",
   ).length;
-
-  const activeGate = activePhaseId ? gateReviews[activePhaseId] : null;
-
-  async function handleLeftApprove() {
-    if (!activePhaseId) return;
-    setApprovingGateFromLeft(true);
-    try {
-      await onApproveGate(activePhaseId);
-    } finally {
-      setApprovingGateFromLeft(false);
-    }
-  }
 
   const scoreColor = confidenceScore !== null ? confidenceColor(confidenceScore) : "var(--v3-text-muted)";
 
@@ -1044,31 +1031,6 @@ export default function ProgrammeHealthView({
             />
           </div>
         </div>
-
-        {/* Approve gate button (left panel shortcut) */}
-        {activePhaseId && activeGate?.status !== "approved" && (
-          <div style={{ padding: "12px 18px 16px" }}>
-            <button
-              disabled={approvingGateFromLeft}
-              onClick={handleLeftApprove}
-              style={{
-                width: "100%",
-                padding: "9px 0",
-                background: "var(--v3-accent)",
-                color: "#fff",
-                border: "none",
-                borderRadius: "var(--v3-radius)",
-                cursor: approvingGateFromLeft ? "not-allowed" : "pointer",
-                fontFamily: "var(--v3-font)",
-                fontSize: 12,
-                fontWeight: 600,
-                opacity: approvingGateFromLeft ? 0.6 : 1,
-              }}
-            >
-              {approvingGateFromLeft ? "Approving…" : "Approve Gate"}
-            </button>
-          </div>
-        )}
       </div>
 
       {/* ── Right panel ───────────────────────────────────────────────────── */}
