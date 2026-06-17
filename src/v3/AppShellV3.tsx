@@ -1313,8 +1313,12 @@ export default function AppShellV3() {
       return;
     }
 
-    // Guard: AI not connected — show actionable message instead of a cryptic error
-    if (!aiStatus || aiStatus.status !== "connected") {
+    // Guard: AI not connected — block only on definitive negative states.
+    // "checking" (cold mount before the first status poll) and "error" (edge
+    // cold-start or a transient network blip) are NOT proof of a missing key, so
+    // they must not block a user who is actually configured. The edge call below
+    // validates the key and surfaces a real error if it's genuinely absent.
+    if (aiStatus && (aiStatus.status === "not-configured" || aiStatus.status === "offline")) {
       pushV3Toast("AI is not connected. Open AI Settings to add a provider key.", {
         tone: "warning",
         duration: 6000,
