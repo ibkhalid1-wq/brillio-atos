@@ -3494,29 +3494,29 @@ button.v3-chip:focus-visible,
 }
 
 .v3-button.ghost {
-  /* A subtle accent-tinted control. Deliberately NOT the neutral top-lit card
-     gradient used by metric tiles — a faint cool accent wash + accent-leaning
+  /* A subtle blue-tinted control. Deliberately NOT the neutral top-lit card
+     gradient used by metric tiles — a faint cool blue wash + blue-leaning
      hairline reads it as an interactive action, distinct from the data panels
      it often sits beside. Flat (no base drop-shadow) so it stays a control, not
      an elevated surface. */
-  background: color-mix(in srgb, var(--v3-accent) 7%, var(--v3-surface-2));
+  background: color-mix(in srgb, var(--v3-accent-b) 8%, var(--v3-surface-2));
   color: var(--v3-text-secondary);
-  border: 1px solid color-mix(in srgb, var(--v3-accent) 24%, var(--v3-border));
+  border: 1px solid color-mix(in srgb, var(--v3-accent-b) 26%, var(--v3-border));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .v3-button.ghost:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--v3-accent) 14%, var(--v3-surface-2));
+  background: color-mix(in srgb, var(--v3-accent-b) 16%, var(--v3-surface-2));
   color: var(--v3-text-primary);
-  border-color: color-mix(in srgb, var(--v3-accent) 48%, var(--v3-border));
+  border-color: color-mix(in srgb, var(--v3-accent-b) 52%, var(--v3-border));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 5px 14px color-mix(in srgb, var(--v3-accent) 18%, transparent);
+    0 5px 14px color-mix(in srgb, var(--v3-accent-b) 20%, transparent);
   transform: translateY(-1px);
 }
 
 .v3-button.ghost:active:not(:disabled) {
-  background: color-mix(in srgb, var(--v3-accent) 10%, var(--v3-surface-2));
+  background: color-mix(in srgb, var(--v3-accent-b) 12%, var(--v3-surface-2));
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.14);
   transform: translateY(0) scale(0.97);
 }
