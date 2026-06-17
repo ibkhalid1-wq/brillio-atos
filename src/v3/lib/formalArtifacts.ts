@@ -165,3 +165,22 @@ export function getFormalArtifactContent(source: Record<string, unknown> | null,
   const text = formatStructuredDoc(source[fieldKey]);
   return text.trim() ? text : null;
 }
+
+/**
+ * The AI's self-assessed confidence for a formal document, read from the same
+ * top-level mirror as its body. run-agent returns `confidence` (0-1) on the
+ * generation result and stores it on the mirror object, but NOT on the
+ * phaseArtifacts ledger record — so without this, a formal-document card has no
+ * quality signal to show until the independent review lands. Returns a 0-100
+ * score, or null when the artifact is not a formal document / has no confidence.
+ */
+export function getFormalArtifactConfidence(source: Record<string, unknown> | null, artifactId: string): number | null {
+  if (!source) return null;
+  const fieldKey = FORMAL_ARTIFACT_FIELD_KEYS[artifactId];
+  if (!fieldKey) return null;
+  const doc = source[fieldKey];
+  if (!isObject(doc)) return null;
+  const confidence = doc.confidence;
+  if (typeof confidence !== "number" || !Number.isFinite(confidence)) return null;
+  return Math.round(confidence <= 1 ? confidence * 100 : confidence);
+}

@@ -10,6 +10,8 @@
  * never read one score on the card and a different one in the header.
  */
 
+import { getFormalArtifactConfidence } from "@/v3/lib/formalArtifacts";
+
 /** Convert a producing-agent/artifact id to its persisted review key. */
 export function artifactReviewFieldKey(defId: string): string {
   const camel = defId.replace(/-([a-z])/g, (_, ch: string) => ch.toUpperCase());
@@ -63,5 +65,8 @@ export function resolveArtifactQualityScore(
   if (typeof storedConfidence === "number" && Number.isFinite(storedConfidence)) {
     return Math.round(storedConfidence <= 1 ? storedConfidence * 100 : storedConfidence);
   }
-  return null;
+  // Formal documents persist the AI's generation confidence on their top-level
+  // mirror, not the ledger record — fall back to it so their cards/header show a
+  // score before the independent review lands.
+  return getFormalArtifactConfidence(source ?? null, defId);
 }

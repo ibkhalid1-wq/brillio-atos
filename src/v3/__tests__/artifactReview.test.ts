@@ -71,10 +71,20 @@ describe("resolveArtifactQualityScore", () => {
     expect(resolveArtifactQualityScore({}, "charter", "strategy", 80)).toBe(80);
   });
 
+  it("falls back to a formal document's generation confidence from its mirror", () => {
+    // A regenerated formal doc has no review key and no ledger confidence, but the
+    // AI's generation confidence is stored on the top-level mirror. The card must
+    // surface it so quality isn't blank before the independent review lands.
+    const source = { outcomeFramework: { confidence: 0.98, summary: "x" } };
+    expect(resolveArtifactQualityScore(source, "outcome-framework", "strategy", null)).toBe(98);
+    // The mirror key differs from camelCase(defId) for charter/business-case.
+    expect(resolveArtifactQualityScore({ transformationCharter: { confidence: 0.6 } }, "charter", "strategy")).toBe(60);
+  });
+
   it("returns null when the artifact has no quality signal at all", () => {
-    // This is exactly the regenerated-formal-artifact case: a draft with no
-    // review key and no persisted confidence has no score to show on the card,
-    // and must NOT inherit another phase's programme-wide review score.
+    // A draft with no review key, no persisted confidence, and no formal mirror
+    // confidence has no score to show, and must NOT inherit another phase's
+    // programme-wide review score.
     expect(resolveArtifactQualityScore({}, "charter", "strategy", null)).toBeNull();
     expect(resolveArtifactQualityScore({ planQuality: { score: 57 } }, "charter", "strategy")).toBeNull();
   });

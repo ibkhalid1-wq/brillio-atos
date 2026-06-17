@@ -15,7 +15,7 @@ import { RelativeTime } from "@/v3/components/ui/RelativeTime";
 import { StatusBadge } from "@/v3/components/ui/StatusBadge";
 import { computePhaseReadiness } from "@/v3/lib/phaseReadiness";
 import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
-import { resolveArtifactReview } from "@/v3/lib/artifactReview";
+import { resolveArtifactReview, resolveArtifactQualityScore } from "@/v3/lib/artifactReview";
 import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
 import { getArtifactInputFields } from "@/v3/lib/phaseFlowEdges";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
@@ -1197,7 +1197,7 @@ export default function StageView({
               // quality) still has a reviewer score here. Prefer it so the chip
               // shows quality for drafts and the modal can render the AI plan.
               const review = resolveArtifactReview(source, def.id, activePhase.id);
-              const displayScore = review?.score ?? score;
+              const displayScore = resolveArtifactQualityScore(source, def.id, activePhase.id, score);
               const statusLabel = !present
                 ? "Missing"
                 : state === "approved" ? "Approved"
