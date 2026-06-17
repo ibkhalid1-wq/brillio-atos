@@ -1542,7 +1542,7 @@ export default function AppShellV3() {
     : activeRuns.some((run) => run.status === "failed" || run.status === "cancelled")
     ? "stopped"
     : "idle";
-  // For ExecCommandPanel / ExecutiveView buttons: only block when the *user* triggered a run,
+  // For agent-run buttons (ExecutiveView etc.): only block when the *user* triggered a run,
   // not when a background / proactive agent is sitting in the DB in "queued"/"running" state.
   // agentIsUserRunning === isLoading, which is true only during the runAgent() HTTP call itself
   // and resets in the finally block — never gets stuck regardless of DB run state.
