@@ -53,7 +53,7 @@ import ProgramSetupWizard from "@/v3/components/ProgramSetupWizard";
 import { reportError } from "@/lib/errorReporter";
 import { sanitizeMarkdown } from "@/lib/sanitize";
 import { changedInputFields, approvedArtifactsToStale, fieldsFeedingApprovedArtifacts } from "@/v3/lib/artifactStaleness";
-import { getDynamicSchemaStore, sanitizePlannerProposal, applyDynamicProposal } from "@/v3/lib/dynamicSchema";
+import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { useRelativeTimeTick } from "@/lib/useRelativeTimeTick";
 import { useAgentCascadeToasts } from "@/v3/hooks/useAgentCascadeToasts";
 import { useCriticalEventAlerts } from "@/v3/hooks/useCriticalEventAlerts";
@@ -2452,29 +2452,26 @@ export default function AppShellV3() {
               : undefined,
           },
         });
-        const proposal = sanitizePlannerProposal((response.data as { output?: unknown } | undefined)?.output);
-        const added = proposal ? proposal.inputFields.length + proposal.artifacts.length : 0;
-        if (proposal && added) {
-          // approveGate() above already bumped the row's updated_at, so the
-          // in-memory activeProgram snapshot is stale. Re-read the freshest row
-          // and layer the dynamic schema onto IT (preserving the gate approval +
-          // approved artifacts) using its current updated_at — otherwise the
-          // optimistic-concurrency check would reject this write and the planner
-          // proposal would be silently dropped.
-          const { data: fresh } = await supabase
-            .from("adam_programs")
-            .select("data, updated_at")
-            .eq("id", activeProgram.id)
-            .single();
-          const freshRaw = (fresh?.data as Record<string, unknown> | undefined) ?? activeProgram.rawData ?? {};
-          const cloned = cloneRawProgram({ ...activeProgram, rawData: freshRaw });
-          const store = getDynamicSchemaStore(cloned.inner);
-          const nextStore = applyDynamicProposal(store, nextPhaseId, proposal);
-          const payload = cloned.commit({ ...cloned.inner, dynamicSchema: nextStore });
-          await updateProgramData(activeProgram.id, payload, fresh?.updated_at ?? activeProgram.updatedAt);
-          await refreshPrograms();
+        if (response.error) throw response.error;
+        // The edge persists the planner proposal into dynamicSchema itself (it
+        // is the single writer — relying on this HTTP response to carry the
+        // proposal back for the client to persist silently dropped good output
+        // when the round-trip was flaky). Re-read the freshest row so the UI and
+        // the toast reflect what was actually written.
+        await refreshPrograms();
+        const { data: fresh } = await supabase
+          .from("adam_programs")
+          .select("data")
+          .eq("id", activeProgram.id)
+          .single();
+        const freshRaw = (fresh?.data as Record<string, unknown> | undefined) ?? activeProgram.rawData ?? {};
+        const cloned = cloneRawProgram({ ...activeProgram, rawData: freshRaw });
+        const store = getDynamicSchemaStore(cloned.inner);
+        const nInputs = store.inputFields?.[nextPhaseId]?.length ?? 0;
+        const nArtifacts = store.artifacts?.[nextPhaseId]?.length ?? 0;
+        if (nInputs + nArtifacts > 0) {
           pushV3Toast(
-            `Planner tailored ${nextPhaseId}: ${proposal.inputFields.length} input${proposal.inputFields.length === 1 ? "" : "s"} and ${proposal.artifacts.length} artifact${proposal.artifacts.length === 1 ? "" : "s"} generated.`,
+            `Planner tailored ${nextPhaseId}: ${nInputs} input${nInputs === 1 ? "" : "s"} and ${nArtifacts} artifact${nArtifacts === 1 ? "" : "s"} generated.`,
             { tone: "info", duration: 5000 },
           );
         } else {

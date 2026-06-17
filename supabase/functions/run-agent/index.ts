@@ -4198,6 +4198,82 @@ function applyGeneratedExitCriteriaToProgramData(programData: ProgramState, phas
   });
 }
 
+const PLANNER_FIELD_TYPES = new Set(["text", "textarea", "number", "date", "select", "grid"]);
+
+/**
+ * Write the phase-input-planner's proposal straight into the program's
+ * dynamicSchema (inputFields / artifacts / artifactInputFlow for `phaseId`),
+ * replacing any prior entries for that phase. The edge is the single writer:
+ * relying on the client to persist from the HTTP response was fragile (a flaky
+ * round-trip silently dropped a perfectly good proposal). Sanitisation mirrors
+ * the client's sanitizePlannerProposal so persisted data stays identical.
+ */
+function applyPhaseInputPlannerResultToProgramData(
+  programData: ProgramState,
+  phaseId: string,
+  result: Record<string, unknown>,
+): ProgramState {
+  const fieldsIn = Array.isArray(result.inputFields) ? result.inputFields : [];
+  const artifactsIn = Array.isArray(result.artifacts) ? result.artifacts : [];
+  const flowIn = isRecord(result.artifactInputFlow) ? result.artifactInputFlow : {};
+
+  const fieldIds = new Set<string>();
+  const inputFields: Record<string, JsonValue>[] = [];
+  for (const f of fieldsIn) {
+    if (!isRecord(f)) continue;
+    const id = String(f.id ?? "").trim();
+    const type = String(f.type ?? "").trim();
+    if (!id || fieldIds.has(id) || !PLANNER_FIELD_TYPES.has(type)) continue;
+    fieldIds.add(id);
+    const field: Record<string, JsonValue> = {
+      id,
+      label: String(f.label ?? "").trim() || id,
+      type,
+      required: Boolean(f.required),
+      source: "ai-derived",
+    };
+    if (typeof f.placeholder === "string" && f.placeholder.trim()) field.placeholder = f.placeholder;
+    if (typeof f.hint === "string" && f.hint.trim()) field.hint = f.hint;
+    if (Array.isArray(f.options)) field.options = f.options.filter((o): o is string => typeof o === "string");
+    inputFields.push(field);
+  }
+
+  const artifactIds = new Set<string>();
+  const artifacts: Record<string, JsonValue>[] = [];
+  for (const a of artifactsIn) {
+    if (!isRecord(a)) continue;
+    const id = String(a.id ?? "").trim();
+    if (!id || artifactIds.has(id)) continue;
+    artifactIds.add(id);
+    artifacts.push({ id, label: String(a.label ?? "").trim() || id, description: String(a.description ?? "").trim() });
+  }
+
+  const artifactInputFlow: Record<string, JsonValue> = {};
+  for (const [artifactId, fields] of Object.entries(flowIn)) {
+    if (!artifactIds.has(artifactId) || !Array.isArray(fields)) continue;
+    const refs = (fields as unknown[]).filter((id): id is string => typeof id === "string" && fieldIds.has(id));
+    if (refs.length) artifactInputFlow[artifactId] = refs;
+  }
+
+  if (!inputFields.length && !artifacts.length) return programData;
+
+  return updateInnerProgramData(programData, (inner) => {
+    const store = normalizeProgramData(inner.dynamicSchema as JsonValue | null);
+    const prevInputs = normalizeProgramData(store.inputFields as JsonValue | null);
+    const prevArtifacts = normalizeProgramData(store.artifacts as JsonValue | null);
+    const prevFlow = normalizeProgramData(store.artifactInputFlow as JsonValue | null);
+    return {
+      ...inner,
+      dynamicSchema: {
+        ...store,
+        inputFields: { ...prevInputs, [phaseId]: inputFields as JsonValue },
+        artifacts: { ...prevArtifacts, [phaseId]: artifacts as JsonValue },
+        artifactInputFlow: { ...prevFlow, [phaseId]: artifactInputFlow as JsonValue },
+      } as JsonValue,
+    };
+  });
+}
+
 function applyDecisionAdvisorResultToProgramData(programData: ProgramState, decisionId: string, result: Record<string, unknown>): ProgramState {
   return updateInnerProgramData(programData, (inner) => {
     const queue = Array.isArray(inner.decisionQueue) ? inner.decisionQueue.filter(isRecord) : [];
@@ -6904,6 +6980,8 @@ Deno.serve(async (req) => {
         nextProgramData = applyContradictionResultToProgramData(contextProgramData, request.phaseId, result);
       } else if (request.agentId === "cross-artifact-validator") {
         nextProgramData = applyCrossArtifactValidationResultToProgramData(contextProgramData, request.phaseId, result);
+      } else if (request.agentId === "phase-input-planner") {
+        nextProgramData = applyPhaseInputPlannerResultToProgramData(contextProgramData, request.phaseId, result);
       } else if (request.agentId === "dependency-check") {
         nextProgramData = applyDependencyCheckResultToProgramData(contextProgramData, request.phaseId, result);
       } else if (request.agentId === "benefits-tracker") {
