@@ -1,5 +1,6 @@
 import type { ExitCriterion, ProgramSummary } from "@/new/types";
 import { getGateThreshold, computeInputQualityScore } from "@/v3/lib/confidenceScore";
+import { derivePhaseInputQuality } from "@/v3/lib/phaseInputQuality";
 import { getMandatoryCriteria } from "@/v3/lib/exitCriteriaLibrary";
 import { ATOS_STANDARD } from "@/v3/lib/methodology";
 import { getDynamicSchemaStore, dynamicArtifactDefs } from "@/v3/lib/dynamicSchema";
@@ -199,10 +200,18 @@ export function computePhaseReadiness(
     : 1.0;
   const hasStructuredInputs = Object.keys(phaseInputData).filter((k) => !k.startsWith("_")).length > 0;
 
-  // Quality-weighted input score instead of old binary 0/100
-  const inputScore = hasStructuredInputs
-    ? computeInputQualityScore(phaseInputData, extractionConfidence, hasStageNote)
-    : hasStageNote ? 30 : 0;
+  // Quality-weighted input score. The schema-grounded derivePhaseInputQuality is
+  // the single source of truth for phases that declare a static input schema, and
+  // is exactly what the phase screen's "Input quality" tile renders — so reading
+  // it here keeps the status rings (inner = input) consistent with the metrics.
+  // Dynamic-only phases declare no static schema (it returns null); there we fall
+  // back to counting the stored dynamic fields so produced inputs still register.
+  const schemaInputQuality = derivePhaseInputQuality(phaseId, phaseInputData);
+  const inputScore = schemaInputQuality
+    ? schemaInputQuality.overallScore
+    : hasStructuredInputs
+      ? computeInputQualityScore(phaseInputData, extractionConfidence, hasStageNote)
+      : hasStageNote ? 30 : 0;
 
   if (!hasStructuredInputs && !hasStageNote) {
     missing.push("No inputs provided for this phase");
