@@ -49,7 +49,6 @@ const PHASE_FIELD_ARTIFACTS: Record<string, Record<string, string[]>> = {
     sponsor: ["charter"],
     constraints: ["business-case"],
     successMetric: ["outcome-framework"],
-    keyRoles: ["charter"],
   },
 };
 

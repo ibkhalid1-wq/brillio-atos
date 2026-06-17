@@ -55,10 +55,11 @@ describe("derivePhaseFlowEdges", () => {
 describe("getArtifactInputFields", () => {
   it("unions methodology artifactInputFlow with the static field→artifact map (deduped)", () => {
     // charter is fed by methodology (industry, startDate, targetEndDate) AND the
-    // static map (sponsor, keyRoles, businessObjective) — all present, no dupes.
+    // static map (sponsor, businessObjective) — every id must be a real strategy
+    // input field, so the quality modal can resolve each to a label, never a raw id.
     const fields = getArtifactInputFields("strategy", "charter");
     expect(new Set(fields)).toEqual(
-      new Set(["industry", "startDate", "targetEndDate", "businessObjective", "sponsor", "keyRoles"]),
+      new Set(["industry", "startDate", "targetEndDate", "businessObjective", "sponsor"]),
     );
     expect(fields.length).toBe(new Set(fields).size);
   });
