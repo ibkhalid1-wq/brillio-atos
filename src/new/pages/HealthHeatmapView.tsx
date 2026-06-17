@@ -100,6 +100,8 @@ export function HealthHeatmapView({
           const heatmap = program.healthHeatmap;
           type HealthAction = { icon: string; label: string; reason: string; urgency: "critical" | "high" | "normal"; agentId?: string; phaseId?: string };
           const actions: HealthAction[] = [];
+          const redPhases = heatmap.phaseHealth.filter((p) => p.rag === "red");
+          const amberPhases = heatmap.phaseHealth.filter((p) => p.rag === "amber");
 
           // 1. Declining trend — refresh immediately
           if (heatmap.trend === "declining") {
@@ -112,8 +114,21 @@ export function HealthHeatmapView({
             });
           }
 
-          // 2. Red phases — action immediately on worst phase
-          const redPhases = heatmap.phaseHealth.filter((p) => p.rag === "red");
+          // 2. Overall red — a program-level critical that no single phase carries.
+          // When nothing has started yet the per-phase RAGs are grey, so the
+          // worst-phase action below never fires; surface the overall red here
+          // so the recommendation can never read "healthy" while the header is red.
+          if (heatmap.overallRag === "red" && redPhases.length === 0) {
+            actions.push({
+              icon: "⚠",
+              label: "Program health is red — immediate action needed",
+              reason: heatmap.summary || `Overall health is ${heatmap.overallHealthScore}. Define the plan, milestones, and objectives to get the program moving.`,
+              urgency: "critical",
+              agentId: "health-heatmap",
+            });
+          }
+
+          // 3. Red phases — action immediately on worst phase
           if (redPhases.length > 0) {
             const worst = redPhases[0];
             actions.push({
@@ -126,8 +141,21 @@ export function HealthHeatmapView({
             });
           }
 
-          // 3. Amber phases — prevent escalation
-          const amberPhases = heatmap.phaseHealth.filter((p) => p.rag === "amber");
+          // 4. Stalled / slowing momentum — get the program moving
+          if (heatmap.programMomentum === "stalled" || heatmap.programMomentum === "slowing") {
+            const stalled = heatmap.programMomentum === "stalled";
+            actions.push({
+              icon: "▶",
+              label: stalled ? "Program is stalled — mobilise the first phase" : "Momentum is slowing — keep phases progressing",
+              reason: stalled
+                ? "No phases are advancing. Run the daily briefing to surface the fastest path to traction."
+                : "Throughput is dropping. Review in-flight phases before they stall.",
+              urgency: heatmap.overallRag === "red" ? "critical" : "high",
+              agentId: "daily-briefing",
+            });
+          }
+
+          // 5. Amber phases — prevent escalation
           if (amberPhases.length > 0) {
             actions.push({
               icon: "◷",
@@ -138,7 +166,7 @@ export function HealthHeatmapView({
             });
           }
 
-          // 4. Low confidence — improve input quality
+          // 6. Low confidence — improve input quality
           if (heatmap.confidence < 0.6) {
             actions.push({
               icon: "⊡",
@@ -148,15 +176,29 @@ export function HealthHeatmapView({
             });
           }
 
-          // 5. Stable/green — maintain momentum
+          // 7. Fallback — only claim "healthy" when the overall RAG agrees.
+          // Otherwise surface an amber-grade review prompt so the panel never
+          // contradicts a non-green header.
           if (actions.length === 0) {
-            actions.push({
-              icon: "✓",
-              label: "Health is good — maintain momentum",
-              reason: heatmap.programMomentum === "strong" ? "Programme momentum is strong. Keep up the pace to maintain green status." : "No immediate health concerns. Run the daily briefing to stay on track.",
-              urgency: "normal",
-              agentId: "daily-briefing",
-            });
+            actions.push(
+              heatmap.overallRag === "green"
+                ? {
+                    icon: "✓",
+                    label: "Health is good — maintain momentum",
+                    reason: heatmap.programMomentum === "accelerating"
+                      ? "Programme momentum is accelerating. Keep up the pace to maintain green status."
+                      : "No immediate health concerns. Run the daily briefing to stay on track.",
+                    urgency: "normal",
+                    agentId: "daily-briefing",
+                  }
+                : {
+                    icon: "◷",
+                    label: "Review program health before it slips",
+                    reason: heatmap.summary || "Overall health is amber. Run a health assessment to pinpoint what needs attention.",
+                    urgency: "high",
+                    agentId: "health-heatmap",
+                  },
+            );
           }
 
           return (
