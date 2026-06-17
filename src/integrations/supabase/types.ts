@@ -45,6 +45,36 @@ export interface Database {
         };
         Relationships: [];
       };
+      adam_program_snapshots: {
+        Row: {
+          id: string;
+          program_id: string;
+          label: string;
+          kind: string;
+          data: Json;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          program_id: string;
+          label?: string;
+          kind?: string;
+          data: Json;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          program_id?: string;
+          label?: string;
+          kind?: string;
+          data?: Json;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       adam_portfolio: {
         Row: {
           id: string;

@@ -56,6 +56,7 @@ interface StageViewProps {
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; clearReviewDefId?: string }) => Promise<void>;
   onSaveProgram?: (label?: string, kind?: "manual" | "lock") => Promise<void>;
   onRevertProgram?: (snapshotId: string) => Promise<void>;
+  programSnapshots?: Array<{ id: string; label: string; kind: string; createdAt: string }>;
   onUploadDocument: () => void;
   onAssistField?: (phaseId: string, request: FieldAssistRequest) => Promise<string>;
   artifactPreviews?: {
@@ -469,6 +470,7 @@ export default function StageView({
   onSaveInputs,
   onSaveProgram,
   onRevertProgram,
+  programSnapshots = [],
   onUploadDocument,
   onAssistField,
   artifactPreviews,
@@ -665,22 +667,6 @@ export default function StageView({
   // Timestamped programme snapshots (newest first) the user can revert to. Manual
   // saves + auto-saves taken when a phase gate locks. Read straight off persisted
   // rawData so the revert modal always lists the authoritative history.
-  const programSnapshots = useMemo<Array<{ id: string; label: string; kind: string; createdAt: string }>>(() => {
-    const raw = source?.programSnapshots;
-    if (!Array.isArray(raw)) return [];
-    return raw
-      .map((entry) => {
-        const e = entry as Record<string, unknown>;
-        if (typeof e.id !== "string") return null;
-        return {
-          id: e.id,
-          label: typeof e.label === "string" ? e.label : "Untitled save",
-          kind: typeof e.kind === "string" ? e.kind : "manual",
-          createdAt: typeof e.createdAt === "string" ? e.createdAt : "",
-        };
-      })
-      .filter((e): e is { id: string; label: string; kind: string; createdAt: string } => e !== null);
-  }, [source]);
   // Full content for each produced artifact in the active phase, keyed by its
   // underlying artifact id (rawData.phaseArtifacts[phaseId][artifactId].content).
   // Powers the inline preview on every artifact row — the truncated 180-char

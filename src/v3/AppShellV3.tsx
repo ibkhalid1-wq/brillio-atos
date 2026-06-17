@@ -22,6 +22,7 @@ import { usePhaseProgress } from "@/new/lib/usePhaseProgress";
 import { useProgramNotes } from "@/new/lib/useProgramNotes";
 import { type ProgramSetupPatch, useProgramSetup } from "@/new/lib/useProgramSetup";
 import { usePrograms } from "@/new/lib/usePrograms";
+import { useProgramSnapshots } from "@/new/lib/useProgramSnapshots";
 import { useCopilotThread } from "@/hooks/useCopilotThread";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { CopilotPanel } from "@/new/components/shell/CopilotPanel";
@@ -284,31 +285,6 @@ type ShellToast = {
 };
 
 const MAX_VISIBLE_TOASTS = 3;
-const MAX_PROGRAM_SNAPSHOTS = 8;
-// Hard ceiling on the combined size of programSnapshots. Each snapshot embeds a
-// full program copy, so without a byte budget the history alone grew past 260KB
-// and pushed the whole `data` blob over Postgres's statement_timeout on every
-// read-modify-write. Trim oldest-first until both the count and byte budget hold.
-const MAX_PROGRAM_SNAPSHOTS_BYTES = 120_000;
-
-function trimProgramSnapshots(
-  snapshots: Array<Record<string, unknown>>,
-): Array<Record<string, unknown>> {
-  // newest-first; keep the freshest entries that fit the count + byte budget.
-  let kept = snapshots.slice(0, MAX_PROGRAM_SNAPSHOTS);
-  while (kept.length > 1) {
-    let bytes = 0;
-    try {
-      bytes = JSON.stringify(kept).length;
-    } catch {
-      break;
-    }
-    if (bytes <= MAX_PROGRAM_SNAPSHOTS_BYTES) break;
-    kept = kept.slice(0, kept.length - 1);
-  }
-  return kept;
-}
-
 function parseLocation(): { surface: V3Surface; moreView: V3MoreView | null; activePhaseId: string | null; reportId: V3ReportId | null } {
   const path = typeof window !== "undefined" ? window.location.pathname.replace(/^\/+/, "") : "";
   if (path === "auth") return { surface: "stage", moreView: null, activePhaseId: null, reportId: null };
@@ -1176,6 +1152,7 @@ export default function AppShellV3() {
     userId,
   });
   const { activeRuns, isRunning: agentIsRunning, isUserRunning: agentIsUserRunning, runAgent, channelStatus } = useAgentRun(activeProgramId, authed, refreshPrograms);
+  const { snapshots: programSnapshots, createSnapshot: createProgramSnapshot, getSnapshotData: getProgramSnapshotData } = useProgramSnapshots(activeProgramId || null, { enabled: authChecked && migrated });
   const aiStatus = useAIStatus(true); // status check works without auth since edge function accepts anon key
   const agentCards = useMemo(() => buildAgentCards(activeProgram, activeRuns), [activeProgram, activeRuns]);
   const agentActivityMap = useMemo(() => buildAgentActivityMap(activeRuns), [activeRuns]);
@@ -2213,57 +2190,44 @@ export default function AppShellV3() {
   }, [activeProgram, commitNavigation, refreshPrograms, updateProgramData]);
 
   // ── Program save snapshots ──────────────────────────────────────────────────
-  // Point-in-time backups the user can restore. Each snapshot captures the whole
-  // programme state *except* the snapshot history itself (so reverts never nest
-  // prior snapshots and balloon the record). Stored under rawData.programSnapshots,
-  // newest first, capped to MAX_PROGRAM_SNAPSHOTS.
+  // Point-in-time backups the user can restore. Each snapshot is a full copy of
+  // the live programme state, stored as its own row in adam_program_snapshots —
+  // never inside the programme's own data blob — so the history can't bloat the
+  // record the app reads and rewrites on every operation.
   const handleSaveProgramSnapshot = useCallback(async (label?: string, kind: "manual" | "lock" = "manual") => {
     if (!activeProgram) return;
-    const cloned = cloneRawProgram(activeProgram);
-    const inner = cloned.inner;
-    const prevSnapshots = Array.isArray(inner.programSnapshots)
-      ? (inner.programSnapshots as Array<Record<string, unknown>>)
-      : [];
-    const data = { ...inner };
-    delete data.programSnapshots;
-    const createdAt = new Date().toISOString();
-    const snapshot = {
-      id: typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `snap-${Date.now()}`,
-      label: (label && label.trim()) || `Manual save · ${new Date(createdAt).toLocaleString()}`,
-      kind,
-      createdAt,
-      data,
-    };
-    const nextSnapshots = trimProgramSnapshots([snapshot, ...prevSnapshots]);
-    const payload = cloned.commit({ ...inner, programSnapshots: nextSnapshots });
-    await updateProgramData(activeProgram.id, payload, activeProgram.updatedAt);
-    await refreshPrograms();
-    pushV3Toast(
-      kind === "lock" ? `Snapshot saved: ${snapshot.label}` : "Program saved.",
-      { tone: "success", duration: 2500 },
-    );
-  }, [activeProgram, refreshPrograms, updateProgramData]);
+    const { inner } = cloneRawProgram(activeProgram);
+    // Legacy blobs may still carry an in-data snapshot array; never nest it.
+    delete inner.programSnapshots;
+    const resolvedLabel = (label && label.trim()) || `Manual save · ${new Date().toLocaleString()}`;
+    try {
+      await createProgramSnapshot(resolvedLabel, kind, inner);
+      pushV3Toast(
+        kind === "lock" ? `Snapshot saved: ${resolvedLabel}` : "Program saved.",
+        { tone: "success", duration: 2500 },
+      );
+    } catch (err) {
+      pushV3Toast(err instanceof Error ? err.message : "Failed to save snapshot.", { tone: "error", duration: 4000 });
+    }
+  }, [activeProgram, createProgramSnapshot]);
 
   const handleRevertProgramSnapshot = useCallback(async (snapshotId: string) => {
     if (!activeProgram) return;
-    const cloned = cloneRawProgram(activeProgram);
-    const inner = cloned.inner;
-    const snapshots = Array.isArray(inner.programSnapshots)
-      ? (inner.programSnapshots as Array<Record<string, unknown>>)
-      : [];
-    const target = snapshots.find((s) => (s as { id?: string }).id === snapshotId);
-    if (!target || typeof target.data !== "object" || target.data === null) {
+    const restoredInner = await getProgramSnapshotData(snapshotId);
+    if (!restoredInner) {
       pushV3Toast("Snapshot not found.", { tone: "error", duration: 3000 });
       return;
     }
-    // Restore the captured state but keep the (separately stored) snapshot history
-    // so the user can still move between saves after reverting.
-    const restored = { ...(target.data as Record<string, unknown>), programSnapshots: snapshots };
-    const payload = cloned.commit(restored);
+    const cloned = cloneRawProgram(activeProgram);
+    // The snapshot holds the inner programme state; strip any legacy snapshot key
+    // so a restored copy never reintroduces an in-data history.
+    delete restoredInner.programSnapshots;
+    const payload = cloned.commit(restoredInner);
     await updateProgramData(activeProgram.id, payload, activeProgram.updatedAt);
     await refreshPrograms();
-    pushV3Toast(`Reverted to “${(target as { label?: string }).label ?? "snapshot"}”.`, { tone: "success", duration: 3000 });
-  }, [activeProgram, refreshPrograms, updateProgramData]);
+    const label = programSnapshots.find((s) => s.id === snapshotId)?.label ?? "snapshot";
+    pushV3Toast(`Reverted to “${label}”.`, { tone: "success", duration: 3000 });
+  }, [activeProgram, getProgramSnapshotData, programSnapshots, refreshPrograms, updateProgramData]);
 
   // Auto-snapshot when a phase gate transitions to approved (a "lock"). Detected
   // from the persisted gateReviews so it runs off the refreshed programme — no
@@ -2901,6 +2865,7 @@ export default function AppShellV3() {
                 onSaveInputs={handleSavePhaseInputs}
                 onSaveProgram={handleSaveProgramSnapshot}
                 onRevertProgram={handleRevertProgramSnapshot}
+                programSnapshots={programSnapshots}
                 onUploadDocument={handleUploadDocument}
                 onAssistField={handleAssistField}
                 artifactPreviews={{
