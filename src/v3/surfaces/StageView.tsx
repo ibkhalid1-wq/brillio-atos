@@ -707,13 +707,17 @@ export default function StageView({
           const artifactsComplete = phaseArtifacts.required > 0
             ? Math.round((phaseArtifacts.present / phaseArtifacts.required) * 100)
             : readiness.artifactScore;
+          const hasProducedArtifacts = phaseArtifacts.present > 0;
           const pctTone = (v: number) => (v >= 75 ? "green" : v >= 50 ? "amber" : "red");
           // The gate pipeline, in the order work flows toward the gate.
           const pipeline: Array<{ label: string; value: string | number; tone: string; anchor?: string | null; onClick?: () => void }> = [
             { label: "Inputs complete", value: `${inputsComplete}%`, tone: pctTone(inputsComplete), anchor: "phase-inputs-anchor" },
             { label: "Input quality", value: inputQuality ? `${inputQuality.overallScore}%` : "—", tone: inputQuality ? pctTone(inputQuality.overallScore) : "", anchor: "phase-inputs-anchor" },
             { label: "Artifacts complete", value: `${artifactsComplete}%`, tone: pctTone(artifactsComplete), anchor: "phase-artifacts-anchor" },
-            { label: "Artifact quality", value: `${readiness.artifactScore}%`, tone: pctTone(readiness.artifactScore), anchor: "phase-artifacts-anchor" },
+            // Quality is only meaningful once something is produced; mirror the
+            // "—" treatment of input quality / gate score so a stale review score
+            // never shows next to a 0%/all-missing artifact column.
+            { label: "Artifact quality", value: hasProducedArtifacts ? `${readiness.artifactScore}%` : "—", tone: hasProducedArtifacts ? pctTone(readiness.artifactScore) : "", anchor: "phase-artifacts-anchor" },
             { label: "Gate score", value: readiness.gateScore != null ? `${readiness.gateScore}%` : "—", tone: readiness.gateScore != null ? pctTone(readiness.gateScore) : "", onClick: () => setExitCriteriaOpen(true) },
           ];
           // Live work counts — distinct from the pipeline, shown as a separated group.
