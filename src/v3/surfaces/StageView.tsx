@@ -665,8 +665,8 @@ export default function StageView({
     const inputs = liveInputs && liveInputs.phaseId === activePhase?.id
       ? { ...persisted, ...liveInputs.inputs }
       : persisted;
-    return derivePhaseInputQuality(activePhase?.id, inputs);
-  }, [activePhase?.id, source, liveInputs]);
+    return derivePhaseInputQuality(activePhase?.id, inputs, dynamicStore);
+  }, [activePhase?.id, source, liveInputs, dynamicStore]);
   const generatedCriteria = useMemo(() => {
     const bucket = source?.generatedExitCriteria;
     if (!bucket || typeof bucket !== "object" || Array.isArray(bucket)) return [];

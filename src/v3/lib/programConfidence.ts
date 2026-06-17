@@ -18,6 +18,7 @@ import type { ProgramSummary } from "@/new/types";
 import { computeConfidenceScore, computeRiskPosture, type ConfidenceScore } from "@/v3/lib/confidenceScore";
 import { computePhaseReadiness } from "@/v3/lib/phaseReadiness";
 import { derivePhaseInputQuality } from "@/v3/lib/phaseInputQuality";
+import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { isDecisionOpen } from "@/v3/utils";
 
 /**
@@ -86,7 +87,9 @@ export function deriveProgramConfidence(
       ? (rawData.phaseInputs as Record<string, Record<string, unknown>>)
       : {};
   const activeInputs = phaseId ? phaseInputs[phaseId] ?? {} : {};
-  const inputQuality = phaseId ? derivePhaseInputQuality(phaseId, activeInputs) : null;
+  const inputQuality = phaseId
+    ? derivePhaseInputQuality(phaseId, activeInputs, getDynamicSchemaStore(rawData))
+    : null;
   const inputCompleteness = inputQuality
     ? inputQuality.overallScore
     : phaseReadiness?.inputScore ?? 0;

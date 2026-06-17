@@ -43,4 +43,31 @@ describe("derivePhaseInputQuality", () => {
     expect(derivePhaseInputQuality("design", {})).toBeNull();
     expect(derivePhaseInputQuality("mobilise", { anything: "x" })).toBeNull();
   });
+
+  it("scores a dynamic-only phase against its ai-derived fields when a store is supplied", () => {
+    // The header metric must assess the SAME field set the inputs panel renders.
+    // Once the planner has proposed dynamic fields for a phase, omitting the store
+    // (the old behaviour) under-counts inputs; passing it makes the metric track
+    // exactly what the user can fill in.
+    const store = {
+      inputFields: {
+        design: [
+          { id: "modelRoutingPolicy", label: "Model routing policy", type: "textarea" as const, required: true },
+          { id: "dataResidency", label: "Data residency", type: "textarea" as const, required: true },
+        ],
+      },
+    };
+    // With no store, design is dynamic-only → null.
+    expect(derivePhaseInputQuality("design", { modelRoutingPolicy: "Route to Opus for planning." }, undefined)).toBeNull();
+    // With the store, the dynamic required fields become the assessed set.
+    const result = derivePhaseInputQuality(
+      "design",
+      { modelRoutingPolicy: "Route planning to Opus and execution to Sonnet for cost efficiency." },
+      store,
+    )!;
+    expect(result).not.toBeNull();
+    expect(result.total).toBe(2);
+    expect(result.present).toBe(1);
+    expect(result.missingCritical).toContain("Data residency");
+  });
 });

@@ -14,6 +14,7 @@
  * included for Strategy alone.
  */
 import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
+import type { DynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { parseRows, filledRowCount } from "@/v3/components/StructuredGrid";
 
 export interface PhaseInputQuality {
@@ -62,10 +63,14 @@ function countNamedKpis(raw: unknown): number {
 export function derivePhaseInputQuality(
   phaseId: string | null | undefined,
   phaseInputs: Record<string, unknown> | null | undefined,
+  store?: DynamicSchemaStore,
 ): PhaseInputQuality | null {
   if (!phaseId) return null;
 
-  const schema = getPhaseInputSchema(phaseId);
+  // Resolve with the programme's dynamic store so the metric scores the same
+  // field set the inputs panel renders — including ai-derived dynamic fields.
+  // Omitting the store yields the static schema (unchanged for callers/tests).
+  const schema = getPhaseInputSchema(phaseId, store);
   const inputs = phaseInputs ?? {};
   const items: QualityItem[] = [];
 
