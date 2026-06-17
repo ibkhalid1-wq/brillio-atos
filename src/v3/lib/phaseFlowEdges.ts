@@ -9,7 +9,7 @@
  * Targets are constrained to the phase's own artifact set
  * (`getPhaseArtifactIds`), so every edge resolves to a real DOM anchor in the
  * artifacts column and no connector dangles. Any declared target not present in
- * the phase (e.g. Narrative on a dynamic-only phase) is silently dropped.
+ * the phase is silently dropped.
  */
 import { getPhaseArtifactIds } from "@/v3/lib/phaseArtifacts";
 import { ATOS_STANDARD } from "@/v3/lib/methodology";
@@ -39,9 +39,9 @@ function methodologyFieldArtifacts(phaseId: string): Record<string, string[]> {
 }
 
 /**
- * Extra artifact targets per field, beyond Narrative. Strategy is the only
- * static phase, so it is the only one with a hand-declared map; dynamic phases
- * derive their field→artifact targets from the dynamicSchema at runtime.
+ * Static artifact targets per field. Strategy is the only static phase, so it is
+ * the only one with a hand-declared map; dynamic phases derive their
+ * field→artifact targets from the dynamicSchema at runtime.
  */
 const PHASE_FIELD_ARTIFACTS: Record<string, Record<string, string[]>> = {
   strategy: {
@@ -74,10 +74,11 @@ export function getArtifactInputFields(phaseId: string, artifactId: string, stor
 }
 
 /**
- * Derive the input → artifact edges for a phase. Each field yields one edge to
- * Narrative plus one edge per declared specialised target that exists in the
- * phase, de-duplicated and in a stable order (Narrative first, then declared
- * targets).
+ * Derive the input → artifact edges for a phase. Each field yields one edge per
+ * declared target (from Strategy's static map, the methodology's
+ * `artifactInputFlow`, and the dynamic schema) that exists in the phase's
+ * artifact set, de-duplicated in a stable order. Nothing is hard-coded: a field
+ * with no declared targets produces no edges.
  */
 export function derivePhaseFlowEdges(phaseId: string, fieldIds: string[], store?: DynamicSchemaStore): FlowEdge[] {
   const map = PHASE_FIELD_ARTIFACTS[phaseId] ?? {};
@@ -87,7 +88,7 @@ export function derivePhaseFlowEdges(phaseId: string, fieldIds: string[], store?
   const edges: FlowEdge[] = [];
   for (const fieldId of fieldIds) {
     const seen = new Set<string>();
-    const targets = ["narrative", ...(map[fieldId] ?? []), ...(methodologyMap[fieldId] ?? []), ...(dynamicMap[fieldId] ?? [])];
+    const targets = [...(map[fieldId] ?? []), ...(methodologyMap[fieldId] ?? []), ...(dynamicMap[fieldId] ?? [])];
     for (const to of targets) {
       if (seen.has(to) || !valid.has(to)) continue;
       seen.add(to);

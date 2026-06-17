@@ -24,9 +24,8 @@ describe("artifactStaleness", () => {
   });
 
   describe("artifactsForInputFields", () => {
-    it("includes the Narrative for any field plus declared specialised targets", () => {
+    it("includes every declared artifact a field flows into", () => {
       const targets = artifactsForInputFields("strategy", ["businessObjective"]);
-      expect(targets.has("narrative")).toBe(true);
       expect(targets.has("charter")).toBe(true);
       expect(targets.has("business-case")).toBe(true);
     });
@@ -34,44 +33,44 @@ describe("artifactStaleness", () => {
 
   describe("approvedArtifactsToStale", () => {
     const bucket = {
-      narrative: { status: "approved" },
       charter: { status: "approved" },
       "business-case": { status: "draft" },
     };
 
     it("returns approved artifacts the changed fields flow into", () => {
       const stale = approvedArtifactsToStale("strategy", ["sponsor"], bucket);
-      // sponsor flows to narrative + charter; both approved → both stale.
-      expect(new Set(stale)).toEqual(new Set(["narrative", "charter"]));
+      // sponsor flows to charter; approved → stale.
+      expect(new Set(stale)).toEqual(new Set(["charter"]));
     });
 
     it("never returns a non-approved artifact even if the field flows into it", () => {
-      const stale = approvedArtifactsToStale("strategy", ["constraints"], bucket);
-      // constraints flows to narrative (approved) + business-case (draft).
-      expect(stale).toContain("narrative");
+      const stale = approvedArtifactsToStale("strategy", ["businessObjective"], bucket);
+      // businessObjective flows to charter (approved) + business-case (draft).
+      expect(stale).toContain("charter");
       expect(stale).not.toContain("business-case");
     });
 
     it("returns nothing when no fields changed or nothing is approved", () => {
       expect(approvedArtifactsToStale("strategy", [], bucket)).toEqual([]);
-      expect(approvedArtifactsToStale("strategy", ["sponsor"], { narrative: { status: "draft" } })).toEqual([]);
+      expect(approvedArtifactsToStale("strategy", ["sponsor"], { charter: { status: "draft" } })).toEqual([]);
     });
   });
 
   describe("fieldsFeedingApprovedArtifacts", () => {
     it("blocks reimport of fields feeding an approved artifact, allows the rest", () => {
-      const bucket = { charter: { status: "approved" }, narrative: { status: "draft" } };
+      const bucket = { charter: { status: "approved" }, "business-case": { status: "draft" } };
       const blocked = fieldsFeedingApprovedArtifacts("strategy", ["sponsor", "successMetric"], bucket);
       // sponsor → charter (approved) ⇒ blocked. successMetric → outcome-framework (not approved) ⇒ allowed.
       expect(blocked.has("sponsor")).toBe(true);
       expect(blocked.has("successMetric")).toBe(false);
     });
 
-    it("blocks every field once the Narrative is approved (all fields feed it)", () => {
-      const bucket = { narrative: { status: "approved" } };
-      const blocked = fieldsFeedingApprovedArtifacts("strategy", ["sponsor", "successMetric"], bucket);
-      expect(blocked.has("sponsor")).toBe(true);
-      expect(blocked.has("successMetric")).toBe(true);
+    it("blocks a field that feeds multiple approved artifacts", () => {
+      const bucket = { charter: { status: "approved" }, "business-case": { status: "approved" } };
+      const blocked = fieldsFeedingApprovedArtifacts("strategy", ["industry", "successMetric"], bucket);
+      // industry → charter + business-case (both approved) ⇒ blocked. successMetric → outcome-framework (not approved) ⇒ allowed.
+      expect(blocked.has("industry")).toBe(true);
+      expect(blocked.has("successMetric")).toBe(false);
     });
   });
 });

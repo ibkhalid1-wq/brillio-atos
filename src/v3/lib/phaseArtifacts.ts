@@ -4,11 +4,9 @@
  * The artifacts a phase produces are declared by the methodology
  * (`ATOS_STANDARD.phases[].requiredArtifacts`, as producing-agent ids) — so
  * Mobilise yields Governance Model and RACI Matrix, Design yields Solution
- * Architecture, etc., rather than a generic narrative/documents/risks set.
- *
- * The Narrative leads (it is a required artifact in every phase and carries a
- * live inline preview); the phase's specialised required artifacts follow.
- * Labels resolve through the agent catalogue (`getAgentMeta(id).outputArtifact`).
+ * Architecture, etc. Nothing is hard-coded here: the catalogue is exactly the
+ * methodology's required set plus any ai-derived dynamic artifacts. Labels
+ * resolve through the agent catalogue (`getAgentMeta(id).outputArtifact`).
  *
  * This is the single source of truth for both the rendered artifact chips and
  * the flow-overlay edge targets, so every connector resolves to a real anchor.
@@ -18,7 +16,7 @@ import { getAgentMeta } from "@/v3/lib/agentMeta";
 import { dynamicArtifactDefs, type DynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 
 export interface PhaseArtifactDef {
-  /** Stable id — the producing-agent id, or "narrative"/"deck" for the core pair. */
+  /** Stable id — the producing-agent id. */
   id: string;
   label: string;
   /** One-line plain-English summary of what this artifact captures. */
@@ -26,27 +24,22 @@ export interface PhaseArtifactDef {
 }
 
 function artifactLabel(id: string): string {
-  if (id === "narrative") return "Narrative";
   const meta = getAgentMeta(id);
   return meta.outputArtifact || meta.label || id;
 }
 
 function artifactDescription(id: string): string {
-  if (id === "narrative") return "Synthesises this phase into a plain-English narrative summary.";
   return getAgentMeta(id).description || "";
 }
 
 /**
- * Ordered artifact definitions for a phase: Narrative first, then the
- * methodology's required artifacts, then any ai-derived dynamic artifacts from
- * the programme's `store` (appended, deduped). Omitting `store` yields the
- * static catalogue unchanged.
+ * Ordered artifact definitions for a phase: the methodology's required
+ * artifacts, then any ai-derived dynamic artifacts from the programme's `store`
+ * (appended, deduped). Omitting `store` yields the static catalogue unchanged.
+ * Dynamic-only phases start empty.
  */
 export function getPhaseArtifactDefs(phaseId: string, store?: DynamicSchemaStore): PhaseArtifactDef[] {
   const phase = ATOS_STANDARD.phases.find((p) => p.id === phaseId);
-  // Narrative is no longer auto-guaranteed in every phase — a phase only carries
-  // the artifacts the methodology declares (Strategy still lists narrative) plus
-  // any ai-derived dynamic artifacts. Dynamic-only phases start empty.
   const ordered: string[] = [];
   for (const id of phase?.requiredArtifacts ?? []) {
     if (!ordered.includes(id)) ordered.push(id);

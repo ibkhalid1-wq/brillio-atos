@@ -107,7 +107,7 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       id: "strategy",
       displayName: "Strategy",
       description: "Define the transformation mandate, value hypothesis, and success metrics.",
-      requiredArtifacts: ["charter", "business-case", "outcome-framework", "strategic-roadmap", "narrative"],
+      requiredArtifacts: ["charter", "business-case", "outcome-framework", "strategic-roadmap"],
       mandatoryExitCriteriaTemplates: [
         "Executive sponsor confirmed and mandate documented",
         "Business objective and primary success metric defined",
