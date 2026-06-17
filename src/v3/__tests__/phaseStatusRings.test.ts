@@ -110,4 +110,29 @@ describe("phaseStatusRings — end to end via computePhaseReadiness", () => {
     expect(r.overall).toBe(88);
     expect(ringTone(r.gate)).toBe("green");
   });
+
+  it("mutes an unreached phase even when an artifact was force-routed into its slot", () => {
+    // Strategy is the open frontier (no gate approved), so every later phase is
+    // locked. A program-level agent (e.g. adoption → operate) pre-drafted an
+    // artifact into Operate's slot, which would otherwise score the phase ~44%.
+    // The rings must show it as not-started (all zero), exactly like the other
+    // unreached phases — the programme has not reached nor activated Operate.
+    const program = normalizeProgram({
+      id: "p1",
+      name: "ERP",
+      data: {
+        phaseArtifacts: {
+          operate: {
+            adoption: { title: "Adoption Plan", status: "draft", agentDrafted: true, agentConfidence: 97 },
+          },
+        },
+      },
+    });
+    const r = derivePhaseStatusRings(program, "operate");
+    expect(r.gate).toBe(0);
+    expect(r.artifact).toBe(0);
+    expect(r.input).toBe(0);
+    expect(r.overall).toBe(0);
+    expect(r.canApproveGate).toBe(false);
+  });
 });

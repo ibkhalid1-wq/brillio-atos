@@ -18,7 +18,7 @@
  */
 
 import type { ProgramSummary } from "@/new/types";
-import { computePhaseReadiness, type PhaseReadinessResult } from "@/v3/lib/phaseReadiness";
+import { computePhaseReadiness, getLockedPhaseIds, type PhaseReadinessResult } from "@/v3/lib/phaseReadiness";
 
 export type RingTone = "green" | "amber" | "red" | "muted";
 
@@ -95,5 +95,21 @@ export function derivePhaseStatusRings(
   phaseId: string,
   threshold?: number,
 ): PhaseStatusRingValues {
-  return ringsFromReadiness(computePhaseReadiness(program, phaseId, threshold));
+  const result = computePhaseReadiness(program, phaseId, threshold);
+  // Unreached phases must not show progression on the rings. Under strict
+  // sequential gating a phase is locked until its predecessor's gate is approved;
+  // until then the programme has not reached — nor dynamically activated — it, so
+  // it has no legitimate progression to display. An artifact force-routed into a
+  // later-phase slot ahead of time (e.g. a program-level agent whose methodology
+  // home is Operate) would otherwise inflate that phase's rings and make it read
+  // as "in progress". Mute every signal to the same "not started" state the other
+  // unreached phases already show. Readiness itself stays lock-agnostic (it answers
+  // "is this phase's gate approvable in isolation?"); only the visual is gated here.
+  // A phase that has already cleared its own gate has genuinely been worked, so it
+  // is never muted even if an earlier gate is (re)open.
+  const gateApproved = program.gateReviews?.[phaseId]?.status === "approved";
+  if (!gateApproved && getLockedPhaseIds(program).has(phaseId)) {
+    return ringsFromReadiness({ ...result, score: 0, artifactScore: 0, inputScore: 0 });
+  }
+  return ringsFromReadiness(result);
 }
