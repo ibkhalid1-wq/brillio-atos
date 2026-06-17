@@ -37,6 +37,27 @@ export interface PhaseInputField {
    * resolver keep static fields authoritative when ids collide.
    */
   source?: "methodology" | "ai-derived";
+  // ── Planner traceability (ai-derived fields only) ──────────────────────────
+  // The Phase Transition Planner annotates each proposed field with why it is
+  // needed and which artifacts consume it, and may pre-fill a high-confidence
+  // inferred value the user only has to confirm. All optional; static fields
+  // omit them.
+  /** Short "why we need this fact" rationale from the planner. */
+  reasonNeeded?: string;
+  /** Artifact ids this field feeds (planner-declared). */
+  usedByArtifacts?: string[];
+  /** Planner-inferred value to suggest; the user confirms rather than retypes. */
+  prefillValue?: string;
+  /** Where the prefilled value was inferred from (artifact/document/evidence). */
+  prefillSource?: string;
+  /** Planner's confidence in the prefilled value. */
+  confidence?: "high" | "medium" | "low";
+  /** True when a prefilled value must be explicitly confirmed before it counts. */
+  needsConfirmation?: boolean;
+  /** Human-readable validation expectation (e.g. "ISO date"). */
+  validationRule?: string;
+  /** Example answer to anchor the user. */
+  example?: string;
 }
 
 // Industry options surfaced on the Strategy phase. Lives in the methodology so

@@ -24,10 +24,45 @@
  */
 import { ATOS_STANDARD, type PhaseInputField } from "@/v3/lib/methodology";
 
+export type ArtifactGenerationReadiness = "ready" | "needs_input" | "blocked";
+
 export interface DynamicArtifactDef {
   id: string;
   label: string;
   description: string;
+  // ── Planner dependency map (optional) ──────────────────────────────────────
+  /** Field ids this artifact needs before it can be generated. */
+  requiredInputs?: string[];
+  /** Prior-phase artifact ids this artifact synthesizes. */
+  sourceArtifactsUsed?: string[];
+  /** Whether the artifact can be generated now, needs inputs, or is blocked. */
+  generationReadiness?: ArtifactGenerationReadiness;
+  /** Field ids still missing that block generation. */
+  missingInputs?: string[];
+}
+
+/** A field the planner surfaces because prior phases disagree on a value. */
+export interface ConflictField {
+  fieldId: string;
+  label: string;
+  conflictDescription: string;
+  conflictingValues: string[];
+  requiredResolution: boolean;
+  usedByArtifacts: string[];
+}
+
+/** Planner verdict + counts for a phase, shown in the phase header. */
+export interface PhasePlanMeta {
+  readiness?: "green" | "yellow" | "red";
+  rationale?: string;
+  purpose?: string;
+  validationSummary?: {
+    inputCount: number;
+    artifactCount: number;
+    conflictCount: number;
+    readyArtifacts: number;
+    blockedArtifacts: number;
+  };
 }
 
 export interface DynamicSchemaStore {
@@ -37,6 +72,12 @@ export interface DynamicSchemaStore {
   artifacts?: Record<string, DynamicArtifactDef[]>;
   /** phaseId → { artifactId → input field ids that feed it } (additive). */
   artifactInputFlow?: Record<string, Record<string, string[]>>;
+  /** phaseId → cross-phase conflicts the user must resolve. */
+  conflicts?: Record<string, ConflictField[]>;
+  /** phaseId → planner-flagged gaps requiring attention. */
+  gaps?: Record<string, string[]>;
+  /** phaseId → planner readiness verdict + validation summary. */
+  planMeta?: Record<string, PhasePlanMeta>;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -61,6 +102,9 @@ export function getDynamicSchemaStore(rawData: unknown): DynamicSchemaStore {
   if (isRecord(store.artifactInputFlow)) {
     out.artifactInputFlow = store.artifactInputFlow as Record<string, Record<string, string[]>>;
   }
+  if (isRecord(store.conflicts)) out.conflicts = store.conflicts as Record<string, ConflictField[]>;
+  if (isRecord(store.gaps)) out.gaps = store.gaps as Record<string, string[]>;
+  if (isRecord(store.planMeta)) out.planMeta = store.planMeta as Record<string, PhasePlanMeta>;
   return out;
 }
 
@@ -88,6 +132,8 @@ export function mergeDynamicInputFields(
   return extra.length ? [...staticFields, ...extra] : staticFields;
 }
 
+const ARTIFACT_READINESS = new Set(["ready", "needs_input", "blocked"]);
+
 /** Dynamic artifact ids declared for a phase (deduped, valid). */
 export function dynamicArtifactDefs(phaseId: string, store?: DynamicSchemaStore): DynamicArtifactDef[] {
   const defs = store?.artifacts?.[phaseId];
@@ -97,9 +143,48 @@ export function dynamicArtifactDefs(phaseId: string, store?: DynamicSchemaStore)
   for (const def of defs) {
     if (!def || typeof def.id !== "string" || seen.has(def.id)) continue;
     seen.add(def.id);
-    out.push({ id: def.id, label: def.label || def.id, description: def.description || "" });
+    const entry: DynamicArtifactDef = { id: def.id, label: def.label || def.id, description: def.description || "" };
+    if (Array.isArray(def.requiredInputs)) entry.requiredInputs = def.requiredInputs.filter((x): x is string => typeof x === "string");
+    if (Array.isArray(def.sourceArtifactsUsed)) entry.sourceArtifactsUsed = def.sourceArtifactsUsed.filter((x): x is string => typeof x === "string");
+    if (typeof def.generationReadiness === "string" && ARTIFACT_READINESS.has(def.generationReadiness)) entry.generationReadiness = def.generationReadiness;
+    if (Array.isArray(def.missingInputs)) entry.missingInputs = def.missingInputs.filter((x): x is string => typeof x === "string");
+    out.push(entry);
   }
   return out;
+}
+
+/** Cross-phase conflicts the planner flagged for a phase. */
+export function dynamicConflicts(phaseId: string, store?: DynamicSchemaStore): ConflictField[] {
+  const list = store?.conflicts?.[phaseId];
+  if (!Array.isArray(list)) return [];
+  const out: ConflictField[] = [];
+  for (const c of list) {
+    if (!isRecord(c)) continue;
+    const fieldId = asString(c.fieldId).trim();
+    if (!fieldId) continue;
+    out.push({
+      fieldId,
+      label: asString(c.label).trim() || fieldId,
+      conflictDescription: asString(c.conflictDescription).trim(),
+      conflictingValues: Array.isArray(c.conflictingValues) ? c.conflictingValues.map((v) => asString(v)).filter(Boolean) : [],
+      requiredResolution: c.requiredResolution !== false,
+      usedByArtifacts: Array.isArray(c.usedByArtifacts) ? c.usedByArtifacts.filter((x): x is string => typeof x === "string") : [],
+    });
+  }
+  return out;
+}
+
+/** Planner-flagged gaps (free-text) for a phase. */
+export function dynamicGaps(phaseId: string, store?: DynamicSchemaStore): string[] {
+  const list = store?.gaps?.[phaseId];
+  if (!Array.isArray(list)) return [];
+  return list.map((g) => asString(g).trim()).filter(Boolean);
+}
+
+/** Planner readiness verdict + summary for a phase, or null. */
+export function dynamicPlanMeta(phaseId: string, store?: DynamicSchemaStore): PhasePlanMeta | null {
+  const meta = store?.planMeta?.[phaseId];
+  return isRecord(meta) ? (meta as PhasePlanMeta) : null;
 }
 
 const ALLOWED_FIELD_TYPES = new Set(["text", "textarea", "number", "date", "select", "grid"]);
@@ -108,31 +193,47 @@ export interface DynamicPhaseProposal {
   inputFields: PhaseInputField[];
   artifacts: DynamicArtifactDef[];
   artifactInputFlow: Record<string, string[]>;
+  conflicts: ConflictField[];
+  gaps: string[];
+  planMeta: PhasePlanMeta;
 }
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+const CONFIDENCE_LEVELS = new Set(["high", "medium", "low"]);
+const READINESS_LEVELS = new Set(["green", "yellow", "red"]);
+
+function asStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.map((v) => asString(v).trim()).filter(Boolean) : [];
+}
+
 /**
- * Validate and coerce a planner agent's raw proposal for one phase into a
- * well-formed shape. The planner output is AI-generated and untrusted, so every
- * entry is shape-checked: fields need a non-empty id and an allowed type;
- * artifacts need a non-empty id; flow entries must reference declared dynamic
- * field/artifact ids. Anything malformed is dropped rather than persisted.
- * Returns null when nothing usable survives.
+ * Validate and coerce the Phase Transition Planner's raw proposal for one phase
+ * into a well-formed shape. The output is AI-generated and untrusted, so every
+ * entry is shape-checked and anything malformed is dropped. Accepts both the
+ * rich planner contract (`fieldId`, `artifactsToGenerate`, `conflictResolution
+ * Fields`, `gaps`, `nextPhase`) and the legacy flat shape (`id`, `artifacts`),
+ * so an older deployed agent keeps working during rollout. Returns null when
+ * nothing usable survives.
  */
 export function sanitizePlannerProposal(raw: unknown): DynamicPhaseProposal | null {
   if (!isRecord(raw)) return null;
   const fieldsIn = Array.isArray(raw.inputFields) ? raw.inputFields : [];
-  const artifactsIn = Array.isArray(raw.artifacts) ? raw.artifacts : [];
+  const artifactsIn = Array.isArray(raw.artifactsToGenerate)
+    ? raw.artifactsToGenerate
+    : Array.isArray(raw.artifacts) ? raw.artifacts : [];
   const flowIn = isRecord(raw.artifactInputFlow) ? raw.artifactInputFlow : {};
+  const conflictsIn = Array.isArray(raw.conflictResolutionFields) ? raw.conflictResolutionFields : [];
+  const nextPhase = isRecord(raw.nextPhase) ? raw.nextPhase : {};
+  const summaryIn = isRecord(raw.validationSummary) ? raw.validationSummary : {};
 
   const fieldIds = new Set<string>();
   const inputFields: PhaseInputField[] = [];
   for (const f of fieldsIn) {
     if (!isRecord(f)) continue;
-    const id = asString(f.id).trim();
+    const id = (asString(f.fieldId) || asString(f.id)).trim();
     const type = asString(f.type).trim();
     if (!id || fieldIds.has(id) || !ALLOWED_FIELD_TYPES.has(type)) continue;
     fieldIds.add(id);
@@ -144,8 +245,24 @@ export function sanitizePlannerProposal(raw: unknown): DynamicPhaseProposal | nu
       source: "ai-derived",
     };
     if (asString(f.placeholder)) field.placeholder = asString(f.placeholder);
-    if (asString(f.hint)) field.hint = asString(f.hint);
+    // Prefer an explicit hint; fall back to the planner's field description.
+    const hint = asString(f.hint).trim() || asString(f.description).trim();
+    if (hint) field.hint = hint;
     if (Array.isArray(f.options)) field.options = f.options.filter((o): o is string => typeof o === "string");
+    // Planner traceability + prefill (all optional).
+    if (asString(f.reasonNeeded).trim()) field.reasonNeeded = asString(f.reasonNeeded).trim();
+    const usedBy = asStringArray(f.usedByArtifacts);
+    if (usedBy.length) field.usedByArtifacts = usedBy;
+    const prefill = f.prefillValue;
+    if (prefill !== null && prefill !== undefined && asString(prefill).trim()) {
+      field.prefillValue = asString(prefill).trim();
+    }
+    if (asString(f.prefillSource).trim()) field.prefillSource = asString(f.prefillSource).trim();
+    const conf = asString(f.confidence).trim().toLowerCase();
+    if (CONFIDENCE_LEVELS.has(conf)) field.confidence = conf as PhaseInputField["confidence"];
+    if (f.needsConfirmation === true) field.needsConfirmation = true;
+    if (asString(f.validationRule).trim()) field.validationRule = asString(f.validationRule).trim();
+    if (asString(f.example).trim()) field.example = asString(f.example).trim();
     inputFields.push(field);
   }
 
@@ -153,21 +270,79 @@ export function sanitizePlannerProposal(raw: unknown): DynamicPhaseProposal | nu
   const artifacts: DynamicArtifactDef[] = [];
   for (const a of artifactsIn) {
     if (!isRecord(a)) continue;
-    const id = asString(a.id).trim();
+    const id = (asString(a.artifactId) || asString(a.id)).trim();
     if (!id || artifactIds.has(id)) continue;
     artifactIds.add(id);
-    artifacts.push({ id, label: asString(a.label).trim() || id, description: asString(a.description).trim() });
+    const def: DynamicArtifactDef = {
+      id,
+      label: (asString(a.artifactName) || asString(a.label)).trim() || id,
+      description: (asString(a.artifactPurpose) || asString(a.description)).trim(),
+    };
+    const reqIn = asStringArray(a.requiredInputs);
+    if (reqIn.length) def.requiredInputs = reqIn;
+    const srcIn = asStringArray(a.sourceArtifactsUsed);
+    if (srcIn.length) def.sourceArtifactsUsed = srcIn;
+    const readiness = asString(a.generationReadiness).trim().toLowerCase();
+    if (ARTIFACT_READINESS.has(readiness)) def.generationReadiness = readiness as ArtifactGenerationReadiness;
+    const missingIn = asStringArray(a.missingInputs);
+    if (missingIn.length) def.missingInputs = missingIn;
+    artifacts.push(def);
   }
 
+  // Flow: prefer an explicit artifactInputFlow map; otherwise derive it from each
+  // artifact's requiredInputs so the rich contract still produces flow edges.
   const artifactInputFlow: Record<string, string[]> = {};
   for (const [artifactId, fields] of Object.entries(flowIn)) {
     if (!artifactIds.has(artifactId) || !Array.isArray(fields)) continue;
     const refs = fields.filter((id): id is string => typeof id === "string" && fieldIds.has(id));
     if (refs.length) artifactInputFlow[artifactId] = refs;
   }
+  if (Object.keys(artifactInputFlow).length === 0) {
+    for (const a of artifacts) {
+      const refs = (a.requiredInputs ?? []).filter((id) => fieldIds.has(id));
+      if (refs.length) artifactInputFlow[a.id] = refs;
+    }
+  }
 
-  if (!inputFields.length && !artifacts.length) return null;
-  return { inputFields, artifacts, artifactInputFlow };
+  const conflicts: ConflictField[] = [];
+  const conflictIds = new Set<string>();
+  for (const c of conflictsIn) {
+    if (!isRecord(c)) continue;
+    const fieldId = asString(c.fieldId).trim();
+    if (!fieldId || conflictIds.has(fieldId)) continue;
+    conflictIds.add(fieldId);
+    conflicts.push({
+      fieldId,
+      label: asString(c.label).trim() || fieldId,
+      conflictDescription: asString(c.conflictDescription).trim(),
+      conflictingValues: asStringArray(c.conflictingValues),
+      requiredResolution: c.requiredResolution !== false,
+      usedByArtifacts: asStringArray(c.usedByArtifacts),
+    });
+  }
+
+  const gaps = Array.isArray(raw.gaps)
+    ? raw.gaps.map((g) => (isRecord(g) ? asString(g.description).trim() : asString(g).trim())).filter(Boolean)
+    : [];
+
+  const planMeta: PhasePlanMeta = {};
+  const readiness = asString(nextPhase.readiness).trim().toLowerCase();
+  if (READINESS_LEVELS.has(readiness)) planMeta.readiness = readiness as PhasePlanMeta["readiness"];
+  if (asString(nextPhase.rationale).trim()) planMeta.rationale = asString(nextPhase.rationale).trim();
+  if (asString(nextPhase.purpose).trim()) planMeta.purpose = asString(nextPhase.purpose).trim();
+  const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+  if (Object.keys(summaryIn).length) {
+    planMeta.validationSummary = {
+      inputCount: num(summaryIn.inputCount),
+      artifactCount: num(summaryIn.artifactCount),
+      conflictCount: num(summaryIn.conflictCount),
+      readyArtifacts: num(summaryIn.readyArtifacts),
+      blockedArtifacts: num(summaryIn.blockedArtifacts),
+    };
+  }
+
+  if (!inputFields.length && !artifacts.length && !conflicts.length) return null;
+  return { inputFields, artifacts, artifactInputFlow, conflicts, gaps, planMeta };
 }
 
 /**
@@ -181,9 +356,13 @@ export function applyDynamicProposal(
   proposal: DynamicPhaseProposal,
 ): DynamicSchemaStore {
   return {
+    ...store,
     inputFields: { ...(store.inputFields ?? {}), [phaseId]: proposal.inputFields },
     artifacts: { ...(store.artifacts ?? {}), [phaseId]: proposal.artifacts },
     artifactInputFlow: { ...(store.artifactInputFlow ?? {}), [phaseId]: proposal.artifactInputFlow },
+    conflicts: { ...(store.conflicts ?? {}), [phaseId]: proposal.conflicts },
+    gaps: { ...(store.gaps ?? {}), [phaseId]: proposal.gaps },
+    planMeta: { ...(store.planMeta ?? {}), [phaseId]: proposal.planMeta },
   };
 }
 
