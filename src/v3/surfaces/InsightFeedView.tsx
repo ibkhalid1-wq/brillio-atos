@@ -7,7 +7,7 @@ import { forecastConfidence, getGateThreshold } from "@/v3/lib/confidenceScore";
 import type { V3MoreView } from "@/v3/types";
 import { Kpi } from "@/v3/components/ui/Kpi";
 import { PhaseStripCard } from "@/v3/components/PhaseStripCard";
-import { selectHighRisks } from "@/v3/lib/programRaid";
+import { selectDecisions, selectHighRisks } from "@/v3/lib/programRaid";
 import {
   runDeterministicValidation,
   selectModelValidationFindings,
@@ -541,7 +541,7 @@ export default function InsightFeedView({
               const score = confidenceScore ?? 0;
               const label = confidenceResult.label;
               const gatesApproved = phases.filter((p) => program.gateReviews?.[p.id]?.status === "approved").length;
-              const openDecisions = (program as unknown as { decisionQueue?: Array<{status?: string}> }).decisionQueue?.filter((d) => !d.status || d.status === "open").length ?? 0;
+              const openDecisions = selectDecisions(program).length;
               const topSignal = [...(confidenceResult.signals)].sort((a, b) => {
                 const order = { poor: 0, warn: 1, good: 2 };
                 return order[a.status] - order[b.status];

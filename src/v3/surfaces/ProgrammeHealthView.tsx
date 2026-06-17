@@ -8,6 +8,7 @@ import LiteGateModal from "@/v3/components/LiteGateModal";
 import { ReadinessExplainer } from "@/v3/components/ReadinessExplainer";
 import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
 import { getGateThreshold } from "@/v3/lib/confidenceScore";
+import { selectDecisions } from "@/v3/lib/programRaid";
 
 interface AgentActivityItem {
   runId: string;
@@ -830,9 +831,16 @@ export default function ProgrammeHealthView({
       : {};
   }, [inner]);
 
+  // Decisions shown here must agree with the Action Center / rail counts. The
+  // canonical open set (selectDecisions) includes synthesised agent actions that
+  // the raw persisted decisionQueue lacks, so use it for the "open" rows and add
+  // only the persisted *decided* rows so the "Decided" filter still has history.
   const decisionQueue = useMemo<DecisionSummary[]>(() => {
-    return Array.isArray(inner.decisionQueue) ? (inner.decisionQueue as DecisionSummary[]) : [];
-  }, [inner]);
+    const open = selectDecisions(program);
+    const persisted = Array.isArray(inner.decisionQueue) ? (inner.decisionQueue as DecisionSummary[]) : [];
+    const decided = persisted.filter((d) => d.status && d.status !== "open");
+    return [...open, ...decided];
+  }, [program, inner]);
 
   // Prefer pre-processed phases (already sanitised by derivePhases) over raw DB data
   // to avoid showing stale 100% values on new programs.

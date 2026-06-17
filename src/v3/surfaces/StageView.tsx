@@ -9,6 +9,7 @@ import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
 import { PhaseRail } from "@/v3/components/PhaseRail";
 import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
 import { derivePhaseBlockers } from "@/v3/lib/phaseBlockers";
+import { selectRisks } from "@/v3/lib/programRaid";
 import { EmptyState } from "@/v3/components/ui/EmptyState";
 import { ExpandableSection } from "@/v3/components/ui/ExpandableSection";
 import { RelativeTime } from "@/v3/components/ui/RelativeTime";
@@ -741,8 +742,8 @@ export default function StageView({
   // engine the right-rail Blockers tab reads from, so the numbers never disagree.
   const phaseBlockers = useMemo(() => derivePhaseBlockers(program, activePhase?.id ?? ""), [program, activePhase?.id]);
   const phaseRiskCount = useMemo(
-    () => (program?.raidEntries || []).filter((e) => e.phase === activePhase?.id && e.status !== "closed" && e.type === "risk").length,
-    [program?.raidEntries, activePhase?.id],
+    () => (activePhase?.id ? selectRisks(program, { phaseId: activePhase.id }).length : 0),
+    [program, activePhase?.id],
   );
   const phaseRationale = program?.plan?.nextThreeActions?.find((action) => action.phase === activePhase?.id)?.rationale || "";
   const verdict = firstSentence(
