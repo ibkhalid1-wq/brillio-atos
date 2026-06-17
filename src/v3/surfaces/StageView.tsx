@@ -119,25 +119,40 @@ function deriveArtifactQualityIssues(opts: {
 }): ArtifactQualityIssue[] {
   const { score, state, inputRequirements, improvements } = opts;
   const issues: ArtifactQualityIssue[] = [];
+  // Split grounding inputs first so the score message can be honest about whether
+  // there are empty inputs to complete or whether every input is already filled.
+  const missing = inputRequirements.filter((req) => !req.filled);
+  const present = inputRequirements.filter((req) => req.filled);
+  const allInputsFilled = inputRequirements.length > 0 && missing.length === 0;
   if (typeof score === "number") {
     if (score < 60) {
-      issues.push({ severity: "high", title: `Low quality score — ${score}%`, detail: "ATOS rated this document below the quality bar. Complete the grounding inputs below, then regenerate to lift the score." });
+      issues.push({
+        severity: "high",
+        title: `Low quality score — ${score}%`,
+        detail: allInputsFilled
+          ? `ATOS rated this document below the quality bar even though every grounding input is filled. The lever now is depth, not coverage — see the step below to enrich the inputs, then regenerate.`
+          : "ATOS rated this document below the quality bar. Complete the grounding inputs below, then regenerate to lift the score.",
+      });
     } else if (score < 80) {
-      issues.push({ severity: "medium", title: `Quality score ${score}% — room to improve`, detail: "The document is usable but ATOS sees headroom. Strengthen the grounding inputs below, then regenerate." });
+      issues.push({
+        severity: "medium",
+        title: `Quality score ${score}% — room to improve`,
+        detail: allInputsFilled
+          ? `The document is usable, but ATOS sees headroom even though every grounding input is filled. See the step below to push the score higher, or regenerate for another pass.`
+          : "The document is usable but ATOS sees headroom. Strengthen the grounding inputs below, then regenerate.",
+      });
     }
   }
   // Prescriptive, per-field: name the exact input each artifact is grounded on and
   // what it must contain. Empty grounding inputs are the highest-leverage fixes.
-  const missing = inputRequirements.filter((req) => !req.filled);
-  const present = inputRequirements.filter((req) => req.filled);
   for (const req of missing) {
     issues.push({ severity: "high", title: `Add "${req.label}"`, detail: req.requirement });
   }
-  if (!missing.length && present.length && typeof score === "number" && score < 80) {
+  if (allInputsFilled && typeof score === "number" && score < 80) {
     issues.push({
       severity: "medium",
       title: "Deepen the grounding inputs",
-      detail: `These inputs ground this document — add specifics to each to lift quality: ${present.map((req) => req.label).join(", ")}.`,
+      detail: `Every grounding input already has a value, so nothing is missing — the score reflects how specific those values are. Revisit ${present.map((req) => req.label).join(", ")} and replace any broad or placeholder answers with concrete detail: real names and titles, dated milestones, quantified figures, and named constraints. Once the inputs read like a briefing rather than a summary, regenerate to lift the score.`,
     });
   }
   for (const improvement of improvements ?? []) {
