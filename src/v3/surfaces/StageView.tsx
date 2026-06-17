@@ -51,7 +51,7 @@ interface StageViewProps {
   onApproveGate: (phaseId: string) => Promise<void>;
   onRunAgent: (agentId: string) => void;
   onSaveArtifact: (artifactId: "narrative" | "deck", content: string) => Promise<void>;
-  onApproveArtifact: (phaseId: string, artifactId: string) => Promise<void>;
+  onApproveArtifact: (phaseId: string, artifactId: string, agentId: string) => Promise<void>;
   onUnapproveArtifact: (phaseId: string, artifactId: string) => Promise<void>;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; clearReviewDefId?: string }) => Promise<void>;
   onSaveProgram?: (label?: string, kind?: "manual" | "lock") => Promise<void>;
@@ -1479,7 +1479,7 @@ export default function StageView({
                     <button
                       type="button"
                       className="v3-button primary v3-button-inline-xs v3-artifact-approve"
-                      onClick={() => { void onApproveArtifact(activePhase.id, artifactId); }}
+                      onClick={() => { void onApproveArtifact(activePhase.id, artifactId, def.id); }}
                       title={`Approve ${def.label} — approving the final document runs the gate check`}
                     >
                       ✓ Approve

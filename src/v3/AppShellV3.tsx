@@ -28,7 +28,7 @@ import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { CopilotPanel } from "@/new/components/shell/CopilotPanel";
 import type { AppView, DecisionSummary, Milestone, Persona, ProgramSummary } from "@/new/types";
 import type { PhaseAgentTask } from "@/lib/adamPhaseAgentTypes";
-import { buildCrossPhaseContext } from "@/lib/adamOrchestrator";
+import { buildCrossPhaseContext, recordAgentFeedback } from "@/lib/adamOrchestrator";
 // Surfaces are code-split: only one renders at a time, so lazy-loading keeps
 // them out of the initial shell chunk (see Suspense boundary around the layout).
 const InsightFeedView = React.lazy(() => import("@/v3/surfaces/InsightFeedView"));
@@ -2497,7 +2497,7 @@ export default function AppShellV3() {
     pushV3Toast("Artifact saved. Your version will be used on the next agent run.", { tone: "success", duration: 3000 });
   }, [activePhaseId, activeProgram, refreshPrograms, updateProgramData]);
 
-  const handleApproveArtifact = useCallback(async (phaseId: string, artifactId: string) => {
+  const handleApproveArtifact = useCallback(async (phaseId: string, artifactId: string, agentId: string) => {
     if (!activeProgram) return;
     const cloned = cloneRawProgram(activeProgram);
     const nextInner = { ...cloned.inner };
@@ -2510,6 +2510,10 @@ export default function AppShellV3() {
     nextInner.phaseArtifacts = buckets;
     await updateProgramData(activeProgram.id, cloned.commit(nextInner), activeProgram.updatedAt);
     await refreshPrograms();
+
+    // Feed the human approval into the producing agent's memory so its next run
+    // sees the artifact was accepted (buildMemoryContext surfaces it on dispatch).
+    recordAgentFeedback(agentId, phaseId, activeProgram.id, artifactId, "accepted");
 
     // Gate runs automatically once the last required document is approved — every
     // required artifact (narrative is reviewed separately) must read "approved",
