@@ -1044,20 +1044,10 @@ export default function StageView({
                     </span>
                   </div>
                   <p className="v3-artifact-row-desc">{summary}</p>
-                  {/* For a produced artifact, the missing-input gaps live inside the
-                      Improve quality modal (as actionable issues), not as a chip on the
-                      card. Pre-generation we still nudge the user to add inputs first. */}
-                  {inputsIncomplete && !present ? (
-                    <div className="v3-artifact-preflight">
-                      <button
-                        type="button"
-                        className="v3-button ghost v3-button-inline-xs"
-                        onClick={() => document.getElementById("phase-inputs-anchor")?.scrollIntoView({ behavior: "smooth", block: "start" })}
-                      >
-                        Add inputs →
-                      </button>
-                    </div>
-                  ) : null}
+                  {/* The input→artifact relationship and any missing-input gaps are
+                      already conveyed by the flow overlay, the artifact status chip,
+                      and the inputs panel, so no per-card "add inputs" nudge is needed.
+                      The Generate tooltip still surfaces preflight.missingFields. */}
                   <div className="v3-artifact-row-actions">
                   {present && previewContent ? (
                     <button
