@@ -38,14 +38,14 @@ export default function PhaseDataOverwriteModal({ open, phaseName, onOverwrite, 
         <div style={{ fontSize: 13, color: "var(--v3-text-secondary)", marginBottom: 18, lineHeight: 1.5, fontFamily: "var(--v3-font)" }}>
           The {phaseName} phase already has input fields and artifacts. Regenerating with AI
           will replace them and discard any data captured there. Keep the existing data, or
-          overwrite and recreate the inputs and artifacts?
+          overwrite the inputs and artifacts?
         </div>
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 16 }}>
           <button type="button" className="v3-button ghost" onClick={onKeep}>
             Keep existing
           </button>
           <button type="button" className="v3-button primary" onClick={onOverwrite}>
-            Overwrite &amp; recreate
+            Overwrite
           </button>
         </div>
       </div>
