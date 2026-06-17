@@ -375,6 +375,26 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
       ...nextData,
       _syncedAt: new Date().toISOString(),
     };
+    // Defensive snapshot trim. Each programSnapshot embeds a full program copy, so
+    // an unbounded history bloats the `data` blob until a read-modify-write trips
+    // Postgres's statement_timeout and the app fails to mount. Cap the history on
+    // EVERY write (not just snapshot creation) so legacy oversized blobs self-heal.
+    if (Array.isArray(payload.programSnapshots)) {
+      const MAX_SNAPSHOTS = 8;
+      const MAX_SNAPSHOTS_BYTES = 120_000;
+      let kept = (payload.programSnapshots as Array<Record<string, unknown>>).slice(0, MAX_SNAPSHOTS);
+      while (kept.length > 1) {
+        let bytes = 0;
+        try {
+          bytes = JSON.stringify(kept).length;
+        } catch {
+          break;
+        }
+        if (bytes <= MAX_SNAPSHOTS_BYTES) break;
+        kept = kept.slice(0, kept.length - 1);
+      }
+      payload.programSnapshots = kept;
+    }
     let currentUpdatedAt: string | null = null;
     if (expectedUpdatedAt) {
       const { data: current } = await supabase

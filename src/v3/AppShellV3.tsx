@@ -284,7 +284,30 @@ type ShellToast = {
 };
 
 const MAX_VISIBLE_TOASTS = 3;
-const MAX_PROGRAM_SNAPSHOTS = 25;
+const MAX_PROGRAM_SNAPSHOTS = 8;
+// Hard ceiling on the combined size of programSnapshots. Each snapshot embeds a
+// full program copy, so without a byte budget the history alone grew past 260KB
+// and pushed the whole `data` blob over Postgres's statement_timeout on every
+// read-modify-write. Trim oldest-first until both the count and byte budget hold.
+const MAX_PROGRAM_SNAPSHOTS_BYTES = 120_000;
+
+function trimProgramSnapshots(
+  snapshots: Array<Record<string, unknown>>,
+): Array<Record<string, unknown>> {
+  // newest-first; keep the freshest entries that fit the count + byte budget.
+  let kept = snapshots.slice(0, MAX_PROGRAM_SNAPSHOTS);
+  while (kept.length > 1) {
+    let bytes = 0;
+    try {
+      bytes = JSON.stringify(kept).length;
+    } catch {
+      break;
+    }
+    if (bytes <= MAX_PROGRAM_SNAPSHOTS_BYTES) break;
+    kept = kept.slice(0, kept.length - 1);
+  }
+  return kept;
+}
 
 function parseLocation(): { surface: V3Surface; moreView: V3MoreView | null; activePhaseId: string | null; reportId: V3ReportId | null } {
   const path = typeof window !== "undefined" ? window.location.pathname.replace(/^\/+/, "") : "";
@@ -2196,7 +2219,7 @@ export default function AppShellV3() {
       createdAt,
       data,
     };
-    const nextSnapshots = [snapshot, ...prevSnapshots].slice(0, MAX_PROGRAM_SNAPSHOTS);
+    const nextSnapshots = trimProgramSnapshots([snapshot, ...prevSnapshots]);
     const payload = cloned.commit({ ...inner, programSnapshots: nextSnapshots });
     await updateProgramData(activeProgram.id, payload, activeProgram.updatedAt);
     await refreshPrograms();
