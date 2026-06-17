@@ -399,8 +399,8 @@ export function PhaseRailPanels({
 
           {intelTab === "graph" ? (
             <div className="v3-rail-list">
-              <ArtifactMapTree program={program} phaseId={phaseId} />
               <button type="button" className="v3-button ghost v3-button-inline-xs v3-rail-footer-link" onClick={() => onOpenMoreView("artifact-map")}>Open full artifact map →</button>
+              <ArtifactMapTree program={program} phaseId={phaseId} />
             </div>
           ) : null}
 
