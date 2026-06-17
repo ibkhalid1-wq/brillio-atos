@@ -79,6 +79,14 @@ export interface PhaseDefinition {
    * The artifact generators read this instead of hard-coding which inputs apply.
    */
   artifactInputFlow?: Record<string, string[]>;
+  /**
+   * When true, this phase carries NO static inputs or artifacts — its entire
+   * input + artifact schema is generated dynamically from prior-phase artifacts
+   * (the planner writes them into the programme's dynamicSchema overlay at the
+   * preceding gate). Only Strategy is static; every later phase is dynamic, so
+   * the "static vs dynamic" rule lives here in the methodology, not in resolvers.
+   */
+  dynamicSchema?: boolean;
 }
 
 export interface MethodologyDefinition {
@@ -127,7 +135,9 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       id: "mobilise",
       displayName: "Mobilise",
       description: "Stand up the team, governance model, and working environment.",
-      requiredArtifacts: ["governance-model", "raci-matrix", "narrative", "plan", "stakeholder"],
+      // Dynamic-only: artifacts + inputs are planned from Strategy's approved artifacts.
+      requiredArtifacts: [],
+      dynamicSchema: true,
       mandatoryExitCriteriaTemplates: [
         "Core team roles filled with named individuals",
         "Governance model agreed and documented",
@@ -136,33 +146,13 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       entryGuards: ["Strategy gate approved"],
       recommendedAgents: ["governance-model", "raci-matrix", "narrative", "plan", "stakeholder", "risk"],
       typicalDurationWeeks: { min: 2, max: 4 },
-      inputFields: [
-        { id: "programDirector", label: "Programme director", type: "text", placeholder: "Name", required: true },
-        { id: "teamSize", label: "Team size", type: "number", placeholder: "Number of FTEs", required: true },
-        { id: "governanceModel", label: "Governance model", type: "select", options: ["Steering committee", "PMO-led", "Agile squad", "Hybrid"], required: true },
-        { id: "keyRisks", label: "Known risks at mobilisation", type: "textarea", placeholder: "Staffing, vendor readiness, budget approval…", required: true },
-        {
-          id: "keyRoles",
-          label: "Key roles",
-          type: "grid",
-          required: true,
-          hint: "Name the accountable person for each role active in this phase",
-          columns: [
-            { key: "role", label: "Role", placeholder: "Programme Director" },
-            { key: "person", label: "Person", placeholder: "Jane Smith" },
-            { key: "org", label: "Org/Team", width: 130, placeholder: "PMO" },
-          ],
-        },
-      ],
-      artifactInputFlow: {
-        "plan": ["businessObjective", "startDate", "targetEndDate", "teamSize", "keyRisks", "keyRoles"],
-      },
     },
     {
       id: "discover",
       displayName: "Discover",
       description: "Establish current state, scope, and discovery findings.",
-      requiredArtifacts: ["requirements-catalog", "narrative", "risk", "milestone"],
+      requiredArtifacts: [],
+      dynamicSchema: true,
       mandatoryExitCriteriaTemplates: [
         "Current state documented",
         "In-scope and out-of-scope items agreed",
@@ -176,7 +166,8 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       id: "design",
       displayName: "Design",
       description: "Produce the solution design, architecture decisions, and delivery plan.",
-      requiredArtifacts: ["future-state-design", "target-operating-model", "solution-architecture", "narrative", "plan", "risk", "critical-path"],
+      requiredArtifacts: [],
+      dynamicSchema: true,
       mandatoryExitCriteriaTemplates: [
         "Solution design approved by architecture review",
         "Key architecture decisions recorded",
@@ -190,7 +181,8 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       id: "build",
       displayName: "Build",
       description: "Deliver the solution against the agreed design.",
-      requiredArtifacts: ["test-plan", "narrative", "plan", "milestone"],
+      requiredArtifacts: [],
+      dynamicSchema: true,
       mandatoryExitCriteriaTemplates: [
         "All must-have requirements delivered and tested",
         "User acceptance testing passed",
@@ -204,7 +196,8 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       id: "operate",
       displayName: "Operate",
       description: "Transition to live operation with appropriate support.",
-      requiredArtifacts: ["runbook", "support-model", "narrative", "adoption"],
+      requiredArtifacts: [],
+      dynamicSchema: true,
       mandatoryExitCriteriaTemplates: [
         "Live operation stable for agreed hyper-care period",
         "Support model handed to operations",
@@ -218,7 +211,8 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       id: "govern",
       displayName: "Govern",
       description: "Establish ongoing governance, compliance, and performance monitoring.",
-      requiredArtifacts: ["narrative", "risk"],
+      requiredArtifacts: [],
+      dynamicSchema: true,
       mandatoryExitCriteriaTemplates: [
         "Governance model operational",
         "Compliance controls verified",
@@ -232,7 +226,8 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       id: "optimize",
       displayName: "Optimize",
       description: "Drive continuous improvement against baseline metrics.",
-      requiredArtifacts: ["optimization-backlog", "narrative", "plan"],
+      requiredArtifacts: [],
+      dynamicSchema: true,
       mandatoryExitCriteriaTemplates: [
         "Optimisation opportunities identified and prioritised",
         "At least one improvement cycle completed",
@@ -245,7 +240,8 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       id: "valuerealize",
       displayName: "Value Realize",
       description: "Formally measure and document benefits realisation.",
-      requiredArtifacts: ["narrative", "closure"],
+      requiredArtifacts: [],
+      dynamicSchema: true,
       mandatoryExitCriteriaTemplates: [
         "Benefits measured against baseline",
         "Final lessons learned documented",

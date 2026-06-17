@@ -34,8 +34,12 @@ function filledInputs(phaseId: string): Record<string, string> {
 /** Required artifacts present, approved, high confidence. */
 function presentArtifacts(phaseId: string): Record<string, unknown> {
   const phaseDef = ATOS_STANDARD.phases.find((p) => p.id === phaseId)!;
+  // Strategy carries static required artifacts; every later phase is dynamic-only,
+  // so a completed run has ≥1 ai-derived artifact persisted in data.phaseArtifacts.
+  // Simulate that here so a fully-provisioned dynamic phase scores like a static one.
+  const artifactIds = phaseDef.requiredArtifacts.length > 0 ? phaseDef.requiredArtifacts : [`${phaseId}-primary`];
   const bucket: Record<string, unknown> = {};
-  for (const agentId of phaseDef.requiredArtifacts) {
+  for (const agentId of artifactIds) {
     bucket[agentId] = { confidence: 0.95, status: "approved", agentDrafted: true, title: agentId };
   }
   return bucket;

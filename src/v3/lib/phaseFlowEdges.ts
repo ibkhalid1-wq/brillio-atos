@@ -1,15 +1,15 @@
 /**
  * Declared input → artifact dependency model for the phase flow wiring.
  *
- * Each input field always feeds the phase Narrative (the primary synthesis);
- * specialised fields additionally feed the phase-specific artifacts they most
- * directly inform (e.g. on Mobilise, the governance model field → Governance
- * Model, key roles → RACI Matrix + Stakeholder Map).
+ * Only Strategy carries a static field→artifact map; every later phase is
+ * dynamic, so its input→artifact edges come entirely from the programme's
+ * dynamicSchema (via `dynamicFieldArtifacts`) plus the methodology's declared
+ * `artifactInputFlow`.
  *
  * Targets are constrained to the phase's own artifact set
  * (`getPhaseArtifactIds`), so every edge resolves to a real DOM anchor in the
  * artifacts column and no connector dangles. Any declared target not present in
- * the phase is silently dropped.
+ * the phase (e.g. Narrative on a dynamic-only phase) is silently dropped.
  */
 import { getPhaseArtifactIds } from "@/v3/lib/phaseArtifacts";
 import { ATOS_STANDARD } from "@/v3/lib/methodology";
@@ -38,7 +38,11 @@ function methodologyFieldArtifacts(phaseId: string): Record<string, string[]> {
   return inverted;
 }
 
-/** Extra artifact targets per field, beyond the always-present Narrative. */
+/**
+ * Extra artifact targets per field, beyond Narrative. Strategy is the only
+ * static phase, so it is the only one with a hand-declared map; dynamic phases
+ * derive their field→artifact targets from the dynamicSchema at runtime.
+ */
 const PHASE_FIELD_ARTIFACTS: Record<string, Record<string, string[]>> = {
   strategy: {
     businessObjective: ["charter", "business-case"],
@@ -46,52 +50,6 @@ const PHASE_FIELD_ARTIFACTS: Record<string, Record<string, string[]>> = {
     constraints: ["business-case"],
     successMetric: ["outcome-framework"],
     keyRoles: ["charter"],
-  },
-  mobilise: {
-    programDirector: ["governance-model", "raci-matrix"],
-    teamSize: ["raci-matrix"],
-    governanceModel: ["governance-model"],
-    keyRoles: ["raci-matrix", "stakeholder"],
-  },
-  discover: {
-    currentState: ["requirements-catalog"],
-    scopeInclusions: ["requirements-catalog"],
-    scopeExclusions: ["requirements-catalog"],
-  },
-  design: {
-    solutionApproach: ["future-state-design", "solution-architecture"],
-    integrationPoints: ["solution-architecture"],
-    designConstraints: ["solution-architecture", "risk"],
-    keyRoles: ["target-operating-model"],
-  },
-  build: {
-    sprintVelocity: ["milestone", "plan"],
-    blockers: ["milestone"],
-    testCoverage: ["test-plan"],
-  },
-  operate: {
-    goLivePlanOwner: ["runbook"],
-    supportModel: ["support-model"],
-    trackedKpi: ["adoption"],
-    runbookReference: ["runbook"],
-    adoptionApproach: ["adoption"],
-  },
-  govern: {
-    complianceOwner: ["risk"],
-    controlMatrix: ["risk"],
-    auditEvidencePlan: ["risk"],
-    escalationPath: ["risk"],
-  },
-  optimize: {
-    benefitBaseline: ["optimization-backlog"],
-    improvementBacklog: ["optimization-backlog"],
-    experimentProposal: ["optimization-backlog"],
-  },
-  valuerealize: {
-    realisedBenefits: ["closure"],
-    lessonsLearnedReference: ["closure"],
-    bauOwner: ["closure"],
-    closurePackReference: ["closure"],
   },
 };
 

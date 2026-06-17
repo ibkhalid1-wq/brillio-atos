@@ -112,14 +112,16 @@ describe("resolvers honour the dynamic store end to end", () => {
   });
 
   it("derivePhaseFlowEdges wires the dynamic field to the dynamic artifact", () => {
+    // Design is now a dynamic-only phase: narrative is no longer guaranteed, so
+    // the only resolvable target is the dynamic artifact from the store.
     const edges = derivePhaseFlowEdges("design", ["modelRouting"], store);
-    expect(edges).toContainEqual({ from: "modelRouting", to: "narrative" });
+    expect(edges).not.toContainEqual({ from: "modelRouting", to: "narrative" });
     expect(edges).toContainEqual({ from: "modelRouting", to: "routing-policy" });
   });
 
-  it("derivePhaseFlowEdges drops the dynamic target without the store", () => {
+  it("derivePhaseFlowEdges yields no edges for a dynamic-only phase without the store", () => {
     const edges = derivePhaseFlowEdges("design", ["modelRouting"]);
-    expect(edges).toEqual([{ from: "modelRouting", to: "narrative" }]);
+    expect(edges).toEqual([]);
   });
 });
 

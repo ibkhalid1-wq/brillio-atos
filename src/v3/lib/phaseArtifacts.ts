@@ -44,7 +44,10 @@ function artifactDescription(id: string): string {
  */
 export function getPhaseArtifactDefs(phaseId: string, store?: DynamicSchemaStore): PhaseArtifactDef[] {
   const phase = ATOS_STANDARD.phases.find((p) => p.id === phaseId);
-  const ordered: string[] = ["narrative"];
+  // Narrative is no longer auto-guaranteed in every phase — a phase only carries
+  // the artifacts the methodology declares (Strategy still lists narrative) plus
+  // any ai-derived dynamic artifacts. Dynamic-only phases start empty.
+  const ordered: string[] = [];
   for (const id of phase?.requiredArtifacts ?? []) {
     if (!ordered.includes(id)) ordered.push(id);
   }

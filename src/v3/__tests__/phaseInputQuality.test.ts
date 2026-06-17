@@ -35,12 +35,12 @@ describe("derivePhaseInputQuality", () => {
     expect(result.overallScore).toBeGreaterThan(60);
   });
 
-  it("does not include KPIs or workstreams for non-Strategy phases", () => {
-    const result = derivePhaseInputQuality("design", {})!;
-    expect(result.missingCritical).toEqual(
-      expect.arrayContaining(["Solution approach", "Integration points", "Design constraints"]),
-    );
-    expect(result.missingCritical).not.toContain("Outcome KPIs");
-    expect(result.missingCritical.join(" ").toLowerCase()).not.toContain("workstream");
+  it("returns null for a dynamic-only phase — no static schema, so no leaked KPI/workstream fields", () => {
+    // Strategy is the only phase with a static input schema; every later phase is
+    // dynamic-only, so its fields come from the programme's dynamicSchema store, not
+    // from here. With no static fields there is nothing to assess — and crucially no
+    // path for "Outcome KPIs"/"workstreams" to leak into a non-Strategy phase.
+    expect(derivePhaseInputQuality("design", {})).toBeNull();
+    expect(derivePhaseInputQuality("mobilise", { anything: "x" })).toBeNull();
   });
 });
