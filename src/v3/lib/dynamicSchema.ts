@@ -22,7 +22,7 @@
  * through here, so a dynamic field shows up in the inputs panel, the flow
  * overlay, and the staleness model with no parallel wiring.
  */
-import { ATOS_STANDARD, type PhaseInputField } from "@/v3/lib/methodology";
+import { ATOS_STANDARD, type GridColumn, type PhaseInputField } from "@/v3/lib/methodology";
 
 export type ArtifactGenerationReadiness = "ready" | "needs_input" | "blocked";
 
@@ -116,6 +116,22 @@ function staticInputFields(phaseId: string): PhaseInputField[] {
 }
 
 /**
+ * A persisted dynamic `grid` field with no usable columns cannot render: every
+ * row would have no cells (only a remove button), and because `rowHasContent`
+ * is false for a column-less row, any imported value is silently dropped to `[]`
+ * on the next save. Coerce such a field to a `textarea` so the captured value
+ * survives and stays editable. Defensive at the read boundary so it also repairs
+ * schemas persisted before the planner carried grid columns through.
+ */
+function normalizeDynamicField(field: PhaseInputField): PhaseInputField {
+  if (field.type === "grid" && !(field.columns && field.columns.length > 0)) {
+    const { columns: _columns, minRows: _minRows, ...rest } = field;
+    return { ...rest, type: "textarea" };
+  }
+  return field;
+}
+
+/**
  * Merge static + dynamic input fields for a phase. Static fields keep their
  * order and win on id collision; dynamic fields are appended in declared order
  * and tagged `source: "ai-derived"` if not already.
@@ -130,7 +146,7 @@ export function mergeDynamicInputFields(
   const seen = new Set(staticFields.map((f) => f.id));
   const extra = dynamic
     .filter((f) => f && typeof f.id === "string" && !seen.has(f.id))
-    .map((f) => ({ ...f, source: "ai-derived" as const }));
+    .map((f) => normalizeDynamicField({ ...f, source: "ai-derived" as const }));
   return extra.length ? [...staticFields, ...extra] : staticFields;
 }
 
@@ -209,6 +225,37 @@ const READINESS_LEVELS = new Set(["green", "yellow", "red"]);
 
 function asStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map((v) => asString(v).trim()).filter(Boolean) : [];
+}
+
+const GRID_COLUMN_TYPES = new Set(["text", "number", "select"]);
+
+/**
+ * Validate the planner's `columns` for a `grid` field into well-formed
+ * `GridColumn`s. Columns are untrusted AI output, so each is shape-checked and
+ * anything without a usable `key` is dropped; duplicate keys collapse to the
+ * first. A grid that yields no valid column here is unusable and is coerced to a
+ * textarea by the caller.
+ */
+function sanitizeGridColumns(raw: unknown): GridColumn[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const out: GridColumn[] = [];
+  for (const c of raw) {
+    if (!isRecord(c)) continue;
+    const key = asString(c.key).trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    const col: GridColumn = { key, label: asString(c.label).trim() || key };
+    const type = asString(c.type).trim();
+    if (GRID_COLUMN_TYPES.has(type)) col.type = type as GridColumn["type"];
+    const options = asStringArray(c.options);
+    if (options.length) col.options = options;
+    if (asString(c.placeholder).trim()) col.placeholder = asString(c.placeholder).trim();
+    const width = Number(c.width);
+    if (Number.isFinite(width) && width > 0) col.width = Math.floor(width);
+    out.push(col);
+  }
+  return out;
 }
 
 /**
@@ -306,6 +353,20 @@ export function sanitizePlannerProposal(raw: unknown): DynamicPhaseProposal | nu
     if (f.needsConfirmation === true) field.needsConfirmation = true;
     if (asString(f.validationRule).trim()) field.validationRule = asString(f.validationRule).trim();
     if (asString(f.example).trim()) field.example = asString(f.example).trim();
+    // A grid needs columns to render its rows. Carry the planner's columns
+    // through when valid; a column-less grid is unusable, so demote it to a
+    // textarea (matching the read-boundary guard) rather than ship empty rows.
+    if (field.type === "grid") {
+      const columns = sanitizeGridColumns(f.columns);
+      if (columns.length) {
+        field.columns = columns;
+        const minRows = Number(f.minRows);
+        if (Number.isFinite(minRows) && minRows > 0) field.minRows = Math.floor(minRows);
+      } else {
+        field.type = "textarea";
+        guardrailWarnings.push(`Demoted column-less grid "${label}" to a textarea.`);
+      }
+    }
     inputFields.push(field);
   }
 

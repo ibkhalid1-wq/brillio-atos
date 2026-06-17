@@ -63,6 +63,27 @@ describe("mergeDynamicInputFields", () => {
     const merged = mergeDynamicInputFields(staticFields, "design", store);
     expect(merged).toBe(staticFields);
   });
+
+  it("coerces a persisted column-less grid to a textarea (data-preserving repair)", () => {
+    const grid: PhaseInputField = { id: "coreTeamAssignments", label: "Named individuals", type: "grid", required: false };
+    const store: DynamicSchemaStore = { inputFields: { mobilise: [grid] } };
+    const merged = mergeDynamicInputFields(staticFields, "mobilise", store);
+    const coerced = merged.find((f) => f.id === "coreTeamAssignments");
+    expect(coerced?.type).toBe("textarea");
+    expect(coerced?.columns).toBeUndefined();
+  });
+
+  it("preserves a grid that has usable columns", () => {
+    const grid: PhaseInputField = {
+      id: "roles", label: "Roles", type: "grid", required: false,
+      columns: [{ key: "role", label: "Role" }, { key: "name", label: "Name" }],
+    };
+    const store: DynamicSchemaStore = { inputFields: { mobilise: [grid] } };
+    const merged = mergeDynamicInputFields(staticFields, "mobilise", store);
+    const kept = merged.find((f) => f.id === "roles");
+    expect(kept?.type).toBe("grid");
+    expect(kept?.columns?.map((c) => c.key)).toEqual(["role", "name"]);
+  });
 });
 
 describe("dynamicArtifactDefs", () => {
@@ -144,6 +165,34 @@ describe("sanitizePlannerProposal", () => {
     expect(out?.inputFields.map((f) => f.id)).toEqual(["modelRouting"]);
     expect(out?.inputFields[0].source).toBe("ai-derived");
     expect(out?.inputFields[0].required).toBe(true);
+  });
+
+  it("carries valid grid columns through and keeps the field a grid", () => {
+    const out = sanitizePlannerProposal({
+      inputFields: [{
+        id: "roles", label: "Roles", type: "grid", required: true,
+        columns: [
+          { key: "role", label: "Role" },
+          { key: "name", label: "Name", type: "text" },
+          { label: "no key — dropped" },
+          { key: "role", label: "dup key — dropped" },
+        ],
+      }],
+      artifacts: [],
+    });
+    const field = out?.inputFields[0];
+    expect(field?.type).toBe("grid");
+    expect(field?.columns?.map((c) => c.key)).toEqual(["role", "name"]);
+  });
+
+  it("demotes a column-less grid to a textarea and warns", () => {
+    const out = sanitizePlannerProposal({
+      inputFields: [{ id: "coreTeamAssignments", label: "Named individuals", type: "grid", required: true }],
+      artifacts: [],
+    });
+    expect(out?.inputFields[0].type).toBe("textarea");
+    expect(out?.inputFields[0].columns).toBeUndefined();
+    expect(out?.planMeta.warnings?.some((w) => /column-less grid/i.test(w))).toBe(true);
   });
 
   it("keeps only flow entries that reference declared dynamic field + artifact ids", () => {
