@@ -5,6 +5,7 @@ import { normalizeProgram, updateDecisionInProgram } from "@/new/lib/programData
 import { ConflictError } from "@/new/lib/conflicts";
 import type { ProgramSummary, DecisionSummary } from "@/new/types";
 import { pushV3Toast } from "@/v3/utils";
+import { enqueueWrite, flushWriteQueue, getQueuedWriteCount } from "@/lib/writeQueue";
 
 type ProgramRow = Database["public"]["Tables"]["adam_programs"]["Row"];
 type LocalProgramEntry = Record<string, unknown>;
@@ -185,6 +186,12 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
     setError("");
 
     try {
+      // Retry any writes that were queued while offline / after a statement-timeout
+      // before reading, so a successful flush is reflected in the rows we fetch below.
+      if (getQueuedWriteCount() > 0) {
+        await flushWriteQueue(supabase);
+      }
+
       // No owner filter: row-level security scopes visibility to programs the
       // signed-in user owns or has been granted membership on, so collaborators
       // see shared programs too. We fetch deleted rows too (no is_deleted filter)
@@ -417,7 +424,18 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
       .eq("id", programId)
       .select("id");
     if (updateError) {
-      throw new Error(updateError.message || "Failed to update program.");
+      // A failed UPDATE here is the offline / statement-timeout case: the write
+      // never reached Postgres. Queue it so the next refresh retries it, and keep
+      // the change in this session's local cache so it isn't lost in the meantime.
+      enqueueWrite("adam_programs", programId, { data: payload as Json, updated_at: nextUpdatedAt });
+      persistLocalProgram(programId, nextData);
+      pushV3Toast(
+        "Couldn't reach the server — saved locally and queued to retry automatically.",
+        { tone: "warning", duration: 7000 },
+      );
+      localKnownUpdatedAt.current[programId] = nextUpdatedAt;
+      await refreshPrograms();
+      return;
     }
     // If 0 rows were updated (RLS blocked it or row doesn't exist yet), upsert with full data
     if (!updatedRows || updatedRows.length === 0) {
