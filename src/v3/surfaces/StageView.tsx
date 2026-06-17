@@ -696,7 +696,7 @@ export default function StageView({
     const slug = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "artifact";
     const phaseLabel = activePhase.label ?? activePhase.id;
     const produced: Array<{ label: string; state: string; content: string }> = [];
-    for (const def of getPhaseArtifactDefs(activePhase.id, dynamicStore).filter((d) => d.id !== "narrative")) {
+    for (const def of getPhaseArtifactDefs(activePhase.id, dynamicStore)) {
       const node = phaseArtifacts.byKey.get(def.id);
       const stringContent = node?.artifactId ? phaseArtifactContentById.get(node.artifactId) ?? null : null;
       const content = (stringContent && stringContent.trim()) ? stringContent : getFormalArtifactContent(source, def.id);
@@ -1024,8 +1024,11 @@ export default function StageView({
             // never shows next to a 0%/all-missing artifact column.
             { label: "Artifact quality", value: hasProducedArtifacts ? `${readiness.artifactScore}%` : "—", tone: hasProducedArtifacts ? pctTone(readiness.artifactScore) : "", anchor: "phase-artifacts-anchor" },
             // Gate score = average of artifacts complete and artifact quality (the
-            // two signals that move the phase toward its gate). Distinct from the
-            // lock condition, the stricter "artifacts 100% complete and quality > 90%".
+            // two signals that move the phase toward its gate). This is the single
+            // definition of "gate score" across the app — the header metric, the
+            // outer status ring and every other surface all read readiness.score so
+            // the number is identical everywhere. Distinct from the stricter lock
+            // condition ("artifacts 100% complete and quality > 90%").
             { label: "Gate score", value: `${readiness.score}%`, tone: pctTone(readiness.score), onClick: () => setExitCriteriaOpen(true) },
           ];
           // Live work counts — distinct from the pipeline, shown as a separated group.
@@ -1337,7 +1340,6 @@ export default function StageView({
           ) : null}
 
           {getPhaseArtifactDefs(activePhase.id, dynamicStore)
-            .filter((def) => def.id !== "narrative")
             .map((def) => {
               const node = phaseArtifacts.byKey.get(def.id);
               const required = !!node;

@@ -6,11 +6,13 @@
  * The mandate fixes the ring-to-KPI mapping and it must be identical everywhere:
  *   • inner ring  → Input Score    (how good are the inputs feeding the phase)
  *   • middle ring → Artifact Score (how complete/quality are the artifacts)
- *   • outer ring  → Gate Score     (gate readiness; null until a gate review exists)
+ *   • outer ring  → Gate Score     (readiness composite: the average of artifact
+ *                                   completeness and artifact quality)
  *
- * All three values come from computePhaseReadiness(); the composite `overall`
- * is its `score`. This module is the pure derivation + tone brain so the visual
- * component stays presentational and the mapping stays unit-testable.
+ * All values come from computePhaseReadiness(). Gate Score and the composite
+ * `overall` are both its `score`, so the outer ring matches the header "Gate
+ * score" metric everywhere. This module is the pure derivation + tone brain so
+ * the visual component stays presentational and the mapping stays unit-testable.
  *
  * No React, deterministic, unit-tested.
  */
@@ -25,11 +27,11 @@ export interface PhaseStatusRingValues {
   input: number;
   /** Middle ring — artifact quality score (0-100). */
   artifact: number;
-  /** Outer ring — gate readiness score (0-100), or null when no gate review yet. */
+  /** Outer ring — gate score: the readiness composite (avg of artifact completeness + quality), 0-100. */
   gate: number | null;
-  /** Composite phase score (gate·0.6 + artifact·0.3 + input·0.1, or the no-gate blend). */
+  /** Composite phase score — same value as `gate` (computePhaseReadiness().score). */
   overall: number;
-  /** True once a gate review with a readiness score exists. */
+  /** Always true: the gate score is the readiness composite, which is always defined. */
   hasGate: boolean;
   /** Whether the gate can currently be approved (score + exits + assumptions). */
   canApproveGate: boolean;
@@ -67,12 +69,18 @@ export function ringColor(value: number | null): string {
  */
 export function ringsFromReadiness(result: PhaseReadinessResult): PhaseStatusRingValues {
   const clamp = (n: number) => Math.min(100, Math.max(0, Math.round(n)));
+  // Gate score is the readiness composite — the average of artifact completeness
+  // and artifact quality (result.score). This is the SAME number the header
+  // "Gate score" metric shows, so the outer ring stays consistent with it on
+  // every surface. (The LLM gate-review readinessScore is a separate reviewer
+  // signal that drives canApproveGate / exit criteria, not this ring.)
+  const gate = clamp(result.score);
   return {
     input: clamp(result.inputScore),
     artifact: clamp(result.artifactScore),
-    gate: result.gateScore == null ? null : clamp(result.gateScore),
-    overall: clamp(result.score),
-    hasGate: result.gateScore != null,
+    gate,
+    overall: gate,
+    hasGate: true,
     canApproveGate: result.canApproveGate,
     threshold: result.threshold,
   };

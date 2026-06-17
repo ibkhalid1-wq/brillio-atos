@@ -51,46 +51,48 @@ describe("phaseStatusRings — tone bands", () => {
 });
 
 describe("phaseStatusRings — canonical KPI mapping", () => {
-  it("maps inner=input, middle=artifact, outer=gate, overall=score", () => {
+  it("maps inner=input, middle=artifact, and gate=overall=score", () => {
     const r = ringsFromReadiness(
       readiness({ inputScore: 40, artifactScore: 60, gateScore: 80, score: 71, canApproveGate: true }),
     );
     expect(r.input).toBe(40);
     expect(r.artifact).toBe(60);
-    expect(r.gate).toBe(80);
+    // Gate score is the readiness composite (score), not the LLM gateScore.
+    expect(r.gate).toBe(71);
     expect(r.overall).toBe(71);
     expect(r.hasGate).toBe(true);
     expect(r.canApproveGate).toBe(true);
   });
 
-  it("reports gate=null and hasGate=false when no gate review exists", () => {
+  it("derives the gate score from the composite even with no gate review", () => {
     const r = ringsFromReadiness(readiness({ inputScore: 30, artifactScore: 20, gateScore: null, score: 23 }));
-    expect(r.gate).toBeNull();
-    expect(r.hasGate).toBe(false);
+    expect(r.gate).toBe(23);
+    expect(r.hasGate).toBe(true);
   });
 
   it("clamps and rounds out-of-range values", () => {
     const r = ringsFromReadiness(readiness({ inputScore: 142.6, artifactScore: -10, gateScore: 99.4, score: 50.5 }));
     expect(r.input).toBe(100);
     expect(r.artifact).toBe(0);
-    expect(r.gate).toBe(99);
+    // Gate tracks the composite score, not gateScore.
+    expect(r.gate).toBe(51);
     expect(r.overall).toBe(51);
   });
 });
 
 describe("phaseStatusRings — end to end via computePhaseReadiness", () => {
-  it("derives muted gate ring for a barely-started phase", () => {
+  it("derives a low composite gate ring for a barely-started phase", () => {
     const program = normalizeProgram({
       id: "p1",
       name: "ERP",
       data: { phases: [{ id: "mobilise", pct: 10 }] },
     });
     const r = derivePhaseStatusRings(program, "mobilise");
-    expect(r.hasGate).toBe(false);
-    expect(r.gate).toBeNull();
+    expect(r.hasGate).toBe(true);
+    expect(r.gate).not.toBeNull();
+    expect(r.gate).toBe(r.overall);
     expect(r.input).toBeGreaterThanOrEqual(0);
     expect(r.input).toBeLessThanOrEqual(100);
-    expect(ringTone(r.gate)).toBe("muted");
   });
 
   it("surfaces the gate score once a gate review is approved", () => {
