@@ -49,6 +49,24 @@ interface PhaseInputsPanelProps {
 const SUCCESS_METRIC_ANCHOR_KEYS = ["successMetricBaseline", "successMetricTarget", "successMetricUnit"] as const;
 
 /**
+ * Content signature over the *managed* input keys (schema fields plus the special
+ * KPI / workstream / success-metric-anchor keys), ignoring metadata like savedAt
+ * and provenance. The resync effect uses it to tell our own debounced auto-save
+ * echo (signature matches what we just persisted) from an external write — e.g. a
+ * document import landing KPIs in phaseInputs.kpis. Only the former should block
+ * the resync; an external change must always be adopted, otherwise the stale edit
+ * buffer hides it and the next auto-save clobbers it.
+ */
+export function managedInputSignature(src: Record<string, unknown>, fields: { id: string }[]): string {
+  const read = (key: string) => (typeof src[key] === "string" ? (src[key] as string) : "");
+  const parts = fields.map((field) => `${field.id}=${read(field.id)}`);
+  for (const key of ["kpis", "workstreams", "kpiActuals", ...SUCCESS_METRIC_ANCHOR_KEYS]) {
+    parts.push(`${key}=${read(key)}`);
+  }
+  return parts.join("\u0001");
+}
+
+/**
  * Structured baseline/target KPI captured at Strategy. Persisted as a JSON
  * string under phaseInputs.strategy.kpis so the benefits-tracker agent can
  * measure realisation against a human-entered baseline — closing the
@@ -245,6 +263,9 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
   const autoSaveTimerRef = useRef<number | null>(null);
   const isDirtyRef = useRef(false);
   const prevPhaseIdRef = useRef(phaseId);
+  // Signature of the inputs this panel last persisted, so the resync effect can
+  // recognise our own auto-save echo and not mistake an external write for it.
+  const selfSaveSigRef = useRef<string | null>(null);
 
   async function runAssist(field: { id: string; label: string; hint?: string }, mode: FieldAssistMode) {
     if (!onAssistField || assistingField) return;
@@ -286,7 +307,13 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
     // dirty; always resync when the phase itself changed (a different editor).
     const phaseChanged = prevPhaseIdRef.current !== phaseId;
     prevPhaseIdRef.current = phaseId;
-    if (!phaseChanged && isDirtyRef.current) return;
+    // Block the resync only for our *own* save echo while the buffer is dirty —
+    // that's the focus-steal case the guard exists for. An external write (e.g. a
+    // document import populating phaseInputs.kpis) carries a different signature
+    // and must be adopted, even when the stale buffer looks "dirty" against it.
+    const incomingSig = managedInputSignature(existingInputs as Record<string, unknown>, schema.fields);
+    const isOwnSaveEcho = selfSaveSigRef.current !== null && incomingSig === selfSaveSigRef.current;
+    if (!phaseChanged && isDirtyRef.current && isOwnSaveEcho) return;
     setValues(existingInputs);
     // Only auto-open if there's no data yet (first-time setup)
     if (Object.keys(existingInputs).length === 0) setOpen(true);
@@ -419,6 +446,9 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
   async function handleSave() {
     if (locked) return;
     setSaving(true);
+    // Record exactly what we're persisting so the resync effect recognises this
+    // save's echo and doesn't treat it as an external change worth re-adopting.
+    selfSaveSigRef.current = managedInputSignature(liveSnapshot, schema.fields);
     try {
       // Auto-save is the only save path now (no manual button), so persist
       // quietly — the surface shows a subtle "Saved" tick instead of a toast.
