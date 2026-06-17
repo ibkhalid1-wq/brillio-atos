@@ -1079,6 +1079,55 @@ function flowedArtifactInputs(
   return Object.keys(out).length ? out : undefined;
 }
 
+/**
+ * Flattens every captured phase input into a readable "phase.field: value" block
+ * for the artifact reviewer. The reviewer must see exactly what the user has
+ * already supplied so it never recommends adding a fact that is already an input
+ * (e.g. asking for a target end date when targetEndDate is populated). Values are
+ * passed in full — the reviewer must be able to judge specificity against the
+ * complete input, not a truncated head.
+ */
+function collectProvidedInputs(programData: ProgramState): string {
+  const inner = getInnerProgramData(programData);
+  const phaseInputs = normalizeProgramData(inner.phaseInputs as JsonValue | null);
+  const lines: string[] = [];
+  for (const [phaseId, phaseValue] of Object.entries(phaseInputs)) {
+    const record = normalizeProgramData(phaseValue as JsonValue | null);
+    for (const [fieldId, value] of Object.entries(record)) {
+      if (fieldId === "savedAt") continue;
+      const stringified = stringifyFlowValue(value);
+      if (stringified) lines.push(`- ${phaseId}.${fieldId}: ${stringified}`);
+    }
+  }
+  return lines.join("\n");
+}
+
+/**
+ * Every artifact produced in phases BEFORE the target phase, in full and
+ * regardless of approval status. The reviewer needs the complete upstream picture
+ * to judge consistency and to avoid flagging as "missing" anything an earlier
+ * phase already established. Mirrors getPriorPhaseContext's access pattern
+ * (top-level phaseArtifacts) but drops the approved-only filter and the length
+ * cap so the review sees the whole prior-phase trail verbatim.
+ */
+function collectPriorPhaseArtifacts(programData: ProgramState, targetPhaseId: string): string {
+  const targetIndex = ATOS_PHASE_SEQUENCE.indexOf(targetPhaseId);
+  if (targetIndex <= 0) return "";
+  const phaseArtifacts = (programData.phaseArtifacts as Record<string, Record<string, Record<string, JsonValue>>> | undefined) || {};
+  const lines: string[] = [];
+  for (const phaseId of ATOS_PHASE_SEQUENCE.slice(0, targetIndex)) {
+    const artifacts = phaseArtifacts[phaseId] || {};
+    for (const [artifactId, artifact] of Object.entries(artifacts)) {
+      const title = typeof artifact?.title === "string" ? artifact.title : artifactId;
+      const status = typeof artifact?.status === "string" ? artifact.status : "draft";
+      const content = typeof artifact?.content === "string" ? artifact.content.replace(/\s+/g, " ").trim() : "";
+      if (!content) continue;
+      lines.push(`- ${phaseId} / ${title} (${status}): ${content}`);
+    }
+  }
+  return lines.join("\n");
+}
+
 function buildSpecialAgentInputContext(
   programData: ProgramState,
   meta: {
@@ -2940,7 +2989,7 @@ function applyPatternQueryResultToProgramData(
   }));
 }
 
-function getPriorPhaseContext(programData: ProgramState, targetPhaseId: string, maxChars = 1200): string {
+function getPriorPhaseContext(programData: ProgramState, targetPhaseId: string): string {
   const targetIndex = ATOS_PHASE_SEQUENCE.indexOf(targetPhaseId);
   if (targetIndex <= 0) return "";
   const phaseArtifacts = (programData.phaseArtifacts as Record<string, Record<string, Record<string, JsonValue>>> | undefined) || {};
@@ -2952,12 +3001,7 @@ function getPriorPhaseContext(programData: ProgramState, targetPhaseId: string, 
       const title = typeof artifact.title === "string" ? artifact.title : artifactId;
       const content = typeof artifact.content === "string" ? artifact.content.replace(/\s+/g, " ").trim() : "";
       if (!content) continue;
-      const line = `${phaseId}: ${title} — ${content.slice(0, 220)}`;
-      const next = [...lines, line].join("\n");
-      if (next.length > maxChars) {
-        return `Prior phase context:\n${lines.join("\n")}`.slice(0, maxChars);
-      }
-      lines.push(line);
+      lines.push(`${phaseId}: ${title} — ${content}`);
     }
   }
   return lines.length ? `Prior phase context:\n${lines.join("\n")}` : "";
@@ -3840,38 +3884,47 @@ async function callJsonLLM(
   };
 }
 
-function stringifyForReview(value: unknown, maxLength = 2000): string {
-  if (typeof value === "string") return value.slice(0, maxLength);
-  return stringifyJson(value).slice(0, maxLength);
+function stringifyForReview(value: unknown): string {
+  if (typeof value === "string") return value;
+  return stringifyJson(value);
 }
 
 async function reviewArtifact(
   artifactLabel: string,
   artifactContent: string,
   phaseContext: string,
-  priorPhaseContext: string,
+  priorPhaseArtifacts: string,
+  providedInputs: string,
 ): Promise<{ score: number; dimensions: Record<string, number>; improvements: string[] }> {
   const systemPrompt = `You are an independent artifact quality reviewer for ATOS transformation programs.
 Score the artifact on these dimensions (0-100 each):
 - completeness: are all expected sections present with substantive content?
 - specificity: does it reference actual program data (names, metrics, dates) vs generic statements?
 - actionability: does it tell the reader what to do next, concretely?
-- consistency: is it consistent with the prior phase context provided?
+- consistency: is it consistent with the prior-phase artifacts provided?
 
-Every entry in "improvements" must give the user precise direction on how to improve their INPUTS — the facts that ground this document — not vague edits to the prose. For each weakness, write one actionable sentence that:
-1. names the specific grounding fact the document lacks or treats too generically (e.g. the executive sponsor's name and title, a dated go-live milestone, the quantified cost figure, the named KPI baseline);
+SOURCE OF TRUTH: The "Structured inputs already provided" and "Prior-phase artifacts" blocks below are authoritative — they are exactly what the user has already supplied or established upstream. Before writing ANY improvement, cross-check it against both blocks. NEVER recommend adding, specifying, quantifying, or clarifying a fact that already appears in them (for example, if targetEndDate is present in the inputs, do not ask for a target/end date; if a prior phase already named the sponsor or KPI, do not ask for it). Only raise inputs that are genuinely absent, empty, or too vague to act on. If a fact exists in the inputs but is simply not surfaced in the document prose, frame the suggestion as "surface <fact> (already provided) in the document", never as "add <fact>".
+
+Every entry in "improvements" must give the user precise direction on how to improve their INPUTS — the facts that ground this document — not vague edits to the prose. For each genuine gap, write one actionable sentence that:
+1. names the specific grounding fact the document lacks or treats too generically;
 2. states exactly what to add or replace, with a concrete worked example of the level of detail expected;
 3. ties it to the score (which dimension it lifts).
-Never write generic advice like "add more detail" or "be more specific" — always say WHICH fact and WHAT to write. If the document is already strong, return fewer, sharper suggestions rather than padding.
+Never write generic advice like "add more detail" or "be more specific" — always say WHICH fact and WHAT to write. If the document is already well-grounded by the inputs and prior artifacts, return fewer (even zero) suggestions rather than inventing gaps.
 
 Return ONLY valid JSON:
-{ "score": 0-100, "dimensions": { "completeness": 0-100, "specificity": 0-100, "actionability": 0-100, "consistency": 0-100 }, "improvements": ["Name the executive sponsor with their title in the Sponsor input (e.g. 'Jane Doe, COO') — this lifts specificity and makes accountability unambiguous", "Replace the open-ended timeline with a dated go-live milestone in Target end date (e.g. '2026-11-30') so the roadmap can sequence backwards from it"] }`;
+{ "score": 0-100, "dimensions": { "completeness": 0-100, "specificity": 0-100, "actionability": 0-100, "consistency": 0-100 }, "improvements": ["Name the executive sponsor with their title in the Sponsor input (e.g. 'Jane Doe, COO') — this lifts specificity and makes accountability unambiguous", "Quantify the cost assumption (e.g. '$2.4M based on vendor quotes and a 6-person core team') so the business case can be resourced"] }`;
   const userPrompt = `Artifact type: ${artifactLabel}
-Prior phase context: ${priorPhaseContext || "None"}
+
+Structured inputs already provided (field: value) — authoritative, do not request anything already here:
+${providedInputs || "None recorded"}
+
+Prior-phase artifacts (everything established upstream) — authoritative, do not request anything already here:
+${priorPhaseArtifacts || "None"}
+
 Program context: ${phaseContext}
 
 Artifact to review:
-${artifactContent.slice(0, 2000)}`;
+${artifactContent}`;
   const { parsed } = await callJsonLLM(systemPrompt, userPrompt, 400);
   return {
     score: clampNumber(parsed.score, 0, 100, 70),
@@ -6966,7 +7019,8 @@ Deno.serve(async (req) => {
             request.agentId,
             reviewTarget.content,
             `Program: ${programRow.name || "Unknown"}, Phase: ${request.phaseId}`,
-            request.crossPhaseContext || priorPhaseContext || "",
+            collectPriorPhaseArtifacts(contextProgramData, request.phaseId),
+            collectProvidedInputs(contextProgramData),
           );
           nextProgramData = applyArtifactQuality(nextProgramData, reviewTarget.fieldKey, artifactReview as unknown as Record<string, unknown>, reviewTarget.confidenceFieldKey);
         }
