@@ -8,8 +8,7 @@ import PhaseFlowOverlay from "@/v3/components/PhaseFlowOverlay";
 import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
 import { PhaseRail } from "@/v3/components/PhaseRail";
 import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
-import { derivePhaseBlockers } from "@/v3/lib/phaseBlockers";
-import { selectRisks } from "@/v3/lib/programRaid";
+import { selectBlockers, selectRisks } from "@/v3/lib/programRaid";
 import { EmptyState } from "@/v3/components/ui/EmptyState";
 import { ExpandableSection } from "@/v3/components/ui/ExpandableSection";
 import { RelativeTime } from "@/v3/components/ui/RelativeTime";
@@ -732,9 +731,15 @@ export default function StageView({
   // Programme screen never shows two different "open" numbers for one phase.
   const stageDecisions = deriveOpenRecommendedActions(program, "delivery_lead")
     .filter((decision) => !decision.phaseId || decision.phaseId === activePhase?.id);
-  // Canonical phase blocker + risk counts for the header metric strip — same
-  // engine the right-rail Blockers tab reads from, so the numbers never disagree.
-  const phaseBlockers = useMemo(() => derivePhaseBlockers(program, activePhase?.id ?? ""), [program, activePhase?.id]);
+  // Canonical phase blocker + risk counts for the header metric strip — the same
+  // RAID selectors (scoped to this phase) the right-rail Blockers/Risks tabs read
+  // from, so the header number always matches the list it opens. (The gate-
+  // readiness checklist is a different concept, surfaced via the Gate score
+  // metric / exit-criteria modal, not the "Blockers" KPI.)
+  const phaseBlockerCount = useMemo(
+    () => (activePhase?.id ? selectBlockers(program, { phaseId: activePhase.id }).length : 0),
+    [program, activePhase?.id],
+  );
   const phaseRiskCount = useMemo(
     () => (activePhase?.id ? selectRisks(program, { phaseId: activePhase.id }).length : 0),
     [program, activePhase?.id],
@@ -1035,7 +1040,7 @@ export default function StageView({
           // Each carries an `addTab` so the "+ Add" button under it opens the right
           // Action Center add form.
           const work: Array<{ label: string; value: string | number; tone: string; anchor?: string | null; onClick?: () => void; addTab: "blockers" | "risks" | "actions" }> = [
-            { label: "Blockers", value: phaseBlockers.length, tone: phaseBlockers.length ? "red" : "green", onClick: () => onOpenMoreView("risks"), addTab: "blockers" },
+            { label: "Blockers", value: phaseBlockerCount, tone: phaseBlockerCount ? "red" : "green", onClick: () => onOpenMoreView("risks"), addTab: "blockers" },
             { label: "Risks", value: phaseRiskCount, tone: phaseRiskCount ? "amber" : "", onClick: () => onOpenMoreView("risks"), addTab: "risks" },
             { label: "Actions", value: stageDecisions.length, tone: stageDecisions.length ? "amber" : "", onClick: onOpenDecide, addTab: "actions" },
           ];
