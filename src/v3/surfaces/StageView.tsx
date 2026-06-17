@@ -16,6 +16,7 @@ import { StatusBadge } from "@/v3/components/ui/StatusBadge";
 import { computePhaseReadiness } from "@/v3/lib/phaseReadiness";
 import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
 import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
+import { getArtifactInputFields } from "@/v3/lib/phaseFlowEdges";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { runPreFlight } from "@/v3/lib/phaseInputPreFlight";
 import { derivePhaseInputQuality } from "@/v3/lib/phaseInputQuality";
@@ -56,6 +57,28 @@ interface StageViewProps {
     plan?: Array<{ action?: string; rationale?: string }> | null;
     deck?: string | null;
   };
+}
+
+/** A captured input value counts as filled when it carries real content — a
+ *  non-blank string, or a non-empty grid (JSON array). Used to gate an
+ *  artifact's Generate button on the inputs declared to flow into it. */
+function isInputFilled(value: unknown): boolean {
+  if (value == null) return false;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return false;
+    if (trimmed.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        return Array.isArray(parsed) ? parsed.length > 0 : true;
+      } catch {
+        return true;
+      }
+    }
+    return true;
+  }
+  if (Array.isArray(value)) return value.length > 0;
+  return true;
 }
 
 function firstSentence(text: string, maxLength = 160): string {
@@ -1071,6 +1094,13 @@ export default function StageView({
                 : getFormalArtifactContent(source, def.id);
               const preflight = runPreFlight(activePhase.id, preFlightInputs);
               const inputsIncomplete = !preflight.pass;
+              // Inputs declared to flow into THIS artifact must be complete before
+              // it can be generated — generating against missing upstream inputs
+              // produces a thin artifact and burns a ~90s model run. An artifact
+              // with no declared input dependencies has nothing to wait on.
+              const flowedFieldIds = getArtifactInputFields(activePhase.id, def.id, dynamicStore);
+              const missingFlowedFields = flowedFieldIds.filter((fieldId) => !isInputFilled(preFlightInputs[fieldId]));
+              const flowedInputsIncomplete = missingFlowedFields.length > 0;
               return (
                 <div key={def.id} className="v3-artifact-row" data-io-anchor={`artifact:${def.id}`}>
                   <div className="v3-artifact-row-head">
@@ -1109,8 +1139,10 @@ export default function StageView({
                     type="button"
                     className="v3-button ghost v3-button-inline-xs v3-artifact-regen"
                     onClick={() => onRunAgent(def.id)}
-                    disabled={agentButtonDisabled(def.id)}
-                    title={inputsIncomplete
+                    disabled={agentButtonDisabled(def.id) || flowedInputsIncomplete}
+                    title={flowedInputsIncomplete
+                      ? `Complete the inputs that feed ${def.label} first: ${missingFlowedFields.join(", ")}`
+                      : inputsIncomplete
                       ? `${present ? "Regenerate" : "Generate"} ${def.label} — missing inputs may limit quality: ${preflight.missingFields.join(", ")}`
                       : present ? `Regenerate ${def.label}` : `Generate ${def.label}`}
                   >

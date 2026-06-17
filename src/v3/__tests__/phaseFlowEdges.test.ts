@@ -1,4 +1,4 @@
-import { derivePhaseFlowEdges } from "@/v3/lib/phaseFlowEdges";
+import { derivePhaseFlowEdges, getArtifactInputFields } from "@/v3/lib/phaseFlowEdges";
 import { getPhaseArtifactIds } from "@/v3/lib/phaseArtifacts";
 import { PHASE_INPUT_SCHEMAS } from "@/v3/lib/phaseInputSchema";
 
@@ -49,5 +49,38 @@ describe("derivePhaseFlowEdges", () => {
         expect(valid.has(edge.to)).toBe(true);
       }
     }
+  });
+});
+
+describe("getArtifactInputFields", () => {
+  it("unions methodology artifactInputFlow with the static field→artifact map (deduped)", () => {
+    // charter is fed by methodology (industry, startDate, targetEndDate) AND the
+    // static map (sponsor, keyRoles, businessObjective) — all present, no dupes.
+    const fields = getArtifactInputFields("strategy", "charter");
+    expect(new Set(fields)).toEqual(
+      new Set(["industry", "startDate", "targetEndDate", "businessObjective", "sponsor", "keyRoles"]),
+    );
+    expect(fields.length).toBe(new Set(fields).size);
+  });
+
+  it("merges both sources for business-case", () => {
+    expect(new Set(getArtifactInputFields("strategy", "business-case"))).toEqual(
+      new Set(["industry", "businessObjective", "constraints"]),
+    );
+  });
+
+  it("returns the static-only mapping when the methodology declares no flow for the artifact", () => {
+    expect(getArtifactInputFields("strategy", "outcome-framework")).toEqual(["successMetric"]);
+  });
+
+  it("returns no fields for a dynamic phase with no store (nothing to wait on)", () => {
+    expect(getArtifactInputFields("mobilise", "governance-model")).toEqual([]);
+  });
+
+  it("reads declared fields from the dynamic schema store for a dynamic phase", () => {
+    const store = { artifactInputFlow: { mobilise: { "governance-model": ["sponsorTier", "raciOwner"] } } };
+    expect(new Set(getArtifactInputFields("mobilise", "governance-model", store))).toEqual(
+      new Set(["sponsorTier", "raciOwner"]),
+    );
   });
 });

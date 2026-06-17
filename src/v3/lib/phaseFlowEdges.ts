@@ -54,6 +54,27 @@ const PHASE_FIELD_ARTIFACTS: Record<string, Record<string, string[]>> = {
 };
 
 /**
+ * The input field ids declared to flow into a given artifact, across all three
+ * sources that wire the phase flow: the methodology's `artifactInputFlow`
+ * (artifact → fields), Strategy's hand-declared field → artifact map, and the
+ * programme's dynamic schema. Returns the deduped field ids — the inputs that
+ * must be complete before the artifact can be meaningfully generated. An empty
+ * result means no input is declared to feed the artifact (nothing to wait on).
+ */
+export function getArtifactInputFields(phaseId: string, artifactId: string, store?: DynamicSchemaStore): string[] {
+  const fields = new Set<string>();
+  const methodologyFlow = ATOS_STANDARD.phases.find((phase) => phase.id === phaseId)?.artifactInputFlow ?? {};
+  for (const fieldId of methodologyFlow[artifactId] ?? []) fields.add(fieldId);
+  const fieldMap = PHASE_FIELD_ARTIFACTS[phaseId] ?? {};
+  for (const [fieldId, artifacts] of Object.entries(fieldMap)) {
+    if (artifacts.includes(artifactId)) fields.add(fieldId);
+  }
+  const dynamicFlow = store?.artifactInputFlow?.[phaseId] ?? {};
+  for (const fieldId of dynamicFlow[artifactId] ?? []) fields.add(fieldId);
+  return [...fields];
+}
+
+/**
  * Derive the input → artifact edges for a phase. Each field yields one edge to
  * Narrative plus one edge per declared specialised target that exists in the
  * phase, de-duplicated and in a stable order (Narrative first, then declared
