@@ -636,15 +636,31 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
                     onChange={(event) => setValues((current) => ({ ...current, [field.id]: event.target.value }))}
                   />
                 ) : field.type === "select" ? (
-                  <select
-                    className="v3-input"
-                    aria-label={field.label}
-                    value={values[field.id] ?? ""}
-                    onChange={(event) => setValues((current) => ({ ...current, [field.id]: event.target.value }))}
-                  >
-                    <option value="">Select…</option>
-                    {field.options?.map((option) => <option key={option} value={option}>{option}</option>)}
-                  </select>
+                  (() => {
+                    // A select only displays its value when that value matches an
+                    // <option>. AI extraction (and older free-text captures) can
+                    // store an off-list value — e.g. industry "Enterprise Software,
+                    // CRM Platforms…" against a fixed option list — which then
+                    // rendered as blank, looking like the saved value had vanished.
+                    // Surface any off-list current value as its own option so it
+                    // stays visible and selected (and isn't silently dropped on the
+                    // next save) until the user picks a canonical option.
+                    const current = values[field.id] ?? "";
+                    const options = field.options ?? [];
+                    const hasCurrent = current !== "" && !options.includes(current);
+                    return (
+                      <select
+                        className="v3-input"
+                        aria-label={field.label}
+                        value={current}
+                        onChange={(event) => setValues((c) => ({ ...c, [field.id]: event.target.value }))}
+                      >
+                        <option value="">Select…</option>
+                        {hasCurrent ? <option value={current}>{current}</option> : null}
+                        {options.map((option) => <option key={option} value={option}>{option}</option>)}
+                      </select>
+                    );
+                  })()
                 ) : field.id === "successMetric" ? (
                   // Render the Primary success metric on a single row in the same
                   // column layout as the secondary Outcome KPIs below
