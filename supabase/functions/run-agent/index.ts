@@ -1128,6 +1128,40 @@ function collectPriorPhaseArtifacts(programData: ProgramState, targetPhaseId: st
   return lines.join("\n");
 }
 
+/**
+ * Methodology scope for the phase being reviewed: its name, objective, the
+ * artifacts it is responsible for, its declared exit criteria, and where it sits
+ * in the sequence. This is sourced entirely from the programme's own phase data
+ * (driven by the methodology registry on the client), so the reviewer judges an
+ * artifact against ITS phase's intent and never demands detail the methodology
+ * assigns to a later phase (delivery milestones, RACI, exit criteria, go-live).
+ */
+function getCurrentPhaseScope(programData: ProgramState, phaseId: string): string {
+  const phases = getProgramPhaseContext(programData);
+  const phase = phases.find((p) => p.id === phaseId);
+  const index = ATOS_PHASE_SEQUENCE.indexOf(phaseId);
+  const laterPhases = index >= 0 ? ATOS_PHASE_SEQUENCE.slice(index + 1) : [];
+  const ownArtifacts = getProgramArtifactContext(programData)
+    .filter((a) => a.phaseId === phaseId)
+    .map((a) => a.title)
+    .filter((t): t is string => typeof t === "string");
+  const name = typeof phase?.name === "string" && phase.name ? phase.name : formatPhaseName(phaseId);
+  const objective = typeof phase?.objective === "string" ? phase.objective : "";
+  const exitCriteria = Array.isArray(phase?.exitCriteria) ? (phase!.exitCriteria as string[]) : [];
+  const lines = [
+    `Phase under review: ${name} (${phaseId}) — step ${index + 1} of ${ATOS_PHASE_SEQUENCE.length} in the ATOS sequence.`,
+  ];
+  if (objective) lines.push(`Objective of this phase: ${objective}`);
+  if (ownArtifacts.length) lines.push(`Artifacts this phase is responsible for: ${ownArtifacts.join(", ")}.`);
+  if (exitCriteria.length) lines.push(`This phase's own exit criteria: ${exitCriteria.join("; ")}.`);
+  if (laterPhases.length) {
+    lines.push(
+      `Detail owned by LATER phases (out of scope here): ${laterPhases.join(", ")}. Anything those phases capture — delivery/milestone schedules, RACI and ownership matrices, phase exit criteria, UAT/go-live dates, run/operate plans — must NOT be demanded of this artifact.`,
+    );
+  }
+  return lines.join("\n");
+}
+
 function buildSpecialAgentInputContext(
   programData: ProgramState,
   meta: {
@@ -3895,13 +3929,16 @@ async function reviewArtifact(
   phaseContext: string,
   priorPhaseArtifacts: string,
   providedInputs: string,
+  phaseScope: string,
 ): Promise<{ score: number; dimensions: Record<string, number>; improvements: string[] }> {
   const systemPrompt = `You are an independent artifact quality reviewer for ATOS transformation programs.
 Score the artifact on these dimensions (0-100 each):
-- completeness: are all expected sections present with substantive content?
+- completeness: are all the sections expected FOR THIS PHASE present with substantive content?
 - specificity: does it reference actual program data (names, metrics, dates) vs generic statements?
-- actionability: does it tell the reader what to do next, concretely?
+- actionability: does it tell the reader what to do next, concretely, within this phase's remit?
 - consistency: is it consistent with the prior-phase artifacts provided?
+
+PHASE SCOPE — read this first. The "Phase scope" block below states which phase this artifact belongs to, that phase's objective, the artifacts it owns, and which detail belongs to LATER phases. ATOS programmes run in sequenced phases: early phases set direction and intent; later phases add delivery detail. Judge the artifact ONLY against its own phase's purpose. NEVER recommend adding a fact, section, milestone schedule, RACI/ownership matrix, phase exit criteria, UAT/go-live date, delivery/run plan, or any other deliverable that the scope block flags as owned by a later phase — that detail is out of scope here and such a suggestion is wrong, not helpful. If a weakness only matters for a downstream phase, omit it entirely.
 
 SOURCE OF TRUTH: The "Structured inputs already provided" and "Prior-phase artifacts" blocks below are authoritative — they are exactly what the user has already supplied or established upstream. Before writing ANY improvement, cross-check it against both blocks. NEVER recommend adding, specifying, quantifying, or clarifying a fact that already appears in them (for example, if targetEndDate is present in the inputs, do not ask for a target/end date; if a prior phase already named the sponsor or KPI, do not ask for it). Only raise inputs that are genuinely absent, empty, or too vague to act on. If a fact exists in the inputs but is simply not surfaced in the document prose, frame the suggestion as "surface <fact> (already provided) in the document", never as "add <fact>".
 
@@ -3914,6 +3951,9 @@ Never write generic advice like "add more detail" or "be more specific" — alwa
 Return ONLY valid JSON:
 { "score": 0-100, "dimensions": { "completeness": 0-100, "specificity": 0-100, "actionability": 0-100, "consistency": 0-100 }, "improvements": ["Name the executive sponsor with their title in the Sponsor input (e.g. 'Jane Doe, COO') — this lifts specificity and makes accountability unambiguous", "Quantify the cost assumption (e.g. '$2.4M based on vendor quotes and a 6-person core team') so the business case can be resourced"] }`;
   const userPrompt = `Artifact type: ${artifactLabel}
+
+Phase scope (judge the artifact only against this phase's remit; never demand detail owned by a later phase):
+${phaseScope || "Not specified"}
 
 Structured inputs already provided (field: value) — authoritative, do not request anything already here:
 ${providedInputs || "None recorded"}
@@ -7021,6 +7061,7 @@ Deno.serve(async (req) => {
             `Program: ${programRow.name || "Unknown"}, Phase: ${request.phaseId}`,
             collectPriorPhaseArtifacts(contextProgramData, request.phaseId),
             collectProvidedInputs(contextProgramData),
+            getCurrentPhaseScope(contextProgramData, request.phaseId),
           );
           nextProgramData = applyArtifactQuality(nextProgramData, reviewTarget.fieldKey, artifactReview as unknown as Record<string, unknown>, reviewTarget.confidenceFieldKey);
         }
