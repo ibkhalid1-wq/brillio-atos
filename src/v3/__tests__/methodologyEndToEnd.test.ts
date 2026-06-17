@@ -127,12 +127,13 @@ describe("ATOS sample use case — every phase completes", () => {
 });
 
 describe("ATOS sample use case — gate progression unlocks phases in order", () => {
-  it("with no gates approved, only the frontier (next) phase is reachable", () => {
+  it("with no gates approved, only the first phase is reachable; the next phase is locked until its gate is approved", () => {
     const program = buildProgram({});
     const locked = getLockedPhaseIds(program);
-    // strategy (current) and mobilise (frontier) open; everything beyond locked.
+    // Strict gating: strategy (current) open; mobilise stays locked until the
+    // strategy gate is approved, and everything beyond it is locked too.
     expect(locked.has("strategy")).toBe(false);
-    expect(locked.has("mobilise")).toBe(false);
+    expect(locked.has("mobilise")).toBe(true);
     expect(locked.has("discover")).toBe(true);
     expect(locked.has("valuerealize")).toBe(true);
   });

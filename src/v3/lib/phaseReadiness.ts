@@ -457,16 +457,16 @@ export function getLockedPhaseIds(program: ProgramSummary): Set<string> {
   const locked = new Set<string>();
   const phases = program.phases || [];
 
-  // Progression model: every prior gate must be approved to reach a phase, EXCEPT
-  // the immediate next phase (the "frontier"), which stays navigable so the team
-  // can step forward and start work without first approving the current gate.
-  // Only phases beyond the frontier are locked — this blocks skipping ahead while
-  // keeping normal forward navigation open.
-  for (let index = 1; index < phases.length; index += 1) {
-    const previousPhase = phases[index - 1];
-    const previousGate = program.gateReviews?.[previousPhase.id];
-    const previousApproved = previousGate?.status === "approved";
-    if (!previousApproved) {
+  // Strict sequential gating: a phase is reachable only once its immediate
+  // predecessor's gate has been approved (locked). The first phase is always
+  // open; the moment we reach a phase whose own gate is not yet approved, that
+  // phase stays the active frontier but EVERY phase after it is locked — you
+  // cannot enter Mobilise until Strategy is locked, Discover until Mobilise is
+  // locked, and so on. This stops a phase being started before the prior gate
+  // clears, rather than letting the next phase open speculatively.
+  for (let index = 0; index < phases.length - 1; index += 1) {
+    const gate = program.gateReviews?.[phases[index].id];
+    if (gate?.status !== "approved") {
       for (let remaining = index + 1; remaining < phases.length; remaining += 1) {
         locked.add(phases[remaining].id);
       }
