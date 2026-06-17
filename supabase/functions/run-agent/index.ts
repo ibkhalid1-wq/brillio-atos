@@ -4226,6 +4226,35 @@ function plannerStrArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map((v) => plannerStr(v)).filter(Boolean) : [];
 }
 
+const PLANNER_GRID_COLUMN_TYPES = new Set(["text", "number", "select"]);
+/**
+ * Validate the planner's `columns` for a `grid` field into well-formed columns.
+ * Mirrors the client sanitizeGridColumns: each column needs a usable `key`;
+ * duplicates collapse to the first. A grid with no valid column here is unusable
+ * and the caller demotes it to a textarea so imported values are never dropped.
+ */
+function sanitizePlannerGridColumns(raw: unknown): Record<string, JsonValue>[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const out: Record<string, JsonValue>[] = [];
+  for (const c of raw) {
+    if (!isRecord(c)) continue;
+    const key = plannerStr(c.key);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    const col: Record<string, JsonValue> = { key, label: plannerStr(c.label) || key };
+    const type = plannerStr(c.type);
+    if (PLANNER_GRID_COLUMN_TYPES.has(type)) col.type = type;
+    const options = plannerStrArray(c.options);
+    if (options.length) col.options = options;
+    if (plannerStr(c.placeholder)) col.placeholder = plannerStr(c.placeholder);
+    const width = Number(c.width);
+    if (Number.isFinite(width) && width > 0) col.width = Math.floor(width);
+    out.push(col);
+  }
+  return out;
+}
+
 /**
  * Write the Phase Transition Planner's proposal straight into the program's
  * dynamicSchema for `phaseId`, replacing any prior entries for that phase. The
@@ -4289,6 +4318,20 @@ function applyPhaseInputPlannerResultToProgramData(
     if (f.needsConfirmation === true) field.needsConfirmation = true;
     if (plannerStr(f.validationRule)) field.validationRule = plannerStr(f.validationRule);
     if (plannerStr(f.example)) field.example = plannerStr(f.example);
+    // A grid needs columns to render its rows. Carry the planner's columns
+    // through when valid; a column-less grid is unusable, so demote it to a
+    // textarea (matching the client guardrail) rather than persist empty rows.
+    if (type === "grid") {
+      const columns = sanitizePlannerGridColumns(f.columns);
+      if (columns.length) {
+        field.columns = columns as JsonValue;
+        const minRows = Number(f.minRows);
+        if (Number.isFinite(minRows) && minRows > 0) field.minRows = Math.floor(minRows);
+      } else {
+        field.type = "textarea";
+        guardrailWarnings.push(`Demoted column-less grid "${label}" to a textarea.`);
+      }
+    }
     inputFields.push(field);
   }
 
@@ -5639,6 +5682,11 @@ Rules:
   needsConfirmation:true rather than asking the user to type it from scratch.
 - Propose enough inputs + artifacts to cover every exit criterion (user message), no filler.
 - Field "type" MUST be one of: text, textarea, number, date, select, grid.
+- Use "grid" for a repeating list of structured rows (e.g. team roster, RACI,
+  workstream owners). A grid field MUST include a "columns" array — each column is
+  { "key": "camelCaseKey", "label": "Header", "type": "text|number|select",
+  "options": ["..."] (select only) }. A grid with no columns is invalid; if you
+  cannot name its columns, use "textarea" instead.
 - Use stable camelCase field ids and kebab-case artifact ids.
 - Each artifact's "requiredInputs" lists the field ids that feed it; every input field
   must feed at least one artifact; every exit criterion must be covered by an artifact.
@@ -5651,7 +5699,11 @@ Return ONLY valid JSON:
     { "fieldId": "camelCaseId", "label": "Atomic fact label", "type": "text", "required": true,
       "reasonNeeded": "why this fact is needed", "usedByArtifacts": ["kebab-id"],
       "prefillValue": "inferred value or omit", "prefillSource": "where inferred from or omit",
-      "confidence": "high|medium|low", "needsConfirmation": false, "example": "optional", "hint": "optional" }
+      "confidence": "high|medium|low", "needsConfirmation": false, "example": "optional", "hint": "optional" },
+    { "fieldId": "coreTeamRoster", "label": "Named individuals per core team role", "type": "grid",
+      "required": true, "usedByArtifacts": ["raci-matrix"],
+      "columns": [ { "key": "role", "label": "Role", "type": "text" },
+                   { "key": "name", "label": "Name", "type": "text" } ] }
   ],
   "artifactsToGenerate": [
     { "artifactId": "kebab-id", "artifactName": "Artifact Name",
