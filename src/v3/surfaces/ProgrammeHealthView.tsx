@@ -619,12 +619,14 @@ function DecisionsTab({
 // ─── Health tab ───────────────────────────────────────────────────────────────
 
 function HealthTab({
+  program,
   phases,
   rawData,
   agentActivity,
   onRunAgent,
   anyAgentRunning,
 }: {
+  program: ProgramSummary | null;
   phases: Array<{ id: string; displayName: string; pct: number; status: string }>;
   rawData: Record<string, unknown>;
   agentActivity: AgentActivityItem[];
@@ -1143,6 +1145,7 @@ export default function ProgrammeHealthView({
           )}
           {rightTab === "health" && (
             <HealthTab
+              program={program}
               phases={phases}
               rawData={inner}
               agentActivity={agentActivity}
