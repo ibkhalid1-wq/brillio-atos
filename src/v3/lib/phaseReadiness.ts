@@ -370,12 +370,13 @@ export function computePhaseReadiness(
   }
 
   // ── Compute headline score and gate-lock eligibility ──────────────────────────
-  // Headline score is always the average of input quality and artifact quality —
-  // the two things a PM controls. Gate locking is a stricter, separate bar:
-  // artifacts fully present (100%) AND artifact quality above 90%, with all hard
-  // gate conditions (exit criteria, critical assumptions, cross-phase dependency)
-  // satisfied. The headline score is informational; it does not gate the lock.
-  const score = Math.min(100, Math.max(0, Math.round((inputScore + artifactScore) / 2)));
+  // Headline score is the average of artifact completeness (the share of required
+  // documents APPROVED) and artifact quality — the two signals that move the phase
+  // toward its gate. Gate locking is a stricter, separate bar: artifacts fully
+  // present (100%) AND artifact quality above 90%, with all hard gate conditions
+  // (exit criteria, critical assumptions, cross-phase dependency) satisfied. The
+  // headline score is informational; it does not gate the lock.
+  const score = Math.min(100, Math.max(0, Math.round((artifactsComplete + artifactScore) / 2)));
   const canApproveGate =
     artifactsComplete === 100 &&
     artifactScore > 90 &&

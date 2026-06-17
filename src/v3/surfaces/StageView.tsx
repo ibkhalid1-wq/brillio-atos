@@ -947,9 +947,9 @@ export default function StageView({
             // "—" treatment of input quality / gate score so a stale review score
             // never shows next to a 0%/all-missing artifact column.
             { label: "Artifact quality", value: hasProducedArtifacts ? `${readiness.artifactScore}%` : "—", tone: hasProducedArtifacts ? pctTone(readiness.artifactScore) : "", anchor: "phase-artifacts-anchor" },
-            // Gate score = average of input quality and artifact quality (the two
-            // signals the PM controls). Distinct from the lock condition, which is
-            // the stricter "artifacts 100% complete and quality > 90%".
+            // Gate score = average of artifacts complete and artifact quality (the
+            // two signals that move the phase toward its gate). Distinct from the
+            // lock condition, the stricter "artifacts 100% complete and quality > 90%".
             { label: "Gate score", value: `${readiness.score}%`, tone: pctTone(readiness.score), onClick: () => setExitCriteriaOpen(true) },
           ];
           // Live work counts — distinct from the pipeline, shown as a separated group.
