@@ -14,7 +14,7 @@ import { EmptyState } from "@/v3/components/ui/EmptyState";
 import { ExpandableSection } from "@/v3/components/ui/ExpandableSection";
 import { RelativeTime } from "@/v3/components/ui/RelativeTime";
 import { StatusBadge } from "@/v3/components/ui/StatusBadge";
-import { computePhaseReadiness } from "@/v3/lib/phaseReadiness";
+import { computePhaseReadiness, type ReadinessAction } from "@/v3/lib/phaseReadiness";
 import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
 import { resolveArtifactReview, resolveArtifactQualityScore } from "@/v3/lib/artifactReview";
 import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
@@ -492,6 +492,14 @@ export default function StageView({
   } | null>(null);
   const [applyingImprovements, setApplyingImprovements] = React.useState(false);
   const [applyError, setApplyError] = React.useState<string | null>(null);
+  // Tracks a user-initiated "Re-check" so we can surface a result prompt the
+  // moment it finishes — but only for a manual click, never the automatic
+  // re-checks ATOS fires after each document generation.
+  const gateRecheckPendingRef = React.useRef<string | null>(null);
+  const prevGateRunningRef = React.useRef(false);
+  const [gateRecheckPrompt, setGateRecheckPrompt] = React.useState<
+    null | { phaseId: string; missing: string[]; actions: ReadinessAction[] }
+  >(null);
 
   // Apply the reviewer's suggestions straight into the grounding inputs: run an AI
   // enrichment pass over each textual input that feeds this artifact, directed by
@@ -867,6 +875,25 @@ export default function StageView({
   ), [phaseInputs]);
   const gateApproved = gateReviewStatus === "approved";
 
+  // When a user-initiated gate re-check finishes, tell them the result. If the
+  // phase still can't be closed, surface the blocking reasons + resolve actions
+  // so the re-check never fails silently. Only fires for the manual click we
+  // flagged in gateRecheckPendingRef — ATOS's automatic re-checks stay quiet.
+  useEffect(() => {
+    const wasRunning = prevGateRunningRef.current;
+    prevGateRunningRef.current = isGateRunning;
+    if (!wasRunning || isGateRunning) return;
+    const pendingPhaseId = gateRecheckPendingRef.current;
+    if (!pendingPhaseId || pendingPhaseId !== activePhase?.id) return;
+    gateRecheckPendingRef.current = null;
+    if (gateApproved || (readiness && readiness.canApproveGate)) return;
+    setGateRecheckPrompt({
+      phaseId: pendingPhaseId,
+      missing: readiness?.missing ?? [],
+      actions: readiness?.recommendedActions ?? [],
+    });
+  }, [isGateRunning, gateApproved, readiness, activePhase?.id]);
+
   if (!program || !activePhase) {
     return (
       <div className="v3-section">
@@ -1083,7 +1110,10 @@ export default function StageView({
                               className="v3-button ghost v3-button-inline-xs v3-phase-gate-recheck"
                               disabled={isGateRunning}
                               title="ATOS re-checks gate readiness automatically after each document is generated — use this only to force a manual refresh."
-                              onClick={() => triggers.triggerGateReview(activePhase.id)}
+                              onClick={() => {
+                                gateRecheckPendingRef.current = activePhase.id;
+                                triggers.triggerGateReview(activePhase.id);
+                              }}
                             >
                               {isGateRunning ? "Checking…" : "Re-check"}
                             </button>
@@ -1594,6 +1624,77 @@ export default function StageView({
             />
           </div>
         </div>
+      ) : null}
+
+      {gateRecheckPrompt ? (
+        <StageModal title="Gate re-check — phase not ready to close" onClose={() => setGateRecheckPrompt(null)}>
+          <p style={{ margin: "0 0 16px", fontSize: 13.5, lineHeight: 1.5, color: "var(--v3-text-secondary)" }}>
+            ATOS re-checked this gate and it still can&apos;t be closed. Resolve the items below, then re-check again.
+          </p>
+          {gateRecheckPrompt.missing.length ? (
+            <div style={{ marginBottom: gateRecheckPrompt.actions.length ? 18 : 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, color: "var(--v3-text-muted)", marginBottom: 8 }}>
+                Blocking reasons
+              </div>
+              <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 6 }}>
+                {gateRecheckPrompt.missing.map((reason, index) => (
+                  <li key={index} style={{ fontSize: 13, lineHeight: 1.45, color: "var(--v3-text-primary)" }}>{reason}</li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <div style={{ fontSize: 13, color: "var(--v3-text-secondary)", marginBottom: gateRecheckPrompt.actions.length ? 18 : 0 }}>
+              Readiness is below the gate threshold. Strengthen the phase artifacts and inputs, then re-check.
+            </div>
+          )}
+          {gateRecheckPrompt.actions.length ? (
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, color: "var(--v3-text-muted)", marginBottom: 8 }}>
+                Recommended actions
+              </div>
+              <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 10 }}>
+                {gateRecheckPrompt.actions.slice(0, 4).map((action) => (
+                  <li key={action.id} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                    <span className={`v3-chip v3-chip-tight ${action.priority === "critical" ? "red" : action.priority === "high" ? "amber" : "muted"}`}>{action.priority}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--v3-text-primary)" }}>{action.label}</div>
+                      {action.description ? (
+                        <div style={{ fontSize: 12, lineHeight: 1.45, color: "var(--v3-text-secondary)", marginTop: 2 }}>{action.description}</div>
+                      ) : null}
+                      {action.agentId ? (
+                        <button
+                          type="button"
+                          className="v3-button ghost v3-button-inline-xs"
+                          style={{ marginTop: 6 }}
+                          disabled={agentButtonDisabled(action.agentId)}
+                          onClick={() => { onRunAgent(action.agentId!); setGateRecheckPrompt(null); }}
+                        >
+                          {isAgentRunning(action.agentId) ? "Generating…" : "Run agent"}
+                        </button>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          <div style={{ display: "flex", gap: 8, marginTop: 22, justifyContent: "flex-end" }}>
+            <button
+              type="button"
+              className="v3-button ghost v3-button-inline-sm"
+              onClick={() => { setGateRecheckPrompt(null); setExitCriteriaOpen(true); }}
+            >
+              View exit criteria
+            </button>
+            <button
+              type="button"
+              className="v3-button primary v3-button-inline-sm"
+              onClick={() => setGateRecheckPrompt(null)}
+            >
+              Got it
+            </button>
+          </div>
+        </StageModal>
       ) : null}
 
       {previewArtifact ? (
