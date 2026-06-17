@@ -15,6 +15,7 @@
  * Pure, deterministic, unit-testable. No AI, no backend.
  */
 import { derivePhaseFlowEdges } from "@/v3/lib/phaseFlowEdges";
+import { type DynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 
 /** A phase's artifact bucket: artifactId → entry (we only read `status`). */
 export type PhaseArtifactBucket = Record<string, unknown> | undefined;
@@ -36,9 +37,13 @@ function approvedArtifactIds(bucket: PhaseArtifactBucket): Set<string> {
 }
 
 /** Artifact ids (within the phase) that the given input fields flow into. */
-export function artifactsForInputFields(phaseId: string, fieldIds: string[]): Set<string> {
+export function artifactsForInputFields(
+  phaseId: string,
+  fieldIds: string[],
+  store?: DynamicSchemaStore,
+): Set<string> {
   const targets = new Set<string>();
-  for (const edge of derivePhaseFlowEdges(phaseId, fieldIds)) targets.add(edge.to);
+  for (const edge of derivePhaseFlowEdges(phaseId, fieldIds, store)) targets.add(edge.to);
   return targets;
 }
 
@@ -66,11 +71,12 @@ export function approvedArtifactsToStale(
   phaseId: string,
   changedFieldIds: string[],
   bucket: PhaseArtifactBucket,
+  store?: DynamicSchemaStore,
 ): string[] {
   if (!changedFieldIds.length) return [];
   const approved = approvedArtifactIds(bucket);
   if (!approved.size) return [];
-  const targets = artifactsForInputFields(phaseId, changedFieldIds);
+  const targets = artifactsForInputFields(phaseId, changedFieldIds, store);
   return [...targets].filter((artifactId) => approved.has(artifactId));
 }
 
@@ -84,12 +90,13 @@ export function fieldsFeedingApprovedArtifacts(
   phaseId: string,
   fieldIds: string[],
   bucket: PhaseArtifactBucket,
+  store?: DynamicSchemaStore,
 ): Set<string> {
   const blocked = new Set<string>();
   const approved = approvedArtifactIds(bucket);
   if (!approved.size) return blocked;
   for (const fieldId of fieldIds) {
-    for (const edge of derivePhaseFlowEdges(phaseId, [fieldId])) {
+    for (const edge of derivePhaseFlowEdges(phaseId, [fieldId], store)) {
       if (approved.has(edge.to)) {
         blocked.add(fieldId);
         break;

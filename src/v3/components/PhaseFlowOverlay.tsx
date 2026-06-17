@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import type { ProgramSummary } from "@/new/types";
 import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
 import { derivePhaseFlowEdges } from "@/v3/lib/phaseFlowEdges";
+import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { assessField } from "@/v3/components/PhaseInputsPanel";
 
 /**
@@ -60,7 +61,8 @@ export default function PhaseFlowOverlay({ containerRef, program, phaseId, enabl
   // Every target is an artifact chip that always renders, so each anchor
   // resolves. `filled` reflects whether the source field has a value.
   const edges = useMemo(() => {
-    const schema = getPhaseInputSchema(phaseId);
+    const store = getDynamicSchemaStore(program.rawData);
+    const schema = getPhaseInputSchema(phaseId, store);
     const persisted = readPhaseInputs(program, phaseId);
     const typeOf = new Map(schema.fields.map((field) => [field.id, field.type]));
     const toneOf = (id: string): FieldTone => {
@@ -68,7 +70,7 @@ export default function PhaseFlowOverlay({ containerRef, program, phaseId, enabl
       const str = typeof value === "string" ? value : value != null ? String(value) : undefined;
       return assessField(str, typeOf.get(id) ?? "text").tone;
     };
-    return derivePhaseFlowEdges(phaseId, schema.fields.map((field) => field.id))
+    return derivePhaseFlowEdges(phaseId, schema.fields.map((field) => field.id), store)
       .map((edge) => ({ ...edge, tone: toneOf(edge.from) }));
   }, [program, phaseId]);
 

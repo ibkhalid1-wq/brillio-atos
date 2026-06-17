@@ -13,6 +13,7 @@
  */
 import { getPhaseArtifactIds } from "@/v3/lib/phaseArtifacts";
 import { ATOS_STANDARD } from "@/v3/lib/methodology";
+import { dynamicFieldArtifacts, type DynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 
 export interface FlowEdge {
   from: string;
@@ -100,14 +101,15 @@ const PHASE_FIELD_ARTIFACTS: Record<string, Record<string, string[]>> = {
  * phase, de-duplicated and in a stable order (Narrative first, then declared
  * targets).
  */
-export function derivePhaseFlowEdges(phaseId: string, fieldIds: string[]): FlowEdge[] {
+export function derivePhaseFlowEdges(phaseId: string, fieldIds: string[], store?: DynamicSchemaStore): FlowEdge[] {
   const map = PHASE_FIELD_ARTIFACTS[phaseId] ?? {};
   const methodologyMap = methodologyFieldArtifacts(phaseId);
-  const valid = new Set(getPhaseArtifactIds(phaseId));
+  const dynamicMap = dynamicFieldArtifacts(phaseId, store);
+  const valid = new Set(getPhaseArtifactIds(phaseId, store));
   const edges: FlowEdge[] = [];
   for (const fieldId of fieldIds) {
     const seen = new Set<string>();
-    const targets = ["narrative", ...(map[fieldId] ?? []), ...(methodologyMap[fieldId] ?? [])];
+    const targets = ["narrative", ...(map[fieldId] ?? []), ...(methodologyMap[fieldId] ?? []), ...(dynamicMap[fieldId] ?? [])];
     for (const to of targets) {
       if (seen.has(to) || !valid.has(to)) continue;
       seen.add(to);

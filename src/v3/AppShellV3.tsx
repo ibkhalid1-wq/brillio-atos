@@ -53,6 +53,7 @@ import { reportError } from "@/lib/errorReporter";
 import { sanitizeMarkdown } from "@/lib/sanitize";
 import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
 import { changedInputFields, approvedArtifactsToStale, fieldsFeedingApprovedArtifacts } from "@/v3/lib/artifactStaleness";
+import { getDynamicSchemaStore, sanitizePlannerProposal, applyDynamicProposal } from "@/v3/lib/dynamicSchema";
 import { useRelativeTimeTick } from "@/lib/useRelativeTimeTick";
 import { useAgentCascadeToasts } from "@/v3/hooks/useAgentCascadeToasts";
 import { useCriticalEventAlerts } from "@/v3/hooks/useCriticalEventAlerts";
@@ -2276,8 +2277,48 @@ export default function AppShellV3() {
     } catch (err) {
       const message = err instanceof Error ? err.message : "Gate approval failed. Please try again.";
       pushV3Toast(message, { tone: "error", duration: 4000 });
+      return;
     }
-  }, [activeProgram, approveGate, refreshPrograms]);
+
+    // Dynamic schema: once a phase clears its gate, ask the planner agent to read
+    // the just-approved phase's artifacts and propose tailored additional input
+    // fields/artifacts for the *next* phase. Best-effort and fully guarded — if
+    // the agent is unavailable the gate approval still stands. The proposal is
+    // sanitised before it is persisted under rawData.dynamicSchema, where every
+    // resolver merges it on top of the static methodology for this programme.
+    const phaseOrder = activeProgram.phases?.map((p) => p.id) ?? [];
+    const nextPhaseId = phaseOrder[phaseOrder.indexOf(phaseId) + 1];
+    if (supabase && nextPhaseId) {
+      try {
+        const response = await supabase.functions.invoke("run-agent", {
+          body: {
+            programId: activeProgram.id,
+            agentId: "phase-input-planner",
+            phaseId: nextPhaseId,
+            triggeredBy: "trigger",
+          },
+        });
+        const proposal = sanitizePlannerProposal((response.data as { output?: unknown } | undefined)?.output);
+        if (proposal) {
+          const cloned = cloneRawProgram(activeProgram);
+          const store = getDynamicSchemaStore(cloned.inner);
+          const nextStore = applyDynamicProposal(store, nextPhaseId, proposal);
+          const payload = cloned.commit({ ...cloned.inner, dynamicSchema: nextStore });
+          await updateProgramData(activeProgram.id, payload, activeProgram.updatedAt);
+          await refreshPrograms();
+          const added = proposal.inputFields.length + proposal.artifacts.length;
+          if (added) {
+            pushV3Toast(
+              `Planner tailored ${nextPhaseId}: ${proposal.inputFields.length} input${proposal.inputFields.length === 1 ? "" : "s"} and ${proposal.artifacts.length} artifact${proposal.artifacts.length === 1 ? "" : "s"} proposed.`,
+              { tone: "info", duration: 5000 },
+            );
+          }
+        }
+      } catch {
+        // Planner unavailable (no auth / agent not deployed) — gate approval stands.
+      }
+    }
+  }, [activeProgram, approveGate, refreshPrograms, updateProgramData]);
 
   const handleReopenGate = useCallback(async (phaseId: string) => {
     setGateReopenPhase(phaseId);

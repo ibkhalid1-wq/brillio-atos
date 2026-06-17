@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import type { ProgramSummary, Workstream } from "@/new/types";
 import { getPhaseInputSchema, type GridColumn } from "@/v3/lib/phaseInputSchema";
+import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { availableModes, FIELD_ASSIST_MODE_LABEL, type FieldAssistMode } from "@/v3/lib/fieldAssist";
 import { prioritizePhaseFields } from "@/v3/lib/phaseInputPriority";
 import StructuredGrid, { type GridRow, parseRows, serializeRows, filledRowCount } from "@/v3/components/StructuredGrid";
@@ -162,7 +163,10 @@ function parseKpiActuals(raw: unknown): Record<string, string> {
 }
 
 export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDocument, onAssistField, locked = false }: PhaseInputsPanelProps) {
-  const schema = getPhaseInputSchema(phaseId);
+  // Merge any ai-derived dynamic fields for this phase on top of the static
+  // methodology schema, so planner-proposed inputs render in this panel.
+  const dynamicStore = useMemo(() => getDynamicSchemaStore(program.rawData), [program.rawData]);
+  const schema = useMemo(() => getPhaseInputSchema(phaseId, dynamicStore), [phaseId, dynamicStore]);
   // useMemo prevents a new object reference on every render, which would cause an
   // infinite loop: new existingInputs reference → useEffect fires → setValues → re-render → repeat.
   const existingInputs = useMemo(() => {
@@ -511,6 +515,15 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
                     <div className="v3-field-label">
                       {field.label}
                       {field.required ? <span style={{ color: "var(--v3-accent)", marginLeft: 3 }}>*</span> : null}
+                      {field.source === "ai-derived" ? (
+                        <span
+                          className="v3-chip"
+                          style={{ fontSize: 9, marginLeft: 6, verticalAlign: "middle" }}
+                          title="Proposed by the planner agent from prior-phase artifacts"
+                        >
+                          ✦ AI
+                        </span>
+                      ) : null}
                     </div>
                     {field.hint ? (
                       <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 2 }}>{field.hint}</div>

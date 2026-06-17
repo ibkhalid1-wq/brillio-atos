@@ -101,6 +101,7 @@ const VALID_AGENT_IDS = new Set([
   "deck-section",
   "narrative-refine",
   "board-pack",
+  "phase-input-planner",
   // Formal-artifact agents (kept in lockstep with FORMAL_ARTIFACT_AGENTS below).
   "charter",
   "business-case",
@@ -517,6 +518,7 @@ function isSpecialProgramAgent(agentId: string, phaseId: string): boolean {
     || agentId === "deck-section"
     || agentId === "narrative-refine"
     || agentId === "board-pack"
+    || agentId === "phase-input-planner"
     || FORMAL_ARTIFACT_AGENTS[agentId] !== undefined
     || isProgramLevelAdoptionAgent(agentId, phaseId);
 }
@@ -5227,6 +5229,41 @@ Return ONLY valid JSON:
     };
   }
 
+  if (request.agentId === "phase-input-planner") {
+    return {
+      system: `You are the ATOS Phase Input Planner.
+A prior phase has just cleared its stage gate. Read its approved artifacts and the
+programme's objective/industry, then propose ADDITIONAL input fields and artifacts
+that the NEXT phase ("${request.phaseId}") should capture for THIS specific programme —
+beyond the standard methodology set. Only propose what is genuinely warranted by this
+programme's context (e.g. an agentic-CRM build may warrant a "Model routing policy"
+input on Design that a generic programme would not). Propose nothing generic.
+
+Rules:
+- Propose 0–4 input fields and 0–2 artifacts. Fewer, high-signal items beat many.
+- Field "type" MUST be one of: text, textarea, number, date, select, grid.
+- Use stable camelCase field ids and kebab-case artifact ids; do not collide with
+  obvious standard methodology ids.
+- "artifactInputFlow" maps each proposed artifact id to the proposed field ids that
+  feed it (only reference ids you proposed here).
+- If nothing programme-specific is warranted, return empty arrays.
+
+Return ONLY valid JSON:
+{
+  "inputFields": [
+    { "id": "camelCaseId", "label": "Human label", "type": "textarea", "required": false, "placeholder": "optional", "hint": "optional" }
+  ],
+  "artifacts": [
+    { "id": "kebab-id", "label": "Artifact Name", "description": "one sentence" }
+  ],
+  "artifactInputFlow": { "kebab-id": ["camelCaseId"] },
+  "rationale": "one sentence on why these are warranted for this programme",
+  "confidence": 0.0
+}`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
   if (request.agentId === "dependency-check") {
     return {
       system: `You are the ATOS Cross-Phase Dependency Checker.
@@ -6583,6 +6620,7 @@ Deno.serve(async (req) => {
         "benefit-forecast",
         "artifact-staleness-check",
         "meeting-notes-extractor",
+        "phase-input-planner",
       ].includes(request.agentId)
         || FORMAL_ARTIFACT_AGENTS[request.agentId] !== undefined;
       const autonomy = skipAutonomyReview

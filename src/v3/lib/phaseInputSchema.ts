@@ -1,4 +1,5 @@
 import { ATOS_STANDARD, type PhaseInputField } from "@/v3/lib/methodology";
+import { mergeDynamicInputFields, type DynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 
 // Field/column types are owned by the methodology (single source of truth);
 // re-exported here so existing imports from this module keep working.
@@ -110,8 +111,14 @@ export const PHASE_INPUT_SCHEMAS: Record<string, PhaseInputSchema> = {
   },
 };
 
-export function getPhaseInputSchema(phaseId: string): PhaseInputSchema {
-  return PHASE_INPUT_SCHEMAS[phaseId] ?? {
+/**
+ * Resolve a phase's input schema. When a programme's `store` is supplied, any
+ * ai-derived dynamic fields for the phase are merged on top of the static
+ * methodology fields (static wins on id collision). Omitting `store` yields the
+ * static schema unchanged, so existing pure call sites and tests are unaffected.
+ */
+export function getPhaseInputSchema(phaseId: string, store?: DynamicSchemaStore): PhaseInputSchema {
+  const base = PHASE_INPUT_SCHEMAS[phaseId] ?? {
     phaseId,
     title: "Phase inputs",
     description: "Provide any context ATOS needs to generate artifacts for this phase.",
@@ -120,4 +127,6 @@ export function getPhaseInputSchema(phaseId: string): PhaseInputSchema {
       { id: "objectives", label: "Phase objectives", type: "textarea", placeholder: "What must be achieved before this phase can close?", required: true },
     ],
   };
+  const fields = mergeDynamicInputFields(base.fields, phaseId, store);
+  return fields === base.fields ? base : { ...base, fields };
 }

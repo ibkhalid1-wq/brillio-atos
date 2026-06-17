@@ -16,6 +16,7 @@ import { StatusBadge } from "@/v3/components/ui/StatusBadge";
 import { computePhaseReadiness } from "@/v3/lib/phaseReadiness";
 import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
 import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
+import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { runPreFlight } from "@/v3/lib/phaseInputPreFlight";
 import { derivePhaseInputQuality } from "@/v3/lib/phaseInputQuality";
 import { getFormalArtifactContent } from "@/v3/lib/formalArtifacts";
@@ -446,16 +447,28 @@ export default function StageView({
     return { byKey, present, required };
   }, [program, activePhase]);
 
+  // Programme-specific dynamic schema (ai-derived fields/artifacts/flow proposed
+  // by the planner after a prior gate cleared). Merged on top of the static
+  // methodology by every resolver below so dynamic entries render everywhere.
+  const dynamicStore = useMemo(() => {
+    const raw = typeof program?.rawData === "object" && program.rawData !== null
+      ? ("data" in program.rawData && typeof program.rawData.data === "object" && program.rawData.data !== null
+        ? program.rawData.data
+        : program.rawData)
+      : null;
+    return getDynamicSchemaStore(raw);
+  }, [program]);
+
   // Labels of required artifacts not yet produced — drives the artifacts-card summary.
   const missingRequiredArtifacts = useMemo(() => {
     if (!activePhase) return [] as string[];
-    return getPhaseArtifactDefs(activePhase.id)
+    return getPhaseArtifactDefs(activePhase.id, dynamicStore)
       .filter((def) => {
         const node = phaseArtifacts.byKey.get(def.id);
         return node && !node.present;
       })
       .map((def) => def.label);
-  }, [activePhase, phaseArtifacts]);
+  }, [activePhase, phaseArtifacts, dynamicStore]);
 
   const gateReview = activePhase ? program?.gateReviews?.[activePhase.id] || null : null;
   const source = typeof program?.rawData === "object" && program.rawData !== null
@@ -981,7 +994,7 @@ export default function StageView({
             </button>
           ) : null}
 
-          {getPhaseArtifactDefs(activePhase.id)
+          {getPhaseArtifactDefs(activePhase.id, dynamicStore)
             .filter((def) => def.id !== "narrative")
             .map((def) => {
               const node = phaseArtifacts.byKey.get(def.id);

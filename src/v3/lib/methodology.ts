@@ -30,6 +30,13 @@ export interface PhaseInputField {
   columns?: GridColumn[];
   /** Soft-required threshold: warn when a grid has fewer than this many rows. */
   minRows?: number;
+  /**
+   * Provenance. Omitted (or "methodology") for the static registry fields;
+   * "ai-derived" for fields a planner agent proposed for a specific programme
+   * after a prior phase cleared its gate. Lets the UI mark them and lets the
+   * resolver keep static fields authoritative when ids collide.
+   */
+  source?: "methodology" | "ai-derived";
 }
 
 // Industry options surfaced on the Strategy phase. Lives in the methodology so
