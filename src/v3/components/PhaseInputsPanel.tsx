@@ -205,7 +205,17 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
     const phaseInputs = typeof source.phaseInputs === "object" && source.phaseInputs !== null
       ? source.phaseInputs as Record<string, Record<string, string>>
       : {};
-    return phaseInputs[phaseId] ?? {};
+    const bucket = phaseInputs[phaseId] ?? {};
+    // An empty grid serializes to "[]". When a field is no longer a grid (e.g. a
+    // column-less grid coerced to a textarea), that orphaned "[]" would render as
+    // literal text — normalize the canonical empty-array string to "". Safe for
+    // real grids too: parseRows treats "" and "[]" identically. Copy only when a
+    // rewrite is needed so unchanged buckets keep their reference (resync guard).
+    let normalized: Record<string, string> | null = null;
+    for (const key in bucket) {
+      if (bucket[key] === "[]") (normalized ??= { ...bucket })[key] = "";
+    }
+    return normalized ?? bucket;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [program.rawData, phaseId]);
 
