@@ -65,7 +65,7 @@ describe("getArtifactInputFields", () => {
 
   it("merges both sources for business-case", () => {
     expect(new Set(getArtifactInputFields("strategy", "business-case"))).toEqual(
-      new Set(["industry", "businessObjective", "constraints"]),
+      new Set(["industry", "costAssumption", "businessObjective", "constraints"]),
     );
   });
 

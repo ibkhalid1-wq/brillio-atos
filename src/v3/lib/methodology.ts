@@ -122,13 +122,14 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         { id: "industry", label: "Industry", type: "select", options: INDUSTRY_OPTIONS, required: true },
         { id: "startDate", label: "Programme start date", type: "date", required: true },
         { id: "targetEndDate", label: "Target end date", type: "date", required: true },
+        { id: "costAssumption", label: "Cost assumption", type: "textarea", placeholder: "Estimated programme cost and the basis for it", required: true, hint: "e.g. ~$2.4M based on vendor quotes and a 6-person core team" },
         { id: "constraints", label: "Key constraints", type: "textarea", placeholder: "Budget, timeline, regulatory, or technical constraints", required: true, hint: "e.g. Must go live before Q4 financial year end" },
         { id: "successMetric", label: "Primary success metric", type: "text", placeholder: "KPI name, e.g. Cost to serve", required: true },
       ],
       artifactInputFlow: {
         "strategic-roadmap": ["businessObjective", "startDate", "targetEndDate"],
         "charter": ["industry", "startDate", "targetEndDate"],
-        "business-case": ["industry"],
+        "business-case": ["industry", "costAssumption"],
       },
     },
     {

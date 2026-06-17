@@ -48,7 +48,7 @@ describe("derivePhaseMethodologyCompleteness", () => {
     expect(kinds).toContain("exit-criterion");
 
     const inputGroup = result.groups.find((g) => g.kind === "input")!;
-    expect(inputGroup.total).toBe(7);          // businessObjective, sponsor, industry, startDate, targetEndDate, constraints, successMetric
+    expect(inputGroup.total).toBe(8);          // businessObjective, sponsor, industry, startDate, targetEndDate, costAssumption, constraints, successMetric
     expect(inputGroup.present).toBe(1);          // only businessObjective filled
 
     const exitGroup = result.groups.find((g) => g.kind === "exit-criterion")!;

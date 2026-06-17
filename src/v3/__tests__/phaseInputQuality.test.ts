@@ -26,6 +26,7 @@ describe("derivePhaseInputQuality", () => {
       industry: "Financial services",
       startDate: "2026-01-01",
       targetEndDate: "2027-06-30",
+      costAssumption: "Approximately $2.4M based on vendor quotes and a six-person core team over eighteen months.",
       constraints: "Must go live before the Q4 financial year end with a fixed budget envelope.",
       successMetric: "Cost to serve",
       kpis: JSON.stringify([{ id: "k1", name: "Cost to serve", baseline: "100", target: "80", unit: "$" }]),
