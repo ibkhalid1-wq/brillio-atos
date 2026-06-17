@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { ProgramSummary, Workstream } from "@/new/types";
 import { getPhaseInputSchema, type GridColumn } from "@/v3/lib/phaseInputSchema";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
@@ -25,10 +25,18 @@ export interface FieldAssistRequest {
 interface PhaseInputsPanelProps {
   program: ProgramSummary;
   phaseId: string;
-  onSave: (phaseId: string, inputs: Record<string, string>) => Promise<void>;
+  onSave: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean }) => Promise<void>;
   onUploadDocument: () => void;
   /** Optional AI assist for a single field; resolves with the new field text. */
   onAssistField?: (phaseId: string, request: FieldAssistRequest) => Promise<string>;
+  /**
+   * Emits the live (unsaved) input snapshot on every edit, in the same shape
+   * `onSave` would persist. Lets the surface recompute input-quality / readiness
+   * / flow-line metrics from in-progress edits instead of waiting for an explicit
+   * save. Read-only consumers only — the panel itself keeps using the persisted
+   * `program`, so this never re-syncs the edit buffer (which would steal focus).
+   */
+  onValuesChange?: (phaseId: string, inputs: Record<string, string>) => void;
   /** When the phase gate is approved the inputs are frozen: read-only, no save. */
   locked?: boolean;
 }
@@ -162,7 +170,7 @@ function parseKpiActuals(raw: unknown): Record<string, string> {
   }
 }
 
-export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDocument, onAssistField, locked = false }: PhaseInputsPanelProps) {
+export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDocument, onAssistField, onValuesChange, locked = false }: PhaseInputsPanelProps) {
   // Merge any ai-derived dynamic fields for this phase on top of the static
   // methodology schema, so planner-proposed inputs render in this panel.
   const dynamicStore = useMemo(() => getDynamicSchemaStore(program.rawData), [program.rawData]);
@@ -230,6 +238,13 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
   // Per-field AI assist: which field is currently generating, and any per-field error.
   const [assistingField, setAssistingField] = useState<string | null>(null);
   const [assistErrors, setAssistErrors] = useState<Record<string, string>>({});
+  // Debounced auto-save plumbing. `isDirtyRef` lets the persisted-resync effect
+  // tell our own save echo (safe to ignore) from an external change (must apply)
+  // so it never clobbers in-progress typing. `prevPhaseIdRef` forces a full
+  // resync when the phase changes regardless of dirtiness.
+  const autoSaveTimerRef = useRef<number | null>(null);
+  const isDirtyRef = useRef(false);
+  const prevPhaseIdRef = useRef(phaseId);
 
   async function runAssist(field: { id: string; label: string; hint?: string }, mode: FieldAssistMode) {
     if (!onAssistField || assistingField) return;
@@ -264,6 +279,14 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
   }
 
   useEffect(() => {
+    // Resync the edit buffer from persisted props. With auto-save on, our own
+    // saves echo back a fresh `existingInputs`; if the user has kept typing, that
+    // echo is *older* than the buffer, so blindly resetting would drop keystrokes
+    // and steal focus. Skip the reset on a same-phase echo while the buffer is
+    // dirty; always resync when the phase itself changed (a different editor).
+    const phaseChanged = prevPhaseIdRef.current !== phaseId;
+    prevPhaseIdRef.current = phaseId;
+    if (!phaseChanged && isDirtyRef.current) return;
     setValues(existingInputs);
     // Only auto-open if there's no data yet (first-time setup)
     if (Object.keys(existingInputs).length === 0) setOpen(true);
@@ -306,9 +329,6 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
       ? filledRowCount(grids[field.id] ?? [], field.columns ?? []) > 0
       : !!values[field.id]?.trim();
 
-  const hasAllRequired = schema.fields
-    .filter((field) => field.required)
-    .every((field) => isFieldFilled(field));
   const filledCount = schema.fields.filter((field) => isFieldFilled(field)).length;
 
   // Has the live buffer diverged from the persisted snapshot? Drives the Cancel
@@ -338,6 +358,9 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
     if (showActuals && JSON.stringify(localActuals) !== JSON.stringify(parseKpiActuals((existingInputs as Record<string, unknown>).kpiActuals))) return true;
     return false;
   }, [schema.fields, values, existingInputs, localWorkstreams, localKpis, localActuals, grids, program.workstreams, phaseId, showKpis, showActuals]);
+  // Keep the ref in sync so the persisted-resync effect can read the latest
+  // dirtiness without taking it as a dependency.
+  isDirtyRef.current = isDirty;
 
   // Gap accounting for the "what's left" banner. We deliberately do NOT use this
   // to reorder the fields: the methodology owns the field sequence (e.g. Strategy
@@ -352,64 +375,80 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
     ? schema.fields.find((field) => field.id === prioritized.firstGapId)?.label ?? null
     : null;
 
+  // The exact payload `handleSave` would persist, recomputed on every edit. Used
+  // both by the save path and by `onValuesChange` so read-only consumers (header
+  // metrics, status rings, flow-line tones) can reflect in-progress edits without
+  // an explicit save or a heavy network round-trip.
+  const liveSnapshot = useMemo<Record<string, string>>(() => ({
+    ...values,
+    // Serialize structured grid fields (overrides any stale string in values).
+    ...Object.fromEntries(
+      schema.fields
+        .filter((field) => field.type === "grid")
+        .map((field) => [field.id, serializeRows(grids[field.id] ?? [], field.columns ?? [])]),
+    ),
+    workstreams: JSON.stringify(localWorkstreams),
+    // Strategy-only: persist baseline/target KPIs so benefits realisation
+    // is measured against the human-entered baseline downstream.
+    ...(showKpis ? { kpis: JSON.stringify(localKpis.filter((kpi) => kpi.name.trim())) } : {}),
+    // Value Realize-only: persist a full snapshot of each KPI plus its
+    // measured actual, so the Benefits Tracker reports realisation against
+    // human-entered numbers. Snapshotting baseline/target/unit keeps the
+    // record self-contained even if Strategy KPIs are later edited.
+    ...(showActuals ? {
+      kpiActuals: JSON.stringify(
+        strategyKpiDefs.map((def) => ({
+          id: def.id,
+          name: def.name,
+          baseline: def.baseline,
+          target: def.target,
+          unit: def.unit,
+          actual: localActuals[def.id] ?? "",
+        })),
+      ),
+    } : {}),
+  }), [values, schema.fields, grids, localWorkstreams, showKpis, localKpis, showActuals, strategyKpiDefs, localActuals]);
+
+  // Emit the live snapshot to read-only consumers on every edit. The panel keeps
+  // editing against the persisted `program`, so this never feeds back into the
+  // edit buffer (which would steal focus mid-keystroke).
+  useEffect(() => {
+    onValuesChange?.(phaseId, liveSnapshot);
+  }, [phaseId, liveSnapshot, onValuesChange]);
+
   async function handleSave() {
     if (locked) return;
     setSaving(true);
     try {
-      await onSave(phaseId, {
-        ...values,
-        // Serialize structured grid fields (overrides any stale string in values).
-        ...Object.fromEntries(
-          schema.fields
-            .filter((field) => field.type === "grid")
-            .map((field) => [field.id, serializeRows(grids[field.id] ?? [], field.columns ?? [])]),
-        ),
-        workstreams: JSON.stringify(localWorkstreams),
-        // Strategy-only: persist baseline/target KPIs so benefits realisation
-        // is measured against the human-entered baseline downstream.
-        ...(showKpis ? { kpis: JSON.stringify(localKpis.filter((kpi) => kpi.name.trim())) } : {}),
-        // Value Realize-only: persist a full snapshot of each KPI plus its
-        // measured actual, so the Benefits Tracker reports realisation against
-        // human-entered numbers. Snapshotting baseline/target/unit keeps the
-        // record self-contained even if Strategy KPIs are later edited.
-        ...(showActuals ? {
-          kpiActuals: JSON.stringify(
-            strategyKpiDefs.map((def) => ({
-              id: def.id,
-              name: def.name,
-              baseline: def.baseline,
-              target: def.target,
-              unit: def.unit,
-              actual: localActuals[def.id] ?? "",
-            })),
-          ),
-        } : {}),
-      });
+      // Auto-save is the only save path now (no manual button), so persist
+      // quietly — the surface shows a subtle "Saved" tick instead of a toast.
+      await onSave(phaseId, liveSnapshot, { silent: true });
       setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+      setTimeout(() => setSaved(false), 1600);
     } finally {
       setSaving(false);
     }
   }
 
-  // Revert the live edit buffer back to the last persisted snapshot, mirroring
-  // the reset run by the existingInputs effect.
-  function handleCancel() {
-    setValues(existingInputs);
-    const existingWorkstreams = Array.isArray(existingInputs.workstreams)
-      ? existingInputs.workstreams.filter((entry): entry is Workstream => typeof entry === "object" && entry !== null)
-      : Array.isArray(program.workstreams)
-        ? program.workstreams.filter((entry) => entry.phaseId === phaseId)
-        : [];
-    setLocalWorkstreams(existingWorkstreams);
-    setLocalKpis(parseKpis((existingInputs as Record<string, unknown>).kpis));
-    setLocalActuals(parseKpiActuals((existingInputs as Record<string, unknown>).kpiActuals));
-    const nextGrids: Record<string, GridRow[]> = {};
-    for (const field of schema.fields) {
-      if (field.type === "grid") nextGrids[field.id] = parseRows((existingInputs as Record<string, unknown>)[field.id], field.columns ?? []);
-    }
-    setGrids(nextGrids);
-  }
+  // Auto-save: persist after the user pauses typing. Debounced so a burst of
+  // keystrokes coalesces into one write, and only fires when the buffer actually
+  // diverges from the persisted snapshot (no-op saves are skipped). Partial input
+  // is intentionally saved — progress should never be lost, and the header metrics
+  // read the persisted value once it lands.
+  useEffect(() => {
+    if (locked || !isDirty) return;
+    if (autoSaveTimerRef.current != null) window.clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = window.setTimeout(() => {
+      autoSaveTimerRef.current = null;
+      void handleSave();
+    }, 800);
+    return () => {
+      if (autoSaveTimerRef.current != null) window.clearTimeout(autoSaveTimerRef.current);
+    };
+    // handleSave is intentionally omitted — it is redefined every render; the
+    // timer always fires the latest closure via liveSnapshot below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDirty, liveSnapshot, locked]);
 
   function addKpi() {
     setLocalKpis((current) => [
@@ -462,6 +501,13 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
 
       {open ? (
         <div className="v3-phase-inputs-body">
+          {!locked ? (
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+              <button type="button" className="v3-button ghost" style={{ fontSize: 12 }} onClick={onUploadDocument}>
+                ↑ Upload document instead
+              </button>
+            </div>
+          ) : null}
           <div style={{ fontSize: 12, color: "var(--v3-text-muted)", marginBottom: 12, lineHeight: 1.55 }}>
             {schema.description}
           </div>
@@ -779,30 +825,10 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
               🔒 Inputs locked — this phase has cleared its stage gate. Reopen the gate to edit.
             </div>
           ) : (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "space-between", alignItems: "center" }}>
-              <button type="button" className="v3-button ghost" style={{ fontSize: 12 }} onClick={onUploadDocument}>
-                ↑ Upload document instead
-              </button>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <button
-                  type="button"
-                  className="v3-button ghost"
-                  style={{ fontSize: 12 }}
-                  disabled={saving || !isDirty}
-                  onClick={handleCancel}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="v3-button primary"
-                  style={{ fontSize: 12 }}
-                  disabled={saving || !hasAllRequired}
-                  onClick={() => void handleSave()}
-                >
-                  {saved ? "Saved ✓" : saving ? "Saving…" : "Save inputs"}
-                </button>
-              </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center" }}>
+              <span className="v3-autosave-status" aria-live="polite">
+                {saving ? "Saving…" : saved ? "Saved ✓" : isDirty ? "Unsaved changes…" : "All changes saved"}
+              </span>
             </div>
           )}
         </div>

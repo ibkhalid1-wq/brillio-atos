@@ -49,7 +49,7 @@ interface StageViewProps {
   onRunAgent: (agentId: string) => void;
   onSaveArtifact: (artifactId: "narrative" | "deck", content: string) => Promise<void>;
   onApproveArtifact: (phaseId: string, artifactId: string) => Promise<void>;
-  onSaveInputs: (phaseId: string, inputs: Record<string, string>) => Promise<void>;
+  onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean }) => Promise<void>;
   onUploadDocument: () => void;
   onAssistField?: (phaseId: string, request: FieldAssistRequest) => Promise<string>;
   artifactPreviews?: {
@@ -438,6 +438,14 @@ export default function StageView({
   const [lockedModalOpen, setLockedModalOpen] = React.useState(false);
   const [previewArtifact, setPreviewArtifact] = React.useState<{ label: string; description?: string; content: string; score: number | null; statusTone: string } | null>(null);
   const [qualityArtifact, setQualityArtifact] = React.useState<{ label: string; defId: string; score: number | null; issues: ArtifactQualityIssue[] } | null>(null);
+  // Live (unsaved) input snapshot emitted by the inputs panel on every edit, so
+  // header metrics / status rings / flow-line tones reflect in-progress typing
+  // before an explicit Save. Read-only — never fed back into the panel's edit
+  // buffer (that would steal focus mid-keystroke).
+  const [liveInputs, setLiveInputs] = React.useState<{ phaseId: string; inputs: Record<string, string> } | null>(null);
+  const handleLiveInputs = React.useCallback((phaseId: string, inputs: Record<string, string>) => {
+    setLiveInputs({ phaseId, inputs });
+  }, []);
   const phaseMainRef = useRef<HTMLDivElement | null>(null);
   const previousDeckRef = useRef<string | null>(artifactPreviews?.deck || null);
   useEffect(() => {
@@ -503,6 +511,33 @@ export default function StageView({
       ? program.rawData.data as Record<string, unknown>
       : program.rawData as Record<string, unknown>)
     : null;
+  // Live overlay: the persisted programme with the active phase's *unsaved* input
+  // edits merged in, so header metrics / status rings / flow-line tones reflect
+  // typing instantly — ahead of the debounced auto-save round-trip. Only the
+  // active phase's bucket is overlaid; everything else is the persisted programme
+  // (gateReviews, artifacts, other phases) untouched. Read-only consumers only —
+  // the inputs panel still edits against the persisted `program`.
+  const liveProgram = useMemo<ProgramSummary | null>(() => {
+    if (!program || !activePhase) return program ?? null;
+    if (!liveInputs || liveInputs.phaseId !== activePhase.id) return program;
+    const raw = program.rawData;
+    if (typeof raw !== "object" || raw === null) return program;
+    const nested = "data" in raw && typeof (raw as Record<string, unknown>).data === "object" && (raw as Record<string, unknown>).data !== null;
+    const inner = nested ? (raw as Record<string, unknown>).data as Record<string, unknown> : raw as Record<string, unknown>;
+    const persistedBucket = typeof inner.phaseInputs === "object" && inner.phaseInputs !== null && !Array.isArray(inner.phaseInputs)
+      ? (inner.phaseInputs as Record<string, Record<string, unknown>>)[activePhase.id] ?? {}
+      : {};
+    const mergedBucket = { ...persistedBucket, ...liveInputs.inputs };
+    const nextInner = {
+      ...inner,
+      phaseInputs: {
+        ...(typeof inner.phaseInputs === "object" && inner.phaseInputs !== null && !Array.isArray(inner.phaseInputs) ? inner.phaseInputs : {}),
+        [activePhase.id]: mergedBucket,
+      },
+    };
+    const nextRaw = nested ? { ...(raw as Record<string, unknown>), data: nextInner } : nextInner;
+    return { ...program, rawData: nextRaw } as ProgramSummary;
+  }, [program, activePhase, liveInputs]);
   // Full content for each produced artifact in the active phase, keyed by its
   // underlying artifact id (rawData.phaseArtifacts[phaseId][artifactId].content).
   // Powers the inline preview on every artifact row — the truncated 180-char
@@ -551,8 +586,8 @@ export default function StageView({
     return getRiskTrend(activePhase.id, program.id);
   }, [activePhase, program?.id]);
   const readiness = useMemo(
-    () => (program && activePhase ? computePhaseReadiness(program, activePhase.id) : null),
-    [activePhase, program],
+    () => (liveProgram && activePhase ? computePhaseReadiness(liveProgram, activePhase.id) : null),
+    [activePhase, liveProgram],
   );
   // User-initiated lock: the gate flips to "approved" (label "Locked") and the
   // completion modal covers the transition. Shown once per lock action — tied to
@@ -575,11 +610,15 @@ export default function StageView({
     const bucket = source?.phaseInputs && typeof source.phaseInputs === "object" && !Array.isArray(source.phaseInputs)
       ? (source.phaseInputs as Record<string, unknown>)[activePhase?.id ?? ""]
       : null;
-    const inputs = bucket && typeof bucket === "object" && !Array.isArray(bucket)
+    const persisted = bucket && typeof bucket === "object" && !Array.isArray(bucket)
       ? (bucket as Record<string, unknown>)
       : {};
+    // Overlay unsaved edits so "Inputs complete" / "Input quality" track typing.
+    const inputs = liveInputs && liveInputs.phaseId === activePhase?.id
+      ? { ...persisted, ...liveInputs.inputs }
+      : persisted;
     return derivePhaseInputQuality(activePhase?.id, inputs);
-  }, [activePhase?.id, source]);
+  }, [activePhase?.id, source, liveInputs]);
   const generatedCriteria = useMemo(() => {
     const bucket = source?.generatedExitCriteria;
     if (!bucket || typeof bucket !== "object" || Array.isArray(bucket)) return [];
@@ -710,7 +749,7 @@ export default function StageView({
         <div className="v3-phase-head-row">
           <div className="v3-phase-head-identity">
             {/* Canonical 3-ring phase status — inner Input · middle Artifact · outer Gate */}
-            <PhaseStatusRings program={program} phaseId={activePhase.id} size={116} showCenter />
+            <PhaseStatusRings program={liveProgram ?? program} phaseId={activePhase.id} size={116} showCenter />
             <div className="v3-phase-head-titles">
               <div className="v3-phase-head-eyebrow">
                 <span className="v3-phase-head-prog">{program.name}</span>
@@ -922,7 +961,7 @@ export default function StageView({
       </div>
 
       <div className="v3-phase-main" ref={phaseMainRef}>
-      <PhaseFlowOverlay containerRef={phaseMainRef} program={program} phaseId={activePhase.id} enabled />
+      <PhaseFlowOverlay containerRef={phaseMainRef} program={liveProgram ?? program} phaseId={activePhase.id} enabled />
       {/* LEFT — input fields card (keeps upload-document + workstream buttons inside PhaseInputsPanel) */}
       <section className="v3-phase-col v3-phase-col--inputs">
         <div className="v3-zone-label">Input fields</div>
@@ -946,6 +985,7 @@ export default function StageView({
               onSave={onSaveInputs}
               onUploadDocument={onUploadDocument}
               onAssistField={onAssistField}
+              onValuesChange={handleLiveInputs}
               locked={gateApproved}
             />
           </div>

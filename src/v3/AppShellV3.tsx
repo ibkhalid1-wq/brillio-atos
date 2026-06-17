@@ -2030,8 +2030,9 @@ export default function AppShellV3() {
 
   // Per-phase debounce timers for the Tier-2 input-quality validation pass.
   const inputQualityDebounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const handleSavePhaseInputs = useCallback(async (phaseId: string, inputs: Record<string, string>) => {
+  const handleSavePhaseInputs = useCallback(async (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean }) => {
     if (!activeProgram) return;
+    const silent = opts?.silent === true;
     // Hard freeze: once a phase clears its stage gate its inputs are locked, so no
     // save (manual or import) can mutate them. The UI already hides the editors;
     // this is the authoritative server-bound chokepoint that enforces it.
@@ -2075,12 +2076,15 @@ export default function AppShellV3() {
       delete timers[phaseId];
       void runProgramAgent({ agentId: "input-quality", phaseId, triggeredBy: "trigger", skipPreSync: true });
     }, 8000);
+    // Auto-saves persist quietly (the panel shows its own "Saved" tick). The
+    // stale-artifact warning is the one thing still worth surfacing even on an
+    // auto-save, since it changes what the user must regenerate.
     if (staled.length) {
       pushV3Toast(
         `Inputs saved. ${staled.length} approved artifact${staled.length > 1 ? "s" : ""} marked stale — regenerate to apply your changes.`,
         { tone: "warning", duration: 5000 },
       );
-    } else {
+    } else if (!silent) {
       pushV3Toast("Inputs saved. Ready to run agents.", { tone: "success", duration: 2500 });
     }
   }, [activeProgram, refreshPrograms, runProgramAgent, updateProgramData]);
