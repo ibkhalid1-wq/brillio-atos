@@ -518,12 +518,13 @@ body {
 .adam-card {
   /* Shell tokens aligned to the dominant .v3-card system (radius, border, */
   /* elevation) so AdamCard surfaces and v3-card surfaces read as one card  */
-  /* system. Cohesion audit: card consistency.                             */
-  background: var(--v3-surface);
+  /* system. Cohesion audit: card consistency. A soft top-lit gradient +    */
+  /* inset highlight give every card a consistent premium, physical depth.  */
+  background: linear-gradient(180deg, var(--v3-surface-2) 0%, var(--v3-surface) 100%);
   border: 1px solid var(--v3-border);
   border-radius: var(--v3-radius-lg);
   overflow: hidden;
-  box-shadow: var(--v3-shadow-xs);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), var(--v3-shadow-xs);
 }
 
 .adam-card--interactive {
@@ -540,11 +541,11 @@ body {
   cursor: pointer;
 }
 
-.adam-card--success { box-shadow: inset 3px 0 0 var(--color-success); }
-.adam-card--warning { box-shadow: inset 3px 0 0 var(--color-warning); }
-.adam-card--danger { box-shadow: inset 3px 0 0 var(--color-danger); }
-.adam-card--info { box-shadow: inset 3px 0 0 var(--color-info); }
-.adam-card--primary { box-shadow: inset 3px 0 0 var(--color-primary); }
+.adam-card--success { box-shadow: inset 3px 0 0 var(--color-success), inset 0 1px 0 rgba(255, 255, 255, 0.05), var(--v3-shadow-xs); }
+.adam-card--warning { box-shadow: inset 3px 0 0 var(--color-warning), inset 0 1px 0 rgba(255, 255, 255, 0.05), var(--v3-shadow-xs); }
+.adam-card--danger { box-shadow: inset 3px 0 0 var(--color-danger), inset 0 1px 0 rgba(255, 255, 255, 0.05), var(--v3-shadow-xs); }
+.adam-card--info { box-shadow: inset 3px 0 0 var(--color-info), inset 0 1px 0 rgba(255, 255, 255, 0.05), var(--v3-shadow-xs); }
+.adam-card--primary { box-shadow: inset 3px 0 0 var(--color-primary), inset 0 1px 0 rgba(255, 255, 255, 0.05), var(--v3-shadow-xs); }
 
 .adam-card__header {
   display: flex;
@@ -3502,8 +3503,14 @@ button.v3-chip:focus-visible,
 .v3-button.ghost:hover:not(:disabled) {
   background: var(--v3-surface-2);
   color: var(--v3-text-primary);
-  border-color: rgba(255, 255, 255, 0.12);
+  border-color: color-mix(in srgb, var(--v3-accent) 40%, var(--v3-border));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 5px 14px rgba(0, 0, 0, 0.16);
   transform: translateY(-1px);
+}
+
+.v3-button.ghost:active:not(:disabled) {
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.14);
+  transform: translateY(0) scale(0.97);
 }
 
 .v3-button.danger {
@@ -3517,18 +3524,27 @@ button.v3-chip:focus-visible,
   transform: translateY(-1px);
 }
 
-/* Secondary variant — a filled, bordered neutral button. Brought over
-   from the Button.tsx component so its consumers can share the canonical
-   button class (radius, hover lift, active scale, focus ring). */
+/* Secondary variant — a polished, filled neutral button. A soft top-lit
+   gradient + inset highlight gives it physical depth; hover reveals an
+   accent-tinted hairline and a deeper ambient shadow so it reads as a
+   premium control rather than a flat utility chip. */
 .v3-button.secondary {
-  background: var(--v3-surface-2);
+  background: linear-gradient(180deg, var(--v3-surface-3) 0%, var(--v3-surface-2) 100%);
   color: var(--v3-text-primary);
   border: 1px solid var(--v3-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
 .v3-button.secondary:hover:not(:disabled) {
-  background: var(--v3-surface-3);
+  background: linear-gradient(180deg, var(--v3-surface-3) 0%, var(--v3-surface-3) 100%);
+  border-color: color-mix(in srgb, var(--v3-accent) 45%, var(--v3-border));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09), 0 6px 16px rgba(0, 0, 0, 0.18);
   transform: translateY(-1px);
+}
+
+.v3-button.secondary:active:not(:disabled) {
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18);
+  transform: translateY(0) scale(0.97);
 }
 
 /* Large size modifier (counterpart to .v3-button.sm). */
@@ -5249,10 +5265,10 @@ button.v3-chip:focus-visible,
 .v3-journey-status-card {
   padding: var(--v3-space-4) var(--v3-space-5);
   border-radius: var(--v3-radius-lg);
-  background: rgba(15, 15, 26, 0.76);
+  background: linear-gradient(180deg, var(--v3-surface-3) 0%, var(--v3-surface-2) 100%);
   border: 1px solid var(--v3-border);
   border-top-color: var(--v3-border-top);
-  box-shadow: var(--v3-shadow-card);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), var(--v3-shadow-card);
 }
 
 .v3-journey-status-value {
@@ -5538,17 +5554,34 @@ button.v3-chip:focus-visible,
   background: var(--v3-border); margin: 0 2px;
 }
 .v3-phase-metric {
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  min-width: 70px; padding: 6px 12px;
-  background: var(--v3-surface-2); border: 1px solid var(--v3-border); border-radius: var(--radius-md);
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  min-width: 74px; padding: 8px 13px;
+  background: linear-gradient(180deg, var(--v3-surface-3) 0%, var(--v3-surface-2) 100%);
+  border: 1px solid var(--v3-border); border-radius: var(--radius-md);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 1px 2px rgba(0, 0, 0, 0.12);
 }
+/* Top-edge status hairline — a subtle premium cue that reads the metric's
+   health before the number does. Neutral by default; tinted per tone. */
+.v3-phase-metric::before {
+  content: ""; position: absolute; inset: 0 0 auto 0; height: 2px;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  background: var(--v3-border); opacity: 0.7;
+}
+.v3-phase-metric.tone-green::before { background: var(--v3-green); opacity: 0.55; }
+.v3-phase-metric.tone-amber::before { background: var(--v3-amber); opacity: 0.55; }
+.v3-phase-metric.tone-red::before { background: var(--v3-red); opacity: 0.55; }
 button.v3-phase-metric {
   font: inherit; text-align: center; cursor: pointer;
-  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease, box-shadow 140ms ease;
 }
 button.v3-phase-metric:hover {
-  border-color: var(--v3-accent); background: var(--v3-surface-3); transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--v3-accent) 50%, var(--v3-border));
+  background: linear-gradient(180deg, var(--v3-surface-3) 0%, var(--v3-surface-3) 100%);
+  transform: translateY(-1px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 6px 16px rgba(0, 0, 0, 0.18);
 }
+button.v3-phase-metric:active { transform: translateY(0) scale(0.98); }
 button.v3-phase-metric:focus-visible {
   outline: 2px solid var(--v3-accent); outline-offset: 2px;
 }
@@ -5559,6 +5592,74 @@ button.v3-phase-metric:focus-visible {
 .v3-phase-metric-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--v3-text-muted); }
 
 .v3-phase-head-actions { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+/* ── Programme Save / Revert — premium header CTAs ───────────────────────────
+   A matched pair top-right of the phase screen: a filled accent "Save program"
+   with a soft gradient sheen + glow, and a refined glass "Revert" that reveals a
+   pill count of available snapshots. Both share the platform's lift-on-hover and
+   press-scale so they read as first-class controls, not utility links. */
+.v3-program-save-actions { display: inline-flex; gap: 8px; align-items: center; flex-shrink: 0; }
+.v3-program-save-actions .v3-save-btn,
+.v3-program-save-actions .v3-revert-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 36px; padding: 0 15px;
+  border-radius: 10px;
+  font-family: var(--v3-font);
+  font-size: 12.5px; font-weight: var(--v3-weight-semibold); letter-spacing: 0.01em;
+  cursor: pointer; white-space: nowrap; user-select: none;
+  transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease, border-color 140ms ease, color 140ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.v3-program-save-actions .v3-save-btn-icon,
+.v3-program-save-actions .v3-revert-btn-icon { display: inline-flex; align-items: center; }
+
+/* Save — filled accent with gradient sheen + ambient glow. */
+.v3-program-save-actions .v3-save-btn {
+  border: 1px solid color-mix(in srgb, var(--v3-accent) 70%, transparent);
+  background: linear-gradient(180deg, var(--v3-accent-2) 0%, var(--v3-accent) 100%);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 6px 18px var(--v3-accent-glow);
+}
+.v3-program-save-actions .v3-save-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 11px 26px var(--v3-accent-glow);
+}
+.v3-program-save-actions .v3-save-btn:active:not(:disabled) { transform: translateY(0) scale(0.97); }
+.v3-program-save-actions .v3-save-btn.is-saved {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--v3-green) 85%, #fff) 0%, var(--v3-green) 100%);
+  border-color: color-mix(in srgb, var(--v3-green) 60%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 6px 18px rgba(44, 200, 77, 0.28);
+}
+.v3-save-spin { animation: v3-save-spin 0.7s linear infinite; transform-origin: center; }
+@keyframes v3-save-spin { to { transform: rotate(360deg); } }
+
+/* Revert — refined glass/outline with an inset snapshot count pill. */
+.v3-program-save-actions .v3-revert-btn {
+  border: 1px solid var(--v3-border);
+  background: var(--v3-surface-2);
+  color: var(--v3-text-secondary);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+.v3-program-save-actions .v3-revert-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--v3-accent) 55%, var(--v3-border));
+  background: var(--v3-surface-3);
+  color: var(--v3-text-primary);
+}
+.v3-program-save-actions .v3-revert-btn:active:not(:disabled) { transform: translateY(0) scale(0.97); }
+.v3-program-save-actions .v3-revert-btn-count {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 5px; margin-left: 1px;
+  border-radius: 999px;
+  font-size: 11px; font-weight: var(--v3-weight-bold); font-variant-numeric: tabular-nums;
+  background: var(--v3-accent-soft); color: var(--v3-accent);
+}
+.v3-program-save-actions .v3-save-btn:disabled,
+.v3-program-save-actions .v3-revert-btn:disabled { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
+.v3-program-save-actions .v3-save-btn:focus-visible,
+.v3-program-save-actions .v3-revert-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(44, 200, 77, 0.18), 0 0 0 4px rgba(44, 200, 77, 0.34);
+}
 .v3-phase-head-actions-grp { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
 .v3-phase-body { display: flex; flex-wrap: wrap; align-items: flex-start; min-height: 0; flex: 1; }
@@ -11572,10 +11673,11 @@ button, [role="button"] {
   color: var(--v3-text-muted);
 }
 .v3-pipeline-stat {
-  padding: 6px 12px;
-  background: var(--v3-surface-2);
+  padding: 7px 12px;
+  background: linear-gradient(180deg, var(--v3-surface-3) 0%, var(--v3-surface-2) 100%);
   border: 1px solid var(--v3-border-soft);
   border-radius: var(--v3-radius);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 1px 2px rgba(0, 0, 0, 0.1);
   text-align: center;
   min-width: 60px;
 }

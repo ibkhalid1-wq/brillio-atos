@@ -50,6 +50,8 @@ interface StageViewProps {
   onSaveArtifact: (artifactId: "narrative" | "deck", content: string) => Promise<void>;
   onApproveArtifact: (phaseId: string, artifactId: string) => Promise<void>;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean }) => Promise<void>;
+  onSaveProgram?: (label?: string, kind?: "manual" | "lock") => Promise<void>;
+  onRevertProgram?: (snapshotId: string) => Promise<void>;
   onUploadDocument: () => void;
   onAssistField?: (phaseId: string, request: FieldAssistRequest) => Promise<string>;
   artifactPreviews?: {
@@ -426,6 +428,8 @@ export default function StageView({
   onSaveArtifact,
   onApproveArtifact,
   onSaveInputs,
+  onSaveProgram,
+  onRevertProgram,
   onUploadDocument,
   onAssistField,
   artifactPreviews,
@@ -446,6 +450,31 @@ export default function StageView({
   const handleLiveInputs = React.useCallback((phaseId: string, inputs: Record<string, string>) => {
     setLiveInputs({ phaseId, inputs });
   }, []);
+  const [revertModalOpen, setRevertModalOpen] = React.useState(false);
+  const [savingProgram, setSavingProgram] = React.useState(false);
+  const [programSaved, setProgramSaved] = React.useState(false);
+  const [revertingId, setRevertingId] = React.useState<string | null>(null);
+  const handleSaveProgramClick = React.useCallback(async () => {
+    if (!onSaveProgram || savingProgram) return;
+    setSavingProgram(true);
+    try {
+      await onSaveProgram();
+      setProgramSaved(true);
+      window.setTimeout(() => setProgramSaved(false), 1800);
+    } finally {
+      setSavingProgram(false);
+    }
+  }, [onSaveProgram, savingProgram]);
+  const handleRevertClick = React.useCallback(async (snapshotId: string) => {
+    if (!onRevertProgram || revertingId) return;
+    setRevertingId(snapshotId);
+    try {
+      await onRevertProgram(snapshotId);
+      setRevertModalOpen(false);
+    } finally {
+      setRevertingId(null);
+    }
+  }, [onRevertProgram, revertingId]);
   const phaseMainRef = useRef<HTMLDivElement | null>(null);
   const previousDeckRef = useRef<string | null>(artifactPreviews?.deck || null);
   useEffect(() => {
@@ -538,6 +567,25 @@ export default function StageView({
     const nextRaw = nested ? { ...(raw as Record<string, unknown>), data: nextInner } : nextInner;
     return { ...program, rawData: nextRaw } as ProgramSummary;
   }, [program, activePhase, liveInputs]);
+  // Timestamped programme snapshots (newest first) the user can revert to. Manual
+  // saves + auto-saves taken when a phase gate locks. Read straight off persisted
+  // rawData so the revert modal always lists the authoritative history.
+  const programSnapshots = useMemo<Array<{ id: string; label: string; kind: string; createdAt: string }>>(() => {
+    const raw = source?.programSnapshots;
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .map((entry) => {
+        const e = entry as Record<string, unknown>;
+        if (typeof e.id !== "string") return null;
+        return {
+          id: e.id,
+          label: typeof e.label === "string" ? e.label : "Untitled save",
+          kind: typeof e.kind === "string" ? e.kind : "manual",
+          createdAt: typeof e.createdAt === "string" ? e.createdAt : "",
+        };
+      })
+      .filter((e): e is { id: string; label: string; kind: string; createdAt: string } => e !== null);
+  }, [source]);
   // Full content for each produced artifact in the active phase, keyed by its
   // underlying artifact id (rawData.phaseArtifacts[phaseId][artifactId].content).
   // Powers the inline preview on every artifact row — the truncated 180-char
@@ -774,6 +822,41 @@ export default function StageView({
               {verdict ? <div className="v3-phase-head-verdict">{verdict}</div> : null}
             </div>
           </div>
+          {onSaveProgram ? (
+            <div className="v3-program-save-actions">
+              <button
+                type="button"
+                className={`v3-save-btn${programSaved ? " is-saved" : ""}`}
+                onClick={() => void handleSaveProgramClick()}
+                disabled={savingProgram}
+                title="Save a timestamped snapshot of this programme"
+              >
+                <span className="v3-save-btn-icon" aria-hidden="true">
+                  {savingProgram ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="v3-save-spin"><path d="M12 3a9 9 0 1 0 9 9" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" /></svg>
+                  ) : programSaved ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 5h11l3 3v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /><path d="M8 5v5h7V5M8 19v-5h8v5" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg>
+                  )}
+                </span>
+                {savingProgram ? "Saving…" : programSaved ? "Saved" : "Save program"}
+              </button>
+              <button
+                type="button"
+                className="v3-revert-btn"
+                onClick={() => setRevertModalOpen(true)}
+                disabled={programSnapshots.length === 0}
+                title={programSnapshots.length === 0 ? "No saved versions yet" : "Revert to a saved version"}
+              >
+                <span className="v3-revert-btn-icon" aria-hidden="true">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 9a8 8 0 1 1-1 5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /><path d="M4 4v5h5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                </span>
+                Revert
+                {programSnapshots.length > 0 ? <span className="v3-revert-btn-count">{programSnapshots.length}</span> : null}
+              </button>
+            </div>
+          ) : null}
         </div>
 
         {/* Key metrics — the gate pipeline (inputs → quality → artifacts → quality → gate)
@@ -816,6 +899,7 @@ export default function StageView({
           ];
           const renderMetric = (metric: { label: string; value: string | number; tone: string; anchor?: string | null; onClick?: () => void }) => {
             const cls = `v3-phase-metric-value ${metric.tone}`;
+            const toneCls = metric.tone ? ` tone-${metric.tone}` : "";
             const handler = metric.onClick
               ? metric.onClick
               : metric.anchor
@@ -823,7 +907,7 @@ export default function StageView({
               : null;
             if (!handler) {
               return (
-                <div key={metric.label} className="v3-phase-metric">
+                <div key={metric.label} className={`v3-phase-metric${toneCls}`}>
                   <div className={cls}>{metric.value}</div>
                   <div className="v3-phase-metric-label">{metric.label}</div>
                 </div>
@@ -833,7 +917,7 @@ export default function StageView({
               <button
                 key={metric.label}
                 type="button"
-                className="v3-phase-metric is-clickable"
+                className={`v3-phase-metric is-clickable${toneCls}`}
                 aria-label={`${metric.label} ${metric.value} — open detail`}
                 onClick={handler}
               >
@@ -1406,6 +1490,61 @@ export default function StageView({
             >
               Done
             </button>
+          </div>
+        </div>
+      ) : null}
+
+      {revertModalOpen ? (
+        <div
+          role="presentation"
+          onClick={() => setRevertModalOpen(false)}
+          style={{ position: "fixed", inset: 0, zIndex: 600, background: "rgba(8,10,16,0.45)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Revert to a saved version"
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: "100%", maxWidth: 520, maxHeight: "80vh", display: "flex", flexDirection: "column", background: "var(--v3-surface)", border: "1px solid var(--v3-border)", borderRadius: 16, boxShadow: "0 24px 64px rgba(0,0,0,0.35)", padding: 24 }}
+          >
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 4 }}>
+              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: "var(--v3-text)" }}>Saved versions</h2>
+              <button type="button" className="v3-button ghost v3-button-inline-sm" onClick={() => setRevertModalOpen(false)}>Close</button>
+            </div>
+            <p style={{ margin: "0 0 16px", fontSize: 12.5, lineHeight: 1.5, color: "var(--v3-text-secondary)" }}>
+              Restore the programme to any earlier save. Reverting replaces the current programme data; your save history is kept.
+            </p>
+            <div style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+              {programSnapshots.length === 0 ? (
+                <div style={{ fontSize: 13, color: "var(--v3-text-secondary)", padding: "12px 0" }}>No saved versions yet.</div>
+              ) : (
+                programSnapshots.map((snap) => (
+                  <div
+                    key={snap.id}
+                    style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 12px", border: "1px solid var(--v3-border)", borderRadius: 10, background: "var(--v3-surface-2, rgba(255,255,255,0.02))" }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 13.5, fontWeight: 500, color: "var(--v3-text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{snap.label}</span>
+                        <span className={`v3-chip ${snap.kind === "lock" ? "green" : "muted"}`} style={{ flexShrink: 0 }}>{snap.kind === "lock" ? "auto · lock" : "manual"}</span>
+                      </div>
+                      {snap.createdAt ? (
+                        <div style={{ fontSize: 11.5, color: "var(--v3-text-secondary)", marginTop: 2 }}>{new Date(snap.createdAt).toLocaleString()}</div>
+                      ) : null}
+                    </div>
+                    <button
+                      type="button"
+                      className="v3-button v3-button-inline-sm"
+                      onClick={() => void handleRevertClick(snap.id)}
+                      disabled={revertingId !== null}
+                      style={{ flexShrink: 0 }}
+                    >
+                      {revertingId === snap.id ? "Reverting…" : "Revert"}
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       ) : null}

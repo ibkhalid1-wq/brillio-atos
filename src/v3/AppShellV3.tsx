@@ -283,6 +283,7 @@ type ShellToast = {
 };
 
 const MAX_VISIBLE_TOASTS = 3;
+const MAX_PROGRAM_SNAPSHOTS = 25;
 
 function parseLocation(): { surface: V3Surface; moreView: V3MoreView | null; activePhaseId: string | null; reportId: V3ReportId | null } {
   const path = typeof window !== "undefined" ? window.location.pathname.replace(/^\/+/, "") : "";
@@ -2149,6 +2150,85 @@ export default function AppShellV3() {
     pushV3Toast(`${fieldCount} field${fieldCount !== 1 ? "s" : ""} saved across ${phaseCount} phase${phaseCount !== 1 ? "s" : ""}. Ready to run agents.${lockedNote}${protectedNote}`, { tone: "success", duration: 3500 });
   }, [activeProgram, commitNavigation, refreshPrograms, updateProgramData]);
 
+  // ── Program save snapshots ──────────────────────────────────────────────────
+  // Point-in-time backups the user can restore. Each snapshot captures the whole
+  // programme state *except* the snapshot history itself (so reverts never nest
+  // prior snapshots and balloon the record). Stored under rawData.programSnapshots,
+  // newest first, capped to MAX_PROGRAM_SNAPSHOTS.
+  const handleSaveProgramSnapshot = useCallback(async (label?: string, kind: "manual" | "lock" = "manual") => {
+    if (!activeProgram) return;
+    const cloned = cloneRawProgram(activeProgram);
+    const inner = cloned.inner;
+    const prevSnapshots = Array.isArray(inner.programSnapshots)
+      ? (inner.programSnapshots as Array<Record<string, unknown>>)
+      : [];
+    const data = { ...inner };
+    delete data.programSnapshots;
+    const createdAt = new Date().toISOString();
+    const snapshot = {
+      id: typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `snap-${Date.now()}`,
+      label: (label && label.trim()) || `Manual save · ${new Date(createdAt).toLocaleString()}`,
+      kind,
+      createdAt,
+      data,
+    };
+    const nextSnapshots = [snapshot, ...prevSnapshots].slice(0, MAX_PROGRAM_SNAPSHOTS);
+    const payload = cloned.commit({ ...inner, programSnapshots: nextSnapshots });
+    await updateProgramData(activeProgram.id, payload, activeProgram.updatedAt);
+    await refreshPrograms();
+    pushV3Toast(
+      kind === "lock" ? `Snapshot saved: ${snapshot.label}` : "Program saved.",
+      { tone: "success", duration: 2500 },
+    );
+  }, [activeProgram, refreshPrograms, updateProgramData]);
+
+  const handleRevertProgramSnapshot = useCallback(async (snapshotId: string) => {
+    if (!activeProgram) return;
+    const cloned = cloneRawProgram(activeProgram);
+    const inner = cloned.inner;
+    const snapshots = Array.isArray(inner.programSnapshots)
+      ? (inner.programSnapshots as Array<Record<string, unknown>>)
+      : [];
+    const target = snapshots.find((s) => (s as { id?: string }).id === snapshotId);
+    if (!target || typeof target.data !== "object" || target.data === null) {
+      pushV3Toast("Snapshot not found.", { tone: "error", duration: 3000 });
+      return;
+    }
+    // Restore the captured state but keep the (separately stored) snapshot history
+    // so the user can still move between saves after reverting.
+    const restored = { ...(target.data as Record<string, unknown>), programSnapshots: snapshots };
+    const payload = cloned.commit(restored);
+    await updateProgramData(activeProgram.id, payload, activeProgram.updatedAt);
+    await refreshPrograms();
+    pushV3Toast(`Reverted to “${(target as { label?: string }).label ?? "snapshot"}”.`, { tone: "success", duration: 3000 });
+  }, [activeProgram, refreshPrograms, updateProgramData]);
+
+  // Auto-snapshot when a phase gate transitions to approved (a "lock"). Detected
+  // from the persisted gateReviews so it runs off the refreshed programme — no
+  // stale closure from the approve click's await chain. Pre-existing locks are
+  // baselined on first load / program switch so only *new* locks snapshot.
+  const lockSnapshotSeenRef = useRef<{ programId: string | null; phases: Set<string> }>({ programId: null, phases: new Set() });
+  useEffect(() => {
+    if (!activeProgram) return;
+    const approved = new Set(
+      Object.entries(activeProgram.gateReviews ?? {})
+        .filter(([, review]) => (review as { status?: string } | null)?.status === "approved")
+        .map(([phaseId]) => phaseId),
+    );
+    const seen = lockSnapshotSeenRef.current;
+    if (seen.programId !== activeProgram.id) {
+      // New programme in focus — baseline its existing locks without snapshotting.
+      lockSnapshotSeenRef.current = { programId: activeProgram.id, phases: approved };
+      return;
+    }
+    const fresh = [...approved].filter((phaseId) => !seen.phases.has(phaseId));
+    if (fresh.length === 0) return;
+    for (const phaseId of fresh) seen.phases.add(phaseId);
+    const phaseId = fresh[0];
+    const name = activeProgram.phases.find((p) => p.id === phaseId)?.name ?? phaseId;
+    void handleSaveProgramSnapshot(`${name} locked`, "lock");
+  }, [activeProgram, handleSaveProgramSnapshot]);
+
   const handleUploadDocument = useCallback(() => {
     openMoreView("documents");
   }, [openMoreView]);
@@ -2734,6 +2814,8 @@ export default function AppShellV3() {
                 onSaveArtifact={handleSaveArtifact}
                 onApproveArtifact={handleApproveArtifact}
                 onSaveInputs={handleSavePhaseInputs}
+                onSaveProgram={handleSaveProgramSnapshot}
+                onRevertProgram={handleRevertProgramSnapshot}
                 onUploadDocument={handleUploadDocument}
                 onAssistField={handleAssistField}
                 artifactPreviews={{

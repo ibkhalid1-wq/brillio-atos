@@ -425,6 +425,11 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
       await onSave(phaseId, liveSnapshot, { silent: true });
       setSaved(true);
       setTimeout(() => setSaved(false), 1600);
+    } catch {
+      // Auto-save is best-effort. A conflict (another save — e.g. a lock
+      // snapshot — landed first) or transient failure must not surface as an
+      // unhandled rejection: the buffer stays dirty, so the next debounced pass
+      // retries against the refreshed program.
     } finally {
       setSaving(false);
     }
