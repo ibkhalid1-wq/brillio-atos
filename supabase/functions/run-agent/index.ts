@@ -3084,7 +3084,7 @@ function applyArtifactsToProgramData(
       agentDrafted: true,
       agentDraftedAt: new Date().toISOString(),
       ...(typeof artifact.confidence === "number"
-        ? { agentConfidence: artifact.confidence as JsonValue }
+        ? { agentConfidence: toLedgerConfidence(artifact.confidence) as JsonValue }
         : {}),
     };
   }

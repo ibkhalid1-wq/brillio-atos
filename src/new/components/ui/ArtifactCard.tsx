@@ -30,7 +30,7 @@ function statusTone(status: ArtifactCardProps["status"]): string {
 
 export function ArtifactCard(props: ArtifactCardProps) {
   const tone = statusTone(props.status);
-  const confidencePct = typeof props.agentConfidence === "number" ? Math.round(props.agentConfidence * 100) : null;
+  const confidencePct = typeof props.agentConfidence === "number" ? Math.round(props.agentConfidence) : null;
   return (
     <article className={`adam-card adam-stack p-4 border-l-4 ${tone === "green" ? "border-l-emerald-400" : tone === "amber" ? "border-l-amber-400" : "border-l-slate-500"}`}>
       <div className="adam-row adam-space-between">

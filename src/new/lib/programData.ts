@@ -221,6 +221,13 @@ function deriveActivePhaseId(phases: PhaseSummary[]): string {
   return firstStarted?.id || phases[0]?.id || "strategy";
 }
 
+/** Normalise an agent confidence (0-1 or 0-100) to a 0-100 quality score. */
+function normalizeConfidenceTo100(value: number): number | undefined {
+  if (!Number.isFinite(value) || value <= 0) return undefined;
+  const scaled = value <= 1 ? value * 100 : value;
+  return Math.max(0, Math.min(100, Math.round(scaled)));
+}
+
 function deriveArtifacts(data: JsonRecord): ArtifactSummary[] {
   const phaseArtifacts = asRecord(data.phaseArtifacts);
   const items: ArtifactSummary[] = [];
@@ -237,7 +244,7 @@ function deriveArtifacts(data: JsonRecord): ArtifactSummary[] {
         phaseId,
         title,
         status: status === "approved" || status === "archived" ? status : "draft",
-        agentConfidence: asNumber(entry.confidence ?? entry.agentConfidence, 0) || undefined,
+        agentConfidence: normalizeConfidenceTo100(asNumber(entry.confidence ?? entry.agentConfidence, 0)),
         agentGenerated: entry.agentDrafted === true || entry.lastEditedBy === "agent",
         lastEditedBy: entry.lastEditedBy === "human" ? "human" : "agent",
         lastEditedAt: asString(entry.updatedAt ?? entry.lastEditedAt, new Date().toISOString()),
