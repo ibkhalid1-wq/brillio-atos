@@ -28,6 +28,8 @@ interface PhaseInputsPanelProps {
   onUploadDocument: () => void;
   /** Optional AI assist for a single field; resolves with the new field text. */
   onAssistField?: (phaseId: string, request: FieldAssistRequest) => Promise<string>;
+  /** When the phase gate is approved the inputs are frozen: read-only, no save. */
+  locked?: boolean;
 }
 
 /**
@@ -159,7 +161,7 @@ function parseKpiActuals(raw: unknown): Record<string, string> {
   }
 }
 
-export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDocument, onAssistField }: PhaseInputsPanelProps) {
+export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDocument, onAssistField, locked = false }: PhaseInputsPanelProps) {
   const schema = getPhaseInputSchema(phaseId);
   // useMemo prevents a new object reference on every render, which would cause an
   // infinite loop: new existingInputs reference → useEffect fires → setValues → re-render → repeat.
@@ -333,10 +335,11 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
     return false;
   }, [schema.fields, values, existingInputs, localWorkstreams, localKpis, localActuals, grids, program.workstreams, phaseId, showKpis, showActuals]);
 
-  // Prioritise inputs by impact: required gaps first, then optional gaps, then
-  // complete — so "what matters now" is at the top. Ranked from the *persisted*
-  // snapshot (existingInputs), never the live edit buffer, so a field can't jump
-  // under the cursor while the user is typing into it.
+  // Gap accounting for the "what's left" banner. We deliberately do NOT use this
+  // to reorder the fields: the methodology owns the field sequence (e.g. Strategy
+  // shows industry / start / end immediately after the sponsor), and reshuffling
+  // by fill-state made just-saved fields appear to "jump" or vanish. So fields
+  // render in methodology order and this only powers the summary banner.
   const prioritized = useMemo(
     () => prioritizePhaseFields(schema.fields, existingInputs as Record<string, string | undefined>),
     [schema.fields, existingInputs],
@@ -346,6 +349,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
     : null;
 
   async function handleSave() {
+    if (locked) return;
     setSaving(true);
     try {
       await onSave(phaseId, {
@@ -463,6 +467,20 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
             </div>
           ) : null}
 
+          {locked ? (
+            <div className="v3-input-lock-banner">
+              <span className="v3-chip" style={{ fontSize: 10 }}>🔒 Gate approved</span>
+              <span className="v3-input-priority-detail">
+                Inputs are locked for this phase. Reopen the gate to make changes.
+              </span>
+            </div>
+          ) : null}
+
+          <fieldset
+            disabled={locked}
+            className="v3-phase-inputs-fieldset"
+            style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}
+          >
           {prioritized.requiredGaps > 0 ? (
             <div className="v3-input-priority-banner">
               <span className="v3-chip red" style={{ fontSize: 10 }}>
@@ -480,7 +498,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
           ) : null}
 
           <div style={{ display: "grid", gap: 12, marginBottom: 12 }}>
-            {prioritized.fields.map(({ field }) => {
+            {schema.fields.map((field) => {
               const verdict = field.type === "grid"
                 ? (filledRowCount(grids[field.id] ?? [], field.columns ?? []) > 0
                     ? { label: "Complete", tone: "green" as const }
@@ -741,31 +759,39 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
             </div>
           ) : null}
 
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "space-between", alignItems: "center" }}>
-            <button type="button" className="v3-button ghost" style={{ fontSize: 12 }} onClick={onUploadDocument}>
-              ↑ Upload document instead
-            </button>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <button
-                type="button"
-                className="v3-button ghost"
-                style={{ fontSize: 12 }}
-                disabled={saving || !isDirty}
-                onClick={handleCancel}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="v3-button primary"
-                style={{ fontSize: 12 }}
-                disabled={saving || !hasAllRequired}
-                onClick={() => void handleSave()}
-              >
-                {saved ? "Saved ✓" : saving ? "Saving…" : "Save inputs"}
-              </button>
+          </fieldset>
+
+          {locked ? (
+            <div className="v3-input-lock-footer">
+              🔒 Inputs locked — this phase has cleared its stage gate. Reopen the gate to edit.
             </div>
-          </div>
+          ) : (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "space-between", alignItems: "center" }}>
+              <button type="button" className="v3-button ghost" style={{ fontSize: 12 }} onClick={onUploadDocument}>
+                ↑ Upload document instead
+              </button>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <button
+                  type="button"
+                  className="v3-button ghost"
+                  style={{ fontSize: 12 }}
+                  disabled={saving || !isDirty}
+                  onClick={handleCancel}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="v3-button primary"
+                  style={{ fontSize: 12 }}
+                  disabled={saving || !hasAllRequired}
+                  onClick={() => void handleSave()}
+                >
+                  {saved ? "Saved ✓" : saving ? "Saving…" : "Save inputs"}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       ) : null}
     </div>

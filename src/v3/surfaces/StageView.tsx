@@ -870,6 +870,7 @@ export default function StageView({
               onSave={onSaveInputs}
               onUploadDocument={onUploadDocument}
               onAssistField={onAssistField}
+              locked={gateApproved}
             />
           </div>
         ) : null}
@@ -991,12 +992,14 @@ export default function StageView({
               const statusLabel = !present
                 ? "Missing"
                 : state === "approved" ? "Approved"
+                : state === "stale" ? "Stale — regenerate"
                 : state === "ready" ? "Ready"
                 : state === "archived" ? "Archived"
                 : "Draft";
               const statusTone = !present
                 ? "muted"
                 : state === "approved" ? "green"
+                : state === "stale" ? "red"
                 : state === "ready" ? "blue"
                 : state === "archived" ? "muted"
                 : "amber";
@@ -1024,11 +1027,11 @@ export default function StageView({
                     </span>
                   </div>
                   <p className="v3-artifact-row-desc">{summary}</p>
-                  {inputsIncomplete ? (
+                  {/* For a produced artifact, the missing-input gaps live inside the
+                      Improve quality modal (as actionable issues), not as a chip on the
+                      card. Pre-generation we still nudge the user to add inputs first. */}
+                  {inputsIncomplete && !present ? (
                     <div className="v3-artifact-preflight">
-                      {present ? (
-                        <span className="v3-chip amber v3-chip-tight">Needs: {preflight.missingFields.join(" · ")}</span>
-                      ) : null}
                       <button
                         type="button"
                         className="v3-button ghost v3-button-inline-xs"

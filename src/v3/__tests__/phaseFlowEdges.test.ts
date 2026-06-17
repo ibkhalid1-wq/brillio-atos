@@ -18,8 +18,15 @@ describe("derivePhaseFlowEdges", () => {
   });
 
   it("falls back to Narrative-only for unmapped fields and phases", () => {
-    expect(derivePhaseFlowEdges("mobilise", ["keyRisks"])).toEqual([{ from: "keyRisks", to: "narrative" }]);
+    expect(derivePhaseFlowEdges("mobilise", ["unmappedField"])).toEqual([{ from: "unmappedField", to: "narrative" }]);
     expect(derivePhaseFlowEdges("unknown-phase", ["whatever"])).toEqual([{ from: "whatever", to: "narrative" }]);
+  });
+
+  it("wires methodology-declared flow fields (e.g. keyRisks) to their artifacts", () => {
+    expect(derivePhaseFlowEdges("mobilise", ["keyRisks"])).toEqual([
+      { from: "keyRisks", to: "narrative" },
+      { from: "keyRisks", to: "plan" },
+    ]);
   });
 
   it("only ever targets artifacts that exist in the phase's artifact set", () => {

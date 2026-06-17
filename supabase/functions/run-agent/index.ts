@@ -988,6 +988,14 @@ section ordering, naming conventions, terminology, and output shape. Repeated ru
 on identical inputs must produce substantially identical output — do not rephrase
 content solely for stylistic variation or introduce unnecessary rewrites.
 
+### Cross-phase continuity
+The context carries "priorPhaseArtifacts": the approved artifacts from every
+earlier phase. Treat them as the established programme baseline — build on their
+scope, decisions, roles, and terminology, and never contradict or silently
+restate them. They rank as reference material (below current structured inputs in
+the source priority order), so when current inputs conflict with a prior-phase
+artifact, follow the current inputs.
+
 ### Memory constraint
 Agent memory and run history are supplemental context only. They may aid
 continuity, terminology, and narrative consistency, but must never override
@@ -1020,6 +1028,53 @@ function parseKpiBaselines(raw: unknown): Record<string, unknown>[] {
   if (typeof raw === "string") return safeJsonParse<unknown[]>(raw, []).filter(isRecord);
   if (Array.isArray(raw)) return raw.filter(isRecord);
   return [];
+}
+
+/**
+ * Declarative artifact-input flow — the deploy-side copy of the client
+ * methodology's `artifactInputFlow` (src/v3/lib/methodology.ts). Maps an agent
+ * id to the phase-input field ids (which may live on different phases) that must
+ * feed its generation prompt. The edge cannot import the client methodology, so
+ * the flow is expressed here as config rather than hard-coded inside the
+ * context branches.
+ */
+const ARTIFACT_INPUT_FLOW: Record<string, string[]> = {
+  "strategic-roadmap": ["businessObjective", "startDate", "targetEndDate"],
+  "plan": ["businessObjective", "startDate", "targetEndDate", "teamSize", "keyRisks", "keyRoles"],
+};
+
+/** Stringify a phase-input value (string, number, or grid rows) for the prompt. */
+function stringifyFlowValue(value: unknown): string | undefined {
+  if (typeof value === "string") return value.trim() || undefined;
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (Array.isArray(value) && value.length) return JSON.stringify(value);
+  return undefined;
+}
+
+/**
+ * Pulls the input fields that flow into the given agent's prompt, scanning every
+ * phase's captured inputs so fields from different phases (e.g. Strategy +
+ * Mobilise) can both feed one artifact.
+ */
+function flowedArtifactInputs(
+  inner: Record<string, unknown>,
+  agentId: string,
+): Record<string, string> | undefined {
+  const fieldIds = ARTIFACT_INPUT_FLOW[agentId];
+  if (!fieldIds) return undefined;
+  const phaseInputs = normalizeProgramData(inner.phaseInputs as JsonValue | null);
+  const out: Record<string, string> = {};
+  for (const id of fieldIds) {
+    for (const phase of Object.values(phaseInputs)) {
+      const phaseRecord = normalizeProgramData(phase as JsonValue | null);
+      const stringified = stringifyFlowValue(phaseRecord[id]);
+      if (stringified !== undefined) {
+        out[id] = stringified;
+        break;
+      }
+    }
+  }
+  return Object.keys(out).length ? out : undefined;
 }
 
 function buildSpecialAgentInputContext(
@@ -1752,6 +1807,14 @@ function buildSpecialAgentInputContext(
     const changedInputs = runMode === "initial_generation"
       ? []
       : computeInputDelta(readPriorInputSnapshot(inner, formalSpec.fieldKey), buildFormalInputSnapshot(inner, formalSpec.phase));
+    // Cross-phase grounding: every phase except Strategy (the first) generates
+    // artifacts with the approved artifacts from all earlier phases in context,
+    // so later artifacts build on what came before instead of contradicting it.
+    const phaseIndex = ATOS_PHASE_SEQUENCE.indexOf(formalSpec.phase);
+    const priorPhaseArtifacts = phaseIndex > 0
+      ? ATOS_PHASE_SEQUENCE.slice(0, phaseIndex).flatMap((phaseId) =>
+          (artifactsByPhase[phaseId] || []).map((artifact) => ({ ...artifact, phase: phaseId })))
+      : [];
     return JSON.stringify({
       artifact: formalSpec.title,
       phase: formalSpec.phase,
@@ -1759,12 +1822,14 @@ function buildSpecialAgentInputContext(
       changedInputs,
       programName: meta.name || (typeof projectMeta.name === "string" ? projectMeta.name : ""),
       client: meta.client || (typeof projectMeta.client === "string" ? projectMeta.client : ""),
-      industry: meta.industry || (typeof projectMeta.industry === "string" ? projectMeta.industry : ""),
+      industry: meta.industry || strategyInputs.industry || (typeof projectMeta.industry === "string" ? projectMeta.industry : ""),
       objective,
       businessObjective: strategyInputs.businessObjective || objective,
       sponsor: strategyInputs.sponsor || inner.sponsor || projectMeta.sponsor || projectMeta.executiveSponsor || "",
       successMetric: strategyInputs.successMetric || strategyInputs.successMetrics || null,
       constraints: strategyInputs.constraints || null,
+      startDate: strategyInputs.startDate || (typeof projectMeta.startDate === "string" ? projectMeta.startDate : null),
+      targetEndDate: strategyInputs.targetEndDate || (typeof projectMeta.targetEndDate === "string" ? projectMeta.targetEndDate : null),
       budget: strategyInputs.budget || budget || null,
       scopeInclusions: strategyInputs.scopeInclusions || strategyInputs.scopeIn || null,
       scopeExclusions: strategyInputs.scopeExclusions || strategyInputs.scopeOut || null,
@@ -1779,27 +1844,43 @@ function buildSpecialAgentInputContext(
       stakeholders: stakeholderEntries.slice(0, 12),
       existingBusinessCase: businessCase,
       existingArtifacts: artifactsByPhase[formalSpec.phase] || [],
+      priorPhaseArtifacts,
     }, null, 2);
   }
 
+  // Phase inputs that flow into this agent's prompt (e.g. the Delivery Plan
+  // agent now receives businessObjective + start/end dates from Strategy plus
+  // team size, known risks, and key roles from Mobilise). Sourced from the
+  // declarative ARTIFACT_INPUT_FLOW config, not hard-coded here.
+  const flowedInputs = flowedArtifactInputs(inner, target?.agentId || "");
+  const defaultStrategyInputs = normalizeProgramData(
+    normalizeProgramData(inner.phaseInputs as JsonValue | null).strategy as JsonValue | null,
+  );
   return JSON.stringify({
     programName: meta.name || (typeof projectMeta.name === "string" ? projectMeta.name : ""),
     client: meta.client || (typeof projectMeta.client === "string" ? projectMeta.client : ""),
-    industry: meta.industry || (typeof projectMeta.industry === "string" ? projectMeta.industry : ""),
+    industry: meta.industry
+      || (typeof defaultStrategyInputs.industry === "string" ? defaultStrategyInputs.industry : "")
+      || (typeof projectMeta.industry === "string" ? projectMeta.industry : ""),
     objective: typeof inner.objective === "string"
       ? inner.objective
       : typeof inner.programObjective === "string"
         ? inner.programObjective
-        : typeof projectMeta.objective === "string"
-          ? projectMeta.objective
-          : "",
+        : typeof defaultStrategyInputs.businessObjective === "string"
+          ? defaultStrategyInputs.businessObjective
+          : typeof projectMeta.objective === "string"
+            ? projectMeta.objective
+            : "",
     sponsor: typeof inner.sponsor === "string"
       ? inner.sponsor
-      : typeof projectMeta.sponsor === "string"
-        ? projectMeta.sponsor
-        : typeof projectMeta.executiveSponsor === "string"
-          ? projectMeta.executiveSponsor
-          : "",
+      : typeof defaultStrategyInputs.sponsor === "string"
+        ? defaultStrategyInputs.sponsor
+        : typeof projectMeta.sponsor === "string"
+          ? projectMeta.sponsor
+          : typeof projectMeta.executiveSponsor === "string"
+            ? projectMeta.executiveSponsor
+            : "",
+    ...(flowedInputs ? { flowedInputs } : {}),
     narrative,
     valueProjected: coerceNumber(inner.valueProjected ?? businessCase.projectedValue ?? valueRealizeData.projectedValue, 0),
     valueDelivered: coerceNumber(inner.valueDelivered ?? valueRealizeData.valueDelivered ?? businessCase.valueDelivered, 0),
@@ -4396,6 +4477,7 @@ The plan must contain:
 
 Rules:
 - Derive milestones from exit criteria and phase readiness. Do not fabricate dates — use the program's ETA fields if present, otherwise mark as TBD.
+- When flowedInputs is present, anchor the plan to its businessObjective, bound the timeline by startDate / targetEndDate, and size/staff milestones using teamSize, keyRisks, and keyRoles.
 - If objective is blank and no phase has measurable progress, respond with: { "plan": null, "reason": "insufficient_data" }
 - Otherwise respond with the full plan object plus "planGeneratedAt": "<ISO timestamp>"
 - Mark any field as null if data is genuinely unavailable rather than inventing it.

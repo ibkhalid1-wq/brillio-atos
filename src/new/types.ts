@@ -38,7 +38,7 @@ export interface ArtifactSummary {
   id: string;
   phaseId: string;
   title: string;
-  status: "draft" | "approved" | "archived";
+  status: "draft" | "approved" | "stale" | "archived";
   agentConfidence?: number;
   agentGenerated: boolean;
   lastEditedBy: "agent" | "human";

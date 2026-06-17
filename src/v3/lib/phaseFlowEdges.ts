@@ -12,10 +12,29 @@
  * the phase is silently dropped.
  */
 import { getPhaseArtifactIds } from "@/v3/lib/phaseArtifacts";
+import { ATOS_STANDARD } from "@/v3/lib/methodology";
 
 export interface FlowEdge {
   from: string;
   to: string;
+}
+
+/**
+ * Methodology-declared input → artifact relationships, inverted from the phase's
+ * `artifactInputFlow` (which is keyed artifact → input fields). Keeping the flow
+ * wiring sourced from the methodology means a relationship declared once there
+ * (e.g. industry / start / end feeding the Charter and Roadmap) shows up in the
+ * visual flow automatically, with no parallel hand-maintained edge list.
+ */
+function methodologyFieldArtifacts(phaseId: string): Record<string, string[]> {
+  const flow = ATOS_STANDARD.phases.find((phase) => phase.id === phaseId)?.artifactInputFlow ?? {};
+  const inverted: Record<string, string[]> = {};
+  for (const [artifactId, fieldIds] of Object.entries(flow)) {
+    for (const fieldId of fieldIds) {
+      (inverted[fieldId] ??= []).push(artifactId);
+    }
+  }
+  return inverted;
 }
 
 /** Extra artifact targets per field, beyond the always-present Narrative. */
@@ -83,11 +102,12 @@ const PHASE_FIELD_ARTIFACTS: Record<string, Record<string, string[]>> = {
  */
 export function derivePhaseFlowEdges(phaseId: string, fieldIds: string[]): FlowEdge[] {
   const map = PHASE_FIELD_ARTIFACTS[phaseId] ?? {};
+  const methodologyMap = methodologyFieldArtifacts(phaseId);
   const valid = new Set(getPhaseArtifactIds(phaseId));
   const edges: FlowEdge[] = [];
   for (const fieldId of fieldIds) {
     const seen = new Set<string>();
-    const targets = ["narrative", ...(map[fieldId] ?? [])];
+    const targets = ["narrative", ...(map[fieldId] ?? []), ...(methodologyMap[fieldId] ?? [])];
     for (const to of targets) {
       if (seen.has(to) || !valid.has(to)) continue;
       seen.add(to);

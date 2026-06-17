@@ -14,27 +14,6 @@ const ARCHETYPE_VARIANT: Record<string, MethodologyVariant> = PROGRAM_ARCHETYPES
   {} as Record<string, MethodologyVariant>,
 );
 
-const INDUSTRY_OPTIONS = [
-  "Financial Services",
-  "Banking",
-  "Insurance",
-  "Healthcare",
-  "Life Sciences & Pharma",
-  "Retail & Consumer Goods",
-  "Manufacturing",
-  "Automotive",
-  "Energy & Utilities",
-  "Telecommunications",
-  "Media & Entertainment",
-  "Technology & Software",
-  "Transportation & Logistics",
-  "Public Sector & Government",
-  "Education",
-  "Travel & Hospitality",
-  "Professional Services",
-  "Other",
-];
-
 interface ProgramSetupWizardProps {
   program: ProgramSummary;
   onSave: (patch: ProgramSetupPatch) => Promise<void>;
@@ -45,10 +24,6 @@ interface ProgramSetupWizardProps {
 export interface ProgramSetupPatch {
   name: string;
   client: string;
-  industry: string;
-  objective: string;
-  startDate: string;
-  targetEndDate: string;
   /** Selected programme archetype (only set when the user picks one in step 0). */
   archetype?: string;
   /** Methodology variant derived from the archetype. Persisted to program data. */
@@ -115,10 +90,6 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
   const [prefillError, setPrefillError] = useState<string | null>(null);
   const [name, setName] = useState(program.name === "New Program" || program.name === "New Programme" ? "" : program.name || "");
   const [client, setClient] = useState(typeof projectMeta.client === "string" ? projectMeta.client : program.client || "");
-  const [industry, setIndustry] = useState(typeof projectMeta.industry === "string" ? projectMeta.industry : program.industry || "");
-  const [startDate, setStartDate] = useState(typeof projectMeta.startDate === "string" ? projectMeta.startDate : "");
-  const [targetEndDate, setTargetEndDate] = useState(typeof projectMeta.targetEndDate === "string" ? projectMeta.targetEndDate : "");
-  const [objective, setObjective] = useState(program.objective || "");
   // Phases keep their existing progress/target dates; the wizard no longer edits
   // them inline (the phase-progress section was removed), so the setter is unused.
   const [phases] = useState<PhaseForm[]>(
@@ -158,22 +129,6 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
         setClient(fields.clientName.trim());
         nextPrefilled.add("client");
       }
-      if (typeof fields.industry === "string" && fields.industry.trim()) {
-        setIndustry(fields.industry.trim());
-        nextPrefilled.add("industry");
-      }
-      if (Array.isArray(fields.objectives) && fields.objectives.length) {
-        setObjective(fields.objectives.filter((value): value is string => typeof value === "string").join(". "));
-        nextPrefilled.add("objective");
-      }
-      if (typeof fields.startDate === "string" && fields.startDate) {
-        setStartDate(fields.startDate.slice(0, 10));
-        nextPrefilled.add("startDate");
-      }
-      if (typeof fields.endDate === "string" && fields.endDate) {
-        setTargetEndDate(fields.endDate.slice(0, 10));
-        nextPrefilled.add("targetEndDate");
-      }
       setPrefilledFields(nextPrefilled);
       if (!nextPrefilled.size) {
         setPrefillError("Couldn't extract fields automatically. Please fill them in manually.");
@@ -186,6 +141,10 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
   }
 
   const prefillClass = (field: string) => prefilling || !prefilledFields.has(field) ? "v3-input" : "v3-input ring-1 ring-amber-400";
+
+  // Programme name and client are mandatory in the new-programme flow: the user
+  // must provide both before the setup can be saved.
+  const canSave = name.trim().length > 0 && client.trim().length > 0;
 
   return (
     <div className="v3-wizard-overlay" role="dialog" aria-modal="true" aria-label="Programme setup">
@@ -246,23 +205,14 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
               <button type="button" className="v3-button ghost" onClick={onClose}>
                 Cancel
               </button>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
-                <button
-                  type="button"
-                  className="v3-button primary"
-                  disabled={!selectedArchetype}
-                  onClick={() => setStep(1)}
-                >
-                  Next
-                </button>
-                <button
-                  type="button"
-                  style={{ fontSize: 12, color: "var(--v3-text-muted)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
-                  onClick={() => setStep(1)}
-                >
-                  Skip — I&apos;ll configure manually
-                </button>
-              </div>
+              <button
+                type="button"
+                className="v3-button primary"
+                disabled={!selectedArchetype}
+                onClick={() => setStep(1)}
+              >
+                Next
+              </button>
             </div>
           </>
         ) : (
@@ -299,65 +249,36 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
           <div className="v3-wizard-section-label">Programme details</div>
           <div className="v3-wizard-grid">
             <label>
-              <div className="v3-field-label">Programme name</div>
-              <input className={prefillClass("name")} title={prefilledFields.has("name") ? "Extracted from uploaded document — verify before saving" : undefined} aria-label="Programme name" type="text" placeholder="e.g. ERP Transformation" value={name} onChange={(event) => setName(event.target.value)} />
+              <div className="v3-field-label">Programme name <span style={{ color: "var(--v3-accent)" }} aria-hidden="true">*</span></div>
+              <input className={prefillClass("name")} required aria-required="true" title={prefilledFields.has("name") ? "Extracted from uploaded document — verify before saving" : undefined} aria-label="Programme name" type="text" placeholder="e.g. ERP Transformation" value={name} onChange={(event) => setName(event.target.value)} />
             </label>
             <label>
-              <div className="v3-field-label">Client / organisation</div>
-              <input className={prefillClass("client")} title={prefilledFields.has("client") ? "Extracted from uploaded document — verify before saving" : undefined} aria-label="Client or organisation" type="text" placeholder="e.g. Acme Corp" value={client} onChange={(event) => setClient(event.target.value)} />
-            </label>
-            <label>
-              <div className="v3-field-label">Industry</div>
-              <select className={prefillClass("industry")} title={prefilledFields.has("industry") ? "Extracted from uploaded document — verify before saving" : undefined} aria-label="Industry" value={industry} onChange={(event) => setIndustry(event.target.value)}>
-                <option value="">Select an industry…</option>
-                {industry && !INDUSTRY_OPTIONS.includes(industry) ? <option value={industry}>{industry}</option> : null}
-                {INDUSTRY_OPTIONS.map((option) => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <div className="v3-field-label">Programme start date</div>
-              <input className={prefillClass("startDate")} title={prefilledFields.has("startDate") ? "Extracted from uploaded document — verify before saving" : undefined} aria-label="Programme start date" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
-            </label>
-            <label>
-              <div className="v3-field-label">Target end date</div>
-              <input className={prefillClass("targetEndDate")} title={prefilledFields.has("targetEndDate") ? "Extracted from uploaded document — verify before saving" : undefined} aria-label="Target end date" type="date" value={targetEndDate} onChange={(event) => setTargetEndDate(event.target.value)} />
+              <div className="v3-field-label">Client / organisation <span style={{ color: "var(--v3-accent)" }} aria-hidden="true">*</span></div>
+              <input className={prefillClass("client")} required aria-required="true" title={prefilledFields.has("client") ? "Extracted from uploaded document — verify before saving" : undefined} aria-label="Client or organisation" type="text" placeholder="e.g. Acme Corp" value={client} onChange={(event) => setClient(event.target.value)} />
             </label>
           </div>
-        </section>
-
-        <section>
-          <div className="v3-wizard-section-label">Programme objective</div>
-          <label>
-            <textarea
-              className={`${prefillClass("objective")} v3-textarea`}
-              aria-label="Programme objective"
-              rows={4}
-              maxLength={500}
-              placeholder="Describe what this transformation is trying to achieve and why it matters."
-              value={objective}
-              onChange={(event) => setObjective(event.target.value)}
-            />
-          </label>
-          <div className="v3-char-count">{objective.length} / 500</div>
+          {!canSave ? (
+            <div style={{ fontSize: 11, color: "var(--v3-amber)", marginTop: 8 }}>
+              Programme name and client / organisation are required.
+            </div>
+          ) : null}
+          <div style={{ fontSize: 12, color: "var(--v3-text-muted)", marginTop: 10 }}>
+            Industry, dates, and objective are captured on the Strategy phase, where they feed artifact generation.
+          </div>
         </section>
 
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button type="button" className="v3-button ghost" onClick={onClose}>
-            Skip for now
+            Cancel
           </button>
           <button
             type="button"
             className="v3-button primary"
-            disabled={isSaving}
+            disabled={isSaving || !canSave}
+            title={!canSave ? "Enter a programme name and client / organisation to continue" : undefined}
             onClick={() => onSave({
-              name: name.trim() || "New Programme",
+              name: name.trim(),
               client: client.trim(),
-              industry: industry.trim(),
-              objective: objective.trim(),
-              startDate,
-              targetEndDate,
               ...(selectedArchetype ? {
                 archetype: selectedArchetype,
                 methodology: ARCHETYPE_VARIANT[selectedArchetype] ?? "atos-standard",

@@ -2,6 +2,59 @@ import type { ArchetypeDefinition } from "@/v3/types";
 
 export type MethodologyVariant = "atos-standard" | "atos-lite" | "atos-regulated";
 
+/** One column of a structured `grid` phase-input field. */
+export interface GridColumn {
+  key: string;
+  label: string;
+  type?: "text" | "number" | "select";
+  /** Fixed pixel width; omit to let the column flex. */
+  width?: number;
+  options?: string[];
+  placeholder?: string;
+}
+
+/**
+ * A single phase-input field captured on the phase screen. The methodology owns
+ * the field definitions so the input schema, the UI, and the artifact prompts
+ * all read one source of truth — never a hard-coded list in a component.
+ */
+export interface PhaseInputField {
+  id: string;
+  label: string;
+  type: "text" | "textarea" | "number" | "date" | "select" | "grid";
+  placeholder?: string;
+  required: boolean;
+  options?: string[];
+  hint?: string;
+  /** Required when `type === "grid"`: the columns each row exposes. */
+  columns?: GridColumn[];
+  /** Soft-required threshold: warn when a grid has fewer than this many rows. */
+  minRows?: number;
+}
+
+// Industry options surfaced on the Strategy phase. Lives in the methodology so
+// the field definition and its prompt flow stay co-located.
+export const INDUSTRY_OPTIONS = [
+  "Financial Services",
+  "Banking",
+  "Insurance",
+  "Healthcare",
+  "Life Sciences & Pharma",
+  "Retail & Consumer Goods",
+  "Manufacturing",
+  "Automotive",
+  "Energy & Utilities",
+  "Telecommunications",
+  "Media & Entertainment",
+  "Technology & Software",
+  "Transportation & Logistics",
+  "Public Sector & Government",
+  "Education",
+  "Travel & Hospitality",
+  "Professional Services",
+  "Other",
+];
+
 export interface PhaseDefinition {
   id: string;
   displayName: string;
@@ -11,6 +64,14 @@ export interface PhaseDefinition {
   entryGuards: string[];
   recommendedAgents: string[];
   typicalDurationWeeks: { min: number; max: number };
+  /** Phase-input fields captured on this phase (source of truth for the UI schema). */
+  inputFields?: PhaseInputField[];
+  /**
+   * Declarative flow: which captured input field ids feed each artifact/agent's
+   * generation prompt. Keyed by agent id (e.g. "strategic-roadmap", "plan").
+   * The artifact generators read this instead of hard-coding which inputs apply.
+   */
+  artifactInputFlow?: Record<string, string[]>;
 }
 
 export interface MethodologyDefinition {
@@ -31,15 +92,29 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       id: "strategy",
       displayName: "Strategy",
       description: "Define the transformation mandate, value hypothesis, and success metrics.",
-      requiredArtifacts: ["charter", "business-case", "outcome-framework", "strategic-roadmap", "narrative", "plan"],
+      requiredArtifacts: ["charter", "business-case", "outcome-framework", "strategic-roadmap", "narrative"],
       mandatoryExitCriteriaTemplates: [
         "Executive sponsor confirmed and mandate documented",
         "Business objective and primary success metric defined",
         "Programme budget approved",
       ],
       entryGuards: ["Programme created", "Sponsor identified"],
-      recommendedAgents: ["charter", "business-case", "outcome-framework", "narrative", "plan", "input-quality"],
+      recommendedAgents: ["charter", "business-case", "outcome-framework", "narrative", "input-quality"],
       typicalDurationWeeks: { min: 2, max: 6 },
+      inputFields: [
+        { id: "businessObjective", label: "Business objective", type: "textarea", placeholder: "What outcome is this programme trying to achieve?", required: true },
+        { id: "sponsor", label: "Executive sponsor", type: "text", placeholder: "Name and title", required: true },
+        { id: "industry", label: "Industry", type: "select", options: INDUSTRY_OPTIONS, required: true },
+        { id: "startDate", label: "Programme start date", type: "date", required: true },
+        { id: "targetEndDate", label: "Target end date", type: "date", required: true },
+        { id: "constraints", label: "Key constraints", type: "textarea", placeholder: "Budget, timeline, regulatory, or technical constraints", required: true, hint: "e.g. Must go live before Q4 financial year end" },
+        { id: "successMetric", label: "Primary success metric", type: "text", placeholder: "KPI name, e.g. Cost to serve", required: true },
+      ],
+      artifactInputFlow: {
+        "strategic-roadmap": ["businessObjective", "startDate", "targetEndDate"],
+        "charter": ["industry", "startDate", "targetEndDate"],
+        "business-case": ["industry"],
+      },
     },
     {
       id: "mobilise",
@@ -52,8 +127,29 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         "Risks and assumptions log established",
       ],
       entryGuards: ["Strategy gate approved"],
-      recommendedAgents: ["governance-model", "raci-matrix", "narrative", "stakeholder", "risk"],
+      recommendedAgents: ["governance-model", "raci-matrix", "narrative", "plan", "stakeholder", "risk"],
       typicalDurationWeeks: { min: 2, max: 4 },
+      inputFields: [
+        { id: "programDirector", label: "Programme director", type: "text", placeholder: "Name", required: true },
+        { id: "teamSize", label: "Team size", type: "number", placeholder: "Number of FTEs", required: true },
+        { id: "governanceModel", label: "Governance model", type: "select", options: ["Steering committee", "PMO-led", "Agile squad", "Hybrid"], required: true },
+        { id: "keyRisks", label: "Known risks at mobilisation", type: "textarea", placeholder: "Staffing, vendor readiness, budget approval…", required: true },
+        {
+          id: "keyRoles",
+          label: "Key roles",
+          type: "grid",
+          required: true,
+          hint: "Name the accountable person for each role active in this phase",
+          columns: [
+            { key: "role", label: "Role", placeholder: "Programme Director" },
+            { key: "person", label: "Person", placeholder: "Jane Smith" },
+            { key: "org", label: "Org/Team", width: 130, placeholder: "PMO" },
+          ],
+        },
+      ],
+      artifactInputFlow: {
+        "plan": ["businessObjective", "startDate", "targetEndDate", "teamSize", "keyRisks", "keyRoles"],
+      },
     },
     {
       id: "discover",

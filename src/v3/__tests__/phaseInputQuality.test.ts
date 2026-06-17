@@ -23,6 +23,9 @@ describe("derivePhaseInputQuality", () => {
     const result = derivePhaseInputQuality("strategy", {
       businessObjective: "Cut cost-to-serve by twenty percent within eighteen months across all regions.",
       sponsor: "Jane Smith, CFO",
+      industry: "Financial services",
+      startDate: "2026-01-01",
+      targetEndDate: "2027-06-30",
       constraints: "Must go live before the Q4 financial year end with a fixed budget envelope.",
       successMetric: "Cost to serve",
       kpis: JSON.stringify([{ id: "k1", name: "Cost to serve", baseline: "100", target: "80", unit: "$" }]),

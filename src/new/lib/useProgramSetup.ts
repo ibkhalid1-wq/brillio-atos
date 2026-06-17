@@ -6,10 +6,6 @@ import { getProgramState, wrapProgramState, asRecord } from "@/new/lib/programSt
 export interface ProgramSetupPatch {
   name: string;
   client: string;
-  industry: string;
-  objective: string;
-  startDate: string;
-  targetEndDate: string;
   /** Selected programme archetype, persisted to projectMeta when chosen. */
   archetype?: string;
   /** Methodology variant derived from the archetype, persisted to program data. */
@@ -30,7 +26,7 @@ function persistSetupLocally(programId: string, patch: ProgramSetupPatch, nextDa
         if (typeof entry !== "object" || entry === null) return entry;
         const e = entry as Record<string, unknown>;
         if (e.id !== programId) return entry;
-        return { ...e, name: patch.name, client: patch.client, industry: patch.industry, updatedAt: now, lastActiveAt: now, data: { ...nextData, _syncedAt: now } };
+        return { ...e, name: patch.name, client: patch.client, updatedAt: now, lastActiveAt: now, data: { ...nextData, _syncedAt: now } };
       });
       localStorage.setItem(storageKey, JSON.stringify(nextEntries));
     } catch { /* ignore */ }
@@ -61,18 +57,16 @@ export function useProgramSetup(
         : patch.phases.map((phase) => ({ id: phase.id, pct: phase.pct, targetDate: phase.targetDate }));
       const nextInner = {
         ...inner,
-        objective: patch.objective,
         phases: updatedPhases,
         // Only override methodology when the user explicitly selected an archetype,
         // so editing details without re-picking a type never clobbers the variant.
         ...(patch.methodology ? { methodology: patch.methodology } : {}),
+        // Industry, dates, and objective now live on the Strategy phase inputs
+        // (phaseInputs.strategy), so setup only owns name/client/archetype here.
         projectMeta: {
           ...existingMeta,
           name: patch.name,
           client: patch.client,
-          industry: patch.industry,
-          startDate: patch.startDate,
-          targetEndDate: patch.targetEndDate,
           ...(patch.archetype ? { archetype: patch.archetype } : {}),
         },
       };
@@ -98,7 +92,6 @@ export function useProgramSetup(
               id: programId,
               name: patch.name,
               client: patch.client || null,
-              industry: patch.industry || null,
               data: payload as Json,
               updated_at: now,
               is_deleted: false,

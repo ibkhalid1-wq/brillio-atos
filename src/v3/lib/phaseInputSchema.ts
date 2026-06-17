@@ -1,27 +1,8 @@
-/** One column of a structured `grid` input. */
-export interface GridColumn {
-  key: string;
-  label: string;
-  type?: "text" | "number" | "select";
-  /** Fixed pixel width; omit to let the column flex. */
-  width?: number;
-  options?: string[];
-  placeholder?: string;
-}
+import { ATOS_STANDARD, type PhaseInputField } from "@/v3/lib/methodology";
 
-export interface PhaseInputField {
-  id: string;
-  label: string;
-  type: "text" | "textarea" | "number" | "date" | "select" | "grid";
-  placeholder?: string;
-  required: boolean;
-  options?: string[];
-  hint?: string;
-  /** Required when `type === "grid"`: the columns each row exposes. */
-  columns?: GridColumn[];
-  /** Soft-required threshold: warn when a grid has fewer than this many rows. */
-  minRows?: number;
-}
+// Field/column types are owned by the methodology (single source of truth);
+// re-exported here so existing imports from this module keep working.
+export type { GridColumn, PhaseInputField } from "@/v3/lib/methodology";
 
 export interface PhaseInputSchema {
   phaseId: string;
@@ -30,47 +11,25 @@ export interface PhaseInputSchema {
   fields: PhaseInputField[];
 }
 
-// ── Reusable grid column presets ─────────────────────────────────────────────
-// Three shapes cover ~15 free-text fields across phases: a roles/people grid, a
-// measurable grid, and a RAID/entity grid (with per-field column labels).
-const ROLE_COLS: GridColumn[] = [
-  { key: "role", label: "Role", placeholder: "Programme Director" },
-  { key: "person", label: "Person", placeholder: "Jane Smith" },
-  { key: "org", label: "Org/Team", width: 130, placeholder: "PMO" },
-];
-
-const keyRolesField: PhaseInputField = {
-  id: "keyRoles",
-  label: "Key roles",
-  type: "grid",
-  columns: ROLE_COLS,
-  required: true,
-  hint: "Name the accountable person for each role active in this phase",
-};
+/** Reads a phase's input-field definitions from the methodology registry. */
+function methodologyInputFields(phaseId: string): PhaseInputField[] {
+  return ATOS_STANDARD.phases.find((phase) => phase.id === phaseId)?.inputFields ?? [];
+}
 
 export const PHASE_INPUT_SCHEMAS: Record<string, PhaseInputSchema> = {
   strategy: {
     phaseId: "strategy",
     title: "Strategy inputs",
     description: "Provide the foundational context ATOS needs to generate strategy artifacts.",
-    fields: [
-      { id: "businessObjective", label: "Business objective", type: "textarea", placeholder: "What outcome is this programme trying to achieve?", required: true },
-      { id: "sponsor", label: "Executive sponsor", type: "text", placeholder: "Name and title", required: true },
-      { id: "constraints", label: "Key constraints", type: "textarea", placeholder: "Budget, timeline, regulatory, or technical constraints", required: true, hint: "e.g. Must go live before Q4 financial year end" },
-      { id: "successMetric", label: "Primary success metric", type: "text", placeholder: "KPI name, e.g. Cost to serve", required: true },
-    ],
+    // Fields sourced from the methodology so the schema never drifts from it.
+    fields: methodologyInputFields("strategy"),
   },
   mobilise: {
     phaseId: "mobilise",
     title: "Mobilise inputs",
     description: "Define the team and governance structure for this phase.",
-    fields: [
-      { id: "programDirector", label: "Programme director", type: "text", placeholder: "Name", required: true },
-      { id: "teamSize", label: "Team size", type: "number", placeholder: "Number of FTEs", required: true },
-      { id: "governanceModel", label: "Governance model", type: "select", options: ["Steering committee", "PMO-led", "Agile squad", "Hybrid"], required: true },
-      { id: "keyRisks", label: "Known risks at mobilisation", type: "textarea", placeholder: "Staffing, vendor readiness, budget approval…", required: true },
-      keyRolesField,
-    ],
+    // Fields sourced from the methodology so the schema never drifts from it.
+    fields: methodologyInputFields("mobilise"),
   },
   discover: {
     phaseId: "discover",

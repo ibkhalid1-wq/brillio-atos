@@ -84,6 +84,10 @@ function asArray(value: Json | unknown): Json[] {
   return Array.isArray(value) ? value : [];
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function asString(value: Json | unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
 }
@@ -243,7 +247,7 @@ function deriveArtifacts(data: JsonRecord): ArtifactSummary[] {
         id: artifactId,
         phaseId,
         title,
-        status: status === "approved" || status === "archived" ? status : "draft",
+        status: status === "approved" || status === "stale" || status === "archived" ? status : "draft",
         agentConfidence: normalizeConfidenceTo100(asNumber(entry.confidence ?? entry.agentConfidence, 0)),
         agentGenerated: entry.agentDrafted === true || entry.lastEditedBy === "agent",
         lastEditedBy: entry.lastEditedBy === "human" ? "human" : "agent",

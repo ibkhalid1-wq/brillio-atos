@@ -8735,6 +8735,31 @@ button.v3-chip:disabled {
   color: var(--v3-text-secondary);
 }
 
+/* Phase-input lock (gate approved → inputs frozen) */
+.v3-input-lock-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 7px 10px;
+  margin-bottom: 12px;
+  border: 1px solid var(--v3-border);
+  border-radius: 8px;
+  background: var(--v3-surface-2);
+}
+.v3-phase-inputs-fieldset[disabled] {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+.v3-input-lock-footer {
+  font-size: 12px;
+  color: var(--v3-text-secondary);
+  padding: 9px 11px;
+  border: 1px dashed var(--v3-border);
+  border-radius: 8px;
+  background: var(--v3-surface-2);
+}
+
 /* Per-field AI assist controls (phase inputs) */
 .v3-field-assist {
   display: flex;

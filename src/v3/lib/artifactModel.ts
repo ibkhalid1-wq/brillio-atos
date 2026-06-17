@@ -13,7 +13,7 @@ import type { ProgramSummary, ArtifactSummary } from "@/new/types";
 import { ATOS_STANDARD, type MethodologyDefinition } from "@/v3/lib/methodology";
 import { getAgentMeta } from "@/v3/lib/agentMeta";
 
-export type ArtifactState = "missing" | "draft" | "ready" | "approved" | "archived";
+export type ArtifactState = "missing" | "draft" | "ready" | "approved" | "stale" | "archived";
 export type ArtifactOrigin = "generated" | "uploaded" | "required";
 
 export interface ArtifactNode {
@@ -122,6 +122,7 @@ function matchesRequirement(artifact: ArtifactSummary, agentId: string, expected
 function stateFromArtifact(artifact: ArtifactSummary | undefined): ArtifactState {
   if (!artifact) return "missing";
   if (artifact.status === "approved") return "approved";
+  if (artifact.status === "stale") return "stale";
   if (artifact.status === "archived") return "archived";
   // A draft with strong confidence reads as "ready" for review.
   if ((artifact.agentConfidence ?? 0) >= 80) return "ready";

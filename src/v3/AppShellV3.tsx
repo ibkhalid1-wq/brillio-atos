@@ -52,6 +52,7 @@ import ProgramSetupWizard from "@/v3/components/ProgramSetupWizard";
 import { reportError } from "@/lib/errorReporter";
 import { sanitizeMarkdown } from "@/lib/sanitize";
 import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
+import { changedInputFields, approvedArtifactsToStale } from "@/v3/lib/artifactStaleness";
 import { useRelativeTimeTick } from "@/lib/useRelativeTimeTick";
 import { useAgentCascadeToasts } from "@/v3/hooks/useAgentCascadeToasts";
 import { useCriticalEventAlerts } from "@/v3/hooks/useCriticalEventAlerts";
@@ -1217,48 +1218,13 @@ export default function AppShellV3() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePhaseId, activeProgramId, authed, aiStatus.status]);
 
-  // ── Proactive agent triggers (Priority 3) ────────────────────────────────────
-  // When readiness drops below 60% on the active phase, auto-trigger the gate
-  // readiness coach so the user is proactively guided — not waiting to discover
-  // the problem themselves. Runs at most once per phase per session.
-  const lastProactiveTriggerRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!activeProgram || !activePhaseId || anyAgentRunning) return;
-    if (!authed || !activeProgramId) return;
-    // Only trigger when AI is connected
-    if (aiStatus.status !== "connected") return;
-    if (Date.now() < rateLimitCooldownUntilRef.current) return; // AI throttled — don't pile on
-
-    const readiness = computePhaseReadiness(activeProgram, activePhaseId);
-    const threshold = getGateThreshold(activePhaseId);
-    const gateStatus = activeProgram.gateReviews?.[activePhaseId]?.status;
-
-    // Don't trigger if gate is already approved or already in review
-    if (gateStatus === "approved" || gateStatus === "pending-review") return;
-
-    // Fire at most once per (program, phase) ever — persisted across reloads. The old
-    // readiness-bucketed key re-fired every time the score crossed a 10% boundary and
-    // on every fresh page load, which made gate-readiness-coach the single largest
-    // source of background AI calls. Coaching stays available on demand via the panel.
-    const triggerKey = `${activeProgramId}:${activePhaseId}:gate-coach`;
-    if (lastProactiveTriggerRef.current === triggerKey || hasProactiveFired(triggerKey)) return;
-
-    // Trigger when readiness is low but work is underway (score > 5 means some activity)
-    if (readiness.score > 5 && readiness.score < Math.max(40, threshold - 20)) {
-      lastProactiveTriggerRef.current = triggerKey;
-      markProactiveFired(triggerKey);
-      pushV3Toast(
-        `Gate readiness is ${readiness.score}% — ATOS is running a readiness assessment to identify blockers.`,
-        { tone: "info", duration: 4000 },
-      );
-      void runProgramAgent({
-        agentId: "gate-readiness-coach",
-        phaseId: activePhaseId,
-        triggeredBy: "proactive",
-      });
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activePhaseId, activeProgramId, authed, aiStatus.status]);
+  // NOTE: The proactive gate-readiness-coach trigger that used to live here was
+  // removed as obsolete — it duplicated the background trigger in
+  // useAgentTriggers (which fires gate-readiness-coach for any phase whose
+  // readiness score is < 80%). Running both produced two server calls for the
+  // same agent+phase under overlapping low-readiness conditions. The agent still
+  // runs via the background engine and remains available on demand from the
+  // command palette / gate panel.
 
   const nudges = useMemo(() => {
     if (!activeProgram) return [];
@@ -1923,12 +1889,22 @@ export default function AppShellV3() {
         setActiveProgramId(newId);
         // Short delay so the new activeProgram is set before opening the wizard
         setTimeout(() => setWizardOpen(true), 150);
+        // Nudge the user to connect an AI provider so agents are usable on the
+        // new programme. Only prompt when the status check has resolved to a
+        // definitively-unconnected state (skip "checking" to avoid false alarms).
+        if (aiStatus.status !== "connected" && aiStatus.status !== "checking") {
+          pushV3Toast("Connect an AI provider to unlock agents for this programme.", {
+            tone: "info",
+            duration: 10000,
+            action: { label: "Connect AI provider →", onClick: () => openAISettings() },
+          });
+        }
       }
     } catch (error) {
       reportError(error instanceof Error ? error : new Error(String(error)), { action: "create_program" });
       pushV3Toast("Could not create programme.", { tone: "error", duration: 4000 });
     }
-  }, [refreshPrograms, setActiveProgramId, userId]);
+  }, [refreshPrograms, setActiveProgramId, userId, aiStatus.status, openAISettings]);
 
   const handleDeleteProgram = useCallback(async (programId: string) => {
     const ok = await deleteProgramFromSupabase(programId);
@@ -2055,12 +2031,38 @@ export default function AppShellV3() {
   const inputQualityDebounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const handleSavePhaseInputs = useCallback(async (phaseId: string, inputs: Record<string, string>) => {
     if (!activeProgram) return;
+    // Hard freeze: once a phase clears its stage gate its inputs are locked, so no
+    // save (manual or import) can mutate them. The UI already hides the editors;
+    // this is the authoritative server-bound chokepoint that enforces it.
+    if (activeProgram.gateReviews?.[phaseId]?.status === "approved") {
+      pushV3Toast("Phase gate approved — inputs are locked. Reopen the gate to edit.", { tone: "warning", duration: 4000 });
+      return;
+    }
     const cloned = cloneRawProgram(activeProgram);
     const existing = typeof cloned.inner.phaseInputs === "object" && cloned.inner.phaseInputs !== null
       ? { ...(cloned.inner.phaseInputs as Record<string, unknown>) }
       : {};
+    // An approved artifact must never silently drift: when a captured input that
+    // feeds it changes, flag that artifact stale so it is regenerated. Flow edges
+    // are methodology-derived, so which inputs touch which artifacts is not
+    // hard-coded here. Computed against the prior bucket, before the merge.
+    const changedFields = changedInputFields(existing[phaseId], inputs);
     existing[phaseId] = mergePhaseInputBucket(existing[phaseId], inputs);
-    const payload = cloned.commit({ ...cloned.inner, phaseInputs: existing });
+    const artifactBuckets = typeof cloned.inner.phaseArtifacts === "object" && cloned.inner.phaseArtifacts !== null
+      ? { ...(cloned.inner.phaseArtifacts as Record<string, Record<string, Record<string, unknown>>>) }
+      : {};
+    const phaseBucket = artifactBuckets[phaseId];
+    const staled = approvedArtifactsToStale(phaseId, changedFields, phaseBucket);
+    if (staled.length) {
+      const nextBucket = { ...phaseBucket };
+      const nowIso = new Date().toISOString();
+      const reason = `Inputs changed: ${changedFields.join(", ")}`;
+      for (const artifactId of staled) {
+        nextBucket[artifactId] = { ...(nextBucket[artifactId] as Record<string, unknown>), status: "stale", staleReason: reason, staleAt: nowIso };
+      }
+      artifactBuckets[phaseId] = nextBucket;
+    }
+    const payload = cloned.commit({ ...cloned.inner, phaseInputs: existing, phaseArtifacts: artifactBuckets });
     await updateProgramData(activeProgram.id, payload, activeProgram.updatedAt);
     await refreshPrograms();
     // Debounce input-quality (Tier 2 — no one is blocked on it) so a flurry of saves
@@ -2072,7 +2074,14 @@ export default function AppShellV3() {
       delete timers[phaseId];
       void runProgramAgent({ agentId: "input-quality", phaseId, triggeredBy: "trigger", skipPreSync: true });
     }, 8000);
-    pushV3Toast("Inputs saved. Ready to run agents.", { tone: "success", duration: 2500 });
+    if (staled.length) {
+      pushV3Toast(
+        `Inputs saved. ${staled.length} approved artifact${staled.length > 1 ? "s" : ""} marked stale — regenerate to apply your changes.`,
+        { tone: "warning", duration: 5000 },
+      );
+    } else {
+      pushV3Toast("Inputs saved. Ready to run agents.", { tone: "success", duration: 2500 });
+    }
   }, [activeProgram, refreshPrograms, runProgramAgent, updateProgramData]);
 
   // Atomic multi-phase save — used by document import to avoid stale-closure overwrites
@@ -2082,23 +2091,38 @@ export default function AppShellV3() {
     const existing = typeof cloned.inner.phaseInputs === "object" && cloned.inner.phaseInputs !== null
       ? { ...(cloned.inner.phaseInputs as Record<string, unknown>) }
       : {};
-    for (const [phaseId, inputs] of Object.entries(allInputs)) {
+    // Skip any phase whose gate is already approved — its inputs are frozen, so an
+    // import must not overwrite them. Dropped phases are surfaced to the user below.
+    const lockedPhases = Object.keys(allInputs).filter(
+      (phaseId) => activeProgram.gateReviews?.[phaseId]?.status === "approved",
+    );
+    const writableInputs = Object.fromEntries(
+      Object.entries(allInputs).filter(([phaseId]) => !lockedPhases.includes(phaseId)),
+    );
+    if (Object.keys(writableInputs).length === 0) {
+      pushV3Toast("All targeted phases are gate-locked — nothing imported.", { tone: "warning", duration: 4000 });
+      return;
+    }
+    for (const [phaseId, inputs] of Object.entries(writableInputs)) {
       existing[phaseId] = mergePhaseInputBucket(existing[phaseId], inputs);
     }
     const payload = cloned.commit({ ...cloned.inner, phaseInputs: existing });
     await updateProgramData(activeProgram.id, payload, activeProgram.updatedAt);
     await refreshPrograms();
-    // Navigate to the first phase that received inputs and open the context drawer
-    const targetPhase = firstPhaseId ?? Object.keys(allInputs)[0];
+    // Navigate to the first writable phase that received inputs and open the drawer
+    const targetPhase = (firstPhaseId && !lockedPhases.includes(firstPhaseId) ? firstPhaseId : null) ?? Object.keys(writableInputs)[0];
     if (targetPhase) {
       setActivePhaseId(targetPhase);
       commitNavigation({ surface: "stage", moreView: null, activePhaseId: targetPhase, reportId: null });
       setContextDrawerOpen(true);
       window.localStorage.setItem(CONTEXT_DRAWER_STORAGE_KEY, "true");
     }
-    const phaseCount = Object.keys(allInputs).length;
-    const fieldCount = Object.values(allInputs).reduce((sum, fields) => sum + Object.keys(fields).length, 0);
-    pushV3Toast(`${fieldCount} field${fieldCount !== 1 ? "s" : ""} saved across ${phaseCount} phase${phaseCount !== 1 ? "s" : ""}. Ready to run agents.`, { tone: "success", duration: 3500 });
+    const phaseCount = Object.keys(writableInputs).length;
+    const fieldCount = Object.values(writableInputs).reduce((sum, fields) => sum + Object.keys(fields).length, 0);
+    const lockedNote = lockedPhases.length
+      ? ` ${lockedPhases.length} gate-locked phase${lockedPhases.length > 1 ? "s" : ""} skipped.`
+      : "";
+    pushV3Toast(`${fieldCount} field${fieldCount !== 1 ? "s" : ""} saved across ${phaseCount} phase${phaseCount !== 1 ? "s" : ""}. Ready to run agents.${lockedNote}`, { tone: "success", duration: 3500 });
   }, [activeProgram, commitNavigation, refreshPrograms, updateProgramData]);
 
   const handleUploadDocument = useCallback(() => {
@@ -2486,14 +2510,6 @@ export default function AppShellV3() {
                 >
                   <span className="v3-welcome-quickstart-item-icon">?</span>
                   <span className="v3-welcome-quickstart-item-text">Read the guide</span>
-                </button>
-                <button
-                  type="button"
-                  className="v3-welcome-quickstart-item"
-                  onClick={openAISettings}
-                >
-                  <span className="v3-welcome-quickstart-item-icon">✦</span>
-                  <span className="v3-welcome-quickstart-item-text">Connect AI provider</span>
                 </button>
               </div>
             </div>
