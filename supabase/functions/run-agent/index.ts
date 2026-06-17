@@ -4281,6 +4281,11 @@ function applyProgramSupportArtifact(
   return next;
 }
 
+/** Convert a kebab-case agent/artifact id to camelCase (e.g. "change-impact" → "changeImpact"). */
+function toCamelCaseId(id: string): string {
+  return id.replace(/-([a-z])/g, (_, ch: string) => ch.toUpperCase());
+}
+
 function applyArtifactQuality(programData: ProgramState, fieldKey: string, review: Record<string, unknown>, confidenceFieldKey?: string): ProgramState {
   return updateInnerProgramData(programData, (inner) => ({
     ...inner,
@@ -6928,7 +6933,16 @@ Deno.serve(async (req) => {
             content: stringifyForReview(result),
           },
         };
-        const reviewTarget = reviewTargets[request.agentId];
+        // Formal-artifact documents (charter, business-case, outcome-framework,
+        // …) carry no static review entry, but the user needs the same AI quality
+        // score + improvement plan for them. Review the generated document and
+        // persist under `${camelCase(agentId)}Quality` — the exact key the Stage
+        // view computes from the artifact's producing-agent id (no hardcoded map).
+        const formalSpec = FORMAL_ARTIFACT_AGENTS[request.agentId];
+        const reviewTarget = reviewTargets[request.agentId]
+          ?? (formalSpec
+            ? { fieldKey: `${toCamelCaseId(request.agentId)}Quality`, content: stringifyForReview(result) }
+            : undefined);
         if (reviewTarget?.content.trim()) {
           const artifactReview = await reviewArtifact(
             request.agentId,

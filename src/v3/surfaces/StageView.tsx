@@ -128,6 +128,42 @@ function deriveArtifactQualityIssues(opts: {
   return issues;
 }
 
+// The independent AI quality review (score + improvement plan) that run-agent
+// produces at generation time is persisted at a top-level program key derived
+// from the producing-agent id: `${camelCase(agentId)}Quality` (e.g. narrative →
+// narrativeQuality, change-impact → changeImpactQuality, charter →
+// charterQuality). Computing the key keeps this in lockstep with the edge for
+// every reviewed artifact — including formal documents — without a hardcoded map.
+export function artifactReviewFieldKey(defId: string): string {
+  const camel = defId.replace(/-([a-z])/g, (_, ch: string) => ch.toUpperCase());
+  return `${camel}Quality`;
+}
+
+// Resolve the AI review record for an artifact. The review is stored at a
+// top-level key (program-wide) but may carry a per-phase bucket; prefer the
+// phase-specific entry, mirroring how phaseReadiness reads these scores.
+export function resolveArtifactReview(
+  source: Record<string, unknown> | null,
+  defId: string,
+  phaseId: string,
+): { score: number | null; improvements: string[] } | null {
+  if (!source) return null;
+  const fieldKey = artifactReviewFieldKey(defId);
+  const candidate = source[fieldKey];
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return null;
+  const record = candidate as Record<string, unknown>;
+  const phaseBucket = record[phaseId];
+  const pick = (phaseBucket && typeof phaseBucket === "object" && !Array.isArray(phaseBucket)
+    ? phaseBucket
+    : record) as Record<string, unknown>;
+  const score = typeof pick.score === "number" ? Math.round(pick.score) : null;
+  const improvements = Array.isArray(pick.improvements)
+    ? pick.improvements.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+  if (score == null && improvements.length === 0) return null;
+  return { score, improvements };
+}
+
 function StageModal({ title, onClose, children, maxWidth = 560 }: { title: string; onClose: () => void; children: React.ReactNode; maxWidth?: number }) {
   return (
     <div
@@ -1189,6 +1225,13 @@ export default function StageView({
               const present = !!node?.present;
               const state = node?.state ?? "missing";
               const score = typeof node?.quality === "number" ? node.quality : null;
+              // The AI quality review (score + improvement plan) is produced at
+              // generation time and stored at a top-level program key, not on the
+              // artifact ledger record — so a draft (agentConfidence unset → null
+              // quality) still has a reviewer score here. Prefer it so the chip
+              // shows quality for drafts and the modal can render the AI plan.
+              const review = resolveArtifactReview(source, def.id, activePhase.id);
+              const displayScore = review?.score ?? score;
               const statusLabel = !present
                 ? "Missing"
                 : state === "approved" ? "Approved"
@@ -1230,7 +1273,7 @@ export default function StageView({
                   <div className="v3-artifact-row-head">
                     <span className="v3-artifact-row-label">{def.label}</span>
                     <span className={`v3-chip ${statusTone}`} style={{ flex: "0 0 auto" }}>
-                      {statusLabel}{present && score != null ? ` · ${score}%` : ""}
+                      {statusLabel}{present && displayScore != null ? ` · ${displayScore}%` : ""}
                     </span>
                   </div>
                   <p className="v3-artifact-row-desc">{summary}</p>
@@ -1243,7 +1286,7 @@ export default function StageView({
                     <button
                       type="button"
                       className="v3-button ghost v3-button-inline-xs"
-                      onClick={() => setPreviewArtifact({ label: def.label, description: def.description, content: previewContent, score, statusTone })}
+                      onClick={() => setPreviewArtifact({ label: def.label, description: def.description, content: previewContent, score: displayScore, statusTone })}
                       title={`Preview ${def.label}`}
                     >
                       ▾ Preview
@@ -1253,7 +1296,7 @@ export default function StageView({
                     <button
                       type="button"
                       className="v3-button ghost v3-button-inline-xs"
-                      onClick={() => setQualityArtifact({ label: def.label, defId: def.id, score, issues: deriveArtifactQualityIssues({ score, state, missingInputs: preflight.missingFields }) })}
+                      onClick={() => setQualityArtifact({ label: def.label, defId: def.id, score: displayScore, issues: deriveArtifactQualityIssues({ score: displayScore, state, missingInputs: preflight.missingFields, improvements: review?.improvements }) })}
                       title={`Review and improve the quality of ${def.label}`}
                     >
                       ✦ Improve quality
