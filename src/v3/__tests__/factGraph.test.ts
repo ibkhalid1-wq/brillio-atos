@@ -6,7 +6,9 @@ import {
   factsByStatus,
   factsForArtifact,
   compressFactCitation,
+  selectFactsForArtifacts,
   type Fact,
+  type FactGraph,
 } from "@/v3/lib/factGraph";
 
 /** Minimal ProgramSummary stub — buildFactGraph only reads rawData. */
@@ -104,6 +106,79 @@ describe("fact accessors", () => {
 
   it("factsForArtifact returns only facts feeding that artifact", () => {
     expect(factsForArtifact(graph, "any-artifact")).toHaveLength(0);
+  });
+});
+
+/** Hand-built facts with explicit impactedArtifacts — static schema fields declare
+ *  none, so we construct a graph directly to exercise the artifact-scoped slice. */
+function fact(id: string, factType: string, artifacts: string[]): Fact {
+  return {
+    id,
+    factId: `strategy:${factType}`,
+    factType,
+    factText: `${factType}: value ${id}`,
+    normalizedValue: `value ${id}`,
+    sourceType: "user_input",
+    sourceId: "strategy",
+    sourceName: "User input",
+    sourceLocation: "",
+    confidence: 1,
+    status: "confirmed",
+    impactedArtifacts: artifacts,
+    impactedPhases: ["strategy"],
+  };
+}
+
+function graphOf(facts: Fact[]): FactGraph {
+  const byId: Record<string, Fact> = {};
+  for (const f of facts) byId[f.id] = f;
+  return {
+    facts,
+    byId,
+    stats: {
+      factCount: facts.length,
+      byStatus: { proposed: 0, confirmed: facts.length, conflicted: 0, rejected: 0, stale: 0 },
+      bySourceType: { user_input: facts.length, imported_document: 0, prior_artifact: 0, inferred: 0 },
+      orphans: facts.filter((f) => f.impactedArtifacts.length === 0).length,
+    },
+  };
+}
+
+describe("selectFactsForArtifacts", () => {
+  const graph = graphOf([
+    fact("F1", "sponsor", ["charter", "businessCase"]),
+    fact("F2", "businessObjective", ["charter"]),
+    fact("F3", "industry", ["marketScan"]),
+    fact("F4", "budget", []), // orphan — feeds nothing
+  ]);
+
+  it("keeps only facts feeding an in-scope artifact", () => {
+    const sel = selectFactsForArtifacts(graph, ["charter"]);
+    expect(sel.facts.map((f) => f.id)).toEqual(["F1", "F2"]);
+  });
+
+  it("unions facts across multiple in-scope artifacts, no duplicates", () => {
+    const sel = selectFactsForArtifacts(graph, ["charter", "marketScan"]);
+    expect(sel.facts.map((f) => f.id)).toEqual(["F1", "F2", "F3"]);
+  });
+
+  it("reports a positive reduction when the scope is a strict subset", () => {
+    const sel = selectFactsForArtifacts(graph, ["charter"]);
+    expect(sel.reduction.scopedChars).toBeLessThan(sel.reduction.fullChars);
+    expect(sel.reduction.reductionPct).toBeGreaterThan(0);
+    expect(sel.reduction.droppedChars).toBe(sel.reduction.fullChars - sel.reduction.scopedChars);
+  });
+
+  it("returns an empty slice with 100% reduction when no artifact matches", () => {
+    const sel = selectFactsForArtifacts(graph, ["nonexistent"]);
+    expect(sel.facts).toHaveLength(0);
+    expect(sel.citations).toBe("");
+    expect(sel.reduction.reductionPct).toBe(100);
+  });
+
+  it("citations are the compressed form of the selected facts", () => {
+    const sel = selectFactsForArtifacts(graph, ["businessCase"]);
+    expect(sel.citations).toBe(compressFactCitation(graph.byId.F1));
   });
 });
 

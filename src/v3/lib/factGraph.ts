@@ -210,3 +210,45 @@ export function compressFactCitation(fact: Fact): string {
 export function compressFactGraph(facts: Fact[]): string {
   return facts.map(compressFactCitation).join("\n");
 }
+
+/**
+ * A scoped slice of the Fact Graph with a measured token saving — the fact-level
+ * analogue of contextContracts.selectContext. Where selectContext prunes graph
+ * *nodes* and reports the pruned percentage, this prunes *facts* to only those
+ * feeding the in-scope artifacts and reports how much of the full fact corpus was
+ * dropped. The compressed citations are what an agent prompt carries instead of
+ * the whole programme's facts.
+ */
+export interface FactSelection {
+  /** The facts that feed at least one in-scope artifact. */
+  facts: Fact[];
+  /** compressFactGraph(facts) — the prompt-ready citation block. */
+  citations: string;
+  reduction: {
+    /** Characters of the full fact corpus, compressed. */
+    fullChars: number;
+    /** Characters of just the selected facts, compressed. */
+    scopedChars: number;
+    droppedChars: number;
+    /** Percentage of the full fact-corpus characters pruned (0–100). */
+    reductionPct: number;
+  };
+}
+
+/**
+ * Select the facts feeding any of `artifactIds` and measure the saving versus
+ * sending the full fact corpus. Composes with contextContracts.selectContext:
+ * pass the artifact node ids of an `artifact`-capability ScopedContext (e.g.
+ * `scoped.graph.nodes.filter(n => n.kind === "artifact").map(n => n.id)`), and
+ * the returned `citations` are the "Relevant inputs" slice that contract needs.
+ */
+export function selectFactsForArtifacts(graph: FactGraph, artifactIds: Iterable<string>): FactSelection {
+  const wanted = new Set(artifactIds);
+  const facts = graph.facts.filter((f) => f.impactedArtifacts.some((a) => wanted.has(a)));
+  const citations = compressFactGraph(facts);
+  const fullChars = compressFactGraph(graph.facts).length;
+  const scopedChars = citations.length;
+  const droppedChars = Math.max(0, fullChars - scopedChars);
+  const reductionPct = fullChars === 0 ? 0 : Math.round((droppedChars / fullChars) * 100);
+  return { facts, citations, reduction: { fullChars, scopedChars, droppedChars, reductionPct } };
+}
