@@ -4199,14 +4199,43 @@ function applyGeneratedExitCriteriaToProgramData(programData: ProgramState, phas
 }
 
 const PLANNER_FIELD_TYPES = new Set(["text", "textarea", "number", "date", "select", "grid"]);
+const PLANNER_CONFIDENCE = new Set(["high", "medium", "low"]);
+const PLANNER_READINESS = new Set(["green", "yellow", "red"]);
+const PLANNER_ARTIFACT_READINESS = new Set(["ready", "needs_input", "blocked"]);
 
 /**
- * Write the phase-input-planner's proposal straight into the program's
- * dynamicSchema (inputFields / artifacts / artifactInputFlow for `phaseId`),
- * replacing any prior entries for that phase. The edge is the single writer:
- * relying on the client to persist from the HTTP response was fragile (a flaky
- * round-trip silently dropped a perfectly good proposal). Sanitisation mirrors
- * the client's sanitizePlannerProposal so persisted data stays identical.
+ * Words that signal a label names a deliverable (artifact) rather than an atomic
+ * fact. The Phase Transition Planner must never return these as input fields —
+ * users supply facts; ATOS generates artifacts. Mirrors the client guardrail in
+ * dynamicSchema.ts (ARTIFACT_LIKE_WORDS / isArtifactLikeLabel).
+ */
+const PLANNER_ARTIFACT_WORDS = new Set([
+  "plan", "summary", "report", "register", "map", "model", "deck",
+  "brief", "pack", "roadmap", "assessment", "design", "artifact",
+]);
+function isArtifactLikeLabel(label: string): boolean {
+  const words = label.toLowerCase().split(/[^a-z]+/).filter(Boolean);
+  const head = words[words.length - 1];
+  return head ? PLANNER_ARTIFACT_WORDS.has(head) : false;
+}
+
+function plannerStr(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+function plannerStrArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.map((v) => plannerStr(v)).filter(Boolean) : [];
+}
+
+/**
+ * Write the Phase Transition Planner's proposal straight into the program's
+ * dynamicSchema for `phaseId`, replacing any prior entries for that phase. The
+ * edge is the single writer: relying on the client to persist from the HTTP
+ * response was fragile (a flaky round-trip silently dropped a good proposal).
+ * Sanitisation mirrors the client's sanitizePlannerProposal so persisted data
+ * stays identical. Accepts both the rich planner contract (fieldId /
+ * artifactsToGenerate / conflictResolutionFields / gaps / nextPhase /
+ * validationSummary) and the legacy flat shape, and applies the deterministic
+ * input/artifact confusion guardrail.
  */
 function applyPhaseInputPlannerResultToProgramData(
   programData: ProgramState,
@@ -4214,27 +4243,52 @@ function applyPhaseInputPlannerResultToProgramData(
   result: Record<string, unknown>,
 ): ProgramState {
   const fieldsIn = Array.isArray(result.inputFields) ? result.inputFields : [];
-  const artifactsIn = Array.isArray(result.artifacts) ? result.artifacts : [];
+  const artifactsIn = Array.isArray(result.artifactsToGenerate)
+    ? result.artifactsToGenerate
+    : Array.isArray(result.artifacts) ? result.artifacts : [];
   const flowIn = isRecord(result.artifactInputFlow) ? result.artifactInputFlow : {};
+  const conflictsIn = Array.isArray(result.conflictResolutionFields) ? result.conflictResolutionFields : [];
+  const nextPhase = isRecord(result.nextPhase) ? result.nextPhase : {};
+  const summaryIn = isRecord(result.validationSummary) ? result.validationSummary : {};
+
+  const promotedArtifacts: Record<string, JsonValue>[] = [];
+  const guardrailWarnings: string[] = [];
 
   const fieldIds = new Set<string>();
   const inputFields: Record<string, JsonValue>[] = [];
   for (const f of fieldsIn) {
     if (!isRecord(f)) continue;
-    const id = String(f.id ?? "").trim();
-    const type = String(f.type ?? "").trim();
+    const id = (plannerStr(f.fieldId) || plannerStr(f.id));
+    const type = plannerStr(f.type);
     if (!id || fieldIds.has(id) || !PLANNER_FIELD_TYPES.has(type)) continue;
+    const label = plannerStr(f.label) || id;
+    if (isArtifactLikeLabel(label)) {
+      promotedArtifacts.push({ id, label, description: plannerStr(f.description) || plannerStr(f.hint) });
+      guardrailWarnings.push(`Demoted artifact-like input "${label}" to artifactsToGenerate.`);
+      continue;
+    }
     fieldIds.add(id);
     const field: Record<string, JsonValue> = {
       id,
-      label: String(f.label ?? "").trim() || id,
+      label,
       type,
       required: Boolean(f.required),
       source: "ai-derived",
     };
-    if (typeof f.placeholder === "string" && f.placeholder.trim()) field.placeholder = f.placeholder;
-    if (typeof f.hint === "string" && f.hint.trim()) field.hint = f.hint;
+    if (plannerStr(f.placeholder)) field.placeholder = plannerStr(f.placeholder);
+    const hint = plannerStr(f.hint) || plannerStr(f.description);
+    if (hint) field.hint = hint;
     if (Array.isArray(f.options)) field.options = f.options.filter((o): o is string => typeof o === "string");
+    if (plannerStr(f.reasonNeeded)) field.reasonNeeded = plannerStr(f.reasonNeeded);
+    const usedBy = plannerStrArray(f.usedByArtifacts);
+    if (usedBy.length) field.usedByArtifacts = usedBy;
+    if (plannerStr(f.prefillValue)) field.prefillValue = plannerStr(f.prefillValue);
+    if (plannerStr(f.prefillSource)) field.prefillSource = plannerStr(f.prefillSource);
+    const conf = plannerStr(f.confidence).toLowerCase();
+    if (PLANNER_CONFIDENCE.has(conf)) field.confidence = conf;
+    if (f.needsConfirmation === true) field.needsConfirmation = true;
+    if (plannerStr(f.validationRule)) field.validationRule = plannerStr(f.validationRule);
+    if (plannerStr(f.example)) field.example = plannerStr(f.example);
     inputFields.push(field);
   }
 
@@ -4242,10 +4296,33 @@ function applyPhaseInputPlannerResultToProgramData(
   const artifacts: Record<string, JsonValue>[] = [];
   for (const a of artifactsIn) {
     if (!isRecord(a)) continue;
-    const id = String(a.id ?? "").trim();
+    const id = (plannerStr(a.artifactId) || plannerStr(a.id));
     if (!id || artifactIds.has(id)) continue;
     artifactIds.add(id);
-    artifacts.push({ id, label: String(a.label ?? "").trim() || id, description: String(a.description ?? "").trim() });
+    const def: Record<string, JsonValue> = {
+      id,
+      label: (plannerStr(a.artifactName) || plannerStr(a.label)) || id,
+      description: (plannerStr(a.artifactPurpose) || plannerStr(a.description)),
+    };
+    const reqIn = plannerStrArray(a.requiredInputs);
+    if (reqIn.length) def.requiredInputs = reqIn;
+    const srcIn = plannerStrArray(a.sourceArtifactsUsed);
+    if (srcIn.length) def.sourceArtifactsUsed = srcIn;
+    const readiness = plannerStr(a.generationReadiness).toLowerCase();
+    if (PLANNER_ARTIFACT_READINESS.has(readiness)) def.generationReadiness = readiness;
+    const missingIn = plannerStrArray(a.missingInputs);
+    if (missingIn.length) def.missingInputs = missingIn;
+    artifacts.push(def);
+  }
+
+  // Fold in demoted artifact-like inputs unless already declared.
+  const artifactLabels = new Set(artifacts.map((a) => String(a.label).toLowerCase()));
+  for (const promoted of promotedArtifacts) {
+    const lower = String(promoted.label).toLowerCase();
+    if (artifactIds.has(String(promoted.id)) || artifactLabels.has(lower)) continue;
+    artifactIds.add(String(promoted.id));
+    artifactLabels.add(lower);
+    artifacts.push(promoted);
   }
 
   const artifactInputFlow: Record<string, JsonValue> = {};
@@ -4254,14 +4331,63 @@ function applyPhaseInputPlannerResultToProgramData(
     const refs = (fields as unknown[]).filter((id): id is string => typeof id === "string" && fieldIds.has(id));
     if (refs.length) artifactInputFlow[artifactId] = refs;
   }
+  if (Object.keys(artifactInputFlow).length === 0) {
+    for (const a of artifacts) {
+      const reqIn = Array.isArray(a.requiredInputs) ? (a.requiredInputs as JsonValue[]) : [];
+      const refs = reqIn.filter((id): id is string => typeof id === "string" && fieldIds.has(id));
+      if (refs.length) artifactInputFlow[String(a.id)] = refs;
+    }
+  }
 
-  if (!inputFields.length && !artifacts.length) return programData;
+  const conflicts: Record<string, JsonValue>[] = [];
+  const conflictIds = new Set<string>();
+  for (const c of conflictsIn) {
+    if (!isRecord(c)) continue;
+    const fieldId = plannerStr(c.fieldId);
+    if (!fieldId || conflictIds.has(fieldId)) continue;
+    conflictIds.add(fieldId);
+    conflicts.push({
+      fieldId,
+      label: plannerStr(c.label) || fieldId,
+      conflictDescription: plannerStr(c.conflictDescription),
+      conflictingValues: plannerStrArray(c.conflictingValues),
+      requiredResolution: c.requiredResolution !== false,
+      usedByArtifacts: plannerStrArray(c.usedByArtifacts),
+    });
+  }
+
+  const gaps = Array.isArray(result.gaps)
+    ? result.gaps.map((g) => (isRecord(g) ? plannerStr(g.description) : plannerStr(g))).filter(Boolean)
+    : [];
+
+  const planMeta: Record<string, JsonValue> = {};
+  const readiness = plannerStr(nextPhase.readiness).toLowerCase();
+  if (PLANNER_READINESS.has(readiness)) planMeta.readiness = readiness;
+  if (plannerStr(nextPhase.rationale)) planMeta.rationale = plannerStr(nextPhase.rationale);
+  if (plannerStr(nextPhase.purpose)) planMeta.purpose = plannerStr(nextPhase.purpose);
+  const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+  if (Object.keys(summaryIn).length) {
+    planMeta.validationSummary = {
+      inputCount: num(summaryIn.inputCount),
+      artifactCount: num(summaryIn.artifactCount),
+      conflictCount: num(summaryIn.conflictCount),
+      readyArtifacts: num(summaryIn.readyArtifacts),
+      blockedArtifacts: num(summaryIn.blockedArtifacts),
+    };
+  }
+  const warnings = [...plannerStrArray(summaryIn.warnings), ...guardrailWarnings];
+  if (warnings.length) planMeta.warnings = warnings;
+
+  if (!inputFields.length && !artifacts.length && !conflicts.length) return programData;
 
   return updateInnerProgramData(programData, (inner) => {
     const store = normalizeProgramData(inner.dynamicSchema as JsonValue | null);
     const prevInputs = normalizeProgramData(store.inputFields as JsonValue | null);
     const prevArtifacts = normalizeProgramData(store.artifacts as JsonValue | null);
     const prevFlow = normalizeProgramData(store.artifactInputFlow as JsonValue | null);
+    const prevConflicts = normalizeProgramData(store.conflicts as JsonValue | null);
+    const prevGaps = normalizeProgramData(store.gaps as JsonValue | null);
+    const prevPlanMeta = normalizeProgramData(store.planMeta as JsonValue | null);
     return {
       ...inner,
       dynamicSchema: {
@@ -4269,6 +4395,9 @@ function applyPhaseInputPlannerResultToProgramData(
         inputFields: { ...prevInputs, [phaseId]: inputFields as JsonValue },
         artifacts: { ...prevArtifacts, [phaseId]: artifacts as JsonValue },
         artifactInputFlow: { ...prevFlow, [phaseId]: artifactInputFlow as JsonValue },
+        conflicts: { ...prevConflicts, [phaseId]: conflicts as JsonValue },
+        gaps: { ...prevGaps, [phaseId]: gaps as JsonValue },
+        planMeta: { ...prevPlanMeta, [phaseId]: planMeta as JsonValue },
       } as JsonValue,
     };
   });
@@ -5487,42 +5616,55 @@ Return ONLY valid JSON:
     const exitCriteria = specCriteria.length ? specCriteria : persistedCriteria;
     const recommendedAgents = Array.isArray(spec?.recommendedAgents) ? spec!.recommendedAgents.filter((c) => typeof c === "string" && c.trim()) : [];
     return {
-      system: `You are the ATOS Phase Input Planner.
-The prior phase has just cleared its stage gate. The NEXT phase ("${nextPhaseName}") is a
-dynamic phase: it has NO predefined input fields or artifacts. YOU define its complete
-working set — the inputs the team must capture and the artifacts they must produce to
-clear this phase's gate. This inventory is the phase's ONLY source of inputs and artifacts,
-so it must be complete, not a list of "extras".
+      system: `You are the ATOS Phase Transition Planner.
+The prior phase has just cleared its gate. For the NEXT phase ("${nextPhaseName}") identify
+the inputs the team must still provide, any conflicts to resolve, and the artifacts ATOS
+will generate to clear the gate.
 
-Ground every item in two things:
-1. The next phase's mandatory exit criteria (listed in the user message) — every exit
-   criterion must be supported by at least one artifact that, once produced, satisfies it.
-2. The approved artifacts and objective/industry of the completed prior phases (full
-   content in the user message) — tailor labels, fields, and scope to THIS programme,
-   not a generic template.
+CORE PRINCIPLE — users provide FACTS; ATOS generates ARTIFACTS.
+- inputFields are ATOMIC, answerable facts (a date, a name, a number, a short list, a
+  cadence, a budget range). A user can answer each in one sitting without authoring a doc.
+- artifactsToGenerate are the DELIVERABLES ATOS produces FROM those facts.
+- NEVER put a deliverable in inputFields. A label is a deliverable (not a fact) if it
+  contains any of: plan, summary, report, register, map, model, deck, brief, pack,
+  roadmap, assessment, design, artifact. Such items belong in artifactsToGenerate.
+  Example — do NOT ask for "Mobilization Plan"; instead ask atomic facts (mobilization
+  start date, core team members, workstream owners, governance cadence, known risks) and
+  list "Mobilization Plan" under artifactsToGenerate.
 
 Rules:
-- Propose 3–6 input fields and 3–6 artifacts — enough to cover every exit criterion,
-  no filler. Each artifact must map to a concrete deliverable the team can produce.
+- Use facts already known from the prior-phase context; ask ONLY for what is missing,
+  conflicting, or low-confidence. Do not re-ask for facts already established.
+- When a value can be confidently inferred from prior context, prefill it and set
+  needsConfirmation:true rather than asking the user to type it from scratch.
+- Propose enough inputs + artifacts to cover every exit criterion (user message), no filler.
 - Field "type" MUST be one of: text, textarea, number, date, select, grid.
 - Use stable camelCase field ids and kebab-case artifact ids.
-- "artifactInputFlow" maps each artifact id to the field ids that feed it (reference
-  only ids you proposed here). Every artifact should have at least one feeding field;
-  every field should feed at least one artifact.
-- Make labels specific to this programme (e.g. name the actual team, system, or market),
-  never abstract placeholders.
+- Each artifact's "requiredInputs" lists the field ids that feed it; every input field
+  must feed at least one artifact; every exit criterion must be covered by an artifact.
+- Make labels specific to this programme (name the actual team, system, or market).
 
 Return ONLY valid JSON:
 {
+  "nextPhase": { "readiness": "green|yellow|red", "rationale": "one sentence", "purpose": "one sentence" },
   "inputFields": [
-    { "id": "camelCaseId", "label": "Human label", "type": "textarea", "required": false, "placeholder": "optional", "hint": "optional" }
+    { "fieldId": "camelCaseId", "label": "Atomic fact label", "type": "text", "required": true,
+      "reasonNeeded": "why this fact is needed", "usedByArtifacts": ["kebab-id"],
+      "prefillValue": "inferred value or omit", "prefillSource": "where inferred from or omit",
+      "confidence": "high|medium|low", "needsConfirmation": false, "example": "optional", "hint": "optional" }
   ],
-  "artifacts": [
-    { "id": "kebab-id", "label": "Artifact Name", "description": "one sentence on what it delivers and which exit criterion it satisfies" }
+  "artifactsToGenerate": [
+    { "artifactId": "kebab-id", "artifactName": "Artifact Name",
+      "artifactPurpose": "what it delivers and which exit criterion it satisfies",
+      "requiredInputs": ["camelCaseId"], "generationReadiness": "ready|needs_input|blocked",
+      "missingInputs": ["camelCaseId of any unmet input"] }
   ],
-  "artifactInputFlow": { "kebab-id": ["camelCaseId"] },
-  "rationale": "one sentence on how this inventory covers the phase's exit criteria for this programme",
-  "confidence": 0.0
+  "conflictResolutionFields": [
+    { "fieldId": "camelCaseId", "label": "label", "conflictDescription": "what disagrees",
+      "conflictingValues": ["A", "B"], "requiredResolution": true, "usedByArtifacts": ["kebab-id"] }
+  ],
+  "gaps": ["short description of missing information that blocks an artifact"],
+  "validationSummary": { "inputCount": 0, "artifactCount": 0, "conflictCount": 0, "readyArtifacts": 0, "blockedArtifacts": 0 }
 }`,
       user: `Next phase: ${nextPhaseName}${nextPhaseObjective ? `\nObjective: ${nextPhaseObjective}` : ""}
 Mandatory exit criteria this phase must satisfy (every one must be covered by an artifact):

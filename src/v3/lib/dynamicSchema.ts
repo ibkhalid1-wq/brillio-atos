@@ -63,6 +63,8 @@ export interface PhasePlanMeta {
     readyArtifacts: number;
     blockedArtifacts: number;
   };
+  /** Deterministic guardrail warnings (e.g. an artifact-like field was demoted). */
+  warnings?: string[];
 }
 
 export interface DynamicSchemaStore {
@@ -210,6 +212,31 @@ function asStringArray(value: unknown): string[] {
 }
 
 /**
+ * Words that signal a label names a deliverable (artifact) rather than an atomic
+ * fact the user can answer. The Phase Transition Planner must put these in
+ * `artifactsToGenerate`, never in `inputFields` — users supply facts; ATOS
+ * generates artifacts. The guardrail below repairs violations deterministically
+ * so a misbehaving model can never present "Mobilization Plan" as something to
+ * type in.
+ */
+const ARTIFACT_LIKE_WORDS = new Set([
+  "plan", "summary", "report", "register", "map", "model", "deck",
+  "brief", "pack", "roadmap", "assessment", "design", "artifact",
+]);
+
+/**
+ * True when a label names a deliverable. We test the HEAD noun (the last
+ * alphabetic word) rather than any word, so "Mobilization Plan" / "Stakeholder
+ * Map" / "Governance Model" are caught while atomic facts that merely mention a
+ * term ("Model routing", "Operating model owner") are not.
+ */
+export function isArtifactLikeLabel(label: string): boolean {
+  const words = label.toLowerCase().split(/[^a-z]+/).filter(Boolean);
+  const head = words[words.length - 1];
+  return head ? ARTIFACT_LIKE_WORDS.has(head) : false;
+}
+
+/**
  * Validate and coerce the Phase Transition Planner's raw proposal for one phase
  * into a well-formed shape. The output is AI-generated and untrusted, so every
  * entry is shape-checked and anything malformed is dropped. Accepts both the
@@ -229,6 +256,10 @@ export function sanitizePlannerProposal(raw: unknown): DynamicPhaseProposal | nu
   const nextPhase = isRecord(raw.nextPhase) ? raw.nextPhase : {};
   const summaryIn = isRecord(raw.validationSummary) ? raw.validationSummary : {};
 
+  // Artifact-like input labels the guardrail demoted into artifactsToGenerate.
+  const promotedArtifacts: DynamicArtifactDef[] = [];
+  const guardrailWarnings: string[] = [];
+
   const fieldIds = new Set<string>();
   const inputFields: PhaseInputField[] = [];
   for (const f of fieldsIn) {
@@ -236,10 +267,22 @@ export function sanitizePlannerProposal(raw: unknown): DynamicPhaseProposal | nu
     const id = (asString(f.fieldId) || asString(f.id)).trim();
     const type = asString(f.type).trim();
     if (!id || fieldIds.has(id) || !ALLOWED_FIELD_TYPES.has(type)) continue;
+    const label = asString(f.label).trim() || id;
+    // Guardrail: a field whose label names a deliverable is not an answerable
+    // fact. Demote it to an artifact rather than asking the user to type it.
+    if (isArtifactLikeLabel(label)) {
+      promotedArtifacts.push({
+        id,
+        label,
+        description: asString(f.description).trim() || asString(f.hint).trim(),
+      });
+      guardrailWarnings.push(`Demoted artifact-like input "${label}" to artifactsToGenerate.`);
+      continue;
+    }
     fieldIds.add(id);
     const field: PhaseInputField = {
       id,
-      label: asString(f.label).trim() || id,
+      label,
       type: type as PhaseInputField["type"],
       required: Boolean(f.required),
       source: "ai-derived",
@@ -287,6 +330,16 @@ export function sanitizePlannerProposal(raw: unknown): DynamicPhaseProposal | nu
     const missingIn = asStringArray(a.missingInputs);
     if (missingIn.length) def.missingInputs = missingIn;
     artifacts.push(def);
+  }
+
+  // Fold in any artifact-like input fields the guardrail demoted, unless the
+  // planner already declared an artifact with that id or an equivalent label.
+  const artifactLabels = new Set(artifacts.map((a) => a.label.trim().toLowerCase()));
+  for (const promoted of promotedArtifacts) {
+    if (artifactIds.has(promoted.id) || artifactLabels.has(promoted.label.trim().toLowerCase())) continue;
+    artifactIds.add(promoted.id);
+    artifactLabels.add(promoted.label.trim().toLowerCase());
+    artifacts.push(promoted);
   }
 
   // Flow: prefer an explicit artifactInputFlow map; otherwise derive it from each
@@ -340,6 +393,10 @@ export function sanitizePlannerProposal(raw: unknown): DynamicPhaseProposal | nu
       blockedArtifacts: num(summaryIn.blockedArtifacts),
     };
   }
+  // Surface deterministic guardrail repairs (alongside any planner-supplied warnings).
+  const plannerWarnings = asStringArray(summaryIn.warnings);
+  const warnings = [...plannerWarnings, ...guardrailWarnings];
+  if (warnings.length) planMeta.warnings = warnings;
 
   if (!inputFields.length && !artifacts.length && !conflicts.length) return null;
   return { inputFields, artifacts, artifactInputFlow, conflicts, gaps, planMeta };
