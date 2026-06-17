@@ -102,22 +102,12 @@ Return ONLY valid JSON in the exact structure below. Do not include markdown fen
     "strategy": {
       "businessObjective": { "value": "string", "confidence": 0.9, "source": "string", "extractionType": "extracted" },
       "sponsor": { "value": "string", "confidence": 0.9, "source": "string", "extractionType": "extracted" },
+      "industry": { "value": "string", "confidence": 0.85, "source": "string", "extractionType": "extracted" },
+      "startDate": { "value": "YYYY-MM-DD", "confidence": 0.8, "source": "string", "extractionType": "extracted" },
+      "targetEndDate": { "value": "YYYY-MM-DD", "confidence": 0.8, "source": "string", "extractionType": "extracted" },
+      "costAssumption": { "value": "string", "confidence": 0.8, "source": "string", "extractionType": "extracted" },
       "constraints": { "value": "string", "confidence": 0.8, "source": "string", "extractionType": "extracted" },
-      "successMetric": { "value": "string", "confidence": 0.85, "source": "string", "extractionType": "extracted" },
-      "keyRoles": { "value": "string", "confidence": 0.85, "source": "string", "extractionType": "extracted" }
-    },
-    "mobilise": {
-      "programDirector": { "value": "string", "confidence": 0.9, "source": "string", "extractionType": "extracted" },
-      "teamSize": { "value": "string", "confidence": 0.8, "source": "string", "extractionType": "extracted" },
-      "governanceModel": { "value": "string", "confidence": 0.75, "source": "string", "extractionType": "inferred" },
-      "keyRisks": { "value": "string", "confidence": 0.8, "source": "string", "extractionType": "extracted" },
-      "keyRoles": { "value": "string", "confidence": 0.85, "source": "string", "extractionType": "extracted" }
-    },
-    "build": {
-      "blockers": { "value": "string", "confidence": 0.8, "source": "string", "extractionType": "extracted" },
-      "sprintVelocity": { "value": "string", "confidence": 0.8, "source": "string", "extractionType": "extracted" },
-      "testCoverage": { "value": "string", "confidence": 0.8, "source": "string", "extractionType": "extracted" },
-      "keyRoles": { "value": "string", "confidence": 0.8, "source": "string", "extractionType": "extracted" }
+      "successMetric": { "value": "string", "confidence": 0.85, "source": "string", "extractionType": "extracted" }
     }
   },
   "kpis": [
@@ -131,6 +121,7 @@ RULES:
 - extractionType values: "extracted" = verbatim or near-verbatim from document; "enriched" = you restructured/formatted raw text; "inferred" = logically derived from context
 - confidence: 0.9+ for verbatim, 0.75-0.9 for paraphrased/enriched, 0.5-0.75 for inferred
 - source: short quote (under 60 chars) from the document, or a section/page reference
+- methodologyMappings: the Strategy fields above are the only declared programme inputs at the outset; map them whenever the document supplies the data. Later phases (mobilise, design, build, operate, …) have NO fixed input fields until the programme reaches and activates them, so do not invent fields for them — capture that material in the entities arrays instead. The application ignores any mapping whose field is not a declared input of an activated phase.
 - Only include methodologyMappings for phases where you found actual data
 - Limit each entity array to a maximum of 5 items (the most important ones)
 - Omit methodology mapping fields that have no data rather than returning empty strings

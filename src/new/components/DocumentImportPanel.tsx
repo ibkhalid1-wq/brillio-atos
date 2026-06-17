@@ -21,6 +21,7 @@ import { useDocumentIntelligence } from "@/new/lib/useDocumentIntelligence";
 import { DocumentReviewPanel } from "@/new/components/DocumentReviewPanel";
 import { PHASE_LABELS, type AtosPhase } from "@/new/lib/documentPhaseMap";
 import type { DocumentImportResult } from "@/new/lib/useDocumentIntelligence";
+import type { DynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024; // 50 MB
 
@@ -28,6 +29,8 @@ interface DocumentImportPanelProps {
   programId: string | null;
   /** Existing phase inputs — used for conflict detection */
   existingPhaseInputs?: Record<string, Record<string, string>>;
+  /** Programme's dynamic schema — gates which phases/fields an import can target */
+  dynamicSchemaStore?: DynamicSchemaStore;
   /** Called when the user saves approved inputs (single phase — legacy) */
   onSavePhaseInputs?: (phaseId: string, inputs: Record<string, string>) => Promise<void>;
   /** Preferred: atomic save for all phases at once, avoids stale-closure overwrites */
@@ -42,6 +45,7 @@ interface DocumentImportPanelProps {
 export default function DocumentImportPanel({
   programId,
   existingPhaseInputs = {},
+  dynamicSchemaStore,
   onSavePhaseInputs,
   onSaveAllPhaseInputs,
   onRefineField,
@@ -73,6 +77,7 @@ export default function DocumentImportPanel({
   } = useDocumentIntelligence({
     programId,
     existingPhaseInputs,
+    dynamicSchemaStore,
     onComplete,
   });
 

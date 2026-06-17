@@ -14,7 +14,8 @@
 
 import { useCallback, useState } from "react";
 import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
-import { PHASE_INPUT_SCHEMAS } from "@/v3/lib/phaseInputSchema";
+import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
+import type { DynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import type {
   ApprovedInputs,
   DocumentImportResult,
@@ -86,29 +87,48 @@ async function fileToBase64(file: File): Promise<string> {
 
 // ─── Build review fields from intelligence ────────────────────────────────────
 
-function buildReviewFields(
+/**
+ * Turn the AI's per-phase field mappings into reviewable fields, gated by the
+ * methodology. A mapping is only surfaced when its `(phaseId, fieldId)` is a
+ * *declared* input field of that phase — i.e. it exists in the phase's resolved
+ * input schema (static methodology fields plus any ai-derived dynamic fields the
+ * programme has already generated, via `store`).
+ *
+ * This is the single authoritative gate: the extractor can propose anything, but
+ * only fields the methodology declares for a phase land in the review. A phase
+ * the programme has not reached has no schema (no static fields, no dynamic
+ * schema), so its mappings are dropped rather than scattered into an unreached
+ * phase's inputs. Nothing is hard-coded here; the allowed set comes entirely
+ * from `getPhaseInputSchema`.
+ */
+export function buildReviewFields(
   mappings: MethodologyMappings,
   existingPhaseInputs: Record<string, Record<string, string>>,
+  store?: DynamicSchemaStore,
 ): ReviewField[] {
   const fields: ReviewField[] = [];
 
   for (const [phaseId, fieldMappings] of Object.entries(mappings)) {
-    // Look up schema to get human-readable field labels
-    const schema = PHASE_INPUT_SCHEMAS[phaseId];
-    const schemaFields = schema?.fields ?? [];
+    // The phase's declared input fields (methodology + dynamic schema) are the
+    // only valid targets. An unreached/unknown dynamic phase resolves to none.
+    const schemaFields = getPhaseInputSchema(phaseId, store).fields;
+    const declared = new Map(schemaFields.map((f) => [f.id, f]));
 
     for (const [fieldId, mapping] of Object.entries(fieldMappings)) {
       if (!mapping.value?.trim()) continue;
 
-      const schemaField = schemaFields.find((f) => f.id === fieldId);
-      const fieldLabel = schemaField?.label ?? fieldId;
+      const schemaField = declared.get(fieldId);
+      // Not a declared field for this phase → drop it rather than create a
+      // raw-id input on a phase the methodology never declared.
+      if (!schemaField) continue;
+
       const existingValue = existingPhaseInputs[phaseId]?.[fieldId] ?? "";
       const hasConflict = Boolean(existingValue && existingValue.trim() !== mapping.value.trim());
 
       fields.push({
         phaseId,
         fieldId,
-        fieldLabel,
+        fieldLabel: schemaField.label,
         mapping: { ...mapping, reviewState: "pending" },
         existingValue: existingValue || undefined,
         hasConflict,
@@ -309,6 +329,8 @@ export interface UseDocumentIntelligenceOptions {
   programId: string | null;
   /** Existing phase inputs from the programme — used for conflict detection */
   existingPhaseInputs?: Record<string, Record<string, string>>;
+  /** Programme's dynamic schema — gates which phases/fields an import can target */
+  dynamicSchemaStore?: DynamicSchemaStore;
   /** Called after approved inputs are persisted */
   onComplete?: (result?: DocumentImportResult) => void | Promise<void>;
 }
@@ -316,6 +338,7 @@ export interface UseDocumentIntelligenceOptions {
 export function useDocumentIntelligence({
   programId,
   existingPhaseInputs = {},
+  dynamicSchemaStore,
   onComplete,
 }: UseDocumentIntelligenceOptions) {
   const [stage, setStage] = useState<DocumentImportStage>("idle");
@@ -434,6 +457,7 @@ export function useDocumentIntelligence({
       const fields = buildReviewFields(
         intel.methodologyMappings ?? {},
         existingPhaseInputs,
+        dynamicSchemaStore,
       );
       const kpiField = deriveKpiReviewField(intel.kpis, existingPhaseInputs);
       setReviewFields(kpiField ? [...fields, kpiField] : fields);
@@ -459,7 +483,7 @@ export function useDocumentIntelligence({
         setError(`Extraction failed: ${msg}`);
       }
     }
-  }, [programId, existingPhaseInputs]);
+  }, [programId, existingPhaseInputs, dynamicSchemaStore]);
 
   // ── updateReviewField: user edits / approves / rejects a field ───────────
   const updateReviewField = useCallback((

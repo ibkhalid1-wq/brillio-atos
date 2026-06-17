@@ -27,6 +27,7 @@ import SchedulePanel from "@/v3/components/SchedulePanel";
 import ProgramAccessPanel from "@/v3/components/ProgramAccessPanel";
 import TwinGraphView from "@/v3/components/TwinGraphView";
 import { ArtifactMapTree } from "@/v3/components/ArtifactMapTree";
+import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { AdamCard, AdamCardBody, AdamCardHeader } from "@/v3/components/ui/AdamCard";
 import { EmptyState } from "@/v3/components/ui/EmptyState";
 import { RelativeTime } from "@/v3/components/ui/RelativeTime";
@@ -263,6 +264,7 @@ export default function ProgramDetailRouter({
               const pi = source.phaseInputs;
               return (typeof pi === "object" && pi !== null) ? pi as Record<string, Record<string, string>> : {};
             })()}
+            dynamicSchemaStore={getDynamicSchemaStore(program?.rawData)}
             onSavePhaseInputs={async (phaseId, inputs) => {
               await onSavePhaseInputs(phaseId, inputs);
               onOpenPhase(phaseId);
