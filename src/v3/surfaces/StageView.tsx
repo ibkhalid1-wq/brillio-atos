@@ -18,6 +18,7 @@ import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
 import { resolveArtifactReview, resolveArtifactQualityScore } from "@/v3/lib/artifactReview";
 import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
 import { getArtifactInputFields } from "@/v3/lib/phaseFlowEdges";
+import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { runPreFlight } from "@/v3/lib/phaseInputPreFlight";
 import { derivePhaseInputQuality } from "@/v3/lib/phaseInputQuality";
@@ -97,28 +98,46 @@ interface ArtifactQualityIssue {
   severity: "high" | "medium" | "low";
 }
 
+/** One grounding input the artifact is generated from, with what it must hold. */
+interface ArtifactInputRequirement {
+  label: string;
+  requirement: string;
+  filled: boolean;
+}
+
 // Deterministic, signal-grounded quality assessment for a produced artifact.
-// Combines the AI quality score, the phase inputs the document still lacks, any
-// model-suggested improvements, and approval state into a concrete punch list —
-// no extra model call, so the "Improve quality" modal can only ever name real,
-// actionable gaps for this artifact.
+// Combines the AI quality score, the SPECIFIC input fields this document is
+// grounded on (named, with what each must contain), any model-suggested
+// improvements, and approval state into a concrete punch list — no extra model
+// call, so the "Improve quality" modal can only ever name real, actionable gaps.
 function deriveArtifactQualityIssues(opts: {
   score: number | null;
   state: string;
-  missingInputs: string[];
+  inputRequirements: ArtifactInputRequirement[];
   improvements?: string[];
 }): ArtifactQualityIssue[] {
-  const { score, state, missingInputs, improvements } = opts;
+  const { score, state, inputRequirements, improvements } = opts;
   const issues: ArtifactQualityIssue[] = [];
   if (typeof score === "number") {
     if (score < 60) {
-      issues.push({ severity: "high", title: `Low quality score — ${score}%`, detail: "ATOS rated this document below the quality bar. Regenerate it with richer phase inputs to lift the score." });
+      issues.push({ severity: "high", title: `Low quality score — ${score}%`, detail: "ATOS rated this document below the quality bar. Complete the grounding inputs below, then regenerate to lift the score." });
     } else if (score < 80) {
-      issues.push({ severity: "medium", title: `Quality score ${score}% — room to improve`, detail: "The document is usable but ATOS sees headroom. Add detail to the phase inputs and regenerate." });
+      issues.push({ severity: "medium", title: `Quality score ${score}% — room to improve`, detail: "The document is usable but ATOS sees headroom. Strengthen the grounding inputs below, then regenerate." });
     }
   }
-  if (missingInputs.length) {
-    issues.push({ severity: "medium", title: `${missingInputs.length} input${missingInputs.length > 1 ? "s" : ""} missing`, detail: `Add these phase inputs to strengthen the next generation: ${missingInputs.join(", ")}.` });
+  // Prescriptive, per-field: name the exact input each artifact is grounded on and
+  // what it must contain. Empty grounding inputs are the highest-leverage fixes.
+  const missing = inputRequirements.filter((req) => !req.filled);
+  const present = inputRequirements.filter((req) => req.filled);
+  for (const req of missing) {
+    issues.push({ severity: "high", title: `Add "${req.label}"`, detail: req.requirement });
+  }
+  if (!missing.length && present.length && typeof score === "number" && score < 80) {
+    issues.push({
+      severity: "medium",
+      title: "Deepen the grounding inputs",
+      detail: `These inputs ground this document — add specifics to each to lift quality: ${present.map((req) => req.label).join(", ")}.`,
+    });
   }
   for (const improvement of improvements ?? []) {
     if (improvement && improvement.trim()) issues.push({ severity: "low", title: "Suggested improvement", detail: improvement.trim() });
@@ -1234,6 +1253,17 @@ export default function StageView({
               const flowedFieldIds = getArtifactInputFields(activePhase.id, def.id, dynamicStore);
               const missingFlowedFields = flowedFieldIds.filter((fieldId) => !isInputFilled(preFlightInputs[fieldId]));
               const flowedInputsIncomplete = missingFlowedFields.length > 0;
+              // Map each grounding input to its label + what it must contain, so
+              // "Improve quality" can prescribe the exact field to enrich, not a
+              // generic "add inputs" nudge.
+              const phaseFieldDefs = getPhaseInputSchema(activePhase.id, dynamicStore).fields;
+              const inputRequirements = flowedFieldIds.map((fieldId) => {
+                const fieldDef = phaseFieldDefs.find((field) => field.id === fieldId);
+                const requirement = [fieldDef?.placeholder, fieldDef?.hint]
+                  .filter((part): part is string => !!part && part.trim().length > 0)
+                  .join(" — ") || `Provide ${fieldDef?.label ?? fieldId}.`;
+                return { label: fieldDef?.label ?? fieldId, requirement, filled: isInputFilled(preFlightInputs[fieldId]) };
+              });
               return (
                 <div key={def.id} className="v3-artifact-row" data-io-anchor={`artifact:${def.id}`}>
                   <div className="v3-artifact-row-head">
@@ -1262,7 +1292,7 @@ export default function StageView({
                     <button
                       type="button"
                       className="v3-button ghost v3-button-inline-xs"
-                      onClick={() => setQualityArtifact({ label: def.label, defId: def.id, score: displayScore, issues: deriveArtifactQualityIssues({ score: displayScore, state, missingInputs: preflight.missingFields, improvements: review?.improvements }) })}
+                      onClick={() => setQualityArtifact({ label: def.label, defId: def.id, score: displayScore, issues: deriveArtifactQualityIssues({ score: displayScore, state, inputRequirements, improvements: review?.improvements }) })}
                       title={`Review and improve the quality of ${def.label}`}
                     >
                       ✦ Improve quality
