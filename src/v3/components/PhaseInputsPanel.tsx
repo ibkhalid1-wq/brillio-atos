@@ -611,6 +611,16 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
                     {field.hint ? (
                       <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 2 }}>{field.hint}</div>
                     ) : null}
+                    {field.reasonNeeded ? (
+                      <div style={{ fontSize: 10.5, color: "var(--v3-text-muted)", marginTop: 2, fontStyle: "italic" }}>
+                        Why: {field.reasonNeeded}
+                      </div>
+                    ) : null}
+                    {field.usedByArtifacts && field.usedByArtifacts.length ? (
+                      <div style={{ fontSize: 10, color: "var(--v3-text-muted)", marginTop: 2 }}>
+                        Feeds: {field.usedByArtifacts.join(", ")}
+                      </div>
+                    ) : null}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                     {provenanceMatches(provenance[field.id], values[field.id])
@@ -717,6 +727,30 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
                     onChange={(event) => setValues((current) => ({ ...current, [field.id]: event.target.value }))}
                   />
                 )}
+                {field.prefillValue && !(values[field.id] ?? "").trim() ? (
+                  <div
+                    style={{
+                      display: "flex", alignItems: "center", gap: 8, marginTop: 6,
+                      padding: "6px 10px", borderRadius: 8,
+                      border: "1px dashed var(--v3-border)", background: "var(--v3-surface-2, transparent)",
+                    }}
+                  >
+                    <span style={{ fontSize: 9, flexShrink: 0 }} className="v3-chip amber">
+                      {field.needsConfirmation ? "Confirm" : "Suggested"}
+                    </span>
+                    <span style={{ fontSize: 11, color: "var(--v3-text)", minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis" }} title={field.prefillSource ? `Inferred from ${field.prefillSource}` : undefined}>
+                      {field.prefillValue}
+                    </span>
+                    <button
+                      type="button"
+                      className="v3-field-assist-btn"
+                      disabled={locked}
+                      onClick={() => setValues((current) => ({ ...current, [field.id]: field.prefillValue ?? "" }))}
+                    >
+                      {field.needsConfirmation ? "✓ Confirm" : "Use"}
+                    </button>
+                  </div>
+                ) : null}
                 {onAssistField && field.type === "textarea" ? (
                   <div className="v3-field-assist">
                     {assistingField === field.id ? (
