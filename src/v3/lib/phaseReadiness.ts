@@ -66,7 +66,18 @@ export function computePhaseReadiness(
   const recommendedActions: ReadinessAction[] = [];
 
   const gateReview = program.gateReviews?.[phaseId] ?? null;
-  const gateScore = typeof gateReview?.readinessScore === "number" ? gateReview.readinessScore : null;
+  // gateScore is consumed everywhere on a 0-100 scale (rings, metrics, composite
+  // score). readinessScore is written on two scales, though: the gate-review
+  // agent stores a 0-1 fraction, while manual/offline approval stores a 0-100
+  // number. Normalise on read — values ≤ 1 are the fraction convention (1.0 =
+  // 100%) and get scaled up; values > 1 are already 0-100. Without this the
+  // outer (gate) ring read e.g. 0.25 as 0%, so it never rendered or progressed.
+  const rawGateScore = typeof gateReview?.readinessScore === "number" ? gateReview.readinessScore : null;
+  const gateScore = rawGateScore == null
+    ? null
+    : rawGateScore <= 1
+      ? Math.round(rawGateScore * 100)
+      : Math.round(rawGateScore);
 
   // Fast-path: gate already approved
   if (gateReview?.status === "approved" && gateScore !== null) {
