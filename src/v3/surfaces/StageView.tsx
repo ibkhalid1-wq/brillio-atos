@@ -1102,7 +1102,16 @@ export default function StageView({
                       ) : isGate ? (
                         <div className="v3-phase-gate-col">
                           {renderMetric(metric)}
-                          {gateApproved ? null : (
+                          {gateApproved ? (
+                            <button
+                              type="button"
+                              className="v3-button ghost v3-button-inline-xs v3-phase-gate-recheck"
+                              title="Unlock this phase to edit, regenerate, or re-review its artifacts."
+                              onClick={() => onReopenGate(activePhase.id)}
+                            >
+                              ⤺ Unlock
+                            </button>
+                          ) : (
                             <button
                               type="button"
                               className="v3-button ghost v3-button-inline-xs v3-phase-gate-recheck"
@@ -1147,11 +1156,6 @@ export default function StageView({
 
         {/* Moved actions — gate decisions + artifact / nav jumps */}
         <div className="v3-phase-head-actions">
-          {gateReviewStatus === "approved" ? (
-            <div className="v3-phase-head-actions-grp">
-              <button type="button" className="v3-button ghost v3-button-inline-xs" onClick={() => onReopenGate(activePhase.id)}>Reopen Gate</button>
-            </div>
-          ) : null}
           {phaseAgentActions.length ? (
             <div className="v3-phase-head-actions-grp">
               {phaseAgentActions.map((action) => (
