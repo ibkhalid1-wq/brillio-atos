@@ -15,6 +15,7 @@ import { RelativeTime } from "@/v3/components/ui/RelativeTime";
 import { StatusBadge } from "@/v3/components/ui/StatusBadge";
 import { computePhaseReadiness } from "@/v3/lib/phaseReadiness";
 import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
+import { resolveArtifactReview } from "@/v3/lib/artifactReview";
 import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
 import { getArtifactInputFields } from "@/v3/lib/phaseFlowEdges";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
@@ -128,41 +129,6 @@ function deriveArtifactQualityIssues(opts: {
   return issues;
 }
 
-// The independent AI quality review (score + improvement plan) that run-agent
-// produces at generation time is persisted at a top-level program key derived
-// from the producing-agent id: `${camelCase(agentId)}Quality` (e.g. narrative →
-// narrativeQuality, change-impact → changeImpactQuality, charter →
-// charterQuality). Computing the key keeps this in lockstep with the edge for
-// every reviewed artifact — including formal documents — without a hardcoded map.
-export function artifactReviewFieldKey(defId: string): string {
-  const camel = defId.replace(/-([a-z])/g, (_, ch: string) => ch.toUpperCase());
-  return `${camel}Quality`;
-}
-
-// Resolve the AI review record for an artifact. The review is stored at a
-// top-level key (program-wide) but may carry a per-phase bucket; prefer the
-// phase-specific entry, mirroring how phaseReadiness reads these scores.
-export function resolveArtifactReview(
-  source: Record<string, unknown> | null,
-  defId: string,
-  phaseId: string,
-): { score: number | null; improvements: string[] } | null {
-  if (!source) return null;
-  const fieldKey = artifactReviewFieldKey(defId);
-  const candidate = source[fieldKey];
-  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return null;
-  const record = candidate as Record<string, unknown>;
-  const phaseBucket = record[phaseId];
-  const pick = (phaseBucket && typeof phaseBucket === "object" && !Array.isArray(phaseBucket)
-    ? phaseBucket
-    : record) as Record<string, unknown>;
-  const score = typeof pick.score === "number" ? Math.round(pick.score) : null;
-  const improvements = Array.isArray(pick.improvements)
-    ? pick.improvements.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
-    : [];
-  if (score == null && improvements.length === 0) return null;
-  return { score, improvements };
-}
 
 function StageModal({ title, onClose, children, maxWidth = 560 }: { title: string; onClose: () => void; children: React.ReactNode; maxWidth?: number }) {
   return (

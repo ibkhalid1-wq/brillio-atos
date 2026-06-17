@@ -1,4 +1,4 @@
-import { artifactReviewFieldKey, resolveArtifactReview } from "@/v3/surfaces/StageView";
+import { artifactReviewFieldKey, resolveArtifactReview, resolveArtifactQualityScore } from "@/v3/lib/artifactReview";
 
 describe("artifactReviewFieldKey", () => {
   it("camelCases the producing-agent id and suffixes Quality", () => {
@@ -54,5 +54,28 @@ describe("resolveArtifactReview", () => {
     const review = resolveArtifactReview(source, "plan", "build")!;
     expect(review.score).toBe(65);
     expect(review.improvements).toEqual(["real"]);
+  });
+});
+
+describe("resolveArtifactQualityScore", () => {
+  it("prefers the AI review score over stored confidence", () => {
+    const source = { charterQuality: { score: 82, improvements: [] } };
+    expect(resolveArtifactQualityScore(source, "charter", "strategy", 0.5)).toBe(82);
+  });
+
+  it("falls back to stored agent confidence (0-1) when no review exists", () => {
+    expect(resolveArtifactQualityScore({}, "charter", "strategy", 0.74)).toBe(74);
+  });
+
+  it("accepts an already-0-100 confidence", () => {
+    expect(resolveArtifactQualityScore({}, "charter", "strategy", 80)).toBe(80);
+  });
+
+  it("returns null when the artifact has no quality signal at all", () => {
+    // This is exactly the regenerated-formal-artifact case: a draft with no
+    // review key and no persisted confidence has no score to show on the card,
+    // and must NOT inherit another phase's programme-wide review score.
+    expect(resolveArtifactQualityScore({}, "charter", "strategy", null)).toBeNull();
+    expect(resolveArtifactQualityScore({ planQuality: { score: 57 } }, "charter", "strategy")).toBeNull();
   });
 });

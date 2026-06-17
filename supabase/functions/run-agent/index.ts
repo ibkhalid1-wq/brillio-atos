@@ -3891,7 +3891,14 @@ function setPhaseArtifactValue(
   artifactId: string,
   content: Record<string, unknown>,
   title: string,
+  confidence?: number | null,
 ): ProgramState {
+  // Persist the producing agent's confidence (0-1) on the ledger record so the
+  // Stage view card and the phase "Artifact quality" tile show a score for the
+  // document even before the independent review lands. Without this, formal
+  // documents (charter, business-case, …) persist with no quality signal and
+  // their cards read blank.
+  const ledgerConfidence = toLedgerConfidence(confidence);
   return updateInnerProgramData(programData, (inner) => {
     const phaseArtifacts = normalizeProgramData(inner.phaseArtifacts as JsonValue | null);
     const currentPhaseArtifacts = normalizeProgramData(phaseArtifacts[phaseId] as JsonValue | null);
@@ -3908,6 +3915,9 @@ function setPhaseArtifactValue(
             status: "draft",
             agentDrafted: true,
             agentDraftedAt: new Date().toISOString(),
+            ...(typeof ledgerConfidence === "number"
+              ? { confidence: ledgerConfidence / 100, agentConfidence: ledgerConfidence }
+              : {}),
           } as JsonValue,
         } as JsonValue,
       } as JsonValue,
@@ -4269,6 +4279,7 @@ function applyProgramSupportArtifact(
    * so the renderer skips it — never surfaced to users, only kept for provenance.
    */
   generationMetadata?: Record<string, unknown>,
+  confidence?: number | null,
 ): ProgramState {
   const generatedAt = typeof result.generatedAt === "string" ? result.generatedAt : new Date().toISOString();
   const payload = {
@@ -4277,7 +4288,7 @@ function applyProgramSupportArtifact(
     ...(generationMetadata ? { _generationMetadata: generationMetadata as JsonValue } : {}),
   };
   let next = setInnerField(programData, fieldKey, payload as JsonValue);
-  next = setPhaseArtifactValue(next, phaseId, artifactId, payload, title);
+  next = setPhaseArtifactValue(next, phaseId, artifactId, payload, title, confidence);
   return next;
 }
 
@@ -6874,7 +6885,7 @@ Deno.serve(async (req) => {
           inputSnapshot,
           generatedAt: new Date().toISOString(),
         };
-        nextProgramData = applyProgramSupportArtifact(contextProgramData, spec.phase, request.agentId, spec.fieldKey, result, spec.title, generationMetadata);
+        nextProgramData = applyProgramSupportArtifact(contextProgramData, spec.phase, request.agentId, spec.fieldKey, result, spec.title, generationMetadata, confidence);
       }
 
       // Surface structured agent output in the artifact ledger. The UI artifact

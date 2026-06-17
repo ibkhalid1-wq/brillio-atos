@@ -4,6 +4,7 @@ import { derivePhaseInputQuality } from "@/v3/lib/phaseInputQuality";
 import { getMandatoryCriteria } from "@/v3/lib/exitCriteriaLibrary";
 import { ATOS_STANDARD } from "@/v3/lib/methodology";
 import { getDynamicSchemaStore, dynamicArtifactDefs } from "@/v3/lib/dynamicSchema";
+import { resolveArtifactQualityScore } from "@/v3/lib/artifactReview";
 
 // ─── Readiness Action ─────────────────────────────────────────────────────────
 // Ranked action with estimated readiness impact — powers the "what to do next"
@@ -98,39 +99,11 @@ export function computePhaseReadiness(
       : raw;
   })();
 
-  // ── Artifact quality score ──────────────────────────────────────────────────
-  const reviewKeys = [
-    "narrativeQuality",
-    "planQuality",
-    "riskQuality",
-    "deckQuality",
-    "gateReviewQuality",
-    "stakeholderQuality",
-    "changeImpactQuality",
-    "adoptionQuality",
-    "criticalPathQuality",
-    "handoffQuality",
-  ] as const;
-
-  const reviewScores = reviewKeys
-    .map((key) => {
-      const candidate = source?.[key];
-      if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return null;
-      const directScore = (candidate as Record<string, unknown>).score;
-      if (typeof directScore === "number") return directScore;
-      const phaseBucket = (candidate as Record<string, unknown>)[phaseId];
-      if (phaseBucket && typeof phaseBucket === "object" && !Array.isArray(phaseBucket)) {
-        const phaseScore = (phaseBucket as Record<string, unknown>).score;
-        if (typeof phaseScore === "number") return phaseScore;
-      }
-      return null;
-    })
-    .filter((value): value is number => value !== null);
-
   const phaseArtifacts = source && typeof source.phaseArtifacts === "object" && source.phaseArtifacts !== null
     ? source.phaseArtifacts as Record<string, Record<string, { confidence?: number; status?: string }>>
     : {};
-  const artifactsForPhase = Object.values(phaseArtifacts[phaseId] ?? {});
+  const phaseArtifactRecords = phaseArtifacts[phaseId] ?? {};
+  const artifactsForPhase = Object.values(phaseArtifactRecords);
 
   // ── Resolved required artifact set ──────────────────────────────────────────
   // The phase's required artifact set = the methodology's static requiredArtifacts
@@ -142,31 +115,30 @@ export function computePhaseReadiness(
     ...(phaseDef?.requiredArtifacts ?? []),
     ...dynamicArtifactDefs(phaseId, dynamicStore).map((d) => d.id),
   ];
-  const presentArtifactIds = new Set(Object.keys(phaseArtifacts[phaseId] ?? {}));
+  const presentArtifactIds = new Set(Object.keys(phaseArtifactRecords));
 
   // ── Artifact quality score ──────────────────────────────────────────────────
-  // Quality is only meaningful once the phase has actually produced an artifact.
-  // The review scores (narrativeQuality, planQuality, …) are programme-wide
-  // signals; without this guard a phase that has produced nothing still inherits
-  // a non-zero quality from another phase's review (e.g. a Strategy phase showing
-  // 31% off a stray criticalPathQuality), which then propagates into the gate
-  // score. Gate on whether any of THIS phase's required artifacts is present
-  // (or, for dynamic-only phases with no required spine, any artifact at all).
+  // Quality is scored over THIS phase's own artifacts only — its required set
+  // plus anything actually produced — never a fixed programme-wide review pool.
+  // Each artifact resolves through the same single source of truth the Stage
+  // view cards use (AI review score, else the ledger's stored confidence), so
+  // the header tile equals the average of the visible card scores. Reading a
+  // fixed programme-wide key list instead leaked later-phase quality into a
+  // phase (e.g. Strategy reading 57% off plan/risk/adoption reviews that belong
+  // to Build/Operate) and diverged from the per-artifact card scores.
+  const qualityArtifactIds = Array.from(new Set([...requiredArtifactIds, ...presentArtifactIds]));
+  const phaseQualityScores = qualityArtifactIds
+    .map((id) => resolveArtifactQualityScore(source, id, phaseId, phaseArtifactRecords[id]?.confidence ?? null))
+    .filter((value): value is number => value !== null);
+
+  // Quality is only meaningful once the phase has actually produced a required
+  // artifact (or, for dynamic-only phases with no required spine, any artifact).
   const hasProducedArtifact = requiredArtifactIds.length > 0
     ? requiredArtifactIds.some((id) => presentArtifactIds.has(id))
     : presentArtifactIds.size > 0;
-  const artifactScore = !hasProducedArtifact
+  const artifactScore = !hasProducedArtifact || !phaseQualityScores.length
     ? 0
-    : reviewScores.length
-      ? Math.round(reviewScores.reduce((sum, value) => sum + value, 0) / reviewScores.length)
-      : (() => {
-          const confidenceValues = artifactsForPhase
-            .map((artifact) => typeof artifact.confidence === "number" ? artifact.confidence * 100 : null)
-            .filter((value): value is number => value !== null);
-          return confidenceValues.length
-            ? Math.round(confidenceValues.reduce((sum, value) => sum + value, 0) / confidenceValues.length)
-            : 0;
-        })();
+    : Math.round(phaseQualityScores.reduce((sum, value) => sum + value, 0) / phaseQualityScores.length);
 
   // ── Artifact completeness ───────────────────────────────────────────────────
   // Completeness is the share of the required set present in data.phaseArtifacts.
@@ -177,7 +149,7 @@ export function computePhaseReadiness(
       )
     : presentArtifactIds.size > 0 ? 100 : 0;
 
-  if (!reviewScores.length && !artifactsForPhase.length) {
+  if (!phaseQualityScores.length && !artifactsForPhase.length) {
     missing.push("No artifacts generated yet");
     // Highest-impact action: run the phase narrative agent
     recommendedActions.push({
@@ -406,7 +378,7 @@ export function computePhaseReadiness(
     unvalidatedCriticalAssumptions.length === 0 &&
     !dependencyCheckBlocking;
 
-  if (!canApproveGate && artifactsComplete < 100 && (reviewScores.length || artifactsForPhase.length)) {
+  if (!canApproveGate && artifactsComplete < 100 && (phaseQualityScores.length || artifactsForPhase.length)) {
     missing.push(`Artifacts are ${artifactsComplete}% complete — every required artifact must be produced before the gate can be locked`);
   }
 
@@ -444,7 +416,7 @@ export function computePhaseReadiness(
     mandatoryExitsPassing,
     mandatoryExitsTotal,
     mandatoryExitsMet,
-    reviewScoresCount: reviewScores.length,
+    reviewScoresCount: phaseQualityScores.length,
     recommendedActions,
     libraryExitCriteriaCount: libraryCriteria.length,
     missingLibraryCriteria,
