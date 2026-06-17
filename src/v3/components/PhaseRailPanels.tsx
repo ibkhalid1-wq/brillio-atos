@@ -148,10 +148,8 @@ export function PhaseRailPanels({
   const artifacts = useMemo(() => {
     const summary = buildPhaseArtifacts(program, phaseId);
     const byKey = new Map((summary?.artifacts ?? []).map((node) => [node.key, node]));
-    // Mirror the Programme artifacts column: Narrative leads as its own inline
-    // preview there, so it is excluded from the artifact-chip list on both
-    // surfaces. Counts are derived from the displayed defs to stay consistent.
-    const defs = getPhaseArtifactDefs(phaseId).filter((def) => def.id !== "narrative");
+    // Counts are derived from the displayed defs to stay consistent with the chips.
+    const defs = getPhaseArtifactDefs(phaseId);
     const required = defs.length;
     const present = defs.filter((def) => byKey.get(def.id)?.present).length;
     return { defs, byKey, present, required };
