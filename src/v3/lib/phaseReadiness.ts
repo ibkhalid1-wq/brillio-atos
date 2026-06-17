@@ -132,23 +132,10 @@ export function computePhaseReadiness(
     : {};
   const artifactsForPhase = Object.values(phaseArtifacts[phaseId] ?? {});
 
-  const artifactScore = reviewScores.length
-    ? Math.round(reviewScores.reduce((sum, value) => sum + value, 0) / reviewScores.length)
-    : (() => {
-        const confidenceValues = artifactsForPhase
-          .map((artifact) => typeof artifact.confidence === "number" ? artifact.confidence * 100 : null)
-          .filter((value): value is number => value !== null);
-        return confidenceValues.length
-          ? Math.round(confidenceValues.reduce((sum, value) => sum + value, 0) / confidenceValues.length)
-          : 0;
-      })();
-
-  // ── Artifact completeness ───────────────────────────────────────────────────
-  // The phase's resolved required artifact set = the methodology's static
-  // requiredArtifacts (Strategy) merged with any ai-derived dynamic artifacts the
-  // programme has accrued for this phase. Completeness is the share of that set
-  // present in data.phaseArtifacts. A dynamic-only phase has no static required
-  // set — there it is complete once ≥1 artifact has actually been produced.
+  // ── Resolved required artifact set ──────────────────────────────────────────
+  // The phase's required artifact set = the methodology's static requiredArtifacts
+  // (Strategy) merged with any ai-derived dynamic artifacts the programme has
+  // accrued for this phase. A dynamic-only phase has no static required set.
   const phaseDef = ATOS_STANDARD.phases.find((p) => p.id === phaseId);
   const dynamicStore = getDynamicSchemaStore(program.rawData);
   const requiredArtifactIds = [
@@ -156,6 +143,34 @@ export function computePhaseReadiness(
     ...dynamicArtifactDefs(phaseId, dynamicStore).map((d) => d.id),
   ];
   const presentArtifactIds = new Set(Object.keys(phaseArtifacts[phaseId] ?? {}));
+
+  // ── Artifact quality score ──────────────────────────────────────────────────
+  // Quality is only meaningful once the phase has actually produced an artifact.
+  // The review scores (narrativeQuality, planQuality, …) are programme-wide
+  // signals; without this guard a phase that has produced nothing still inherits
+  // a non-zero quality from another phase's review (e.g. a Strategy phase showing
+  // 31% off a stray criticalPathQuality), which then propagates into the gate
+  // score. Gate on whether any of THIS phase's required artifacts is present
+  // (or, for dynamic-only phases with no required spine, any artifact at all).
+  const hasProducedArtifact = requiredArtifactIds.length > 0
+    ? requiredArtifactIds.some((id) => presentArtifactIds.has(id))
+    : presentArtifactIds.size > 0;
+  const artifactScore = !hasProducedArtifact
+    ? 0
+    : reviewScores.length
+      ? Math.round(reviewScores.reduce((sum, value) => sum + value, 0) / reviewScores.length)
+      : (() => {
+          const confidenceValues = artifactsForPhase
+            .map((artifact) => typeof artifact.confidence === "number" ? artifact.confidence * 100 : null)
+            .filter((value): value is number => value !== null);
+          return confidenceValues.length
+            ? Math.round(confidenceValues.reduce((sum, value) => sum + value, 0) / confidenceValues.length)
+            : 0;
+        })();
+
+  // ── Artifact completeness ───────────────────────────────────────────────────
+  // Completeness is the share of the required set present in data.phaseArtifacts.
+  // A dynamic-only phase is complete once ≥1 artifact has actually been produced.
   const artifactsComplete = requiredArtifactIds.length > 0
     ? Math.round(
         (requiredArtifactIds.filter((id) => presentArtifactIds.has(id)).length / requiredArtifactIds.length) * 100,
