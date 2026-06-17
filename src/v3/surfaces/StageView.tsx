@@ -1567,21 +1567,13 @@ export default function StageView({
             </ul>
           ) : (
             <div style={{ fontSize: 13, color: "var(--v3-text-secondary)" }}>
-              ATOS found no outstanding quality issues for this artifact. You can still regenerate it to fold in the latest programme context.
+              ATOS found no outstanding quality issues for this artifact.
             </div>
           )}
           <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
             <button
               type="button"
               className="v3-button primary v3-button-inline-sm"
-              disabled={agentButtonDisabled(qualityArtifact.defId)}
-              onClick={() => { onRunAgent(qualityArtifact.defId); setQualityArtifact(null); }}
-            >
-              {agentButtonContent(qualityArtifact.defId, "↻ Regenerate to improve")}
-            </button>
-            <button
-              type="button"
-              className="v3-button ghost v3-button-inline-sm"
               onClick={() => { document.getElementById("phase-inputs-anchor")?.scrollIntoView({ behavior: "smooth", block: "start" }); setQualityArtifact(null); }}
             >
               Add inputs →
