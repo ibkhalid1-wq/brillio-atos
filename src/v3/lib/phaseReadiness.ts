@@ -79,29 +79,6 @@ export function computePhaseReadiness(
       ? Math.round(rawGateScore * 100)
       : Math.round(rawGateScore);
 
-  // Fast-path: gate already approved
-  if (gateReview?.status === "approved" && gateScore !== null) {
-    return {
-      score: gateScore,
-      gateScore,
-      artifactScore: 0,
-      inputScore: 100,
-      artifactsComplete: 100,
-      canApproveGate: true,
-      threshold: resolvedThreshold,
-      missing: [],
-      mandatoryExitsPassing: true,
-      mandatoryExitsTotal: 0,
-      mandatoryExitsMet: 0,
-      reviewScoresCount: 0,
-      recommendedActions: [],
-      libraryExitCriteriaCount: getMandatoryCriteria(phaseId).length,
-      missingLibraryCriteria: 0,
-      dependencyCheckPassed: true,
-      dependencyBlockingIssues: 0,
-    };
-  }
-
   const source = (() => {
     const raw = program.rawData as Record<string, unknown>;
     if (!raw) return null;
@@ -150,6 +127,33 @@ export function computePhaseReadiness(
   const artifactScore = !hasProducedArtifact || !phaseQualityScores.length
     ? 0
     : Math.round(phaseQualityScores.reduce((sum, value) => sum + value, 0) / phaseQualityScores.length);
+
+  // Fast-path: gate already approved. Return the phase's REAL artifact quality for
+  // the middle ring — an approved phase's artifacts were reviewed and accepted, so
+  // the ring should read that quality, not a hardcoded 0. Fall back to the gate
+  // score only when no per-artifact quality resolves, so a locked/approved phase
+  // never renders a misleading red 0% middle ring.
+  if (gateReview?.status === "approved" && gateScore !== null) {
+    return {
+      score: gateScore,
+      gateScore,
+      artifactScore: artifactScore > 0 ? artifactScore : gateScore,
+      inputScore: 100,
+      artifactsComplete: 100,
+      canApproveGate: true,
+      threshold: resolvedThreshold,
+      missing: [],
+      mandatoryExitsPassing: true,
+      mandatoryExitsTotal: 0,
+      mandatoryExitsMet: 0,
+      reviewScoresCount: 0,
+      recommendedActions: [],
+      libraryExitCriteriaCount: getMandatoryCriteria(phaseId).length,
+      missingLibraryCriteria: 0,
+      dependencyCheckPassed: true,
+      dependencyBlockingIssues: 0,
+    };
+  }
 
   // ── Artifact completeness ───────────────────────────────────────────────────
   // Completeness is the share of the required set that has been APPROVED — merely
