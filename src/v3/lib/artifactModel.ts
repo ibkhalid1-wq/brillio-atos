@@ -12,6 +12,7 @@
 import type { ProgramSummary, ArtifactSummary } from "@/new/types";
 import { ATOS_STANDARD, type MethodologyDefinition } from "@/v3/lib/methodology";
 import { getAgentMeta } from "@/v3/lib/agentMeta";
+import { getDynamicSchemaStore, dynamicArtifactDefs } from "@/v3/lib/dynamicSchema";
 
 export type ArtifactState = "missing" | "draft" | "ready" | "approved" | "stale" | "archived";
 export type ArtifactOrigin = "generated" | "uploaded" | "required";
@@ -160,6 +161,14 @@ export function buildArtifactModel(
   // Only consider phases the programme actually has, in methodology order.
   const programPhaseIds = new Set((program.phases || []).map((phase) => phase.id));
 
+  // The required spine = the methodology's static requiredArtifacts merged with
+  // any ai-derived dynamic artifacts the programme has accrued for the phase.
+  // Without this, a dynamic-only phase (e.g. Mobilise) has an empty static spine,
+  // so present generated artifacts fall through to the "additional" bucket as
+  // required:false — which StageView's required-only filter then hides as
+  // "Missing". Mirrors the resolved required set in phaseReadiness.ts.
+  const dynamicStore = getDynamicSchemaStore(program.rawData);
+
   const phases: PhaseArtifactSummary[] = [];
 
   for (const phaseDef of methodology.phases) {
@@ -169,9 +178,20 @@ export function buildArtifactModel(
     const consumed = new Set<string>();
     const nodes: ArtifactNode[] = [];
 
+    // Merge static (agent id → meta label) and dynamic (def id → def label)
+    // required specs, deduped by normalized key so a dynamic def that already
+    // exists statically isn't doubled.
+    const requiredSpecs: { key: string; label: string }[] = [
+      ...phaseDef.requiredArtifacts.map((agentId) => ({ key: agentId, label: artifactLabel(agentId) })),
+      ...dynamicArtifactDefs(phaseDef.id, dynamicStore).map((def) => ({ key: def.id, label: def.label })),
+    ];
+    const seenSpecKeys = new Set<string>();
+
     // 1. Required artifacts (the spine of the phase).
-    for (const agentId of phaseDef.requiredArtifacts) {
-      const label = artifactLabel(agentId);
+    for (const { key: agentId, label } of requiredSpecs) {
+      const normKey = normalize(agentId);
+      if (normKey && seenSpecKeys.has(normKey)) continue;
+      if (normKey) seenSpecKeys.add(normKey);
       const match = present.find((a) => !consumed.has(a.id) && matchesRequirement(a, agentId, label));
       if (match) consumed.add(match.id);
       nodes.push({
