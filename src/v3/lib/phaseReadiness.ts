@@ -231,17 +231,39 @@ export function computePhaseReadiness(
     ? gateReview.exitCriteriaStatus as ExitCriterion[]
     : [];
 
-  // Auto-seed from exit criteria library if no stored criteria exist yet
+  // Auto-seed when no gate review has stored criteria yet. Prefer the
+  // program-specific set produced by the exit-criteria-generator (this is exactly
+  // what the Stage view's exit-criteria card renders), so the blocking count here
+  // matches what the user sees; fall back to the static mandatory library only
+  // when no generated set exists. Both are unmet until a gate review evaluates
+  // them — but reading the generated set keeps readiness and the card in lockstep.
   const libraryCriteria = getMandatoryCriteria(phaseId);
+  const generatedExitBucket = source && typeof source.generatedExitCriteria === "object" && source.generatedExitCriteria !== null
+    ? (source.generatedExitCriteria as Record<string, unknown>)[phaseId]
+    : null;
+  const generatedExitCriteria: ExitCriterion[] = generatedExitBucket
+    && typeof generatedExitBucket === "object"
+    && Array.isArray((generatedExitBucket as Record<string, unknown>).criteria)
+    ? ((generatedExitBucket as Record<string, unknown>).criteria as unknown[])
+        .filter((c): c is Record<string, unknown> => typeof c === "object" && c !== null && typeof (c as Record<string, unknown>).criterion === "string")
+        .map((c) => ({
+          criterion: c.criterion as string,
+          met: false,
+          evidence: null,
+          mandatory: (c as Record<string, unknown>).mandatory !== false,
+        } as ExitCriterion))
+    : [];
   const effectiveExitCriteria: ExitCriterion[] =
     storedExitCriteria.length > 0
       ? storedExitCriteria
-      : libraryCriteria.map((lc) => ({
-          criterion: lc.label,
-          met: false,
-          evidence: null,
-          mandatory: true,
-        } as ExitCriterion));
+      : generatedExitCriteria.length > 0
+        ? generatedExitCriteria
+        : libraryCriteria.map((lc) => ({
+            criterion: lc.label,
+            met: false,
+            evidence: null,
+            mandatory: true,
+          } as ExitCriterion));
 
   const mandatoryExits = effectiveExitCriteria.filter(
     (criterion) => (criterion as Record<string, unknown>).mandatory !== false,

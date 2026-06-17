@@ -1402,10 +1402,30 @@ function buildSpecialAgentInputContext(
       return riskPhaseId === phaseId;
     });
 
+    // Effective exit criteria for the agent to evaluate. The phase object rarely
+    // carries its own `exitCriteria`, so feeding only that left the agent with an
+    // empty list — it then returned an empty exitCriteriaStatus, which left the
+    // gate permanently unable to close (readiness falls back to the mandatory
+    // library, all unmet, with nothing ever marking them met). Prefer the
+    // program-specific set the exit-criteria-generator produced; fall back to any
+    // criteria declared on the phase.
+    const generatedExit = normalizeProgramData(inner.generatedExitCriteria as JsonValue | null);
+    const generatedForPhase = normalizeProgramData(generatedExit[phaseId] as JsonValue | null);
+    const generatedCriteria = Array.isArray(generatedForPhase.criteria)
+      ? generatedForPhase.criteria
+          .filter(isRecord)
+          .map((c) => (typeof c.criterion === "string" ? c.criterion : ""))
+          .filter((s) => s.length > 0)
+      : [];
+    const declaredCriteria = Array.isArray(phase?.exitCriteria)
+      ? (phase!.exitCriteria as unknown[]).filter((s): s is string => typeof s === "string")
+      : [];
+    const effectiveExitCriteria = generatedCriteria.length ? generatedCriteria : declaredCriteria;
+
     return JSON.stringify({
       phase,
       artifacts: phaseArtifacts,
-      exitCriteria: Array.isArray(phase?.exitCriteria) ? phase.exitCriteria : [],
+      exitCriteria: effectiveExitCriteria,
       openDecisions,
       openDecisionCount: openDecisions.length,
       openRisks,
