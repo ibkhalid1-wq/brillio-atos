@@ -377,16 +377,28 @@ const MORE_VIEW_LABELS: Partial<Record<string, string>> = {
   intelligence: "AI Settings",
 };
 
+// Report screens are reached by drill-down from the Workspaces grid but are
+// tracked via reportId (not moreView), so they need their own crumb labels.
+// `status` is the default /program landing (the overview itself), so it has no
+// drill-down crumb — only the deeper reports do.
+const REPORT_CRUMB_LABELS: Partial<Record<V3ReportId, string>> = {
+  narrative: "Narrative",
+  deck: "Status Deck",
+  closure: "Closure",
+};
+
 function TopbarBreadcrumb({
   surface,
   activePhaseLabel,
   moreView,
+  reportId,
   onNavigate,
   onClearMoreView,
 }: {
   surface: V3Surface;
   activePhaseLabel: string | null;
   moreView: string | null;
+  reportId: V3ReportId | null;
   onNavigate: (s: V3Surface) => void;
   onClearMoreView: () => void;
 }) {
@@ -407,16 +419,19 @@ function TopbarBreadcrumb({
   // Single context chip — no deep breadcrumb chains
   if (surface === "insight-feed" || surface === "pipeline") return null;
 
-  // Workspace drill-down: "Workspaces › Risk & Issues"
-  if (surface === "program" && moreView) {
-    const workspaceLabel = MORE_VIEW_LABELS[moreView] || moreView;
+  // Workspace drill-down: "Workspaces › Risk & Issues" (moreView) or
+  // "Workspaces › Narrative" (report). Both are reached from the Workspaces grid.
+  if (surface === "program" && (moreView || (reportId && REPORT_CRUMB_LABELS[reportId]))) {
+    const drilldownLabel = moreView
+      ? MORE_VIEW_LABELS[moreView] || moreView
+      : REPORT_CRUMB_LABELS[reportId as V3ReportId];
     return (
       <nav className="v3-topbar-breadcrumb" aria-label="Breadcrumb">
         <button type="button" className="v3-topbar-breadcrumb-link" onClick={onClearMoreView}>
           Workspaces
         </button>
         <span className="v3-topbar-breadcrumb-sep" aria-hidden="true">›</span>
-        <span className="v3-topbar-breadcrumb-current" aria-current="page">{workspaceLabel}</span>
+        <span className="v3-topbar-breadcrumb-current" aria-current="page">{drilldownLabel}</span>
       </nav>
     );
   }
@@ -2780,6 +2795,7 @@ export default function AppShellV3() {
             surface={surface}
             activePhaseLabel={activePhaseId ? phaseNameById(activeProgram, activePhaseId) : null}
             moreView={moreView}
+            reportId={reportId}
             onNavigate={navigateSurface}
             onClearMoreView={() => openMoreView(null)}
           />
