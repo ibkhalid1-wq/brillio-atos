@@ -20,6 +20,8 @@ export interface FieldAssistRequest {
   currentValue: string;
   /** For `merge` mode: the new value to reconcile with currentValue. */
   incomingValue?: string;
+  /** Reviewer suggestions to fold into this field (used by "Improve quality" apply). */
+  guidance?: string;
 }
 
 interface PhaseInputsPanelProps {
@@ -704,7 +706,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
                     {assistingField === field.id ? (
                       <span className="v3-field-assist-status">✨ Writing…</span>
                     ) : (
-                      availableModes(values[field.id] ?? "").map((mode) => (
+                      availableModes(values[field.id] ?? "").filter((mode) => mode !== "improve").map((mode) => (
                         <button
                           key={mode}
                           type="button"

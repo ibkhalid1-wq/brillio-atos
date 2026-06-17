@@ -51,20 +51,20 @@ export interface ConfidenceScore {
 }
 
 // ── Phase-calibrated gate thresholds ─────────────────────────────────────────
-// Later phases carry higher execution risk, so they require higher readiness.
+// Every phase gate requires 80% readiness before it can be approved.
 export const PHASE_GATE_THRESHOLDS: Record<string, number> = {
-  strategy:    65,   // Directional confidence acceptable at mandate stage
-  mobilise:    68,   // Team and governance must be mostly settled
-  discover:    68,   // Discovery outputs are inherently provisional
-  design:      75,   // Architecture and TOM decisions are hard to reverse
-  build:       80,   // Delivery execution — highest fidelity required
-  operate:     80,   // Live operation — no margin for incomplete readiness
-  govern:      72,   // Governance formality varies by organisation
-  optimize:    70,   // Improvement cycles are iterative by nature
-  valuerealize:72,   // Benefits evidence needs to be substantial
+  strategy:    80,
+  mobilise:    80,
+  discover:    80,
+  design:      80,
+  build:       80,
+  operate:     80,
+  govern:      80,
+  optimize:    80,
+  valuerealize:80,
 };
 
-export const DEFAULT_GATE_THRESHOLD = 70;
+export const DEFAULT_GATE_THRESHOLD = 80;
 
 export function getGateThreshold(phaseId: string): number {
   return PHASE_GATE_THRESHOLDS[phaseId] ?? DEFAULT_GATE_THRESHOLD;

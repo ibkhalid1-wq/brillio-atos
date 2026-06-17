@@ -64,6 +64,7 @@ import { getPhaseSequence } from "@/v3/lib/methodology";
 import { computePhaseReadiness, getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
 import { confidenceRag, getGateThreshold } from "@/v3/lib/confidenceScore";
 import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
+import { artifactReviewFieldKey } from "@/v3/lib/artifactReview";
 import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
 import { buildFieldAssistPrompt, sanitiseFieldReply } from "@/v3/lib/fieldAssist";
 import { PROVENANCE_KEY, mergeProvenance } from "@/new/lib/fieldProvenance";
@@ -2035,7 +2036,7 @@ export default function AppShellV3() {
 
   // Per-phase debounce timers for the Tier-2 input-quality validation pass.
   const inputQualityDebounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const handleSavePhaseInputs = useCallback(async (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean }) => {
+  const handleSavePhaseInputs = useCallback(async (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; clearReviewDefId?: string }) => {
     if (!activeProgram) return;
     const silent = opts?.silent === true;
     // Hard freeze: once a phase clears its stage gate its inputs are locked, so no
@@ -2069,7 +2070,26 @@ export default function AppShellV3() {
       }
       artifactBuckets[phaseId] = nextBucket;
     }
-    const payload = cloned.commit({ ...cloned.inner, phaseInputs: existing, phaseArtifacts: artifactBuckets });
+    // When inputs are applied straight from a reviewer's improvement list, the
+    // suggestions that drove them are now spent — clear them in the same atomic
+    // write so we never leave stale "fix this" guidance pointing at text we just
+    // rewrote (a second write would risk an optimistic-concurrency conflict).
+    const reviewPatch: Record<string, unknown> = {};
+    const clearDefId = opts?.clearReviewDefId;
+    if (clearDefId) {
+      const key = artifactReviewFieldKey(clearDefId);
+      const rec = cloned.inner[key];
+      if (rec && typeof rec === "object" && !Array.isArray(rec)) {
+        const nextRec: Record<string, unknown> = { ...(rec as Record<string, unknown>) };
+        if ("improvements" in nextRec) nextRec.improvements = [];
+        const pb = nextRec[phaseId];
+        if (pb && typeof pb === "object" && !Array.isArray(pb)) {
+          nextRec[phaseId] = { ...(pb as Record<string, unknown>), improvements: [] };
+        }
+        reviewPatch[key] = nextRec;
+      }
+    }
+    const payload = cloned.commit({ ...cloned.inner, phaseInputs: existing, phaseArtifacts: artifactBuckets, ...reviewPatch });
     await updateProgramData(activeProgram.id, payload, activeProgram.updatedAt);
     await refreshPrograms();
     // Debounce input-quality (Tier 2 — no one is blocked on it) so a flurry of saves
@@ -2259,6 +2279,7 @@ export default function AppShellV3() {
       fieldHint: request.fieldHint,
       currentValue: request.currentValue,
       incomingValue: request.incomingValue,
+      guidance: request.guidance,
     });
     const { data, error } = await supabase.functions.invoke("copilot-chat", {
       body: { programId: activeProgram.id, workspaceId: `phase-input:${phaseId}`, message, stream: false },

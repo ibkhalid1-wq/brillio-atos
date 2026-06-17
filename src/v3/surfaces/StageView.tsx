@@ -52,7 +52,7 @@ interface StageViewProps {
   onSaveArtifact: (artifactId: "narrative" | "deck", content: string) => Promise<void>;
   onApproveArtifact: (phaseId: string, artifactId: string) => Promise<void>;
   onUnapproveArtifact: (phaseId: string, artifactId: string) => Promise<void>;
-  onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean }) => Promise<void>;
+  onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; clearReviewDefId?: string }) => Promise<void>;
   onSaveProgram?: (label?: string, kind?: "manual" | "lock") => Promise<void>;
   onRevertProgram?: (snapshotId: string) => Promise<void>;
   onUploadDocument: () => void;
@@ -480,7 +480,54 @@ export default function StageView({
   const [downloadingArtifacts, setDownloadingArtifacts] = React.useState(false);
   const [lockedModalOpen, setLockedModalOpen] = React.useState(false);
   const [previewArtifact, setPreviewArtifact] = React.useState<{ label: string; description?: string; content: string; score: number | null; statusTone: string } | null>(null);
-  const [qualityArtifact, setQualityArtifact] = React.useState<{ label: string; defId: string; score: number | null; issues: ArtifactQualityIssue[] } | null>(null);
+  const [qualityArtifact, setQualityArtifact] = React.useState<{
+    label: string;
+    defId: string;
+    score: number | null;
+    issues: ArtifactQualityIssue[];
+    phaseId: string;
+    fields: Array<{ id: string; label: string; hint?: string; currentValue: string; filled: boolean }>;
+    improvements: string[];
+  } | null>(null);
+  const [applyingImprovements, setApplyingImprovements] = React.useState(false);
+  const [applyError, setApplyError] = React.useState<string | null>(null);
+
+  // Apply the reviewer's suggestions straight into the grounding inputs: run an AI
+  // enrichment pass over each textual input that feeds this artifact, directed by
+  // the suggestion list, then persist the rewritten values in one save. Saving a
+  // changed grounding input auto-stales the approved artifact downstream, so the
+  // user can regenerate against the stronger inputs.
+  const handleApplyImprovements = React.useCallback(async () => {
+    if (!onAssistField || !qualityArtifact) return;
+    const { phaseId, fields, improvements } = qualityArtifact;
+    if (!fields.length) return;
+    const guidance = improvements.map((s, i) => `${i + 1}. ${s}`).join("\n");
+    setApplyingImprovements(true);
+    setApplyError(null);
+    try {
+      const updates: Record<string, string> = {};
+      for (const field of fields) {
+        const text = await onAssistField(phaseId, {
+          fieldId: field.id,
+          fieldLabel: field.label,
+          fieldHint: field.hint,
+          mode: field.filled ? "improve" : "generate",
+          currentValue: field.currentValue,
+          guidance,
+        });
+        const clean = (text || "").trim();
+        if (clean && clean !== field.currentValue.trim()) updates[field.id] = clean;
+      }
+      if (Object.keys(updates).length) {
+        await onSaveInputs(phaseId, updates, { clearReviewDefId: qualityArtifact.defId });
+      }
+      setQualityArtifact(null);
+    } catch (err) {
+      setApplyError(err instanceof Error ? err.message : "Could not apply improvements. Try again.");
+    } finally {
+      setApplyingImprovements(false);
+    }
+  }, [onAssistField, onSaveInputs, qualityArtifact]);
   // Live (unsaved) input snapshot emitted by the inputs panel on every edit, so
   // header metrics / status rings / flow-line tones reflect in-progress typing
   // before an explicit Save. Read-only — never fed back into the panel's edit
@@ -1334,6 +1381,26 @@ export default function StageView({
                   .join(" — ") || `Provide ${fieldDef?.label ?? fieldId}.`;
                 return { label: fieldDef?.label ?? fieldId, requirement, filled: isInputFilled(preFlightInputs[fieldId]) };
               });
+              // Same grounding inputs, but carrying the id + current value so the
+              // "Improve quality → Apply" action can run an AI enrichment pass over
+              // each field and persist the result. Only textual fields are eligible;
+              // grid/structured inputs are not free-text rewritable.
+              const qualityFields = flowedFieldIds
+                .map((fieldId) => {
+                  const fieldDef = phaseFieldDefs.find((field) => field.id === fieldId);
+                  const raw = preFlightInputs[fieldId];
+                  const currentValue = typeof raw === "string" ? raw : raw == null ? "" : String(raw);
+                  return {
+                    id: fieldId,
+                    label: fieldDef?.label ?? fieldId,
+                    hint: fieldDef?.hint,
+                    type: fieldDef?.type,
+                    currentValue,
+                    filled: isInputFilled(raw),
+                  };
+                })
+                .filter((field) => field.type !== "grid")
+                .map(({ type: _type, ...rest }) => rest);
               // Prescriptive generate guidance: name each unfilled input prompt and
               // spell out the information it must carry, so a user knows exactly what
               // to write where before spending a ~90s model run on a thin artifact.
@@ -1341,6 +1408,7 @@ export default function StageView({
                 .filter((req) => !req.filled)
                 .map((req) => `• ${req.label}: ${req.requirement}`)
                 .join("\n");
+              const suggestionCount = (review?.improvements ?? []).filter((s) => !!s && s.trim()).length;
               return (
                 <div key={def.id} className="v3-artifact-row" data-io-anchor={`artifact:${def.id}`}>
                   <div className="v3-artifact-row-head">
@@ -1369,10 +1437,10 @@ export default function StageView({
                     <button
                       type="button"
                       className="v3-button ghost v3-button-inline-xs"
-                      onClick={() => setQualityArtifact({ label: def.label, defId: def.id, score: displayScore, issues: deriveArtifactQualityIssues({ score: displayScore, state, inputRequirements, improvements: review?.improvements }) })}
+                      onClick={() => { setApplyError(null); setQualityArtifact({ label: def.label, defId: def.id, score: displayScore, issues: deriveArtifactQualityIssues({ score: displayScore, state, inputRequirements, improvements: review?.improvements }), phaseId: activePhase.id, fields: qualityFields, improvements: (review?.improvements ?? []).filter((s) => !!s && s.trim()) }); }}
                       title={`Review and improve the quality of ${def.label}`}
                     >
-                      ✦ Improve quality
+                      ✦ Improve quality{suggestionCount ? ` (${suggestionCount})` : ""}
                     </button>
                   ) : null}
                   {state !== "approved" ? (
@@ -1570,11 +1638,26 @@ export default function StageView({
               ATOS found no outstanding quality issues for this artifact.
             </div>
           )}
+          {applyError ? (
+            <div style={{ marginTop: 14, fontSize: 12.5, color: "var(--v3-red, #dc2626)" }}>{applyError}</div>
+          ) : null}
           <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
+            {onAssistField && qualityArtifact.fields.length && qualityArtifact.improvements.length ? (
+              <button
+                type="button"
+                className="v3-button primary v3-button-inline-sm"
+                onClick={handleApplyImprovements}
+                disabled={applyingImprovements}
+                title="Use AI to fold these suggestions into the grounding inputs, then save"
+              >
+                {applyingImprovements ? "✨ Applying…" : "✨ Apply suggestions to inputs"}
+              </button>
+            ) : null}
             <button
               type="button"
-              className="v3-button primary v3-button-inline-sm"
+              className={`v3-button ${onAssistField && qualityArtifact.fields.length && qualityArtifact.improvements.length ? "ghost" : "primary"} v3-button-inline-sm`}
               onClick={() => { document.getElementById("phase-inputs-anchor")?.scrollIntoView({ behavior: "smooth", block: "start" }); setQualityArtifact(null); }}
+              disabled={applyingImprovements}
             >
               Add inputs →
             </button>

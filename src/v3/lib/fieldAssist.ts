@@ -22,6 +22,12 @@ export interface FieldAssistContext {
   currentValue: string;
   /** For `merge` mode: the new value (e.g. a document-extracted value) to reconcile with currentValue. */
   incomingValue?: string;
+  /**
+   * Reviewer suggestions to act on (e.g. from the "Improve quality" modal). When
+   * present, the assist must incorporate the points that pertain to THIS field
+   * into the rewritten value and ignore points that belong to other fields.
+   */
+  guidance?: string;
 }
 
 /** Human-facing label for each mode (used by the inline action buttons). */
@@ -105,6 +111,7 @@ export function buildFieldAssistPrompt(mode: FieldAssistMode, ctx: FieldAssistCo
     ].join("\n");
   }
 
+  const guidance = (ctx.guidance ?? "").trim();
   return [
     "You are ATOS, a senior delivery consultant helping a Program Manager complete a phase input field.",
     "",
@@ -115,6 +122,14 @@ export function buildFieldAssistPrompt(mode: FieldAssistMode, ctx: FieldAssistCo
     current || "",
     "",
     `TASK: ${MODE_INSTRUCTION[mode]}`,
+    ...(guidance
+      ? [
+          "",
+          "REVIEWER GUIDANCE (a quality reviewer raised these points about the document this field feeds):",
+          guidance,
+          "Incorporate ONLY the points above that pertain to THIS field; ignore any that belong to other fields. Never invent facts that are not implied by the programme context or current draft.",
+        ]
+      : []),
     "",
     "RULES:",
     "- Return ONLY the field text — no preamble, no sign-off, no quotation marks, no markdown headers.",
