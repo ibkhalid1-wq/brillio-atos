@@ -60,7 +60,7 @@ import { useCriticalEventAlerts } from "@/v3/hooks/useCriticalEventAlerts";
 import { useLocalProgramMigration } from "@/v3/hooks/useLocalProgramMigration";
 import { usePhaseAgentState } from "@/v3/hooks/usePhaseAgentState";
 import { useProgramValidation } from "@/v3/hooks/useProgramValidation";
-import { getPhaseSequence, getPhaseDefinition } from "@/v3/lib/methodology";
+import { getPhaseSequence, getPhaseDefinition, ATOS_STANDARD } from "@/v3/lib/methodology";
 import { computePhaseReadiness, getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
 import { confidenceRag, getGateThreshold } from "@/v3/lib/confidenceScore";
 import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
@@ -2707,7 +2707,7 @@ export default function AppShellV3() {
               <div className="v3-welcome-hero-glyph" aria-hidden="true">✦</div>
               <h1 className="v3-welcome-hero-title">Welcome to Brillio ATOS</h1>
               <p className="v3-welcome-hero-sub">
-                Brillio's Agentic Transformation OS. Create your first programme to unlock agent-driven insights, gate reviews, and delivery intelligence.
+                Brillio's Agentic Transformation OS. Spin up a programme and ATOS plans every phase, drafts your artefacts from confirmed facts, and tracks gate readiness from strategy through to value realisation.
               </p>
               <button
                 type="button"
@@ -2718,13 +2718,31 @@ export default function AppShellV3() {
               </button>
             </div>
 
+            {/* Phase journey — the methodology backbone, sourced from the registry */}
+            <div className="v3-welcome-journey">
+              <div className="v3-welcome-journey-label">The ATOS transformation lifecycle</div>
+              <div className="v3-welcome-journey-track">
+                {ATOS_STANDARD.phases.map((phase, index) => (
+                  <React.Fragment key={phase.id}>
+                    <div className="v3-welcome-journey-phase" title={phase.description}>
+                      <span className="v3-welcome-journey-dot">{index + 1}</span>
+                      <span className="v3-welcome-journey-name">{phase.displayName}</span>
+                    </div>
+                    {index < ATOS_STANDARD.phases.length - 1 ? (
+                      <span className="v3-welcome-journey-arrow" aria-hidden="true">→</span>
+                    ) : null}
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+
             {/* Capability tiles */}
             <div className="v3-welcome-tiles">
               {[
-                { icon: "◎", title: "Programme narrative", body: "ATOS reads your objective and generates a live status narrative updated by agents continuously." },
-                { icon: "⬡", title: "Gate readiness", body: "Automated gate checks surface blockers, missing artefacts, and approval confidence before each milestone." },
-                { icon: "⋯", title: "Action intelligence", body: "A prioritised action plan per phase, driven by risk signals, decisions, and delivery health." },
-                { icon: "◫", title: "Executive deck", body: "One-click SteerCo packs and closure reports generated from live programme data." },
+                { icon: "◇", title: "Methodology-driven phases", body: "Nine governed phases, each with its required artefacts, exit criteria, and a formal gate review before you advance." },
+                { icon: "✦", title: "Specialised AI agents", body: "Phase agents draft your Charter, Business Case, Outcome Framework, and roadmaps — then keep them current as inputs change." },
+                { icon: "⬡", title: "Fact-grounded traceability", body: "Every artefact is built from confirmed, citable facts, so each output traces back to its source instead of invented detail." },
+                { icon: "◫", title: "Delivery & executive intelligence", body: "Live action plans, risk and decision surfacing, gate-readiness scoring, and one-click SteerCo packs from real programme data." },
               ].map((tile) => (
                 <div key={tile.title} className="v3-welcome-tile">
                   <span className="v3-welcome-tile-icon">{tile.icon}</span>

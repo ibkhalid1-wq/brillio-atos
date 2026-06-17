@@ -11536,6 +11536,83 @@ button, [role="button"] {
   transform: translateY(0);
 }
 
+/* Phase journey — the methodology lifecycle strip */
+.v3-welcome-journey {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+}
+
+.v3-welcome-journey-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--v3-text-muted);
+  font-family: var(--v3-font);
+}
+
+.v3-welcome-journey-track {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 10px;
+}
+
+.v3-welcome-journey-phase {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px 7px 8px;
+  background: var(--v3-surface-2);
+  border: 1px solid var(--v3-border-soft);
+  border-radius: 999px;
+  transition: border-color 0.2s, background 0.2s, transform 0.2s;
+}
+.v3-welcome-journey-phase:hover {
+  border-color: rgba(99, 102, 241, 0.4);
+  background: color-mix(in srgb, var(--v3-accent) 6%, var(--v3-surface-2));
+  transform: translateY(-1px);
+}
+
+.v3-welcome-journey-dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(99, 102, 241, 0.14);
+  color: var(--v3-accent);
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--v3-font);
+  flex-shrink: 0;
+}
+
+.v3-welcome-journey-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--v3-text-primary);
+  font-family: var(--v3-font);
+  white-space: nowrap;
+}
+
+.v3-welcome-journey-arrow {
+  color: var(--v3-text-muted);
+  font-size: 13px;
+  opacity: 0.55;
+}
+
+[data-theme="light"] .v3-welcome-journey-phase,
+:root:not([data-theme="dark"]) .v3-welcome-journey-phase {
+  background: #fff;
+  border-color: rgba(33, 23, 71, 0.1);
+}
+
 /* Capability tiles */
 .v3-welcome-tiles {
   display: grid;
