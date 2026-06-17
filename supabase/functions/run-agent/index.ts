@@ -5395,23 +5395,35 @@ Return ONLY valid JSON:
   }
 
   if (request.agentId === "phase-input-planner") {
+    const nextPhase = getProgramPhaseContext(programData).find((p) => p.id === request.phaseId);
+    const nextPhaseName = typeof nextPhase?.name === "string" && nextPhase.name ? nextPhase.name : formatPhaseName(request.phaseId);
+    const nextPhaseObjective = typeof nextPhase?.objective === "string" ? nextPhase.objective : "";
+    const exitCriteria = Array.isArray(nextPhase?.exitCriteria) ? (nextPhase!.exitCriteria as unknown[]).map((c) => String(c)).filter(Boolean) : [];
     return {
       system: `You are the ATOS Phase Input Planner.
-A prior phase has just cleared its stage gate. Read its approved artifacts and the
-programme's objective/industry, then propose ADDITIONAL input fields and artifacts
-that the NEXT phase ("${request.phaseId}") should capture for THIS specific programme —
-beyond the standard methodology set. Only propose what is genuinely warranted by this
-programme's context (e.g. an agentic-CRM build may warrant a "Model routing policy"
-input on Design that a generic programme would not). Propose nothing generic.
+The prior phase has just cleared its stage gate. The NEXT phase ("${nextPhaseName}") is a
+dynamic phase: it has NO predefined input fields or artifacts. YOU define its complete
+working set — the inputs the team must capture and the artifacts they must produce to
+clear this phase's gate. This inventory is the phase's ONLY source of inputs and artifacts,
+so it must be complete, not a list of "extras".
+
+Ground every item in two things:
+1. The next phase's mandatory exit criteria (listed in the user message) — every exit
+   criterion must be supported by at least one artifact that, once produced, satisfies it.
+2. The approved artifacts and objective/industry of the completed prior phases (full
+   content in the user message) — tailor labels, fields, and scope to THIS programme,
+   not a generic template.
 
 Rules:
-- Propose 0–4 input fields and 0–2 artifacts. Fewer, high-signal items beat many.
+- Propose 3–6 input fields and 3–6 artifacts — enough to cover every exit criterion,
+  no filler. Each artifact must map to a concrete deliverable the team can produce.
 - Field "type" MUST be one of: text, textarea, number, date, select, grid.
-- Use stable camelCase field ids and kebab-case artifact ids; do not collide with
-  obvious standard methodology ids.
-- "artifactInputFlow" maps each proposed artifact id to the proposed field ids that
-  feed it (only reference ids you proposed here).
-- If nothing programme-specific is warranted, return empty arrays.
+- Use stable camelCase field ids and kebab-case artifact ids.
+- "artifactInputFlow" maps each artifact id to the field ids that feed it (reference
+  only ids you proposed here). Every artifact should have at least one feeding field;
+  every field should feed at least one artifact.
+- Make labels specific to this programme (e.g. name the actual team, system, or market),
+  never abstract placeholders.
 
 Return ONLY valid JSON:
 {
@@ -5419,13 +5431,17 @@ Return ONLY valid JSON:
     { "id": "camelCaseId", "label": "Human label", "type": "textarea", "required": false, "placeholder": "optional", "hint": "optional" }
   ],
   "artifacts": [
-    { "id": "kebab-id", "label": "Artifact Name", "description": "one sentence" }
+    { "id": "kebab-id", "label": "Artifact Name", "description": "one sentence on what it delivers and which exit criterion it satisfies" }
   ],
   "artifactInputFlow": { "kebab-id": ["camelCaseId"] },
-  "rationale": "one sentence on why these are warranted for this programme",
+  "rationale": "one sentence on how this inventory covers the phase's exit criteria for this programme",
   "confidence": 0.0
 }`,
-      user: `Input context JSON:\n${specialAgentInputContext || "{}"}${
+      user: `Next phase: ${nextPhaseName}${nextPhaseObjective ? `\nObjective: ${nextPhaseObjective}` : ""}
+Mandatory exit criteria this phase must satisfy (every one must be covered by an artifact):
+${exitCriteria.length ? exitCriteria.map((c) => `- ${c}`).join("\n") : "- (none recorded — infer from the prior-phase context and objective)"}
+
+Input context JSON:\n${specialAgentInputContext || "{}"}${
         typeof contextSnapshot.priorPhaseContext === "string" && contextSnapshot.priorPhaseContext
           ? `\n\nApproved artifacts from completed phases (full content — read these to ground your proposal):\n${contextSnapshot.priorPhaseContext}`
           : ""
