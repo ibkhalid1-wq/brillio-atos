@@ -382,26 +382,37 @@ export default function ExecutiveView({
           </div>
         </div>
 
-        {confidenceScore !== null && (
-          <AdamExplainsTooltip metric="confidence" value={confidenceScore} placement="left">
-            <div style={{ textAlign: "right", cursor: "help" }}>
-              <div
-                style={{
-                  fontSize: 48,
-                  fontWeight: 900,
-                  lineHeight: 1,
-                  color: confidenceColor(confidenceScore),
-                  letterSpacing: "-0.03em",
-                }}
-              >
-                {confidenceScore}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
+          {/* Dummy for now — will initiate the change-request flow for editing locked stages. */}
+          <button
+            type="button"
+            className="v3-button secondary v3-button-inline-sm"
+            onClick={() => { /* TODO: wire change-request flow for locked stages */ }}
+          >
+            Change Request
+          </button>
+
+          {confidenceScore !== null && (
+            <AdamExplainsTooltip metric="confidence" value={confidenceScore} placement="left">
+              <div style={{ textAlign: "right", cursor: "help" }}>
+                <div
+                  style={{
+                    fontSize: 48,
+                    fontWeight: 900,
+                    lineHeight: 1,
+                    color: confidenceColor(confidenceScore),
+                    letterSpacing: "-0.03em",
+                  }}
+                >
+                  {confidenceScore}
+                </div>
+                <div style={{ fontSize: 11, color: "var(--v3-text-muted)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Confidence
+                </div>
               </div>
-              <div style={{ fontSize: 11, color: "var(--v3-text-muted)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                Confidence
-              </div>
-            </div>
-          </AdamExplainsTooltip>
-        )}
+            </AdamExplainsTooltip>
+          )}
+        </div>
       </div>
 
       {/* ── Executive summary — generated on demand, never auto-run ─────────── */}
