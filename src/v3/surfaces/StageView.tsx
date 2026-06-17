@@ -23,6 +23,7 @@ import { getDynamicSchemaStore, dynamicConflicts, dynamicGaps, dynamicPlanMeta }
 import { runPreFlight } from "@/v3/lib/phaseInputPreFlight";
 import { derivePhaseInputQuality } from "@/v3/lib/phaseInputQuality";
 import { getFormalArtifactContent } from "@/v3/lib/formalArtifacts";
+import { buildFactGraph, factsForPhase } from "@/v3/lib/factGraph";
 import type { V3Mode, V3MoreView, V3ReportId } from "@/v3/types";
 
 interface StageViewProps {
@@ -674,6 +675,19 @@ export default function StageView({
     const nextRaw = nested ? { ...(raw as Record<string, unknown>), data: nextInner } : nextInner;
     return { ...program, rawData: nextRaw } as ProgramSummary;
   }, [program, activePhase, liveInputs]);
+
+  // Traceability: atomic facts derived from confirmed inputs for the active phase,
+  // with a source-type breakdown. Built off liveProgram so unsaved edits surface
+  // instantly. This is the human-readable view of the same Fact Graph that LLM
+  // calls cite by short id, instead of re-sending document excerpts.
+  const phaseFacts = useMemo(() => {
+    if (!activePhase) return null;
+    const graph = buildFactGraph(liveProgram ?? program);
+    const facts = factsForPhase(graph, activePhase.id);
+    if (!facts.length) return null;
+    const imported = facts.filter((f) => f.sourceType === "imported_document").length;
+    return { facts, total: facts.length, imported, userInput: facts.length - imported };
+  }, [liveProgram, program, activePhase]);
   // Timestamped programme snapshots (newest first) the user can revert to. Manual
   // saves + auto-saves taken when a phase gate locks. Read straight off persisted
   // rawData so the revert modal always lists the authoritative history.
@@ -1232,6 +1246,31 @@ export default function StageView({
               </div>
             ) : null}
           </div>
+        ) : null}
+        {phaseFacts ? (
+          <details className="v3-fact-graph-panel" style={{ marginBottom: 12, border: "1px solid var(--v3-border)", borderRadius: 8, padding: "8px 10px" }}>
+            <summary style={{ cursor: "pointer", fontSize: 11, fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
+              <span>Traceability — {phaseFacts.total} fact{phaseFacts.total === 1 ? "" : "s"}</span>
+              <span style={{ fontSize: 10, fontWeight: 400, color: "var(--v3-text-muted)" }}>
+                {phaseFacts.userInput} user · {phaseFacts.imported} imported
+              </span>
+            </summary>
+            <div style={{ display: "grid", gap: 4, marginTop: 8 }}>
+              {phaseFacts.facts.map((f) => (
+                <div key={f.id} style={{ display: "flex", alignItems: "baseline", gap: 6, fontSize: 11 }}>
+                  <span style={{ fontFamily: "var(--v3-mono, monospace)", color: "var(--v3-text-muted)", flexShrink: 0 }}>{f.id}</span>
+                  <span style={{ color: "var(--v3-text)" }}>{f.factText}</span>
+                  <span
+                    className={`v3-chip ${f.confidence >= 0.85 ? "green" : f.confidence >= 0.6 ? "amber" : "red"}`}
+                    style={{ fontSize: 9, marginLeft: "auto", flexShrink: 0 }}
+                    title={f.sourceLocation || f.sourceName}
+                  >
+                    {f.sourceType === "imported_document" ? "imported" : "user"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </details>
         ) : null}
         {inputQuality ? (
           <div className={`v3-input-quality-banner ${inputQuality.verdict}`}>
