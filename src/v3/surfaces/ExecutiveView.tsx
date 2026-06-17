@@ -140,8 +140,9 @@ function PhaseProgressRow({
       <div style={{ width: 34, textAlign: "right", fontSize: 12, color: "var(--v3-text-muted)", fontWeight: 600 }}>
         {pct}%
       </div>
-      <div style={{ width: 86, flexShrink: 0 }}>
+      <div style={{ width: 104, flexShrink: 0, display: "flex", justifyContent: "flex-end" }}>
         <span className={chipCls} style={{ fontSize: 11 }}>
+          <span className="v3-chip-dot" />
           {chipLabel}
         </span>
       </div>

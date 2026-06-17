@@ -3336,6 +3336,17 @@ select {
   font-weight: var(--v3-weight-bold);
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Status chip with a leading state dot — the dot inherits currentColor so it
+   carries the same green/blue/grey semantic as the chip text/border. */
+.v3-chip .v3-chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
 }
 
 .v3-chip.green {
