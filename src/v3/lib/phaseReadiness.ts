@@ -141,13 +141,18 @@ export function computePhaseReadiness(
     : Math.round(phaseQualityScores.reduce((sum, value) => sum + value, 0) / phaseQualityScores.length);
 
   // ── Artifact completeness ───────────────────────────────────────────────────
-  // Completeness is the share of the required set present in data.phaseArtifacts.
-  // A dynamic-only phase is complete once ≥1 artifact has actually been produced.
+  // Completeness is the share of the required set that has been APPROVED — merely
+  // producing a draft does not count it as complete; a PM must review and approve
+  // each document. A dynamic-only phase is complete once ≥1 artifact is approved.
+  // This is also the gate-lock bar: the gate auto-runs when the last required
+  // document is approved, so completeness reaching 100% and the gate becoming
+  // lockable are the same event.
+  const isArtifactApproved = (id: string) => phaseArtifactRecords[id]?.status === "approved";
   const artifactsComplete = requiredArtifactIds.length > 0
     ? Math.round(
-        (requiredArtifactIds.filter((id) => presentArtifactIds.has(id)).length / requiredArtifactIds.length) * 100,
+        (requiredArtifactIds.filter(isArtifactApproved).length / requiredArtifactIds.length) * 100,
       )
-    : presentArtifactIds.size > 0 ? 100 : 0;
+    : artifactsForPhase.some((record) => record.status === "approved") ? 100 : 0;
 
   if (!phaseQualityScores.length && !artifactsForPhase.length) {
     missing.push("No artifacts generated yet");
@@ -379,7 +384,7 @@ export function computePhaseReadiness(
     !dependencyCheckBlocking;
 
   if (!canApproveGate && artifactsComplete < 100 && (phaseQualityScores.length || artifactsForPhase.length)) {
-    missing.push(`Artifacts are ${artifactsComplete}% complete — every required artifact must be produced before the gate can be locked`);
+    missing.push(`Artifacts are ${artifactsComplete}% complete — every required artifact must be approved before the gate can be locked`);
   }
 
   if (!canApproveGate && artifactsComplete === 100 && artifactScore <= 90) {

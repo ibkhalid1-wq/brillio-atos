@@ -51,6 +51,7 @@ interface StageViewProps {
   onRunAgent: (agentId: string) => void;
   onSaveArtifact: (artifactId: "narrative" | "deck", content: string) => Promise<void>;
   onApproveArtifact: (phaseId: string, artifactId: string) => Promise<void>;
+  onUnapproveArtifact: (phaseId: string, artifactId: string) => Promise<void>;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean }) => Promise<void>;
   onSaveProgram?: (label?: string, kind?: "manual" | "lock") => Promise<void>;
   onRevertProgram?: (snapshotId: string) => Promise<void>;
@@ -448,6 +449,7 @@ export default function StageView({
   onRunAgent,
   onSaveArtifact,
   onApproveArtifact,
+  onUnapproveArtifact,
   onSaveInputs,
   onSaveProgram,
   onRevertProgram,
@@ -460,6 +462,7 @@ export default function StageView({
   const [updatedArtifactId, setUpdatedArtifactId] = React.useState<"narrative" | "deck" | null>(null);
   const [exitCriteriaOpen, setExitCriteriaOpen] = React.useState(false);
   const [isLocking, setIsLocking] = React.useState(false);
+  const [downloadingArtifacts, setDownloadingArtifacts] = React.useState(false);
   const [lockedModalOpen, setLockedModalOpen] = React.useState(false);
   const [previewArtifact, setPreviewArtifact] = React.useState<{ label: string; description?: string; content: string; score: number | null; statusTone: string } | null>(null);
   const [qualityArtifact, setQualityArtifact] = React.useState<{ label: string; defId: string; score: number | null; issues: ArtifactQualityIssue[] } | null>(null);
@@ -628,6 +631,45 @@ export default function StageView({
     }
     return map;
   }, [source, activePhase]);
+  // Bundle every produced artifact in the active phase into one .zip — each as a
+  // markdown file, plus a README manifest — so a PM can hand the phase package to
+  // a stakeholder without copying documents out one card at a time.
+  const handleDownloadArtifacts = React.useCallback(async () => {
+    if (!activePhase || downloadingArtifacts) return;
+    const slug = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "artifact";
+    const phaseLabel = activePhase.label ?? activePhase.id;
+    const produced: Array<{ label: string; state: string; content: string }> = [];
+    for (const def of getPhaseArtifactDefs(activePhase.id, dynamicStore).filter((d) => d.id !== "narrative")) {
+      const node = phaseArtifacts.byKey.get(def.id);
+      const stringContent = node?.artifactId ? phaseArtifactContentById.get(node.artifactId) ?? null : null;
+      const content = (stringContent && stringContent.trim()) ? stringContent : getFormalArtifactContent(source, def.id);
+      if (content && content.trim()) produced.push({ label: def.label, state: node?.state ?? "draft", content });
+    }
+    if (!produced.length) return;
+    setDownloadingArtifacts(true);
+    try {
+      const { default: JSZip } = await import("jszip");
+      const zip = new JSZip();
+      const manifest = [`# ${program.name} — ${phaseLabel} artifacts`, "", `Exported ${new Date().toISOString().slice(0, 10)}`, "", "## Contents", ""];
+      for (const item of produced) {
+        const fileName = `${slug(item.label)}.md`;
+        zip.file(fileName, `# ${item.label}\n\n${item.content.trim()}\n`);
+        manifest.push(`- ${item.label} (${item.state}) → ${fileName}`);
+      }
+      zip.file("README.md", `${manifest.join("\n")}\n`);
+      const blob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${slug(program.name)}-${slug(phaseLabel)}-artifacts.zip`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } finally {
+      setDownloadingArtifacts(false);
+    }
+  }, [activePhase, downloadingArtifacts, dynamicStore, phaseArtifacts, phaseArtifactContentById, source, program]);
   const gateReviewStatus = getRawGateStatus(program, activePhase?.id) || gateReview?.status || null;
   // Same canonical action queue the rail and Action Center count, so the
   // Programme screen never shows two different "open" numbers for one phase.
@@ -887,10 +929,10 @@ export default function StageView({
           const inputsComplete = inputQuality && inputQuality.total > 0
             ? Math.round((inputQuality.present / inputQuality.total) * 100)
             : readiness.inputScore;
-          // Canonical completeness from the readiness model — resolves the phase's
-          // required artifact set across static methodology + dynamic schema, so a
-          // dynamic-only phase reads 100% once its artifacts are produced (the same
-          // signal the gate-lock condition uses).
+          // Canonical completeness from the readiness model — the share of the
+          // phase's required artifact set (static methodology + dynamic schema) that
+          // has been APPROVED, not merely produced. Reaches 100% only when every
+          // required document is approved — the same event that makes the gate lockable.
           const artifactsComplete = readiness.artifactsComplete;
           // True once at least one artifact has actually been produced — covers
           // dynamic phases (no static required spine) via the artifact score.
@@ -1195,6 +1237,19 @@ export default function StageView({
             </div>
           )
         ) : null}
+        {phaseArtifacts.present > 0 ? (
+          <div className="v3-artifact-download-row">
+            <button
+              type="button"
+              className="v3-button ghost v3-button-inline-xs"
+              onClick={() => void handleDownloadArtifacts()}
+              disabled={downloadingArtifacts}
+              title={`Download every produced ${activePhase.label ?? activePhase.id} artifact as a .zip package`}
+            >
+              {downloadingArtifacts ? "Preparing package…" : "⬇ Download artifacts package"}
+            </button>
+          </div>
+        ) : null}
         <div className="v3-output-strip">
           {showRetro ? (
             <button type="button" className="v3-chip muted" disabled={isRetroRunning} onClick={() => triggers.triggerRetro(activePhase.id)}>
@@ -1264,6 +1319,13 @@ export default function StageView({
                   .join(" — ") || `Provide ${fieldDef?.label ?? fieldId}.`;
                 return { label: fieldDef?.label ?? fieldId, requirement, filled: isInputFilled(preFlightInputs[fieldId]) };
               });
+              // Prescriptive generate guidance: name each unfilled input prompt and
+              // spell out the information it must carry, so a user knows exactly what
+              // to write where before spending a ~90s model run on a thin artifact.
+              const generateGuidance = inputRequirements
+                .filter((req) => !req.filled)
+                .map((req) => `• ${req.label}: ${req.requirement}`)
+                .join("\n");
               return (
                 <div key={def.id} className="v3-artifact-row" data-io-anchor={`artifact:${def.id}`}>
                   <div className="v3-artifact-row-head">
@@ -1288,7 +1350,7 @@ export default function StageView({
                       ▾ Preview
                     </button>
                   ) : null}
-                  {present ? (
+                  {present && state !== "approved" ? (
                     <button
                       type="button"
                       className="v3-button ghost v3-button-inline-xs"
@@ -1298,19 +1360,21 @@ export default function StageView({
                       ✦ Improve quality
                     </button>
                   ) : null}
-                  <button
-                    type="button"
-                    className="v3-button ghost v3-button-inline-xs v3-artifact-regen"
-                    onClick={() => onRunAgent(def.id)}
-                    disabled={agentButtonDisabled(def.id) || flowedInputsIncomplete}
-                    title={flowedInputsIncomplete
-                      ? `Complete the inputs that feed ${def.label} first: ${missingFlowedFields.join(", ")}`
-                      : inputsIncomplete
-                      ? `${present ? "Regenerate" : "Generate"} ${def.label} — missing inputs may limit quality: ${preflight.missingFields.join(", ")}`
-                      : present ? `Regenerate ${def.label}` : `Generate ${def.label}`}
-                  >
-                    {agentButtonContent(def.id, present ? "↻ Regenerate" : "Generate")}
-                  </button>
+                  {state !== "approved" ? (
+                    <button
+                      type="button"
+                      className="v3-button ghost v3-button-inline-xs v3-artifact-regen"
+                      onClick={() => onRunAgent(def.id)}
+                      disabled={agentButtonDisabled(def.id) || flowedInputsIncomplete}
+                      title={flowedInputsIncomplete
+                        ? `Provide these inputs before generating ${def.label}:\n${generateGuidance}`
+                        : inputsIncomplete
+                        ? `${present ? "Regenerate" : "Generate"} ${def.label} — strengthen these inputs to lift quality:\n${generateGuidance || preflight.missingFields.join(", ")}`
+                        : present ? `Regenerate ${def.label}` : `Generate ${def.label}`}
+                    >
+                      {agentButtonContent(def.id, present ? "↻ Regenerate" : "Generate")}
+                    </button>
+                  ) : null}
                   {present && artifactId && state !== "approved" && state !== "archived" ? (
                     <button
                       type="button"
@@ -1319,6 +1383,16 @@ export default function StageView({
                       title={`Approve ${def.label} — approving the final document runs the gate check`}
                     >
                       ✓ Approve
+                    </button>
+                  ) : null}
+                  {present && artifactId && state === "approved" && !lockedPhaseIds.has(activePhase.id) ? (
+                    <button
+                      type="button"
+                      className="v3-button ghost v3-button-inline-xs v3-artifact-unlock"
+                      onClick={() => { void onUnapproveArtifact(activePhase.id, artifactId); }}
+                      title={`Unlock ${def.label} to edit, regenerate, or re-review it`}
+                    >
+                      ⤺ Unlock
                     </button>
                   ) : null}
                   </div>

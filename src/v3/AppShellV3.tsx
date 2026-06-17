@@ -2498,6 +2498,26 @@ export default function AppShellV3() {
     }
   }, [activeProgram, refreshPrograms, updateProgramData, triggers]);
 
+  // Reverse an artifact approval back to a working state so the user can edit,
+  // regenerate, or re-review it. Only reachable while the phase gate is unlocked
+  // (StageView hides Unlock once the gate is locked), so it never silently
+  // unwinds a locked gate.
+  const handleUnapproveArtifact = useCallback(async (phaseId: string, artifactId: string) => {
+    if (!activeProgram) return;
+    const cloned = cloneRawProgram(activeProgram);
+    const nextInner = { ...cloned.inner };
+    const buckets = { ...(nextInner.phaseArtifacts as Record<string, Record<string, Record<string, unknown>>> | undefined ?? {}) };
+    const phaseBucket = { ...(buckets[phaseId] ?? {}) };
+    const entry = phaseBucket[artifactId];
+    if (!entry) return;
+    phaseBucket[artifactId] = { ...entry, status: "ready", updatedAt: new Date().toISOString() };
+    buckets[phaseId] = phaseBucket;
+    nextInner.phaseArtifacts = buckets;
+    await updateProgramData(activeProgram.id, cloned.commit(nextInner), activeProgram.updatedAt);
+    await refreshPrograms();
+    pushV3Toast("Document unlocked for editing.", { tone: "info", duration: 2500 });
+  }, [activeProgram, refreshPrograms, updateProgramData]);
+
   const handleDecideDecision = useCallback(async (id: string, decision: string) => {
     await handleResolveDecision(id, "approved", decision);
   }, [handleResolveDecision]);
@@ -2813,6 +2833,7 @@ export default function AppShellV3() {
                 onRunAgent={handleRunAgent}
                 onSaveArtifact={handleSaveArtifact}
                 onApproveArtifact={handleApproveArtifact}
+                onUnapproveArtifact={handleUnapproveArtifact}
                 onSaveInputs={handleSavePhaseInputs}
                 onSaveProgram={handleSaveProgramSnapshot}
                 onRevertProgram={handleRevertProgramSnapshot}
