@@ -52,7 +52,7 @@ import ProgramSetupWizard from "@/v3/components/ProgramSetupWizard";
 import { reportError } from "@/lib/errorReporter";
 import { sanitizeMarkdown } from "@/lib/sanitize";
 import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
-import { changedInputFields, approvedArtifactsToStale } from "@/v3/lib/artifactStaleness";
+import { changedInputFields, approvedArtifactsToStale, fieldsFeedingApprovedArtifacts } from "@/v3/lib/artifactStaleness";
 import { useRelativeTimeTick } from "@/lib/useRelativeTimeTick";
 import { useAgentCascadeToasts } from "@/v3/hooks/useAgentCascadeToasts";
 import { useCriticalEventAlerts } from "@/v3/hooks/useCriticalEventAlerts";
@@ -2103,8 +2103,23 @@ export default function AppShellV3() {
       pushV3Toast("All targeted phases are gate-locked — nothing imported.", { tone: "warning", duration: 4000 });
       return;
     }
+    // Reimport guard: an approved artifact's inputs must not be silently overwritten
+    // by a re-scan. For each phase, drop any incoming field that feeds an already-
+    // approved artifact (flow edges are methodology-derived, so this isn't hard-coded).
+    // First imports approve nothing, so nothing is dropped then; only re-imports of a
+    // phase with approved artifacts preserve those inputs.
+    const artifactBuckets = typeof cloned.inner.phaseArtifacts === "object" && cloned.inner.phaseArtifacts !== null
+      ? (cloned.inner.phaseArtifacts as Record<string, Record<string, Record<string, unknown>>>)
+      : {};
+    let skippedFieldCount = 0;
     for (const [phaseId, inputs] of Object.entries(writableInputs)) {
-      existing[phaseId] = mergePhaseInputBucket(existing[phaseId], inputs);
+      const blocked = fieldsFeedingApprovedArtifacts(phaseId, Object.keys(inputs), artifactBuckets[phaseId]);
+      const writableFields = blocked.size
+        ? Object.fromEntries(Object.entries(inputs).filter(([fieldId]) => !blocked.has(fieldId)))
+        : inputs;
+      skippedFieldCount += Object.keys(inputs).length - Object.keys(writableFields).length;
+      if (Object.keys(writableFields).length === 0) continue;
+      existing[phaseId] = mergePhaseInputBucket(existing[phaseId], writableFields);
     }
     const payload = cloned.commit({ ...cloned.inner, phaseInputs: existing });
     await updateProgramData(activeProgram.id, payload, activeProgram.updatedAt);
@@ -2118,11 +2133,15 @@ export default function AppShellV3() {
       window.localStorage.setItem(CONTEXT_DRAWER_STORAGE_KEY, "true");
     }
     const phaseCount = Object.keys(writableInputs).length;
-    const fieldCount = Object.values(writableInputs).reduce((sum, fields) => sum + Object.keys(fields).length, 0);
+    const totalIncoming = Object.values(writableInputs).reduce((sum, fields) => sum + Object.keys(fields).length, 0);
+    const fieldCount = totalIncoming - skippedFieldCount;
     const lockedNote = lockedPhases.length
       ? ` ${lockedPhases.length} gate-locked phase${lockedPhases.length > 1 ? "s" : ""} skipped.`
       : "";
-    pushV3Toast(`${fieldCount} field${fieldCount !== 1 ? "s" : ""} saved across ${phaseCount} phase${phaseCount !== 1 ? "s" : ""}. Ready to run agents.${lockedNote}`, { tone: "success", duration: 3500 });
+    const protectedNote = skippedFieldCount
+      ? ` ${skippedFieldCount} field${skippedFieldCount > 1 ? "s" : ""} feeding approved artifacts preserved.`
+      : "";
+    pushV3Toast(`${fieldCount} field${fieldCount !== 1 ? "s" : ""} saved across ${phaseCount} phase${phaseCount !== 1 ? "s" : ""}. Ready to run agents.${lockedNote}${protectedNote}`, { tone: "success", duration: 3500 });
   }, [activeProgram, commitNavigation, refreshPrograms, updateProgramData]);
 
   const handleUploadDocument = useCallback(() => {
