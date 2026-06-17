@@ -7195,38 +7195,50 @@ button.v3-phase-metric:focus-visible {
   left: 0;
   top: 50%;
   transform: translate(-100%, -50%);
-  width: 20px;
-  height: 56px;
-  border-radius: 10px 0 0 10px;
-  border: 1px solid var(--v3-border);
+  width: 26px;
+  height: 76px;
+  border-radius: 12px 0 0 12px;
+  border: 1px solid var(--v3-accent);
   border-right: 0;
-  background: var(--color-surface);
-  color: var(--v3-text-secondary);
+  background: var(--v3-accent);
+  color: #fff;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: -3px 0 12px rgba(16, 24, 40, 0.22);
+  transition: width var(--v3-dur-fast) var(--v3-ease), filter var(--v3-dur-fast) var(--v3-ease);
   z-index: 3;
 }
 
 .v3-context-drawer-toggle:hover {
-  color: var(--v3-text-primary);
-  background: var(--color-elevated);
+  width: 30px;
+  color: #fff;
+  filter: brightness(1.12);
+}
+
+.v3-context-drawer-toggle:focus-visible {
+  outline: 2px solid var(--v3-accent);
+  outline-offset: 2px;
 }
 
 .v3-context-drawer-toggle-badge {
   position: absolute;
-  top: -4px;
-  right: -4px;
-  min-width: 16px;
-  height: 16px;
+  top: -5px;
+  right: -5px;
+  min-width: 17px;
+  height: 17px;
   padding: 0 4px;
   border-radius: 999px;
-  background: var(--color-primary);
+  background: #ef4444;
   color: #fff;
   font-size: 11px;
-  line-height: 16px;
+  line-height: 17px;
   font-weight: 700;
+  box-shadow: 0 0 0 2px var(--color-surface);
 }
 
 .v3-context-drawer {
