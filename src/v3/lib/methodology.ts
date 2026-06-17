@@ -322,3 +322,16 @@ export function getMethodology(variant: MethodologyVariant = "atos-lite"): Metho
 export function getPhaseSequence(variant: MethodologyVariant = "atos-lite"): string[] {
   return getMethodology(variant).phases.map((phase) => phase.id);
 }
+
+/**
+ * The methodology definition for a single phase id. Falls back to the standard
+ * methodology (which declares every known phase) when the variant omits it, so
+ * callers always get the phase's exit-criteria spine and recommended agents.
+ */
+export function getPhaseDefinition(
+  phaseId: string,
+  variant: MethodologyVariant = "atos-lite",
+): PhaseDefinition | undefined {
+  return getMethodology(variant).phases.find((phase) => phase.id === phaseId)
+    ?? ATOS_STANDARD.phases.find((phase) => phase.id === phaseId);
+}

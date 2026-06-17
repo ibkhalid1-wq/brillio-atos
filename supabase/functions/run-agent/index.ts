@@ -5396,9 +5396,20 @@ Return ONLY valid JSON:
 
   if (request.agentId === "phase-input-planner") {
     const nextPhase = getProgramPhaseContext(programData).find((p) => p.id === request.phaseId);
-    const nextPhaseName = typeof nextPhase?.name === "string" && nextPhase.name ? nextPhase.name : formatPhaseName(request.phaseId);
-    const nextPhaseObjective = typeof nextPhase?.objective === "string" ? nextPhase.objective : "";
-    const exitCriteria = Array.isArray(nextPhase?.exitCriteria) ? (nextPhase!.exitCriteria as unknown[]).map((c) => String(c)).filter(Boolean) : [];
+    const spec = request.phaseSpec;
+    const nextPhaseName = (typeof spec?.name === "string" && spec.name)
+      ? spec.name
+      : (typeof nextPhase?.name === "string" && nextPhase.name ? nextPhase.name : formatPhaseName(request.phaseId));
+    const nextPhaseObjective = (typeof spec?.description === "string" && spec.description)
+      ? spec.description
+      : (typeof nextPhase?.objective === "string" ? nextPhase.objective : "");
+    // The client passes the methodology's mandatory exit criteria for dynamic
+    // phases (the edge can't import the methodology, and persisted phases often
+    // carry no exitCriteria yet). Prefer those; fall back to anything persisted.
+    const specCriteria = Array.isArray(spec?.exitCriteria) ? spec!.exitCriteria.filter((c) => typeof c === "string" && c.trim()) : [];
+    const persistedCriteria = Array.isArray(nextPhase?.exitCriteria) ? (nextPhase!.exitCriteria as unknown[]).map((c) => String(c)).filter(Boolean) : [];
+    const exitCriteria = specCriteria.length ? specCriteria : persistedCriteria;
+    const recommendedAgents = Array.isArray(spec?.recommendedAgents) ? spec!.recommendedAgents.filter((c) => typeof c === "string" && c.trim()) : [];
     return {
       system: `You are the ATOS Phase Input Planner.
 The prior phase has just cleared its stage gate. The NEXT phase ("${nextPhaseName}") is a
@@ -5439,7 +5450,9 @@ Return ONLY valid JSON:
 }`,
       user: `Next phase: ${nextPhaseName}${nextPhaseObjective ? `\nObjective: ${nextPhaseObjective}` : ""}
 Mandatory exit criteria this phase must satisfy (every one must be covered by an artifact):
-${exitCriteria.length ? exitCriteria.map((c) => `- ${c}`).join("\n") : "- (none recorded — infer from the prior-phase context and objective)"}
+${exitCriteria.length ? exitCriteria.map((c) => `- ${c}`).join("\n") : "- (none recorded — infer from the prior-phase context and objective)"}${
+        recommendedAgents.length ? `\n\nAgents that will operate in this phase (each typically needs a feeding input and produces an artifact): ${recommendedAgents.join(", ")}.` : ""
+      }
 
 Input context JSON:\n${specialAgentInputContext || "{}"}${
         typeof contextSnapshot.priorPhaseContext === "string" && contextSnapshot.priorPhaseContext
@@ -6158,6 +6171,18 @@ Deno.serve(async (req) => {
       decisionId: typeof rawRequest.decisionId === "string" ? rawRequest.decisionId : undefined,
       documentId: typeof rawRequest.documentId === "string" ? rawRequest.documentId : undefined,
       artifactId: typeof rawRequest.artifactId === "string" ? rawRequest.artifactId : undefined,
+      phaseSpec: isRecord(rawRequest.phaseSpec)
+        ? {
+            name: typeof rawRequest.phaseSpec.name === "string" ? rawRequest.phaseSpec.name : undefined,
+            description: typeof rawRequest.phaseSpec.description === "string" ? rawRequest.phaseSpec.description : undefined,
+            exitCriteria: Array.isArray(rawRequest.phaseSpec.exitCriteria)
+              ? rawRequest.phaseSpec.exitCriteria.filter((c): c is string => typeof c === "string")
+              : undefined,
+            recommendedAgents: Array.isArray(rawRequest.phaseSpec.recommendedAgents)
+              ? rawRequest.phaseSpec.recommendedAgents.filter((c): c is string => typeof c === "string")
+              : undefined,
+          }
+        : undefined,
     };
     if (!request.programId || !request.agentId) {
       return jsonResponse({ error: "programId and agentId are required." }, 400);

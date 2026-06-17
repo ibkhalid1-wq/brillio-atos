@@ -60,7 +60,7 @@ import { useCriticalEventAlerts } from "@/v3/hooks/useCriticalEventAlerts";
 import { useLocalProgramMigration } from "@/v3/hooks/useLocalProgramMigration";
 import { usePhaseAgentState } from "@/v3/hooks/usePhaseAgentState";
 import { useProgramValidation } from "@/v3/hooks/useProgramValidation";
-import { getPhaseSequence } from "@/v3/lib/methodology";
+import { getPhaseSequence, getPhaseDefinition } from "@/v3/lib/methodology";
 import { computePhaseReadiness, getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
 import { confidenceRag, getGateThreshold } from "@/v3/lib/confidenceScore";
 import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
@@ -2431,12 +2431,25 @@ export default function AppShellV3() {
         }
       }
       try {
+        // The edge can't import the methodology, so pass the next phase's spine
+        // (mandatory exit criteria + recommended agents) for the planner to
+        // ground a complete inventory on — persisted phases often carry no
+        // exitCriteria yet, which otherwise leaves the planner under-generating.
+        const nextPhaseDef = getPhaseDefinition(nextPhaseId);
         const response = await supabase.functions.invoke("run-agent", {
           body: {
             programId: activeProgram.id,
             agentId: "phase-input-planner",
             phaseId: nextPhaseId,
             triggeredBy: "trigger",
+            phaseSpec: nextPhaseDef
+              ? {
+                  name: nextPhaseDef.displayName,
+                  description: nextPhaseDef.description,
+                  exitCriteria: nextPhaseDef.mandatoryExitCriteriaTemplates,
+                  recommendedAgents: nextPhaseDef.recommendedAgents,
+                }
+              : undefined,
           },
         });
         const proposal = sanitizePlannerProposal((response.data as { output?: unknown } | undefined)?.output);

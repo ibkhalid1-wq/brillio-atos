@@ -70,6 +70,18 @@ export interface RunAgentRequest {
   memberRole?: string;
   meetingDate?: string;
   meetingDurationMins?: number;
+  /**
+   * Methodology spine for the phase being planned, supplied by the client. The
+   * edge cannot import the client methodology registry, so dynamic-phase exit
+   * criteria / recommended agents are passed in here for the phase-input-planner
+   * to ground its generated inputs and artifacts on.
+   */
+  phaseSpec?: {
+    name?: string;
+    description?: string;
+    exitCriteria?: string[];
+    recommendedAgents?: string[];
+  };
 }
 
 export interface RunAgentResponse {
