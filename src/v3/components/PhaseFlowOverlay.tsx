@@ -27,19 +27,20 @@ interface PhaseFlowOverlayProps {
   enabled: boolean;
 }
 
-type FieldTone = "green" | "amber" | "muted";
+type FieldTone = "green" | "amber" | "red" | "muted";
 type Line = { x1: number; y1: number; x2: number; y2: number; tone: FieldTone; key: string };
 
-// Stroke styling per source-field status, mirroring the inline field-quality
-// badges (green = good/filled, amber = brief/fair, muted = empty). Each tone
-// carries a brighter "soft" companion used for the source→target gradient.
+// Stroke styling per source-field quality, mirroring the inline field-quality
+// badges (green = complete, amber = fair, red = brief/thin, muted = empty). Each
+// tone carries a brighter "soft" companion used for the source→target gradient.
 const TONE_STYLE: Record<FieldTone, { stroke: string; soft: string; width: number; glow: number; dot: number }> = {
   green: { stroke: "#2DD4BF", soft: "#5EEAD4", width: 1.75, glow: 0.18, dot: 0.85 },
   amber: { stroke: "#F59E0B", soft: "#FBBF24", width: 1.75, glow: 0.16, dot: 0.8 },
+  red: { stroke: "#F43F5E", soft: "#FB7185", width: 1.4, glow: 0.14, dot: 0.7 },
   muted: { stroke: "#94A3B8", soft: "#CBD5E1", width: 1.1, glow: 0.0, dot: 0.32 },
 };
 
-const TONES: FieldTone[] = ["green", "amber", "muted"];
+const TONES: FieldTone[] = ["green", "amber", "red", "muted"];
 
 function readPhaseInputs(program: ProgramSummary, phaseId: string): Record<string, unknown> {
   const raw = program.rawData as Record<string, unknown> | null;
