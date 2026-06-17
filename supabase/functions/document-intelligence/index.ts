@@ -38,7 +38,89 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 // ─── Extraction prompt ────────────────────────────────────────────────────────
 
-const EXTRACTION_SYSTEM_PROMPT = `You are an expert business analyst and programme management consultant. Analyse the provided document and extract ALL methodology-relevant information.
+// ─── Declared-input schema (passed by the client) ─────────────────────────────
+// The client resolves each activated phase's input fields from the methodology +
+// dynamic-schema registry (the single source of truth) and forwards a compact
+// view here so the extractor maps document data onto the SAME fields the UI will
+// surface for review — including ai-derived dynamic fields (e.g. Mobilise's team
+// roster grid) the static prompt never knew about.
+interface PhaseFieldSchema {
+  key?: string;
+  id?: string;
+  label?: string;
+  type?: string;
+  hint?: string;
+  options?: string[];
+  columns?: Array<{ key?: string; label?: string }>;
+}
+interface PhaseSchema {
+  phaseId: string;
+  title?: string;
+  fields: PhaseFieldSchema[];
+}
+
+// Strategy's static input fields — the fallback declaration used when the client
+// sends no schema (older callers), preserving the prior behaviour exactly.
+const STRATEGY_FALLBACK_SCHEMA: PhaseSchema = {
+  phaseId: "strategy",
+  fields: [
+    { id: "businessObjective", label: "Business objective", type: "textarea" },
+    { id: "sponsor", label: "Executive sponsor", type: "text" },
+    { id: "industry", label: "Industry", type: "select" },
+    { id: "startDate", label: "Start date", type: "date" },
+    { id: "targetEndDate", label: "Target end date", type: "date" },
+    { id: "costAssumption", label: "Cost assumption", type: "text" },
+    { id: "constraints", label: "Constraints", type: "textarea" },
+    { id: "successMetric", label: "Success metric", type: "textarea" },
+  ],
+};
+
+function fieldId(field: PhaseFieldSchema): string {
+  return (field.id || field.key || "").trim();
+}
+
+/** One human-readable line describing a declared field for the prompt's guide. */
+function describeField(field: PhaseFieldSchema): string {
+  const id = fieldId(field);
+  const type = field.type || "text";
+  const label = field.label || id;
+  if (type === "grid") {
+    const cols = (field.columns || []).map((c) => (c.key || "").trim()).filter(Boolean);
+    const colHint = cols.length ? ` — value must be a JSON-array STRING of row objects using these keys: ${cols.join(", ")}` : "";
+    return `  - ${id} (grid): ${label}${colHint}`;
+  }
+  const opts = type === "select" && field.options?.length ? ` (one of: ${field.options.slice(0, 24).join(" | ")})` : "";
+  const hint = field.hint ? ` — ${field.hint}` : "";
+  return `  - ${id} (${type})${opts}: ${label}${hint}`;
+}
+
+/**
+ * Builds the extraction system prompt. The entities/kpis structure is fixed; the
+ * methodologyMappings target set is driven entirely by the declared phase schema
+ * the client supplies, so the extractor can populate any activated phase's
+ * fields — static or ai-derived — rather than a hard-coded Strategy-only set.
+ */
+function buildExtractionSystemPrompt(schemas: PhaseSchema[]): string {
+  const active = schemas.length ? schemas : [STRATEGY_FALLBACK_SCHEMA];
+
+  const mappingSkeleton = active
+    .map((phase) => {
+      const fieldLines = phase.fields
+        .filter((f) => fieldId(f))
+        .map((f) => `      "${fieldId(f)}": { "value": "string", "confidence": 0.9, "source": "string", "extractionType": "extracted" }`)
+        .join(",\n");
+      return `    "${phase.phaseId}": {\n${fieldLines}\n    }`;
+    })
+    .join(",\n");
+
+  const fieldGuide = active
+    .map((phase) => {
+      const lines = phase.fields.filter((f) => fieldId(f)).map(describeField).join("\n");
+      return `${phase.phaseId}${phase.title ? ` (${phase.title})` : ""}:\n${lines}`;
+    })
+    .join("\n");
+
+  return `You are an expert business analyst and programme management consultant. Analyse the provided document and extract ALL methodology-relevant information.
 
 Return ONLY valid JSON in the exact structure below. Do not include markdown fences or any text outside the JSON object.
 
@@ -99,16 +181,7 @@ Return ONLY valid JSON in the exact structure below. Do not include markdown fen
     ]
   },
   "methodologyMappings": {
-    "strategy": {
-      "businessObjective": { "value": "string", "confidence": 0.9, "source": "string", "extractionType": "extracted" },
-      "sponsor": { "value": "string", "confidence": 0.9, "source": "string", "extractionType": "extracted" },
-      "industry": { "value": "string", "confidence": 0.85, "source": "string", "extractionType": "extracted" },
-      "startDate": { "value": "YYYY-MM-DD", "confidence": 0.8, "source": "string", "extractionType": "extracted" },
-      "targetEndDate": { "value": "YYYY-MM-DD", "confidence": 0.8, "source": "string", "extractionType": "extracted" },
-      "costAssumption": { "value": "string", "confidence": 0.8, "source": "string", "extractionType": "extracted" },
-      "constraints": { "value": "string", "confidence": 0.8, "source": "string", "extractionType": "extracted" },
-      "successMetric": { "value": "string", "confidence": 0.85, "source": "string", "extractionType": "extracted" }
-    }
+${mappingSkeleton}
   },
   "kpis": [
     { "name": "string — the metric/KPI name", "baseline": "string — current value, or empty", "target": "string — target value, or empty", "unit": "string — unit of measure, or empty", "source": "brief quote or section ref", "confidence": 0.85, "extractionType": "extracted" }
@@ -116,19 +189,24 @@ Return ONLY valid JSON in the exact structure below. Do not include markdown fen
   "gaps": "string — brief description of what information appears to be missing from this document"
 }
 
+DECLARED PHASE INPUT FIELDS — map document data ONLY to these fields, each under its phase id in methodologyMappings:
+${fieldGuide}
+
 RULES:
 - kpis: populate ONLY when the document states quantified metrics with current and/or target values (e.g. a metrics table, OKRs, or "X → Y" targets). Each KPI must have a name; leave baseline/target/unit as empty strings when not stated. Do not duplicate the same metric across entities.successMetrics and kpis — prefer kpis for anything with a numeric baseline or target. Omit the kpis array entirely when there are no quantified metrics.
 - extractionType values: "extracted" = verbatim or near-verbatim from document; "enriched" = you restructured/formatted raw text; "inferred" = logically derived from context
 - confidence: 0.9+ for verbatim, 0.75-0.9 for paraphrased/enriched, 0.5-0.75 for inferred
 - source: short quote (under 60 chars) from the document, or a section/page reference
-- methodologyMappings: the Strategy fields above are the only declared programme inputs at the outset; map them whenever the document supplies the data. Later phases (mobilise, design, build, operate, …) have NO fixed input fields until the programme reaches and activates them, so do not invent fields for them — capture that material in the entities arrays instead. The application ignores any mapping whose field is not a declared input of an activated phase.
-- Only include methodologyMappings for phases where you found actual data
+- methodologyMappings: map document data ONLY to the declared phase input fields listed above, each under its own phase id. Do NOT invent fields that are not in that list — capture any other material in the entities arrays instead.
+- grid fields: the "value" MUST be a JSON-array STRING (e.g. "[{\\"role\\":\\"Delivery Lead\\",\\"name\\":\\"Jane Doe\\"}]") whose objects use exactly the column keys named for that field. Include one object per row found in the document; omit the field entirely when the document has no such data.
+- Only include methodologyMappings for phases/fields where you found actual data
 - Limit each entity array to a maximum of 5 items (the most important ones)
 - Omit methodology mapping fields that have no data rather than returning empty strings
-- Keep all string values concise — under 300 characters per field
+- Keep all string values concise — under 300 characters per field (grid JSON strings excepted)
 - Never fabricate information that is not in the document
 - Convert bullets, tables, and informal notes into structured values where appropriate (mark as "enriched")
 - If you are running low on tokens, prioritise completing methodologyMappings over entities arrays`;
+}
 
 // ─── Type helpers ─────────────────────────────────────────────────────────────
 
@@ -138,6 +216,8 @@ interface ExtractionPayload {
   fileName: string;
   fileAttachment?: FileAttachment;
   phaseHint?: string;
+  /** Declared input fields of the programme's activated phases (registry-sourced). */
+  phaseSchemas?: PhaseSchema[];
 }
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
@@ -178,8 +258,12 @@ Deno.serve(async (req) => {
 
     const startedAt = Date.now();
 
+    const schemas = Array.isArray(payload.phaseSchemas)
+      ? payload.phaseSchemas.filter((s) => s && typeof s.phaseId === "string" && Array.isArray(s.fields))
+      : [];
+
     const result = await completeClaudeText({
-      system: EXTRACTION_SYSTEM_PROMPT,
+      system: buildExtractionSystemPrompt(schemas),
       messages: toClaudeMessages([{ role: "user", content: userMessage, timestamp: new Date().toISOString() }]),
       maxTokens: 8000,
       temperature: 0.1,

@@ -397,6 +397,28 @@ export function useDocumentIntelligence({
     setProgress(30);
     setStage("extracting");
 
+    // Declare the activated phases' input fields (static methodology + ai-derived
+    // dynamic) so the extractor maps document data onto the SAME registry fields
+    // the review panel will surface — not a hard-coded Strategy-only set. A phase
+    // is "activated" once it has captured inputs or accrued dynamic fields; we
+    // always include Strategy and the upload's target phase.
+    const activatedPhaseIds = new Set<string>(["strategy"]);
+    if (phaseHint) activatedPhaseIds.add(phaseHint);
+    for (const pid of Object.keys(existingPhaseInputs)) activatedPhaseIds.add(pid);
+    for (const pid of Object.keys(dynamicSchemaStore?.inputFields ?? {})) activatedPhaseIds.add(pid);
+    const phaseSchemas = [...activatedPhaseIds].map((pid) => ({
+      phaseId: pid,
+      title: getPhaseInputSchema(pid, dynamicSchemaStore).title,
+      fields: getPhaseInputSchema(pid, dynamicSchemaStore).fields.map((f) => ({
+        id: f.id,
+        label: f.label,
+        type: f.type,
+        hint: f.hint,
+        options: f.options,
+        columns: f.type === "grid" ? (f.columns ?? []).map((c) => ({ key: c.key, label: c.label })) : undefined,
+      })),
+    }));
+
     // ── Call document-intelligence edge function ──────────────────────────
     try {
       const invoked = await supabase.functions.invoke("document-intelligence", {
@@ -406,6 +428,7 @@ export function useDocumentIntelligence({
           fileName: file.name,
           fileAttachment: fileAttachment || undefined,
           phaseHint: phaseHint || undefined,
+          phaseSchemas,
         },
       });
 
