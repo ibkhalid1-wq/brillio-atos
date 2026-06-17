@@ -10,7 +10,7 @@
  * - Accept All / Save Selected / Cancel actions
  */
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import type { DocumentIntelligence, ReviewField } from "@/new/lib/documentIntelligenceTypes";
 import {
   confidenceLabel,
@@ -456,6 +456,29 @@ export function DocumentReviewPanel({
   ).length;
   const conflictCount = reviewFields.filter((f) => f.hasConflict).length;
 
+  // Auto-commit once every extracted field has been decided (approved/edited or
+  // rejected) — no explicit Save/Cancel. Approved fields persist; if everything
+  // was rejected there is nothing to import, so the review just dismisses. A
+  // short debounce lets a burst of decisions (e.g. "Accept all") settle, and the
+  // ref guard ensures it fires exactly once.
+  const firedRef = useRef(false);
+  // Latch the latest callbacks so the debounce timer below doesn't reset every
+  // render (the parent passes fresh inline closures for onSave/onCancel).
+  const onSaveRef = useRef(onSave);
+  const onCancelRef = useRef(onCancel);
+  onSaveRef.current = onSave;
+  onCancelRef.current = onCancel;
+  const allDecided = reviewFields.length > 0 && pendingCount === 0;
+  useEffect(() => {
+    if (!allDecided || saving || firedRef.current) return;
+    const timer = window.setTimeout(() => {
+      firedRef.current = true;
+      if (approvedCount > 0) onSaveRef.current();
+      else onCancelRef.current();
+    }, 600);
+    return () => window.clearTimeout(timer);
+  }, [allDecided, approvedCount, saving]);
+
   const ent = intelligence.entities ?? {};
   const entityCounts = [
     { label: "Objectives", count: ent.objectives?.length ?? 0, icon: "🎯" },
@@ -641,7 +664,9 @@ export function DocumentReviewPanel({
         </div>
       )}
 
-      {/* ── Action bar ── */}
+      {/* ── Status bar ── approve/reject each field; approved fields auto-save
+          once everything is decided. No explicit Save/Cancel. The only control
+          is a Done affordance for the empty "nothing mapped" terminal state. */}
       <div
         style={{
           display: "flex",
@@ -649,32 +674,29 @@ export function DocumentReviewPanel({
           paddingTop: 8,
           borderTop: "1px solid var(--v3-border)",
           justifyContent: "flex-end",
+          alignItems: "center",
         }}
       >
-        <button
-          type="button"
-          className="v3-button ghost"
-          style={{ fontSize: 12 }}
-          onClick={onCancel}
-          disabled={saving}
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          className="v3-button primary"
-          style={{ fontSize: 12 }}
-          onClick={onSave}
-          disabled={saving || (reviewFields.length > 0 && approvedCount === 0 && pendingCount === 0)}
-        >
-          {saving
-            ? "Saving…"
-            : approvedCount > 0
-              ? `Save ${approvedCount} approved field${approvedCount !== 1 ? "s" : ""}`
-              : reviewFields.length === 0
-                ? "Done"
-                : "Save pending fields"}
-        </button>
+        {reviewFields.length === 0 ? (
+          <button
+            type="button"
+            className="v3-button primary"
+            style={{ fontSize: 12 }}
+            onClick={onSave}
+          >
+            Done
+          </button>
+        ) : (
+          <span style={{ fontSize: 12, color: "var(--v3-text-muted)" }} aria-live="polite">
+            {saving
+              ? "Saving approved fields…"
+              : pendingCount > 0
+                ? `${pendingCount} field${pendingCount !== 1 ? "s" : ""} left to review — approved fields save automatically`
+                : approvedCount > 0
+                  ? `Saving ${approvedCount} approved field${approvedCount !== 1 ? "s" : ""}…`
+                  : "No fields approved — nothing to import"}
+          </span>
+        )}
       </div>
     </div>
   );
