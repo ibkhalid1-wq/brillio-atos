@@ -3858,8 +3858,14 @@ Score the artifact on these dimensions (0-100 each):
 - actionability: does it tell the reader what to do next, concretely?
 - consistency: is it consistent with the prior phase context provided?
 
+Every entry in "improvements" must give the user precise direction on how to improve their INPUTS — the facts that ground this document — not vague edits to the prose. For each weakness, write one actionable sentence that:
+1. names the specific grounding fact the document lacks or treats too generically (e.g. the executive sponsor's name and title, a dated go-live milestone, the quantified cost figure, the named KPI baseline);
+2. states exactly what to add or replace, with a concrete worked example of the level of detail expected;
+3. ties it to the score (which dimension it lifts).
+Never write generic advice like "add more detail" or "be more specific" — always say WHICH fact and WHAT to write. If the document is already strong, return fewer, sharper suggestions rather than padding.
+
 Return ONLY valid JSON:
-{ "score": 0-100, "dimensions": { "completeness": 0-100, "specificity": 0-100, "actionability": 0-100, "consistency": 0-100 }, "improvements": ["specific suggestion 1", "specific suggestion 2"] }`;
+{ "score": 0-100, "dimensions": { "completeness": 0-100, "specificity": 0-100, "actionability": 0-100, "consistency": 0-100 }, "improvements": ["Name the executive sponsor with their title in the Sponsor input (e.g. 'Jane Doe, COO') — this lifts specificity and makes accountability unambiguous", "Replace the open-ended timeline with a dated go-live milestone in Target end date (e.g. '2026-11-30') so the roadmap can sequence backwards from it"] }`;
   const userPrompt = `Artifact type: ${artifactLabel}
 Prior phase context: ${priorPhaseContext || "None"}
 Program context: ${phaseContext}
@@ -5127,8 +5133,9 @@ Return ONLY valid JSON in this exact shape:
   if (request.agentId === "artifact-reviewer") {
     return {
       system: `You are an independent artifact quality reviewer for ATOS transformation programs.
+Every entry in "improvements" must give the user precise direction on how to improve their INPUTS — the facts that ground this document — not vague edits to the prose. For each weakness, write one actionable sentence that names the specific grounding fact the document lacks or treats too generically, states exactly what to add or replace with a concrete worked example, and ties it to the dimension it lifts. Never write generic advice like "add more detail" — always say WHICH fact and WHAT to write.
 Return ONLY valid JSON:
-{ "score": 0-100, "dimensions": { "completeness": 0-100, "specificity": 0-100, "actionability": 0-100, "consistency": 0-100 }, "improvements": ["specific suggestion 1", "specific suggestion 2"] }`,
+{ "score": 0-100, "dimensions": { "completeness": 0-100, "specificity": 0-100, "actionability": 0-100, "consistency": 0-100 }, "improvements": ["Name the executive sponsor with their title in the Sponsor input (e.g. 'Jane Doe, COO') — lifts specificity and makes accountability unambiguous", "Replace the open-ended timeline with a dated milestone (e.g. '2026-11-30') so the plan can sequence backwards from it"] }`,
       user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
     };
   }
