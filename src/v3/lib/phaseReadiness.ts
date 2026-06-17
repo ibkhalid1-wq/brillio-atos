@@ -155,9 +155,8 @@ export function computePhaseReadiness(
   // Completeness is the share of the required set that has been APPROVED — merely
   // producing a draft does not count it as complete; a PM must review and approve
   // each document. A dynamic-only phase is complete once ≥1 artifact is approved.
-  // This is also the gate-lock bar: the gate auto-runs when the last required
-  // document is approved, so completeness reaching 100% and the gate becoming
-  // lockable are the same event.
+  // This is also the gate-lock bar: completeness reaching 100% is what enables the
+  // (manual) Close phase action — the PM still clicks Close to lock the gate.
   const isArtifactApproved = (id: string) => phaseArtifactRecords[id]?.status === "approved";
   const artifactsComplete = requiredArtifactIds.length > 0
     ? Math.round(

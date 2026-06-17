@@ -47,7 +47,7 @@ interface StageViewProps {
   onAddItem?: (tab: "blockers" | "risks" | "actions") => void;
   onOpenReport: (reportId: V3ReportId) => void;
   onReopenGate: (phaseId: string) => void;
-  onApproveGate: (phaseId: string) => Promise<void>;
+  onApproveGate: (phaseId: string) => Promise<boolean | void>;
   onRunAgent: (agentId: string) => void;
   onSaveArtifact: (artifactId: "narrative" | "deck", content: string) => Promise<void>;
   onApproveArtifact: (phaseId: string, artifactId: string, agentId: string) => Promise<void>;
@@ -480,6 +480,7 @@ export default function StageView({
   const [exitCriteriaOpen, setExitCriteriaOpen] = React.useState(false);
   const [isLocking, setIsLocking] = React.useState(false);
   const [downloadingArtifacts, setDownloadingArtifacts] = React.useState(false);
+  const [lockConfirmOpen, setLockConfirmOpen] = React.useState(false);
   const [lockedModalOpen, setLockedModalOpen] = React.useState(false);
   const [previewArtifact, setPreviewArtifact] = React.useState<{ label: string; description?: string; content: string; score: number | null; statusTone: string } | null>(null);
   const [qualityArtifact, setQualityArtifact] = React.useState<{
@@ -769,8 +770,12 @@ export default function StageView({
     if (!activePhase || isLocking) return;
     setIsLocking(true);
     try {
-      await onApproveGate(activePhase.id);
-      setLockedModalOpen(true);
+      const closed = await onApproveGate(activePhase.id);
+      setLockConfirmOpen(false);
+      // Only show the "complete & locked" confirmation when the phase actually
+      // closed. handleApproveGate returns false (and toasts the reason) if the
+      // close was rejected, so we never show a misleading success state.
+      if (closed !== false) setLockedModalOpen(true);
     } finally {
       setIsLocking(false);
     }
@@ -1078,7 +1083,6 @@ export default function StageView({
               <div className="v3-phase-pipeline" role="group" aria-label="Gate readiness pipeline">
                 {pipeline.map((metric, i) => {
                   const isGate = i === pipeline.length - 1;
-                  const isArtifactQuality = metric.label === "Artifact quality";
                   const isInputsComplete = metric.label === "Inputs complete";
                   return (
                     <React.Fragment key={metric.label}>
@@ -1098,32 +1102,17 @@ export default function StageView({
                       ) : isGate ? (
                         <div className="v3-phase-gate-col">
                           {renderMetric(metric)}
-                          {gateReview ? (
+                          {gateApproved ? null : (
                             <button
                               type="button"
                               className="v3-button ghost v3-button-inline-xs v3-phase-gate-recheck"
-                              disabled={isGateRunning}
-                              title="ATOS re-checks gate readiness automatically after each document is generated — use this only to force a manual refresh."
-                              onClick={() => {
-                                gateRecheckPendingRef.current = activePhase.id;
-                                triggers.triggerGateReview(activePhase.id);
-                              }}
+                              disabled={isLocking || !(readiness.artifactsComplete >= 100 && readiness.artifactScore > 85)}
+                              title="Close this phase. Enabled once every required artifact is approved and quality clears 85%."
+                              onClick={() => setLockConfirmOpen(true)}
                             >
-                              {isGateRunning ? "Checking…" : "Re-check"}
+                              {isLocking ? "Closing…" : "Close phase"}
                             </button>
-                          ) : null}
-                        </div>
-                      ) : isArtifactQuality ? (
-                        <div className="v3-phase-gate-col">
-                          {renderMetric(metric)}
-                          <button
-                            type="button"
-                            className="v3-button ghost v3-button-inline-xs v3-phase-gate-recheck"
-                            aria-label="Open exit criteria"
-                            onClick={() => setExitCriteriaOpen(true)}
-                          >
-                            Exit criteria
-                          </button>
+                          )}
                         </div>
                       ) : (
                         renderMetric(metric)
@@ -1161,18 +1150,6 @@ export default function StageView({
           {gateReviewStatus === "approved" ? (
             <div className="v3-phase-head-actions-grp">
               <button type="button" className="v3-button ghost v3-button-inline-xs" onClick={() => onReopenGate(activePhase.id)}>Reopen Gate</button>
-            </div>
-          ) : readiness?.canApproveGate ? (
-            <div className="v3-phase-head-actions-grp">
-              <button
-                type="button"
-                className="v3-button primary v3-button-inline-sm"
-                disabled={isLocking}
-                title="All required artifacts are complete and quality clears the lock bar — lock this stage. Further changes go through change control."
-                onClick={() => void handleLockStage()}
-              >
-                {isLocking ? "Locking…" : "Lock stage"}
-              </button>
             </div>
           ) : null}
           {phaseAgentActions.length ? (
@@ -1758,6 +1735,49 @@ export default function StageView({
             </button>
           </div>
         </StageModal>
+      ) : null}
+
+      {lockConfirmOpen ? (
+        <div
+          role="presentation"
+          onClick={() => { if (!isLocking) setLockConfirmOpen(false); }}
+          style={{ position: "fixed", inset: 0, zIndex: 600, background: "rgba(8,10,16,0.45)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Close stage"
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: "100%", maxWidth: 460, background: "var(--v3-surface)", border: "1px solid var(--v3-border)", borderRadius: 16, boxShadow: "0 24px 64px rgba(0,0,0,0.35)", padding: 28, textAlign: "center" }}
+          >
+            <div aria-hidden="true" style={{ width: 52, height: 52, margin: "0 auto 16px", borderRadius: "50%", background: "var(--v3-amber-soft, rgba(245,158,11,0.16))", color: "var(--v3-amber)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>🔒</div>
+            <h2 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 600, color: "var(--v3-text)" }}>
+              Close the {activePhase.label ?? activePhase.id} stage?
+            </h2>
+            <p style={{ margin: "0 0 20px", fontSize: 13.5, lineHeight: 1.5, color: "var(--v3-text-secondary)" }}>
+              Every required artifact is complete and quality clears the gate bar. Closing locks this stage and approves its artifacts; further changes are managed through <strong>change control</strong>. The approved artifacts are then handed to the AI planner to generate the next stage&rsquo;s input fields and artifact inventory.
+            </p>
+            <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+              <button
+                type="button"
+                className="v3-button ghost v3-button-inline-sm"
+                onClick={() => setLockConfirmOpen(false)}
+                disabled={isLocking}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="v3-button primary v3-button-inline-sm"
+                onClick={() => void handleLockStage()}
+                disabled={isLocking}
+                autoFocus
+              >
+                {isLocking ? "Closing…" : "Close phase"}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {lockedModalOpen ? (

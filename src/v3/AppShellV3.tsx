@@ -52,7 +52,6 @@ import ProgramDetailRouter from "@/v3/components/ProgramDetailRouter";
 import ProgramSetupWizard from "@/v3/components/ProgramSetupWizard";
 import { reportError } from "@/lib/errorReporter";
 import { sanitizeMarkdown } from "@/lib/sanitize";
-import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
 import { changedInputFields, approvedArtifactsToStale, fieldsFeedingApprovedArtifacts } from "@/v3/lib/artifactStaleness";
 import { getDynamicSchemaStore, sanitizePlannerProposal, applyDynamicProposal } from "@/v3/lib/dynamicSchema";
 import { useRelativeTimeTick } from "@/lib/useRelativeTimeTick";
@@ -2322,73 +2321,45 @@ export default function AppShellV3() {
     [handleAssistField],
   );
 
-  const handleApproveGate = useCallback(async (phaseId: string) => {
-    if (!activeProgram) return;
+  const handleApproveGate = useCallback(async (phaseId: string): Promise<boolean> => {
+    if (!activeProgram) return false;
 
-    // Authoritative hard gate: re-verify readiness at the single chokepoint both
-    // StageView and ProgrammeHealthView route through, so a stale-enabled button
-    // or a view that doesn't disable its own button can never approve a phase
-    // whose score, mandatory exit criteria, or critical assumptions still fail.
+    // Authoritative hard gate: closing a phase is deterministic and governed by
+    // artifact completeness and quality — the same two conditions the Close
+    // phase button enables on (every required artifact approved AND quality
+    // above 85%). No LLM gate-review and no mandatory exit-criteria gating. This
+    // is the single chokepoint every surface (StageView, ProgrammeHealthView)
+    // routes through, so a stale-enabled button can never close a phase whose
+    // artifacts are incomplete or under-quality.
     const approvalReadiness = computePhaseReadiness(activeProgram, phaseId);
-    if (!approvalReadiness.canApproveGate) {
+    if (approvalReadiness.artifactsComplete < 100) {
       pushV3Toast(
-        approvalReadiness.missing[0]
-          || `Gate readiness ${approvalReadiness.score}% is below the ${approvalReadiness.threshold}% threshold.`,
+        `Artifacts are ${Math.round(approvalReadiness.artifactsComplete)}% complete — every required artifact must be approved before this phase can close.`,
         { tone: "error", duration: 5000 },
       );
-      return;
+      return false;
     }
-
-    // Cross-phase dependency check is a hard gate condition. Token optimization:
-    // reuse the verdict already persisted (dependency-check auto-runs downstream of
-    // gate-review), and only invoke the model when no verdict exists yet — so a
-    // routine approve click costs zero tokens instead of one model call each time.
-    if (supabase) {
-      try {
-        type DependencyVerdict = { passed?: boolean; issues?: Array<{ severity?: string; description?: string }> };
-        const persisted = getProgramState(activeProgram.rawData || {}).inner.dependencyCheck;
-        let dependencyCheck = persisted && typeof persisted === "object"
-          ? (persisted as Record<string, DependencyVerdict>)[phaseId]
-          : undefined;
-        if (!dependencyCheck) {
-          const dependencyResponse = await supabase.functions.invoke("run-agent", {
-            body: {
-              programId: activeProgram.id,
-              agentId: "dependency-check",
-              phaseId,
-              triggeredBy: "trigger",
-            },
-          });
-          dependencyCheck = (dependencyResponse.data as { output?: DependencyVerdict } | undefined)?.output;
-        }
-        const blockingIssue = dependencyCheck?.issues?.find((issue) => issue.severity === "blocking");
-        if (dependencyCheck && dependencyCheck.passed === false && blockingIssue?.description) {
-          pushV3Toast(`Gate blocked: ${blockingIssue.description}`, { tone: "error", duration: 5000 });
-          return;
-        }
-      } catch {
-        // Dependency check unavailable (no auth / agent down) — proceed with manual approval
-      }
-    }
-
-    await refreshPrograms();
-    const source = getProgramState(activeProgram.rawData || {}).inner;
-    const handoffQuality = typeof source.handoffQuality === "object" && source.handoffQuality !== null
-      ? (source.handoffQuality as Record<string, { passed?: boolean; score?: number; missing?: string[] }>)[phaseId]
-      : undefined;
-    if (handoffQuality && handoffQuality.passed === false) {
+    if (!(approvalReadiness.artifactScore > 85)) {
       pushV3Toast(
-        `Handoff incomplete (${handoffQuality.score ?? 0}%): ${handoffQuality.missing?.[0] || "Missing sections"}`,
-        { tone: "warning", duration: 5000 },
+        `Artifact quality ${Math.round(approvalReadiness.artifactScore)}% is below the 85% required to close this phase.`,
+        { tone: "error", duration: 5000 },
       );
+      return false;
     }
+
+    // Closing is deterministic: the only conditions are artifact completeness
+    // and quality, checked above. We deliberately do NOT run the cross-phase
+    // dependency-check or any other LLM verdict as a blocker here — those gate
+    // on exit criteria / handoff quality the user has chosen not to enforce for
+    // closing a phase. The single LLM call closing makes is the next-phase input
+    // planner below, which generates rather than blocks.
     try {
       await approveGate(phaseId);
       pushV3Toast("Gate approved.", { tone: "success", duration: 2500 });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Gate approval failed. Please try again.";
       pushV3Toast(message, { tone: "error", duration: 4000 });
-      return;
+      return false;
     }
 
     // Dynamic schema: once a phase clears its gate, ask the planner agent to read
@@ -2410,25 +2381,44 @@ export default function AppShellV3() {
           },
         });
         const proposal = sanitizePlannerProposal((response.data as { output?: unknown } | undefined)?.output);
-        if (proposal) {
-          const cloned = cloneRawProgram(activeProgram);
+        const added = proposal ? proposal.inputFields.length + proposal.artifacts.length : 0;
+        if (proposal && added) {
+          // approveGate() above already bumped the row's updated_at, so the
+          // in-memory activeProgram snapshot is stale. Re-read the freshest row
+          // and layer the dynamic schema onto IT (preserving the gate approval +
+          // approved artifacts) using its current updated_at — otherwise the
+          // optimistic-concurrency check would reject this write and the planner
+          // proposal would be silently dropped.
+          const { data: fresh } = await supabase
+            .from("adam_programs")
+            .select("data, updated_at")
+            .eq("id", activeProgram.id)
+            .single();
+          const freshRaw = (fresh?.data as Record<string, unknown> | undefined) ?? activeProgram.rawData ?? {};
+          const cloned = cloneRawProgram({ ...activeProgram, rawData: freshRaw });
           const store = getDynamicSchemaStore(cloned.inner);
           const nextStore = applyDynamicProposal(store, nextPhaseId, proposal);
           const payload = cloned.commit({ ...cloned.inner, dynamicSchema: nextStore });
-          await updateProgramData(activeProgram.id, payload, activeProgram.updatedAt);
+          await updateProgramData(activeProgram.id, payload, fresh?.updated_at ?? activeProgram.updatedAt);
           await refreshPrograms();
-          const added = proposal.inputFields.length + proposal.artifacts.length;
-          if (added) {
-            pushV3Toast(
-              `Planner tailored ${nextPhaseId}: ${proposal.inputFields.length} input${proposal.inputFields.length === 1 ? "" : "s"} and ${proposal.artifacts.length} artifact${proposal.artifacts.length === 1 ? "" : "s"} proposed.`,
-              { tone: "info", duration: 5000 },
-            );
-          }
+          pushV3Toast(
+            `Planner tailored ${nextPhaseId}: ${proposal.inputFields.length} input${proposal.inputFields.length === 1 ? "" : "s"} and ${proposal.artifacts.length} artifact${proposal.artifacts.length === 1 ? "" : "s"} generated.`,
+            { tone: "info", duration: 5000 },
+          );
+        } else {
+          pushV3Toast(
+            `Phase closed, but the planner did not generate inputs/artifacts for ${nextPhaseId}. Re-run from the next phase if needed.`,
+            { tone: "warning", duration: 6000 },
+          );
         }
       } catch {
-        // Planner unavailable (no auth / agent not deployed) — gate approval stands.
+        pushV3Toast(
+          `Phase closed, but the planner could not be reached to generate ${nextPhaseId} inputs/artifacts.`,
+          { tone: "warning", duration: 6000 },
+        );
       }
     }
+    return true;
   }, [activeProgram, approveGate, refreshPrograms, updateProgramData]);
 
   const handleReopenGate = useCallback(async (phaseId: string) => {
@@ -2515,19 +2505,8 @@ export default function AppShellV3() {
     // sees the artifact was accepted (buildMemoryContext surfaces it on dispatch).
     recordAgentFeedback(agentId, phaseId, activeProgram.id, artifactId, "accepted");
 
-    // Gate runs automatically once the last required document is approved — every
-    // required artifact (narrative is reviewed separately) must read "approved",
-    // counting the one just approved which the stale activeProgram doesn't yet reflect.
-    const ledger = buildPhaseArtifacts(activeProgram, phaseId);
-    const required = (ledger?.artifacts ?? []).filter((node) => node.required && node.key !== "narrative");
-    const allApproved = required.length > 0 && required.every((node) => node.state === "approved" || node.artifactId === artifactId);
-    if (allApproved) {
-      triggers.triggerGateReview(phaseId);
-      pushV3Toast("Final document approved — running the gate check.", { tone: "success", duration: 4000 });
-    } else {
-      pushV3Toast("Document approved.", { tone: "success", duration: 2500 });
-    }
-  }, [activeProgram, refreshPrograms, updateProgramData, triggers]);
+    pushV3Toast("Document approved.", { tone: "success", duration: 2500 });
+  }, [activeProgram, refreshPrograms, updateProgramData]);
 
   // Reverse an artifact approval back to a working state so the user can edit,
   // regenerate, or re-review it. Only reachable while the phase gate is unlocked

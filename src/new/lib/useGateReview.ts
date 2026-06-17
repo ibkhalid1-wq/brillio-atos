@@ -133,9 +133,30 @@ export function useGateReview(
         remediationNote: null,
       },
     };
+    // Closing a phase approves its produced artifacts: the gate decision is the
+    // PM sign-off on this phase's deliverables. This is what lets the next
+    // phase's planner read them as approved prior-phase context (only approved
+    // artifacts feed the cross-phase LLM handoff). Empty/placeholder slots stay
+    // untouched in effect — the planner skips artifacts with no content.
+    const phaseArtifacts = inner.phaseArtifacts && typeof inner.phaseArtifacts === "object" && !Array.isArray(inner.phaseArtifacts)
+      ? inner.phaseArtifacts as Record<string, Record<string, Record<string, unknown>>>
+      : {};
+    const phaseBucket = phaseArtifacts[phaseId];
+    const nextPhaseArtifacts = phaseBucket && typeof phaseBucket === "object"
+      ? {
+          ...phaseArtifacts,
+          [phaseId]: Object.fromEntries(
+            Object.entries(phaseBucket).map(([artifactId, artifact]) => [
+              artifactId,
+              artifact && typeof artifact === "object" ? { ...artifact, status: "approved" } : artifact,
+            ]),
+          ),
+        }
+      : phaseArtifacts;
     const nextInner = {
       ...inner,
       gateReviews: nextReviews,
+      phaseArtifacts: nextPhaseArtifacts,
       decisionQueue: decisionQueue.filter((decision) => !(
         String(decision.type || "") === "gate-approval"
         && String(decision.phaseId || decision.phase_id || "") === phaseId
