@@ -1388,7 +1388,36 @@ function buildSpecialAgentInputContext(
   if (target?.agentId === "gate-review") {
     const phaseId = target.phaseId || "program";
     const phase = phases.find((entry) => entry.id === phaseId) || null;
-    const phaseArtifacts = artifactsByPhase[phaseId] || [];
+    // Gate review judges each exit criterion against evidence, so it needs the
+    // actual artifact CONTENT — not just the title/status that
+    // getProgramArtifactContext surfaces for lighter agents. Without the body
+    // the agent had nothing to match criteria against and marked every
+    // criterion unmet. Read the rich content straight from phaseArtifacts and
+    // cap each body so a fat artifact can't blow the token budget.
+    const phaseArtifactBucket = normalizeProgramData(
+      normalizeProgramData(inner.phaseArtifacts as JsonValue | null)[phaseId] as JsonValue | null,
+    );
+    const MAX_ARTIFACT_CONTENT_CHARS = 6000;
+    const phaseArtifacts = Object.entries(phaseArtifactBucket).map(([artifactId, value]) => {
+      const artifact = normalizeProgramData(value as JsonValue | null);
+      const rawContent = artifact.content;
+      let content: JsonValue | string | null = (rawContent as JsonValue | undefined) ?? null;
+      if (content != null && typeof content !== "string") {
+        const serialized = JSON.stringify(content);
+        content = serialized.length > MAX_ARTIFACT_CONTENT_CHARS
+          ? `${serialized.slice(0, MAX_ARTIFACT_CONTENT_CHARS)}…[truncated]`
+          : serialized;
+      } else if (typeof content === "string" && content.length > MAX_ARTIFACT_CONTENT_CHARS) {
+        content = `${content.slice(0, MAX_ARTIFACT_CONTENT_CHARS)}…[truncated]`;
+      }
+      return {
+        id: artifactId,
+        title: typeof artifact.title === "string" ? artifact.title : artifactId,
+        status: typeof artifact.status === "string" ? artifact.status : "draft",
+        confidence: typeof artifact.confidence === "number" ? artifact.confidence : null,
+        content,
+      };
+    });
     const openDecisions = decisions.filter((entry) =>
       entry.status !== "resolved"
       && (entry.phaseId === phaseId || entry.phase_id === phaseId)
