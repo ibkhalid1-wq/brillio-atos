@@ -3494,22 +3494,39 @@ button.v3-chip:focus-visible,
 }
 
 .v3-button.ghost {
-  background: transparent;
+  /* A refined "glass" ghost: a faint top-lit translucent gradient + hairline
+     border so the control reads as a tangible pane of glass at rest, not a bare
+     outline, yet stays visually quieter than secondary/primary. The blurred
+     backdrop lets whatever sits behind it bleed through softly for depth. */
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--v3-surface-3) 50%, transparent) 0%,
+    color-mix(in srgb, var(--v3-surface-2) 42%, transparent) 100%
+  );
   color: var(--v3-text-secondary);
-  border: 1px solid var(--v3-border);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  border: 1px solid color-mix(in srgb, var(--v3-border) 72%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(6px) saturate(1.12);
+  -webkit-backdrop-filter: blur(6px) saturate(1.12);
 }
 
 .v3-button.ghost:hover:not(:disabled) {
-  background: var(--v3-surface-2);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--v3-surface-3) 92%, transparent) 0%,
+    color-mix(in srgb, var(--v3-surface-2) 88%, transparent) 100%
+  );
   color: var(--v3-text-primary);
-  border-color: color-mix(in srgb, var(--v3-accent) 40%, var(--v3-border));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 5px 14px rgba(0, 0, 0, 0.16);
+  border-color: color-mix(in srgb, var(--v3-accent) 46%, var(--v3-border));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 6px 16px rgba(0, 0, 0, 0.18);
   transform: translateY(-1px);
 }
 
 .v3-button.ghost:active:not(:disabled) {
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.14);
+  background: color-mix(in srgb, var(--v3-surface-2) 80%, transparent);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.16);
   transform: translateY(0) scale(0.97);
 }
 

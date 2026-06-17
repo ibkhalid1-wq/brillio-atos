@@ -32,14 +32,22 @@ export function Kpi({
 }) {
   const isBlock = variant === "block";
 
+  // Shared premium surface — top-lit gradient, inset highlight, and a soft base
+  // shadow so every KPI tile reads with the same physical depth as the phase
+  // metric cards. Hover lifts the tile and warms the border toward the accent.
+  const restBg = "linear-gradient(180deg, var(--v3-surface-3) 0%, var(--v3-surface-2) 100%)";
+  const restShadow = "inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 1px 2px rgba(0, 0, 0, 0.1)";
+  const hoverShadow = "inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 6px 16px rgba(0, 0, 0, 0.18)";
+
   const container: React.CSSProperties = {
-    background: "var(--v3-surface)",
-    border: "1px solid var(--v3-border-soft)",
+    background: restBg,
+    border: "1px solid var(--v3-border)",
     borderRadius: "var(--v3-radius)",
+    boxShadow: restShadow,
     display: "flex",
     flexDirection: "column",
     fontFamily: "var(--v3-font)",
-    transition: "background 0.15s, border-color 0.15s, box-shadow 0.15s",
+    transition: "background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.15s",
     cursor: onClick ? "pointer" : "default",
     ...(isBlock
       ? { flex: 1, minWidth: 0, padding: "16px 18px", gap: 4, textAlign: "left" as const }
@@ -77,14 +85,14 @@ export function Kpi({
         onClick={onClick}
         style={container}
         onMouseEnter={(e) => {
-          e.currentTarget.style.background = "var(--v3-surface-2)";
           e.currentTarget.style.borderColor = "var(--v3-accent)";
-          if (isBlock) e.currentTarget.style.boxShadow = "0 2px 10px rgba(0,0,0,0.15)";
+          e.currentTarget.style.boxShadow = hoverShadow;
+          e.currentTarget.style.transform = "translateY(-1px)";
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.background = "var(--v3-surface)";
-          e.currentTarget.style.borderColor = "var(--v3-border-soft)";
-          e.currentTarget.style.boxShadow = "none";
+          e.currentTarget.style.borderColor = "var(--v3-border)";
+          e.currentTarget.style.boxShadow = restShadow;
+          e.currentTarget.style.transform = "translateY(0)";
         }}
       >
         {inner}
