@@ -44,6 +44,7 @@ interface StageViewProps {
   onAddItem?: (tab: "blockers" | "risks" | "actions") => void;
   onOpenReport: (reportId: V3ReportId) => void;
   onReopenGate: (phaseId: string) => void;
+  onApproveGate: (phaseId: string) => Promise<void>;
   onRunAgent: (agentId: string) => void;
   onSaveArtifact: (artifactId: "narrative" | "deck", content: string) => Promise<void>;
   onApproveArtifact: (phaseId: string, artifactId: string) => Promise<void>;
@@ -397,6 +398,7 @@ export default function StageView({
   onAddItem,
   onOpenReport,
   onReopenGate,
+  onApproveGate,
   onRunAgent,
   onSaveArtifact,
   onApproveArtifact,
@@ -409,6 +411,8 @@ export default function StageView({
   const [editingArtifact, setEditingArtifact] = React.useState<"narrative" | "deck" | null>(null);
   const [updatedArtifactId, setUpdatedArtifactId] = React.useState<"narrative" | "deck" | null>(null);
   const [exitCriteriaOpen, setExitCriteriaOpen] = React.useState(false);
+  const [isLocking, setIsLocking] = React.useState(false);
+  const [lockedModalOpen, setLockedModalOpen] = React.useState(false);
   const [previewArtifact, setPreviewArtifact] = React.useState<{ label: string; description?: string; content: string; score: number | null; statusTone: string } | null>(null);
   const [qualityArtifact, setQualityArtifact] = React.useState<{ label: string; defId: string; score: number | null; issues: ArtifactQualityIssue[] } | null>(null);
   const phaseMainRef = useRef<HTMLDivElement | null>(null);
@@ -527,6 +531,19 @@ export default function StageView({
     () => (program && activePhase ? computePhaseReadiness(program, activePhase.id) : null),
     [activePhase, program],
   );
+  // User-initiated lock: the gate flips to "approved" (label "Locked") and the
+  // completion modal covers the transition. Shown once per lock action — tied to
+  // this click, so no persisted ack flag is needed.
+  const handleLockStage = React.useCallback(async () => {
+    if (!activePhase || isLocking) return;
+    setIsLocking(true);
+    try {
+      await onApproveGate(activePhase.id);
+      setLockedModalOpen(true);
+    } finally {
+      setIsLocking(false);
+    }
+  }, [activePhase, isLocking, onApproveGate]);
   // Schema-grounded, deterministic input-quality assessment. Derived from the
   // phase's declared input fields (the single source of truth), so the banner's
   // "Missing:" list can only ever name inputs that genuinely belong to this
@@ -704,10 +721,14 @@ export default function StageView({
           const inputsComplete = inputQuality && inputQuality.total > 0
             ? Math.round((inputQuality.present / inputQuality.total) * 100)
             : readiness.inputScore;
-          const artifactsComplete = phaseArtifacts.required > 0
-            ? Math.round((phaseArtifacts.present / phaseArtifacts.required) * 100)
-            : readiness.artifactScore;
-          const hasProducedArtifacts = phaseArtifacts.present > 0;
+          // Canonical completeness from the readiness model — resolves the phase's
+          // required artifact set across static methodology + dynamic schema, so a
+          // dynamic-only phase reads 100% once its artifacts are produced (the same
+          // signal the gate-lock condition uses).
+          const artifactsComplete = readiness.artifactsComplete;
+          // True once at least one artifact has actually been produced — covers
+          // dynamic phases (no static required spine) via the artifact score.
+          const hasProducedArtifacts = phaseArtifacts.present > 0 || readiness.artifactScore > 0;
           const pctTone = (v: number) => (v >= 75 ? "green" : v >= 50 ? "amber" : "red");
           // The gate pipeline, in the order work flows toward the gate.
           const pipeline: Array<{ label: string; value: string | number; tone: string; anchor?: string | null; onClick?: () => void }> = [
@@ -718,7 +739,10 @@ export default function StageView({
             // "—" treatment of input quality / gate score so a stale review score
             // never shows next to a 0%/all-missing artifact column.
             { label: "Artifact quality", value: hasProducedArtifacts ? `${readiness.artifactScore}%` : "—", tone: hasProducedArtifacts ? pctTone(readiness.artifactScore) : "", anchor: "phase-artifacts-anchor" },
-            { label: "Gate score", value: readiness.gateScore != null ? `${readiness.gateScore}%` : "—", tone: readiness.gateScore != null ? pctTone(readiness.gateScore) : "", onClick: () => setExitCriteriaOpen(true) },
+            // Gate score = average of input quality and artifact quality (the two
+            // signals the PM controls). Distinct from the lock condition, which is
+            // the stricter "artifacts 100% complete and quality > 90%".
+            { label: "Gate score", value: `${readiness.score}%`, tone: pctTone(readiness.score), onClick: () => setExitCriteriaOpen(true) },
           ];
           // Live work counts — distinct from the pipeline, shown as a separated group.
           // Each carries an `addTab` so the "+ Add" button under it opens the right
@@ -841,6 +865,18 @@ export default function StageView({
           {gateReviewStatus === "approved" ? (
             <div className="v3-phase-head-actions-grp">
               <button type="button" className="v3-button ghost v3-button-inline-xs" onClick={() => onReopenGate(activePhase.id)}>Reopen Gate</button>
+            </div>
+          ) : readiness?.canApproveGate ? (
+            <div className="v3-phase-head-actions-grp">
+              <button
+                type="button"
+                className="v3-button primary v3-button-inline-sm"
+                disabled={isLocking}
+                title="All required artifacts are complete and quality clears the lock bar — lock this stage. Further changes go through change control."
+                onClick={() => void handleLockStage()}
+              >
+                {isLocking ? "Locking…" : "Lock stage"}
+              </button>
             </div>
           ) : null}
           {phaseAgentActions.length ? (
@@ -1268,6 +1304,38 @@ export default function StageView({
             </button>
           </div>
         </StageModal>
+      ) : null}
+
+      {lockedModalOpen ? (
+        <div
+          role="presentation"
+          onClick={() => setLockedModalOpen(false)}
+          style={{ position: "fixed", inset: 0, zIndex: 600, background: "rgba(8,10,16,0.45)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Stage locked"
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: "100%", maxWidth: 460, background: "var(--v3-surface)", border: "1px solid var(--v3-border)", borderRadius: 16, boxShadow: "0 24px 64px rgba(0,0,0,0.35)", padding: 28, textAlign: "center" }}
+          >
+            <div aria-hidden="true" style={{ width: 52, height: 52, margin: "0 auto 16px", borderRadius: "50%", background: "var(--v3-green-soft, rgba(34,197,94,0.16))", color: "var(--v3-green)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>✓</div>
+            <h2 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 600, color: "var(--v3-text)" }}>
+              {activePhase.label ?? activePhase.id} stage complete &amp; locked
+            </h2>
+            <p style={{ margin: "0 0 20px", fontSize: 13.5, lineHeight: 1.5, color: "var(--v3-text-secondary)" }}>
+              Every required artifact is complete and quality clears the gate bar. This stage is now locked. Any further changes are managed through <strong>change control</strong>, accessed from the Executive Overview screen.
+            </p>
+            <button
+              type="button"
+              className="v3-button primary v3-button-inline-sm"
+              onClick={() => setLockedModalOpen(false)}
+              autoFocus
+            >
+              Done
+            </button>
+          </div>
+        </div>
       ) : null}
     </div>
   );

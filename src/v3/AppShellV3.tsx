@@ -2725,6 +2725,7 @@ export default function AppShellV3() {
                 onAddItem={(tab) => { setDecideIntent({ tab, nonce: Date.now() }); navigateSurface("decide"); }}
                 onOpenReport={openReport}
                 onReopenGate={handleReopenGate}
+                onApproveGate={handleApproveGate}
                 onRunAgent={handleRunAgent}
                 onSaveArtifact={handleSaveArtifact}
                 onApproveArtifact={handleApproveArtifact}
