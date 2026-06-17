@@ -166,7 +166,6 @@ export default function ExecutiveView({
 }: ExecutiveViewProps) {
   const [approvingPhase, setApprovingPhase] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [summaryExpanded, setSummaryExpanded] = useState(false);
 
   // ── Extract inner program data for agent-generated artifacts ─────────────
   const innerData = useMemo<Record<string, unknown>>(() => {
@@ -419,26 +418,14 @@ export default function ExecutiveView({
           <span style={{ fontSize: 11, fontWeight: 600, color: "var(--v3-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
             ✦ Executive summary
           </span>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            {program.narrative && !narrativeRunning ? (
-              <button
-                type="button"
-                className="v3-button ghost v3-button-inline-xs"
-                onClick={() => setSummaryExpanded((open) => !open)}
-                aria-expanded={summaryExpanded}
-              >
-                {summaryExpanded ? "Collapse" : "Expand"}
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="v3-button ghost v3-button-inline-xs"
-              onClick={() => onRunAgent("narrative", "program")}
-              disabled={narrativeRunning}
-            >
-              {narrativeRunning ? "Generating…" : program.narrative ? "Refresh" : "Generate summary"}
-            </button>
-          </div>
+          <button
+            type="button"
+            className="v3-button ghost v3-button-inline-xs"
+            onClick={() => onRunAgent("narrative", "program")}
+            disabled={narrativeRunning}
+          >
+            {narrativeRunning ? "Generating…" : program.narrative ? "Refresh" : "Generate summary"}
+          </button>
         </div>
         {narrativeRunning ? (
           <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--v3-accent)" }}>
@@ -446,12 +433,8 @@ export default function ExecutiveView({
             <span>ATOS is generating the summary…</span>
           </div>
         ) : program.narrative ? (
-          <div style={summaryExpanded
-            ? { whiteSpace: "pre-wrap" }
-            : { overflow: "hidden", maxHeight: 60, maskImage: "linear-gradient(to bottom, black 60%, transparent 100%)", WebkitMaskImage: "linear-gradient(to bottom, black 60%, transparent 100%)" }}>
-            {typeof program.narrative === "string"
-              ? (summaryExpanded ? program.narrative : program.narrative.slice(0, 300))
-              : ""}
+          <div style={{ whiteSpace: "pre-wrap" }}>
+            {typeof program.narrative === "string" ? program.narrative : ""}
           </div>
         ) : (
           <div style={{ color: "var(--v3-text-muted)" }}>
