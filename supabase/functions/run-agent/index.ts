@@ -5425,7 +5425,11 @@ Return ONLY valid JSON:
   "rationale": "one sentence on why these are warranted for this programme",
   "confidence": 0.0
 }`,
-      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}${
+        typeof contextSnapshot.priorPhaseContext === "string" && contextSnapshot.priorPhaseContext
+          ? `\n\nApproved artifacts from completed phases (full content — read these to ground your proposal):\n${contextSnapshot.priorPhaseContext}`
+          : ""
+      }`,
     };
   }
 
