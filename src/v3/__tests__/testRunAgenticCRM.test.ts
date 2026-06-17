@@ -41,6 +41,14 @@ function filledInputs(phaseId: string): Record<string, string> {
         ? JSON.stringify([{ role: "Programme Director", person: "Jane Smith", org: "PMO" }])
         : `Defined ${fieldDef.label.toLowerCase()} for the agentic CRM build with measurable detail.`;
   }
+  // Dynamic-only phases carry no static input schema; a completed run persists
+  // ai-derived field responses in data.phaseInputs. Simulate substantive inputs
+  // so input quality scores like a static phase's.
+  if (Object.keys(out).length === 0) {
+    for (let i = 0; i < 5; i += 1) {
+      out[`aiField${i}`] = "Defined ai-derived input for the agentic CRM build with measurable, substantive operational detail provided.";
+    }
+  }
   return out;
 }
 

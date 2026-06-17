@@ -1,6 +1,8 @@
 import type { ExitCriterion, ProgramSummary } from "@/new/types";
 import { getGateThreshold, computeInputQualityScore } from "@/v3/lib/confidenceScore";
 import { getMandatoryCriteria } from "@/v3/lib/exitCriteriaLibrary";
+import { ATOS_STANDARD } from "@/v3/lib/methodology";
+import { getDynamicSchemaStore, dynamicArtifactDefs } from "@/v3/lib/dynamicSchema";
 
 // ─── Readiness Action ─────────────────────────────────────────────────────────
 // Ranked action with estimated readiness impact — powers the "what to do next"
@@ -21,6 +23,12 @@ export interface PhaseReadinessResult {
   gateScore: number | null;
   artifactScore: number;
   inputScore: number;
+  /**
+   * 0-100 artifact completeness: share of the phase's resolved required artifact
+   * set that is present. For dynamic-only phases (no static required set) this is
+   * 100 once ≥1 artifact has been produced, else 0. Gate locking requires 100.
+   */
+  artifactsComplete: number;
   canApproveGate: boolean;
   threshold: number;
   missing: string[];
@@ -65,6 +73,7 @@ export function computePhaseReadiness(
       gateScore,
       artifactScore: 0,
       inputScore: 100,
+      artifactsComplete: 100,
       canApproveGate: true,
       threshold: resolvedThreshold,
       missing: [],
@@ -132,6 +141,25 @@ export function computePhaseReadiness(
           ? Math.round(confidenceValues.reduce((sum, value) => sum + value, 0) / confidenceValues.length)
           : 0;
       })();
+
+  // ── Artifact completeness ───────────────────────────────────────────────────
+  // The phase's resolved required artifact set = the methodology's static
+  // requiredArtifacts (Strategy) merged with any ai-derived dynamic artifacts the
+  // programme has accrued for this phase. Completeness is the share of that set
+  // present in data.phaseArtifacts. A dynamic-only phase has no static required
+  // set — there it is complete once ≥1 artifact has actually been produced.
+  const phaseDef = ATOS_STANDARD.phases.find((p) => p.id === phaseId);
+  const dynamicStore = getDynamicSchemaStore(program.rawData);
+  const requiredArtifactIds = [
+    ...(phaseDef?.requiredArtifacts ?? []),
+    ...dynamicArtifactDefs(phaseId, dynamicStore).map((d) => d.id),
+  ];
+  const presentArtifactIds = new Set(Object.keys(phaseArtifacts[phaseId] ?? {}));
+  const artifactsComplete = requiredArtifactIds.length > 0
+    ? Math.round(
+        (requiredArtifactIds.filter((id) => presentArtifactIds.has(id)).length / requiredArtifactIds.length) * 100,
+      )
+    : presentArtifactIds.size > 0 ? 100 : 0;
 
   if (!reviewScores.length && !artifactsForPhase.length) {
     missing.push("No artifacts generated yet");
@@ -340,25 +368,35 @@ export function computePhaseReadiness(
     });
   }
 
-  // ── Compute composite score ───────────────────────────────────────────────────
-  const rawScore = gateScore !== null
-    ? Math.round(gateScore * 0.6 + artifactScore * 0.3 + inputScore * 0.1)
-    : Math.round(artifactScore * 0.7 + inputScore * 0.3);
+  // ── Compute headline score and gate-lock eligibility ──────────────────────────
+  // Headline score is always the average of input quality and artifact quality —
+  // the two things a PM controls. Gate locking is a stricter, separate bar:
+  // artifacts fully present (100%) AND artifact quality above 90%, with all hard
+  // gate conditions (exit criteria, critical assumptions, cross-phase dependency)
+  // satisfied. The headline score is informational; it does not gate the lock.
+  const score = Math.min(100, Math.max(0, Math.round((inputScore + artifactScore) / 2)));
+  const canApproveGate =
+    artifactsComplete === 100 &&
+    artifactScore > 90 &&
+    mandatoryExitsPassing &&
+    unvalidatedCriticalAssumptions.length === 0 &&
+    !dependencyCheckBlocking;
 
-  const score = Math.min(100, Math.max(0, rawScore));
-  const canApproveGate = score >= resolvedThreshold && mandatoryExitsPassing && unvalidatedCriticalAssumptions.length === 0 && !dependencyCheckBlocking;
+  if (!canApproveGate && artifactsComplete < 100 && (reviewScores.length || artifactsForPhase.length)) {
+    missing.push(`Artifacts are ${artifactsComplete}% complete — every required artifact must be produced before the gate can be locked`);
+  }
 
-  if (!canApproveGate && score < resolvedThreshold) {
-    missing.push(`Score ${score}% is below the ${resolvedThreshold}% gate threshold for this phase`);
+  if (!canApproveGate && artifactsComplete === 100 && artifactScore <= 90) {
+    missing.push(`Artifact quality is ${artifactScore}% — it must exceed 90% before the gate can be locked`);
     if (!recommendedActions.some((a) => a.agentId === "gate-readiness-coach")) {
       recommendedActions.push({
         id: "gate-coach",
         label: "Run gate readiness coach",
-        description: `Score is ${resolvedThreshold - score} points below threshold. The gate readiness coach identifies the fastest path to approval.`,
-        estimatedImpact: Math.min(15, resolvedThreshold - score),
+        description: `Artifact quality is ${91 - artifactScore} point${91 - artifactScore === 1 ? "" : "s"} short of the 90% lock bar. The gate readiness coach identifies the fastest path to approval.`,
+        estimatedImpact: Math.min(15, 91 - artifactScore),
         effort: "quick",
         agentId: "gate-readiness-coach",
-        priority: score < resolvedThreshold - 20 ? "critical" : "high",
+        priority: artifactScore < 70 ? "critical" : "high",
       });
     }
   }
@@ -375,6 +413,7 @@ export function computePhaseReadiness(
     gateScore,
     artifactScore,
     inputScore,
+    artifactsComplete,
     canApproveGate,
     threshold: resolvedThreshold,
     missing,

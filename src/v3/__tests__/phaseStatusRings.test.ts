@@ -14,6 +14,7 @@ function readiness(partial: Partial<PhaseReadinessResult>): PhaseReadinessResult
     gateScore: null,
     artifactScore: 0,
     inputScore: 0,
+    artifactsComplete: 0,
     canApproveGate: false,
     threshold: 70,
     missing: [],
