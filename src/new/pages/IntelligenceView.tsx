@@ -1036,6 +1036,15 @@ export function IntelligenceView({ program, onRefreshProgram, initialTab }: Inte
                     />
                     <button type="button" className="adam-button-ghost" onClick={() => setProviderKeyVisible((v) => !v)}>{providerKeyVisible ? "Hide" : "Show"}</button>
                     <button type="button" className="adam-button-ghost" onClick={() => void pasteProviderKey()}>Paste key</button>
+                    <button
+                      type="button"
+                      className="adam-button-ghost"
+                      onClick={() => { setProviderApiKey(""); setProviderKeyVisible(false); setProviderMessage(null); }}
+                      disabled={!providerApiKey}
+                      title="Clear the entered key from this field"
+                    >
+                      Clear
+                    </button>
                   </div>
                 </label>
 
