@@ -198,6 +198,17 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
     return parseKpis((phaseInputs.strategy ?? {}).kpis);
   }, [program.rawData]);
 
+  // Re-sync the local edit buffer from props only when the *persisted content*
+  // actually changes — not on every new program.rawData reference. Background
+  // refreshes (Supabase Realtime echoes, agent-run polling) hand us a fresh
+  // rawData object with identical content; keying the reset effect on object
+  // identity reset the buffer mid-keystroke and stole focus. This only surfaced
+  // in the live app, where realtime traffic drives those no-op refreshes.
+  const existingInputsKey = useMemo(
+    () => `${JSON.stringify(existingInputs)}|${JSON.stringify(program.workstreams ?? [])}`,
+    [existingInputs, program.workstreams],
+  );
+
   const [values, setValues] = useState<Record<string, string>>(existingInputs);
   const [localWorkstreams, setLocalWorkstreams] = useState<Workstream[]>([]);
   const [localKpis, setLocalKpis] = useState<PhaseKpi[]>([]);
@@ -264,7 +275,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
     }
     setGrids(nextGrids);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [existingInputs, phaseId]);
+  }, [existingInputsKey, phaseId]);
 
   const showKpis = phaseId === "strategy";
   const showActuals = phaseId === "valuerealize";
