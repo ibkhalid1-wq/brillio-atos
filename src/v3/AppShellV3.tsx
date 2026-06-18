@@ -2128,51 +2128,78 @@ export default function AppShellV3() {
       pushV3Toast("Phase gate approved — inputs are locked. Reopen the gate to edit.", { tone: "warning", duration: 4000 });
       return;
     }
-    const cloned = cloneRawProgram(activeProgram);
-    const existing = typeof cloned.inner.phaseInputs === "object" && cloned.inner.phaseInputs !== null
-      ? { ...(cloned.inner.phaseInputs as Record<string, unknown>) }
-      : {};
-    // An approved artifact must never silently drift: when a captured input that
-    // feeds it changes, flag that artifact stale so it is regenerated. Flow edges
-    // are methodology-derived, so which inputs touch which artifacts is not
-    // hard-coded here. Computed against the prior bucket, before the merge.
-    const changedFields = changedInputFields(existing[phaseId], inputs);
-    existing[phaseId] = mergePhaseInputBucket(existing[phaseId], inputs);
-    const artifactBuckets = typeof cloned.inner.phaseArtifacts === "object" && cloned.inner.phaseArtifacts !== null
-      ? { ...(cloned.inner.phaseArtifacts as Record<string, Record<string, Record<string, unknown>>>) }
-      : {};
-    const phaseBucket = artifactBuckets[phaseId];
-    const staled = approvedArtifactsToStale(phaseId, changedFields, phaseBucket);
-    if (staled.length) {
-      const nextBucket = { ...phaseBucket };
-      const nowIso = new Date().toISOString();
-      const reason = `Inputs changed: ${changedFields.join(", ")}`;
-      for (const artifactId of staled) {
-        nextBucket[artifactId] = { ...(nextBucket[artifactId] as Record<string, unknown>), status: "stale", staleReason: reason, staleAt: nowIso };
-      }
-      artifactBuckets[phaseId] = nextBucket;
-    }
-    // When inputs are applied straight from a reviewer's improvement list, the
-    // suggestions that drove them are now spent — clear them in the same atomic
-    // write so we never leave stale "fix this" guidance pointing at text we just
-    // rewrote (a second write would risk an optimistic-concurrency conflict).
-    const reviewPatch: Record<string, unknown> = {};
-    const clearDefId = opts?.clearReviewDefId;
-    if (clearDefId) {
-      const key = artifactReviewFieldKey(clearDefId);
-      const rec = cloned.inner[key];
-      if (rec && typeof rec === "object" && !Array.isArray(rec)) {
-        const nextRec: Record<string, unknown> = { ...(rec as Record<string, unknown>) };
-        if ("improvements" in nextRec) nextRec.improvements = [];
-        const pb = nextRec[phaseId];
-        if (pb && typeof pb === "object" && !Array.isArray(pb)) {
-          nextRec[phaseId] = { ...(pb as Record<string, unknown>), improvements: [] };
+    // Build the field-level patch (input merge + stale flags + spent-review clear)
+    // on top of a given base program. Parameterised by base so a version conflict
+    // can re-base the exact same patch onto the freshest server copy and retry.
+    const buildPayload = (base: ProgramSummary) => {
+      const cloned = cloneRawProgram(base);
+      const existing = typeof cloned.inner.phaseInputs === "object" && cloned.inner.phaseInputs !== null
+        ? { ...(cloned.inner.phaseInputs as Record<string, unknown>) }
+        : {};
+      // An approved artifact must never silently drift: when a captured input that
+      // feeds it changes, flag that artifact stale so it is regenerated. Flow edges
+      // are methodology-derived, so which inputs touch which artifacts is not
+      // hard-coded here. Computed against the prior bucket, before the merge.
+      const changedFields = changedInputFields(existing[phaseId], inputs);
+      existing[phaseId] = mergePhaseInputBucket(existing[phaseId], inputs);
+      const artifactBuckets = typeof cloned.inner.phaseArtifacts === "object" && cloned.inner.phaseArtifacts !== null
+        ? { ...(cloned.inner.phaseArtifacts as Record<string, Record<string, Record<string, unknown>>>) }
+        : {};
+      const phaseBucket = artifactBuckets[phaseId];
+      const staled = approvedArtifactsToStale(phaseId, changedFields, phaseBucket);
+      if (staled.length) {
+        const nextBucket = { ...phaseBucket };
+        const nowIso = new Date().toISOString();
+        const reason = `Inputs changed: ${changedFields.join(", ")}`;
+        for (const artifactId of staled) {
+          nextBucket[artifactId] = { ...(nextBucket[artifactId] as Record<string, unknown>), status: "stale", staleReason: reason, staleAt: nowIso };
         }
-        reviewPatch[key] = nextRec;
+        artifactBuckets[phaseId] = nextBucket;
       }
+      // When inputs are applied straight from a reviewer's improvement list, the
+      // suggestions that drove them are now spent — clear them in the same atomic
+      // write so we never leave stale "fix this" guidance pointing at text we just
+      // rewrote (a second write would risk an optimistic-concurrency conflict).
+      const reviewPatch: Record<string, unknown> = {};
+      const clearDefId = opts?.clearReviewDefId;
+      if (clearDefId) {
+        const key = artifactReviewFieldKey(clearDefId);
+        const rec = cloned.inner[key];
+        if (rec && typeof rec === "object" && !Array.isArray(rec)) {
+          const nextRec: Record<string, unknown> = { ...(rec as Record<string, unknown>) };
+          if ("improvements" in nextRec) nextRec.improvements = [];
+          const pb = nextRec[phaseId];
+          if (pb && typeof pb === "object" && !Array.isArray(pb)) {
+            nextRec[phaseId] = { ...(pb as Record<string, unknown>), improvements: [] };
+          }
+          reviewPatch[key] = nextRec;
+        }
+      }
+      const payload = cloned.commit({ ...cloned.inner, phaseInputs: existing, phaseArtifacts: artifactBuckets, ...reviewPatch });
+      return { payload, staled };
+    };
+
+    let { payload, staled } = buildPayload(activeProgram);
+    try {
+      await updateProgramData(activeProgram.id, payload, activeProgram.updatedAt);
+    } catch (err) {
+      if (!(err instanceof ConflictError) || !isSupabaseConfigured || !supabase) throw err;
+      // A concurrent write — very often this user's OWN background agent
+      // (input-quality, co-pilot) touching a different part of the blob — bumped
+      // the row's version mid-edit. Don't reject the user's deliberate input change:
+      // re-base the same field-level patch onto the freshest server copy and retry
+      // once, so the edit lands without clobbering the concurrent change.
+      const { data: fresh } = await supabase
+        .from("adam_programs")
+        .select("data, updated_at")
+        .eq("id", activeProgram.id)
+        .single();
+      const freshRaw = (fresh?.data as Record<string, unknown> | undefined) ?? activeProgram.rawData ?? {};
+      const rebased = buildPayload({ ...activeProgram, rawData: freshRaw, updatedAt: fresh?.updated_at ?? activeProgram.updatedAt });
+      payload = rebased.payload;
+      staled = rebased.staled;
+      await updateProgramData(activeProgram.id, payload, fresh?.updated_at ?? undefined);
     }
-    const payload = cloned.commit({ ...cloned.inner, phaseInputs: existing, phaseArtifacts: artifactBuckets, ...reviewPatch });
-    await updateProgramData(activeProgram.id, payload, activeProgram.updatedAt);
     await refreshPrograms();
     // Debounce input-quality (Tier 2 — no one is blocked on it) so a flurry of saves
     // coalesces into a single validation run instead of firing input-quality and its
@@ -2350,15 +2377,30 @@ export default function AppShellV3() {
       incomingValue: request.incomingValue,
       guidance: request.guidance,
     });
-    const { data, error } = await supabase.functions.invoke("copilot-chat", {
-      body: { programId: activeProgram.id, workspaceId: `phase-input:${phaseId}`, message, stream: false },
-    });
+    // A FunctionsFetchError ("Failed to send a request to the Edge Function") means
+    // the request never reached the function — a transient network drop or edge
+    // cold-start reset, not a real rejection. Retry once before surfacing it so a
+    // single blip mid-apply doesn't fail the whole pass.
+    let data: unknown;
+    let error: { message?: string; name?: string; context?: Response } | null = null;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      ({ data, error } = await supabase.functions.invoke("copilot-chat", {
+        body: { programId: activeProgram.id, workspaceId: `phase-input:${phaseId}`, message, stream: false },
+      }));
+      if (!error || error.name !== "FunctionsFetchError") break;
+      if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 600));
+    }
     if (error) {
+      // A fetch-level failure that survived the retry: the edge never answered.
+      // Surface an actionable message instead of the raw "Failed to send a request".
+      if (error.name === "FunctionsFetchError") {
+        throw new Error("Couldn't reach the AI service — check your connection and try again.");
+      }
       // supabase-js collapses any non-2xx into the opaque "Edge Function returned
       // a non-2xx status code". The real reason (provider key, program not synced,
       // invalid id, AI error) lives in the Response body it stashes on `.context`.
       let detail = error.message || "AI assist request failed.";
-      const ctx = (error as { context?: Response }).context;
+      const ctx = error.context;
       if (ctx && typeof ctx.json === "function") {
         try {
           const body = await ctx.clone().json() as { error?: string };

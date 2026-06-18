@@ -522,20 +522,32 @@ export default function StageView({
     setApplyError(null);
     try {
       const updates: Record<string, string> = {};
+      let lastError: unknown = null;
+      let failures = 0;
       for (const field of fields) {
-        const text = await onAssistField(phaseId, {
-          fieldId: field.id,
-          fieldLabel: field.label,
-          fieldHint: field.hint,
-          mode: field.filled ? "improve" : "generate",
-          currentValue: field.currentValue,
-          guidance,
-        });
-        const clean = (text || "").trim();
-        if (clean && clean !== field.currentValue.trim()) updates[field.id] = clean;
+        // Tolerate a per-field failure (e.g. a transient edge blip): keep the
+        // inputs that did improve rather than discarding the whole batch. Only a
+        // total wipeout (every field failed) is surfaced as an error to retry.
+        try {
+          const text = await onAssistField(phaseId, {
+            fieldId: field.id,
+            fieldLabel: field.label,
+            fieldHint: field.hint,
+            mode: field.filled ? "improve" : "generate",
+            currentValue: field.currentValue,
+            guidance,
+          });
+          const clean = (text || "").trim();
+          if (clean && clean !== field.currentValue.trim()) updates[field.id] = clean;
+        } catch (err) {
+          failures += 1;
+          lastError = err;
+        }
       }
       if (Object.keys(updates).length) {
         await onSaveInputs(phaseId, updates, { clearReviewDefId: qualityArtifact.defId });
+      } else if (failures === fields.length) {
+        throw lastError instanceof Error ? lastError : new Error("Could not apply improvements. Try again.");
       }
       // Keep the modal open and flip to the "applied" state so the user gets an
       // explicit confirmation (button disabled, "no more suggestions") rather than
