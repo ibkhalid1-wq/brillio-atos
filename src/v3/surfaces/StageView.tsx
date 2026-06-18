@@ -686,7 +686,24 @@ export default function StageView({
     const facts = factsForPhase(graph, activePhase.id);
     if (!facts.length) return null;
     const imported = facts.filter((f) => f.sourceType === "imported_document").length;
-    return { facts, total: facts.length, imported, userInput: facts.length - imported };
+    // Group by factType so a multi-row grid (roster, RACI) collapses under one
+    // field label instead of repeating it on every row. normalizedValue carries
+    // the row cells without the label prefix, so grouped rows read cleanly.
+    const groups: { key: string; label: string; items: typeof facts }[] = [];
+    const groupIndex = new Map<string, number>();
+    for (const f of facts) {
+      let gi = groupIndex.get(f.factType);
+      if (gi === undefined) {
+        gi = groups.length;
+        groupIndex.set(f.factType, gi);
+        const label = f.normalizedValue && f.factText.endsWith(f.normalizedValue)
+          ? f.factText.slice(0, f.factText.length - f.normalizedValue.length).replace(/[:\s]+$/, "")
+          : f.factText;
+        groups.push({ key: f.factType, label, items: [] });
+      }
+      groups[gi].items.push(f);
+    }
+    return { facts, total: facts.length, imported, userInput: facts.length - imported, groups };
   }, [liveProgram, program, activePhase]);
   // Timestamped programme snapshots (newest first) the user can revert to. Manual
   // saves + auto-saves taken when a phase gate locks. Read straight off persisted
@@ -1256,19 +1273,40 @@ export default function StageView({
               </span>
             </summary>
             <div style={{ display: "grid", gap: 4, marginTop: 8 }}>
-              {phaseFacts.facts.map((f) => (
-                <div key={f.id} style={{ display: "flex", alignItems: "baseline", gap: 6, fontSize: 11 }}>
-                  <span style={{ fontFamily: "var(--v3-mono, monospace)", color: "var(--v3-text-muted)", flexShrink: 0 }}>{f.id}</span>
-                  <span style={{ color: "var(--v3-text)" }}>{f.factText}</span>
-                  <span
-                    className={`v3-chip ${f.confidence >= 0.85 ? "green" : f.confidence >= 0.6 ? "amber" : "red"}`}
-                    style={{ fontSize: 9, marginLeft: "auto", flexShrink: 0 }}
-                    title={f.sourceLocation || f.sourceName}
-                  >
-                    {f.sourceType === "imported_document" ? "imported" : "user"}
-                  </span>
-                </div>
-              ))}
+              {phaseFacts.groups.map((g) =>
+                g.items.length === 1 ? (
+                  <div key={g.items[0].id} style={{ display: "flex", alignItems: "baseline", gap: 6, fontSize: 11 }}>
+                    <span style={{ fontFamily: "var(--v3-mono, monospace)", color: "var(--v3-text-muted)", flexShrink: 0 }}>{g.items[0].id}</span>
+                    <span style={{ color: "var(--v3-text)" }}>{g.items[0].factText}</span>
+                    <span
+                      className={`v3-chip ${g.items[0].confidence >= 0.85 ? "green" : g.items[0].confidence >= 0.6 ? "amber" : "red"}`}
+                      style={{ fontSize: 9, marginLeft: "auto", flexShrink: 0 }}
+                      title={g.items[0].sourceLocation || g.items[0].sourceName}
+                    >
+                      {g.items[0].sourceType === "imported_document" ? "imported" : "user"}
+                    </span>
+                  </div>
+                ) : (
+                  <div key={g.key} style={{ display: "grid", gap: 2 }}>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: "var(--v3-text-muted)" }}>
+                      {g.label} · {g.items.length}
+                    </div>
+                    {g.items.map((f) => (
+                      <div key={f.id} style={{ display: "flex", alignItems: "baseline", gap: 6, fontSize: 11, paddingLeft: 8 }}>
+                        <span style={{ fontFamily: "var(--v3-mono, monospace)", color: "var(--v3-text-muted)", flexShrink: 0 }}>{f.id}</span>
+                        <span style={{ color: "var(--v3-text)" }}>{f.normalizedValue}</span>
+                        <span
+                          className={`v3-chip ${f.confidence >= 0.85 ? "green" : f.confidence >= 0.6 ? "amber" : "red"}`}
+                          style={{ fontSize: 9, marginLeft: "auto", flexShrink: 0 }}
+                          title={f.sourceLocation || f.sourceName}
+                        >
+                          {f.sourceType === "imported_document" ? "imported" : "user"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )
+              )}
             </div>
           </details>
         ) : null}
