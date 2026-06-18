@@ -96,12 +96,17 @@ describe("phaseStatusRings — end to end via computePhaseReadiness", () => {
   });
 
   it("surfaces the gate score once a gate review is approved", () => {
+    // Strategy must also be approved so Mobilise is reachable (not locked behind an
+    // open upstream gate) — a locked phase mutes to zero regardless of its own gate.
     const program = normalizeProgram({
       id: "p1",
       name: "ERP",
       data: {
         phases: [{ id: "mobilise", pct: 100 }],
-        gateReviews: { mobilise: { status: "approved", readinessScore: 88 } },
+        gateReviews: {
+          strategy: { status: "approved", readinessScore: 90 },
+          mobilise: { status: "approved", readinessScore: 88 },
+        },
       },
     });
     const r = derivePhaseStatusRings(program, "mobilise");
@@ -109,6 +114,30 @@ describe("phaseStatusRings — end to end via computePhaseReadiness", () => {
     expect(r.gate).toBe(88);
     expect(r.overall).toBe(88);
     expect(ringTone(r.gate)).toBe("green");
+  });
+
+  it("mutes a previously-approved phase once an upstream gate is reopened", () => {
+    // Strategy → Mobilise both approved, then Strategy is reopened
+    // (remediation-requested). Strict sequential gating now cascade-locks Mobilise
+    // even though it still carries its own approved gate. Its rings must read as
+    // "not started", not keep showing the old green 88% — the approval is stale and
+    // pending re-approval behind the reopened upstream gate.
+    const program = normalizeProgram({
+      id: "p1",
+      name: "ERP",
+      data: {
+        phases: [{ id: "mobilise", pct: 100 }],
+        gateReviews: {
+          strategy: { status: "remediation-requested", readinessScore: 90, reopenedAt: "2026-06-17T00:00:00Z" },
+          mobilise: { status: "approved", readinessScore: 88 },
+        },
+      },
+    });
+    const r = derivePhaseStatusRings(program, "mobilise");
+    expect(r.gate).toBe(0);
+    expect(r.artifact).toBe(0);
+    expect(r.input).toBe(0);
+    expect(r.overall).toBe(0);
   });
 
   it("mutes an unreached phase even when an artifact was force-routed into its slot", () => {
