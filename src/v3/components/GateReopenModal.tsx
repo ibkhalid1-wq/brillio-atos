@@ -4,17 +4,30 @@ interface GateReopenModalProps {
   open: boolean;
   phaseName: string;
   onClose: () => void;
-  onConfirm: (reason: string) => void;
+  onConfirm: (reason: string) => void | Promise<void>;
 }
 
 export default function GateReopenModal({ open, phaseName, onClose, onConfirm }: GateReopenModalProps) {
   const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (open) setReason("");
+    if (open) { setReason(""); setSubmitting(false); }
   }, [open]);
 
   if (!open) return null;
+
+  const handleConfirm = async () => {
+    if (!reason.trim() || submitting) return;
+    setSubmitting(true);
+    try {
+      await onConfirm(reason.trim());
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const close = () => { if (!submitting) onClose(); };
 
   return (
     <div
@@ -23,7 +36,7 @@ export default function GateReopenModal({ open, phaseName, onClose, onConfirm }:
         background: "rgba(0,0,0,0.55)", display: "flex",
         alignItems: "center", justifyContent: "center", padding: 24,
       }}
-      onClick={onClose}
+      onClick={close}
     >
       <div
         style={{
@@ -43,21 +56,22 @@ export default function GateReopenModal({ open, phaseName, onClose, onConfirm }:
           autoFocus
           value={reason}
           onChange={(e) => setReason(e.target.value)}
+          disabled={submitting}
           placeholder="Reason for reopening (e.g. exit criteria not fully met, new risk identified)…"
           className="v3-input v3-textarea"
           style={{ minHeight: 96, background: "var(--v3-surface-2)" }}
         />
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 16 }}>
-          <button type="button" className="v3-button ghost" onClick={onClose}>
+          <button type="button" className="v3-button ghost" onClick={close} disabled={submitting}>
             Cancel
           </button>
           <button
             type="button"
             className="v3-button primary"
-            disabled={!reason.trim()}
-            onClick={() => { if (reason.trim()) { onConfirm(reason.trim()); onClose(); } }}
+            disabled={!reason.trim() || submitting}
+            onClick={handleConfirm}
           >
-            Reopen Gate
+            {submitting ? "Reopening…" : "Reopen Gate"}
           </button>
         </div>
       </div>

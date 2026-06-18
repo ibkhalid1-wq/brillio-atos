@@ -18,7 +18,10 @@ export function useCriticalEventAlerts(program: ProgramSummary | null) {
     );
     const remediationGates = new Set(
       Object.entries(program.gateReviews || {})
-        .filter(([, review]) => review?.status === "remediation-requested")
+        // A user-initiated unlock also sets status "remediation-requested" but stamps
+        // reopenedAt — that's a deliberate action the PM already saw confirmed, not a
+        // review-driven failure, so it must not surface as a red "remediation required" alert.
+        .filter(([, review]) => review?.status === "remediation-requested" && !(review as { reopenedAt?: string }).reopenedAt)
         .map(([id]) => id),
     );
 

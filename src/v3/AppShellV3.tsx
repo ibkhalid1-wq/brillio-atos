@@ -2497,13 +2497,16 @@ export default function AppShellV3() {
   const handleConfirmGateReopen = useCallback(async (reason: string) => {
     if (!gateReopenPhase) return;
     const phaseId = gateReopenPhase;
-    setGateReopenPhase(null);
+    // Keep the modal mounted (it shows a pending state) until the async reopen settles,
+    // so a slow Supabase write can't be double-submitted by an impatient second click.
     try {
       await reopenGate(phaseId, reason);
       pushV3Toast("Gate reopened. Next phase is locked pending re-approval.", { tone: "warning", duration: 4000 });
     } catch (err) {
       const detail = err instanceof Error ? err.message : "";
       pushV3Toast(detail ? `Could not reopen gate: ${detail}` : "Could not reopen gate.", { tone: "error", duration: 4000 });
+    } finally {
+      setGateReopenPhase(null);
     }
   }, [gateReopenPhase, reopenGate]);
 

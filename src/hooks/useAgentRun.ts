@@ -246,6 +246,23 @@ export function useAgentRun(programId: string, enabled = true, onRunComplete?: (
       setIsUserLoading(true);
     }
 
+    // Optimistically register a queued run so per-agent button state (isAgentRunning)
+    // flips to disabled the instant generation starts. Without this, activeRuns only
+    // gains the row once the edge function inserts it and realtime/refreshRuns deliver
+    // it — a multi-second window during which the user could re-fire the same agent.
+    // The temp id is reconciled away by refreshRuns (which replaces the list with DB
+    // rows) on success, and removed explicitly in finally on the error path.
+    const optimisticRunId = `optimistic-${params.agentId}-${params.phaseId}-${Date.now()}`;
+    setActiveRuns((prev) => upsertRun(prev, {
+      id: optimisticRunId,
+      program_id: programId,
+      agent_id: params.agentId,
+      phase_id: params.phaseId,
+      status: "queued",
+      created_at: new Date().toISOString(),
+      started_at: new Date().toISOString(),
+    } as Partial<AgentRun>));
+
     // Client-side safety net: abort only as a last resort, comfortably past the
     // edge function's own wall-clock budget (DEFAULT_STREAM_TIMEOUT_MS ~130s).
     // Aborting earlier than the server budget killed the request mid-generation,
@@ -290,6 +307,10 @@ export function useAgentRun(programId: string, enabled = true, onRunComplete?: (
       };
     } finally {
       setIsLoading(false);
+      // Drop the optimistic placeholder. On success refreshRuns already replaced the
+      // list with DB rows (this is a no-op); on error it clears the stuck placeholder
+      // so the button doesn't stay disabled forever.
+      setActiveRuns((prev) => prev.filter((run) => run.id !== optimisticRunId));
       if (isUserCall) {
         userLoadingCount.current = Math.max(0, userLoadingCount.current - 1);
         if (userLoadingCount.current === 0) setIsUserLoading(false);
