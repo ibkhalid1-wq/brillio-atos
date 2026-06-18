@@ -495,6 +495,10 @@ export default function StageView({
   } | null>(null);
   const [applyingImprovements, setApplyingImprovements] = React.useState(false);
   const [applyError, setApplyError] = React.useState<string | null>(null);
+  // True once the reviewer's suggestions have been folded into the inputs for the
+  // currently-open quality modal, so the Apply button can switch to a disabled
+  // "no more suggestions" state instead of the modal silently vanishing.
+  const [improvementsApplied, setImprovementsApplied] = React.useState(false);
   // Tracks a user-initiated "Re-check" so we can surface a result prompt the
   // moment it finishes — but only for a manual click, never the automatic
   // re-checks ATOS fires after each document generation.
@@ -533,7 +537,10 @@ export default function StageView({
       if (Object.keys(updates).length) {
         await onSaveInputs(phaseId, updates, { clearReviewDefId: qualityArtifact.defId });
       }
-      setQualityArtifact(null);
+      // Keep the modal open and flip to the "applied" state so the user gets an
+      // explicit confirmation (button disabled, "no more suggestions") rather than
+      // the modal silently closing.
+      setImprovementsApplied(true);
     } catch (err) {
       setApplyError(err instanceof Error ? err.message : "Could not apply improvements. Try again.");
     } finally {
@@ -1572,7 +1579,7 @@ export default function StageView({
                     <button
                       type="button"
                       className="v3-button ghost v3-button-inline-xs"
-                      onClick={() => { setApplyError(null); setQualityArtifact({ label: def.label, defId: def.id, score: displayScore, issues: deriveArtifactQualityIssues({ score: displayScore, state, inputRequirements, improvements: review?.improvements }), phaseId: activePhase.id, fields: qualityFields, improvements: (review?.improvements ?? []).filter((s) => !!s && s.trim()) }); }}
+                      onClick={() => { setApplyError(null); setImprovementsApplied(false); setQualityArtifact({ label: def.label, defId: def.id, score: displayScore, issues: deriveArtifactQualityIssues({ score: displayScore, state, inputRequirements, improvements: review?.improvements }), phaseId: activePhase.id, fields: qualityFields, improvements: (review?.improvements ?? []).filter((s) => !!s && s.trim()) }); }}
                       title={`Review and improve the quality of ${def.label}`}
                     >
                       ✦ Improve quality{suggestionCount ? ` (${suggestionCount})` : ""}
@@ -1847,25 +1854,36 @@ export default function StageView({
           {applyError ? (
             <div style={{ marginTop: 14, fontSize: 12.5, color: "var(--v3-red, #dc2626)" }}>{applyError}</div>
           ) : null}
+          {improvementsApplied ? (
+            <div style={{ marginTop: 14, fontSize: 12.5, color: "var(--v3-green, #16a34a)", display: "flex", alignItems: "center", gap: 6 }}>
+              <span aria-hidden="true">✓</span>
+              Suggestions applied to inputs — no more suggestions. Regenerate the artifact to refresh its quality.
+            </div>
+          ) : null}
           <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
             {onAssistField && qualityArtifact.fields.length && qualityArtifact.improvements.length ? (
               <button
                 type="button"
                 className="v3-button primary v3-button-inline-sm"
                 onClick={handleApplyImprovements}
-                disabled={applyingImprovements}
-                title="Use AI to fold these suggestions into the grounding inputs, then save"
+                disabled={applyingImprovements || improvementsApplied}
+                title={improvementsApplied
+                  ? "These suggestions have been applied — regenerate the artifact to get a fresh review"
+                  : "Use AI to fold these suggestions into the grounding inputs, then save"}
               >
-                {applyingImprovements ? "✨ Applying…" : "✨ Apply suggestions to inputs"}
+                {improvementsApplied ? "✓ Suggestions applied" : applyingImprovements ? "✨ Applying…" : "✨ Apply suggestions to inputs"}
               </button>
             ) : null}
             <button
               type="button"
-              className={`v3-button ${onAssistField && qualityArtifact.fields.length && qualityArtifact.improvements.length ? "ghost" : "primary"} v3-button-inline-sm`}
-              onClick={() => { document.getElementById("phase-inputs-anchor")?.scrollIntoView({ behavior: "smooth", block: "start" }); setQualityArtifact(null); }}
+              className={`v3-button ${improvementsApplied || !(onAssistField && qualityArtifact.fields.length && qualityArtifact.improvements.length) ? "primary" : "ghost"} v3-button-inline-sm`}
+              onClick={() => {
+                if (!improvementsApplied) document.getElementById("phase-inputs-anchor")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                setQualityArtifact(null);
+              }}
               disabled={applyingImprovements}
             >
-              Add inputs →
+              {improvementsApplied ? "Done" : "Add inputs →"}
             </button>
           </div>
         </StageModal>
