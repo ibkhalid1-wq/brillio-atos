@@ -1643,10 +1643,12 @@ export default function AppShellV3() {
     const ai = aiStatus.status === "connected" ? "green" : aiStatus.status === "checking" ? "amber" : "red";
     const escalationCount = (activeProgram?.escalations || []).filter((e: any) => e.status === "open").length;
     const aiNotReady = aiStatus.status !== "connected" && aiStatus.status !== "checking";
+    // Red is reserved for a genuinely unavailable AI layer. Open escalations and
+    // decisions are "needs attention", not "broken" — they route to amber so the
+    // dot doesn't read as an AI fault when the intelligence layer is healthy.
     const agents = aiNotReady ? "red"
       : anyAgentRunning ? "green"
-      : escalationCount > 0 ? "red"
-      : openDecisions.length > 0 ? "amber"
+      : escalationCount > 0 || openDecisions.length > 0 ? "amber"
       : "green";
     return { programme, ai, agents } as const;
   }, [programConfidenceScore, aiStatus.status, anyAgentRunning, activeProgram?.escalations, openDecisions.length]);
