@@ -184,8 +184,9 @@ export function useGateReview(
 
   const requestRemediation = useCallback(async (phaseId: string, note: string) => {
     const { inner, gateReviews, decisionQueue } = getGateReviewState();
-    const review = gateReviews[phaseId];
-    if (!review) throw new Error("Gate review not found.");
+    // Same tolerance as approveGate/reopenGate: a locked gate may have no stored
+    // review (legacy or manual lock), so synthesise a default instead of failing.
+    const review: GateReview = gateReviews[phaseId] ?? defaultGateReview(phaseId);
     const nextReviews = {
       ...gateReviews,
       [phaseId]: {
