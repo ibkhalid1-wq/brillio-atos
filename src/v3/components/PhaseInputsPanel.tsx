@@ -536,13 +536,22 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
             {filledCount}/{schema.fields.length} fields · {open ? "collapse" : "expand"}
           </span>
         </div>
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          {filledCount === schema.fields.length
-            ? <span className="v3-chip green" style={{ fontSize: 11 }}>Complete</span>
-            : filledCount > 0
-              ? <span className="v3-chip amber" style={{ fontSize: 11 }}>Partial</span>
-              : <span className="v3-chip muted" style={{ fontSize: 11 }}>Empty</span>}
-          <span>{open ? "▴" : "▾"}</span>
+        <div className="v3-phase-inputs-toggle-aside">
+          <div
+            className={`v3-input-progress ${filledCount === schema.fields.length ? "is-complete" : filledCount > 0 ? "is-partial" : "is-empty"}`}
+            title={`${filledCount} of ${schema.fields.length} fields filled`}
+          >
+            <span className="v3-input-progress-track">
+              <span
+                className="v3-input-progress-fill"
+                style={{ width: `${schema.fields.length ? Math.round((filledCount / schema.fields.length) * 100) : 0}%` }}
+              />
+            </span>
+            <span className="v3-input-progress-pct">
+              {schema.fields.length ? Math.round((filledCount / schema.fields.length) * 100) : 0}%
+            </span>
+          </div>
+          <span className={`v3-input-chevron ${open ? "is-open" : ""}`} aria-hidden>▾</span>
         </div>
       </button>
 
@@ -602,7 +611,13 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
                     : { label: "Empty", tone: "muted" as const })
                 : assessField(values[field.id], field.type);
               return (
-              <div key={field.id} data-io-anchor={`input:${field.id}`}>
+              <div
+                key={field.id}
+                data-io-anchor={`input:${field.id}`}
+                className="v3-input-field"
+                data-filled={verdict.tone === "green" ? "true" : "false"}
+                data-required={field.required ? "true" : "false"}
+              >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 8, marginBottom: 4 }}>
                   <div style={{ minWidth: 0 }}>
                     <div className="v3-field-label">

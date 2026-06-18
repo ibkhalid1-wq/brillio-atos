@@ -7293,6 +7293,83 @@ button.v3-phase-metric:focus-visible {
   border-top: 1px solid var(--v3-border);
 }
 
+/* ── Inputs panel premium polish ─────────────────────────────────── */
+.v3-phase-inputs-toggle-aside {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.v3-input-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.v3-input-progress-track {
+  width: 72px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--v3-surface-3, rgba(255, 255, 255, 0.08));
+  overflow: hidden;
+}
+.v3-input-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--v3-accent);
+  transition: width 0.3s var(--v3-ease, ease);
+}
+.v3-input-progress.is-complete .v3-input-progress-fill { background: var(--v3-green); }
+.v3-input-progress.is-empty .v3-input-progress-fill { background: var(--v3-text-muted); }
+.v3-input-progress-pct {
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--v3-text-secondary);
+  min-width: 30px;
+  text-align: right;
+}
+.v3-input-progress.is-complete .v3-input-progress-pct { color: var(--v3-green); }
+.v3-input-chevron {
+  font-size: 12px;
+  color: var(--v3-text-muted);
+  transition: transform 0.18s var(--v3-ease, ease);
+}
+.v3-input-chevron.is-open { transform: rotate(180deg); }
+
+/* Filled-field affordance: a quiet left accent bar on completed fields, so a
+   glance down the column shows exactly what's left to fill. */
+.v3-input-field {
+  position: relative;
+  padding-left: 10px;
+}
+.v3-input-field::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 2px;
+  bottom: 2px;
+  width: 2px;
+  border-radius: 999px;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+.v3-input-field[data-filled="true"]::before { background: var(--v3-green); }
+.v3-input-field[data-required="true"][data-filled="false"]::before {
+  background: var(--v3-accent);
+  opacity: 0.5;
+}
+
+/* Hover-reveal per-field AI assist: keep the resting state calm, surface the
+   assist affordances on hover/focus so the column isn't a wall of tiny pills. */
+.v3-input-field .v3-field-assist {
+  opacity: 0.55;
+  transition: opacity 0.15s ease;
+}
+.v3-input-field:hover .v3-field-assist,
+.v3-input-field:focus-within .v3-field-assist {
+  opacity: 1;
+}
+
 .v3-context-drawer-shell {
   position: relative;
   display: flex;
@@ -8804,9 +8881,9 @@ button.v3-chip:disabled {
 }
 
 .v3-field-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--v3-text-muted);
+  color: var(--v3-text-primary);
   margin-bottom: 4px;
 }
 
@@ -8937,7 +9014,10 @@ button.v3-chip:disabled {
    across the platform shares one focus affordance (border + soft glow). */
 .v3-input:focus {
   border-color: var(--v3-accent);
-  box-shadow: 0 0 0 2px var(--v3-accent-soft);
+  box-shadow: 0 0 0 3px var(--v3-accent-soft), 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+.v3-input:hover:not(:focus):not([disabled]) {
+  border-color: var(--v3-text-muted);
 }
 
 .v3-textarea {
