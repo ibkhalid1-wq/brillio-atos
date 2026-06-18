@@ -1395,7 +1395,12 @@ export default function AppShellV3() {
       // We always upsert (not just on missing row) so that data stays current.
       // rawData may be {} if it was previously synced from an empty Supabase row,
       // so fall back to reading the raw entry directly from localStorage.
-      if (!skipPreSync && isSupabaseConfigured && supabase && activeProgram && userId) {
+      //
+      // This runs as runAgent's `preflight`, so the optimistic "Generating…" button
+      // state is already showing while this (sometimes slow) sync completes — the
+      // user sees instant feedback instead of a dead button until the upsert returns.
+      const preflight = async () => {
+        if (skipPreSync || !isSupabaseConfigured || !supabase || !activeProgram || !userId) return;
         let programData: Record<string, unknown> = activeProgram.rawData || {};
         if (Object.keys(programData).length === 0 && typeof localStorage !== "undefined") {
           const LEGACY_KEYS = ["brillio-adam-projects", "brillio-atlas-projects"];
@@ -1441,7 +1446,7 @@ export default function AppShellV3() {
             throw new Error(`Could not sync programme to cloud before running agent: ${syncError.message}`);
           }
         }
-      }
+      };
       await runAgent({
         agentId: resolvedAgentId,
         phaseId,
@@ -1455,6 +1460,7 @@ export default function AppShellV3() {
         memberRole,
         meetingDate,
         meetingDurationMins,
+        preflight,
       });
       saveAgentMemory({
         agentId: resolvedAgentId,

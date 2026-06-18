@@ -23,6 +23,11 @@ interface RunParams {
   memberRole?: string;
   meetingDate?: string;
   meetingDurationMins?: number;
+  // Optional pre-flight work (e.g. syncing the programme to the cloud) that must
+  // complete before the edge function runs. Awaited AFTER the optimistic run is
+  // registered so the button shows "Generating…" during it rather than appearing
+  // to do nothing while a slow sync blocks the call.
+  preflight?: () => Promise<void>;
 }
 
 type BroadcastPayload = {
@@ -274,6 +279,10 @@ export function useAgentRun(programId: string, enabled = true, onRunComplete?: (
     const USER_TIMEOUT_MS = 150_000;
 
     try {
+      // Pre-flight (e.g. cloud sync) runs while the optimistic "queued" row is
+      // already showing, so the button flips to "Generating…" the instant the
+      // user clicks rather than after a slow sync completes.
+      if (params.preflight) await params.preflight();
       const response = await runPhaseAgent({
         programId,
         agentId: params.agentId,
