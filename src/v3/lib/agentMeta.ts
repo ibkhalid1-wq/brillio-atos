@@ -63,6 +63,21 @@ export const AGENT_META: Record<string, AgentMeta> = {
   "optimization-backlog": { id: "optimization-backlog", label: "Optimization Backlog", description: "Prioritises continuous-improvement opportunities", estimatedSeconds: 22, category: "strategy", icon: "✧", outputArtifact: "Optimization Backlog", confidence: 76, reasoning: "Ranks improvement opportunities by value vs effort against baseline KPIs and operating signals" },
 };
 
+/**
+ * Synonym artifact-id → canonical producing-agent id. The phase planner
+ * sometimes emits a dynamic artifact under a descriptive synonym ("risk-log")
+ * instead of the canonical producing-agent id ("risk"). The run-agent edge
+ * function only accepts canonical ids, so an un-aliased synonym 400s with
+ * `Unknown agentId`. Mapping the known synonyms here — in the producing-agent
+ * registry, the single source of truth — lets every surface (Generate, Improve
+ * quality, flow wiring) resolve to a real agent without hard-coding aliases in
+ * components or the edge. Keep keys lowercase and hyphenated.
+ */
+export const AGENT_ID_ALIASES: Record<string, string> = {
+  "risk-log": "risk",
+  "risk-register": "risk",
+};
+
 export function getAgentMeta(agentId: string): AgentMeta {
   return AGENT_META[agentId] ?? {
     id: agentId, label: agentId, description: "Agent run",

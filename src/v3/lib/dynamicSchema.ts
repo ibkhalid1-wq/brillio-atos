@@ -23,7 +23,7 @@
  * overlay, and the staleness model with no parallel wiring.
  */
 import { ATOS_STANDARD, type GridColumn, type PhaseInputField } from "@/v3/lib/methodology";
-import { AGENT_META } from "@/v3/lib/agentMeta";
+import { AGENT_META, AGENT_ID_ALIASES } from "@/v3/lib/agentMeta";
 
 export type ArtifactGenerationReadiness = "ready" | "needs_input" | "blocked";
 
@@ -42,10 +42,12 @@ export type ArtifactGenerationReadiness = "ready" | "needs_input" | "blocked";
  */
 export function canonicalArtifactId(phaseId: string, id: string): string {
   if (AGENT_META[id]) return id;
+  if (AGENT_ID_ALIASES[id]) return AGENT_ID_ALIASES[id];
   const prefix = `${phaseId}-`;
   if (id.startsWith(prefix)) {
     const base = id.slice(prefix.length);
     if (AGENT_META[base]) return base;
+    if (AGENT_ID_ALIASES[base]) return AGENT_ID_ALIASES[base];
   }
   return id;
 }

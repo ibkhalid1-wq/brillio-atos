@@ -54,6 +54,7 @@ import { reportError } from "@/lib/errorReporter";
 import { sanitizeMarkdown } from "@/lib/sanitize";
 import { changedInputFields, approvedArtifactsToStale, fieldsFeedingApprovedArtifacts } from "@/v3/lib/artifactStaleness";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
+import { AGENT_ID_ALIASES } from "@/v3/lib/agentMeta";
 import { useRelativeTimeTick } from "@/lib/useRelativeTimeTick";
 import { useAgentCascadeToasts } from "@/v3/hooks/useAgentCascadeToasts";
 import { useCriticalEventAlerts } from "@/v3/hooks/useCriticalEventAlerts";
@@ -1319,7 +1320,10 @@ export default function AppShellV3() {
       "portfolio-intelligence": "health-heatmap",
       "steerco-prep": "steerco-agenda-builder",
     };
-    return aliases[agentId] || agentId;
+    // UI-action aliases win; otherwise fall back to the registry's artifact-id
+    // synonym map (e.g. "risk-log" → "risk") so any path that passes a raw
+    // dynamic-artifact synonym still resolves to a valid producing agent.
+    return aliases[agentId] || AGENT_ID_ALIASES[agentId] || agentId;
   }, []);
 
   // When the AI provider rate-limits us (HTTP 429), background/proactive agents

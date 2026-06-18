@@ -101,6 +101,22 @@ describe("dynamicArtifactDefs", () => {
     expect(defs.map((d) => d.id)).toEqual(["a", "b"]);
     expect(defs[0].label).toBe("a");
   });
+
+  it("canonicalises a planner artifact-id synonym to its producing agent", () => {
+    // The planner emitted the Risk Register under the synonym "risk-log" (and a
+    // phase-prefixed variant); both must collapse to the canonical "risk" agent
+    // id the run-agent edge accepts, so Generate doesn't 400 with Unknown agentId.
+    const store: DynamicSchemaStore = {
+      artifacts: {
+        mobilise: [
+          { id: "risk-log", label: "Risk Log", description: "" },
+          { id: "mobilise-risk-log", label: "dup", description: "" },
+        ],
+      },
+    };
+    const defs = dynamicArtifactDefs("mobilise", store);
+    expect(defs.map((d) => d.id)).toEqual(["risk"]);
+  });
 });
 
 describe("dynamicFieldArtifacts", () => {
