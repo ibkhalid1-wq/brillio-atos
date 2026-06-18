@@ -323,3 +323,44 @@ describe("Test Run — Agentic CRM: full methodology completion", () => {
     expect(computePhaseReadiness(program, "valuerealize").canApproveGate).toBe(true);
   });
 });
+
+describe("Test Run — approved gate score reflects real artifacts, not a stale review score", () => {
+  const strategyArtifactIds = ATOS_STANDARD.phases.find((p) => p.id === "strategy")!.requiredArtifacts;
+
+  it("shows the artifact composite — not the gate-review readinessScore — once an approved phase has real artifacts", () => {
+    const bucket: Record<string, unknown> = {};
+    for (const id of strategyArtifactIds) {
+      bucket[id] = { confidence: 0.92, status: "approved", agentDrafted: true, title: id };
+    }
+    const program = normalizeProgram({
+      id: "p-stale-gate",
+      name: "Stale gate",
+      data: {
+        phases: [{ id: "strategy", pct: 100 }],
+        phaseArtifacts: { strategy: bucket },
+        // Gate approved, but the agent stored a low 0.35 readiness fraction — the
+        // exact shape that rendered a 35% gate score next to 92% artifact quality.
+        gateReviews: { strategy: { status: "approved", phaseId: "strategy", readinessScore: 0.35 } },
+      },
+    });
+    const readiness = computePhaseReadiness(program, "strategy");
+    expect(readiness.artifactsComplete).toBe(100);
+    expect(readiness.artifactScore).toBe(92);
+    // Composite (100 + 92) / 2 = 96 — NOT the stale 35 gate-review score.
+    expect(readiness.score).toBe(96);
+    // The raw gate-review score is still exposed for anything that needs it.
+    expect(readiness.gateScore).toBe(35);
+  });
+
+  it("falls back to the gate-review score when an approved phase has no artifacts to measure", () => {
+    const program = normalizeProgram({
+      id: "p-no-artifacts",
+      name: "No artifacts",
+      data: {
+        phases: [{ id: "strategy", pct: 100 }],
+        gateReviews: { strategy: { status: "approved", phaseId: "strategy", readinessScore: 0.82 } },
+      },
+    });
+    expect(computePhaseReadiness(program, "strategy").score).toBe(82);
+  });
+});

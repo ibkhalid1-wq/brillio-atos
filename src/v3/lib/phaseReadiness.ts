@@ -134,10 +134,22 @@ export function computePhaseReadiness(
   // score only when no per-artifact quality resolves, so a locked/approved phase
   // never renders a misleading red 0% middle ring.
   if (gateReview?.status === "approved" && gateScore !== null) {
+    // Headline "gate score" is the same composite the app uses everywhere —
+    // average of artifact completeness (100% once approved) and real artifact
+    // quality. Once the phase has actual artifacts, the headline must reflect
+    // them, NOT the gate-review agent's stored readinessScore, which can be a
+    // stale/low value captured at approval time (e.g. an artifact at 92% quality
+    // showing a 35% gate score). Only when no per-artifact quality resolves do we
+    // fall back to the gate-review score so an approved-but-artifactless phase
+    // still reads its reviewed readiness instead of a misleading 50%.
+    const approvedArtifactScore = artifactScore > 0 ? artifactScore : gateScore;
+    const approvedScore = artifactScore > 0
+      ? Math.min(100, Math.max(0, Math.round((100 + approvedArtifactScore) / 2)))
+      : gateScore;
     return {
-      score: gateScore,
+      score: approvedScore,
       gateScore,
-      artifactScore: artifactScore > 0 ? artifactScore : gateScore,
+      artifactScore: approvedArtifactScore,
       inputScore: 100,
       artifactsComplete: 100,
       canApproveGate: true,
