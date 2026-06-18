@@ -1572,13 +1572,18 @@ export default function StageView({
                 ? `The previous version of "${def.label}" was quality-reviewed. Apply these specific improvements directly in the artifact you now produce:\n${reviewerSuggestions.map((s, i) => `${i + 1}. ${s.trim()}`).join("\n")}`
                 : undefined;
               return (
-                <div key={def.id} className="v3-artifact-row" data-io-anchor={`artifact:${def.id}`}>
+                <div key={def.id} className="v3-artifact-row" data-io-anchor={`artifact:${def.id}`} data-tone={statusTone} data-present={present ? "true" : "false"}>
                   <div className="v3-artifact-row-head">
                     <span className="v3-artifact-row-label">{def.label}</span>
                     <span className={`v3-chip ${statusTone}`} style={{ flex: "0 0 auto" }}>
                       {statusLabel}{present && displayScore != null ? ` · ${displayScore}%` : ""}
                     </span>
                   </div>
+                  {present && displayScore != null ? (
+                    <div className="v3-artifact-quality-meter" title={`Quality ${displayScore}%`}>
+                      <span className={`v3-artifact-quality-fill ${displayScore >= 90 ? "is-high" : displayScore >= 70 ? "is-mid" : "is-low"}`} style={{ width: `${Math.max(0, Math.min(100, displayScore))}%` }} />
+                    </div>
+                  ) : null}
                   <p className="v3-artifact-row-desc">{summary}</p>
                   {/* The input→artifact relationship and any missing-input gaps are
                       already conveyed by the flow overlay, the artifact status chip,
@@ -1588,27 +1593,29 @@ export default function StageView({
                   {present && previewContent ? (
                     <button
                       type="button"
-                      className="v3-button ghost v3-button-inline-xs"
+                      className="v3-button ghost v3-button-inline-xs v3-button-icon"
                       onClick={() => setPreviewArtifact({ label: def.label, description: def.description, content: previewContent, score: displayScore, statusTone })}
                       title={`Preview ${def.label}`}
+                      aria-label={`Preview ${def.label}`}
                     >
-                      ▾ Preview
+                      ▾
                     </button>
                   ) : null}
                   {present && state !== "approved" ? (
                     <button
                       type="button"
-                      className="v3-button ghost v3-button-inline-xs"
+                      className="v3-button ghost v3-button-inline-xs v3-button-icon"
                       onClick={() => { setApplyError(null); setImprovementsApplied(false); setQualityArtifact({ label: def.label, defId: def.id, score: displayScore, issues: deriveArtifactQualityIssues({ score: displayScore, state, inputRequirements, improvements: review?.improvements }), phaseId: activePhase.id, fields: qualityFields, improvements: (review?.improvements ?? []).filter((s) => !!s && s.trim()) }); }}
-                      title={`Review and improve the quality of ${def.label}`}
+                      title={`Review and improve the quality of ${def.label}${suggestionCount ? ` — ${suggestionCount} suggestion${suggestionCount === 1 ? "" : "s"}` : ""}`}
+                      aria-label={`Improve quality of ${def.label}`}
                     >
-                      ✦ Improve quality{suggestionCount ? ` (${suggestionCount})` : ""}
+                      ✦{suggestionCount ? <span className="v3-button-icon-badge">{suggestionCount}</span> : null}
                     </button>
                   ) : null}
                   {state !== "approved" ? (
                     <button
                       type="button"
-                      className="v3-button ghost v3-button-inline-xs v3-artifact-regen"
+                      className={`v3-button ${present ? "ghost" : "primary"} v3-button-inline-xs v3-artifact-regen`}
                       onClick={() => onRunAgent(def.id, activePhase.id, regenGuidance)}
                       disabled={agentButtonDisabled(def.id) || flowedInputsIncomplete}
                       title={flowedInputsIncomplete

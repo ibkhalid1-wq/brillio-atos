@@ -6639,6 +6639,74 @@ button.v3-phase-metric:focus-visible {
   align-self: flex-start;
 }
 
+/* ── Artifact rows premium polish ────────────────────────────────── */
+/* Left status stripe: a 3px accent colored by state, for instant column scan. */
+.v3-artifact-row {
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.16s var(--v3-ease, ease), box-shadow 0.16s var(--v3-ease, ease), border-color 0.16s var(--v3-ease, ease);
+}
+.v3-artifact-row::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--v3-border);
+}
+.v3-artifact-row[data-tone="green"]::before { background: var(--v3-green); }
+.v3-artifact-row[data-tone="amber"]::before { background: var(--v3-amber); }
+.v3-artifact-row[data-tone="red"]::before { background: var(--v3-red); }
+.v3-artifact-row[data-tone="blue"]::before { background: var(--v3-accent); }
+.v3-artifact-row[data-tone="muted"]::before { background: var(--v3-border); }
+/* Hover elevation for tactility. */
+.v3-artifact-row:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  border-color: var(--v3-text-muted);
+}
+/* Missing artifacts read as ghosts: dashed border + dimmed, so produced vs
+   not-yet-generated is obvious without reading the status chip. */
+.v3-artifact-row[data-present="false"] {
+  border-style: dashed;
+  background: transparent;
+}
+.v3-artifact-row[data-present="false"] .v3-artifact-row-label {
+  color: var(--v3-text-muted);
+}
+/* Quality micro-meter under the score chip. */
+.v3-artifact-quality-meter {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--v3-surface-3, rgba(255, 255, 255, 0.08));
+  overflow: hidden;
+}
+.v3-artifact-quality-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s var(--v3-ease, ease);
+}
+.v3-artifact-quality-fill.is-high { background: var(--v3-green); }
+.v3-artifact-quality-fill.is-mid { background: var(--v3-amber); }
+.v3-artifact-quality-fill.is-low { background: var(--v3-red); }
+/* Icon-only secondary actions (Preview, Improve quality). */
+.v3-button-icon {
+  position: relative;
+  padding-left: 7px;
+  padding-right: 7px;
+  min-width: 26px;
+  justify-content: center;
+}
+.v3-button-icon-badge {
+  margin-left: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
 /* ── Artifact Map tree ─────────────────────────────────────────── */
 .v3-amap {
   display: grid;
