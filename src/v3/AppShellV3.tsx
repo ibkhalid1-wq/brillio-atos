@@ -2501,8 +2501,9 @@ export default function AppShellV3() {
     try {
       await reopenGate(phaseId, reason);
       pushV3Toast("Gate reopened. Next phase is locked pending re-approval.", { tone: "warning", duration: 4000 });
-    } catch {
-      pushV3Toast("Could not reopen gate.", { tone: "error", duration: 3000 });
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "";
+      pushV3Toast(detail ? `Could not reopen gate: ${detail}` : "Could not reopen gate.", { tone: "error", duration: 4000 });
     }
   }, [gateReopenPhase, reopenGate]);
 

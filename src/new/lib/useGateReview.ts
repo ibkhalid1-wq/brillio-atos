@@ -261,8 +261,10 @@ export function useGateReview(
 
   const reopenGate = useCallback(async (phaseId: string, reason: string) => {
     const { inner, gateReviews, decisionQueue } = getGateReviewState();
-    const review = gateReviews[phaseId];
-    if (!review) throw new Error("Gate review not found.");
+    // A gate can be locked without a stored review (legacy programmes, or a gate
+    // closed before AI review existed). Mirror approveGate and synthesise a
+    // default rather than failing the reopen.
+    const review: GateReview = gateReviews[phaseId] ?? defaultGateReview(phaseId);
 
     const nextReviews = {
       ...gateReviews,
