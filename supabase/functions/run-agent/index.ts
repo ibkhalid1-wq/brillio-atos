@@ -973,6 +973,13 @@ a lower one override it:
 8. Prior run history
 Never allow memory or a prior artifact to override current structured inputs.
 
+### Grounding facts
+The context carries "groundingFacts": the current phase inputs as atomic,
+id-tagged facts (F1, F2, …) — grid rows are split into one fact each. These ARE
+the current phase inputs and rank first in the source priority order. Ground
+every claim in them; never invent facts they do not support. Reference a fact by
+its id where it aids precision instead of restating the full input verbatim.
+
 ### Regeneration rules
 The input context carries a "runMode" (initial_generation | input_change_refresh |
 cascade_refresh | gate_remediation | manual_regeneration) and, on redraws, a
@@ -1077,6 +1084,45 @@ function flowedArtifactInputs(
     }
   }
   return Object.keys(out).length ? out : undefined;
+}
+
+/**
+ * Compresses one phase's captured inputs into atomic, id-citable fact lines
+ * ("F1: <field> — <value>"). Deploy-side mirror of the client Fact Graph
+ * (src/v3/lib/factGraph.ts): each filled atomic field becomes one fact; a grid
+ * value (a JSON array of row objects) expands to one fact per non-empty row.
+ * Replaces the verbose raw phaseInputs blob in the generation context with a
+ * shorter, citable form — the same grounding information, fewer tokens, and a
+ * stable id the model can cite instead of restating inputs verbatim.
+ */
+function buildGroundingFacts(phaseRecord: Record<string, unknown>): string[] {
+  const lines: string[] = [];
+  let seq = 0;
+  for (const [fieldId, value] of Object.entries(phaseRecord)) {
+    if (fieldId === "savedAt" || fieldId === "_provenance") continue;
+    // Grid value: persisted as a JSON-stringified array of row objects.
+    if (typeof value === "string" && value.trim().startsWith("[")) {
+      const rows = safeJsonParse<unknown[]>(value, []);
+      if (Array.isArray(rows) && rows.length && rows.every(isRecord)) {
+        for (const row of rows as Record<string, unknown>[]) {
+          const cells = Object.entries(row)
+            .filter(([key]) => key !== "id")
+            .map(([, cell]) => stringifyFlowValue(cell))
+            .filter((cell): cell is string => Boolean(cell));
+          if (!cells.length) continue;
+          seq += 1;
+          lines.push(`F${seq}: ${fieldId} — ${cells.join(" · ")}`);
+        }
+        continue;
+      }
+    }
+    const stringified = stringifyFlowValue(value);
+    if (stringified) {
+      seq += 1;
+      lines.push(`F${seq}: ${fieldId} — ${stringified}`);
+    }
+  }
+  return lines;
 }
 
 /**
@@ -1968,7 +2014,7 @@ function buildSpecialAgentInputContext(
       scopeInclusions: strategyInputs.scopeInclusions || strategyInputs.scopeIn || null,
       scopeExclusions: strategyInputs.scopeExclusions || strategyInputs.scopeOut || null,
       kpiBaselines: parseKpiBaselines(strategyInputs.kpis),
-      phaseInputs,
+      groundingFacts: buildGroundingFacts(phaseInputs),
       valueProjected: coerceNumber(inner.valueProjected ?? businessCase.projectedValue ?? valueRealizeData.projectedValue, 0),
       narrative,
       phases,
