@@ -1346,6 +1346,7 @@ export default function AppShellV3() {
     meetingDate,
     meetingDurationMins,
     skipPreSync,
+    regenGuidance,
   }: {
     agentId: string;
     phaseId: string;
@@ -1358,6 +1359,9 @@ export default function AppShellV3() {
     memberRole?: string;
     meetingDate?: string;
     meetingDurationMins?: number;
+    // Quality-review suggestions folded into the generation prompt so a single
+    // Regenerate applies them directly — no separate input-rewrite LLM round trip.
+    regenGuidance?: string;
     // Caller has already persisted fresh program data; skip the pre-sync upsert
     // so it can't clobber that write with a stale closure snapshot.
     skipPreSync?: boolean;
@@ -1391,7 +1395,14 @@ export default function AppShellV3() {
     }
 
     const resolvedAgentId = resolveAgentId(agentId);
-    const crossPhaseContext = buildCrossPhaseContext(activeProgramId, phaseId);
+    let crossPhaseContext = buildCrossPhaseContext(activeProgramId, phaseId);
+    // Append the artifact's stored quality-review suggestions to the prompt context.
+    // The edge function folds crossPhaseContext into prompt.system, so the model
+    // applies these improvements directly in the regenerated artifact — collapsing
+    // the old "improve quality → rewrite inputs → regenerate" loop into one run.
+    if (regenGuidance && regenGuidance.trim()) {
+      crossPhaseContext += `${crossPhaseContext ? "\n\n" : ""}## Reviewer improvements to apply in this regeneration\n${regenGuidance.trim()}`;
+    }
 
     try {
       // Ensure the programme exists in Supabase before calling the edge function.
@@ -1516,8 +1527,8 @@ export default function AppShellV3() {
   // may pass an explicit phaseId; otherwise we fall back to the active phase,
   // then the "program"-level bucket.
   const handleRunAgent = useCallback(
-    (agentId: string, phaseId?: string) =>
-      void runProgramAgent({ agentId, phaseId: phaseId || activePhaseId || "program", triggeredBy: "user" }),
+    (agentId: string, phaseId?: string, guidance?: string) =>
+      void runProgramAgent({ agentId, phaseId: phaseId || activePhaseId || "program", triggeredBy: "user", regenGuidance: guidance }),
     [runProgramAgent, activePhaseId],
   );
 

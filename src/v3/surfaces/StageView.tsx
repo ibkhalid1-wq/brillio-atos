@@ -49,7 +49,7 @@ interface StageViewProps {
   onOpenReport: (reportId: V3ReportId) => void;
   onReopenGate: (phaseId: string) => void;
   onApproveGate: (phaseId: string) => Promise<boolean | void>;
-  onRunAgent: (agentId: string) => void;
+  onRunAgent: (agentId: string, phaseId?: string, guidance?: string) => void;
   onSaveArtifact: (artifactId: "narrative" | "deck", content: string) => Promise<void>;
   onApproveArtifact: (phaseId: string, artifactId: string, agentId: string) => Promise<void>;
   onUnapproveArtifact: (phaseId: string, artifactId: string) => Promise<void>;
@@ -1562,7 +1562,15 @@ export default function StageView({
                 .filter((req) => !req.filled)
                 .map((req) => `• ${req.label}: ${req.requirement}`)
                 .join("\n");
-              const suggestionCount = (review?.improvements ?? []).filter((s) => !!s && s.trim()).length;
+              const reviewerSuggestions = (review?.improvements ?? []).filter((s) => !!s && s.trim());
+              const suggestionCount = reviewerSuggestions.length;
+              // Fold the stored quality-review suggestions straight into the
+              // regeneration prompt (via crossPhaseContext → prompt.system) so a
+              // single Regenerate applies them directly — no separate per-field
+              // input-rewrite LLM round trip.
+              const regenGuidance = suggestionCount
+                ? `The previous version of "${def.label}" was quality-reviewed. Apply these specific improvements directly in the artifact you now produce:\n${reviewerSuggestions.map((s, i) => `${i + 1}. ${s.trim()}`).join("\n")}`
+                : undefined;
               return (
                 <div key={def.id} className="v3-artifact-row" data-io-anchor={`artifact:${def.id}`}>
                   <div className="v3-artifact-row-head">
@@ -1601,10 +1609,12 @@ export default function StageView({
                     <button
                       type="button"
                       className="v3-button ghost v3-button-inline-xs v3-artifact-regen"
-                      onClick={() => onRunAgent(def.id)}
+                      onClick={() => onRunAgent(def.id, activePhase.id, regenGuidance)}
                       disabled={agentButtonDisabled(def.id) || flowedInputsIncomplete}
                       title={flowedInputsIncomplete
                         ? `Provide these inputs before generating ${def.label}:\n${generateGuidance}`
+                        : regenGuidance
+                        ? `Regenerate ${def.label} — applies ${suggestionCount} quality suggestion${suggestionCount === 1 ? "" : "s"} directly in the new draft`
                         : inputsIncomplete
                         ? `${present ? "Regenerate" : "Generate"} ${def.label} — strengthen these inputs to lift quality:\n${generateGuidance || preflight.missingFields.join(", ")}`
                         : present ? `Regenerate ${def.label}` : `Generate ${def.label}`}
