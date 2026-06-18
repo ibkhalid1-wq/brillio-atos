@@ -15,7 +15,7 @@
  * mechanism behind traceability compression (factId → source resolved in the UI).
  */
 import type { ProgramSummary } from "@/new/types";
-import { ATOS_STANDARD } from "@/v3/lib/methodology";
+import { ATOS_STANDARD, type GridColumn } from "@/v3/lib/methodology";
 import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
 import { getDynamicSchemaStore, dynamicFieldArtifacts } from "@/v3/lib/dynamicSchema";
 import { parseProvenance, provenanceMatches, PROVENANCE_KEY, type FieldProvenance } from "@/new/lib/fieldProvenance";
@@ -82,6 +82,46 @@ function phaseInputsOf(rawData: unknown): Record<string, Record<string, unknown>
   return typeof pi === "object" && pi !== null ? (pi as Record<string, Record<string, unknown>>) : {};
 }
 
+interface GridRowFact {
+  /** Stable suffix for the fact's factId (row id when present, else index). */
+  rowKey: string;
+  factText: string;
+  normalizedValue: string;
+}
+
+/**
+ * Derive one fact per non-empty row of a structured grid. The persisted value is
+ * a JSON-string array of row objects keyed by column key; each row with at least
+ * one filled declared cell becomes a citable fact "<field label>: <cell> · …".
+ * A grid with no columns yields nothing (it carries no structured facts).
+ */
+function gridRowFacts(raw: unknown, columns: GridColumn[], label: string): GridRowFact[] {
+  if (typeof raw !== "string" || !raw.trim() || columns.length === 0) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  const out: GridRowFact[] = [];
+  parsed.forEach((entry, index) => {
+    if (typeof entry !== "object" || entry === null) return;
+    const row = entry as Record<string, unknown>;
+    const cells = columns
+      .map((col) => (typeof row[col.key] === "string" ? (row[col.key] as string).trim() : ""))
+      .filter(Boolean);
+    if (!cells.length) return;
+    const normalizedValue = cells.join(" · ");
+    out.push({
+      rowKey: typeof row.id === "string" && row.id ? row.id : String(index),
+      factText: `${label}: ${normalizedValue}`,
+      normalizedValue,
+    });
+  });
+  return out;
+}
+
 function sourceFromProvenance(prov: FieldProvenance | undefined): {
   sourceType: FactSourceType; sourceName: string; sourceLocation: string; confidence: number;
 } {
@@ -130,8 +170,36 @@ export function buildFactGraph(program: ProgramSummary | null | undefined): Fact
     const fieldArtifacts = dynamicFieldArtifacts(phase.id, dynamicStore);
 
     for (const field of schema.fields) {
-      if (field.type === "grid" || NON_FACT_KEYS.has(field.id)) continue;
+      if (NON_FACT_KEYS.has(field.id)) continue;
       const raw = bucket[field.id];
+      const impactedArtifacts = Array.from(
+        new Set([...(field.usedByArtifacts ?? []), ...(fieldArtifacts[field.id] ?? [])]),
+      );
+
+      // Structured grids expand to one fact per non-empty row. Rows carry no
+      // per-row import provenance, so they are treated as confirmed user input.
+      if (field.type === "grid") {
+        for (const rowFact of gridRowFacts(raw, field.columns ?? [], field.label)) {
+          seq += 1;
+          facts.push({
+            id: `F${seq}`,
+            factId: `${phase.id}:${field.id}#${rowFact.rowKey}`,
+            factType: field.id,
+            factText: rowFact.factText,
+            normalizedValue: rowFact.normalizedValue,
+            sourceType: "user_input",
+            sourceId: phase.id,
+            sourceName: "User input",
+            sourceLocation: "",
+            confidence: 1,
+            status: "confirmed",
+            impactedArtifacts,
+            impactedPhases: [phase.id],
+          });
+        }
+        continue;
+      }
+
       const value = typeof raw === "string" ? raw.trim() : "";
       if (!value) continue;
 
@@ -139,9 +207,6 @@ export function buildFactGraph(program: ProgramSummary | null | undefined): Fact
       // snapshot; a later hand-edit makes it confirmed user input again.
       const prov = provenanceMatches(provenance[field.id], value) ? provenance[field.id] : undefined;
       const src = sourceFromProvenance(prov);
-      const impactedArtifacts = Array.from(
-        new Set([...(field.usedByArtifacts ?? []), ...(fieldArtifacts[field.id] ?? [])]),
-      );
 
       seq += 1;
       facts.push({

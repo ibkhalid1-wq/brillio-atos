@@ -89,6 +89,63 @@ describe("buildFactGraph", () => {
   });
 });
 
+describe("grid fields expand to one fact per row", () => {
+  /** Stub carrying both a dynamic grid field and its persisted row value. */
+  function programWithGrid(): ProgramSummary {
+    const rosterField = {
+      id: "coreTeamRoster", label: "Core team roster", type: "grid", required: true,
+      source: "ai-derived",
+      columns: [{ key: "role", label: "Role" }, { key: "name", label: "Name" }],
+      usedByArtifacts: ["raci-matrix"],
+    };
+    const rows = JSON.stringify([
+      { id: "r1", role: "Exec Sponsor", name: "Raj Mamodia" },
+      { id: "r2", role: "Eng Lead", name: "Nayana Pai" },
+      { role: "", name: "" }, // empty — no fact
+    ]);
+    return {
+      rawData: {
+        phaseInputs: { mobilise: { coreTeamRoster: rows } },
+        dynamicSchema: { inputFields: { mobilise: [rosterField] } },
+      },
+    } as unknown as ProgramSummary;
+  }
+
+  const graph = buildFactGraph(programWithGrid());
+  const roster = graph.facts.filter((f) => f.factType === "coreTeamRoster");
+
+  it("emits a fact per non-empty row, skipping empty rows", () => {
+    expect(roster).toHaveLength(2);
+    expect(roster.map((f) => f.factText)).toEqual([
+      "Core team roster: Exec Sponsor · Raj Mamodia",
+      "Core team roster: Eng Lead · Nayana Pai",
+    ]);
+  });
+
+  it("scopes each row fact to the grid field's artifacts", () => {
+    expect(roster[0].impactedArtifacts).toEqual(["raci-matrix"]);
+    expect(graph.stats.orphans).toBe(0);
+  });
+
+  it("treats rows as confirmed user input with row-scoped fact ids", () => {
+    expect(roster[0].sourceType).toBe("user_input");
+    expect(roster[0].confidence).toBe(1);
+    expect(roster[0].factId).toBe("mobilise:coreTeamRoster#r1");
+  });
+
+  it("emits nothing for a grid that has no columns", () => {
+    const colless = buildFactGraph({
+      rawData: {
+        phaseInputs: { mobilise: { x: JSON.stringify([{ a: "1" }]) } },
+        dynamicSchema: { inputFields: { mobilise: [{ id: "x", label: "X", type: "grid", required: false, columns: [] }] } },
+      },
+    } as unknown as ProgramSummary);
+    // A column-less grid is coerced to a textarea by the resolver; its raw "[{...}]"
+    // string then becomes a single atomic fact rather than per-row facts.
+    expect(colless.facts.filter((f) => f.factId.includes("#"))).toHaveLength(0);
+  });
+});
+
 describe("fact accessors", () => {
   const graph = buildFactGraph(programWith({
     strategy: { sponsor: "Jane Doe, CIO", businessObjective: "Velocity" },
