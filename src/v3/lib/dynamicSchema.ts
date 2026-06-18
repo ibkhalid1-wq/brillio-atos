@@ -23,8 +23,32 @@
  * overlay, and the staleness model with no parallel wiring.
  */
 import { ATOS_STANDARD, type GridColumn, type PhaseInputField } from "@/v3/lib/methodology";
+import { AGENT_META } from "@/v3/lib/agentMeta";
 
 export type ArtifactGenerationReadiness = "ready" | "needs_input" | "blocked";
+
+/**
+ * Canonical producing-agent id for a (possibly phase-prefixed) dynamic artifact.
+ *
+ * The planner occasionally names a dynamic artifact with a phase prefix
+ * (e.g. "mobilise-narrative") even though its producing agent is the bare id
+ * ("narrative"). Both the artifact ledger (run-agent writes the node keyed by the
+ * agent id) and the run-agent endpoint's VALID_AGENT_IDS check key off the bare
+ * producing-agent id — so a phase-prefixed id never matches a generated artifact
+ * and "Generate"/"Improve quality" 400 with `Unknown agentId`. Strip a leading
+ * "<phaseId>-" only when the remainder is a real producing agent (AGENT_META is
+ * the registry of those); every other id passes through untouched, so genuinely
+ * hyphenated agent ids ("gate-review", "raci-matrix") are never mangled.
+ */
+export function canonicalArtifactId(phaseId: string, id: string): string {
+  if (AGENT_META[id]) return id;
+  const prefix = `${phaseId}-`;
+  if (id.startsWith(prefix)) {
+    const base = id.slice(prefix.length);
+    if (AGENT_META[base]) return base;
+  }
+  return id;
+}
 
 export interface DynamicArtifactDef {
   id: string;
@@ -159,9 +183,11 @@ export function dynamicArtifactDefs(phaseId: string, store?: DynamicSchemaStore)
   const seen = new Set<string>();
   const out: DynamicArtifactDef[] = [];
   for (const def of defs) {
-    if (!def || typeof def.id !== "string" || seen.has(def.id)) continue;
-    seen.add(def.id);
-    const entry: DynamicArtifactDef = { id: def.id, label: def.label || def.id, description: def.description || "" };
+    if (!def || typeof def.id !== "string") continue;
+    const id = canonicalArtifactId(phaseId, def.id);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const entry: DynamicArtifactDef = { id, label: def.label || id, description: def.description || "" };
     if (Array.isArray(def.requiredInputs)) entry.requiredInputs = def.requiredInputs.filter((x): x is string => typeof x === "string");
     if (Array.isArray(def.sourceArtifactsUsed)) entry.sourceArtifactsUsed = def.sourceArtifactsUsed.filter((x): x is string => typeof x === "string");
     if (typeof def.generationReadiness === "string" && ARTIFACT_READINESS.has(def.generationReadiness)) entry.generationReadiness = def.generationReadiness;
@@ -495,9 +521,13 @@ export function dynamicFieldArtifacts(phaseId: string, store?: DynamicSchemaStor
   const inverted: Record<string, string[]> = {};
   for (const [artifactId, fieldIds] of Object.entries(flow)) {
     if (!Array.isArray(fieldIds)) continue;
+    // Canonicalise so a flow keyed by a phase-prefixed id ("mobilise-narrative")
+    // still targets the artifact under its producing-agent id, matching the
+    // normalised id getPhaseArtifactDefs emits — otherwise the edge is dropped.
+    const canonicalId = canonicalArtifactId(phaseId, artifactId);
     for (const fieldId of fieldIds) {
       if (typeof fieldId !== "string") continue;
-      (inverted[fieldId] ??= []).push(artifactId);
+      (inverted[fieldId] ??= []).push(canonicalId);
     }
   }
   return inverted;

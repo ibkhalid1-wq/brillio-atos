@@ -13,7 +13,7 @@
  */
 import { getPhaseArtifactIds } from "@/v3/lib/phaseArtifacts";
 import { ATOS_STANDARD } from "@/v3/lib/methodology";
-import { dynamicFieldArtifacts, type DynamicSchemaStore } from "@/v3/lib/dynamicSchema";
+import { canonicalArtifactId, dynamicFieldArtifacts, type DynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 
 export interface FlowEdge {
   from: string;
@@ -69,7 +69,12 @@ export function getArtifactInputFields(phaseId: string, artifactId: string, stor
     if (artifacts.includes(artifactId)) fields.add(fieldId);
   }
   const dynamicFlow = store?.artifactInputFlow?.[phaseId] ?? {};
-  for (const fieldId of dynamicFlow[artifactId] ?? []) fields.add(fieldId);
+  // The flow may be keyed by a phase-prefixed id while callers pass the canonical
+  // (producing-agent) id, so match on the canonicalised key.
+  for (const [flowArtifactId, fieldIds] of Object.entries(dynamicFlow)) {
+    if (canonicalArtifactId(phaseId, flowArtifactId) !== artifactId) continue;
+    for (const fieldId of fieldIds ?? []) fields.add(fieldId);
+  }
   return [...fields];
 }
 
