@@ -2190,26 +2190,17 @@ export default function AppShellV3() {
   }, [updatePhasePct]);
 
   const handleAddDecision = useCallback(async (decision: Omit<DecisionSummary, "id" | "status" | "createdAt">) => {
-    const newDecision = await addDecision(decision);
-    if (!activeProgram?.id || !newDecision || !supabase) return;
-    await supabase.functions.invoke("run-agent", {
-      body: {
-        programId: activeProgram.id,
-        agentId: "decision-advisor",
-        phaseId: decision.phaseId || activePhaseId || "program",
-        decisionId: newDecision.id,
-        triggeredBy: "trigger",
-      },
-    });
+    // Adding a decision is a deterministic write — no automatic LLM call. The
+    // decision-advisor is now on-demand (run from the decision card) rather than
+    // firing on every add, so capturing a decision never costs a model call.
+    await addDecision(decision);
     await refreshPrograms();
-  }, [activePhaseId, activeProgram?.id, addDecision, refreshPrograms]);
+  }, [addDecision, refreshPrograms]);
 
   const handleSaveNarrativeCorrection = useCallback(async (note: string) => {
     await addProgramNote(note, "narrative-correction");
   }, [addProgramNote]);
 
-  // Per-phase debounce timers for the Tier-2 input-quality validation pass.
-  const inputQualityDebounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const handleSavePhaseInputs = useCallback(async (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; clearReviewDefId?: string; staleDefId?: string }) => {
     if (!activeProgram) return;
     const silent = opts?.silent === true;
@@ -2305,15 +2296,10 @@ export default function AppShellV3() {
       await updateProgramData(activeProgram.id, payload, fresh?.updated_at ?? undefined);
     }
     await refreshPrograms();
-    // Debounce input-quality (Tier 2 — no one is blocked on it) so a flurry of saves
-    // coalesces into a single validation run instead of firing input-quality and its
-    // downstream cascade on every save. A later save for the same phase resets the timer.
-    const timers = inputQualityDebounceRef.current;
-    if (timers[phaseId]) clearTimeout(timers[phaseId]);
-    timers[phaseId] = setTimeout(() => {
-      delete timers[phaseId];
-      void runProgramAgent({ agentId: "input-quality", phaseId, triggeredBy: "trigger", skipPreSync: true });
-    }, 8000);
+    // No automatic input-quality LLM call on save. Saving inputs is a
+    // deterministic persist; input-quality now runs only as part of artifact
+    // generation (generate/expand/rewrite), so editing inputs never silently
+    // triggers a model call.
     // Auto-saves persist quietly (the panel shows its own "Saved" tick). The
     // stale-artifact warning is the one thing still worth surfacing even on an
     // auto-save, since it changes what the user must regenerate.
@@ -2325,7 +2311,7 @@ export default function AppShellV3() {
     } else if (!silent) {
       pushV3Toast("Inputs saved. Ready to run agents.", { tone: "success", duration: 2500 });
     }
-  }, [activeProgram, refreshPrograms, runProgramAgent, updateProgramData]);
+  }, [activeProgram, refreshPrograms, updateProgramData]);
 
   // Atomic multi-phase save — used by document import to avoid stale-closure overwrites
   const handleSaveAllPhaseInputs = useCallback(async (allInputs: Record<string, Record<string, string>>, firstPhaseId?: string) => {

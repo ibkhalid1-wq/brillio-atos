@@ -103,10 +103,9 @@ export function useGateReview(
           }
         }
 
-        // Fire pattern-extract asynchronously (ignore errors — agents may need auth)
-        supabase.functions.invoke("run-agent", {
-          body: { programId, agentId: "pattern-extract", phaseId: "program", triggeredBy: "trigger", triggerEvent: "gate-approved" },
-        }).catch(() => undefined);
+        // No automatic pattern-extract on gate approval. Closing a gate is a
+        // deterministic state change; pattern mining is now on-demand (run from
+        // the program intelligence surface) so approving a gate costs no LLM call.
       } else {
         // localStorage-only path
         persistLocally(programId, payload);
