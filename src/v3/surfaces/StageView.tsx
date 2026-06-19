@@ -740,6 +740,33 @@ export default function StageView({
     }
     return locked;
   }, [activePhase, dynamicStore, phaseArtifacts, source]);
+  // Every produced artifact in the phase clears the quality gate (>89%), or is
+  // already approved. Combined with `allRequiredProduced`, this is the gate for
+  // surfacing bulk approve — you can only approve once everything is generated
+  // AND high quality.
+  const allArtifactsMeetQualityGate = useMemo(() => {
+    if (!activePhase) return false;
+    let anyProduced = false;
+    for (const def of getPhaseArtifactDefs(activePhase.id, dynamicStore)) {
+      const node = phaseArtifacts.byKey.get(def.id);
+      if (!node?.present) continue;
+      anyProduced = true;
+      const state = node.state;
+      if (state === "approved" || state === "archived") continue;
+      const score = resolveArtifactQualityScore(
+        source,
+        def.id,
+        activePhase.id,
+        typeof node.quality === "number" ? node.quality : null,
+      );
+      if (!(typeof score === "number" && score >= ARTIFACT_QUALITY_GATE)) return false;
+    }
+    return anyProduced;
+  }, [activePhase, dynamicStore, phaseArtifacts, source]);
+  // Bulk approve is offered only when every required artifact is produced, none
+  // are stale, and all clear the quality gate. Until then we show an inline hint
+  // explaining the condition instead of the button.
+  const showApproveAll = allRequiredProduced && approvableArtifactCount > 0 && !hasStaleArtifact && allArtifactsMeetQualityGate;
   // Live overlay: the persisted programme with the active phase's *unsaved* input
   // edits merged in, so header metrics / status rings / flow-line tones reflect
   // typing instantly — ahead of the debounced auto-save round-trip. Only the
@@ -1527,7 +1554,7 @@ export default function StageView({
             </div>
           )
         ) : null}
-        {phaseArtifacts.present > 0 || (allRequiredProduced && approvableArtifactCount > 0 && !hasStaleArtifact) ? (
+        {phaseArtifacts.present > 0 || showApproveAll ? (
           <div className="v3-artifact-download-row" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {phaseArtifacts.present > 0 ? (
               <button
@@ -1540,7 +1567,7 @@ export default function StageView({
                 {downloadingArtifacts ? "Preparing package…" : "⬇ Download artifacts package"}
               </button>
             ) : null}
-            {allRequiredProduced && approvableArtifactCount > 0 && !hasStaleArtifact ? (
+            {showApproveAll ? (
               <button
                 type="button"
                 className="v3-button primary v3-button-inline-xs"
@@ -1559,6 +1586,11 @@ export default function StageView({
                 {approvingAll ? "⋯ Finalizing artifacts…" : `✓ Approve all artifacts (${approvableArtifactCount})`}
               </button>
             ) : null}
+          </div>
+        ) : null}
+        {approvableArtifactCount > 0 && !showApproveAll ? (
+          <div className="v3-artifact-approve-hint">
+            You will be able to approve artifacts once all have been generated and have quality &gt; 90%.
           </div>
         ) : null}
         <div className="v3-output-strip">

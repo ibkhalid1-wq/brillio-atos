@@ -7864,6 +7864,18 @@ button.v3-phase-metric:focus-visible {
   background: color-mix(in srgb, var(--v3-amber) 8%, var(--v3-surface-2));
 }
 
+/* Inline hint explaining when bulk approve unlocks (all produced + >90% quality). */
+.v3-artifact-approve-hint {
+  margin: 2px 0 8px;
+  padding: 8px 10px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--v3-text-muted);
+  border: 1px dashed var(--v3-border);
+  border-radius: var(--v3-radius);
+  background: var(--v3-surface-2);
+}
+
 /* Programme right-rail panels (Actions + Intelligence) */
 .v3-rail-panels {
   display: flex;
