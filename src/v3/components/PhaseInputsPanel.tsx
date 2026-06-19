@@ -605,6 +605,10 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
 
           <div style={{ display: "grid", gap: 12, marginBottom: 12 }}>
             {schema.fields.map((field) => {
+              // The Primary success metric is folded into the unified Outcome KPIs
+              // table below (it is the headline KPI), so don't also render it as a
+              // standalone field here. Only Strategy shows that table (showKpis).
+              if (field.id === "successMetric" && showKpis) return null;
               const verdict = field.type === "grid"
                 ? (filledRowCount(grids[field.id] ?? [], field.columns ?? []) > 0
                     ? { label: "Complete", tone: "green" as const }
@@ -827,17 +831,79 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
             </div>
           ) : null}
 
-          {showKpis ? (
-            <div style={{ marginTop: 12, marginBottom: 12 }}>
+          {showKpis ? (() => {
+            const successField = schema.fields.find((field) => field.id === "successMetric");
+            const successVerdict = assessField(values.successMetric, "text");
+            return (
+            <div style={{ marginTop: 12, marginBottom: 12 }} data-io-anchor="input:successMetric">
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <div className="v3-field-label">Outcome KPIs (baseline → target)</div>
                 {provenanceMatches(provenance.kpis, (existingInputs as Record<string, unknown>).kpis)
                   ? <ProvenanceChip prov={provenance.kpis} />
                   : null}
               </div>
-              <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginBottom: 6 }}>
-                Define the measurable outcomes for this programme. Baseline and target captured here
-                anchor the Benefits Tracker so realisation is measured against your numbers — not estimates.
+              <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginBottom: 8 }}>
+                Your primary success metric is the headline outcome; add any supporting KPIs beneath it.
+                Baseline and target captured here anchor the Benefits Tracker so realisation is measured
+                against your numbers — not estimates.
+              </div>
+              {/* Shared column headers for the primary metric + supporting KPI rows */}
+              <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4 }}>
+                <div style={{ flex: 2, fontSize: 10, fontWeight: 600, color: "var(--v3-text-muted)" }}>Metric</div>
+                <div style={{ width: 80, fontSize: 10, fontWeight: 600, color: "var(--v3-text-muted)" }}>Baseline</div>
+                <div style={{ width: 80, fontSize: 10, fontWeight: 600, color: "var(--v3-text-muted)" }}>Target</div>
+                <div style={{ width: 64, fontSize: 10, fontWeight: 600, color: "var(--v3-text-muted)" }}>Unit</div>
+                <div style={{ width: 28 }} />
+              </div>
+              {/* Primary success metric — pinned first row of the unified table */}
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                <span className="v3-chip indigo" style={{ fontSize: 9 }}>★ Primary</span>
+                {successField?.required ? <span style={{ color: "var(--v3-accent)", fontSize: 11 }}>required</span> : null}
+                <span className={`v3-chip ${successVerdict.tone}`} style={{ fontSize: 10 }}>{successVerdict.label}</span>
+                {provenanceMatches(provenance.successMetric, values.successMetric)
+                  ? <ProvenanceChip prov={provenance.successMetric} />
+                  : null}
+              </div>
+              <div style={{ display: "flex", gap: 6, marginBottom: 10, alignItems: "center" }}>
+                <input
+                  type="text"
+                  className="v3-input"
+                  style={{ flex: 2 }}
+                  aria-label={successField?.label ?? "Primary success metric"}
+                  placeholder={successField?.placeholder ?? "Primary success metric, e.g. Cost to serve"}
+                  value={values.successMetric ?? ""}
+                  onChange={(event) => setValues((current) => ({ ...current, successMetric: event.target.value }))}
+                />
+                <input
+                  type="text"
+                  className="v3-input"
+                  style={{ width: 80 }}
+                  aria-label="Primary success metric baseline"
+                  placeholder="Baseline"
+                  value={values.successMetricBaseline ?? ""}
+                  onChange={(event) => setValues((current) => ({ ...current, successMetricBaseline: event.target.value }))}
+                />
+                <input
+                  type="text"
+                  className="v3-input"
+                  style={{ width: 80 }}
+                  aria-label="Primary success metric target"
+                  placeholder="Target"
+                  value={values.successMetricTarget ?? ""}
+                  onChange={(event) => setValues((current) => ({ ...current, successMetricTarget: event.target.value }))}
+                />
+                <input
+                  type="text"
+                  className="v3-input"
+                  style={{ width: 64 }}
+                  aria-label="Primary success metric unit"
+                  placeholder="Unit"
+                  value={values.successMetricUnit ?? ""}
+                  onChange={(event) => setValues((current) => ({ ...current, successMetricUnit: event.target.value }))}
+                />
+                {/* Hidden spacer mirroring the supporting KPIs' remove button so the
+                    columns line up — the primary metric can't be removed. */}
+                <button type="button" className="v3-button ghost" style={{ fontSize: 11, visibility: "hidden", width: 28 }} tabIndex={-1} aria-hidden>✕</button>
               </div>
               {localKpis.map((kpi, index) => (
                 <div key={kpi.id} style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
@@ -880,7 +946,8 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
                 + Add KPI
               </button>
             </div>
-          ) : null}
+            );
+          })() : null}
 
           {showActuals ? (
             <div style={{ marginTop: 12, marginBottom: 12 }}>
