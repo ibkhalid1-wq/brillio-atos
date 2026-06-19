@@ -1614,19 +1614,29 @@ export default function StageView({
               // shows quality for drafts and the modal can render the AI plan.
               const review = resolveArtifactReview(source, def.id, activePhase.id);
               const displayScore = resolveArtifactQualityScore(source, def.id, activePhase.id, score);
+              // Quality-driven status taxonomy:
+              //   Missing            → not yet generated
+              //   Stale              → a related input changed; must regenerate
+              //   Needs improvement  → produced, quality below the 90% bar
+              //   Ready              → produced, quality ≥ 90% — ready for approval
+              //   Approved           → locked in (Archived kept for retired specs)
+              // "Ready" uses the same 90% bar as the generation/approval gates so a
+              // chip that reads "Ready" is exactly an artifact that unlocks the next
+              // one and counts toward bulk approve.
+              const meetsQualityBar = typeof displayScore === "number" && displayScore >= ARTIFACT_QUALITY_GATE;
               const statusLabel = !present
                 ? "Missing"
                 : state === "approved" ? "Approved"
                 : state === "stale" ? "Stale — regenerate"
-                : state === "ready" ? "Ready"
                 : state === "archived" ? "Archived"
-                : "Draft";
+                : meetsQualityBar ? "Ready"
+                : "Needs improvement";
               const statusTone = !present
                 ? "muted"
                 : state === "approved" ? "green"
                 : state === "stale" ? "red"
-                : state === "ready" ? "blue"
                 : state === "archived" ? "muted"
+                : meetsQualityBar ? "blue"
                 : "amber";
               const summary = present
                 ? def.description
