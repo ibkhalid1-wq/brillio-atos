@@ -1981,6 +1981,26 @@ export default function AppShellV3() {
     commitNavigation({ surface: "stage", moreView: null, activePhaseId: phaseId, reportId: null });
   }, [commitNavigation]);
 
+  // Open a phase screen AND scroll to its inputs section. Used by the Action
+  // Center: resolving an action / blocker / risk takes the user to where they
+  // actually fix it — the phase's input fields. The anchor only exists once the
+  // StageView has mounted, so poll briefly for it after navigation.
+  const navigateToPhaseInputs = useCallback((phaseId: string) => {
+    if (!phaseId) return;
+    openPhaseSheet(phaseId);
+    if (typeof window === "undefined") return;
+    let attempts = 0;
+    const tryScroll = () => {
+      const el = document.getElementById("phase-inputs-anchor");
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+      if (attempts++ < 20) window.setTimeout(tryScroll, 100);
+    };
+    window.setTimeout(tryScroll, 150);
+  }, [openPhaseSheet]);
+
   const openReport = useCallback((nextReportId: V3ReportId) => {
     commitNavigation({ surface: "program", moreView: null, activePhaseId, reportId: nextReportId });
   }, [activePhaseId, commitNavigation]);
@@ -3093,6 +3113,7 @@ export default function AppShellV3() {
               onRequestRemediation={requestRemediation}
               onAddRaid={addRaidEntry}
               onCloseRaid={closeRaidEntry}
+              onNavigateToPhaseInputs={navigateToPhaseInputs}
               persona={persona}
               initialIntent={decideIntent}
             />

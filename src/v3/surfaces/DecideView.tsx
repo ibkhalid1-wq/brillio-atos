@@ -23,6 +23,8 @@ interface DecideViewProps {
   onRequestRemediation: (phaseId: string, note: string) => Promise<void>;
   onAddRaid: (draft: { type: RAIDEntryType; title: string; description: string; severity: RAIDEntry["severity"]; phase: string; owner?: string; mitigation?: string }) => Promise<void>;
   onCloseRaid: (entryId: string, note?: string) => Promise<void>;
+  /** Resolve an action / blocker / risk by jumping to that phase's input fields. */
+  onNavigateToPhaseInputs: (phaseId: string) => void;
   /** Deep-link intent: select a tab and open its add form (nonce forces re-fire). */
   initialIntent?: { tab: ActionTab; nonce: number } | null;
 }
@@ -155,6 +157,7 @@ function DecisionCard({
   onToggleModify,
   onChangeModify,
   onResolveDecision,
+  onGoToInput,
 }: {
   decision: ReviewDecision;
   modifyOpen: boolean;
@@ -164,6 +167,7 @@ function DecisionCard({
   onToggleModify: () => void;
   onChangeModify: (value: string) => void;
   onResolveDecision: (resolution: "approved" | "deferred" | "rejected" | "modified", modifiedContent?: string) => void;
+  onGoToInput: () => void;
 }) {
   return (
     <AdamCard accent={decision.priority === "critical" || decision.priority === "high" ? "danger" : "none"} className="v3-governance-decision-card">
@@ -258,7 +262,7 @@ function DecisionCard({
         ) : null}
 
         <div className="v3-governance-decision-actions">
-          <button type="button" className="v3-button primary" style={{ fontSize: 12 }} onClick={() => onResolveDecision("approved")}>
+          <button type="button" className="v3-button primary" style={{ fontSize: 12 }} onClick={onGoToInput}>
             Resolve
           </button>
           <button type="button" className="v3-button ghost" style={{ fontSize: 12 }} onClick={() => onResolveDecision("deferred")}>
@@ -384,12 +388,10 @@ function GateDetailPanel({
 
 function RaidCard({
   entry,
-  closing,
-  onClose,
+  onGoToInput,
 }: {
   entry: RAIDEntry;
-  closing: boolean;
-  onClose: () => void;
+  onGoToInput: () => void;
 }) {
   const isUrgent = entry.severity === "critical" || entry.severity === "high";
   return (
@@ -411,8 +413,8 @@ function RaidCard({
         {entry.mitigation ? <div className="v3-governance-decision-analysis">Mitigation: {entry.mitigation}</div> : null}
 
         <div className="v3-governance-decision-actions">
-          <button type="button" className="v3-button primary" style={{ fontSize: 12 }} disabled={closing} onClick={onClose}>
-            {closing ? "Resolving…" : "Mark resolved"}
+          <button type="button" className="v3-button primary" style={{ fontSize: 12 }} onClick={onGoToInput}>
+            Resolve
           </button>
         </div>
       </AdamCardBody>
@@ -514,6 +516,7 @@ export default function DecideView({
   onRequestRemediation,
   onAddRaid,
   onCloseRaid,
+  onNavigateToPhaseInputs,
   initialIntent,
 }: DecideViewProps) {
   const [scope, setScope] = useState<Scope>(mode === "guided" ? "stage" : "all");
@@ -528,7 +531,6 @@ export default function DecideView({
   const [activeTab, setActiveTab] = useState<ActionTab>("actions");
   const [raidFormOpen, setRaidFormOpen] = useState(false);
   const [raidSaving, setRaidSaving] = useState(false);
-  const [closingRaidId, setClosingRaidId] = useState<string | null>(null);
 
   useEffect(() => {
     if (mode === "guided") setScope("stage");
@@ -695,6 +697,7 @@ export default function DecideView({
             return next;
           })}
           onResolveDecision={(resolution, modifiedContent) => void onResolveDecision(decision.id, resolution, modifiedContent, decision)}
+          onGoToInput={() => onNavigateToPhaseInputs(resolveTargetPhase(decision.phaseId))}
         />
       </div>
     </div>
@@ -717,14 +720,13 @@ export default function DecideView({
     }
   };
 
-  const closeRaid = async (entryId: string) => {
-    setClosingRaidId(entryId);
-    try {
-      await onCloseRaid(entryId);
-    } finally {
-      setClosingRaidId(null);
-    }
-  };
+  // An action / blocker / risk is resolved at its source — the phase's input
+  // fields. Resolve a known phase if the item carries one, otherwise fall back
+  // to the focused / active phase so the user always lands somewhere editable.
+  const resolveTargetPhase = (phaseId: string | null | undefined): string =>
+    phaseId && phaseId !== "all"
+      ? phaseId
+      : (selectedPhaseId ?? activePhaseId ?? program?.phases?.[0]?.id ?? "strategy");
 
   const renderRaidList = (entries: RAIDEntry[], emptyLabel: string) => (
     entries.length ? (
@@ -738,7 +740,7 @@ export default function DecideView({
                 ? <>Affects: <strong>All phases</strong></>
                 : <>Affects: <strong>{PHASE_LABELS[entry.phase] ?? entry.phase}</strong> phase</>}
             </div>
-            <RaidCard entry={entry} closing={closingRaidId === entry.id} onClose={() => void closeRaid(entry.id)} />
+            <RaidCard entry={entry} onGoToInput={() => onNavigateToPhaseInputs(resolveTargetPhase(entry.phase))} />
           </div>
         ))}
       </div>
