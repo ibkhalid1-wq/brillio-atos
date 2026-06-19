@@ -1,12 +1,13 @@
 import type { CopilotThreadMessage } from "./types.ts";
+import {
+  type AIProvider,
+  defaultModelForProvider,
+  getModelCapabilities,
+  isAIProvider,
+} from "./modelCatalog.ts";
 
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
-const GEMINI_MODEL = "gemini-1.5-pro";
-const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6";
-const DEFAULT_OPENAI_MODEL = "gpt-4o";
-
-type AIProvider = "anthropic" | "openai" | "google";
 
 let cachedProviderSettings: { provider: AIProvider; apiKey: string; model: string } | null = null;
 
@@ -63,23 +64,13 @@ export interface ClaudeStreamResult extends ClaudeCompletionResult {
   chunks: string[];
 }
 
-function isProvider(value: string): value is AIProvider {
-  return value === "anthropic" || value === "openai" || value === "google";
-}
-
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function defaultModelForProvider(provider: AIProvider): string {
-  if (provider === "openai") return DEFAULT_OPENAI_MODEL;
-  if (provider === "google") return GEMINI_MODEL;
-  return DEFAULT_ANTHROPIC_MODEL;
-}
-
 function envProviderSettings(): { provider: AIProvider; apiKey: string; model: string } | null {
   const configuredProvider = (Deno.env.get("ADAM_AI_PROVIDER") || "").toLowerCase();
-  const provider = isProvider(configuredProvider) ? configuredProvider : null;
+  const provider = isAIProvider(configuredProvider) ? configuredProvider : null;
   const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY") || "";
   const openAiKey = Deno.env.get("OPENAI_API_KEY") || "";
   const googleKey = Deno.env.get("GOOGLE_GEMINI_API_KEY") || Deno.env.get("GEMINI_API_KEY") || "";
@@ -113,8 +104,8 @@ async function getProviderSettings(): Promise<{ provider: AIProvider; apiKey: st
     );
     if (response.ok) {
       const rows = await response.json().catch(() => []) as Array<{ provider?: string; api_key?: string; model?: string }>;
-      const row = rows.find((item) => isProvider(item.provider || "") && item.api_key);
-      if (row?.provider && row.api_key && isProvider(row.provider)) {
+      const row = rows.find((item) => isAIProvider(item.provider || "") && item.api_key);
+      if (row?.provider && row.api_key && isAIProvider(row.provider)) {
         cachedProviderSettings = { provider: row.provider, apiKey: row.api_key, model: row.model || defaultModelForProvider(row.provider) };
         return cachedProviderSettings;
       }
@@ -226,27 +217,34 @@ function anthropicSystemBlocks(system: string): Array<Record<string, unknown>> {
 }
 
 function anthropicPayload(options: ClaudeCompletionOptions, stream: boolean): Record<string, unknown> {
-  return {
-    model: options.model || DEFAULT_ANTHROPIC_MODEL,
-    system: anthropicSystemBlocks(options.system),
+  const model = options.model || defaultModelForProvider("anthropic");
+  const caps = getModelCapabilities(model, "anthropic");
+  const payload: Record<string, unknown> = {
+    model,
+    // Cacheable system blocks only when the model supports prompt caching;
+    // otherwise send a plain string so we don't attach cache_control needlessly.
+    system: caps.promptCaching ? anthropicSystemBlocks(options.system) : options.system,
     messages: options.messages.map((message, idx) => {
       const textBlock = { type: "text", text: message.content };
-      // Attach the file to the first user message
-      if (message.role === "user" && idx === 0 && options.fileAttachment) {
+      // Attach the file to the first user message when the model accepts files.
+      if (caps.fileInput && message.role === "user" && idx === 0 && options.fileAttachment) {
         return { role: message.role, content: [anthropicFileBlock(options.fileAttachment), textBlock] };
       }
       return { role: message.role, content: [textBlock] };
     }),
-    max_tokens: options.maxTokens ?? 4096,
-    temperature: options.temperature ?? 0.2,
+    [caps.tokenParam]: options.maxTokens ?? 4096,
     stream,
   };
+  if (caps.acceptsTemperature) payload.temperature = options.temperature ?? 0.2;
+  return payload;
 }
 
 function openAiPayload(options: ClaudeCompletionOptions, stream: boolean): Record<string, unknown> {
+  const model = options.model || defaultModelForProvider("openai");
+  const caps = getModelCapabilities(model, "openai");
   const messages: unknown[] = [{ role: "system", content: options.system }];
   options.messages.forEach((message, idx) => {
-    if (message.role === "user" && idx === 0 && options.fileAttachment) {
+    if (caps.fileInput && message.role === "user" && idx === 0 && options.fileAttachment) {
       const file = options.fileAttachment;
       const isImage = file.mimeType.startsWith("image/");
       const contentParts: unknown[] = [];
@@ -262,34 +260,38 @@ function openAiPayload(options: ClaudeCompletionOptions, stream: boolean): Recor
   });
 
   const payload: Record<string, unknown> = {
-    model: options.model || DEFAULT_OPENAI_MODEL,
+    model,
     messages,
-    max_tokens: options.maxTokens ?? 4096,
-    temperature: options.temperature ?? 0.2,
+    [caps.tokenParam]: options.maxTokens ?? 4096,
     stream,
   };
-  if (!stream && options.jsonResponse) {
+  if (caps.acceptsTemperature) payload.temperature = options.temperature ?? 0.2;
+  // JSON object mode only when the model supports it AND the caller asked for it.
+  if (!stream && options.jsonResponse && caps.jsonMode) {
     payload.response_format = { type: "json_object" };
   }
   return payload;
 }
 
 function geminiPayload(options: ClaudeCompletionOptions): Record<string, unknown> {
+  const model = options.model || defaultModelForProvider("google");
+  const caps = getModelCapabilities(model, "google");
+  const generationConfig: Record<string, unknown> = {
+    [caps.tokenParam]: options.maxTokens ?? 1400,
+  };
+  if (caps.acceptsTemperature) generationConfig.temperature = options.temperature ?? 0.2;
   return {
     systemInstruction: { parts: [{ text: options.system }] },
     contents: options.messages.map((message, idx) => {
       const parts: unknown[] = [];
-      if (message.role === "user" && idx === 0 && options.fileAttachment) {
+      if (caps.fileInput && message.role === "user" && idx === 0 && options.fileAttachment) {
         const file = options.fileAttachment;
         parts.push({ inlineData: { mimeType: file.mimeType, data: file.base64 } });
       }
       parts.push({ text: message.content });
       return { role: message.role === "assistant" ? "model" : "user", parts };
     }),
-    generationConfig: {
-      maxOutputTokens: options.maxTokens ?? 1400,
-      temperature: options.temperature ?? 0.2,
-    },
+    generationConfig,
   };
 }
 
@@ -317,7 +319,7 @@ async function providerResponse(
   }
 
   if (settings.provider === "google") {
-    const model = providerOptions.model || GEMINI_MODEL;
+    const model = providerOptions.model || defaultModelForProvider("google");
     const action = stream ? "streamGenerateContent" : "generateContent";
     const query = stream ? `alt=sse&key=${encodeURIComponent(settings.apiKey)}` : `key=${encodeURIComponent(settings.apiKey)}`;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:${action}?${query}`;
@@ -333,16 +335,21 @@ async function providerResponse(
     return { response, provider: settings.provider };
   }
 
+  const anthropicModel = providerOptions.model || defaultModelForProvider("anthropic");
+  const anthropicHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+    "x-api-key": settings.apiKey,
+    "anthropic-version": "2023-06-01",
+  };
+  // Send the prompt-caching beta header only for models that support caching —
+  // capability flag, never a model-name check.
+  if (getModelCapabilities(anthropicModel, "anthropic").promptCaching) {
+    anthropicHeaders["anthropic-beta"] = "prompt-caching-2024-07-31";
+  }
   const response = await fetchWithRetry(
     () => fetch(ANTHROPIC_API_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": settings.apiKey,
-        "anthropic-version": "2023-06-01",
-        // Enable prompt caching for the cache_control-marked system prefix.
-        "anthropic-beta": "prompt-caching-2024-07-31",
-      },
+      headers: anthropicHeaders,
       body: JSON.stringify(anthropicPayload(providerOptions, stream)),
       signal: providerOptions.signal,
     }),

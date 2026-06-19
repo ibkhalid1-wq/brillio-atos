@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
+import { defaultModelForProvider, isAIProvider } from "../_shared/modelCatalog.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -10,17 +11,14 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const SUPPORTED_PROVIDERS = new Set(["anthropic", "openai", "google"]);
+// Provider membership is the only allowlist we keep — models are NOT allowlisted.
+// A model the catalog hasn't seen yet still saves and runs (provider-default
+// capabilities), so a newer model never requires a code change here.
 const RUNTIME_READY_PROVIDERS = new Set(["anthropic", "openai", "google"]);
 const DEFAULT_MODELS: Record<string, string> = {
-  anthropic: "claude-sonnet-4-6",
-  openai: "gpt-4o",
-  google: "gemini-1.5-pro",
-};
-const SUPPORTED_MODELS: Record<string, Set<string>> = {
-  anthropic: new Set(["claude-sonnet-4-6", "claude-opus-4-1", "claude-haiku-4-5"]),
-  openai: new Set(["gpt-4o", "gpt-4.1", "gpt-4o-mini"]),
-  google: new Set(["gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash"]),
+  anthropic: defaultModelForProvider("anthropic"),
+  openai: defaultModelForProvider("openai"),
+  google: defaultModelForProvider("google"),
 };
 
 function json(body: Record<string, unknown>, status = 200): Response {
@@ -79,7 +77,7 @@ Deno.serve(async (request) => {
     action?: "status" | "save" | "pause" | "resume";
   };
   const provider = (payload.provider || "anthropic").trim().toLowerCase();
-  if (!SUPPORTED_PROVIDERS.has(provider)) {
+  if (!isAIProvider(provider)) {
     return json({ error: "Unsupported AI provider." }, 400);
   }
 
@@ -162,9 +160,12 @@ Deno.serve(async (request) => {
     }, 400);
   }
 
+  // No model allowlist: accept any non-empty model id and fall back to the
+  // provider default when none is supplied. Unknown ids run on provider-default
+  // capabilities, so newer models work without a code change.
   const requestedModel = (payload.model || DEFAULT_MODELS[provider] || "").trim();
-  if (!SUPPORTED_MODELS[provider]?.has(requestedModel)) {
-    return json({ error: "Unsupported model for this provider." }, 400);
+  if (!requestedModel) {
+    return json({ error: "Enter a model id for this provider." }, 400);
   }
 
   const providedApiKey = (payload.apiKey || "").trim();
@@ -186,15 +187,9 @@ Deno.serve(async (request) => {
     return json({ error: "Enter an API key before saving this provider." }, 400);
   }
 
-  if (provider === "anthropic" && !apiKey.startsWith("sk-ant-")) {
-    return json({ error: "Enter a valid Anthropic API key." }, 400);
-  }
-  if (provider === "openai" && !apiKey.startsWith("sk-")) {
-    return json({ error: "Enter a valid OpenAI API key." }, 400);
-  }
-  if (provider === "google" && apiKey.length < 20) {
-    return json({ error: "Enter a valid Google Gemini API key." }, 400);
-  }
+  // No provider-specific key-prefix validation: prefixes change over time and a
+  // wrong-but-well-formed key fails fast at call time anyway. We only require a
+  // non-empty key (checked above) — the provider is the authority on validity.
 
   const { error: deactivateError } = await admin
     .from("adam_ai_provider_settings")
