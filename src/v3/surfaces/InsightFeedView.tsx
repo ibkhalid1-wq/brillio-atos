@@ -7,7 +7,7 @@ import { forecastConfidence, getGateThreshold } from "@/v3/lib/confidenceScore";
 import type { V3MoreView } from "@/v3/types";
 import { Kpi } from "@/v3/components/ui/Kpi";
 import { PhaseStripCard } from "@/v3/components/PhaseStripCard";
-import { selectDecisions, selectHighRisks } from "@/v3/lib/programRaid";
+import { selectBlockers, selectDecisions, selectHighRisks, selectRisks } from "@/v3/lib/programRaid";
 import {
   runDeterministicValidation,
   selectModelValidationFindings,
@@ -340,10 +340,6 @@ export default function InsightFeedView({
 
   // ── Metrics ──────────────────────────────────────────────────────────────
   const phases = program?.phases ?? [];
-  const avgPct =
-    phases.length > 0
-      ? Math.round(phases.reduce((s, p) => s + p.pct, 0) / phases.length)
-      : 0;
   // Fresh programme = no phase progress yet. Used to suppress confidence-heavy
   // sections (they're noise before any signal exists) and to show the welcome guide.
   const totalPct = phases.reduce((sum, p) => sum + (p.pct ?? 0), 0);
@@ -358,6 +354,22 @@ export default function InsightFeedView({
           (g as { status: string }).status === "approved",
       ).length
     : 0;
+  // Gate completion = share of phase gates approved — the programme's progress
+  // through its governance milestones (distinct from input/artifact completion).
+  const gateCompletionPct = phases.length ? Math.round((gatesApproved / phases.length) * 100) : 0;
+  // Active phase resolved the same way the insight cards do, so the header pill
+  // and "Active Phase" insight never disagree.
+  const headerActivePhase =
+    (activePhaseId ? phases.find((p) => p.id === activePhaseId) : null) ??
+    phases.find((p) => p.pct >= 10 && p.pct <= 90) ??
+    phases[0] ??
+    null;
+  const headerActivePhaseLabel = headerActivePhase
+    ? (PHASE_LABELS[headerActivePhase.id] ?? headerActivePhase.displayName)
+    : "—";
+  const blockerCount = program ? selectBlockers(program).length : 0;
+  const riskCount = program ? selectRisks(program).length : 0;
+  const goToProgramme = () => (headerActivePhase ? onNavigateToPhase(headerActivePhase.id) : onNavigateToGates());
 
   // C2: index of the first "upcoming" phase after the active one
   const nextPhaseId = useMemo(() => {
@@ -579,19 +591,35 @@ export default function InsightFeedView({
           )}
         </div>
 
-        {/* Inline metric pills strip */}
+        {/* Inline metric pills strip. Gates / Active phase / Progress drill into
+            the Programme screen; Actions / Blockers / Risks open the Action Center. */}
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <Kpi variant="pill" label="Completion" value={`${avgPct}%`} onClick={onNavigateToPipeline} />
-          <Kpi variant="pill" label="Gates" value={`${gatesApproved}/${phases.length}`} onClick={onNavigateToGates} />
+          <Kpi variant="pill" label="Gates" value={`${gatesApproved}/${phases.length}`} onClick={goToProgramme} />
+          <Kpi variant="pill" label="Active phase" value={headerActivePhaseLabel} onClick={goToProgramme} />
+          <Kpi variant="pill" label="Progress" value={`${gateCompletionPct}%`} onClick={goToProgramme} />
           <AdamExplainsTooltip metric="open-decisions" value={openDecisionCount} placement="top">
             <Kpi
               variant="pill"
-              label="Open Actions"
+              label="Actions"
               value={openDecisionCount}
               color={openDecisionCount > 0 ? "var(--v3-amber)" : undefined}
               onClick={onNavigateToDecide}
             />
           </AdamExplainsTooltip>
+          <Kpi
+            variant="pill"
+            label="Blockers"
+            value={blockerCount}
+            color={blockerCount > 0 ? "var(--v3-red)" : undefined}
+            onClick={onNavigateToDecide}
+          />
+          <Kpi
+            variant="pill"
+            label="Risks"
+            value={riskCount}
+            color={riskCount > 0 ? "var(--v3-amber)" : undefined}
+            onClick={onNavigateToDecide}
+          />
         </div>
       </div>
 
