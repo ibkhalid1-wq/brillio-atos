@@ -52,7 +52,7 @@ import ProgramDetailRouter from "@/v3/components/ProgramDetailRouter";
 import ProgramSetupWizard from "@/v3/components/ProgramSetupWizard";
 import { reportError } from "@/lib/errorReporter";
 import { sanitizeMarkdown } from "@/lib/sanitize";
-import { changedInputFields, approvedArtifactsToStale, fieldsFeedingApprovedArtifacts } from "@/v3/lib/artifactStaleness";
+import { changedInputFields, relatedArtifactsToStale, fieldsFeedingApprovedArtifacts } from "@/v3/lib/artifactStaleness";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { AGENT_ID_ALIASES } from "@/v3/lib/agentMeta";
 import { useRelativeTimeTick } from "@/lib/useRelativeTimeTick";
@@ -2213,7 +2213,10 @@ export default function AppShellV3() {
         ? { ...(cloned.inner.phaseArtifacts as Record<string, Record<string, Record<string, unknown>>>) }
         : {};
       const phaseBucket = artifactBuckets[phaseId];
-      const staled = approvedArtifactsToStale(phaseId, changedFields, phaseBucket);
+      // Any artifact fed by a changed input is now out of date — flag it stale
+      // regardless of status (draft, ready, OR approved), so every document built
+      // from the old inputs is regenerated rather than silently drifting.
+      const staled = relatedArtifactsToStale(phaseId, changedFields, phaseBucket);
       // Applying a reviewer's improvement list rewrites the artifact's grounding
       // inputs, so the existing draft/approved document built from the old inputs
       // is now out of date. Flag it stale explicitly (even when it isn't approved),
@@ -2723,6 +2726,37 @@ export default function AppShellV3() {
     pushV3Toast("Document approved.", { tone: "success", duration: 2500 });
   }, [activeProgram, refreshPrograms, updateProgramData]);
 
+  // Approve every produced artifact in a phase in a single write. Approving one
+  // at a time means a network round-trip (and gate re-check) per document; once
+  // all artifacts are generated the user approves the whole set at once. Skips
+  // anything already approved or archived, and records human feedback per agent.
+  const handleApproveAllArtifacts = useCallback(async (phaseId: string) => {
+    if (!activeProgram) return;
+    const cloned = cloneRawProgram(activeProgram);
+    const nextInner = { ...cloned.inner };
+    const buckets = { ...(nextInner.phaseArtifacts as Record<string, Record<string, Record<string, unknown>>> | undefined ?? {}) };
+    const phaseBucket = { ...(buckets[phaseId] ?? {}) };
+    const nowIso = new Date().toISOString();
+    const approved: Array<{ artifactId: string; agentId: string }> = [];
+    for (const [artifactId, entry] of Object.entries(phaseBucket)) {
+      if (!entry || typeof entry !== "object") continue;
+      const status = (entry as { status?: unknown }).status;
+      if (status === "approved" || status === "archived") continue;
+      phaseBucket[artifactId] = { ...(entry as Record<string, unknown>), status: "approved", updatedAt: nowIso };
+      const agentId = typeof (entry as { agentId?: unknown }).agentId === "string" ? (entry as { agentId: string }).agentId : artifactId;
+      approved.push({ artifactId, agentId });
+    }
+    if (!approved.length) return;
+    buckets[phaseId] = phaseBucket;
+    nextInner.phaseArtifacts = buckets;
+    await updateProgramData(activeProgram.id, cloned.commit(nextInner), activeProgram.updatedAt);
+    await refreshPrograms();
+    for (const { artifactId, agentId } of approved) {
+      recordAgentFeedback(agentId, phaseId, activeProgram.id, artifactId, "accepted");
+    }
+    pushV3Toast(`${approved.length} document${approved.length > 1 ? "s" : ""} approved.`, { tone: "success", duration: 2500 });
+  }, [activeProgram, refreshPrograms, updateProgramData]);
+
   // Reverse an artifact approval back to a working state so the user can edit,
   // regenerate, or re-review it. Only reachable while the phase gate is unlocked
   // (StageView hides Unlock once the gate is locked), so it never silently
@@ -3077,6 +3111,7 @@ export default function AppShellV3() {
                 onRunAgent={handleRunAgent}
                 onSaveArtifact={handleSaveArtifact}
                 onApproveArtifact={handleApproveArtifact}
+                onApproveAllArtifacts={handleApproveAllArtifacts}
                 onUnapproveArtifact={handleUnapproveArtifact}
                 onSaveInputs={handleSavePhaseInputs}
                 onSaveProgram={handleSaveProgramSnapshot}

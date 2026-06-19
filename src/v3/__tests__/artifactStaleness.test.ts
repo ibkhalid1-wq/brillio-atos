@@ -2,6 +2,7 @@ import {
   artifactsForInputFields,
   changedInputFields,
   approvedArtifactsToStale,
+  relatedArtifactsToStale,
   fieldsFeedingApprovedArtifacts,
 } from "@/v3/lib/artifactStaleness";
 
@@ -53,6 +54,32 @@ describe("artifactStaleness", () => {
     it("returns nothing when no fields changed or nothing is approved", () => {
       expect(approvedArtifactsToStale("strategy", [], bucket)).toEqual([]);
       expect(approvedArtifactsToStale("strategy", ["sponsor"], { charter: { status: "draft" } })).toEqual([]);
+    });
+  });
+
+  describe("relatedArtifactsToStale", () => {
+    const bucket = {
+      charter: { status: "approved" },
+      "business-case": { status: "draft" },
+      "outcome-framework": { status: "archived" },
+    };
+
+    it("stales every fed artifact regardless of status, except archived/already-stale", () => {
+      const stale = relatedArtifactsToStale("strategy", ["businessObjective"], bucket);
+      // businessObjective → charter (approved) + business-case (draft): both stale.
+      expect(stale).toContain("charter");
+      expect(stale).toContain("business-case");
+    });
+
+    it("leaves archived artifacts untouched", () => {
+      const stale = relatedArtifactsToStale("strategy", ["successMetric"], bucket);
+      // successMetric → outcome-framework, but it is archived ⇒ excluded.
+      expect(stale).not.toContain("outcome-framework");
+    });
+
+    it("ignores artifacts that have not been generated and no-op when nothing changed", () => {
+      expect(relatedArtifactsToStale("strategy", [], bucket)).toEqual([]);
+      expect(relatedArtifactsToStale("strategy", ["sponsor"], {})).toEqual([]);
     });
   });
 

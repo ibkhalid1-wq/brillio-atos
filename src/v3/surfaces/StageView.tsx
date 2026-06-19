@@ -52,6 +52,7 @@ interface StageViewProps {
   onRunAgent: (agentId: string, phaseId?: string, guidance?: string) => void;
   onSaveArtifact: (artifactId: "narrative" | "deck", content: string) => Promise<void>;
   onApproveArtifact: (phaseId: string, artifactId: string, agentId: string) => Promise<void>;
+  onApproveAllArtifacts: (phaseId: string) => Promise<void>;
   onUnapproveArtifact: (phaseId: string, artifactId: string) => Promise<void>;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; clearReviewDefId?: string; staleDefId?: string }) => Promise<void>;
   onSaveProgram?: (label?: string, kind?: "manual" | "lock") => Promise<void>;
@@ -466,6 +467,7 @@ export default function StageView({
   onRunAgent,
   onSaveArtifact,
   onApproveArtifact,
+  onApproveAllArtifacts,
   onUnapproveArtifact,
   onSaveInputs,
   onSaveProgram,
@@ -480,7 +482,7 @@ export default function StageView({
   const [updatedArtifactId, setUpdatedArtifactId] = React.useState<"narrative" | "deck" | null>(null);
   const [exitCriteriaOpen, setExitCriteriaOpen] = React.useState(false);
   const [isLocking, setIsLocking] = React.useState(false);
-  const [approvingArtifactId, setApprovingArtifactId] = React.useState<string | null>(null);
+  const [approvingAll, setApprovingAll] = React.useState(false);
   const [downloadingArtifacts, setDownloadingArtifacts] = React.useState(false);
   const [lockConfirmOpen, setLockConfirmOpen] = React.useState(false);
   const [lockedModalOpen, setLockedModalOpen] = React.useState(false);
@@ -651,6 +653,19 @@ export default function StageView({
       })
       .map((def) => def.label);
   }, [activePhase, phaseArtifacts, dynamicStore]);
+
+  // Produced artifacts still awaiting approval (present, not approved/archived).
+  // Drives the single "Approve all artifacts" action that replaces per-row approve.
+  const approvableArtifactCount = useMemo(() => {
+    if (!activePhase) return 0;
+    let count = 0;
+    for (const node of phaseArtifacts.byKey.values()) {
+      if (node.present && node.artifactId && node.state !== "approved" && node.state !== "archived") count += 1;
+    }
+    return count;
+  }, [activePhase, phaseArtifacts]);
+  // All required artifacts generated → the gate for surfacing bulk approve.
+  const allRequiredProduced = phaseArtifacts.required > 0 && phaseArtifacts.present === phaseArtifacts.required;
 
   // Phase Transition Planner verdict + cross-phase conflicts/gaps for this phase.
   const planner = useMemo(() => {
@@ -1468,6 +1483,27 @@ export default function StageView({
             </button>
           </div>
         ) : null}
+        {allRequiredProduced && approvableArtifactCount > 0 ? (
+          <div className="v3-artifact-download-row">
+            <button
+              type="button"
+              className="v3-button primary v3-button-inline-xs"
+              onClick={async () => {
+                if (approvingAll) return;
+                setApprovingAll(true);
+                try {
+                  await onApproveAllArtifacts(activePhase.id);
+                } finally {
+                  setApprovingAll(false);
+                }
+              }}
+              disabled={approvingAll}
+              title={`Approve all ${approvableArtifactCount} produced ${activePhase.label ?? activePhase.id} artifact${approvableArtifactCount > 1 ? "s" : ""} — running the gate check once`}
+            >
+              {approvingAll ? "⋯ Finalizing artifacts…" : `✓ Approve all artifacts (${approvableArtifactCount})`}
+            </button>
+          </div>
+        ) : null}
         <div className="v3-output-strip">
           {showRetro ? (
             <button type="button" className="v3-chip muted" disabled={isRetroRunning} onClick={() => triggers.triggerRetro(activePhase.id)}>
@@ -1633,25 +1669,9 @@ export default function StageView({
                       {agentButtonContent(def.id, present ? "↻ Regenerate" : "Generate")}
                     </button>
                   ) : null}
-                  {present && artifactId && state !== "approved" && state !== "archived" ? (
-                    <button
-                      type="button"
-                      className="v3-button primary v3-button-inline-xs v3-artifact-approve"
-                      onClick={async () => {
-                        if (approvingArtifactId) return;
-                        setApprovingArtifactId(artifactId);
-                        try {
-                          await onApproveArtifact(activePhase.id, artifactId, def.id);
-                        } finally {
-                          setApprovingArtifactId(null);
-                        }
-                      }}
-                      disabled={!!approvingArtifactId}
-                      title={`Approve ${def.label} — approving the final document runs the gate check`}
-                    >
-                      {approvingArtifactId === artifactId ? "⋯ Finalizing artifact…" : "✓ Approve"}
-                    </button>
-                  ) : null}
+                  {/* Per-artifact approve is replaced by the single "Approve all
+                      artifacts" action in the card header, shown once every required
+                      artifact has been generated. */}
                   {present && artifactId && state === "approved" && !lockedPhaseIds.has(activePhase.id) ? (
                     <button
                       type="button"

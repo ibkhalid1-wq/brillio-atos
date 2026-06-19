@@ -81,6 +81,30 @@ export function approvedArtifactsToStale(
 }
 
 /**
+ * Every artifact in `bucket` that the changed input fields feed — regardless of
+ * status — so that ANY artifact built from those inputs (draft, ready, OR
+ * approved) is moved to "stale" and must be regenerated. `archived` artifacts are
+ * left alone (intentionally retired). This is the broader counterpart to
+ * `approvedArtifactsToStale`, which only touches approved artifacts.
+ */
+export function relatedArtifactsToStale(
+  phaseId: string,
+  changedFieldIds: string[],
+  bucket: PhaseArtifactBucket,
+  store?: DynamicSchemaStore,
+): string[] {
+  if (!changedFieldIds.length) return [];
+  if (!bucket || typeof bucket !== "object") return [];
+  const targets = artifactsForInputFields(phaseId, changedFieldIds, store);
+  return [...targets].filter((artifactId) => {
+    const entry = (bucket as Record<string, unknown>)[artifactId];
+    if (!entry || typeof entry !== "object") return false;
+    const status = (entry as { status?: unknown }).status;
+    return status !== "archived" && status !== "stale";
+  });
+}
+
+/**
  * The subset of `fieldIds` that must NOT be overwritten on reimport because
  * they feed an already-approved artifact. Protecting these keeps an approved
  * artifact's source inputs stable rather than silently staling it on every
