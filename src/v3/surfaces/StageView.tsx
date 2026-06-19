@@ -480,6 +480,7 @@ export default function StageView({
   const [updatedArtifactId, setUpdatedArtifactId] = React.useState<"narrative" | "deck" | null>(null);
   const [exitCriteriaOpen, setExitCriteriaOpen] = React.useState(false);
   const [isLocking, setIsLocking] = React.useState(false);
+  const [approvingArtifactId, setApprovingArtifactId] = React.useState<string | null>(null);
   const [downloadingArtifacts, setDownloadingArtifacts] = React.useState(false);
   const [lockConfirmOpen, setLockConfirmOpen] = React.useState(false);
   const [lockedModalOpen, setLockedModalOpen] = React.useState(false);
@@ -1633,10 +1634,19 @@ export default function StageView({
                     <button
                       type="button"
                       className="v3-button primary v3-button-inline-xs v3-artifact-approve"
-                      onClick={() => { void onApproveArtifact(activePhase.id, artifactId, def.id); }}
+                      onClick={async () => {
+                        if (approvingArtifactId) return;
+                        setApprovingArtifactId(artifactId);
+                        try {
+                          await onApproveArtifact(activePhase.id, artifactId, def.id);
+                        } finally {
+                          setApprovingArtifactId(null);
+                        }
+                      }}
+                      disabled={!!approvingArtifactId}
                       title={`Approve ${def.label} — approving the final document runs the gate check`}
                     >
-                      ✓ Approve
+                      {approvingArtifactId === artifactId ? "⋯ Finalizing artifact…" : "✓ Approve"}
                     </button>
                   ) : null}
                   {present && artifactId && state === "approved" && !lockedPhaseIds.has(activePhase.id) ? (
