@@ -2185,7 +2185,7 @@ export default function AppShellV3() {
 
   // Per-phase debounce timers for the Tier-2 input-quality validation pass.
   const inputQualityDebounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const handleSavePhaseInputs = useCallback(async (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; clearReviewDefId?: string }) => {
+  const handleSavePhaseInputs = useCallback(async (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; clearReviewDefId?: string; staleDefId?: string }) => {
     if (!activeProgram) return;
     const silent = opts?.silent === true;
     // Hard freeze: once a phase clears its stage gate its inputs are locked, so no
@@ -2214,11 +2214,20 @@ export default function AppShellV3() {
         : {};
       const phaseBucket = artifactBuckets[phaseId];
       const staled = approvedArtifactsToStale(phaseId, changedFields, phaseBucket);
-      if (staled.length) {
+      // Applying a reviewer's improvement list rewrites the artifact's grounding
+      // inputs, so the existing draft/approved document built from the old inputs
+      // is now out of date. Flag it stale explicitly (even when it isn't approved),
+      // so the row shows "Stale — regenerate" and the user re-runs it.
+      const staleDefId = opts?.staleDefId;
+      const explicitStale = staleDefId && phaseBucket && phaseBucket[staleDefId] ? [staleDefId] : [];
+      const allStaled = [...new Set([...staled, ...explicitStale])];
+      if (allStaled.length) {
         const nextBucket = { ...phaseBucket };
         const nowIso = new Date().toISOString();
-        const reason = `Inputs changed: ${changedFields.join(", ")}`;
-        for (const artifactId of staled) {
+        const reason = changedFields.length
+          ? `Inputs changed: ${changedFields.join(", ")}`
+          : "Quality improvements applied to grounding inputs";
+        for (const artifactId of allStaled) {
           nextBucket[artifactId] = { ...(nextBucket[artifactId] as Record<string, unknown>), status: "stale", staleReason: reason, staleAt: nowIso };
         }
         artifactBuckets[phaseId] = nextBucket;
@@ -2243,7 +2252,7 @@ export default function AppShellV3() {
         }
       }
       const payload = cloned.commit({ ...cloned.inner, phaseInputs: existing, phaseArtifacts: artifactBuckets, ...reviewPatch });
-      return { payload, staled };
+      return { payload, staled: allStaled };
     };
 
     let { payload, staled } = buildPayload(activeProgram);
@@ -2282,7 +2291,7 @@ export default function AppShellV3() {
     // auto-save, since it changes what the user must regenerate.
     if (staled.length) {
       pushV3Toast(
-        `Inputs saved. ${staled.length} approved artifact${staled.length > 1 ? "s" : ""} marked stale — regenerate to apply your changes.`,
+        `Inputs saved. ${staled.length} artifact${staled.length > 1 ? "s" : ""} marked stale — regenerate to apply your changes.`,
         { tone: "warning", duration: 5000 },
       );
     } else if (!silent) {

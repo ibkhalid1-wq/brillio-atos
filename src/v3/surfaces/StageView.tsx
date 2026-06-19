@@ -53,7 +53,7 @@ interface StageViewProps {
   onSaveArtifact: (artifactId: "narrative" | "deck", content: string) => Promise<void>;
   onApproveArtifact: (phaseId: string, artifactId: string, agentId: string) => Promise<void>;
   onUnapproveArtifact: (phaseId: string, artifactId: string) => Promise<void>;
-  onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; clearReviewDefId?: string }) => Promise<void>;
+  onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; clearReviewDefId?: string; staleDefId?: string }) => Promise<void>;
   onSaveProgram?: (label?: string, kind?: "manual" | "lock") => Promise<void>;
   onRevertProgram?: (snapshotId: string) => Promise<void>;
   programSnapshots?: Array<{ id: string; label: string; kind: string; createdAt: string }>;
@@ -546,7 +546,7 @@ export default function StageView({
         }
       }
       if (Object.keys(updates).length) {
-        await onSaveInputs(phaseId, updates, { clearReviewDefId: qualityArtifact.defId });
+        await onSaveInputs(phaseId, updates, { clearReviewDefId: qualityArtifact.defId, staleDefId: qualityArtifact.defId });
       } else if (failures === fields.length) {
         throw lastError instanceof Error ? lastError : new Error("Could not apply improvements. Try again.");
       }
@@ -1607,7 +1607,10 @@ export default function StageView({
                       type="button"
                       className="v3-button ghost v3-button-inline-xs v3-button-icon"
                       onClick={() => { setApplyError(null); setImprovementsApplied(false); setQualityArtifact({ label: def.label, defId: def.id, score: displayScore, issues: deriveArtifactQualityIssues({ score: displayScore, state, inputRequirements, improvements: review?.improvements }), phaseId: activePhase.id, fields: qualityFields, improvements: (review?.improvements ?? []).filter((s) => !!s && s.trim()) }); }}
-                      title={`Review and improve the quality of ${def.label}${suggestionCount ? ` — ${suggestionCount} suggestion${suggestionCount === 1 ? "" : "s"}` : ""}`}
+                      disabled={suggestionCount === 0}
+                      title={suggestionCount === 0
+                        ? `No outstanding quality suggestions for ${def.label} — regenerate or re-review to surface new ones`
+                        : `Review and improve the quality of ${def.label} — ${suggestionCount} suggestion${suggestionCount === 1 ? "" : "s"}`}
                       aria-label={`Improve quality of ${def.label}`}
                     >
                       ✦{suggestionCount ? <span className="v3-button-icon-badge">{suggestionCount}</span> : null}
