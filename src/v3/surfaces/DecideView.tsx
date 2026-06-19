@@ -549,16 +549,26 @@ export default function DecideView({
     if (!selectedPhaseId && activePhaseId) setSelectedPhaseId(activePhaseId);
   }, [activePhaseId, selectedPhaseId]);
 
+  // Only phases that are "in play" — already approved (locked-in) or the active
+  // frontier — can surface work. Future phases sit behind an unapproved gate
+  // (getLockedPhaseIds), so their actions/blockers/risks are not actionable yet
+  // and are hidden. Programme-level / "all" items are never phase-gated.
+  const isPhaseActionable = useMemo(() => {
+    const locked = program ? getLockedPhaseIds(program) : new Set<string>();
+    return (phaseId: string | null | undefined) => !phaseId || phaseId === "all" || !locked.has(phaseId);
+  }, [program]);
+
   const open = useMemo(() => {
     // Shared derivation (synthesise → merge persisted resolution → open filter)
     // so this feed and the rail badge count cannot drift apart.
     const personaId = persona === "executive" ? "executive" : persona === "architect" ? "architect" : "delivery_lead";
-    const queue = deriveOpenRecommendedActions(program, personaId) as ReviewDecision[];
+    const queue = (deriveOpenRecommendedActions(program, personaId) as ReviewDecision[])
+      .filter((decision) => isPhaseActionable(decision.phaseId));
     // "This phase" scope follows the phase selected in the Gate timeline (falling
     // back to the active phase), so selecting a phase actually filters the feed.
     const phaseFilterId = selectedPhaseId ?? activePhaseId;
     return scope === "stage" && phaseFilterId ? queue.filter((decision) => decision.phaseId === phaseFilterId) : queue;
-  }, [activePhaseId, selectedPhaseId, persona, program, scope]);
+  }, [activePhaseId, selectedPhaseId, persona, program, scope, isPhaseActionable]);
 
   const sortedOpen = [...open].sort((a, b) => {
     const order: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
@@ -569,10 +579,10 @@ export default function DecideView({
     const phaseFilterId = selectedPhaseId ?? activePhaseId;
     const raidScope: RaidScope = scope === "stage" && phaseFilterId ? { phaseId: phaseFilterId } : "programme";
     return {
-      blockers: selectBlockers(program, raidScope),
-      risks: selectRisks(program, raidScope),
+      blockers: selectBlockers(program, raidScope).filter((entry) => isPhaseActionable(entry.phase)),
+      risks: selectRisks(program, raidScope).filter((entry) => isPhaseActionable(entry.phase)),
     };
-  }, [program, scope, selectedPhaseId, activePhaseId]);
+  }, [program, scope, selectedPhaseId, activePhaseId, isPhaseActionable]);
 
   if (!program) {
     return (
