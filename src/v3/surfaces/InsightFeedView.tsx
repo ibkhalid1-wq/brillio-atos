@@ -7,27 +7,8 @@ import { forecastConfidence, getGateThreshold } from "@/v3/lib/confidenceScore";
 import type { V3MoreView } from "@/v3/types";
 import { Kpi } from "@/v3/components/ui/Kpi";
 import { PhaseStripCard } from "@/v3/components/PhaseStripCard";
-import { selectBlockers, selectDecisions, selectHighRisks, selectRisks } from "@/v3/lib/programRaid";
-import {
-  runDeterministicValidation,
-  selectModelValidationFindings,
-  summariseValidation,
-  type ValidationDomain,
-  type ValidationSeverity,
-} from "@/v3/lib/crossArtifactValidation";
-
-const VALIDATION_DOMAIN_LABEL: Record<ValidationDomain, string> = {
-  "risk-controls": "Risk & controls",
-  "stakeholder-readiness": "Stakeholder readiness",
-  "benefits-traceability": "Benefits traceability",
-  "delivery-readiness": "Delivery readiness",
-  governance: "Governance",
-  "scope-coverage": "Scope coverage",
-  "requirements-coverage": "Requirements coverage",
-  "architecture-consistency": "Architecture consistency",
-};
-
-const VALIDATION_SEVERITY_RANK: Record<ValidationSeverity, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+import { selectBlockers, selectDecisions, selectRisks } from "@/v3/lib/programRaid";
+import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
 
 interface InsightFeedViewProps {
   program: ProgramSummary | null;
@@ -426,16 +407,15 @@ export default function InsightFeedView({
     return forecastConfidence(history, target);
   }, [confidenceScore, program, activePhaseId]);
 
-  // ── Transformation integrity — deterministic (zero-token) cross-artifact
-  //    validation, merged with any model findings persisted at gate review ──
-  const integrity = useMemo(() => {
-    if (!program) return null;
-    const findings = [...runDeterministicValidation(program), ...selectModelValidationFindings(program)];
-    if (findings.length === 0) return null;
-    const ordered = [...findings].sort(
-      (a, b) => VALIDATION_SEVERITY_RANK[a.severity] - VALIDATION_SEVERITY_RANK[b.severity],
+  // ── Open actions — the same delivery-lead recommended-action queue the header
+  //    pill and Action Center count from, surfaced inline so the user can act
+  //    without leaving Today. Top 4 by priority. ──
+  const openActions = useMemo(() => {
+    if (!program) return [] as ReturnType<typeof deriveOpenRecommendedActions>;
+    const order: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+    return [...deriveOpenRecommendedActions(program, "delivery_lead")].sort(
+      (a, b) => (order[a.priority as string] ?? 2) - (order[b.priority as string] ?? 2),
     );
-    return { summary: summariseValidation(findings), top: ordered.slice(0, 4) };
   }, [program]);
 
   if (!program) {
@@ -797,72 +777,8 @@ export default function InsightFeedView({
         </div>
       )}
 
-      {/* ── 4. Top Risks — inline summary (eliminates navigation trip to Risks workspace) ── */}
-      {program && selectHighRisks(program).length > 0 && (() => {
-        const topRisks = selectHighRisks(program).slice(0, 3);
-        return (
-          <div
-            style={{
-              padding: 18,
-              borderRadius: "var(--v3-radius)",
-              border: "1px solid rgba(239,68,68,0.25)",
-              background: "rgba(239,68,68,0.04)",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--v3-text-primary)" }}>
-                  △ Top Risks
-                </div>
-                <div style={{ fontSize: 12, color: "var(--v3-text-muted)", marginTop: 2 }}>
-                  {topRisks.length} high or critical risk{topRisks.length !== 1 ? "s" : ""} requiring attention
-                </div>
-              </div>
-              {onOpenMoreView && (
-                <button
-                  type="button"
-                  className="v3-button ghost sm"
-                  onClick={() => onOpenMoreView("risks")}
-                >
-                  See all →
-                </button>
-              )}
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {topRisks.map((risk) => {
-                const severityColor = risk.severity === "critical" ? "var(--v3-red)" : "var(--v3-amber)";
-                return (
-                  <div
-                    key={risk.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      padding: "8px 12px",
-                      borderRadius: 10,
-                      background: "var(--v3-surface)",
-                      border: "1px solid var(--v3-border-soft)",
-                    }}
-                  >
-                    <span style={{ fontSize: 10, fontWeight: 700, color: severityColor, textTransform: "uppercase", letterSpacing: "0.05em", flexShrink: 0 }}>
-                      {risk.severity}
-                    </span>
-                    <span style={{ flex: 1, fontSize: 13, color: "var(--v3-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {risk.title}
-                    </span>
-                    {risk.owner && (
-                      <span style={{ fontSize: 11, color: "var(--v3-text-muted)", flexShrink: 0 }}>{risk.owner}</span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* ── 7. Transformation Integrity — cross-artifact validation gaps ──────── */}
-      {integrity && (
+      {/* ── 4. Open Actions — inline queue so the user can act without leaving Today ── */}
+      {openActions.length > 0 && (
         <div
           style={{
             padding: 18,
@@ -874,24 +790,32 @@ export default function InsightFeedView({
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
             <div>
               <div style={{ fontSize: 14, fontWeight: 700, color: "var(--v3-text-primary)" }}>
-                ◇ Transformation Integrity
+                ◈ Actions
               </div>
               <div style={{ fontSize: 12, color: "var(--v3-text-muted)", marginTop: 2 }}>
-                {integrity.summary.total} traceability gap{integrity.summary.total !== 1 ? "s" : ""} across artifacts · {integrity.summary.recommendation}
+                {openActions.length} open action{openActions.length !== 1 ? "s" : ""} awaiting a decision
               </div>
             </div>
-            <span className={`v3-chip ${integrity.summary.coverageScore >= 85 ? "green" : integrity.summary.coverageScore >= 60 ? "amber" : "red"}`} style={{ flex: "0 0 auto" }}>
-              {integrity.summary.coverageScore}%
-            </span>
+            <button
+              type="button"
+              className="v3-button ghost sm"
+              onClick={onNavigateToDecide}
+            >
+              See all →
+            </button>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {integrity.top.map((finding) => {
-              const severityColor = finding.severity === "critical" || finding.severity === "high"
+            {openActions.slice(0, 4).map((action) => {
+              const priorityColor = action.priority === "critical"
                 ? "var(--v3-red)"
-                : finding.severity === "medium" ? "var(--v3-amber)" : "var(--v3-text-muted)";
+                : action.priority === "high" ? "var(--v3-amber)" : "var(--v3-text-muted)";
+              const phaseLabel = action.phaseId && action.phaseId !== "all"
+                ? (PHASE_LABELS[action.phaseId] ?? action.phaseId)
+                : null;
               return (
                 <div
-                  key={finding.findingId}
+                  key={action.id}
+                  onClick={onNavigateToDecide}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -900,17 +824,18 @@ export default function InsightFeedView({
                     borderRadius: 10,
                     background: "var(--v3-surface-2)",
                     border: "1px solid var(--v3-border-soft)",
+                    cursor: "pointer",
                   }}
                 >
-                  <span style={{ fontSize: 10, fontWeight: 700, color: severityColor, textTransform: "uppercase", letterSpacing: "0.05em", flexShrink: 0 }}>
-                    {finding.severity}
+                  <span style={{ fontSize: 10, fontWeight: 700, color: priorityColor, textTransform: "uppercase", letterSpacing: "0.05em", flexShrink: 0 }}>
+                    {action.priority}
                   </span>
-                  <span style={{ flex: 1, fontSize: 13, color: "var(--v3-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={finding.issue}>
-                    {finding.issue}
+                  <span style={{ flex: 1, fontSize: 13, color: "var(--v3-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={action.question || action.title}>
+                    {action.question || action.title}
                   </span>
-                  <span style={{ fontSize: 11, color: "var(--v3-text-muted)", flexShrink: 0 }}>
-                    {VALIDATION_DOMAIN_LABEL[finding.domain]}
-                  </span>
+                  {phaseLabel && (
+                    <span style={{ fontSize: 11, color: "var(--v3-text-muted)", flexShrink: 0 }}>{phaseLabel}</span>
+                  )}
                 </div>
               );
             })}
