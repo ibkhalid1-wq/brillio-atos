@@ -2031,6 +2031,56 @@ function buildSpecialAgentInputContext(
     }, null, 2);
   }
 
+  // The Phase Transition Planner plans a downstream phase's inputs/artifacts.
+  // It MUST inherit the programme fundamentals established at Strategy — the
+  // objective, scope, success metrics/KPIs, constraints, timeline — as STRUCTURED
+  // facts, not just as artifact prose. Without these it re-requests objective,
+  // scope, and success metrics at every dynamic phase and flags them "missing"
+  // even though Strategy already set them (the symptom seen at Mobilise). The
+  // default context below omits scope + success metrics, so the planner needs
+  // its own grounding payload.
+  if (target?.agentId === "phase-input-planner") {
+    const phaseInputsAll = normalizeProgramData(inner.phaseInputs as JsonValue | null);
+    const strategyInputs = normalizeProgramData(phaseInputsAll.strategy as JsonValue | null);
+    const targetPhaseInputs = normalizeProgramData(phaseInputsAll[target.phaseId || ""] as JsonValue | null);
+    const objective = typeof inner.objective === "string"
+      ? inner.objective
+      : typeof inner.programObjective === "string"
+        ? inner.programObjective
+        : typeof strategyInputs.businessObjective === "string"
+          ? strategyInputs.businessObjective
+          : typeof projectMeta.objective === "string"
+            ? projectMeta.objective
+            : "";
+    return JSON.stringify({
+      programName: meta.name || (typeof projectMeta.name === "string" ? projectMeta.name : ""),
+      client: meta.client || (typeof projectMeta.client === "string" ? projectMeta.client : ""),
+      industry: meta.industry || strategyInputs.industry || (typeof projectMeta.industry === "string" ? projectMeta.industry : ""),
+      // Programme fundamentals — already established; INHERIT, do not re-ask.
+      objective,
+      businessObjective: strategyInputs.businessObjective || objective,
+      successMetric: strategyInputs.successMetric || strategyInputs.successMetrics || null,
+      kpiBaselines: parseKpiBaselines(strategyInputs.kpis),
+      scopeInclusions: strategyInputs.scopeInclusions || strategyInputs.scopeIn || null,
+      scopeExclusions: strategyInputs.scopeExclusions || strategyInputs.scopeOut || null,
+      constraints: strategyInputs.constraints || null,
+      sponsor: strategyInputs.sponsor || (typeof inner.sponsor === "string" ? inner.sponsor : "") || projectMeta.sponsor || projectMeta.executiveSponsor || "",
+      startDate: strategyInputs.startDate || (typeof projectMeta.startDate === "string" ? projectMeta.startDate : null),
+      targetEndDate: strategyInputs.targetEndDate || (typeof projectMeta.targetEndDate === "string" ? projectMeta.targetEndDate : null),
+      budget: strategyInputs.budget || budget || null,
+      // Facts already captured for the phase being planned, so the planner sees
+      // what is already filled in (team roster, governance cadence, etc.) and
+      // does not re-ask for them.
+      groundingFacts: buildGroundingFacts(targetPhaseInputs),
+      narrative,
+      phases,
+      milestones: milestones.slice(0, 12),
+      risks: activeRaidEntries.slice(0, 10),
+      decisions: decisions.filter((entry) => entry.status !== "resolved").slice(0, 8),
+      stakeholders: stakeholderEntries.slice(0, 12),
+    }, null, 2);
+  }
+
   // Phase inputs that flow into this agent's prompt (e.g. the Delivery Plan
   // agent now receives businessObjective + start/end dates from Strategy plus
   // team size, known risks, and key roles from Mobilise). Sourced from the
@@ -5772,6 +5822,13 @@ CORE PRINCIPLE — users provide FACTS; ATOS generates ARTIFACTS.
 Rules:
 - Use facts already known from the prior-phase context; ask ONLY for what is missing,
   conflicting, or low-confidence. Do not re-ask for facts already established.
+- PROGRAMME FUNDAMENTALS are inherited, never re-requested. The input context carries
+  objective / businessObjective, scopeInclusions + scopeExclusions, successMetric +
+  kpiBaselines, constraints, sponsor, startDate / targetEndDate and budget. When a
+  fundamental is present, treat it as established context for THIS phase — do NOT add it
+  as an inputField, a conflict, or a gap. Only flag a fundamental as missing if it is
+  genuinely absent (empty/null) AND an artifact this phase must produce truly needs it;
+  in that case prefer a single conflictResolutionField, not duplicate gaps.
 - When a value can be confidently inferred from prior context, prefill it and set
   needsConfirmation:true rather than asking the user to type it from scratch.
 - Propose enough inputs + artifacts to cover every exit criterion (user message), no filler.
