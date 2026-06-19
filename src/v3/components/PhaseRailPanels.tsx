@@ -7,6 +7,7 @@ import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
 import { PROVENANCE_KEY, parseProvenance, provenanceMatches } from "@/new/lib/fieldProvenance";
 import { AdamCard, AdamCardBody } from "@/v3/components/ui/AdamCard";
 import { ArtifactMapTree } from "@/v3/components/ArtifactMapTree";
+import { DrillDownLinks } from "@/v3/components/DrillDownLinks";
 import { RelativeTime } from "@/v3/components/ui/RelativeTime";
 import { StatusBadge } from "@/v3/components/ui/StatusBadge";
 import type { V3MoreView } from "@/v3/types";
@@ -44,6 +45,13 @@ type PhaseRailPanelsProps = {
   onRunAgent: (agentId: string) => void;
   onOpenMoreView: (view: V3MoreView) => void;
   onUploadDocument: () => void;
+  /**
+   * Resolve an action / blocker / risk by jumping to its source. With no anchor
+   * it lands on the phase's input section; with a drill-down anchor
+   * (`artifact:<id>` / `input:<id>`) it scrolls to that exact element and
+   * highlights it. Optional so older call sites keep compiling.
+   */
+  onNavigateToPhaseInputs?: (phaseId: string, anchor?: string) => void;
 };
 
 type PrimaryTab = "actions" | "intelligence";
@@ -116,6 +124,7 @@ export function PhaseRailPanels({
   onRunAgent,
   onOpenMoreView,
   onUploadDocument,
+  onNavigateToPhaseInputs,
 }: PhaseRailPanelsProps) {
   const [primaryTab, setPrimaryTab] = useState<PrimaryTab>("actions");
   const [actionTab, setActionTab] = useState<ActionTab>("actions");
@@ -125,6 +134,15 @@ export function PhaseRailPanels({
 
   const blockers = useMemo(() => selectBlockers(program, { phaseId }), [program, phaseId]);
   const risks = useMemo(() => selectRisks(program, { phaseId }), [program, phaseId]);
+
+  // Drill an item down to its source input/artifact. Items resolve at the phase
+  // they belong to (falling back to the focused phase), so the user always lands
+  // somewhere editable. No-ops when no navigator is wired in.
+  const drillTo = (itemPhase: string | null | undefined, anchor: string) => {
+    if (!onNavigateToPhaseInputs) return;
+    const target = itemPhase && itemPhase !== "all" ? itemPhase : phaseId;
+    onNavigateToPhaseInputs(target, anchor);
+  };
 
   // Full artifact bodies for the current phase, keyed by artifact/def id.
   const artifactContentById = useMemo(() => {
@@ -266,6 +284,12 @@ export function PhaseRailPanels({
                       <span className="v3-rail-item-title">{decision.question || decision.title || "Open decision"}</span>
                     </div>
                     {decision.recommendation ? <div className="v3-rail-item-sub">{decision.recommendation}</div> : null}
+                    <DrillDownLinks
+                      phaseId={decision.phaseId && decision.phaseId !== "all" ? decision.phaseId : phaseId}
+                      relatedArtifactId={decision.relatedArtifactId}
+                      relatedInputIds={decision.relatedInputIds}
+                      onDrill={(anchor) => drillTo(decision.phaseId, anchor)}
+                    />
                   </div>
                 ))}
                 <button type="button" className="v3-button ghost v3-button-inline-xs v3-rail-footer-link" onClick={onOpenDecide}>Open Action Center →</button>
@@ -293,6 +317,12 @@ export function PhaseRailPanels({
                       <span className="v3-rail-item-title">{entry.title}</span>
                     </div>
                     {entry.description ? <div className="v3-rail-item-sub">{entry.description}</div> : null}
+                    <DrillDownLinks
+                      phaseId={entry.phase && entry.phase !== "all" ? entry.phase : phaseId}
+                      relatedArtifactId={entry.relatedArtifactId}
+                      relatedInputIds={entry.relatedInputIds}
+                      onDrill={(anchor) => drillTo(entry.phase, anchor)}
+                    />
                     <div className="v3-rail-item-foot">
                       <span className="v3-rail-item-age"><RelativeTime date={entry.createdAt} /></span>
                       <button type="button" className="v3-button ghost v3-button-inline-xs" disabled={closingId === entry.id} onClick={(event) => { event.stopPropagation(); void closeRaid(entry.id); }}>{closingId === entry.id ? "Resolving…" : "Resolve"}</button>
@@ -324,6 +354,12 @@ export function PhaseRailPanels({
                     </div>
                     {entry.description ? <div className="v3-rail-item-sub">{entry.description}</div> : null}
                     {entry.mitigation ? <div className="v3-rail-item-sub">Mitigation: {entry.mitigation}</div> : null}
+                    <DrillDownLinks
+                      phaseId={entry.phase && entry.phase !== "all" ? entry.phase : phaseId}
+                      relatedArtifactId={entry.relatedArtifactId}
+                      relatedInputIds={entry.relatedInputIds}
+                      onDrill={(anchor) => drillTo(entry.phase, anchor)}
+                    />
                     <div className="v3-rail-item-foot">
                       <span className="v3-rail-item-age"><RelativeTime date={entry.createdAt} /></span>
                       <button type="button" className="v3-button ghost v3-button-inline-xs" disabled={closingId === entry.id} onClick={(event) => { event.stopPropagation(); void closeRaid(entry.id); }}>{closingId === entry.id ? "Resolving…" : "Resolve"}</button>

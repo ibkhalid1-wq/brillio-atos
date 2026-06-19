@@ -1939,14 +1939,28 @@ export default function AppShellV3() {
     });
   }, [activePhaseId, commitNavigation, moreView, reportId, surface]);
 
+  // The phase the programme is currently working through: the first in-progress
+  // phase, else the first incomplete one, else the first phase. Mirrors the
+  // landing logic so "current phase" means the same thing everywhere.
+  const resolveCurrentPhaseId = useCallback((): string | null => {
+    const phases = activeProgram?.phases ?? [];
+    if (!phases.length) return null;
+    const inProgress = phases.find((phase) => (phase.pct ?? 0) > 0 && (phase.pct ?? 0) < 100);
+    const firstIncomplete = phases.find((phase) => (phase.pct ?? 0) < 100);
+    return inProgress?.id || firstIncomplete?.id || phases[0]?.id || null;
+  }, [activeProgram]);
+
   const navigateSurface = useCallback((nextSurface: V3Surface) => {
+    // The programme (phase cockpit) screen always opens on the current phase, so
+    // landing there from the nav lands on where the work is, not a stale pick.
+    const nextActivePhaseId = nextSurface === "stage" ? (resolveCurrentPhaseId() ?? activePhaseId) : activePhaseId;
     commitNavigation({
       surface: nextSurface,
       moreView: null,
-      activePhaseId,
+      activePhaseId: nextActivePhaseId,
       reportId: nextSurface === "program" ? reportId || "status" : null,
     });
-  }, [activePhaseId, commitNavigation, reportId]);
+  }, [activePhaseId, commitNavigation, reportId, resolveCurrentPhaseId]);
 
   const handleSelectPhase = useCallback((id: string) => {
     if (lockedPhaseIds.has(id)) {
@@ -2003,7 +2017,7 @@ export default function AppShellV3() {
         el.scrollIntoView({ behavior: "smooth", block: anchor ? "center" : "start" });
         if (anchor) {
           el.classList.add("v3-io-anchor-flash");
-          window.setTimeout(() => el.classList.remove("v3-io-anchor-flash"), 1800);
+          window.setTimeout(() => el.classList.remove("v3-io-anchor-flash"), 5000);
         }
         return;
       }
@@ -3371,6 +3385,7 @@ export default function AppShellV3() {
           onCloseRaid={closeRaidEntry}
           onOpenMoreView={(view) => openMoreView(view)}
           onOpenDecide={() => navigateSurface("decide")}
+          onNavigateToPhaseInputs={navigateToPhaseInputs}
         />
       ) : null}
       </div>

@@ -35,6 +35,7 @@ interface ContextDrawerProps {
   onCloseRaid: (entryId: string, note?: string) => Promise<void>;
   onOpenMoreView?: (view: V3MoreView) => void;
   onOpenDecide?: () => void;
+  onNavigateToPhaseInputs?: (phaseId: string, anchor?: string) => void;
 }
 
 export function ContextDrawer({
@@ -55,6 +56,7 @@ export function ContextDrawer({
   onCloseRaid,
   onOpenMoreView,
   onOpenDecide,
+  onNavigateToPhaseInputs,
 }: ContextDrawerProps) {
   return (
     <div className={`v3-context-drawer-shell ${open ? "is-open" : ""}`}>
@@ -98,6 +100,7 @@ export function ContextDrawer({
               onRunAgent={onRunAgent}
               onOpenMoreView={onOpenMoreView ?? (() => {})}
               onUploadDocument={onUploadDocument}
+              onNavigateToPhaseInputs={onNavigateToPhaseInputs}
             />
           ) : null}
         </div>
