@@ -1470,38 +1470,38 @@ export default function StageView({
             </div>
           )
         ) : null}
-        {phaseArtifacts.present > 0 ? (
-          <div className="v3-artifact-download-row">
-            <button
-              type="button"
-              className="v3-button ghost v3-button-inline-xs"
-              onClick={() => void handleDownloadArtifacts()}
-              disabled={downloadingArtifacts}
-              title={`Download every produced ${activePhase.label ?? activePhase.id} artifact as a .zip package`}
-            >
-              {downloadingArtifacts ? "Preparing package…" : "⬇ Download artifacts package"}
-            </button>
-          </div>
-        ) : null}
-        {allRequiredProduced && approvableArtifactCount > 0 ? (
-          <div className="v3-artifact-download-row">
-            <button
-              type="button"
-              className="v3-button primary v3-button-inline-xs"
-              onClick={async () => {
-                if (approvingAll) return;
-                setApprovingAll(true);
-                try {
-                  await onApproveAllArtifacts(activePhase.id);
-                } finally {
-                  setApprovingAll(false);
-                }
-              }}
-              disabled={approvingAll}
-              title={`Approve all ${approvableArtifactCount} produced ${activePhase.label ?? activePhase.id} artifact${approvableArtifactCount > 1 ? "s" : ""} — running the gate check once`}
-            >
-              {approvingAll ? "⋯ Finalizing artifacts…" : `✓ Approve all artifacts (${approvableArtifactCount})`}
-            </button>
+        {phaseArtifacts.present > 0 || (allRequiredProduced && approvableArtifactCount > 0) ? (
+          <div className="v3-artifact-download-row" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {phaseArtifacts.present > 0 ? (
+              <button
+                type="button"
+                className="v3-button ghost v3-button-inline-xs"
+                onClick={() => void handleDownloadArtifacts()}
+                disabled={downloadingArtifacts}
+                title={`Download every produced ${activePhase.label ?? activePhase.id} artifact as a .zip package`}
+              >
+                {downloadingArtifacts ? "Preparing package…" : "⬇ Download artifacts package"}
+              </button>
+            ) : null}
+            {allRequiredProduced && approvableArtifactCount > 0 ? (
+              <button
+                type="button"
+                className="v3-button primary v3-button-inline-xs"
+                onClick={async () => {
+                  if (approvingAll) return;
+                  setApprovingAll(true);
+                  try {
+                    await onApproveAllArtifacts(activePhase.id);
+                  } finally {
+                    setApprovingAll(false);
+                  }
+                }}
+                disabled={approvingAll}
+                title={`Approve all ${approvableArtifactCount} produced ${activePhase.label ?? activePhase.id} artifact${approvableArtifactCount > 1 ? "s" : ""} — running the gate check once`}
+              >
+                {approvingAll ? "⋯ Finalizing artifacts…" : `✓ Approve all artifacts (${approvableArtifactCount})`}
+              </button>
+            ) : null}
           </div>
         ) : null}
         <div className="v3-output-strip">
