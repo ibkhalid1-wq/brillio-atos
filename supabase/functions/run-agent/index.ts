@@ -71,7 +71,6 @@ const VALID_AGENT_IDS = new Set([
   "dependency-check",
   "benefits-tracker",
   "handoff-quality",
-  "scope-creep-monitor",
   "benchmark-comparator",
   "meeting-notes",
   "weekly-digest",
@@ -91,12 +90,8 @@ const VALID_AGENT_IDS = new Set([
   "lessons-synthesiser",
   "vendor-risk-assessor",
   "daily-briefing",
-  "phase-readiness-monitor",
-  "workstream-health-scorer",
-  "budget-anomaly-detector",
   "stakeholder-risk-assessor",
   "benefit-forecast",
-  "artifact-staleness-check",
   "meeting-notes-extractor",
   "deck-section",
   "narrative-refine",
@@ -446,7 +441,6 @@ function isSpecialProgramAgent(agentId: string, phaseId: string): boolean {
     || agentId === "dependency-check"
     || agentId === "benefits-tracker"
     || agentId === "handoff-quality"
-    || agentId === "scope-creep-monitor"
     || agentId === "benchmark-comparator"
     || agentId === "meeting-notes"
     || agentId === "weekly-digest"
@@ -464,12 +458,8 @@ function isSpecialProgramAgent(agentId: string, phaseId: string): boolean {
     || agentId === "capacity-assessor"
     || agentId === "lessons-synthesiser"
     || agentId === "vendor-risk-assessor"
-    || agentId === "phase-readiness-monitor"
-    || agentId === "workstream-health-scorer"
-    || agentId === "budget-anomaly-detector"
     || agentId === "stakeholder-risk-assessor"
     || agentId === "benefit-forecast"
-    || agentId === "artifact-staleness-check"
     || agentId === "meeting-notes-extractor"
     || agentId === "deck-section"
     || agentId === "narrative-refine"
@@ -1541,7 +1531,7 @@ function buildSpecialAgentInputContext(
     }, null, 2);
   }
 
-  if (target?.agentId === "benefits-tracker" || target?.agentId === "scope-creep-monitor") {
+  if (target?.agentId === "benefits-tracker") {
     const strategyInputs = normalizeProgramData(normalizeProgramData(inner.phaseInputs as JsonValue | null).strategy as JsonValue | null);
     // Human-entered baseline/target KPIs captured at Strategy (persisted as a
     // JSON string by PhaseInputsPanel). Parse them into structured anchors so
@@ -1721,55 +1711,6 @@ function buildSpecialAgentInputContext(
     }, null, 2);
   }
 
-  if (target?.agentId === "phase-readiness-monitor") {
-    const phaseId = target.phaseId || "strategy";
-    const phaseInputs = normalizeProgramData(inner.phaseInputs as JsonValue | null);
-    const phaseData = normalizeProgramData(phaseInputs[phaseId] as JsonValue | null);
-    const phaseArtifacts = normalizeProgramData(normalizeProgramData(inner.phaseArtifacts as JsonValue | null)[phaseId] as JsonValue | null);
-    const phase = phases.find((p) => p.id === phaseId) || null;
-    return JSON.stringify({
-      phaseId,
-      phase,
-      phaseInputs: phaseData,
-      phaseArtifacts: Object.keys(phaseArtifacts),
-      exitCriteria: getExitCriteriaForPhase(inner, phaseId),
-      openRisks: activeRaidEntries.filter((e) => {
-        const rPhaseId = typeof e.phase === "string" ? e.phase : typeof e.phaseId === "string" ? e.phaseId : "";
-        return rPhaseId === phaseId;
-      }),
-      openDecisions: decisions.filter((d) => d.status !== "resolved" && (d.phaseId === phaseId || d.phase_id === phaseId)),
-      today: new Date().toISOString().slice(0, 10),
-    }, null, 2);
-  }
-
-  if (target?.agentId === "workstream-health-scorer") {
-    const phaseId = target.phaseId || "strategy";
-    const phaseInputs = normalizeProgramData(inner.phaseInputs as JsonValue | null);
-    const phaseData = normalizeProgramData(phaseInputs[phaseId] as JsonValue | null);
-    const workstreams = Array.isArray(phaseData.workstreams) ? phaseData.workstreams : Array.isArray(inner.workstreams) ? inner.workstreams.filter((w: unknown) => isRecord(w) && (w as Record<string,unknown>).phaseId === phaseId) : [];
-    return JSON.stringify({
-      phaseId,
-      workstreams,
-      openBlockers: activeRaidEntries.filter((e) => {
-        const rPhaseId = typeof e.phase === "string" ? e.phase : typeof e.phaseId === "string" ? e.phaseId : "";
-        return rPhaseId === phaseId;
-      }),
-      today: new Date().toISOString().slice(0, 10),
-    }, null, 2);
-  }
-
-  if (target?.agentId === "budget-anomaly-detector") {
-    const strategyInputs = normalizeProgramData(normalizeProgramData(inner.phaseInputs as JsonValue | null).strategy as JsonValue | null);
-    return JSON.stringify({
-      baselineBudget: strategyInputs.budget || strategyInputs.constraints || null,
-      currentBudget: budget,
-      budgetTracking,
-      phases,
-      milestones,
-      today: new Date().toISOString().slice(0, 10),
-    }, null, 2);
-  }
-
   if (target?.agentId === "stakeholder-risk-assessor") {
     return JSON.stringify({
       stakeholders: stakeholderEntries,
@@ -1791,27 +1732,6 @@ function buildSpecialAgentInputContext(
       milestones,
       today: new Date().toISOString().slice(0, 10),
     }, null, 2);
-  }
-
-  if (target?.agentId === "artifact-staleness-check") {
-    const phaseArtifacts = normalizeProgramData(inner.phaseArtifacts as JsonValue | null);
-    const phaseInputs = normalizeProgramData(inner.phaseInputs as JsonValue | null);
-    const artifactTimestamps: Array<{ phaseId: string; artifactId: string; agentId: string; savedAt: string }> = [];
-    Object.entries(phaseArtifacts).forEach(([phId, bucket]) => {
-      const bkt = normalizeProgramData(bucket as JsonValue | null);
-      Object.entries(bkt).forEach(([aid, av]) => {
-        const art = normalizeProgramData(av as JsonValue | null);
-        if (typeof art.savedAt === "string") {
-          artifactTimestamps.push({ phaseId: phId, artifactId: aid, agentId: typeof art.agentId === "string" ? art.agentId : aid, savedAt: art.savedAt });
-        }
-      });
-    });
-    const inputTimestamps: Array<{ phaseId: string; savedAt: string }> = [];
-    Object.entries(phaseInputs).forEach(([phId, pv]) => {
-      const pi = normalizeProgramData(pv as JsonValue | null);
-      if (typeof pi.savedAt === "string") inputTimestamps.push({ phaseId: phId, savedAt: pi.savedAt });
-    });
-    return JSON.stringify({ artifactTimestamps, inputTimestamps, today: new Date().toISOString() }, null, 2);
   }
 
   if (target?.agentId === "meeting-notes-extractor") {
@@ -4601,14 +4521,6 @@ function applyHandoffQualityResultToProgramData(programData: ProgramState, phase
   });
 }
 
-function applyScopeDriftResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
-  return setInnerField(programData, "scopeDrift", {
-    ...result,
-    driftIndex: Math.round(clampNumber(result.driftIndex, 0, 100, 0)),
-    monitoredAt: new Date().toISOString(),
-  } as JsonValue);
-}
-
 function applyBenchmarkComparisonResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
   return setInnerField(programData, "benchmarkComparison", {
     ...result,
@@ -4738,43 +4650,6 @@ function applyArtifactQuality(programData: ProgramState, fieldKey: string, revie
   }));
 }
 
-function applyPhaseReadinessResultToProgramData(programData: ProgramState, result: Record<string, unknown>, phaseId: string): ProgramState {
-  return updateInnerProgramData(programData, (inner) => {
-    const existing = normalizeProgramData(inner.phaseReadinessScores as JsonValue | null);
-    return {
-      ...inner,
-      phaseReadinessScores: {
-        ...existing,
-        [phaseId]: {
-          score: typeof result.score === "number" ? Math.max(0, Math.min(100, result.score)) : null,
-          confidence: typeof result.confidence === "number" ? result.confidence : null,
-          blockers: Array.isArray(result.blockers) ? result.blockers.filter((b): b is string => typeof b === "string") : [],
-          computedAt: new Date().toISOString(),
-        },
-      },
-    };
-  });
-}
-
-function applyWorkstreamHealthResultToProgramData(programData: ProgramState, result: Record<string, unknown>, phaseId: string): ProgramState {
-  return updateInnerProgramData(programData, (inner) => {
-    const phaseInputs = normalizeProgramData(inner.phaseInputs as JsonValue | null);
-    const phaseData = normalizeProgramData(phaseInputs[phaseId] as JsonValue | null);
-    const workstreams = Array.isArray(phaseData.workstreams) ? phaseData.workstreams : [];
-    const scores = Array.isArray(result.workstreamScores) ? result.workstreamScores.filter(isRecord) : [];
-    const updatedWorkstreams = workstreams.map((ws) => {
-      if (!isRecord(ws)) return ws;
-      const match = scores.find((s) => s.id === ws.id || s.label === ws.label);
-      if (!match) return ws;
-      return { ...ws, health: typeof match.health === "number" ? match.health : null, healthColor: typeof match.color === "string" ? match.color : null, healthIssues: Array.isArray(match.issues) ? match.issues : [] };
-    });
-    return {
-      ...inner,
-      phaseInputs: { ...(isRecord(inner.phaseInputs) ? inner.phaseInputs : {}), [phaseId]: { ...phaseData, workstreams: updatedWorkstreams } },
-    };
-  });
-}
-
 // Persists the extra fields setup-prefill extracts that have no home in the
 // 2-field wizard (sponsor, scope in/out, team size, objectives). They are written
 // into phaseInputs — which the wizard's save patch never touches — so there is no
@@ -4810,20 +4685,6 @@ function applySetupPrefillResultToProgramData(programData: ProgramState, result:
   });
 }
 
-function applyBudgetAnomalyResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
-  return updateInnerProgramData(programData, (inner) => ({
-    ...inner,
-    budgetAnomaly: {
-      hasAnomaly: result.hasAnomaly === true,
-      severity: typeof result.severity === "string" ? result.severity : "green",
-      findings: Array.isArray(result.findings) ? result.findings.filter((f): f is string => typeof f === "string") : [],
-      burnRateVariance: typeof result.burnRateVariance === "number" ? result.burnRateVariance : null,
-      recommendation: typeof result.recommendation === "string" ? result.recommendation : null,
-      checkedAt: new Date().toISOString(),
-    },
-  }));
-}
-
 function applyStakeholderRiskResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
   return updateInnerProgramData(programData, (inner) => {
     const existing = Array.isArray(inner.stakeholders) ? inner.stakeholders.filter(isRecord) : [];
@@ -4849,22 +4710,6 @@ function applyBenefitForecastResultToProgramData(programData: ProgramState, resu
       computedAt: new Date().toISOString(),
     },
   }));
-}
-
-function applyArtifactStalenessResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
-  return updateInnerProgramData(programData, (inner) => {
-    const phaseArtifacts = normalizeProgramData(inner.phaseArtifacts as JsonValue | null);
-    const staleList = Array.isArray(result.staleArtifacts) ? result.staleArtifacts.filter(isRecord) : [];
-    staleList.forEach((s) => {
-      const phId = typeof s.phaseId === "string" ? s.phaseId : "";
-      const aId = typeof s.artifactId === "string" ? s.artifactId : "";
-      if (!phId || !aId) return;
-      const bucket = normalizeProgramData(phaseArtifacts[phId] as JsonValue | null);
-      const art = normalizeProgramData(bucket[aId] as JsonValue | null);
-      (phaseArtifacts as Record<string, unknown>)[phId] = { ...bucket, [aId]: { ...art, isStale: true, staleReason: typeof s.reason === "string" ? s.reason : "Inputs updated after artifact was generated", staleCheckedAt: new Date().toISOString() } };
-    });
-    return { ...inner, phaseArtifacts };
-  });
 }
 
 function buildContextSnapshot(
@@ -5876,25 +5721,6 @@ Return ONLY valid JSON:
     };
   }
 
-  if (request.agentId === "scope-creep-monitor") {
-    return {
-      system: `You are the ATOS Scope Creep Monitor.
-Compare the original program scope with current delivery artifacts and identify scope drift.
-
-Return ONLY valid JSON:
-{
-  "driftIndex": 0-100,
-  "driftLevel": "none|low|moderate|significant|critical",
-  "additions": ["items now in scope that were not in the original"],
-  "removals": ["items originally in scope now absent"],
-  "outOfScopeBreaches": ["items explicitly excluded now appearing"],
-  "summary": "one sentence verdict",
-  "recommendation": "what to do about the drift"
-}`,
-      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
-    };
-  }
-
   if (request.agentId === "benchmark-comparator") {
     return {
       system: `You are the ATOS Benchmark Comparator.
@@ -6060,8 +5886,7 @@ Return ONLY valid JSON:
     "health-heatmap": 21600000,
     "risk": 21600000,
     "milestone": 21600000,
-    "critical-path": 21600000,
-    "scope-creep-monitor": 21600000
+    "critical-path": 21600000
   },
   "velocity": {
     "changesLast24h": 0,
@@ -6261,47 +6086,6 @@ Return JSON array:
     };
   }
 
-  if (request.agentId === "phase-readiness-monitor") {
-    return {
-      system: `You are a programme readiness analyst. Analyse the provided phase inputs, artifacts, exit criteria, open risks, and open decisions. Return ONLY valid JSON (no markdown):
-{
-  "score": 72,
-  "confidence": 0.8,
-  "blockers": ["Missing exit criteria for Design sign-off", "2 critical open risks unmitigated"]
-}
-Rules: score 0-100 (0=not started, 100=gate-ready). blockers: max 5 specific blocking items. confidence 0-1.`,
-      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
-    };
-  }
-
-  if (request.agentId === "workstream-health-scorer") {
-    return {
-      system: `You are a delivery health analyst. Analyse each workstream and return ONLY valid JSON (no markdown):
-{
-  "workstreamScores": [
-    { "id": "ws-id", "label": "Workstream name", "health": 75, "color": "amber", "issues": ["No owner assigned"] }
-  ]
-}
-Rules: health 0-100. color: "green" >=80, "amber" 50-79, "red" <50. issues: max 3 per workstream. Include ALL workstreams from input.`,
-      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
-    };
-  }
-
-  if (request.agentId === "budget-anomaly-detector") {
-    return {
-      system: `You are a financial risk analyst. Compare the baseline budget against current tracking data and return ONLY valid JSON (no markdown):
-{
-  "hasAnomaly": true,
-  "severity": "amber",
-  "findings": ["Burn rate 18% above baseline"],
-  "burnRateVariance": 18,
-  "recommendation": "Review Build phase costs"
-}
-Rules: severity "green" (no issues), "amber" (>10% variance or minor scope creep), "red" (>25% variance or major scope change). findings: max 4. If insufficient data, return hasAnomaly: false with a finding explaining what data is missing.`,
-      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
-    };
-  }
-
   if (request.agentId === "stakeholder-risk-assessor") {
     return {
       system: `You are a stakeholder engagement analyst. Assess each stakeholder's engagement risk and return ONLY valid JSON (no markdown):
@@ -6326,19 +6110,6 @@ Rules: risk "high" | "medium" | "low". Include ALL stakeholders. Base on: decisi
   "projectedFinalValue": 4200000
 }
 Rules: forecastedRealization 0-100 (% of projected benefits likely to be realised). trajectoryStatus: "on-track" | "at-risk" | "off-track". gaps: max 4 specific gaps. projectedFinalValue: null if insufficient data.`,
-      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
-    };
-  }
-
-  if (request.agentId === "artifact-staleness-check") {
-    return {
-      system: `You are an artifact freshness analyst. Compare artifact generation timestamps against input update timestamps and return ONLY valid JSON (no markdown):
-{
-  "staleArtifacts": [
-    { "phaseId": "strategy", "artifactId": "narrative", "reason": "Phase inputs updated 3 days after artifact was generated" }
-  ]
-}
-Rules: An artifact is stale if its savedAt timestamp is OLDER than the phaseInputs savedAt for the same phase. Return only artifacts that are genuinely stale. Return empty array if all artifacts are current.`,
       user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
     };
   }
@@ -7137,7 +6908,6 @@ Deno.serve(async (req) => {
         "dependency-check",
         "benefits-tracker",
         "handoff-quality",
-        "scope-creep-monitor",
         "benchmark-comparator",
         "meeting-notes",
         "weekly-digest",
@@ -7156,12 +6926,8 @@ Deno.serve(async (req) => {
         "capacity-assessor",
         "lessons-synthesiser",
         "vendor-risk-assessor",
-        "phase-readiness-monitor",
-        "workstream-health-scorer",
-        "budget-anomaly-detector",
         "stakeholder-risk-assessor",
         "benefit-forecast",
-        "artifact-staleness-check",
         "meeting-notes-extractor",
         "phase-input-planner",
       ].includes(request.agentId)
@@ -7245,8 +7011,6 @@ Deno.serve(async (req) => {
         nextProgramData = applyBenefitsTrackerResultToProgramData(contextProgramData, result);
       } else if (request.agentId === "handoff-quality") {
         nextProgramData = applyHandoffQualityResultToProgramData(contextProgramData, request.phaseId, result);
-      } else if (request.agentId === "scope-creep-monitor") {
-        nextProgramData = applyScopeDriftResultToProgramData(contextProgramData, result);
       } else if (request.agentId === "benchmark-comparator") {
         nextProgramData = applyBenchmarkComparisonResultToProgramData(contextProgramData, result);
       } else if (request.agentId === "meeting-notes") {
@@ -7374,18 +7138,10 @@ Deno.serve(async (req) => {
         nextProgramData = applyProgramSupportArtifact(contextProgramData, "program", "lessons-synthesiser", "lessonsSynthesis", result, "Programme learnings");
       } else if (request.agentId === "vendor-risk-assessor") {
         nextProgramData = applyProgramSupportArtifact(contextProgramData, request.phaseId, "vendor-risk-assessor", "vendorRiskAssessment", { vendorAssessments: Array.isArray(parsedResult) ? parsedResult : result.vendorAssessments || [], generatedAt: new Date().toISOString() }, "Vendor risk assessment");
-      } else if (request.agentId === "phase-readiness-monitor") {
-        nextProgramData = applyPhaseReadinessResultToProgramData(contextProgramData, result, request.phaseId);
-      } else if (request.agentId === "workstream-health-scorer") {
-        nextProgramData = applyWorkstreamHealthResultToProgramData(contextProgramData, result, request.phaseId);
-      } else if (request.agentId === "budget-anomaly-detector") {
-        nextProgramData = applyBudgetAnomalyResultToProgramData(contextProgramData, result);
       } else if (request.agentId === "stakeholder-risk-assessor") {
         nextProgramData = applyStakeholderRiskResultToProgramData(contextProgramData, result);
       } else if (request.agentId === "benefit-forecast") {
         nextProgramData = applyBenefitForecastResultToProgramData(contextProgramData, result);
-      } else if (request.agentId === "artifact-staleness-check") {
-        nextProgramData = applyArtifactStalenessResultToProgramData(contextProgramData, result);
       } else if (request.agentId === "meeting-notes-extractor") {
         nextProgramData = applyProgramSupportArtifact(contextProgramData, request.phaseId, "meeting-notes-extractor", "meetingNotesExtraction", result, "Meeting notes extraction");
       } else if (request.agentId === "deck-section") {
