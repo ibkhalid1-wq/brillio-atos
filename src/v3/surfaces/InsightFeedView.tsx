@@ -681,64 +681,7 @@ export default function InsightFeedView({
         </div>
       )}
 
-      {/* ── 1c. Confidence Signal Breakdown — hidden until the programme has signal ── */}
-      {!isFresh && confidenceResult && confidenceResult.signals && confidenceResult.signals.length > 0 && (
-        <div
-          style={{
-            background: "var(--v3-surface)",
-            border: "1px solid var(--v3-border-soft)",
-            borderRadius: "var(--v3-radius)",
-            padding: "16px 18px",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--v3-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              Confidence Breakdown
-            </span>
-            {confidenceResult.explanation && (
-              <span style={{ fontSize: 12, color: "var(--v3-text-muted)", fontStyle: "italic" }}>
-                — {confidenceResult.explanation}
-              </span>
-            )}
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {confidenceResult.signals.map((sig) => {
-              const barColor = sig.status === "good" ? "var(--v3-green)" : sig.status === "warn" ? "var(--v3-amber)" : "var(--v3-red, #ef4444)";
-              return (
-                <div key={sig.label} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  {/* Label */}
-                  <div style={{ width: 140, fontSize: 12, color: "var(--v3-text-secondary)", flexShrink: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={sig.label}>
-                    {sig.label}
-                  </div>
-                  {/* Bar */}
-                  <div style={{ flex: 1, height: 6, background: "var(--v3-border-soft)", borderRadius: 3, overflow: "hidden", minWidth: 60 }}>
-                    <div style={{ height: "100%", width: `${Math.min(100, Math.max(0, sig.score))}%`, background: barColor, borderRadius: 3, transition: "width 0.4s" }} />
-                  </div>
-                  {/* Score */}
-                  <div style={{ width: 38, fontSize: 12, fontWeight: 600, color: barColor, textAlign: "right", flexShrink: 0 }}>
-                    {Math.round(sig.score)}
-                  </div>
-                  {/* Status chip */}
-                  <div style={{
-                    fontSize: 10,
-                    padding: "1px 6px",
-                    borderRadius: 10,
-                    background: sig.status === "good" ? "rgba(34,197,94,0.12)" : sig.status === "warn" ? "rgba(245,158,11,0.12)" : "rgba(239,68,68,0.12)",
-                    color: barColor,
-                    fontWeight: 600,
-                    flexShrink: 0,
-                    letterSpacing: 0.2,
-                    textTransform: "uppercase",
-                  }}>
-                    {sig.status}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {/* Confidence Breakdown moved to the Executive summary screen. */}
 
       {/* ── 1d. Confidence Trajectory — compact one-line trend (full chart retired) ── */}
       {!isFresh && confidenceForecast && confidenceScore !== null && (

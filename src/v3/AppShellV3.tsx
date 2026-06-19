@@ -3255,6 +3255,7 @@ export default function AppShellV3() {
               program={activeProgram}
               programs={programs}
               confidenceScore={programConfidenceScore}
+              confidenceResult={programConfidenceResult ?? undefined}
               onApproveGate={handleApproveGate}
               onRunAgent={handleRunAgent}
               anyAgentRunning={anyUserAgentRunning}
