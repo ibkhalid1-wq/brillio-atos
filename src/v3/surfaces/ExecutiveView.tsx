@@ -47,26 +47,27 @@ function PhaseProgressRow({
   program,
   phaseId,
   label,
-  pct,
   status,
   onClick,
 }: {
   program: ProgramSummary;
   phaseId: string;
   label: string;
-  pct: number;
   status: string;
   onClick: () => void;
 }) {
   const rings = derivePhaseStatusRings(program, phaseId);
-  // Visual state is driven by phase STATUS, not by an arbitrary % threshold,
-  // so two phases with the same status always read the same. The bar fill width
-  // already communicates magnitude — colour encodes meaning: green = done,
-  // blue = in progress, grey = not started.
+  // Phase progress is the gate score — the same composite the outer ring shows
+  // (average of approved-artifact completeness and artifact quality), NOT the
+  // phase-estimator pct. So the bar/number agree with the ring and a phase with
+  // no signed-off output reads its real readiness, not a soft 5% estimate.
+  const pct = computePhaseReadiness(program, phaseId).score;
+  // Visual state still keys off phase STATUS so an active phase reads "In
+  // Progress" even before its gate score climbs; the bar/number show magnitude.
   const phaseState: "complete" | "in-progress" | "not-started" =
     status === "complete" || pct >= 100
       ? "complete"
-      : pct > 0
+      : status === "active" || status === "ready" || pct > 0
       ? "in-progress"
       : "not-started";
 
@@ -753,7 +754,6 @@ export default function ExecutiveView({
               program={program}
               phaseId={phase.id}
               label={PHASE_LABELS[phase.id] ?? phase.displayName}
-              pct={phase.pct}
               status={phase.status}
               onClick={() => onNavigateToPhase(phase.id)}
             />
