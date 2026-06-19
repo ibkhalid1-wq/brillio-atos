@@ -4889,6 +4889,15 @@ function buildContextSnapshot(
   memoryContext: string,
   priorPhaseContext: string,
 ): Record<string, JsonValue> {
+  // The generic phase-agent prompt (buildAgentPrompt's fallback branch) consumes
+  // this snapshot directly. Formal/special agents get their inputs through
+  // buildSpecialAgentInputContext, but a dynamic phase's captured field values
+  // would otherwise never reach the model. Surface them here as citable grounding
+  // facts so every artifact is generated against the inputs the user supplied.
+  const inner = getInnerProgramData(programData);
+  const phaseInputs = normalizeProgramData(
+    normalizeProgramData(inner.phaseInputs as JsonValue | null)[request.phaseId] as JsonValue | null,
+  );
   return {
     programName: typeof programData.programName === "string" ? programData.programName : "",
     programObjective: typeof programData.programObjective === "string" ? programData.programObjective : "",
@@ -4897,6 +4906,8 @@ function buildContextSnapshot(
     triggerEvent: request.triggerEvent || "",
     memoryContext,
     priorPhaseContext,
+    phaseInputs: phaseInputs as JsonValue,
+    groundingFacts: buildGroundingFacts(phaseInputs) as JsonValue,
     incomingHandoff: (request.incomingHandoff || null) as JsonValue | null,
     readiness: (programData.phaseGuidance as Record<string, Record<string, JsonValue>> | undefined)?.[request.phaseId]?.readiness ?? null,
   };
@@ -6393,6 +6404,7 @@ Rules: Extract verbatim or near-verbatim from transcript. Max 10 decisions, 15 a
       phaseGuidance: (programData.phaseGuidance as Record<string, JsonValue> | undefined)?.[request.phaseId] || {},
     })}`,
     `Execution context: ${stringifyJson(contextSnapshot)}`,
+    "Ground every artifact in this phase's captured inputs (see phaseInputs / groundingFacts). Use those field values directly — never restate a fact the user already supplied as an open question, and never invent details that contradict them.",
     "Perform the next meaningful unit of work for this phase. Draft artifacts only when the context supports it. Queue decisions when human review is needed.",
   ].join("\n\n");
 

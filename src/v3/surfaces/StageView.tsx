@@ -1601,7 +1601,7 @@ export default function StageView({
           ) : null}
 
           {getPhaseArtifactDefs(activePhase.id, dynamicStore)
-            .map((def) => {
+            .map((def, index) => {
               const node = phaseArtifacts.byKey.get(def.id);
               const required = !!node;
               const present = !!node?.present;
@@ -1711,7 +1711,11 @@ export default function StageView({
               // yet cleared the 89% quality bar, so its Generate action is locked.
               const generationLocked = lockedArtifactDefIds.has(def.id);
               return (
-                <div key={def.id} className="v3-artifact-row" data-io-anchor={`artifact:${def.id}`} data-tone={statusTone} data-present={present ? "true" : "false"}>
+                <React.Fragment key={def.id}>
+                {index > 0 ? (
+                  <div className="v3-artifact-flow-arrow" aria-hidden="true" title="Generate artifacts in this order">↓</div>
+                ) : null}
+                <div className="v3-artifact-row" data-io-anchor={`artifact:${def.id}`} data-tone={statusTone} data-present={present ? "true" : "false"}>
                   <div className="v3-artifact-row-head">
                     <span className="v3-artifact-row-label">{def.label}</span>
                     <span className={`v3-chip ${statusTone}`} style={{ flex: "0 0 auto" }}>
@@ -1788,6 +1792,7 @@ export default function StageView({
                   ) : null}
                   </div>
                 </div>
+                </React.Fragment>
               );
             })}
         </div>

@@ -6575,6 +6575,19 @@ button.v3-phase-metric:focus-visible {
   border-radius: 10px;
   background: var(--v3-surface-2, rgba(255, 255, 255, 0.02));
 }
+.v3-artifact-flow-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin: -2px 0;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--v3-text-muted);
+  opacity: 0.65;
+  user-select: none;
+  pointer-events: none;
+}
 .v3-artifact-row-head {
   display: flex;
   align-items: center;
