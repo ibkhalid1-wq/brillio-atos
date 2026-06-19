@@ -1088,7 +1088,7 @@ export default function StageView({
           const pipeline: Array<{ label: string; value: string | number; tone: string; anchor?: string | null; onClick?: () => void }> = [
             { label: "Inputs complete", value: `${inputsComplete}%`, tone: pctTone(inputsComplete), anchor: "phase-inputs-anchor" },
             { label: "Input quality", value: inputQuality ? `${inputQuality.overallScore}%` : "—", tone: inputQuality ? pctTone(inputQuality.overallScore) : "", anchor: "phase-inputs-anchor" },
-            { label: "Artifacts complete", value: `${artifactsComplete}%`, tone: pctTone(artifactsComplete), anchor: "phase-artifacts-anchor" },
+            { label: "Artifacts approved", value: `${artifactsComplete}%`, tone: pctTone(artifactsComplete), anchor: "phase-artifacts-anchor" },
             // Quality is only meaningful once something is produced; mirror the
             // "—" treatment of input quality / gate score so a stale review score
             // never shows next to a 0%/all-missing artifact column.
