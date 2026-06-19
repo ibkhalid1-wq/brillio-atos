@@ -525,7 +525,7 @@ export default function DecideView({
   const [modifyOpenMap, setModifyOpenMap] = useState<Map<string, boolean>>(new Map());
   const [visibleCount, setVisibleCount] = useState(20);
   const [selectedPhaseId, setSelectedPhaseId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<ActionTab>("blockers");
+  const [activeTab, setActiveTab] = useState<ActionTab>("actions");
   const [raidFormOpen, setRaidFormOpen] = useState(false);
   const [raidSaving, setRaidSaving] = useState(false);
   const [closingRaidId, setClosingRaidId] = useState<string | null>(null);
@@ -751,8 +751,8 @@ export default function DecideView({
   );
 
   const tabs: { id: ActionTab; label: string; count: number }[] = [
+    { id: "actions", label: "Actions", count: sortedOpen.length },
     { id: "blockers", label: "Blockers", count: blockers.length },
-    { id: "actions", label: "Recommended Actions", count: sortedOpen.length },
     { id: "risks", label: "Risks", count: risks.length },
   ];
 
@@ -769,7 +769,7 @@ export default function DecideView({
       <div className="v3-governance-header">
         <div>
           <h1 className="v3-governance-title">Action Center</h1>
-          <p className="v3-governance-subtitle">Blockers, recommended actions, and risks — in one place</p>
+          <p className="v3-governance-subtitle">Actions, blockers, and risks — in one place</p>
         </div>
         <div className="v3-governance-header-actions">
           <button type="button" className={`v3-mode-toggle ${scope === "stage" ? "active" : ""}`} aria-pressed={scope === "stage"} onClick={() => setScope("stage")}>This phase</button>
