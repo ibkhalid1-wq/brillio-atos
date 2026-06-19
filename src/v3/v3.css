@@ -5721,7 +5721,9 @@ button.v3-phase-metric:focus-visible {
 .v3-phase-col { min-width: 0; }
 .v3-phase-col--inputs { order: 1; flex: 3 1 460px; }
 .v3-phase-col--map { order: 2; flex: 0 1 170px; }
-.v3-phase-col--artifacts { order: 3; flex: 1 1 260px; }
+/* Wide enough that the Download + Approve-all buttons sit on one row and the
+   artifact rows below them share that same full width. */
+.v3-phase-col--artifacts { order: 3; flex: 1.4 1 360px; }
 .v3-phase-cards { order: 4; flex: 1 1 100%; width: 100%; }
 .v3-phase-cards-grid {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;

@@ -664,6 +664,16 @@ export default function StageView({
     }
     return count;
   }, [activePhase, phaseArtifacts]);
+  // Any produced artifact is stale → bulk approve must NOT be offered: a stale
+  // artifact has drifted from its inputs and must be regenerated before it can
+  // be approved, so approving the set wholesale would lock in stale output.
+  const hasStaleArtifact = useMemo(() => {
+    if (!activePhase) return false;
+    for (const node of phaseArtifacts.byKey.values()) {
+      if (node.present && node.state === "stale") return true;
+    }
+    return false;
+  }, [activePhase, phaseArtifacts]);
   // All required artifacts generated → the gate for surfacing bulk approve.
   const allRequiredProduced = phaseArtifacts.required > 0 && phaseArtifacts.present === phaseArtifacts.required;
 
@@ -1470,7 +1480,7 @@ export default function StageView({
             </div>
           )
         ) : null}
-        {phaseArtifacts.present > 0 || (allRequiredProduced && approvableArtifactCount > 0) ? (
+        {phaseArtifacts.present > 0 || (allRequiredProduced && approvableArtifactCount > 0 && !hasStaleArtifact) ? (
           <div className="v3-artifact-download-row" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {phaseArtifacts.present > 0 ? (
               <button
@@ -1483,7 +1493,7 @@ export default function StageView({
                 {downloadingArtifacts ? "Preparing package…" : "⬇ Download artifacts package"}
               </button>
             ) : null}
-            {allRequiredProduced && approvableArtifactCount > 0 ? (
+            {allRequiredProduced && approvableArtifactCount > 0 && !hasStaleArtifact ? (
               <button
                 type="button"
                 className="v3-button primary v3-button-inline-xs"
@@ -1630,26 +1640,26 @@ export default function StageView({
                   {present && previewContent ? (
                     <button
                       type="button"
-                      className="v3-button ghost v3-button-inline-xs v3-button-icon"
+                      className="v3-button ghost v3-button-inline-xs"
                       onClick={() => setPreviewArtifact({ label: def.label, description: def.description, content: previewContent, score: displayScore, statusTone })}
                       title={`Preview ${def.label}`}
                       aria-label={`Preview ${def.label}`}
                     >
-                      ▾
+                      ▾ Preview
                     </button>
                   ) : null}
                   {present && state !== "approved" ? (
                     <button
                       type="button"
-                      className="v3-button ghost v3-button-inline-xs v3-button-icon"
+                      className="v3-button ghost v3-button-inline-xs"
                       onClick={() => { setApplyError(null); setImprovementsApplied(false); setQualityArtifact({ label: def.label, defId: def.id, score: displayScore, issues: deriveArtifactQualityIssues({ score: displayScore, state, inputRequirements, improvements: review?.improvements }), phaseId: activePhase.id, fields: qualityFields, improvements: (review?.improvements ?? []).filter((s) => !!s && s.trim()) }); }}
                       disabled={suggestionCount === 0}
                       title={suggestionCount === 0
                         ? `No outstanding quality suggestions for ${def.label} — regenerate or re-review to surface new ones`
                         : `Review and improve the quality of ${def.label} — ${suggestionCount} suggestion${suggestionCount === 1 ? "" : "s"}`}
-                      aria-label={`Improve quality of ${def.label}`}
+                      aria-label={`Improvement recommendations for ${def.label}`}
                     >
-                      ✦{suggestionCount ? <span className="v3-button-icon-badge">{suggestionCount}</span> : null}
+                      ✦ Recommendations{suggestionCount ? <span className="v3-button-icon-badge">{suggestionCount}</span> : null}
                     </button>
                   ) : null}
                   {state !== "approved" ? (
