@@ -9877,6 +9877,42 @@ button.v3-chip:disabled {
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--v3-accent) 18%, transparent);
 }
 
+.v3-auth-password-wrap {
+  position: relative;
+  display: block;
+}
+
+.v3-auth-password-wrap .v3-auth-input {
+  padding-right: 56px;
+}
+
+.v3-auth-reveal {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  color: var(--v3-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 6px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: color 140ms ease, background 140ms ease;
+}
+
+.v3-auth-reveal:hover {
+  color: var(--v3-text-primary);
+  background: color-mix(in srgb, var(--v3-accent) 12%, transparent);
+}
+
+.v3-auth-reveal:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--v3-accent) 28%, transparent);
+}
+
 .v3-auth-feedback {
   font-size: 12px;
   line-height: 1.5;

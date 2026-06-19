@@ -152,6 +152,13 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string>("");
   const hasResolvedOnce = useRef(false);
+  // Render-gating mirror of hasResolvedOnce. The ref alone can't drive a
+  // re-render, so consumers (e.g. the V3 shell's empty-state gate) read this
+  // state to distinguish "genuinely resolved with zero programs" (show Welcome)
+  // from "not loaded yet for this signed-in user" (keep the skeleton). Without
+  // it, the one frame between sign-in and the load effect flashes the Welcome
+  // hero before the Today screen.
+  const [hasResolvedPrograms, setHasResolvedPrograms] = useState(false);
   const localKnownUpdatedAt = useRef<Record<string, string>>({});
   const normalizationCache = useRef<Map<string, ProgramSummary>>(new Map());
 
@@ -161,7 +168,14 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
       setActiveProgramIdState("");
       setIsLoading(false);
       setError("");
-      hasResolvedOnce.current = true;
+      // Signed-out / disabled is NOT a resolved program state. If we marked it
+      // resolved, the first real load after sign-in would keep isLoading=false
+      // (see `setIsLoading(!hasResolvedOnce.current)` below) — leaving programs
+      // empty for the whole fetch and flashing the "Welcome to Brillio" empty
+      // state before the Today screen. Resetting here means the next enabled
+      // refresh raises the skeleton instead, then resolves straight to Today.
+      hasResolvedOnce.current = false;
+      setHasResolvedPrograms(false);
       return;
     }
 
@@ -179,6 +193,7 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
       setActiveProgramIdState(nextActive);
       setIsLoading(false);
       hasResolvedOnce.current = true;
+      setHasResolvedPrograms(true);
       return;
     }
 
@@ -312,6 +327,7 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
       setActiveProgramIdState(nextActive);
       setError(normalized.length || !localPrograms.length ? "" : "");
       hasResolvedOnce.current = true;
+      setHasResolvedPrograms(true);
     } catch (caughtError) {
       if (localPrograms.length) {
         setPrograms(localPrograms);
@@ -323,10 +339,15 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
         setActiveProgramIdState(nextActive);
         setError("");
         hasResolvedOnce.current = true;
+        setHasResolvedPrograms(true);
       } else {
         setPrograms([]);
         setProgramRoles({});
         setError(caughtError instanceof Error ? caughtError.message : "Failed to load programs.");
+        // A failed load with no local fallback is still a resolved (empty)
+        // outcome — let the empty-state render instead of leaving the shell
+        // stuck on an indefinite skeleton.
+        setHasResolvedPrograms(true);
       }
     } finally {
       setIsLoading(false);
@@ -520,6 +541,7 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
     updateProgramData,
     resolveDecision,
     isLoading,
+    hasResolvedPrograms,
     error,
     programRoles,
     getProgramRole,

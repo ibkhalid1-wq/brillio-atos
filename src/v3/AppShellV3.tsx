@@ -521,6 +521,7 @@ function AuthScreen({
   const recoverySignal = isRecoveryReturn() || hasStoredRecoveryIntent();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [authMode, setAuthMode] = useState<"signin" | "signup" | "reset">(recoverySignal ? "reset" : "signin");
   const [signInMethod, setSignInMethod] = useState<"password" | "magic">("password");
   const [submitting, setSubmitting] = useState(false);
@@ -854,21 +855,32 @@ function AuthScreen({
                     <>
                       <div className="v3-auth-field">
                         <label className="v3-auth-label" htmlFor="atlas-auth-password">Password</label>
-                        <input
-                          id="atlas-auth-password"
-                          type="password"
-                          autoComplete="current-password"
-                          value={password}
-                          onChange={(event) => setPassword(event.target.value)}
-                          placeholder="Enter your password"
-                          className="v3-auth-input"
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                              event.preventDefault();
-                              void handlePasswordSignIn();
-                            }
-                          }}
-                        />
+                        <div className="v3-auth-password-wrap">
+                          <input
+                            id="atlas-auth-password"
+                            type={showPassword ? "text" : "password"}
+                            autoComplete="current-password"
+                            value={password}
+                            onChange={(event) => setPassword(event.target.value)}
+                            placeholder="Enter your password"
+                            className="v3-auth-input"
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                void handlePasswordSignIn();
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className="v3-auth-reveal"
+                            onClick={() => setShowPassword((prev) => !prev)}
+                            aria-pressed={showPassword}
+                            aria-label={showPassword ? "Hide password" : "Show password"}
+                          >
+                            {showPassword ? "Hide" : "Show"}
+                          </button>
+                        </div>
                       </div>
                       <button type="button" className="v3-button primary" onClick={() => void handlePasswordSignIn()} disabled={submitting}>
                         {submitting ? "Signing in…" : "Sign in"}
@@ -937,15 +949,26 @@ function AuthScreen({
                   </div>
                   <div className="v3-auth-field">
                     <label className="v3-auth-label" htmlFor="atlas-auth-password">Create password</label>
-                    <input
-                      id="atlas-auth-password"
-                      type="password"
-                      autoComplete="new-password"
-                      value={password}
-                      onChange={(event) => setPassword(event.target.value)}
-                      placeholder="Choose a strong password"
-                      className="v3-auth-input"
-                    />
+                    <div className="v3-auth-password-wrap">
+                      <input
+                        id="atlas-auth-password"
+                        type={showPassword ? "text" : "password"}
+                        autoComplete="new-password"
+                        value={password}
+                        onChange={(event) => setPassword(event.target.value)}
+                        placeholder="Choose a strong password"
+                        className="v3-auth-input"
+                      />
+                      <button
+                        type="button"
+                        className="v3-auth-reveal"
+                        onClick={() => setShowPassword((prev) => !prev)}
+                        aria-pressed={showPassword}
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? "Hide" : "Show"}
+                      </button>
+                    </div>
                   </div>
                   <div className="v3-auth-helper-card">
                     Use at least 8 characters. Some workspaces may ask you to confirm your email before first access.
@@ -981,21 +1004,32 @@ function AuthScreen({
                     <>
                       <div className="v3-auth-field">
                         <label className="v3-auth-label" htmlFor="atlas-auth-password">New password</label>
-                        <input
-                          id="atlas-auth-password"
-                          type="password"
-                          autoComplete="new-password"
-                          value={password}
-                          onChange={(event) => setPassword(event.target.value)}
-                          placeholder="Choose a strong new password"
-                          className="v3-auth-input"
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                              event.preventDefault();
-                              void handlePasswordResetConfirm();
-                            }
-                          }}
-                        />
+                        <div className="v3-auth-password-wrap">
+                          <input
+                            id="atlas-auth-password"
+                            type={showPassword ? "text" : "password"}
+                            autoComplete="new-password"
+                            value={password}
+                            onChange={(event) => setPassword(event.target.value)}
+                            placeholder="Choose a strong new password"
+                            className="v3-auth-input"
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                void handlePasswordResetConfirm();
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className="v3-auth-reveal"
+                            onClick={() => setShowPassword((prev) => !prev)}
+                            aria-pressed={showPassword}
+                            aria-label={showPassword ? "Hide password" : "Show password"}
+                          >
+                            {showPassword ? "Hide" : "Show"}
+                          </button>
+                        </div>
                       </div>
                       <div className="v3-auth-helper-card">
                         This update will replace your old password for future sign-ins.
@@ -1191,7 +1225,7 @@ export default function AppShellV3() {
       : "local";
 
   const migrated = useLocalProgramMigration(userId);
-  const { programs, activeProgram, activeProgramId, setActiveProgramId, refreshPrograms, updateProgramData, resolveDecision, isLoading: programsLoading, activeProgramRole, canEditActiveProgram, isActiveProgramAdmin } = usePrograms({
+  const { programs, activeProgram, activeProgramId, setActiveProgramId, refreshPrograms, updateProgramData, resolveDecision, isLoading: programsLoading, hasResolvedPrograms, activeProgramRole, canEditActiveProgram, isActiveProgramAdmin } = usePrograms({
     enabled: authChecked && migrated,
     userId,
   });
@@ -2749,7 +2783,7 @@ export default function AppShellV3() {
     return <AuthScreen configured={isSupabaseConfigured} authed={authed} onSignOut={handleSignOut} />;
   }
 
-  if (programsLoading && (!programs || programs.length === 0)) {
+  if ((!programs || programs.length === 0) && (programsLoading || !hasResolvedPrograms)) {
     return (
       <div className="v3-shell" aria-busy="true">
         <div className="v3-topbar">
@@ -2768,7 +2802,7 @@ export default function AppShellV3() {
     );
   }
 
-  if (!programsLoading && (!programs || programs.length === 0)) {
+  if (!programsLoading && hasResolvedPrograms && (!programs || programs.length === 0)) {
     return (
       <div className="v3-shell">
         <div className="v3-topbar">
