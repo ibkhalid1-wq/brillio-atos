@@ -148,7 +148,11 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         { id: "successMetric", label: "Primary success metric", type: "text", placeholder: "KPI name, e.g. Cost to serve", required: true },
       ],
       artifactInputFlow: {
-        "strategic-roadmap": ["businessObjective", "startDate", "targetEndDate"],
+        // The roadmap is sequenced from the whole strategy picture — objective,
+        // sponsor, industry, constraints, cost, and the primary success metric —
+        // bounded by the programme start/end dates. So every strategy input
+        // feeds it: all must be present to generate, and any change stales it.
+        "strategic-roadmap": ["businessObjective", "sponsor", "industry", "startDate", "targetEndDate", "costAssumption", "constraints", "successMetric"],
         "charter": ["industry", "startDate", "targetEndDate"],
         "business-case": ["industry", "costAssumption"],
       },

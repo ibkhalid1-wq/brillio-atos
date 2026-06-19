@@ -748,7 +748,7 @@ Return ONLY valid JSON:
     title: "Strategic Roadmap",
     system: `You are the ATOS Strategic Roadmap Agent. Produce a phase-level roadmap sequencing the transformation from now to value realisation.
 
-Use the programme phases, milestones, and objective. Anchor dates to existing phase ETAs/milestones — do NOT fabricate dates; mark unknown dates "TBD".
+Ground the roadmap in ALL of the programme's strategy inputs provided in the context — the business objective, primary success metric, key constraints, cost assumption, industry, and sponsor (see "groundingFacts" plus the explicit fields) — so the sequencing reflects this programme's actual mandate, not a generic template. Bound the overall timeline by the programme start date and target end date, distributing the phases and milestones across that window. Anchor intermediate dates to existing phase ETAs/milestones where available; do NOT fabricate dates; mark unknown dates "TBD". Let the constraints and success metric shape phase ordering and the critical decisions/gaps you surface.
 
 Return ONLY valid JSON:
 {
@@ -1048,7 +1048,10 @@ function parseKpiBaselines(raw: unknown): Record<string, unknown>[] {
  * context branches.
  */
 const ARTIFACT_INPUT_FLOW: Record<string, string[]> = {
-  "strategic-roadmap": ["businessObjective", "startDate", "targetEndDate"],
+  // Kept in sync with the client methodology's artifactInputFlow. The roadmap is
+  // grounded on the full strategy picture (objective, sponsor, industry,
+  // constraints, cost, success metric) bounded by the start/end dates.
+  "strategic-roadmap": ["businessObjective", "sponsor", "industry", "startDate", "targetEndDate", "costAssumption", "constraints", "successMetric"],
   "plan": ["businessObjective", "startDate", "targetEndDate", "teamSize", "keyRisks", "keyRoles"],
 };
 

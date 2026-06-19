@@ -21,8 +21,11 @@ describe("derivePhaseFlowEdges", () => {
 
   it("adds declared phase-specific targets (e.g. charter) without duplicating", () => {
     const edges = derivePhaseFlowEdges("strategy", ["sponsor"]);
+    // sponsor feeds the charter (static map) and the strategic roadmap (it is
+    // declared in the roadmap's methodology artifactInputFlow).
     expect(edges).toEqual([
       { from: "sponsor", to: "charter" },
+      { from: "sponsor", to: "strategic-roadmap" },
     ]);
   });
 
@@ -38,7 +41,10 @@ describe("derivePhaseFlowEdges", () => {
   });
 
   it("wires methodology-declared flow fields (e.g. industry) to their artifacts", () => {
+    // industry feeds the roadmap, charter, and business-case — emitted in the
+    // methodology's artifactInputFlow declaration order (roadmap first).
     expect(derivePhaseFlowEdges("strategy", ["industry"])).toEqual([
+      { from: "industry", to: "strategic-roadmap" },
       { from: "industry", to: "charter" },
       { from: "industry", to: "business-case" },
     ]);
