@@ -3921,18 +3921,30 @@ async function triggerDownstreamAgents(
   completedHandoff?: AgentHandoff | null,
   /** Post-completion program state — used to gate the formal-artifact cascade. */
   programData?: ProgramState,
+  /**
+   * True when the completed run produced one or more artifacts (formal documents
+   * OR dynamic-phase artifacts). Dynamic-phase artifacts go through the generic
+   * agent branch, which is not in FORMAL_ARTIFACT_AGENTS, so this flag is how a
+   * dynamic artifact generation also refreshes the plan + risk register.
+   */
+  producedArtifact = false,
 ): Promise<void> {
   const downstreamAgents = [...(AGENT_DOWNSTREAM[completedAgentId] || [])];
+  const isFormalArtifact = !!FORMAL_ARTIFACT_AGENTS[completedAgentId];
 
-  // ── Formal-artifact cascade ────────────────────────────────────────────────
-  // When a document artifact is (re)generated, ATOS automatically refreshes the
-  // intelligence that document feeds: the plan's next actions, the risk register,
-  // and — once the phase's documents are complete — the gate review (which itself
-  // cascades to the cross-phase dependency check). This is what replaces the
-  // removed manual "Check Gate Readiness" / "Generate criteria" buttons.
-  if (FORMAL_ARTIFACT_AGENTS[completedAgentId] && completedPhaseId && completedPhaseId !== "program") {
+  // ── Artifact cascade ───────────────────────────────────────────────────────
+  // When ANY artifact is (re)generated — a formal document or a dynamic-phase
+  // artifact — ATOS automatically refreshes the intelligence that artifact feeds:
+  // the plan's next actions and the risk register. So the actions/risks/blockers
+  // surfaces always reflect the latest artifacts rather than silently drifting.
+  if ((isFormalArtifact || producedArtifact) && completedPhaseId && completedPhaseId !== "program") {
     downstreamAgents.push({ agentId: "plan", phaseId: "program" });
     downstreamAgents.push({ agentId: "risk", phaseId: "program" });
+  }
+  // Gate review (and its cross-phase dependency cascade) only runs off the formal
+  // document set — once a phase's formal artifacts are complete. This replaces the
+  // removed manual "Check Gate Readiness" / "Generate criteria" buttons.
+  if (isFormalArtifact && completedPhaseId && completedPhaseId !== "program") {
     const phaseComplete = !programData || phaseFormalArtifactsComplete(programData, completedPhaseId);
     const gateReviewFresh = !!programData && gateReviewIsFresherThanArtifacts(programData, completedPhaseId);
     if (phaseComplete && !gateReviewFresh) {
@@ -7800,6 +7812,15 @@ Deno.serve(async (req) => {
         triggerEvent: "handoff",
         incomingHandoff: handoff,
       });
+    }
+
+    // A dynamic-phase artifact was just produced — refresh the plan's next actions
+    // and the risk register so actions/risks/blockers reflect the new artifact.
+    // (Formal artifacts trigger this from the special-agent branch above.)
+    if (!autonomy.shouldQueueReview && parsed.artifacts.length > 0) {
+      scheduleBackground(
+        triggerDownstreamAgents(request.agentId, request.programId, request.phaseId, handoff, nextProgramData, true),
+      );
     }
 
     return jsonResponse({
