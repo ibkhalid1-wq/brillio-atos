@@ -1590,7 +1590,7 @@ export default function StageView({
         ) : null}
         {approvableArtifactCount > 0 && !showApproveAll ? (
           <div className="v3-artifact-approve-hint">
-            You will be able to approve artifacts once all have been generated and have quality &gt; 90%.
+            Approval unlocks once every artifact is generated and reaches a quality score of 90% or higher.
           </div>
         ) : null}
         <div className="v3-output-strip">
