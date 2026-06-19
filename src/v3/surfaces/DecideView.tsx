@@ -568,9 +568,21 @@ export default function DecideView({
     else { setRaidFormOpen(true); setAddOpen(false); }
   }, [initialIntent?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // The phase the programme is currently working through: first in-progress,
+  // else first incomplete, else the active/first phase. The gate timeline opens
+  // here so the Action Center lands on the live phase even when reached via the
+  // /decide deep-link (where activePhaseId is null).
+  const currentPhaseId = useMemo(() => {
+    const phases = program?.phases ?? [];
+    if (!phases.length) return activePhaseId;
+    const inProgress = phases.find((phase) => (phase.pct ?? 0) > 0 && (phase.pct ?? 0) < 100);
+    const firstIncomplete = phases.find((phase) => (phase.pct ?? 0) < 100);
+    return inProgress?.id || firstIncomplete?.id || activePhaseId || phases[0]?.id || null;
+  }, [program, activePhaseId]);
+
   useEffect(() => {
-    if (!selectedPhaseId && activePhaseId) setSelectedPhaseId(activePhaseId);
-  }, [activePhaseId, selectedPhaseId]);
+    if (!selectedPhaseId && currentPhaseId) setSelectedPhaseId(currentPhaseId);
+  }, [currentPhaseId, selectedPhaseId]);
 
   // Only phases that are "in play" — already approved (locked-in) or the active
   // frontier — can surface work. Future phases sit behind an unapproved gate
