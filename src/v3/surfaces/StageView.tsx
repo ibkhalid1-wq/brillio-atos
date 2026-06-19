@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { getRiskTrend } from "@/lib/adamGateRisk";
 import type { AgentRun } from "@/lib/adamSync";
 import type { ExitCriterion, GateReview, ProgramSummary } from "@/new/types";
@@ -168,12 +169,24 @@ function deriveArtifactQualityIssues(opts: {
 }
 
 
+/**
+ * Quality bar an artifact must EXCEED (>89%, i.e. ≥90) before the next artifact
+ * in the phase order is unlocked for generation. Drives sequential generation.
+ */
+const ARTIFACT_QUALITY_GATE = 90;
+
 function StageModal({ title, onClose, children, maxWidth = 560 }: { title: string; onClose: () => void; children: React.ReactNode; maxWidth?: number }) {
-  return (
+  // Render through a portal to <body>. The phase workspace has transformed
+  // ancestors (hover-lift transitions, the flow overlay), and a `position:
+  // fixed` element nested under a transformed ancestor is positioned relative to
+  // that ancestor — not the viewport — which made the overlay dim only part of
+  // the page and anchored the dialog near the top. Portaling to body escapes
+  // every local stacking/transform context so the modal truly centres.
+  const modal = (
     <div
       role="presentation"
       onClick={onClose}
-      style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
+      style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
     >
       <div
         role="dialog"
@@ -190,6 +203,7 @@ function StageModal({ title, onClose, children, maxWidth = 560 }: { title: strin
       </div>
     </div>
   );
+  return typeof document !== "undefined" ? createPortal(modal, document.body) : modal;
 }
 
 function phaseStatusTone(phase: ProgramSummary["phases"][number]): { label: string; tone: "green" | "amber" | "red" } {
@@ -693,6 +707,39 @@ export default function StageView({
       ? program.rawData.data as Record<string, unknown>
       : program.rawData as Record<string, unknown>)
     : null;
+  // Sequential artifact-generation gate. Artifacts must be produced in order:
+  // an artifact is "cleared" once it is approved/archived or its quality exceeds
+  // 89%. Only the first not-yet-cleared artifact (plus all cleared ones) may be
+  // generated; every artifact after it is locked until the current one clears
+  // the 89% quality bar — so users build a high-quality artifact before moving
+  // on rather than mass-generating thin drafts. (The ordering itself is the
+  // methodology/dynamic-schema order from getPhaseArtifactDefs.)
+  const lockedArtifactDefIds = useMemo(() => {
+    const locked = new Set<string>();
+    if (!activePhase) return locked;
+    let reachedCurrent = false;
+    for (const def of getPhaseArtifactDefs(activePhase.id, dynamicStore)) {
+      if (reachedCurrent) {
+        locked.add(def.id);
+        continue;
+      }
+      const node = phaseArtifacts.byKey.get(def.id);
+      const state = node?.state ?? "missing";
+      if (state === "approved" || state === "archived") continue; // already cleared
+      const score = resolveArtifactQualityScore(
+        source,
+        def.id,
+        activePhase.id,
+        typeof node?.quality === "number" ? node.quality : null,
+      );
+      const cleared = !!node?.present && typeof score === "number" && score >= ARTIFACT_QUALITY_GATE;
+      if (cleared) continue;
+      // First not-yet-cleared artifact: this one stays generatable, everything
+      // after it is locked.
+      reachedCurrent = true;
+    }
+    return locked;
+  }, [activePhase, dynamicStore, phaseArtifacts, source]);
   // Live overlay: the persisted programme with the active phase's *unsaved* input
   // edits merged in, so header metrics / status rings / flow-line tones reflect
   // typing instantly — ahead of the debounced auto-save round-trip. Only the
@@ -1618,6 +1665,9 @@ export default function StageView({
               const regenGuidance = suggestionCount
                 ? `The previous version of "${def.label}" was quality-reviewed. Apply these specific improvements directly in the artifact you now produce:\n${reviewerSuggestions.map((s, i) => `${i + 1}. ${s.trim()}`).join("\n")}`
                 : undefined;
+              // Sequential generation: this artifact comes after one that has not
+              // yet cleared the 89% quality bar, so its Generate action is locked.
+              const generationLocked = lockedArtifactDefIds.has(def.id);
               return (
                 <div key={def.id} className="v3-artifact-row" data-io-anchor={`artifact:${def.id}`} data-tone={statusTone} data-present={present ? "true" : "false"}>
                   <div className="v3-artifact-row-head">
@@ -1667,8 +1717,10 @@ export default function StageView({
                       type="button"
                       className={`v3-button ${present ? "ghost" : "primary"} v3-button-inline-xs v3-artifact-regen`}
                       onClick={() => onRunAgent(def.id, activePhase.id, regenGuidance)}
-                      disabled={agentButtonDisabled(def.id) || flowedInputsIncomplete}
-                      title={flowedInputsIncomplete
+                      disabled={agentButtonDisabled(def.id) || flowedInputsIncomplete || generationLocked}
+                      title={generationLocked
+                        ? `Produce the earlier artifact${activePhase.label ? ` in ${activePhase.label}` : ""} to above 89% quality before generating ${def.label} — artifacts are built in order.`
+                        : flowedInputsIncomplete
                         ? `Provide these inputs before generating ${def.label}:\n${generateGuidance}`
                         : regenGuidance
                         ? `Regenerate ${def.label} — applies ${suggestionCount} quality suggestion${suggestionCount === 1 ? "" : "s"} directly in the new draft`
@@ -1676,7 +1728,7 @@ export default function StageView({
                         ? `${present ? "Regenerate" : "Generate"} ${def.label} — strengthen these inputs to lift quality:\n${generateGuidance || preflight.missingFields.join(", ")}`
                         : present ? `Regenerate ${def.label}` : `Generate ${def.label}`}
                     >
-                      {agentButtonContent(def.id, present ? "↻ Regenerate" : "Generate")}
+                      {agentButtonContent(def.id, generationLocked ? "🔒 Locked" : present ? "↻ Regenerate" : "Generate")}
                     </button>
                   ) : null}
                   {/* Per-artifact approve is replaced by the single "Approve all
