@@ -720,7 +720,7 @@ export default function InsightFeedView({
         </div>
       )}
 
-      {/* ── 4. Open Actions — inline queue so the user can act without leaving Today ── */}
+      {/* ── 4. Top Actions — top-priority inline queue so the user can act without leaving Today ── */}
       {openActions.length > 0 && (
         <div
           style={{
@@ -733,7 +733,7 @@ export default function InsightFeedView({
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
             <div>
               <div style={{ fontSize: 14, fontWeight: 700, color: "var(--v3-text-primary)" }}>
-                ◈ Actions
+                ◈ Top Actions
               </div>
               <div style={{ fontSize: 12, color: "var(--v3-text-muted)", marginTop: 2 }}>
                 {openActions.length} open action{openActions.length !== 1 ? "s" : ""} awaiting a decision
