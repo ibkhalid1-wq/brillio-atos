@@ -2138,6 +2138,9 @@ function applyPlanResultToProgramData(programData: ProgramState, result: Record<
           phase: typeof a.phase === "string" ? a.phase : "",
           owner: typeof a.owner === "string" ? a.owner : null,
           rationale: typeof a.rationale === "string" ? a.rationale : "",
+          // Drill-down references to the artifact/inputs that drove this action.
+          relatedArtifactId: typeof a.relatedArtifactId === "string" && a.relatedArtifactId ? a.relatedArtifactId : null,
+          relatedInputIds: Array.isArray(a.relatedInputIds) ? a.relatedInputIds.filter((id): id is string => typeof id === "string" && !!id) : [],
         })) : [],
         milestones: Array.isArray(p.milestones) ? p.milestones.filter(isRecord).map((m) => ({
           id: typeof m.id === "string" ? m.id : crypto.randomUUID(),
@@ -2152,6 +2155,8 @@ function applyPlanResultToProgramData(programData: ProgramState, result: Record<
           phase: typeof b.phase === "string" ? b.phase : "",
           severity: ["critical", "high", "medium", "low"].includes(String(b.severity)) ? b.severity : "medium",
           resolution: typeof b.resolution === "string" ? b.resolution : null,
+          relatedArtifactId: typeof b.relatedArtifactId === "string" && b.relatedArtifactId ? b.relatedArtifactId : null,
+          relatedInputIds: Array.isArray(b.relatedInputIds) ? b.relatedInputIds.filter((id): id is string => typeof id === "string" && !!id) : [],
         })) : [],
         confidence: typeof p.confidence === "number" ? Math.max(0, Math.min(1, p.confidence)) : 0.5,
       } as JsonValue;
@@ -2218,6 +2223,12 @@ function applyRiskResultToProgramData(programData: ProgramState, result: Record<
               mitigation: typeof entry.mitigation === "string" && entry.mitigation ? entry.mitigation : null,
               status: humanTriaged && typeof prior!.status === "string" ? prior!.status : "open",
               source: "agent",
+              // Drill-down references: which artifact/inputs this finding traces to,
+              // so the UI can link the entry straight to the relevant document/field.
+              relatedArtifactId: typeof entry.relatedArtifactId === "string" && entry.relatedArtifactId ? entry.relatedArtifactId : null,
+              relatedInputIds: Array.isArray(entry.relatedInputIds)
+                ? entry.relatedInputIds.filter((id): id is string => typeof id === "string" && !!id)
+                : [],
               agentConfidence,
               createdAt: typeof entry.createdAt === "string"
                 ? entry.createdAt
@@ -4957,9 +4968,13 @@ Input context will be provided as JSON.`,
 The plan must contain:
 - milestones: Array of { id, phase, title, dueDate (ISO), status: "complete"|"on-track"|"at-risk"|"blocked"|"not-started", owner }
 - criticalPath: Array of phase IDs in sequence that must complete for value to land
-- nextThreeActions: Array of { action, owner, phase, rationale } — the most important immediate steps
-- blockerSummary: Array of { blocker, phase, severity: "critical"|"high"|"medium", resolution }
+- nextThreeActions: Array of { action, owner, phase, rationale, relatedArtifactId, relatedInputIds } — the most important immediate steps
+- blockerSummary: Array of { blocker, phase, severity: "critical"|"high"|"medium", resolution, relatedArtifactId, relatedInputIds }
 - confidence: number (0.0-1.0)
+
+Drill-down rules (for nextThreeActions and blockerSummary):
+- relatedArtifactId: the specific artifact id the action/blocker traces to (use ids present in the input context), or null when not tied to an artifact.
+- relatedInputIds: array of captured input field ids the action/blocker depends on, or [] when none. Use ONLY ids present in the provided context — never invent ids.
 
 Rules:
 - Derive milestones from exit criteria and phase readiness. Do not fabricate dates — use the program's ETA fields if present, otherwise mark as TBD.
@@ -5009,9 +5024,16 @@ Otherwise respond with:
       "phase": "<phase ID>",
       "owner": "<suggested owner or null>",
       "mitigation": "<recommended action or null>",
+      "relatedArtifactId": "<id of the artifact this finding traces to, or null>",
+      "relatedInputIds": ["<input field id this finding relates to>", "..."],
       "agentConfidence": <0.0-1.0>
     }
   ],
+
+Drill-down rules:
+- Always set relatedArtifactId to the specific artifact id that surfaced the finding when one exists (use the ids present in the input context's artifacts/phases). Set it to null only for findings not tied to any artifact.
+- Populate relatedInputIds with the captured input field ids the finding depends on (e.g. a missing/weak input). Use [] when none apply.
+- Use ONLY ids that appear in the provided context — never invent ids.
   "generatedAt": "<ISO timestamp>",
   "confidence": <overall confidence 0.0-1.0>,
   "summary": "<1 sentence executive summary of the risk posture>"

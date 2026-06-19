@@ -24,6 +24,13 @@ export function deriveOpenRecommendedActions(
   const synthesized = buildDecisionQueue(phaseAgents, nested, personaId);
   const byId = new Map((program.decisionQueue || []).map((decision) => [decision.id, decision]));
   return synthesized
-    .map((decision) => ({ status: "open", ...decision, ...(byId.get(decision.id) || {}) }) as DecisionSummary)
+    .map((decision) => {
+      const merged = { status: "open", ...decision, ...(byId.get(decision.id) || {}) } as DecisionSummary & { artifactId?: string };
+      // Synthesised draft/revision/plan actions carry the artifact they concern
+      // as `artifactId`; surface it as the drill-down target so the action links
+      // to the exact artifact under review unless an explicit one was persisted.
+      if (!merged.relatedArtifactId && merged.artifactId) merged.relatedArtifactId = merged.artifactId;
+      return merged as DecisionSummary;
+    })
     .filter((decision) => isDecisionOpen(decision));
 }

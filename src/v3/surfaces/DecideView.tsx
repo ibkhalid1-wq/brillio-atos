@@ -4,6 +4,8 @@ import { selectPhaseMetrics } from "@/v3/lib/programMetrics";
 import { selectBlockers, selectRisks, type RaidScope } from "@/v3/lib/programRaid";
 import { PHASE_LABELS } from "@/v3/lib/uiHelpers";
 import { getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
+import { getAgentMeta } from "@/v3/lib/agentMeta";
+import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
 import type { DecisionSummary, GateReview, ProgramSummary, RAIDEntry, RAIDEntryType } from "@/new/types";
 import type { Persona } from "@/new/types";
 import { AdamCard, AdamCardBody, AdamCardHeader } from "@/v3/components/ui/AdamCard";
@@ -23,8 +25,12 @@ interface DecideViewProps {
   onRequestRemediation: (phaseId: string, note: string) => Promise<void>;
   onAddRaid: (draft: { type: RAIDEntryType; title: string; description: string; severity: RAIDEntry["severity"]; phase: string; owner?: string; mitigation?: string }) => Promise<void>;
   onCloseRaid: (entryId: string, note?: string) => Promise<void>;
-  /** Resolve an action / blocker / risk by jumping to that phase's input fields. */
-  onNavigateToPhaseInputs: (phaseId: string) => void;
+  /**
+   * Resolve an action / blocker / risk by jumping to that phase. With no anchor
+   * it lands on the phase's input section; with a drill-down anchor
+   * (`artifact:<id>` / `input:<id>`) it scrolls to that exact element.
+   */
+  onNavigateToPhaseInputs: (phaseId: string, anchor?: string) => void;
   /** Deep-link intent: select a tab and open its add form (nonce forces re-fire). */
   initialIntent?: { tab: ActionTab; nonce: number } | null;
 }
@@ -66,6 +72,63 @@ function gateVariant(status: GateReview["status"] | undefined): "approved" | "re
   if (status === "remediation-requested") return "remediation";
   if (status === "not-ready") return "locked";
   return "pending";
+}
+
+/** Human label for an artifact id (producing-agent id), for drill-down chips. */
+function artifactLabelFor(id: string): string {
+  const meta = getAgentMeta(id);
+  return meta.outputArtifact || meta.label || id;
+}
+
+/** Human label for an input field id within a phase, for drill-down chips. */
+function inputLabelFor(phaseId: string, id: string): string {
+  const field = getPhaseInputSchema(phaseId).fields.find((candidate) => candidate.id === id);
+  return field?.label || id;
+}
+
+/**
+ * Renders "Linked to" chips that drill an action / blocker / risk down to the
+ * exact artifact or input it was derived from. Clicking a chip navigates to the
+ * owning phase and scrolls to that element's `data-io-anchor`. Renders nothing
+ * when the item carries no provenance, so older items degrade gracefully.
+ */
+function DrillDownLinks({
+  phaseId,
+  relatedArtifactId,
+  relatedInputIds,
+  onDrill,
+}: {
+  phaseId: string;
+  relatedArtifactId?: string | null;
+  relatedInputIds?: string[];
+  onDrill: (anchor: string) => void;
+}) {
+  const links: { anchor: string; label: string; kind: "artifact" | "input" }[] = [];
+  if (relatedArtifactId) {
+    links.push({ anchor: `artifact:${relatedArtifactId}`, label: artifactLabelFor(relatedArtifactId), kind: "artifact" });
+  }
+  for (const id of relatedInputIds ?? []) {
+    links.push({ anchor: `input:${id}`, label: inputLabelFor(phaseId, id), kind: "input" });
+  }
+  if (!links.length) return null;
+  return (
+    <div className="v3-drilldown-row">
+      <span className="v3-drilldown-label">Linked to</span>
+      {links.map((link) => (
+        <button
+          key={link.anchor}
+          type="button"
+          className="v3-drilldown-chip"
+          data-kind={link.kind}
+          onClick={() => onDrill(link.anchor)}
+          title={`Open source ${link.kind}: ${link.label}`}
+        >
+          <span aria-hidden="true">{link.kind === "artifact" ? "◆ " : "▸ "}</span>
+          {link.label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function ArtifactPreview({ agentId, content }: { agentId: string; content: Record<string, unknown> }) {
@@ -158,6 +221,7 @@ function DecisionCard({
   onChangeModify,
   onResolveDecision,
   onGoToInput,
+  onDrill,
 }: {
   decision: ReviewDecision;
   modifyOpen: boolean;
@@ -168,6 +232,7 @@ function DecisionCard({
   onChangeModify: (value: string) => void;
   onResolveDecision: (resolution: "approved" | "deferred" | "rejected" | "modified", modifiedContent?: string) => void;
   onGoToInput: () => void;
+  onDrill: (anchor: string) => void;
 }) {
   return (
     <AdamCard accent={decision.priority === "critical" || decision.priority === "high" ? "danger" : "none"} className="v3-governance-decision-card">
@@ -260,6 +325,13 @@ function DecisionCard({
             ) : null}
           </div>
         ) : null}
+
+        <DrillDownLinks
+          phaseId={decision.phaseId && decision.phaseId !== "all" ? decision.phaseId : ""}
+          relatedArtifactId={decision.relatedArtifactId}
+          relatedInputIds={decision.relatedInputIds}
+          onDrill={onDrill}
+        />
 
         <div className="v3-governance-decision-actions">
           <button type="button" className="v3-button primary" style={{ fontSize: 12 }} onClick={onGoToInput}>
@@ -389,9 +461,11 @@ function GateDetailPanel({
 function RaidCard({
   entry,
   onGoToInput,
+  onDrill,
 }: {
   entry: RAIDEntry;
   onGoToInput: () => void;
+  onDrill: (anchor: string) => void;
 }) {
   const isUrgent = entry.severity === "critical" || entry.severity === "high";
   return (
@@ -411,6 +485,13 @@ function RaidCard({
         <div className="v3-governance-decision-title">{entry.title}</div>
         {entry.description ? <div className="v3-governance-decision-recommendation">{entry.description}</div> : null}
         {entry.mitigation ? <div className="v3-governance-decision-analysis">Mitigation: {entry.mitigation}</div> : null}
+
+        <DrillDownLinks
+          phaseId={entry.phase}
+          relatedArtifactId={entry.relatedArtifactId}
+          relatedInputIds={entry.relatedInputIds}
+          onDrill={onDrill}
+        />
 
         <div className="v3-governance-decision-actions">
           <button type="button" className="v3-button primary" style={{ fontSize: 12 }} onClick={onGoToInput}>
@@ -708,6 +789,7 @@ export default function DecideView({
           })}
           onResolveDecision={(resolution, modifiedContent) => void onResolveDecision(decision.id, resolution, modifiedContent, decision)}
           onGoToInput={() => onNavigateToPhaseInputs(resolveTargetPhase(decision.phaseId))}
+          onDrill={(anchor) => onNavigateToPhaseInputs(resolveTargetPhase(decision.phaseId), anchor)}
         />
       </div>
     </div>
@@ -750,7 +832,11 @@ export default function DecideView({
                 ? <>Affects: <strong>All phases</strong></>
                 : <>Affects: <strong>{PHASE_LABELS[entry.phase] ?? entry.phase}</strong> phase</>}
             </div>
-            <RaidCard entry={entry} onGoToInput={() => onNavigateToPhaseInputs(resolveTargetPhase(entry.phase))} />
+            <RaidCard
+              entry={entry}
+              onGoToInput={() => onNavigateToPhaseInputs(resolveTargetPhase(entry.phase))}
+              onDrill={(anchor) => onNavigateToPhaseInputs(resolveTargetPhase(entry.phase), anchor)}
+            />
           </div>
         ))}
       </div>

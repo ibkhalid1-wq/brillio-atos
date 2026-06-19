@@ -401,6 +401,10 @@ function deriveRAIDEntries(data: JsonRecord): RAIDEntry[] {
         closedAt: asString(entry.closedAt) || null,
         closedBy: closedByValue === "agent" || closedByValue === "human" ? closedByValue : null,
         closureNote: asString(entry.closureNote) || null,
+        relatedArtifactId: asString(entry.relatedArtifactId) || null,
+        relatedInputIds: asArray(entry.relatedInputIds)
+          .map((id) => asString(id))
+          .filter((id) => id.length > 0),
       };
     });
 

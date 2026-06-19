@@ -6588,6 +6588,57 @@ button.v3-phase-metric:focus-visible {
   user-select: none;
   pointer-events: none;
 }
+
+/* Drill-down chips: link an action / blocker / risk to its source artifact or
+   input. Clicking a chip navigates to the owning phase and flashes the target. */
+.v3-drilldown-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+.v3-drilldown-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--v3-text-muted);
+}
+.v3-drilldown-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--v3-text-secondary);
+  background: var(--v3-surface-2, rgba(127, 127, 127, 0.08));
+  border: 1px solid var(--v3-border, rgba(127, 127, 127, 0.22));
+  border-radius: 20px;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.v3-drilldown-chip:hover {
+  color: var(--v3-text-primary);
+  border-color: var(--v3-accent, #6366f1);
+  background: var(--v3-accent-soft, rgba(99, 102, 241, 0.1));
+}
+.v3-drilldown-chip[data-kind="artifact"] {
+  color: var(--v3-accent, #6366f1);
+}
+
+/* Brief highlight applied to a drill-down target after navigation. */
+@keyframes v3-io-anchor-flash {
+  0% { box-shadow: 0 0 0 0 var(--v3-accent, #6366f1); }
+  20% { box-shadow: 0 0 0 3px var(--v3-accent-soft, rgba(99, 102, 241, 0.45)); }
+  100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+}
+.v3-io-anchor-flash {
+  animation: v3-io-anchor-flash 1.8s ease-out;
+  border-radius: var(--v3-radius-lg, 10px);
+}
 .v3-artifact-row-head {
   display: flex;
   align-items: center;

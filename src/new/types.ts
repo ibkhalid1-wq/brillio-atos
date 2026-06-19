@@ -63,6 +63,10 @@ export interface DecisionSummary {
   previewContent?: Record<string, unknown>;
   source?: string;
   resolvedBy?: string;
+  /** Drill-down: the artifact this action was derived from (artifact id). */
+  relatedArtifactId?: string | null;
+  /** Drill-down: the input field ids this action relates to. */
+  relatedInputIds?: string[];
   advisorAnalysis?: {
     options: Array<{
       label: string;
@@ -110,6 +114,10 @@ export interface RAIDEntry {
   closedAt: string | null;
   closedBy: "agent" | "human" | null;
   closureNote: string | null;
+  /** Drill-down: the artifact this entry was derived from (artifact id). */
+  relatedArtifactId?: string | null;
+  /** Drill-down: the input field ids this entry relates to. */
+  relatedInputIds?: string[];
 }
 
 export interface PlanMilestone {

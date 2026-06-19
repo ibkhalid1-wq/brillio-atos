@@ -1985,15 +1985,26 @@ export default function AppShellV3() {
   // Center: resolving an action / blocker / risk takes the user to where they
   // actually fix it — the phase's input fields. The anchor only exists once the
   // StageView has mounted, so poll briefly for it after navigation.
-  const navigateToPhaseInputs = useCallback((phaseId: string) => {
+  //
+  // When a drill-down `anchor` is supplied (e.g. `artifact:charter` or
+  // `input:successMetric`) the view scrolls to that specific element and briefly
+  // flashes it, so a risk/blocker/action lands the user on the exact artifact or
+  // input it was derived from rather than the generic inputs section.
+  const navigateToPhaseInputs = useCallback((phaseId: string, anchor?: string) => {
     if (!phaseId) return;
     openPhaseSheet(phaseId);
     if (typeof window === "undefined") return;
     let attempts = 0;
     const tryScroll = () => {
-      const el = document.getElementById("phase-inputs-anchor");
+      const el = anchor
+        ? (document.querySelector(`[data-io-anchor="${anchor}"]`) as HTMLElement | null)
+        : document.getElementById("phase-inputs-anchor");
       if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "start" });
+        el.scrollIntoView({ behavior: "smooth", block: anchor ? "center" : "start" });
+        if (anchor) {
+          el.classList.add("v3-io-anchor-flash");
+          window.setTimeout(() => el.classList.remove("v3-io-anchor-flash"), 1800);
+        }
         return;
       }
       if (attempts++ < 20) window.setTimeout(tryScroll, 100);
