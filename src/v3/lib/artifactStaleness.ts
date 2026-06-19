@@ -22,6 +22,36 @@ export type PhaseArtifactBucket = Record<string, unknown> | undefined;
 
 const RESERVED_INPUT_KEYS = new Set(["savedAt"]);
 
+/**
+ * Some inputs are captured through a specialised editor that persists under its
+ * own key(s) but is conceptually the SAME methodology field. The Strategy KPI
+ * table is the editor for the success-metric concept — it replaces the standalone
+ * `successMetric` field in the UI and persists as `kpis` plus the successMetric*
+ * anchor keys. For staleness, a change to any companion key must follow the
+ * canonical field's flow edges, otherwise deleting/editing a KPI silently leaves
+ * the artifacts it feeds (e.g. the outcome framework) marked fresh.
+ *
+ * This map is consulted ONLY on the staleness path. Generation-gating must not
+ * use it: these companion keys are not declared schema fields, so surfacing them
+ * in the label-resolved generation flow would render raw ids in the UI.
+ */
+export const STALENESS_FIELD_ALIASES: Record<string, string[]> = {
+  kpis: ["successMetric"],
+  successMetricBaseline: ["successMetric"],
+  successMetricTarget: ["successMetric"],
+  successMetricUnit: ["successMetric"],
+};
+
+/** The given field ids plus any canonical fields they alias to (deduped). */
+function expandWithAliases(fieldIds: string[]): string[] {
+  const expanded = new Set<string>();
+  for (const id of fieldIds) {
+    expanded.add(id);
+    for (const alias of STALENESS_FIELD_ALIASES[id] ?? []) expanded.add(alias);
+  }
+  return [...expanded];
+}
+
 function isApproved(entry: unknown): boolean {
   return Boolean(entry && typeof entry === "object" && (entry as { status?: unknown }).status === "approved");
 }
@@ -43,7 +73,7 @@ export function artifactsForInputFields(
   store?: DynamicSchemaStore,
 ): Set<string> {
   const targets = new Set<string>();
-  for (const edge of derivePhaseFlowEdges(phaseId, fieldIds, store)) targets.add(edge.to);
+  for (const edge of derivePhaseFlowEdges(phaseId, expandWithAliases(fieldIds), store)) targets.add(edge.to);
   return targets;
 }
 
@@ -120,7 +150,10 @@ export function fieldsFeedingApprovedArtifacts(
   const approved = approvedArtifactIds(bucket);
   if (!approved.size) return blocked;
   for (const fieldId of fieldIds) {
-    for (const edge of derivePhaseFlowEdges(phaseId, [fieldId], store)) {
+    // Expand to the canonical field(s) this key aliases to (e.g. kpis →
+    // successMetric) so a companion key feeding an approved artifact is protected
+    // on reimport just like the canonical field would be.
+    for (const edge of derivePhaseFlowEdges(phaseId, expandWithAliases([fieldId]), store)) {
       if (approved.has(edge.to)) {
         blocked.add(fieldId);
         break;

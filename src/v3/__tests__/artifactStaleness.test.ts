@@ -30,6 +30,15 @@ describe("artifactStaleness", () => {
       expect(targets.has("charter")).toBe(true);
       expect(targets.has("business-case")).toBe(true);
     });
+
+    it("follows the canonical field's edges for an aliased companion key (kpis → successMetric)", () => {
+      // The Strategy KPI table persists as `kpis` but is the successMetric editor,
+      // so editing/deleting a KPI must stale whatever successMetric feeds.
+      const viaKpis = artifactsForInputFields("strategy", ["kpis"]);
+      const viaSuccessMetric = artifactsForInputFields("strategy", ["successMetric"]);
+      expect(viaKpis.has("outcome-framework")).toBe(true);
+      expect(new Set(viaKpis)).toEqual(new Set(viaSuccessMetric));
+    });
   });
 
   describe("approvedArtifactsToStale", () => {
@@ -80,6 +89,17 @@ describe("artifactStaleness", () => {
     it("ignores artifacts that have not been generated and no-op when nothing changed", () => {
       expect(relatedArtifactsToStale("strategy", [], bucket)).toEqual([]);
       expect(relatedArtifactsToStale("strategy", ["sponsor"], {})).toEqual([]);
+    });
+
+    it("stales the success-metric artifacts when a KPI is deleted (kpis alias)", () => {
+      // Deleting a row in the Strategy KPI table changes the `kpis` key. That key
+      // aliases to successMetric, which feeds the outcome framework — so the
+      // outcome framework must move to stale even though successMetric text is
+      // unchanged.
+      const stale = relatedArtifactsToStale("strategy", ["kpis"], {
+        "outcome-framework": { status: "ready" },
+      });
+      expect(stale).toContain("outcome-framework");
     });
   });
 
