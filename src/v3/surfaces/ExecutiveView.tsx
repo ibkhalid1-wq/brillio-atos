@@ -5,6 +5,7 @@ import AdamExplainsTooltip from "@/v3/components/AdamExplainsTooltip";
 import { Kpi } from "@/v3/components/ui/Kpi";
 import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
 import { derivePhaseStatusRings } from "@/v3/lib/phaseStatusRings";
+import { computePhaseReadiness } from "@/v3/lib/phaseReadiness";
 import { selectDecisions, selectEscalatedDecisions, selectHighRisks } from "@/v3/lib/programRaid";
 
 interface ExecutiveViewProps {
@@ -221,9 +222,20 @@ export default function ExecutiveView({
           (g as { status: string }).status === "approved",
       ).length
     : 0;
-  const avgPctCopy = phases.length > 0
-    ? Math.round(phases.reduce((s, p) => s + p.pct, 0) / phases.length)
-    : 0;
+  // Programme completion is measured by approved artifacts, not the phase-estimator
+  // pct. Each phase contributes its share of required artifacts that PMs have
+  // actually reviewed and approved (computePhaseReadiness.artifactsComplete — the
+  // same "Artifacts approved" metric shown on the phase screen); we average those
+  // across phases so the executive headline reflects real, signed-off output.
+  const avgPctCopy = useMemo(() => {
+    if (!program || phases.length === 0) return 0;
+    const perPhaseApproved = program.phases.map(
+      (p) => computePhaseReadiness(program, p.id).artifactsComplete,
+    );
+    return Math.round(
+      perPhaseApproved.reduce((s, v) => s + v, 0) / perPhaseApproved.length,
+    );
+  }, [program, phases.length]);
 
   // handleCopyBrief is defined after useMemo hooks below — see bottom of component
 
@@ -264,7 +276,7 @@ export default function ExecutiveView({
       `EXECUTIVE BRIEF — ${program.name}`,
       `As of ${todayLabelCopy}`,
       ``,
-      `Confidence: ${confidenceScore !== null ? confidenceScore + "%" : "N/A"} | Gates: ${approvedGatesCopy}/${totalGates} | Completion: ${avgPctCopy}%`,
+      `Confidence: ${confidenceScore !== null ? confidenceScore + "%" : "N/A"} | Gates: ${approvedGatesCopy}/${totalGates} | Artifacts approved: ${avgPctCopy}%`,
       ``,
       topRisks.length > 0
         ? `CRITICAL RISKS:\n${topRisks.map((r) => `• ${r.title} [${r.severity}]`).join("\n")}`
@@ -469,7 +481,7 @@ export default function ExecutiveView({
             />
           )}
           <Kpi label="Gates Approved" value={`${approvedGates} of ${totalGates}`} onClick={onNavigateToGates} />
-          <Kpi label="Completion" value={`${avgPct}%`} onClick={onNavigateToPipeline} />
+          <Kpi label="Artifacts Approved" value={`${avgPct}%`} onClick={onNavigateToPipeline} />
           <Kpi
             label="Open Actions"
             value={openDecisionCount}
