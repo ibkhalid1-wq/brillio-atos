@@ -129,53 +129,9 @@ const AGENT_ID_ALIASES: Record<string, string> = {
   "steerco-prep": "steerco-agenda-builder",
 };
 
-const AGENT_DOWNSTREAM: Record<string, Array<{ agentId: string; phaseId: string }>> = {
-  "input-quality": [
-    { agentId: "exit-criteria-generator", phaseId: "{{phaseId}}" },
-    { agentId: "phase-readiness-monitor", phaseId: "{{phaseId}}" },
-    { agentId: "workstream-health-scorer", phaseId: "{{phaseId}}" },
-    { agentId: "artifact-staleness-check", phaseId: "program" },
-  ],
-  narrative: [
-    { agentId: "contradiction-detector", phaseId: "{{phaseId}}" },
-    { agentId: "twin-sync", phaseId: "program" },
-  ],
-  plan: [
-    { agentId: "health-heatmap", phaseId: "program" },
-    { agentId: "contradiction-detector", phaseId: "{{phaseId}}" },
-    { agentId: "scope-creep-monitor", phaseId: "{{phaseId}}" },
-  ],
-  risk: [
-    { agentId: "change-impact", phaseId: "program" },
-    { agentId: "scope-pcr", phaseId: "program" },
-    { agentId: "health-heatmap", phaseId: "program" },
-    { agentId: "contradiction-detector", phaseId: "{{phaseId}}" },
-  ],
-  milestone: [
-    { agentId: "adoption", phaseId: "program" },
-    { agentId: "health-heatmap", phaseId: "program" },
-    { agentId: "benefits-tracker", phaseId: "program" },
-    { agentId: "scope-creep-monitor", phaseId: "{{phaseId}}" },
-  ],
-  "gate-review": [
-    { agentId: "health-heatmap", phaseId: "program" },
-    { agentId: "dependency-check", phaseId: "{{phaseId}}" },
-    { agentId: "cross-artifact-validator", phaseId: "{{phaseId}}" },
-  ],
-  escalation: [{ agentId: "health-heatmap", phaseId: "program" }],
-  closure: [
-    { agentId: "deck", phaseId: "program" },
-    { agentId: "pattern-extract", phaseId: "program" },
-    { agentId: "benefits-tracker", phaseId: "program" },
-  ],
-  handoff: [{ agentId: "handoff-quality", phaseId: "{{phaseId}}" }],
-  "pattern-extract": [{ agentId: "benchmark-comparator", phaseId: "{{phaseId}}" }],
-  "scope-pcr": [],
-  "stakeholder": [{ agentId: "stakeholder-risk-assessor", phaseId: "program" }],
-  "budget": [{ agentId: "budget-anomaly-detector", phaseId: "program" }],
-  "benefits-tracker": [{ agentId: "benefit-forecast", phaseId: "program" }],
-  "deck": [{ agentId: "board-pack", phaseId: "program" }],
-};
+// NOTE: the AGENT_DOWNSTREAM cascade map has been retired. Automatic agent
+// fan-out multiplied LLM calls and caused state drift; the only automatic
+// follow-on is now the lean plan+risk refresh in triggerDownstreamAgents.
 
 type SupabaseClient = ReturnType<typeof createClient>;
 type ProgramState = Record<string, JsonValue>;
@@ -3940,48 +3896,14 @@ async function isProviderRateLimited(res: Response): Promise<boolean> {
  * result returns immediately — downstream agents only persist follow-on intelligence
  * and are never part of the response payload.
  */
-/** True when every formal document a phase requires has been generated. */
-function phaseFormalArtifactsComplete(programData: ProgramState, phaseId: string): boolean {
-  const requiredFieldKeys = Object.values(FORMAL_ARTIFACT_AGENTS)
-    .filter((spec) => spec.phase === phaseId)
-    .map((spec) => spec.fieldKey);
-  if (!requiredFieldKeys.length) return true;
-  const inner = getInnerProgramData(programData);
-  return requiredFieldKeys.every((key) => isRecord(inner[key]) && Object.keys(inner[key] as Record<string, unknown>).length > 0);
-}
-
-/**
- * True when an existing gate review already post-dates the phase's newest formal
- * artifact — i.e. the inputs have not changed since the last check, so re-running
- * the gate review would only reproduce the same verdict (skip-if-unchanged).
- */
-function gateReviewIsFresherThanArtifacts(programData: ProgramState, phaseId: string): boolean {
-  const inner = getInnerProgramData(programData);
-  const gateReviews = isRecord(inner.gateReviews) ? inner.gateReviews as Record<string, unknown> : {};
-  const review = isRecord(gateReviews[phaseId]) ? gateReviews[phaseId] as Record<string, unknown> : null;
-  const reviewAt = review && typeof review.generatedAt === "string" ? new Date(review.generatedAt).getTime() : NaN;
-  if (!Number.isFinite(reviewAt)) return false;
-  let newestArtifact = 0;
-  for (const spec of Object.values(FORMAL_ARTIFACT_AGENTS)) {
-    if (spec.phase !== phaseId) continue;
-    const value = inner[spec.fieldKey];
-    if (isRecord(value) && typeof value.generatedAt === "string") {
-      const t = new Date(value.generatedAt).getTime();
-      if (Number.isFinite(t) && t > newestArtifact) newestArtifact = t;
-    }
-  }
-  if (newestArtifact === 0) return false;
-  return reviewAt >= newestArtifact;
-}
-
 async function triggerDownstreamAgents(
   completedAgentId: string,
   programId: string,
   completedPhaseId: string,
   /** Handoff from the completing agent — passed to each downstream so they know upstream context */
   completedHandoff?: AgentHandoff | null,
-  /** Post-completion program state — used to gate the formal-artifact cascade. */
-  programData?: ProgramState,
+  /** Post-completion program state (unused now the recursive cascade is retired). */
+  _programData?: ProgramState,
   /**
    * True when the completed run produced one or more artifacts (formal documents
    * OR dynamic-phase artifacts). Dynamic-phase artifacts go through the generic
@@ -3990,37 +3912,26 @@ async function triggerDownstreamAgents(
    */
   producedArtifact = false,
 ): Promise<void> {
-  const downstreamAgents = [...(AGENT_DOWNSTREAM[completedAgentId] || [])];
+  // ── No recursive cascade ─────────────────────────────────────────────────
+  // The automatic agent fan-out (AGENT_DOWNSTREAM map, gate-review/retro/
+  // pattern-query/contradiction-detector/health-heatmap chains) has been
+  // retired: it multiplied LLM calls and produced drift. The ONLY automatic
+  // follow-on now is the lean post-artifact refresh — when an artifact is
+  // (re)generated, ATOS refreshes exactly two derived views: the plan's next
+  // actions and the risk register, so the actions/risks/blockers surfaces stay
+  // in sync with the latest artifact. Everything else (gate review,
+  // contradiction checks, decks, retros, pattern mining) is on-demand.
   const isFormalArtifact = !!FORMAL_ARTIFACT_AGENTS[completedAgentId];
+  const shouldRefreshDerived = (isFormalArtifact || producedArtifact)
+    && !!completedPhaseId && completedPhaseId !== "program";
+  if (!shouldRefreshDerived) return;
 
-  // ── Artifact cascade ───────────────────────────────────────────────────────
-  // When ANY artifact is (re)generated — a formal document or a dynamic-phase
-  // artifact — ATOS automatically refreshes the intelligence that artifact feeds:
-  // the plan's next actions and the risk register. So the actions/risks/blockers
-  // surfaces always reflect the latest artifacts rather than silently drifting.
-  if ((isFormalArtifact || producedArtifact) && completedPhaseId && completedPhaseId !== "program") {
-    downstreamAgents.push({ agentId: "plan", phaseId: "program" });
-    downstreamAgents.push({ agentId: "risk", phaseId: "program" });
-  }
-  // Gate review (and its cross-phase dependency cascade) only runs off the formal
-  // document set — once a phase's formal artifacts are complete. This replaces the
-  // removed manual "Check Gate Readiness" / "Generate criteria" buttons.
-  if (isFormalArtifact && completedPhaseId && completedPhaseId !== "program") {
-    const phaseComplete = !programData || phaseFormalArtifactsComplete(programData, completedPhaseId);
-    const gateReviewFresh = !!programData && gateReviewIsFresherThanArtifacts(programData, completedPhaseId);
-    if (phaseComplete && !gateReviewFresh) {
-      downstreamAgents.push({ agentId: "gate-review", phaseId: completedPhaseId });
-    }
-  }
-
-  if (completedAgentId === "gate-review" && completedPhaseId && completedPhaseId !== "program") {
-    downstreamAgents.push({ agentId: "retro", phaseId: completedPhaseId });
-  }
-  // Pattern-query runs after gate-review and narrative to surface relevant precedents
-  if (completedAgentId === "gate-review" || completedAgentId === "narrative") {
-    downstreamAgents.push({ agentId: "pattern-query", phaseId: completedPhaseId });
-  }
-  if (!downstreamAgents.length) return;
+  // plan and risk run at phaseId "program" and are not formal artifacts, so they
+  // never re-enter this branch — the refresh cannot recurse.
+  const downstreamAgents = [
+    { agentId: "plan", phaseId: "program" },
+    { agentId: "risk", phaseId: "program" },
+  ];
 
   for (let i = 0; i < downstreamAgents.length; i++) {
     const target = downstreamAgents[i];
@@ -4034,7 +3945,7 @@ async function triggerDownstreamAgents(
         body: JSON.stringify({
           programId,
           agentId: target.agentId,
-          phaseId: target.phaseId === "{{phaseId}}" ? completedPhaseId : target.phaseId,
+          phaseId: target.phaseId,
           triggeredBy: "trigger",
           triggerEvent: `downstream:${completedAgentId}`,
           // ── Cross-agent intelligence: pass upstream handoff so downstream agents
