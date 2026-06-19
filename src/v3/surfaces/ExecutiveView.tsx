@@ -5,7 +5,7 @@ import AdamExplainsTooltip from "@/v3/components/AdamExplainsTooltip";
 import { Kpi } from "@/v3/components/ui/Kpi";
 import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
 import { derivePhaseStatusRings } from "@/v3/lib/phaseStatusRings";
-import { computePhaseReadiness } from "@/v3/lib/phaseReadiness";
+import { computePhaseReadiness, getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
 import { selectBlockers, selectDecisions, selectEscalatedDecisions, selectHighRisks, selectRisks } from "@/v3/lib/programRaid";
 import type { ConfidenceScore } from "@/v3/lib/confidenceScore";
 
@@ -214,6 +214,15 @@ export default function ExecutiveView({
 
   const todayLabelCopy = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
   const phases = program?.phases ?? [];
+  // Phase Progress lists only phases that are "in play" — approved (locked-in)
+  // or the active frontier. Future phases sit behind an unapproved gate
+  // (getLockedPhaseIds) and must not appear with a soft estimator % (e.g.
+  // Operate reading "32% in-progress" before its phase has even started).
+  const visiblePhases = useMemo(() => {
+    if (!program) return [] as typeof phases;
+    const locked = getLockedPhaseIds(program);
+    return phases.filter((phase) => !locked.has(phase.id));
+  }, [program, phases]);
   const totalGates = program?.phases.length ?? 0;
   // Only count gate reviews that correspond to an actual phase in this programme —
   // stale/orphaned keys (e.g. from a prior methodology) must not inflate the count.
@@ -829,7 +838,7 @@ export default function ExecutiveView({
             padding: "4px 16px 8px",
           }}
         >
-          {phases.map((phase) => (
+          {visiblePhases.map((phase) => (
             <PhaseProgressRow
               key={phase.id}
               program={program}
@@ -839,7 +848,7 @@ export default function ExecutiveView({
               onClick={() => onNavigateToPhase(phase.id)}
             />
           ))}
-          {phases.length === 0 && (
+          {visiblePhases.length === 0 && (
             <div style={{ padding: "16px 0", fontSize: 13, color: "var(--v3-text-muted)" }}>
               No phase data available.
             </div>
