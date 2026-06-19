@@ -6,7 +6,7 @@ import { Kpi } from "@/v3/components/ui/Kpi";
 import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
 import { derivePhaseStatusRings } from "@/v3/lib/phaseStatusRings";
 import { computePhaseReadiness } from "@/v3/lib/phaseReadiness";
-import { selectDecisions, selectEscalatedDecisions, selectHighRisks } from "@/v3/lib/programRaid";
+import { selectBlockers, selectDecisions, selectEscalatedDecisions, selectHighRisks, selectRisks } from "@/v3/lib/programRaid";
 
 interface ExecutiveViewProps {
   program: ProgramSummary | null;
@@ -262,6 +262,23 @@ export default function ExecutiveView({
   const shownDecisions = escalatedDecisions.slice(0, 3);
   const extraDecisions = escalatedDecisions.length - shownDecisions.length;
 
+  // ── Open RAID counts for the header block ─────────────────────────────────
+  // Programme-wide open blockers and risks (canonical programRaid selectors, so
+  // these agree with every other surface that counts them).
+  const blockerCount = useMemo(() => selectBlockers(program).length, [program]);
+  const riskCount = useMemo(() => selectRisks(program).length, [program]);
+
+  // Current phase = first not-yet-complete phase (prefer an active/ready one),
+  // falling back to the last phase once everything is closed. Drives the
+  // Gates Approved drill-down to the live phase screen.
+  const currentPhaseId = useMemo(() => {
+    const list = program?.phases ?? [];
+    const active = list.find((p) => p.status === "active" || p.status === "ready");
+    if (active) return active.id;
+    const incomplete = list.find((p) => p.status !== "complete");
+    return incomplete?.id ?? list[list.length - 1]?.id ?? "strategy";
+  }, [program]);
+
   // ── Gate counts (use pre-declared above) ─────────────────────────────────
   const approvedGates = approvedGatesCopy;
   const avgPct = avgPctCopy;
@@ -481,12 +498,21 @@ export default function ExecutiveView({
               onClick={onNavigateToGates}
             />
           )}
-          <Kpi label="Gates Approved" value={`${approvedGates} of ${totalGates}`} onClick={onNavigateToGates} />
-          <Kpi label="Artifacts Approved" value={`${avgPct}%`} onClick={onNavigateToPipeline} />
           <Kpi
-            label="Open Actions"
-            value={openDecisionCount}
-            color={openDecisionCount > 0 ? "var(--v3-amber)" : undefined}
+            label="Gates Approved"
+            value={`${approvedGates} of ${totalGates}`}
+            onClick={() => onNavigateToPhase(currentPhaseId)}
+          />
+          <Kpi
+            label="Blockers"
+            value={blockerCount}
+            color={blockerCount > 0 ? "var(--v3-red)" : undefined}
+            onClick={onNavigateToDecide}
+          />
+          <Kpi
+            label="Risks"
+            value={riskCount}
+            color={riskCount > 0 ? "var(--v3-amber)" : undefined}
             onClick={onNavigateToDecide}
           />
         </div>
