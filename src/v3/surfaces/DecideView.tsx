@@ -4,7 +4,7 @@ import { selectPhaseMetrics } from "@/v3/lib/programMetrics";
 import { selectBlockers, selectRisks, type RaidScope } from "@/v3/lib/programRaid";
 import { PHASE_LABELS } from "@/v3/lib/uiHelpers";
 import { getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
-import { DrillDownLinks } from "@/v3/components/DrillDownLinks";
+import { DrillDownLinks, artifactLabelFor, inputLabelFor } from "@/v3/components/DrillDownLinks";
 import type { DecisionSummary, GateReview, ProgramSummary, RAIDEntry, RAIDEntryType } from "@/new/types";
 import type { Persona } from "@/new/types";
 import { AdamCard, AdamCardBody, AdamCardHeader } from "@/v3/components/ui/AdamCard";
@@ -12,7 +12,7 @@ import { EmptyState } from "@/v3/components/ui/EmptyState";
 import { RelativeTime } from "@/v3/components/ui/RelativeTime";
 import { StatusBadge } from "@/v3/components/ui/StatusBadge";
 import type { V3Mode } from "@/v3/types";
-import { phaseName, phaseNameById } from "@/v3/utils";
+import { phaseName, phaseNameById, pushV3Toast } from "@/v3/utils";
 
 interface DecideViewProps {
   program: ProgramSummary | null;
@@ -742,7 +742,7 @@ export default function DecideView({
             return next;
           })}
           onResolveDecision={(resolution, modifiedContent) => void onResolveDecision(decision.id, resolution, modifiedContent, decision)}
-          onGoToInput={() => onNavigateToPhaseInputs(resolveTargetPhase(decision.phaseId))}
+          onGoToInput={() => goToItemSource({ itemPhase: decision.phaseId, title: decision.question || decision.title || "Open decision", kindLabel: "Action", relatedArtifactId: decision.relatedArtifactId, relatedInputIds: decision.relatedInputIds })}
           onDrill={(anchor) => onNavigateToPhaseInputs(resolveTargetPhase(decision.phaseId), anchor)}
         />
       </div>
@@ -774,6 +774,37 @@ export default function DecideView({
       ? phaseId
       : (selectedPhaseId ?? activePhaseId ?? program?.phases?.[0]?.id ?? "strategy");
 
+  // Resolve an item by jumping to its single best source field: the first related
+  // input (the field a PM edits), then its artifact, then the phase input section.
+  // The navigator flashes the target; a context toast names where you landed so
+  // the jump is never disorienting.
+  const goToItemSource = (args: {
+    itemPhase: string | null | undefined;
+    title: string;
+    kindLabel: string;
+    relatedArtifactId?: string | null;
+    relatedInputIds?: string[];
+  }) => {
+    const target = resolveTargetPhase(args.itemPhase);
+    const firstInput = (args.relatedInputIds ?? [])[0];
+    const anchor = firstInput
+      ? `input:${firstInput}`
+      : args.relatedArtifactId
+      ? `artifact:${args.relatedArtifactId}`
+      : undefined;
+    const destination = firstInput
+      ? inputLabelFor(target, firstInput)
+      : args.relatedArtifactId
+      ? artifactLabelFor(args.relatedArtifactId)
+      : `${PHASE_LABELS[target] ?? target} inputs`;
+    onNavigateToPhaseInputs(target, anchor);
+    pushV3Toast(`${args.kindLabel}: ${args.title} → ${destination}`, {
+      tone: "info",
+      icon: "↳",
+      duration: 6000,
+    });
+  };
+
   const renderRaidList = (entries: RAIDEntry[], emptyLabel: string) => (
     entries.length ? (
       <div className="v3-governance-card-list">
@@ -788,7 +819,7 @@ export default function DecideView({
             </div>
             <RaidCard
               entry={entry}
-              onGoToInput={() => onNavigateToPhaseInputs(resolveTargetPhase(entry.phase))}
+              onGoToInput={() => goToItemSource({ itemPhase: entry.phase, title: entry.title, kindLabel: entry.type === "blocker" ? "Blocker" : entry.type === "risk" ? "Risk" : "Item", relatedArtifactId: entry.relatedArtifactId, relatedInputIds: entry.relatedInputIds })}
               onDrill={(anchor) => onNavigateToPhaseInputs(resolveTargetPhase(entry.phase), anchor)}
             />
           </div>

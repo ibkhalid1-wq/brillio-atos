@@ -9,6 +9,8 @@ import { ArtifactMapTree } from "@/v3/components/ArtifactMapTree";
 import { DrillDownLinks } from "@/v3/components/DrillDownLinks";
 import { RelativeTime } from "@/v3/components/ui/RelativeTime";
 import { StatusBadge } from "@/v3/components/ui/StatusBadge";
+import { pushV3Toast } from "@/v3/utils";
+import { artifactLabelFor, inputLabelFor } from "@/v3/components/DrillDownLinks";
 import type { V3MoreView } from "@/v3/types";
 
 /**
@@ -126,6 +128,48 @@ export function PhaseRailPanels({
     onNavigateToPhaseInputs(target, anchor);
   };
 
+  // The single best source anchor for an item: prefer its first related input
+  // (the field a PM would actually edit), then fall back to its artifact. Returns
+  // both the anchor and a human label so the toast can name the destination.
+  const primaryAnchorFor = (
+    itemPhase: string | null | undefined,
+    relatedArtifactId?: string | null,
+    relatedInputIds?: string[],
+  ): { anchor: string; label: string } | null => {
+    const resolvedPhase = itemPhase && itemPhase !== "all" ? itemPhase : phaseId;
+    const firstInput = (relatedInputIds ?? [])[0];
+    if (firstInput) return { anchor: `input:${firstInput}`, label: inputLabelFor(resolvedPhase, firstInput) };
+    if (relatedArtifactId) return { anchor: `artifact:${relatedArtifactId}`, label: artifactLabelFor(relatedArtifactId) };
+    return null;
+  };
+
+  // Click handler for an Action Center item. When the item carries a source
+  // anchor, jump to that field (it flashes via the navigator) and raise a context
+  // toast with a button back to the full surface; otherwise open the surface
+  // directly so the item is never a dead click.
+  const resolveItem = (args: {
+    itemPhase: string | null | undefined;
+    title: string;
+    relatedArtifactId?: string | null;
+    relatedInputIds?: string[];
+    kindLabel: string;
+    openLabel: string;
+    openSurface: () => void;
+  }) => {
+    const target = primaryAnchorFor(args.itemPhase, args.relatedArtifactId, args.relatedInputIds);
+    if (!target || !onNavigateToPhaseInputs) {
+      args.openSurface();
+      return;
+    }
+    drillTo(args.itemPhase, target.anchor);
+    pushV3Toast(`${args.kindLabel}: ${args.title} → ${target.label}`, {
+      tone: "info",
+      icon: "↳",
+      duration: 6000,
+      action: { label: args.openLabel, onClick: args.openSurface },
+    });
+  };
+
   // Required-artifact count for this phase, surfaced on the Intelligence tab badge.
   const artifactCount = useMemo(() => getPhaseArtifactDefs(phaseId).length, [phaseId]);
 
@@ -221,8 +265,8 @@ export function PhaseRailPanels({
                     role="button"
                     tabIndex={0}
                     aria-label={`Open action: ${decision.question || decision.title || "Open decision"}`}
-                    onClick={() => onOpenDecide()}
-                    onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpenDecide(); } }}
+                    onClick={() => resolveItem({ itemPhase: decision.phaseId, title: decision.question || decision.title || "Open decision", relatedArtifactId: decision.relatedArtifactId, relatedInputIds: decision.relatedInputIds, kindLabel: "Action", openLabel: "Open Action Center", openSurface: onOpenDecide })}
+                    onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); resolveItem({ itemPhase: decision.phaseId, title: decision.question || decision.title || "Open decision", relatedArtifactId: decision.relatedArtifactId, relatedInputIds: decision.relatedInputIds, kindLabel: "Action", openLabel: "Open Action Center", openSurface: onOpenDecide }); } }}
                   >
                     <div className="v3-rail-item-head">
                       <StatusBadge variant={priorityVariant(decision.priority)} size="sm" />
@@ -254,8 +298,8 @@ export function PhaseRailPanels({
                     role="button"
                     tabIndex={0}
                     aria-label={`Open blocker in RAID log: ${entry.title}`}
-                    onClick={() => onOpenMoreView("risks")}
-                    onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpenMoreView("risks"); } }}
+                    onClick={() => resolveItem({ itemPhase: entry.phase, title: entry.title, relatedArtifactId: entry.relatedArtifactId, relatedInputIds: entry.relatedInputIds, kindLabel: "Blocker", openLabel: "Open RAID log", openSurface: () => onOpenMoreView("risks") })}
+                    onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); resolveItem({ itemPhase: entry.phase, title: entry.title, relatedArtifactId: entry.relatedArtifactId, relatedInputIds: entry.relatedInputIds, kindLabel: "Blocker", openLabel: "Open RAID log", openSurface: () => onOpenMoreView("risks") }); } }}
                   >
                     <div className="v3-rail-item-head">
                       <span className={`v3-chip v3-chip-tight ${severityTone(entry.severity)}`}>{entry.severity}</span>
@@ -290,8 +334,8 @@ export function PhaseRailPanels({
                     role="button"
                     tabIndex={0}
                     aria-label={`Open risk in RAID log: ${entry.title}`}
-                    onClick={() => onOpenMoreView("risks")}
-                    onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpenMoreView("risks"); } }}
+                    onClick={() => resolveItem({ itemPhase: entry.phase, title: entry.title, relatedArtifactId: entry.relatedArtifactId, relatedInputIds: entry.relatedInputIds, kindLabel: "Risk", openLabel: "Open RAID log", openSurface: () => onOpenMoreView("risks") })}
+                    onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); resolveItem({ itemPhase: entry.phase, title: entry.title, relatedArtifactId: entry.relatedArtifactId, relatedInputIds: entry.relatedInputIds, kindLabel: "Risk", openLabel: "Open RAID log", openSurface: () => onOpenMoreView("risks") }); } }}
                   >
                     <div className="v3-rail-item-head">
                       <span className={`v3-chip v3-chip-tight ${severityTone(entry.severity)}`}>{entry.severity}</span>
