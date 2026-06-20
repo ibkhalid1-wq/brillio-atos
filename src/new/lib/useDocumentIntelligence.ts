@@ -25,7 +25,9 @@ import type {
   FieldMapping,
   MethodologyMappings,
   ReviewField,
+  StakeholderEntity,
 } from "@/new/lib/documentIntelligenceTypes";
+import type { GridColumn, PhaseInputField } from "@/v3/lib/phaseInputSchema";
 import {
   PROVENANCE_KEY,
   serializeProvenance,
@@ -229,7 +231,128 @@ export function deriveKpiReviewField(
   };
 }
 
+// ─── Extracted stakeholders → core-team roster grid ───────────────────────────
+
+/** Find the column key whose key or label matches `re`, falling back to `fallback`. */
+function matchColumnKey(columns: GridColumn[], re: RegExp, fallback?: string): string | undefined {
+  const hit = columns.find((c) => re.test(c.key) || re.test(c.label ?? ""));
+  return hit?.key ?? fallback;
+}
+
+/**
+ * Locate the Mobilise core-team roster grid in a phase schema. Prefers the
+ * canonical ai-derived id ("coreTeamRoster", label "Named individuals per core
+ * team role"); otherwise the first grid whose columns clearly carry a name and a
+ * role. Returns null when no such grid is declared.
+ */
+function findRosterGrid(fields: PhaseInputField[]): PhaseInputField | null {
+  const byId = fields.find((f) => f.type === "grid" && f.id === "coreTeamRoster");
+  if (byId) return byId;
+  return (
+    fields.find(
+      (f) =>
+        f.type === "grid" &&
+        Boolean(matchColumnKey(f.columns ?? [], /name/i)) &&
+        Boolean(matchColumnKey(f.columns ?? [], /role|title|position/i)),
+    ) ?? null
+  );
+}
+
+/**
+ * Bridge extracted stakeholders into the Mobilise core-team roster grid.
+ *
+ * The roster is an ai-derived dynamic grid (id "coreTeamRoster"). The extractor
+ * reliably lands people in `entities.stakeholders` but only intermittently fills
+ * the per-phase grid mapping, so — exactly as `deriveKpiReviewField` does for
+ * KPIs — we synthesise the grid value from the structured entity. Rows are keyed
+ * to the grid's *actual* declared column keys so the value parses cleanly in
+ * StructuredGrid. Returns null when the roster grid is not a declared field for
+ * the programme (dynamic schema not generated yet) — we never fabricate a field.
+ */
+export function deriveRosterReviewField(
+  stakeholders: StakeholderEntity[] | undefined,
+  existingPhaseInputs: Record<string, Record<string, string>>,
+  store?: DynamicSchemaStore,
+  phaseId = "mobilise",
+): ReviewField | null {
+  const named = (stakeholders ?? []).filter((s) => s.name?.trim() || s.role?.trim());
+  if (named.length === 0) return null;
+
+  const grid = findRosterGrid(getPhaseInputSchema(phaseId, store).fields);
+  if (!grid) return null;
+
+  const cols = grid.columns ?? [];
+  const nameKey = matchColumnKey(cols, /name/i, "name")!;
+  const roleKey = matchColumnKey(cols, /role|title|position/i, "role")!;
+  const orgKey = matchColumnKey(cols, /org|company|firm/i);
+
+  const rows = named.map((s) => {
+    const row: Record<string, string> = { id: kpiRowId() };
+    row[roleKey] = (s.role ?? "").trim();
+    row[nameKey] = (s.name ?? "").trim();
+    if (orgKey) row[orgKey] = (s.organization ?? "").trim();
+    return row;
+  });
+  const value = JSON.stringify(rows);
+  const existingValue = existingPhaseInputs[phaseId]?.[grid.id] ?? "";
+  const avgConfidence = named.reduce((sum, s) => sum + (Number(s.confidence) || 0), 0) / named.length;
+
+  return {
+    phaseId,
+    fieldId: grid.id,
+    fieldLabel: grid.label,
+    mapping: {
+      value,
+      confidence: avgConfidence > 0 ? avgConfidence : 0.75,
+      source: named.find((s) => s.source?.trim())?.source ?? "",
+      extractionType: "extracted",
+      reviewState: "pending",
+    },
+    existingValue: existingValue || undefined,
+    hasConflict: Boolean(existingValue && existingValue.trim() !== value),
+  };
+}
+
 // ─── Build approved inputs from reviewed fields ───────────────────────────────
+
+/** Parse a value as an array of row objects, or null when it isn't JSON-array shaped. */
+function parseRowArray(raw: string): Array<Record<string, unknown>> | null {
+  if (!raw.trim().startsWith("[")) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    return parsed.filter((e): e is Record<string, unknown> => typeof e === "object" && e !== null);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Union two serialized grids (e.g. the core-team roster) without data loss. Rows
+ * are de-duplicated by a signature of their cells excluding `id`, so re-importing
+ * the same document is idempotent while genuinely new rows are appended. Used on
+ * import conflict — the default text refine/concat path would corrupt the JSON.
+ */
+export function mergeGridJson(existingJson: string, incomingJson: string): string {
+  const existing = parseRowArray(existingJson) ?? [];
+  const incoming = parseRowArray(incomingJson) ?? [];
+  const sig = (row: Record<string, unknown>) =>
+    JSON.stringify(
+      Object.entries(row)
+        .filter(([k]) => k !== "id")
+        .map(([k, v]) => [k, String(v ?? "").trim().toLowerCase()])
+        .sort(([a], [b]) => a.localeCompare(b)),
+    );
+  const seen = new Set<string>();
+  const merged: Array<Record<string, unknown>> = [];
+  for (const row of [...existing, ...incoming]) {
+    const key = sig(row);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(row);
+  }
+  return JSON.stringify(merged);
+}
 
 /** Deterministic merge used when AI refine is unavailable or fails — never loses data. */
 function localMerge(existing: string, incoming: string): string {
@@ -294,6 +417,13 @@ export async function buildApprovedInputs(
         // below would corrupt the JSON and wipe existing rows.
         if (field.fieldId === "kpis") {
           add(field.phaseId, field.fieldId, mergeKpiJson(existing, incoming), field.mapping, "enriched");
+          return;
+        }
+        // Any other grid value (e.g. the core-team roster) is also a JSON array —
+        // union it structurally rather than concatenating text, which would
+        // corrupt the JSON and drop rows the PM already entered.
+        if (parseRowArray(existing) && parseRowArray(incoming)) {
+          add(field.phaseId, field.fieldId, mergeGridJson(existing, incoming), field.mapping, "enriched");
           return;
         }
         let merged = "";
@@ -482,8 +612,21 @@ export function useDocumentIntelligence({
         existingPhaseInputs,
         dynamicSchemaStore,
       );
+      const derived: ReviewField[] = [];
       const kpiField = deriveKpiReviewField(intel.kpis, existingPhaseInputs);
-      setReviewFields(kpiField ? [...fields, kpiField] : fields);
+      if (kpiField) derived.push(kpiField);
+      // Bridge extracted stakeholders into the Mobilise core-team roster grid,
+      // unless the model already mapped that grid directly (avoid a duplicate
+      // review row for the same field).
+      const rosterField = deriveRosterReviewField(
+        intel.entities?.stakeholders,
+        existingPhaseInputs,
+        dynamicSchemaStore,
+      );
+      if (rosterField && !fields.some((f) => f.phaseId === rosterField.phaseId && f.fieldId === rosterField.fieldId)) {
+        derived.push(rosterField);
+      }
+      setReviewFields(derived.length ? [...fields, ...derived] : fields);
 
       // Store the attachmentId so we can link it after approval
       setResult({
