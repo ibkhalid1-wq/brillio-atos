@@ -17,6 +17,7 @@ import React from "react";
 import type { ProgramSummary } from "@/new/types";
 import { buildArtifactModel, type ArtifactNode } from "@/v3/lib/artifactModel";
 import { getPhaseInputSchema, type PhaseInputField } from "@/v3/lib/phaseInputSchema";
+import { buildFactGraph, type FactSourceType } from "@/v3/lib/factGraph";
 
 // ─── Cross-surface focus request ─────────────────────────────────────────────
 // The Traceability panel (StageView) lets a user jump from a fact straight to
@@ -206,6 +207,19 @@ export function ArtifactMapTree({
   const model = React.useMemo(() => buildArtifactModel(program), [program]);
   const scoped = !!phaseId;
 
+  // Source provenance per phase-field, derived from the Fact Graph: tells each
+  // input node whether its value was typed by the user or extracted from an
+  // imported document, so the tree can show a "User input" / "Document" chip.
+  const factSourceByField = React.useMemo(() => {
+    const map = new Map<string, FactSourceType>();
+    const graph = buildFactGraph(program);
+    for (const fact of graph.facts) {
+      const key = `${fact.sourceId}::${fact.factType}`;
+      if (!map.has(key)) map.set(key, fact.sourceType);
+    }
+    return map;
+  }, [program]);
+
   const phases = React.useMemo(
     () => (phaseId ? model.phases.filter((p) => p.phaseId === phaseId) : model.phases),
     [model.phases, phaseId],
@@ -241,8 +255,21 @@ export function ArtifactMapTree({
           const inputKey = `${artifactKey}>in:${field.id}`;
           const tags: Tag[] = [];
           if (field.required) tags.push({ text: "Required", variant: "req" });
+          // Show how a provided value was sourced — typed by the user or pulled
+          // from an imported document — so provenance is visible at a glance.
+          const sourceType = filled ? factSourceByField.get(`${phase.phaseId}::${field.id}`) : undefined;
+          if (sourceType === "imported_document") {
+            tags.push({ text: "Document", variant: "subtle", color: "var(--v3-accent)" });
+          } else if (sourceType) {
+            tags.push({ text: "User input", variant: "subtle" });
+          }
           if (!filled) tags.push({ text: "Not provided", variant: "muted" });
           const short = preview ? (preview.length > 72 ? `${preview.slice(0, 71)}…` : preview) : null;
+          const sourceLabel = sourceType === "imported_document"
+            ? "Source — imported document"
+            : sourceType
+              ? "Source — user input"
+              : "Source / evidence";
           return {
             key: inputKey,
             label: field.label,
@@ -254,7 +281,7 @@ export function ArtifactMapTree({
             children: [
               {
                 key: `${inputKey}>src`,
-                label: "Source / evidence",
+                label: sourceLabel,
                 tone: filled ? "good" : "muted",
                 detail: preview ?? (field.hint ? `No value yet — ${field.hint}` : "Not provided"),
                 detailSubtle: !filled,
@@ -293,7 +320,7 @@ export function ArtifactMapTree({
         children: artifactNodes,
       };
     });
-  }, [program, phases]);
+  }, [program, phases, factSourceByField]);
 
   const allKeys = React.useMemo(() => collectKeys(tree), [tree]);
 

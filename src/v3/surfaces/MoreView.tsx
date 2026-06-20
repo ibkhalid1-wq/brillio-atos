@@ -74,6 +74,7 @@ const WORKSPACE_GROUPS: Array<{
     label: "Documents & Reports",
     tiles: [
       { view: "documents", label: "Documents", description: "Uploaded documents and extracted insights", icon: "⊡", accent: "amber" },
+      { view: "artifact-map", label: "Artifact Map", description: "The complete programme tree — every phase with its artifacts, inputs and provenance", icon: "⊞", accent: "blue" },
       // Removed: Programme Narrative, Action Plan (content surfaced on Home)
     ],
   },
