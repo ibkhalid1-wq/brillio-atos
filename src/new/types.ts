@@ -26,7 +26,7 @@ export interface PhaseSummary {
   id: string;
   displayName: string;
   pct: number;
-  status: "ready" | "at-risk" | "blocked" | "complete" | "inactive";
+  status: "ready" | "at-risk" | "blocked" | "complete" | "inactive" | "active";
   objective: string;
 }
 

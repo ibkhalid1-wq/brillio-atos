@@ -124,7 +124,7 @@ function normalizePhaseStatus(pct: number): PhaseSummary["status"] {
 function deriveWorkstreams(data: JsonRecord): Workstream[] {
   if (!Array.isArray(data.workstreams)) return [];
   return data.workstreams
-    .filter((entry) => isRecord(entry))
+    .filter((entry): entry is { [key: string]: Json | undefined } => isRecord(entry))
     .map((entry, index) => ({
       id: asString(entry.id, `workstream-${index + 1}`),
       label: asString(entry.label, `Workstream ${index + 1}`),
@@ -1057,17 +1057,17 @@ export function normalizeProgram(row: ProgramRowLike): ProgramSummary {
   const narrativeGeneratedAt = asString(innerData.narrativeGeneratedAt, "");
   const narrativeConfidenceValue = asNumber(innerData.narrativeConfidence, Number.NaN);
   const plan = innerData.plan && typeof innerData.plan === "object" && !Array.isArray(innerData.plan)
-    ? innerData.plan as PlanSummary
+    ? innerData.plan as unknown as PlanSummary
     : null;
   const planGeneratedAt = asString(innerData.planGeneratedAt, "");
   const planConfidenceValue = asNumber(innerData.planConfidence, Number.NaN);
   const milestones = deriveMilestones(innerData);
   const milestonesGeneratedAt = asString(innerData.milestonesGeneratedAt) || null;
   const budgetTracking = innerData.budgetTracking && typeof innerData.budgetTracking === "object" && !Array.isArray(innerData.budgetTracking)
-    ? innerData.budgetTracking as BudgetTracking
+    ? innerData.budgetTracking as unknown as BudgetTracking
     : null;
   const criticalPath = innerData.criticalPath && typeof innerData.criticalPath === "object" && !Array.isArray(innerData.criticalPath)
-    ? innerData.criticalPath as CriticalPathAnalysis
+    ? innerData.criticalPath as unknown as CriticalPathAnalysis
     : null;
   const escalations = deriveEscalations(innerData);
   const closure = deriveClosure(innerData);
@@ -1142,12 +1142,12 @@ export function normalizeProgram(row: ProgramRowLike): ProgramSummary {
     benefitsTracking,
     benchmarkComparison,
     weeklyDigest,
-    methodology: asString(innerData.methodology) || "atos-standard",
+    methodology: (asString(innerData.methodology) || "atos-standard") as ProgramSummary["methodology"],
     workstreams,
     patternExtractGeneratedAt: asString(innerData.patternExtractGeneratedAt) || null,
     patternExtractCount: typeof innerData.patternExtractCount === "number" ? innerData.patternExtractCount : 0,
     patternQueryCache: Array.isArray(innerData.patternQueryCache)
-      ? innerData.patternQueryCache.filter((entry): entry is Record<string, unknown> => isRecord(entry))
+      ? (innerData.patternQueryCache.filter(isRecord) as Record<string, unknown>[])
       : [],
     patternQueryCachedAt: asString(innerData.patternQueryCachedAt) || null,
     patternLibrary: [],
@@ -1263,10 +1263,10 @@ export function buildNudges(program: ProgramSummary | null, runs: AgentRun[]): N
     items.push({
       id: "agent-recommendation",
       type: "recommendation",
-      message: `${running} agents are active now. Open the Twin or Work view to inspect their latest handoffs.`,
+      message: `${running} agents are active now. Open the Work view to inspect their latest handoffs.`,
       priority: "medium",
-      actionLabel: "Open twin",
-      actionView: "twin",
+      actionLabel: "Open work view",
+      actionView: "work",
     });
   }
   if (program.valueProjected > 0 && program.valueDelivered > 0) {
