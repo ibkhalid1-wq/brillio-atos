@@ -2056,9 +2056,10 @@ export default function AppShellV3() {
         : document.getElementById("phase-inputs-anchor");
       if (el) {
         el.scrollIntoView({ behavior: "smooth", block: anchor ? "center" : "start" });
-        // Always flash the landing target — for a generic inputs jump as well as a
-        // specific field/artifact — so a drill is never a silent no-op.
-        flash(el);
+        // Only flash a precise target — the specific field or artifact drilled into.
+        // A generic inputs jump (no anchor) just scrolls; flashing the whole inputs
+        // card would be visually heavy and wouldn't point at anything in particular.
+        if (anchor) flash(el);
         return;
       }
       if (attempts++ < 20) {
@@ -2066,14 +2067,10 @@ export default function AppShellV3() {
         return;
       }
       // The specific anchor never resolved (e.g. the source field id no longer maps
-      // to a rendered input). Fall back to the inputs section so the user still
-      // lands on the editable area and sees it acknowledged.
+      // to a rendered input). Scroll to the inputs section so the user still lands
+      // on the editable area — without flashing the entire card.
       if (anchor) {
-        const fallback = document.getElementById("phase-inputs-anchor");
-        if (fallback) {
-          fallback.scrollIntoView({ behavior: "smooth", block: "start" });
-          flash(fallback);
-        }
+        document.getElementById("phase-inputs-anchor")?.scrollIntoView({ behavior: "smooth", block: "start" });
       }
     };
     window.setTimeout(tryScroll, 150);
