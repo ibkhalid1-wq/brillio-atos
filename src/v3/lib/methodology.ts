@@ -146,6 +146,30 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         { id: "costAssumption", label: "Cost assumption", type: "textarea", placeholder: "Estimated programme cost and the basis for it", required: true, hint: "e.g. ~$2.4M based on vendor quotes and a 6-person core team" },
         { id: "constraints", label: "Key constraints", type: "textarea", placeholder: "Budget, timeline, regulatory, or technical constraints", required: true, hint: "e.g. Must go live before Q4 financial year end" },
         { id: "successMetric", label: "Primary success metric", type: "text", placeholder: "KPI name, e.g. Cost to serve", required: true },
+        {
+          // Validation / delivery posture: an explicit, recorded decision on how
+          // much the programme will prove before committing to full build. POC →
+          // Prototype → Pilot → MVP is a fidelity/investment ladder, so each stage
+          // carries its own "is it needed?" call AND the rationale (the "why not"
+          // when a stage is skipped is itself the governance value). Optional at
+          // Strategy (appetite-level) so it never blocks artifact generation — a
+          // required+empty field would fail the pre-flight gate; the concrete plan
+          // is refined downstream in Design. Captured as a grid so one field holds
+          // the whole matrix, and the edge's buildGroundingFacts already flattens
+          // every grid row into the strategy artifact prompts — so it informs the
+          // charter / business-case / roadmap automatically with NO artifactInputFlow
+          // entry (which would otherwise gate generation on it).
+          id: "validationApproach",
+          label: "Validation approach",
+          type: "grid",
+          required: false,
+          hint: "Record each de-risking stage you're considering and whether it's needed. Consciously skipping a stage — with the reason — is a valid, valuable decision to capture.",
+          columns: [
+            { key: "stage", label: "Stage", type: "select", width: 140, options: ["POC", "Prototype", "Pilot", "MVP"] },
+            { key: "decision", label: "Needed?", type: "select", width: 150, options: ["Required", "Not required", "Decide later"] },
+            { key: "considerations", label: "Considerations", type: "text", placeholder: "Why it is / isn't needed, scope, what it must prove to proceed" },
+          ],
+        },
       ],
       artifactInputFlow: {
         // The roadmap is sequenced from the whole strategy picture — objective,
