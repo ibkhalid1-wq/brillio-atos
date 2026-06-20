@@ -9,7 +9,6 @@ import { reportError } from '@/lib/errorReporter'
  * V3 is the only production shell mounted by the app.
  * - `src/v3/*` is the active shell and chrome layer
  * - `src/new/*` contains shared pages, hooks, and UI building blocks consumed by V3
- * - `src/flavor2/*` and `src/new/AppShell.tsx` are legacy shells kept for reference only
  *
  * If a future shell swap is intentional, change this import and update `src/SHELLS.md`.
  */

@@ -21,5 +21,3 @@ class ResizeObserverMock {
 }
 
 globalThis.ResizeObserver = ResizeObserverMock as any;
-
-await import("../new/AppShell");
