@@ -254,6 +254,25 @@ export default function InsightFeedView({
     null;
   const gateThreshold = getGateThreshold(gateThresholdPhase?.id ?? "");
 
+  // The daily-briefing agent ("What should I know today?") writes its structured
+  // output to program.rawData.data.dailyBriefing — headline + ≤3 focus items. This
+  // is the genuine "focus for today" (distinct from the programme narrative, which
+  // is the full brief shown on Executive).
+  const dailyBriefing = useMemo(() => {
+    const rd = program?.rawData as Record<string, unknown> | undefined;
+    if (!rd) return null;
+    const data = (typeof rd.data === "object" && rd.data !== null ? rd.data : rd) as Record<string, unknown>;
+    const b = data.dailyBriefing;
+    if (!b || typeof b !== "object") return null;
+    return b as {
+      headline?: string;
+      focusItems?: Array<{ item: string; urgency?: string; owner?: string; action?: string }>;
+      progressHighlight?: string;
+      ragStatus?: "green" | "amber" | "red";
+      reason?: string;
+    };
+  }, [program?.rawData]);
+
   // ── Derive insight cards ─────────────────────────────────────────────────
   const insights = useMemo(() => {
     type Card = InsightCardProps;
@@ -635,7 +654,7 @@ export default function InsightFeedView({
         </div>
       </div>
 
-      {/* ── 1a-ii. Programme summary (narrative) — context after the focus ────── */}
+      {/* ── 1a-ii. Today's briefing — the daily-briefing agent's focus for today ─ */}
       {!isFresh && (
         <div style={{
           padding: "16px 18px",
@@ -648,45 +667,71 @@ export default function InsightFeedView({
         }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
             <span style={{ fontSize: 11, fontWeight: 600, color: "var(--v3-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              ✦ Programme summary
+              ✦ Today's briefing
             </span>
             <button
               type="button"
               className="v3-button ghost v3-button-inline-xs"
-              onClick={() => onRunAgent("narrative", activePhaseId ?? "program")}
+              onClick={() => onRunAgent("daily-briefing")}
               disabled={anyAgentRunning}
             >
-              {program.narrative ? "Refresh" : "Generate summary"}
+              {dailyBriefing?.headline ? "Refresh" : "Generate"}
             </button>
           </div>
-          {program.narrative ? (
+          {dailyBriefing?.headline ? (
             <>
-              {/* Today shows only the lead paragraph; the full brief lives on Executive. */}
-              <div style={{ whiteSpace: "pre-wrap" }}>
-                {(typeof program.narrative === "string" ? program.narrative : "")
-                  .split(/\n\s*\n/)[0]
-                  .trim()}
+              {/* Lead sentence — where the programme stands today */}
+              <div style={{ fontWeight: 600, fontSize: 14, color: "var(--v3-text-primary)", lineHeight: 1.5 }}>
+                {dailyBriefing.headline}
               </div>
-              <button
-                type="button"
-                onClick={onNavigateToExecutive}
-                style={{
-                  marginTop: 10,
-                  padding: 0,
-                  background: "none",
-                  border: "none",
-                  color: "var(--v3-accent)",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                Read full summary →
-              </button>
+              {Array.isArray(dailyBriefing.focusItems) && dailyBriefing.focusItems.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
+                  {dailyBriefing.focusItems.slice(0, 3).map((f, i) => {
+                    const urgency = (f.urgency ?? "").toLowerCase();
+                    const tone = urgency === "now" ? "var(--v3-red)" : urgency === "today" ? "var(--v3-amber)" : "var(--v3-text-muted)";
+                    return (
+                      <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                        <span style={{ color: tone, fontSize: 13, lineHeight: 1.5, flexShrink: 0 }}>•</span>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--v3-text-primary)", lineHeight: 1.5 }}>
+                            {f.item}
+                            {f.urgency && (
+                              <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, color: tone, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                                {urgency.replace("-", " ")}
+                              </span>
+                            )}
+                          </div>
+                          {f.action && (
+                            <div style={{ fontSize: 12, color: "var(--v3-text-secondary)", lineHeight: 1.5, marginTop: 2 }}>{f.action}</div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {program.narrative && (
+                <button
+                  type="button"
+                  onClick={onNavigateToExecutive}
+                  style={{
+                    marginTop: 12,
+                    padding: 0,
+                    background: "none",
+                    border: "none",
+                    color: "var(--v3-accent)",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Read full summary →
+                </button>
+              )}
             </>
           ) : (
             <div style={{ color: "var(--v3-text-muted)" }}>
-              No summary yet — generate a programme narrative to see it here.
+              No briefing yet — tap “What should I know today?” to generate today’s focus.
             </div>
           )}
         </div>
