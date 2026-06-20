@@ -1923,21 +1923,6 @@ export default function AppShellV3() {
     return () => window.removeEventListener("atlas-v3-open-drawer", openDrawer);
   }, []);
 
-  const handleCommandModeChange = useCallback((nextMode: V3CommandMode) => {
-    if (nextMode === ("executive" as any)) {
-      commitNavigation({ surface: "executive", moreView: null, activePhaseId, reportId: null });
-      return;
-    }
-    setActiveMode(nextMode);
-    const nextSurface = commandModeToSurface(nextMode, surface);
-    commitNavigation({
-      surface: nextSurface,
-      moreView: nextSurface === "program" ? moreView : null,
-      activePhaseId,
-      reportId: nextSurface === "program" ? reportId || "status" : null,
-    });
-  }, [activePhaseId, commitNavigation, moreView, reportId, surface]);
-
   // The phase the programme is currently working through: the first in-progress
   // phase, else the first incomplete one, else the first phase. Mirrors the
   // landing logic so "current phase" means the same thing everywhere.
@@ -1948,6 +1933,27 @@ export default function AppShellV3() {
     const firstIncomplete = phases.find((phase) => (phase.pct ?? 0) < 100);
     return inProgress?.id || firstIncomplete?.id || phases[0]?.id || null;
   }, [activeProgram]);
+
+  const handleCommandModeChange = useCallback((nextMode: V3CommandMode) => {
+    if (nextMode === ("executive" as any)) {
+      commitNavigation({ surface: "executive", moreView: null, activePhaseId, reportId: null });
+      return;
+    }
+    setActiveMode(nextMode);
+    const nextSurface = commandModeToSurface(nextMode, surface);
+    // Entering the phase cockpit from another surface lands on the current phase
+    // (where the work is), not whatever phase was last viewed. Staying within the
+    // stage surface keeps the user's explicit phase pick.
+    const nextActivePhaseId = nextSurface === "stage" && surface !== "stage"
+      ? (resolveCurrentPhaseId() ?? activePhaseId)
+      : activePhaseId;
+    commitNavigation({
+      surface: nextSurface,
+      moreView: nextSurface === "program" ? moreView : null,
+      activePhaseId: nextActivePhaseId,
+      reportId: nextSurface === "program" ? reportId || "status" : null,
+    });
+  }, [activePhaseId, commitNavigation, moreView, reportId, surface, resolveCurrentPhaseId]);
 
   const navigateSurface = useCallback((nextSurface: V3Surface) => {
     // The programme (phase cockpit) screen always opens on the current phase, so
@@ -3312,7 +3318,7 @@ export default function AppShellV3() {
               onRunAgent={handleRunAgent}
               anyAgentRunning={anyAgentRunning}
               confidenceScore={programConfidenceScore}
-              onNavigateToPhase={(phaseId) => { setActivePhaseId(phaseId); navigateSurface("stage"); }}
+              onNavigateToPhase={openPhaseSheet}
             />
           </AdamErrorBoundary>
         ) : null}
