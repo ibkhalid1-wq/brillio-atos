@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
@@ -51,6 +52,7 @@
     "jsdom": "^29.1.1",
     "supabase": "^2.105.0",
     "tsx": "^4.20.1",
+    "typescript": "^5.4.5",
     "vite": "^4.4.5",
     "vitest": "^0.34.6"
   }
