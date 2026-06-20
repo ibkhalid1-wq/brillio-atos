@@ -856,9 +856,10 @@ export default function StageView({
   // The map mounts on the view switch, then reads the queued focus request to
   // expand the branch and highlight the matching input rows.
   const traceFactToGraph = React.useCallback((fact: { factType: string }) => {
+    if (!activePhase?.id) return;
     requestArtifactMapFocus(activePhase.id, fact.factType);
     onOpenMoreView("artifact-map");
-  }, [activePhase.id, onOpenMoreView]);
+  }, [activePhase?.id, onOpenMoreView]);
 
   // Timestamped programme snapshots (newest first) the user can revert to. Manual
   // saves + auto-saves taken when a phase gate locks. Read straight off persisted
