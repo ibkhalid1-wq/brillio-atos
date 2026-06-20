@@ -15,12 +15,27 @@ describe("normalizeProgram", () => {
         { id: "mobilise", pct: 40 },
         { id: "discover", pct: 0 },
       ],
+      // Strategy's gate is approved, so the programme has moved past it — the
+      // current (frontier) phase is the first one whose gate is NOT yet approved.
+      gateReviews: {
+        strategy: { status: "approved", readinessScore: 0.95 },
+      },
     },
   };
 
-  it("derives activePhaseId from phases", () => {
+  it("derives activePhaseId from the gate frontier (first unapproved gate)", () => {
     const program = normalizeProgram(baseRow);
     expect(program.activePhaseId).toBe("mobilise");
+  });
+
+  it("keeps a phase current until its gate is approved, even at 100% inputs", () => {
+    // No gate approved anywhere: strategy stays the frontier despite 100% pct,
+    // because advancing requires gate approval, not just complete inputs.
+    const program = normalizeProgram({
+      ...baseRow,
+      data: { ...baseRow.data, gateReviews: {} },
+    });
+    expect(program.activePhaseId).toBe("strategy");
   });
 
   it("handles empty phases without throwing", () => {

@@ -218,7 +218,21 @@ function derivePhases(data: JsonRecord): PhaseSummary[] {
   });
 }
 
-function deriveActivePhaseId(phases: PhaseSummary[]): string {
+function deriveActivePhaseId(
+  phases: PhaseSummary[],
+  gateReviews?: Record<string, { status?: string }>,
+): string {
+  // The current phase is the frontier: the first phase whose gate is NOT yet
+  // approved. An approved (locked-in) gate means the phase is complete even if its
+  // input pct never reached 100% — so a phase the team has gated past must never
+  // be reported as current. This matches getLockedPhaseIds' sequential gating.
+  if (gateReviews) {
+    const frontier = phases.find((phase) => gateReviews[phase.id]?.status !== "approved");
+    if (frontier) return frontier.id;
+    // Every gate approved → programme complete; surface the final phase.
+    if (phases.length) return phases[phases.length - 1].id;
+  }
+  // No gate data available — fall back to the pct-based frontier.
   const firstIncomplete = phases.find((phase) => phase.pct < 100 && phase.pct > 0);
   if (firstIncomplete) return firstIncomplete.id;
   const firstStarted = phases.find((phase) => phase.pct > 0);
@@ -1035,7 +1049,8 @@ export function normalizeProgram(row: ProgramRowLike): ProgramSummary {
       action: entry.mitigation ?? undefined,
       actionView: "work" as AppView,
     }));
-  const activePhaseId = deriveActivePhaseId(phases);
+  const gateReviews = deriveGateReviews(innerData);
+  const activePhaseId = deriveActivePhaseId(phases, gateReviews);
   const businessCase = asRecord(innerData.businessCase);
   const valueRealizeData = asRecord(innerData.valueRealizeData);
   const narrative = asString(innerData.narrative, "");
@@ -1054,7 +1069,6 @@ export function normalizeProgram(row: ProgramRowLike): ProgramSummary {
   const criticalPath = innerData.criticalPath && typeof innerData.criticalPath === "object" && !Array.isArray(innerData.criticalPath)
     ? innerData.criticalPath as CriticalPathAnalysis
     : null;
-  const gateReviews = deriveGateReviews(innerData);
   const escalations = deriveEscalations(innerData);
   const closure = deriveClosure(innerData);
   const changeImpact = deriveChangeImpact(innerData);
