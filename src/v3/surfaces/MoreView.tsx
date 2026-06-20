@@ -19,14 +19,14 @@ type WorkspaceTile = {
 // Users are no longer expected to discover the right workspace manually.
 // Phase-relevant areas — only references tiles that exist in WORKSPACE_GROUPS
 const PHASE_RECOMMENDED_WORKSPACES: Record<string, V3MoreView[]> = {
-  strategy:    ["risks", "documents"],
-  mobilise:    ["stakeholders", "risks", "milestones", "documents"],
-  discover:    ["stakeholders", "change-impact", "risks", "documents"],
-  design:      ["critical-path", "change-impact", "risks"],
-  build:       ["milestones", "critical-path", "risks", "budget", "scope-pcr"],
-  operate:     ["change-impact", "milestones", "budget"],
-  govern:      ["risks", "decision-audit"],
-  optimize:    ["milestones", "budget"],
+  strategy:    ["documents"],
+  mobilise:    ["stakeholders", "documents"],
+  discover:    ["stakeholders", "change-impact", "documents"],
+  design:      ["change-impact"],
+  build:       ["budget", "scope-pcr"],
+  operate:     ["change-impact", "budget"],
+  govern:      ["decision-audit"],
+  optimize:    ["budget"],
   valuerealize:["closure", "decision-audit"],
 };
 
@@ -45,10 +45,10 @@ const WORKSPACE_GROUPS: Array<{
   {
     label: "Delivery",
     tiles: [
-      { view: "risks", label: "Risks & Issues", description: "RAID log, risk heatmap and mitigations", icon: "△", accent: "red" },
-      { view: "milestones", label: "Milestones", description: "Milestone tracker and completion status", icon: "◉", accent: "green" },
+      // Risks/blockers live in the Action Center (DecideView); milestones and
+      // critical-path are surfaced in-context (Programme Health / Plan), so their
+      // standalone workspace tiles were removed to avoid duplicate entry points.
       { view: "budget", label: "Budget", description: "Budget tracking, forecasts and variance", icon: "◈", accent: "amber" },
-      { view: "critical-path", label: "Critical Path", description: "Schedule dependencies and float analysis", icon: "→", accent: "blue" },
       { view: "scope-pcr", label: "Scope Changes", description: "Scope baseline and change request log", icon: "◫", accent: "amber" },
     ],
   },
