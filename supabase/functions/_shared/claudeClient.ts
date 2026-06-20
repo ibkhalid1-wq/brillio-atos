@@ -58,6 +58,10 @@ export interface ClaudeCompletionResult {
   /** Input tokens served from the prompt cache (billed at the discounted rate). */
   cachedInputTokens?: number;
   latencyMs: number;
+  /** Provider + model that actually served the call (failover-aware) — lets the
+   *  cost ledger attribute spend to the right model even after a provider swap. */
+  provider: AIProvider;
+  model: string;
 }
 
 export interface ClaudeStreamResult extends ClaudeCompletionResult {
@@ -299,10 +303,11 @@ async function providerResponse(
   options: ClaudeCompletionOptions,
   stream: boolean,
   settingsOverride?: ProviderSettings,
-): Promise<{ response: Response; provider: AIProvider }> {
+): Promise<{ response: Response; provider: AIProvider; model: string }> {
   const settings = settingsOverride ?? await getProviderSettings();
   const providerOptions = { ...options, model: options.model || settings.model };
   if (settings.provider === "openai") {
+    const openAiModel = providerOptions.model || defaultModelForProvider("openai");
     const response = await fetchWithRetry(
       () => fetch(OPENAI_API_URL, {
         method: "POST",
@@ -315,7 +320,7 @@ async function providerResponse(
       }),
       "OpenAI",
     );
-    return { response, provider: settings.provider };
+    return { response, provider: settings.provider, model: openAiModel };
   }
 
   if (settings.provider === "google") {
@@ -332,7 +337,7 @@ async function providerResponse(
       }),
       "Google Gemini",
     );
-    return { response, provider: settings.provider };
+    return { response, provider: settings.provider, model };
   }
 
   const anthropicModel = providerOptions.model || defaultModelForProvider("anthropic");
@@ -355,7 +360,7 @@ async function providerResponse(
     }),
     "Anthropic",
   );
-  return { response, provider: settings.provider };
+  return { response, provider: settings.provider, model: anthropicModel };
 }
 
 function parseGeminiText(parsed: { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>; usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number } }) {
@@ -375,7 +380,7 @@ async function completeOnce(
   settings: ProviderSettings,
 ): Promise<ClaudeCompletionResult> {
   const startedAt = Date.now();
-  const { response, provider } = await providerResponse(options, false, settings);
+  const { response, provider, model } = await providerResponse(options, false, settings);
 
   if (provider === "openai") {
     const parsed = await response.json() as {
@@ -387,6 +392,8 @@ async function completeOnce(
       inputTokens: parsed.usage?.prompt_tokens ?? 0,
       outputTokens: parsed.usage?.completion_tokens ?? 0,
       latencyMs: Date.now() - startedAt,
+      provider,
+      model,
     };
   }
 
@@ -396,7 +403,7 @@ async function completeOnce(
       usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
     };
     const result = parseGeminiText(parsed);
-    return { ...result, latencyMs: Date.now() - startedAt };
+    return { ...result, latencyMs: Date.now() - startedAt, provider, model };
   }
 
   const parsed = await response.json() as {
@@ -410,6 +417,8 @@ async function completeOnce(
     outputTokens: parsed.usage?.output_tokens ?? 0,
     cachedInputTokens: parsed.usage?.cache_read_input_tokens ?? 0,
     latencyMs: Date.now() - startedAt,
+    provider,
+    model,
   };
 }
 
@@ -465,7 +474,7 @@ async function streamOnce(
   }, timeoutMs);
 
   try {
-    const { response, provider } = await providerResponse({ ...options, signal: controller.signal }, true, settings);
+    const { response, provider, model } = await providerResponse({ ...options, signal: controller.signal }, true, settings);
     const reader = response.body?.getReader();
     if (!reader) {
       throw new Error(`${provider} streaming response body is unavailable.`);
@@ -546,6 +555,8 @@ async function streamOnce(
       cachedInputTokens,
       latencyMs: Date.now() - startedAt,
       chunks: state.chunks,
+      provider,
+      model,
     };
   } catch (error) {
     if (timedOut) {

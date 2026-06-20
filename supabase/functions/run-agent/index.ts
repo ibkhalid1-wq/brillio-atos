@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
 import {
   streamClaudeText,
 } from "../_shared/claudeClient.ts";
+import { estimateCostUsd } from "../_shared/modelCatalog.ts";
 import { logger } from "../_shared/logger.ts";
 import type {
   AgentHandoff,
@@ -6816,6 +6817,17 @@ Deno.serve(async (req) => {
       claudeResult = retry;
     }
 
+    // Cost ledger: derive USD spend from the actually-served model (failover-aware)
+    // and the measured token breakdown, honouring the prompt-cache discount. This is
+    // the single point every agent path flows through after the model call, so the
+    // admin observability surface can roll spend up per model / capability / program.
+    const runCostUsd = estimateCostUsd({
+      model: claudeResult.model,
+      provider: claudeResult.provider,
+      inputTokens: claudeResult.inputTokens,
+      outputTokens: claudeResult.outputTokens,
+      cachedInputTokens: claudeResult.cachedInputTokens ?? 0,
+    });
     await logObservation(auth.admin, {
       runId,
       programId: request.programId,
@@ -6829,6 +6841,9 @@ Deno.serve(async (req) => {
         inputTokens: claudeResult.inputTokens,
         outputTokens: claudeResult.outputTokens,
         cachedInputTokens: claudeResult.cachedInputTokens ?? 0,
+        provider: claudeResult.provider,
+        model: claudeResult.model,
+        costUsd: runCostUsd,
       },
       tokens: claudeResult.inputTokens + claudeResult.outputTokens,
       latencyMs: claudeResult.latencyMs,

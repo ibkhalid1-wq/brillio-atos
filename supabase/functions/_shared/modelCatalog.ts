@@ -112,3 +112,33 @@ export function getModelCapabilities(modelId: string | undefined | null, provide
 export function modelsForProvider(provider: AIProvider): ModelCatalogEntry[] {
   return MODEL_CATALOG.filter((entry) => entry.provider === provider);
 }
+
+/**
+ * USD cost for a single model call, derived from catalog list pricing. Unknown
+ * models fall back to their provider's default model pricing so a cost is always
+ * produced (graceful degradation, never throws). Cached input tokens are billed
+ * at the discounted prompt-cache read rate (default 10% of the input rate), and
+ * they are subtracted from fresh input so they're never double-counted.
+ */
+export function estimateCostUsd(params: {
+  model: string | undefined | null;
+  provider: AIProvider;
+  inputTokens: number;
+  outputTokens: number;
+  cachedInputTokens?: number;
+}): number {
+  const entry = getCatalogEntry(params.model)
+    ?? getCatalogEntry(defaultModelForProvider(params.provider));
+  const inputPerM = entry?.inputPricePerM ?? 3;
+  const outputPerM = entry?.outputPricePerM ?? 15;
+  const cachedPerM = inputPerM * 0.1; // prompt-cache read ≈ 10% of fresh input.
+  const input = Math.max(params.inputTokens, 0);
+  const output = Math.max(params.outputTokens, 0);
+  const cached = Math.min(Math.max(params.cachedInputTokens ?? 0, 0), input);
+  const freshInput = input - cached;
+  const cost =
+    (freshInput / 1_000_000) * inputPerM +
+    (cached / 1_000_000) * cachedPerM +
+    (output / 1_000_000) * outputPerM;
+  return Math.round(cost * 1e6) / 1e6;
+}
