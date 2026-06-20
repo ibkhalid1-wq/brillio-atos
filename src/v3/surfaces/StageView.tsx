@@ -261,7 +261,7 @@ function ExitCriteriaCard({
   const display = criteria.length
     ? criteria
     : generatedCriteria.map((entry) => ({ criterion: entry.criterion, met: gateApproved, evidence: null }));
-  const mandatory = display.filter((criterion) => (criterion as Record<string, unknown>).mandatory !== false);
+  const mandatory = display.filter((criterion) => (criterion as unknown as Record<string, unknown>).mandatory !== false);
   const mandatoryUnmet = mandatory.filter((criterion) => !criterion.met);
   return (
     <div className="v3-card-sm">
@@ -278,7 +278,7 @@ function ExitCriteriaCard({
       {display.length ? (
         <div style={{ display: "grid", gap: 8 }}>
           {display.map((criterion) => {
-            const mandatoryCriterion = (criterion as Record<string, unknown>).mandatory !== false;
+            const mandatoryCriterion = (criterion as unknown as Record<string, unknown>).mandatory !== false;
             const evidence = typeof criterion.evidence === "string" ? criterion.evidence : "";
             return (
               <ExpandableSection
@@ -401,15 +401,18 @@ function DocBlockView({ block, keyPrefix }: { block: DocBlock; keyPrefix: string
   if (block.kind === "h2") return <h2 className="v3-doc-h2">{renderInline(block.text, keyPrefix)}</h2>;
   if (block.kind === "h3") return <h3 className="v3-doc-h3">{renderInline(block.text, keyPrefix)}</h3>;
   if (block.kind === "p") return <p className="v3-doc-p">{renderInline(block.text, keyPrefix)}</p>;
-  return (
-    <ul className="v3-doc-ul">
-      {block.items.map((it, i) => (
-        <li key={`${keyPrefix}-li${i}`} className="v3-doc-li" data-depth={Math.min(it.depth, 4)}>
-          {renderInline(it.text, `${keyPrefix}-li${i}`)}
-        </li>
-      ))}
-    </ul>
-  );
+  if (block.kind === "ul") {
+    return (
+      <ul className="v3-doc-ul">
+        {block.items.map((it, i) => (
+          <li key={`${keyPrefix}-li${i}`} className="v3-doc-li" data-depth={Math.min(it.depth, 4)}>
+            {renderInline(it.text, `${keyPrefix}-li${i}`)}
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  return null;
 }
 
 function AnimatedArtifactContent({ content }: { content: string }) {
@@ -867,9 +870,9 @@ export default function StageView({
   // markdown file, plus a README manifest — so a PM can hand the phase package to
   // a stakeholder without copying documents out one card at a time.
   const handleDownloadArtifacts = React.useCallback(async () => {
-    if (!activePhase || downloadingArtifacts) return;
+    if (!activePhase || !program || downloadingArtifacts) return;
     const slug = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "artifact";
-    const phaseLabel = activePhase.label ?? activePhase.id;
+    const phaseLabel = activePhase.displayName ?? activePhase.id;
     const produced: Array<{ label: string; state: string; content: string }> = [];
     for (const def of getPhaseArtifactDefs(activePhase.id, dynamicStore)) {
       const node = phaseArtifacts.byKey.get(def.id);
@@ -902,7 +905,7 @@ export default function StageView({
       setDownloadingArtifacts(false);
     }
   }, [activePhase, downloadingArtifacts, dynamicStore, phaseArtifacts, phaseArtifactContentById, source, program]);
-  const gateReviewStatus = getRawGateStatus(program, activePhase?.id) || gateReview?.status || null;
+  const gateReviewStatus = getRawGateStatus(program, activePhase?.id ?? null) || gateReview?.status || null;
   // Same canonical action queue the rail and Action Center count, so the
   // Programme screen never shows two different "open" numbers for one phase.
   const stageDecisions = deriveOpenRecommendedActions(program, "delivery_lead")
@@ -924,7 +927,6 @@ export default function StageView({
   const verdict = firstSentence(
     activePhase?.objective ||
     phaseRationale ||
-    program?.plan?.summary ||
     program?.narrative ||
     ""
   );
@@ -1105,7 +1107,7 @@ export default function StageView({
                 <span>· Updated <RelativeTime date={program.updatedAt} /></span>
               </div>
               <div className="v3-phase-head-titlerow">
-                <span className="v3-phase-head-title">{activePhase.label ?? activePhase.id}</span>
+                <span className="v3-phase-head-title">{activePhase.displayName ?? activePhase.id}</span>
                 <span className={`v3-chip ${phaseTone.tone === "green" ? "green" : phaseTone.tone === "amber" ? "amber" : phaseTone.tone === "red" ? "red" : "muted"}`}>
                   {activePhase.status ? activePhase.status.replace(/-/g, " ") : `${Math.round(activePhase.pct ?? 0)}% complete`}
                 </span>
@@ -1537,7 +1539,7 @@ export default function StageView({
                 className="v3-button ghost v3-button-inline-xs"
                 onClick={() => void handleDownloadArtifacts()}
                 disabled={downloadingArtifacts}
-                title={`Download every produced ${activePhase.label ?? activePhase.id} artifact as a .zip package`}
+                title={`Download every produced ${activePhase.displayName ?? activePhase.id} artifact as a .zip package`}
               >
                 {downloadingArtifacts ? "Preparing package…" : "⬇ Download artifacts package"}
               </button>
@@ -1556,7 +1558,7 @@ export default function StageView({
                   }
                 }}
                 disabled={approvingAll}
-                title={`Approve all ${approvableArtifactCount} produced ${activePhase.label ?? activePhase.id} artifact${approvableArtifactCount > 1 ? "s" : ""} — running the gate check once`}
+                title={`Approve all ${approvableArtifactCount} produced ${activePhase.displayName ?? activePhase.id} artifact${approvableArtifactCount > 1 ? "s" : ""} — running the gate check once`}
               >
                 {approvingAll ? "⋯ Finalizing artifacts…" : `✓ Approve all artifacts (${approvableArtifactCount})`}
               </button>
@@ -1734,7 +1736,7 @@ export default function StageView({
                       onClick={() => onRunAgent(def.id, activePhase.id, regenGuidance)}
                       disabled={agentButtonDisabled(def.id) || flowedInputsIncomplete || generationLocked}
                       title={generationLocked
-                        ? `Produce the earlier artifact${activePhase.label ? ` in ${activePhase.label}` : ""} to above 89% quality before generating ${def.label} — artifacts are built in order.`
+                        ? `Produce the earlier artifact${activePhase.displayName ? ` in ${activePhase.displayName}` : ""} to above 89% quality before generating ${def.label} — artifacts are built in order.`
                         : flowedInputsIncomplete
                         ? `Provide these inputs before generating ${def.label}:\n${generateGuidance}`
                         : regenGuidance
@@ -1850,7 +1852,7 @@ export default function StageView({
           <div
             role="dialog"
             aria-modal="true"
-            aria-label={`Exit criteria — ${activePhase.label ?? activePhase.id}`}
+            aria-label={`Exit criteria — ${activePhase.displayName ?? activePhase.id}`}
             onClick={(e) => e.stopPropagation()}
             style={{
               background: "var(--v3-surface)", borderRadius: "var(--v3-radius)",
@@ -1973,7 +1975,7 @@ export default function StageView({
           >
             <div aria-hidden="true" style={{ width: 52, height: 52, margin: "0 auto 16px", borderRadius: "50%", background: "var(--v3-amber-soft, rgba(245,158,11,0.16))", color: "var(--v3-amber)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>🔒</div>
             <h2 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 600, color: "var(--v3-text)" }}>
-              Close the {activePhase.label ?? activePhase.id} stage?
+              Close the {activePhase.displayName ?? activePhase.id} stage?
             </h2>
             <p style={{ margin: "0 0 20px", fontSize: 13.5, lineHeight: 1.5, color: "var(--v3-text-secondary)" }}>
               Every required artifact is complete and quality clears the gate bar. Closing locks this stage and approves its artifacts; further changes are managed through <strong>change control</strong>. The approved artifacts are then handed to the AI planner to generate the next stage&rsquo;s input fields and artifact inventory.
@@ -2016,7 +2018,7 @@ export default function StageView({
           >
             <div aria-hidden="true" style={{ width: 52, height: 52, margin: "0 auto 16px", borderRadius: "50%", background: "var(--v3-green-soft, rgba(34,197,94,0.16))", color: "var(--v3-green)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>✓</div>
             <h2 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 600, color: "var(--v3-text)" }}>
-              {activePhase.label ?? activePhase.id} stage complete &amp; locked
+              {activePhase.displayName ?? activePhase.id} stage complete &amp; locked
             </h2>
             <p style={{ margin: "0 0 20px", fontSize: 13.5, lineHeight: 1.5, color: "var(--v3-text-secondary)" }}>
               Every required artifact is complete and quality clears the gate bar. This stage is now locked. Any further changes are managed through <strong>change control</strong>, accessed from the Executive Overview screen.
