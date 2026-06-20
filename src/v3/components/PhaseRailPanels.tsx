@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from "react";
 import type { DecisionSummary, ProgramSummary, RAIDEntry, RAIDEntryType } from "@/new/types";
-import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
 import { selectBlockers, selectRisks } from "@/v3/lib/programRaid";
 import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
 import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
@@ -18,8 +17,8 @@ import type { V3MoreView } from "@/v3/types";
  *
  *   • Actions      → Actions (open decisions) · Risks · Blockers, read-only
  *                    lists that deep-link to the decision queue / RAID log.
- *   • Intelligence → Artifacts · Graph · Uploads. Artifacts open a content
- *                    modal; uploads list imported source content for download.
+ *   • Intelligence → Graph · Uploads. The graph maps phase artifacts and their
+ *                    lineage; uploads list imported source content for download.
  */
 
 type RaidDraft = {
@@ -35,6 +34,7 @@ type PhaseRailPanelsProps = {
   program: ProgramSummary;
   phaseId: string;
   decisions: DecisionSummary[];
+  /** Retained for call-site compatibility; the rail no longer generates artifacts inline. */
   agentsAvailable?: boolean;
   /** Retained for call-site compatibility; the rail no longer raises items inline. */
   onAddDecision?: (decision: Omit<DecisionSummary, "id" | "status" | "createdAt">) => Promise<void>;
@@ -42,7 +42,8 @@ type PhaseRailPanelsProps = {
   onAddRaid?: (draft: RaidDraft) => Promise<void>;
   onCloseRaid: (entryId: string, note?: string) => Promise<void>;
   onOpenDecide: () => void;
-  onRunAgent: (agentId: string) => void;
+  /** Retained for call-site compatibility; the rail no longer generates artifacts inline. */
+  onRunAgent?: (agentId: string) => void;
   onOpenMoreView: (view: V3MoreView) => void;
   onUploadDocument: () => void;
   /**
@@ -56,11 +57,9 @@ type PhaseRailPanelsProps = {
 
 type PrimaryTab = "actions" | "intelligence";
 type ActionTab = "actions" | "blockers" | "risks";
-type IntelTab = "artifacts" | "graph" | "uploads";
+type IntelTab = "graph" | "uploads";
 
 type UploadItem = { fieldId: string; label: string; source: string; value: string };
-
-type ArtifactModalData = { label: string; statusLabel: string; tone: string; score: number | null; content: string };
 
 function priorityVariant(value: string): "critical" | "high" | "medium" | "low" {
   if (value === "critical") return "critical";
@@ -100,37 +99,20 @@ function slugify(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "document";
 }
 
-function RailModal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  return (
-    <div className="v3-rail-modal-overlay" role="presentation" onClick={onClose}>
-      <div className="v3-rail-modal" role="dialog" aria-modal="true" aria-label={title} onClick={(event) => event.stopPropagation()}>
-        <div className="v3-rail-modal-head">
-          <span className="v3-rail-modal-title">{title}</span>
-          <button type="button" className="v3-rail-modal-close" aria-label="Close" onClick={onClose}>✕</button>
-        </div>
-        <div className="v3-rail-modal-body">{children}</div>
-      </div>
-    </div>
-  );
-}
-
 export function PhaseRailPanels({
   program,
   phaseId,
   decisions,
-  agentsAvailable = true,
   onCloseRaid,
   onOpenDecide,
-  onRunAgent,
   onOpenMoreView,
   onUploadDocument,
   onNavigateToPhaseInputs,
 }: PhaseRailPanelsProps) {
   const [primaryTab, setPrimaryTab] = useState<PrimaryTab>("actions");
   const [actionTab, setActionTab] = useState<ActionTab>("actions");
-  const [intelTab, setIntelTab] = useState<IntelTab>("artifacts");
+  const [intelTab, setIntelTab] = useState<IntelTab>("graph");
   const [closingId, setClosingId] = useState<string | null>(null);
-  const [openArtifact, setOpenArtifact] = useState<ArtifactModalData | null>(null);
 
   const blockers = useMemo(() => selectBlockers(program, { phaseId }), [program, phaseId]);
   const risks = useMemo(() => selectRisks(program, { phaseId }), [program, phaseId]);
@@ -144,34 +126,8 @@ export function PhaseRailPanels({
     onNavigateToPhaseInputs(target, anchor);
   };
 
-  // Full artifact bodies for the current phase, keyed by artifact/def id.
-  const artifactContentById = useMemo(() => {
-    const map = new Map<string, string>();
-    const bucket = getDataBucket(program);
-    const phaseBucket = bucket?.phaseArtifacts && typeof bucket.phaseArtifacts === "object" && !Array.isArray(bucket.phaseArtifacts)
-      ? (bucket.phaseArtifacts as Record<string, unknown>)[phaseId]
-      : null;
-    if (!phaseBucket || typeof phaseBucket !== "object") return map;
-    for (const [artifactId, value] of Object.entries(phaseBucket as Record<string, unknown>)) {
-      const entry = value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
-      if (!entry) continue;
-      const content = typeof entry.content === "string" && entry.content.trim()
-        ? entry.content
-        : typeof entry.contentSummary === "string" ? entry.contentSummary : "";
-      if (content.trim()) map.set(artifactId, content);
-    }
-    return map;
-  }, [program, phaseId]);
-
-  const artifacts = useMemo(() => {
-    const summary = buildPhaseArtifacts(program, phaseId);
-    const byKey = new Map((summary?.artifacts ?? []).map((node) => [node.key, node]));
-    // Counts are derived from the displayed defs to stay consistent with the chips.
-    const defs = getPhaseArtifactDefs(phaseId);
-    const required = defs.length;
-    const present = defs.filter((def) => byKey.get(def.id)?.present).length;
-    return { defs, byKey, present, required };
-  }, [program, phaseId]);
+  // Required-artifact count for this phase, surfaced on the Intelligence tab badge.
+  const artifactCount = useMemo(() => getPhaseArtifactDefs(phaseId).length, [phaseId]);
 
   // Imported source content for this phase, derived from field provenance. Only
   // values that still match the imported snapshot are listed (a hand-edit drops
@@ -199,7 +155,6 @@ export function PhaseRailPanels({
   ];
   const openActionCount = decisions.length + blockers.length + risks.length;
   const intelTabs: { id: IntelTab; label: string }[] = [
-    { id: "artifacts", label: "Artifacts" },
     { id: "graph", label: "Graph" },
     { id: "uploads", label: "Uploads" },
   ];
@@ -215,18 +170,8 @@ export function PhaseRailPanels({
 
   const primaryTabs: { id: PrimaryTab; label: string; count: number }[] = [
     { id: "actions", label: "Action Center", count: openActionCount },
-    { id: "intelligence", label: "Intelligence", count: artifacts.required },
+    { id: "intelligence", label: "Intelligence", count: artifactCount },
   ];
-
-  const openArtifactModal = (defLabel: string, defId: string, statusLabel: string, tone: string, score: number | null) => {
-    setOpenArtifact({
-      label: defLabel,
-      statusLabel,
-      tone,
-      score,
-      content: artifactContentById.get(defId) ?? "",
-    });
-  };
 
   return (
     <div className="v3-rail-panels">
@@ -394,43 +339,6 @@ export function PhaseRailPanels({
             ))}
           </div>
 
-          {intelTab === "artifacts" ? (
-            <div className="v3-rail-list">
-              {artifacts.required > 0 ? (
-                <div className="v3-rail-meta">{artifacts.present}/{artifacts.required} produced</div>
-              ) : null}
-              {artifacts.defs.map((def) => {
-                const node = artifacts.byKey.get(def.id);
-                const present = !!node?.present;
-                const score = typeof node?.quality === "number" ? node.quality : null;
-                const state = node?.state ?? "missing";
-                const statusLabel = !present ? "Missing" : state === "approved" ? "Approved" : state === "ready" ? "Ready" : "Draft";
-                const tone = !present ? "muted" : state === "approved" ? "green" : state === "ready" ? "blue" : "amber";
-                const hasContent = present && artifactContentById.has(def.id);
-                return (
-                  <div
-                    key={def.id}
-                    className={`v3-rail-item v3-rail-item--row${hasContent ? " is-clickable" : ""}`}
-                    role={hasContent ? "button" : undefined}
-                    tabIndex={hasContent ? 0 : undefined}
-                    aria-label={hasContent ? `Open ${def.label}` : undefined}
-                    onClick={hasContent ? () => openArtifactModal(def.label, def.id, statusLabel, tone, score) : undefined}
-                    onKeyDown={hasContent ? (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openArtifactModal(def.label, def.id, statusLabel, tone, score); } } : undefined}
-                  >
-                    <div className="v3-rail-item-head">
-                      <span className="v3-rail-item-title">{def.label}</span>
-                      <span className={`v3-chip v3-chip-tight ${tone}`}>{statusLabel}{score != null ? ` · ${score}%` : ""}</span>
-                    </div>
-                    <button type="button" className="v3-button ghost v3-button-inline-xs" disabled={!agentsAvailable} onClick={(event) => { event.stopPropagation(); onRunAgent(def.id); }} title={present ? `Regenerate ${def.label}` : `Generate ${def.label}`}>
-                      {present ? "↻ Regenerate" : "Generate"}
-                    </button>
-                  </div>
-                );
-              })}
-              <button type="button" className="v3-button ghost v3-button-inline-xs v3-rail-footer-link" onClick={() => onOpenMoreView("artifact-map")}>Open full artifact map →</button>
-            </div>
-          ) : null}
-
           {intelTab === "graph" ? (
             <div className="v3-rail-list">
               <button type="button" className="v3-button ghost v3-button-inline-xs v3-rail-footer-link" onClick={() => onOpenMoreView("artifact-map")}>Open full artifact map →</button>
@@ -469,22 +377,6 @@ export function PhaseRailPanels({
           ) : null}
         </AdamCardBody>
       </AdamCard>
-      ) : null}
-
-      {openArtifact ? (
-        <RailModal title={openArtifact.label} onClose={() => setOpenArtifact(null)}>
-          <div className="v3-rail-modal-meta">
-            <span className={`v3-chip v3-chip-tight ${openArtifact.tone}`}>{openArtifact.statusLabel}{openArtifact.score != null ? ` · ${openArtifact.score}%` : ""}</span>
-            <button
-              type="button"
-              className="v3-button ghost v3-button-inline-xs"
-              onClick={() => triggerDownload(`${slugify(openArtifact.label)}.txt`, `${openArtifact.label}\n\n${openArtifact.content}`)}
-            >
-              ↓ Download
-            </button>
-          </div>
-          <div className="v3-rail-modal-content">{openArtifact.content || "No content captured for this artifact yet."}</div>
-        </RailModal>
       ) : null}
     </div>
   );
