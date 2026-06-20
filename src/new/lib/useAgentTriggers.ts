@@ -439,7 +439,7 @@ export function useAgentTriggers({
 
   useEffect(() => {
     if (!canRunAgents) return;
-    if (!isAgentStale("scope-creep-monitor", scopePcrGeneratedAt)) return;
+    if (!isAgentStale("scope-pcr", scopePcrGeneratedAt)) return;
     if (loadTriggerRef.current.scopePcrProgramId === programId || scopePcrRunning.current) return;
     if (phases.filter((phase) => phase.pct > 0).length < 2) return;
 

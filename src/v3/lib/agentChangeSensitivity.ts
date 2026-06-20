@@ -14,7 +14,7 @@ export const AGENT_CHANGE_SENSITIVITY: Record<string, SensitivityConfig> = {
   milestone: { watchedFields: ["milestones"], minIntervalMs: 3_600_000, maxIntervalMs: 86_400_000, velocityMultiplier: 0.5 },
   stakeholder: { watchedFields: ["stakeholders", "decisionQueue"], minIntervalMs: 86_400_000, maxIntervalMs: 604_800_000, velocityMultiplier: 1.5 },
   adoption: { watchedFields: ["healthScore", "stakeholders"], minIntervalMs: 86_400_000, maxIntervalMs: 604_800_000, velocityMultiplier: 1.2 },
-  "scope-creep-monitor": { watchedFields: ["scopeLog", "decisionQueue"], minIntervalMs: 7_200_000, maxIntervalMs: 86_400_000, velocityMultiplier: 0.3 },
+  "scope-pcr": { watchedFields: ["scopeLog", "decisionQueue"], minIntervalMs: 7_200_000, maxIntervalMs: 86_400_000, velocityMultiplier: 0.3 },
   "gate-readiness-coach": { watchedFields: ["gateReviews", "phaseInputs", "raidEntries"], minIntervalMs: 3_600_000, maxIntervalMs: 86_400_000, velocityMultiplier: 0.4 },
   "phase-completion-estimator": { watchedFields: ["milestones", "exitCriteria", "phaseArtifacts", "phaseAgentTasks"], minIntervalMs: 3_600_000, maxIntervalMs: 86_400_000, velocityMultiplier: 0.4 },
 };
