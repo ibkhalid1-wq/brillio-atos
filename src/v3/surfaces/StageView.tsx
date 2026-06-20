@@ -8,6 +8,7 @@ import PhaseInputsPanel, { type FieldAssistRequest } from "@/v3/components/Phase
 import PhaseFlowOverlay from "@/v3/components/PhaseFlowOverlay";
 import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
 import { PhaseRail } from "@/v3/components/PhaseRail";
+import { requestArtifactMapFocus } from "@/v3/components/ArtifactMapTree";
 import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
 import { selectBlockers, selectRisks } from "@/v3/lib/programRaid";
 import { EmptyState } from "@/v3/components/ui/EmptyState";
@@ -850,6 +851,15 @@ export default function StageView({
     tryScroll();
   }, [onOpenMoreView]);
 
+  // Traceability → graph: jump from a fact to its node in the full artifact map,
+  // where the input's place in the phase → artifact → input lineage is shown.
+  // The map mounts on the view switch, then reads the queued focus request to
+  // expand the branch and highlight the matching input rows.
+  const traceFactToGraph = React.useCallback((fact: { factType: string }) => {
+    requestArtifactMapFocus(activePhase.id, fact.factType);
+    onOpenMoreView("artifact-map");
+  }, [activePhase.id, onOpenMoreView]);
+
   // Timestamped programme snapshots (newest first) the user can revert to. Manual
   // saves + auto-saves taken when a phase gate locks. Read straight off persisted
   // rawData so the revert modal always lists the authoritative history.
@@ -1421,7 +1431,14 @@ export default function StageView({
               {phaseFacts.groups.map((g) =>
                 g.items.length === 1 ? (
                   <div key={g.items[0].id} style={{ display: "flex", alignItems: "baseline", gap: 6, fontSize: 11 }}>
-                    <span style={{ fontFamily: "var(--v3-mono, monospace)", color: "var(--v3-text-muted)", flexShrink: 0 }}>{g.items[0].id}</span>
+                    <button
+                      type="button"
+                      style={{ fontFamily: "var(--v3-mono, monospace)", color: "var(--v3-accent)", flexShrink: 0, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline dotted" }}
+                      title="Open in artifact map"
+                      onClick={() => traceFactToGraph(g.items[0])}
+                    >
+                      {g.items[0].id}
+                    </button>
                     <span style={{ color: "var(--v3-text)" }}>{g.items[0].factText}</span>
                     <button
                       type="button"
@@ -1442,7 +1459,14 @@ export default function StageView({
                     </div>
                     {g.items.map((f) => (
                       <div key={f.id} style={{ display: "flex", alignItems: "baseline", gap: 6, fontSize: 11, paddingLeft: 8 }}>
-                        <span style={{ fontFamily: "var(--v3-mono, monospace)", color: "var(--v3-text-muted)", flexShrink: 0 }}>{f.id}</span>
+                        <button
+                          type="button"
+                          style={{ fontFamily: "var(--v3-mono, monospace)", color: "var(--v3-accent)", flexShrink: 0, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline dotted" }}
+                          title="Open in artifact map"
+                          onClick={() => traceFactToGraph(f)}
+                        >
+                          {f.id}
+                        </button>
                         <span style={{ color: "var(--v3-text)" }}>{f.normalizedValue}</span>
                         <button
                           type="button"

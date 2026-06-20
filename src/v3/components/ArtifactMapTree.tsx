@@ -18,6 +18,33 @@ import type { ProgramSummary } from "@/new/types";
 import { buildArtifactModel, type ArtifactNode } from "@/v3/lib/artifactModel";
 import { getPhaseInputSchema, type PhaseInputField } from "@/v3/lib/phaseInputSchema";
 
+// ─── Cross-surface focus request ─────────────────────────────────────────────
+// The Traceability panel (StageView) lets a user jump from a fact straight to
+// its node in the full artifact map. Because the map mounts fresh when the view
+// switches, we stash the request module-side and fire an event: a freshly
+// mounted tree reads the pending request on mount, while an already-mounted tree
+// re-focuses on the event. The request is single-shot — consumed once read.
+
+const ARTIFACT_MAP_FOCUS_EVENT = "v3-artifact-map-focus";
+
+type ArtifactMapFocusRequest = { phaseId: string; inputId: string };
+
+let pendingArtifactMapFocus: ArtifactMapFocusRequest | null = null;
+
+/** Request the full artifact map to expand + highlight a phase input's nodes. */
+export function requestArtifactMapFocus(phaseId: string, inputId: string) {
+  pendingArtifactMapFocus = { phaseId, inputId };
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent<ArtifactMapFocusRequest>(ARTIFACT_MAP_FOCUS_EVENT, { detail: { phaseId, inputId } }));
+  }
+}
+
+function consumeArtifactMapFocus(): ArtifactMapFocusRequest | null {
+  const req = pendingArtifactMapFocus;
+  pendingArtifactMapFocus = null;
+  return req;
+}
+
 type Tone = "good" | "warning" | "muted";
 
 const TONE_COLOR: Record<Tone, string> = {
@@ -85,22 +112,52 @@ function collectKeys(nodes: TreeNodeData[], acc: string[] = []): string[] {
   return acc;
 }
 
+/** Ancestor keys for a `a>b>c` tree key (excludes the key itself). */
+function ancestorKeys(key: string): string[] {
+  const parts = key.split(">");
+  const acc: string[] = [];
+  for (let i = 1; i < parts.length; i++) acc.push(parts.slice(0, i).join(">"));
+  return acc;
+}
+
+/**
+ * Resolve a focus request to the input-node keys it should highlight (the same
+ * input appears under each artifact of the phase) plus every ancestor that must
+ * be expanded to reveal them.
+ */
+function resolveFocusKeys(
+  allKeys: string[],
+  phaseId: string,
+  inputId: string,
+): { focus: string[]; expand: string[] } {
+  const phasePrefix = `phase:${phaseId}>`;
+  const inputSuffix = `>in:${inputId}`;
+  const focus = allKeys.filter((k) => k.startsWith(phasePrefix) && k.endsWith(inputSuffix));
+  const expand = new Set<string>();
+  for (const k of focus) for (const a of ancestorKeys(k)) expand.add(a);
+  return { focus, expand: [...expand] };
+}
+
 function TreeNode({
   node,
   expanded,
   onToggle,
+  focusedKeys,
 }: {
   node: TreeNodeData;
   expanded: Set<string>;
   onToggle: (key: string) => void;
+  focusedKeys: Set<string>;
 }) {
   const hasChildren = !!node.children && node.children.length > 0;
   const open = expanded.has(node.key);
+  const isFocused = focusedKeys.has(node.key);
   return (
     <div className="v3-amap-node">
       <button
         type="button"
-        className="v3-amap-row"
+        className={`v3-amap-row${isFocused ? " is-focused" : ""}`}
+        data-amap-key={node.key}
         onClick={() => hasChildren && onToggle(node.key)}
         disabled={!hasChildren}
       >
@@ -130,7 +187,7 @@ function TreeNode({
       {hasChildren && open ? (
         <div className="v3-amap-children">
           {node.children!.map((child) => (
-            <TreeNode key={child.key} node={child} expanded={expanded} onToggle={onToggle} />
+            <TreeNode key={child.key} node={child} expanded={expanded} onToggle={onToggle} focusedKeys={focusedKeys} />
           ))}
         </div>
       ) : null}
@@ -264,12 +321,56 @@ export function ArtifactMapTree({
     });
   }, []);
 
+  // ── Cross-surface focus: expand + highlight a fact's input node ──
+  // Only the full map (not the scoped rail) honours focus requests. On a focus
+  // request we expand the ancestor chain, mark the matching input rows, scroll
+  // the first into view, then fade the highlight after a few seconds.
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [focusedKeys, setFocusedKeys] = React.useState<Set<string>>(() => new Set());
+  const focusTimerRef = React.useRef<number | null>(null);
+
+  const applyFocus = React.useCallback((req: ArtifactMapFocusRequest) => {
+    if (scoped) return;
+    const { focus, expand } = resolveFocusKeys(allKeys, req.phaseId, req.inputId);
+    if (focus.length === 0) return;
+    setExpanded((current) => {
+      const next = new Set(current);
+      for (const k of expand) next.add(k);
+      return next;
+    });
+    setFocusedKeys(new Set(focus));
+    if (focusTimerRef.current) window.clearTimeout(focusTimerRef.current);
+    // Wait for the expand to render, then scroll the first match into view.
+    window.setTimeout(() => {
+      const el = containerRef.current?.querySelector(`[data-amap-key="${CSS.escape(focus[0])}"]`) as HTMLElement | null;
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 80);
+    focusTimerRef.current = window.setTimeout(() => setFocusedKeys(new Set()), 5000);
+  }, [scoped, allKeys]);
+
+  // Drain a pending request on mount (view just switched in) and listen for
+  // live requests while mounted.
+  React.useEffect(() => {
+    if (scoped) return;
+    const pending = consumeArtifactMapFocus();
+    if (pending) applyFocus(pending);
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<ArtifactMapFocusRequest>).detail;
+      if (detail) applyFocus(detail);
+    };
+    window.addEventListener(ARTIFACT_MAP_FOCUS_EVENT, handler);
+    return () => {
+      window.removeEventListener(ARTIFACT_MAP_FOCUS_EVENT, handler);
+      if (focusTimerRef.current) window.clearTimeout(focusTimerRef.current);
+    };
+  }, [scoped, applyFocus]);
+
   if (!program || tree.length === 0) {
     return <div className="v3-context-artifacts-empty">No artifact tree for this programme yet.</div>;
   }
 
   return (
-    <div className={`v3-amap${scoped ? " is-scoped" : ""}`}>
+    <div className={`v3-amap${scoped ? " is-scoped" : ""}`} ref={containerRef}>
       <div className="v3-amap-toolbar">
         <span className="v3-amap-totals">
           <strong>{totals.present}</strong> of <strong>{totals.required}</strong> required artifacts present
@@ -289,7 +390,7 @@ export function ArtifactMapTree({
       <div className="v3-amap-tree">
         {tree.map((node) => (
           <div key={node.key} className="v3-amap-phase" data-tone={node.tone}>
-            <TreeNode node={node} expanded={expanded} onToggle={toggle} />
+            <TreeNode node={node} expanded={expanded} onToggle={toggle} focusedKeys={focusedKeys} />
           </div>
         ))}
       </div>

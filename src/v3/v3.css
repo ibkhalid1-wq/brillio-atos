@@ -6914,6 +6914,15 @@ button.v3-phase-metric:focus-visible {
 .v3-amap-row:not(:disabled):hover {
   background: var(--v3-accent-soft);
 }
+/* Highlighted when a Traceability fact jumps to its node in the map. */
+@keyframes v3-amap-focus-flash {
+  0%   { background: var(--v3-accent-soft); box-shadow: inset 0 0 0 2px var(--v3-accent); }
+  70%  { background: var(--v3-accent-soft); box-shadow: inset 0 0 0 2px var(--v3-accent); }
+  100% { background: none; box-shadow: inset 0 0 0 0 transparent; }
+}
+.v3-amap-row.is-focused {
+  animation: v3-amap-focus-flash 5s ease-out;
+}
 .v3-amap-caret {
   flex: 0 0 auto;
   display: inline-flex;
