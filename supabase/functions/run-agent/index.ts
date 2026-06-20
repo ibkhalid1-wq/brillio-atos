@@ -618,6 +618,30 @@ interface FormalArtifactSpec {
   system: string;
 }
 
+// Output-token right-sizing (T2). The default budget is generous (4096) so any
+// long-form or unknown agent can never be truncated — truncation would only
+// trigger a costly parse-failure retry, defeating the purpose. We tighten the
+// budget ONLY for agents whose output is bounded structured JSON (scores,
+// validations, checks, short estimates). These reliably finish well under 2048
+// tokens, so the lower ceiling trims worst-case latency/cost with zero
+// truncation risk. New agents inherit the safe 4096 default automatically.
+const COMPACT_OUTPUT_AGENTS = new Set<string>([
+  "input-quality", "contradiction-detector", "cross-artifact-validator",
+  "health-heatmap", "change-impact", "gate-review", "benchmark-comparator",
+  "stakeholder-risk-assessor", "benefit-forecast", "twin-sync", "decision-advisor",
+  "kpi-validator", "compliance-checker", "dependency-check", "handoff-quality",
+  "capacity-assessor", "vendor-risk-assessor", "phase-completion-estimator",
+  "gate-readiness-coach", "artifact-reviewer", "scope-pcr", "critical-path",
+  "agent-schedule-optimiser", "exit-criteria-generator", "phase-input-planner",
+]);
+const COMPACT_OUTPUT_TOKENS = 2048;
+const DEFAULT_OUTPUT_TOKENS = 4096;
+
+/** Per-agent output-token budget — bounded JSON agents get a tighter ceiling. */
+function resolveOutputTokenBudget(agentId: string): number {
+  return COMPACT_OUTPUT_AGENTS.has(agentId) ? COMPACT_OUTPUT_TOKENS : DEFAULT_OUTPUT_TOKENS;
+}
+
 const FORMAL_ARTIFACT_AGENTS: Record<string, FormalArtifactSpec> = {
   "charter": {
     phase: "strategy",
@@ -6785,16 +6809,21 @@ Deno.serve(async (req) => {
       }
     }
 
+    const outputTokenBudget = resolveOutputTokenBudget(request.agentId);
     let claudeResult = await streamClaudeText({
       system: prompt.system,
       messages: [{ role: "user", content: prompt.user }],
-      maxTokens: 4096,
+      maxTokens: outputTokenBudget,
       temperature: 0.2,
     });
 
     // Resilience: if the model returned no parseable JSON object (prose-only,
-    // truncated stream, fenced markdown that broke extraction), retry once with a
-    // stricter instruction at temperature 0. If it still fails, throw so the run is
+    // truncated stream, fenced markdown that broke extraction), repair it cheaply
+    // (T5). Rather than re-running the full prompt — which re-sends the entire
+    // (large) system + cross-phase context and pays for it twice — we feed ONLY
+    // the broken text back with a tiny "fix this into valid JSON" instruction.
+    // Input tokens collapse to the size of the broken output, so the repair costs
+    // a fraction of a full re-run. If the repair still fails, throw so the run is
     // recorded as failed rather than silently completing with zero artifacts.
     if (!hasUsableAgentJson(claudeResult.text)) {
       await logObservation(auth.admin, {
@@ -6806,13 +6835,13 @@ Deno.serve(async (req) => {
         payload: { preview: claudeResult.text.slice(0, 200) },
       });
       const retry = await streamClaudeText({
-        system: `${prompt.system}\n\nCRITICAL: Your previous response could not be parsed. Respond with ONLY a single valid JSON object matching the required schema — no markdown code fences, no commentary before or after the JSON.`,
-        messages: [{ role: "user", content: prompt.user }],
-        maxTokens: 4096,
+        system: "You are a JSON repair tool. The user message contains text that was meant to be a single valid JSON object but could not be parsed (it may be wrapped in prose, fenced in markdown, or truncated). Reconstruct and return ONLY the corrected, complete JSON object — no markdown code fences, no commentary before or after.",
+        messages: [{ role: "user", content: claudeResult.text }],
+        maxTokens: outputTokenBudget,
         temperature: 0,
       });
       if (!hasUsableAgentJson(retry.text)) {
-        throw new Error("AI returned no parseable output after a retry — the run produced no usable result.");
+        throw new Error("AI returned no parseable output after a repair pass — the run produced no usable result.");
       }
       claudeResult = retry;
     }
