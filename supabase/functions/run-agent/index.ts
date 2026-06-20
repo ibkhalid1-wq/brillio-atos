@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
 import {
   streamClaudeText,
 } from "../_shared/claudeClient.ts";
-import { estimateCostUsd } from "../_shared/modelCatalog.ts";
+import { estimateCostUsd, resolveAgentTier } from "../_shared/modelCatalog.ts";
 import { logger } from "../_shared/logger.ts";
 import type {
   AgentHandoff,
@@ -6810,11 +6810,18 @@ Deno.serve(async (req) => {
     }
 
     const outputTokenBudget = resolveOutputTokenBudget(request.agentId);
+    // Cost-first model routing (T3): downgrade only. Light agents (detection /
+    // scoring / validation / extraction) run on the active provider's cheap tier1
+    // model; analytical and strategic agents keep the configured model so we never
+    // auto-escalate spend. Tier routing is provider-agnostic — claudeClient maps
+    // the tier to the active provider's model.
+    const routedTier = resolveAgentTier(request.agentId) === "tier1" ? "tier1" as const : undefined;
     let claudeResult = await streamClaudeText({
       system: prompt.system,
       messages: [{ role: "user", content: prompt.user }],
       maxTokens: outputTokenBudget,
       temperature: 0.2,
+      tier: routedTier,
     });
 
     // Resilience: if the model returned no parseable JSON object (prose-only,
@@ -6839,6 +6846,7 @@ Deno.serve(async (req) => {
         messages: [{ role: "user", content: claudeResult.text }],
         maxTokens: outputTokenBudget,
         temperature: 0,
+        tier: "tier1", // JSON repair is light fix-up work — route to the cheap model.
       });
       if (!hasUsableAgentJson(retry.text)) {
         throw new Error("AI returned no parseable output after a repair pass — the run produced no usable result.");

@@ -1,9 +1,11 @@
 import type { CopilotThreadMessage } from "./types.ts";
 import {
   type AIProvider,
+  type ModelTier,
   defaultModelForProvider,
   getModelCapabilities,
   isAIProvider,
+  modelForTier,
 } from "./modelCatalog.ts";
 
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
@@ -28,6 +30,14 @@ export interface ClaudeCompletionOptions {
   maxTokens?: number;
   temperature?: number;
   model?: string;
+  /**
+   * Cost-routing tier. When set (and no explicit `model` is given), the call is
+   * routed to the active provider's model for this tier — e.g. tier1 → the
+   * provider's small/cheap model. An explicit `model` always wins; an unset tier
+   * uses the configured default model. Provider knowledge stays here, so callers
+   * route by intent ("this is light work") not by model name.
+   */
+  tier?: ModelTier;
   /** Native file attachment — sent as a document/image content block to the AI */
   fileAttachment?: FileAttachment;
   /** Caller-supplied cancellation. Aborting interrupts the request and the stream read. */
@@ -305,7 +315,13 @@ async function providerResponse(
   settingsOverride?: ProviderSettings,
 ): Promise<{ response: Response; provider: AIProvider; model: string }> {
   const settings = settingsOverride ?? await getProviderSettings();
-  const providerOptions = { ...options, model: options.model || settings.model };
+  // Routing precedence: explicit model → tier-routed model for the active
+  // provider → the provider's configured/default model. Tier routing is what
+  // sends light agents to a cheaper model without any model-name logic upstream.
+  const routedModel = options.model
+    || (options.tier ? modelForTier(settings.provider, options.tier) : undefined)
+    || settings.model;
+  const providerOptions = { ...options, model: routedModel };
   if (settings.provider === "openai") {
     const openAiModel = providerOptions.model || defaultModelForProvider("openai");
     const response = await fetchWithRetry(

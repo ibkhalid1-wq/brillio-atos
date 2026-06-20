@@ -114,6 +114,66 @@ export function modelsForProvider(provider: AIProvider): ModelCatalogEntry[] {
 }
 
 /**
+ * Concrete model id for a provider at a given tier — the routing target. Picks
+ * the cheapest catalog entry for that provider+tier (so tier1 lands on the
+ * smallest model). Returns undefined when the provider has no model at that tier,
+ * letting the caller fall back to the configured default.
+ */
+export function modelForTier(provider: AIProvider, tier: ModelTier): string | undefined {
+  const candidates = MODEL_CATALOG
+    .filter((entry) => entry.provider === provider && entry.tier === tier)
+    .sort((a, b) => a.costMultiplier - b.costMultiplier);
+  return candidates[0]?.id;
+}
+
+// ── Agent → model tier registry (provider-agnostic) ──
+// Quality-first: only genuinely light work (detection / scoring / validation /
+// extraction / routing) is tier1; narrative / strategic / synthesis is tier3;
+// the analytical majority stays tier2 (the safe default). Unknown agents resolve
+// via the name heuristic below, then default to tier2 — never silently cheap.
+const AGENT_TIER: Record<string, ModelTier> = {
+  // Tier 1 — light
+  "input-quality": "tier1",
+  "phase-completion-estimator": "tier1",
+  "dependency-check": "tier1",
+  "kpi-validator": "tier1",
+  "compliance-checker": "tier1",
+  "setup-prefill": "tier1",
+  "meeting-notes": "tier1",
+  "meeting-notes-extractor": "tier1",
+  "agent-schedule-optimiser": "tier1",
+  "pattern-query": "tier1",
+  // Tier 3 — narrative / strategic / synthesis
+  narrative: "tier3",
+  "narrative-refine": "tier3",
+  deck: "tier3",
+  "deck-section": "tier3",
+  "board-pack": "tier3",
+  "steerco-agenda-builder": "tier3",
+  "daily-briefing": "tier3",
+  "weekly-digest": "tier3",
+  closure: "tier3",
+  "benefit-forecast": "tier3",
+  "lessons-synthesiser": "tier3",
+};
+
+const TIER1_HINTS = ["detector", "detection", "checker", "validator", "monitor", "fingerprint", "dedup", "drift", "staleness", "classify", "classifier", "router", "ranking", "estimator", "scorer", "extractor", "prefill"];
+const TIER3_HINTS = ["narrative", "brief", "briefing", "digest", "deck", "board-pack", "steerco", "forecast", "synthesis", "synthesiser", "synthesizer", "merge", "executive"];
+
+/**
+ * Resolve an agent's model tier: explicit registry first, then a conservative
+ * name heuristic (heavy wins over light on a tie), then tier2.
+ */
+export function resolveAgentTier(agentId: string): ModelTier {
+  const explicit = AGENT_TIER[agentId];
+  if (explicit) return explicit;
+  const id = agentId.toLowerCase();
+  if (TIER3_HINTS.some((h) => id.includes(h))) return "tier3";
+  if (TIER1_HINTS.some((h) => id.includes(h))) return "tier1";
+  return "tier2";
+}
+
+/**
  * USD cost for a single model call, derived from catalog list pricing. Unknown
  * models fall back to their provider's default model pricing so a cost is always
  * produced (graceful degradation, never throws). Cached input tokens are billed
