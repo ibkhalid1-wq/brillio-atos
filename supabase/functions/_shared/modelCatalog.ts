@@ -133,7 +133,6 @@ export function modelForTier(provider: AIProvider, tier: ModelTier): string | un
 // via the name heuristic below, then default to tier2 — never silently cheap.
 const AGENT_TIER: Record<string, ModelTier> = {
   // Tier 1 — light
-  "input-quality": "tier1",
   "phase-completion-estimator": "tier1",
   "dependency-check": "tier1",
   "kpi-validator": "tier1",
@@ -141,7 +140,6 @@ const AGENT_TIER: Record<string, ModelTier> = {
   "setup-prefill": "tier1",
   "meeting-notes": "tier1",
   "meeting-notes-extractor": "tier1",
-  "agent-schedule-optimiser": "tier1",
   "pattern-query": "tier1",
   // Tier 3 — narrative / strategic / synthesis
   narrative: "tier3",

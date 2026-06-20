@@ -451,15 +451,6 @@ export function useAgentTriggers({
 
   useEffect(() => {
     if (!canRunAgents) return;
-    const generatedAt = typeof rawData.agentScheduleOptimiser === "object" && rawData.agentScheduleOptimiser && !Array.isArray(rawData.agentScheduleOptimiser)
-      ? (rawData.agentScheduleOptimiser as { generatedAt?: string }).generatedAt || null
-      : null;
-    if (!isOlderThan(generatedAt, ONE_DAY_MS)) return;
-    void runAgentSafely({ agentId: "agent-schedule-optimiser", phaseId: "program", triggeredBy: "trigger" });
-  }, [canRunAgents, rawData.agentScheduleOptimiser, runAgentSafely]);
-
-  useEffect(() => {
-    if (!canRunAgents) return;
     if (!closureGeneratedAt) return;
     if (!isOlderThan(patternExtractGeneratedAt, ONE_DAY_MS * 7)) return;
     if (loadTriggerRef.current.patternExtractProgramId === programId || patternExtractRunning.current) return;

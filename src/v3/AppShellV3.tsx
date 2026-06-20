@@ -2252,10 +2252,9 @@ export default function AppShellV3() {
       await updateProgramData(activeProgram.id, payload, fresh?.updated_at ?? undefined);
     }
     await refreshPrograms();
-    // No automatic input-quality LLM call on save. Saving inputs is a
-    // deterministic persist; input-quality now runs only as part of artifact
-    // generation (generate/expand/rewrite), so editing inputs never silently
-    // triggers a model call.
+    // Saving inputs is a deterministic persist — no model call. Input quality is
+    // scored locally by derivePhaseInputQuality (phaseInputQuality.ts), so editing
+    // inputs never silently triggers an agent run.
     // Auto-saves persist quietly (the panel shows its own "Saved" tick). The
     // stale-artifact warning is the one thing still worth surfacing even on an
     // auto-save, since it changes what the user must regenerate.

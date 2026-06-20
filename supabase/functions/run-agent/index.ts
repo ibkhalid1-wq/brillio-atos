@@ -62,7 +62,6 @@ const VALID_AGENT_IDS = new Set([
   "closure",
   "pattern-extract",
   "pattern-query",
-  "input-quality",
   "artifact-reviewer",
   "exit-criteria-generator",
   "decision-advisor",
@@ -76,7 +75,6 @@ const VALID_AGENT_IDS = new Set([
   "weekly-digest",
   "twin-sync",
   "phase-completion-estimator",
-  "agent-schedule-optimiser",
   "setup-prefill",
   "discovery-guide-generator",
   "sprint-planner",
@@ -429,7 +427,6 @@ function isSpecialProgramAgent(agentId: string, phaseId: string): boolean {
     || agentId === "escalation"
     || agentId === "closure"
     || agentId === "pattern-extract"
-    || agentId === "input-quality"
     || agentId === "artifact-reviewer"
     || agentId === "exit-criteria-generator"
     || agentId === "decision-advisor"
@@ -442,7 +439,6 @@ function isSpecialProgramAgent(agentId: string, phaseId: string): boolean {
     || agentId === "meeting-notes"
     || agentId === "weekly-digest"
     || agentId === "phase-completion-estimator"
-    || agentId === "agent-schedule-optimiser"
     || agentId === "setup-prefill"
     || agentId === "discovery-guide-generator"
     || agentId === "sprint-planner"
@@ -620,13 +616,13 @@ interface FormalArtifactSpec {
 // tokens, so the lower ceiling trims worst-case latency/cost with zero
 // truncation risk. New agents inherit the safe 4096 default automatically.
 const COMPACT_OUTPUT_AGENTS = new Set<string>([
-  "input-quality", "contradiction-detector", "cross-artifact-validator",
+  "contradiction-detector", "cross-artifact-validator",
   "health-heatmap", "change-impact", "benchmark-comparator",
   "stakeholder-risk-assessor", "benefit-forecast", "twin-sync", "decision-advisor",
   "kpi-validator", "compliance-checker", "dependency-check", "handoff-quality",
   "capacity-assessor", "vendor-risk-assessor", "phase-completion-estimator",
   "artifact-reviewer", "scope-pcr", "critical-path",
-  "agent-schedule-optimiser", "exit-criteria-generator", "phase-input-planner",
+  "exit-criteria-generator", "phase-input-planner",
 ]);
 const COMPACT_OUTPUT_TOKENS = 2048;
 const DEFAULT_OUTPUT_TOKENS = 4096;
@@ -1431,7 +1427,7 @@ function buildSpecialAgentInputContext(
     }, null, 2);
   }
 
-  if (target?.agentId === "input-quality" || target?.agentId === "exit-criteria-generator") {
+  if (target?.agentId === "exit-criteria-generator") {
     const phaseId = target.phaseId || "strategy";
     const phaseInputs = normalizeProgramData(inner.phaseInputs as JsonValue | null);
     const humanNotes = Array.isArray(inner.humanNotes) ? inner.humanNotes.filter(isRecord) : [];
@@ -3888,45 +3884,6 @@ function computeReadinessForAgent(programData: ProgramState, phaseId: string): {
   };
 }
 
-function applyInputQualityResultToProgramData(
-  programData: ProgramState,
-  phaseId: string,
-  result: Record<string, unknown>,
-): ProgramState {
-  return updateInnerProgramData(programData, (inner) => {
-    const existing = normalizeProgramData(inner.inputQuality as JsonValue | null);
-    const stateKey = `phaseAgentTasks_${phaseId}`;
-    const existingTasks = Array.isArray(inner[stateKey]) ? inner[stateKey] as JsonValue[] : [];
-    const newTasks = Array.isArray(result.tasks)
-      ? result.tasks.filter(isRecord).map((task, index) => ({
-          id: `input-quality-${Date.now()}-${index}`,
-          ...task,
-          phaseId,
-          status: "pending",
-          createdAt: Date.now(),
-        }) as JsonValue)
-      : [];
-    return {
-      ...inner,
-      inputQuality: {
-        ...existing,
-        [phaseId]: {
-          ...result,
-          overallScore: Math.round(clampNumber(result.overallScore, 0, 100, 0)),
-          verdict: ["sufficient", "partial", "insufficient"].includes(String(result.verdict))
-            ? result.verdict
-            : "partial",
-          missingCritical: uniqueStrings(result.missingCritical, 8),
-          readyToRun: uniqueStrings(result.readyToRun, 8),
-          blockedAgents: uniqueStrings(result.blockedAgents, 8),
-          assessedAt: new Date().toISOString(),
-        } as JsonValue,
-      } as JsonValue,
-      [stateKey]: [...existingTasks, ...newTasks] as JsonValue,
-    };
-  });
-}
-
 function applyGeneratedExitCriteriaToProgramData(programData: ProgramState, phaseId: string, result: Record<string, unknown>): ProgramState {
   return updateInnerProgramData(programData, (inner) => {
     const existing = normalizeProgramData(inner.generatedExitCriteria as JsonValue | null);
@@ -4371,14 +4328,6 @@ function applyCompletionEstimateResultToProgramData(programData: ProgramState, p
     generatedAt: new Date().toISOString(),
   }, "Completion estimate");
   return next;
-}
-
-function applyAgentScheduleOptimiserResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
-  return setInnerField(programData, "agentScheduleOptimiser", {
-    schedule: isRecord(result.schedule) ? result.schedule : {},
-    velocity: isRecord(result.velocity) ? result.velocity : {},
-    generatedAt: new Date().toISOString(),
-  } as JsonValue);
 }
 
 function applyProgramSupportArtifact(
@@ -5135,30 +5084,6 @@ Return ONLY valid JSON.`,
     };
   }
 
-  if (request.agentId === "input-quality") {
-    return {
-      system: `You are the ATOS Input Quality Assessor for the ${request.phaseId} phase of an ATOS transformation program.
-
-Your job is to evaluate whether the inputs provided are sufficient for agents to generate high-quality artifacts for this phase.
-
-Return ONLY valid JSON in this exact shape:
-{
-  "overallScore": 0-100,
-  "verdict": "sufficient|partial|insufficient",
-  "fieldAssessments": [
-    { "field": "fieldName", "score": 0-100, "issue": "what is missing or too vague", "suggestion": "specific improvement" }
-  ],
-  "missingCritical": ["list of critical missing information"],
-  "tasks": [
-    { "type": "populate_fields|ask_question", "priority": "critical|high|medium", "description": "what the user must provide", "reason": "why this matters for artifact quality" }
-  ],
-  "readyToRun": ["agentId list of agents that can run with current inputs"],
-  "blockedAgents": ["agentId list of agents that need more input first"]
-}`,
-      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
-    };
-  }
-
   if (request.agentId === "artifact-reviewer") {
     return {
       system: `You are an independent artifact quality reviewer for ATOS transformation programs.
@@ -5596,31 +5521,6 @@ Return ONLY valid JSON:
     "exitPass": 0.0,
     "taskCompletion": 0.0,
     "artifactSignal": 0.0
-  },
-  "generatedAt": "ISO timestamp"
-}`,
-      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
-    };
-  }
-
-  if (request.agentId === "agent-schedule-optimiser") {
-    return {
-      system: `You are the ATOS Agent Schedule Optimiser.
-Recommend refresh cadences for monitoring agents based on recent programme activity.
-
-Return ONLY valid JSON:
-{
-  "schedule": {
-    "health-heatmap": 21600000,
-    "risk": 21600000,
-    "milestone": 21600000,
-    "critical-path": 21600000
-  },
-  "velocity": {
-    "changesLast24h": 0,
-    "agentRunsLast24h": 0,
-    "activePhaseId": "string",
-    "daysSinceLastGate": 0
   },
   "generatedAt": "ISO timestamp"
 }`,
@@ -6655,7 +6555,6 @@ Deno.serve(async (req) => {
       }
 
       const skipAutonomyReview = [
-        "input-quality",
         "artifact-reviewer",
         "exit-criteria-generator",
         "decision-advisor",
@@ -6669,7 +6568,6 @@ Deno.serve(async (req) => {
         "weekly-digest",
         "twin-sync",
         "phase-completion-estimator",
-        "agent-schedule-optimiser",
         "setup-prefill",
         "discovery-guide-generator",
         "sprint-planner",
@@ -6743,8 +6641,6 @@ Deno.serve(async (req) => {
         nextProgramData = applyEscalationResultToProgramData(contextProgramData, normalizedParsedResult);
       } else if (request.agentId === "closure") {
         nextProgramData = applyClosureResultToProgramData(contextProgramData, normalizedParsedResult);
-      } else if (request.agentId === "input-quality") {
-        nextProgramData = applyInputQualityResultToProgramData(contextProgramData, request.phaseId, result);
       } else if (request.agentId === "artifact-reviewer") {
         nextProgramData = applyArtifactQuality(contextProgramData, "artifactReviewerQuality", result);
       } else if (request.agentId === "exit-criteria-generator") {
@@ -6851,8 +6747,6 @@ Deno.serve(async (req) => {
         nextProgramData = applyTwinSyncResultToProgramData(contextProgramData, result);
       } else if (request.agentId === "phase-completion-estimator") {
         nextProgramData = applyCompletionEstimateResultToProgramData(contextProgramData, request.phaseId, result);
-      } else if (request.agentId === "agent-schedule-optimiser") {
-        nextProgramData = applyAgentScheduleOptimiserResultToProgramData(contextProgramData, result);
       } else if (request.agentId === "discovery-guide-generator") {
         nextProgramData = applyProgramSupportArtifact(contextProgramData, "discover", "discovery-guide-generator", "discoveryGuide", result, "Discovery pack");
       } else if (request.agentId === "sprint-planner") {

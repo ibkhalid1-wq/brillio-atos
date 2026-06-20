@@ -135,7 +135,7 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         "Programme budget approved",
       ],
       entryGuards: ["Programme created", "Sponsor identified"],
-      recommendedAgents: ["charter", "business-case", "outcome-framework", "narrative", "input-quality"],
+      recommendedAgents: ["charter", "business-case", "outcome-framework", "narrative"],
       typicalDurationWeeks: { min: 2, max: 6 },
       inputFields: [
         { id: "businessObjective", label: "Business objective", type: "textarea", placeholder: "What outcome is this programme trying to achieve?", required: true },
