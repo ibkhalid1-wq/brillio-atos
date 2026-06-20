@@ -81,7 +81,6 @@ const VALID_AGENT_IDS = new Set([
   "discovery-guide-generator",
   "sprint-planner",
   "stakeholder-comms-drafter",
-  "onboarding-briefer",
   "steerco-agenda-builder",
   "kpi-validator",
   "compliance-checker",
@@ -448,7 +447,6 @@ function isSpecialProgramAgent(agentId: string, phaseId: string): boolean {
     || agentId === "discovery-guide-generator"
     || agentId === "sprint-planner"
     || agentId === "stakeholder-comms-drafter"
-    || agentId === "onboarding-briefer"
     || agentId === "steerco-agenda-builder"
     || agentId === "kpi-validator"
     || agentId === "compliance-checker"
@@ -1576,18 +1574,6 @@ function buildSpecialAgentInputContext(
       healthHeatmap,
       activePhase: inner.activePhase || target.phaseId || null,
       gateReview: normalizeProgramData(gateReviews[String(inner.activePhase || target.phaseId || "")] as JsonValue | null),
-    }, null, 2);
-  }
-
-  if (target?.agentId === "onboarding-briefer") {
-    return JSON.stringify({
-      phases,
-      activePhase: inner.activePhase || target.phaseId || null,
-      healthHeatmap,
-      decisions,
-      milestones,
-      stakeholders: stakeholderEntries,
-      raidEntries: activeRaidEntries,
     }, null, 2);
   }
 
@@ -5698,24 +5684,6 @@ Return JSON:
     };
   }
 
-  if (request.agentId === "onboarding-briefer") {
-    return {
-      system: `You are producing a programme onboarding briefing.
-Produce a concise onboarding briefing document for a new team member.
-Structure:
-1. Programme overview
-2. Where we are now
-3. What has been decided
-4. Key risks to be aware of
-5. Critical milestones coming up
-6. Your role and first steps
-7. Key people to meet
-Return JSON only:
-{ "content": "markdown string", "memberName": "string", "memberRole": "string" }`,
-      user: `Member name: ${request.memberName || "New team member"}\nMember role: ${request.memberRole || "Contributor"}\nInput context JSON:\n${specialAgentInputContext || "{}"}`,
-    };
-  }
-
   if (request.agentId === "steerco-agenda-builder") {
     return {
       system: `You are a programme management expert preparing a Leadership Review (SteerCo) pack.
@@ -6706,7 +6674,6 @@ Deno.serve(async (req) => {
         "discovery-guide-generator",
         "sprint-planner",
         "stakeholder-comms-drafter",
-        "onboarding-briefer",
         "steerco-agenda-builder",
         "kpi-validator",
         "compliance-checker",
@@ -6892,19 +6859,6 @@ Deno.serve(async (req) => {
         nextProgramData = applyProgramSupportArtifact(contextProgramData, "build", "sprint-planner", "sprintPlan", result, "Sprint plan");
       } else if (request.agentId === "stakeholder-comms-drafter") {
         nextProgramData = applyProgramSupportArtifact(contextProgramData, request.phaseId, "stakeholder-comms-drafter", "stakeholderComms", { ...result, audienceGroup: request.audienceGroup || "all" }, "Stakeholder communications");
-      } else if (request.agentId === "onboarding-briefer") {
-        nextProgramData = updateInnerProgramData(contextProgramData, (inner) => ({
-          ...inner,
-          onboardingBriefings: [
-            ...(Array.isArray(inner.onboardingBriefings) ? inner.onboardingBriefings as JsonValue[] : []),
-            {
-              memberName: request.memberName || result.memberName || "New team member",
-              memberRole: request.memberRole || result.memberRole || "Contributor",
-              content: typeof result.content === "string" ? result.content : "",
-              generatedAt: new Date().toISOString(),
-            } as JsonValue,
-          ] as JsonValue,
-        }));
       } else if (request.agentId === "steerco-agenda-builder") {
         nextProgramData = applyProgramSupportArtifact(contextProgramData, "program", "steerco-agenda-builder", "steercoAgenda", result, "Steering committee agenda");
       } else if (request.agentId === "kpi-validator") {

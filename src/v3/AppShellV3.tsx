@@ -1246,59 +1246,6 @@ export default function AppShellV3() {
     document.title = name ? `${name} — ATOS` : "Brillio ATOS — Agentic Transformation OS";
   }, [activeProgram?.name]);
 
-  // ── Phase-entry auto-trigger — brief the team when they first visit a fresh phase ──
-  // Fires the onboarding-briefer agent exactly once per phase per programme session.
-  // Gives the team the phase purpose, recommended first actions, and exit criteria
-  // without requiring them to know the ATOS methodology.
-  const phaseEntryTriggeredRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    if (!activeProgram || !activePhaseId || !activeProgramId) return;
-    if (!authed || aiStatus.status !== "connected") return;
-    if (anyAgentRunning) return;
-    if (Date.now() < rateLimitCooldownUntilRef.current) return; // AI throttled — don't pile on
-    const gateStatus = activeProgram.gateReviews?.[activePhaseId]?.status;
-    if (gateStatus === "approved") return; // Skip if phase already done
-
-    const entryKey = `${activeProgramId}:${activePhaseId}:onboarding`;
-    if (phaseEntryTriggeredRef.current.has(entryKey) || hasProactiveFired(entryKey)) return;
-
-    // Check if this phase has any data at all
-    const rawSource = typeof activeProgram.rawData === "object" && activeProgram.rawData !== null
-      ? ("data" in activeProgram.rawData && typeof (activeProgram.rawData as Record<string,unknown>).data === "object"
-        ? (activeProgram.rawData as Record<string,unknown>).data as Record<string,unknown>
-        : activeProgram.rawData as Record<string,unknown>)
-      : null;
-    const phaseInputs = rawSource?.phaseInputs as Record<string,unknown> | undefined;
-    const hasInputs = !!(phaseInputs?.[activePhaseId] && Object.keys(phaseInputs[activePhaseId] as Record<string,unknown>).filter((k) => !k.startsWith("_")).length > 0);
-    const phaseArtifacts = rawSource?.phaseArtifacts as Record<string,unknown> | undefined;
-    const hasArtifacts = !!(phaseArtifacts?.[activePhaseId] && Object.keys(phaseArtifacts[activePhaseId] as Record<string,unknown>).length > 0);
-
-    // Only trigger for genuinely fresh phases with no data.
-    // Use a 4-second delay so the UI settles before the agent fires,
-    // preventing the perception of the dashboard being immediately "frozen".
-    if (!hasInputs && !hasArtifacts) {
-      phaseEntryTriggeredRef.current.add(entryKey);
-      markProactiveFired(entryKey);
-      const t = setTimeout(() => {
-        void runProgramAgent({
-          agentId: "onboarding-briefer",
-          phaseId: activePhaseId,
-          triggeredBy: "proactive",
-        });
-      }, 4000);
-      return () => clearTimeout(t);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activePhaseId, activeProgramId, authed, aiStatus.status]);
-
-  // NOTE: The proactive gate-readiness-coach trigger that used to live here was
-  // removed as obsolete — it duplicated the background trigger in
-  // useAgentTriggers (which fires gate-readiness-coach for any phase whose
-  // readiness score is < 80%). Running both produced two server calls for the
-  // same agent+phase under overlapping low-readiness conditions. The agent still
-  // runs via the background engine and remains available on demand from the
-  // command palette / gate panel.
-
   const nudges = useMemo(() => {
     if (!activeProgram) return [];
     return evaluateProactiveNudges(activeProgram);
@@ -1351,8 +1298,6 @@ export default function AppShellV3() {
     documentId,
     docText,
     audienceGroup,
-    memberName,
-    memberRole,
     meetingDate,
     meetingDurationMins,
     skipPreSync,
@@ -1365,8 +1310,6 @@ export default function AppShellV3() {
     documentId?: string;
     docText?: string;
     audienceGroup?: "executive" | "operational" | "all";
-    memberName?: string;
-    memberRole?: string;
     meetingDate?: string;
     meetingDurationMins?: number;
     // Quality-review suggestions folded into the generation prompt so a single
@@ -1488,8 +1431,6 @@ export default function AppShellV3() {
         documentId,
         docText,
         audienceGroup,
-        memberName,
-        memberRole,
         meetingDate,
         meetingDurationMins,
         preflight,

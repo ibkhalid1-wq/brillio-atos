@@ -35,8 +35,6 @@ type PhaseAgentRunParams = {
   documentId?: string;
   docText?: string;
   audienceGroup?: "executive" | "operational" | "all";
-  memberName?: string;
-  memberRole?: string;
   meetingDate?: string;
   meetingDurationMins?: number;
   signal?: AbortSignal;
@@ -503,8 +501,6 @@ export async function runPhaseAgent(params: PhaseAgentRunParams): Promise<AgentR
           documentId: params.documentId,
           docText: params.docText,
           audienceGroup: params.audienceGroup,
-          memberName: params.memberName,
-          memberRole: params.memberRole,
           meetingDate: params.meetingDate,
           meetingDurationMins: params.meetingDurationMins,
         },

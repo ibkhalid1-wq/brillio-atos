@@ -19,8 +19,6 @@ interface RunParams {
   documentId?: string;
   docText?: string;
   audienceGroup?: "executive" | "operational" | "all";
-  memberName?: string;
-  memberRole?: string;
   meetingDate?: string;
   meetingDurationMins?: number;
   // Optional pre-flight work (e.g. syncing the programme to the cloud) that must
@@ -293,8 +291,6 @@ export function useAgentRun(programId: string, enabled = true, onRunComplete?: (
         documentId: params.documentId,
         docText: params.docText,
         audienceGroup: params.audienceGroup,
-        memberName: params.memberName,
-        memberRole: params.memberRole,
         meetingDate: params.meetingDate,
         meetingDurationMins: params.meetingDurationMins,
         timeoutMs: USER_TIMEOUT_MS,
