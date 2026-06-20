@@ -2,100 +2,29 @@ import React from "react";
 import type { AgentRun } from "@/lib/adamSync";
 import { buildAgentActivityMap, buildAgentCards } from "@/new/lib/programData";
 import { AcceleratorsView } from "@/new/pages/AcceleratorsView";
-import { AdoptionView } from "@/new/pages/AdoptionView";
 import { BudgetView } from "@/new/pages/BudgetView";
 import { ChangeImpactView } from "@/new/pages/ChangeImpactView";
-import { CriticalPathView } from "@/new/pages/CriticalPathView";
 import { DeckView } from "@/new/pages/DeckView";
 import { HealthHeatmapView } from "@/new/pages/HealthHeatmapView";
-import { IntelligenceView, PatternLibraryView, AgentActivityView, ArtifactHistoryView } from "@/new/pages/IntelligenceView";
+import { IntelligenceView } from "@/new/pages/IntelligenceView";
 import { MilestoneView } from "@/new/pages/MilestoneView";
 import { NarrativeView } from "@/new/pages/NarrativeView";
 import { PlanView } from "@/new/pages/PlanView";
-import { RetroView } from "@/new/pages/RetroView";
 import { ClosureView } from "@/new/pages/ClosureView";
 import { RisksView } from "@/new/pages/RisksView";
 import { ScopePcrView } from "@/new/pages/ScopePcrView";
 import { StakeholderView } from "@/new/pages/StakeholderView";
-import { TwinView } from "@/new/pages/TwinView";
 import DocumentImportPanel from "@/new/components/DocumentImportPanel";
 import DocumentList from "@/new/components/DocumentList";
 import MeetingNotesPanel from "@/v3/components/MeetingNotesPanel";
 import type { AppView, Milestone, ProgramSummary } from "@/new/types";
-import SchedulePanel from "@/v3/components/SchedulePanel";
 import ProgramAccessPanel from "@/v3/components/ProgramAccessPanel";
-import TwinGraphView from "@/v3/components/TwinGraphView";
 import { ArtifactMapTree } from "@/v3/components/ArtifactMapTree";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { AdamCard, AdamCardBody, AdamCardHeader } from "@/v3/components/ui/AdamCard";
 import { EmptyState } from "@/v3/components/ui/EmptyState";
 import { RelativeTime } from "@/v3/components/ui/RelativeTime";
 import type { V3MoreView, V3ReportId } from "@/v3/types";
-
-function BenchmarkView({
-  program,
-  onExtractPatterns,
-}: {
-  program: ProgramSummary | null;
-  onExtractPatterns: () => Promise<void>;
-}) {
-  const benchmark = program?.benchmarkComparison || null;
-  if (!benchmark) {
-    return (
-      <div className="v3-section">
-        <AdamCard>
-          <AdamCardBody>
-            <EmptyState
-              compact
-              icon="⊞"
-              title="No benchmark comparison yet"
-              description="Run pattern extraction to compare this programme against similar delivery patterns."
-              action={{ label: "Extract patterns", onClick: () => void onExtractPatterns() }}
-            />
-          </AdamCardBody>
-        </AdamCard>
-      </div>
-    );
-  }
-  return (
-    <div className="v3-section">
-      <AdamCard>
-        <AdamCardHeader
-          title="Benchmark comparison"
-          subtitle="How this programme compares against similar delivery patterns"
-          action={(
-            <button type="button" className="v3-button ghost" style={{ fontSize: 12 }} onClick={() => void onExtractPatterns()}>
-              Refresh
-            </button>
-          )}
-        />
-        <AdamCardBody className="v3-program-detail-stack">
-          <div style={{ fontSize: 13, color: "var(--v3-text-secondary)", lineHeight: 1.7 }}>
-            {benchmark.summary}
-          </div>
-          <div style={{ display: "grid", gap: 10 }}>
-            {benchmark.comparisons.map((row) => (
-              <AdamCard key={row.dimension} accent={row.signal === "concerning" ? "danger" : row.signal === "strong" ? "success" : "none"}>
-                <AdamCardBody className="v3-program-detail-stack" padded>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--v3-text-primary)" }}>{row.dimension}</div>
-                    <span className={`v3-chip ${row.signal === "concerning" ? "red" : row.signal === "strong" ? "green" : "muted"}`} style={{ fontSize: 11 }}>
-                      {row.percentile}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 12, color: "var(--v3-text-secondary)", lineHeight: 1.6 }}>
-                    Programme: {row.programValue} · Benchmark: {row.benchmarkRange}
-                  </div>
-                  <div style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>{row.insight}</div>
-                </AdamCardBody>
-              </AdamCard>
-            ))}
-          </div>
-        </AdamCardBody>
-      </AdamCard>
-    </div>
-  );
-}
 
 /** Statuses that represent a closed-out (decided) queue entry. */
 const RESOLVED_DECISION_STATUSES = new Set(["approved", "deferred", "rejected", "modified", "resolved", "escalated"]);
@@ -301,42 +230,16 @@ export default function ProgramDetailRouter({
       return <RisksView program={program} raidAgentRunning={activeRuns.some((r) => r.agent_id === "risk" && r.status === "running")} onTriggerRiskAgent={triggers.triggerRisk} onRefresh={onRefresh} />;
     case "budget":
       return <BudgetView program={program} budgetIsRunning={activeRuns.some((r) => r.agent_id === "budget" && r.status === "running")} onTriggerBudget={triggers.triggerBudget} onSaveBudgetInputs={onSaveBudgetInputs} savePending={budgetSavePending} />;
-    case "critical-path":
-      return <CriticalPathView program={program} isRunning={activeRuns.some((r) => r.agent_id === "critical-path" && r.status === "running")} onTriggerCriticalPath={triggers.triggerCriticalPath} />;
     case "change-impact":
       return <ChangeImpactView program={program} isRunning={triggers.changeImpactIsRunning} onTriggerChangeImpact={triggers.triggerChangeImpact} />;
     case "stakeholders":
       return <StakeholderView program={program} isRunning={triggers.stakeholderIsRunning} onTriggerStakeholders={triggers.triggerStakeholders} />;
-    case "adoption":
-      return <AdoptionView program={program} isRunning={triggers.adoptionIsRunning} onTriggerAdoption={triggers.triggerAdoption} />;
     case "health":
       return <HealthHeatmapView program={program} isRunning={healthHeatmapIsRunning} onTriggerHealthHeatmap={triggers.triggerHealthHeatmap} onSelectPhase={onOpenPhase} onRunAgent={onRunAgent} />;
-    case "retro":
-      return <RetroView program={program} runningPhases={triggers.retroRunningPhases} onTriggerRetro={triggers.triggerRetro} onOpenIntelligence={onOpenIntelligence} />;
     case "scope-pcr":
       return <ScopePcrView program={program} isRunning={triggers.scopePcrIsRunning} onTriggerScopePcr={triggers.triggerScopePcr} onNavigate={onNavigate} />;
     case "intelligence":
       return <IntelligenceView program={program} onRefreshProgram={onRefresh} initialTab={intelligenceInitialTab as "Status" | "Autonomy" | "Setup" | undefined} />;
-    case "pattern-library":
-      return <PatternLibraryView program={program} />;
-    case "agent-activity":
-      return <AgentActivityView program={program} />;
-    case "artifact-history":
-      return <ArtifactHistoryView program={program} onRefreshProgram={onRefresh} />;
-    case "twin":
-      return triggers.runTwinSync
-        ? (
-          <TwinGraphView
-            graph={{
-              nodes: (program?.twinGraph?.nodes || []) as Array<{ id: string; type: string; label: string; description?: string; status?: string; phase?: string }>,
-              edges: (program?.twinGraph?.edges || []) as Array<{ source: string; target: string; type: string; label?: string }>,
-              syncedAt: undefined,
-            }}
-            onSyncTwin={triggers.runTwinSync}
-            isSyncing={activeRuns.some((run) => run.agent_id === "twin-sync" && run.status === "running")}
-          />
-        )
-        : <TwinView program={program} agentCards={agentCards} agentActivityMap={agentActivityMap} onOpenWorkspace={onOpenPhase} onViewTrace={onOpenTrace} />;
     case "artifact-map":
       return (
         <div className="v3-section">
@@ -353,12 +256,8 @@ export default function ProgramDetailRouter({
       );
     case "accelerators":
       return <AcceleratorsView program={program} onNavigate={onNavigate} patternsCount={patternsCount} onExtractPatterns={onExtractPatterns} />;
-    case "schedules":
-      return <SchedulePanel programId={programId} program={program} />;
     case "access":
       return <ProgramAccessPanel programId={programId} currentUserId={currentUserId ?? null} />;
-    case "benchmark":
-      return <BenchmarkView program={program} onExtractPatterns={onExtractPatterns} />;
     case "decision-audit":
       return <DecisionAuditView program={program} />;
     case "closure":

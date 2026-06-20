@@ -941,7 +941,6 @@ export default function StageView({
     ""
   );
   const isGateRunning = activePhase ? triggers.gateReviewRunningPhaseSet.has(activePhase.id) : false;
-  const isRetroRunning = activePhase ? triggers.retroRunningPhases.has(activePhase.id) : false;
   const gateTrend = useMemo(() => {
     if (!activePhase || !program?.id) return null;
     return getRiskTrend(activePhase.id, program.id);
@@ -1093,7 +1092,6 @@ export default function StageView({
   }
 
   const phaseTone = phaseStatusTone(activePhase);
-  const showRetro = activePhase.pct >= 90;
 
   // Phase-specific agent actions — consolidated into the header so the workspace
   // below shows only generated results, never a wall of "Generate X" buttons.
@@ -1112,9 +1110,6 @@ export default function StageView({
   }
   if (["design", "build", "operate"].includes(activePhase.id)) {
     phaseAgentActions.push({ key: "vendor-risk-assessor", label: agentButtonContent("vendor-risk-assessor", vendorRiskAssessment ? "Re-assess vendor risk" : "Assess vendor risk"), disabled: agentButtonDisabled("vendor-risk-assessor"), onClick: () => onRunAgent("vendor-risk-assessor") });
-  }
-  if (showRetro) {
-    phaseAgentActions.push({ key: "retro", label: isRetroRunning ? "Preparing…" : "Generate retrospective", disabled: isRetroRunning, onClick: () => triggers.triggerRetro(activePhase.id) });
   }
 
   return (
@@ -1606,12 +1601,6 @@ export default function StageView({
           </div>
         ) : null}
         <div className="v3-output-strip">
-          {showRetro ? (
-            <button type="button" className="v3-chip muted" disabled={isRetroRunning} onClick={() => triggers.triggerRetro(activePhase.id)}>
-              {isRetroRunning ? "Preparing…" : "Retrospective"}
-            </button>
-          ) : null}
-
           {getPhaseArtifactDefs(activePhase.id, dynamicStore)
             .map((def, index) => {
               const node = phaseArtifacts.byKey.get(def.id);

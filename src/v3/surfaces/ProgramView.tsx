@@ -31,10 +31,6 @@ interface ProgramViewProps {
 
 const ADVANCED_LINKS: Array<{ label: string; view: V3MoreView }> = [
   { label: "Stakeholder map", view: "stakeholders" },
-  { label: "Adoption tracker", view: "adoption" },
-  { label: "Critical path", view: "critical-path" },
-  { label: "Pattern library", view: "intelligence" },
-  { label: "Benchmark comparison", view: "benchmark" },
   { label: "Decision audit trail", view: "decision-audit" },
   { label: "Budget", view: "budget" },
   { label: "Change impact", view: "change-impact" },

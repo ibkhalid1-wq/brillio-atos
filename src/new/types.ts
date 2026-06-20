@@ -2,7 +2,6 @@ import type { AgentRun } from "@/lib/adamSync";
 
 export type AppView =
   | "home"
-  | "twin"
   | "work"
   | "accelerators"
   | "narrative"
@@ -11,12 +10,9 @@ export type AppView =
   | "decisions"
   | "risks"
   | "budget"
-  | "critical-path"
   | "change-impact"
   | "stakeholders"
-  | "adoption"
   | "health-heatmap"
-  | "retro"
   | "deck"
   | "scope-pcr"
   | "closure"

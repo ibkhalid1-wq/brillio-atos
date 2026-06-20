@@ -58,7 +58,7 @@ const WORKSPACE_GROUPS: Array<{
       // Stakeholders and Change Impact consolidated — separate views kept for depth
       { view: "stakeholders", label: "Stakeholders", description: "Stakeholder map, influence and engagement", icon: "◎", accent: "purple" },
       { view: "change-impact", label: "Change & Adoption", description: "Organisational change impact and adoption readiness", icon: "↺", accent: "amber" },
-      // Removed: adoption (merged into change-impact description above — view still accessible)
+      // Removed: standalone Adoption view (folded into Change & Adoption above)
     ],
   },
   {
