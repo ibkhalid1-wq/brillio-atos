@@ -211,11 +211,11 @@ export function ArtifactMapTree({
   // input node whether its value was typed by the user or extracted from an
   // imported document, so the tree can show a "User input" / "Document" chip.
   const factSourceByField = React.useMemo(() => {
-    const map = new Map<string, FactSourceType>();
+    const map = new Map<string, { sourceType: FactSourceType; sourceName: string }>();
     const graph = buildFactGraph(program);
     for (const fact of graph.facts) {
       const key = `${fact.sourceId}::${fact.factType}`;
-      if (!map.has(key)) map.set(key, fact.sourceType);
+      if (!map.has(key)) map.set(key, { sourceType: fact.sourceType, sourceName: fact.sourceName });
     }
     return map;
   }, [program]);
@@ -256,17 +256,24 @@ export function ArtifactMapTree({
           const tags: Tag[] = [];
           if (field.required) tags.push({ text: "Required", variant: "req" });
           // Show how a provided value was sourced — typed by the user or pulled
-          // from an imported document — so provenance is visible at a glance.
-          const sourceType = filled ? factSourceByField.get(`${phase.phaseId}::${field.id}`) : undefined;
+          // from an imported document — so provenance is visible at a glance. For
+          // imported values, name the originating document.
+          const src = filled ? factSourceByField.get(`${phase.phaseId}::${field.id}`) : undefined;
+          const sourceType = src?.sourceType;
+          const docName = sourceType === "imported_document"
+            && src?.sourceName && src.sourceName !== "Imported document"
+            ? src.sourceName
+            : null;
           if (sourceType === "imported_document") {
-            tags.push({ text: "Document", variant: "subtle", color: "var(--v3-accent)" });
+            const chipName = docName ? (docName.length > 28 ? `${docName.slice(0, 27)}…` : docName) : null;
+            tags.push({ text: chipName ? `Document · ${chipName}` : "Document", variant: "subtle", color: "var(--v3-accent)" });
           } else if (sourceType) {
             tags.push({ text: "User input", variant: "subtle" });
           }
           if (!filled) tags.push({ text: "Not provided", variant: "muted" });
           const short = preview ? (preview.length > 72 ? `${preview.slice(0, 71)}…` : preview) : null;
           const sourceLabel = sourceType === "imported_document"
-            ? "Source — imported document"
+            ? (docName ? `Source — ${docName}` : "Source — imported document")
             : sourceType
               ? "Source — user input"
               : "Source / evidence";

@@ -1446,7 +1446,7 @@ export default function StageView({
                       className={`v3-chip ${g.items[0].confidence >= 0.85 ? "green" : g.items[0].confidence >= 0.6 ? "amber" : "red"}`}
                       style={{ fontSize: 9, marginLeft: "auto", flexShrink: 0, cursor: "pointer", border: "none" }}
                       title={g.items[0].sourceType === "imported_document"
-                        ? `Imported${g.items[0].sourceLocation ? ` — ${g.items[0].sourceLocation}` : ""} · open Document Centre`
+                        ? `From ${g.items[0].sourceName}${g.items[0].sourceLocation ? ` — ${g.items[0].sourceLocation}` : ""} · open Document Centre`
                         : "User input · jump to field"}
                       onClick={() => traceFactToSource(g.items[0])}
                     >
@@ -1474,7 +1474,7 @@ export default function StageView({
                           className={`v3-chip ${f.confidence >= 0.85 ? "green" : f.confidence >= 0.6 ? "amber" : "red"}`}
                           style={{ fontSize: 9, marginLeft: "auto", flexShrink: 0, cursor: "pointer", border: "none" }}
                           title={f.sourceType === "imported_document"
-                            ? `Imported${f.sourceLocation ? ` — ${f.sourceLocation}` : ""} · open Document Centre`
+                            ? `From ${f.sourceName}${f.sourceLocation ? ` — ${f.sourceLocation}` : ""} · open Document Centre`
                             : "User input · jump to field"}
                           onClick={() => traceFactToSource(f)}
                         >

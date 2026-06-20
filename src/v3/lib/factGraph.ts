@@ -128,7 +128,9 @@ function sourceFromProvenance(prov: FieldProvenance | undefined): {
   if (prov) {
     return {
       sourceType: "imported_document",
-      sourceName: "Imported document",
+      // Name the originating document when we captured it, so the artifact map
+      // and traceability views show "report.pdf" rather than a generic label.
+      sourceName: prov.documentName?.trim() || "Imported document",
       sourceLocation: prov.source ?? "",
       // Extraction confidence (0–1); inferred/enriched values carry lower scores.
       confidence: typeof prov.confidence === "number" ? prov.confidence : 0.5,

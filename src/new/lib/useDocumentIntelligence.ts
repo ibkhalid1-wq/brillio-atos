@@ -12,7 +12,7 @@
  * - Full traceability stored in extracted_data
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
 import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
 import type { DynamicSchemaStore } from "@/v3/lib/dynamicSchema";
@@ -374,9 +374,11 @@ function localMerge(existing: string, incoming: string): string {
 export async function buildApprovedInputs(
   reviewFields: ReviewField[],
   refineField?: RefineFieldFn,
+  documentName?: string,
 ): Promise<ApprovedInputs> {
   const result: ApprovedInputs = {};
   const provByPhase: Record<string, ProvenanceMap> = {};
+  const docName = documentName?.trim() || "";
   const add = (
     phaseId: string,
     fieldId: string,
@@ -386,10 +388,13 @@ export async function buildApprovedInputs(
   ) => {
     if (!result[phaseId]) result[phaseId] = {};
     result[phaseId][fieldId] = value;
-    // Record where this value came from so the input grid can show provenance.
+    // Record where this value came from so the input grid can show provenance —
+    // including the originating document's file name so the artifact map and
+    // traceability views can name the source, not just label it "imported".
     if (!provByPhase[phaseId]) provByPhase[phaseId] = {};
     provByPhase[phaseId][fieldId] = {
       source: mapping.source ?? "",
+      ...(docName ? { documentName: docName } : {}),
       confidence: typeof mapping.confidence === "number" ? mapping.confidence : 0,
       extractionType,
       value,
@@ -478,6 +483,9 @@ export function useDocumentIntelligence({
   const [reviewFields, setReviewFields] = useState<ReviewField[]>([]);
   const [result, setResult] = useState<DocumentImportResult | null>(null);
   const [aiUnavailable, setAiUnavailable] = useState(false);
+  // Name of the file being imported — stamped into per-field provenance at save
+  // so the artifact map / traceability can name the source document.
+  const importedFileNameRef = useRef<string>("");
 
   // ── importFile: parse + extract → move to reviewing ──────────────────────
   const importFile = useCallback(async (file: File, phaseHint?: string) => {
@@ -499,6 +507,7 @@ export function useDocumentIntelligence({
     setReviewFields([]);
     setAiUnavailable(false);
     setProgress(10);
+    importedFileNameRef.current = file.name;
 
     // Decide: send file natively to AI or pre-extract text client-side
     const canUseAINative = AI_NATIVE_TYPES.has(file.type) && file.size <= AI_PARSE_MAX_BYTES;
@@ -695,7 +704,7 @@ export function useDocumentIntelligence({
     setProgress(90);
 
     try {
-      const approved = await buildApprovedInputs(reviewFields, refineField);
+      const approved = await buildApprovedInputs(reviewFields, refineField, importedFileNameRef.current);
       // Filter out empty phases
       const nonEmpty = Object.fromEntries(
         Object.entries(approved).filter(([, inputs]) => Object.keys(inputs).length > 0),

@@ -21,6 +21,8 @@ export const PROVENANCE_KEY = "_provenance";
 export interface FieldProvenance {
   /** Short quote or section reference the value was extracted from. */
   source: string;
+  /** File name of the document the value was imported from, when known. */
+  documentName?: string;
   /** Extraction confidence 0–1. */
   confidence: number;
   extractionType: ExtractionType;
@@ -46,6 +48,7 @@ export function parseProvenance(raw: unknown): ProvenanceMap {
       const e = entry as Record<string, unknown>;
       out[fieldId] = {
         source: typeof e.source === "string" ? e.source : "",
+        ...(typeof e.documentName === "string" && e.documentName ? { documentName: e.documentName } : {}),
         confidence: typeof e.confidence === "number" ? e.confidence : 0,
         extractionType:
           e.extractionType === "enriched" || e.extractionType === "inferred"
