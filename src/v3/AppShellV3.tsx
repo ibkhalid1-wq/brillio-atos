@@ -79,7 +79,6 @@ const PipelineView = React.lazy(() => import("@/v3/surfaces/PipelineView"));
 const PortfolioView = React.lazy(() => import("@/v3/surfaces/PortfolioView"));
 const ProgramView = React.lazy(() => import("@/v3/surfaces/ProgramView"));
 const StageView = React.lazy(() => import("@/v3/surfaces/StageView"));
-import type { AgentActivityItem } from "@/v3/components/AgentActivityFeed";
 import type { V3CommandMode, V3Mode, V3MoreView, V3ReportId, V3Surface } from "@/v3/types";
 import { isDecisionOpen, phaseNameById, pushV3Toast } from "@/v3/utils";
 import "@/new/styles.css";
@@ -2796,33 +2795,6 @@ export default function AppShellV3() {
     await handleResolveDecision(id, "deferred");
   }, [handleResolveDecision]);
 
-  // Map activeRuns to AgentActivityItem[] for new surfaces
-  const agentActivityItems = useMemo((): AgentActivityItem[] =>
-    activeRuns.map((run) => {
-      const startTs = run.started_at ?? run.created_at;
-      const endTs = run.completed_at;
-      const durationMs = startTs && endTs
-        ? new Date(endTs).getTime() - new Date(startTs).getTime()
-        : undefined;
-      const feedStatus: AgentActivityItem["status"] =
-        run.status === "running" ? "running"
-        : run.status === "done" || run.status === "complete" ? "success"
-        : run.status === "error" || run.status === "failed" ? "failed"
-        : "queued";
-      return {
-        runId: run.id,
-        agentId: run.agent_id,
-        status: feedStatus,
-        startedAt: startTs ?? new Date().toISOString(),
-        durationMs,
-        phaseId: run.phase_id ?? undefined,
-        // Surface the failure reason inline (provider outage vs auth vs other) so a
-        // failed run isn't an opaque red ✗ — the feed classifies + renders it.
-        errorMessage: feedStatus === "failed" ? (run.error_message ?? undefined) : undefined,
-      };
-    }),
-  [activeRuns]);
-
   const handleRunDemo = useCallback(async () => {
     if (!activeProgramId) return;
     try {
@@ -3340,7 +3312,6 @@ export default function AppShellV3() {
               onRunAgent={handleRunAgent}
               anyAgentRunning={anyAgentRunning}
               confidenceScore={programConfidenceScore}
-              agentActivity={agentActivityItems}
               onNavigateToPhase={(phaseId) => { setActivePhaseId(phaseId); navigateSurface("stage"); }}
             />
           </AdamErrorBoundary>

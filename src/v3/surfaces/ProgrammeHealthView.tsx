@@ -10,15 +10,6 @@ import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
 import { getGateThreshold } from "@/v3/lib/confidenceScore";
 import { selectDecisions } from "@/v3/lib/programRaid";
 
-interface AgentActivityItem {
-  runId: string;
-  agentId: string;
-  status: "running" | "success" | "failed" | "queued";
-  startedAt: string;
-  durationMs?: number;
-  phaseId?: string;
-}
-
 interface ProgrammeHealthViewProps {
   programId: string;
   program: ProgramSummary | null;
@@ -34,7 +25,6 @@ interface ProgrammeHealthViewProps {
   onRunAgent: (agentId: string, phaseId?: string) => void;
   anyAgentRunning: boolean;
   confidenceScore: number | null;
-  agentActivity?: AgentActivityItem[];
   onNavigateToPhase?: (phaseId: string) => void;
 }
 
@@ -623,14 +613,12 @@ function HealthTab({
   program,
   phases,
   rawData,
-  agentActivity,
   onRunAgent,
   anyAgentRunning,
 }: {
   program: ProgramSummary | null;
   phases: Array<{ id: string; displayName: string; pct: number; status: string }>;
   rawData: Record<string, unknown>;
-  agentActivity: AgentActivityItem[];
   onRunAgent: (agentId: string, phaseId?: string) => void;
   anyAgentRunning: boolean;
 }) {
@@ -817,7 +805,6 @@ export default function ProgrammeHealthView({
   onRunAgent,
   anyAgentRunning,
   confidenceScore,
-  agentActivity = [],
   onNavigateToPhase,
 }: ProgrammeHealthViewProps) {
   const [rightTab, setRightTab] = useState<RightTab>("gates");
@@ -1118,7 +1105,6 @@ export default function ProgrammeHealthView({
               program={program}
               phases={phases}
               rawData={inner}
-              agentActivity={agentActivity}
               onRunAgent={onRunAgent}
               anyAgentRunning={anyAgentRunning}
             />
@@ -1139,7 +1125,7 @@ export default function ProgrammeHealthView({
                   <div style={{ marginBottom: 20 }}>
                     <BenefitsTrajectoryWidget
                       benefitForecast={benefitForecast ?? null}
-                      onRunAgent={() => onRunAgent("benefit-forecast", "program")}
+                      onRunAgent={() => onRunAgent("benefits-tracker", "program")}
                       isRunning={anyAgentRunning}
                     />
                   </div>
