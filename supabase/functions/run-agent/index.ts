@@ -60,7 +60,6 @@ const VALID_AGENT_IDS = new Set([
   "scope-pcr",
   "escalation",
   "closure",
-  "pattern-extract",
   "pattern-query",
   "artifact-reviewer",
   "exit-criteria-generator",
@@ -73,7 +72,6 @@ const VALID_AGENT_IDS = new Set([
   "benchmark-comparator",
   "meeting-notes",
   "weekly-digest",
-  "twin-sync",
   "phase-completion-estimator",
   "setup-prefill",
   "discovery-guide-generator",
@@ -426,7 +424,6 @@ function isSpecialProgramAgent(agentId: string, phaseId: string): boolean {
     || agentId === "scope-pcr"
     || agentId === "escalation"
     || agentId === "closure"
-    || agentId === "pattern-extract"
     || agentId === "artifact-reviewer"
     || agentId === "exit-criteria-generator"
     || agentId === "decision-advisor"
@@ -618,7 +615,7 @@ interface FormalArtifactSpec {
 const COMPACT_OUTPUT_AGENTS = new Set<string>([
   "contradiction-detector", "cross-artifact-validator",
   "health-heatmap", "change-impact", "benchmark-comparator",
-  "stakeholder-risk-assessor", "benefit-forecast", "twin-sync", "decision-advisor",
+  "stakeholder-risk-assessor", "benefit-forecast", "decision-advisor",
   "kpi-validator", "compliance-checker", "dependency-check", "handoff-quality",
   "capacity-assessor", "vendor-risk-assessor", "phase-completion-estimator",
   "artifact-reviewer", "scope-pcr", "critical-path",
@@ -1727,49 +1724,6 @@ function buildSpecialAgentInputContext(
   // actual, plus the benefits-tracker assessment and gate outcomes) so outcomes
   // are judged against evidence, not guessed. This grounds the only real
   // cross-programme learning loop.
-  if (target?.agentId === "pattern-extract") {
-    const phaseInputsAll = normalizeProgramData(inner.phaseInputs as JsonValue | null);
-    const strategyInputs = normalizeProgramData(phaseInputsAll.strategy as JsonValue | null);
-    const valueRealizeInputs = normalizeProgramData(phaseInputsAll.valuerealize as JsonValue | null);
-    const kpiActuals = typeof valueRealizeInputs.kpiActuals === "string"
-      ? safeJsonParse<unknown[]>(valueRealizeInputs.kpiActuals, []).filter(isRecord)
-      : Array.isArray(valueRealizeInputs.kpiActuals)
-        ? valueRealizeInputs.kpiActuals.filter(isRecord)
-        : [];
-    const gateReviewsRec = isRecord(inner.gateReviews) ? inner.gateReviews : {};
-    const gateOutcomes = Object.entries(gateReviewsRec).map(([gatePhaseId, review]) => ({
-      phaseId: gatePhaseId,
-      status: isRecord(review) ? (review.status ?? null) : null,
-      readinessScore: isRecord(review) && typeof review.readinessScore === "number" ? review.readinessScore : null,
-    }));
-    return JSON.stringify({
-      programName: meta.name || (typeof projectMeta.name === "string" ? projectMeta.name : ""),
-      industry: meta.industry || (typeof projectMeta.industry === "string" ? projectMeta.industry : ""),
-      objective: typeof inner.objective === "string"
-        ? inner.objective
-        : typeof inner.programObjective === "string"
-          ? inner.programObjective
-          : typeof projectMeta.objective === "string"
-            ? projectMeta.objective
-            : "",
-      narrative,
-      phases,
-      milestones,
-      decisions,
-      raidEntries: activeRaidEntries,
-      // Benefits realisation — the OUTCOME evidence that grounds pattern labels.
-      benefitsRealization: {
-        kpiBaselines: parseKpiBaselines(strategyInputs.kpis),
-        kpiActuals,
-        benefitsTracking: isRecord(inner.benefitsTracking) ? inner.benefitsTracking : null,
-        valueProjected: coerceNumber(inner.valueProjected ?? businessCase.projectedValue ?? valueRealizeData.projectedValue, 0),
-        valueDelivered: coerceNumber(inner.valueDelivered ?? valueRealizeData.valueDelivered ?? businessCase.valueDelivered, 0),
-        gateOutcomes,
-      },
-      patternContext: options?.patternContext || [],
-    }, null, 2);
-  }
-
   // Formal-artifact agents draw on their phase inputs plus the shared programme
   // context. The structured Strategy KPIs (captured in PhaseInputsPanel) are
   // always surfaced as kpiBaselines so outcome/business-case/optimization agents
@@ -2824,19 +2778,6 @@ function applyScopePcrResultToProgramData(programData: ProgramState, result: Rec
   });
 }
 
-function applyPatternExtractResultToProgramData(
-  programData: ProgramState,
-  result: Record<string, unknown> | null,
-): ProgramState {
-  return updateInnerProgramData(programData, (inner) => ({
-    ...inner,
-    patternExtractGeneratedAt: new Date().toISOString(),
-    patternExtractCount: isRecord(result) && Array.isArray(result.patterns)
-      ? result.patterns.filter(isRecord).length
-      : 0,
-  }));
-}
-
 function applyPatternQueryResultToProgramData(
   programData: ProgramState,
   result: Record<string, unknown> | null,
@@ -3309,40 +3250,6 @@ async function autonomyGate(
     shouldQueueReview: enabled && !actAutonomously,
     reason,
   };
-}
-
-async function persistExtractedPatterns(
-  admin: SupabaseClient,
-  programId: string,
-  patterns: unknown,
-): Promise<number> {
-  if (!Array.isArray(patterns)) return 0;
-  const validPatternTypes = new Set(["risk", "intervention", "milestone-sequence", "adoption-tactic", "gate-criteria"]);
-  const validProgramSizes = new Set(["small", "medium", "large", "enterprise"]);
-  const validOutcomes = new Set(["successful", "failed", "neutral"]);
-  const rows = patterns
-    .filter(isRecord)
-    .map((entry) => ({
-      pattern_type: validPatternTypes.has(String(entry.pattern_type)) ? String(entry.pattern_type) : "risk",
-      phase_id: typeof entry.phase_id === "string" ? entry.phase_id : null,
-      industry: typeof entry.industry === "string" ? entry.industry : null,
-      program_size: validProgramSizes.has(String(entry.program_size)) ? String(entry.program_size) : null,
-      pattern_title: typeof entry.pattern_title === "string" && entry.pattern_title.trim()
-        ? entry.pattern_title.trim().slice(0, 120)
-        : "Unnamed pattern",
-      pattern_body: isRecord(entry.pattern_body) ? entry.pattern_body : { raw: entry },
-      outcome: validOutcomes.has(String(entry.outcome)) ? String(entry.outcome) : "neutral",
-      confidence: typeof entry.confidence === "number" ? Math.max(0, Math.min(1, entry.confidence)) : 0.5,
-      source_program_id: programId,
-    }));
-
-  if (!rows.length) return 0;
-
-  const { error } = await admin.from("adam_pattern_library").insert(rows);
-  if (error) {
-    throw new Error(`Failed to persist extracted patterns: ${error.message}`);
-  }
-  return rows.length;
 }
 
 /**
@@ -4294,17 +4201,6 @@ function applyDailyBriefingResultToProgramData(programData: ProgramState, result
   } as JsonValue);
 }
 
-function applyTwinSyncResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
-  return setInnerField(programData, "twinGraph", {
-    nodes: Array.isArray(result.nodes) ? result.nodes.filter(isRecord) as JsonValue[] : [],
-    edges: Array.isArray(result.edges) ? result.edges.filter(isRecord) as JsonValue[] : [],
-    syncedAt: new Date().toISOString(),
-    version: typeof normalizeProgramData(getInnerProgramData(programData).twinGraph as JsonValue | null).version === "number"
-      ? Number(normalizeProgramData(getInnerProgramData(programData).twinGraph as JsonValue | null).version) + 1
-      : 1,
-  } as JsonValue);
-}
-
 function applyCompletionEstimateResultToProgramData(programData: ProgramState, phaseId: string, result: Record<string, unknown>): ProgramState {
   const estimate = Math.round(clampNumber(result.estimate, 0, 100, 0));
   let next = updateInnerProgramData(programData, (inner) => ({
@@ -5048,42 +4944,6 @@ Return JSON only:
     };
   }
 
-  if (request.agentId === "pattern-extract") {
-    return {
-      system: `You are ATOS's Pattern Extraction agent for a Brillio transformation program.
-Extract reusable patterns from the program history and return a JSON object with exactly this shape:
-{
-  "patterns": [
-    {
-      "pattern_type": "risk|intervention|milestone-sequence|adoption-tactic|gate-criteria",
-      "phase_id": "string | null",
-      "industry": "string | null",
-      "program_size": "small|medium|large|enterprise | null",
-      "pattern_title": "string",
-      "pattern_body": { "summary": "string", "evidence": ["string"] },
-      "outcome": "successful|failed|neutral",
-      "confidence": 0-1
-    }
-  ]
-}
-
-Judging "outcome" — base it on EVIDENCE, never a guess. The context includes a
-"benefitsRealization" block: kpiBaselines (baseline → target), kpiActuals (the
-human-entered measured value per KPI), benefitsTracking (RAG assessment), gate
-outcomes, and value projected vs delivered.
-- "successful": the measured actuals met or exceeded target (or benefitsTracking
-  RAG is green / value delivered ≥ projected). Cite the KPI and its numbers in evidence.
-- "failed": actuals fell materially short of target (or RAG red / value delivered
-  well below projected, or a gate ended in remediation). Cite the shortfall.
-- "neutral": mixed results, OR there is no realisation evidence (kpiActuals empty
-  and benefitsTracking absent). Do NOT infer success from narrative tone alone —
-  if outcomes were not measured, the pattern is "neutral".
-Set "confidence" lower when the outcome label rests on little or no realisation data.
-Return ONLY valid JSON.`,
-      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
-    };
-  }
-
   if (request.agentId === "artifact-reviewer") {
     return {
       system: `You are an independent artifact quality reviewer for ATOS transformation programs.
@@ -5486,23 +5346,6 @@ Return ONLY valid JSON:
   "lastWeekHighlights": ["what was completed or progressed"],
   "weekHealthRag": "green|amber|red",
   "motivationalNote": "one encouraging sentence acknowledging progress"
-}`,
-      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
-    };
-  }
-
-  if (request.agentId === "twin-sync") {
-    return {
-      system: `You are the ATOS Transformation Twin synchroniser. Extract a knowledge graph from the program artifacts.
-
-Return ONLY valid JSON:
-{
-  "nodes": [
-    { "id": "unique-slug", "type": "Strategy|Outcome|KPI|Capability|Decision|Role|Agent|Skill|Data|Risk|Governance|Value|Learning", "label": "display name", "description": "one sentence", "status": "active|at-risk|complete|inactive", "phase": "phaseId or null" }
-  ],
-  "edges": [
-    { "source": "node-id", "target": "node-id", "type": "achieves|enables|governs|implements|requires|measures|depends_on|produces|consumed_by|risks|mitigates", "label": "optional description" }
-  ]
 }`,
       user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
     };
@@ -6498,62 +6341,6 @@ Deno.serve(async (req) => {
       const confidence = typeof result.confidence === "number" ? Number(result.confidence) : null;
       const outputSummary = buildOutputSummary(request.agentId, normalizedParsedResult);
 
-      if (request.agentId === "pattern-extract") {
-        const insertedCount = await persistExtractedPatterns(auth.admin, request.programId, result.patterns);
-        const memoryEntry = {
-          runAt: new Date().toISOString() as JsonValue,
-          runId: runId as JsonValue,
-          summary: outputSummary as JsonValue,
-          confidence: confidence,
-          keyFindings: Array.isArray(result.keyFindings) ? result.keyFindings.slice(0, 3) as JsonValue[] : [],
-        };
-        const nextProgramData = appendAgentServerMemory(
-          applyPatternExtractResultToProgramData(contextProgramData, normalizedParsedResult),
-          request.agentId,
-          memoryEntry,
-        );
-        await persistAgentArtifact(auth.admin, request.programId, request.agentId, request.phaseId, normalizedParsedResult, confidence);
-        await persistProgramData(auth.admin, request.programId, nextProgramData, persistConcurrency);
-        await auth.admin
-          .from("adam_agent_runs")
-          .update({
-            status: "complete",
-            output: outputPayload,
-            handoff: null,
-            reasoning_trace: null,
-            confidence,
-            tokens_used: claudeResult.inputTokens + claudeResult.outputTokens,
-            completed_at: new Date().toISOString(),
-            awaiting_decision_id: null,
-          })
-          .eq("id", runId);
-        await emitAgentEvent(auth.admin, {
-          programId: request.programId,
-          agentId: request.agentId,
-          phaseId: request.phaseId,
-          eventType: "completed",
-          payload: {
-            confidence,
-            generatedAt: new Date().toISOString(),
-            outputSummary: insertedCount ? `${insertedCount} patterns extracted` : "No reusable patterns extracted",
-          },
-        });
-        await broadcastStatus(auth.admin, {
-          runId,
-          programId: request.programId,
-          agentId: request.agentId,
-          phaseId: request.phaseId,
-          status: "complete",
-          confidence,
-          latestObservationType: "response_received",
-        });
-        return jsonResponse({
-          status: "complete",
-          runId,
-          output: outputPayload,
-        } satisfies RunAgentResponse);
-      }
-
       const skipAutonomyReview = [
         "artifact-reviewer",
         "exit-criteria-generator",
@@ -6566,7 +6353,6 @@ Deno.serve(async (req) => {
         "benchmark-comparator",
         "meeting-notes",
         "weekly-digest",
-        "twin-sync",
         "phase-completion-estimator",
         "setup-prefill",
         "discovery-guide-generator",
@@ -6743,8 +6529,6 @@ Deno.serve(async (req) => {
         nextProgramData = applyWeeklyDigestResultToProgramData(contextProgramData, result);
       } else if (request.agentId === "daily-briefing") {
         nextProgramData = applyDailyBriefingResultToProgramData(contextProgramData, result);
-      } else if (request.agentId === "twin-sync") {
-        nextProgramData = applyTwinSyncResultToProgramData(contextProgramData, result);
       } else if (request.agentId === "phase-completion-estimator") {
         nextProgramData = applyCompletionEstimateResultToProgramData(contextProgramData, request.phaseId, result);
       } else if (request.agentId === "discovery-guide-generator") {
