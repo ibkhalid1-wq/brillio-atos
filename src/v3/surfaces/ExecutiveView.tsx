@@ -407,24 +407,6 @@ export default function ExecutiveView({
           {/* Executive actions live in the header so the primary controls are
               reachable without scrolling to the foot of the brief. */}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            <button
-              type="button"
-              className="v3-button primary v3-button-inline-sm"
-              disabled={anyAgentRunning}
-              onClick={() => onRunAgent("executive-brief", "program")}
-            >
-              <span>◇</span>
-              <span>{anyAgentRunning ? "Preparing…" : "What should I know today?"}</span>
-            </button>
-            <button
-              type="button"
-              className="v3-button ghost v3-button-inline-sm"
-              disabled={anyAgentRunning}
-              onClick={() => onRunAgent("steerco-prep", "program")}
-            >
-              <span>⬡</span>
-              <span>{anyAgentRunning ? "Building…" : "Prepare Leadership Review"}</span>
-            </button>
             {/* Dummy for now — will initiate the change-request flow for editing locked stages. */}
             <button
               type="button"
@@ -957,36 +939,48 @@ export default function ExecutiveView({
         </div>
       )}
 
-      {/* ── 8. SteerCo Agenda output ──────────────────────────────────────── */}
-      {steercoAgenda && (
-        <div>
-          <SectionLabel>Leadership Review</SectionLabel>
-          <div style={{
-            background: "var(--v3-surface)",
-            border: "1px solid var(--v3-border-soft)",
-            borderRadius: "var(--v3-radius)",
-            overflow: "hidden",
-          }}>
+      {/* ── 8. Leadership Review (SteerCo pack) — generated on demand from the card ─ */}
+      <div>
+        <SectionLabel>Leadership Review</SectionLabel>
+        <div style={{
+          background: "var(--v3-surface)",
+          border: "1px solid var(--v3-border-soft)",
+          borderRadius: "var(--v3-radius)",
+          overflow: "hidden",
+        }}>
             <div style={{
               padding: "14px 16px",
               borderBottom: "1px solid var(--v3-border-soft)",
               display: "flex",
               justifyContent: "space-between",
               alignItems: "flex-start",
+              gap: 12,
             }}>
               <div>
-                <div style={{ fontWeight: 700, fontSize: 14, color: "var(--v3-text-primary)" }}>{steercoAgenda.title || "Steering Committee Meeting"}</div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: "var(--v3-text-primary)" }}>{steercoAgenda?.title || "Steering Committee Meeting"}</div>
                 <div style={{ fontSize: 12, color: "var(--v3-text-muted)", marginTop: 3 }}>
-                  {steercoAgenda.date && <span>{steercoAgenda.date}</span>}
-                  {steercoAgenda.duration && <span> · {steercoAgenda.duration}</span>}
+                  {steercoAgenda?.date && <span>{steercoAgenda.date}</span>}
+                  {steercoAgenda?.duration && <span> · {steercoAgenda.duration}</span>}
                 </div>
               </div>
-              {steercoAgenda.generatedAt && (
-                <span style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>
-                  {new Date(steercoAgenda.generatedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
-                </span>
-              )}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                {steercoAgenda?.generatedAt && (
+                  <span style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>
+                    {new Date(steercoAgenda.generatedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  className="v3-button ghost v3-button-inline-xs"
+                  disabled={anyAgentRunning}
+                  onClick={() => onRunAgent("steerco-prep", "program")}
+                >
+                  {anyAgentRunning ? "Building…" : steercoAgenda ? "Refresh" : "Generate"}
+                </button>
+              </div>
             </div>
+            {steercoAgenda ? (
+              <>
             {steercoAgenda.attendees && steercoAgenda.attendees.length > 0 && (
               <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--v3-border-soft)", fontSize: 12, color: "var(--v3-text-secondary)" }}>
                 <span style={{ fontWeight: 600, color: "var(--v3-text-muted)", marginRight: 8 }}>ATTENDEES</span>
@@ -1102,9 +1096,14 @@ export default function ExecutiveView({
                 {steercoAgenda.parkingLot.map((p, i) => <div key={i} style={{ fontSize: 12, color: "var(--v3-text-secondary)", padding: "2px 0" }}>• {p}</div>)}
               </div>
             )}
-          </div>
+              </>
+            ) : (
+              <div style={{ padding: "16px", fontSize: 12, color: "var(--v3-text-muted)", lineHeight: 1.6 }}>
+                No leadership review yet — generate a SteerCo pack to build the agenda, critical blockers, and decisions for your next steering committee.
+              </div>
+            )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

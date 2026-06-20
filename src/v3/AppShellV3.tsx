@@ -1327,7 +1327,6 @@ export default function AppShellV3() {
 
   const resolveAgentId = useCallback((agentId: string) => {
     const aliases: Record<string, string> = {
-      "executive-brief": "daily-briefing",
       "portfolio-intelligence": "health-heatmap",
       "steerco-prep": "steerco-agenda-builder",
     };
@@ -3288,6 +3287,7 @@ export default function AppShellV3() {
               onOpenPhase={openPhaseSheet}
               onRunAgent={handleRunAgent}
               onNavigateToPortfolio={() => navigateSurface("portfolio")}
+              onNavigateToExecutive={() => navigateSurface("executive")}
               onOpenMoreView={(view) => openMoreView(view)}
             />
           </AdamErrorBoundary>

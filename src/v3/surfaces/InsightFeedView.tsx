@@ -27,6 +27,7 @@ interface InsightFeedViewProps {
   onOpenPhase: (phaseId: string) => void;
   onRunAgent: (agentId: string, phaseId?: string) => void;
   onNavigateToPortfolio: () => void;
+  onNavigateToExecutive: () => void;
   onOpenMoreView?: (view: V3MoreView) => void;
 }
 
@@ -235,6 +236,7 @@ export default function InsightFeedView({
   onOpenPhase,
   onRunAgent,
   onNavigateToPortfolio,
+  onNavigateToExecutive,
   onOpenMoreView,
 }: InsightFeedViewProps) {
   const todayLabel = new Date().toLocaleDateString("en-GB", {
@@ -559,16 +561,27 @@ export default function InsightFeedView({
             })()}
           </div>
 
-          {confidenceScore !== null && (
-            <AdamExplainsTooltip metric="confidence" value={confidenceScore} placement="bottom">
-              <div
-                className={confidenceChipClass(confidenceScore)}
-                style={{ fontSize: 13, fontWeight: 600, padding: "6px 14px", cursor: "help" }}
-              >
-                {confidenceScore}% confidence
-              </div>
-            </AdamExplainsTooltip>
-          )}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
+            <button
+              type="button"
+              className="v3-button primary v3-button-inline-sm"
+              disabled={anyAgentRunning}
+              onClick={() => onRunAgent("daily-briefing")}
+            >
+              <span>◇</span>
+              <span>{anyAgentRunning ? "Preparing…" : "What should I know today?"}</span>
+            </button>
+            {confidenceScore !== null && (
+              <AdamExplainsTooltip metric="confidence" value={confidenceScore} placement="bottom">
+                <div
+                  className={confidenceChipClass(confidenceScore)}
+                  style={{ fontSize: 13, fontWeight: 600, padding: "6px 14px", cursor: "help" }}
+                >
+                  {confidenceScore}% confidence
+                </div>
+              </AdamExplainsTooltip>
+            )}
+          </div>
         </div>
 
         {/* Inline metric pills strip. Gates / Active phase / Progress drill into
@@ -621,6 +634,63 @@ export default function InsightFeedView({
           ))}
         </div>
       </div>
+
+      {/* ── 1a-ii. Programme summary (narrative) — context after the focus ────── */}
+      {!isFresh && (
+        <div style={{
+          padding: "16px 18px",
+          background: "var(--v3-surface-2)",
+          border: "1px solid var(--v3-border)",
+          borderRadius: "var(--v3-radius)",
+          fontSize: 13,
+          color: "var(--v3-text-secondary)",
+          lineHeight: 1.6,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: "var(--v3-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              ✦ Programme summary
+            </span>
+            <button
+              type="button"
+              className="v3-button ghost v3-button-inline-xs"
+              onClick={() => onRunAgent("narrative", activePhaseId ?? "program")}
+              disabled={anyAgentRunning}
+            >
+              {program.narrative ? "Refresh" : "Generate summary"}
+            </button>
+          </div>
+          {program.narrative ? (
+            <>
+              {/* Today shows only the lead paragraph; the full brief lives on Executive. */}
+              <div style={{ whiteSpace: "pre-wrap" }}>
+                {(typeof program.narrative === "string" ? program.narrative : "")
+                  .split(/\n\s*\n/)[0]
+                  .trim()}
+              </div>
+              <button
+                type="button"
+                onClick={onNavigateToExecutive}
+                style={{
+                  marginTop: 10,
+                  padding: 0,
+                  background: "none",
+                  border: "none",
+                  color: "var(--v3-accent)",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Read full summary →
+              </button>
+            </>
+          ) : (
+            <div style={{ color: "var(--v3-text-muted)" }}>
+              No summary yet — generate a programme narrative to see it here.
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── 1b. Phase Pipeline — horizontal scroll (C1) ──────────────────────── */}
       {phases.length > 0 && (
