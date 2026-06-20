@@ -1857,9 +1857,13 @@ export default function AppShellV3() {
     lastLandedProgramIdRef.current = activeProgramId;
     const validCurrent = activeProgram.phases.some((phase) => phase.id === activePhaseId);
     if (validCurrent && !programChanged) return;
+    // Prefer the canonical active phase so the landing phase matches what every
+    // surface labels "Active phase"; fall back to the pct-based frontier.
+    const canonical = activeProgram.activePhaseId;
+    const canonicalValid = canonical && activeProgram.phases.some((phase) => phase.id === canonical);
     const inProgress = activeProgram.phases.find((phase) => (phase.pct ?? 0) > 0 && (phase.pct ?? 0) < 100);
     const firstIncomplete = activeProgram.phases.find((phase) => (phase.pct ?? 0) < 100);
-    setActivePhaseId(inProgress?.id || firstIncomplete?.id || activeProgram.phases[0]?.id || null);
+    setActivePhaseId((canonicalValid ? canonical : null) || inProgress?.id || firstIncomplete?.id || activeProgram.phases[0]?.id || null);
   }, [activeProgramId, activePhaseId, activeProgram]);
 
   useEffect(() => {
@@ -1942,12 +1946,17 @@ export default function AppShellV3() {
     return () => window.removeEventListener("atlas-v3-open-drawer", openDrawer);
   }, []);
 
-  // The phase the programme is currently working through: the first in-progress
-  // phase, else the first incomplete one, else the first phase. Mirrors the
-  // landing logic so "current phase" means the same thing everywhere.
+  // The phase the programme is currently working through. We prefer the
+  // programme's canonical activePhaseId — the phase every other surface labels
+  // "Active phase" — so navigating to the cockpit or Action Center always lands
+  // on the same phase the user thinks of as current. Only when no valid active
+  // phase is set do we fall back to the pct-based frontier (first in-progress,
+  // else first incomplete, else first phase).
   const resolveCurrentPhaseId = useCallback((): string | null => {
     const phases = activeProgram?.phases ?? [];
     if (!phases.length) return null;
+    const canonical = activeProgram?.activePhaseId;
+    if (canonical && phases.some((phase) => phase.id === canonical)) return canonical;
     const inProgress = phases.find((phase) => (phase.pct ?? 0) > 0 && (phase.pct ?? 0) < 100);
     const firstIncomplete = phases.find((phase) => (phase.pct ?? 0) < 100);
     return inProgress?.id || firstIncomplete?.id || phases[0]?.id || null;

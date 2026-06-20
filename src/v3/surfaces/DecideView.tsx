@@ -568,13 +568,16 @@ export default function DecideView({
     else { setRaidFormOpen(true); setAddOpen(false); }
   }, [initialIntent?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // The phase the programme is currently working through: first in-progress,
-  // else first incomplete, else the active/first phase. The gate timeline opens
-  // here so the Action Center lands on the live phase even when reached via the
-  // /decide deep-link (where activePhaseId is null).
+  // The phase the programme is currently working through. Prefer the canonical
+  // activePhaseId (what every surface labels "Active phase") so the gate timeline
+  // and feed land on the live phase even when reached via the /decide deep-link
+  // (where the shell's activePhaseId prop is null); fall back to the pct-based
+  // frontier (first in-progress, else first incomplete, else first phase).
   const currentPhaseId = useMemo(() => {
     const phases = program?.phases ?? [];
     if (!phases.length) return activePhaseId;
+    const canonical = program?.activePhaseId;
+    if (canonical && phases.some((phase) => phase.id === canonical)) return canonical;
     const inProgress = phases.find((phase) => (phase.pct ?? 0) > 0 && (phase.pct ?? 0) < 100);
     const firstIncomplete = phases.find((phase) => (phase.pct ?? 0) < 100);
     return inProgress?.id || firstIncomplete?.id || activePhaseId || phases[0]?.id || null;
