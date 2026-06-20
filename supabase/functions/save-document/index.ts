@@ -48,6 +48,25 @@ Deno.serve(async (req) => {
       return jsonResponse({ documents: rows ?? [] });
     }
 
+    // action: "get" — fetch a single document's stored content (raw text +
+    // extracted data) for download or re-extraction. Scoped by program_id so a
+    // document can only be read in the context of its own programme.
+    if (payload.action === "get") {
+      const id = payload.id as string | undefined;
+      const programId = payload.program_id as string | undefined;
+      if (!id || !programId) return jsonResponse({ error: "id and program_id are required." }, 400);
+
+      const { data: row, error } = await admin
+        .from("adam_document_attachments")
+        .select("id, file_name, file_type, phase_context, raw_text, extracted_data, extraction_status, confidence, created_at")
+        .eq("program_id", programId)
+        .eq("id", id)
+        .single();
+
+      if (error) return jsonResponse({ error: error.message }, 500);
+      return jsonResponse({ document: row });
+    }
+
     // default action: insert a new document attachment
     const insert = payload as {
       program_id: string;

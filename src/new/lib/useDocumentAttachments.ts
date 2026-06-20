@@ -16,6 +16,40 @@ export interface DocumentAttachmentSummary {
   created_at: string;
 }
 
+export interface DocumentAttachmentDetail {
+  id: string;
+  file_name: string;
+  file_type: string;
+  phase_context: string | null;
+  raw_text: string | null;
+  extracted_data: Record<string, unknown> | null;
+  extraction_status: string | null;
+  confidence: number | null;
+  created_at: string;
+}
+
+/**
+ * Fetch a single document's stored content (raw text + extracted data) for
+ * download or re-extraction. Routed through the save-document edge function
+ * (admin client) so it bypasses RLS, scoped by program_id + id.
+ */
+export async function getDocumentDetail(
+  programId: string,
+  id: string,
+): Promise<DocumentAttachmentDetail> {
+  if (!isSupabaseConfigured || !supabase) {
+    throw new Error("Supabase is not configured.");
+  }
+  const { data: result, error } = await supabase.functions.invoke("save-document", {
+    body: { action: "get", id, program_id: programId },
+  });
+  if (error) throw new Error(error.message || "Failed to load document.");
+  if ((result as any)?.error) throw new Error((result as any).error);
+  const doc = (result as any)?.document;
+  if (!doc) throw new Error("Document not found.");
+  return doc as DocumentAttachmentDetail;
+}
+
 export function useDocumentAttachments(programId: string | null) {
   const [data, setData] = useState<DocumentAttachmentSummary[]>([]);
   const [isLoading, setIsLoading] = useState(false);

@@ -14,7 +14,7 @@
  *   - No broken states, no raw errors
  */
 
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useAIStatus } from "@/v3/hooks/useAIStatus";
 import { ACCEPTED_FILE_EXTENSIONS, detectFileType, FILE_TYPE_LABELS, getFileTypeEmoji } from "@/new/lib/parseDocumentToText";
 import { useDocumentIntelligence } from "@/new/lib/useDocumentIntelligence";
@@ -69,6 +69,7 @@ export default function DocumentImportPanel({
     reviewFields,
     aiUnavailable,
     importFile,
+    importText,
     updateReviewField,
     approveAll,
     rejectAll,
@@ -86,6 +87,30 @@ export default function DocumentImportPanel({
     setSelectionError(null);
     reset();
   }
+
+  // ── Re-extract from a stored document ──────────────────────────────────────
+  // The documents list dispatches `adam:reextract-document` with the document's
+  // stored raw text. We re-run the extractor over that text (no file re-upload)
+  // and surface the same review → save flow used for fresh imports.
+  useEffect(() => {
+    const handleReextract = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        programId?: string;
+        rawText?: string;
+        fileName?: string;
+        phaseHint?: string;
+      }>).detail;
+      if (!detail) return;
+      if (detail.programId && programId && detail.programId !== programId) return;
+      setSelectedFile(null);
+      setSelectionError(null);
+      void importText(detail.rawText ?? "", detail.fileName ?? "document", detail.phaseHint || undefined);
+    };
+    window.addEventListener("adam:reextract-document", handleReextract as EventListener);
+    return () => {
+      window.removeEventListener("adam:reextract-document", handleReextract as EventListener);
+    };
+  }, [programId, importText]);
 
   function handleFiles(files: FileList | null) {
     if (!files?.length) return;

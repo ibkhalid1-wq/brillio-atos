@@ -534,6 +534,58 @@ export function useDocumentIntelligence({
     }
 
     setProgress(30);
+    await runExtraction({ text, fileName: file.name, fileAttachment, phaseHint, onAiUnavailable: () => saveDocumentOnly(programId, file, text) });
+  }, [programId, existingPhaseInputs, dynamicSchemaStore]);
+
+  // ── importText: re-extract from already-stored raw text (no file parse) ────
+  // Used by the documents screen's "Re-extract" action: the original binary is
+  // not retained, but the parsed raw_text is, so we re-run the same extractor
+  // over that text and reuse the identical review → save flow.
+  const importText = useCallback(async (rawText: string, fileName: string, phaseHint?: string) => {
+    if (!programId) {
+      setStage("error");
+      setError("No active programme selected.");
+      return;
+    }
+    if (!isSupabaseConfigured || !supabase) {
+      setStage("error");
+      setError("Supabase is not configured.");
+      return;
+    }
+
+    setStage("parsing");
+    setError(null);
+    setResult(null);
+    setIntelligence(null);
+    setReviewFields([]);
+    setAiUnavailable(false);
+    setProgress(20);
+    importedFileNameRef.current = fileName;
+
+    if (!rawText.trim()) {
+      setStage("error");
+      setError("This document has no stored text to re-extract from.");
+      return;
+    }
+
+    setProgress(30);
+    // On re-extract the document record already exists, so the AI-unavailable
+    // path simply surfaces the degradation without re-saving an empty record.
+    await runExtraction({ text: rawText, fileName, phaseHint, onAiUnavailable: async () => {} });
+  }, [programId, existingPhaseInputs, dynamicSchemaStore]);
+
+  // ── runExtraction: shared core — call the extractor edge fn, build review ──
+  // fields, and move to the reviewing stage. Both importFile and importText
+  // funnel through here so the extraction + review pipeline stays identical.
+  const runExtraction = useCallback(async (args: {
+    text: string;
+    fileName: string;
+    fileAttachment?: { base64: string; mimeType: string; name: string };
+    phaseHint?: string;
+    onAiUnavailable: () => Promise<void>;
+  }) => {
+    const { text, fileName, fileAttachment, phaseHint, onAiUnavailable } = args;
+    if (!programId || !supabase) return;
     setStage("extracting");
 
     // Declare the activated phases' input fields (static methodology + ai-derived
@@ -564,7 +616,7 @@ export function useDocumentIntelligence({
         body: {
           programId,
           text: text || undefined,
-          fileName: file.name,
+          fileName,
           fileAttachment: fileAttachment || undefined,
           phaseHint: phaseHint || undefined,
           phaseSchemas,
@@ -598,8 +650,7 @@ export function useDocumentIntelligence({
 
       if (response.isAIUnavailable) {
         setAiUnavailable(true);
-        // Still allow upload without AI — save the document with no extraction
-        await saveDocumentOnly(programId, file, text);
+        await onAiUnavailable();
         setStage("done");
         setProgress(100);
         return;
@@ -650,7 +701,7 @@ export function useDocumentIntelligence({
       const msg = err instanceof Error ? err.message : "Extraction failed.";
       if (msg.includes("AI provider not configured") || msg.includes("not configured")) {
         setAiUnavailable(true);
-        await saveDocumentOnly(programId, file, text);
+        await onAiUnavailable();
         setStage("done");
         setProgress(100);
       } else {
@@ -762,6 +813,7 @@ export function useDocumentIntelligence({
     result,
     aiUnavailable,
     importFile,
+    importText,
     updateReviewField,
     approveAll,
     rejectAll,
