@@ -15,7 +15,7 @@ interface ExecutiveViewProps {
   confidenceScore: number | null;
   /** Full confidence result — drives the signal breakdown (moved from Today). */
   confidenceResult?: ConfidenceScore;
-  onApproveGate: (phaseId: string) => Promise<void>;
+  onApproveGate: (phaseId: string) => Promise<boolean | void>;
   onRunAgent: (agentId: string, phaseId?: string) => void;
   anyAgentRunning: boolean;
   narrativeRunning: boolean;

@@ -18,7 +18,7 @@ interface ProgrammeHealthViewProps {
   /** Pre-processed phases from ProgramSummary — used in preference to raw DB phases to avoid stale pct values */
   processedPhases?: Array<{ id: string; displayName: string; pct: number; status: string }>;
   onSetPhase: (phaseId: string) => void;
-  onApproveGate: (phaseId: string) => Promise<void>;
+  onApproveGate: (phaseId: string) => Promise<boolean | void>;
   onRequestRemediation: (phaseId: string, note: string) => Promise<void>;
   onDecideDecision: (id: string, decision: string) => Promise<void>;
   onDeferDecision: (id: string) => Promise<void>;
@@ -129,7 +129,7 @@ function GatesTab({
   activePhaseId: string | null;
   gateReviews: Record<string, GateReview>;
   program: ProgramSummary | null;
-  onApproveGate: (phaseId: string) => Promise<void>;
+  onApproveGate: (phaseId: string) => Promise<boolean | void>;
   onRequestRemediation: (phaseId: string, note: string) => Promise<void>;
   onRunAgent: (agentId: string, phaseId?: string) => void;
   anyAgentRunning: boolean;

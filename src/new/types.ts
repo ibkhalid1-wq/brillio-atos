@@ -17,6 +17,7 @@ export type AppView =
   | "scope-pcr"
   | "closure"
   | "intelligence"
+  | "decision-audit"
   | "settings";
 export type Persona = "executive" | "lead" | "architect" | "fde" | "engineer";
 export type AgentStatus = "idle" | "running" | "paused" | "complete" | "failed";

@@ -267,7 +267,7 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
         await supabase
           .from("adam_programs")
           .upsert(upsertRows, { onConflict: "id", ignoreDuplicates: false })
-          .then(({ error: upsertErr }) => {
+          .then(({ error: upsertErr }: { error: { message: string } | null }) => {
             if (upsertErr) console.warn("Local→DB program sync failed:", upsertErr.message);
           });
       }
@@ -301,7 +301,7 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
           .from("adam_program_members")
           .select("program_id, role")
           .eq("user_id", userId);
-        (memberships || []).forEach((m) => {
+        (memberships || []).forEach((m: { program_id: string; role: string }) => {
           const role = m.role as ProgramRole;
           if (role === "admin" || role === "editor" || role === "viewer") {
             roleMap[m.program_id as string] = role;
@@ -376,10 +376,11 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
   const canEditActiveProgram = activeProgramRole === "admin" || activeProgramRole === "editor";
   const isActiveProgramAdmin = activeProgramRole === "admin";
 
-  const setActiveProgramId = useCallback((programId: string) => {
-    setActiveProgramIdState(programId);
+  const setActiveProgramId = useCallback((programId: string | null) => {
+    const next = programId ?? "";
+    setActiveProgramIdState(next);
     if (typeof localStorage !== "undefined") {
-      localStorage.setItem(ACTIVE_PROGRAM_KEY, programId);
+      localStorage.setItem(ACTIVE_PROGRAM_KEY, next);
     }
   }, []);
 
@@ -399,7 +400,7 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
     if (!program) {
       throw new Error("Program not found.");
     }
-    const payload = {
+    const payload: Record<string, unknown> = {
       ...nextData,
       _syncedAt: new Date().toISOString(),
     };

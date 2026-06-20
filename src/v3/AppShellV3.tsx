@@ -515,7 +515,7 @@ function AuthScreen({
 
   useEffect(() => {
     if (!supabase) return undefined;
-    const { data: listener } = supabase.auth.onAuthStateChange((event) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event: string) => {
       if (event === "PASSWORD_RECOVERY") {
         setStoredRecoveryIntent(true);
         setAuthMode("reset");
@@ -1255,9 +1255,11 @@ export default function AppShellV3() {
     if (!nudge) return null;
     return {
       id: nudge.id || "nudge-0",
+      type: nudge.type,
+      priority: nudge.priority,
       message: nudge.message,
       actionLabel: nudge.actionLabel || "View →",
-      actionView: (nudge.actionViewId as AppView | null | undefined) || null,
+      actionView: (nudge.actionViewId as AppView | undefined) || undefined,
     };
   }, [nudges]);
   const persona = useMemo((): Persona => {
@@ -1597,7 +1599,10 @@ export default function AppShellV3() {
     const score = programConfidenceScore;
     // null → "amber" preserves the rail badge's long-standing neutral-pending
     // tone; a scored program routes through the canonical confidence→RAG band.
-    const programme = score == null ? "amber" : confidenceRag(score);
+    const programmeRag = score == null ? "amber" : confidenceRag(score);
+    // The rail dot only renders green/amber/red; collapse the "muted" band onto
+    // the neutral-pending amber tone (same intent as the score==null branch).
+    const programme = programmeRag === "muted" ? "amber" : programmeRag;
     const ai = aiStatus.status === "connected" ? "green" : aiStatus.status === "checking" ? "amber" : "red";
     const escalationCount = (activeProgram?.escalations || []).filter((e: any) => e.status === "open").length;
     const aiNotReady = aiStatus.status !== "connected" && aiStatus.status !== "checking";
@@ -1637,12 +1642,13 @@ export default function AppShellV3() {
     const handleToast = (event: Event) => {
       const detail = (event as CustomEvent<{ message?: string; icon?: string; tone?: ShellToast["tone"]; duration?: number; action?: { label: string; onClick: () => void } }>).detail;
       if (!detail?.message) return;
+      const message = detail.message;
       const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       setToasts((current) => {
-        if (current.some((toast) => toast.message === detail.message && toast.tone === detail.tone)) {
+        if (current.some((toast) => toast.message === message && toast.tone === detail.tone)) {
           return current;
         }
-        return [...current, { id, message: detail.message, icon: detail.icon, tone: detail.tone, action: detail.action }].slice(-MAX_VISIBLE_TOASTS);
+        return [...current, { id, message, icon: detail.icon, tone: detail.tone, action: detail.action }].slice(-MAX_VISIBLE_TOASTS);
       });
       window.setTimeout(() => {
         setToasts((current) => current.filter((toast) => toast.id !== id));
@@ -1681,7 +1687,7 @@ export default function AppShellV3() {
       setAuthChecked(true);
     };
 
-    void supabase.auth.getSession().then(({ data }) => {
+    void supabase.auth.getSession().then(({ data }: { data: { session: { user?: { id: string; email?: string } | null } | null } }) => {
       settled = true;
       window.clearTimeout(fallbackTimer);
       applySession(data.session);
@@ -1691,7 +1697,7 @@ export default function AppShellV3() {
       applySession(null);
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event: string, session: { user?: { id: string; email?: string } | null } | null) => {
       settled = true;
       window.clearTimeout(fallbackTimer);
       setLastAuthEvent(event);
@@ -2390,7 +2396,7 @@ export default function AppShellV3() {
     if (fresh.length === 0) return;
     for (const phaseId of fresh) seen.phases.add(phaseId);
     const phaseId = fresh[0];
-    const name = activeProgram.phases.find((p) => p.id === phaseId)?.name ?? phaseId;
+    const name = activeProgram.phases.find((p) => p.id === phaseId)?.displayName ?? phaseId;
     void handleSaveProgramSnapshot(`${name} locked`, "lock");
   }, [activeProgram, handleSaveProgramSnapshot]);
 
@@ -2409,7 +2415,7 @@ export default function AppShellV3() {
     if (!activeProgram) {
       throw new Error("No active programme.");
     }
-    const phaseLabel = activeProgram.phases.find((p) => p.id === phaseId)?.name ?? phaseId;
+    const phaseLabel = activeProgram.phases.find((p) => p.id === phaseId)?.displayName ?? phaseId;
     const message = buildFieldAssistPrompt(request.mode, {
       programName: activeProgram.name,
       client: activeProgram.client,
@@ -2898,7 +2904,7 @@ export default function AppShellV3() {
         </div>
 
         {helpOpen && (
-          <HelpPanel open={helpOpen} onClose={() => setHelpOpen(false)} />
+          <HelpPanel onClose={() => setHelpOpen(false)} />
         )}
       </div>
     );
@@ -3409,7 +3415,7 @@ export default function AppShellV3() {
           if (lower.includes("gate") || lower.includes("ready")) {
             const gateCount = Object.keys(activeProgram?.gateReviews ?? {}).length;
             const approvedCount = Object.values(activeProgram?.gateReviews ?? {}).filter((g: any) => g?.status === "approved").length;
-            const gateThreshold = getGateThreshold(activePhaseId);
+            const gateThreshold = getGateThreshold(activePhaseId ?? "");
             return `${approvedCount} of ${gateCount} gates approved. ${score && score < gateThreshold ? `Gate readiness is below ${gateThreshold}% — run an AI Gate Check to identify blockers.` : "Gate readiness looks healthy."}`;
           }
           if (lower.includes("decision") || lower.includes("action")) {
