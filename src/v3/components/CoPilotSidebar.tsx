@@ -28,7 +28,6 @@ interface CoPilotSidebarProps {
 
 const QUICK_ACTIONS = [
   { label: "Daily briefing", icon: "☀", agentId: "daily-briefing" },
-  { label: "Gate check", icon: "⬡", agentId: "gate-review" },
   { label: "Risk review", icon: "⚑", agentId: "risk-review" },
   { label: "Status report", icon: "✦", agentId: "narrative" },
   { label: "SteerCo pack", icon: "●", agentId: "steerco-prep" },

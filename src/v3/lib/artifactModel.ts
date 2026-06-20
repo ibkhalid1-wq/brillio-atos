@@ -68,12 +68,12 @@ export interface ProgramArtifactModel {
  * this is the seed of the knowledge graph, refined in Cycle 5.
  */
 const ARTIFACT_DOWNSTREAM: Record<string, string[]> = {
-  narrative: ["plan", "stakeholder", "gate-review"],
-  plan: ["milestone", "gate-review"],
-  risk: ["gate-review"],
-  milestone: ["gate-review", "critical-path"],
+  narrative: ["plan", "stakeholder"],
+  plan: ["milestone"],
+  risk: [],
+  milestone: ["critical-path"],
   stakeholder: ["change-impact"],
-  budget: ["gate-review"],
+  budget: [],
 };
 
 function invertDownstream(): Record<string, string[]> {

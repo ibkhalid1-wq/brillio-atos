@@ -35,7 +35,7 @@ const AGENT_STATUS_GROUPS: Array<{ label: string; agents: string[] }> = [
   },
   {
     label: "Governance",
-    agents: ["gate-review", "escalation", "closure"],
+    agents: ["escalation", "closure"],
   },
   {
     label: "Intelligence",
@@ -110,7 +110,6 @@ const AGENT_DESCRIPTIONS: Record<string, string> = {
   "deck":                  "Builds a structured executive slide deck from programme artefacts.",
   "scope-pcr":             "Tracks scope baseline and logs change requests against approved scope.",
   "daily-briefing":        "Produces a concise daily status brief covering key events and risks.",
-  "gate-review":           "Assesses gate readiness against exit criteria before phase transition.",
   "escalation":            "Monitors unresolved risks and decisions, triggers escalation alerts.",
   "closure":               "Validates programme closure readiness and generates closure artefacts.",
   "pattern-extract":       "Extracts reusable delivery patterns from programme data for the library.",

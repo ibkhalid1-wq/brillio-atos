@@ -58,7 +58,6 @@ const VALID_AGENT_IDS = new Set([
   "retro",
   "deck",
   "scope-pcr",
-  "gate-review",
   "escalation",
   "closure",
   "pattern-extract",
@@ -77,7 +76,6 @@ const VALID_AGENT_IDS = new Set([
   "weekly-digest",
   "twin-sync",
   "phase-completion-estimator",
-  "gate-readiness-coach",
   "agent-schedule-optimiser",
   "setup-prefill",
   "discovery-guide-generator",
@@ -429,7 +427,6 @@ function isSpecialProgramAgent(agentId: string, phaseId: string): boolean {
     || agentId === "retro"
     || agentId === "deck"
     || agentId === "scope-pcr"
-    || agentId === "gate-review"
     || agentId === "escalation"
     || agentId === "closure"
     || agentId === "pattern-extract"
@@ -446,7 +443,6 @@ function isSpecialProgramAgent(agentId: string, phaseId: string): boolean {
     || agentId === "meeting-notes"
     || agentId === "weekly-digest"
     || agentId === "phase-completion-estimator"
-    || agentId === "gate-readiness-coach"
     || agentId === "agent-schedule-optimiser"
     || agentId === "setup-prefill"
     || agentId === "discovery-guide-generator"
@@ -627,11 +623,11 @@ interface FormalArtifactSpec {
 // truncation risk. New agents inherit the safe 4096 default automatically.
 const COMPACT_OUTPUT_AGENTS = new Set<string>([
   "input-quality", "contradiction-detector", "cross-artifact-validator",
-  "health-heatmap", "change-impact", "gate-review", "benchmark-comparator",
+  "health-heatmap", "change-impact", "benchmark-comparator",
   "stakeholder-risk-assessor", "benefit-forecast", "twin-sync", "decision-advisor",
   "kpi-validator", "compliance-checker", "dependency-check", "handoff-quality",
   "capacity-assessor", "vendor-risk-assessor", "phase-completion-estimator",
-  "gate-readiness-coach", "artifact-reviewer", "scope-pcr", "critical-path",
+  "artifact-reviewer", "scope-pcr", "critical-path",
   "agent-schedule-optimiser", "exit-criteria-generator", "phase-input-planner",
 ]);
 const COMPACT_OUTPUT_TOKENS = 2048;
@@ -1405,83 +1401,6 @@ function buildSpecialAgentInputContext(
     }, null, 2);
   }
 
-  if (target?.agentId === "gate-review") {
-    const phaseId = target.phaseId || "program";
-    const phase = phases.find((entry) => entry.id === phaseId) || null;
-    // Gate review judges each exit criterion against evidence, so it needs the
-    // actual artifact CONTENT — not just the title/status that
-    // getProgramArtifactContext surfaces for lighter agents. Without the body
-    // the agent had nothing to match criteria against and marked every
-    // criterion unmet. Read the rich content straight from phaseArtifacts and
-    // cap each body so a fat artifact can't blow the token budget.
-    const phaseArtifactBucket = normalizeProgramData(
-      normalizeProgramData(inner.phaseArtifacts as JsonValue | null)[phaseId] as JsonValue | null,
-    );
-    const MAX_ARTIFACT_CONTENT_CHARS = 6000;
-    const phaseArtifacts = Object.entries(phaseArtifactBucket).map(([artifactId, value]) => {
-      const artifact = normalizeProgramData(value as JsonValue | null);
-      const rawContent = artifact.content;
-      let content: JsonValue | string | null = (rawContent as JsonValue | undefined) ?? null;
-      if (content != null && typeof content !== "string") {
-        const serialized = JSON.stringify(content);
-        content = serialized.length > MAX_ARTIFACT_CONTENT_CHARS
-          ? `${serialized.slice(0, MAX_ARTIFACT_CONTENT_CHARS)}…[truncated]`
-          : serialized;
-      } else if (typeof content === "string" && content.length > MAX_ARTIFACT_CONTENT_CHARS) {
-        content = `${content.slice(0, MAX_ARTIFACT_CONTENT_CHARS)}…[truncated]`;
-      }
-      return {
-        id: artifactId,
-        title: typeof artifact.title === "string" ? artifact.title : artifactId,
-        status: typeof artifact.status === "string" ? artifact.status : "draft",
-        confidence: typeof artifact.confidence === "number" ? artifact.confidence : null,
-        content,
-      };
-    });
-    const openDecisions = decisions.filter((entry) =>
-      entry.status !== "resolved"
-      && (entry.phaseId === phaseId || entry.phase_id === phaseId)
-    );
-    const openRisks = activeRaidEntries.filter((entry) => {
-      const riskPhaseId = typeof entry.phase === "string"
-        ? entry.phase
-        : typeof entry.phaseId === "string"
-          ? entry.phaseId
-          : "strategy";
-      return riskPhaseId === phaseId;
-    });
-
-    // Effective exit criteria for the agent to evaluate. The phase object rarely
-    // carries its own `exitCriteria`, so feeding only that left the agent with an
-    // empty list — it then returned an empty exitCriteriaStatus, which left the
-    // gate permanently unable to close (readiness falls back to the mandatory
-    // library, all unmet, with nothing ever marking them met). Prefer the
-    // program-specific set the exit-criteria-generator produced; fall back to any
-    // criteria declared on the phase.
-    const generatedExit = normalizeProgramData(inner.generatedExitCriteria as JsonValue | null);
-    const generatedForPhase = normalizeProgramData(generatedExit[phaseId] as JsonValue | null);
-    const generatedCriteria = Array.isArray(generatedForPhase.criteria)
-      ? generatedForPhase.criteria
-          .filter(isRecord)
-          .map((c) => (typeof c.criterion === "string" ? c.criterion : ""))
-          .filter((s) => s.length > 0)
-      : [];
-    const declaredCriteria = Array.isArray(phase?.exitCriteria)
-      ? (phase!.exitCriteria as unknown[]).filter((s): s is string => typeof s === "string")
-      : [];
-    const effectiveExitCriteria = generatedCriteria.length ? generatedCriteria : declaredCriteria;
-
-    return JSON.stringify({
-      phase,
-      artifacts: phaseArtifacts,
-      exitCriteria: effectiveExitCriteria,
-      openDecisions,
-      openDecisionCount: openDecisions.length,
-      openRisks,
-      openRiskCount: openRisks.length,
-    }, null, 2);
-  }
-
   if (target?.agentId === "escalation") {
     const existingEscalations = Array.isArray(inner.escalations)
       ? inner.escalations.filter(isRecord).filter((entry) => entry.status === "open" || entry.status === "acknowledged")
@@ -1612,7 +1531,7 @@ function buildSpecialAgentInputContext(
     }, null, 2);
   }
 
-  if (target?.agentId === "phase-completion-estimator" || target?.agentId === "gate-readiness-coach") {
+  if (target?.agentId === "phase-completion-estimator") {
     const phaseId = target.phaseId || "strategy";
     return JSON.stringify({
       phaseId,
@@ -2336,140 +2255,6 @@ function buildEscalationKey(entry: {
 
 function getPhaseArtifactContext(programData: ProgramState, phaseId: string): Array<Record<string, unknown>> {
   return getProgramArtifactContext(programData).filter((artifact) => artifact.phaseId === phaseId);
-}
-
-function applyGateReviewResultToProgramData(
-  programData: ProgramState,
-  phaseId: string,
-  result: Record<string, unknown> | null,
-): ProgramState {
-  return updateInnerProgramData(programData, (inner) => {
-    if (!isRecord(result)) {
-      return {
-        ...inner,
-        gateReviews: {
-          ...normalizeProgramData(inner.gateReviews as JsonValue | null),
-          [phaseId]: {
-            phaseId,
-            phaseName: formatPhaseName(phaseId),
-            status: "not-ready",
-            readinessScore: 0,
-            artifactsSummary: [],
-            openDecisions: 0,
-            openRisks: 0,
-            exitCriteriaStatus: [],
-            recommendation: "Insufficient data for gate review.",
-            generatedAt: new Date().toISOString(),
-          } as JsonValue,
-        },
-      };
-    }
-
-    const phases = getProgramPhaseContext(programData);
-    const phase = phases.find((entry) => entry.id === phaseId);
-    const gateReviews = normalizeProgramData(inner.gateReviews as JsonValue | null);
-    const existingReview = normalizeProgramData(gateReviews[phaseId] as JsonValue | null);
-    const queue = Array.isArray(inner.decisionQueue) ? inner.decisionQueue.filter(isRecord) : [];
-    const raidLog = normalizeProgramData(inner.raidLog as JsonValue | null);
-    const openDecisionCount = queue.filter((decision) =>
-      decision.status !== "resolved"
-      && (decision.phaseId === phaseId || decision.phase_id === phaseId)
-    ).length;
-    const openRiskCount = (Array.isArray(raidLog.entries) ? raidLog.entries : [])
-      .filter(isRecord)
-      .filter((entry) => entry.status !== "closed")
-      .filter((entry) => {
-        const riskPhaseId = typeof entry.phase === "string"
-          ? entry.phase
-          : typeof entry.phaseId === "string"
-            ? entry.phaseId
-            : "strategy";
-        return riskPhaseId === phaseId;
-      })
-      .length;
-    const agentStatus = typeof result.status === "string" ? result.status : "pending-review";
-    const finalStatus = existingReview.status === "approved"
-      ? "approved"
-      : agentStatus === "remediation-requested"
-        ? "remediation-requested"
-        : "pending-review";
-    const openGateDecision = queue.find((decision) =>
-      decision.type === "gate-approval"
-      && (decision.phaseId === phaseId || decision.phase_id === phaseId)
-      && decision.status !== "resolved"
-      && decision.status !== "approved"
-      && decision.status !== "rejected"
-    );
-
-    const review = {
-      phaseId,
-      phaseName: phase?.name || formatPhaseName(phaseId),
-      status: finalStatus,
-      readinessScore: typeof result.readinessScore === "number" ? Math.max(0, Math.min(1, Number(result.readinessScore))) : 0,
-      artifactsSummary: Array.isArray(result.artifactsSummary)
-        ? result.artifactsSummary.filter(isRecord).map((artifact) => ({
-            name: typeof artifact.name === "string" ? artifact.name : "Unnamed artifact",
-            status: typeof artifact.status === "string" && ["complete", "partial", "missing"].includes(artifact.status)
-              ? artifact.status
-              : "missing",
-            confidence: typeof artifact.confidence === "number" ? Math.max(0, Math.min(1, Number(artifact.confidence))) : 0,
-          }))
-        : [],
-      openDecisions: typeof result.openDecisions === "number"
-        ? Math.max(0, Math.round(Number(result.openDecisions)))
-        : openDecisionCount,
-      openRisks: typeof result.openRisks === "number"
-        ? Math.max(0, Math.round(Number(result.openRisks)))
-        : openRiskCount,
-      exitCriteriaStatus: Array.isArray(result.exitCriteriaStatus)
-        ? result.exitCriteriaStatus.filter(isRecord).map((criterion) => ({
-            criterion: typeof criterion.criterion === "string" ? criterion.criterion : "Unnamed criterion",
-            met: criterion.met === true,
-            evidence: typeof criterion.evidence === "string" ? criterion.evidence : null,
-          }))
-        : [],
-      recommendation: typeof result.recommendation === "string" ? result.recommendation : "",
-      generatedAt: new Date().toISOString(),
-      approvedAt: typeof existingReview.approvedAt === "string" ? existingReview.approvedAt : null,
-      approvedBy: typeof existingReview.approvedBy === "string" ? existingReview.approvedBy : null,
-      remediationNote: typeof existingReview.remediationNote === "string" ? existingReview.remediationNote : null,
-    };
-
-    let nextQueue = queue;
-    if (review.status === "ready" && !openGateDecision) {
-      const decisionId = `gate_${phaseId}_${Date.now()}`;
-      nextQueue = [
-        ...queue,
-        {
-          id: decisionId,
-          type: "gate-approval",
-          title: `${review.phaseName} gate ready`,
-          priority: "high",
-          phaseId,
-          question: `${review.phaseName} is gate-ready. Approve to unlock the next phase?`,
-          recommendation: review.recommendation,
-          options: ["Approve gate", "Request remediation"],
-          createdAt: new Date().toISOString(),
-          status: "pending",
-        },
-      ];
-    }
-    if (review.status === "not-ready") {
-      nextQueue = queue.filter((decision) => !(
-        decision.type === "gate-approval"
-        && (decision.phaseId === phaseId || decision.phase_id === phaseId)
-      ));
-    }
-
-    return {
-      ...inner,
-      gateReviews: {
-        ...gateReviews,
-        [phaseId]: review as JsonValue,
-      },
-      decisionQueue: nextQueue as JsonValue,
-    };
-  });
 }
 
 function applyEscalationResultToProgramData(programData: ProgramState, result: Record<string, unknown> | null): ProgramState {
@@ -3360,9 +3145,6 @@ function buildOutputSummary(agentId: string, result: Record<string, unknown> | n
   if (agentId === "milestone") {
     return `${Array.isArray(result.milestones) ? result.milestones.length : 0} milestones derived`;
   }
-  if (agentId === "gate-review") {
-    return `Gate review: ${typeof result.status === "string" ? result.status : "complete"}`;
-  }
   if (agentId === "escalation") {
     return `${Array.isArray(result.escalations) ? result.escalations.length : 0} escalations raised`;
   }
@@ -3464,7 +3246,7 @@ async function autonomyGate(
   shouldQueueReview: boolean;
   reason: string;
 }> {
-  const ALWAYS_HUMAN = ["gate-review", "closure", "escalation"];
+  const ALWAYS_HUMAN = ["closure", "escalation"];
   if (ALWAYS_HUMAN.includes(agentId)) {
     await admin.from("adam_autonomy_log").insert({
       program_id: programId,
@@ -4605,26 +4387,6 @@ function applyCompletionEstimateResultToProgramData(programData: ProgramState, p
   return next;
 }
 
-function applyGateCoachResultToProgramData(programData: ProgramState, phaseId: string, result: Record<string, unknown>): ProgramState {
-  let next = updateInnerProgramData(programData, (inner) => ({
-    ...inner,
-    gateReadinessCoach: {
-      ...(normalizeProgramData(inner.gateReadinessCoach as JsonValue | null)),
-      [phaseId]: {
-        actions: Array.isArray(result.actions) ? result.actions.filter(isRecord) : [],
-        score: Math.round(clampNumber(result.score, 0, 100, 0)),
-        generatedAt: new Date().toISOString(),
-      } as JsonValue,
-    } as JsonValue,
-  }));
-  next = setPhaseArtifactValue(next, phaseId, "gate-readiness-coach", {
-    actions: Array.isArray(result.actions) ? result.actions.filter(isRecord) : [],
-    score: Math.round(clampNumber(result.score, 0, 100, 0)),
-    generatedAt: new Date().toISOString(),
-  }, "Gate readiness coach");
-  return next;
-}
-
 function applyAgentScheduleOptimiserResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
   return setInnerField(programData, "agentScheduleOptimiser", {
     schedule: isRecord(result.schedule) ? result.schedule : {},
@@ -5269,40 +5031,6 @@ Return ONLY valid JSON.`,
     };
   }
 
-  if (request.agentId === "gate-review") {
-    return {
-      system: `You are the Gate Review Agent for an enterprise transformation program.
-
-Evaluate gate readiness for the supplied phase.
-
-Rules:
-- For each artifact, assess completeness and confidence.
-- For each exit criterion, determine whether it is met based on the available evidence.
-- Derive an overall readiness score from 0.0 to 1.0.
-- If readiness is below threshold, explain specifically what is still missing.
-- If pct < 90, always return status "not-ready".
-- If pct >= 90, openDecisionCount === 0, openRiskCount === 0, and readinessScore >= 0.8, return status "ready".
-
-Return JSON only:
-{
-  "readinessScore": number,
-  "artifactsSummary": [
-    { "name": string, "status": "complete"|"partial"|"missing", "confidence": number }
-  ],
-  "exitCriteriaStatus": [
-    { "criterion": string, "met": boolean, "evidence": string | null }
-  ],
-  "openDecisions": number,
-  "openRisks": number,
-  "recommendation": string,
-  "status": "ready" | "not-ready"
-}
-
-If no meaningful phase data exists, return null.`,
-      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
-    };
-  }
-
   if (request.agentId === "escalation") {
     return {
       system: `You are the Escalation Agent for an enterprise transformation program.
@@ -5516,8 +5244,8 @@ Return ONLY valid JSON:
     {
       "id": "unique string",
       "severity": "critical|high|medium",
-      "artifactA": "narrative|plan|risk|gate-review",
-      "artifactB": "narrative|plan|risk|gate-review",
+      "artifactA": "narrative|plan|risk",
+      "artifactB": "narrative|plan|risk",
       "description": "what specifically contradicts what",
       "recommendation": "how to resolve"
     }
@@ -5885,17 +5613,6 @@ Return ONLY valid JSON:
   },
   "generatedAt": "ISO timestamp"
 }`,
-      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
-    };
-  }
-
-  if (request.agentId === "gate-readiness-coach") {
-    return {
-      system: `You are a transformation programme coach.
-Given a list of gate readiness gaps, produce a prioritised action plan.
-For each gap, output: action (string), effort ("quick" | "hours" | "days"), owner ("user" | "agent"), agentId (string | null).
-Return ONLY valid JSON:
-{ "actions": [{ "action": "string", "effort": "quick|hours|days", "owner": "user|agent", "agentId": null }], "score": 0-100, "generatedAt": "ISO timestamp" }`,
       user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
     };
   }
@@ -6476,8 +6193,6 @@ Deno.serve(async (req) => {
       || request.agentId === "benchmark-comparator"
       || request.agentId === "narrative"
       || request.agentId === "plan"
-      || request.agentId === "gate-review"
-      || request.agentId === "gate-readiness-coach"
       || request.agentId === "change-impact"
       || request.agentId === "adoption"
       || request.agentId === "health-heatmap";
@@ -6986,7 +6701,6 @@ Deno.serve(async (req) => {
         "weekly-digest",
         "twin-sync",
         "phase-completion-estimator",
-        "gate-readiness-coach",
         "agent-schedule-optimiser",
         "setup-prefill",
         "discovery-guide-generator",
@@ -7058,8 +6772,6 @@ Deno.serve(async (req) => {
         nextProgramData = applyDeckResultToProgramData(contextProgramData, normalizedParsedResult);
       } else if (request.agentId === "scope-pcr") {
         nextProgramData = applyScopePcrResultToProgramData(contextProgramData, normalizedParsedResult);
-      } else if (request.agentId === "gate-review") {
-        nextProgramData = applyGateReviewResultToProgramData(contextProgramData, request.phaseId, normalizedParsedResult);
       } else if (request.agentId === "escalation") {
         nextProgramData = applyEscalationResultToProgramData(contextProgramData, normalizedParsedResult);
       } else if (request.agentId === "closure") {
@@ -7172,8 +6884,6 @@ Deno.serve(async (req) => {
         nextProgramData = applyTwinSyncResultToProgramData(contextProgramData, result);
       } else if (request.agentId === "phase-completion-estimator") {
         nextProgramData = applyCompletionEstimateResultToProgramData(contextProgramData, request.phaseId, result);
-      } else if (request.agentId === "gate-readiness-coach") {
-        nextProgramData = applyGateCoachResultToProgramData(contextProgramData, request.phaseId, result);
       } else if (request.agentId === "agent-schedule-optimiser") {
         nextProgramData = applyAgentScheduleOptimiserResultToProgramData(contextProgramData, result);
       } else if (request.agentId === "discovery-guide-generator") {
@@ -7276,10 +6986,6 @@ Deno.serve(async (req) => {
           risk: {
             fieldKey: "riskQuality",
             content: stringifyForReview({ summary: result.summary, raidEntries: result.raidEntries }),
-          },
-          "gate-review": {
-            fieldKey: "gateReviewQuality",
-            content: stringifyForReview(result),
           },
           deck: {
             fieldKey: "deckQuality",

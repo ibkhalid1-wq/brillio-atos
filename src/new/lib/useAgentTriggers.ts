@@ -159,20 +159,8 @@ export function useAgentTriggers({
   const patternQueryRunning = useRef(false);
   const escalationRunning = useRef(false);
   const closureRunning = useRef(false);
-  const gateReviewRunningPhases = useRef(new Set<string>());
   const [retroRunningPhases, setRetroRunningPhases] = useState<Set<string>>(new Set());
-  const [gateReviewRunningPhaseSet, setGateReviewRunningPhaseSet] = useState<Set<string>>(new Set());
   const [escalationIsRunning, setEscalationIsRunning] = useState(false);
-
-  const startGateReviewRun = useCallback((phaseId: string) => {
-    gateReviewRunningPhases.current.add(phaseId);
-    setGateReviewRunningPhaseSet(new Set(gateReviewRunningPhases.current));
-  }, []);
-
-  const finishGateReviewRun = useCallback((phaseId: string) => {
-    gateReviewRunningPhases.current.delete(phaseId);
-    setGateReviewRunningPhaseSet(new Set(gateReviewRunningPhases.current));
-  }, []);
 
   const startEscalationRun = useCallback(() => {
     escalationRunning.current = true;
@@ -270,9 +258,7 @@ export function useAgentTriggers({
       raidSnapshotReady.current = false;
       milestoneSnapshotReady.current = false;
       decisionSnapshotReady.current = false;
-      gateReviewRunningPhases.current = new Set();
       setRetroRunningPhases(new Set());
-      setGateReviewRunningPhaseSet(new Set());
       setEscalationIsRunning(false);
       return;
     }
@@ -301,9 +287,7 @@ export function useAgentTriggers({
     raidSnapshotReady.current = false;
     milestoneSnapshotReady.current = false;
     decisionSnapshotReady.current = false;
-    gateReviewRunningPhases.current = new Set();
     setRetroRunningPhases(new Set());
-    setGateReviewRunningPhaseSet(new Set());
     setEscalationIsRunning(false);
     previousRunStatuses.current = new Map(activeRuns.map((run) => [run.id, run.status]));
   }, [programId]);
@@ -466,16 +450,6 @@ export function useAgentTriggers({
   }, [activePhaseId, canRunAgents, gateReviews, milestones, rawData, runAgentSafely]);
 
   useEffect(() => {
-    if (!canRunAgents || !activePhaseId) return;
-    const review = gateReviews[activePhaseId];
-    const score = typeof review?.readinessScore === "number" ? Math.round(review.readinessScore * 100) : null;
-    if (score === null || score >= 80) return;
-    void runAgentSafely({ agentId: "gate-readiness-coach", phaseId: activePhaseId, triggeredBy: "trigger" }, () => {
-      lastRunSnapshots.current["gate-readiness-coach"] = captureSnapshot("gate-readiness-coach", rawData);
-    });
-  }, [activePhaseId, canRunAgents, gateReviews, rawData, runAgentSafely]);
-
-  useEffect(() => {
     if (!canRunAgents) return;
     const generatedAt = typeof rawData.agentScheduleOptimiser === "object" && rawData.agentScheduleOptimiser && !Array.isArray(rawData.agentScheduleOptimiser)
       ? (rawData.agentScheduleOptimiser as { generatedAt?: string }).generatedAt || null
@@ -508,23 +482,6 @@ export function useAgentTriggers({
       patternQueryRunning.current = false;
     });
   }, [canRunAgents, patternQueryCachedAt, programId, runAgentSafely]);
-
-  useEffect(() => {
-    if (!canRunAgents) return;
-
-    phases
-      .filter((phase) => phase.pct >= 90)
-      .forEach((phase) => {
-        const review = gateReviews[phase.id];
-        const isReviewStale = !review || isOlderThan(review.generatedAt, ONE_DAY_MS);
-        if (!isReviewStale || gateReviewRunningPhases.current.has(phase.id)) return;
-
-        startGateReviewRun(phase.id);
-        void runAgentSafely({ agentId: "gate-review", phaseId: phase.id, triggeredBy: "trigger" }, () => {
-          finishGateReviewRun(phase.id);
-        });
-      });
-  }, [canRunAgents, finishGateReviewRun, gateReviews, phases, programId, runAgentSafely, startGateReviewRun]);
 
   useEffect(() => {
     if (!canRunAgents) return;
@@ -694,7 +651,7 @@ export function useAgentTriggers({
       const previousPct = phaseSnapshots.current.get(phase.id);
       return typeof previousPct === "number" && phase.pct - previousPct > 10;
     });
-    const gateReviewPhaseCrossovers = phases.filter((phase) => {
+    const phaseGateCrossovers = phases.filter((phase) => {
       const previousPct = phaseSnapshots.current.get(phase.id);
       return typeof previousPct === "number"
         && previousPct < 90
@@ -764,14 +721,6 @@ export function useAgentTriggers({
       });
     }
 
-    gateReviewPhaseCrossovers.forEach((phase) => {
-      if (gateReviewRunningPhases.current.has(phase.id)) return;
-      startGateReviewRun(phase.id);
-      void runAgentSafely({ agentId: "gate-review", phaseId: phase.id, triggeredBy: "trigger" }, () => {
-        finishGateReviewRun(phase.id);
-      });
-    });
-
     retroPhaseCrossovers.forEach((phase) => {
       if (retroRunningPhases.has(phase.id)) return;
       setRetroRunningPhases((prev) => new Set([...prev, phase.id]));
@@ -815,7 +764,7 @@ export function useAgentTriggers({
       ) || (
         closure?.status === "not-ready"
         && phases.every((phase) => phase.pct >= 90)
-        && gateReviewPhaseCrossovers.length > 0
+        && phaseGateCrossovers.length > 0
       ))
       && !closureRunning.current
     ) {
@@ -840,10 +789,8 @@ export function useAgentTriggers({
     retrosGeneratedAt,
     runAgentSafely,
     finishEscalationRun,
-    finishGateReviewRun,
     scopePcrGeneratedAt,
     startEscalationRun,
-    startGateReviewRun,
   ]);
 
   const triggerNarrative = useCallback(() => {
@@ -954,14 +901,6 @@ export function useAgentTriggers({
     });
   }, [runAgentSafely]);
 
-  const triggerGateReview = useCallback((phaseId: string) => {
-    if (gateReviewRunningPhases.current.has(phaseId)) return;
-    startGateReviewRun(phaseId);
-    void runAgentSafely({ agentId: "gate-review", phaseId, triggeredBy: "user" }, () => {
-      finishGateReviewRun(phaseId);
-    });
-  }, [finishGateReviewRun, runAgentSafely, startGateReviewRun]);
-
   const triggerEscalation = useCallback(() => {
     if (escalationRunning.current) return;
     startEscalationRun();
@@ -992,10 +931,8 @@ export function useAgentTriggers({
     triggerRetro,
     triggerDeck,
     triggerScopePcr,
-    triggerGateReview,
     triggerEscalation,
     triggerClosure,
-    gateReviewRunningPhaseSet,
     escalationIsRunning,
     changeImpactIsRunning,
     stakeholderIsRunning,

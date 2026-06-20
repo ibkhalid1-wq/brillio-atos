@@ -1569,7 +1569,7 @@ export default function AppShellV3() {
   const { sanity, validation, hasBlockers, warningCount } = useProgramValidation(activeProgram);
   const copilotMemoryContext = useMemo(() => {
     if (!activeProgramId) return "";
-    return ["narrative", "plan", "risk", "gate-review", "retro"]
+    return ["narrative", "plan", "risk"]
       .map((agentId) => buildMemoryContext(agentId, activeProgramId))
       .filter(Boolean)
       .join("\n");
@@ -1616,7 +1616,7 @@ export default function AppShellV3() {
 
   // Why agents can / cannot generate artifacts — the three preconditions, checked
   // in the same order runProgramAgent enforces them, so the ledger names the exact blocker.
-  const anyAgentRunning = agentIsRunning || triggers.gateReviewRunningPhaseSet.size > 0 || triggers.escalationIsRunning;
+  const anyAgentRunning = agentIsRunning || triggers.escalationIsRunning;
   // Three-state rail indicator: running (working) → idle (at rest, ready) →
   // stopped (a recent run ended abnormally — failed/cancelled — within the
   // hook's terminal-run retention window, so it surfaces as needing attention).

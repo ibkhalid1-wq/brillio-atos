@@ -264,7 +264,7 @@ export default function ProgramDetailRouter({
       return (
         <ClosureView
           program={program}
-          onTriggerClosure={() => void triggers.triggerGateReview("valuerealize")}
+          onTriggerClosure={() => void triggers.triggerClosure()}
           closureIsRunning={activeRuns.some((r) => r.agent_id === "closure-pack" && r.status === "running")}
           onApproveClosure={() => undefined}
           onArchiveProgram={() => undefined}

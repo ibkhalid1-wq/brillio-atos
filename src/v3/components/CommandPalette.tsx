@@ -34,8 +34,6 @@ function simulateQuery(q: string): string {
 }
 
 const AGENT_COMMANDS: Array<{ id: string; label: string; description: string }> = [
-  { id: "gate-review", label: "Run Gate Check", description: "AI readiness assessment for current phase" },
-  { id: "gate-readiness-coach", label: "Get Readiness Advice", description: "Recommended actions to improve gate score" },
   { id: "narrative", label: "Generate Summary", description: "Refresh the stakeholder programme summary" },
   { id: "risk", label: "Analyse Risks", description: "Identify risks and mitigation options" },
   { id: "milestone", label: "Update Milestones", description: "Generate or refresh milestone tracker" },
@@ -46,15 +44,15 @@ const AGENT_COMMANDS: Array<{ id: string; label: string; description: string }> 
 ];
 
 const PHASE_AGENTS: Record<string, string[]> = {
-  strategy: ["narrative", "gate-review", "gate-readiness-coach"],
-  mobilise: ["gate-review", "risk", "narrative"],
-  discover: ["narrative", "gate-review", "risk"],
-  design: ["narrative", "gate-review", "change-impact"],
-  build: ["milestone", "gate-review", "risk"],
-  operate: ["health-heatmap", "gate-review", "narrative"],
-  govern: ["gate-review", "narrative", "risk"],
-  optimize: ["narrative", "gate-review", "milestone"],
-  valuerealize: ["narrative", "gate-review", "closure"],
+  strategy: ["narrative", "risk"],
+  mobilise: ["risk", "narrative"],
+  discover: ["narrative", "risk"],
+  design: ["narrative", "change-impact"],
+  build: ["milestone", "risk"],
+  operate: ["health-heatmap", "narrative"],
+  govern: ["narrative", "risk"],
+  optimize: ["narrative", "milestone"],
+  valuerealize: ["narrative", "closure"],
 };
 
 const NAV_ITEMS: Array<{ mode: V3CommandMode; title: string; subtitle: string }> = [

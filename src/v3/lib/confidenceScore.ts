@@ -154,7 +154,7 @@ export function computeConfidenceScore(inputs: {
           : `Current gate readiness is ${inputs.gateReadiness}%.`,
       topAction:
         inputs.gateReadiness < 70
-          ? "Run gate-review agent to assess exit criteria and generate a readiness score."
+          ? "Resolve unmet exit criteria and open decisions to raise gate readiness."
           : undefined,
     },
     {

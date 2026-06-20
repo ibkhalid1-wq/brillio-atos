@@ -136,7 +136,7 @@ export function HealthHeatmapView({
               label: `Address ${worst.phaseName} — health is critical`,
               reason: worst.topRisk ? `Top risk: ${worst.topRisk}` : (worst.healthNote ?? `${worst.phaseName} health score is red`),
               urgency: "critical",
-              agentId: "gate-readiness-coach",
+              agentId: "risk",
               phaseId: worst.phaseId,
             });
           }

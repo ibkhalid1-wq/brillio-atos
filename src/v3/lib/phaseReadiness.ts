@@ -304,15 +304,6 @@ export function computePhaseReadiness(
       .filter((criterion) => !criterion.met)
       .map((criterion) => criterion.criterion);
     missing.push(`${unmet.length} mandatory exit criteria unmet: ${unmet.slice(0, 2).join("; ")}`);
-    recommendedActions.push({
-      id: "gate-review",
-      label: "Run gate review to assess exit criteria",
-      description: `${unmet.length} mandatory exit criteria are not yet met. The gate-review agent evaluates evidence and marks criteria met.`,
-      estimatedImpact: Math.round(unmet.length * 3),
-      effort: "quick",
-      agentId: "gate-review",
-      priority: "critical",
-    });
   }
 
   // ── Open decisions blocking gate (Priority 8 — decision-to-readiness linkage) ─
@@ -438,17 +429,6 @@ export function computePhaseReadiness(
 
   if (!canApproveGate && artifactsComplete === 100 && artifactScore <= 90) {
     missing.push(`Artifact quality is ${artifactScore}% — it must exceed 90% before the gate can be locked`);
-    if (!recommendedActions.some((a) => a.agentId === "gate-readiness-coach")) {
-      recommendedActions.push({
-        id: "gate-coach",
-        label: "Run gate readiness coach",
-        description: `Artifact quality is ${91 - artifactScore} point${91 - artifactScore === 1 ? "" : "s"} short of the 90% lock bar. The gate readiness coach identifies the fastest path to approval.`,
-        estimatedImpact: Math.min(15, 91 - artifactScore),
-        effort: "quick",
-        agentId: "gate-readiness-coach",
-        priority: artifactScore < 70 ? "critical" : "high",
-      });
-    }
   }
 
   // Sort actions: critical first, then by estimated impact descending

@@ -320,15 +320,6 @@ function GatesTab({
         <button
           type="button"
           className="v3-button ghost"
-          disabled={anyAgentRunning}
-          onClick={() => onRunAgent("gate-review", phaseId)}
-        >
-          ⬡ Check Gate Readiness
-        </button>
-
-        <button
-          type="button"
-          className="v3-button ghost"
           onClick={() => setLiteGateOpen(true)}
         >
           ✓ Quick Gate Check
@@ -400,11 +391,10 @@ function GatesTab({
         open={liteGateOpen}
         phaseId={phaseId ?? ""}
         onClose={() => setLiteGateOpen(false)}
-        onComplete={(passed, _answers) => {
+        onComplete={() => {
+          // Lite gate is a deterministic sense-check only. The formal gate
+          // approval lives inline on this same Gates tab — no agent to invoke.
           setLiteGateOpen(false);
-          if (passed) {
-            onRunAgent("gate-review", phaseId ?? "program");
-          }
         }}
       />
     </div>

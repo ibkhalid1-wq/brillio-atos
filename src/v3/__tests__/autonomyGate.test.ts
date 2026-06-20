@@ -9,7 +9,7 @@ function evaluateAutonomyGate(
   confidence: number | null,
   settings?: { enabled: boolean; trustThreshold: number } | null,
 ): AutonomyDecision {
-  const alwaysHuman = new Set(["gate-review", "closure", "escalation"]);
+  const alwaysHuman = new Set(["closure", "escalation"]);
   if (alwaysHuman.has(agentId)) {
     return { actAutonomously: false, applyWriteBack: true, shouldQueueReview: false };
   }
@@ -27,14 +27,6 @@ function evaluateAutonomyGate(
 }
 
 describe("autonomyGate", () => {
-  it("blocks gate-review at any confidence", () => {
-    expect(evaluateAutonomyGate("gate-review", 0.99)).toEqual({
-      actAutonomously: false,
-      applyWriteBack: true,
-      shouldQueueReview: false,
-    });
-  });
-
   it("blocks closure at any confidence", () => {
     expect(evaluateAutonomyGate("closure", 0.99)).toEqual({
       actAutonomously: false,

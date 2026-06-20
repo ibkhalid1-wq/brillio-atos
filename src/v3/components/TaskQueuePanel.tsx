@@ -128,16 +128,15 @@ export default function TaskQueuePanel({ tasks, phaseId, onAnswerQuestion, onAck
               </div>
             ) : null}
 
-            {(task.type === "draft_artifact" || task.type === "gate_assessment" || task.type === "generate_handoff") && task.status === "pending" ? (
+            {(task.type === "draft_artifact" || task.type === "generate_handoff") && task.status === "pending" ? (
               <div style={{ marginTop: 8 }}>
                 <button
                   type="button"
                   className="v3-button ghost"
                   style={{ fontSize: 11, padding: "4px 10px" }}
                   onClick={() => onRunAgent(
-                    task.type === "gate_assessment" ? "gate-review"
-                      : task.type === "generate_handoff" ? "handoff"
-                        : "narrative",
+                    task.type === "generate_handoff" ? "handoff"
+                      : "narrative",
                   )}
                 >
                   Run agent →

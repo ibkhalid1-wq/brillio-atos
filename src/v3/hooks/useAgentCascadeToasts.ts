@@ -15,7 +15,6 @@ const AGENT_LABELS: Record<string, string> = {
   retro: "Retrospective",
   deck: "Status deck",
   "scope-pcr": "Scope & PCR",
-  "gate-review": "Gate review",
   escalation: "Escalation",
   closure: "Closure pack",
 };

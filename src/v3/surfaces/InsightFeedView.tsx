@@ -470,7 +470,7 @@ export default function InsightFeedView({
         const ENTRY_STEPS = [
           { n: 1, icon: "⊡", label: "Complete Strategy phase inputs", why: "Tell ATOS your programme objective, sponsor, and budget — this bootstraps all AI analysis.", action: firstPhase ? () => onOpenPhase(firstPhase.id) : undefined, cta: "Open Strategy phase →" },
           { n: 2, icon: "◎", label: "Build your programme brief", why: "Creates the programme narrative — the primary summary referenced by all downstream analysis.", action: () => onRunAgent("narrative", firstPhase?.id ?? "strategy"), cta: "Build brief →" },
-          { n: 3, icon: "⬡", label: "Check phase readiness", why: "Assesses what's missing before you can progress to Mobilise. Surfaces blockers early.", action: () => onRunAgent("gate-review", firstPhase?.id ?? "strategy"), cta: "Check readiness →" },
+          { n: 3, icon: "⬡", label: "Check phase readiness", why: "Open the phase to see its exit criteria and what's still missing before you can progress to Mobilise.", action: firstPhase ? () => onOpenPhase(firstPhase.id) : undefined, cta: "Review readiness →" },
           { n: 4, icon: "→", label: "Work through the phase checklist", why: "Each phase has specific exit criteria. ATOS will guide you step-by-step.", action: undefined, cta: null },
         ];
         return (

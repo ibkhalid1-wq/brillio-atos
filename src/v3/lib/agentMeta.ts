@@ -16,8 +16,6 @@ export const AGENT_META: Record<string, AgentMeta> = {
   "risk": { id: "risk", label: "Risk", description: "Analyses and ranks programme risks", estimatedSeconds: 22, category: "analysis", icon: "⚑", outputArtifact: "Risk Register" },
   "milestone": { id: "milestone", label: "Milestones", description: "Reviews milestone health and forecasts", estimatedSeconds: 18, category: "analysis", icon: "◆", outputArtifact: "Milestone Review" },
   "budget": { id: "budget", label: "Budget", description: "Tracks budget variance and burn", estimatedSeconds: 20, category: "analysis", icon: "◈", outputArtifact: "Budget Report" },
-  "gate-review": { id: "gate-review", label: "Gate Review", description: "Produces phase gate pack and readiness assessment", estimatedSeconds: 35, category: "gate", icon: "⬡", outputArtifact: "Gate Pack" },
-  "gate-readiness-coach": { id: "gate-readiness-coach", label: "Gate Coach", description: "Identifies blocking actions before gate", estimatedSeconds: 28, category: "gate", icon: "⬡", outputArtifact: "Readiness Actions" },
   "critical-path": { id: "critical-path", label: "Critical Path", description: "Maps critical path and slack", estimatedSeconds: 30, category: "analysis", icon: "⟶", outputArtifact: "Critical Path" },
   "change-impact": { id: "change-impact", label: "Change Impact", description: "Assesses organisational change impact", estimatedSeconds: 28, category: "analysis", icon: "◫", outputArtifact: "Change Impact" },
   "stakeholder": { id: "stakeholder", label: "Stakeholders", description: "Stakeholder engagement analysis", estimatedSeconds: 22, category: "analysis", icon: "⊕", outputArtifact: "Stakeholder Map" },
