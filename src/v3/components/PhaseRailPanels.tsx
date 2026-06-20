@@ -156,13 +156,24 @@ export function PhaseRailPanels({
     openLabel: string;
     openSurface: () => void;
   }) => {
-    const target = primaryAnchorFor(args.itemPhase, args.relatedArtifactId, args.relatedInputIds);
-    if (!target || !onNavigateToPhaseInputs) {
+    // Without a navigator wired in there's nothing to drill to — open the surface.
+    if (!onNavigateToPhaseInputs) {
       args.openSurface();
       return;
     }
-    drillTo(args.itemPhase, target.anchor);
-    pushV3Toast(`${args.kindLabel}: ${args.title} → ${target.label}`, {
+    // Every rail click lands on the programme phase the item belongs to. When the
+    // item carries a source anchor we flash the exact field/artifact; otherwise we
+    // still navigate to that phase's inputs section so the click is never a dead
+    // end and never bounces the user to a different surface unexpectedly. The full
+    // surface (Action Center / RAID log) stays one tap away via the toast action.
+    const target = primaryAnchorFor(args.itemPhase, args.relatedArtifactId, args.relatedInputIds);
+    const resolvedPhase = args.itemPhase && args.itemPhase !== "all" ? args.itemPhase : phaseId;
+    if (target) {
+      drillTo(args.itemPhase, target.anchor);
+    } else {
+      onNavigateToPhaseInputs(resolvedPhase);
+    }
+    pushV3Toast(`${args.kindLabel}: ${args.title} → ${target ? target.label : "Phase inputs"}`, {
       tone: "info",
       icon: "↳",
       duration: 6000,

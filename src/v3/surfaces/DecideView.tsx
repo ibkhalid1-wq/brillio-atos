@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
 import { selectPhaseMetrics } from "@/v3/lib/programMetrics";
 import { selectBlockers, selectRisks, type RaidScope } from "@/v3/lib/programRaid";
@@ -583,8 +583,17 @@ export default function DecideView({
     return inProgress?.id || firstIncomplete?.id || activePhaseId || phases[0]?.id || null;
   }, [program, activePhaseId]);
 
+  // The Action Center always opens on the live (current) phase, and follows it as
+  // the programme frontier advances — so it never sits stuck on a phase the team
+  // has already moved past. A manual phase pick is preserved until the frontier
+  // actually moves to a different phase.
+  const lastSyncedCurrentPhaseRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!selectedPhaseId && currentPhaseId) setSelectedPhaseId(currentPhaseId);
+    if (!currentPhaseId) return;
+    if (selectedPhaseId == null || lastSyncedCurrentPhaseRef.current !== currentPhaseId) {
+      setSelectedPhaseId(currentPhaseId);
+      lastSyncedCurrentPhaseRef.current = currentPhaseId;
+    }
   }, [currentPhaseId, selectedPhaseId]);
 
   // Only phases that are "in play" — already approved (locked-in) or the active
