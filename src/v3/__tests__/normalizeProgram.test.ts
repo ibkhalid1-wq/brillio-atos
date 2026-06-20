@@ -37,4 +37,31 @@ describe("normalizeProgram", () => {
     const second = normalizeProgram(baseRow);
     expect(second).toEqual(first);
   });
+
+  it("surfaces resolved-decision audit fields onto decisionQueue", () => {
+    // The Decision Audit screen reads these straight off program.decisionQueue,
+    // so the resolution stamp must survive normalization.
+    const program = normalizeProgram({
+      ...baseRow,
+      data: {
+        ...baseRow.data,
+        decisionQueue: [
+          {
+            id: "dec-1",
+            title: "Approve vendor shortlist",
+            phaseId: "mobilise",
+            status: "approved",
+            resolvedAt: "2026-06-15T10:00:00.000Z",
+            resolvedBy: "lead@acme.com",
+            humanNote: "Aligned with sourcing policy",
+          },
+        ],
+      },
+    });
+    const decided = program.decisionQueue.find((d) => d.id === "dec-1");
+    expect(decided?.status).toBe("approved");
+    expect(decided?.resolvedAt).toBe("2026-06-15T10:00:00.000Z");
+    expect(decided?.resolvedBy).toBe("lead@acme.com");
+    expect(decided?.humanNote).toBe("Aligned with sourcing policy");
+  });
 });

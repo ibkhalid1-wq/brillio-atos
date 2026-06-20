@@ -1,5 +1,4 @@
-import React, { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import React from "react";
 import type { AgentRun } from "@/lib/adamSync";
 import { buildAgentActivityMap, buildAgentCards } from "@/new/lib/programData";
 import { AcceleratorsView } from "@/new/pages/AcceleratorsView";
@@ -98,22 +97,24 @@ function BenchmarkView({
   );
 }
 
-function DecisionAuditView({ programId }: { programId: string | null }) {
-  const [auditLog, setAuditLog] = useState<Array<Record<string, unknown>>>([]);
+/** Statuses that represent a closed-out (decided) queue entry. */
+const RESOLVED_DECISION_STATUSES = new Set(["approved", "deferred", "rejected", "modified", "resolved", "escalated"]);
 
-  useEffect(() => {
-    if (!programId || !supabase) {
-      setAuditLog([]);
-      return;
-    }
-    void supabase
-      .from("adam_decision_audit")
-      .select("*")
-      .eq("program_id", programId)
-      .order("resolved_at", { ascending: false })
-      .limit(50)
-      .then(({ data }) => setAuditLog((data || []) as Array<Record<string, unknown>>));
-  }, [programId]);
+function DecisionAuditView({ program }: { program: ProgramSummary | null }) {
+  // The audit trail is sourced directly from the resolved entries of the
+  // program's own decisionQueue (stamped with status/resolvedAt/resolvedBy by
+  // updateDecisionInProgram). The legacy `adam_decision_audit` table is never
+  // written to, so reading it would always show an empty screen.
+  const auditLog = React.useMemo(() => {
+    const queue = program?.decisionQueue || [];
+    return queue
+      .filter((d) => Boolean(d.resolvedAt) || RESOLVED_DECISION_STATUSES.has(String(d.status || "").toLowerCase()))
+      .sort((left, right) => {
+        const lt = new Date(left.resolvedAt || left.createdAt || 0).getTime();
+        const rt = new Date(right.resolvedAt || right.createdAt || 0).getTime();
+        return rt - lt;
+      });
+  }, [program?.decisionQueue]);
 
   return (
     <div className="v3-section">
@@ -127,17 +128,22 @@ function DecisionAuditView({ programId }: { programId: string | null }) {
           {auditLog.length ? (
             <div style={{ display: "grid", gap: 10 }}>
               {auditLog.map((entry) => (
-                <AdamCard key={String(entry.id)}>
+                <AdamCard key={entry.id}>
                   <AdamCardBody className="v3-program-detail-stack" padded>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: "var(--v3-text-primary)" }}>
-                        {String(entry.decision_title || entry.decision_id || "")}
+                        {entry.title || entry.id}
                       </div>
-                      <span className="v3-chip muted" style={{ fontSize: 11 }}>{String(entry.resolution || "")}</span>
+                      <span className="v3-chip muted" style={{ fontSize: 11 }}>{String(entry.status || "resolved")}</span>
                     </div>
                     <div style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>
-                      {entry.resolved_at ? <RelativeTime date={String(entry.resolved_at)} /> : "Unknown date"} · {String(entry.resolved_by || "unknown")} · {String(entry.phase_id || "program")}
+                      {entry.resolvedAt ? <RelativeTime date={entry.resolvedAt} /> : "Unknown date"} · {entry.resolvedBy || "unknown"} · {entry.phaseId || "program"}
                     </div>
+                    {entry.humanNote ? (
+                      <div style={{ fontSize: 12, color: "var(--v3-text-secondary)", marginTop: 2 }}>
+                        “{entry.humanNote}”
+                      </div>
+                    ) : null}
                   </AdamCardBody>
                 </AdamCard>
               ))}
@@ -354,7 +360,7 @@ export default function ProgramDetailRouter({
     case "benchmark":
       return <BenchmarkView program={program} onExtractPatterns={onExtractPatterns} />;
     case "decision-audit":
-      return <DecisionAuditView programId={programId} />;
+      return <DecisionAuditView program={program} />;
     case "closure":
       return (
         <ClosureView

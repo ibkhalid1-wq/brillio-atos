@@ -63,6 +63,12 @@ export interface DecisionSummary {
   previewContent?: Record<string, unknown>;
   source?: string;
   resolvedBy?: string;
+  /** ISO timestamp stamped when the decision was resolved (governance audit trail). */
+  resolvedAt?: string;
+  /** Reviewer note captured at resolution time. */
+  humanNote?: string;
+  /** Edited content when the resolution was "modified". */
+  modifiedContent?: string;
   /** Drill-down: the artifact this action was derived from (artifact id). */
   relatedArtifactId?: string | null;
   /** Drill-down: the input field ids this action relates to. */

@@ -291,6 +291,9 @@ function deriveDecisions(data: JsonRecord): DecisionSummary[] {
         : undefined,
       source: asString(entry.source) || undefined,
       resolvedBy: asString(entry.resolvedBy || entry.resolved_by) || undefined,
+      resolvedAt: asString(entry.resolvedAt || entry.resolved_at) || undefined,
+      humanNote: asString(entry.humanNote || entry.human_note) || undefined,
+      modifiedContent: asString(entry.modifiedContent || entry.modified_content) || undefined,
     }))
     .sort((left, right) => (
       new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
