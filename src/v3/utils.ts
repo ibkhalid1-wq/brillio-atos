@@ -23,7 +23,7 @@ export function phaseName(phase: Pick<PhaseSummary, "id" | "displayName">): stri
   return PHASE_LABELS[phase.id] || phase.displayName || phase.id;
 }
 
-export function phaseNameById(program: ProgramSummary | null, phaseId: string): string {
+export function phaseNameById(program: ProgramSummary | null | undefined, phaseId: string): string {
   if (!program) return PHASE_LABELS[phaseId] || phaseId;
   const phase = program.phases.find((entry) => entry.id === phaseId);
   if (!phase) return PHASE_LABELS[phaseId] || phaseId;

@@ -127,7 +127,13 @@ function BenefitsCard({ milestones, onNavigateToProgrammeHealth }: { milestones:
 }
 
 function StakeholderCard({ program, onOpenMoreView }: { program: ProgramSummary; onOpenMoreView: (view: V3MoreView | null) => void }) {
-  const updates = program.stakeholderRadar?.latestUpdates || [];
+  // NOTE: `stakeholderRadar` is not a ProgramSummary field and is set nowhere in
+  // the codebase, so this list is always empty at runtime (the card shows the
+  // "No stakeholder sentiment yet" empty state). Typed cast preserves that exact
+  // behaviour; wiring it to real `program.stakeholders` data is a separate change.
+  const updates = (program as {
+    stakeholderRadar?: { latestUpdates?: Array<{ stakeholder: string; summary: string; sentiment: string }> };
+  }).stakeholderRadar?.latestUpdates || [];
   return (
     <AdamCard>
       <AdamCardHeader
@@ -237,7 +243,10 @@ export default function ProgramView({
   }
 
   const detailView = renderView();
-  const benefits = program.benefitsTracking?.benefitMilestones || [];
+  // benefitMilestones lives on budgetTracking (BudgetTracking), not the
+  // benefitsTracking KPI summary — the prior reference was a typo that left this
+  // card permanently empty.
+  const benefits = program.budgetTracking?.benefitMilestones || [];
   // Health reads from the computed confidence score (traceable, explainable) —
   // the single source of truth shared with the rail badge and Portfolio cards —
   // not the opaque agent-supplied overallRag, so this surface never contradicts
@@ -246,8 +255,12 @@ export default function ProgramView({
   const healthVariant = ragToBadgeVariant(healthRag);
   const openRisks = selectRisks(program);
   const highRisks = selectHighRisks(program);
-  const activeMembers = program.team?.members?.length || 0;
-  const updatedAt = program.updatedAt || program.lastActiveAt || null;
+  // `team` and `lastActiveAt` are not ProgramSummary fields (always undefined at
+  // runtime, so activeMembers is 0 and updatedAt resolves from updatedAt). Typed
+  // cast preserves that behaviour without asserting fields onto the model.
+  const programExtras = program as { team?: { members?: unknown[] }; lastActiveAt?: string };
+  const activeMembers = programExtras.team?.members?.length || 0;
+  const updatedAt = program.updatedAt || programExtras.lastActiveAt || null;
   const activePhase = (program.phases || []).find((phase) => phase.id === program.activePhaseId) || null;
   const hasActivePhase = !!program.activePhaseId;
 

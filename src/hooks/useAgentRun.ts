@@ -153,7 +153,7 @@ export function useAgentRun(programId: string, enabled = true, onRunComplete?: (
           table: "adam_agent_runs",
           filter: `program_id=eq.${programId}`,
         },
-        (payload) => {
+        (payload: { new?: unknown; old?: unknown }) => {
           const row = ((payload.new && typeof payload.new === "object")
             ? payload.new
             : payload.old) as Partial<AgentRun> | undefined;
@@ -176,13 +176,13 @@ export function useAgentRun(programId: string, enabled = true, onRunComplete?: (
           }
         },
       )
-      .subscribe((status) => {
+      .subscribe((status: string) => {
         updateChannelStatus("postgres", status);
       });
 
     const broadcastChannel = supabase
       .channel(`program-${programId}-agents`)
-      .on("broadcast", { event: "agent_status" }, ({ payload }) => {
+      .on("broadcast", { event: "agent_status" }, ({ payload }: { payload: unknown }) => {
         const statusPayload = payload as BroadcastPayload;
         setActiveRuns((prev) => upsertRun(prev, {
           id: statusPayload.runId,
@@ -195,7 +195,7 @@ export function useAgentRun(programId: string, enabled = true, onRunComplete?: (
           started_at: statusPayload.updatedAt,
         } as Partial<AgentRun>));
       })
-      .subscribe((status) => {
+      .subscribe((status: string) => {
         updateChannelStatus("broadcast", status);
       });
 
@@ -225,7 +225,7 @@ export function useAgentRun(programId: string, enabled = true, onRunComplete?: (
 
       if (data) {
         setActiveRuns((current) => current.map((run) => {
-          const polled = data.find((entry) => entry.id === run.id);
+          const polled = data.find((entry: { id: string }) => entry.id === run.id);
           return polled ? { ...run, ...polled } : run;
         }));
       }

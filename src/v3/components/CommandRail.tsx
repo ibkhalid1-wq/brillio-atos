@@ -19,6 +19,7 @@ import {
   LayoutGrid,
   Activity,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type { V3Surface } from "@/v3/types";
 import { getConfidenceColor } from "@/v3/lib/confidenceScore";
 
@@ -72,7 +73,7 @@ const PRIMARY_NAV: Array<{
   surface: V3Surface;
   label: string;
   sublabel: string;
-  Icon: React.FC<{ size?: number; strokeWidth?: number }>;
+  Icon: LucideIcon;
 }> = [
   {
     id: "today",

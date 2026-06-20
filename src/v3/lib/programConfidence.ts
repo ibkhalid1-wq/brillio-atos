@@ -39,8 +39,8 @@ export function deriveProgramConfidence(
   const rawData = (program.rawData || {}) as Record<string, unknown>;
 
   const phases = program.phases || [];
-  const approved = Object.values(program.gateReviews || {}).filter(
-    (g: Record<string, unknown>) => g?.status === "approved",
+  const approved = (Object.values(program.gateReviews || {}) as unknown as Array<Record<string, unknown>>).filter(
+    (g) => g?.status === "approved",
   ).length;
   const totalGates = phases.length;
 
@@ -68,13 +68,13 @@ export function deriveProgramConfidence(
   ).length;
 
   // Milestone health: on-track ratio
-  const milestones = program.milestones || [];
+  const milestones = (program.milestones || []) as unknown as Array<Record<string, unknown>>;
   const onTrack = milestones.filter(
-    (m: Record<string, unknown>) => m.status === "on-track" || m.status === "complete",
+    (m) => m.status === "on-track" || m.status === "complete",
   ).length;
   const milestoneHealth = milestones.length > 0 ? Math.round((onTrack / milestones.length) * 100) : 70;
   const milestonesAtRisk = milestones.filter(
-    (m: Record<string, unknown>) => m.status === "at-risk" || m.status === "overdue",
+    (m) => m.status === "at-risk" || m.status === "overdue",
   ).length;
 
   // Input completeness: read from the SAME schema-grounded assessment the phase
@@ -96,7 +96,7 @@ export function deriveProgramConfidence(
 
   // Decision metrics
   const openDecisions = (program.decisionQueue || []).filter(isDecisionOpen);
-  const overdueDecisions = openDecisions.filter((d: Record<string, unknown>) => {
+  const overdueDecisions = openDecisions.filter((d) => {
     const created = d.createdAt as string | undefined;
     return created && Date.now() - new Date(created).getTime() > 14 * 86_400_000;
   }).length;
