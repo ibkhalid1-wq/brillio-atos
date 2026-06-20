@@ -308,9 +308,19 @@ export function ArtifactMapTree({
   }, [tree, scoped]);
 
   const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set());
+  // Seed the open set from defaults, but only when the tree's *structure* changes
+  // — not on every re-render. `program` is re-normalised to a fresh object on each
+  // refresh/poll, which churns the tree/defaultKeys references; resetting on that
+  // identity change would collapse whatever the user manually expanded. Gate on a
+  // structural signature so refreshes that don't alter the node set leave the
+  // user's expand state intact.
+  const defaultKeysSig = React.useMemo(() => defaultKeys.join("|"), [defaultKeys]);
+  const seededSigRef = React.useRef<string | null>(null);
   React.useEffect(() => {
+    if (seededSigRef.current === defaultKeysSig) return;
+    seededSigRef.current = defaultKeysSig;
     setExpanded(new Set(defaultKeys));
-  }, [defaultKeys]);
+  }, [defaultKeysSig, defaultKeys]);
 
   const toggle = React.useCallback((key: string) => {
     setExpanded((current) => {
