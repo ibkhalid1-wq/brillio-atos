@@ -824,6 +824,32 @@ export default function StageView({
     }
     return { facts, total: facts.length, imported, userInput: facts.length - imported, groups };
   }, [liveProgram, program, activePhase]);
+
+  // Traceability drill-down: a fact endpoint resolves back to where the value
+  // came from. User-input facts scroll to (and briefly flash) their input field
+  // on this same phase screen — every fact shown here originates from the active
+  // phase, so the anchor is always mounted locally. Imported facts open the
+  // Document Centre, where the source document lives.
+  const traceFactToSource = React.useCallback((fact: { factType: string; sourceType: string }) => {
+    if (fact.sourceType === "imported_document") {
+      onOpenMoreView("documents");
+      return;
+    }
+    if (typeof window === "undefined") return;
+    let attempts = 0;
+    const tryScroll = () => {
+      const el = document.querySelector(`[data-io-anchor="input:${fact.factType}"]`) as HTMLElement | null;
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("v3-io-anchor-flash");
+        window.setTimeout(() => el.classList.remove("v3-io-anchor-flash"), 5000);
+        return;
+      }
+      if (attempts++ < 20) window.setTimeout(tryScroll, 100);
+    };
+    tryScroll();
+  }, [onOpenMoreView]);
+
   // Timestamped programme snapshots (newest first) the user can revert to. Manual
   // saves + auto-saves taken when a phase gate locks. Read straight off persisted
   // rawData so the revert modal always lists the authoritative history.
@@ -1397,13 +1423,17 @@ export default function StageView({
                   <div key={g.items[0].id} style={{ display: "flex", alignItems: "baseline", gap: 6, fontSize: 11 }}>
                     <span style={{ fontFamily: "var(--v3-mono, monospace)", color: "var(--v3-text-muted)", flexShrink: 0 }}>{g.items[0].id}</span>
                     <span style={{ color: "var(--v3-text)" }}>{g.items[0].factText}</span>
-                    <span
+                    <button
+                      type="button"
                       className={`v3-chip ${g.items[0].confidence >= 0.85 ? "green" : g.items[0].confidence >= 0.6 ? "amber" : "red"}`}
-                      style={{ fontSize: 9, marginLeft: "auto", flexShrink: 0 }}
-                      title={g.items[0].sourceLocation || g.items[0].sourceName}
+                      style={{ fontSize: 9, marginLeft: "auto", flexShrink: 0, cursor: "pointer", border: "none" }}
+                      title={g.items[0].sourceType === "imported_document"
+                        ? `Imported${g.items[0].sourceLocation ? ` — ${g.items[0].sourceLocation}` : ""} · open Document Centre`
+                        : "User input · jump to field"}
+                      onClick={() => traceFactToSource(g.items[0])}
                     >
-                      {g.items[0].sourceType === "imported_document" ? "imported" : "user"}
-                    </span>
+                      {g.items[0].sourceType === "imported_document" ? "imported ↗" : "user ↗"}
+                    </button>
                   </div>
                 ) : (
                   <div key={g.key} style={{ display: "grid", gap: 2 }}>
@@ -1414,13 +1444,17 @@ export default function StageView({
                       <div key={f.id} style={{ display: "flex", alignItems: "baseline", gap: 6, fontSize: 11, paddingLeft: 8 }}>
                         <span style={{ fontFamily: "var(--v3-mono, monospace)", color: "var(--v3-text-muted)", flexShrink: 0 }}>{f.id}</span>
                         <span style={{ color: "var(--v3-text)" }}>{f.normalizedValue}</span>
-                        <span
+                        <button
+                          type="button"
                           className={`v3-chip ${f.confidence >= 0.85 ? "green" : f.confidence >= 0.6 ? "amber" : "red"}`}
-                          style={{ fontSize: 9, marginLeft: "auto", flexShrink: 0 }}
-                          title={f.sourceLocation || f.sourceName}
+                          style={{ fontSize: 9, marginLeft: "auto", flexShrink: 0, cursor: "pointer", border: "none" }}
+                          title={f.sourceType === "imported_document"
+                            ? `Imported${f.sourceLocation ? ` — ${f.sourceLocation}` : ""} · open Document Centre`
+                            : "User input · jump to field"}
+                          onClick={() => traceFactToSource(f)}
                         >
-                          {f.sourceType === "imported_document" ? "imported" : "user"}
-                        </span>
+                          {f.sourceType === "imported_document" ? "imported ↗" : "user ↗"}
+                        </button>
                       </div>
                     ))}
                   </div>
