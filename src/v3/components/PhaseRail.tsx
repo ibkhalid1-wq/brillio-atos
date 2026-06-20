@@ -18,10 +18,28 @@ export function PhaseRail({
   lockedPhaseIds,
   onPhaseClick,
 }: PhaseRailProps) {
+  const railRef = React.useRef<HTMLDivElement>(null);
+  const activeRef = React.useRef<HTMLButtonElement>(null);
+
+  // The rail scrolls horizontally; when the active stage changes (e.g. navigating
+  // to the programme screen lands on the current stage), bring its pill into view
+  // so the control actually moves to the current stage instead of leaving it
+  // highlighted but scrolled off. Scroll the rail itself — never the page — by
+  // nudging scrollLeft so the active pill is centred.
+  React.useEffect(() => {
+    const rail = railRef.current;
+    const pill = activeRef.current;
+    if (!rail || !pill) return;
+    const railRect = rail.getBoundingClientRect();
+    const pillRect = pill.getBoundingClientRect();
+    const delta = (pillRect.left - railRect.left) - (rail.clientWidth / 2 - pill.clientWidth / 2);
+    rail.scrollTo({ left: Math.max(0, rail.scrollLeft + delta), behavior: "smooth" });
+  }, [activePhaseId]);
+
   return (
     <div className="v3-phase-rail-wrap">
       <div className="v3-phase-rail-fade" aria-hidden="true" />
-      <div className="v3-phase-rail" role="navigation" aria-label="Programme phases">
+      <div className="v3-phase-rail" role="navigation" aria-label="Programme phases" ref={railRef}>
         {phases.map((phase, index: number) => {
           const isActive = phase.id === activePhaseId;
           const isLocked = lockedPhaseIds.has(phase.id);
@@ -32,6 +50,7 @@ export function PhaseRail({
             <React.Fragment key={phase.id}>
               <button
                 type="button"
+                ref={isActive ? activeRef : undefined}
                 onClick={() => !isLocked && onPhaseClick(phase.id)}
                 disabled={isLocked}
                 title={isLocked ? `${phaseName(phase)} unlocks once the preceding gate is approved` : undefined}
