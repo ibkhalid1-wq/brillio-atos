@@ -21,7 +21,7 @@ import { resolveArtifactReview, resolveArtifactQualityScore } from "@/v3/lib/art
 import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
 import { getArtifactInputFields } from "@/v3/lib/phaseFlowEdges";
 import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
-import { getDynamicSchemaStore, dynamicConflicts, dynamicGaps, dynamicPlanMeta } from "@/v3/lib/dynamicSchema";
+import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { runPreFlight } from "@/v3/lib/phaseInputPreFlight";
 import { derivePhaseInputQuality } from "@/v3/lib/phaseInputQuality";
 import { getFormalArtifactContent } from "@/v3/lib/formalArtifacts";
@@ -691,16 +691,6 @@ export default function StageView({
   }, [activePhase, phaseArtifacts]);
   // All required artifacts generated → the gate for surfacing bulk approve.
   const allRequiredProduced = phaseArtifacts.required > 0 && phaseArtifacts.present === phaseArtifacts.required;
-
-  // Phase Transition Planner verdict + cross-phase conflicts/gaps for this phase.
-  const planner = useMemo(() => {
-    if (!activePhase) return { meta: null, conflicts: [], gaps: [] as string[] };
-    return {
-      meta: dynamicPlanMeta(activePhase.id, dynamicStore),
-      conflicts: dynamicConflicts(activePhase.id, dynamicStore),
-      gaps: dynamicGaps(activePhase.id, dynamicStore),
-    };
-  }, [activePhase, dynamicStore]);
 
   const gateReview = activePhase ? program?.gateReviews?.[activePhase.id] || null : null;
   const source = typeof program?.rawData === "object" && program.rawData !== null
@@ -1377,49 +1367,12 @@ export default function StageView({
       {/* LEFT — input fields card (keeps upload-document + workstream buttons inside PhaseInputsPanel) */}
       <section className="v3-phase-col v3-phase-col--inputs">
         <div className="v3-zone-label">Input fields</div>
-        {planner.meta?.readiness || planner.conflicts.length || planner.gaps.length ? (
-          <div className="v3-planner-panel" style={{ display: "grid", gap: 8, marginBottom: 12 }}>
-            {planner.meta?.readiness ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span
-                  className={`v3-chip ${planner.meta.readiness === "green" ? "green" : planner.meta.readiness === "yellow" ? "amber" : "red"}`}
-                  style={{ fontSize: 11 }}
-                >
-                  Phase readiness: {planner.meta.readiness === "green" ? "Ready" : planner.meta.readiness === "yellow" ? "Almost" : "Blocked"}
-                </span>
-                {planner.meta.rationale ? (
-                  <span style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>{planner.meta.rationale}</span>
-                ) : null}
-              </div>
-            ) : null}
-            {planner.conflicts.length ? (
-              <div style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--v3-border)" }}>
-                <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4 }}>
-                  Conflicts to resolve ({planner.conflicts.length})
-                </div>
-                <div style={{ display: "grid", gap: 4 }}>
-                  {planner.conflicts.map((c) => (
-                    <div key={c.fieldId} style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>
-                      <strong style={{ color: "var(--v3-text)" }}>{c.label}</strong>
-                      {c.conflictDescription ? ` — ${c.conflictDescription}` : null}
-                      {c.conflictingValues.length ? ` (${c.conflictingValues.join(" vs ")})` : null}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-            {planner.gaps.length ? (
-              <div style={{ padding: "8px 10px", borderRadius: 8, border: "1px dashed var(--v3-border)" }}>
-                <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4 }}>Open gaps ({planner.gaps.length})</div>
-                <ul style={{ margin: 0, paddingLeft: 16, display: "grid", gap: 2 }}>
-                  {planner.gaps.map((g, i) => (
-                    <li key={i} style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>{g}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
+        {/* The phase-readiness / conflicts / open-gaps planner banner was removed:
+            it duplicated signals already surfaced elsewhere — readiness restates
+            the Gate score and readiness rings at the top of this screen, while the
+            conflicts and gaps (missing required inputs, contradictions) are the
+            same items shown as recommended actions, blockers, risks and
+            escalations in the Action Center and the phase right rail. */}
         {phaseFacts ? (
           <details className="v3-fact-graph-panel" style={{ marginBottom: 12, border: "1px solid var(--v3-border)", borderRadius: 8, padding: "8px 10px" }}>
             <summary style={{ cursor: "pointer", fontSize: 11, fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
