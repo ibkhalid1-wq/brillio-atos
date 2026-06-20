@@ -123,6 +123,18 @@ function markProactiveFired(key: string): void {
   }
 }
 
+// Retired agent families. runProgramAgent short-circuits these ids at the single
+// dispatch chokepoint so any residual auto-trigger, cascade hop, or stale call
+// site becomes a no-op without unpicking the woven trigger logic.
+const DISABLED_AGENTS = new Set<string>([
+  "critical-path",
+  "retro",
+  "pattern-extract",
+  "pattern-query",
+  "twin-sync",
+  "benchmark-comparator",
+]);
+
 const MORE_ROUTE_MAP: Record<string, V3MoreView> = {
   documents: "documents",
   narrative: "narrative",
@@ -1400,6 +1412,13 @@ export default function AppShellV3() {
     skipPreSync?: boolean;
   }) => {
     if (!activeProgramId) return;
+
+    // Guard: retired agents. These agent families (legacy critical-path
+    // scheduling, retrospective generation, pattern mining/query, digital-twin
+    // sync, benchmark comparison) were removed from the product surface. The
+    // chokepoint guard short-circuits any residual auto-trigger or stale call
+    // site rather than threading the removal through every woven cascade.
+    if (DISABLED_AGENTS.has(agentId)) return;
 
     // Guard: not signed in — agents require an authenticated session
     if (!authed) {

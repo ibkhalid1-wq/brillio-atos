@@ -35,7 +35,6 @@ export function useClosure(
   const persistClosureState = useCallback(async (
     nextInner: Record<string, unknown>,
     programStatus?: "active" | "finalized" | "archived",
-    options?: { triggerPatternExtract?: boolean; triggerEvent?: string },
   ) => {
     if (!isSupabaseConfigured || !supabase || !programId) throw new Error("Not configured.");
     setIsSaving(true);
@@ -54,17 +53,7 @@ export function useClosure(
         .update(updates)
         .eq("id", programId);
       if (error) throw new Error(error.message);
-      if (options?.triggerPatternExtract) {
-        await supabase.functions.invoke("run-agent", {
-          body: {
-            programId,
-            agentId: "pattern-extract",
-            phaseId: "program",
-            triggeredBy: "trigger",
-            triggerEvent: options.triggerEvent || "closure-approved",
-          },
-        }).catch(() => undefined);
-      }
+      // pattern-extract agent retired — no post-closure mining invoke.
       await onRefresh();
     } finally {
       setIsSaving(false);
@@ -87,10 +76,7 @@ export function useClosure(
       closurePromptDismissed: true,
       decisionQueue: decisionQueue.filter((decision) => String(decision.id || "") !== String(closureDecisionId || "")),
     };
-    await persistClosureState(nextInner, "finalized", {
-      triggerPatternExtract: true,
-      triggerEvent: "closure-approved",
-    });
+    await persistClosureState(nextInner, "finalized");
   }, [getClosureState, persistClosureState]);
 
   const archiveProgram = useCallback(async () => {
