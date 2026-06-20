@@ -2042,19 +2042,39 @@ export default function AppShellV3() {
     openPhaseSheet(phaseId);
     if (typeof window === "undefined") return;
     let attempts = 0;
+    const flash = (el: HTMLElement) => {
+      // Restart the animation even if the class is already present (re-drilling the
+      // same field should visibly flash again).
+      el.classList.remove("v3-io-anchor-flash");
+      void el.offsetWidth;
+      el.classList.add("v3-io-anchor-flash");
+      window.setTimeout(() => el.classList.remove("v3-io-anchor-flash"), 5000);
+    };
     const tryScroll = () => {
       const el = anchor
         ? (document.querySelector(`[data-io-anchor="${anchor}"]`) as HTMLElement | null)
         : document.getElementById("phase-inputs-anchor");
       if (el) {
         el.scrollIntoView({ behavior: "smooth", block: anchor ? "center" : "start" });
-        if (anchor) {
-          el.classList.add("v3-io-anchor-flash");
-          window.setTimeout(() => el.classList.remove("v3-io-anchor-flash"), 5000);
-        }
+        // Always flash the landing target — for a generic inputs jump as well as a
+        // specific field/artifact — so a drill is never a silent no-op.
+        flash(el);
         return;
       }
-      if (attempts++ < 20) window.setTimeout(tryScroll, 100);
+      if (attempts++ < 20) {
+        window.setTimeout(tryScroll, 100);
+        return;
+      }
+      // The specific anchor never resolved (e.g. the source field id no longer maps
+      // to a rendered input). Fall back to the inputs section so the user still
+      // lands on the editable area and sees it acknowledged.
+      if (anchor) {
+        const fallback = document.getElementById("phase-inputs-anchor");
+        if (fallback) {
+          fallback.scrollIntoView({ behavior: "smooth", block: "start" });
+          flash(fallback);
+        }
+      }
     };
     window.setTimeout(tryScroll, 150);
   }, [openPhaseSheet]);
