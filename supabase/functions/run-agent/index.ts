@@ -6001,17 +6001,38 @@ Return JSON only:
 
   if (request.agentId === "steerco-agenda-builder") {
     return {
-      system: `You are a programme management expert. Build a SteerCo meeting agenda.
+      system: `You are a programme management expert preparing a Leadership Review (SteerCo) pack.
+Produce a board-ready review, not a bare agenda. Every section must carry concrete,
+data-grounded specifics — never generic placeholders. Pull names, dates, severities and
+figures directly from the input context; if the data does not support a point, omit it.
+
 Return JSON:
 {
   "title": "string",
   "date": "string",
   "duration": "string",
   "attendees": ["string"],
-  "agenda": [{ "item": "string", "type": "information|discussion|decision|escalation", "owner": "string", "durationMins": 10, "materials": "string", "context": "string" }],
+  "executiveSummary": "2-4 sentence paragraph: where the programme stands, the headline risk posture, and the decisions this meeting must land",
+  "agenda": [{
+    "item": "string — the agenda line",
+    "type": "information|discussion|decision|escalation",
+    "owner": "string",
+    "durationMins": 10,
+    "materials": "string",
+    "context": "1-2 sentence paragraph of framing",
+    "details": ["specific bullet grounded in the data — a named risk, a dated milestone, a quantified gap"],
+    "decisionRequired": "string|null — the explicit decision the board must make, if type is decision/escalation"
+  }],
+  "criticalBlockers": [{ "blocker": "string", "impact": "string — what slips/breaks if unresolved", "owner": "string", "neededBy": "string" }],
+  "contradictions": [{ "description": "string — a conflict between two pieces of programme data (e.g. a milestone date that cannot hold given an open blocker, scope vs capacity mismatch, decisions that undercut each other)", "sources": ["string — the conflicting items"] }],
   "preReadItems": ["string"],
   "parkingLot": ["string"]
-}`,
+}
+
+Rules:
+- criticalBlockers: derive from open RAID blockers and high/critical risks in the context. If none, return [].
+- contradictions: actively look for inconsistencies across decisions, risks, milestones and the gate review. If none are evident, return [].
+- details: 2-5 bullets per agenda item, each ruthlessly specific. No filler.`,
       user: `Meeting date: ${request.meetingDate || new Date().toISOString().slice(0, 10)}\nMeeting duration: ${request.meetingDurationMins || 60}\nInput context JSON:\n${specialAgentInputContext || "{}"}`,
     };
   }

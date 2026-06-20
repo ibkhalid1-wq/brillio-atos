@@ -46,6 +46,26 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Subheading inside the Leadership Review pack. tone tints the label for the
+// blocker/contradiction sections so the eye lands on the at-risk content first.
+function SteercoHeading({ children, tone }: { children: React.ReactNode; tone?: "red" | "amber" }) {
+  const color = tone === "red" ? "var(--v3-red, #ef4444)" : tone === "amber" ? "var(--v3-amber)" : "var(--v3-text-secondary)";
+  return (
+    <div
+      style={{
+        fontSize: 11,
+        fontWeight: 700,
+        color,
+        textTransform: "uppercase",
+        letterSpacing: "0.06em",
+        fontFamily: "var(--v3-font)",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 function PhaseProgressRow({
   program,
   phaseId,
@@ -172,7 +192,6 @@ export default function ExecutiveView({
   onNavigateToRisks,
 }: ExecutiveViewProps) {
   const [approvingPhase, setApprovingPhase] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
 
   // ── Extract inner program data for agent-generated artifacts ─────────────
   const innerData = useMemo<Record<string, unknown>>(() => {
@@ -205,7 +224,10 @@ export default function ExecutiveView({
       date?: string;
       duration?: string;
       attendees?: string[];
-      agenda?: Array<{ item: string; type?: string; owner?: string; durationMins?: number; context?: string }>;
+      executiveSummary?: string;
+      agenda?: Array<{ item: string; type?: string; owner?: string; durationMins?: number; context?: string; details?: string[]; decisionRequired?: string | null }>;
+      criticalBlockers?: Array<{ blocker: string; impact?: string; owner?: string; neededBy?: string }>;
+      contradictions?: Array<{ description: string; sources?: string[] }>;
       preReadItems?: string[];
       parkingLot?: string[];
       generatedAt?: string;
@@ -299,51 +321,6 @@ export default function ExecutiveView({
   const health = healthLabel(confidenceScore);
 
   // ── Copy brief to clipboard ───────────────────────────────────────────────
-  const handleCopyBrief = () => {
-    if (!program) return;
-    const topRisks = selectHighRisks(program).slice(0, 3);
-    const topDecisions = selectEscalatedDecisions(program, "programme", "executive").slice(0, 3);
-    const lines = [
-      `EXECUTIVE BRIEF — ${program.name}`,
-      `As of ${todayLabelCopy}`,
-      ``,
-      `Confidence: ${confidenceScore !== null ? confidenceScore + "%" : "N/A"} | Gates: ${approvedGatesCopy}/${totalGates} | Artifacts approved: ${avgPctCopy}%`,
-      ``,
-      topRisks.length > 0
-        ? `CRITICAL RISKS:\n${topRisks.map((r) => `• ${r.title} [${r.severity}]`).join("\n")}`
-        : "CRITICAL RISKS: None",
-      ``,
-      topDecisions.length > 0
-        ? `ACTIONS AWAITING INPUT:\n${topDecisions.map((d) => `• ${(d.title || d.question)} [${d.priority}]`).join("\n")}`
-        : "ACTIONS AWAITING INPUT: None",
-      ``,
-      `PHASE PROGRESS:`,
-      ...phases.map((p) => `• ${PHASE_LABELS[p.id] ?? (p as { displayName?: string }).displayName ?? p.id}: ${p.pct}%`),
-    ];
-    const text = lines.join("\n");
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      }).catch(() => {
-        // Fallback: create a temporary textarea and use execCommand
-        const el = document.createElement("textarea");
-        el.value = text;
-        el.style.position = "fixed";
-        el.style.opacity = "0";
-        document.body.appendChild(el);
-        el.select();
-        document.execCommand("copy");
-        document.body.removeChild(el);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      });
-    } else {
-      // No clipboard API — show the text in a prompt so user can copy manually
-      window.prompt("Copy the brief below (Ctrl+A, Ctrl+C):", text);
-    }
-  };
-
   // ── Gate approve handler ──────────────────────────────────────────────────
   async function handleApprove(phaseId: string) {
     setApprovingPhase(phaseId);
@@ -426,15 +403,37 @@ export default function ExecutiveView({
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
-          {/* Dummy for now — will initiate the change-request flow for editing locked stages. */}
-          <button
-            type="button"
-            className="v3-button secondary v3-button-inline-sm"
-            onClick={() => { /* TODO: wire change-request flow for locked stages */ }}
-          >
-            Change Request
-          </button>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 14 }}>
+          {/* Executive actions live in the header so the primary controls are
+              reachable without scrolling to the foot of the brief. */}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <button
+              type="button"
+              className="v3-button primary v3-button-inline-sm"
+              disabled={anyAgentRunning}
+              onClick={() => onRunAgent("executive-brief", "program")}
+            >
+              <span>◇</span>
+              <span>{anyAgentRunning ? "Preparing…" : "What should I know today?"}</span>
+            </button>
+            <button
+              type="button"
+              className="v3-button ghost v3-button-inline-sm"
+              disabled={anyAgentRunning}
+              onClick={() => onRunAgent("steerco-prep", "program")}
+            >
+              <span>⬡</span>
+              <span>{anyAgentRunning ? "Building…" : "Prepare Leadership Review"}</span>
+            </button>
+            {/* Dummy for now — will initiate the change-request flow for editing locked stages. */}
+            <button
+              type="button"
+              className="v3-button secondary v3-button-inline-sm"
+              onClick={() => { /* TODO: wire change-request flow for locked stages */ }}
+            >
+              Change Request
+            </button>
+          </div>
 
           {confidenceScore !== null && (
             <AdamExplainsTooltip metric="confidence" value={confidenceScore} placement="left">
@@ -856,43 +855,7 @@ export default function ExecutiveView({
         </div>
       </div>
 
-      {/* ── 6. Executive actions ──────────────────────────────────────────── */}
-      <div>
-        <SectionLabel>Actions</SectionLabel>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button
-            type="button"
-            className="v3-button primary"
-            disabled={anyAgentRunning}
-            onClick={() => onRunAgent("executive-brief", "program")}
-          >
-            <span>◇</span>
-            <span>{anyAgentRunning ? "Preparing your brief…" : "What should I know today?"}</span>
-          </button>
-
-          <button
-            type="button"
-            className="v3-button ghost"
-            disabled={anyAgentRunning}
-            onClick={() => onRunAgent("steerco-prep", "program")}
-          >
-            <span>⬡</span>
-            <span>{anyAgentRunning ? "Building agenda…" : "Prepare Leadership Review"}</span>
-          </button>
-
-          <button
-            type="button"
-            className="v3-button ghost"
-            onClick={handleCopyBrief}
-            style={copied ? { color: "var(--v3-green)", borderColor: "var(--v3-green)" } : undefined}
-          >
-            {copied ? "✓ Copied" : "⎘ Copy Summary"}
-          </button>
-          {/* Print button removed — low-frequency action, browser print available via browser menu */}
-        </div>
-      </div>
-
-      {/* ── 7. Daily Briefing output ──────────────────────────────────────── */}
+      {/* ── 6. Daily Briefing output ──────────────────────────────────────── */}
       {dailyBriefing && !dailyBriefing.reason && (
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
@@ -1030,34 +993,113 @@ export default function ExecutiveView({
                 {steercoAgenda.attendees.join(" · ")}
               </div>
             )}
-            {steercoAgenda.agenda && steercoAgenda.agenda.length > 0 && (
-              <div>
-                {steercoAgenda.agenda.map((item, i) => (
-                  <div key={i} style={{
-                    padding: "11px 16px",
-                    borderBottom: i < (steercoAgenda.agenda?.length ?? 0) - 1 ? "1px solid var(--v3-border-soft)" : undefined,
-                    display: "flex",
-                    gap: 12,
-                    alignItems: "flex-start",
-                  }}>
-                    <span style={{ fontSize: 12, color: "var(--v3-text-muted)", minWidth: 24, textAlign: "right", paddingTop: 1 }}>{i + 1}.</span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, color: "var(--v3-text-primary)", fontWeight: 500 }}>{item.item}</div>
-                      <div style={{ display: "flex", gap: 8, marginTop: 3, flexWrap: "wrap" }}>
-                        {item.type && <span style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>{item.type}</span>}
-                        {item.owner && <span style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>· {item.owner}</span>}
-                        {item.durationMins && <span style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>· {item.durationMins}min</span>}
-                      </div>
-                      {item.context && <div style={{ fontSize: 12, color: "var(--v3-text-secondary)", marginTop: 4, lineHeight: 1.5 }}>{item.context}</div>}
-                    </div>
-                  </div>
-                ))}
+
+            {/* Executive summary — leading paragraph */}
+            {steercoAgenda.executiveSummary && (
+              <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--v3-border-soft)" }}>
+                <SteercoHeading>Executive Summary</SteercoHeading>
+                <p style={{ fontSize: 13, color: "var(--v3-text-secondary)", lineHeight: 1.6, margin: "8px 0 0" }}>
+                  {steercoAgenda.executiveSummary}
+                </p>
               </div>
             )}
+
+            {/* Critical blockers — bulleted specifics */}
+            {steercoAgenda.criticalBlockers && steercoAgenda.criticalBlockers.length > 0 && (
+              <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--v3-border-soft)" }}>
+                <SteercoHeading tone="red">Critical Blockers</SteercoHeading>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
+                  {steercoAgenda.criticalBlockers.map((b, i) => (
+                    <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                      <span style={{ color: "var(--v3-red, #ef4444)", fontSize: 13, lineHeight: 1.5 }}>•</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, color: "var(--v3-text-primary)", fontWeight: 600, lineHeight: 1.5 }}>{b.blocker}</div>
+                        {b.impact && <div style={{ fontSize: 12, color: "var(--v3-text-secondary)", lineHeight: 1.5, marginTop: 2 }}>Impact: {b.impact}</div>}
+                        {(b.owner || b.neededBy) && (
+                          <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 3 }}>
+                            {b.owner && <span>{b.owner}</span>}
+                            {b.owner && b.neededBy && <span> · </span>}
+                            {b.neededBy && <span>needed by {b.neededBy}</span>}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Contradictions — bulleted specifics */}
+            {steercoAgenda.contradictions && steercoAgenda.contradictions.length > 0 && (
+              <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--v3-border-soft)" }}>
+                <SteercoHeading tone="amber">Contradictions & Inconsistencies</SteercoHeading>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
+                  {steercoAgenda.contradictions.map((c, i) => (
+                    <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                      <span style={{ color: "var(--v3-amber)", fontSize: 13, lineHeight: 1.5 }}>•</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, color: "var(--v3-text-primary)", lineHeight: 1.5 }}>{c.description}</div>
+                        {c.sources && c.sources.length > 0 && (
+                          <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 3 }}>Conflicting: {c.sources.join(" ↔ ")}</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Agenda — each item with a subheader, framing paragraph and bulleted details */}
+            {steercoAgenda.agenda && steercoAgenda.agenda.length > 0 && (
+              <div style={{ padding: "14px 16px 4px" }}>
+                <SteercoHeading>Agenda</SteercoHeading>
+                <div style={{ marginTop: 8 }}>
+                  {steercoAgenda.agenda.map((item, i) => (
+                    <div key={i} style={{
+                      padding: "11px 0",
+                      borderBottom: i < (steercoAgenda.agenda?.length ?? 0) - 1 ? "1px solid var(--v3-border-soft)" : undefined,
+                      display: "flex",
+                      gap: 12,
+                      alignItems: "flex-start",
+                    }}>
+                      <span style={{ fontSize: 12, color: "var(--v3-text-muted)", minWidth: 24, textAlign: "right", paddingTop: 1 }}>{i + 1}.</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, color: "var(--v3-text-primary)", fontWeight: 600 }}>{item.item}</div>
+                        <div style={{ display: "flex", gap: 8, marginTop: 3, flexWrap: "wrap" }}>
+                          {item.type && <span style={{ fontSize: 11, color: "var(--v3-text-muted)", textTransform: "capitalize" }}>{item.type}</span>}
+                          {item.owner && <span style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>· {item.owner}</span>}
+                          {item.durationMins && <span style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>· {item.durationMins}min</span>}
+                        </div>
+                        {item.context && <p style={{ fontSize: 12, color: "var(--v3-text-secondary)", margin: "4px 0 0", lineHeight: 1.5 }}>{item.context}</p>}
+                        {item.details && item.details.length > 0 && (
+                          <ul style={{ margin: "6px 0 0", paddingLeft: 16, display: "flex", flexDirection: "column", gap: 3 }}>
+                            {item.details.map((d, di) => (
+                              <li key={di} style={{ fontSize: 12, color: "var(--v3-text-secondary)", lineHeight: 1.5 }}>{d}</li>
+                            ))}
+                          </ul>
+                        )}
+                        {item.decisionRequired && (
+                          <div style={{ fontSize: 12, color: "var(--v3-text-primary)", marginTop: 6, padding: "6px 10px", background: "var(--v3-surface-2)", borderRadius: "var(--v3-radius)", borderLeft: "2px solid var(--v3-accent)" }}>
+                            <span style={{ fontWeight: 600 }}>Decision required: </span>{item.decisionRequired}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {steercoAgenda.preReadItems && steercoAgenda.preReadItems.length > 0 && (
               <div style={{ padding: "10px 16px", borderTop: "1px solid var(--v3-border-soft)", background: "var(--v3-surface-2)" }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: "var(--v3-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Pre-Read</div>
                 {steercoAgenda.preReadItems.map((p, i) => <div key={i} style={{ fontSize: 12, color: "var(--v3-text-secondary)", padding: "2px 0" }}>• {p}</div>)}
+              </div>
+            )}
+            {steercoAgenda.parkingLot && steercoAgenda.parkingLot.length > 0 && (
+              <div style={{ padding: "10px 16px", borderTop: "1px solid var(--v3-border-soft)", background: "var(--v3-surface-2)" }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--v3-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Parking Lot</div>
+                {steercoAgenda.parkingLot.map((p, i) => <div key={i} style={{ fontSize: 12, color: "var(--v3-text-secondary)", padding: "2px 0" }}>• {p}</div>)}
               </div>
             )}
           </div>
