@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "typecheck": "tsc --noEmit",
+    "validate": "npm run typecheck && npm run lint && npm run build && npm run test",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
