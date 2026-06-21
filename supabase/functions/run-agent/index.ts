@@ -3808,7 +3808,11 @@ function applyGeneratedExitCriteriaToProgramData(programData: ProgramState, phas
   });
 }
 
-const PLANNER_FIELD_TYPES = new Set(["text", "textarea", "number", "date", "select", "grid"]);
+const PLANNER_FIELD_TYPES = new Set([
+  "text", "textarea", "number", "date", "select", "grid",
+  // Semantic reference types — persist as a string, render as a context picker.
+  "stakeholder", "organization", "document", "artifact-reference",
+]);
 const PLANNER_CONFIDENCE = new Set(["high", "medium", "low"]);
 const PLANNER_READINESS = new Set(["green", "yellow", "red"]);
 const PLANNER_ARTIFACT_READINESS = new Set(["ready", "needs_input", "blocked"]);
@@ -5112,15 +5116,23 @@ Rules:
 - When a value can be confidently inferred from prior context, prefill it and set
   needsConfirmation:true rather than asking the user to type it from scratch.
 - Propose enough inputs + artifacts to cover every exit criterion (user message), no filler.
-- Field "type" MUST be one of: text, textarea, number, date, select, grid.
-- Choose the type that best fits the FACT's shape, mapping richer notions onto the six:
+- Field "type" MUST be one of: text, textarea, number, date, select, grid,
+  stakeholder, organization, document, artifact-reference.
+- Prefer a SEMANTIC REFERENCE type whenever the fact is a reference to a known
+  entity — the UI renders these as context-aware pickers, so the captured value
+  resolves to a real person/org/document/artifact instead of free text:
+  • a named person (owner, sponsor, lead, approver) -> "stakeholder".
+  • a named organisation, vendor, partner or department -> "organization".
+  • a reference to an uploaded source document -> "document".
+  • a reference to another generated artifact in this programme -> "artifact-reference".
+- Otherwise choose the primitive that best fits the FACT's shape, mapping richer
+  notions onto the primitives:
   • a money amount -> "number", and name the currency/unit in the label (e.g.
     "Phase budget (USD)"). • a percentage / ratio -> "number" with "%" in the label
     (e.g. "Target cost reduction (%)"). • a yes/no decision -> "select" with
     options ["Yes","No"]. • a pick-one from a known set -> "select" with options.
-    • a pick-many or a single named person/team/system -> "text" if free-form, else
-    "select". • a calendar point -> "date"; for a span, use two date fields
-    (e.g. "...start date" and "...end date"). Never invent a type outside the six.
+    • a calendar point -> "date"; for a span, use two date fields
+    (e.g. "...start date" and "...end date"). Never invent a type outside the ten.
 - Use "grid" for a repeating list of structured rows (e.g. team roster, RACI,
   workstream owners). A grid field MUST include a "columns" array — each column is
   { "key": "camelCaseKey", "label": "Header", "type": "text|number|select",

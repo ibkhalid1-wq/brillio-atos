@@ -184,6 +184,22 @@ describe("sanitizePlannerProposal", () => {
     expect(out?.inputFields[0].required).toBe(true);
   });
 
+  it("accepts the semantic reference types (stakeholder/organization/document/artifact-reference)", () => {
+    const out = sanitizePlannerProposal({
+      inputFields: [
+        { id: "phaseSponsor", label: "Phase sponsor", type: "stakeholder", required: true },
+        { id: "implPartner", label: "Implementation partner", type: "organization", required: false },
+        { id: "sourceContract", label: "Source contract", type: "document", required: false },
+        { id: "upstreamDesign", label: "Upstream solution doc", type: "artifact-reference", required: false },
+      ],
+      artifacts: [],
+    });
+    expect(out?.inputFields.map((f) => f.type)).toEqual([
+      "stakeholder", "organization", "document", "artifact-reference",
+    ]);
+    expect(out?.inputFields.every((f) => f.source === "ai-derived")).toBe(true);
+  });
+
   it("carries valid grid columns through and keeps the field a grid", () => {
     const out = sanitizePlannerProposal({
       inputFields: [{

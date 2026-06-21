@@ -362,6 +362,46 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
     return parseRows((phaseInputs.mobilise ?? {}).keyRoles, ROLE_COLS);
   }, [program.rawData]);
 
+  // Context-sourced suggestions for the semantic reference field types
+  // (stakeholder / organization / document / artifact-reference). Each persists
+  // as a plain string, but renders as a text input backed by a <datalist> drawn
+  // from the programme so the captured value is a real, resolvable reference
+  // rather than free text. Empty lists degrade gracefully to a plain text input.
+  const referenceSuggestions = useMemo<Record<string, string[]>>(() => {
+    const dedup = (xs: (string | null | undefined)[]) =>
+      Array.from(new Set(xs.map((x) => (x ?? "").trim()).filter(Boolean)));
+    const documents = (() => {
+      const raw = program.rawData as Record<string, unknown>;
+      const data = raw && typeof raw.data === "object" && raw.data !== null
+        ? (raw.data as Record<string, unknown>)
+        : raw ?? {};
+      const list = Array.isArray(data.documents)
+        ? data.documents
+        : Array.isArray((raw as Record<string, unknown>).documents)
+          ? ((raw as Record<string, unknown>).documents as unknown[])
+          : [];
+      return dedup((list as unknown[]).map((doc) => {
+        if (typeof doc === "string") return doc;
+        if (doc && typeof doc === "object") {
+          const o = doc as Record<string, unknown>;
+          const v = o.title ?? o.name ?? o.fileName ?? o.filename;
+          return typeof v === "string" ? v : undefined;
+        }
+        return undefined;
+      }));
+    })();
+    return {
+      stakeholder: dedup([
+        program.sponsor,
+        ...mobiliseRoles.map((row) => row.name),
+        ...program.stakeholders.map((s) => (s.role ? `${s.name} — ${s.role}` : s.name)),
+      ]),
+      organization: dedup([program.client, ...program.stakeholders.map((s) => s.organisation)]),
+      document: documents,
+      "artifact-reference": dedup(program.artifacts.map((a) => a.title)),
+    };
+  }, [program.sponsor, program.client, program.stakeholders, program.artifacts, program.rawData, mobiliseRoles]);
+
   /** Grid-aware "is this field filled?" — counts non-empty rows for grids. */
   const isFieldFilled = (field: { id: string; type: string; columns?: GridColumn[] }): boolean =>
     field.type === "grid"
@@ -698,6 +738,39 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
                         {hasCurrent ? <option value={current}>{current}</option> : null}
                         {options.map((option) => <option key={option} value={option}>{option}</option>)}
                       </select>
+                    );
+                  })()
+                ) : (field.type === "stakeholder" || field.type === "organization" || field.type === "document" || field.type === "artifact-reference") ? (
+                  // Semantic reference types. Persist as a plain string but offer
+                  // a context-aware datalist drawn from the programme (roster /
+                  // orgs / documents / artifacts) so the value resolves to a real
+                  // entity. With no suggestions it degrades to a plain text input.
+                  (() => {
+                    const listId = `ref-${phaseId}-${field.id}`;
+                    const suggestions = referenceSuggestions[field.type] ?? [];
+                    const refPlaceholder = field.placeholder ?? (
+                      field.type === "stakeholder" ? "Name a person…"
+                      : field.type === "organization" ? "Name an organisation…"
+                      : field.type === "document" ? "Reference a document…"
+                      : "Reference an artifact…"
+                    );
+                    return (
+                      <>
+                        <input
+                          type="text"
+                          list={suggestions.length ? listId : undefined}
+                          className="v3-input"
+                          aria-label={field.label}
+                          placeholder={refPlaceholder}
+                          value={values[field.id] ?? ""}
+                          onChange={(event) => setValues((current) => ({ ...current, [field.id]: event.target.value }))}
+                        />
+                        {suggestions.length ? (
+                          <datalist id={listId}>
+                            {suggestions.map((opt) => <option key={opt} value={opt} />)}
+                          </datalist>
+                        ) : null}
+                      </>
                     );
                   })()
                 ) : field.id === "successMetric" ? (

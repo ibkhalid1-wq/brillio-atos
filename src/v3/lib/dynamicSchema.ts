@@ -233,7 +233,11 @@ export function dynamicPlanMeta(phaseId: string, store?: DynamicSchemaStore): Ph
   return isRecord(meta) ? (meta as PhasePlanMeta) : null;
 }
 
-const ALLOWED_FIELD_TYPES = new Set(["text", "textarea", "number", "date", "select", "grid"]);
+const ALLOWED_FIELD_TYPES = new Set([
+  "text", "textarea", "number", "date", "select", "grid",
+  // Semantic reference types — persist as a string, render as a context picker.
+  "stakeholder", "organization", "document", "artifact-reference",
+]);
 
 export interface DynamicPhaseProposal {
   inputFields: PhaseInputField[];

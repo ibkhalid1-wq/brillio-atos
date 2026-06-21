@@ -21,7 +21,28 @@ export interface GridColumn {
 export interface PhaseInputField {
   id: string;
   label: string;
-  type: "text" | "textarea" | "number" | "date" | "select" | "grid";
+  /**
+   * Input shape. The first six are the primitive editors. The last four are
+   * *semantic reference* types — they still persist as a plain string, but the
+   * UI renders a context-aware picker (a datalist sourced from the programme's
+   * roster, organisations, uploaded documents or generated artifacts) so the
+   * captured fact is a real, resolvable reference rather than free text:
+   *   • stakeholder         → a named person (roster / stakeholder map)
+   *   • organization        → a named org, vendor or department (client + orgs)
+   *   • document            → an uploaded source document
+   *   • artifact-reference  → a generated artifact in this programme
+   */
+  type:
+    | "text"
+    | "textarea"
+    | "number"
+    | "date"
+    | "select"
+    | "grid"
+    | "stakeholder"
+    | "organization"
+    | "document"
+    | "artifact-reference";
   placeholder?: string;
   required: boolean;
   options?: string[];
