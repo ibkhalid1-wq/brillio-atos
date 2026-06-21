@@ -141,7 +141,7 @@ export function DeckView({
                 const exportTitle = `Executive Deck — ${program?.name || ""}`;
                 return (
                   <div style={{ position: "absolute", right: 0, top: "100%", marginTop: 4, background: "var(--v3-surface)", border: "1px solid var(--v3-border)", borderRadius: 6, boxShadow: "0 4px 12px rgba(0,0,0,0.12)", zIndex: 50, minWidth: 130 }}>
-                    {([["PDF", () => { exportAsPDF(exportTitle, deckToHtml({ name: program?.name, client: (program as Record<string, unknown>).client as string | undefined }, deckData)); setShowExportMenu(false); }], ["Word Doc", () => { exportAsDocx(exportTitle, deckToHtml({ name: program?.name, client: (program as Record<string, unknown>).client as string | undefined }, deckData)); setShowExportMenu(false); }]] as Array<[string, () => void]>).map(([label, fn]) => (
+                    {([["PDF", () => { exportAsPDF(exportTitle, deckToHtml({ name: program?.name, client: program?.client }, deckData)); setShowExportMenu(false); }], ["Word Doc", () => { exportAsDocx(exportTitle, deckToHtml({ name: program?.name, client: program?.client }, deckData)); setShowExportMenu(false); }]] as Array<[string, () => void]>).map(([label, fn]) => (
                       <button key={label} type="button" onClick={fn} style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 14px", background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "var(--v3-text-primary)" }}
                         onMouseEnter={(e) => (e.currentTarget.style.background = "var(--v3-surface-2)")}
                         onMouseLeave={(e) => (e.currentTarget.style.background = "none")}

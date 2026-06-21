@@ -71,7 +71,7 @@ function inputFilled(value: unknown): boolean {
 
 /** Build the set of mandatory exit-criterion labels that are marked met on the gate. */
 function metExitCriterionLabels(program: ProgramSummary, phaseId: string): Set<string> {
-  const gate = program.gateReviews?.[phaseId] as Record<string, unknown> | undefined;
+  const gate = program.gateReviews?.[phaseId] as unknown as Record<string, unknown> | undefined;
   if (!gate) return new Set();
   // An approved gate implies all mandatory criteria are satisfied.
   if (gate.status === "approved") return new Set(getMandatoryCriteria(phaseId).map((c) => c.label.toLowerCase()));
@@ -130,9 +130,9 @@ export function derivePhaseMethodologyCompleteness(
   }));
 
   const groups: MethodologyRequirementGroup[] = [
-    { kind: "input", label: GROUP_LABEL.input, items: inputItems, present: inputItems.filter((i) => i.present).length, total: inputItems.length },
-    { kind: "artifact", label: GROUP_LABEL.artifact, items: artifactItems, present: artifactItems.filter((i) => i.present).length, total: artifactItems.length },
-    { kind: "exit-criterion", label: GROUP_LABEL["exit-criterion"], items: exitItems, present: exitItems.filter((i) => i.present).length, total: exitItems.length },
+    { kind: "input" as const, label: GROUP_LABEL.input, items: inputItems, present: inputItems.filter((i) => i.present).length, total: inputItems.length },
+    { kind: "artifact" as const, label: GROUP_LABEL.artifact, items: artifactItems, present: artifactItems.filter((i) => i.present).length, total: artifactItems.length },
+    { kind: "exit-criterion" as const, label: GROUP_LABEL["exit-criterion"], items: exitItems, present: exitItems.filter((i) => i.present).length, total: exitItems.length },
   ].filter((group) => group.total > 0);
 
   const total = groups.reduce((sum, group) => sum + group.total, 0);

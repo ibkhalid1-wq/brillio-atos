@@ -136,7 +136,7 @@ export function PlanView({
               {showExportMenu && (() => {
                 const exportTitle = `Transformation Plan — ${program?.name || ""}`;
                 const planForExport = { milestones: plan.milestones as unknown as Array<Record<string, unknown>>, nextThreeActions: plan.nextThreeActions as unknown as Array<Record<string, unknown>>, blockerSummary: plan.blockerSummary as unknown as Array<Record<string, unknown>>, criticalPath: plan.criticalPath };
-                const progForExport = { name: program?.name, client: (program as Record<string, unknown>).client as string | undefined };
+                const progForExport = { name: program?.name, client: program?.client };
                 return (
                   <div style={{ position: "absolute", right: 0, top: "100%", marginTop: 4, background: "var(--v3-surface)", border: "1px solid var(--v3-border)", borderRadius: 6, boxShadow: "0 4px 12px rgba(0,0,0,0.12)", zIndex: 50, minWidth: 130 }}>
                     {([["PDF", () => { exportAsPDF(exportTitle, planToHtml(progForExport, planForExport)); setShowExportMenu(false); }], ["Word Doc", () => { exportAsDocx(exportTitle, planToHtml(progForExport, planForExport)); setShowExportMenu(false); }]] as Array<[string, () => void]>).map(([label, fn]) => (

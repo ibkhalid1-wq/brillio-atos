@@ -47,7 +47,7 @@ export function useMilestones(
 
       const { error } = await supabase
         .from("adam_programs")
-        .update({ data: payload as Json, updated_at: new Date().toISOString() })
+        .update({ data: payload as unknown as Json, updated_at: new Date().toISOString() })
         .eq("id", programId);
       if (error) throw new Error(error.message);
       await onRefresh();

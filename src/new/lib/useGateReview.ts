@@ -202,8 +202,8 @@ export function useGateReview(
     // decision pointing at the blockers + re-run gate review, then re-approve.
     // Carry the top blockers (if the gate review captured any) into the prompt so
     // the PM sees *what* to fix, not just *that* something needs fixing.
-    const blockerLabels = Array.isArray((review as Record<string, unknown>).blockers)
-      ? ((review as Record<string, unknown>).blockers as unknown[])
+    const blockerLabels = Array.isArray((review as unknown as Record<string, unknown>).blockers)
+      ? ((review as unknown as Record<string, unknown>).blockers as unknown[])
           .map((b) => (typeof b === "string" ? b : (b && typeof b === "object" ? String((b as Record<string, unknown>).label ?? (b as Record<string, unknown>).criterion ?? "") : "")))
           .filter((label) => label.trim().length > 0)
           .slice(0, 3)

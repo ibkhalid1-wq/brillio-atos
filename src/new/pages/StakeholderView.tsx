@@ -216,7 +216,7 @@ export function StakeholderView({
                 <div className="adam-stack" style={{ gap: 4 }}>
                   <div className="adam-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     {entry.name}
-                    <RiskBadge risk={(entry as Record<string,unknown>).engagementRisk as "high"|"medium"|"low"|null} reason={(entry as Record<string,unknown>).engagementRiskReason as string} />
+                    <RiskBadge risk={(entry as unknown as Record<string,unknown>).engagementRisk as "high"|"medium"|"low"|null} reason={(entry as unknown as Record<string,unknown>).engagementRiskReason as string} />
                   </div>
                   <div className="adam-micro adam-muted">
                     {entry.role || "Role pending"}

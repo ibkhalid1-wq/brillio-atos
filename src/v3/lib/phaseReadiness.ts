@@ -292,7 +292,7 @@ export function computePhaseReadiness(
           } as ExitCriterion));
 
   const mandatoryExits = effectiveExitCriteria.filter(
-    (criterion) => (criterion as Record<string, unknown>).mandatory !== false,
+    (criterion) => (criterion as unknown as Record<string, unknown>).mandatory !== false,
   );
   const mandatoryExitsMet = mandatoryExits.filter((criterion) => criterion.met).length;
   const mandatoryExitsTotal = mandatoryExits.length;
