@@ -77,7 +77,7 @@ export function useLocalProgramMigration(userId: string | null) {
       .from("adam_programs")
       .select("id")
       .in("id", rows.map((row) => row.id))
-      .then(({ data }) => {
+      .then(({ data }: { data: Array<{ id: string }> | null }) => {
         const existingIds = new Set((data || []).map((row) => row.id));
         const toInsert = rows.filter((row) => !existingIds.has(row.id));
         if (!toInsert.length) {
@@ -89,7 +89,7 @@ export function useLocalProgramMigration(userId: string | null) {
         void supabase
           .from("adam_programs")
           .insert(toInsert)
-          .then(({ error }) => {
+          .then(({ error }: { error: { message: string } | null }) => {
             if (!error) {
               LEGACY_PROGRAM_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
             }

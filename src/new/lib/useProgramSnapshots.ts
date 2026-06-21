@@ -87,7 +87,7 @@ export function useProgramSnapshots(programId: string | null, opts: { enabled?: 
       if (error) throw error;
       if (programIdRef.current !== programId) return;
       setSnapshots(
-        (data ?? []).map((row) => ({
+        (data ?? []).map((row: Record<string, unknown>) => ({
           id: row.id as string,
           label: (row.label as string) || "Untitled save",
           kind: (row.kind as string) || "manual",
@@ -129,7 +129,7 @@ export function useProgramSnapshots(programId: string | null, opts: { enabled?: 
         .select("id")
         .eq("program_id", programId)
         .order("created_at", { ascending: false });
-      const excess = (rows ?? []).slice(MAX_SNAPSHOTS_PER_PROGRAM).map((r) => r.id as string);
+      const excess = (rows ?? []).slice(MAX_SNAPSHOTS_PER_PROGRAM).map((r: { id: string }) => r.id as string);
       if (excess.length) {
         await supabase.from("adam_program_snapshots").delete().in("id", excess);
       }

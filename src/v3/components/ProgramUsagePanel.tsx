@@ -18,7 +18,7 @@ export default function ProgramUsagePanel({ programId }: { programId: string }) 
       .eq("program_id", programId)
       .order("created_at", { ascending: false })
       .limit(100)
-      .then(({ data: rows }) => {
+      .then(({ data: rows }: { data: Array<{ agent_id: string; tokens_used: number | null }> | null }) => {
         setData((rows || []).map((row) => ({
           agent_id: row.agent_id,
           tokens_used: row.tokens_used,
