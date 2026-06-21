@@ -2,6 +2,7 @@ import React from "react";
 
 interface IconProps {
   className?: string;
+  style?: React.CSSProperties;
 }
 
 function baseProps(className = "") {
@@ -59,9 +60,9 @@ export function InboxIcon({ className }: IconProps) {
   );
 }
 
-export function SparklesIcon({ className }: IconProps) {
+export function SparklesIcon({ className, style }: IconProps) {
   return (
-    <svg {...baseProps(className)}>
+    <svg {...baseProps(className)} style={style}>
       <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3Z" />
       <path d="M5 16l.7 2.3L8 19l-2.3.7L5 22l-.7-2.3L2 19l2.3-.7L5 16Z" />
       <path d="M19 14l.7 1.8L22 16.5l-2.3.7L19 19l-.7-1.8-2.3-.7 2.3-.7L19 14Z" />

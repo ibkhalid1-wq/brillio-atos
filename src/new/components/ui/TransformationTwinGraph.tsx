@@ -96,7 +96,7 @@ function getOrderedLanes(rawNodes: TwinNodeRecord[]): TwinLaneDefinition[] {
   const baseLanes = SEMANTIC_LANES
     .filter((lane) => lane.types.some((type) => presentTypes.has(type)))
     .map((lane) => ({ id: lane.id, label: lane.label, types: [...lane.types] }));
-  const coveredTypes = new Set(baseLanes.flatMap((lane) => lane.types));
+  const coveredTypes = new Set<string>(baseLanes.flatMap((lane) => lane.types));
   const extraTypes = Array.from(presentTypes)
     .filter((type) => !coveredTypes.has(type))
     .sort((left, right) => left.localeCompare(right))

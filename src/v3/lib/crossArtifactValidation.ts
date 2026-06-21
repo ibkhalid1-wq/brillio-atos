@@ -317,7 +317,7 @@ const RULES: ValidationRule[] = [
           sourceArtifact: "phases",
           targetArtifact: "workstreams",
           sourceItem: ph.id,
-          issue: `Active phase "${ph.name}" is not reflected in any delivery workstream.`,
+          issue: `Active phase "${ph.displayName}" is not reflected in any delivery workstream.`,
           recommendation: "Add a workstream covering this phase's scope, or confirm it is out of delivery.",
           confidence: 1,
           evidence: [`phase ${ph.id} active, workstreams covering it = 0`],

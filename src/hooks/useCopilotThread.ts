@@ -12,7 +12,7 @@ function normalizeMessages(raw: Json | null | undefined): ThreadMessage[] {
   if (!Array.isArray(raw)) return [];
   return raw
     .filter((entry): entry is Record<string, Json> => typeof entry === "object" && entry !== null && !Array.isArray(entry))
-    .map((entry) => ({
+    .map((entry): ThreadMessage => ({
       role: entry.role === "assistant" || entry.role === "system" ? entry.role : "user",
       content: typeof entry.content === "string" ? entry.content : "",
       timestamp: typeof entry.timestamp === "string" ? entry.timestamp : new Date().toISOString(),

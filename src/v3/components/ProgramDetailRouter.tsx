@@ -111,6 +111,7 @@ interface ProgramDetailRouterProps {
     triggerHealthHeatmap: () => void;
     triggerRetro: (phaseId: string) => void;
     triggerScopePcr: () => void;
+    triggerClosure: () => void;
     retroRunningPhases: Set<string>;
     changeImpactIsRunning: boolean;
     stakeholderIsRunning: boolean;
@@ -239,7 +240,7 @@ export default function ProgramDetailRouter({
     case "scope-pcr":
       return <ScopePcrView program={program} isRunning={triggers.scopePcrIsRunning} onTriggerScopePcr={triggers.triggerScopePcr} onNavigate={onNavigate} />;
     case "intelligence":
-      return <IntelligenceView program={program} onRefreshProgram={onRefresh} initialTab={intelligenceInitialTab as "Status" | "Autonomy" | "Setup" | undefined} />;
+      return <IntelligenceView program={program} onRefreshProgram={onRefresh} initialTab={intelligenceInitialTab as "Status" | "Setup" | undefined} />;
     case "artifact-map":
       return (
         <div className="v3-section">

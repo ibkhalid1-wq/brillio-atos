@@ -21,7 +21,7 @@ export function deriveOpenRecommendedActions(
   const phaseAgents = Object.fromEntries(
     (program.phases || []).map((phase) => [phase.id, { agentState: phaseAgentStates[phase.id] ?? null }]),
   );
-  const synthesized = buildDecisionQueue(phaseAgents, nested, personaId);
+  const synthesized = buildDecisionQueue(phaseAgents as Parameters<typeof buildDecisionQueue>[0], nested, personaId);
   const byId = new Map((program.decisionQueue || []).map((decision) => [decision.id, decision]));
   return synthesized
     .map((decision) => {

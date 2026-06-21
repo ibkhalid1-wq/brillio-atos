@@ -1,7 +1,6 @@
 import {
   ADAM_AGENT_PROMPTS,
   type AdamAgentId,
-  type ObjectSchema,
 } from "@/lib/adamAgentPrompts";
 
 export interface PromptVersion {
@@ -41,12 +40,12 @@ function buildDefaultRegistry(): Record<string, PromptVersion[]> {
           agentId,
           version: "1.0.0",
           prompt: bundle.prompt,
-          outputSchema: bundle.outputSchema as ObjectSchema,
+          outputSchema: bundle.outputSchema as unknown as Record<string, unknown>,
           changelog: "Initial production prompt with typed output schema, confidence calibration, pause protocol, and quality bar.",
           publishedAt,
           publishedBy: "system",
           status: "active" as const,
-        },
+        } as PromptVersion,
       ],
     ]),
   );

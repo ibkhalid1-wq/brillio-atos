@@ -129,7 +129,7 @@ function getPhaseTitle(value: any) {
   return normalized.replace(/[_-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function hasMeaningfulValue(value: any) {
+function hasMeaningfulValue(value: any): boolean {
   if (Array.isArray(value)) return value.some((item) => hasMeaningfulValue(item));
   if (value && typeof value === "object") {
     return Object.values(value).some((item) => hasMeaningfulValue(item));
@@ -298,7 +298,7 @@ function buildSyntheticRaidAlertItems(projectData: any) {
     });
 
   return [...grouped.entries()]
-    .map(([phaseId, entries]) => {
+    .map(([phaseId, entries]): DecisionItem => {
       const sortedEntries = entries.slice().sort((left, right) => {
         const leftSeverity = getRaidEntrySeverity(left) === "critical" ? 0 : getRaidEntrySeverity(left) === "high" ? 1 : 2;
         const rightSeverity = getRaidEntrySeverity(right) === "critical" ? 0 : getRaidEntrySeverity(right) === "high" ? 1 : 2;

@@ -51,7 +51,7 @@ const BRILLIO_ACCELERATORS: Array<{
     category: "Intelligence",
     description: "A premium analysis accelerator that combines twin signals, pattern context, and scenario planning for executive decision support.",
     chips: ["Twin", "Patterns", "Scenario planning"],
-    view: "twin",
+    view: "intelligence",
     actionLabel: "Open twin",
   },
 ];

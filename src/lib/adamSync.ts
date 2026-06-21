@@ -111,13 +111,14 @@ export async function saveProgramToSupabase(program: Record<string, unknown>): P
   if (!isSupabaseConfigured || !supabase) return false;
   const { data: auth } = await supabase.auth.getUser();
   if (!auth?.user) return false;
+  const meta = (program?.projectMeta as Record<string, unknown> | undefined) ?? {};
   const record = program?.data
     ? program
     : {
         id: program?.id,
-        name: program?.projectMeta?.name || program?.name || "Untitled Program",
-        client: program?.projectMeta?.client || program?.client || null,
-        industry: program?.projectMeta?.industry || program?.industry || null,
+        name: meta.name || program?.name || "Untitled Program",
+        client: meta.client || program?.client || null,
+        industry: meta.industry || program?.industry || null,
         data: program,
       };
   const syncedAt = new Date().toISOString();

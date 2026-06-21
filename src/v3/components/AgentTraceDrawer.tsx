@@ -52,7 +52,7 @@ export default function AgentTraceDrawer({ runId, onClose }: AgentTraceDrawerPro
     setError(null);
 
     void supabase.auth.getSession()
-      .then(async ({ data }) => {
+      .then(async ({ data }: { data: { session: { access_token?: string } | null } }) => {
         const jwt = data.session?.access_token || "";
         const response = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-agent-trace?runId=${encodeURIComponent(runId)}`,

@@ -173,7 +173,7 @@ export function PlanView({
                     <span>{node.phaseName || node.phaseId}</span>
                     {node.isBottleneck ? <span className="adam-badge red">Bottleneck</span> : null}
                   </span>
-                  {index < program.criticalPath.sequence.length - 1 ? <span className="adam-micro adam-muted">→</span> : null}
+                  {index < (program.criticalPath?.sequence?.length ?? 0) - 1 ? <span className="adam-micro adam-muted">→</span> : null}
                 </React.Fragment>
               ))
               : plan.criticalPath.map((phaseId, index) => (

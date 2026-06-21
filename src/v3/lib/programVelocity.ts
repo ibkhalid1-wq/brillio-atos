@@ -54,7 +54,7 @@ export async function computeProgramVelocity(
     .filter((value): value is string => typeof value === "string")
     .sort()
     .at(-1) || null;
-  const completedRuns = (runResult.data || []).filter((row) => row.status === "complete").length;
+  const completedRuns = (runResult.data || []).filter((row: { status?: string | null }) => row.status === "complete").length;
 
   return {
     changesLast24h: updatedAt && new Date(updatedAt).getTime() >= new Date(since).getTime() ? Math.max(1, completedRuns) : 0,

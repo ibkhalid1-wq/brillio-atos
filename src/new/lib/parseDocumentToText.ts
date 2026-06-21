@@ -301,7 +301,7 @@ async function parseOdt(file: File): Promise<ParseResult> {
       return { ok: false, error: "Could not read ODT content.", fileType: "odt" };
     }
 
-    const content = await contentEntry.getData?.(new TextWriter());
+    const content = await (contentEntry as { getData?: (writer: unknown) => Promise<unknown> }).getData?.(new TextWriter());
     if (typeof content !== "string") {
       return { ok: false, error: "Could not decode ODT content.", fileType: "odt" };
     }
@@ -596,7 +596,7 @@ async function parseZip(file: File): Promise<ParseResult> {
     const sections: string[] = [];
     for (const entry of supportedEntries.slice(0, 20)) {
       try {
-        const innerBlob = await entry.getData?.(new BlobWriter());
+        const innerBlob = await (entry as { getData?: (writer: unknown) => Promise<unknown> }).getData?.(new BlobWriter());
         if (!(innerBlob instanceof Blob)) continue;
         const innerFile = new File([innerBlob], entry.filename, { type: innerBlob.type || "" });
         const result = await parseDocumentToText(innerFile);

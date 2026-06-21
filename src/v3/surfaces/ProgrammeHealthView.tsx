@@ -390,6 +390,7 @@ function GatesTab({
       <LiteGateModal
         open={liteGateOpen}
         phaseId={phaseId ?? ""}
+        phaseLabel={phaseLabel}
         onClose={() => setLiteGateOpen(false)}
         onComplete={() => {
           // Lite gate is a deterministic sense-check only. The formal gate
@@ -1195,7 +1196,7 @@ export default function ProgrammeHealthView({
               </button>
               {activePhaseId && (
                 <button
-                  onClick={() => onNavigateToPhase(activePhaseId)}
+                  onClick={() => onNavigateToPhase?.(activePhaseId)}
                   style={{
                     background: "none", border: "none", padding: "4px 0",
                     cursor: "pointer", fontSize: 12, color: "var(--v3-accent)",
