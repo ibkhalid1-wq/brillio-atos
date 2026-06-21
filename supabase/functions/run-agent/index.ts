@@ -5113,12 +5113,25 @@ Rules:
   needsConfirmation:true rather than asking the user to type it from scratch.
 - Propose enough inputs + artifacts to cover every exit criterion (user message), no filler.
 - Field "type" MUST be one of: text, textarea, number, date, select, grid.
+- Choose the type that best fits the FACT's shape, mapping richer notions onto the six:
+  • a money amount -> "number", and name the currency/unit in the label (e.g.
+    "Phase budget (USD)"). • a percentage / ratio -> "number" with "%" in the label
+    (e.g. "Target cost reduction (%)"). • a yes/no decision -> "select" with
+    options ["Yes","No"]. • a pick-one from a known set -> "select" with options.
+    • a pick-many or a single named person/team/system -> "text" if free-form, else
+    "select". • a calendar point -> "date"; for a span, use two date fields
+    (e.g. "...start date" and "...end date"). Never invent a type outside the six.
 - Use "grid" for a repeating list of structured rows (e.g. team roster, RACI,
   workstream owners). A grid field MUST include a "columns" array — each column is
   { "key": "camelCaseKey", "label": "Header", "type": "text|number|select",
   "options": ["..."] (select only) }. A grid with no columns is invalid; if you
   cannot name its columns, use "textarea" instead.
 - Use stable camelCase field ids and kebab-case artifact ids.
+- EVERY input field MUST carry a concrete, programme-specific "example" showing the
+  exact shape of a good answer (e.g. "2026-09-01", "USD 1.2M", "12%", "Jane Doe — CFO").
+  The example must match the field's type. This is not optional.
+- EVERY input field MUST carry a one-line "reasonNeeded" stating the PURPOSE — why this
+  fact is needed and which decision or artifact it unblocks.
 - Each artifact's "requiredInputs" lists the field ids that feed it; every input field
   must feed at least one artifact; every exit criterion must be covered by an artifact.
 - Make labels specific to this programme (name the actual team, system, or market).
@@ -5127,10 +5140,11 @@ Return ONLY valid JSON:
 {
   "nextPhase": { "readiness": "green|yellow|red", "rationale": "one sentence", "purpose": "one sentence" },
   "inputFields": [
-    { "fieldId": "camelCaseId", "label": "Atomic fact label", "type": "text", "required": true,
-      "reasonNeeded": "why this fact is needed", "usedByArtifacts": ["kebab-id"],
+    { "fieldId": "camelCaseId", "label": "Atomic fact label (name the unit, e.g. USD or %)", "type": "text", "required": true,
+      "reasonNeeded": "PURPOSE — why this fact is needed and what it unblocks (required)", "usedByArtifacts": ["kebab-id"],
       "prefillValue": "inferred value or omit", "prefillSource": "where inferred from or omit",
-      "confidence": "high|medium|low", "needsConfirmation": false, "example": "optional", "hint": "optional" },
+      "confidence": "high|medium|low", "needsConfirmation": false,
+      "example": "concrete sample answer matching the type (required)", "hint": "optional" },
     { "fieldId": "coreTeamRoster", "label": "Named individuals per core team role", "type": "grid",
       "required": true, "usedByArtifacts": ["raci-matrix"],
       "columns": [ { "key": "role", "label": "Role", "type": "text" },
