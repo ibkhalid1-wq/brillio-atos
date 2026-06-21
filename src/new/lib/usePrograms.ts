@@ -161,6 +161,13 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
   const [hasResolvedPrograms, setHasResolvedPrograms] = useState(false);
   const localKnownUpdatedAt = useRef<Record<string, string>>({});
   const normalizationCache = useRef<Map<string, ProgramSummary>>(new Map());
+  // Mirror of activeProgramId read inside refreshPrograms. Keeping it in a ref
+  // (instead of the callback's dependency array) means refreshPrograms stays
+  // referentially STABLE across active-program changes. Otherwise every selection
+  // re-created the callback, re-fired the load effect, and triggered a full
+  // refetch of every program's `data` blob — the dominant cost behind the slow
+  // refresh/unlock — and churned every hook that takes refreshPrograms as a dep.
+  const activeProgramIdRef = useRef<string>("");
 
   const refreshPrograms = useCallback(async () => {
     if (!enabled) {
@@ -322,7 +329,8 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
       const storedId = typeof localStorage !== "undefined"
         ? localStorage.getItem(ACTIVE_PROGRAM_KEY) || ""
         : "";
-      const preferredId = effectivePrograms.some((program) => program.id === activeProgramId) ? activeProgramId : storedId;
+      const currentActiveId = activeProgramIdRef.current;
+      const preferredId = effectivePrograms.some((program) => program.id === currentActiveId) ? currentActiveId : storedId;
       const nextActive = effectivePrograms.find((program) => program.id === preferredId)?.id || effectivePrograms[0]?.id || "";
       setActiveProgramIdState(nextActive);
       setError(normalized.length || !localPrograms.length ? "" : "");
@@ -352,7 +360,14 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
     } finally {
       setIsLoading(false);
     }
-  }, [activeProgramId, enabled, userId]);
+  }, [enabled, userId]);
+
+  // Keep the ref refreshPrograms reads in sync with the live state, without
+  // putting activeProgramId in the callback's dependency array (which would make
+  // it unstable and re-trigger full refetches on every selection — see the ref).
+  useEffect(() => {
+    activeProgramIdRef.current = activeProgramId;
+  }, [activeProgramId]);
 
   useEffect(() => {
     void refreshPrograms();

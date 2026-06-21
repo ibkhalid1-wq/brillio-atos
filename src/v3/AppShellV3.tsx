@@ -2257,7 +2257,9 @@ export default function AppShellV3() {
       staled = rebased.staled;
       await updateProgramData(activeProgram.id, payload, fresh?.updated_at ?? undefined);
     }
-    await refreshPrograms();
+    // Both branches above persist via updateProgramData, which already refreshes
+    // on success — a second refetch here doubled every (debounced, very frequent)
+    // input auto-save, re-pulling every programme's full data blob each keystroke.
     // Saving inputs is a deterministic persist — no model call. Input quality is
     // scored locally by derivePhaseInputQuality (phaseInputQuality.ts), so editing
     // inputs never silently triggers an agent run.
@@ -2312,8 +2314,8 @@ export default function AppShellV3() {
       existing[phaseId] = mergePhaseInputBucket(existing[phaseId], writableFields);
     }
     const payload = cloned.commit({ ...cloned.inner, phaseInputs: existing });
+    // updateProgramData already refreshes on success — no second refetch needed.
     await updateProgramData(activeProgram.id, payload, activeProgram.updatedAt);
-    await refreshPrograms();
     // Navigate to the first writable phase that received inputs and open the drawer
     const targetPhase = (firstPhaseId && !lockedPhases.includes(firstPhaseId) ? firstPhaseId : null) ?? Object.keys(writableInputs)[0];
     if (targetPhase) {
@@ -2368,8 +2370,8 @@ export default function AppShellV3() {
     // so a restored copy never reintroduces an in-data history.
     delete restoredInner.programSnapshots;
     const payload = cloned.commit(restoredInner);
+    // updateProgramData already refreshes on success — no second refetch needed.
     await updateProgramData(activeProgram.id, payload, activeProgram.updatedAt);
-    await refreshPrograms();
     const label = programSnapshots.find((s) => s.id === snapshotId)?.label ?? "snapshot";
     pushV3Toast(`Reverted to “${label}”.`, { tone: "success", duration: 3000 });
   }, [activeProgram, getProgramSnapshotData, programSnapshots, refreshPrograms, updateProgramData]);
@@ -2643,8 +2645,9 @@ export default function AppShellV3() {
         taskId,
       }],
     });
+    // updateProgramData already refreshes programmes — only the phase tasks still
+    // need a separate refetch here.
     await updateProgramData(activeProgram.id, payload, activeProgram.updatedAt);
-    await refreshPrograms();
     await refreshPhaseTasks();
     pushV3Toast("Answer saved. ATOS will continue from here.", { tone: "success", duration: 2500 });
   }, [activePhaseId, activeProgram, activeProgramId, refreshPhaseTasks, refreshPrograms, updatePhaseTask, updateProgramData]);
