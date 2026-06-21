@@ -161,6 +161,18 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
   const [hasResolvedPrograms, setHasResolvedPrograms] = useState(false);
   const localKnownUpdatedAt = useRef<Record<string, string>>({});
   const normalizationCache = useRef<Map<string, ProgramSummary>>(new Map());
+  // Metadata-only list path. The list query no longer pulls every programme's
+  // heavy `data` JSON blob (the dominant cost behind slow refresh/unlock); it
+  // selects metadata columns only. Full blobs are fetched lazily per-id (active
+  // programme up front in refreshPrograms; the rest on demand via hydratePrograms,
+  // e.g. when the Portfolio surface opens) and cached here keyed by id, tagged
+  // with the row's updated_at so a stale blob is re-fetched after an edit.
+  const hydratedDataById = useRef<Map<string, { updatedAt: string; data: Json }>>(new Map());
+  // Source rows for composePrograms: the latest live cloud metadata rows and the
+  // live local-cache programs. Kept in refs so hydratePrograms can recompose the
+  // list (merging freshly hydrated blobs) without re-running the whole refresh.
+  const cloudMetaRowsRef = useRef<ProgramRow[]>([]);
+  const localProgramsRef = useRef<ProgramSummary[]>([]);
   // Mirror of activeProgramId read inside refreshPrograms. Keeping it in a ref
   // (instead of the callback's dependency array) means refreshPrograms stays
   // referentially STABLE across active-program changes. Otherwise every selection
@@ -168,6 +180,83 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
   // refetch of every program's `data` blob — the dominant cost behind the slow
   // refresh/unlock — and churned every hook that takes refreshPrograms as a dep.
   const activeProgramIdRef = useRef<string>("");
+
+  // Normalise one cloud metadata row into a ProgramSummary, hydrating it from the
+  // blob cache when a fresh blob is available, otherwise producing a lightweight
+  // (metadata-only) summary. Results are memoised by id+updated_at+hydration state
+  // so re-composing the list after a partial hydration is cheap.
+  const buildCloudSummary = useCallback((row: ProgramRow): ProgramSummary => {
+    const hydrated = hydratedDataById.current.get(row.id);
+    const data = hydrated && hydrated.updatedAt === row.updated_at ? hydrated.data : undefined;
+    const cacheKey = `${row.id}:${row.updated_at}:${data != null ? "full" : "meta"}`;
+    const cached = normalizationCache.current.get(cacheKey);
+    if (cached) return cached;
+    const nextValue = normalizeProgram({
+      id: row.id,
+      name: row.name,
+      client: row.client,
+      industry: row.industry,
+      updated_at: row.updated_at,
+      data,
+    });
+    normalizationCache.current.set(cacheKey, nextValue);
+    // Keep a generous cache so multiple programmes (each in meta + full variants)
+    // survive a recompose without thrashing; lightweight re-normalisation is cheap.
+    if (normalizationCache.current.size > 64) {
+      const firstKey = normalizationCache.current.keys().next().value;
+      if (firstKey) normalizationCache.current.delete(firstKey);
+    }
+    return nextValue;
+  }, []);
+
+  // Recompose the effective programmes list from the cached source rows + the blob
+  // cache. Used both at the end of a refresh and after a lazy hydration.
+  const composePrograms = useCallback((): ProgramSummary[] => {
+    const normalized = cloudMetaRowsRef.current.map(buildCloudSummary);
+    normalized.forEach((program) => {
+      localKnownUpdatedAt.current[program.id] = program.updatedAt;
+    });
+    const live = localProgramsRef.current;
+    const localById = new Map(live.map((lp) => [lp.id, lp]));
+    // Prefer a local copy only when it is genuinely newer (e.g. after a failed RLS
+    // write that fell back to localStorage); otherwise the cloud row wins.
+    const merged = normalized.map((remoteProgram) => {
+      const localProgram = localById.get(remoteProgram.id);
+      if (!localProgram) return remoteProgram;
+      const localMs = new Date(localProgram.updatedAt).getTime();
+      const remoteMs = new Date(remoteProgram.updatedAt).getTime();
+      return localMs > remoteMs ? localProgram : remoteProgram;
+    });
+    const remoteIds = new Set(normalized.map((p) => p.id));
+    const localOnly = live.filter((lp) => !remoteIds.has(lp.id));
+    const all = [...merged, ...localOnly];
+    return all.length ? all : live;
+  }, [buildCloudSummary]);
+
+  // Fetch + cache the full `data` blob for the given programme ids, skipping any
+  // already-fresh in the cache. Returns true if the cache changed. No setState —
+  // callers decide whether to recompose (refreshPrograms composes once at the end;
+  // hydratePrograms recomposes immediately).
+  const fetchDataRows = useCallback(async (ids: string[]): Promise<boolean> => {
+    if (!isSupabaseConfigured || !supabase) return false;
+    const need = [...new Set(ids)].filter((id) => {
+      if (!id) return false;
+      const row = cloudMetaRowsRef.current.find((r) => r.id === id);
+      if (!row) return false; // not a cloud programme (local-only copies are already full)
+      const have = hydratedDataById.current.get(id);
+      return !have || have.updatedAt !== row.updated_at;
+    });
+    if (need.length === 0) return false;
+    const { data: rows, error: fetchError } = await supabase
+      .from("adam_programs")
+      .select("id, updated_at, data")
+      .in("id", need);
+    if (fetchError || !rows) return false;
+    (rows as Array<{ id: string; updated_at: string; data: Json }>).forEach((r) => {
+      hydratedDataById.current.set(r.id, { updatedAt: r.updated_at, data: r.data });
+    });
+    return true;
+  }, []);
 
   const refreshPrograms = useCallback(async () => {
     if (!enabled) {
@@ -218,9 +307,10 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
       // signed-in user owns or has been granted membership on, so collaborators
       // see shared programs too. We fetch deleted rows too (no is_deleted filter)
       // so we can reconcile stale local caches against cloud deletions below.
+      // Metadata-only: `data` is deliberately NOT selected — see hydratedDataById.
       const query = supabase
         .from("adam_programs")
-        .select("id, name, client, industry, updated_at, data, is_deleted, owner_id")
+        .select("id, name, client, industry, updated_at, is_deleted, owner_id")
         .order("updated_at", { ascending: false });
 
       const { data: allRows, error: loadError } = await query;
@@ -237,29 +327,23 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
         ((allRows || []) as ProgramRow[]).filter((row) => row.is_deleted).map((row) => row.id),
       );
       if (deletedIds.size) purgeLocalPrograms(deletedIds);
-      const data = ((allRows || []) as ProgramRow[]).filter((row) => !row.is_deleted);
+      const liveCloudRows = ((allRows || []) as ProgramRow[]).filter((row) => !row.is_deleted);
       const liveLocalPrograms = localPrograms.filter((program) => !deletedIds.has(program.id));
 
-      const normalized = ((data || []) as ProgramRow[]).map((row) => {
-        const cacheKey = `${row.id}:${row.updated_at}`;
-        const cached = normalizationCache.current.get(cacheKey);
-        if (cached) return cached;
-        const nextValue = normalizeProgram(row);
-        normalizationCache.current.set(cacheKey, nextValue);
-        if (normalizationCache.current.size > 5) {
-          const firstKey = normalizationCache.current.keys().next().value;
-          if (firstKey) normalizationCache.current.delete(firstKey);
-        }
-        return nextValue;
-      });
-      normalized.forEach((program) => {
-        localKnownUpdatedAt.current[program.id] = program.updatedAt;
-      });
+      // Evict blob-cache entries for programmes that are gone or soft-deleted, so
+      // the cache can't grow unbounded or resurrect a deleted blob.
+      const liveCloudIds = new Set(liveCloudRows.map((row) => row.id));
+      for (const cachedId of [...hydratedDataById.current.keys()]) {
+        if (!liveCloudIds.has(cachedId)) hydratedDataById.current.delete(cachedId);
+      }
+
+      cloudMetaRowsRef.current = liveCloudRows;
+      localProgramsRef.current = liveLocalPrograms;
 
       // If DB returned no programs but we have local ones, migrate them up to Supabase
       // so agent edge-function calls can find them by ID. Only migrate programs not
       // soft-deleted in the cloud, so a delete can't be undone by re-upserting.
-      if (normalized.length === 0 && liveLocalPrograms.length > 0 && userId) {
+      if (liveCloudRows.length === 0 && liveLocalPrograms.length > 0 && userId) {
         const upsertRows = liveLocalPrograms.map((program) => ({
           id: program.id,
           name: program.name,
@@ -279,30 +363,27 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
           });
       }
 
-      // Merge: if a local program is newer than the Supabase version (e.g. after a
-      // failed RLS UPSERT that fell back to localStorage), prefer the local copy so
-      // gate approvals and other saves are immediately visible in the UI.
-      const localById = new Map(liveLocalPrograms.map((lp) => [lp.id, lp]));
-      const mergedNormalized = normalized.map((remoteProgram) => {
-        const localProgram = localById.get(remoteProgram.id);
-        if (!localProgram) return remoteProgram;
-        const localMs = new Date(localProgram.updatedAt).getTime();
-        const remoteMs = new Date(remoteProgram.updatedAt).getTime();
-        return localMs > remoteMs ? localProgram : remoteProgram;
-      });
-      // Include programs that exist only in localStorage (not yet in Supabase)
-      const remoteIds = new Set(normalized.map((p) => p.id));
-      const localOnlyPrograms = liveLocalPrograms.filter((lp) => !remoteIds.has(lp.id));
-      const allEffective = [...mergedNormalized, ...localOnlyPrograms];
+      // Resolve the active programme against the (lightweight) composed list, then
+      // hydrate ONLY its full blob up front so the active programme paints fully
+      // without pulling every other programme's blob. The rest stay metadata-only
+      // until something needs them (e.g. Portfolio calls hydratePrograms).
+      const composedBeforeHydrate = composePrograms();
+      const storedId = typeof localStorage !== "undefined"
+        ? localStorage.getItem(ACTIVE_PROGRAM_KEY) || ""
+        : "";
+      const currentActiveId = activeProgramIdRef.current;
+      const preferredId = composedBeforeHydrate.some((program) => program.id === currentActiveId) ? currentActiveId : storedId;
+      const nextActive = composedBeforeHydrate.find((program) => program.id === preferredId)?.id || composedBeforeHydrate[0]?.id || "";
+      if (nextActive) await fetchDataRows([nextActive]);
 
-      const effectivePrograms = allEffective.length ? allEffective : liveLocalPrograms;
+      const effectivePrograms = composePrograms();
       setPrograms(effectivePrograms);
 
       // Resolve the signed-in user's role per program. The owner is always an
       // admin; otherwise the role comes from adam_program_members. Local-only
       // programs default to admin (full local control).
       const roleMap: Record<string, ProgramRole> = {};
-      const ownerById = new Map(((data || []) as ProgramRow[]).map((row) => [row.id, row.owner_id]));
+      const ownerById = new Map(liveCloudRows.map((row) => [row.id, row.owner_id]));
       if (userId) {
         const { data: memberships } = await supabase
           .from("adam_program_members")
@@ -326,14 +407,8 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
       });
       setProgramRoles(roleMap);
 
-      const storedId = typeof localStorage !== "undefined"
-        ? localStorage.getItem(ACTIVE_PROGRAM_KEY) || ""
-        : "";
-      const currentActiveId = activeProgramIdRef.current;
-      const preferredId = effectivePrograms.some((program) => program.id === currentActiveId) ? currentActiveId : storedId;
-      const nextActive = effectivePrograms.find((program) => program.id === preferredId)?.id || effectivePrograms[0]?.id || "";
       setActiveProgramIdState(nextActive);
-      setError(normalized.length || !localPrograms.length ? "" : "");
+      setError("");
       hasResolvedOnce.current = true;
       setHasResolvedPrograms(true);
     } catch (caughtError) {
@@ -360,7 +435,18 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
     } finally {
       setIsLoading(false);
     }
-  }, [enabled, userId]);
+    // composePrograms/fetchDataRows are referentially stable (deps are stable
+    // callbacks/refs), so refreshPrograms stays stable too — selecting a programme
+    // does not recreate it or re-fire the load effect.
+  }, [enabled, userId, composePrograms, fetchDataRows]);
+
+  // Lazily hydrate the full `data` blobs for the given programmes and recompose the
+  // list so consumers that need rich per-programme data for the WHOLE list (e.g.
+  // the Portfolio surface) get it on demand, instead of every refresh paying for it.
+  const hydratePrograms = useCallback(async (ids: string[]) => {
+    const changed = await fetchDataRows(ids);
+    if (changed) setPrograms(composePrograms());
+  }, [fetchDataRows, composePrograms]);
 
   // Keep the ref refreshPrograms reads in sync with the live state, without
   // putting activeProgramId in the callback's dependency array (which would make
@@ -459,7 +545,7 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
         updated_at: nextUpdatedAt,
       })
       .eq("id", programId)
-      .select("id");
+      .select("id, updated_at");
     if (updateError) {
       // A failed UPDATE here is the offline / statement-timeout case: the write
       // never reached Postgres. Queue it so the next refresh retries it, and keep
@@ -508,6 +594,14 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
       pushV3Toast("Another update was made while you were saving. Your changes were applied — refresh to verify.", { tone: "warning", duration: 6000 });
     }
     localKnownUpdatedAt.current[programId] = nextUpdatedAt;
+    // Prime the blob cache with what we just persisted so the metadata-only refresh
+    // below recomposes this programme fully WITHOUT a second single-row data fetch.
+    // Key it by the DB-returned updated_at (not the client ISO we sent) so the
+    // string matches exactly what the next list refetch returns — Postgres can
+    // round-trip a timestamptz in a different textual format, which would otherwise
+    // make the cache look stale and trigger a needless re-fetch.
+    const persistedUpdatedAt = (updatedRows?.[0] as { updated_at?: string } | undefined)?.updated_at || nextUpdatedAt;
+    hydratedDataById.current.set(programId, { updatedAt: persistedUpdatedAt, data: payload as Json });
     await refreshPrograms();
   }, [programs, programRoles, refreshPrograms]);
 
@@ -554,6 +648,7 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
     activeProgramId,
     setActiveProgramId,
     refreshPrograms,
+    hydratePrograms,
     updateProgramData,
     resolveDecision,
     isLoading,

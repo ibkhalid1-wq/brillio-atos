@@ -1202,7 +1202,7 @@ export default function AppShellV3() {
       : "local";
 
   const migrated = useLocalProgramMigration(userId);
-  const { programs, activeProgram, activeProgramId, setActiveProgramId, refreshPrograms, updateProgramData, resolveDecision, isLoading: programsLoading, hasResolvedPrograms, activeProgramRole, canEditActiveProgram, isActiveProgramAdmin } = usePrograms({
+  const { programs, activeProgram, activeProgramId, setActiveProgramId, refreshPrograms, hydratePrograms, updateProgramData, resolveDecision, isLoading: programsLoading, hasResolvedPrograms, activeProgramRole, canEditActiveProgram, isActiveProgramAdmin } = usePrograms({
     enabled: authChecked && migrated,
     userId,
   });
@@ -1212,6 +1212,16 @@ export default function AppShellV3() {
   const agentCards = useMemo(() => buildAgentCards(activeProgram, activeRuns), [activeProgram, activeRuns]);
   const agentActivityMap = useMemo(() => buildAgentActivityMap(activeRuns), [activeRuns]);
   const rawData = useMemo(() => activeProgram?.rawData || {}, [activeProgram?.rawData]);
+
+  // Portfolio shows rich per-programme data (phase dots, RAG, open actions) for the
+  // WHOLE list, so it needs every programme's full blob — the only surface that
+  // does. The metadata-only list path leaves non-active programmes unhydrated, so
+  // hydrate them on demand when Portfolio opens. hydratePrograms is a no-op once
+  // all are fresh, so the repeat caused by `programs` changing identity is cheap.
+  useEffect(() => {
+    if (surface !== "portfolio" || programs.length === 0) return;
+    void hydratePrograms(programs.map((p) => p.id));
+  }, [surface, programs, hydratePrograms]);
 
   const handleSignOut = useCallback(async () => {
     if (!supabase) return;
