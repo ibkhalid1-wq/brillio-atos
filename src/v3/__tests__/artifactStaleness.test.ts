@@ -11,7 +11,7 @@ describe("artifactStaleness", () => {
     it("reports only fields whose value differs, ignoring meta keys", () => {
       const prev = { sponsor: "Jane", businessObjective: "Cut cost", savedAt: "x", _provenance: { a: 1 } };
       const next = { sponsor: "John", businessObjective: "Cut cost", savedAt: "y", _provenance: { a: 2 } };
-      expect(changedInputFields(prev, next)).toEqual(["sponsor"]);
+      expect(changedInputFields(prev as unknown as Record<string, string>, next as unknown as Record<string, string>)).toEqual(["sponsor"]);
     });
 
     it("treats a newly-filled field (no prior value) as changed", () => {

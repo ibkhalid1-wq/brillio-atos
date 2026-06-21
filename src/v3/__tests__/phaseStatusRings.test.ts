@@ -25,6 +25,8 @@ function readiness(partial: Partial<PhaseReadinessResult>): PhaseReadinessResult
     recommendedActions: [],
     libraryExitCriteriaCount: 0,
     missingLibraryCriteria: 0,
+    dependencyCheckPassed: null,
+    dependencyBlockingIssues: 0,
     ...partial,
   };
 }

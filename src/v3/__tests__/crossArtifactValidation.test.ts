@@ -8,7 +8,7 @@ import {
   type ValidationFinding,
 } from "@/v3/lib/crossArtifactValidation";
 
-const risk = (over: Partial<ValidatableProgram["raidEntries"][number]> = {}) => ({
+const risk = (over: Partial<NonNullable<ValidatableProgram["raidEntries"]>[number]> = {}) => ({
   id: "R-01",
   type: "risk" as const,
   title: "Vendor readiness slips",
@@ -193,7 +193,7 @@ describe("runDeterministicValidation — delivery, governance, scope", () => {
   });
 
   it("flags an active phase with no workstream, but not when workstreams are unplanned", () => {
-    const phases = [{ id: "build", name: "Build", status: "active" as const } as ValidatableProgram["phases"][number]];
+    const phases = [{ id: "build", name: "Build", status: "active" as const } as unknown as NonNullable<ValidatableProgram["phases"]>[number]];
     const withWs = runDeterministicValidation({
       phases,
       workstreams: [{ id: "w1", label: "Data", phaseId: "design", weight: 1, pct: 50, gateScore: null, owner: null, status: "active" }],

@@ -37,7 +37,7 @@ describe("evaluateExitCriteria", () => {
       },
     });
     expect(result.passed).toBe(false);
-    expect(result.failures.some((failure) => /mandate/i.test(failure))).toBe(true);
+    expect(result.failures.some((failure: string) => /mandate/i.test(failure))).toBe(true);
   });
 
   it("fails discover when no approved capabilityDNA", () => {
@@ -45,7 +45,7 @@ describe("evaluateExitCriteria", () => {
       discoverContext: { capabilityDNA: [{ name: "Invoice Processing", status: "draft" }] },
     });
     expect(result.passed).toBe(false);
-    expect(result.failures.some((failure) => /capability/i.test(failure))).toBe(true);
+    expect(result.failures.some((failure: string) => /capability/i.test(failure))).toBe(true);
   });
 
   it("passes discover when one capability is approved", () => {
@@ -62,14 +62,14 @@ describe("evaluateExitCriteria", () => {
         baselineKpi: "10",
       },
     });
-    expect(result.failures.some((failure) => /capability/i.test(failure))).toBe(false);
+    expect(result.failures.some((failure: string) => /capability/i.test(failure))).toBe(false);
   });
 
   it("fails design when skillCatalog is empty", () => {
     const result = evaluateExitCriteria("design", {
       architecture: { skillCatalog: [], decisions: [], capabilities: "Invoice AI", knowledgeModel: "Taxonomy" },
     });
-    expect(result.failures.some((failure) => /skill/i.test(failure))).toBe(true);
+    expect(result.failures.some((failure: string) => /skill/i.test(failure))).toBe(true);
   });
 
   it("fails build when trustGraduationEvidence is missing", () => {
@@ -85,7 +85,7 @@ describe("evaluateExitCriteria", () => {
         deploymentChecklist: null,
       },
     });
-    expect(result.failures.some((failure) => /trust/i.test(failure))).toBe(true);
+    expect(result.failures.some((failure: string) => /trust/i.test(failure))).toBe(true);
   });
 });
 
@@ -143,9 +143,9 @@ describe("pruneTwinOrphans", () => {
     };
     const projectData = { discoverContext: { capabilityDNA: [{ id: "active-cap", name: "Live Cap", status: "approved" }] } };
     const pruned = pruneTwinOrphans(graph, projectData);
-    expect(pruned.nodes.find((node) => node.id === "n1")).toBeUndefined();
-    expect(pruned.edges.find((edge) => edge.id === "e1")).toBeUndefined();
-    expect(pruned.nodes.find((node) => node.id === "n2")).toBeDefined();
+    expect(pruned.nodes.find((node: { id: string }) => node.id === "n1")).toBeUndefined();
+    expect(pruned.edges.find((edge: { id: string }) => edge.id === "e1")).toBeUndefined();
+    expect(pruned.nodes.find((node: { id: string }) => node.id === "n2")).toBeDefined();
   });
 });
 
@@ -184,7 +184,7 @@ describe("detectCopilotContradictions", () => {
       architecture: { decisions: [{ title: "Use L4 autonomous invoice agent", chosenApproach: "fully autonomous" }] },
       mobilise: { deliveryRoles: [{ roleType: "program manager", roleName: "PM" }] },
     });
-    expect(contradictions.some((contradiction) => /L3|L4|autonom/i.test(contradiction))).toBe(true);
+    expect(contradictions.some((contradiction: string) => /L3|L4|autonom/i.test(contradiction))).toBe(true);
   });
 
   it("flags data residency vs public cloud", () => {
@@ -194,7 +194,7 @@ describe("detectCopilotContradictions", () => {
         decisions: [{ title: "Deploy on AWS", chosenApproach: "AWS us-east-1", rationale: "" }],
       },
     });
-    expect(contradictions.some((contradiction) => /residen|sovereign|cloud/i.test(contradiction))).toBe(true);
+    expect(contradictions.some((contradiction: string) => /residen|sovereign|cloud/i.test(contradiction))).toBe(true);
   });
 
   it("returns empty array for clean program", () => {

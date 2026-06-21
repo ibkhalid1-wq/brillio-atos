@@ -7,6 +7,7 @@ import {
   sanitizePlannerProposal,
   applyDynamicProposal,
   type DynamicSchemaStore,
+  type DynamicPhaseProposal,
 } from "@/v3/lib/dynamicSchema";
 import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
 import { getPhaseArtifactIds } from "@/v3/lib/phaseArtifacts";
@@ -233,7 +234,7 @@ describe("applyDynamicProposal", () => {
       inputFields: [aiField("modelRouting")],
       artifacts: [{ id: "routing-policy", label: "Routing Policy", description: "" }],
       artifactInputFlow: { "routing-policy": ["modelRouting"] },
-    });
+    } as unknown as DynamicPhaseProposal);
     expect(next.inputFields?.strategy?.[0].id).toBe("keep");
     expect(next.inputFields?.design?.[0].id).toBe("modelRouting");
     expect(next.artifacts?.design?.[0].id).toBe("routing-policy");

@@ -50,10 +50,10 @@ type JsonRecord = Record<string, Json | undefined>;
 type ProgramRowLike = {
   id: string;
   name: string;
-  client: string | null;
-  industry: string | null;
-  updated_at: string;
-  data: Json;
+  client?: string | null;
+  industry?: string | null;
+  updated_at?: string;
+  data: unknown;
 };
 
 const PHASE_LABELS: Record<string, string> = {
@@ -1163,7 +1163,7 @@ export function normalizeProgram(row: ProgramRowLike): ProgramSummary {
     raidGeneratedAt: asString(raidLog.generatedAt, ""),
     twinGraph,
     rawData: wrapper as Record<string, unknown>,
-    updatedAt: row.updated_at,
+    updatedAt: row.updated_at ?? "",
   };
   return program;
 }
