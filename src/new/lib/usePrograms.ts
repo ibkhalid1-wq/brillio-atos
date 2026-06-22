@@ -308,12 +308,26 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
       // see shared programs too. We fetch deleted rows too (no is_deleted filter)
       // so we can reconcile stale local caches against cloud deletions below.
       // Metadata-only: `data` is deliberately NOT selected — see hydratedDataById.
-      const query = supabase
-        .from("adam_programs")
-        .select("id, name, client, industry, updated_at, is_deleted, owner_id")
-        .order("updated_at", { ascending: false });
-
-      const { data: allRows, error: loadError } = await query;
+      //
+      // The programmes list and the per-programme role memberships are independent
+      // reads, so fire them in PARALLEL. First paint then waits on a single round
+      // trip (max of the two) instead of metadata → memberships → active-blob
+      // chained sequentially — the latter is what made cold launch crawl.
+      const [
+        { data: allRows, error: loadError },
+        membershipResult,
+      ] = await Promise.all([
+        supabase
+          .from("adam_programs")
+          .select("id, name, client, industry, updated_at, is_deleted, owner_id")
+          .order("updated_at", { ascending: false }),
+        userId
+          ? supabase
+              .from("adam_program_members")
+              .select("program_id, role")
+              .eq("user_id", userId)
+          : Promise.resolve({ data: [] as Array<{ program_id: string; role: string }> }),
+      ]);
 
       if (loadError) {
         throw new Error(loadError.message || "Failed to load programs.");
@@ -363,39 +377,30 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
           });
       }
 
-      // Resolve the active programme against the (lightweight) composed list, then
-      // hydrate ONLY its full blob up front so the active programme paints fully
-      // without pulling every other programme's blob. The rest stay metadata-only
-      // until something needs them (e.g. Portfolio calls hydratePrograms).
-      const composedBeforeHydrate = composePrograms();
+      // Compose + paint the (metadata-only) list immediately — the active
+      // programme's full blob is hydrated AFTER paint (below), so first paint is
+      // not gated on a second round trip for a potentially large blob.
+      const effectivePrograms = composePrograms();
       const storedId = typeof localStorage !== "undefined"
         ? localStorage.getItem(ACTIVE_PROGRAM_KEY) || ""
         : "";
       const currentActiveId = activeProgramIdRef.current;
-      const preferredId = composedBeforeHydrate.some((program) => program.id === currentActiveId) ? currentActiveId : storedId;
-      const nextActive = composedBeforeHydrate.find((program) => program.id === preferredId)?.id || composedBeforeHydrate[0]?.id || "";
-      if (nextActive) await fetchDataRows([nextActive]);
+      const preferredId = effectivePrograms.some((program) => program.id === currentActiveId) ? currentActiveId : storedId;
+      const nextActive = effectivePrograms.find((program) => program.id === preferredId)?.id || effectivePrograms[0]?.id || "";
 
-      const effectivePrograms = composePrograms();
       setPrograms(effectivePrograms);
 
-      // Resolve the signed-in user's role per program. The owner is always an
-      // admin; otherwise the role comes from adam_program_members. Local-only
-      // programs default to admin (full local control).
+      // Resolve the signed-in user's role per program from the memberships fetched
+      // in parallel above. The owner is always an admin; otherwise the role comes
+      // from adam_program_members. Local-only programs default to admin.
       const roleMap: Record<string, ProgramRole> = {};
       const ownerById = new Map(liveCloudRows.map((row) => [row.id, row.owner_id]));
-      if (userId) {
-        const { data: memberships } = await supabase
-          .from("adam_program_members")
-          .select("program_id, role")
-          .eq("user_id", userId);
-        (memberships || []).forEach((m: { program_id: string; role: string }) => {
-          const role = m.role as ProgramRole;
-          if (role === "admin" || role === "editor" || role === "viewer") {
-            roleMap[m.program_id as string] = role;
-          }
-        });
-      }
+      ((membershipResult.data || []) as Array<{ program_id: string; role: string }>).forEach((m) => {
+        const role = m.role as ProgramRole;
+        if (role === "admin" || role === "editor" || role === "viewer") {
+          roleMap[m.program_id] = role;
+        }
+      });
       effectivePrograms.forEach((program) => {
         if (ownerById.get(program.id) && ownerById.get(program.id) === userId) {
           roleMap[program.id] = "admin";
@@ -411,6 +416,16 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
       setError("");
       hasResolvedOnce.current = true;
       setHasResolvedPrograms(true);
+
+      // Hydrate the active programme's full blob WITHOUT blocking first paint: the
+      // metadata list is already on screen; its rich data streams in a moment later
+      // via a single-row fetch. If it's already cached (e.g. right after a write,
+      // which primes the cache) this is a no-op and there is no flash.
+      if (nextActive) {
+        void fetchDataRows([nextActive]).then((changed) => {
+          if (changed) setPrograms(composePrograms());
+        });
+      }
     } catch (caughtError) {
       if (localPrograms.length) {
         setPrograms(localPrograms);
