@@ -542,15 +542,6 @@ export default function InsightFeedView({
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
-            <button
-              type="button"
-              className="v3-button primary v3-button-inline-sm"
-              disabled={anyAgentRunning}
-              onClick={() => onRunAgent("daily-briefing")}
-            >
-              <span>◇</span>
-              <span>{anyAgentRunning ? "Preparing…" : "What should I know today?"}</span>
-            </button>
             {confidenceScore !== null && (
               <AdamExplainsTooltip metric="confidence" value={confidenceScore} placement="bottom">
                 <div
@@ -616,12 +607,11 @@ export default function InsightFeedView({
       </div>
 
       {/* ── 1a-ii. Today's briefing — the daily-briefing agent's focus for today ─
-          Always shown once the user engages the feature (a briefing exists or a
-          run is in flight), even on a fresh programme — otherwise the header
-          "What should I know today?" CTA fires the agent with nowhere to render
-          its result or a loading state, and reads as a dead button. */}
-      {(!isFresh || dailyBriefing || anyAgentRunning) && (
-        <div style={{
+          Always rendered: this card hosts the primary "What should I know today?"
+          CTA, so it must be present even on a fresh programme. Otherwise there is
+          nowhere to trigger the briefing and no surface for its Preparing → result
+          state, which is exactly what made the button read as dead. */}
+      <div style={{
           padding: "16px 18px",
           background: "var(--v3-surface-2)",
           border: "1px solid var(--v3-border)",
@@ -636,11 +626,12 @@ export default function InsightFeedView({
             </span>
             <button
               type="button"
-              className="v3-button ghost v3-button-inline-xs"
+              className="v3-button primary v3-button-inline-sm"
               onClick={() => onRunAgent("daily-briefing")}
               disabled={anyAgentRunning}
             >
-              {dailyBriefing?.headline ? "Refresh" : "Generate"}
+              <span>◇</span>
+              <span>{anyAgentRunning ? "Preparing…" : dailyBriefing?.headline ? "Refresh" : "What should I know today?"}</span>
             </button>
           </div>
           {dailyBriefing?.headline ? (
@@ -708,7 +699,6 @@ export default function InsightFeedView({
             </div>
           )}
         </div>
-      )}
 
       {/* ── 1b. Phase Pipeline — horizontal scroll (C1) ──────────────────────── */}
       {phases.length > 0 && (
