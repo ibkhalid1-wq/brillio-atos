@@ -95,6 +95,10 @@ function RaidLinkBadges({ entryId, links }: { entryId: string; links: RaidLinkag
         const isFrom = link.from.id === entryId;
         const other = isFrom ? link.to : link.from;
         const verb = isFrom ? LINK_VERB_FORWARD[link.relation] : LINK_VERB_BACK[link.relation];
+        // Drop the type noun when the verb already implies it ("Blocked by blocker"
+        // → "Blocked by"); keep it where it adds context ("Caused by risk …").
+        const kindWord = verb.toLowerCase().includes(other.kind.slice(0, 4)) ? "" : `${other.kind} `;
+        const label = `${verb.charAt(0).toUpperCase()}${verb.slice(1)} ${kindWord}“${other.label}”`;
         return (
           <span
             key={link.id}
@@ -103,7 +107,7 @@ function RaidLinkBadges({ entryId, links }: { entryId: string; links: RaidLinkag
             style={{ fontSize: 11, display: "inline-flex", gap: 4, alignItems: "center" }}
           >
             <span aria-hidden style={{ opacity: 0.6 }}>↳</span>
-            {verb} {other.kind}: {other.label}
+            {label}
           </span>
         );
       })}
@@ -131,10 +135,10 @@ function ColdStartNudge({
   return (
     <div className="v3-empty" style={{ marginTop: 40 }}>
       <div className="v3-empty-icon" style={{ color: "var(--v3-text-muted)", fontSize: 28 }}>◌</div>
-      <div className="v3-empty-title">No {kindLabel} yet</div>
+      <div className="v3-empty-title">Nothing here yet</div>
       <div className="v3-empty-body">
-        No phase agent has produced governance items yet. Run {phaseLabel}'s agents to populate the
-        register automatically — or raise one yourself with the button above.
+        As work gets going in {phaseLabel}, {kindLabel} will show up here on their own — or you can
+        add one yourself with the button above.
       </div>
       {onOpenPhase ? (
         <button type="button" className="v3-button primary" style={{ fontSize: 12, marginTop: 14 }} onClick={onOpenPhase}>
@@ -145,27 +149,56 @@ function ColdStartNudge({
   );
 }
 
+type RaidStats = { risks: number; blockers: number; decisions: number; escalations: number; linkages: number };
+
+/** Plain-English count, e.g. "2 risks", "1 decision". */
+function countPhrase(n: number, noun: string): string {
+  return `${n} ${noun}${n === 1 ? "" : "s"}`;
+}
+
+/** Join a list as natural prose: ["a","b","c"] → "a, b and c". */
+function joinNaturally(parts: string[]): string {
+  if (parts.length <= 1) return parts[0] ?? "";
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
 /**
- * Causal summary — the LLM narration over the deterministic linkages. Shown only
- * when cross-type links exist. The deterministic rollup is always visible (it
- * needs no model); the prose is generated on demand so a programme with no one
- * reading the synthesis never pays for the call. If the call returns nothing the
- * rollup stands on its own — the narrative can only ever elaborate it.
+ * A human-readable one-liner for the connections card, in place of the
+ * deterministic "1 risk(s), 0 blocker(s)…" rollup (which still anchors the LLM
+ * prompt, but reads like a machine on screen).
+ */
+function humanizeRaidStats(stats: RaidStats): string {
+  const open = [
+    stats.risks ? countPhrase(stats.risks, "risk") : "",
+    stats.blockers ? countPhrase(stats.blockers, "blocker") : "",
+    stats.decisions ? countPhrase(stats.decisions, "decision") : "",
+  ].filter(Boolean);
+  const head = open.length ? joinNaturally(open) : "Nothing open";
+  const escalated = stats.escalations ? `, ${stats.escalations} of them flagged to escalate` : "";
+  const links = `we found ${countPhrase(stats.linkages, "link")} showing how they connect`;
+  return `${head}${escalated} — ${links}.`;
+}
+
+/**
+ * Connections card — the LLM narration over the deterministic linkages. Shown
+ * only when cross-type links exist. A plain-English count is always visible (it
+ * needs no model); the fuller story is written on demand, so a programme nobody
+ * is reading never pays for the call. If the call returns nothing the count
+ * stands on its own — the story can only ever elaborate it.
  */
 function RaidCausalSummary({
   program,
   personaId,
-  rollup,
-  linkageCount,
+  stats,
 }: {
   program: ProgramSummary;
   personaId: string;
-  rollup: string;
-  linkageCount: number;
+  stats: RaidStats;
 }) {
   const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [text, setText] = useState("");
 
+  const linkageCount = stats.linkages;
   if (!linkageCount) return null;
 
   const run = async () => {
@@ -182,22 +215,22 @@ function RaidCausalSummary({
   return (
     <AdamCard>
       <AdamCardHeader
-        title="Causal summary"
-        subtitle={rollup}
+        title="How these connect"
+        subtitle={humanizeRaidStats(stats)}
         badge={<span className="v3-chip muted" style={{ fontSize: 11 }}>{linkageCount} link{linkageCount === 1 ? "" : "s"}</span>}
       />
       <AdamCardBody>
         {state === "done" ? (
           <p style={{ fontSize: 13, color: "var(--v3-text-secondary)", lineHeight: 1.65, margin: 0 }}>{text}</p>
         ) : state === "loading" ? (
-          <span style={{ fontSize: 12, color: "var(--v3-text-muted)" }}>Synthesising the causal story…</span>
+          <span style={{ fontSize: 12, color: "var(--v3-text-muted)" }}>Connecting the dots…</span>
         ) : (
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <button type="button" className="v3-button ghost" style={{ fontSize: 12 }} onClick={() => void run()}>
-              {state === "error" ? "Retry narrative" : "Explain these linkages"}
+              {state === "error" ? "Try again" : "Explain how these connect"}
             </button>
             {state === "error" ? (
-              <span style={{ fontSize: 12, color: "var(--v3-text-muted)" }}>Narrative unavailable — the facts above still stand.</span>
+              <span style={{ fontSize: 12, color: "var(--v3-text-muted)" }}>Couldn't write a summary just now — the details below still apply.</span>
             ) : null}
           </div>
         )}
@@ -364,15 +397,15 @@ function DecisionCard({
           const totalPenalty = Math.min(30, confidencePenalty + additionalAgePenalty);
 
           const blockingMsg = isCritical
-            ? "This decision is critical — it may block phase gate approval until resolved."
+            ? "This one's critical — it could hold up this phase's gate approval until it's settled."
             : isHigh
-            ? "High-priority decisions contribute to gate readiness risk when left open."
+            ? "Left open, this adds to the risk that this phase won't clear its gate."
             : null;
 
           const overdueMsg = isOverdue
-            ? `${Math.floor(ageDays)} days overdue — each week of delay costs approximately 2% confidence.`
+            ? `${Math.floor(ageDays)} days overdue — every week it waits chips about 2% off confidence.`
             : isAging
-            ? `Approaching overdue threshold (${Math.ceil(14 - ageDays)} days remaining).`
+            ? `Due soon — about ${Math.ceil(14 - ageDays)} days left.`
             : null;
 
           return (
@@ -386,12 +419,12 @@ function DecisionCard({
               lineHeight: 1.55,
             }}>
               <div style={{ fontWeight: 600, color: isOverdue || isCritical ? "var(--v3-red, #ef4444)" : "var(--v3-amber)", marginBottom: 3 }}>
-                ⚠ Impact if not resolved
+                ⚠ What happens if this waits
               </div>
               {blockingMsg && <div style={{ color: "var(--v3-text-secondary)" }}>• {blockingMsg}</div>}
               {overdueMsg && <div style={{ color: "var(--v3-text-secondary)" }}>• {overdueMsg}</div>}
               <div style={{ color: "var(--v3-text-secondary)" }}>
-                • Estimated confidence cost: <strong style={{ color: isOverdue || isCritical ? "var(--v3-red, #ef4444)" : "var(--v3-amber)" }}>−{totalPenalty}%</strong> until resolved
+                • Costing roughly <strong style={{ color: isOverdue || isCritical ? "var(--v3-red, #ef4444)" : "var(--v3-amber)" }}>−{totalPenalty}%</strong> confidence while it sits
               </div>
             </div>
           );
@@ -914,10 +947,10 @@ export default function DecideView({
       >
         <div style={{ fontSize: 11, color: "var(--v3-text-muted)", padding: "4px 0 0 4px" }}>
           {!decision.phaseId
-            ? <>Affects: <strong>Programme-level</strong></>
+            ? <>Impacts <strong>the whole programme</strong></>
             : decision.phaseId === "all"
-            ? <>Affects: <strong>All phases</strong></>
-            : <>Affects: <strong>{PHASE_LABELS[decision.phaseId] ?? decision.phaseId}</strong> phase</>}
+            ? <>Impacts <strong>all phases</strong></>
+            : <>Impacts the <strong>{PHASE_LABELS[decision.phaseId] ?? decision.phaseId}</strong> phase</>}
         </div>
         <DecisionCard
           decision={decision}
@@ -1014,10 +1047,10 @@ export default function DecideView({
           <div key={entry.id} style={{ marginBottom: 8 }}>
             <div style={{ fontSize: 11, color: "var(--v3-text-muted)", padding: "4px 0 0 4px" }}>
               {!entry.phase
-                ? <>Affects: <strong>Programme-level</strong></>
+                ? <>Impacts <strong>the whole programme</strong></>
                 : entry.phase === "all"
-                ? <>Affects: <strong>All phases</strong></>
-                : <>Affects: <strong>{PHASE_LABELS[entry.phase] ?? entry.phase}</strong> phase</>}
+                ? <>Impacts <strong>all phases</strong></>
+                : <>Impacts the <strong>{PHASE_LABELS[entry.phase] ?? entry.phase}</strong> phase</>}
             </div>
             <RaidCard
               entry={entry}
@@ -1100,8 +1133,7 @@ export default function DecideView({
           <RaidCausalSummary
             program={program}
             personaId={personaId}
-            rollup={synthesis.rollup}
-            linkageCount={synthesis.stats.linkages}
+            stats={synthesis.stats}
           />
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
             <button
