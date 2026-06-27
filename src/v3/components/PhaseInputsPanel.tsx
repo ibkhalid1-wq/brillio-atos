@@ -209,6 +209,22 @@ function parseKpiActuals(raw: unknown): Record<string, string> {
   }
 }
 
+/** Workstreams for a phase: prefer the persisted bucket, else the program-level list. */
+function workstreamsFromBucket(
+  bucket: Record<string, unknown>,
+  programWorkstreams: Workstream[] | undefined,
+  phaseId: string,
+): Workstream[] {
+  if (Array.isArray(bucket.workstreams)) {
+    return (bucket.workstreams as unknown[]).filter(
+      (entry): entry is Workstream => typeof entry === "object" && entry !== null,
+    );
+  }
+  return Array.isArray(programWorkstreams)
+    ? programWorkstreams.filter((entry) => entry.phaseId === phaseId)
+    : [];
+}
+
 export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistField, onValuesChange, locked = false }: PhaseInputsPanelProps) {
   // Merge any ai-derived dynamic fields for this phase on top of the static
   // methodology schema, so planner-proposed inputs render in this panel.
@@ -272,14 +288,31 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
     [existingInputs, program.workstreams],
   );
 
+  // Initialize every managed buffer from the persisted inputs — same as `values`.
+  // Starting these at empty created a window where a freshly-mounted panel looked
+  // "dirty" (empty buffer) against non-empty persisted content, so the debounced
+  // auto-save could clobber an external write (e.g. a document import that just
+  // populated kpis) with an empty array before the resync effect adopted it.
   const [values, setValues] = useState<Record<string, string>>(existingInputs);
-  const [localWorkstreams, setLocalWorkstreams] = useState<Workstream[]>([]);
-  const [localKpis, setLocalKpis] = useState<PhaseKpi[]>([]);
+  const [localWorkstreams, setLocalWorkstreams] = useState<Workstream[]>(
+    () => workstreamsFromBucket(existingInputs as Record<string, unknown>, program.workstreams, phaseId),
+  );
+  const [localKpis, setLocalKpis] = useState<PhaseKpi[]>(
+    () => parseKpis((existingInputs as Record<string, unknown>).kpis),
+  );
   // Map of KPI id → human-entered actual value (Value Realize only).
-  const [localActuals, setLocalActuals] = useState<Record<string, string>>({});
+  const [localActuals, setLocalActuals] = useState<Record<string, string>>(
+    () => parseKpiActuals((existingInputs as Record<string, unknown>).kpiActuals),
+  );
   // Structured grid fields (e.g. key roles), keyed by field id. Persisted as a
   // JSON string under the field id — same convention as KPIs/workstreams.
-  const [grids, setGrids] = useState<Record<string, GridRow[]>>({});
+  const [grids, setGrids] = useState<Record<string, GridRow[]>>(() => {
+    const next: Record<string, GridRow[]> = {};
+    for (const field of schema.fields) {
+      if (field.type === "grid") next[field.id] = parseRows((existingInputs as Record<string, unknown>)[field.id], field.columns ?? []);
+    }
+    return next;
+  });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   // Always start expanded so document-imported data is immediately visible
@@ -381,11 +414,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
     baseInputsRef.current = existingInputs;
 
     const workstreamsFrom = (bucket: Record<string, unknown>): Workstream[] =>
-      Array.isArray(bucket.workstreams)
-        ? (bucket.workstreams as unknown[]).filter((entry): entry is Workstream => typeof entry === "object" && entry !== null)
-        : Array.isArray(program.workstreams)
-          ? program.workstreams.filter((entry) => entry.phaseId === phaseId)
-          : [];
+      workstreamsFromBucket(bucket, program.workstreams, phaseId);
 
     if (shouldMerge) {
       // Three-way merge per category: keep the user's value for any field changed
