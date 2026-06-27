@@ -463,60 +463,6 @@ export default function InsightFeedView({
         fontFamily: "var(--v3-font)",
       }}
     >
-      {/* ── 0. Fresh-program entry guidance — shown only when programme is brand new ── */}
-      {(() => {
-        if (!isFresh) return null;
-        const firstPhase = phases[0];
-        const ENTRY_STEPS = [
-          { n: 1, icon: "⊡", label: "Complete Strategy phase inputs", why: "Tell ATOS your programme objective, sponsor, and budget — this bootstraps all AI analysis.", action: firstPhase ? () => onOpenPhase(firstPhase.id) : undefined, cta: "Open Strategy phase →" },
-          { n: 2, icon: "◎", label: "Build your programme brief", why: "Creates the programme narrative — the primary summary referenced by all downstream analysis.", action: () => onRunAgent("narrative", firstPhase?.id ?? "strategy"), cta: "Build brief →" },
-          { n: 3, icon: "⬡", label: "Check phase readiness", why: "Open the phase to see its exit criteria and what's still missing before you can progress to Mobilise.", action: firstPhase ? () => onOpenPhase(firstPhase.id) : undefined, cta: "Review readiness →" },
-          { n: 4, icon: "→", label: "Work through the phase checklist", why: "Each phase has specific exit criteria. ATOS will guide you step-by-step.", action: undefined, cta: null },
-        ];
-        return (
-          <div style={{
-            background: "linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(99,102,241,0.02) 100%)",
-            border: "1px solid rgba(99,102,241,0.2)",
-            borderRadius: "var(--v3-radius)",
-            padding: "20px 22px",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-              <span style={{ fontSize: 22 }}>◎</span>
-              <div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: "var(--v3-text-primary)" }}>Welcome — let's get your programme started</div>
-                <div style={{ fontSize: 12, color: "var(--v3-text-muted)", marginTop: 2 }}>Follow these 4 steps and ATOS will guide you the rest of the way</div>
-              </div>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {ENTRY_STEPS.map((step) => (
-                <div key={step.n} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                  <div style={{
-                    width: 24, height: 24, borderRadius: "50%",
-                    background: "rgba(99,102,241,0.15)",
-                    color: "var(--v3-accent)",
-                    fontSize: 11, fontWeight: 700,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    flexShrink: 0, marginTop: 1,
-                  }}>{step.n}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--v3-text-primary)" }}>{step.label}</div>
-                    <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 2, lineHeight: 1.5 }}>Why: {step.why}</div>
-                  </div>
-                  {step.cta && step.action && (
-                    <button
-                      type="button"
-                      className="v3-button primary sm"
-                      onClick={step.action}
-                      style={{ flexShrink: 0 }}
-                    >{step.cta}</button>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
-
       {/* ── 1. Welcome header + inline metrics ──────────────────────────────── */}
       {/* D: metrics moved inline below greeting; no separate Programme card */}
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
