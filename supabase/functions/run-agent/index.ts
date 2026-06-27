@@ -6379,6 +6379,7 @@ Deno.serve(async (req) => {
         "benchmark-comparator",
         "meeting-notes",
         "weekly-digest",
+        "daily-briefing",
         "phase-completion-estimator",
         "setup-prefill",
         "discovery-guide-generator",

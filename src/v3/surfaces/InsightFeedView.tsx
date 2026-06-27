@@ -615,8 +615,12 @@ export default function InsightFeedView({
         </div>
       </div>
 
-      {/* ── 1a-ii. Today's briefing — the daily-briefing agent's focus for today ─ */}
-      {!isFresh && (
+      {/* ── 1a-ii. Today's briefing — the daily-briefing agent's focus for today ─
+          Always shown once the user engages the feature (a briefing exists or a
+          run is in flight), even on a fresh programme — otherwise the header
+          "What should I know today?" CTA fires the agent with nowhere to render
+          its result or a loading state, and reads as a dead button. */}
+      {(!isFresh || dailyBriefing || anyAgentRunning) && (
         <div style={{
           padding: "16px 18px",
           background: "var(--v3-surface-2)",
@@ -690,6 +694,14 @@ export default function InsightFeedView({
                 </button>
               )}
             </>
+          ) : anyAgentRunning ? (
+            <div style={{ color: "var(--v3-text-muted)" }}>
+              Preparing today’s briefing…
+            </div>
+          ) : dailyBriefing && dailyBriefing.reason === "insufficient_data" ? (
+            <div style={{ color: "var(--v3-text-muted)" }}>
+              Not enough programme activity yet to brief on — add phase progress, risks, or milestones, then regenerate.
+            </div>
           ) : (
             <div style={{ color: "var(--v3-text-muted)" }}>
               No briefing yet — tap “What should I know today?” to generate today’s focus.
