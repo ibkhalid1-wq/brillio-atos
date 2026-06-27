@@ -110,6 +110,40 @@ function RaidLinkBadges({ entryId, links }: { entryId: string; links: RaidLinkag
   );
 }
 
+/**
+ * Empty-state nudge shown when the whole-programme register is cold — no phase
+ * agent has produced any risk, blocker, or decision yet. Unlike the green
+ * all-clear, this tells the user the register is unpopulated (not resolved) and
+ * points at the single next action: open the live phase's workspace, where its
+ * agents run and populate the register. Raising an item manually still works via
+ * the toolbar above.
+ */
+function ColdStartNudge({
+  kindLabel,
+  phaseLabel,
+  onOpenPhase,
+}: {
+  kindLabel: string;
+  phaseLabel: string;
+  onOpenPhase: (() => void) | null;
+}) {
+  return (
+    <div className="v3-empty" style={{ marginTop: 40 }}>
+      <div className="v3-empty-icon" style={{ color: "var(--v3-text-muted)", fontSize: 28 }}>◌</div>
+      <div className="v3-empty-title">No {kindLabel} yet</div>
+      <div className="v3-empty-body">
+        No phase agent has produced governance items yet. Run {phaseLabel}'s agents to populate the
+        register automatically — or raise one yourself with the button above.
+      </div>
+      {onOpenPhase ? (
+        <button type="button" className="v3-button primary" style={{ fontSize: 12, marginTop: 14 }} onClick={onOpenPhase}>
+          Open {phaseLabel} workspace
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function gateVariant(status: GateReview["status"] | undefined): "approved" | "remediation" | "pending" | "locked" {
   if (status === "approved") return "approved";
   if (status === "remediation-requested") return "remediation";
@@ -661,14 +695,16 @@ export default function DecideView({
 
   const personaId = persona === "executive" ? "executive" : persona === "architect" ? "architect" : "delivery_lead";
 
-  // Cross-type linkage overlay, indexed by entry id. Computed at programme scope
-  // so a card's links stay stable regardless of the active tab/phase filter —
-  // the chips inform even when the linked entry sits in another tab. Pure read;
-  // never resolves or counts anything.
+  // One programme-scope synthesis pass feeds both the linkage overlay and the
+  // cold-start detection below, so they read the same counts. Programme scope
+  // (not the active tab/phase filter) keeps a card's links stable across tabs.
+  const synthesis = useMemo(() => synthesizeRaid(program, "programme", personaId), [program, personaId]);
+
+  // Cross-type linkage overlay, indexed by entry id — the chips inform even when
+  // the linked entry sits in another tab. Pure read; never resolves or counts.
   const linkagesByEntry = useMemo(() => {
-    const { linkages } = synthesizeRaid(program, "programme", personaId);
     const map = new Map<string, RaidLinkage[]>();
-    for (const link of linkages) {
+    for (const link of synthesis.linkages) {
       for (const id of [link.from.id, link.to.id]) {
         const list = map.get(id);
         if (list) list.push(link);
@@ -676,7 +712,14 @@ export default function DecideView({
       }
     }
     return map;
-  }, [program, personaId]);
+  }, [synthesis]);
+
+  // Cold-start: the whole-programme register has zero agent-derived risks,
+  // blockers, and decisions — no phase agent has produced governance state yet.
+  // Distinguishes "nothing has run" from "everything is resolved" so the empty
+  // state can nudge the next action instead of a misleading all-clear.
+  const registerIsCold =
+    synthesis.stats.risks === 0 && synthesis.stats.blockers === 0 && synthesis.stats.decisions === 0;
 
   const open = useMemo(() => {
     // Shared derivation (synthesise → merge persisted resolution → open filter)
@@ -890,7 +933,10 @@ export default function DecideView({
     });
   };
 
-  const renderRaidList = (entries: RAIDEntry[], emptyLabel: string) => (
+  const coldPhaseLabel = currentPhaseId ? (PHASE_LABELS[currentPhaseId] ?? currentPhaseId) : "the active phase";
+  const openCurrentPhase = currentPhaseId ? () => onNavigateToPhaseInputs(currentPhaseId) : null;
+
+  const renderRaidList = (entries: RAIDEntry[], emptyLabel: string, coldKindLabel: string) => (
     entries.length ? (
       <div className="v3-governance-card-list">
         {entries.map((entry) => (
@@ -911,6 +957,8 @@ export default function DecideView({
           </div>
         ))}
       </div>
+    ) : registerIsCold ? (
+      <ColdStartNudge kindLabel={coldKindLabel} phaseLabel={coldPhaseLabel} onOpenPhase={openCurrentPhase} />
     ) : (
       <div className="v3-empty" style={{ marginTop: 40 }}>
         <div className="v3-empty-icon" style={{ color: "var(--v3-green)", fontSize: 28 }}>✓</div>
@@ -1003,8 +1051,8 @@ export default function DecideView({
             />
           ) : null}
 
-          {activeTab === "blockers" ? renderRaidList(blockers, scope === "stage" ? "No blockers in this phase" : "No open blockers") : null}
-          {activeTab === "risks" ? renderRaidList(risks, scope === "stage" ? "No risks in this phase" : "No open risks") : null}
+          {activeTab === "blockers" ? renderRaidList(blockers, scope === "stage" ? "No blockers in this phase" : "No open blockers", "blockers") : null}
+          {activeTab === "risks" ? renderRaidList(risks, scope === "stage" ? "No risks in this phase" : "No open risks", "risks") : null}
           {activeTab === "actions" ? (
             sortedOpen.length ? (
               <>
@@ -1017,6 +1065,8 @@ export default function DecideView({
                   </button>
                 ) : null}
               </>
+            ) : registerIsCold ? (
+              <ColdStartNudge kindLabel="actions" phaseLabel={coldPhaseLabel} onOpenPhase={openCurrentPhase} />
             ) : (
               <div className="v3-empty" style={{ marginTop: 40 }}>
                 <div className="v3-empty-icon" style={{ color: "var(--v3-green)", fontSize: 28 }}>✓</div>
