@@ -37,7 +37,9 @@ export type DecisionItemType =
   | "escalation_raised"
   | "resource_alert"
   | "plan_action"
-  | "checklist_alert";
+  | "checklist_alert"
+  | "inputs_incomplete"
+  | "artifacts_incomplete";
 
 const ADAM_PHASE_SEQUENCE_FALLBACK = [
   "strategy",
@@ -54,15 +56,15 @@ const ADAM_PHASE_SEQUENCE_FALLBACK = [
 export const DECISION_QUEUE_PERSONAS = {
   executive: {
     label: "Executive",
-    types: ["exit_proposal", "escalation", "briefing_ready", "rebaseline", "steering_pack", "risk_mitigation", "agent_conflict", "handoff_ready", "meeting_agenda", "raid_alert", "communication_ready", "scope_change", "hypothesis_alert", "gate_approval", "capacity_alert", "milestone_slip", "change_request", "stakeholder_alert", "benefit_alert", "budget_alert", "closure_ready", "escalation_raised", "plan_action", "checklist_alert"],
+    types: ["exit_proposal", "escalation", "briefing_ready", "rebaseline", "steering_pack", "risk_mitigation", "agent_conflict", "handoff_ready", "meeting_agenda", "raid_alert", "communication_ready", "scope_change", "hypothesis_alert", "gate_approval", "capacity_alert", "milestone_slip", "change_request", "stakeholder_alert", "benefit_alert", "budget_alert", "closure_ready", "escalation_raised", "plan_action", "checklist_alert", "inputs_incomplete", "artifacts_incomplete"],
   },
   delivery_lead: {
     label: "Delivery Lead",
-    types: ["draft_review", "revision_ready", "question", "escalation", "adr_proposal", "exit_proposal", "steering_pack", "risk_mitigation", "handoff_ready", "meeting_agenda", "raid_alert", "communication_ready", "scope_change", "hypothesis_alert", "gate_approval", "capacity_alert", "uat_ready", "milestone_slip", "change_request", "stakeholder_alert", "calendar_proposal", "budget_alert", "retro_ready", "closure_ready", "critical_path_alert", "escalation_raised", "resource_alert", "plan_action", "checklist_alert"],
+    types: ["draft_review", "revision_ready", "question", "escalation", "adr_proposal", "exit_proposal", "steering_pack", "risk_mitigation", "handoff_ready", "meeting_agenda", "raid_alert", "communication_ready", "scope_change", "hypothesis_alert", "gate_approval", "capacity_alert", "uat_ready", "milestone_slip", "change_request", "stakeholder_alert", "calendar_proposal", "budget_alert", "retro_ready", "closure_ready", "critical_path_alert", "escalation_raised", "resource_alert", "plan_action", "checklist_alert", "inputs_incomplete", "artifacts_incomplete"],
   },
   architect: {
     label: "Architect",
-    types: ["adr_proposal", "draft_review", "revision_ready", "exit_proposal", "steering_pack", "risk_mitigation", "agent_conflict", "handoff_ready", "communication_ready", "scope_change", "hypothesis_alert", "gate_approval", "capacity_alert", "integration_conflict", "data_governance_gap", "critical_path_alert", "plan_action", "checklist_alert"],
+    types: ["adr_proposal", "draft_review", "revision_ready", "exit_proposal", "steering_pack", "risk_mitigation", "agent_conflict", "handoff_ready", "communication_ready", "scope_change", "hypothesis_alert", "gate_approval", "capacity_alert", "integration_conflict", "data_governance_gap", "critical_path_alert", "plan_action", "checklist_alert", "inputs_incomplete", "artifacts_incomplete"],
   },
   all: {
     label: "All perspectives",
@@ -427,6 +429,77 @@ function buildSyntheticPlanActionItems(projectData: any) {
   return collected.slice(0, 3);
 }
 
+/** One aggregate action per started phase whose input fields are not all answered. */
+function buildSyntheticInputCompletionItems(projectData: any) {
+  const workplanPhases = asArray(projectData?.mobilise?.workplan?.phases);
+  return ADAM_PHASE_SEQUENCE_FALLBACK
+    .map((phaseId) => {
+      const phaseGuidance = projectData?.phaseGuidance?.[phaseId] ?? {};
+      const fields = phaseGuidance?.fields ?? {};
+      const fieldKeys = Object.keys(fields).filter((key) => key !== "aiBrief");
+      if (!fieldKeys.length) return null;
+      const answeredFields = fieldKeys.filter((key) => hasMeaningfulValue(fields[key])).length;
+      const missing = fieldKeys.length - answeredFields;
+      if (missing <= 0) return null;
+      const artifacts = Object.values(projectData?.phaseArtifacts?.[phaseId] ?? {}) as any[];
+      const draftedArtifacts = artifacts.filter((artifact) => String(artifact?.status || "").toLowerCase() !== "blank").length;
+      const workplanPhase = workplanPhases.find((phase: any) => getNormalizedPhaseId(phase?.phaseId) === phaseId);
+      const hasStarted = Boolean(phaseGuidance?.startedAt)
+        || answeredFields > 0
+        || draftedArtifacts > 0
+        || Boolean(workplanPhase?.actualStart || workplanPhase?.plannedStart);
+      if (!hasStarted) return null;
+      const pct = Math.round((answeredFields / fieldKeys.length) * 100);
+      return {
+        id: `inputs-incomplete-${phaseId}`,
+        type: "inputs_incomplete" as const,
+        phaseId,
+        priority: "medium" as DecisionPriority,
+        title: `${getPhaseTitle(phaseId)} inputs incomplete`,
+        summary: `${answeredFields}/${fieldKeys.length} inputs captured (${pct}%) · ${missing} remaining`,
+        createdAt: getCreatedAt(phaseGuidance?.lastUpdated || phaseGuidance?.startedAt || workplanPhase?.plannedStart),
+        actionLabel: "Complete inputs",
+        dismissable: false,
+        payload: { answeredFields, totalFields: fieldKeys.length, missing, pct },
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
+}
+
+/** One aggregate blocker per started phase whose artifacts are not all approved. */
+function buildSyntheticArtifactBlockerItems(projectData: any) {
+  const workplanPhases = asArray(projectData?.mobilise?.workplan?.phases);
+  return ADAM_PHASE_SEQUENCE_FALLBACK
+    .map((phaseId) => {
+      const phaseGuidance = projectData?.phaseGuidance?.[phaseId] ?? {};
+      const artifacts = Object.values(projectData?.phaseArtifacts?.[phaseId] ?? {}) as any[];
+      if (!artifacts.length) return null;
+      const approvedArtifacts = artifacts.filter((artifact) => String(artifact?.status || "").toLowerCase() === "approved").length;
+      const incomplete = artifacts.length - approvedArtifacts;
+      if (incomplete <= 0) return null;
+      const draftedArtifacts = artifacts.filter((artifact) => String(artifact?.status || "").toLowerCase() !== "blank").length;
+      const notStarted = artifacts.length - draftedArtifacts;
+      const workplanPhase = workplanPhases.find((phase: any) => getNormalizedPhaseId(phase?.phaseId) === phaseId);
+      const hasStarted = Boolean(phaseGuidance?.startedAt)
+        || draftedArtifacts > 0
+        || Boolean(workplanPhase?.actualStart || workplanPhase?.plannedStart);
+      if (!hasStarted) return null;
+      return {
+        id: `artifacts-incomplete-${phaseId}`,
+        type: "artifacts_incomplete" as const,
+        phaseId,
+        priority: "high" as DecisionPriority,
+        title: `${getPhaseTitle(phaseId)} artifacts incomplete`,
+        summary: `${approvedArtifacts}/${artifacts.length} artifacts approved · ${incomplete} outstanding${notStarted ? ` (${notStarted} not started)` : ""}`,
+        createdAt: getCreatedAt(phaseGuidance?.lastUpdated || phaseGuidance?.startedAt || workplanPhase?.plannedStart),
+        actionLabel: "Review artifacts",
+        dismissable: false,
+        payload: { approved: approvedArtifacts, total: artifacts.length, incomplete, notStarted },
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
+}
+
 function buildSyntheticChecklistAlertItems(projectData: any) {
   const raidEntries = getRaidEntries(projectData);
   const workplanPhases = asArray(projectData?.mobilise?.workplan?.phases);
@@ -456,9 +529,10 @@ function buildSyntheticChecklistAlertItems(projectData: any) {
         || Boolean(projectData?.pendingExitProposals?.[phaseId]);
       if (!hasStarted) return null;
 
+      // Inputs and artifacts have dedicated aggregate actions
+      // (inputs_incomplete / artifacts_incomplete), so the checklist rollup only
+      // tracks the residual concerns to avoid double-reporting the same gap.
       const openGaps = [
-        fieldKeys.length && answeredFields < fieldKeys.length ? 1 : 0,
-        artifacts.length && draftedArtifacts < Math.max(1, Math.min(artifacts.length, 2)) ? 1 : 0,
         blockers.length ? 1 : 0,
         exitTotal && exitComplete < exitTotal ? 1 : 0,
         forecast?.atRisk ? 1 : 0,
@@ -484,10 +558,9 @@ function buildSyntheticChecklistAlertItems(projectData: any) {
         title: `${getPhaseTitle(phaseId)} checklist still has open items`,
         summary: [
           `${openGaps} gap${openGaps === 1 ? "" : "s"}`,
-          fieldKeys.length ? `${answeredFields}/${fieldKeys.length} inputs captured` : null,
-          artifacts.length ? `${draftedArtifacts}/${artifacts.length} artifacts ready` : null,
           blockers.length ? `${blockers.length} blocker${blockers.length === 1 ? "" : "s"}` : null,
           exitTotal ? `${exitComplete}/${exitTotal} exit checks` : null,
+          forecast?.atRisk ? "forecast at risk" : null,
         ].filter(Boolean).join(" · "),
         createdAt: getCreatedAt(phaseGuidance?.lastUpdated || phaseGuidance?.startedAt || workplanPhase?.plannedStart),
         actionLabel: "Review checklist",
@@ -1011,6 +1084,8 @@ export function buildDecisionQueue(
   queue.push(...buildSyntheticMilestoneSlipItems(projectData));
   queue.push(...buildSyntheticRaidAlertItems(projectData));
   queue.push(...buildSyntheticPlanActionItems(projectData));
+  queue.push(...buildSyntheticInputCompletionItems(projectData));
+  queue.push(...buildSyntheticArtifactBlockerItems(projectData));
   queue.push(...buildSyntheticChecklistAlertItems(projectData));
 
   for (const persistedItem of (projectData?.decisionQueue ?? []) as any[]) {
@@ -1042,12 +1117,14 @@ export function buildDecisionQueue(
       || type === "escalation_raised"
       || type === "resource_alert"
       || type === "plan_action"
+      || type === "artifacts_incomplete"
       ? "high"
       : type === "uat_ready"
         || type === "calendar_proposal"
         || type === "retro_ready"
         || type === "closure_ready"
         || type === "checklist_alert"
+        || type === "inputs_incomplete"
         ? "medium"
         : "info";
     const persistedActionLabel = (() => {
@@ -1080,6 +1157,10 @@ export function buildDecisionQueue(
           return "Open workspace";
         case "checklist_alert":
           return "Review checklist";
+        case "inputs_incomplete":
+          return "Complete inputs";
+        case "artifacts_incomplete":
+          return "Review artifacts";
         case "closure_ready":
           return "Open Closure";
         case "data_governance_gap":
