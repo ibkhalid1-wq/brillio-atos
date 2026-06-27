@@ -8,6 +8,9 @@ import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
 import { getLockedPhaseIds, computePhaseReadiness } from "@/v3/lib/phaseReadiness";
 import { buildArtifactModel, type ArtifactNode } from "@/v3/lib/artifactModel";
 import { selectDecisions } from "@/v3/lib/programRaid";
+import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
+import type { ConfidenceScore } from "@/v3/lib/confidenceScore";
+import ConfidenceBreakdown from "@/v3/components/ConfidenceBreakdown";
 
 interface ProgrammeHealthViewProps {
   programId: string;
@@ -553,12 +556,14 @@ function HealthTab({
   program,
   phases,
   rawData,
+  confidenceResult,
   onRunAgent,
   anyAgentRunning,
 }: {
   program: ProgramSummary | null;
   phases: Array<{ id: string; displayName: string; pct: number; status: string }>;
   rawData: Record<string, unknown>;
+  confidenceResult: ConfidenceScore | null;
   onRunAgent: (agentId: string, phaseId?: string) => void;
   anyAgentRunning: boolean;
 }) {
@@ -570,6 +575,9 @@ function HealthTab({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24, padding: 24, overflowY: "auto" }}>
+      {/* Confidence breakdown — the per-signal scores behind the headline % */}
+      <ConfidenceBreakdown confidenceResult={confidenceResult} />
+
       {/* Phase completion bars */}
       <div>
         <SectionLabel>Phase Completion</SectionLabel>
@@ -979,6 +987,13 @@ export default function ProgrammeHealthView({
       : [];
   }, [processedPhases, inner]);
 
+  // Per-signal confidence breakdown — derived from the single source of truth so
+  // the Health screen explains the same headline % the Executive summary shows.
+  const confidenceResult = useMemo<ConfidenceScore | null>(
+    () => (program ? deriveProgramConfidence(program, activePhaseId) : null),
+    [program, activePhaseId],
+  );
+
   // Gates approved progress
   const approvedCount = ADAM_PHASE_SEQUENCE.filter(
     (id) => gateReviews[id]?.status === "approved",
@@ -1275,6 +1290,7 @@ export default function ProgrammeHealthView({
               program={program}
               phases={phases}
               rawData={inner}
+              confidenceResult={confidenceResult}
               onRunAgent={onRunAgent}
               anyAgentRunning={anyAgentRunning}
             />
