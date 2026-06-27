@@ -68,6 +68,26 @@ export function managedInputSignature(src: Record<string, unknown>, fields: { id
 }
 
 /**
+ * Three-way merge for the string-keyed edit buffer when an external write lands
+ * while the buffer is dirty. `base` is the snapshot the buffer was last synced
+ * from; `ours` is the live buffer; `theirs` is the incoming persisted state.
+ * Any key the user changed since `base` keeps the user's value; every other key
+ * adopts the incoming value — so an external write to one field never discards
+ * unsaved edits to a different field.
+ */
+export function mergeDirtyValues(
+  base: Record<string, string>,
+  ours: Record<string, string>,
+  theirs: Record<string, string>,
+): Record<string, string> {
+  const merged: Record<string, string> = { ...theirs };
+  for (const key of new Set([...Object.keys(ours), ...Object.keys(base)])) {
+    if ((ours[key] ?? "") !== (base[key] ?? "")) merged[key] = ours[key];
+  }
+  return merged;
+}
+
+/**
  * Structured baseline/target KPI captured at Strategy. Persisted as a JSON
  * string under phaseInputs.strategy.kpis so the benefits-tracker agent can
  * measure realisation against a human-entered baseline — closing the
@@ -277,6 +297,26 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
   // Signature of the inputs this panel last persisted, so the resync effect can
   // recognise our own auto-save echo and not mistake an external write for it.
   const selfSaveSigRef = useRef<string | null>(null);
+  // The exact edit a pending debounced save would persist, tagged with the phase
+  // and field set it belongs to. Lets us flush that save when the panel is about
+  // to leave the phase (phase switch or unmount) instead of dropping it — without
+  // this, edits made within the 800ms debounce window are silently lost when the
+  // resync resets the buffer to the new phase and the timer is cleared. Captured
+  // from the *leaving* render, so it carries the old phase even though `values`
+  // (and so `liveSnapshot`) lag a render behind a phase change.
+  const pendingFlushRef = useRef<{ phaseId: string; snapshot: Record<string, string>; fields: { id: string }[] } | null>(null);
+  // Latest onSave / locked, read by the flush cleanup without re-arming it.
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
+  const lockedRef = useRef(locked);
+  lockedRef.current = locked;
+  // The persisted snapshot the edit buffer was last synced from. Acts as the
+  // merge base for a three-way merge when an *external* write lands while the
+  // buffer is dirty: fields the user changed since this base are kept, all other
+  // fields adopt the incoming value. Without this, a wholesale reset on every
+  // external write (apply-improvements, regenerate echoes) wiped unsaved edits
+  // to fields the external write never touched.
+  const baseInputsRef = useRef<Record<string, unknown>>(existingInputs);
 
   async function runAssist(field: { id: string; label: string; hint?: string }, mode: FieldAssistMode) {
     if (!onAssistField || assistingField) return;
@@ -324,16 +364,65 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
     // and must be adopted, even when the stale buffer looks "dirty" against it.
     const incomingSig = managedInputSignature(existingInputs as Record<string, unknown>, schema.fields);
     const isOwnSaveEcho = selfSaveSigRef.current !== null && incomingSig === selfSaveSigRef.current;
-    if (!phaseChanged && isDirtyRef.current && isOwnSaveEcho) return;
+    // Own-save echo while dirty: the buffer already holds this state, so don't
+    // reset (focus-steal). But advance the merge base to what we just persisted,
+    // so a *later* external write diffs against current state, not a stale base.
+    if (!phaseChanged && isDirtyRef.current && isOwnSaveEcho) {
+      baseInputsRef.current = existingInputs;
+      return;
+    }
+
+    // Decide before overwriting the base: merge only when an external write lands
+    // mid-edit on the same phase. A phase switch is a different editor (the
+    // leaving phase's pending edit is flushed separately), and a clean buffer has
+    // nothing to protect — both take the wholesale resync below.
+    const base = baseInputsRef.current;
+    const shouldMerge = !phaseChanged && isDirtyRef.current;
+    baseInputsRef.current = existingInputs;
+
+    const workstreamsFrom = (bucket: Record<string, unknown>): Workstream[] =>
+      Array.isArray(bucket.workstreams)
+        ? (bucket.workstreams as unknown[]).filter((entry): entry is Workstream => typeof entry === "object" && entry !== null)
+        : Array.isArray(program.workstreams)
+          ? program.workstreams.filter((entry) => entry.phaseId === phaseId)
+          : [];
+
+    if (shouldMerge) {
+      // Three-way merge per category: keep the user's value for any field changed
+      // since `base`, otherwise adopt the incoming (`existingInputs`) value.
+      setValues((ours) => mergeDirtyValues(base as Record<string, string>, ours, existingInputs as Record<string, string>));
+      setGrids((ours) => {
+        const next: Record<string, GridRow[]> = {};
+        for (const field of schema.fields) {
+          if (field.type !== "grid") continue;
+          const cols = field.columns ?? [];
+          const ourRows = ours[field.id] ?? [];
+          const baseSer = serializeRows(parseRows((base as Record<string, unknown>)[field.id], cols), cols);
+          next[field.id] = serializeRows(ourRows, cols) !== baseSer
+            ? ourRows
+            : parseRows((existingInputs as Record<string, unknown>)[field.id], cols);
+        }
+        return next;
+      });
+      setLocalWorkstreams((ours) =>
+        JSON.stringify(ours) !== JSON.stringify(workstreamsFrom(base as Record<string, unknown>))
+          ? ours
+          : workstreamsFrom(existingInputs as Record<string, unknown>));
+      setLocalKpis((ours) =>
+        JSON.stringify(ours) !== JSON.stringify(parseKpis((base as Record<string, unknown>).kpis))
+          ? ours
+          : parseKpis((existingInputs as Record<string, unknown>).kpis));
+      setLocalActuals((ours) =>
+        JSON.stringify(ours) !== JSON.stringify(parseKpiActuals((base as Record<string, unknown>).kpiActuals))
+          ? ours
+          : parseKpiActuals((existingInputs as Record<string, unknown>).kpiActuals));
+      return;
+    }
+
     setValues(existingInputs);
     // Only auto-open if there's no data yet (first-time setup)
     if (Object.keys(existingInputs).length === 0) setOpen(true);
-    const existingWorkstreams = Array.isArray(existingInputs.workstreams)
-      ? existingInputs.workstreams.filter((entry): entry is Workstream => typeof entry === "object" && entry !== null)
-      : Array.isArray(program.workstreams)
-        ? program.workstreams.filter((entry) => entry.phaseId === phaseId)
-        : [];
-    setLocalWorkstreams(existingWorkstreams);
+    setLocalWorkstreams(workstreamsFrom(existingInputs as Record<string, unknown>));
     setLocalKpis(parseKpis((existingInputs as Record<string, unknown>).kpis));
     setLocalActuals(parseKpiActuals((existingInputs as Record<string, unknown>).kpiActuals));
     const nextGrids: Record<string, GridRow[]> = {};
@@ -522,10 +611,17 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
   // is intentionally saved — progress should never be lost, and the header metrics
   // read the persisted value once it lands.
   useEffect(() => {
-    if (locked || !isDirty) return;
+    if (locked || !isDirty) {
+      pendingFlushRef.current = null;
+      return;
+    }
+    // Record what this debounce intends to persist, tagged with the current phase
+    // and fields, so a phase switch / unmount before the timer fires can flush it.
+    pendingFlushRef.current = { phaseId, snapshot: liveSnapshot, fields: schema.fields };
     if (autoSaveTimerRef.current != null) window.clearTimeout(autoSaveTimerRef.current);
     autoSaveTimerRef.current = window.setTimeout(() => {
       autoSaveTimerRef.current = null;
+      pendingFlushRef.current = null;
       void handleSave();
     }, 800);
     return () => {
@@ -534,7 +630,26 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
     // handleSave is intentionally omitted — it is redefined every render; the
     // timer always fires the latest closure via liveSnapshot below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDirty, liveSnapshot, locked]);
+  }, [isDirty, liveSnapshot, locked, phaseId, schema.fields]);
+
+  // Flush a pending debounced save when the panel leaves this phase (phase switch
+  // or unmount). Keyed on phaseId so the cleanup closure's `phaseId` is the phase
+  // being left; pendingFlushRef carries the matching snapshot/fields, so the edit
+  // lands under the correct phase even though `values` lags the phaseId change.
+  useEffect(() => {
+    return () => {
+      const pending = pendingFlushRef.current;
+      if (autoSaveTimerRef.current != null) {
+        window.clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
+      }
+      if (!pending || lockedRef.current) return;
+      pendingFlushRef.current = null;
+      selfSaveSigRef.current = managedInputSignature(pending.snapshot, pending.fields);
+      void onSaveRef.current(pending.phaseId, pending.snapshot, { silent: true });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phaseId]);
 
   function addKpi() {
     setLocalKpis((current) => [
