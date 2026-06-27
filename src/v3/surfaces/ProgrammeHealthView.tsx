@@ -4,7 +4,6 @@ import { PHASE_LABELS, confidenceColor, priorityChipClass } from "@/v3/lib/uiHel
 import { ADAM_PHASE_SEQUENCE } from "@/lib/adamMethodology";
 import { getProgramState } from "@/new/lib/programState";
 import type { DecisionSummary, GateReview, ProgramSummary } from "@/new/types";
-import LiteGateModal from "@/v3/components/LiteGateModal";
 import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
 import { getLockedPhaseIds, computePhaseReadiness } from "@/v3/lib/phaseReadiness";
 import { buildArtifactModel, type ArtifactNode } from "@/v3/lib/artifactModel";
@@ -216,25 +215,11 @@ function GatesTab({
   activePhaseId,
   gateReviews,
   program,
-  onApproveGate,
-  onRequestRemediation,
-  onRunAgent,
-  anyAgentRunning,
 }: {
   activePhaseId: string | null;
   gateReviews: Record<string, GateReview>;
   program: ProgramSummary | null;
-  onApproveGate: (phaseId: string) => Promise<boolean | void>;
-  onRequestRemediation: (phaseId: string, note: string) => Promise<void>;
-  onRunAgent: (agentId: string, phaseId?: string) => void;
-  anyAgentRunning: boolean;
 }) {
-  const [approving, setApproving] = useState(false);
-  const [remediationNote, setRemediationNote] = useState("");
-  const [showRemediationInput, setShowRemediationInput] = useState(false);
-  const [submittingRemediation, setSubmittingRemediation] = useState(false);
-  const [liteGateOpen, setLiteGateOpen] = useState(false);
-
   const phaseId = activePhaseId;
   const gate: GateReview | null = phaseId ? (gateReviews[phaseId] ?? null) : null;
   const phaseLabel = phaseId ? (PHASE_LABELS[phaseId] ?? phaseId) : "—";
@@ -249,28 +234,6 @@ function GatesTab({
   }, [program, phaseId]);
   const approvedArtifacts = requiredArtifacts.filter((a) => a.state === "approved").length;
   const allArtifactsApproved = requiredArtifacts.length > 0 && approvedArtifacts === requiredArtifacts.length;
-
-  async function handleApprove() {
-    if (!phaseId) return;
-    setApproving(true);
-    try {
-      await onApproveGate(phaseId);
-    } finally {
-      setApproving(false);
-    }
-  }
-
-  async function handleRemediation() {
-    if (!phaseId || !remediationNote.trim()) return;
-    setSubmittingRemediation(true);
-    try {
-      await onRequestRemediation(phaseId, remediationNote.trim());
-      setRemediationNote("");
-      setShowRemediationInput(false);
-    } finally {
-      setSubmittingRemediation(false);
-    }
-  }
 
   if (!phaseId) {
     return (
@@ -362,7 +325,7 @@ function GatesTab({
             }}
           >
             <strong style={{ color: "var(--v3-text-secondary)" }}>Gate review:</strong>{" "}
-            {gate ? gate.recommendation : "No gate check run yet — use “Check Gate Readiness” to generate an assessment."}
+            {gate ? gate.recommendation : "No gate assessment recorded yet."}
           </div>
         </div>
       </div>
@@ -384,90 +347,6 @@ function GatesTab({
           {gate.remediationNote}
         </div>
       )}
-
-      {/* Actions */}
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <button
-          type="button"
-          className="v3-button ghost"
-          onClick={() => setLiteGateOpen(true)}
-        >
-          ✓ Quick Gate Check
-        </button>
-
-        {gate?.status !== "approved" && (
-          <button
-            type="button"
-            className="v3-button primary"
-            disabled={approving}
-            onClick={handleApprove}
-          >
-            ✓ {approving ? "Approving…" : "Approve & Unlock Next Phase"}
-          </button>
-        )}
-
-        {gate?.status !== "approved" && (
-          <button
-            type="button"
-            className="v3-button ghost"
-            onClick={() => setShowRemediationInput(!showRemediationInput)}
-          >
-            Request Remediation
-          </button>
-        )}
-      </div>
-
-      {showRemediationInput && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <textarea
-            value={remediationNote}
-            onChange={(e) => setRemediationNote(e.target.value)}
-            placeholder="Describe what needs to be remediated before this gate can be approved…"
-            rows={3}
-            style={{
-              width: "100%",
-              padding: "10px 12px",
-              background: "var(--v3-surface)",
-              border: "1px solid var(--v3-border)",
-              borderRadius: "var(--v3-radius)",
-              fontFamily: "var(--v3-font)",
-              fontSize: 13,
-              color: "var(--v3-text-primary)",
-              resize: "vertical",
-              boxSizing: "border-box",
-            }}
-          />
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              type="button"
-              className="v3-button danger"
-              disabled={!remediationNote.trim() || submittingRemediation}
-              onClick={handleRemediation}
-            >
-              {submittingRemediation ? "Submitting…" : "Submit Remediation Request"}
-            </button>
-            <button
-              type="button"
-              className="v3-button ghost"
-              onClick={() => { setShowRemediationInput(false); setRemediationNote(""); }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      <LiteGateModal
-        open={liteGateOpen}
-        phaseId={phaseId ?? ""}
-        phaseLabel={phaseLabel}
-        onClose={() => setLiteGateOpen(false)}
-        onComplete={() => {
-          // Lite gate is a deterministic sense-check only. The formal gate
-          // approval lives inline on this same Gates tab — no agent to invoke.
-          setLiteGateOpen(false);
-        }}
-      />
     </div>
   );
 }
@@ -850,6 +729,200 @@ function HealthTab({
   );
 }
 
+// ─── Benefits tab ──────────────────────────────────────────────────────────────
+
+interface KpiRow {
+  id?: string;
+  name?: string;
+  label?: string;
+  value?: unknown;
+  target?: unknown;
+  unit?: unknown;
+}
+
+function BenefitsTab({
+  rawData,
+  inner,
+  onRunAgent,
+  anyAgentRunning,
+  activePhaseId,
+  onNavigateToPhase,
+}: {
+  rawData: Record<string, unknown>;
+  inner: Record<string, unknown>;
+  onRunAgent: (agentId: string, phaseId?: string) => void;
+  anyAgentRunning: boolean;
+  activePhaseId: string | null;
+  onNavigateToPhase?: (phaseId: string) => void;
+}) {
+  const benefitForecast = useMemo(() => {
+    const nested = typeof rawData.data === "object" && rawData.data !== null
+      ? (rawData.data as Record<string, unknown>)
+      : rawData;
+    return (nested?.benefitForecast ?? null) as Parameters<typeof BenefitsTrajectoryWidget>[0]["benefitForecast"];
+  }, [rawData]);
+
+  const kpis = useMemo<KpiRow[]>(
+    () => (Array.isArray(inner.kpis) ? (inner.kpis as KpiRow[]) : []),
+    [inner],
+  );
+
+  const hypothesis = useMemo<string | null>(() => {
+    const strategy = (inner.strategy ?? {}) as Record<string, unknown>;
+    if (typeof strategy.valueHypothesis === "string") return strategy.valueHypothesis;
+    if (typeof inner.objective === "string") return inner.objective;
+    return null;
+  }, [inner]);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, padding: 24, overflowY: "auto" }}>
+      {/* Forecast trajectory — the headline value projection */}
+      <div>
+        <SectionLabel>Benefit Forecast</SectionLabel>
+        <BenefitsTrajectoryWidget
+          benefitForecast={benefitForecast}
+          onRunAgent={() => onRunAgent("benefits-tracker", "program")}
+          isRunning={anyAgentRunning}
+        />
+      </div>
+
+      {/* KPI attainment — current value measured against target */}
+      <div>
+        <SectionLabel>KPI Attainment</SectionLabel>
+        {kpis.length > 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {kpis.map((kpi, i) => {
+              const hasCurrent = typeof kpi.value === "number";
+              const hasTarget = typeof kpi.target === "number" && (kpi.target as number) > 0;
+              const current = hasCurrent ? (kpi.value as number) : 0;
+              const target = hasTarget ? (kpi.target as number) : 0;
+              const unit = typeof kpi.unit === "string" ? kpi.unit : "";
+              // Only compute attainment when both current and a real target exist —
+              // never fabricate a denominator or percentage.
+              const pct = hasCurrent && hasTarget ? Math.round((current / target) * 100) : null;
+              const achieved = pct !== null && pct >= 100;
+              return (
+                <div
+                  key={kpi.id ?? i}
+                  style={{
+                    background: "var(--v3-surface)",
+                    border: "1px solid var(--v3-border-soft)",
+                    borderRadius: "var(--v3-radius)",
+                    padding: "12px 14px",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: pct !== null ? 8 : 4 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--v3-text-primary)", fontFamily: "var(--v3-font)" }}>
+                      {kpi.name ?? kpi.label ?? `KPI ${i + 1}`}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        fontFamily: "var(--v3-font)",
+                        color: achieved
+                          ? "var(--v3-green)"
+                          : pct !== null && pct >= 70
+                            ? "var(--v3-accent)"
+                            : pct !== null
+                              ? "var(--v3-amber)"
+                              : "var(--v3-text-muted)",
+                      }}
+                    >
+                      {hasCurrent ? `${current}${unit}` : "—"}{hasTarget ? ` / ${target}${unit}` : ""}
+                    </span>
+                  </div>
+                  {pct !== null ? (
+                    <>
+                      <div style={{ height: 6, background: "var(--v3-border-soft)", borderRadius: 99, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: achieved ? "var(--v3-green)" : "var(--v3-accent)", borderRadius: 99, transition: "width 0.4s" }} />
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 5, fontFamily: "var(--v3-font)" }}>
+                        {pct}% of target achieved
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ fontSize: 11, color: "var(--v3-text-muted)", fontFamily: "var(--v3-font)" }}>
+                      {hasTarget ? "Current value not yet measured" : "Target not set — define one in programme setup to track attainment"}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div
+            style={{
+              background: "var(--v3-surface)",
+              border: "1px solid var(--v3-border-soft)",
+              borderRadius: "var(--v3-radius)",
+              padding: "20px",
+              textAlign: "center",
+            }}
+          >
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--v3-text-primary)", marginBottom: 6, fontFamily: "var(--v3-font)" }}>
+              No KPIs configured
+            </div>
+            <div style={{ fontSize: 12, color: "var(--v3-text-muted)", lineHeight: 1.5, fontFamily: "var(--v3-font)" }}>
+              Define success metrics in programme setup to start measuring benefits realisation.
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Value hypothesis carried forward from Strategy */}
+      {hypothesis && (
+        <div>
+          <SectionLabel>Value Hypothesis</SectionLabel>
+          <div
+            style={{
+              background: "var(--v3-surface)",
+              border: "1px solid var(--v3-border-soft)",
+              borderRadius: "var(--v3-radius)",
+              padding: "14px 16px",
+              fontSize: 13,
+              color: "var(--v3-text-secondary)",
+              lineHeight: 1.6,
+              fontFamily: "var(--v3-font)",
+            }}
+          >
+            {hypothesis}
+          </div>
+        </div>
+      )}
+
+      {/* Actions */}
+      <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+        <button
+          type="button"
+          className="v3-button primary"
+          onClick={() => onRunAgent("benefits-tracker", "program")}
+          disabled={anyAgentRunning}
+        >
+          {anyAgentRunning ? "Preparing…" : "Track Benefits Realisation"}
+        </button>
+        {activePhaseId && (
+          <button
+            onClick={() => onNavigateToPhase?.(activePhaseId)}
+            style={{
+              background: "none",
+              border: "none",
+              padding: "4px 0",
+              cursor: "pointer",
+              fontSize: 12,
+              color: "var(--v3-accent)",
+              fontWeight: 500,
+              fontFamily: "var(--v3-font)",
+            }}
+          >
+            View in Active Phase →
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export default function ProgrammeHealthView({
@@ -1188,10 +1261,6 @@ export default function ProgrammeHealthView({
               activePhaseId={activePhaseId}
               gateReviews={gateReviews}
               program={program}
-              onApproveGate={onApproveGate}
-              onRequestRemediation={onRequestRemediation}
-              onRunAgent={onRunAgent}
-              anyAgentRunning={anyAgentRunning}
             />
           )}
           {rightTab === "decisions" && (
@@ -1211,112 +1280,14 @@ export default function ProgrammeHealthView({
             />
           )}
           {rightTab === "benefits" && (
-            <div style={{ padding: 24 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: "var(--v3-text-muted)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 16 }}>
-                Benefits Realisation
-              </div>
-
-              {/* AI Benefit Forecast */}
-              {(() => {
-                const rawInner = rawData && typeof (rawData as Record<string,unknown>).data === "object"
-                  ? (rawData as Record<string,unknown>).data as Record<string,unknown>
-                  : rawData as Record<string,unknown> | undefined;
-                const benefitForecast = rawInner?.benefitForecast as Parameters<typeof BenefitsTrajectoryWidget>[0]["benefitForecast"];
-                return (
-                  <div style={{ marginBottom: 20 }}>
-                    <BenefitsTrajectoryWidget
-                      benefitForecast={benefitForecast ?? null}
-                      onRunAgent={() => onRunAgent("benefits-tracker", "program")}
-                      isRunning={anyAgentRunning}
-                    />
-                  </div>
-                );
-              })()}
-
-              {/* KPI comparison */}
-              {(() => {
-                const kpis = Array.isArray((inner as any).kpis) ? (inner as any).kpis as any[] : [];
-                return kpis.length > 0 ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
-                    {kpis.map((kpi: any, i: number) => {
-                      const hasCurrent = typeof kpi.value === "number";
-                      const hasTarget = typeof kpi.target === "number" && kpi.target > 0;
-                      const current = hasCurrent ? kpi.value : 0;
-                      const unit = typeof kpi.unit === "string" ? kpi.unit : "";
-                      // Only compute attainment when both current and a real target
-                      // exist — never fabricate a denominator or percentage.
-                      const pct = hasCurrent && hasTarget ? Math.round((current / kpi.target) * 100) : null;
-                      const achieved = pct !== null && pct >= 100;
-                      return (
-                        <div key={kpi.id ?? i} style={{ background: "var(--v3-surface)", border: "1px solid var(--v3-border)", borderRadius: "var(--v3-radius-lg)", padding: "12px 14px" }}>
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--v3-text-primary)" }}>{kpi.name ?? kpi.label ?? `KPI ${i + 1}`}</span>
-                            <span style={{ fontSize: 12, fontWeight: 600, color: achieved ? "var(--v3-green)" : pct !== null && pct >= 70 ? "var(--v3-accent)" : pct !== null ? "var(--v3-amber)" : "var(--v3-text-muted)" }}>
-                              {hasCurrent ? `${current}${unit}` : "—"}{hasTarget ? ` / ${kpi.target}${unit}` : ""}
-                            </span>
-                          </div>
-                          {pct !== null ? (
-                            <>
-                              <div style={{ height: 6, background: "var(--v3-surface-3)", borderRadius: 999, overflow: "hidden" }}>
-                                <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: achieved ? "var(--v3-green)" : "var(--v3-accent)", borderRadius: 999, transition: "width 0.4s" }} />
-                              </div>
-                              <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 4 }}>{pct}% of target achieved</div>
-                            </>
-                          ) : (
-                            <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 4 }}>
-                              {hasTarget ? "Current value not yet measured" : "Target not set — define one in programme setup to track attainment"}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div style={{ background: "var(--v3-surface-2)", border: "1px solid var(--v3-border)", borderRadius: "var(--v3-radius-lg)", padding: "20px", textAlign: "center", marginBottom: 20 }}>
-                    <div style={{ fontSize: 24, marginBottom: 10 }}>◆</div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: "var(--v3-text-primary)", marginBottom: 6 }}>No KPIs configured</div>
-                    <div style={{ fontSize: 12, color: "var(--v3-text-muted)", lineHeight: 1.5 }}>
-                      Define success metrics in programme setup to start measuring benefits realisation.
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Value hypothesis from Strategy phase */}
-              {(() => {
-                const strategy = (inner as any)?.strategy ?? {};
-                const hypothesis = typeof strategy.valueHypothesis === "string" ? strategy.valueHypothesis :
-                  typeof (inner as any).objective === "string" ? (inner as any).objective : null;
-                return hypothesis ? (
-                  <div style={{ background: "var(--v3-surface-2)", border: "1px solid var(--v3-border)", borderRadius: "var(--v3-radius-lg)", padding: "14px 16px", marginBottom: 16 }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: "var(--v3-text-muted)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 6 }}>Value Hypothesis</div>
-                    <div style={{ fontSize: 13, color: "var(--v3-text-secondary)", lineHeight: 1.6 }}>{hypothesis}</div>
-                  </div>
-                ) : null;
-              })()}
-
-              {/* Run agent button */}
-              <button
-                type="button"
-                className="v3-button primary"
-                onClick={() => onRunAgent("benefits-tracker", "program")}
-                disabled={anyAgentRunning}
-              >
-                {anyAgentRunning ? "Preparing…" : "Track Benefits Realisation"}
-              </button>
-              {activePhaseId && (
-                <button
-                  onClick={() => onNavigateToPhase?.(activePhaseId)}
-                  style={{
-                    background: "none", border: "none", padding: "4px 0",
-                    cursor: "pointer", fontSize: 12, color: "var(--v3-accent)",
-                    fontWeight: 500, fontFamily: "var(--v3-font)",
-                  }}
-                >
-                  View in Active Phase →
-                </button>
-              )}
-            </div>
+            <BenefitsTab
+              rawData={rawData}
+              inner={inner}
+              onRunAgent={onRunAgent}
+              anyAgentRunning={anyAgentRunning}
+              activePhaseId={activePhaseId}
+              onNavigateToPhase={onNavigateToPhase}
+            />
           )}
         </div>
       </div>
