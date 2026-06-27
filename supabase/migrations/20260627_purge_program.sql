@@ -11,10 +11,20 @@
 -- program-scoped child row. Plain `is_deleted=true` was an UPDATE, so ON DELETE
 -- CASCADE never fired and ALL child rows (snapshots, agent runs/observations,
 -- artifacts, document raw_text, etc.) lingered indefinitely.
+--
+-- Note on types: adam_programs.id and the various program_id columns are `text`
+-- in production (schema drift from the uuid-typed local migrations). All
+-- parameters and comparisons below are text-based so the same function works
+-- regardless of whether a given column is text or uuid.
+
+drop function if exists public.adam_purge_program_cascade(uuid);
+drop function if exists public.adam_purge_program_cascade(text);
+drop function if exists public.adam_purge_program(uuid);
+drop function if exists public.adam_purge_program(text);
 
 -- Internal worker: does the actual purge. No auth check here — callers gate it.
 -- SECURITY DEFINER so it can reach child tables regardless of their RLS.
-create or replace function public.adam_purge_program_cascade(p_program_id uuid)
+create function public.adam_purge_program_cascade(p_program_id text)
 returns void
 language plpgsql
 security definer
@@ -49,10 +59,8 @@ declare
 begin
   foreach tbl in array child_tables loop
     if to_regclass('public.' || tbl) is not null then
-      -- program_id is `uuid` on some tables and `text` on others; compare as
-      -- text on both sides so this works regardless of the column type.
       execute format(
-        'delete from public.%I where program_id::text = $1::text', tbl
+        'delete from public.%I where program_id::text = $1', tbl
       ) using p_program_id;
     end if;
   end loop;
@@ -62,7 +70,7 @@ begin
   if to_regclass('public.adam_pattern_library') is not null then
     update public.adam_pattern_library
       set source_program_id = null
-      where source_program_id = p_program_id;
+      where source_program_id::text = p_program_id;
   end if;
 
   -- Strip the parent to a content-free tombstone.
@@ -73,17 +81,17 @@ begin
         client     = null,
         industry   = null,
         updated_at = now()
-    where id = p_program_id;
+    where id::text = p_program_id;
 end;
 $$;
 
-revoke all on function public.adam_purge_program_cascade(uuid) from public;
-revoke all on function public.adam_purge_program_cascade(uuid) from anon;
-revoke all on function public.adam_purge_program_cascade(uuid) from authenticated;
+revoke all on function public.adam_purge_program_cascade(text) from public;
+revoke all on function public.adam_purge_program_cascade(text) from anon;
+revoke all on function public.adam_purge_program_cascade(text) from authenticated;
 
 -- Public entry point used by the app. Authorizes the caller (owner or program
 -- admin), then purges. Mirrors the "admins delete programs" DELETE policy.
-create or replace function public.adam_purge_program(p_program_id uuid)
+create function public.adam_purge_program(p_program_id text)
 returns boolean
 language plpgsql
 security definer
@@ -92,8 +100,9 @@ as $$
 begin
   if not exists (
     select 1 from public.adam_programs
-    where id = p_program_id
-      and (owner_id = auth.uid() or public.adam_is_program_admin(p_program_id::text))
+    where id::text = p_program_id
+      and (owner_id::text = auth.uid()::text
+           or public.adam_is_program_admin(p_program_id))
   ) then
     raise exception 'not authorized to delete program %', p_program_id
       using errcode = '42501';
@@ -104,14 +113,14 @@ begin
 end;
 $$;
 
-grant execute on function public.adam_purge_program(uuid) to authenticated;
+grant execute on function public.adam_purge_program(text) to authenticated;
 
 -- One-time cleanup: every program already soft-deleted in the app still holds
 -- its full data blob and all child rows. Purge that residual now.
 do $$
 declare r record;
 begin
-  for r in select id from public.adam_programs where is_deleted loop
+  for r in select id::text as id from public.adam_programs where is_deleted loop
     perform public.adam_purge_program_cascade(r.id);
   end loop;
 end $$;
