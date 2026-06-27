@@ -3,6 +3,7 @@ import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
 import { selectPhaseMetrics } from "@/v3/lib/programMetrics";
 import { selectBlockers, selectRisks, type RaidScope } from "@/v3/lib/programRaid";
 import { synthesizeRaid, decisionLinkagePressure, type RaidLinkage } from "@/v3/lib/raidSynthesis";
+import { narrateRaidSynthesis } from "@/v3/lib/raidNarrative";
 import { PHASE_LABELS } from "@/v3/lib/uiHelpers";
 import { getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
 import { DrillDownLinks, artifactLabelFor, inputLabelFor } from "@/v3/components/DrillDownLinks";
@@ -141,6 +142,67 @@ function ColdStartNudge({
         </button>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Causal summary — the LLM narration over the deterministic linkages. Shown only
+ * when cross-type links exist. The deterministic rollup is always visible (it
+ * needs no model); the prose is generated on demand so a programme with no one
+ * reading the synthesis never pays for the call. If the call returns nothing the
+ * rollup stands on its own — the narrative can only ever elaborate it.
+ */
+function RaidCausalSummary({
+  program,
+  personaId,
+  rollup,
+  linkageCount,
+}: {
+  program: ProgramSummary;
+  personaId: string;
+  rollup: string;
+  linkageCount: number;
+}) {
+  const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [text, setText] = useState("");
+
+  if (!linkageCount) return null;
+
+  const run = async () => {
+    setState("loading");
+    const out = await narrateRaidSynthesis(program, "programme", personaId);
+    if (out) {
+      setText(out);
+      setState("done");
+    } else {
+      setState("error");
+    }
+  };
+
+  return (
+    <AdamCard>
+      <AdamCardHeader
+        title="Causal summary"
+        subtitle={rollup}
+        badge={<span className="v3-chip muted" style={{ fontSize: 11 }}>{linkageCount} link{linkageCount === 1 ? "" : "s"}</span>}
+      />
+      <AdamCardBody>
+        {state === "done" ? (
+          <p style={{ fontSize: 13, color: "var(--v3-text-secondary)", lineHeight: 1.65, margin: 0 }}>{text}</p>
+        ) : state === "loading" ? (
+          <span style={{ fontSize: 12, color: "var(--v3-text-muted)" }}>Synthesising the causal story…</span>
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <button type="button" className="v3-button ghost" style={{ fontSize: 12 }} onClick={() => void run()}>
+              {state === "error" ? "Retry narrative" : "Explain these linkages"}
+            </button>
+            {state === "error" ? (
+              <span style={{ fontSize: 12, color: "var(--v3-text-muted)" }}>Narrative unavailable — the facts above still stand.</span>
+            ) : null}
+          </div>
+        )}
+      </AdamCardBody>
+    </AdamCard>
   );
 }
 
@@ -1035,6 +1097,12 @@ export default function DecideView({
         </div>
 
         <div className="v3-governance-main">
+          <RaidCausalSummary
+            program={program}
+            personaId={personaId}
+            rollup={synthesis.rollup}
+            linkageCount={synthesis.stats.linkages}
+          />
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
             <button
               type="button"
