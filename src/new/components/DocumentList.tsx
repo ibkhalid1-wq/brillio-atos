@@ -69,6 +69,7 @@ export default function DocumentList({ programId }: { programId: string | null }
         new CustomEvent("adam:reextract-document", {
           detail: {
             programId,
+            documentId: id,
             rawText: doc.raw_text,
             fileName: doc.file_name || fileName,
             phaseHint: phaseContext || undefined,

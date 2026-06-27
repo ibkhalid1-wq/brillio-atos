@@ -541,7 +541,7 @@ export function useDocumentIntelligence({
   // Used by the documents screen's "Re-extract" action: the original binary is
   // not retained, but the parsed raw_text is, so we re-run the same extractor
   // over that text and reuse the identical review → save flow.
-  const importText = useCallback(async (rawText: string, fileName: string, phaseHint?: string) => {
+  const importText = useCallback(async (rawText: string, fileName: string, phaseHint?: string, reextractId?: string) => {
     if (!programId) {
       setStage("error");
       setError("No active programme selected.");
@@ -571,7 +571,7 @@ export function useDocumentIntelligence({
     setProgress(30);
     // On re-extract the document record already exists, so the AI-unavailable
     // path simply surfaces the degradation without re-saving an empty record.
-    await runExtraction({ text: rawText, fileName, phaseHint, onAiUnavailable: async () => {} });
+    await runExtraction({ text: rawText, fileName, phaseHint, reextractId, onAiUnavailable: async () => {} });
   }, [programId, existingPhaseInputs, dynamicSchemaStore]);
 
   // ── runExtraction: shared core — call the extractor edge fn, build review ──
@@ -582,9 +582,10 @@ export function useDocumentIntelligence({
     fileName: string;
     fileAttachment?: { base64: string; mimeType: string; name: string };
     phaseHint?: string;
+    reextractId?: string;
     onAiUnavailable: () => Promise<void>;
   }) => {
-    const { text, fileName, fileAttachment, phaseHint, onAiUnavailable } = args;
+    const { text, fileName, fileAttachment, phaseHint, reextractId, onAiUnavailable } = args;
     if (!programId || !supabase) return;
     setStage("extracting");
 
@@ -619,6 +620,7 @@ export function useDocumentIntelligence({
           fileName,
           fileAttachment: fileAttachment || undefined,
           phaseHint: phaseHint || undefined,
+          reextractId: reextractId || undefined,
           phaseSchemas,
         },
       });

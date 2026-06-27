@@ -218,6 +218,12 @@ interface ExtractionPayload {
   phaseHint?: string;
   /** Declared input fields of the programme's activated phases (registry-sourced). */
   phaseSchemas?: PhaseSchema[];
+  /**
+   * Id of an existing attachment being re-extracted. When set, the run UPDATES
+   * that row's extraction in place instead of inserting a new one — otherwise a
+   * re-extract would leave a duplicate document in the list.
+   */
+  reextractId?: string;
 }
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
@@ -300,25 +306,41 @@ Deno.serve(async (req) => {
     });
 
     let attachmentId: string | null = null;
-    const { data: insertRow } = await admin
-      .from("adam_document_attachments")
-      .insert({
-        program_id: payload.programId,
-        file_name: payload.fileName,
-        file_type: (payload.fileName.split(".").pop() ?? "unknown").toLowerCase(),
-        file_size_bytes: (payload.text?.length ?? 0) * 2,
-        raw_text: payload.text ? payload.text.slice(0, 50000) : null,
-        phase_context: (intelligence.primaryPhase as string) ?? payload.phaseHint ?? "strategy",
-        extraction_status: parseError ? "error" : "extracted",
-        extracted_data: intelligence,
-        confidence: typeof intelligence.overallConfidence === "number"
-          ? Math.max(0, Math.min(1, intelligence.overallConfidence))
-          : 0.75,
-      })
-      .select("id")
-      .single();
+    const record = {
+      program_id: payload.programId,
+      file_name: payload.fileName,
+      file_type: (payload.fileName.split(".").pop() ?? "unknown").toLowerCase(),
+      file_size_bytes: (payload.text?.length ?? 0) * 2,
+      raw_text: payload.text ? payload.text.slice(0, 50000) : null,
+      phase_context: (intelligence.primaryPhase as string) ?? payload.phaseHint ?? "strategy",
+      extraction_status: parseError ? "error" : "extracted",
+      extracted_data: intelligence,
+      confidence: typeof intelligence.overallConfidence === "number"
+        ? Math.max(0, Math.min(1, intelligence.overallConfidence))
+        : 0.75,
+    };
 
-    attachmentId = insertRow?.id ?? null;
+    if (payload.reextractId) {
+      // Re-extract: overwrite the existing attachment in place (scoped by
+      // program) so the document isn't duplicated in the list.
+      const { data: updatedRow } = await admin
+        .from("adam_document_attachments")
+        .update(record)
+        .eq("id", payload.reextractId)
+        .eq("program_id", payload.programId)
+        .select("id")
+        .single();
+      attachmentId = updatedRow?.id ?? null;
+    }
+    // Fresh import (or re-extract whose target row vanished) → insert a new row.
+    if (!attachmentId) {
+      const { data: insertRow } = await admin
+        .from("adam_document_attachments")
+        .insert(record)
+        .select("id")
+        .single();
+      attachmentId = insertRow?.id ?? null;
+    }
 
     return jsonResponse({
       ok: !parseError,

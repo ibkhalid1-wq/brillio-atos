@@ -103,6 +103,7 @@ export default function DocumentImportPanel({
     const handleReextract = (event: Event) => {
       const detail = (event as CustomEvent<{
         programId?: string;
+        documentId?: string;
         rawText?: string;
         fileName?: string;
         phaseHint?: string;
@@ -111,7 +112,7 @@ export default function DocumentImportPanel({
       if (detail.programId && programId && detail.programId !== programId) return;
       setSelectedFile(null);
       setSelectionError(null);
-      void importText(detail.rawText ?? "", detail.fileName ?? "document", detail.phaseHint || undefined);
+      void importText(detail.rawText ?? "", detail.fileName ?? "document", detail.phaseHint || undefined, detail.documentId || undefined);
     };
     window.addEventListener("adam:reextract-document", handleReextract as EventListener);
     return () => {
