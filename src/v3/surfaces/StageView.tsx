@@ -45,6 +45,7 @@ interface StageViewProps {
   onSelectPhase?: (phaseId: string) => void;
   onResolveDecision: (id: string, resolution: "approved" | "deferred" | "rejected" | "modified", modifiedContent?: string) => void | Promise<void>;
   onOpenDecide: () => void;
+  onOpenDecideTab?: (tab: "blockers" | "risks" | "actions") => void;
   onAddItem?: (tab: "blockers" | "risks" | "actions") => void;
   onOpenReport: (reportId: V3ReportId) => void;
   onReopenGate: (phaseId: string) => void;
@@ -475,6 +476,7 @@ export default function StageView({
   onSelectPhase,
   onResolveDecision,
   onOpenDecide,
+  onOpenDecideTab,
   onAddItem,
   onOpenReport,
   onReopenGate,
@@ -1197,9 +1199,9 @@ export default function StageView({
           // Each carries an `addTab` so the "+ Add" button under it opens the right
           // Action Center add form.
           const work: Array<{ label: string; value: string | number; tone: string; anchor?: string | null; onClick?: () => void; addTab: "blockers" | "risks" | "actions" }> = [
-            { label: "Blockers", value: phaseBlockerCount, tone: phaseBlockerCount ? "red" : "green", onClick: () => onOpenMoreView("risks"), addTab: "blockers" },
-            { label: "Risks", value: phaseRiskCount, tone: phaseRiskCount ? "amber" : "", onClick: () => onOpenMoreView("risks"), addTab: "risks" },
-            { label: "Actions", value: stageDecisions.length, tone: stageDecisions.length ? "amber" : "", onClick: onOpenDecide, addTab: "actions" },
+            { label: "Blockers", value: phaseBlockerCount, tone: phaseBlockerCount ? "red" : "green", onClick: () => (onOpenDecideTab ? onOpenDecideTab("blockers") : onOpenDecide()), addTab: "blockers" },
+            { label: "Risks", value: phaseRiskCount, tone: phaseRiskCount ? "amber" : "", onClick: () => (onOpenDecideTab ? onOpenDecideTab("risks") : onOpenDecide()), addTab: "risks" },
+            { label: "Actions", value: stageDecisions.length, tone: stageDecisions.length ? "amber" : "", onClick: () => (onOpenDecideTab ? onOpenDecideTab("actions") : onOpenDecide()), addTab: "actions" },
           ];
           const renderMetric = (metric: { label: string; value: string | number; tone: string; anchor?: string | null; onClick?: () => void }) => {
             const cls = `v3-phase-metric-value ${metric.tone}`;

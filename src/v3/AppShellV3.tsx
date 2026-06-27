@@ -1104,7 +1104,7 @@ export default function AppShellV3() {
   const [surface, setSurface] = useState<V3Surface>(initialRoute.surface);
   const [activeMode, setActiveMode] = useState<V3CommandMode>(surfaceToCommandMode(initialRoute.surface));
   const [moreView, setMoreView] = useState<V3MoreView | null>(initialRoute.moreView);
-  const [decideIntent, setDecideIntent] = useState<{ tab: "blockers" | "risks" | "actions"; nonce: number } | null>(null);
+  const [decideIntent, setDecideIntent] = useState<{ tab: "blockers" | "risks" | "actions"; nonce: number; openAdd?: boolean } | null>(null);
   const [reportId, setReportId] = useState<V3ReportId | null>(initialRoute.reportId);
   const [activePhaseId, setActivePhaseId] = useState<string | null>(initialRoute.activePhaseId);
   const mode: V3Mode = DEFAULT_V3_MODE;
@@ -3062,6 +3062,7 @@ export default function AppShellV3() {
                 onSelectPhase={handleSelectPhase}
                 onResolveDecision={handleResolveDecision}
                 onOpenDecide={() => navigateSurface("decide")}
+                onOpenDecideTab={(tab) => { setDecideIntent({ tab, nonce: Date.now(), openAdd: false }); navigateSurface("decide"); }}
                 onAddItem={(tab) => { setDecideIntent({ tab, nonce: Date.now() }); navigateSurface("decide"); }}
                 onOpenReport={openReport}
                 onReopenGate={handleReopenGate}

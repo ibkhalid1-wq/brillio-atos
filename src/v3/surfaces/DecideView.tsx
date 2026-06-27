@@ -30,8 +30,10 @@ interface DecideViewProps {
    * (`artifact:<id>` / `input:<id>`) it scrolls to that exact element.
    */
   onNavigateToPhaseInputs: (phaseId: string, anchor?: string) => void;
-  /** Deep-link intent: select a tab and open its add form (nonce forces re-fire). */
-  initialIntent?: { tab: ActionTab; nonce: number } | null;
+  /** Deep-link intent: select a tab and (unless openAdd is false) open its add
+   * form. A header metric drilling in passes openAdd:false to just view the tab;
+   * the "+ Add" buttons omit it so the add form opens. Nonce forces re-fire. */
+  initialIntent?: { tab: ActionTab; nonce: number; openAdd?: boolean } | null;
 }
 
 type Scope = "stage" | "all";
@@ -559,12 +561,14 @@ export default function DecideView({
     if (mode === "guided") setScope("stage");
   }, [mode]);
 
-  // React to a deep-link intent from the phase header "+ Add" buttons: focus the
-  // requested tab and open its add form. Keyed on nonce so repeat clicks re-fire.
+  // React to a deep-link intent: focus the requested tab. The "+ Add" buttons
+  // also open that tab's add form; a header metric drill-in (openAdd:false) just
+  // views the tab. Keyed on nonce so repeat clicks re-fire.
   useEffect(() => {
     if (!initialIntent) return;
     setActiveTab(initialIntent.tab);
-    if (initialIntent.tab === "actions") { setAddOpen(true); setRaidFormOpen(false); }
+    if (initialIntent.openAdd === false) { setAddOpen(false); setRaidFormOpen(false); }
+    else if (initialIntent.tab === "actions") { setAddOpen(true); setRaidFormOpen(false); }
     else { setRaidFormOpen(true); setAddOpen(false); }
   }, [initialIntent?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
 
