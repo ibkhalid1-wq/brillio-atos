@@ -576,20 +576,6 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
           </span>
         </div>
         <div className="v3-phase-inputs-toggle-aside">
-          <div
-            className={`v3-input-progress ${filledCount === schema.fields.length ? "is-complete" : filledCount > 0 ? "is-partial" : "is-empty"}`}
-            title={`${filledCount} of ${schema.fields.length} fields filled`}
-          >
-            <span className="v3-input-progress-track">
-              <span
-                className="v3-input-progress-fill"
-                style={{ width: `${schema.fields.length ? Math.round((filledCount / schema.fields.length) * 100) : 0}%` }}
-              />
-            </span>
-            <span className="v3-input-progress-pct">
-              {schema.fields.length ? Math.round((filledCount / schema.fields.length) * 100) : 0}%
-            </span>
-          </div>
           <span className={`v3-input-chevron ${open ? "is-open" : ""}`} aria-hidden>▾</span>
         </div>
       </button>
