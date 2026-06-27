@@ -21,9 +21,40 @@
  */
 import type { ProgramSummary } from "@/new/types";
 import { buildFactGraph, type Fact } from "@/v3/lib/factGraph";
+import type { DocumentIntelligence, ExtractedEntities } from "@/new/lib/documentIntelligenceTypes";
 
 export type ProgramGraphNodeKind =
-  | "phase" | "fact" | "document" | "artifact" | "kpi" | "risk" | "decision" | "stakeholder";
+  | "phase" | "fact" | "document" | "artifact" | "kpi" | "risk" | "decision" | "stakeholder" | "insight";
+
+/**
+ * A processed document supplied to the graph. The entities the extractor found
+ * but that never mapped to a declared phase field (constraints, assumptions,
+ * recommendations, gaps) are otherwise lost to every downstream phase; passing
+ * the document here turns them into `insight` nodes anchored at its primary
+ * phase, so they flow forward like any other phase output.
+ */
+export interface ProgramDocument {
+  id: string;
+  fileName: string;
+  intelligence: DocumentIntelligence;
+}
+
+/** Entity categories that rarely map to a phase field, so they would otherwise
+ *  be dropped from cross-phase context. */
+const INSIGHT_CATEGORIES: Array<keyof ExtractedEntities> = ["constraints", "assumptions", "recommendations", "gaps"];
+
+function entityText(entity: unknown): string {
+  if (typeof entity !== "object" || entity === null) return "";
+  const record = entity as Record<string, unknown>;
+  const text = typeof record.text === "string" ? record.text : typeof record.description === "string" ? record.description : "";
+  return text.trim();
+}
+
+function entityConfidence(entity: unknown): number | undefined {
+  if (typeof entity !== "object" || entity === null) return undefined;
+  const value = (entity as Record<string, unknown>).confidence;
+  return typeof value === "number" ? value : undefined;
+}
 
 export interface ProgramGraphNode {
   id: string;
@@ -92,7 +123,10 @@ function strategyKpiRaw(program: ProgramSummary): unknown {
  * stakeholders) and the Fact Graph, and never writes. Re-running after a later
  * phase produces inputs/artifacts yields a graph that has grown to include them.
  */
-export function buildProgramGraph(program: ProgramSummary | null | undefined): ProgramGraph {
+export function buildProgramGraph(
+  program: ProgramSummary | null | undefined,
+  documents: ProgramDocument[] = [],
+): ProgramGraph {
   const nodes = new Map<string, ProgramGraphNode>();
   const edges = new Map<string, ProgramGraphEdge>();
   const addNode = (node: ProgramGraphNode) => { if (!nodes.has(node.id)) nodes.set(node.id, node); };
@@ -116,6 +150,38 @@ export function buildProgramGraph(program: ProgramSummary | null | undefined): P
       const prev = program.phases[index - 1].id;
       addEdge({ id: `seq:${prev}->${phase.id}`, from: PHASE(prev), to: PHASE(phase.id), type: "sequence" });
     }
+  });
+
+  // Processed documents: a rich document node (added before fact provenance so
+  // its summary/type win the idempotent merge) plus insight nodes for entities
+  // that never became phase fields, anchored at the document's primary phase so
+  // they flow forward to later phases.
+  documents.forEach((doc) => {
+    const intel = doc.intelligence;
+    addNode({
+      id: DOC(doc.fileName), type: "document", label: doc.fileName,
+      confidence: intel.overallConfidence,
+      properties: { documentType: intel.documentType, summary: intel.summary, primaryPhase: intel.primaryPhase },
+    });
+    const anchorPhase = phaseIds.has(intel.primaryPhase) ? intel.primaryPhase : undefined;
+    const entities = (intel.entities || {}) as Partial<ExtractedEntities>;
+    INSIGHT_CATEGORIES.forEach((category) => {
+      const list = Array.isArray(entities[category]) ? entities[category] as unknown[] : [];
+      list.forEach((entity, index) => {
+        const text = entityText(entity);
+        if (!text) return;
+        const insightId = `insight:${doc.fileName}:${category}:${index}`;
+        addNode({
+          id: insightId, type: "insight", label: text, phaseCreated: anchorPhase,
+          confidence: entityConfidence(entity),
+          properties: { category, document: doc.fileName },
+        });
+        addEdge({ id: `mentions:${insightId}`, from: DOC(doc.fileName), to: insightId, type: "mentions" });
+        if (anchorPhase) {
+          addEdge({ id: `inphase:${insightId}`, from: insightId, to: PHASE(anchorPhase), type: "in_phase" });
+        }
+      });
+    });
   });
 
   // Artifacts the programme has produced; a planned-artifact placeholder is added
@@ -225,7 +291,7 @@ export function buildProgramGraph(program: ProgramSummary | null | undefined): P
 }
 
 function emptyKindCounts(): Record<ProgramGraphNodeKind, number> {
-  return { phase: 0, fact: 0, document: 0, artifact: 0, kpi: 0, risk: 0, decision: 0, stakeholder: 0 };
+  return { phase: 0, fact: 0, document: 0, artifact: 0, kpi: 0, risk: 0, decision: 0, stakeholder: 0, insight: 0 };
 }
 
 export interface ProgramGraphSelection {

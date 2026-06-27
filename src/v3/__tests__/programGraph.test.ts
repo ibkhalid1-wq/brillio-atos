@@ -5,7 +5,31 @@ import {
   selectGraphForPhase,
   compressProgramNode,
   type ProgramGraph,
+  type ProgramDocument,
 } from "@/v3/lib/programGraph";
+import type { DocumentIntelligence } from "@/new/lib/documentIntelligenceTypes";
+
+function doc(over: Partial<DocumentIntelligence>, fileName = "deck.pdf", id = "doc1"): ProgramDocument {
+  return {
+    id,
+    fileName,
+    intelligence: {
+      documentType: "business-case",
+      summary: "A deck",
+      primaryPhase: "strategy",
+      relevantPhases: ["strategy"],
+      overallConfidence: 0.8,
+      entities: {
+        objectives: [], outcomes: [], successMetrics: [], constraints: [], assumptions: [],
+        risks: [], stakeholders: [], milestones: [], budget: [], requirements: [],
+        decisions: [], actions: [], technologies: [], integrations: [], gaps: [], recommendations: [],
+      },
+      methodologyMappings: {},
+      gaps: "",
+      ...over,
+    },
+  };
+}
 
 /**
  * The Program Graph is a pure selector over ProgramSummary. These stubs carry
@@ -124,6 +148,58 @@ describe("buildProgramGraph", () => {
     const node = graph.nodes.find((n) => n.type === "stakeholder");
     expect(node!.label).toBe("Jane (CIO)");
     expect(node!.phaseCreated).toBeUndefined();
+  });
+});
+
+describe("document insights (A2)", () => {
+  it("turns unmapped entities into insight nodes anchored at the primary phase", () => {
+    const graph = buildProgramGraph(
+      program({ phases }),
+      [doc({
+        primaryPhase: "discover",
+        entities: {
+          objectives: [], outcomes: [], successMetrics: [], assumptions: [], risks: [], stakeholders: [],
+          milestones: [], budget: [], requirements: [], decisions: [], actions: [], technologies: [],
+          integrations: [], gaps: [],
+          constraints: [{ text: "Must reuse the legacy ERP", source: "p.3", confidence: 0.7, extractionType: "extracted" }],
+          recommendations: [{ text: "Phase the rollout by region", source: "p.9", confidence: 0.6, extractionType: "inferred", priority: "high" }],
+        },
+      })],
+    );
+    const insights = graph.nodes.filter((n) => n.type === "insight");
+    expect(insights).toHaveLength(2);
+    expect(insights.every((n) => n.phaseCreated === "discover")).toBe(true);
+    expect(insights.map((n) => n.label).sort()).toEqual(["Must reuse the legacy ERP", "Phase the rollout by region"]);
+  });
+
+  it("links the document to its insights and the insight to its phase", () => {
+    const graph = buildProgramGraph(
+      program({ phases }),
+      [doc({ entities: { ...doc({}).intelligence.entities, assumptions: [{ text: "Budget approved", source: "p.1", confidence: 0.9, extractionType: "extracted" }] } })],
+    );
+    expect(graph.edges.find((e) => e.type === "mentions")).toMatchObject({ from: "doc:deck.pdf" });
+    expect(graph.edges.find((e) => e.type === "in_phase" && e.from.startsWith("insight:"))).toMatchObject({ to: "phase:strategy" });
+  });
+
+  it("a rich document node from a processed doc wins over the provenance-only node", () => {
+    const provenance = JSON.stringify({
+      businessObjective: { source: "p.4", documentName: "deck.pdf", confidence: 0.9, extractionType: "extracted", value: "Grow" },
+    });
+    const graph = buildProgramGraph(
+      program({ phases, rawData: { phaseInputs: { strategy: { businessObjective: "Grow", _provenance: provenance } } } }),
+      [doc({ summary: "Full strategy deck" })],
+    );
+    const docNode = graph.nodes.find((n) => n.id === "doc:deck.pdf");
+    expect(docNode!.properties!.summary).toBe("Full strategy deck");
+  });
+
+  it("flows a strategy insight forward into a later phase slice", () => {
+    const graph = buildProgramGraph(
+      program({ phases }),
+      [doc({ primaryPhase: "strategy", entities: { ...doc({}).intelligence.entities, constraints: [{ text: "GDPR applies", source: "p.2", confidence: 0.8, extractionType: "extracted" }] } })],
+    );
+    const sel = selectGraphForPhase(graph, "build");
+    expect(sel.nodes.find((n) => n.type === "insight" && n.label === "GDPR applies")).toBeDefined();
   });
 });
 
