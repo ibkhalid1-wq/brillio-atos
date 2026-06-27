@@ -26,6 +26,9 @@ import { runPreFlight } from "@/v3/lib/phaseInputPreFlight";
 import { derivePhaseInputQuality } from "@/v3/lib/phaseInputQuality";
 import { getFormalArtifactContent } from "@/v3/lib/formalArtifacts";
 import { buildFactGraph, factsForPhase } from "@/v3/lib/factGraph";
+import { getPhaseDefinition } from "@/v3/lib/methodology";
+import { buildPhaseSchedule, type GanttRow } from "@/v3/lib/phaseSchedule";
+import RoadmapGantt from "@/v3/components/RoadmapGantt";
 import type { V3Mode, V3MoreView, V3ReportId } from "@/v3/types";
 
 interface StageViewProps {
@@ -56,6 +59,7 @@ interface StageViewProps {
   onApproveAllArtifacts: (phaseId: string) => Promise<void>;
   onUnapproveArtifact: (phaseId: string, artifactId: string) => Promise<void>;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; clearReviewDefId?: string; staleDefId?: string }) => Promise<void>;
+  onSaveRoadmapSchedule?: (schedule: Record<string, { start: string; end: string }>) => Promise<void>;
   onSaveProgram?: (label?: string, kind?: "manual" | "lock") => Promise<void>;
   onRevertProgram?: (snapshotId: string) => Promise<void>;
   programSnapshots?: Array<{ id: string; label: string; kind: string; createdAt: string }>;
@@ -491,6 +495,7 @@ export default function StageView({
   onApproveAllArtifacts,
   onUnapproveArtifact,
   onSaveInputs,
+  onSaveRoadmapSchedule,
   onSaveProgram,
   onRevertProgram,
   programSnapshots = [],
@@ -507,7 +512,7 @@ export default function StageView({
   const [downloadingArtifacts, setDownloadingArtifacts] = React.useState(false);
   const [lockConfirmOpen, setLockConfirmOpen] = React.useState(false);
   const [lockedModalOpen, setLockedModalOpen] = React.useState(false);
-  const [previewArtifact, setPreviewArtifact] = React.useState<{ label: string; description?: string; content: string; score: number | null; statusTone: string } | null>(null);
+  const [previewArtifact, setPreviewArtifact] = React.useState<{ defId?: string; label: string; description?: string; content: string; score: number | null; statusTone: string } | null>(null);
   const [qualityArtifact, setQualityArtifact] = React.useState<{
     label: string;
     defId: string;
@@ -519,6 +524,56 @@ export default function StageView({
   } | null>(null);
   const [applyingImprovements, setApplyingImprovements] = React.useState(false);
   const [applyError, setApplyError] = React.useState<string | null>(null);
+
+  // Strategic-roadmap timeline rows for the Gantt. Defaults come from the
+  // deterministic window split (programme start → target end, weighted by each
+  // phase's typical duration); any manual date edits the user saved (the
+  // top-level roadmapSchedule override) win per phase.
+  const roadmapRows = React.useMemo<GanttRow[]>(() => {
+    const raw = typeof program?.rawData === "object" && program.rawData !== null
+      ? ("data" in program.rawData && typeof program.rawData.data === "object" && program.rawData.data !== null
+        ? program.rawData.data as Record<string, unknown>
+        : program.rawData as Record<string, unknown>)
+      : {};
+    const phaseInputs = raw.phaseInputs;
+    const strategyInputs = typeof phaseInputs === "object" && phaseInputs !== null
+      ? (phaseInputs as Record<string, unknown>).strategy as Record<string, unknown> | undefined
+      : undefined;
+    const startDate = typeof strategyInputs?.startDate === "string" ? strategyInputs.startDate : undefined;
+    const targetEndDate = typeof strategyInputs?.targetEndDate === "string" ? strategyInputs.targetEndDate : undefined;
+    const programPhases = (program?.phases || []) as Array<{ id: string }>;
+    const weights = programPhases.map((p) => {
+      const def = getPhaseDefinition(p.id);
+      return { id: p.id, weight: def ? (def.typicalDurationWeeks.min + def.typicalDurationWeeks.max) / 2 : 1 };
+    });
+    const defaultsById = new Map(buildPhaseSchedule(startDate, targetEndDate, weights).map((d) => [d.id, d]));
+    const overrideRaw = raw.roadmapSchedule;
+    const overrides = typeof overrideRaw === "object" && overrideRaw !== null
+      ? overrideRaw as Record<string, { start?: unknown; end?: unknown }>
+      : {};
+    const rows: GanttRow[] = [];
+    for (const p of programPhases) {
+      const ov = overrides[p.id];
+      const def = defaultsById.get(p.id);
+      const start = typeof ov?.start === "string" ? ov.start : def?.start;
+      const end = typeof ov?.end === "string" ? ov.end : def?.end;
+      if (!start || !end) continue;
+      rows.push({ id: p.id, name: getPhaseDefinition(p.id)?.displayName ?? p.id, start, end });
+    }
+    return rows;
+  }, [program?.rawData, program?.phases]);
+
+  const handleRoadmapChange = React.useCallback((id: string, start: string, end: string) => {
+    if (!onSaveRoadmapSchedule) return;
+    // Persist the full effective schedule (defaults made explicit) with the one
+    // edited phase replaced, so the saved plan is stable even if the methodology's
+    // duration weights later change.
+    const schedule: Record<string, { start: string; end: string }> = {};
+    for (const row of roadmapRows) {
+      schedule[row.id] = row.id === id ? { start, end } : { start: row.start, end: row.end };
+    }
+    void onSaveRoadmapSchedule(schedule);
+  }, [onSaveRoadmapSchedule, roadmapRows]);
   // True once the reviewer's suggestions have been folded into the inputs for the
   // currently-open quality modal, so the Apply button can switch to a disabled
   // "no more suggestions" state instead of the modal silently vanishing.
@@ -1731,7 +1786,7 @@ export default function StageView({
                     <button
                       type="button"
                       className="v3-button ghost v3-button-inline-xs"
-                      onClick={() => setPreviewArtifact({ label: def.label, description: def.description, content: previewContent, score: displayScore, statusTone })}
+                      onClick={() => setPreviewArtifact({ defId: def.id, label: def.label, description: def.description, content: previewContent, score: displayScore, statusTone })}
                       title={`Preview ${def.label}`}
                       aria-label={`Preview ${def.label}`}
                     >
@@ -1903,7 +1958,7 @@ export default function StageView({
       ) : null}
 
       {previewArtifact ? (
-        <StageModal title={previewArtifact.label} onClose={() => setPreviewArtifact(null)} maxWidth={720}>
+        <StageModal title={previewArtifact.label} onClose={() => setPreviewArtifact(null)} maxWidth={previewArtifact.defId === "strategic-roadmap" ? 900 : 720}>
           {previewArtifact.description ? (
             <div style={{ fontSize: 12, color: "var(--v3-text-muted)", marginBottom: 12 }}>{previewArtifact.description}</div>
           ) : null}
@@ -1911,6 +1966,9 @@ export default function StageView({
             <div style={{ marginBottom: 12 }}>
               <span className={`v3-chip ${previewArtifact.statusTone}`}>Quality {previewArtifact.score}%</span>
             </div>
+          ) : null}
+          {previewArtifact.defId === "strategic-roadmap" ? (
+            <RoadmapGantt rows={roadmapRows} editable={!!onSaveRoadmapSchedule} onChange={handleRoadmapChange} />
           ) : null}
           <AnimatedArtifactContent content={previewArtifact.content} />
         </StageModal>

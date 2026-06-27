@@ -2819,6 +2819,18 @@ export default function AppShellV3() {
     pushV3Toast("Document unlocked for editing.", { tone: "info", duration: 2500 });
   }, [activeProgram, refreshPrograms, updateProgramData]);
 
+  // Persist a user's manual roadmap-date edits. Stored as a top-level override map
+  // (phaseId → {start,end}) — deliberately separate from the locked phaseInputs so
+  // adjusting the delivery timeline never re-stales the roadmap artifact or trips
+  // the gate-lock freeze; the deterministic schedule remains the default fallback.
+  const handleSaveRoadmapSchedule = useCallback(async (schedule: Record<string, { start: string; end: string }>) => {
+    if (!activeProgram || !canEditActiveProgram) return;
+    const cloned = cloneRawProgram(activeProgram);
+    const payload = cloned.commit({ ...cloned.inner, roadmapSchedule: schedule });
+    await updateProgramData(activeProgram.id, payload, activeProgram.updatedAt);
+    await refreshPrograms();
+  }, [activeProgram, canEditActiveProgram, refreshPrograms, updateProgramData]);
+
   const handleDecideDecision = useCallback(async (id: string, decision: string) => {
     await handleResolveDecision(id, "approved", decision);
   }, [handleResolveDecision]);
@@ -3107,6 +3119,7 @@ export default function AppShellV3() {
                 onApproveAllArtifacts={handleApproveAllArtifacts}
                 onUnapproveArtifact={handleUnapproveArtifact}
                 onSaveInputs={handleSavePhaseInputs}
+                onSaveRoadmapSchedule={handleSaveRoadmapSchedule}
                 onSaveProgram={handleSaveProgramSnapshot}
                 onRevertProgram={handleRevertProgramSnapshot}
                 programSnapshots={programSnapshots}

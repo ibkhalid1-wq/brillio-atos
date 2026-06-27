@@ -12355,3 +12355,55 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 
 /* Phase strip — hide scrollbar (webkit) */
 .adam-phase-scroll::-webkit-scrollbar { display: none; }
+
+
+/* ── Roadmap Gantt ─────────────────────────────────────────────────────────── */
+.v3-gantt { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
+.v3-gantt-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.v3-gantt-title { font-size: 13px; font-weight: 600; color: var(--v3-text-primary); }
+.v3-gantt-hint { font-size: 11px; color: var(--v3-text-muted); }
+.v3-gantt-grid { position: relative; }
+/* Each row is a label column + a flexible track column. */
+.v3-gantt-row { display: grid; grid-template-columns: 132px 1fr; align-items: center; gap: 10px; padding: 3px 0; }
+.v3-gantt-axis { grid-template-columns: 132px 1fr; }
+.v3-gantt-label { font-size: 12px; color: var(--v3-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.v3-gantt-track {
+  position: relative; height: 26px; border-radius: 6px;
+  background: var(--v3-accent-soft);
+  border: 1px solid var(--v3-border-soft);
+  overflow: hidden;
+}
+/* Month gridlines + axis labels share the track geometry. */
+.v3-gantt-axis-track { height: 18px; background: transparent; border: none; overflow: visible; }
+.v3-gantt-monthline { position: absolute; top: 0; bottom: -9999px; width: 1px; background: var(--v3-border-soft); }
+.v3-gantt-monthlabel { position: absolute; top: 0; transform: translateX(2px); font-size: 10px; color: var(--v3-text-muted); white-space: nowrap; }
+.v3-gantt-bar {
+  position: absolute; top: 3px; bottom: 3px; min-width: 6px;
+  border-radius: 5px; background: var(--v3-accent);
+  display: flex; align-items: center; padding: 0 8px;
+  font-size: 10px; color: #fff; white-space: nowrap; overflow: hidden;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.18);
+}
+.v3-gantt-bar.is-editable { cursor: grab; }
+.v3-gantt-bar.is-dragging { cursor: grabbing; opacity: 0.9; }
+.v3-gantt-handle {
+  position: absolute; top: 0; bottom: 0; width: 8px; cursor: ew-resize;
+  background: rgba(255, 255, 255, 0.001);
+}
+.v3-gantt-handle.start { left: 0; }
+.v3-gantt-handle.end { right: 0; }
+.v3-gantt-handle::after {
+  content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 2px; height: 12px; border-radius: 1px; background: rgba(255, 255, 255, 0.6);
+}
+.v3-gantt-editrow { display: grid; grid-template-columns: 132px 1fr; gap: 10px; align-items: center; padding: 0 0 4px; }
+.v3-gantt-dates { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.v3-gantt-date {
+  font-size: 11px; padding: 2px 6px; border-radius: 5px; color-scheme: light dark;
+  border: 1px solid var(--v3-border); background: var(--v3-surface); color: var(--v3-text-primary);
+}
+.v3-gantt-date:disabled { opacity: 0.6; }
+.v3-gantt-dates-sep { font-size: 11px; color: var(--v3-text-muted); }
+.v3-gantt-empty { font-size: 12px; color: var(--v3-text-muted); padding: 10px 0; }

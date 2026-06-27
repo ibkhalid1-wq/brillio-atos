@@ -102,3 +102,104 @@ export function buildMethodologyPhaseSchedule(
   }));
   return buildPhaseSchedule(startDate, targetEndDate, phases);
 }
+
+// ── Gantt layout ─────────────────────────────────────────────────────────────
+
+/** A named phase with concrete dates — the input row for a Gantt chart. */
+export interface GanttRow {
+  id: string;
+  name: string;
+  /** ISO yyyy-mm-dd. */
+  start: string;
+  /** ISO yyyy-mm-dd. */
+  end: string;
+}
+
+/** A row positioned on the timeline as percentages of the chart's full width. */
+export interface GanttBar extends GanttRow {
+  offsetPct: number;
+  widthPct: number;
+}
+
+/** A month gridline / axis label, positioned as a percentage of chart width. */
+export interface GanttMonthTick {
+  label: string;
+  offsetPct: number;
+}
+
+export interface GanttLayout {
+  bars: GanttBar[];
+  /** Full timeline span (ISO yyyy-mm-dd), padded out to whole month boundaries. */
+  rangeStart: string;
+  rangeEnd: string;
+  months: GanttMonthTick[];
+}
+
+const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** First-of-month UTC epoch for the month containing `ms`. */
+function startOfUtcMonth(ms: number): number {
+  const d = new Date(ms);
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
+}
+
+/** First-of-month UTC epoch for the month after the one containing `ms`. */
+function startOfNextUtcMonth(ms: number): number {
+  const d = new Date(ms);
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1);
+}
+
+/**
+ * Position phase rows on a shared timeline. The visible span is padded out to
+ * whole-month boundaries so the axis reads in clean months, and each bar's
+ * offset/width are percentages of that span (so the chart is fully responsive —
+ * no pixel math leaks into layout). Rows with unparseable or inverted dates are
+ * dropped; returns null when nothing can be laid out.
+ */
+export function layoutGantt(rows: GanttRow[]): GanttLayout | null {
+  const parsed = rows
+    .map((row) => ({ row, start: parseUtcDay(row.start), end: parseUtcDay(row.end) }))
+    .filter((r): r is { row: GanttRow; start: number; end: number } =>
+      r.start !== null && r.end !== null && r.end > r.start);
+  if (parsed.length === 0) return null;
+
+  const minStart = Math.min(...parsed.map((r) => r.start));
+  const maxEnd = Math.max(...parsed.map((r) => r.end));
+  // Pad to month boundaries for a clean axis.
+  const rangeStartMs = startOfUtcMonth(minStart);
+  const rangeEndMs = startOfNextUtcMonth(maxEnd);
+  const totalMs = rangeEndMs - rangeStartMs;
+  if (totalMs <= 0) return null;
+
+  const bars: GanttBar[] = parsed.map(({ row, start, end }) => ({
+    ...row,
+    offsetPct: ((start - rangeStartMs) / totalMs) * 100,
+    widthPct: ((end - start) / totalMs) * 100,
+  }));
+
+  const months: GanttMonthTick[] = [];
+  for (let m = rangeStartMs; m < rangeEndMs; m = startOfNextUtcMonth(m)) {
+    const d = new Date(m);
+    months.push({
+      label: `${MONTH_LABELS[d.getUTCMonth()]} ${d.getUTCFullYear()}`,
+      offsetPct: ((m - rangeStartMs) / totalMs) * 100,
+    });
+  }
+
+  return { bars, rangeStart: formatUtcDay(rangeStartMs), rangeEnd: formatUtcDay(rangeEndMs), months };
+}
+
+/** Add `days` to an ISO yyyy-mm-dd date, returning a new ISO date (UTC-safe). */
+export function shiftIsoDate(date: string, days: number): string {
+  const ms = parseUtcDay(date);
+  if (ms === null) return date;
+  return formatUtcDay(ms + days * DAY_MS);
+}
+
+/** Whole days between two ISO dates (b - a); 0 if either is unparseable. */
+export function daysBetween(a: string, b: string): number {
+  const ams = parseUtcDay(a);
+  const bms = parseUtcDay(b);
+  if (ams === null || bms === null) return 0;
+  return Math.round((bms - ams) / DAY_MS);
+}

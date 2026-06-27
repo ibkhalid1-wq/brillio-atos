@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { buildPhaseSchedule, buildMethodologyPhaseSchedule } from "@/v3/lib/phaseSchedule";
+import {
+  buildPhaseSchedule,
+  buildMethodologyPhaseSchedule,
+  layoutGantt,
+  shiftIsoDate,
+  daysBetween,
+} from "@/v3/lib/phaseSchedule";
 import { getMethodology } from "@/v3/lib/methodology";
 
 /**
@@ -85,5 +91,51 @@ describe("buildMethodologyPhaseSchedule", () => {
 
   it("returns [] when the programme window is unusable", () => {
     expect(buildMethodologyPhaseSchedule("", "", "atos-standard")).toEqual([]);
+  });
+});
+
+describe("layoutGantt", () => {
+  it("pads the axis to whole months and positions bars as percentages", () => {
+    const layout = layoutGantt([
+      { id: "a", name: "Alpha", start: "2026-01-15", end: "2026-02-15" },
+      { id: "b", name: "Beta", start: "2026-02-15", end: "2026-03-10" },
+    ]);
+    expect(layout).not.toBeNull();
+    // Span pads out to Jan 1 → Apr 1 (the month after the latest end).
+    expect(layout!.rangeStart).toBe("2026-01-01");
+    expect(layout!.rangeEnd).toBe("2026-04-01");
+    expect(layout!.bars[0].offsetPct).toBeGreaterThan(0);
+    expect(layout!.bars[0].widthPct).toBeGreaterThan(0);
+    // The first bar starts after the padded range start, so it has a left offset.
+    expect(layout!.bars[0].offsetPct).toBeCloseTo((14 / 90) * 100, 1);
+    // One tick per month in the padded span: Jan, Feb, Mar.
+    expect(layout!.months.map((m) => m.label)).toEqual(["Jan 2026", "Feb 2026", "Mar 2026"]);
+    expect(layout!.months[0].offsetPct).toBe(0);
+  });
+
+  it("drops rows with invalid or inverted dates and returns null when none survive", () => {
+    const layout = layoutGantt([
+      { id: "good", name: "Good", start: "2026-01-01", end: "2026-02-01" },
+      { id: "inverted", name: "Bad", start: "2026-03-01", end: "2026-02-01" },
+      { id: "junk", name: "Junk", start: "nope", end: "2026-02-01" },
+    ]);
+    expect(layout!.bars.map((b) => b.id)).toEqual(["good"]);
+    expect(layoutGantt([{ id: "x", name: "X", start: "bad", end: "worse" }])).toBeNull();
+    expect(layoutGantt([])).toBeNull();
+  });
+});
+
+describe("shiftIsoDate / daysBetween", () => {
+  it("shifts dates forward and backward across month and year boundaries", () => {
+    expect(shiftIsoDate("2026-01-31", 1)).toBe("2026-02-01");
+    expect(shiftIsoDate("2026-01-01", -1)).toBe("2025-12-31");
+    expect(shiftIsoDate("2026-03-01", 0)).toBe("2026-03-01");
+    expect(shiftIsoDate("not a date", 5)).toBe("not a date");
+  });
+
+  it("counts whole days between dates", () => {
+    expect(daysBetween("2026-01-01", "2026-01-08")).toBe(7);
+    expect(daysBetween("2026-02-01", "2026-01-01")).toBe(-31);
+    expect(daysBetween("bad", "2026-01-01")).toBe(0);
   });
 });
