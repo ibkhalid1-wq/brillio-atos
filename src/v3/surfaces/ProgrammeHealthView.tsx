@@ -3,12 +3,11 @@ import BenefitsTrajectoryWidget from "@/v3/components/BenefitsTrajectoryWidget";
 import { PHASE_LABELS, confidenceColor, priorityChipClass } from "@/v3/lib/uiHelpers";
 import { ADAM_PHASE_SEQUENCE } from "@/lib/adamMethodology";
 import { getProgramState } from "@/new/lib/programState";
-import type { DecisionSummary, ExitCriterion, GateReview, ProgramSummary } from "@/new/types";
+import type { DecisionSummary, GateReview, ProgramSummary } from "@/new/types";
 import LiteGateModal from "@/v3/components/LiteGateModal";
-import { ReadinessExplainer } from "@/v3/components/ReadinessExplainer";
 import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
-import { getGateThreshold } from "@/v3/lib/confidenceScore";
-import { getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
+import { getLockedPhaseIds, computePhaseReadiness } from "@/v3/lib/phaseReadiness";
+import { buildArtifactModel, type ArtifactNode } from "@/v3/lib/artifactModel";
 import { selectDecisions } from "@/v3/lib/programRaid";
 
 interface ProgrammeHealthViewProps {
@@ -38,15 +37,15 @@ const PRIORITY_ORDER: Record<string, number> = {
   low: 3,
 };
 
-const PLACEHOLDER_EXIT_CRITERIA: ExitCriterion[] = [
-  { criterion: "All mandatory artifacts approved", met: false, evidence: null },
-  { criterion: "No open critical risks", met: false, evidence: null },
-  { criterion: "Sponsor sign-off obtained", met: false, evidence: null },
-  { criterion: "Phase retrospective completed", met: false, evidence: null },
-];
-
 type RightTab = "gates" | "decisions" | "health" | "benefits";
 type DecisionFilter = "open" | "decided" | "all";
+
+const TAB_DESCRIPTIONS: Record<RightTab, string> = {
+  gates: "Can each phase close? A phase clears its gate once every required artifact is approved and average quality is above 85%.",
+  decisions: "Decisions waiting on you, plus a record of what's already been decided or deferred.",
+  health: "Delivery progress phase by phase, and the KPIs tracking how the programme is performing.",
+  benefits: "The value this programme is forecast to deliver, measured against its target outcomes.",
+};
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -118,6 +117,101 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 // ─── Gates tab ───────────────────────────────────────────────────────────────
 
+function ArtifactRow({ node, last }: { node: ArtifactNode; last: boolean }) {
+  const approved = node.state === "approved";
+  const inProgress = node.present && !approved;
+  const indicator = approved ? "var(--v3-green)" : inProgress ? "var(--v3-amber)" : "var(--v3-border)";
+  const stateLabel = approved
+    ? "Approved"
+    : node.present
+      ? node.state.charAt(0).toUpperCase() + node.state.slice(1)
+      : "Not started";
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        padding: "9px 12px",
+        borderBottom: last ? undefined : "1px solid var(--v3-border-soft)",
+      }}
+    >
+      <span
+        style={{
+          flexShrink: 0,
+          width: 16,
+          height: 16,
+          borderRadius: 4,
+          border: `2px solid ${indicator}`,
+          background: approved ? "var(--v3-green)" : "transparent",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+        aria-label={stateLabel}
+      >
+        {approved && (
+          <svg width={9} height={7} viewBox="0 0 9 7" fill="none" aria-hidden="true">
+            <path d="M1 3.5L3.5 6L8 1" stroke="#fff" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
+      </span>
+      <span
+        style={{
+          flex: 1,
+          minWidth: 0,
+          fontSize: 13,
+          color: "var(--v3-text-primary)",
+          fontFamily: "var(--v3-font)",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {node.label}
+      </span>
+      <span
+        style={{
+          flexShrink: 0,
+          fontSize: 11,
+          fontWeight: 600,
+          fontFamily: "var(--v3-font)",
+          color: approved ? "var(--v3-green)" : inProgress ? "var(--v3-amber)" : "var(--v3-text-muted)",
+        }}
+      >
+        {node.quality != null ? `${stateLabel} · ${node.quality}%` : stateLabel}
+      </span>
+    </div>
+  );
+}
+
+function GateMetric({
+  label,
+  value,
+  met,
+  suffix,
+}: {
+  label: string;
+  value: number;
+  met: boolean;
+  suffix: string;
+}) {
+  const pct = Math.max(0, Math.min(100, value));
+  return (
+    <div style={{ display: "grid", gap: 4 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontFamily: "var(--v3-font)" }}>
+        <span style={{ fontSize: 12, color: "var(--v3-text-secondary)" }}>{label}</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: met ? "var(--v3-green)" : "var(--v3-text-primary)" }}>
+          {value}% <span style={{ fontWeight: 400, color: "var(--v3-text-muted)" }}>· {suffix}</span>
+        </span>
+      </div>
+      <div style={{ position: "relative", height: 6, borderRadius: 3, background: "var(--v3-border-soft)", overflow: "hidden" }}>
+        <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${pct}%`, background: met ? "var(--v3-green)" : "var(--v3-amber)", borderRadius: 3 }} />
+      </div>
+    </div>
+  );
+}
+
 function GatesTab({
   activePhaseId,
   gateReviews,
@@ -144,15 +238,17 @@ function GatesTab({
   const phaseId = activePhaseId;
   const gate: GateReview | null = phaseId ? (gateReviews[phaseId] ?? null) : null;
   const phaseLabel = phaseId ? (PHASE_LABELS[phaseId] ?? phaseId) : "—";
-  const isApproved = gate?.status === "approved";
-  // Exit criteria must reflect *recorded* status only. When a gate has no
-  // itemised exit-criteria evidence we fall back to the standard ATOS checklist
-  // as an explicitly-unverified template — never fabricating "met" ticks on
-  // approval, which would present false governance evidence.
-  const usingCriteriaTemplate = !gate?.exitCriteriaStatus?.length;
-  const exitCriteria: ExitCriterion[] = usingCriteriaTemplate
-    ? PLACEHOLDER_EXIT_CRITERIA
-    : (gate?.exitCriteriaStatus as ExitCriterion[]);
+  // Gate readiness reflects the single close rule: every required artifact
+  // approved (100%) and average artifact quality above 85%. Exit criteria,
+  // assumptions and dependency checks are informational and live elsewhere.
+  const readiness = program && phaseId ? computePhaseReadiness(program, phaseId) : null;
+  const requiredArtifacts = useMemo<ArtifactNode[]>(() => {
+    if (!program || !phaseId) return [];
+    const summary = buildArtifactModel(program).phases.find((p) => p.phaseId === phaseId);
+    return summary ? summary.artifacts.filter((a) => a.required) : [];
+  }, [program, phaseId]);
+  const approvedArtifacts = requiredArtifacts.filter((a) => a.state === "approved").length;
+  const allArtifactsApproved = requiredArtifacts.length > 0 && approvedArtifacts === requiredArtifacts.length;
 
   async function handleApprove() {
     if (!phaseId) return;
@@ -199,7 +295,62 @@ function GatesTab({
             padding: "20px 24px",
           }}
         >
-          <ReadinessExplainer program={program} phaseId={phaseId} threshold={getGateThreshold(phaseId)} />
+          {readiness ? (
+            <>
+              <div style={{ fontSize: 13, color: "var(--v3-text-secondary)", fontFamily: "var(--v3-font)", marginBottom: 18, lineHeight: 1.5 }}>
+                This phase can close once <strong style={{ color: "var(--v3-text-primary)" }}>every required artifact is approved</strong> and <strong style={{ color: "var(--v3-text-primary)" }}>average artifact quality is above 85%</strong>.
+              </div>
+
+              {/* Required artifacts checklist — the first close requirement */}
+              <div style={{ marginBottom: 18 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8, fontFamily: "var(--v3-font)" }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "var(--v3-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    Required artifacts
+                  </span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: allArtifactsApproved ? "var(--v3-green)" : "var(--v3-text-primary)" }}>
+                    {approvedArtifacts} / {requiredArtifacts.length} approved
+                  </span>
+                </div>
+                {requiredArtifacts.length ? (
+                  <div style={{ border: "1px solid var(--v3-border-soft)", borderRadius: "var(--v3-radius)", overflow: "hidden" }}>
+                    {requiredArtifacts.map((node, i) => (
+                      <ArtifactRow key={node.key} node={node} last={i === requiredArtifacts.length - 1} />
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 12, color: "var(--v3-text-muted)", fontFamily: "var(--v3-font)" }}>
+                    No required artifacts defined for this phase.
+                  </div>
+                )}
+              </div>
+
+              {/* Average artifact quality — the second close requirement */}
+              <GateMetric
+                label="Average artifact quality"
+                value={readiness.artifactScore}
+                met={readiness.artifactScore > 85}
+                suffix="need >85%"
+              />
+
+              <div
+                style={{
+                  marginTop: 16,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  fontFamily: "var(--v3-font)",
+                  color: readiness.canApproveGate ? "var(--v3-green)" : "var(--v3-amber)",
+                }}
+              >
+                {readiness.canApproveGate
+                  ? "✓ Ready to close — both requirements met."
+                  : "Not ready to close — complete the items above."}
+              </div>
+            </>
+          ) : (
+            <div style={{ fontSize: 13, color: "var(--v3-text-muted)", fontFamily: "var(--v3-font)" }}>
+              No readiness data for this phase yet.
+            </div>
+          )}
           <div
             style={{
               marginTop: 14,
@@ -213,88 +364,6 @@ function GatesTab({
             <strong style={{ color: "var(--v3-text-secondary)" }}>Gate review:</strong>{" "}
             {gate ? gate.recommendation : "No gate check run yet — use “Check Gate Readiness” to generate an assessment."}
           </div>
-        </div>
-      </div>
-
-      {/* Exit criteria */}
-      <div>
-        <SectionLabel>Exit Criteria</SectionLabel>
-        {usingCriteriaTemplate && (
-          <div
-            style={{
-              marginBottom: 8,
-              fontSize: 12,
-              color: "var(--v3-text-muted)",
-              fontFamily: "var(--v3-font)",
-            }}
-          >
-            {isApproved
-              ? "Standard ATOS exit criteria shown — this gate was approved without itemised evidence on record. Capture evidence to make sign-off auditable."
-              : "Standard ATOS exit criteria shown — no evidence recorded for this gate yet. Capture evidence against each item to verify readiness."}
-          </div>
-        )}
-        <div
-          style={{
-            background: "var(--v3-surface)",
-            border: "1px solid var(--v3-border-soft)",
-            borderRadius: "var(--v3-radius)",
-            overflow: "hidden",
-          }}
-        >
-          {exitCriteria.map((ec, i) => (
-            <div
-              key={i}
-              style={{
-                display: "flex",
-                alignItems: "flex-start",
-                gap: 12,
-                padding: "11px 16px",
-                borderBottom:
-                  i < exitCriteria.length - 1 ? "1px solid var(--v3-border-soft)" : undefined,
-              }}
-            >
-              <span
-                style={{
-                  flexShrink: 0,
-                  marginTop: 2,
-                  width: 16,
-                  height: 16,
-                  borderRadius: 4,
-                  border: `2px solid ${ec.met ? "var(--v3-green)" : "var(--v3-border)"}`,
-                  background: ec.met ? "var(--v3-green)" : "transparent",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  transition: "all 0.15s",
-                }}
-                aria-label={ec.met ? "Met" : "Not met"}
-              >
-                {ec.met && (
-                  <svg width={9} height={7} viewBox="0 0 9 7" fill="none" aria-hidden="true">
-                    <path d="M1 3.5L3.5 6L8 1" stroke="#fff" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-              </span>
-              <div>
-                <div
-                  style={{
-                    fontSize: 13,
-                    color: ec.met ? "var(--v3-text-secondary)" : "var(--v3-text-primary)",
-                    fontFamily: "var(--v3-font)",
-                    textDecoration: ec.met ? "line-through" : undefined,
-                    marginBottom: ec.evidence ? 3 : 0,
-                  }}
-                >
-                  {ec.criterion}
-                </div>
-                {ec.evidence && (
-                  <div style={{ fontSize: 11, color: "var(--v3-text-muted)", fontFamily: "var(--v3-font)" }}>
-                    {ec.evidence}
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
         </div>
       </div>
 
@@ -938,8 +1007,11 @@ export default function ProgrammeHealthView({
               const status = gate?.status ?? "pending";
               const { cls, label } = gateStatusChip(status);
               const isActive = phaseId === activePhaseId;
-              const score = gate?.readinessScore;
               const locked = lockedPhaseIds.has(phaseId);
+              // Use the same readiness model the gate panel shows, so the timeline
+              // subtext can never contradict the detail view (e.g. "85% ready"
+              // here while the panel says artifacts are 0% complete).
+              const phaseReadiness = !locked && program ? computePhaseReadiness(program, phaseId) : null;
 
               return (
                 <button
@@ -983,9 +1055,15 @@ export default function ProgrammeHealthView({
                       <div style={{ fontSize: 10, color: "var(--v3-text-muted)", marginTop: 1 }}>
                         🔒 Locked
                       </div>
-                    ) : score !== undefined && (
-                      <div style={{ fontSize: 10, color: "var(--v3-text-muted)", marginTop: 1 }}>
-                        {score}% ready
+                    ) : phaseReadiness && (
+                      <div
+                        style={{
+                          fontSize: 10,
+                          marginTop: 1,
+                          color: phaseReadiness.canApproveGate ? "var(--v3-green)" : "var(--v3-text-muted)",
+                        }}
+                      >
+                        {phaseReadiness.canApproveGate ? "✓ Ready to close" : `${phaseReadiness.score}% ready`}
                       </div>
                     )}
                   </div>
@@ -1086,6 +1164,21 @@ export default function ProgrammeHealthView({
               onClick={() => setRightTab(tab)}
             />
           ))}
+        </div>
+
+        {/* Active-tab description — orients the PM on what this view answers */}
+        <div
+          style={{
+            padding: "9px 20px",
+            fontSize: 12,
+            color: "var(--v3-text-muted)",
+            lineHeight: 1.45,
+            borderBottom: "1px solid var(--v3-border-soft)",
+            background: "var(--v3-surface-2)",
+            fontFamily: "var(--v3-font)",
+          }}
+        >
+          {TAB_DESCRIPTIONS[rightTab]}
         </div>
 
         {/* Tab content */}
