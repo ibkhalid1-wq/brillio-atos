@@ -172,6 +172,39 @@ function parseKpiRows(raw: string): KpiRow[] {
 }
 
 /**
+ * Collapse a KPI name to a comparison key so plural/punctuation/casing variants
+ * dedupe to one row. Lowercases, folds any non-alphanumeric run (hyphens,
+ * slashes, extra spaces) to a single space, and strips a trailing plural "s"
+ * (but not "ss", so "process"/"success" survive). So "Win rates", "win rate" and
+ * "win-rate" all key the same, while genuinely distinct KPIs ("pipeline coverage"
+ * vs "coverage efficiency") stay separate — this is normalization, not synonymy.
+ */
+function normalizeKpiKey(name: string): string {
+  const base = name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return base.endsWith("s") && !base.endsWith("ss") ? base.slice(0, -1) : base;
+}
+
+/**
+ * Fold KPI rows that share a normalized key into one, keeping the first row's id
+ * and name and filling its blank cells from the duplicates. Used so a single
+ * extraction pass can't emit both "Win rates" and "win rate" as two rows.
+ */
+function dedupeKpiRows(rows: KpiRow[]): KpiRow[] {
+  const byKey = new Map<string, KpiRow>();
+  for (const row of rows) {
+    const key = normalizeKpiKey(row.name);
+    const prior = byKey.get(key);
+    byKey.set(
+      key,
+      prior
+        ? { ...prior, baseline: prior.baseline || row.baseline, target: prior.target || row.target, unit: prior.unit || row.unit }
+        : row,
+    );
+  }
+  return [...byKey.values()];
+}
+
+/**
  * Merge two serialized KPI grids without data loss. Rows are keyed by
  * case-insensitive name and the union is preserved — genuinely new KPIs are
  * appended and rows present only on one side are kept. Used on import conflict —
@@ -187,9 +220,9 @@ function parseKpiRows(raw: string): KpiRow[] {
  */
 export function mergeKpiJson(existingJson: string, incomingJson: string, preferIncoming = false): string {
   const byName = new Map<string, KpiRow>();
-  for (const row of parseKpiRows(existingJson)) byName.set(row.name.toLowerCase(), row);
+  for (const row of parseKpiRows(existingJson)) byName.set(normalizeKpiKey(row.name), row);
   for (const row of parseKpiRows(incomingJson)) {
-    const key = row.name.toLowerCase();
+    const key = normalizeKpiKey(row.name);
     const prior = byName.get(key);
     byName.set(key, prior
       ? preferIncoming
@@ -213,13 +246,15 @@ export function deriveKpiReviewField(
   const named = (kpis ?? []).filter((kpi) => kpi.name?.trim());
   if (named.length === 0) return null;
 
-  const rows: KpiRow[] = named.map((kpi) => ({
-    id: kpiRowId(),
-    name: kpi.name.trim(),
-    baseline: (kpi.baseline ?? "").trim(),
-    target: (kpi.target ?? "").trim(),
-    unit: (kpi.unit ?? "").trim(),
-  }));
+  const rows: KpiRow[] = dedupeKpiRows(
+    named.map((kpi) => ({
+      id: kpiRowId(),
+      name: kpi.name.trim(),
+      baseline: (kpi.baseline ?? "").trim(),
+      target: (kpi.target ?? "").trim(),
+      unit: (kpi.unit ?? "").trim(),
+    })),
+  );
   const value = JSON.stringify(rows);
   const existingValue = existingPhaseInputs.strategy?.kpis ?? "";
   const avgConfidence = named.reduce((sum, kpi) => sum + (Number(kpi.confidence) || 0), 0) / named.length;

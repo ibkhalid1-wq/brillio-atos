@@ -49,6 +49,35 @@ describe("mergeKpiJson", () => {
     expect(rows(mergeKpiJson("not json", "[{bad}]"))).toEqual([]);
   });
 
+  it("dedupes plural/punctuation/casing variants to one row", () => {
+    const existing = JSON.stringify([{ id: "a", name: "Win rates", baseline: "", target: "Increase", unit: "" }]);
+    const incoming = JSON.stringify([
+      { id: "b", name: "win rate", baseline: "40%", target: "", unit: "%" },
+      { id: "c", name: "Attach-rates", baseline: "", target: "", unit: "" },
+    ]);
+
+    const merged = rows(mergeKpiJson(existing, incoming));
+
+    // "Win rates" / "win rate" collapse; "Attach-rates" is genuinely new.
+    expect(merged).toHaveLength(2);
+    const win = merged.find((r) => r.id === "a")!;
+    expect(win).toMatchObject({ name: "Win rates", target: "Increase", baseline: "40%", unit: "%" });
+  });
+
+  it("does not over-merge distinct KPIs that only share a word", () => {
+    const existing = JSON.stringify([{ id: "a", name: "pipeline coverage", baseline: "", target: "", unit: "" }]);
+    const incoming = JSON.stringify([{ id: "b", name: "coverage efficiency", baseline: "", target: "", unit: "" }]);
+
+    expect(rows(mergeKpiJson(existing, incoming))).toHaveLength(2);
+  });
+
+  it("keeps 'ss' endings intact (process/success not truncated into others)", () => {
+    const existing = JSON.stringify([{ id: "a", name: "process", baseline: "", target: "", unit: "" }]);
+    const incoming = JSON.stringify([{ id: "b", name: "success", baseline: "", target: "", unit: "" }]);
+
+    expect(rows(mergeKpiJson(existing, incoming))).toHaveLength(2);
+  });
+
   it("on re-extract (preferIncoming) refreshes overlapping cells from the document", () => {
     const existing = JSON.stringify([{ id: "a", name: "Accuracy", baseline: "55%", target: "80%", unit: "%" }]);
     const incoming = JSON.stringify([{ id: "b", name: "accuracy", baseline: "72%", target: "90%", unit: "%" }]);
@@ -107,6 +136,21 @@ describe("deriveKpiReviewField", () => {
 
     expect(field!.hasConflict).toBe(true);
     expect(field!.existingValue).toBe(existing);
+  });
+
+  it("folds duplicate extracted KPIs within a single pass into one row", () => {
+    const field = deriveKpiReviewField(
+      [
+        kpi({ name: "Win rates", target: "Increase" }),
+        kpi({ name: "win rate", baseline: "40%" }),
+        kpi({ name: "CSAT" }),
+      ],
+      {},
+    );
+    const parsed = rows(field!.mapping.value);
+    expect(parsed).toHaveLength(2);
+    const win = parsed.find((r) => /^win rate/i.test(r.name))!;
+    expect(win).toMatchObject({ name: "Win rates", target: "Increase", baseline: "40%" });
   });
 
   it("averages confidence across extracted KPIs", () => {
