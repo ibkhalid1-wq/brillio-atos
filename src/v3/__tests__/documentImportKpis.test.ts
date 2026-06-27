@@ -48,6 +48,32 @@ describe("mergeKpiJson", () => {
     expect(rows(mergeKpiJson("", ""))).toEqual([]);
     expect(rows(mergeKpiJson("not json", "[{bad}]"))).toEqual([]);
   });
+
+  it("on re-extract (preferIncoming) refreshes overlapping cells from the document", () => {
+    const existing = JSON.stringify([{ id: "a", name: "Accuracy", baseline: "55%", target: "80%", unit: "%" }]);
+    const incoming = JSON.stringify([{ id: "b", name: "accuracy", baseline: "72%", target: "90%", unit: "%" }]);
+
+    const merged = rows(mergeKpiJson(existing, incoming, true));
+
+    expect(merged).toHaveLength(1);
+    // Document values win, but the stable existing row id is retained.
+    expect(merged[0]).toMatchObject({ id: "a", name: "Accuracy", baseline: "72%", target: "90%", unit: "%" });
+  });
+
+  it("on re-extract keeps existing cells the document leaves blank and preserves PM-only KPIs", () => {
+    const existing = JSON.stringify([
+      { id: "a", name: "Accuracy", baseline: "55%", target: "80%", unit: "%" },
+      { id: "p", name: "PM Only", baseline: "1", target: "2", unit: "u" },
+    ]);
+    const incoming = JSON.stringify([{ id: "b", name: "Accuracy", baseline: "72%", target: "", unit: "" }]);
+
+    const merged = rows(mergeKpiJson(existing, incoming, true));
+
+    expect(merged).toHaveLength(2);
+    const accuracy = merged.find((r) => r.name === "Accuracy")!;
+    expect(accuracy).toMatchObject({ baseline: "72%", target: "80%", unit: "%" });
+    expect(merged.find((r) => r.name === "PM Only")).toMatchObject({ baseline: "1", target: "2", unit: "u" });
+  });
 });
 
 describe("deriveKpiReviewField", () => {

@@ -173,19 +173,28 @@ function parseKpiRows(raw: string): KpiRow[] {
 
 /**
  * Merge two serialized KPI grids without data loss. Rows are keyed by
- * case-insensitive name; incoming values fill blank cells on an existing row and
- * genuinely new KPIs are appended. Used on import conflict — a naive string
- * concat (the default merge) would corrupt the JSON and silently wipe KPIs the
- * PM already entered.
+ * case-insensitive name and the union is preserved — genuinely new KPIs are
+ * appended and rows present only on one side are kept. Used on import conflict —
+ * a naive string concat (the default merge) would corrupt the JSON and silently
+ * wipe KPIs the PM already entered.
+ *
+ * `preferIncoming` controls which side wins on an overlapping row's cells:
+ * - false (default, fresh import): the existing value wins; incoming only fills
+ *   blank cells, so a new document never clobbers PM-entered numbers.
+ * - true (re-extract): the incoming document value wins, so re-running extraction
+ *   over an updated source refreshes the grid; existing values are kept only
+ *   where the document leaves a cell blank.
  */
-export function mergeKpiJson(existingJson: string, incomingJson: string): string {
+export function mergeKpiJson(existingJson: string, incomingJson: string, preferIncoming = false): string {
   const byName = new Map<string, KpiRow>();
   for (const row of parseKpiRows(existingJson)) byName.set(row.name.toLowerCase(), row);
   for (const row of parseKpiRows(incomingJson)) {
     const key = row.name.toLowerCase();
     const prior = byName.get(key);
     byName.set(key, prior
-      ? { ...prior, baseline: prior.baseline || row.baseline, target: prior.target || row.target, unit: prior.unit || row.unit }
+      ? preferIncoming
+        ? { ...prior, baseline: row.baseline || prior.baseline, target: row.target || prior.target, unit: row.unit || prior.unit }
+        : { ...prior, baseline: prior.baseline || row.baseline, target: prior.target || row.target, unit: prior.unit || row.unit }
       : row);
   }
   return JSON.stringify([...byName.values()]);
@@ -375,6 +384,7 @@ export async function buildApprovedInputs(
   reviewFields: ReviewField[],
   refineField?: RefineFieldFn,
   documentName?: string,
+  reextract = false,
 ): Promise<ApprovedInputs> {
   const result: ApprovedInputs = {};
   const provByPhase: Record<string, ProvenanceMap> = {};
@@ -421,7 +431,7 @@ export async function buildApprovedInputs(
         // KPIs are JSON arrays — merge structurally; the text refine/concat path
         // below would corrupt the JSON and wipe existing rows.
         if (field.fieldId === "kpis") {
-          add(field.phaseId, field.fieldId, mergeKpiJson(existing, incoming), field.mapping, "enriched");
+          add(field.phaseId, field.fieldId, mergeKpiJson(existing, incoming, reextract), field.mapping, "enriched");
           return;
         }
         // Any other grid value (e.g. the core-team roster) is also a JSON array —
@@ -486,6 +496,10 @@ export function useDocumentIntelligence({
   // Name of the file being imported — stamped into per-field provenance at save
   // so the artifact map / traceability can name the source document.
   const importedFileNameRef = useRef<string>("");
+  // True when the current extraction is a re-extract of a stored document. On
+  // re-extract the user's intent is to refresh from the source, so the KPI merge
+  // lets the document's values win over the existing grid (see mergeKpiJson).
+  const isReextractRef = useRef<boolean>(false);
 
   // ── importFile: parse + extract → move to reviewing ──────────────────────
   const importFile = useCallback(async (file: File, phaseHint?: string) => {
@@ -587,6 +601,7 @@ export function useDocumentIntelligence({
   }) => {
     const { text, fileName, fileAttachment, phaseHint, reextractId, onAiUnavailable } = args;
     if (!programId || !supabase) return;
+    isReextractRef.current = Boolean(reextractId);
     setStage("extracting");
 
     // Declare the activated phases' input fields (static methodology + ai-derived
@@ -757,7 +772,7 @@ export function useDocumentIntelligence({
     setProgress(90);
 
     try {
-      const approved = await buildApprovedInputs(reviewFields, refineField, importedFileNameRef.current);
+      const approved = await buildApprovedInputs(reviewFields, refineField, importedFileNameRef.current, isReextractRef.current);
       // Filter out empty phases
       const nonEmpty = Object.fromEntries(
         Object.entries(approved).filter(([, inputs]) => Object.keys(inputs).length > 0),
@@ -804,6 +819,7 @@ export function useDocumentIntelligence({
     setReviewFields([]);
     setResult(null);
     setAiUnavailable(false);
+    isReextractRef.current = false;
   }, []);
 
   return {
