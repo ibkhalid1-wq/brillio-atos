@@ -134,7 +134,7 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
             <span className="v3-wizard-eyebrow-glyph">✦</span>
             New programme
           </span>
-          <h2 className="v3-wizard-title">Name your programme</h2>
+          <h2 className="v3-wizard-title">Name the programme</h2>
           <p className="v3-wizard-subtitle">
             Give your transformation a name and client. ATOS plans every phase from there.
           </p>
