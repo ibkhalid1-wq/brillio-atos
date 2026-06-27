@@ -23,6 +23,7 @@ export type V3MoreView =
   | "scope-pcr"
   | "intelligence"
   | "artifact-map"
+  | "program-graph"
   | "accelerators"
   | "decision-audit"
   | "access"

@@ -75,6 +75,7 @@ const WORKSPACE_GROUPS: Array<{
     tiles: [
       { view: "documents", label: "Documents", description: "Uploaded documents and extracted insights", icon: "⊡", accent: "amber" },
       { view: "artifact-map", label: "Artifact Map", description: "The complete programme tree — every phase with its artifacts, inputs and provenance", icon: "⊞", accent: "blue" },
+      { view: "program-graph", label: "Program Graph", description: "The unified knowledge graph — documents, extracted facts, the phases they inform and the artifacts they ground", icon: "⬡", accent: "blue" },
       // Removed: Programme Narrative, Action Plan (content surfaced on Home)
     ],
   },

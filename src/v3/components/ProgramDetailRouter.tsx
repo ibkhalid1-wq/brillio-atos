@@ -20,6 +20,7 @@ import MeetingNotesPanel from "@/v3/components/MeetingNotesPanel";
 import type { AppView, Milestone, ProgramSummary } from "@/new/types";
 import ProgramAccessPanel from "@/v3/components/ProgramAccessPanel";
 import { ArtifactMapTree } from "@/v3/components/ArtifactMapTree";
+import ProgramGraphPanel from "@/v3/components/ProgramGraphPanel";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { AdamCard, AdamCardBody, AdamCardHeader } from "@/v3/components/ui/AdamCard";
 import { EmptyState } from "@/v3/components/ui/EmptyState";
@@ -265,6 +266,8 @@ export default function ProgramDetailRouter({
           </AdamCard>
         </div>
       );
+    case "program-graph":
+      return <ProgramGraphPanel program={program} programId={programId} />;
     case "accelerators":
       return <AcceleratorsView program={program} onNavigate={onNavigate} patternsCount={patternsCount} onExtractPatterns={onExtractPatterns} />;
     case "access":

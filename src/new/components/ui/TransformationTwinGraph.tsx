@@ -5,6 +5,7 @@ import {
   MiniMap,
   Position,
   ReactFlow,
+  useReactFlow,
   type Edge,
   type Node,
 } from "@xyflow/react";
@@ -45,6 +46,28 @@ interface TwinGraphProps {
   agentActivityMap?: Record<string, AgentActivityState>;
   onNodePositionChange?: (nodeId: string, position: TwinManualPosition) => void;
   onResetLayout?: () => void;
+  /** Canvas height in px. Callers serving a graph that grows over time (e.g. the
+   *  Program Graph gaining nodes each phase) pass a viewport-derived value so the
+   *  canvas expands with the window rather than staying at the fixed default. */
+  height?: number;
+  /** Floor for zoom-out. The default suits the compact Twin; a graph that keeps
+   *  growing needs a lower floor so fitView can frame every node at once. */
+  minZoom?: number;
+  /** Refit trigger. When this changes (e.g. the node/edge count after a new phase
+   *  produces outputs) the view re-frames so newly added nodes are in view. */
+  fitViewKey?: string | number;
+}
+
+/** Reframes the viewport whenever `dep` changes — keeps the whole graph in view
+ *  as later phases add nodes. Rendered inside <ReactFlow> so it can use the flow
+ *  instance. */
+function FitViewOnChange({ dep }: { dep: string | number | undefined }) {
+  const { fitView } = useReactFlow();
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => { void fitView({ padding: 0.14 }); });
+    return () => cancelAnimationFrame(raf);
+  }, [dep, fitView]);
+  return null;
 }
 
 const NODE_COLORS: Record<string, string> = {
@@ -61,14 +84,29 @@ const NODE_COLORS: Record<string, string> = {
   Governance: "#3d1a8f",
   Value: "#1a8f5c",
   Learning: "#5c8f1a",
+  // Program Graph node kinds (buildProgramGraph display types).
+  Source: "#475569",
+  Insight: "#9a6a00",
+  Fact: "#0f766e",
+  Phase: "#1e3a5f",
+  Artifact: "#5b21b6",
+  Stakeholder: "#1a5c8f",
 };
 
 const TWIN_NODE_TYPE_ORDER = [
   "Strategy", "Outcome", "KPI", "Capability", "Decision",
   "Role", "Agent", "Skill", "Data", "Risk", "Governance", "Value", "Learning",
+  "Source", "Insight", "Fact", "Phase", "Artifact", "Stakeholder",
 ];
 
 const SEMANTIC_LANES = [
+  // Program Graph lanes (buildProgramGraph) — left→right source→knowledge→phase→
+  // artifact flow. They filter out for Transformation Twin data (whose types are
+  // disjoint), so adding them does not alter twin layout.
+  { id: "pg-sources", label: "Sources", types: ["Source"] },
+  { id: "pg-knowledge", label: "Knowledge", types: ["Insight", "Fact"] },
+  { id: "pg-phases", label: "Phases", types: ["Phase"] },
+  { id: "pg-artifacts", label: "Artifacts", types: ["Artifact"] },
   { id: "strategy", label: "Strategy", types: ["Strategy"] },
   { id: "outcomes", label: "Outcomes", types: ["Outcome", "KPI"] },
   { id: "capability", label: "Capability", types: ["Capability"] },
@@ -76,6 +114,7 @@ const SEMANTIC_LANES = [
   { id: "execution", label: "Execution", types: ["Role", "Agent", "Skill", "Data"] },
   { id: "controls", label: "Controls", types: ["Risk", "Governance"] },
   { id: "value", label: "Value", types: ["Value", "Learning"] },
+  { id: "pg-people", label: "Stakeholders", types: ["Stakeholder"] },
 ] as const;
 
 const LAYER_GAP = 166;
@@ -276,6 +315,9 @@ export function TransformationTwinGraph({
   agentActivityMap,
   onNodePositionChange,
   onResetLayout,
+  height = 760,
+  minZoom = 0.74,
+  fitViewKey,
 }: TwinGraphProps) {
   const rawNodes = Array.isArray(twinGraph?.nodes) ? twinGraph.nodes : [];
   const rawEdges = Array.isArray(twinGraph?.edges) ? twinGraph.edges : [];
@@ -449,7 +491,7 @@ export function TransformationTwinGraph({
   ), [orderedTypes, rawNodes]);
 
   return (
-    <div style={{ position: "relative", height: 760, width: "100%", borderRadius: 18, overflow: "hidden", border: "1px solid rgba(203,213,225,0.9)" }}>
+    <div style={{ position: "relative", height, width: "100%", borderRadius: 18, overflow: "hidden", border: "1px solid rgba(203,213,225,0.9)" }}>
       <style>{`
         .adam-twin-node-pulse {
           animation: adam-twin-node-dot 2s ease-in-out infinite;
@@ -531,7 +573,7 @@ export function TransformationTwinGraph({
         }}
         fitView
         fitViewOptions={{ padding: 0.14, maxZoom: 1.08 }}
-        minZoom={0.74}
+        minZoom={minZoom}
         nodesDraggable={editMode}
         nodesConnectable={false}
         elementsSelectable
@@ -559,6 +601,7 @@ export function TransformationTwinGraph({
           onNodePositionChange?.(flowNode.id, nextPosition);
         }}
       >
+        <FitViewOnChange dep={fitViewKey} />
         <Background gap={20} color="#d8dee9" />
         <Controls />
         <MiniMap
