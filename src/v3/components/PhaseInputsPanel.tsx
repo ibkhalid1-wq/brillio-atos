@@ -28,7 +28,6 @@ interface PhaseInputsPanelProps {
   program: ProgramSummary;
   phaseId: string;
   onSave: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean }) => Promise<void>;
-  onUploadDocument: () => void;
   /** Optional AI assist for a single field; resolves with the new field text. */
   onAssistField?: (phaseId: string, request: FieldAssistRequest) => Promise<string>;
   /**
@@ -190,7 +189,7 @@ function parseKpiActuals(raw: unknown): Record<string, string> {
   }
 }
 
-export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDocument, onAssistField, onValuesChange, locked = false }: PhaseInputsPanelProps) {
+export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistField, onValuesChange, locked = false }: PhaseInputsPanelProps) {
   // Merge any ai-derived dynamic fields for this phase on top of the static
   // methodology schema, so planner-proposed inputs render in this panel.
   const dynamicStore = useMemo(() => getDynamicSchemaStore(program.rawData), [program.rawData]);
@@ -597,13 +596,6 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onUploadDoc
 
       {open ? (
         <div className="v3-phase-inputs-body">
-          {!locked ? (
-            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
-              <button type="button" className="v3-button ghost" style={{ fontSize: 12 }} onClick={onUploadDocument}>
-                ↑ Upload document instead
-              </button>
-            </div>
-          ) : null}
           <div style={{ fontSize: 12, color: "var(--v3-text-muted)", marginBottom: 12, lineHeight: 1.55 }}>
             {schema.description}
           </div>
