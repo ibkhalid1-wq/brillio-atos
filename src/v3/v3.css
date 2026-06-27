@@ -5795,6 +5795,18 @@ button.v3-phase-metric:focus-visible {
   color: var(--v3-accent-b, #2DD4BF);
 }
 
+/* Action row directly beneath a column's zone label. Keeps the inputs column's
+   Import button and the artifacts column's Download/Approve buttons on the same
+   baseline so the two columns read as a single aligned spread. */
+.v3-phase-col-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  min-height: 30px;
+  margin-bottom: 10px;
+}
+
 .v3-focus-header {
   display: flex;
   justify-content: space-between;

@@ -1333,14 +1333,14 @@ export default function StageView({
           the column (beside the zone label) so it's reachable without expanding
           the inputs panel; the panel itself holds the field editors. */}
       <section className="v3-phase-col v3-phase-col--inputs">
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <div className="v3-zone-label" style={{ marginBottom: 0 }}>Input fields</div>
-          {!gateApproved ? (
-            <button type="button" className="v3-button ghost" style={{ fontSize: 12 }} onClick={onUploadDocument}>
-              ↑ Upload document instead
+        <div className="v3-zone-label">Input fields</div>
+        {!gateApproved ? (
+          <div className="v3-phase-col-actions">
+            <button type="button" className="v3-button secondary v3-button-inline-xs" onClick={onUploadDocument}>
+              ↑ Import documents
             </button>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
         {/* The phase-readiness / conflicts / open-gaps planner banner was removed:
             it duplicated signals already surfaced elsewhere — readiness restates
             the Gate score and readiness rings at the top of this screen, while the
@@ -1528,19 +1528,8 @@ export default function StageView({
             </span>
           ) : null}
         </div>
-        {phaseArtifacts.required > 0 ? (
-          missingRequiredArtifacts.length ? (
-            <div className="v3-artifact-summary is-missing">
-              <span className="v3-chip amber v3-chip-tight">{missingRequiredArtifacts.length} required missing</span>
-            </div>
-          ) : (
-            <div className="v3-artifact-summary is-complete">
-              <span className="v3-chip green v3-chip-tight">All required produced</span>
-            </div>
-          )
-        ) : null}
         {phaseArtifacts.present > 0 || showApproveAll ? (
-          <div className="v3-artifact-download-row" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <div className="v3-phase-col-actions v3-artifact-download-row">
             {phaseArtifacts.present > 0 ? (
               <button
                 type="button"
@@ -1572,6 +1561,17 @@ export default function StageView({
               </button>
             ) : null}
           </div>
+        ) : null}
+        {phaseArtifacts.required > 0 ? (
+          missingRequiredArtifacts.length ? (
+            <div className="v3-artifact-summary is-missing">
+              <span className="v3-chip amber v3-chip-tight">{missingRequiredArtifacts.length} required missing</span>
+            </div>
+          ) : (
+            <div className="v3-artifact-summary is-complete">
+              <span className="v3-chip green v3-chip-tight">All required produced</span>
+            </div>
+          )
         ) : null}
         {approvableArtifactCount > 0 && !showApproveAll ? (
           <div className="v3-artifact-approve-hint">
