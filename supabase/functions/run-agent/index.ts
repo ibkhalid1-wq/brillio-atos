@@ -2933,6 +2933,11 @@ function buildDefaultHandoff(
   request: RunAgentRequest,
   payload: ParsedAgentPayload,
 ): AgentHandoff | null {
+  // Only real PHASE agents hand a phase over to the next one. Program-level
+  // support agents (daily-briefing, status-report, risk-review, …) run "against"
+  // the active phase but produce no phase deliverables, so a default handoff from
+  // them would falsely mark the phase ready to advance. Skip them.
+  if (!ATOS_PHASE_SEQUENCE.includes(request.agentId)) return null;
   const currentIndex = ATOS_PHASE_SEQUENCE.indexOf(request.phaseId);
   const nextPhaseId = payload.handoff?.toPhaseId || ATOS_PHASE_SEQUENCE[currentIndex + 1] || "";
   if (!nextPhaseId) return null;
