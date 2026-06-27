@@ -9,29 +9,35 @@ export function PhaseStripCard({
   phase,
   active,
   isNext,
+  locked = false,
   onClick,
 }: {
   program: ProgramSummary;
   phase: ProgramSummary["phases"][number];
   active: boolean;
   isNext: boolean;
+  locked?: boolean;
   onClick: () => void;
 }) {
   const rings = derivePhaseStatusRings(program, phase.id);
   const label = PHASE_LABELS[phase.id] ?? phase.displayName ?? phase.id;
 
   // Rich tooltip — canonical KPI breakdown (inner Input · middle Artifact · outer Gate)
-  const tooltipLines = [
-    rings.hasGate ? `Gate: ${rings.gate}%` : "Gate: no review yet",
-    `Artifact: ${rings.artifact}%`,
-    `Input: ${rings.input}%`,
-    `Overall: ${rings.overall}%`,
-  ].join(" · ");
+  const tooltipLines = locked
+    ? "Locked — clear the previous phase gate to unlock this phase"
+    : [
+        rings.hasGate ? `Gate: ${rings.gate}%` : "Gate: no review yet",
+        `Artifact: ${rings.artifact}%`,
+        `Input: ${rings.input}%`,
+        `Overall: ${rings.overall}%`,
+      ].join(" · ");
 
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={locked ? undefined : onClick}
+      disabled={locked}
+      aria-disabled={locked}
       title={tooltipLines}
       aria-label={`${label} — ${tooltipLines}`}
       style={{
@@ -51,16 +57,17 @@ export function PhaseStripCard({
         border: `1px solid ${
           active ? "var(--v3-accent)" : isNext ? "color-mix(in srgb, var(--v3-accent) 35%, var(--v3-border-soft))" : "var(--v3-border-soft)"
         }`,
-        cursor: "pointer",
+        cursor: locked ? "not-allowed" : "pointer",
+        opacity: locked ? 0.45 : 1,
         position: "relative",
         overflow: "visible",
-        transition: "border-color 0.15s, background 0.15s",
+        transition: "border-color 0.15s, background 0.15s, opacity 0.15s",
       }}
       onMouseEnter={(e) => {
-        if (!active) (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--v3-accent)";
+        if (!active && !locked) (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--v3-accent)";
       }}
       onMouseLeave={(e) => {
-        if (!active) (e.currentTarget as HTMLButtonElement).style.borderColor =
+        if (!active && !locked) (e.currentTarget as HTMLButtonElement).style.borderColor =
           isNext ? "color-mix(in srgb, var(--v3-accent) 35%, var(--v3-border-soft))" : "var(--v3-border-soft)";
       }}
     >
@@ -90,6 +97,24 @@ export function PhaseStripCard({
           whiteSpace: "nowrap",
         }}>
           Next →
+        </span>
+      )}
+
+      {/* Lock badge on phases gated behind an unapproved predecessor */}
+      {locked && (
+        <span
+          aria-hidden="true"
+          style={{
+            position: "absolute", top: -8, right: -4,
+            fontSize: 10, lineHeight: 1,
+            color: "var(--v3-text-muted)",
+            background: "var(--v3-surface)",
+            border: "1px solid var(--v3-border-soft)",
+            borderRadius: 8,
+            padding: "3px 5px",
+          }}
+        >
+          🔒
         </span>
       )}
 

@@ -346,7 +346,7 @@ export function computePhaseReadiness(
     recommendedActions.push({
       id: "validate-assumptions",
       label: "Validate critical assumptions",
-      description: `${unvalidatedCriticalAssumptions.length} critical assumption(s) are blocking gate approval. Add evidence to mark them validated.`,
+      description: `${unvalidatedCriticalAssumptions.length} critical assumption(s) remain unvalidated. Add evidence to mark them validated before closing the phase.`,
       estimatedImpact: 8,
       effort: "hours",
       workspaceId: "risks",
@@ -411,24 +411,22 @@ export function computePhaseReadiness(
   // ── Compute headline score and gate-lock eligibility ──────────────────────────
   // Headline score is the average of artifact completeness (the share of required
   // documents APPROVED) and artifact quality — the two signals that move the phase
-  // toward its gate. Gate locking is a stricter, separate bar: artifacts fully
-  // present (100%) AND artifact quality above 90%, with all hard gate conditions
-  // (exit criteria, critical assumptions, cross-phase dependency) satisfied. The
-  // headline score is informational; it does not gate the lock.
+  // toward its gate. The headline score is informational; it does not gate the lock.
   const score = Math.min(100, Math.max(0, Math.round((artifactsComplete + artifactScore) / 2)));
-  const canApproveGate =
-    artifactsComplete === 100 &&
-    artifactScore > 90 &&
-    mandatoryExitsPassing &&
-    unvalidatedCriticalAssumptions.length === 0 &&
-    !dependencyCheckBlocking;
+  // The single, predictable gate-close requirement: every required artifact is
+  // approved (completeness 100%) AND average artifact quality is above 85%. Exit
+  // criteria, critical assumptions and cross-phase dependency checks stay as
+  // informational signals (surfaced in `missing` and the gate panel) but no
+  // longer block closing — the PM was confused by a gate that read "not ready"
+  // for reasons other than the two metrics the close action actually checks.
+  const canApproveGate = artifactsComplete === 100 && artifactScore > 85;
 
   if (!canApproveGate && artifactsComplete < 100 && (phaseQualityScores.length || artifactsForPhase.length)) {
     missing.push(`Artifacts are ${artifactsComplete}% complete — every required artifact must be approved before the gate can be locked`);
   }
 
-  if (!canApproveGate && artifactsComplete === 100 && artifactScore <= 90) {
-    missing.push(`Artifact quality is ${artifactScore}% — it must exceed 90% before the gate can be locked`);
+  if (!canApproveGate && artifactsComplete === 100 && artifactScore <= 85) {
+    missing.push(`Artifact quality is ${artifactScore}% — it must exceed 85% before the gate can be locked`);
   }
 
   // Sort actions: critical first, then by estimated impact descending

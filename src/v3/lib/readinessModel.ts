@@ -15,8 +15,6 @@
 import type { ProgramSummary, GateReview } from "@/new/types";
 import { ATOS_STANDARD, type MethodologyDefinition } from "@/v3/lib/methodology";
 import { buildArtifactModel, type PhaseArtifactSummary } from "@/v3/lib/artifactModel";
-import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
-import { selectRisks } from "@/v3/lib/programRaid";
 
 export type ReadinessFactorKind = "artifact" | "decision" | "risk" | "exit-criterion" | "quality" | "coverage";
 
@@ -124,54 +122,12 @@ export function explainPhaseReadiness(
     }
   }
 
-  // Gate-derived signals: exit criteria, open decisions, open risks.
-  if (gate) {
-    for (const [index, criterion] of (gate.exitCriteriaStatus || []).entries()) {
-      if (criterion.met) {
-        drivers.push({
-          id: `exit:${index}`,
-          label: criterion.criterion,
-          kind: "exit-criterion",
-          detail: criterion.evidence || "Met",
-          expectedGain: 0,
-        });
-      } else {
-        rawBlockers.push({
-          id: `exit:${index}`,
-          label: criterion.criterion,
-          kind: "exit-criterion",
-          detail: "Exit criterion not yet met",
-          weight: BLOCKER_WEIGHT["exit-criterion"],
-        });
-      }
-    }
-    // Open decisions / risks are counted from the LIVE queues — not the gate
-    // record's frozen openDecisions/openRisks snapshot, which drifts out of date
-    // the moment the team resolves something. Using the same selectors the Action
-    // Center and RAID rail use keeps every surface on one number.
-    const openDecisionCount = deriveOpenRecommendedActions(program).filter(
-      (d) => !d.phaseId || d.phaseId === phaseId,
-    ).length;
-    if (openDecisionCount > 0) {
-      rawBlockers.push({
-        id: "decisions:open",
-        label: `${openDecisionCount} open action${openDecisionCount === 1 ? "" : "s"}`,
-        kind: "decision",
-        detail: "Resolve to unblock the gate",
-        weight: BLOCKER_WEIGHT.decision * Math.min(openDecisionCount, 3),
-      });
-    }
-    const openRiskCount = selectRisks(program, { phaseId }).length;
-    if (openRiskCount > 0) {
-      rawBlockers.push({
-        id: "risks:open",
-        label: `${openRiskCount} open risk${openRiskCount === 1 ? "" : "s"}`,
-        kind: "risk",
-        detail: "Mitigate or accept to raise readiness",
-        weight: BLOCKER_WEIGHT.risk * Math.min(openRiskCount, 3),
-      });
-    }
-  }
+  // Gate readiness is intentionally limited to the two signals that actually gate
+  // closing a phase: artifact completeness and artifact quality (handled above).
+  // Exit criteria, open decisions and open risks were previously folded in here
+  // as blockers, which made the gate read "not ready" for reasons unrelated to the
+  // close requirement and confused PMs. They remain visible in their own sections
+  // (Exit Criteria list, Action Center, RAID rail) but no longer drive readiness.
 
   // Distribute the readiness gap across blockers by weight → expected gain.
   const gap = clamp(100 - score);

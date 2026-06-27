@@ -8,6 +8,7 @@ import LiteGateModal from "@/v3/components/LiteGateModal";
 import { ReadinessExplainer } from "@/v3/components/ReadinessExplainer";
 import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
 import { getGateThreshold } from "@/v3/lib/confidenceScore";
+import { getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
 import { selectDecisions } from "@/v3/lib/programRaid";
 
 interface ProgrammeHealthViewProps {
@@ -809,6 +810,13 @@ export default function ProgrammeHealthView({
       : {};
   }, [inner]);
 
+  // Same strict sequential lock set the Today phase strip uses, so a phase that
+  // can't be entered there can't be entered from the Gate Timeline either.
+  const lockedPhaseIds = useMemo(
+    () => (program ? getLockedPhaseIds(program) : new Set<string>()),
+    [program],
+  );
+
   // Decisions shown here must agree with the Action Center / rail counts. The
   // canonical open set (selectDecisions) includes synthesised agent actions that
   // the raw persisted decisionQueue lacks, so use it for the "open" rows and add
@@ -931,11 +939,15 @@ export default function ProgrammeHealthView({
               const { cls, label } = gateStatusChip(status);
               const isActive = phaseId === activePhaseId;
               const score = gate?.readinessScore;
+              const locked = lockedPhaseIds.has(phaseId);
 
               return (
                 <button
                   key={phaseId}
-                  onClick={() => {
+                  disabled={locked}
+                  aria-disabled={locked}
+                  title={locked ? "Locked — clear the previous phase gate to unlock this phase" : undefined}
+                  onClick={locked ? undefined : () => {
                     onSetPhase(phaseId);
                     onNavigateToPhase?.(phaseId);
                   }}
@@ -948,7 +960,8 @@ export default function ProgrammeHealthView({
                     background: isActive ? "var(--v3-accent-soft)" : "transparent",
                     border: isActive ? "1px solid var(--v3-accent)" : "1px solid transparent",
                     borderRadius: "var(--v3-radius)",
-                    cursor: "pointer",
+                    cursor: locked ? "not-allowed" : "pointer",
+                    opacity: locked ? 0.45 : 1,
                     textAlign: "left",
                     width: "100%",
                   }}
@@ -966,7 +979,11 @@ export default function ProgrammeHealthView({
                     >
                       {PHASE_LABELS[phaseId] ?? phaseId}
                     </div>
-                    {score !== undefined && (
+                    {locked ? (
+                      <div style={{ fontSize: 10, color: "var(--v3-text-muted)", marginTop: 1 }}>
+                        🔒 Locked
+                      </div>
+                    ) : score !== undefined && (
                       <div style={{ fontSize: 10, color: "var(--v3-text-muted)", marginTop: 1 }}>
                         {score}% ready
                       </div>

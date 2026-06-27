@@ -9,6 +9,7 @@ import { Kpi } from "@/v3/components/ui/Kpi";
 import { PhaseStripCard } from "@/v3/components/PhaseStripCard";
 import { selectBlockers, selectDecisions, selectRisks } from "@/v3/lib/programRaid";
 import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
+import { getLockedPhaseIds, computePhaseReadiness } from "@/v3/lib/phaseReadiness";
 
 interface InsightFeedViewProps {
   program: ProgramSummary | null;
@@ -303,23 +304,28 @@ export default function InsightFeedView({
       });
     }
 
-    // Gate readiness uses the same canonical signal the rest of the app shows
-    // (confidence breakdown for the active phase) against the phase-calibrated
-    // threshold from getGateThreshold, so Home never contradicts the command
-    // panel or phase strip with a different number.
-    const gateReadiness = confidenceResult?.breakdown?.gateReadiness;
+    // Gate readiness reflects the ONLY two things that gate closing a phase:
+    // every required artifact approved (completeness 100%) and artifact quality
+    // above 85%. We surface the alert when the active phase isn't closeable yet,
+    // describing exactly which of the two metrics is short — no exit-criteria or
+    // generic-threshold language that doesn't map to the close action.
+    const activeReadiness =
+      activePhase && program ? computePhaseReadiness(program, activePhase.id) : null;
     const activeGateApproved =
       (activePhase && (program?.gateReviews?.[activePhase.id] as { status?: string } | undefined)?.status === "approved") || false;
-    if (typeof gateReadiness === "number" && gateReadiness < gateThreshold && !activeGateApproved) {
-      const score = Math.round(gateReadiness);
-      const gateAccent = score < 40 ? "var(--v3-red)" : "var(--v3-amber)";
-      const phaseLabel = activePhase ? (PHASE_LABELS[activePhase.id] ?? activePhase.displayName) : "current";
+    if (activePhase && activeReadiness && !activeReadiness.canApproveGate && !activeGateApproved) {
+      const phaseLabel = PHASE_LABELS[activePhase.id] ?? activePhase.displayName;
+      const needsArtifacts = activeReadiness.artifactsComplete < 100;
+      const gateAccent = needsArtifacts && activeReadiness.artifactsComplete < 50 ? "var(--v3-red)" : "var(--v3-amber)";
+      const description = needsArtifacts
+        ? `${activeReadiness.artifactsComplete}% of required ${phaseLabel} artifacts are approved. Closing the phase needs all of them approved (100%) at above 85% quality.`
+        : `${phaseLabel} artifacts are 100% approved but quality is ${activeReadiness.artifactScore}%. Closing the phase needs quality above 85%.`;
       cards.push({
         priority: 3 as 1 | 2 | 3,
         accent: gateAccent,
         icon: "⬡",
         title: "Gate Readiness Alert",
-        description: `The ${phaseLabel} gate shows ${score}% readiness — below the ${gateThreshold}% threshold. Check gate readiness to identify what's blocking progress.`,
+        description,
         actionLabel: "View Gates →",
         onAction: onNavigateToGates,
       });
@@ -372,6 +378,15 @@ export default function InsightFeedView({
   const blockerCount = program ? selectBlockers(program).length : 0;
   const riskCount = program ? selectRisks(program).length : 0;
   const goToProgramme = () => (headerActivePhase ? onNavigateToPhase(headerActivePhase.id) : onNavigateToGates());
+
+  // Strict sequential gating: a phase is reachable only once its predecessor's
+  // gate is approved. Reuse the canonical lock set (same source the status rings
+  // use to mute locked phases) so the strip's clickability and ring muting never
+  // disagree. A brand-new programme (no gates approved) exposes only its first phase.
+  const lockedPhaseIds = useMemo(
+    () => (program ? getLockedPhaseIds(program) : new Set<string>()),
+    [program],
+  );
 
   // C2: index of the first "upcoming" phase after the active one
   const nextPhaseId = useMemo(() => {
@@ -727,6 +742,7 @@ export default function InsightFeedView({
                   phase={phase}
                   active={phase.id === activePhaseId}
                   isNext={phase.id === nextPhaseId}
+                  locked={lockedPhaseIds.has(phase.id)}
                   onClick={() => onOpenPhase(phase.id)}
                 />
               ))}

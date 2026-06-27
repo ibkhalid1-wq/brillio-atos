@@ -199,13 +199,15 @@ describe("Test Run — Agentic CRM: blockers hard-stop and then clear", () => {
     ...over,
   });
 
-  it("an unvalidated critical assumption blocks the gate and recommends a validate action", () => {
+  it("surfaces an unvalidated critical assumption without hard-stopping the gate", () => {
     const program = buildCrm({
       raidLog: [assumption({ id: "asm", title: "Sales team adopts agent suggestions" })],
     });
     const readiness = computePhaseReadiness(program, "strategy");
 
-    expect(readiness.canApproveGate).toBe(false);
+    // The single gate-close rule is artifacts 100% + quality >85%. Assumptions are
+    // surfaced as informational signals (missing + recommended action), not blockers.
+    expect(readiness.canApproveGate).toBe(true);
     expect(readiness.missing.some((m) => m.includes("critical assumption"))).toBe(true);
     expect(readiness.recommendedActions.map((a) => a.id)).toContain("validate-assumptions");
   });
@@ -244,20 +246,24 @@ describe("Test Run — Agentic CRM: blockers hard-stop and then clear", () => {
     expect(computePhaseReadiness(program, "strategy").canApproveGate).toBe(true);
   });
 
-  it("a critical assumption is scoped to its own phase — a design assumption does not block strategy", () => {
+  it("a critical assumption is scoped to its own phase — surfaced on design, not strategy", () => {
     const program = buildCrm({
       raidLog: [assumption({ id: "asm", title: "Microservice split is feasible", phase: "design" })],
     });
-    expect(computePhaseReadiness(program, "strategy").canApproveGate).toBe(true);
-    expect(computePhaseReadiness(program, "design").canApproveGate).toBe(false);
+    // The gate-close rule (artifacts 100% + quality >85%) approves both phases; the
+    // unvalidated assumption is surfaced informationally only on its own phase.
+    expect(computePhaseReadiness(program, "design").missing.some((m) => m.includes("critical assumption"))).toBe(true);
+    expect(computePhaseReadiness(program, "strategy").missing.some((m) => m.includes("critical assumption"))).toBe(false);
   });
 
-  it("a blocking cross-phase dependency check hard-stops the gate; clearing it restores approval", () => {
+  it("surfaces a blocking cross-phase dependency check informationally without hard-stopping the gate", () => {
     const blocked = buildCrm({
       dependencyCheck: { mobilise: { passed: false, issues: [{ severity: "blocking", description: "Plan contradicts the strategy charter" }] } },
     });
     const blockedReadiness = computePhaseReadiness(blocked, "mobilise");
-    expect(blockedReadiness.canApproveGate).toBe(false);
+    // Dependency verdict no longer hard-stops the gate — it is surfaced in `missing`
+    // (and dependencyCheckPassed) so the PM sees it, but does not block closing.
+    expect(blockedReadiness.canApproveGate).toBe(true);
     expect(blockedReadiness.dependencyCheckPassed).toBe(false);
     expect(blockedReadiness.missing.some((m) => m.includes("dependency check failed"))).toBe(true);
 

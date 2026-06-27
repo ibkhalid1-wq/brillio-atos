@@ -1267,7 +1267,7 @@ export default function StageView({
                             <button
                               type="button"
                               className="v3-button ghost v3-button-inline-xs v3-phase-gate-recheck"
-                              disabled={isLocking || !(readiness.artifactsComplete >= 100 && readiness.artifactScore > 85)}
+                              disabled={isLocking || !readiness.canApproveGate}
                               title="Close this phase. Enabled once every required artifact is approved and quality clears 85%."
                               onClick={() => setLockConfirmOpen(true)}
                             >
