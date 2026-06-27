@@ -154,6 +154,8 @@ export function useAgentTriggers({
   const adoptionRunning = useRef(false);
   const healthHeatmapRunning = useRef(false);
   const scopePcrRunning = useRef(false);
+  const phaseEstimatorRunning = useRef(false);
+  const phaseEstimatorLastPhase = useRef<string | null>(null);
   const deckRunning = useRef(false);
   const patternExtractRunning = useRef(false);
   const patternQueryRunning = useRef(false);
@@ -258,6 +260,8 @@ export function useAgentTriggers({
       raidSnapshotReady.current = false;
       milestoneSnapshotReady.current = false;
       decisionSnapshotReady.current = false;
+      phaseEstimatorRunning.current = false;
+      phaseEstimatorLastPhase.current = null;
       setRetroRunningPhases(new Set());
       setEscalationIsRunning(false);
       return;
@@ -287,6 +291,8 @@ export function useAgentTriggers({
     raidSnapshotReady.current = false;
     milestoneSnapshotReady.current = false;
     decisionSnapshotReady.current = false;
+    phaseEstimatorRunning.current = false;
+    phaseEstimatorLastPhase.current = null;
     setRetroRunningPhases(new Set());
     setEscalationIsRunning(false);
     previousRunStatuses.current = new Map(activeRuns.map((run) => [run.id, run.status]));
@@ -444,8 +450,28 @@ export function useAgentTriggers({
     const phaseArtifactBucket = (rawData.phaseArtifacts as Record<string, Record<string, unknown>> | undefined)?.[activePhaseId];
     const hasPhaseArtifacts = Boolean(phaseArtifactBucket && Object.keys(phaseArtifactBucket).length > 0);
     if (!activeMilestones.length && !(gateReviews[activePhaseId]?.exitCriteriaStatus || []).length && !hasPhaseArtifacts) return;
+    if (phaseEstimatorRunning.current) return;
+
+    // rawData is a fresh object reference on every program refetch, and the
+    // estimator's own write triggers a refetch. Without a guard this effect
+    // re-fires every few seconds, spending runs and churning artifact state.
+    // Only re-run on a phase switch or when a watched field genuinely changed.
+    const phaseChanged = phaseEstimatorLastPhase.current !== activePhaseId;
+    const fieldsChanged = hasWatchedFieldChanged(
+      "phase-completion-estimator",
+      rawData,
+      lastRunSnapshots.current["phase-completion-estimator"] || null,
+    );
+    if (!phaseChanged && !fieldsChanged) return;
+
+    // Capture the snapshot at fire time (not in onFinally) so the post-run
+    // refetch compares against the inputs that triggered this run, making the
+    // trigger self-terminating instead of looping.
+    lastRunSnapshots.current["phase-completion-estimator"] = captureSnapshot("phase-completion-estimator", rawData);
+    phaseEstimatorLastPhase.current = activePhaseId;
+    phaseEstimatorRunning.current = true;
     void runAgentSafely({ agentId: "phase-completion-estimator", phaseId: activePhaseId, triggeredBy: "trigger" }, () => {
-      lastRunSnapshots.current["phase-completion-estimator"] = captureSnapshot("phase-completion-estimator", rawData);
+      phaseEstimatorRunning.current = false;
     });
   }, [activePhaseId, canRunAgents, gateReviews, milestones, rawData, runAgentSafely]);
 
