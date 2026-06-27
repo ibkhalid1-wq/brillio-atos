@@ -986,18 +986,31 @@ export function buildDecisionQueue(
       ? handoff.toPhaseId
       : handoffSequence[index + 1];
     if (!targetPhaseId) continue;
+    // A handoff only signals readiness when the upstream PHASE agent actually
+    // completed with something to hand over. Program-level support agents
+    // (daily-briefing, status-report, …) and empty runs emit a default handoff
+    // with no artifacts or decisions; surfacing that as "Handoff Ready" tells a
+    // PM the phase is done to move on when nothing has been produced — so skip
+    // handoffs that lack a phase-agent origin or any readiness evidence.
+    const handoffArtifactCount = Array.isArray(handoff.artifactIds)
+      ? handoff.artifactIds.length
+      : (handoff.approvedArtifactCount ?? 0);
+    const handoffDecisionCount = Array.isArray(handoff.keyDecisions) ? handoff.keyDecisions.length : 0;
+    const fromPhaseAgent = !handoff.fromAgentId || handoffSequence.includes(handoff.fromAgentId);
+    if (!fromPhaseAgent || (handoffArtifactCount === 0 && handoffDecisionCount === 0)) continue;
     const nextPhaseGuidance = projectData?.phaseGuidance?.[targetPhaseId]?.fields ?? {};
     const nextPhaseStarted = Object.values(nextPhaseGuidance)
       .some((value: any) => typeof value === "string" && value.length > 5)
       || getCreatedAt(projectData?.phaseIncomingHandoffs?.[targetPhaseId]?.generatedAt) > getCreatedAt(handoff.generatedAt);
     if (nextPhaseStarted) continue;
+    const handoffOpenRisks = handoff.openRiskCount ?? 0;
     queue.push({
       id: `handoff-${phaseId}`,
       type: "handoff_ready",
       phaseId,
       priority: "medium",
       title: `Handoff Ready: ${phaseId} → ${targetPhaseId}`,
-      summary: `${handoff.approvedArtifactCount} artifacts · ${handoff.openRiskCount} open risk(s)`,
+      summary: `${handoffArtifactCount} artifact${handoffArtifactCount === 1 ? "" : "s"} · ${handoffOpenRisks} open risk(s)`,
       createdAt: getCreatedAt(handoff.generatedAt),
       actionLabel: `Open ${targetPhaseId}`,
       dismissable: true,
