@@ -430,6 +430,7 @@ export default function ExecutiveView({
                   }}
                 >
                   {confidenceScore}
+                  <span style={{ fontSize: 24, fontWeight: 800, marginLeft: 2 }}>%</span>
                 </div>
                 <div style={{ fontSize: 11, color: "var(--v3-text-muted)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   Confidence
