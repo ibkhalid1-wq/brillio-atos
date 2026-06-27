@@ -314,7 +314,7 @@ export default function DocumentImportPanel({
             disabled={!programId || !selectedFile}
             style={{ width: "100%", justifyContent: "center" }}
           >
-            {aiAvailable ? "Import & Extract with AI →" : "Upload Document →"}
+            {aiAvailable ? "Import & Extract →" : "Upload Document →"}
           </button>
 
           {!aiAvailable && (
