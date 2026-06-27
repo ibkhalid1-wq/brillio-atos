@@ -2,17 +2,7 @@ import React, { useMemo, useRef, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import { supabase } from "@/integrations/supabase/client";
 import { parseDocumentToText } from "@/new/lib/parseDocumentToText";
-import { PROGRAM_ARCHETYPES, type MethodologyVariant } from "@/v3/lib/methodology";
-
-// Single source of truth for archetype → methodology variant, derived from the
-// methodology registry so the wizard never drifts from PROGRAM_ARCHETYPES.
-const ARCHETYPE_VARIANT: Record<string, MethodologyVariant> = PROGRAM_ARCHETYPES.reduce(
-  (acc, archetype) => {
-    acc[archetype.id] = archetype.methodologyVariant;
-    return acc;
-  },
-  {} as Record<string, MethodologyVariant>,
-);
+import type { MethodologyVariant } from "@/v3/lib/methodology";
 
 interface ProgramSetupWizardProps {
   program: ProgramSummary;
@@ -24,7 +14,7 @@ interface ProgramSetupWizardProps {
 export interface ProgramSetupPatch {
   name: string;
   client: string;
-  /** Selected programme archetype (only set when the user picks one in step 0). */
+  /** Optional programme archetype. No longer selected in the wizard; methodology defaults to atos-standard. */
   archetype?: string;
   /** Methodology variant derived from the archetype. Persisted to program data. */
   methodology?: MethodologyVariant;
@@ -71,19 +61,9 @@ function phaseTargetDates(program: ProgramSummary): Record<string, string> {
   }, {});
 }
 
-const ARCHETYPES: Array<{ id: string; icon: string; label: string; description: string; popular?: boolean }> = [
-  { id: "technology-implementation", icon: "⚙", label: "Technology Implementation", description: "Deploying a platform, system migration, or software rollout", popular: true },
-  { id: "business-transformation", icon: "◈", label: "Business Transformation", description: "Operating model change, org redesign, or strategic shift" },
-  { id: "regulatory-programme", icon: "⊞", label: "Regulatory Programme", description: "Compliance-driven with mandated controls and formal governance" },
-  { id: "agile-delivery", icon: "◎", label: "Agile Delivery", description: "Iterative delivery using sprints, backlogs, and continuous release" },
-];
-
 export default function ProgramSetupWizard({ program, onSave, onClose, isSaving }: ProgramSetupWizardProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const projectMeta = useMemo(() => readProjectMeta(program), [program]);
-  const existingArchetype = typeof projectMeta.archetype === "string" ? projectMeta.archetype : null;
-  const [step, setStep] = useState(existingArchetype ? 1 : 0);
-  const [selectedArchetype, setSelectedArchetype] = useState<string | null>(existingArchetype);
   const targetDates = useMemo(() => phaseTargetDates(program), [program]);
   const [prefilling, setPrefilling] = useState(false);
   const [prefilledFields, setPrefilledFields] = useState<Set<string>>(new Set());
@@ -149,76 +129,8 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
   return (
     <div className="v3-wizard-overlay" role="dialog" aria-modal="true" aria-label="Programme setup">
       <div className="v3-wizard">
-        {step === 0 ? (
-          <>
-            <div>
-              <h2 className="v3-wizard-title">What kind of programme is this?</h2>
-              <p style={{ fontSize: 13, color: "var(--v3-text-muted)", marginTop: 4 }}>
-                ATOS will tailor the methodology, gates, and suggested KPIs to match your programme type.
-              </p>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, margin: "16px 0" }}>
-              {ARCHETYPES.map((archetype) => {
-                const selected = selectedArchetype === archetype.id;
-                return (
-                  <button
-                    key={archetype.id}
-                    type="button"
-                    onClick={() => setSelectedArchetype(archetype.id)}
-                    style={{
-                      position: "relative",
-                      border: selected ? "2px solid var(--v3-accent)" : "1.5px solid var(--v3-border)",
-                      background: selected ? "var(--v3-accent-soft)" : "var(--v3-surface-2)",
-                      borderRadius: 10,
-                      padding: 16,
-                      textAlign: "left",
-                      cursor: "pointer",
-                      transition: "border-color 0.15s, background 0.15s",
-                    }}
-                    aria-pressed={selected}
-                  >
-                    {archetype.popular ? (
-                      <span style={{
-                        position: "absolute",
-                        top: 8,
-                        right: 8,
-                        fontSize: 10,
-                        fontWeight: 700,
-                        color: "var(--v3-accent)",
-                        background: "var(--v3-accent-soft)",
-                        border: "1px solid var(--v3-accent-glow)",
-                        borderRadius: 4,
-                        padding: "1px 6px",
-                        letterSpacing: "0.04em",
-                      }}>Most popular</span>
-                    ) : null}
-                    <div style={{ fontSize: 24, marginBottom: 8 }}>{archetype.icon}</div>
-                    <div style={{ fontWeight: 700, fontSize: 13, color: "var(--v3-text-primary)", marginBottom: 4 }}>{archetype.label}</div>
-                    <div style={{ fontSize: 12, color: "var(--v3-text-muted)", lineHeight: 1.4 }}>{archetype.description}</div>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-              <button type="button" className="v3-button ghost" onClick={onClose}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="v3-button primary"
-                disabled={!selectedArchetype}
-                onClick={() => setStep(1)}
-              >
-                Next
-              </button>
-            </div>
-          </>
-        ) : (
-        <>
         <div>
-          <h2 className="v3-wizard-title">Programme setup</h2>
+          <h2 className="v3-wizard-title">Name your programme</h2>
         </div>
 
         <section>
@@ -279,18 +191,12 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
             onClick={() => onSave({
               name: name.trim(),
               client: client.trim(),
-              ...(selectedArchetype ? {
-                archetype: selectedArchetype,
-                methodology: ARCHETYPE_VARIANT[selectedArchetype] ?? "atos-standard",
-              } : {}),
               phases: phases.map((phase) => ({ id: phase.id, pct: phase.pct, targetDate: phase.targetDate })),
             })}
           >
             {isSaving ? "Saving…" : "Save & close"}
           </button>
         </div>
-        </>
-        )}
       </div>
     </div>
   );
