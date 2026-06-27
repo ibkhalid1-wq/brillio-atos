@@ -24,22 +24,22 @@ function prettyAgent(agentId: string): string {
 
 // ─── Autonomous agents shown in the status grid ───────────────────────────────
 
+// NOTE: keep this in lockstep with DISABLED_AGENTS in AppShellV3 — retired agent
+// families (critical-path, retro, pattern-extract, pattern-query, twin-sync,
+// benchmark-comparator) are removed from the product surface, so they must not
+// appear on the status grid as perpetually "pending" cards that can never run.
 const AGENT_STATUS_GROUPS: Array<{ label: string; agents: string[] }> = [
   {
     label: "Core Delivery",
     agents: [
       "narrative", "plan", "risk", "milestone", "budget",
-      "critical-path", "change-impact", "stakeholder", "adoption",
-      "health-heatmap", "retro", "deck", "scope-pcr", "daily-briefing",
+      "change-impact", "stakeholder", "adoption",
+      "health-heatmap", "deck", "scope-pcr", "daily-briefing",
     ],
   },
   {
     label: "Governance",
     agents: ["escalation", "closure"],
-  },
-  {
-    label: "Intelligence",
-    agents: ["pattern-extract", "pattern-query", "twin-sync", "benchmark-comparator"],
   },
 ];
 
@@ -101,21 +101,15 @@ const AGENT_DESCRIPTIONS: Record<string, string> = {
   "risk":                  "Identifies RAID entries, scores likelihood and impact, proposes mitigations.",
   "milestone":             "Tracks delivery milestones, flags slippage, and recalculates ETA.",
   "budget":                "Monitors spend vs forecast, surfaces variance and burn-rate alerts.",
-  "critical-path":         "Maps schedule dependencies and highlights float on the critical path.",
   "change-impact":         "Assesses organisational change impact and readiness across impacted groups.",
   "stakeholder":           "Maps stakeholders by influence and engagement level, flags gaps.",
   "adoption":              "Scores adoption readiness, tracks training completion and resistance signals.",
   "health-heatmap":        "Scores programme health across 8 dimensions and surfaces red flags.",
-  "retro":                 "Synthesises retrospective findings and lessons-learned from phase data.",
   "deck":                  "Builds a structured executive slide deck from programme artefacts.",
   "scope-pcr":             "Tracks scope baseline and logs change requests against approved scope.",
   "daily-briefing":        "Produces a concise daily status brief covering key events and risks.",
   "escalation":            "Monitors unresolved risks and decisions, triggers escalation alerts.",
   "closure":               "Validates programme closure readiness and generates closure artefacts.",
-  "pattern-extract":       "Extracts reusable delivery patterns from programme data for the library.",
-  "pattern-query":         "Queries the pattern library for relevant precedents and accelerators.",
-  "twin-sync":             "Synchronises the digital twin graph with live programme state.",
-  "benchmark-comparator":  "Benchmarks this programme against similar transformation patterns.",
 };
 
 // ─── Agent run history (drill-down) ──────────────────────────────────────────
