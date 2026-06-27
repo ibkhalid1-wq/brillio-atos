@@ -128,6 +128,7 @@ function deriveArtifactQualityIssues(opts: {
   const missing = inputRequirements.filter((req) => !req.filled);
   const present = inputRequirements.filter((req) => req.filled);
   const allInputsFilled = inputRequirements.length > 0 && missing.length === 0;
+  const hasModelImprovements = (improvements ?? []).some((s) => !!s && s.trim());
   if (typeof score === "number") {
     if (score < 60) {
       issues.push({
@@ -152,7 +153,10 @@ function deriveArtifactQualityIssues(opts: {
   for (const req of missing) {
     issues.push({ severity: "high", title: `Add "${req.label}"`, detail: req.requirement });
   }
-  if (allInputsFilled && typeof score === "number" && score < 80) {
+  // Generic depth nudge — only when the model returned no specific suggestions to
+  // show below it. When `improvements` exist, they carry the actionable advice and
+  // this blanket "make inputs more specific" line is just redundant noise.
+  if (allInputsFilled && typeof score === "number" && score < 80 && !hasModelImprovements) {
     issues.push({
       severity: "medium",
       title: "Deepen the grounding inputs",
