@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
 import { selectPhaseMetrics } from "@/v3/lib/programMetrics";
 import { selectBlockers, selectRisks, type RaidScope } from "@/v3/lib/programRaid";
+import { synthesizeRaid, type RaidLinkage } from "@/v3/lib/raidSynthesis";
 import { PHASE_LABELS } from "@/v3/lib/uiHelpers";
 import { getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
 import { DrillDownLinks, artifactLabelFor, inputLabelFor } from "@/v3/components/DrillDownLinks";
@@ -66,6 +67,47 @@ function priorityVariant(priority: string): "critical" | "high" | "medium" | "lo
   if (priority === "high") return "high";
   if (priority === "low") return "low";
   return "medium";
+}
+
+const LINK_VERB_FORWARD: Record<RaidLinkage["relation"], string> = {
+  causes: "causes",
+  blocks: "blocks",
+  escalates: "escalates",
+};
+const LINK_VERB_BACK: Record<RaidLinkage["relation"], string> = {
+  causes: "caused by",
+  blocks: "blocked by",
+  escalates: "escalated by",
+};
+
+/**
+ * Connective overlay for one entry: the cross-type links it participates in,
+ * read from the entry's perspective ("caused by risk: …" on a decision,
+ * "blocks decision: …" on a blocker). Pure presentation over the deterministic
+ * synthesis — it never resolves or counts anything.
+ */
+function RaidLinkBadges({ entryId, links }: { entryId: string; links: RaidLinkage[] }) {
+  if (!links.length) return null;
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+      {links.map((link) => {
+        const isFrom = link.from.id === entryId;
+        const other = isFrom ? link.to : link.from;
+        const verb = isFrom ? LINK_VERB_FORWARD[link.relation] : LINK_VERB_BACK[link.relation];
+        return (
+          <span
+            key={link.id}
+            className="v3-chip muted"
+            title={`${link.rationale} (confidence: ${Math.round(link.confidence * 100)}%)`}
+            style={{ fontSize: 11, display: "inline-flex", gap: 4, alignItems: "center" }}
+          >
+            <span aria-hidden style={{ opacity: 0.6 }}>↳</span>
+            {verb} {other.kind}: {other.label}
+          </span>
+        );
+      })}
+    </div>
+  );
 }
 
 function gateVariant(status: GateReview["status"] | undefined): "approved" | "remediation" | "pending" | "locked" {
@@ -157,6 +199,7 @@ function GateTimeline({
 
 function DecisionCard({
   decision,
+  links,
   modifyOpen,
   modifyValue,
   previewOpen,
@@ -168,6 +211,7 @@ function DecisionCard({
   onDrill,
 }: {
   decision: ReviewDecision;
+  links: RaidLinkage[];
   modifyOpen: boolean;
   modifyValue: string;
   previewOpen: boolean;
@@ -276,6 +320,8 @@ function DecisionCard({
           relatedInputIds={decision.relatedInputIds}
           onDrill={onDrill}
         />
+
+        <RaidLinkBadges entryId={decision.id} links={links} />
 
         <div className="v3-governance-decision-actions">
           <button type="button" className="v3-button primary" style={{ fontSize: 12 }} onClick={onGoToInput}>
@@ -404,10 +450,12 @@ function GateDetailPanel({
 
 function RaidCard({
   entry,
+  links,
   onGoToInput,
   onDrill,
 }: {
   entry: RAIDEntry;
+  links: RaidLinkage[];
   onGoToInput: () => void;
   onDrill: (anchor: string) => void;
 }) {
@@ -436,6 +484,8 @@ function RaidCard({
           relatedInputIds={entry.relatedInputIds}
           onDrill={onDrill}
         />
+
+        <RaidLinkBadges entryId={entry.id} links={links} />
 
         <div className="v3-governance-decision-actions">
           <button type="button" className="v3-button primary" style={{ fontSize: 12 }} onClick={onGoToInput}>
@@ -609,10 +659,28 @@ export default function DecideView({
     return (phaseId: string | null | undefined) => !phaseId || phaseId === "all" || !locked.has(phaseId);
   }, [program]);
 
+  const personaId = persona === "executive" ? "executive" : persona === "architect" ? "architect" : "delivery_lead";
+
+  // Cross-type linkage overlay, indexed by entry id. Computed at programme scope
+  // so a card's links stay stable regardless of the active tab/phase filter —
+  // the chips inform even when the linked entry sits in another tab. Pure read;
+  // never resolves or counts anything.
+  const linkagesByEntry = useMemo(() => {
+    const { linkages } = synthesizeRaid(program, "programme", personaId);
+    const map = new Map<string, RaidLinkage[]>();
+    for (const link of linkages) {
+      for (const id of [link.from.id, link.to.id]) {
+        const list = map.get(id);
+        if (list) list.push(link);
+        else map.set(id, [link]);
+      }
+    }
+    return map;
+  }, [program, personaId]);
+
   const open = useMemo(() => {
     // Shared derivation (synthesise → merge persisted resolution → open filter)
     // so this feed and the rail badge count cannot drift apart.
-    const personaId = persona === "executive" ? "executive" : persona === "architect" ? "architect" : "delivery_lead";
     const queue = (deriveOpenRecommendedActions(program, personaId) as ReviewDecision[])
       .filter((decision) => isPhaseActionable(decision.phaseId));
     // "This phase" scope follows the phase selected in the Gate timeline (falling
@@ -739,6 +807,7 @@ export default function DecideView({
         </div>
         <DecisionCard
           decision={decision}
+          links={linkagesByEntry.get(decision.id) ?? []}
           previewOpen={!!previewMap.get(decision.id)}
           modifyOpen={!!modifyOpenMap.get(decision.id)}
           modifyValue={modifyMap.get(decision.id) || ""}
@@ -835,6 +904,7 @@ export default function DecideView({
             </div>
             <RaidCard
               entry={entry}
+              links={linkagesByEntry.get(entry.id) ?? []}
               onGoToInput={() => goToItemSource({ itemPhase: entry.phase, title: entry.title, kindLabel: entry.type === "blocker" ? "Blocker" : entry.type === "risk" ? "Risk" : "Item", relatedArtifactId: entry.relatedArtifactId, relatedInputIds: entry.relatedInputIds })}
               onDrill={(anchor) => onNavigateToPhaseInputs(resolveTargetPhase(entry.phase), anchor)}
             />
