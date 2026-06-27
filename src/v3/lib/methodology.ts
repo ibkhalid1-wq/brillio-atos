@@ -197,9 +197,15 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         // sponsor, industry, constraints, cost, and the primary success metric —
         // bounded by the programme start/end dates. So every strategy input
         // feeds it: all must be present to generate, and any change stales it.
-        "strategic-roadmap": ["businessObjective", "sponsor", "industry", "startDate", "targetEndDate", "costAssumption", "constraints", "successMetric"],
+        "strategic-roadmap": ["businessObjective", "sponsor", "industry", "startDate", "targetEndDate", "costAssumption", "constraints", "successMetric", "validationApproach"],
         "charter": ["industry", "startDate", "targetEndDate"],
         "business-case": ["industry", "costAssumption"],
+        // The validation/de-risking ladder shapes how outcomes are sequenced and
+        // proven, so it feeds the outcome framework and the roadmap. It is
+        // optional, so the generation gate (StageView) treats unfilled optional
+        // flow inputs as non-blocking — the edge wires the visual flow + staleness
+        // without locking generation on an appetite-level field.
+        "outcome-framework": ["successMetric", "validationApproach"],
       },
     },
     {

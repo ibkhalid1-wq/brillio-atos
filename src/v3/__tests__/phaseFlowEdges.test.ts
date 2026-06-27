@@ -79,8 +79,12 @@ describe("getArtifactInputFields", () => {
     );
   });
 
-  it("returns the static-only mapping when the methodology declares no flow for the artifact", () => {
-    expect(getArtifactInputFields("strategy", "outcome-framework")).toEqual(["successMetric"]);
+  it("merges the static success-metric edge with the methodology flow for outcome-framework", () => {
+    // successMetric comes from the static field→artifact map; validationApproach is
+    // declared in the methodology artifactInputFlow. Both must surface, deduped.
+    expect(new Set(getArtifactInputFields("strategy", "outcome-framework"))).toEqual(
+      new Set(["successMetric", "validationApproach"]),
+    );
   });
 
   it("returns no fields for a dynamic phase with no store (nothing to wait on)", () => {

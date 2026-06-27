@@ -1637,12 +1637,21 @@ export default function StageView({
               // produces a thin artifact and burns a ~90s model run. An artifact
               // with no declared input dependencies has nothing to wait on.
               const flowedFieldIds = getArtifactInputFields(activePhase.id, def.id, dynamicStore);
-              const missingFlowedFields = flowedFieldIds.filter((fieldId) => !isInputFilled(preFlightInputs[fieldId]));
+              const phaseFieldDefs = getPhaseInputSchema(activePhase.id, dynamicStore).fields;
+              // Only *required* flow inputs gate generation. An optional flow field
+              // (e.g. the appetite-level validation approach) still wires the visual
+              // flow + staleness, but a blank one must not lock the Generate button —
+              // optional means "enriches if present", not "blocks until filled".
+              const optionalFieldIds = new Set(
+                phaseFieldDefs.filter((field) => field.required === false).map((field) => field.id),
+              );
+              const missingFlowedFields = flowedFieldIds.filter(
+                (fieldId) => !optionalFieldIds.has(fieldId) && !isInputFilled(preFlightInputs[fieldId]),
+              );
               const flowedInputsIncomplete = missingFlowedFields.length > 0;
               // Map each grounding input to its label + what it must contain, so
               // "Improve quality" can prescribe the exact field to enrich, not a
               // generic "add inputs" nudge.
-              const phaseFieldDefs = getPhaseInputSchema(activePhase.id, dynamicStore).fields;
               const inputRequirements = flowedFieldIds.map((fieldId) => {
                 const fieldDef = phaseFieldDefs.find((field) => field.id === fieldId);
                 const requirement = [fieldDef?.placeholder, fieldDef?.hint]
