@@ -435,6 +435,7 @@ function isSpecialProgramAgent(agentId: string, phaseId: string): boolean {
     || agentId === "benchmark-comparator"
     || agentId === "meeting-notes"
     || agentId === "weekly-digest"
+    || agentId === "daily-briefing"
     || agentId === "phase-completion-estimator"
     || agentId === "setup-prefill"
     || agentId === "discovery-guide-generator"
