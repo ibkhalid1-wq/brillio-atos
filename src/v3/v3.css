@@ -9235,6 +9235,16 @@ button.v3-chip:disabled {
   border-color: var(--v3-text-muted);
 }
 
+/* Native date/time pickers: opt into dark form controls so the calendar
+   indicator and the picker popup render light-on-dark instead of an
+   invisible black icon against the dark input background. */
+.v3-input[type="date"],
+.v3-input[type="datetime-local"],
+.v3-input[type="time"],
+.v3-input[type="month"] {
+  color-scheme: dark;
+}
+
 .v3-textarea {
   resize: vertical;
   min-height: 80px;
