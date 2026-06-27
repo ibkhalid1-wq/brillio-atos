@@ -187,6 +187,20 @@ export async function deleteProgramFromSupabase(programId: string): Promise<bool
   if (!isSupabaseConfigured || !supabase) {
     return removedLocally;
   }
+  // Purge via RPC: this hard-deletes every program-scoped child row (snapshots,
+  // agent runs/observations, artifacts, document raw_text, …) and strips the
+  // parent down to a content-free `is_deleted=true` tombstone. The tombstone is
+  // kept on purpose so other devices reconcile the deletion (see usePrograms.ts)
+  // — a plain hard delete could let a locally-cached copy resurrect.
+  const { error: purgeError } = await supabase.rpc("adam_purge_program", {
+    p_program_id: programId,
+  });
+  if (!purgeError) {
+    return true;
+  }
+  console.error("ATOS sync purge error:", purgeError);
+  // Fallback for environments where the purge function isn't deployed yet:
+  // degrade to the legacy soft-delete so the program still disappears.
   const { error } = await supabase
     .from("adam_programs")
     .update({ is_deleted: true, updated_at: new Date().toISOString() })
