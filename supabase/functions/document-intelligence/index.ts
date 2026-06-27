@@ -193,7 +193,7 @@ DECLARED PHASE INPUT FIELDS — map document data ONLY to these fields, each und
 ${fieldGuide}
 
 RULES:
-- kpis: populate ONLY when the document states quantified metrics with current and/or target values (e.g. a metrics table, OKRs, or "X → Y" targets). Each KPI must have a name; leave baseline/target/unit as empty strings when not stated. Do not duplicate the same metric across entities.successMetrics and kpis — prefer kpis for anything with a numeric baseline or target. Omit the kpis array entirely when there are no quantified metrics.
+- kpis: populate whenever the document names ANY performance metric, KPI, OKR, or measurable outcome — even when a baseline, target, or unit is absent. A metric qualifies on its name alone; leave baseline/target/unit as empty strings when the document does not state them. If the document is primarily a metrics/KPI table or list, you MUST emit one kpis entry per metric row. Route anything metric-like to kpis (NOT entities.successMetrics) and never duplicate the same metric across both. Only omit the kpis array when the document names no metrics whatsoever. The 5-item entity cap below does NOT apply to kpis — capture every distinct metric the document lists.
 - extractionType values: "extracted" = verbatim or near-verbatim from document; "enriched" = you restructured/formatted raw text; "inferred" = logically derived from context
 - confidence: 0.9+ for verbatim, 0.75-0.9 for paraphrased/enriched, 0.5-0.75 for inferred
 - source: short quote (under 60 chars) from the document, or a section/page reference
