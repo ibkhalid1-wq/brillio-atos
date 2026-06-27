@@ -191,10 +191,6 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
               Programme name and client / organisation are required.
             </div>
           ) : null}
-          <div className="v3-wizard-note">
-            <span className="v3-wizard-note-icon" aria-hidden="true">ⓘ</span>
-            Industry, dates, and objective are captured on the Strategy phase, where they feed artifact generation.
-          </div>
         </section>
 
         <div className="v3-wizard-footer">

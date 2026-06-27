@@ -9064,27 +9064,6 @@ button.v3-chip:disabled {
   line-height: 1.4;
 }
 
-/* Footnote */
-.v3-wizard-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 7px;
-  margin-top: 12px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: var(--v3-surface-2);
-  border: 1px solid var(--v3-border-soft);
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--v3-text-muted);
-}
-.v3-wizard-note-icon {
-  color: var(--v3-accent);
-  font-size: 12px;
-  line-height: 1.5;
-  flex-shrink: 0;
-}
-
 .v3-wizard-footer {
   display: flex;
   gap: 10px;
@@ -12069,58 +12048,6 @@ button, [role="button"] {
   font-family: var(--v3-font);
 }
 
-/* Quick-start row */
-.v3-welcome-quickstart {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
-  width: 100%;
-}
-
-.v3-welcome-quickstart-label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--v3-text-muted);
-  font-family: var(--v3-font);
-}
-
-.v3-welcome-quickstart-row {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-.v3-welcome-quickstart-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 18px;
-  background: var(--v3-surface-2);
-  border: 1px solid var(--v3-border);
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--v3-text-secondary);
-  cursor: pointer;
-  font-family: var(--v3-font);
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-}
-.v3-welcome-quickstart-item:hover {
-  background: var(--v3-surface-3);
-  border-color: var(--v3-border);
-  color: var(--v3-text-primary);
-}
-
-.v3-welcome-quickstart-item-icon {
-  font-size: 14px;
-  color: var(--v3-accent);
-  line-height: 1;
-}
-
 /* Light mode overrides */
 [data-theme="light"] .v3-welcome-hero-title,
 :root:not([data-theme="dark"]) .v3-welcome-hero-title {
@@ -12134,12 +12061,6 @@ button, [role="button"] {
 :root:not([data-theme="dark"]) .v3-welcome-tile {
   background: #fff;
   border-color: rgba(33, 23, 71, 0.1);
-}
-
-[data-theme="light"] .v3-welcome-quickstart-item,
-:root:not([data-theme="dark"]) .v3-welcome-quickstart-item {
-  background: #fff;
-  border-color: rgba(33, 23, 71, 0.12);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

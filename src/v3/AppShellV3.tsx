@@ -2913,29 +2913,6 @@ export default function AppShellV3() {
               ))}
             </div>
 
-            {/* Quick-start options */}
-            <div className="v3-welcome-quickstart">
-              <div className="v3-welcome-quickstart-label">Or get started another way</div>
-              <div className="v3-welcome-quickstart-row">
-                <button
-                  type="button"
-                  className="v3-welcome-quickstart-item"
-                  onClick={() => { void handleCreateProgram(); }}
-                >
-                  <span className="v3-welcome-quickstart-item-icon">↑</span>
-                  <span className="v3-welcome-quickstart-item-text">Upload a document</span>
-                </button>
-                <button
-                  type="button"
-                  className="v3-welcome-quickstart-item"
-                  onClick={() => setHelpOpen(true)}
-                >
-                  <span className="v3-welcome-quickstart-item-icon">?</span>
-                  <span className="v3-welcome-quickstart-item-text">Read the guide</span>
-                </button>
-              </div>
-            </div>
-
           </div>
         </div>
 
