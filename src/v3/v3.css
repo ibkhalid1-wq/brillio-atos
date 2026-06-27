@@ -8935,6 +8935,166 @@ button.v3-chip:disabled {
   margin: 0;
 }
 
+/* ── Premium setup-wizard polish ──────────────────────────────────────────── */
+.v3-wizard--setup {
+  position: relative;
+  padding: 30px 28px 24px;
+  gap: 22px;
+  border-radius: 22px;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 80% at 50% -10%, color-mix(in srgb, var(--v3-accent) 12%, transparent) 0%, transparent 60%),
+    var(--v3-bg-card);
+  box-shadow: 0 40px 80px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  animation: v3-wizard-rise 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+/* Hairline accent strip across the very top edge */
+.v3-wizard--setup::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--v3-accent), transparent);
+  opacity: 0.7;
+}
+
+@keyframes v3-wizard-rise {
+  from { opacity: 0; transform: translateY(10px) scale(0.985); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.v3-wizard-head {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.v3-wizard-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  align-self: flex-start;
+  padding: 4px 11px 4px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--v3-accent);
+  background: color-mix(in srgb, var(--v3-accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--v3-accent) 28%, transparent);
+}
+.v3-wizard-eyebrow-glyph {
+  font-size: 11px;
+  line-height: 1;
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--v3-accent) 60%, transparent));
+}
+
+.v3-wizard--setup .v3-wizard-title {
+  font-size: 24px;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.v3-wizard-subtitle {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--v3-text-secondary);
+  max-width: 46ch;
+}
+
+/* Upload pre-fill dropzone — a tactile dashed card rather than a flat button */
+.v3-wizard-dropzone {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px dashed color-mix(in srgb, var(--v3-accent) 32%, var(--v3-border));
+  background: color-mix(in srgb, var(--v3-accent) 4%, var(--v3-surface-2));
+  color: var(--v3-text-primary);
+  cursor: pointer;
+  font-family: var(--v3-font);
+  transition: border-color 0.16s, background 0.16s, transform 0.16s, box-shadow 0.16s;
+}
+.v3-wizard-dropzone:hover:not(:disabled) {
+  border-color: var(--v3-accent);
+  background: color-mix(in srgb, var(--v3-accent) 9%, var(--v3-surface-2));
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+}
+.v3-wizard-dropzone:active:not(:disabled) { transform: translateY(0) scale(0.995); }
+.v3-wizard-dropzone:disabled { cursor: progress; }
+
+.v3-wizard-dropzone-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 11px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--v3-accent);
+  background: color-mix(in srgb, var(--v3-accent) 14%, transparent);
+}
+.v3-wizard-dropzone.is-busy .v3-wizard-dropzone-icon {
+  animation: v3-spin 0.9s linear infinite;
+}
+@keyframes v3-spin { to { transform: rotate(360deg); } }
+
+.v3-wizard-dropzone-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.v3-wizard-dropzone-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--v3-text-primary);
+}
+.v3-wizard-dropzone-sub {
+  font-size: 12px;
+  color: var(--v3-text-muted);
+  line-height: 1.4;
+}
+
+/* Footnote */
+.v3-wizard-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--v3-surface-2);
+  border: 1px solid var(--v3-border-soft);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--v3-text-muted);
+}
+.v3-wizard-note-icon {
+  color: var(--v3-accent);
+  font-size: 12px;
+  line-height: 1.5;
+  flex-shrink: 0;
+}
+
+.v3-wizard-footer {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding-top: 18px;
+  margin-top: 2px;
+  border-top: 1px solid var(--v3-border-soft);
+}
+.v3-wizard-footer .v3-button { min-height: 40px; padding: 0 22px; }
+
 .v3-wizard-section-label {
   font-size: 11px;
   font-weight: 700;
@@ -11652,13 +11812,33 @@ button, [role="button"] {
   flex-direction: column;
   align-items: center;
   gap: 56px;
-  padding: 80px 32px 100px;
+  padding: 88px 32px 100px;
   max-width: 900px;
   margin: 0 auto;
   width: 100%;
   min-height: 100%;
-  /* Subtle radial glow behind the hero */
-  background: radial-gradient(ellipse 60% 40% at 50% 0%, rgba(99,102,241,0.08) 0%, transparent 70%);
+  position: relative;
+  /* Layered radial glows give the canvas depth behind the hero */
+  background:
+    radial-gradient(ellipse 50% 32% at 50% -2%, color-mix(in srgb, var(--v3-accent) 16%, transparent) 0%, transparent 70%),
+    radial-gradient(ellipse 70% 50% at 50% 0%, color-mix(in srgb, var(--v3-accent) 7%, transparent) 0%, transparent 72%);
+}
+
+/* Staggered entrance for each block — feels composed rather than dumped */
+.v3-welcome-screen > * {
+  animation: v3-welcome-enter 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.v3-welcome-screen > *:nth-child(1) { animation-delay: 0.02s; }
+.v3-welcome-screen > *:nth-child(2) { animation-delay: 0.10s; }
+.v3-welcome-screen > *:nth-child(3) { animation-delay: 0.18s; }
+.v3-welcome-screen > *:nth-child(4) { animation-delay: 0.26s; }
+
+@keyframes v3-welcome-enter {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .v3-welcome-screen > * { animation: none; }
 }
 
 /* Hero */
@@ -11670,29 +11850,44 @@ button, [role="button"] {
   gap: 16px;
 }
 
+/* Glyph rendered as a luminous orb rather than a bare character */
 .v3-welcome-hero-glyph {
-  font-size: 48px;
-  color: var(--v3-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 76px;
+  height: 76px;
+  margin-bottom: 12px;
+  font-size: 34px;
   line-height: 1;
-  margin-bottom: 8px;
-  opacity: 0.9;
-  animation: v3-welcome-pulse 3s ease-in-out infinite;
-  filter: drop-shadow(0 0 18px rgba(99,102,241,0.45));
+  color: var(--v3-accent);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--v3-accent) 28%, transparent) 0%, color-mix(in srgb, var(--v3-accent) 8%, transparent) 60%, transparent 100%);
+  border: 1px solid color-mix(in srgb, var(--v3-accent) 32%, transparent);
+  box-shadow:
+    0 0 0 8px color-mix(in srgb, var(--v3-accent) 6%, transparent),
+    0 18px 40px color-mix(in srgb, var(--v3-accent) 28%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  animation: v3-welcome-pulse 3.2s ease-in-out infinite;
 }
 
 @keyframes v3-welcome-pulse {
-  0%, 100% { opacity: 0.7; transform: scale(1); }
-  50%       { opacity: 1;   transform: scale(1.08); }
+  0%, 100% { transform: scale(1);    box-shadow: 0 0 0 8px color-mix(in srgb, var(--v3-accent) 6%, transparent), 0 18px 40px color-mix(in srgb, var(--v3-accent) 24%, transparent), inset 0 1px 0 rgba(255,255,255,0.18); }
+  50%      { transform: scale(1.04); box-shadow: 0 0 0 12px color-mix(in srgb, var(--v3-accent) 9%, transparent), 0 22px 50px color-mix(in srgb, var(--v3-accent) 36%, transparent), inset 0 1px 0 rgba(255,255,255,0.18); }
 }
 
 .v3-welcome-hero-title {
   margin: 0;
-  font-size: clamp(28px, 4vw, 42px);
+  font-size: clamp(30px, 4.2vw, 46px);
   font-weight: 800;
-  letter-spacing: -0.02em;
-  color: var(--v3-text-primary);
+  letter-spacing: -0.025em;
   font-family: var(--v3-font);
-  line-height: 1.15;
+  line-height: 1.12;
+  background: linear-gradient(180deg, var(--v3-text-primary) 0%, color-mix(in srgb, var(--v3-text-primary) 72%, var(--v3-accent)) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .v3-welcome-hero-sub {
@@ -11700,30 +11895,45 @@ button, [role="button"] {
   font-size: 15px;
   color: var(--v3-text-secondary);
   line-height: 1.65;
-  max-width: 520px;
+  max-width: 540px;
   font-family: var(--v3-font);
 }
 
 .v3-welcome-cta {
-  margin-top: 8px;
-  padding: 13px 32px;
-  background: var(--v3-accent);
+  position: relative;
+  overflow: hidden;
+  margin-top: 12px;
+  padding: 14px 30px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--v3-accent) 92%, white) 0%, var(--v3-accent) 100%);
   color: #fff;
-  border: none;
-  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--v3-accent) 60%, black);
+  border-radius: 12px;
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
   font-family: var(--v3-font);
   letter-spacing: 0.01em;
-  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.38);
-  transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+  box-shadow: 0 8px 26px color-mix(in srgb, var(--v3-accent) 40%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  transition: transform 0.16s, box-shadow 0.16s, filter 0.16s;
+}
+/* Sheen that sweeps across on hover */
+.v3-welcome-cta::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -120%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  transform: skewX(-18deg);
+  transition: left 0.6s ease;
 }
 .v3-welcome-cta:hover {
-  background: #5254cc;
-  transform: translateY(-1px);
-  box-shadow: 0 6px 24px rgba(99, 102, 241, 0.46);
+  transform: translateY(-2px);
+  filter: brightness(1.04);
+  box-shadow: 0 12px 34px color-mix(in srgb, var(--v3-accent) 50%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.28);
 }
+.v3-welcome-cta:hover::after { left: 130%; }
 .v3-welcome-cta:active {
   transform: translateY(0);
 }
@@ -11914,7 +12124,10 @@ button, [role="button"] {
 /* Light mode overrides */
 [data-theme="light"] .v3-welcome-hero-title,
 :root:not([data-theme="dark"]) .v3-welcome-hero-title {
-  color: #1f2540;
+  background: linear-gradient(180deg, #1f2540 0%, color-mix(in srgb, #1f2540 64%, var(--v3-accent)) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 [data-theme="light"] .v3-welcome-tile,

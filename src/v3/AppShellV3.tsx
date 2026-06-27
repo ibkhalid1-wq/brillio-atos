@@ -1160,6 +1160,10 @@ export default function AppShellV3() {
   }, []);
 
   const [wizardOpen, setWizardOpen] = useState(false);
+  // When the wizard is opened immediately after creating a fresh programme,
+  // this holds that draft's id so cancelling can discard it (rather than
+  // leaving an empty "New Programme" behind). Cleared once setup is saved.
+  const [draftProgramId, setDraftProgramId] = useState<string | null>(null);
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [adamCopilotSidebarOpen, setAdamCopilotSidebarOpen] = useState(false);
   const [gateReopenPhase, setGateReopenPhase] = useState<string | null>(null);
@@ -2040,6 +2044,8 @@ export default function AppShellV3() {
       await refreshPrograms();
       if (newId) {
         setActiveProgramId(newId);
+        // Track this as an unsaved draft so cancelling the wizard discards it.
+        setDraftProgramId(newId);
         // Short delay so the new activeProgram is set before opening the wizard
         setTimeout(() => setWizardOpen(true), 150);
         // Nudge the user to connect an AI provider so agents are usable on the
@@ -2149,6 +2155,8 @@ export default function AppShellV3() {
   const handleSaveSetup = useCallback(async (patch: ProgramSetupPatch) => {
     try {
       await saveSetup(patch);
+      // The draft is now a real, named programme — keep it on cancel/close.
+      setDraftProgramId(null);
       setWizardOpen(false);
       pushV3Toast("Programme details saved.", { tone: "success", duration: 2500 });
     } catch (error) {
@@ -2156,6 +2164,21 @@ export default function AppShellV3() {
       throw error;
     }
   }, [saveSetup]);
+
+  // Cancelling the wizard. If it was opened on a freshly-created, never-saved
+  // draft, discard that programme so an empty "New Programme" isn't left behind.
+  const handleCancelSetup = useCallback(async () => {
+    setWizardOpen(false);
+    const idToDelete = draftProgramId;
+    if (!idToDelete) return;
+    setDraftProgramId(null);
+    const ok = await deleteProgramFromSupabase(idToDelete);
+    if (idToDelete === activeProgramId) {
+      const remaining = programs.filter((p) => p.id !== idToDelete);
+      setActiveProgramId(remaining[0]?.id ?? null);
+    }
+    if (ok) await refreshPrograms();
+  }, [draftProgramId, activeProgramId, programs, refreshPrograms, setActiveProgramId]);
 
   const handleUpdatePhasePct = useCallback(async (phaseId: string, pct: number) => {
     await updatePhasePct(phaseId, pct);
@@ -3328,7 +3351,7 @@ export default function AppShellV3() {
         <ProgramSetupWizard
           program={activeProgram}
           onSave={handleSaveSetup}
-          onClose={() => setWizardOpen(false)}
+          onClose={() => void handleCancelSetup()}
           isSaving={wizardSaving}
         />
       ) : null}

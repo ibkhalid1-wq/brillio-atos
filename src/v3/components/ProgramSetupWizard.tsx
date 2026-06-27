@@ -128,16 +128,20 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
 
   return (
     <div className="v3-wizard-overlay" role="dialog" aria-modal="true" aria-label="Programme setup">
-      <div className="v3-wizard">
-        <div>
+      <div className="v3-wizard v3-wizard--setup">
+        <div className="v3-wizard-head">
+          <span className="v3-wizard-eyebrow" aria-hidden="true">
+            <span className="v3-wizard-eyebrow-glyph">✦</span>
+            New programme
+          </span>
           <h2 className="v3-wizard-title">Name your programme</h2>
+          <p className="v3-wizard-subtitle">
+            Give your transformation a name and client. ATOS plans every phase from there.
+          </p>
         </div>
 
         <section>
           <div className="v3-wizard-section-label">Pre-fill from a document</div>
-          <div style={{ fontSize: 12, color: "var(--v3-text-muted)", marginBottom: 8 }}>
-            Upload a project charter, SOW, or briefing document and we&apos;ll pre-fill what we can.
-          </div>
           <input
             ref={fileInputRef}
             type="file"
@@ -149,8 +153,21 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
               event.currentTarget.value = "";
             }}
           />
-          <button type="button" className="v3-button ghost" onClick={() => fileInputRef.current?.click()} disabled={prefilling}>
-            {prefilling ? "Extracting…" : "Upload and pre-fill"}
+          <button
+            type="button"
+            className={`v3-wizard-dropzone${prefilling ? " is-busy" : ""}`}
+            onClick={() => fileInputRef.current?.click()}
+            disabled={prefilling}
+          >
+            <span className="v3-wizard-dropzone-icon" aria-hidden="true">{prefilling ? "◌" : "↑"}</span>
+            <span className="v3-wizard-dropzone-text">
+              <span className="v3-wizard-dropzone-title">
+                {prefilling ? "Extracting details…" : "Upload and pre-fill"}
+              </span>
+              <span className="v3-wizard-dropzone-sub">
+                Project charter, SOW, or briefing — we&apos;ll fill what we can.
+              </span>
+            </span>
           </button>
           {prefillError ? (
             <div style={{ fontSize: 11, color: "var(--v3-amber)", marginTop: 8 }}>{prefillError}</div>
@@ -174,12 +191,13 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
               Programme name and client / organisation are required.
             </div>
           ) : null}
-          <div style={{ fontSize: 12, color: "var(--v3-text-muted)", marginTop: 10 }}>
+          <div className="v3-wizard-note">
+            <span className="v3-wizard-note-icon" aria-hidden="true">ⓘ</span>
             Industry, dates, and objective are captured on the Strategy phase, where they feed artifact generation.
           </div>
         </section>
 
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <div className="v3-wizard-footer">
           <button type="button" className="v3-button ghost" onClick={onClose}>
             Cancel
           </button>
