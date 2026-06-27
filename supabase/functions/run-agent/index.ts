@@ -964,6 +964,17 @@ restate them. They rank as reference material (below current structured inputs i
 the source priority order), so when current inputs conflict with a prior-phase
 artifact, follow the current inputs.
 
+### Document carry-forward
+The context may carry "documentCarryForward": constraints, assumptions,
+recommendations, and gaps the document extractor found in uploaded source files,
+plus each document's summary ("source [phase]: …" / "insight [phase] (category):
+…"). The extractor ran once at upload; these are facts the user already supplied
+via documents but that never became a structured field. Use them as supporting
+evidence so you never ask for, or treat as missing, information an uploaded
+document already established. They rank as reference material — below current
+structured inputs and KPI baselines — so when current inputs conflict, follow the
+current inputs.
+
 ### Memory constraint
 Agent memory and run history are supplemental context only. They may aid
 continuity, terminology, and narrative consistency, but must never override
@@ -1087,6 +1098,64 @@ function buildGroundingFacts(phaseRecord: Record<string, unknown>): string[] {
   return lines;
 }
 
+/** A document's stored DocumentIntelligence, as carried into agent context. */
+interface CarryForwardDocument {
+  fileName: string;
+  intelligence: Record<string, unknown>;
+}
+
+/**
+ * Entity categories the extractor finds but that rarely map to a declared phase
+ * field, so they would otherwise be lost to every downstream phase. Deploy-side
+ * mirror of programGraph.ts's INSIGHT_CATEGORIES.
+ */
+const DOC_INSIGHT_CATEGORIES = ["constraints", "assumptions", "recommendations", "gaps"] as const;
+
+function docEntityText(entity: unknown): string {
+  if (!isRecord(entity)) return "";
+  const text = typeof entity.text === "string"
+    ? entity.text
+    : typeof entity.description === "string"
+      ? entity.description
+      : "";
+  return text.trim();
+}
+
+/**
+ * Deploy-side mirror of selectGraphForPhase's document slice. The document
+ * extractor already ran once at upload and persisted the full DocumentIntelligence
+ * in adam_document_attachments.extracted_data; this surfaces the entities it found
+ * but that never became phase fields (constraints, assumptions, recommendations,
+ * gaps) plus each document's summary as compact citation lines, scoped to the
+ * target phase and every prior phase. The agent thus inherits what earlier
+ * documents established without the user re-extracting the same file at each phase.
+ * A document is in scope when its primaryPhase is at or before the target phase in
+ * the ATOS sequence, or when it declares no known phase (treated as programme-wide).
+ */
+function buildDocumentCarryForward(documents: CarryForwardDocument[], targetPhaseId: string): string {
+  const targetIndex = ATOS_PHASE_SEQUENCE.indexOf(targetPhaseId);
+  const lines: string[] = [];
+  for (const doc of documents) {
+    const intel = doc.intelligence;
+    const primaryPhase = typeof intel.primaryPhase === "string" ? intel.primaryPhase : "";
+    const anchorIndex = ATOS_PHASE_SEQUENCE.indexOf(primaryPhase);
+    // In scope unless anchored at a phase strictly after the target.
+    if (anchorIndex >= 0 && targetIndex >= 0 && anchorIndex > targetIndex) continue;
+    const phaseTag = anchorIndex >= 0 ? ` [${primaryPhase}]` : "";
+    const summary = typeof intel.summary === "string" ? intel.summary.replace(/\s+/g, " ").trim() : "";
+    if (summary) lines.push(`source${phaseTag}: ${doc.fileName} — ${summary}`);
+    const entities = isRecord(intel.entities) ? intel.entities : {};
+    for (const category of DOC_INSIGHT_CATEGORIES) {
+      const list = Array.isArray(entities[category]) ? entities[category] as unknown[] : [];
+      for (const entity of list) {
+        const text = docEntityText(entity);
+        if (text) lines.push(`insight${phaseTag} (${category}): ${text}`);
+      }
+    }
+  }
+  return lines.join("\n");
+}
+
 /**
  * Flattens every captured phase input into a readable "phase.field: value" block
  * for the artifact reviewer. The reviewer must see exactly what the user has
@@ -1185,6 +1254,8 @@ function buildSpecialAgentInputContext(
     patternContext?: Array<Record<string, unknown>>;
     /** Effective generation intent for a formal artifact (Change 1). */
     runMode?: RunMode;
+    /** Program documents' stored intelligence, for cross-phase carry-forward. */
+    documents?: CarryForwardDocument[];
   },
 ): string {
   const inner = getInnerProgramData(programData);
@@ -1775,6 +1846,7 @@ function buildSpecialAgentInputContext(
       scopeExclusions: strategyInputs.scopeExclusions || strategyInputs.scopeOut || null,
       kpiBaselines: parseKpiBaselines(strategyInputs.kpis),
       groundingFacts: buildGroundingFacts(phaseInputs),
+      documentCarryForward: buildDocumentCarryForward(options?.documents || [], formalSpec.phase),
       valueProjected: coerceNumber(inner.valueProjected ?? businessCase.projectedValue ?? valueRealizeData.projectedValue, 0),
       narrative,
       phases,
@@ -5955,6 +6027,26 @@ Deno.serve(async (req) => {
     const formalRunMode = formalSpecForRun
       ? deriveFormalRunMode(request, getInnerProgramData(contextProgramData), formalSpecForRun.fieldKey)
       : undefined;
+    // Cross-phase document carry-forward: only formal-artifact agents inject the
+    // stored document intelligence, so the extra read is skipped for every other
+    // agent. Keep only rows whose extracted_data is a DocumentIntelligence (a
+    // documentType marks the shape); meeting-notes and failed extractions differ.
+    const carryForwardDocuments: CarryForwardDocument[] = [];
+    if (formalSpecForRun) {
+      const { data: documentRows } = await auth.admin
+        .from("adam_document_attachments")
+        .select("file_name, extracted_data")
+        .eq("program_id", request.programId);
+      for (const row of (documentRows || []) as Array<Record<string, unknown>>) {
+        const intel = row.extracted_data;
+        if (isRecord(intel) && "documentType" in intel) {
+          carryForwardDocuments.push({
+            fileName: typeof row.file_name === "string" ? row.file_name : "document",
+            intelligence: intel,
+          });
+        }
+      }
+    }
     let specialAgentInputContext = isSpecialProgramAgent(request.agentId, request.phaseId)
       ? buildSpecialAgentInputContext(contextProgramData, {
           name: typeof programRow.name === "string" ? programRow.name : "",
@@ -5966,6 +6058,7 @@ Deno.serve(async (req) => {
         }, {
           patternContext,
           runMode: formalRunMode,
+          documents: carryForwardDocuments,
         })
       : "";
 
