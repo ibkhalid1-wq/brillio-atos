@@ -71,7 +71,18 @@ interface StructuredGridProps {
 }
 
 export default function StructuredGrid({ columns, rows, onChange, addLabel = "+ Add row", readOnly = false }: StructuredGridProps) {
+  // Always present at least one editable row so the grid reads as a form, not an
+  // empty void. The placeholder lives outside parent state (its keystrokes commit
+  // it via updateCell) and is omitted in read-only mode, where an empty grid
+  // should simply render nothing.
+  const placeholderRow = React.useMemo(() => makeEmptyRow(columns), [columns]);
+  const displayRows = rows.length > 0 ? rows : readOnly ? [] : [placeholderRow];
+
   function updateCell(index: number, key: string, value: string) {
+    if (rows.length === 0) {
+      onChange([{ ...placeholderRow, [key]: value }]);
+      return;
+    }
     onChange(rows.map((row, i) => (i === index ? { ...row, [key]: value } : row)));
   }
 
@@ -85,7 +96,7 @@ export default function StructuredGrid({ columns, rows, onChange, addLabel = "+ 
 
   return (
     <div className="v3-grid-input">
-      {rows.length > 0 ? (
+      {displayRows.length > 0 ? (
         <div className="v3-grid-input-head">
           {columns.map((col) => (
             <span
@@ -100,7 +111,7 @@ export default function StructuredGrid({ columns, rows, onChange, addLabel = "+ 
         </div>
       ) : null}
 
-      {rows.map((row, index) => (
+      {displayRows.map((row, index) => (
         <div key={row.id} className="v3-grid-input-row">
           {columns.map((col) =>
             col.type === "select" ? (
@@ -118,7 +129,7 @@ export default function StructuredGrid({ columns, rows, onChange, addLabel = "+ 
             ) : (
               <input
                 key={col.key}
-                type={col.type === "number" ? "number" : "text"}
+                type={col.type === "number" ? "number" : col.type === "date" ? "date" : "text"}
                 className="v3-input"
                 style={col.width ? { width: col.width, flex: "none" } : { flex: 1 }}
                 value={row[col.key] ?? ""}

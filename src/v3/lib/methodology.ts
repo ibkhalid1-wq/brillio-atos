@@ -6,7 +6,7 @@ export type MethodologyVariant = "atos-standard" | "atos-lite" | "atos-regulated
 export interface GridColumn {
   key: string;
   label: string;
-  type?: "text" | "number" | "select";
+  type?: "text" | "number" | "select" | "date";
   /** Fixed pixel width; omit to let the column flex. */
   width?: number;
   options?: string[];
@@ -168,12 +168,12 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         { id: "constraints", label: "Key constraints", type: "textarea", placeholder: "Budget, timeline, regulatory, or technical constraints", required: true, hint: "e.g. Must go live before Q4 financial year end" },
         { id: "successMetric", label: "Primary success metric", type: "text", placeholder: "KPI name, e.g. Cost to serve", required: true },
         {
-          // Validation / delivery posture: an explicit, recorded decision on how
-          // much the programme will prove before committing to full build. POC →
-          // Prototype → Pilot → MVP is a fidelity/investment ladder, so each stage
-          // carries its own "is it needed?" call AND the rationale (the "why not"
-          // when a stage is skipped is itself the governance value). Optional at
-          // Strategy (appetite-level) so it never blocks artifact generation — a
+          // Validation / delivery posture: an explicit, recorded plan for how much
+          // the programme will prove before committing to full build. POC →
+          // Prototype → Pilot → MVP is a fidelity/investment ladder; each stage
+          // carries its rationale (considerations — including the "why not" when a
+          // stage is skipped, itself governance value) and a target date. Optional
+          // at Strategy (appetite-level) so it never blocks artifact generation — a
           // required+empty field would fail the pre-flight gate; the concrete plan
           // is refined downstream in Design. Captured as a grid so one field holds
           // the whole matrix, and the edge's buildGroundingFacts already flattens
@@ -184,11 +184,11 @@ export const ATOS_STANDARD: MethodologyDefinition = {
           label: "Validation approach",
           type: "grid",
           required: false,
-          hint: "Record each de-risking stage you're considering and whether it's needed. Consciously skipping a stage — with the reason — is a valid, valuable decision to capture.",
+          hint: "Record each de-risking stage you're considering, the key considerations, and a target date. Consciously skipping a stage — with the reason — is a valid, valuable decision to capture.",
           columns: [
             { key: "stage", label: "Stage", type: "select", width: 140, options: ["POC", "Prototype", "Pilot", "MVP"] },
-            { key: "decision", label: "Needed?", type: "select", width: 150, options: ["Required", "Not required", "Decide later"] },
-            { key: "considerations", label: "Considerations", type: "text", placeholder: "Why it is / isn't needed, scope, what it must prove to proceed" },
+            { key: "considerations", label: "Considerations", type: "text", placeholder: "Scope, what it must prove to proceed, or why it isn't needed" },
+            { key: "date", label: "Target date", type: "date", width: 160 },
           ],
         },
       ],
