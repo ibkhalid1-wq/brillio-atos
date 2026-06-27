@@ -62,6 +62,7 @@ import { useLocalProgramMigration } from "@/v3/hooks/useLocalProgramMigration";
 import { usePhaseAgentState } from "@/v3/hooks/usePhaseAgentState";
 import { useProgramValidation } from "@/v3/hooks/useProgramValidation";
 import { getPhaseSequence, getPhaseDefinition, ATOS_STANDARD } from "@/v3/lib/methodology";
+import { buildPhaseSchedule } from "@/v3/lib/phaseSchedule";
 import { computePhaseReadiness, getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
 import { confidenceRag, getGateThreshold } from "@/v3/lib/confidenceScore";
 import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
@@ -1382,6 +1383,35 @@ export default function AppShellV3() {
     // the old "improve quality → rewrite inputs → regenerate" loop into one run.
     if (regenGuidance && regenGuidance.trim()) {
       crossPhaseContext += `${crossPhaseContext ? "\n\n" : ""}## Reviewer improvements to apply in this regeneration\n${regenGuidance.trim()}`;
+    }
+
+    // Strategic-roadmap dates: the agent's prompt asks it to BOTH distribute the
+    // phases across the programme window AND mark unknown dates "TBD", so it punts
+    // every intermediate boundary to TBD even though the start/target-end dates are
+    // known. Splitting a fixed window across an ordered phase list is arithmetic, not
+    // judgement, so we compute it deterministically and hand the agent authoritative
+    // per-phase ETAs (which its prompt already says to anchor to). No deploy needed —
+    // crossPhaseContext is folded into prompt.system by the edge function.
+    if (resolvedAgentId === "strategic-roadmap") {
+      const inner = getProgramState(activeProgram?.rawData || {}).inner;
+      const phaseInputs = inner.phaseInputs;
+      const strategyInputs = typeof phaseInputs === "object" && phaseInputs !== null
+        ? (phaseInputs as Record<string, unknown>).strategy as Record<string, unknown> | undefined
+        : undefined;
+      const startDate = typeof strategyInputs?.startDate === "string" ? strategyInputs.startDate : undefined;
+      const targetEndDate = typeof strategyInputs?.targetEndDate === "string" ? strategyInputs.targetEndDate : undefined;
+      const phaseWeights = (activeProgram?.phases || []).map((phase) => {
+        const def = getPhaseDefinition(phase.id);
+        const weight = def ? (def.typicalDurationWeeks.min + def.typicalDurationWeeks.max) / 2 : 1;
+        return { id: phase.id, weight };
+      });
+      const schedule = buildPhaseSchedule(startDate, targetEndDate, phaseWeights);
+      if (schedule.length > 0) {
+        const lines = schedule
+          .map((entry) => `- ${getPhaseDefinition(entry.id)?.displayName ?? entry.id}: ${entry.start} → ${entry.end}`)
+          .join("\n");
+        crossPhaseContext += `${crossPhaseContext ? "\n\n" : ""}## Authoritative phase schedule — use these exact dates\nThe programme window is fixed (${startDate} → ${targetEndDate}). Use these computed per-phase start/end dates verbatim as each phase's start and end. Do NOT mark any of them "TBD":\n${lines}`;
+      }
     }
 
     try {
