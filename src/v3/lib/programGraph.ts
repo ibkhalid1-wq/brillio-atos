@@ -356,3 +356,43 @@ export function selectGraphForPhase(graph: ProgramGraph, phaseId: string): Progr
 
   return { nodes, edges: selEdges, citations, reduction: { fullChars, scopedChars, droppedChars, reductionPct } };
 }
+
+const GRAPH_CONTEXT_HEADER =
+  "Program graph (prior phases — facts, artifacts, risks, decisions, KPIs):";
+
+/**
+ * Prompt-ready cross-phase grounding for an agent running at `targetPhaseId`:
+ * the compressed citation block for that phase's slice (current + all prior
+ * phases + programme-global nodes). This is the structured complement to the
+ * approved-artifact summaries — it also carries the facts, open risks/decisions
+ * and KPIs the artifact prose alone never surfaces.
+ *
+ * Returns "" when there is nothing to add (no program, empty graph, empty
+ * slice) so callers can append it unconditionally. The block is capped to
+ * `maxChars` by dropping whole citation lines from the tail, so a line is never
+ * cut mid-fact, and the result shares a fixed prompt budget with other context.
+ */
+export function buildProgramGraphContext(
+  program: ProgramSummary | null | undefined,
+  targetPhaseId: string,
+  maxChars = 900,
+): string {
+  if (!program || !targetPhaseId) return "";
+  const graph = buildProgramGraph(program);
+  if (!graph.nodes.length) return "";
+  const body = selectGraphForPhase(graph, targetPhaseId).citations.trim();
+  if (!body) return "";
+
+  const full = `${GRAPH_CONTEXT_HEADER}\n${body}`;
+  if (full.length <= maxChars) return full;
+
+  const kept: string[] = [];
+  let used = GRAPH_CONTEXT_HEADER.length;
+  for (const line of body.split("\n")) {
+    const next = used + 1 + line.length;
+    if (next > maxChars) break;
+    kept.push(line);
+    used = next;
+  }
+  return kept.length ? `${GRAPH_CONTEXT_HEADER}\n${kept.join("\n")}` : "";
+}

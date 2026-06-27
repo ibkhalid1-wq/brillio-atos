@@ -10,6 +10,8 @@ import { buildMemoryContext, saveAgentMemory } from "@/lib/adamAgentMemory";
 import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 import { getSupabaseFunctionErrorMessage } from "@/lib/supabaseFunctionError";
 import type { AgentHandoff, AgentRunResponse } from "@/lib/adamSync";
+import { normalizeProgram, type ProgramRowLike } from "@/new/lib/programData";
+import { buildProgramGraphContext } from "@/v3/lib/programGraph";
 
 type RequestMode = {
   mode: string;
@@ -182,27 +184,44 @@ export function buildCrossPhaseContext(programId: string, targetPhaseId: string,
   if (phaseIndex <= 0) return "";
 
   const project = loadStoredProject(programId);
-  const phaseArtifacts = project?.data?.phaseArtifacts;
-  if (!phaseArtifacts) return "";
+  if (!project) return "";
 
-  const lines: string[] = ["Prior phase context:"];
-  for (const phaseId of ATOS_PHASE_SEQUENCE.slice(0, phaseIndex)) {
-    const artifacts = Object.entries(phaseArtifacts[phaseId] ?? {})
-      .filter(([, artifact]) => artifact?.status === "approved");
-    for (const [artifactId, artifact] of artifacts) {
-      const title = artifact?.title || artifact?.label || artifactId;
-      const summary = summarizeArtifactContent(artifact?.content);
-      if (!summary) continue;
-      const candidate = `${phaseId}: ${title} — ${summary}`;
-      const nextText = [...lines, candidate].join("\n");
-      if (nextText.length > maxChars) {
-        return lines.join("\n").slice(0, maxChars);
+  const sections: string[] = [];
+
+  // Highest-signal first: approved-artifact summaries from prior phases.
+  const phaseArtifacts = project.data?.phaseArtifacts;
+  if (phaseArtifacts) {
+    const lines: string[] = ["Prior phase context:"];
+    outer: for (const phaseId of ATOS_PHASE_SEQUENCE.slice(0, phaseIndex)) {
+      const artifacts = Object.entries(phaseArtifacts[phaseId] ?? {})
+        .filter(([, artifact]) => artifact?.status === "approved");
+      for (const [artifactId, artifact] of artifacts) {
+        const title = artifact?.title || artifact?.label || artifactId;
+        const summary = summarizeArtifactContent(artifact?.content);
+        if (!summary) continue;
+        const candidate = `${phaseId}: ${title} — ${summary}`;
+        if ([...lines, candidate].join("\n").length > maxChars) break outer;
+        lines.push(candidate);
       }
-      lines.push(candidate);
     }
+    if (lines.length > 1) sections.push(lines.join("\n"));
   }
 
-  return lines.length > 1 ? lines.join("\n") : "";
+  // The structured graph slice adds the facts, open risks/decisions and KPIs the
+  // artifact prose alone never surfaces — within whatever budget remains so the
+  // two sections together never exceed maxChars.
+  const used = sections.reduce((sum, section) => sum + section.length + 2, 0);
+  const remaining = maxChars - used;
+  if (remaining > 120) {
+    const graphContext = buildProgramGraphContext(
+      normalizeProgram({ id: project.id ?? programId, name: "", data: project.data } as ProgramRowLike),
+      targetPhaseId,
+      remaining,
+    );
+    if (graphContext) sections.push(graphContext);
+  }
+
+  return sections.join("\n\n");
 }
 
 export async function routeToAgents(

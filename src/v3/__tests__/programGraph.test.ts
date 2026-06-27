@@ -3,6 +3,7 @@ import type { ProgramSummary } from "@/new/types";
 import {
   buildProgramGraph,
   selectGraphForPhase,
+  buildProgramGraphContext,
   compressProgramNode,
   type ProgramGraph,
   type ProgramDocument,
@@ -251,6 +252,59 @@ describe("selectGraphForPhase", () => {
     const sel = selectGraphForPhase(richGraph(), "nonexistent");
     expect(sel.nodes.every((n) => n.phaseCreated === undefined)).toBe(true);
     expect(sel.nodes.find((n) => n.type === "stakeholder")).toBeDefined();
+  });
+});
+
+describe("buildProgramGraphContext", () => {
+  it("returns empty string for a null program or unknown phase nodes", () => {
+    expect(buildProgramGraphContext(null, "discover")).toBe("");
+    expect(buildProgramGraphContext(program({}), "discover")).toBe("");
+  });
+
+  it("emits a headered citation block carrying prior-phase facts and risks", () => {
+    const ctx = buildProgramGraphContext(
+      program({
+        phases,
+        raidEntries: [
+          { id: "x1", type: "risk", title: "Vendor slip", description: "", severity: "high", phase: "strategy", owner: null, mitigation: null, status: "open", source: "agent", createdAt: "", closedAt: null },
+        ],
+        rawData: { phaseInputs: { strategy: { sponsor: "Jane, CIO" } } },
+      }),
+      "discover",
+    );
+    expect(ctx).toContain("Program graph");
+    expect(ctx).toContain("risk [strategy]: Vendor slip");
+    expect(ctx).toContain("Executive sponsor: Jane, CIO");
+  });
+
+  it("excludes downstream phases the agent has not reached yet", () => {
+    const ctx = buildProgramGraphContext(
+      program({
+        phases,
+        raidEntries: [
+          { id: "x1", type: "risk", title: "Build risk", description: "", severity: "high", phase: "build", owner: null, mitigation: null, status: "open", source: "agent", createdAt: "", closedAt: null },
+        ],
+      }),
+      "strategy",
+    );
+    expect(ctx).not.toContain("Build risk");
+  });
+
+  it("caps the block to maxChars by dropping whole lines from the tail", () => {
+    const ctx = buildProgramGraphContext(
+      program({
+        phases,
+        rawData: { phaseInputs: { strategy: { sponsor: "Jane, CIO", businessObjective: "Grow velocity across every regional delivery centre" } } },
+      }),
+      "discover",
+      120,
+    );
+    expect(ctx).not.toBe("");
+    expect(ctx.length).toBeLessThanOrEqual(120);
+    // Never cuts a citation line mid-fact: every line after the header is whole.
+    for (const line of ctx.split("\n").slice(1)) {
+      expect(line).toMatch(/^\w+ \[/);
+    }
   });
 });
 

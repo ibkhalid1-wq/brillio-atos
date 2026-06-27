@@ -47,7 +47,7 @@ import type {
 import { getPhaseSequence } from "@/v3/lib/methodology";
 
 type JsonRecord = Record<string, Json | undefined>;
-type ProgramRowLike = {
+export type ProgramRowLike = {
   id: string;
   name: string;
   client?: string | null;
