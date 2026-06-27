@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
 import { selectPhaseMetrics } from "@/v3/lib/programMetrics";
 import { selectBlockers, selectRisks, type RaidScope } from "@/v3/lib/programRaid";
-import { synthesizeRaid, type RaidLinkage } from "@/v3/lib/raidSynthesis";
+import { synthesizeRaid, decisionLinkagePressure, type RaidLinkage } from "@/v3/lib/raidSynthesis";
 import { PHASE_LABELS } from "@/v3/lib/uiHelpers";
 import { getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
 import { DrillDownLinks, artifactLabelFor, inputLabelFor } from "@/v3/components/DrillDownLinks";
@@ -721,6 +721,12 @@ export default function DecideView({
   const registerIsCold =
     synthesis.stats.risks === 0 && synthesis.stats.blockers === 0 && synthesis.stats.decisions === 0;
 
+  // Linkage pressure: decisions an open risk/blocker points at. A pure ranking
+  // signal (id → strongest incoming-edge confidence) that lifts a grounded
+  // decision above an equal-priority peer with nothing pulling on it. It changes
+  // ORDER only — never priority/escalation counts — so the rail badge can't drift.
+  const pressureByDecision = useMemo(() => decisionLinkagePressure(synthesis.linkages), [synthesis]);
+
   const open = useMemo(() => {
     // Shared derivation (synthesise → merge persisted resolution → open filter)
     // so this feed and the rail badge count cannot drift apart.
@@ -734,7 +740,10 @@ export default function DecideView({
 
   const sortedOpen = [...open].sort((a, b) => {
     const order: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
-    return (order[a.priority as string] ?? 2) - (order[b.priority as string] ?? 2);
+    const byPriority = (order[a.priority as string] ?? 2) - (order[b.priority as string] ?? 2);
+    if (byPriority !== 0) return byPriority;
+    // Same priority: the decision an open risk/blocker is pulling on goes first.
+    return (pressureByDecision.get(b.id) ?? 0) - (pressureByDecision.get(a.id) ?? 0);
   });
 
   const { blockers, risks } = useMemo(() => {

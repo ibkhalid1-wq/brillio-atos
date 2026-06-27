@@ -184,6 +184,25 @@ export function inferRaidLinkages(
   return linkages.sort((x, y) => y.confidence - x.confidence);
 }
 
+/**
+ * Decisions under "linkage pressure" — those an open risk or blocker points at.
+ * Returns a map of decision id → the strongest incoming-edge confidence, used as
+ * a deterministic RANKING signal: a decision grounded in an open risk should sit
+ * above an equal-priority peer that has nothing pulling on it. This deliberately
+ * does NOT touch any decision's priority or escalation flag, so the counts the
+ * rail badge and Executive summary read (selectEscalatedDecisions) never drift —
+ * it only reorders within a priority band. Higher confidence wins ties.
+ */
+export function decisionLinkagePressure(linkages: RaidLinkage[]): Map<string, number> {
+  const pressure = new Map<string, number>();
+  for (const link of linkages) {
+    if (link.to.kind !== "decision") continue;
+    if (link.from.kind !== "risk" && link.from.kind !== "blocker") continue;
+    pressure.set(link.to.id, Math.max(pressure.get(link.to.id) ?? 0, link.confidence));
+  }
+  return pressure;
+}
+
 function buildRollup(
   stats: RaidSynthesis["stats"],
   linkages: RaidLinkage[],

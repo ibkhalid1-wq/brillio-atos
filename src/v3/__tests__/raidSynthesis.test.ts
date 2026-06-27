@@ -1,5 +1,5 @@
 import type { DecisionSummary, RAIDEntry } from "@/new/types";
-import { inferRaidLinkages } from "@/v3/lib/raidSynthesis";
+import { inferRaidLinkages, decisionLinkagePressure } from "@/v3/lib/raidSynthesis";
 
 /**
  * raidSynthesis infers the cross-type edges the per-type selectors structurally
@@ -142,5 +142,29 @@ describe("inferRaidLinkages", () => {
     );
     expect(links[0].confidence).toBeGreaterThanOrEqual(links[links.length - 1].confidence);
     expect(links[0].basis).toBe("artifact");
+  });
+});
+
+describe("decisionLinkagePressure", () => {
+  it("maps a decision to the strongest incoming risk/blocker edge confidence", () => {
+    const links = inferRaidLinkages(
+      [risk({ id: "r1", relatedArtifactId: "art-1" })], // artifact basis (0.9)
+      [blocker({ id: "b1", relatedInputIds: ["scope"] })],
+      [decision({ id: "d1", relatedArtifactId: "art-1", relatedInputIds: ["scope"] })],
+    );
+    const pressure = decisionLinkagePressure(links);
+    // d1 is pulled by both a risk (0.9, artifact) and a blocker (0.75, input);
+    // the strongest wins.
+    expect(pressure.get("d1")).toBe(0.9);
+  });
+
+  it("ignores edges that do not point at a decision", () => {
+    const links = inferRaidLinkages(
+      [risk({ id: "r1", relatedArtifactId: "art-1" })],
+      [blocker({ id: "b1", relatedArtifactId: "art-1" })],
+      [],
+    );
+    // risk → blocker only; no decision target.
+    expect(decisionLinkagePressure(links).size).toBe(0);
   });
 });
