@@ -31,6 +31,12 @@ interface DocumentImportPanelProps {
   existingPhaseInputs?: Record<string, Record<string, string>>;
   /** Programme's dynamic schema — gates which phases/fields an import can target */
   dynamicSchemaStore?: DynamicSchemaStore;
+  /**
+   * Phases whose gate is approved (inputs frozen). Their extracted fields are shown
+   * read-only in the review panel and excluded from the import, so the user learns
+   * the phase is locked up front instead of after a silent post-save drop.
+   */
+  lockedPhaseIds?: Set<string>;
   /** Called when the user saves approved inputs (single phase — legacy) */
   onSavePhaseInputs?: (phaseId: string, inputs: Record<string, string>) => Promise<void>;
   /** Preferred: atomic save for all phases at once, avoids stale-closure overwrites */
@@ -46,6 +52,7 @@ export default function DocumentImportPanel({
   programId,
   existingPhaseInputs = {},
   dynamicSchemaStore,
+  lockedPhaseIds,
   onSavePhaseInputs,
   onSaveAllPhaseInputs,
   onRefineField,
@@ -356,6 +363,7 @@ export default function DocumentImportPanel({
         <DocumentReviewPanel
           intelligence={intelligence}
           reviewFields={reviewFields}
+          lockedPhaseIds={lockedPhaseIds}
           saving={false}
           onUpdateField={(phaseId, fieldId, patch) => updateReviewField(phaseId, fieldId, patch)}
           onApproveAll={approveAll}

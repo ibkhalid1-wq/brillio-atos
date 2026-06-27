@@ -201,6 +201,16 @@ export default function ProgramDetailRouter({
               return (typeof pi === "object" && pi !== null) ? pi as Record<string, Record<string, string>> : {};
             })()}
             dynamicSchemaStore={getDynamicSchemaStore(program?.rawData)}
+            lockedPhaseIds={(() => {
+              // Gate-approved phases have frozen inputs — an import must not write
+              // them (handleSaveAllPhaseInputs drops them server-side). Surface that
+              // set to the review panel so the user sees the phase is locked BEFORE
+              // curating fields, rather than via a post-save "N phases skipped" toast.
+              const gr = program?.gateReviews ?? {};
+              return new Set(
+                Object.keys(gr).filter((phaseId) => gr[phaseId]?.status === "approved"),
+              );
+            })()}
             onSavePhaseInputs={async (phaseId, inputs) => {
               await onSavePhaseInputs(phaseId, inputs);
               onOpenPhase(phaseId);

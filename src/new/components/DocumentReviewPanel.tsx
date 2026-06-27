@@ -111,11 +111,14 @@ function ExtractionBadge({ type }: { type: string }) {
 
 function ReviewFieldRow({
   field,
+  locked = false,
   onApprove,
   onReject,
   onEdit,
 }: {
   field: ReviewField;
+  /** Phase gate is approved → field is frozen: shown read-only, never imported. */
+  locked?: boolean;
   onApprove: () => void;
   onReject: () => void;
   onEdit: (value: string) => void;
@@ -125,6 +128,47 @@ function ReviewFieldRow({
     field.mapping.editedValue ?? field.mapping.value,
   );
   const state = field.mapping.reviewState ?? "pending";
+  const displayValueLocked =
+    state === "edited" ? (field.mapping.editedValue ?? field.mapping.value) : field.mapping.value;
+  const kpiDisplayLocked = formatKpiDisplay(displayValueLocked);
+
+  // Locked phases render a stripped-down, read-only row: no approve/reject/edit
+  // controls, dimmed, with a "frozen" note explaining why it won't be imported.
+  if (locked) {
+    return (
+      <div
+        style={{
+          background: "var(--v3-surface-2, rgba(255,255,255,0.02))",
+          border: "1px dashed var(--v3-border, rgba(255,255,255,0.08))",
+          borderRadius: 8,
+          padding: "10px 12px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
+          opacity: 0.6,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: "var(--v3-text-secondary)",
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+              flex: 1,
+            }}
+          >
+            {field.fieldLabel}
+          </span>
+          <span style={{ fontSize: 10, color: "var(--v3-text-muted)", fontWeight: 600 }}>🔒 Frozen</span>
+        </div>
+        <div style={{ fontSize: 12, color: "var(--v3-text-muted)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+          {kpiDisplayLocked ?? displayValueLocked}
+        </div>
+      </div>
+    );
+  }
   const displayValue =
     state === "edited" ? (field.mapping.editedValue ?? field.mapping.value) : field.mapping.value;
   const kpiDisplay = formatKpiDisplay(displayValue);
@@ -334,12 +378,15 @@ function ReviewFieldRow({
 function PhaseGroup({
   phaseId,
   fields,
+  locked = false,
   onApprove,
   onReject,
   onEdit,
 }: {
   phaseId: string;
   fields: ReviewField[];
+  /** Phase gate is approved → all its fields are frozen and excluded from import. */
+  locked?: boolean;
   onApprove: (fieldId: string) => void;
   onReject: (fieldId: string) => void;
   onEdit: (fieldId: string, value: string) => void;
@@ -355,17 +402,38 @@ function PhaseGroup({
           fontWeight: 700,
           textTransform: "uppercase",
           letterSpacing: "0.08em",
-          color: "var(--v3-accent)",
+          color: locked ? "var(--v3-text-muted)" : "var(--v3-accent)",
           padding: "6px 0 2px",
           borderBottom: "1px solid var(--v3-border)",
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
         }}
       >
-        {phaseLabel}
+        <span>{phaseLabel}</span>
+        {locked && (
+          <span
+            style={{
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: "0.04em",
+              color: "var(--v3-text-muted)",
+              background: "var(--v3-surface-2, rgba(255,255,255,0.04))",
+              border: "1px solid var(--v3-border)",
+              borderRadius: 4,
+              padding: "1px 6px",
+              textTransform: "none",
+            }}
+          >
+            🔒 Gate approved — inputs frozen, not imported
+          </span>
+        )}
       </div>
       {fields.map((field) => (
         <ReviewFieldRow
           key={`${field.phaseId}-${field.fieldId}`}
           field={field}
+          locked={locked}
           onApprove={() => onApprove(field.fieldId)}
           onReject={() => onReject(field.fieldId)}
           onEdit={(value) => onEdit(field.fieldId, value)}
@@ -414,6 +482,8 @@ function EntitySummaryCard({
 interface DocumentReviewPanelProps {
   intelligence: DocumentIntelligence;
   reviewFields: ReviewField[];
+  /** Gate-approved phases — their fields render frozen and are excluded from import. */
+  lockedPhaseIds?: Set<string>;
   saving: boolean;
   onUpdateField: (
     phaseId: string,
@@ -429,6 +499,7 @@ interface DocumentReviewPanelProps {
 export function DocumentReviewPanel({
   intelligence,
   reviewFields,
+  lockedPhaseIds,
   saving,
   onUpdateField,
   onApproveAll,
@@ -440,6 +511,8 @@ export function DocumentReviewPanel({
     DOCUMENT_TYPE_LABELS[intelligence.documentType as keyof typeof DOCUMENT_TYPE_LABELS] ??
     "Document";
 
+  const isPhaseLocked = (phaseId: string) => !!lockedPhaseIds?.has(phaseId);
+
   // Group review fields by phase
   const byPhase = reviewFields.reduce<Record<string, ReviewField[]>>((acc, f) => {
     if (!acc[f.phaseId]) acc[f.phaseId] = [];
@@ -447,14 +520,21 @@ export function DocumentReviewPanel({
     return acc;
   }, {});
 
-  const approvedCount = reviewFields.filter(
+  // Fields in gate-locked phases are frozen — they are displayed read-only but
+  // play no part in the approve/save/auto-commit flow. All counts and the
+  // auto-commit decision are scoped to the importable (non-locked) fields only.
+  const activeFields = reviewFields.filter((f) => !isPhaseLocked(f.phaseId));
+  const lockedFieldCount = reviewFields.length - activeFields.length;
+  const lockedPhaseCount = Object.keys(byPhase).filter((phaseId) => isPhaseLocked(phaseId)).length;
+
+  const approvedCount = activeFields.filter(
     (f) => f.mapping.reviewState === "approved" || f.mapping.reviewState === "edited",
   ).length;
-  const rejectedCount = reviewFields.filter((f) => f.mapping.reviewState === "rejected").length;
-  const pendingCount = reviewFields.filter(
+  const rejectedCount = activeFields.filter((f) => f.mapping.reviewState === "rejected").length;
+  const pendingCount = activeFields.filter(
     (f) => !f.mapping.reviewState || f.mapping.reviewState === "pending",
   ).length;
-  const conflictCount = reviewFields.filter((f) => f.hasConflict).length;
+  const conflictCount = activeFields.filter((f) => f.hasConflict).length;
 
   // Auto-commit once every extracted field has been decided (approved/edited or
   // rejected) — no explicit Save/Cancel. Approved fields persist; if everything
@@ -468,7 +548,7 @@ export function DocumentReviewPanel({
   const onCancelRef = useRef(onCancel);
   onSaveRef.current = onSave;
   onCancelRef.current = onCancel;
-  const allDecided = reviewFields.length > 0 && pendingCount === 0;
+  const allDecided = activeFields.length > 0 && pendingCount === 0;
   useEffect(() => {
     if (!allDecided || saving || firedRef.current) return;
     const timer = window.setTimeout(() => {
@@ -583,8 +663,13 @@ export function DocumentReviewPanel({
           >
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{ fontSize: 13, fontWeight: 600, color: "var(--v3-text-primary)" }}>
-                {reviewFields.length} field{reviewFields.length !== 1 ? "s" : ""} to populate
+                {activeFields.length} field{activeFields.length !== 1 ? "s" : ""} to populate
               </span>
+              {lockedFieldCount > 0 && (
+                <span style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>
+                  🔒 {lockedFieldCount} frozen in {lockedPhaseCount} locked phase{lockedPhaseCount !== 1 ? "s" : ""}
+                </span>
+              )}
               {conflictCount > 0 && (
                 <span
                   style={{
@@ -637,6 +722,7 @@ export function DocumentReviewPanel({
                 key={phaseId}
                 phaseId={phaseId}
                 fields={fields}
+                locked={isPhaseLocked(phaseId)}
                 onApprove={(fieldId) =>
                   onUpdateField(phaseId, fieldId, { reviewState: "approved" })
                 }
@@ -686,6 +772,22 @@ export function DocumentReviewPanel({
           >
             Done
           </button>
+        ) : activeFields.length === 0 ? (
+          // Every mapped phase is gate-locked — there is nothing importable to
+          // decide, so auto-commit never fires. Offer an explicit dismiss.
+          <>
+            <span style={{ fontSize: 12, color: "var(--v3-text-muted)" }} aria-live="polite">
+              All mapped phases are gate-locked — nothing to import.
+            </span>
+            <button
+              type="button"
+              className="v3-button ghost"
+              style={{ fontSize: 12 }}
+              onClick={onCancel}
+            >
+              Done
+            </button>
+          </>
         ) : (
           <span style={{ fontSize: 12, color: "var(--v3-text-muted)" }} aria-live="polite">
             {saving
