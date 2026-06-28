@@ -2150,6 +2150,42 @@ function normalizeRaidTitle(value: unknown): string {
   return typeof value === "string" ? value.trim().toLowerCase().replace(/\s+/g, " ") : "";
 }
 
+// The model intermittently emits RAID findings that contradict the program's
+// actual state — most often claiming an already-approved artifact is unapproved
+// / still in draft, or flagging the absence of "phase exit criteria" (a concept
+// this methodology does not use). Prompt rules alone don't reliably suppress
+// these, so we drop provably-false entries deterministically before persisting.
+const RAID_APPROVAL_NEGATION =
+  /\bnot\s+(been\s+)?(yet\s+)?(formally\s+)?(approved|baselined|signed[\s-]?off|finalized|finalised)\b|\bunapproved\b|\b(only|still)\s+in\s+draft\b|\bin\s+draft\s+state\b|\bdraft\s+state\b|\bpending\s+(sign[\s-]?off|approval)\b|\bawaiting\s+(approval|sign[\s-]?off)\b/i;
+const RAID_EXIT_CRITERIA = /\b(phase\s+)?exit\s+criteria\b|\bexit\s+gate/i;
+
+function buildApprovedArtifactIndex(programData: ProgramState): { ids: Set<string>; titles: string[] } {
+  const ids = new Set<string>();
+  const titles: string[] = [];
+  for (const artifact of getProgramArtifactContext(programData)) {
+    if (artifact.status !== "approved") continue;
+    if (typeof artifact.id === "string" && artifact.id) ids.add(artifact.id);
+    if (typeof artifact.title === "string" && artifact.title.trim().length >= 5) {
+      titles.push(artifact.title.trim().toLowerCase());
+    }
+  }
+  return { ids, titles };
+}
+
+/**
+ * True when a RAID entry provably contradicts current program state:
+ * - it asserts an approved artifact is unapproved / still in draft, or
+ * - its core issue is the absence of phase exit criteria (not part of this methodology).
+ */
+function isProvablyStaleRiskEntry(entry: Record<string, unknown>, approved: { ids: Set<string>; titles: string[] }): boolean {
+  const text = `${typeof entry.title === "string" ? entry.title : ""} ${typeof entry.description === "string" ? entry.description : ""}`.toLowerCase();
+  if (RAID_EXIT_CRITERIA.test(text)) return true;
+  if (!RAID_APPROVAL_NEGATION.test(text)) return false;
+  const rel = typeof entry.relatedArtifactId === "string" ? entry.relatedArtifactId : "";
+  if (rel && approved.ids.has(rel)) return true;
+  return approved.titles.some((title) => text.includes(title));
+}
+
 function applyRiskResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
   return updateInnerProgramData(programData, (inner) => {
     const raidLog = normalizeProgramData(inner.raidLog as JsonValue | null);
@@ -2177,9 +2213,11 @@ function applyRiskResultToProgramData(programData: ProgramState, result: Record<
       if (key && !priorByTitle.has(key)) priorByTitle.set(key, entry);
     }
 
+    const approvedArtifacts = buildApprovedArtifactIndex(programData);
     const agentEntries = Array.isArray(result.raidEntries)
       ? result.raidEntries
           .filter(isRecord)
+          .filter((entry) => !isProvablyStaleRiskEntry(entry, approvedArtifacts))
           .map((entry, index) => {
             const type = typeof entry.type === "string" ? entry.type : "risk";
             const severity = typeof entry.severity === "string" ? entry.severity : "medium";
