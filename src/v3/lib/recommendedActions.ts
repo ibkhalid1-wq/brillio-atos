@@ -1,5 +1,6 @@
 import type { DecisionSummary, ProgramSummary } from "@/new/types";
 import { buildDecisionQueue } from "@/lib/adamDecisionUtils";
+import { getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
 import { isDecisionOpen } from "@/v3/utils";
 
 // Single source of truth for the "Recommended Actions" queue shown in the Action
@@ -37,5 +38,16 @@ export function deriveOpenRecommendedActions(
   // raises by hand in the Action Center) must still surface — otherwise raising
   // one writes it to the queue but it never appears and the count never moves.
   const persistedOnly = persisted.filter((decision) => !synthesizedIds.has(decision.id));
-  return [...mergedSynthesized, ...persistedOnly].filter((decision) => isDecisionOpen(decision));
+  // Locked (future) phases sit behind an unapproved gate, so their actions are
+  // not yet workable. Filtering them HERE — the single source the rail badge,
+  // the Action Center tab, the connections summary and the Executive view all
+  // read — stops those surfaces disagreeing about how many actions are open (the
+  // tab used to apply this filter alone, so it showed one fewer than the badge).
+  // Programme-level / "all" items are never phase-gated.
+  const locked = getLockedPhaseIds(program);
+  const isActionable = (phaseId: string | null | undefined) =>
+    !phaseId || phaseId === "all" || !locked.has(phaseId);
+  return [...mergedSynthesized, ...persistedOnly]
+    .filter((decision) => isDecisionOpen(decision))
+    .filter((decision) => isActionable(decision.phaseId));
 }
