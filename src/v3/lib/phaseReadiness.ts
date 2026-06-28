@@ -1,7 +1,6 @@
-import type { ExitCriterion, ProgramSummary } from "@/new/types";
+import type { ProgramSummary } from "@/new/types";
 import { getGateThreshold, computeInputQualityScore } from "@/v3/lib/confidenceScore";
 import { derivePhaseInputQuality } from "@/v3/lib/phaseInputQuality";
-import { getMandatoryCriteria } from "@/v3/lib/exitCriteriaLibrary";
 import { ATOS_STANDARD } from "@/v3/lib/methodology";
 import { getDynamicSchemaStore, dynamicArtifactDefs } from "@/v3/lib/dynamicSchema";
 import { resolveArtifactQualityScore } from "@/v3/lib/artifactReview";
@@ -34,16 +33,9 @@ export interface PhaseReadinessResult {
   canApproveGate: boolean;
   threshold: number;
   missing: string[];
-  mandatoryExitsPassing: boolean;
-  mandatoryExitsTotal: number;
-  mandatoryExitsMet: number;
   reviewScoresCount: number;
   /** Ranked actions to improve readiness, highest impact first. */
   recommendedActions: ReadinessAction[];
-  /** How many library exit criteria exist for this phase (including unmet). */
-  libraryExitCriteriaCount: number;
-  /** How many library mandatory criteria are not yet in the gate review. */
-  missingLibraryCriteria: number;
   /**
    * Persisted cross-phase dependency-check verdict: true = consistent with the
    * prior approved phase, false = blocked, null = not yet run. Read from stored
@@ -155,13 +147,8 @@ export function computePhaseReadiness(
       canApproveGate: true,
       threshold: resolvedThreshold,
       missing: [],
-      mandatoryExitsPassing: true,
-      mandatoryExitsTotal: 0,
-      mandatoryExitsMet: 0,
       reviewScoresCount: 0,
       recommendedActions: [],
-      libraryExitCriteriaCount: getMandatoryCriteria(phaseId).length,
-      missingLibraryCriteria: 0,
       dependencyCheckPassed: true,
       dependencyBlockingIssues: 0,
     };
@@ -250,60 +237,6 @@ export function computePhaseReadiness(
       effort: "hours",
       priority: "medium",
     });
-  }
-
-  // ── Exit criteria (Priority 4 — auto-populate from library if empty) ────────
-  const storedExitCriteria = Array.isArray(gateReview?.exitCriteriaStatus)
-    ? gateReview.exitCriteriaStatus as ExitCriterion[]
-    : [];
-
-  // Auto-seed when no gate review has stored criteria yet. Prefer the
-  // program-specific set produced by the exit-criteria-generator (this is exactly
-  // what the Stage view's exit-criteria card renders), so the blocking count here
-  // matches what the user sees; fall back to the static mandatory library only
-  // when no generated set exists. Both are unmet until a gate review evaluates
-  // them — but reading the generated set keeps readiness and the card in lockstep.
-  const libraryCriteria = getMandatoryCriteria(phaseId);
-  const generatedExitBucket = source && typeof source.generatedExitCriteria === "object" && source.generatedExitCriteria !== null
-    ? (source.generatedExitCriteria as Record<string, unknown>)[phaseId]
-    : null;
-  const generatedExitCriteria: ExitCriterion[] = generatedExitBucket
-    && typeof generatedExitBucket === "object"
-    && Array.isArray((generatedExitBucket as Record<string, unknown>).criteria)
-    ? ((generatedExitBucket as Record<string, unknown>).criteria as unknown[])
-        .filter((c): c is Record<string, unknown> => typeof c === "object" && c !== null && typeof (c as Record<string, unknown>).criterion === "string")
-        .map((c) => ({
-          criterion: c.criterion as string,
-          met: false,
-          evidence: null,
-          mandatory: (c as Record<string, unknown>).mandatory !== false,
-        } as ExitCriterion))
-    : [];
-  const effectiveExitCriteria: ExitCriterion[] =
-    storedExitCriteria.length > 0
-      ? storedExitCriteria
-      : generatedExitCriteria.length > 0
-        ? generatedExitCriteria
-        : libraryCriteria.map((lc) => ({
-            criterion: lc.label,
-            met: false,
-            evidence: null,
-            mandatory: true,
-          } as ExitCriterion));
-
-  const mandatoryExits = effectiveExitCriteria.filter(
-    (criterion) => (criterion as unknown as Record<string, unknown>).mandatory !== false,
-  );
-  const mandatoryExitsMet = mandatoryExits.filter((criterion) => criterion.met).length;
-  const mandatoryExitsTotal = mandatoryExits.length;
-  const mandatoryExitsPassing = mandatoryExitsTotal === 0 || mandatoryExitsMet === mandatoryExitsTotal;
-  const missingLibraryCriteria = libraryCriteria.length - Math.min(libraryCriteria.length, storedExitCriteria.length);
-
-  if (!mandatoryExitsPassing) {
-    const unmet = mandatoryExits
-      .filter((criterion) => !criterion.met)
-      .map((criterion) => criterion.criterion);
-    missing.push(`${unmet.length} mandatory exit criteria unmet: ${unmet.slice(0, 2).join("; ")}`);
   }
 
   // ── Open decisions blocking gate (Priority 8 — decision-to-readiness linkage) ─
@@ -445,13 +378,8 @@ export function computePhaseReadiness(
     canApproveGate,
     threshold: resolvedThreshold,
     missing,
-    mandatoryExitsPassing,
-    mandatoryExitsTotal,
-    mandatoryExitsMet,
     reviewScoresCount: phaseQualityScores.length,
     recommendedActions,
-    libraryExitCriteriaCount: libraryCriteria.length,
-    missingLibraryCriteria,
     dependencyCheckPassed,
     dependencyBlockingIssues: dependencyBlockingIssues.length,
   };

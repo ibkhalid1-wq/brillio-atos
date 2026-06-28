@@ -110,7 +110,6 @@ describe("ATOS sample use case — every phase completes", () => {
     const readiness = computePhaseReadiness(program, phaseId);
     expect(readiness.canApproveGate).toBe(true);
     expect(readiness.score).toBeGreaterThanOrEqual(readiness.threshold);
-    expect(readiness.mandatoryExitsPassing).toBe(true);
   });
 
   it.each(PHASES)("phase %s is methodologically complete (inputs + artifacts + exit criteria)", (phaseId) => {

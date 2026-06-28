@@ -264,79 +264,6 @@ function getRawGateStatus(program: ProgramSummary | null, phaseId: string | null
   return typeof status === "string" ? status as GateReview["status"] : null;
 }
 
-function ExitCriteriaCard({
-  criteria,
-  generatedCriteria,
-  gateApproved = false,
-}: {
-  criteria: ExitCriterion[];
-  generatedCriteria: Array<{ criterion: string; category: string; owner: string; mandatory: boolean }>;
-  gateApproved?: boolean;
-}) {
-  const display = criteria.length
-    ? criteria
-    : generatedCriteria.map((entry) => ({ criterion: entry.criterion, met: gateApproved, evidence: null }));
-  const mandatory = display.filter((criterion) => (criterion as unknown as Record<string, unknown>).mandatory !== false);
-  const mandatoryUnmet = mandatory.filter((criterion) => !criterion.met);
-  return (
-    <div className="v3-card-sm">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <div className="v3-card-title v3-card-title--flush">Exit criteria</div>
-        {!display.length ? null : mandatoryUnmet.length > 0 ? (
-          <span className="v3-chip red v3-chip-tight">
-            {mandatoryUnmet.length} mandatory unmet
-          </span>
-        ) : display.length > 0 ? (
-          <span className="v3-chip green v3-chip-tight">All met</span>
-        ) : null}
-      </div>
-      {display.length ? (
-        <div style={{ display: "grid", gap: 8 }}>
-          {display.map((criterion) => {
-            const mandatoryCriterion = (criterion as unknown as Record<string, unknown>).mandatory !== false;
-            const evidence = typeof criterion.evidence === "string" ? criterion.evidence : "";
-            return (
-              <ExpandableSection
-                key={criterion.criterion}
-                title={criterion.criterion}
-                subtitle={criterion.met ? "Marked as satisfied" : mandatoryCriterion ? "Evidence still required" : "Supplementary criterion"}
-                defaultOpen={!criterion.met}
-                badge={
-                  <StatusBadge
-                    variant={criterion.met ? "pass" : mandatoryCriterion ? "fail" : "partial"}
-                    size="sm"
-                  />
-                }
-              >
-                <div className="v3-expandable-detail-copy">
-                  {evidence ? (
-                    <div>
-                      <div className="v3-expandable-detail-label">Evidence</div>
-                      <div>{evidence}</div>
-                    </div>
-                  ) : (
-                    <div>No supporting evidence captured yet.</div>
-                  )}
-                  {mandatoryCriterion && !criterion.met ? (
-                    <div className="v3-expandable-inline-note">This one should be addressed before gate approval.</div>
-                  ) : null}
-                </div>
-              </ExpandableSection>
-            );
-          })}
-        </div>
-      ) : (
-        <EmptyState
-          icon="✓"
-          title="No exit criteria yet"
-          description="ATOS drafts exit criteria automatically as this phase's artifacts are generated. Review and confirm them here once they appear."
-          compact
-        />
-      )}
-    </div>
-  );
-}
-
 function GateNotePanel({ phaseId, existing, onSave }: { phaseId: string; existing: string; onSave: (phaseId: string, note: string) => Promise<void> }) {
   const [open, setOpen] = React.useState(false);
   const [note, setNote] = React.useState(existing);
@@ -514,7 +441,6 @@ export default function StageView({
   const [expandedOutput, setExpandedOutput] = React.useState<string | null>(null);
   const [editingArtifact, setEditingArtifact] = React.useState<"narrative" | "deck" | null>(null);
   const [updatedArtifactId, setUpdatedArtifactId] = React.useState<"narrative" | "deck" | null>(null);
-  const [exitCriteriaOpen, setExitCriteriaOpen] = React.useState(false);
   const [isLocking, setIsLocking] = React.useState(false);
   const [approvingAll, setApprovingAll] = React.useState(false);
   const [downloadingArtifacts, setDownloadingArtifacts] = React.useState(false);
@@ -1072,20 +998,6 @@ export default function StageView({
       : persisted;
     return derivePhaseInputQuality(activePhase?.id, inputs, dynamicStore);
   }, [activePhase?.id, source, liveInputs, dynamicStore]);
-  const generatedCriteria = useMemo(() => {
-    const bucket = source?.generatedExitCriteria;
-    if (!bucket || typeof bucket !== "object" || Array.isArray(bucket)) return [];
-    const entry = (bucket as Record<string, unknown>)[activePhase?.id || ""];
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
-    const criteria = (entry as Record<string, unknown>).criteria;
-    return Array.isArray(criteria)
-      ? criteria.filter((item): item is { criterion: string; category: string; owner: string; mandatory: boolean } => (
-          typeof item === "object"
-          && item !== null
-          && typeof (item as Record<string, unknown>).criterion === "string"
-        ))
-      : [];
-  }, [activePhase?.id, source]);
   const contradictions = Array.isArray(source?.contradictions)
     ? source.contradictions as Array<{ severity: string; description: string }>
     : [];
@@ -1340,7 +1252,7 @@ export default function StageView({
             // outer status ring and every other surface all read readiness.score so
             // the number is identical everywhere. Distinct from the stricter lock
             // condition ("artifacts 100% complete and quality > 90%").
-            { label: "Gate score", value: `${readiness.score}%`, tone: pctTone(readiness.score), onClick: () => setExitCriteriaOpen(true) },
+            { label: "Gate score", value: `${readiness.score}%`, tone: pctTone(readiness.score), anchor: "phase-artifacts-anchor" },
           ];
           // Live work counts — distinct from the pipeline, shown as a separated group.
           // Each carries an `addTab` so the "+ Add" button under it opens the right
@@ -2057,46 +1969,6 @@ export default function StageView({
       </section>
       </div>
       </div>
-
-      {exitCriteriaOpen ? (
-        <div
-          role="presentation"
-          onClick={() => setExitCriteriaOpen(false)}
-          style={{
-            position: "fixed", inset: 0, zIndex: 500,
-            background: "rgba(0,0,0,0.55)", display: "flex",
-            alignItems: "center", justifyContent: "center", padding: 24,
-          }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label={`Exit criteria — ${activePhase.displayName ?? activePhase.id}`}
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: "var(--v3-surface)", borderRadius: "var(--v3-radius)",
-              border: "1px solid var(--v3-border)", padding: 20, maxWidth: 560, width: "100%",
-              maxHeight: "82vh", overflowY: "auto", boxShadow: "0 16px 48px rgba(0,0,0,0.4)",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4 }}>
-              <button
-                type="button"
-                className="v3-button ghost v3-button-inline-xs"
-                aria-label="Close exit criteria"
-                onClick={() => setExitCriteriaOpen(false)}
-              >
-                ✕
-              </button>
-            </div>
-            <ExitCriteriaCard
-              criteria={gateReview?.exitCriteriaStatus || []}
-              generatedCriteria={generatedCriteria}
-              gateApproved={gateApproved}
-            />
-          </div>
-        </div>
-      ) : null}
 
       {previewArtifact ? (
         <StageModal title={previewArtifact.label} onClose={() => setPreviewArtifact(null)} maxWidth={previewArtifact.defId === "strategic-roadmap" ? 900 : 720}>

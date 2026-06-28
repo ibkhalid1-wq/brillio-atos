@@ -296,7 +296,6 @@ describe("Test Run — Agentic CRM: full methodology completion", () => {
     const readiness = computePhaseReadiness(program, phaseId);
     expect(readiness.canApproveGate).toBe(true);
     expect(readiness.score).toBeGreaterThanOrEqual(readiness.threshold);
-    expect(readiness.mandatoryExitsPassing).toBe(true);
 
     const completeness = derivePhaseMethodologyCompleteness(program, phaseId);
     expect(completeness).not.toBeNull();
