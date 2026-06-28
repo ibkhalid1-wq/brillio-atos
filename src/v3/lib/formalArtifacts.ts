@@ -27,6 +27,28 @@ export const FORMAL_ARTIFACT_FIELD_KEYS: Record<string, string> = {
   "optimization-backlog": "optimizationBacklog",
 };
 
+/**
+ * Phase each formal-artifact agent belongs to. Kept in lockstep with the
+ * `phase` field of FORMAL_ARTIFACT_AGENTS in supabase/functions/run-agent/index.ts.
+ * Used to place a reconciled ledger stub under the right phaseArtifacts bucket.
+ */
+export const FORMAL_ARTIFACT_PHASES: Record<string, string> = {
+  "charter": "strategy",
+  "business-case": "strategy",
+  "outcome-framework": "strategy",
+  "strategic-roadmap": "strategy",
+  "governance-model": "mobilise",
+  "raci-matrix": "mobilise",
+  "requirements-catalog": "discover",
+  "future-state-design": "design",
+  "target-operating-model": "design",
+  "solution-architecture": "design",
+  "test-plan": "build",
+  "runbook": "operate",
+  "support-model": "operate",
+  "optimization-backlog": "optimize",
+};
+
 // Provenance/scoring fields that are not part of the readable document body.
 const SKIP_KEYS = new Set(["confidence", "generatedat", "title"]);
 
