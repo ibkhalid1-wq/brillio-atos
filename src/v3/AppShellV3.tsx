@@ -2462,12 +2462,34 @@ export default function AppShellV3() {
     // The snapshot holds the inner programme state; strip any legacy snapshot key
     // so a restored copy never reintroduces an in-data history.
     delete restoredInner.programSnapshots;
+    // A restored snapshot carries the RAID log, decision queue and escalations
+    // that were true for THAT point in time. Against the just-restored state they
+    // are stale intelligence, so strip them (and the decision-queue provenance)
+    // before persisting, then regenerate RAID + the decision queue fresh below.
+    // Escalations re-derive on their normal cadence once RAID/decisions exist.
+    delete restoredInner.raidLog;
+    delete restoredInner.raidEntries;
+    delete restoredInner.decisionQueue;
+    delete restoredInner.decisions;
+    delete restoredInner.escalations;
+    delete restoredInner.escalationsLastCheckedAt;
+    delete restoredInner.scopePcrGeneratedAt;
     const payload = cloned.commit(restoredInner);
     // updateProgramData already refreshes on success — no second refetch needed.
     await updateProgramData(activeProgram.id, payload, activeProgram.updatedAt);
     const label = programSnapshots.find((s) => s.id === snapshotId)?.label ?? "snapshot";
-    pushV3Toast(`Reverted to “${label}”.`, { tone: "success", duration: 3000 });
-  }, [activeProgram, getProgramSnapshotData, programSnapshots, refreshPrograms, updateProgramData]);
+    pushV3Toast(`Reverted to “${label}” — regenerating RAID and decisions…`, { tone: "success", duration: 3500 });
+    // Regenerate intelligence against the restored state. skipPreSync is
+    // essential here: runProgramAgent's pre-run upsert reads activeProgram.rawData
+    // from THIS callback's closure, which is still the PRE-restore value (React
+    // state hasn't updated within the same callback) — syncing it would clobber
+    // the restore we just persisted. updateProgramData already wrote the restored
+    // copy to cloud, so the edge functions read the fresh restored blob.
+    if (isSupabaseConfigured) {
+      void runProgramAgent({ agentId: "risk", phaseId: "program", triggeredBy: "trigger", skipPreSync: true });
+      void runProgramAgent({ agentId: "scope-pcr", phaseId: "program", triggeredBy: "trigger", skipPreSync: true });
+    }
+  }, [activeProgram, getProgramSnapshotData, programSnapshots, refreshPrograms, updateProgramData, runProgramAgent]);
 
   // Auto-snapshot when a phase gate transitions to approved (a "lock"). Detected
   // from the persisted gateReviews so it runs off the refreshed programme — no
