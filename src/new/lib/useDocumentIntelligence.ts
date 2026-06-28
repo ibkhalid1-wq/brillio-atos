@@ -14,7 +14,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
-import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
+import { findRosterGrid, getPhaseInputSchema, matchColumnKey } from "@/v3/lib/phaseInputSchema";
 import type { DynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import type {
   ApprovedInputs,
@@ -27,7 +27,6 @@ import type {
   ReviewField,
   StakeholderEntity,
 } from "@/new/lib/documentIntelligenceTypes";
-import type { GridColumn, PhaseInputField } from "@/v3/lib/phaseInputSchema";
 import {
   PROVENANCE_KEY,
   serializeProvenance,
@@ -276,31 +275,6 @@ export function deriveKpiReviewField(
 }
 
 // ─── Extracted stakeholders → core-team roster grid ───────────────────────────
-
-/** Find the column key whose key or label matches `re`, falling back to `fallback`. */
-function matchColumnKey(columns: GridColumn[], re: RegExp, fallback?: string): string | undefined {
-  const hit = columns.find((c) => re.test(c.key) || re.test(c.label ?? ""));
-  return hit?.key ?? fallback;
-}
-
-/**
- * Locate the Mobilise core-team roster grid in a phase schema. Prefers the
- * canonical ai-derived id ("coreTeamRoster", label "Named individuals per core
- * team role"); otherwise the first grid whose columns clearly carry a name and a
- * role. Returns null when no such grid is declared.
- */
-function findRosterGrid(fields: PhaseInputField[]): PhaseInputField | null {
-  const byId = fields.find((f) => f.type === "grid" && f.id === "coreTeamRoster");
-  if (byId) return byId;
-  return (
-    fields.find(
-      (f) =>
-        f.type === "grid" &&
-        Boolean(matchColumnKey(f.columns ?? [], /name/i)) &&
-        Boolean(matchColumnKey(f.columns ?? [], /role|title|position/i)),
-    ) ?? null
-  );
-}
 
 /**
  * Bridge extracted stakeholders into the Mobilise core-team roster grid.

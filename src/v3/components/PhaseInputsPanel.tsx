@@ -1,16 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { ProgramSummary, Workstream } from "@/new/types";
-import { getPhaseInputSchema, type GridColumn } from "@/v3/lib/phaseInputSchema";
+import { getPhaseInputSchema, resolveRosterField, type GridColumn } from "@/v3/lib/phaseInputSchema";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { availableModes, FIELD_ASSIST_MODE_LABEL, type FieldAssistMode } from "@/v3/lib/fieldAssist";
 import { prioritizePhaseFields } from "@/v3/lib/phaseInputPriority";
 import StructuredGrid, { type GridRow, parseRows, serializeRows, filledRowCount } from "@/v3/components/StructuredGrid";
 import { PROVENANCE_KEY, parseProvenance, provenanceMatches, type FieldProvenance } from "@/new/lib/fieldProvenance";
 import { EXTRACTION_TYPE_COLORS, EXTRACTION_TYPE_LABELS, confidenceLabel } from "@/new/lib/documentIntelligenceTypes";
-
-/** Columns for the canonical roles roster (mirrors ROLE_COLS in phaseInputSchema). */
-const ROLE_COLS: GridColumn[] =
-  getPhaseInputSchema("mobilise").fields.find((field) => field.id === "keyRoles")?.columns ?? [];
 
 export interface FieldAssistRequest {
   fieldId: string;
@@ -468,7 +464,13 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
   // reference that roster read-only — single source of truth for people. Strategy
   // runs before Mobilise, so the roster doesn't exist there yet.
   const showRolesReference = phaseId !== "mobilise" && phaseId !== "strategy";
+  // The roster is the ai-derived dynamic "coreTeamRoster" grid on Mobilise, not a
+  // static schema field — resolve it (and its planner-chosen columns) through the
+  // shared resolver so this reference stays aligned with what Mobilise renders.
+  const rosterField = useMemo(() => resolveRosterField(dynamicStore), [dynamicStore]);
+  const rosterCols: GridColumn[] = rosterField?.columns ?? [];
   const mobiliseRoles = useMemo(() => {
+    if (!rosterField) return [];
     const raw = program.rawData as Record<string, unknown>;
     const source = raw && typeof raw.data === "object" && raw.data !== null
       ? raw.data as Record<string, unknown>
@@ -476,8 +478,8 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
     const phaseInputs = typeof source.phaseInputs === "object" && source.phaseInputs !== null
       ? source.phaseInputs as Record<string, Record<string, string>>
       : {};
-    return parseRows((phaseInputs.mobilise ?? {}).keyRoles, ROLE_COLS);
-  }, [program.rawData]);
+    return parseRows((phaseInputs.mobilise ?? {})[rosterField.id], rosterField.columns ?? []);
+  }, [program.rawData, rosterField]);
 
   // Context-sourced suggestions for the semantic reference field types
   // (stakeholder / organization / document / artifact-reference). Each persists
@@ -1021,7 +1023,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
                   (Key roles) and they will appear here.
                 </div>
               ) : (
-                <StructuredGrid columns={ROLE_COLS} rows={mobiliseRoles} onChange={() => {}} readOnly />
+                <StructuredGrid columns={rosterCols} rows={mobiliseRoles} onChange={() => {}} readOnly />
               )}
             </div>
           ) : null}

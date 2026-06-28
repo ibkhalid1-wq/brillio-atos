@@ -1,4 +1,4 @@
-import { ATOS_STANDARD, type PhaseInputField } from "@/v3/lib/methodology";
+import { ATOS_STANDARD, type GridColumn, type PhaseInputField } from "@/v3/lib/methodology";
 import { mergeDynamicInputFields, type DynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 
 // Field/column types are owned by the methodology (single source of truth);
@@ -94,4 +94,46 @@ export function getPhaseInputSchema(phaseId: string, store?: DynamicSchemaStore)
   };
   const fields = mergeDynamicInputFields(base.fields, phaseId, store);
   return fields === base.fields ? base : { ...base, fields };
+}
+
+// ─── Canonical core-team roster resolution ────────────────────────────────────
+// The team roster is an ai-derived dynamic grid, never a hard-coded schema. Its
+// canonical address is the field id "coreTeamRoster" (label "Named individuals
+// per core team role"). Every consumer — the inputs panel reference, the
+// document-import bridge, the capacity-assessor — resolves it through these
+// helpers so the roster has one shared address even though its columns are
+// proposed by the planner per programme.
+
+/** The phase that owns the canonical roster. */
+export const ROSTER_PHASE_ID = "mobilise";
+
+/** Find the column key whose key or label matches `re`, falling back to `fallback`. */
+export function matchColumnKey(columns: GridColumn[], re: RegExp, fallback?: string): string | undefined {
+  const hit = columns.find((c) => re.test(c.key) || re.test(c.label ?? ""));
+  return hit?.key ?? fallback;
+}
+
+/**
+ * Locate the core-team roster grid in a set of phase fields. Prefers the
+ * canonical ai-derived id ("coreTeamRoster"); otherwise the first grid whose
+ * columns clearly carry a name and a role. Returns null when no such grid is
+ * declared (e.g. the dynamic schema has not been generated yet) — we never
+ * fabricate a field.
+ */
+export function findRosterGrid(fields: PhaseInputField[]): PhaseInputField | null {
+  const byId = fields.find((f) => f.type === "grid" && f.id === "coreTeamRoster");
+  if (byId) return byId;
+  return (
+    fields.find(
+      (f) =>
+        f.type === "grid" &&
+        Boolean(matchColumnKey(f.columns ?? [], /name/i)) &&
+        Boolean(matchColumnKey(f.columns ?? [], /role|title|position/i)),
+    ) ?? null
+  );
+}
+
+/** Resolve the roster grid field for a programme (defaults to the Mobilise phase). */
+export function resolveRosterField(store?: DynamicSchemaStore, phaseId: string = ROSTER_PHASE_ID): PhaseInputField | null {
+  return findRosterGrid(getPhaseInputSchema(phaseId, store).fields);
 }
