@@ -137,6 +137,7 @@ const DISABLED_AGENTS = new Set<string>([
   "pattern-query",
   "twin-sync",
   "benchmark-comparator",
+  "closure",
 ]);
 
 const MORE_ROUTE_MAP: Record<string, V3MoreView> = {

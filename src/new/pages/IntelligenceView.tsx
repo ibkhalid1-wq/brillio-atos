@@ -26,8 +26,8 @@ function prettyAgent(agentId: string): string {
 
 // NOTE: keep this in lockstep with DISABLED_AGENTS in AppShellV3 — retired agent
 // families (critical-path, retro, pattern-extract, pattern-query, twin-sync,
-// benchmark-comparator) are removed from the product surface, so they must not
-// appear on the status grid as perpetually "pending" cards that can never run.
+// benchmark-comparator, closure) are removed from the product surface, so they must
+// not appear on the status grid as perpetually "pending" cards that can never run.
 const AGENT_STATUS_GROUPS: Array<{ label: string; agents: string[] }> = [
   {
     label: "Core Delivery",
@@ -39,7 +39,7 @@ const AGENT_STATUS_GROUPS: Array<{ label: string; agents: string[] }> = [
   },
   {
     label: "Governance",
-    agents: ["escalation", "closure"],
+    agents: ["escalation"],
   },
 ];
 
@@ -109,7 +109,6 @@ const AGENT_DESCRIPTIONS: Record<string, string> = {
   "scope-pcr":             "Tracks scope baseline and logs change requests against approved scope.",
   "daily-briefing":        "Produces a concise daily status brief covering key events and risks.",
   "escalation":            "Monitors unresolved risks and decisions, triggers escalation alerts.",
-  "closure":               "Validates programme closure readiness and generates closure artefacts.",
 };
 
 // ─── Agent run history (drill-down) ──────────────────────────────────────────
