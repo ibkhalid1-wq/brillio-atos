@@ -6,7 +6,7 @@ import { Kpi } from "@/v3/components/ui/Kpi";
 import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
 import { derivePhaseStatusRings } from "@/v3/lib/phaseStatusRings";
 import { computePhaseReadiness, getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
-import { selectBlockers, selectDecisions, selectEscalatedDecisions, selectHighRisks, selectRisks } from "@/v3/lib/programRaid";
+import { selectBlockers, selectDecisions, selectHighPriorityDecisions, selectHighRisks, selectRisks } from "@/v3/lib/programRaid";
 import type { ConfidenceScore } from "@/v3/lib/confidenceScore";
 import ConfidenceBreakdown from "@/v3/components/ConfidenceBreakdown";
 import ChangeRequestModal, { type LockedPhaseOption } from "@/v3/components/ChangeRequestModal";
@@ -303,22 +303,22 @@ export default function ExecutiveView({
   // ── Critical risks (severity high/critical, capped at 3) ─────────────────
   const criticalRisks = useMemo<RAIDEntry[]>(() => selectHighRisks(program).slice(0, 3), [program]);
 
-  // ── Decision escalations (open + critical/high) — the high-priority slice of
+  // ── High-priority decisions (open + critical/high) — the high-priority slice of
   //    the SAME open-decisions set the Action Center shows, so counts agree. ───
-  const escalatedDecisions = useMemo(
-    () => selectEscalatedDecisions(program, "programme", "executive"),
+  const highPriorityDecisions = useMemo(
+    () => selectHighPriorityDecisions(program, "programme", "executive"),
     [program],
   );
 
-  // Total open decisions for this persona — the SAME canonical set the escalation
-  // list below slices from, so the KPI can never read lower than the list it caps.
+  // Total open decisions for this persona — the SAME canonical set the list below
+  // slices from, so the KPI can never read lower than the list it caps.
   const openDecisionCount = useMemo(
     () => selectDecisions(program, "programme", "executive").length,
     [program],
   );
 
-  const shownDecisions = escalatedDecisions.slice(0, 3);
-  const extraDecisions = escalatedDecisions.length - shownDecisions.length;
+  const shownDecisions = highPriorityDecisions.slice(0, 3);
+  const extraDecisions = highPriorityDecisions.length - shownDecisions.length;
 
   // ── Open RAID counts for the header block ─────────────────────────────────
   // Programme-wide open blockers and risks (canonical programRaid selectors, so
@@ -718,7 +718,7 @@ export default function ExecutiveView({
 
       {/* ── 4. Actions awaiting executive input ───────────────────────────── */}
       <div>
-        <SectionLabel>Actions Awaiting Executive Input</SectionLabel>
+        <SectionLabel>Decisions That Need You</SectionLabel>
         {shownDecisions.length === 0 ? (
           <div
             style={{
@@ -733,7 +733,7 @@ export default function ExecutiveView({
           >
             <span style={{ fontSize: 18 }}>✓</span>
             <span style={{ fontSize: 13, color: "var(--v3-green)", fontWeight: 500 }}>
-              No escalations pending.
+              Nothing needs your decision right now.
             </span>
           </div>
         ) : (
@@ -834,7 +834,7 @@ export default function ExecutiveView({
                   textAlign: "left",
                 }}
               >
-                View all {escalatedDecisions.length} decisions →
+                View all {highPriorityDecisions.length} decisions →
               </button>
             )}
           </div>

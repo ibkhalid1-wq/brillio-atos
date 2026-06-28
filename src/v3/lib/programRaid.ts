@@ -69,8 +69,9 @@ export function selectHighRisks(
 
 /**
  * Open decisions = the recommended-actions queue. This is the SAME set the Action
- * Center shows; the Executive summary's "escalations" are just the high-priority
- * slice (see {@link selectEscalatedDecisions}), so the two can never disagree.
+ * Center shows; the Executive summary's "needs a decision now" list is just the
+ * high-priority slice (see {@link selectHighPriorityDecisions}), so the two can
+ * never disagree.
  */
 export function selectDecisions(
   program: ProgramSummary | null | undefined,
@@ -85,8 +86,8 @@ export function selectDecisions(
   );
 }
 
-/** High/critical slice of {@link selectDecisions} — the executive escalation set. */
-export function selectEscalatedDecisions(
+/** High/critical slice of {@link selectDecisions} — the "needs a decision now" set. */
+export function selectHighPriorityDecisions(
   program: ProgramSummary | null | undefined,
   scope: RaidScope = "programme",
   personaId?: string,

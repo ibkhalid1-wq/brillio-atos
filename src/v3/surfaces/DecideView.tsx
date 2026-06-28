@@ -149,7 +149,7 @@ function ColdStartNudge({
   );
 }
 
-type RaidStats = { risks: number; blockers: number; decisions: number; escalations: number; linkages: number };
+type RaidStats = { risks: number; blockers: number; decisions: number; highPriority: number; linkages: number };
 
 /** Plain-English count, e.g. "2 risks", "1 decision". */
 function countPhrase(n: number, noun: string): string {
@@ -174,7 +174,7 @@ function humanizeRaidStats(stats: RaidStats): string {
     stats.decisions ? countPhrase(stats.decisions, "decision") : "",
   ].filter(Boolean);
   const head = open.length ? joinNaturally(open) : "Nothing open";
-  const escalated = stats.escalations ? `, ${stats.escalations} of them flagged to escalate` : "";
+  const escalated = stats.highPriority ? `, ${stats.highPriority} high priority` : "";
   const links = `we found ${countPhrase(stats.linkages, "link")} showing how they connect`;
   return `${head}${escalated} — ${links}.`;
 }

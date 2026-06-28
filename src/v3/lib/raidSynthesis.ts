@@ -25,7 +25,7 @@ import type { DecisionSummary, ProgramSummary, RAIDEntry } from "@/new/types";
 import {
   selectBlockers,
   selectDecisions,
-  selectEscalatedDecisions,
+  selectHighPriorityDecisions,
   selectRisks,
   type RaidScope,
 } from "@/v3/lib/programRaid";
@@ -61,7 +61,7 @@ export interface RaidSynthesis {
     risks: number;
     blockers: number;
     decisions: number;
-    escalations: number;
+    highPriority: number;
     linkages: number;
   };
 }
@@ -190,7 +190,7 @@ export function inferRaidLinkages(
  * a deterministic RANKING signal: a decision grounded in an open risk should sit
  * above an equal-priority peer that has nothing pulling on it. This deliberately
  * does NOT touch any decision's priority or escalation flag, so the counts the
- * rail badge and Executive summary read (selectEscalatedDecisions) never drift —
+ * rail badge and Executive summary read (selectHighPriorityDecisions) never drift —
  * it only reorders within a priority band. Higher confidence wins ties.
  */
 export function decisionLinkagePressure(linkages: RaidLinkage[]): Map<string, number> {
@@ -214,7 +214,7 @@ function buildRollup(
   ).size;
   const head =
     `${stats.risks} risk(s), ${stats.blockers} blocker(s), ` +
-    `${stats.decisions} decision(s) (${stats.escalations} escalated).`;
+    `${stats.decisions} decision(s) (${stats.highPriority} high priority).`;
   if (!stats.linkages) return `${head} No cross-type linkages found.`;
   const tail = decisionsFromRisks
     ? ` ${decisionsFromRisks} decision(s) trace to open risks.`
@@ -235,15 +235,15 @@ export function synthesizeRaid(
   const risks = selectRisks(program, scope);
   const blockers = selectBlockers(program, scope);
   const decisions = selectDecisions(program, scope, personaId);
-  const escalations = selectEscalatedDecisions(program, scope, personaId);
-  const escalatedIds = new Set(escalations.map((decision) => decision.id));
+  const highPriority = selectHighPriorityDecisions(program, scope, personaId);
+  const highPriorityIds = new Set(highPriority.map((decision) => decision.id));
 
-  const linkages = inferRaidLinkages(risks, blockers, decisions, escalatedIds);
+  const linkages = inferRaidLinkages(risks, blockers, decisions, highPriorityIds);
   const stats = {
     risks: risks.length,
     blockers: blockers.length,
     decisions: decisions.length,
-    escalations: escalations.length,
+    highPriority: highPriority.length,
     linkages: linkages.length,
   };
   return { linkages, rollup: buildRollup(stats, linkages), stats };

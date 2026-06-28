@@ -24,8 +24,8 @@ function link(over: Partial<RaidLinkage> & { id: string }): RaidLinkage {
 function synthesis(over: Partial<RaidSynthesis> = {}): RaidSynthesis {
   return {
     linkages: [],
-    rollup: "1 risk(s), 0 blocker(s), 1 decision(s) (0 escalated). 1 cross-type link(s).",
-    stats: { risks: 1, blockers: 0, decisions: 1, escalations: 0, linkages: 1 },
+    rollup: "1 risk(s), 0 blocker(s), 1 decision(s) (0 high priority). 1 cross-type link(s).",
+    stats: { risks: 1, blockers: 0, decisions: 1, highPriority: 0, linkages: 1 },
     ...over,
   };
 }
