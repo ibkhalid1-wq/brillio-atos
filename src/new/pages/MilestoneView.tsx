@@ -3,6 +3,7 @@ import { AgentPulse } from "@/new/components/ui/AgentPulse";
 import { NotReadyCard } from "@/new/components/ui/NotReadyCard";
 import type { Milestone, PhaseSummary, ProgramSummary } from "@/new/types";
 import { confidenceLabel, confidenceTone } from "@/v3/utils";
+import { getFormalArtifactContent } from "@/v3/lib/formalArtifacts";
 
 function exportMilestonesCsv(milestones: Milestone[], programName: string) {
   const headers = ["ID", "Title", "Phase", "Status", "Target Date", "Source", "Exit Criteria"];
@@ -133,6 +134,11 @@ export function MilestoneView({
   const milestonesConfidence = milestones.length
     ? milestones.reduce((total, milestone) => total + milestone.confidence, 0) / milestones.length
     : null;
+  // Milestone confidence is only meaningful once the Strategy-phase strategic
+  // roadmap exists to validate the plan against. Until that artifact is
+  // generated, suppress every confidence read-out so the page never implies a
+  // validated delivery posture it can't yet support.
+  const hasStrategicRoadmap = getFormalArtifactContent(program.rawData, "strategic-roadmap") !== null;
 
   const timelineMilestones = [...milestones]
     .filter((entry) => !!entry.targetDate)
@@ -177,7 +183,7 @@ export function MilestoneView({
         <div className="adam-row adam-space-between" style={{ alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
           <div className="adam-stack" style={{ gap: 6 }}>
             <div className="adam-heading-xl">Milestones</div>
-            {milestonesConfidence !== null ? (
+            {hasStrategicRoadmap && milestonesConfidence !== null ? (
               <div>
                 <span className={`v3-chip ${confidenceTone(milestonesConfidence)}`} title={confidenceLabel(milestonesConfidence)}>
                   {Math.round(milestonesConfidence * 100)}% confidence
@@ -416,7 +422,7 @@ export function MilestoneView({
                           <div className="adam-micro adam-muted">
                             {milestone.targetDate ? `Target ${new Date(milestone.targetDate).toLocaleDateString()}` : "Target date pending"}
                             {` · ${milestone.exitCriteria.length} exit criter${milestone.exitCriteria.length === 1 ? "ion" : "ia"}`}
-                            {` · ${Math.round((milestone.confidence || 0) * 100)}% confidence`}
+                            {hasStrategicRoadmap ? ` · ${Math.round((milestone.confidence || 0) * 100)}% confidence` : ""}
                           </div>
                           {milestone.exitCriteria.length ? (
                             <div className="adam-row" style={{ gap: 6, flexWrap: "wrap" }}>
