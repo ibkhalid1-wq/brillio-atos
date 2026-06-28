@@ -71,7 +71,7 @@ export function ReadinessExplainer({
           <div style={{ fontSize: 11, color: "var(--v3-text-secondary)", lineHeight: 1.5 }}>
             {summary}
             {derived ? (
-              <span style={{ color: "var(--v3-text-muted)" }}> (derived from artifact coverage — no gate review yet)</span>
+              <span style={{ color: "var(--v3-text-muted)" }}> (derived from artifact coverage — no sign-off yet)</span>
             ) : null}
           </div>
         </div>

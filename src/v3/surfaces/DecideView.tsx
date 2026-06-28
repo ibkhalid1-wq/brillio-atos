@@ -332,6 +332,7 @@ function GateTimeline({
 
 function DecisionCard({
   decision,
+  destinationLabel,
   links,
   modifyOpen,
   modifyValue,
@@ -344,6 +345,7 @@ function DecisionCard({
   onDrill,
 }: {
   decision: ReviewDecision;
+  destinationLabel: string;
   links: RaidLinkage[];
   modifyOpen: boolean;
   modifyValue: string;
@@ -457,8 +459,8 @@ function DecisionCard({
         <RaidLinkBadges entryId={decision.id} links={links} />
 
         <div className="v3-governance-decision-actions">
-          <button type="button" className="v3-button primary" style={{ fontSize: 12 }} onClick={onGoToInput}>
-            Resolve
+          <button type="button" className="v3-button primary" style={{ fontSize: 12 }} onClick={onGoToInput} title={`Go to ${destinationLabel} to resolve this`}>
+            Resolve in {destinationLabel}
           </button>
           <button type="button" className="v3-button ghost" style={{ fontSize: 12 }} onClick={() => onResolveDecision("deferred")}>
             Defer
@@ -583,11 +585,13 @@ function GateDetailPanel({
 
 function RaidCard({
   entry,
+  destinationLabel,
   links,
   onGoToInput,
   onDrill,
 }: {
   entry: RAIDEntry;
+  destinationLabel: string;
   links: RaidLinkage[];
   onGoToInput: () => void;
   onDrill: (anchor: string) => void;
@@ -621,8 +625,8 @@ function RaidCard({
         <RaidLinkBadges entryId={entry.id} links={links} />
 
         <div className="v3-governance-decision-actions">
-          <button type="button" className="v3-button primary" style={{ fontSize: 12 }} onClick={onGoToInput}>
-            Resolve
+          <button type="button" className="v3-button primary" style={{ fontSize: 12 }} onClick={onGoToInput} title={`Go to ${destinationLabel} to resolve this`}>
+            Resolve in {destinationLabel}
           </button>
         </div>
       </AdamCardBody>
@@ -949,6 +953,7 @@ export default function DecideView({
         </div>
         <DecisionCard
           decision={decision}
+          destinationLabel={describeItemDestination({ itemPhase: decision.phaseId, relatedArtifactId: decision.relatedArtifactId, relatedInputIds: decision.relatedInputIds }).label}
           links={linkagesByEntry.get(decision.id) ?? []}
           previewOpen={!!previewMap.get(decision.id)}
           modifyOpen={!!modifyOpenMap.get(decision.id)}
@@ -1001,17 +1006,15 @@ export default function DecideView({
       ? phaseId
       : (selectedPhaseId ?? activePhaseId ?? program?.phases?.[0]?.id ?? "strategy");
 
-  // Resolve an item by jumping to its single best source field: the first related
-  // input (the field a PM edits), then its artifact, then the phase input section.
-  // The navigator flashes the target; a context toast names where you landed so
-  // the jump is never disorienting.
-  const goToItemSource = (args: {
+  // The single best place to resolve an item: its first related input (the field
+  // a PM edits), then its artifact, then the phase input section. Naming this on
+  // the card — not just in a post-click toast — tells the user WHERE to act before
+  // they click, so an action like "Assign accountable owner" is never a dead end.
+  const describeItemDestination = (args: {
     itemPhase: string | null | undefined;
-    title: string;
-    kindLabel: string;
     relatedArtifactId?: string | null;
     relatedInputIds?: string[];
-  }) => {
+  }): { target: string; anchor?: string; label: string } => {
     const target = resolveTargetPhase(args.itemPhase);
     const firstInput = (args.relatedInputIds ?? [])[0];
     const anchor = firstInput
@@ -1019,13 +1022,26 @@ export default function DecideView({
       : args.relatedArtifactId
       ? `artifact:${args.relatedArtifactId}`
       : undefined;
-    const destination = firstInput
+    const label = firstInput
       ? inputLabelFor(target, firstInput)
       : args.relatedArtifactId
       ? artifactLabelFor(args.relatedArtifactId)
       : `${PHASE_LABELS[target] ?? target} inputs`;
+    return { target, anchor, label };
+  };
+
+  // Resolve an item by jumping to its best source. The navigator flashes the
+  // target; a context toast names where you landed so the jump is never disorienting.
+  const goToItemSource = (args: {
+    itemPhase: string | null | undefined;
+    title: string;
+    kindLabel: string;
+    relatedArtifactId?: string | null;
+    relatedInputIds?: string[];
+  }) => {
+    const { target, anchor, label } = describeItemDestination(args);
     onNavigateToPhaseInputs(target, anchor);
-    pushV3Toast(`${args.kindLabel}: ${args.title} → ${destination}`, {
+    pushV3Toast(`${args.kindLabel}: ${args.title} → ${label}`, {
       tone: "info",
       icon: "↳",
       duration: 6000,
@@ -1049,6 +1065,7 @@ export default function DecideView({
             </div>
             <RaidCard
               entry={entry}
+              destinationLabel={describeItemDestination({ itemPhase: entry.phase, relatedArtifactId: entry.relatedArtifactId, relatedInputIds: entry.relatedInputIds }).label}
               links={linkagesByEntry.get(entry.id) ?? []}
               onGoToInput={() => goToItemSource({ itemPhase: entry.phase, title: entry.title, kindLabel: entry.type === "blocker" ? "Blocker" : entry.type === "risk" ? "Risk" : "Item", relatedArtifactId: entry.relatedArtifactId, relatedInputIds: entry.relatedInputIds })}
               onDrill={(anchor) => onNavigateToPhaseInputs(resolveTargetPhase(entry.phase), anchor)}
