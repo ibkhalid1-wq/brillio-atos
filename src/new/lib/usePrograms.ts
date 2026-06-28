@@ -357,8 +357,26 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
       // If DB returned no programs but we have local ones, migrate them up to Supabase
       // so agent edge-function calls can find them by ID. Only migrate programs not
       // soft-deleted in the cloud, so a delete can't be undone by re-upserting.
-      if (liveCloudRows.length === 0 && liveLocalPrograms.length > 0 && userId) {
-        const upsertRows = liveLocalPrograms.map((program) => ({
+      //
+      // Guard against silent data loss: a degraded/expiring session can be accepted
+      // by the server yet scope this SELECT to zero rows, making a still-existing
+      // cloud row look absent. Upserting an empty / never-hydrated local blob over it
+      // (onConflict: "id") would then clobber the real data. So only migrate local
+      // copies that actually carry content — an empty rawData has nothing worth
+      // pushing and is exactly the dangerous case.
+      const migratable =
+        liveCloudRows.length === 0 && userId
+          ? liveLocalPrograms.filter((program) => {
+              const raw = program.rawData;
+              return (
+                !!raw &&
+                typeof raw === "object" &&
+                Object.keys(raw as Record<string, unknown>).length > 0
+              );
+            })
+          : [];
+      if (migratable.length > 0 && userId) {
+        const upsertRows = migratable.map((program) => ({
           id: program.id,
           name: program.name,
           client: program.client || null,
