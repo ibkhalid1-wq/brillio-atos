@@ -3637,8 +3637,8 @@ async function triggerDownstreamAgents(
   completedPhaseId: string,
   /** Handoff from the completing agent — passed to each downstream so they know upstream context */
   completedHandoff?: AgentHandoff | null,
-  /** Post-completion program state (unused now the recursive cascade is retired). */
-  _programData?: ProgramState,
+  /** Post-completion program state — used to gate the capacity re-assessment on a populated roster. */
+  programData?: ProgramState,
   /**
    * True when the completed run produced one or more artifacts (formal documents
    * OR dynamic-phase artifacts). Dynamic-phase artifacts go through the generic
@@ -3667,6 +3667,23 @@ async function triggerDownstreamAgents(
     { agentId: "plan", phaseId: "program" },
     { agentId: "risk", phaseId: "program" },
   ];
+
+  // Capacity re-assessment is automatic: whenever an artifact is generated in a
+  // phase where team capacity is load-bearing, refresh the capacity assessment so
+  // the roster's adequacy reflects the latest plan. Gated three ways: never from
+  // capacity-assessor itself (it is a support artifact, so it would not re-enter
+  // this branch anyway — but the guard makes the no-recursion intent explicit);
+  // only in the phases that surface a capacity card; and only once the roster
+  // actually carries people, so we never burn a run on an empty grid.
+  const CAPACITY_PHASES = new Set(["mobilise", "build"]);
+  if (completedAgentId !== "capacity-assessor" && CAPACITY_PHASES.has(completedPhaseId)) {
+    const mobiliseInputs = normalizeProgramData(
+      normalizeProgramData(programData?.phaseInputs as JsonValue | null).mobilise as JsonValue | null,
+    );
+    if (resolveRosterRows(mobiliseInputs).length > 0) {
+      downstreamAgents.push({ agentId: "capacity-assessor", phaseId: completedPhaseId });
+    }
+  }
 
   for (let i = 0; i < downstreamAgents.length; i++) {
     const target = downstreamAgents[i];
