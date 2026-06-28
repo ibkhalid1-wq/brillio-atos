@@ -29,6 +29,7 @@ import { buildFactGraph, factsForPhase } from "@/v3/lib/factGraph";
 import { getPhaseDefinition } from "@/v3/lib/methodology";
 import { buildPhaseSchedule, type GanttRow } from "@/v3/lib/phaseSchedule";
 import RoadmapGantt from "@/v3/components/RoadmapGantt";
+import ChangeRequestModal from "@/v3/components/ChangeRequestModal";
 import type { V3Mode, V3MoreView, V3ReportId } from "@/v3/types";
 
 interface StageViewProps {
@@ -52,6 +53,8 @@ interface StageViewProps {
   onAddItem?: (tab: "blockers" | "risks" | "actions") => void;
   onOpenReport: (reportId: V3ReportId) => void;
   onReopenGate: (phaseId: string) => void;
+  /** Raise a change request against a locked phase (controlled edit path). */
+  onRaiseChangeRequest?: (phaseId: string, title: string, reason: string) => Promise<void> | void;
   onApproveGate: (phaseId: string) => Promise<boolean | void>;
   onRunAgent: (agentId: string, phaseId?: string, guidance?: string) => void;
   onSaveArtifact: (artifactId: "narrative" | "deck", content: string) => Promise<void>;
@@ -488,6 +491,7 @@ export default function StageView({
   onAddItem,
   onOpenReport,
   onReopenGate,
+  onRaiseChangeRequest,
   onApproveGate,
   onRunAgent,
   onSaveArtifact,
@@ -512,6 +516,7 @@ export default function StageView({
   const [downloadingArtifacts, setDownloadingArtifacts] = React.useState(false);
   const [lockConfirmOpen, setLockConfirmOpen] = React.useState(false);
   const [lockedModalOpen, setLockedModalOpen] = React.useState(false);
+  const [changeRequestOpen, setChangeRequestOpen] = React.useState(false);
   const [previewArtifact, setPreviewArtifact] = React.useState<{ defId?: string; label: string; description?: string; content: string; score: number | null; statusTone: string } | null>(null);
   const [qualityArtifact, setQualityArtifact] = React.useState<{
     label: string;
@@ -1324,14 +1329,25 @@ export default function StageView({
                         <div className="v3-phase-gate-col">
                           {renderMetric(metric)}
                           {gateApproved ? (
-                            <button
-                              type="button"
-                              className="v3-button ghost v3-button-inline-xs v3-phase-gate-recheck"
-                              title="Unlock this phase to edit, regenerate, or re-review its artifacts."
-                              onClick={() => onReopenGate(activePhase.id)}
-                            >
-                              ⤺ Unlock
-                            </button>
+                            onRaiseChangeRequest ? (
+                              <button
+                                type="button"
+                                className="v3-button ghost v3-button-inline-xs v3-phase-gate-recheck"
+                                title="This phase is locked. Raise a change request to edit it — approval reopens the gate."
+                                onClick={() => setChangeRequestOpen(true)}
+                              >
+                                ✎ Request change
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="v3-button ghost v3-button-inline-xs v3-phase-gate-recheck"
+                                title="Unlock this phase to edit, regenerate, or re-review its artifacts."
+                                onClick={() => onReopenGate(activePhase.id)}
+                              >
+                                ⤺ Unlock
+                              </button>
+                            )
                           ) : (
                             <button
                               type="button"
@@ -2122,6 +2138,18 @@ export default function StageView({
             </button>
           </div>
         </div>
+      ) : null}
+
+      {onRaiseChangeRequest && activePhase ? (
+        <ChangeRequestModal
+          open={changeRequestOpen}
+          fixedPhase={{ id: activePhase.id, name: activePhase.displayName ?? activePhase.id }}
+          onClose={() => setChangeRequestOpen(false)}
+          onSubmit={async (phaseId, title, reason) => {
+            await onRaiseChangeRequest(phaseId, title, reason);
+            setChangeRequestOpen(false);
+          }}
+        />
       ) : null}
 
       {revertModalOpen ? (

@@ -4,6 +4,7 @@ import type { Json } from "@/integrations/supabase/types";
 import type { GateReview } from "@/new/types";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { recordGateRiskSnapshot } from "@/lib/adamGateRisk";
+import { getChangeRequests, makeChangeRequest, applyDecision } from "@/v3/lib/changeControl";
 
 const LEGACY_KEYS = ["brillio-adam-projects", "brillio-atlas-projects"] as const;
 
@@ -50,6 +51,45 @@ function persistLocally(programId: string, payload: Record<string, unknown>) {
       localStorage.setItem(storageKey, JSON.stringify(next));
     } catch { /* ignore */ }
   });
+}
+
+/** Pure transform that reopens one phase's gate on a given inner state. Shared by
+ *  the direct reopen flow and the change-request approval flow so both produce the
+ *  exact same gate/decision-queue mutation in a single atomic write. */
+function buildReopenInner(
+  inner: Record<string, unknown>,
+  gateReviews: Record<string, GateReview>,
+  decisionQueue: Record<string, unknown>[],
+  phaseId: string,
+  reason: string,
+  reopenedBy: string,
+): Record<string, unknown> {
+  const review: GateReview = gateReviews[phaseId] ?? defaultGateReview(phaseId);
+  const nextReviews = {
+    ...gateReviews,
+    [phaseId]: {
+      ...review,
+      status: "remediation-requested" as const,
+      reopenedAt: new Date().toISOString(),
+      reopenedBy,
+      reopenReason: reason,
+      approvedAt: null,
+      approvedBy: null,
+    },
+  };
+  const reopenDecision = {
+    id: `reopen-gate-${phaseId}-${Date.now()}`,
+    title: `Gate reopened: ${phaseId}`,
+    question: `The ${phaseId} gate has been reopened. Reason: ${reason}. Review the gate conditions and re-approve when resolved.`,
+    type: "gate-approval",
+    priority: "high",
+    status: "open",
+    phaseId,
+    source: "gate-reopen",
+    createdAt: new Date().toISOString(),
+    recommendation: "Address the reopen reason, re-run gate review, then re-approve.",
+  };
+  return { ...inner, gateReviews: nextReviews, decisionQueue: [...decisionQueue, reopenDecision] };
 }
 
 export function useGateReview(
@@ -262,41 +302,51 @@ export function useGateReview(
   const reopenGate = useCallback(async (phaseId: string, reason: string) => {
     const { inner, gateReviews, decisionQueue } = getGateReviewState();
     // A gate can be locked without a stored review (legacy programmes, or a gate
-    // closed before AI review existed). Mirror approveGate and synthesise a
-    // default rather than failing the reopen.
-    const review: GateReview = gateReviews[phaseId] ?? defaultGateReview(phaseId);
+    // closed before AI review existed). buildReopenInner synthesises a default
+    // rather than failing the reopen.
+    const reopenedBy = await getCurrentUserDisplayName().catch(() => "Program owner");
+    await persistState(buildReopenInner(inner, gateReviews, decisionQueue, phaseId, reason, reopenedBy));
+  }, [getGateReviewState, persistState]);
 
-    const nextReviews = {
-      ...gateReviews,
-      [phaseId]: {
-        ...review,
-        status: "remediation-requested" as const,
-        reopenedAt: new Date().toISOString(),
-        reopenedBy: await getCurrentUserDisplayName().catch(() => "Program owner"),
-        reopenReason: reason,
-        approvedAt: null,
-        approvedBy: null,
-      },
-    };
+  // Log a change request against a locked phase. This is the sanctioned entry
+  // point for editing a closed stage: nothing unlocks until the request is
+  // approved (see resolveChangeRequest), so the audit trail is never bypassed.
+  const raiseChangeRequest = useCallback(async (phaseId: string, title: string, reason: string) => {
+    const { inner } = getGateReviewState();
+    const requestedBy = await getCurrentUserDisplayName().catch(() => "Program owner");
+    const list = getChangeRequests(inner);
+    const cr = makeChangeRequest({ phaseId, title, reason, requestedBy });
+    await persistState({ ...inner, changeRequests: [...list, cr] });
+  }, [getGateReviewState, persistState]);
 
-    const reopenDecision = {
-      id: `reopen-gate-${phaseId}-${Date.now()}`,
-      title: `Gate reopened: ${phaseId}`,
-      question: `The ${phaseId} gate has been reopened. Reason: ${reason}. Review the gate conditions and re-approve when resolved.`,
-      type: "gate-approval",
-      priority: "high",
-      status: "open",
-      phaseId,
-      source: "gate-reopen",
-      createdAt: new Date().toISOString(),
-      recommendation: "Address the reopen reason, re-run gate review, then re-approve.",
-    };
-
-    await persistState({
+  // Approve or reject a logged change request. Approval also reopens the affected
+  // phase's gate in the SAME write so the request record and the unlocked gate
+  // can never drift out of sync (a second write would race on a stale snapshot).
+  const resolveChangeRequest = useCallback(async (
+    id: string,
+    decision: "approved" | "rejected",
+    note?: string,
+  ) => {
+    const { inner, gateReviews, decisionQueue } = getGateReviewState();
+    const list = getChangeRequests(inner);
+    const target = list.find((cr) => cr.id === id);
+    if (!target || target.status !== "open") return;
+    const decidedBy = await getCurrentUserDisplayName().catch(() => "Program owner");
+    let nextInner: Record<string, unknown> = {
       ...inner,
-      gateReviews: nextReviews,
-      decisionQueue: [...decisionQueue, reopenDecision],
-    });
+      changeRequests: applyDecision(list, id, decision, decidedBy, note),
+    };
+    if (decision === "approved") {
+      nextInner = buildReopenInner(
+        nextInner,
+        gateReviews,
+        decisionQueue,
+        target.phaseId,
+        `Change request approved: ${target.title}`,
+        decidedBy,
+      );
+    }
+    await persistState(nextInner);
   }, [getGateReviewState, persistState]);
 
   return {
@@ -304,6 +354,8 @@ export function useGateReview(
     requestRemediation,
     saveNote,
     reopenGate,
+    raiseChangeRequest,
+    resolveChangeRequest,
     isSaving,
   };
 }

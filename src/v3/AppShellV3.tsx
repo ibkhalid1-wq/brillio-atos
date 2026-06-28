@@ -74,6 +74,7 @@ import type { FieldAssistRequest } from "@/v3/components/PhaseInputsPanel";
 const DecideView = React.lazy(() => import("@/v3/surfaces/DecideView"));
 import GateReopenModal from "@/v3/components/GateReopenModal";
 import RemediationNoteModal from "@/v3/components/RemediationNoteModal";
+import { getChangeRequests } from "@/v3/lib/changeControl";
 import PhaseDataOverwriteModal from "@/v3/components/PhaseDataOverwriteModal";
 const MoreView = React.lazy(() => import("@/v3/surfaces/MoreView"));
 const PipelineView = React.lazy(() => import("@/v3/surfaces/PipelineView"));
@@ -1543,7 +1544,7 @@ export default function AppShellV3() {
   const { addMilestone, completeMilestone, isSaving: milestoneSavePending } = useMilestones(activeProgramId || "", activeProgram?.rawData || {}, refreshPrograms);
   const { saveBudgetInputs, isSaving: budgetSavePending } = useBudgetTracking(activeProgramId || "", activeProgram?.rawData || {}, refreshPrograms);
   useClosure(activeProgramId || "", activeProgram?.rawData || {}, refreshPrograms);
-  const { approveGate, requestRemediation, reopenGate } = useGateReview(activeProgramId || "", rawData, refreshPrograms);
+  const { approveGate, requestRemediation, reopenGate, raiseChangeRequest, resolveChangeRequest } = useGateReview(activeProgramId || "", rawData, refreshPrograms);
   const { acknowledgeEscalation, resolveEscalation } = useEscalations(activeProgramId || "", rawData, refreshPrograms);
   const { addNote: addProgramNote } = useProgramNotes(activeProgramId || "", rawData, refreshPrograms);
   const { addDecision } = useDecisionQueue(activeProgramId || "", rawData, refreshPrograms);
@@ -1667,6 +1668,18 @@ export default function AppShellV3() {
   const lockedPhaseIds = useMemo(
     () => activeProgram ? getLockedPhaseIds(activeProgram) : new Set<string>(),
     [activeProgram],
+  );
+  // Change-control state: the audit log of requests plus the set of locked stages
+  // a new request can target. Both derive from the active programme's state.
+  const changeRequests = useMemo(
+    () => getChangeRequests(getProgramState(rawData).inner),
+    [rawData],
+  );
+  const lockedPhaseOptions = useMemo(
+    () => (activeProgram?.phases ?? [])
+      .filter((phase) => lockedPhaseIds.has(phase.id))
+      .map((phase) => ({ id: phase.id, name: phase.displayName ?? phase.id })),
+    [activeProgram, lockedPhaseIds],
   );
   const isProgramEmpty = useMemo(() => {
     if (!activeProgram) return false;
@@ -2696,6 +2709,31 @@ export default function AppShellV3() {
     }
   }, [gateReopenPhase, reopenGate]);
 
+  const handleRaiseChangeRequest = useCallback(async (phaseId: string, title: string, reason: string) => {
+    try {
+      await raiseChangeRequest(phaseId, title, reason);
+      pushV3Toast("Change request logged for review.", { tone: "success", duration: 3000 });
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "";
+      pushV3Toast(detail ? `Could not log change request: ${detail}` : "Could not log change request.", { tone: "error", duration: 4000 });
+    }
+  }, [raiseChangeRequest]);
+
+  const handleResolveChangeRequest = useCallback(async (id: string, decision: "approved" | "rejected", note?: string) => {
+    try {
+      await resolveChangeRequest(id, decision, note);
+      pushV3Toast(
+        decision === "approved"
+          ? "Change request approved — the stage gate has reopened for editing."
+          : "Change request rejected.",
+        { tone: decision === "approved" ? "success" : "info", duration: 3500 },
+      );
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "";
+      pushV3Toast(detail ? `Could not update change request: ${detail}` : "Could not update change request.", { tone: "error", duration: 4000 });
+    }
+  }, [resolveChangeRequest]);
+
   const handleAnswerAgentQuestion = useCallback(async (taskId: string, answer: string) => {
     if (!activeProgram || !activePhaseId || !activeProgramId) return;
     await updatePhaseTask(taskId, { status: "done", result: answer, completedAt: Date.now() } as Partial<PhaseAgentTask>);
@@ -3112,6 +3150,7 @@ export default function AppShellV3() {
                 onAddItem={(tab) => { setDecideIntent({ tab, nonce: Date.now() }); navigateSurface("decide"); }}
                 onOpenReport={openReport}
                 onReopenGate={handleReopenGate}
+                onRaiseChangeRequest={handleRaiseChangeRequest}
                 onApproveGate={handleApproveGate}
                 onRunAgent={handleRunAgent}
                 onSaveArtifact={handleSaveArtifact}
@@ -3316,6 +3355,10 @@ export default function AppShellV3() {
               onNavigateToPipeline={() => navigateSurface("pipeline")}
               onNavigateToPhase={openPhaseSheet}
               onNavigateToRisks={() => openMoreView("risks")}
+              changeRequests={changeRequests}
+              lockedPhases={lockedPhaseOptions}
+              onRaiseChangeRequest={handleRaiseChangeRequest}
+              onResolveChangeRequest={handleResolveChangeRequest}
             />
           </AdamErrorBoundary>
         ) : null}

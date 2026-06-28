@@ -9,6 +9,8 @@ import { computePhaseReadiness, getLockedPhaseIds } from "@/v3/lib/phaseReadines
 import { selectBlockers, selectDecisions, selectEscalatedDecisions, selectHighRisks, selectRisks } from "@/v3/lib/programRaid";
 import type { ConfidenceScore } from "@/v3/lib/confidenceScore";
 import ConfidenceBreakdown from "@/v3/components/ConfidenceBreakdown";
+import ChangeRequestModal, { type LockedPhaseOption } from "@/v3/components/ChangeRequestModal";
+import type { ChangeRequest } from "@/v3/lib/changeControl";
 
 interface ExecutiveViewProps {
   program: ProgramSummary | null;
@@ -25,6 +27,10 @@ interface ExecutiveViewProps {
   onNavigateToPipeline: () => void;
   onNavigateToPhase: (phaseId: string) => void;
   onNavigateToRisks: () => void;
+  changeRequests?: ChangeRequest[];
+  lockedPhases?: LockedPhaseOption[];
+  onRaiseChangeRequest?: (phaseId: string, title: string, reason: string) => Promise<void> | void;
+  onResolveChangeRequest?: (id: string, decision: "approved" | "rejected", note?: string) => Promise<void> | void;
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
@@ -191,8 +197,24 @@ export default function ExecutiveView({
   onNavigateToPipeline,
   onNavigateToPhase,
   onNavigateToRisks,
+  changeRequests = [],
+  lockedPhases = [],
+  onRaiseChangeRequest,
+  onResolveChangeRequest,
 }: ExecutiveViewProps) {
   const [approvingPhase, setApprovingPhase] = useState<string | null>(null);
+  const [changeRequestOpen, setChangeRequestOpen] = useState(false);
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
+  // Friendly stage names for the change-control log, keyed by phase id.
+  const phaseNameById = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const phase of program?.phases ?? []) map[phase.id] = phase.displayName ?? phase.id;
+    return map;
+  }, [program?.phases]);
+  const openChangeRequests = useMemo(
+    () => changeRequests.filter((cr) => cr.status === "open"),
+    [changeRequests],
+  );
 
   // ── Extract inner program data for agent-generated artifacts ─────────────
   const innerData = useMemo<Record<string, unknown>>(() => {
@@ -408,14 +430,16 @@ export default function ExecutiveView({
           {/* Executive actions live in the header so the primary controls are
               reachable without scrolling to the foot of the brief. */}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            {/* Dummy for now — will initiate the change-request flow for editing locked stages. */}
-            <button
-              type="button"
-              className="v3-button secondary v3-button-inline-sm"
-              onClick={() => { /* TODO: wire change-request flow for locked stages */ }}
-            >
-              Change Request
-            </button>
+            {onRaiseChangeRequest ? (
+              <button
+                type="button"
+                className="v3-button secondary v3-button-inline-sm"
+                title={lockedPhases.length ? "Raise a change request against a locked stage" : "No locked stages yet"}
+                onClick={() => setChangeRequestOpen(true)}
+              >
+                Change Request{openChangeRequests.length ? ` (${openChangeRequests.length})` : ""}
+              </button>
+            ) : null}
           </div>
 
           {confidenceScore !== null && (
@@ -441,6 +465,78 @@ export default function ExecutiveView({
           )}
         </div>
       </div>
+
+      {/* ── Change control log ─────────────────────────────────────────────── */}
+      {onRaiseChangeRequest && changeRequests.length > 0 ? (
+        <div
+          style={{
+            padding: "16px 18px",
+            background: "var(--v3-surface-2)",
+            border: "1px solid var(--v3-border)",
+            borderRadius: "var(--v3-radius)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <SectionLabel>Change control</SectionLabel>
+            {openChangeRequests.length ? (
+              <span className="v3-chip amber" style={{ fontSize: 11 }}>{openChangeRequests.length} open</span>
+            ) : null}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {changeRequests
+              .slice()
+              .sort((a, b) => (a.status === "open" ? 0 : 1) - (b.status === "open" ? 0 : 1) || b.requestedAt.localeCompare(a.requestedAt))
+              .map((cr) => {
+                const chipCls = cr.status === "open" ? "v3-chip amber" : cr.status === "approved" ? "v3-chip green" : "v3-chip muted";
+                const busy = resolvingId === cr.id;
+                return (
+                  <div
+                    key={cr.id}
+                    style={{
+                      display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12,
+                      padding: "10px 12px", background: "var(--v3-surface)", border: "1px solid var(--v3-border-soft)", borderRadius: 10,
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 3 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--v3-text-primary)" }}>{cr.title}</span>
+                        <span className={chipCls} style={{ fontSize: 10 }}>{cr.status}</span>
+                        <span style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>{phaseNameById[cr.phaseId] ?? cr.phaseId}</span>
+                      </div>
+                      {cr.reason ? (
+                        <div style={{ fontSize: 12, color: "var(--v3-text-secondary)", lineHeight: 1.45 }}>{cr.reason}</div>
+                      ) : null}
+                      <div style={{ fontSize: 10.5, color: "var(--v3-text-muted)", marginTop: 4 }}>
+                        {cr.requestedBy} · {new Date(cr.requestedAt).toLocaleDateString()}
+                        {cr.status !== "open" && cr.decidedBy ? ` · ${cr.status} by ${cr.decidedBy}` : ""}
+                      </div>
+                    </div>
+                    {cr.status === "open" && onResolveChangeRequest ? (
+                      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                        <button
+                          type="button"
+                          className="v3-button primary v3-button-inline-xs"
+                          disabled={busy}
+                          onClick={async () => { setResolvingId(cr.id); try { await onResolveChangeRequest(cr.id, "approved"); } finally { setResolvingId(null); } }}
+                        >
+                          {busy ? "…" : "Approve"}
+                        </button>
+                        <button
+                          type="button"
+                          className="v3-button ghost v3-button-inline-xs"
+                          disabled={busy}
+                          onClick={async () => { setResolvingId(cr.id); try { await onResolveChangeRequest(cr.id, "rejected"); } finally { setResolvingId(null); } }}
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      ) : null}
 
       {/* ── Executive summary — generated on demand, never auto-run ─────────── */}
       <div style={{
@@ -1058,6 +1154,18 @@ export default function ExecutiveView({
             )}
         </div>
       </div>
+
+      {onRaiseChangeRequest ? (
+        <ChangeRequestModal
+          open={changeRequestOpen}
+          lockedPhases={lockedPhases}
+          onClose={() => setChangeRequestOpen(false)}
+          onSubmit={async (phaseId, title, reason) => {
+            await onRaiseChangeRequest(phaseId, title, reason);
+            setChangeRequestOpen(false);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
