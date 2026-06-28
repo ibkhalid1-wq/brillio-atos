@@ -37,7 +37,6 @@ export type DecisionItemType =
   | "escalation_raised"
   | "resource_alert"
   | "plan_action"
-  | "checklist_alert"
   | "inputs_incomplete"
   | "artifacts_incomplete";
 
@@ -56,15 +55,15 @@ const ADAM_PHASE_SEQUENCE_FALLBACK = [
 export const DECISION_QUEUE_PERSONAS = {
   executive: {
     label: "Executive",
-    types: ["exit_proposal", "escalation", "briefing_ready", "rebaseline", "steering_pack", "risk_mitigation", "agent_conflict", "handoff_ready", "meeting_agenda", "raid_alert", "communication_ready", "scope_change", "hypothesis_alert", "gate_approval", "capacity_alert", "milestone_slip", "change_request", "stakeholder_alert", "benefit_alert", "budget_alert", "closure_ready", "escalation_raised", "plan_action", "checklist_alert", "inputs_incomplete", "artifacts_incomplete"],
+    types: ["exit_proposal", "escalation", "briefing_ready", "rebaseline", "steering_pack", "risk_mitigation", "agent_conflict", "handoff_ready", "meeting_agenda", "raid_alert", "communication_ready", "scope_change", "hypothesis_alert", "gate_approval", "capacity_alert", "milestone_slip", "change_request", "stakeholder_alert", "benefit_alert", "budget_alert", "closure_ready", "escalation_raised", "plan_action", "inputs_incomplete", "artifacts_incomplete"],
   },
   delivery_lead: {
     label: "Delivery Lead",
-    types: ["draft_review", "revision_ready", "question", "escalation", "adr_proposal", "exit_proposal", "steering_pack", "risk_mitigation", "handoff_ready", "meeting_agenda", "raid_alert", "communication_ready", "scope_change", "hypothesis_alert", "gate_approval", "capacity_alert", "uat_ready", "milestone_slip", "change_request", "stakeholder_alert", "calendar_proposal", "budget_alert", "retro_ready", "closure_ready", "critical_path_alert", "escalation_raised", "resource_alert", "plan_action", "checklist_alert", "inputs_incomplete", "artifacts_incomplete"],
+    types: ["draft_review", "revision_ready", "question", "escalation", "adr_proposal", "exit_proposal", "steering_pack", "risk_mitigation", "handoff_ready", "meeting_agenda", "raid_alert", "communication_ready", "scope_change", "hypothesis_alert", "gate_approval", "capacity_alert", "uat_ready", "milestone_slip", "change_request", "stakeholder_alert", "calendar_proposal", "budget_alert", "retro_ready", "closure_ready", "critical_path_alert", "escalation_raised", "resource_alert", "plan_action", "inputs_incomplete", "artifacts_incomplete"],
   },
   architect: {
     label: "Architect",
-    types: ["adr_proposal", "draft_review", "revision_ready", "exit_proposal", "steering_pack", "risk_mitigation", "agent_conflict", "handoff_ready", "communication_ready", "scope_change", "hypothesis_alert", "gate_approval", "capacity_alert", "integration_conflict", "data_governance_gap", "critical_path_alert", "plan_action", "checklist_alert", "inputs_incomplete", "artifacts_incomplete"],
+    types: ["adr_proposal", "draft_review", "revision_ready", "exit_proposal", "steering_pack", "risk_mitigation", "agent_conflict", "handoff_ready", "communication_ready", "scope_change", "hypothesis_alert", "gate_approval", "capacity_alert", "integration_conflict", "data_governance_gap", "critical_path_alert", "plan_action", "inputs_incomplete", "artifacts_incomplete"],
   },
   all: {
     label: "All perspectives",
@@ -498,97 +497,6 @@ function buildSyntheticArtifactBlockerItems(projectData: any) {
       };
     })
     .filter((item): item is NonNullable<typeof item> => Boolean(item));
-}
-
-function buildSyntheticChecklistAlertItems(projectData: any) {
-  const raidEntries = getRaidEntries(projectData);
-  const workplanPhases = asArray(projectData?.mobilise?.workplan?.phases);
-  return ADAM_PHASE_SEQUENCE_FALLBACK
-    .map((phaseId) => {
-      const phaseGuidance = projectData?.phaseGuidance?.[phaseId] ?? {};
-      const fields = phaseGuidance?.fields ?? {};
-      const fieldKeys = Object.keys(fields).filter((key) => key !== "aiBrief");
-      const answeredFields = fieldKeys.filter((key) => hasMeaningfulValue(fields[key])).length;
-      const artifacts = Object.values(projectData?.phaseArtifacts?.[phaseId] ?? {}) as any[];
-      const draftedArtifacts = artifacts.filter((artifact) => String(artifact?.status || "").toLowerCase() !== "blank").length;
-      const approvedArtifacts = artifacts.filter((artifact) => String(artifact?.status || "").toLowerCase() === "approved").length;
-      const blockers = raidEntries.filter((entry: any) => !isRaidEntryClosed(entry) && getNormalizedPhaseId(entry?.phaseId || entry?.phase) === phaseId && isRaidBlocker(entry));
-      const forecast = asArray(projectData?.completionForecast?.phases).find((entry: any) => getNormalizedPhaseId(entry?.phaseId) === phaseId);
-      const workplanPhase = workplanPhases.find((phase: any) => getNormalizedPhaseId(phase?.phaseId) === phaseId);
-      const exitCriteriaStatus = workplanPhase?.exitCriteriaStatus && typeof workplanPhase.exitCriteriaStatus === "object"
-        ? workplanPhase.exitCriteriaStatus
-        : {};
-      const exitTotal = Object.keys(exitCriteriaStatus).length;
-      const exitComplete = Object.values(exitCriteriaStatus).filter(Boolean).length;
-      const hasStarted = Boolean(phaseGuidance?.startedAt)
-        || answeredFields > 0
-        || draftedArtifacts > 0
-        || blockers.length > 0
-        || Boolean(workplanPhase?.actualStart || workplanPhase?.plannedStart)
-        || Boolean(projectData?.gateApprovalWorkflows?.[phaseId])
-        || Boolean(projectData?.pendingExitProposals?.[phaseId]);
-      if (!hasStarted) return null;
-
-      // Inputs and artifacts have dedicated aggregate actions
-      // (inputs_incomplete / artifacts_incomplete), so the checklist rollup only
-      // tracks the residual concerns to avoid double-reporting the same gap.
-      const openGaps = [
-        blockers.length ? 1 : 0,
-        exitTotal && exitComplete < exitTotal ? 1 : 0,
-        forecast?.atRisk ? 1 : 0,
-      ].reduce((sum, count) => sum + count, 0);
-
-      if (!openGaps) return null;
-
-      const overdueGate = phaseGuidance?.targetGateDate && getCreatedAt(phaseGuidance.targetGateDate) < Date.now();
-      const priority: DecisionPriority = blockers.some((entry: any) => {
-        const severity = getRaidEntrySeverity(entry);
-        return severity === "critical" || severity === "high";
-      }) || overdueGate
-        ? "critical"
-        : forecast?.atRisk
-          ? "high"
-          : "medium";
-
-      return {
-        id: `checklist-alert-${phaseId}`,
-        type: "checklist_alert" as const,
-        phaseId,
-        priority,
-        title: `${getPhaseTitle(phaseId)} checklist still has open items`,
-        summary: [
-          `${openGaps} gap${openGaps === 1 ? "" : "s"}`,
-          blockers.length ? `${blockers.length} blocker${blockers.length === 1 ? "" : "s"}` : null,
-          exitTotal ? `${exitComplete}/${exitTotal} exit checks` : null,
-          forecast?.atRisk ? "forecast at risk" : null,
-        ].filter(Boolean).join(" · "),
-        createdAt: getCreatedAt(phaseGuidance?.lastUpdated || phaseGuidance?.startedAt || workplanPhase?.plannedStart),
-        actionLabel: "Review checklist",
-        dismissable: false,
-        payload: {
-          openGaps,
-          answeredFields,
-          totalFields: fieldKeys.length,
-          draftedArtifacts,
-          totalArtifacts: artifacts.length,
-          approvedArtifacts,
-          blockerCount: blockers.length,
-          blockers: blockers.slice(0, 3),
-          exitComplete,
-          exitTotal,
-          atRisk: Boolean(forecast?.atRisk),
-          targetGateDate: phaseGuidance?.targetGateDate || null,
-        },
-      };
-    })
-    .filter(Boolean)
-    .sort((left: any, right: any) => {
-      const leftRank = left.priority === "critical" ? 0 : left.priority === "high" ? 1 : 2;
-      const rightRank = right.priority === "critical" ? 0 : right.priority === "high" ? 1 : 2;
-      if (leftRank !== rightRank) return leftRank - rightRank;
-      return Number(right.payload?.openGaps || 0) - Number(left.payload?.openGaps || 0);
-    })
-    .slice(0, 3) as DecisionItem[];
 }
 
 export function buildDecisionQueue(
@@ -1099,7 +1007,6 @@ export function buildDecisionQueue(
   queue.push(...buildSyntheticPlanActionItems(projectData));
   queue.push(...buildSyntheticInputCompletionItems(projectData));
   queue.push(...buildSyntheticArtifactBlockerItems(projectData));
-  queue.push(...buildSyntheticChecklistAlertItems(projectData));
 
   for (const persistedItem of (projectData?.decisionQueue ?? []) as any[]) {
     if (!persistedItem || persistedItem.status === "dismissed" || persistedItem.status === "resolved") continue;
@@ -1136,7 +1043,6 @@ export function buildDecisionQueue(
         || type === "calendar_proposal"
         || type === "retro_ready"
         || type === "closure_ready"
-        || type === "checklist_alert"
         || type === "inputs_incomplete"
         ? "medium"
         : "info";
@@ -1168,8 +1074,6 @@ export function buildDecisionQueue(
           return "Open Resources";
         case "plan_action":
           return "Open workspace";
-        case "checklist_alert":
-          return "Review checklist";
         case "inputs_incomplete":
           return "Complete inputs";
         case "artifacts_incomplete":
