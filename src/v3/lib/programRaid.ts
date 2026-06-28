@@ -19,8 +19,9 @@
  *   decisions = the open recommended-actions queue (synthesised + persisted resolution),
  *               in scope, priority-sorted — ie. "actions" and "decisions" are ONE set.
  */
-import type { DecisionSummary, ProgramSummary, RAIDEntry } from "@/new/types";
+import type { DecisionSummary, Escalation, ProgramSummary, RAIDEntry } from "@/new/types";
 import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
+import { getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
 
 /** Programme-wide, or scoped to a single phase by id. */
 export type RaidScope = "programme" | { phaseId: string };
@@ -31,13 +32,34 @@ function inScope(phase: string | undefined, scope: RaidScope): boolean {
   return scope === "programme" || phase === scope.phaseId;
 }
 
+// A locked (future) phase sits behind an unapproved gate, so its items are not
+// yet workable. On programme-wide lists they only add noise, so we hide them —
+// matching the same filter the recommended-actions queue applies. But when the
+// caller scopes INTO a specific phase they navigated there deliberately, so we
+// show everything for that phase even if it is still locked.
+function isActionablePhase(
+  phase: string | undefined,
+  scope: RaidScope,
+  locked: Set<string>,
+): boolean {
+  if (scope !== "programme") return true;
+  return !phase || phase === "all" || !locked.has(phase);
+}
+
 function selectOpenRaid(
   program: ProgramSummary | null | undefined,
   type: RAIDEntry["type"],
   scope: RaidScope,
 ): RAIDEntry[] {
+  const locked = scope === "programme" && program ? getLockedPhaseIds(program) : new Set<string>();
   return (program?.raidEntries || [])
-    .filter((entry) => entry.type === type && entry.status !== "closed" && inScope(entry.phase, scope))
+    .filter(
+      (entry) =>
+        entry.type === type &&
+        entry.status !== "closed" &&
+        inScope(entry.phase, scope) &&
+        isActionablePhase(entry.phase, scope, locked),
+    )
     .sort((a, b) => (SEVERITY_ORDER[a.severity] ?? 2) - (SEVERITY_ORDER[b.severity] ?? 2));
 }
 
@@ -94,5 +116,24 @@ export function selectHighPriorityDecisions(
 ): DecisionSummary[] {
   return selectDecisions(program, scope, personaId).filter(
     (decision) => decision.priority === "critical" || decision.priority === "high",
+  );
+}
+
+/**
+ * Open, actionable formal escalations — the canonical set behind the "N
+ * escalations" pill, the Escalation panel and the critical-event alerts. An
+ * escalation tied to a locked (future) phase is not yet workable, so it is
+ * filtered out for the same reason locked-phase risks/blockers/actions are: the
+ * surfaces should only ever surface things the team can act on now.
+ */
+export function selectOpenEscalations(
+  program: ProgramSummary | null | undefined,
+): Escalation[] {
+  if (!program) return [];
+  const locked = getLockedPhaseIds(program);
+  return (program.escalations || []).filter(
+    (entry) =>
+      entry.status === "open" &&
+      (!entry.linkedPhaseId || !locked.has(entry.linkedPhaseId)),
   );
 }

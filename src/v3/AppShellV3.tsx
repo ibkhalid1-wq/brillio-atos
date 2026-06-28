@@ -69,6 +69,7 @@ import { confidenceRag, getGateThreshold } from "@/v3/lib/confidenceScore";
 import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
 import { artifactReviewFieldKey } from "@/v3/lib/artifactReview";
 import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
+import { selectOpenEscalations } from "@/v3/lib/programRaid";
 import { buildFieldAssistPrompt, sanitiseFieldReply } from "@/v3/lib/fieldAssist";
 import { PROVENANCE_KEY, mergeProvenance } from "@/new/lib/fieldProvenance";
 import type { FieldAssistRequest } from "@/v3/components/PhaseInputsPanel";
@@ -1702,7 +1703,7 @@ export default function AppShellV3() {
       activeProgram.phases.every((phase) => (phase.pct ?? 0) === 0)
     );
   }, [activeProgram]);
-  const openEscalations = useMemo(() => (activeProgram?.escalations || []).filter((entry) => entry.status === "open"), [activeProgram?.escalations]);
+  const openEscalations = useMemo(() => selectOpenEscalations(activeProgram), [activeProgram]);
   const narrativeIsRunning = activeRuns.some((run) => run.agent_id === "narrative" && run.status === "running");
   const healthHeatmapIsRunning = activeRuns.some((run) => run.agent_id === "health-heatmap" && run.status === "running") || triggers.healthHeatmapIsRunning;
   const { tasks: currentPhaseTasks, updateTask: updatePhaseTask, refresh: refreshPhaseTasks } = usePhaseAgentState(activeProgramId, activePhaseId);

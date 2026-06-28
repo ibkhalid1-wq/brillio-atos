@@ -25,6 +25,11 @@ function makeProgram() {
         { id: "strategy", pct: 100 },
         { id: "mobilise", pct: 40 },
       ],
+      // Strategy's gate is approved so Mobilise is unlocked — these tests pin the
+      // selection semantics (risk-only, monitored counted, severity sort), which
+      // must hold independently of phase-locking. Locked-phase filtering has its
+      // own test below.
+      gateReviews: { strategy: { status: "approved" } },
       raidLog: {
         entries: [
           { id: "r1", type: "risk", title: "Budget overrun", severity: "critical", phase: "strategy", status: "open" },
@@ -71,5 +76,46 @@ describe("selectRisks / selectBlockers", () => {
   it("selectBlockers returns open blockers only", () => {
     const ids = selectBlockers(makeProgram()).map((b) => b.id);
     expect(ids).toEqual(["b1"]); // b2 closed
+  });
+});
+
+/**
+ * Programme-wide lists must surface only ACTIONABLE items: a risk or blocker
+ * tied to a locked (future) phase is behind an unapproved gate and cannot be
+ * worked yet, so it drops out of the programme view. Scoping INTO that phase is
+ * deliberate navigation, so the same item must reappear there.
+ */
+describe("locked-phase actionability filter", () => {
+  function makeLockedProgram() {
+    return normalizeProgram({
+      id: "program-2",
+      name: "Locked phases",
+      updated_at: "2026-06-13T00:00:00.000Z",
+      data: {
+        objective: "x",
+        phases: [
+          { id: "strategy", pct: 40 },
+          { id: "mobilise", pct: 0 },
+        ],
+        // No approved gate → Mobilise is locked.
+        raidLog: {
+          entries: [
+            { id: "r1", type: "risk", title: "Active risk", severity: "high", phase: "strategy", status: "open" },
+            { id: "r2", type: "risk", title: "Future risk", severity: "critical", phase: "mobilise", status: "open" },
+            { id: "b1", type: "blocker", title: "Future blocker", severity: "high", phase: "mobilise", status: "open" },
+          ],
+        },
+      },
+    });
+  }
+
+  it("hides locked-phase risks and blockers from the programme-wide list", () => {
+    expect(selectRisks(makeLockedProgram()).map((r) => r.id)).toEqual(["r1"]);
+    expect(selectBlockers(makeLockedProgram()).map((b) => b.id)).toEqual([]);
+  });
+
+  it("still shows them when scoped into the locked phase", () => {
+    expect(selectRisks(makeLockedProgram(), { phaseId: "mobilise" }).map((r) => r.id)).toEqual(["r2"]);
+    expect(selectBlockers(makeLockedProgram(), { phaseId: "mobilise" }).map((b) => b.id)).toEqual(["b1"]);
   });
 });

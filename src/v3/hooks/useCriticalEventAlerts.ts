@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { ProgramSummary } from "@/new/types";
 import { pushV3Toast } from "@/v3/utils";
+import { selectOpenEscalations } from "@/v3/lib/programRaid";
 
 export function useCriticalEventAlerts(program: ProgramSummary | null) {
   const prevSnapshot = useRef<{
@@ -12,7 +13,7 @@ export function useCriticalEventAlerts(program: ProgramSummary | null) {
   useEffect(() => {
     if (!program) return;
 
-    const openEscalations = (program.escalations || []).filter((entry) => entry.status === "open");
+    const openEscalations = selectOpenEscalations(program);
     const atRiskPhases = new Set(
       program.phases.filter((phase) => phase.status === "at-risk" || phase.status === "blocked").map((phase) => phase.id),
     );
