@@ -70,15 +70,19 @@ function priorityVariant(priority: string): "critical" | "high" | "medium" | "lo
   return "medium";
 }
 
+// "escalates" is the linkage RELATION (a high-priority risk driving a decision);
+// the display verb deliberately avoids the word "escalate" so it never reads like
+// a formal Escalation record — those are a separate concept (the escalation pill
+// and panel). "Raised by" matches the "Raise action" wording elsewhere.
 const LINK_VERB_FORWARD: Record<RaidLinkage["relation"], string> = {
   causes: "causes",
   blocks: "blocks",
-  escalates: "escalates",
+  escalates: "raises",
 };
 const LINK_VERB_BACK: Record<RaidLinkage["relation"], string> = {
   causes: "caused by",
   blocks: "blocked by",
-  escalates: "escalated by",
+  escalates: "raised by",
 };
 
 /**
