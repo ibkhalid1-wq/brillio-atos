@@ -54,6 +54,7 @@ import { reportError } from "@/lib/errorReporter";
 import { sanitizeMarkdown } from "@/lib/sanitize";
 import { changedInputFields, relatedArtifactsToStale, fieldsFeedingApprovedArtifacts } from "@/v3/lib/artifactStaleness";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
+import { hasSubstantiveProgramData } from "@/v3/lib/programDataGuard";
 import { AGENT_ID_ALIASES } from "@/v3/lib/agentMeta";
 import { useRelativeTimeTick } from "@/lib/useRelativeTimeTick";
 import { useAgentCascadeToasts } from "@/v3/hooks/useAgentCascadeToasts";
@@ -1443,6 +1444,31 @@ export default function AppShellV3() {
             }
           }
         }
+        // The full-blob upsert can exceed Postgres's statement timeout once a
+        // programme's `data` JSONB has grown large (code 57014). That write only
+        // exists to guarantee the row exists before the edge function reads it —
+        // and the debounced autosave already keeps the cloud copy current. So if
+        // the row already exists, a slow/timed-out pre-sync must NOT hard-block
+        // the agent run: fall back to a cheap existence check and proceed. Only a
+        // genuinely missing row (local-only programme) is a real blocker.
+        const ensureRowExists = async (failMsg: string) => {
+          const { data: existing, error: existsError } = await supabase
+            .from("adam_programs")
+            .select("id")
+            .eq("id", activeProgramId)
+            .maybeSingle();
+          if (existsError || !existing) throw new Error(failMsg);
+        };
+        // DATA-LOSS GUARD. This pre-run sync writes the WHOLE `data` blob. If the
+        // blob hasn't hydrated yet, `programData` is empty — writing it would wipe
+        // the cloud copy. Only upsert the full blob when we actually hold content;
+        // otherwise just verify the row exists and proceed without overwriting it.
+        if (!hasSubstantiveProgramData(programData)) {
+          await ensureRowExists(
+            "Program data hasn't finished loading — open the program and wait a moment before running an agent.",
+          );
+          return;
+        }
         const { error: syncError } = await supabase.from("adam_programs").upsert(
           {
             id: activeProgramId,
@@ -1456,21 +1482,7 @@ export default function AppShellV3() {
           { onConflict: "id", ignoreDuplicates: false },
         );
         if (syncError) {
-          // The full-blob upsert can exceed Postgres's statement timeout once a
-          // programme's `data` JSONB has grown large (code 57014). That write only
-          // exists to guarantee the row exists before the edge function reads it —
-          // and the debounced autosave already keeps the cloud copy current. So if
-          // the row already exists, a slow/timed-out pre-sync must NOT hard-block
-          // the agent run: fall back to a cheap existence check and proceed. Only a
-          // genuinely missing row (local-only programme) is a real blocker.
-          const { data: existing, error: existsError } = await supabase
-            .from("adam_programs")
-            .select("id")
-            .eq("id", activeProgramId)
-            .maybeSingle();
-          if (existsError || !existing) {
-            throw new Error(`Could not sync programme to cloud before running agent: ${syncError.message}`);
-          }
+          await ensureRowExists(`Could not sync programme to cloud before running agent: ${syncError.message}`);
         }
       };
       await runAgent({

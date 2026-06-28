@@ -6,6 +6,7 @@ import { ConflictError } from "@/new/lib/conflicts";
 import type { ProgramSummary, DecisionSummary } from "@/new/types";
 import { pushV3Toast } from "@/v3/utils";
 import { enqueueWrite, flushWriteQueue, getQueuedWriteCount } from "@/lib/writeQueue";
+import { hasSubstantiveProgramData } from "@/v3/lib/programDataGuard";
 
 type ProgramRow = Database["public"]["Tables"]["adam_programs"]["Row"];
 type LocalProgramEntry = Record<string, unknown>;
@@ -557,6 +558,26 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
         kept = kept.slice(0, kept.length - 1);
       }
       payload.programSnapshots = kept;
+    }
+    // DATA-LOSS GUARD. A content-free payload almost always means the program's
+    // `data` blob hasn't finished hydrating (rawData was still `{}` when this save
+    // was built). The optimistic `updated_at` check below can't catch that — the
+    // in-memory timestamp still matches the row — so without this the empty blob
+    // would overwrite real, unrecoverable content. Re-read the row and refuse the
+    // clobber when the cloud copy still holds working content.
+    if (!hasSubstantiveProgramData(payload)) {
+      const { data: currentRow } = await supabase
+        .from("adam_programs")
+        .select("data")
+        .eq("id", programId)
+        .maybeSingle();
+      if (currentRow && hasSubstantiveProgramData(currentRow.data)) {
+        pushV3Toast(
+          "Save blocked — this program is still loading. Refresh before editing so saved work isn't overwritten.",
+          { tone: "error", duration: 8000 },
+        );
+        throw new Error("Refused to overwrite a populated program with empty data (pre-hydration guard).");
+      }
     }
     let currentUpdatedAt: string | null = null;
     if (expectedUpdatedAt) {
