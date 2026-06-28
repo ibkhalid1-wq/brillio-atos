@@ -651,6 +651,24 @@ export default function StageView({
   const [savingProgram, setSavingProgram] = React.useState(false);
   const [programSaved, setProgramSaved] = React.useState(false);
   const [revertingId, setRevertingId] = React.useState<string | null>(null);
+  // Program settings menu (gear, top-right): consolidates Save / Revert / Unlock.
+  const [settingsOpen, setSettingsOpen] = React.useState(false);
+  const settingsRef = useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    if (!settingsOpen) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) setSettingsOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSettingsOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [settingsOpen]);
   const handleSaveProgramClick = React.useCallback(async () => {
     if (!onSaveProgram || savingProgram) return;
     setSavingProgram(true);
@@ -1203,39 +1221,88 @@ export default function StageView({
               {verdict ? <div className="v3-phase-head-verdict">{verdict}</div> : null}
             </div>
           </div>
-          {onSaveProgram ? (
-            <div className="v3-program-save-actions">
+          {(onSaveProgram || gateApproved) ? (
+            <div className="v3-settings" ref={settingsRef}>
               <button
                 type="button"
-                className={`v3-save-btn${programSaved ? " is-saved" : ""}`}
-                onClick={() => void handleSaveProgramClick()}
-                disabled={savingProgram}
-                title="Save a timestamped snapshot of this programme"
+                className={`v3-settings-btn${settingsOpen ? " is-open" : ""}`}
+                aria-haspopup="menu"
+                aria-expanded={settingsOpen}
+                aria-label="Program settings"
+                title="Program settings"
+                onClick={() => setSettingsOpen((open) => !open)}
               >
-                <span className="v3-save-btn-icon" aria-hidden="true">
-                  {savingProgram ? (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="v3-save-spin"><path d="M12 3a9 9 0 1 0 9 9" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" /></svg>
-                  ) : programSaved ? (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                  ) : (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 5h11l3 3v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /><path d="M8 5v5h7V5M8 19v-5h8v5" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg>
-                  )}
-                </span>
-                {savingProgram ? "Saving…" : programSaved ? "Saved" : "Save program"}
+                <svg className="v3-settings-gear" width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle cx="12" cy="12" r="3.2" stroke="currentColor" strokeWidth="1.6" />
+                  <path d="M12 2.6v2.3M12 19.1v2.3M21.4 12h-2.3M4.9 12H2.6M18.66 5.34l-1.63 1.63M6.97 17.03l-1.63 1.63M18.66 18.66l-1.63-1.63M6.97 6.97 5.34 5.34" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                </svg>
+                {programSnapshots.length > 0 ? <span className="v3-settings-dot" aria-hidden="true" /> : null}
               </button>
-              <button
-                type="button"
-                className="v3-revert-btn"
-                onClick={() => setRevertModalOpen(true)}
-                disabled={programSnapshots.length === 0}
-                title={programSnapshots.length === 0 ? "No saved versions yet" : "Revert to a saved version"}
-              >
-                <span className="v3-revert-btn-icon" aria-hidden="true">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 9a8 8 0 1 1-1 5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /><path d="M4 4v5h5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                </span>
-                Revert
-                {programSnapshots.length > 0 ? <span className="v3-revert-btn-count">{programSnapshots.length}</span> : null}
-              </button>
+              {settingsOpen ? (
+                <div className="v3-settings-menu" role="menu">
+                  {onSaveProgram ? (
+                    <>
+                      <div className="v3-settings-menu-head">Program</div>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={`v3-settings-item${programSaved ? " is-success" : ""}`}
+                        disabled={savingProgram}
+                        onClick={() => { void handleSaveProgramClick(); }}
+                      >
+                        <span className="v3-settings-item-icon" aria-hidden="true">
+                          {savingProgram ? (
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" className="v3-save-spin"><path d="M12 3a9 9 0 1 0 9 9" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" /></svg>
+                          ) : programSaved ? (
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                          ) : (
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M5 5h11l3 3v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /><path d="M8 5v5h7V5M8 19v-5h8v5" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg>
+                          )}
+                        </span>
+                        <span className="v3-settings-item-text">
+                          <span className="v3-settings-item-label">{savingProgram ? "Saving…" : programSaved ? "Saved" : "Save program"}</span>
+                          <span className="v3-settings-item-sub">Capture a timestamped snapshot</span>
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="v3-settings-item"
+                        disabled={programSnapshots.length === 0}
+                        onClick={() => { setSettingsOpen(false); setRevertModalOpen(true); }}
+                      >
+                        <span className="v3-settings-item-icon" aria-hidden="true">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 9a8 8 0 1 1-1 5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /><path d="M4 4v5h5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                        </span>
+                        <span className="v3-settings-item-text">
+                          <span className="v3-settings-item-label">Revert…</span>
+                          <span className="v3-settings-item-sub">{programSnapshots.length === 0 ? "No saved versions yet" : `Restore a saved version`}</span>
+                        </span>
+                        {programSnapshots.length > 0 ? <span className="v3-settings-item-count">{programSnapshots.length}</span> : null}
+                      </button>
+                    </>
+                  ) : null}
+                  {gateApproved ? (
+                    <>
+                      <div className="v3-settings-menu-head">{activePhase.displayName ?? activePhase.id} phase</div>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="v3-settings-item is-warning"
+                        onClick={() => { setSettingsOpen(false); onReopenGate(activePhase.id); }}
+                      >
+                        <span className="v3-settings-item-icon" aria-hidden="true">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M7 10V7.5a5 5 0 0 1 9.6-2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /><rect x="4.5" y="10" width="15" height="10" rx="2" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg>
+                        </span>
+                        <span className="v3-settings-item-text">
+                          <span className="v3-settings-item-label">Unlock phase</span>
+                          <span className="v3-settings-item-sub">Reopen the gate to edit artifacts</span>
+                        </span>
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>
