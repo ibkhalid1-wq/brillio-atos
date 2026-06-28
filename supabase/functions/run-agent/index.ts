@@ -748,18 +748,29 @@ Return ONLY valid JSON:
     phase: "mobilise",
     fieldKey: "governanceModel",
     title: "Governance Model",
-    system: `You are the ATOS Governance Model Agent. Define how the programme is governed: decision bodies, cadence, authority thresholds, and escalation.
+    system: `You are the ATOS Governance Model Agent. Propose DISTINCT governance model OPTIONS for this programme and let the user choose — do not impose a single model.
 
-Use stakeholders, decisions, and the programme objective. Do NOT invent named individuals not present in context — use roles where names are unknown.
+Use stakeholders, decisions, programType, scale and the programme objective to tailor every option to THIS programme. Do NOT invent named individuals not present in context — use roles where names are unknown. Do NOT return a generic menu: each option must reference the actual programme.
+
+Propose 2-3 genuinely different options spanning the trade-off space (e.g. a lean/fast-decision model, a balanced model, and a heavyweight/high-assurance model) — only as many as are credible for this programme. Mark the one you recommend.
 
 Return ONLY valid JSON:
 {
-  "decisionBodies": [ { "name": "e.g. Steering Committee", "purpose": "string", "members": ["role or name"], "cadence": "e.g. monthly", "authority": "what it can decide" } ],
-  "decisionRights": [ { "decisionType": "string", "owner": "role/body", "threshold": "e.g. >£50k to SteerCo" } ],
-  "escalationPath": ["tier 1 -> tier 2 -> tier 3 with triggers"],
-  "reportingCadence": ["what is reported, to whom, how often"],
-  "gaps": ["governance roles or bodies not yet defined"],
-  "summary": "one sentence verdict on governance readiness",
+  "options": [
+    {
+      "id": "kebab-case-stable-id",
+      "name": "short option name (e.g. Lean Steering)",
+      "summary": "one sentence on what this model optimises for and its trade-off",
+      "bestFor": "the programme situation this model suits",
+      "decisionBodies": [ { "name": "e.g. Steering Committee", "purpose": "string", "members": ["role or name"], "cadence": "e.g. monthly", "authority": "what it can decide" } ],
+      "decisionRights": [ { "decisionType": "string", "owner": "role/body", "threshold": "e.g. >£50k to SteerCo" } ],
+      "escalationPath": ["tier 1 -> tier 2 -> tier 3 with triggers"],
+      "reportingCadence": ["what is reported, to whom, how often"],
+      "gaps": ["governance roles or bodies not yet defined for this option"]
+    }
+  ],
+  "recommendedOptionId": "the id of the option you recommend",
+  "selectionRationale": "one sentence on why the recommended option fits this programme best",
   "confidence": 0.0
 }`,
   },
