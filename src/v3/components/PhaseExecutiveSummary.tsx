@@ -130,7 +130,7 @@ export function PhaseExecutiveSummary({
           <div className="v3-exec-snapshot-metrics">
             <div className="v3-exec-snapshot-metric">
               <span className="v3-exec-snapshot-metric-val">{summary.readinessScore}%</span>
-              <span className="v3-exec-snapshot-metric-lbl">Readiness · gate {summary.threshold}%</span>
+              <span className="v3-exec-snapshot-metric-lbl">Readiness · close at {summary.threshold}%</span>
             </div>
             <div className="v3-exec-snapshot-metric">
               <span className="v3-exec-snapshot-metric-val">{summary.confidenceScore}%</span>

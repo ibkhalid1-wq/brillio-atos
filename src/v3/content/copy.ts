@@ -48,7 +48,7 @@ export const COPY = {
   tooltips: {
     commandPalette: "Search commands, agents, and phases",
     contextDrawer: "Programme inputs and documents",
-    gateReadiness: "How ready this phase is for gate approval (0–100%)",
+    gateReadiness: "How ready this phase is to close and sign off (0–100%)",
     confidenceScore: "Weighted signal across gate readiness, risk, milestones, decisions, and input completeness",
     agentRunning: "An AI agent is generating outputs for this phase",
   },

@@ -521,7 +521,7 @@ function GateDetailPanel({
     <div className="v3-governance-detail">
       <div className="v3-governance-detail-head">
         <div className="v3-governance-detail-title">
-          <span>{phaseId.replace(/-/g, " ")} Gate Review</span>
+          <span>{phaseId.replace(/-/g, " ")} Phase Sign-off</span>
           {gateReview ? <StatusBadge variant={gateVariant(gateReview.status)} /> : <StatusBadge variant="pending" label="No review" />}
         </div>
         <div className="v3-governance-detail-actions">
@@ -543,11 +543,11 @@ function GateDetailPanel({
             rows={3}
             value={note}
             onChange={(event) => setNote(event.target.value)}
-            placeholder="Describe what needs to be remediated…"
+            placeholder="Describe what needs fixing…"
           />
           <div style={{ display: "flex", gap: 8 }}>
             <button type="button" className="v3-button primary" style={{ fontSize: 12 }} disabled={!note.trim()} onClick={() => void onRemediation(note.trim())}>
-              Submit remediation
+              Confirm fixes needed
             </button>
             <button type="button" className="v3-button ghost" style={{ fontSize: 12 }} onClick={() => setShowRemediationInput(false)}>
               Cancel
@@ -573,7 +573,7 @@ function GateDetailPanel({
 
       {readiness !== null ? (
         <div className="v3-governance-readiness-summary">
-          <span>Readiness score</span>
+          <span>Readiness</span>
           <strong>{readiness}%</strong>
         </div>
       ) : null}

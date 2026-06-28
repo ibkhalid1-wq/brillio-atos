@@ -36,9 +36,9 @@ function getExplanation(
       const phaseId = typeof context?.phaseId === "string" ? context.phaseId : "";
       const threshold = getGateThreshold(phaseId);
       return {
-        title: "Gate Readiness",
+        title: "Readiness to Close",
         body: "Measures whether this phase has met its exit criteria and is ready to proceed. ATOS calculates this from artifact completeness, exit criteria ticked, and open blockers.",
-        tip: `Aim for ${threshold}% or above before approving a gate.`,
+        tip: `Aim for ${threshold}% or above before signing off the phase.`,
       };
     }
     case "rag-status":

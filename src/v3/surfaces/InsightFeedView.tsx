@@ -324,7 +324,7 @@ export default function InsightFeedView({
         priority: 3 as 1 | 2 | 3,
         accent: gateAccent,
         icon: "⬡",
-        title: "Gate Readiness Alert",
+        title: "Phase Readiness Alert",
         description,
         actionLabel: "View Gates →",
         onAction: onNavigateToGates,

@@ -252,7 +252,7 @@ function GatesTab({
           Surfaces WHY the gate is where it is and WHICH action gains the most,
           right at the approval decision point. */}
       <div>
-        <SectionLabel>Gate Readiness — {phaseLabel}</SectionLabel>
+        <SectionLabel>Readiness to Close — {phaseLabel}</SectionLabel>
         <div
           style={{
             background: "var(--v3-surface)",
@@ -327,7 +327,7 @@ function GatesTab({
               fontFamily: "var(--v3-font)",
             }}
           >
-            <strong style={{ color: "var(--v3-text-secondary)" }}>Gate review:</strong>{" "}
+            <strong style={{ color: "var(--v3-text-secondary)" }}>Sign-off note:</strong>{" "}
             {gate ? gate.recommendation : "No gate assessment recorded yet."}
           </div>
         </div>
