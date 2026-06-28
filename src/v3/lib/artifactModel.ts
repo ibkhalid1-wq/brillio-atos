@@ -13,6 +13,11 @@ import type { ProgramSummary, ArtifactSummary } from "@/new/types";
 import { ATOS_STANDARD, type MethodologyDefinition } from "@/v3/lib/methodology";
 import { getAgentMeta } from "@/v3/lib/agentMeta";
 import { getDynamicSchemaStore, dynamicArtifactDefs } from "@/v3/lib/dynamicSchema";
+import {
+  FORMAL_ARTIFACT_FIELD_KEYS,
+  getFormalArtifactContent,
+  getFormalArtifactConfidence,
+} from "@/v3/lib/formalArtifacts";
 
 export type ArtifactState = "missing" | "draft" | "ready" | "approved" | "stale" | "archived";
 export type ArtifactOrigin = "generated" | "uploaded" | "required";
@@ -144,6 +149,54 @@ function evidenceFromArtifact(artifact: ArtifactSummary | undefined): string | n
   return `${source}${version}`;
 }
 
+/**
+ * The data root that holds the top-level formal-artifact mirrors (and
+ * phaseArtifacts/phaseInputs). program.rawData is a wrapper; the live shape nests
+ * the real payload under `.data`. Mirror the resolution in phaseReadiness.ts.
+ */
+function resolveFormalSource(rawData: Record<string, unknown> | null | undefined): Record<string, unknown> | null {
+  if (!rawData || typeof rawData !== "object") return null;
+  const data = (rawData as Record<string, unknown>).data;
+  return typeof data === "object" && data !== null ? (data as Record<string, unknown>) : rawData;
+}
+
+/**
+ * Read-path resilience: a formal document is stored both as a top-level mirror
+ * (the real body, under its field key) and as a phaseArtifacts ledger stub (the
+ * status record the coverage UI normally reads). An older edge build wrote only
+ * the mirror, leaving the ledger empty — so a present document showed as
+ * "missing". When no ledger artifact matches a required formal agent but its
+ * mirror has content, synthesise a present ArtifactSummary from the mirror.
+ */
+function formalMirrorArtifact(
+  source: Record<string, unknown> | null,
+  agentId: string,
+  label: string,
+  phaseId: string,
+): ArtifactSummary | undefined {
+  if (!source || !FORMAL_ARTIFACT_FIELD_KEYS[agentId]) return undefined;
+  const content = getFormalArtifactContent(source, agentId);
+  if (!content) return undefined;
+  const mirror = source[FORMAL_ARTIFACT_FIELD_KEYS[agentId]];
+  const generatedAt =
+    mirror && typeof mirror === "object" && !Array.isArray(mirror)
+      ? (mirror as Record<string, unknown>).generatedAt
+      : null;
+  const confidence = getFormalArtifactConfidence(source, agentId);
+  return {
+    id: agentId,
+    phaseId,
+    title: label,
+    status: "draft",
+    agentConfidence: confidence ?? undefined,
+    agentGenerated: true,
+    lastEditedBy: "agent",
+    lastEditedAt: typeof generatedAt === "string" ? generatedAt : new Date().toISOString(),
+    contentSummary: content,
+    versionNumber: 1,
+  };
+}
+
 export function buildArtifactModel(
   program: ProgramSummary | null,
   methodology: MethodologyDefinition = ATOS_STANDARD,
@@ -168,6 +221,7 @@ export function buildArtifactModel(
   // required:false — which StageView's required-only filter then hides as
   // "Missing". Mirrors the resolved required set in phaseReadiness.ts.
   const dynamicStore = getDynamicSchemaStore(program.rawData);
+  const formalSource = resolveFormalSource(program.rawData);
 
   const phases: PhaseArtifactSummary[] = [];
 
@@ -192,8 +246,9 @@ export function buildArtifactModel(
       const normKey = normalize(agentId);
       if (normKey && seenSpecKeys.has(normKey)) continue;
       if (normKey) seenSpecKeys.add(normKey);
-      const match = present.find((a) => !consumed.has(a.id) && matchesRequirement(a, agentId, label));
+      let match = present.find((a) => !consumed.has(a.id) && matchesRequirement(a, agentId, label));
       if (match) consumed.add(match.id);
+      else match = formalMirrorArtifact(formalSource, agentId, label, phaseDef.id);
       nodes.push({
         key: agentId,
         phaseId: phaseDef.id,
