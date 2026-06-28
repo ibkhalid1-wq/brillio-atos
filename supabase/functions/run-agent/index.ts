@@ -1503,12 +1503,23 @@ function buildSpecialAgentInputContext(
     const existingEscalations = Array.isArray(inner.escalations)
       ? inner.escalations.filter(isRecord).filter((entry) => entry.status === "open" || entry.status === "acknowledged")
       : [];
+    // Pre-filter to the items that can actually trip an escalation rule, so the
+    // agent reasons over signal instead of the whole programme. This mirrors the
+    // four rules in the escalation prompt: open decisions (rule 1), every phase
+    // (rule 2 needs pct history), only HIGH/CRITICAL risks & blockers (rule 3),
+    // and only delayed / at-risk milestones (rule 4).
+    const escalatableRaid = activeRaidEntries.filter(
+      (entry) => entry.severity === "critical" || entry.severity === "high",
+    );
+    const escalatableMilestones = milestones.filter(
+      (entry) => entry.status === "delayed" || entry.status === "at-risk",
+    );
     return JSON.stringify({
       now: new Date().toISOString(),
       decisions: decisions.filter((entry) => entry.status !== "resolved"),
       phases,
-      raidEntries: activeRaidEntries,
-      milestones,
+      raidEntries: escalatableRaid,
+      milestones: escalatableMilestones,
       openEscalations: existingEscalations,
     }, null, 2);
   }
@@ -2102,11 +2113,18 @@ function applyRiskResultToProgramData(programData: ProgramState, result: Record<
       ? raidLog.entries.filter(isRecord)
       : [];
     const humanEntries = existingEntries.filter((entry) => entry.source === "human");
+    // Capacity-gap risks are owned by the capacity-assessor agent, not the risk
+    // agent. Preserve them here so a risk regeneration can't silently drop them.
+    const capacityEntries = existingEntries.filter(
+      (entry) => entry.source !== "human" && typeof entry.id === "string" && entry.id.startsWith("capacity-gap-"),
+    );
 
     // Reconcile-don't-replace: index prior agent entries so regenerated risks can
     // inherit any human triage (resolve / reopen / validate) applied to the same
     // finding. Match on id first, then on normalized title.
-    const priorAgentEntries = existingEntries.filter((entry) => entry.source !== "human");
+    const priorAgentEntries = existingEntries.filter(
+      (entry) => entry.source !== "human" && !(typeof entry.id === "string" && entry.id.startsWith("capacity-gap-")),
+    );
     const priorById = new Map<string, Record<string, unknown>>();
     const priorByTitle = new Map<string, Record<string, unknown>>();
     for (const entry of priorAgentEntries) {
@@ -2167,12 +2185,77 @@ function applyRiskResultToProgramData(programData: ProgramState, result: Record<
       ...inner,
       raidLog: {
         ...raidLog,
-        entries: [...humanEntries, ...agentEntries] as JsonValue,
+        entries: [...humanEntries, ...capacityEntries, ...agentEntries] as JsonValue,
         generatedAt: typeof result.generatedAt === "string" ? result.generatedAt : new Date().toISOString(),
         riskSummary: typeof result.summary === "string" ? result.summary : (raidLog.riskSummary ?? null),
         confidence: typeof result.confidence === "number" ? result.confidence : (raidLog.confidence ?? null),
       },
     };
+  });
+}
+
+/**
+ * Capacity gaps become a real risk. When the capacity assessor reports the team
+ * is insufficient / at-risk (or any role gap is critical), upsert a single
+ * agent-sourced RAID risk keyed per phase so re-runs replace rather than pile up.
+ * When capacity recovers to sufficient, any prior capacity risk is cleared.
+ */
+function applyCapacityRiskToProgramData(
+  programData: ProgramState,
+  phaseId: string,
+  result: Record<string, unknown>,
+): ProgramState {
+  const adequacy = typeof result.overallAdequacy === "string" ? result.overallAdequacy : "";
+  const roleGaps = Array.isArray(result.roleGaps) ? result.roleGaps.filter(isRecord) : [];
+  const criticalGaps = roleGaps.filter((gap) => gap.criticality === "critical");
+  const insufficient = adequacy === "insufficient" || adequacy === "at-risk" || criticalGaps.length > 0;
+  const entryId = `capacity-gap-${phaseId}`;
+
+  return updateInnerProgramData(programData, (inner) => {
+    const raidLog = normalizeProgramData(inner.raidLog as JsonValue | null);
+    const entries = Array.isArray(raidLog.entries) ? raidLog.entries.filter(isRecord) : [];
+    const withoutCapacity = entries.filter((entry) => entry.id !== entryId);
+
+    if (!insufficient) {
+      // Capacity is adequate — drop any prior capacity risk.
+      if (withoutCapacity.length === entries.length) return inner;
+      return { ...inner, raidLog: { ...raidLog, entries: withoutCapacity as JsonValue } };
+    }
+
+    const prior = entries.find((entry) => entry.id === entryId);
+    const gapNames = (criticalGaps.length ? criticalGaps : roleGaps)
+      .map((gap) => (typeof gap.role === "string" ? gap.role : ""))
+      .filter(Boolean)
+      .slice(0, 4);
+    const severity = adequacy === "insufficient" || criticalGaps.length > 0 ? "high" : "medium";
+    const description = gapNames.length
+      ? `Capacity assessment is ${adequacy || "at-risk"}: shortfall in ${gapNames.join(", ")}. Resourcing must be closed before the delivery load lands.`
+      : `Capacity assessment is ${adequacy || "at-risk"} for this phase. Resourcing must be closed before the delivery load lands.`;
+    const recommendations = Array.isArray(result.recommendations)
+      ? result.recommendations.filter((r): r is string => typeof r === "string" && !!r)
+      : [];
+
+    const capacityEntry = {
+      id: entryId,
+      type: "risk",
+      title: "Team capacity shortfall",
+      description,
+      severity,
+      phase: phaseId,
+      owner: null,
+      mitigation: recommendations[0] ?? "Confirm the hiring / backfill plan and lead times for the gapped roles.",
+      status: prior && typeof prior.status === "string" && prior.status !== "open" ? prior.status : "open",
+      source: "agent",
+      relatedArtifactId: "capacity-assessor",
+      relatedInputIds: ["coreTeamRoster"],
+      agentConfidence: typeof result.adequacyScore === "number" ? Math.max(0, Math.min(1, result.adequacyScore / 100)) : null,
+      createdAt: prior && typeof prior.createdAt === "string" ? prior.createdAt : new Date().toISOString(),
+      closedAt: null,
+      closedBy: null,
+      closureNote: null,
+    } as JsonValue;
+
+    return { ...inner, raidLog: { ...raidLog, entries: [...withoutCapacity, capacityEntry] as JsonValue } };
   });
 }
 
@@ -3665,8 +3748,27 @@ async function triggerDownstreamAgents(
   // never re-enter this branch — the refresh cannot recurse.
   const downstreamAgents = [
     { agentId: "plan", phaseId: "program" },
-    { agentId: "risk", phaseId: "program" },
   ];
+
+  // Risk register: the app determines the INITIAL risk set (one automatic scan),
+  // then leaves the register to the team — additional risks are raised manually,
+  // and capacity risks are raised deterministically by the capacity check below.
+  // So the auto risk-scan only runs while no agent-sourced risk exists yet; once
+  // it does, we stop regenerating it on every artifact change.
+  const hasAgentRisks = (() => {
+    if (!programData) return false;
+    const inner = getInnerProgramData(programData);
+    const raidLog = normalizeProgramData(inner.raidLog as JsonValue | null);
+    const entries = Array.isArray(raidLog.entries) ? raidLog.entries.filter(isRecord) : [];
+    // Capacity-gap risks are raised deterministically by the capacity check, not the
+    // risk agent — they must not count as the "initial risk scan has run" signal.
+    return entries.some(
+      (entry) => entry.source === "agent" && !(typeof entry.id === "string" && entry.id.startsWith("capacity-gap-")),
+    );
+  })();
+  if (!hasAgentRisks) {
+    downstreamAgents.push({ agentId: "risk", phaseId: "program" });
+  }
 
   // Capacity re-assessment is automatic: whenever an artifact is generated in a
   // phase where team capacity is load-bearing, refresh the capacity assessment so
@@ -5306,7 +5408,12 @@ Rules:
   in that case prefer a single conflictResolutionField, not duplicate gaps.
 - When a value can be confidently inferred from prior context, prefill it and set
   needsConfirmation:true rather than asking the user to type it from scratch.
-- Propose enough inputs + artifacts to cover every exit criterion (user message), no filler.
+- COVER EVERY EXIT CRITERION. Each exit criterion in the user message MUST map to at
+  least one artifact in artifactsToGenerate — no criterion left uncovered, no filler.
+  If NO exit criteria are recorded, do not return a thin plan: derive 3–5 concrete exit
+  criteria for this phase from its objective, program type and prior-phase context, then
+  propose the inputs + artifacts that satisfy each. A next phase should open with a full
+  working set of artifacts (typically 4+ for a delivery phase), not a single placeholder.
 - Field "type" MUST be one of: text, textarea, number, date, select, grid,
   stakeholder, organization, document, artifact-reference.
 - Prefer a SEMANTIC REFERENCE type whenever the fact is a reference to a known
@@ -5333,9 +5440,13 @@ Rules:
   with a "prefillRows" array (each row keyed by the grid's column keys). Fill only
   the columns you can ground in context and leave the columns the user must supply
   as empty strings. SPECIFICALLY for the core team roster ("coreTeamRoster"):
-  derive one row per role the programme needs from the Strategy objective, scope,
-  programType and prior context (e.g. Programme Manager, Solution Architect, Change
-  Lead), set the role column for each, and leave the name column "" for the user to
+  derive the FULL set of core roles the programme needs — typically 5–8 distinct
+  roles, NEVER just one — from the Strategy objective, scope, programType and prior
+  context. Cover the spine a transformation of this type requires, e.g. Programme
+  Manager, Solution Architect, Change Lead, Business Analyst, Test/QA Lead and
+  Deployment/Cutover Lead, plus any role the program type clearly demands (e.g. Data
+  Lead for a data migration, Integration Lead for a systems programme). Output one
+  prefillRow per role with the role column set and the name column "" for the user to
   fill in. Do not invent names. Roles are AI-derived; names are user-entered.
 - Use stable camelCase field ids and kebab-case artifact ids.
 - EVERY input field MUST carry a concrete, programme-specific "example" showing the
@@ -5361,7 +5472,11 @@ Return ONLY valid JSON:
       "columns": [ { "key": "role", "label": "Role", "type": "text" },
                    { "key": "name", "label": "Name", "type": "text" } ],
       "prefillRows": [ { "role": "Programme Manager", "name": "" },
-                       { "role": "Solution Architect", "name": "" } ] }
+                       { "role": "Solution Architect", "name": "" },
+                       { "role": "Change Lead", "name": "" },
+                       { "role": "Business Analyst", "name": "" },
+                       { "role": "Test/QA Lead", "name": "" },
+                       { "role": "Deployment/Cutover Lead", "name": "" } ] }
   ],
   "artifactsToGenerate": [
     { "artifactId": "kebab-id", "artifactName": "Artifact Name",
@@ -6798,6 +6913,7 @@ Deno.serve(async (req) => {
         nextProgramData = applyProgramSupportArtifact(contextProgramData, request.phaseId, "compliance-checker", "complianceCheck", { gaps: Array.isArray(parsedResult) ? parsedResult : result.gaps || [], generatedAt: new Date().toISOString() }, "Compliance check");
       } else if (request.agentId === "capacity-assessor") {
         nextProgramData = applyProgramSupportArtifact(contextProgramData, request.phaseId, "capacity-assessor", "capacityAssessment", result, "Capacity assessment");
+        nextProgramData = applyCapacityRiskToProgramData(nextProgramData, request.phaseId, result);
       } else if (request.agentId === "lessons-synthesiser") {
         nextProgramData = applyProgramSupportArtifact(contextProgramData, "program", "lessons-synthesiser", "lessonsSynthesis", result, "Programme learnings");
       } else if (request.agentId === "vendor-risk-assessor") {
