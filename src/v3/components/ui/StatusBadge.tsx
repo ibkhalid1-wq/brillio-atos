@@ -35,7 +35,7 @@ const BADGE_STYLE: Record<BadgeVariant, string> = {
 
 const BADGE_LABELS: Partial<Record<BadgeVariant, string>> = {
   "at-risk": "At Risk",
-  remediation: "Remediation Needed",
+  remediation: "Needs Fixes",
 };
 
 export function StatusBadge({

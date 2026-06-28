@@ -56,7 +56,7 @@ function gateStatusChip(status: string): { cls: string; label: string } {
     case "approved":
       return { cls: "v3-chip green", label: "Approved" };
     case "remediation-requested":
-      return { cls: "v3-chip red", label: "Remediation" };
+      return { cls: "v3-chip red", label: "Needs fixes" };
     case "pending-review":
     case "ready":
       return { cls: "v3-chip amber", label: "In Review" };
@@ -346,7 +346,7 @@ function GatesTab({
             fontFamily: "var(--v3-font)",
           }}
         >
-          <strong style={{ color: "var(--v3-red)", marginRight: 8 }}>Remediation note:</strong>
+          <strong style={{ color: "var(--v3-red)", marginRight: 8 }}>Fixes needed:</strong>
           {gate.remediationNote}
         </div>
       )}

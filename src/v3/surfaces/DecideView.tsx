@@ -527,7 +527,7 @@ function GateDetailPanel({
         <div className="v3-governance-detail-actions">
           {gateReview?.status !== "approved" ? (
             <button type="button" className="v3-button ghost" style={{ fontSize: 12 }} onClick={() => setShowRemediationInput((current) => !current)}>
-              Request remediation
+              Send back for fixes
             </button>
           ) : null}
           <button type="button" className="v3-button ghost" style={{ fontSize: 12 }} onClick={onClose}>

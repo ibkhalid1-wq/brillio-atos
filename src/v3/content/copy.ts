@@ -21,7 +21,7 @@ export const COPY = {
   gates: {
     approveConfirm: "Approve this gate? This action moves the programme to the next phase.",
     approveSuccess: (phaseLabel: string) => `${phaseLabel} gate approved`,
-    remediationRequested: "Remediation requested — the gate has been sent back.",
+    remediationRequested: "Sent back for fixes — the gate is on hold.",
     reopened: (phaseLabel: string) => `${phaseLabel} gate reopened`,
     noReview: "No gate review available yet. Run a gate review agent first.",
   },

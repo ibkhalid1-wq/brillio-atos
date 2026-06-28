@@ -42,7 +42,7 @@ export function useCriticalEventAlerts(program: ProgramSummary | null) {
     remediationGates.forEach((id) => {
       if (!previous.remediationGates.has(id)) {
         const phase = program.phases.find((entry) => entry.id === id);
-        pushV3Toast(`Gate review: remediation required for ${phase?.displayName || id}`, { tone: "error", duration: 6000 });
+        pushV3Toast(`Gate review: fixes needed for ${phase?.displayName || id}`, { tone: "error", duration: 6000 });
       }
     });
 

@@ -3620,7 +3620,7 @@ export default function AppShellV3() {
           if (!remediationPhase) return;
           await requestRemediation(remediationPhase, note);
           setRemediationPhase(null);
-          pushV3Toast("Issues flagged. Gate blocked pending remediation.", { tone: "warning", duration: 4000 });
+          pushV3Toast("Issues flagged. Gate on hold until the fixes are made.", { tone: "warning", duration: 4000 });
         }}
       />
 
