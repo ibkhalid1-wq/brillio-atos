@@ -47,6 +47,6 @@ export function checkPlanCompleteness(program: ProgramSummary): CompletenessWarn
   if (phases.length === 0) warnings.push({ field: "Phase structure", impact: "Plan will have no milestones", severity: "blocking" });
   const raidLog = (inner.raidLog as Record<string, unknown>) ?? {};
   const entries = Array.isArray(raidLog.entries) ? raidLog.entries : [];
-  if (entries.length === 0) warnings.push({ field: "RAID entries", impact: "Blocker summary will be empty", severity: "warning" });
+  if (entries.length === 0) warnings.push({ field: "Risk & blocker entries", impact: "Blocker summary will be empty", severity: "warning" });
   return warnings;
 }

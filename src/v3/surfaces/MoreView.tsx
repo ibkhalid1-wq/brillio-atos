@@ -95,7 +95,7 @@ type MarketplaceItem = {
 };
 
 const MARKETPLACE_ITEMS: MarketplaceItem[] = [
-  { id: "risk-accelerator", label: "Risk Intelligence Pack", description: "Pre-configured RAID templates and risk heat-map agent for SAP and Oracle transformations", icon: "△", category: "Delivery", isNew: false },
+  { id: "risk-accelerator", label: "Risk Intelligence Pack", description: "Pre-configured risk & blocker templates and risk heat-map agent for SAP and Oracle transformations", icon: "△", category: "Delivery", isNew: false },
   { id: "ocm-pack", label: "OCM Accelerator", description: "Organisational change management playbook with stakeholder impact matrices and readiness surveys", icon: "◎", category: "People", isNew: false },
   { id: "data-migration", label: "Data Migration Toolkit", description: "ETL validation rules, data quality scoring and cutover runbook templates", icon: "⇄", category: "Technical", isNew: true },
   { id: "erp-governance", label: "ERP Governance Framework", description: "Gate review criteria, steering committee packs and executive reporting for ERP programmes", icon: "⬡", category: "Governance", isNew: false },

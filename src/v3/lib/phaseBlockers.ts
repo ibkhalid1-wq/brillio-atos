@@ -125,7 +125,7 @@ export function derivePhaseBlockers(
       label: risk.title,
       detail: risk.mitigation ? `Mitigation: ${risk.mitigation}` : risk.description || null,
       expectedGain: 0,
-      action: { label: "Open RAID log", workspaceId: "risks" },
+      action: { label: "Open risk & blocker log", workspaceId: "risks" },
     });
   }
 
@@ -138,7 +138,7 @@ export function derivePhaseBlockers(
       label: dep.title,
       detail: dep.description || null,
       expectedGain: 0,
-      action: { label: "Open RAID log", workspaceId: "risks" },
+      action: { label: "Open risk & blocker log", workspaceId: "risks" },
     });
   }
 

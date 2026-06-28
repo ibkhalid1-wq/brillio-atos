@@ -457,7 +457,7 @@ function AnimatedArtifactContent({ content }: { content: string }) {
 const ARTIFACT_DESCRIPTIONS: Record<string, string> = {
   narrative: "Executive-ready summary of the programme status and direction",
   plan: "Prioritised action plan with the next 3 critical moves",
-  risk: "Live RAID log with mitigations and ownership",
+  risk: "Live risk & blocker log with mitigations and ownership",
   milestone: "Milestone health and schedule posture",
   "health-heatmap": "Programme health by dimension and stage",
   retro: "Lessons learned and improvement actions",

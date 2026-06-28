@@ -308,9 +308,9 @@ export function PhaseRailPanels({
                     className="v3-rail-item is-clickable"
                     role="button"
                     tabIndex={0}
-                    aria-label={`Open blocker in RAID log: ${entry.title}`}
-                    onClick={() => resolveItem({ itemPhase: entry.phase, title: entry.title, relatedArtifactId: entry.relatedArtifactId, relatedInputIds: entry.relatedInputIds, kindLabel: "Blocker", openLabel: "Open RAID log", openSurface: () => onOpenMoreView("risks") })}
-                    onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); resolveItem({ itemPhase: entry.phase, title: entry.title, relatedArtifactId: entry.relatedArtifactId, relatedInputIds: entry.relatedInputIds, kindLabel: "Blocker", openLabel: "Open RAID log", openSurface: () => onOpenMoreView("risks") }); } }}
+                    aria-label={`Open blocker in the risk & blocker log: ${entry.title}`}
+                    onClick={() => resolveItem({ itemPhase: entry.phase, title: entry.title, relatedArtifactId: entry.relatedArtifactId, relatedInputIds: entry.relatedInputIds, kindLabel: "Blocker", openLabel: "Open risk & blocker log", openSurface: () => onOpenMoreView("risks") })}
+                    onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); resolveItem({ itemPhase: entry.phase, title: entry.title, relatedArtifactId: entry.relatedArtifactId, relatedInputIds: entry.relatedInputIds, kindLabel: "Blocker", openLabel: "Open risk & blocker log", openSurface: () => onOpenMoreView("risks") }); } }}
                   >
                     <div className="v3-rail-item-head">
                       <span className={`v3-chip v3-chip-tight ${severityTone(entry.severity)}`}>{entry.severity}</span>
@@ -344,9 +344,9 @@ export function PhaseRailPanels({
                     className="v3-rail-item is-clickable"
                     role="button"
                     tabIndex={0}
-                    aria-label={`Open risk in RAID log: ${entry.title}`}
-                    onClick={() => resolveItem({ itemPhase: entry.phase, title: entry.title, relatedArtifactId: entry.relatedArtifactId, relatedInputIds: entry.relatedInputIds, kindLabel: "Risk", openLabel: "Open RAID log", openSurface: () => onOpenMoreView("risks") })}
-                    onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); resolveItem({ itemPhase: entry.phase, title: entry.title, relatedArtifactId: entry.relatedArtifactId, relatedInputIds: entry.relatedInputIds, kindLabel: "Risk", openLabel: "Open RAID log", openSurface: () => onOpenMoreView("risks") }); } }}
+                    aria-label={`Open risk in the risk & blocker log: ${entry.title}`}
+                    onClick={() => resolveItem({ itemPhase: entry.phase, title: entry.title, relatedArtifactId: entry.relatedArtifactId, relatedInputIds: entry.relatedInputIds, kindLabel: "Risk", openLabel: "Open risk & blocker log", openSurface: () => onOpenMoreView("risks") })}
+                    onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); resolveItem({ itemPhase: entry.phase, title: entry.title, relatedArtifactId: entry.relatedArtifactId, relatedInputIds: entry.relatedInputIds, kindLabel: "Risk", openLabel: "Open risk & blocker log", openSurface: () => onOpenMoreView("risks") }); } }}
                   >
                     <div className="v3-rail-item-head">
                       <span className={`v3-chip v3-chip-tight ${severityTone(entry.severity)}`}>{entry.severity}</span>
