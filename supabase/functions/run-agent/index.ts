@@ -1514,10 +1514,33 @@ function buildSpecialAgentInputContext(
     const escalatableMilestones = milestones.filter(
       (entry) => entry.status === "delayed" || entry.status === "at-risk",
     );
+    const nowMs = Date.now();
+    const hoursSince = (value: unknown): number | null => {
+      if (typeof value !== "string" || !value) return null;
+      const ts = Date.parse(value);
+      return Number.isNaN(ts) ? null : Math.max(0, Math.round((nowMs - ts) / 3_600_000));
+    };
+    // Surface verifiable age so the agent honours the 48h/5-day thresholds
+    // instead of guessing, and artifact progress so a phase is judged by
+    // artifact approval (the real signal) rather than pct.
+    const escalatableDecisions = decisions
+      .filter((entry) => entry.status !== "resolved")
+      .map((entry) => ({ ...entry, ageHours: hoursSince(entry.createdAt ?? entry.raisedAt) }));
+    const phasesWithProgress = phases.map((phase) => {
+      const phaseArtifacts = Array.isArray(phase.artifacts) ? phase.artifacts.filter(isRecord) : [];
+      const approvedArtifacts = phaseArtifacts.filter((a) => a.status === "approved").length;
+      return {
+        ...phase,
+        hoursSinceUpdate: hoursSince(phase.lastUpdatedAt),
+        artifactCount: phaseArtifacts.length,
+        approvedArtifactCount: approvedArtifacts,
+        hasArtifactProgress: phaseArtifacts.length > 0,
+      };
+    });
     return JSON.stringify({
       now: new Date().toISOString(),
-      decisions: decisions.filter((entry) => entry.status !== "resolved"),
-      phases,
+      decisions: escalatableDecisions,
+      phases: phasesWithProgress,
       raidEntries: escalatableRaid,
       milestones: escalatableMilestones,
       openEscalations: existingEscalations,
@@ -2419,10 +2442,27 @@ function applyEscalationResultToProgramData(programData: ProgramState, result: R
           }))
       : [];
 
+    // Auto-resolve open/acknowledged escalations the agent reports as cleared,
+    // so a stale "artifacts in draft" / "no milestones" / "phase stalled" entry
+    // closes once its condition no longer holds instead of lingering forever.
+    const resolvedIds = new Set(
+      isRecord(result) && Array.isArray(result.resolvedEscalationIds)
+        ? result.resolvedEscalationIds.filter((id): id is string => typeof id === "string")
+        : [],
+    );
+    const nowIso = new Date().toISOString();
+    const reconciled = existingEscalations.map((entry) => {
+      const id = typeof entry.id === "string" ? entry.id : "";
+      if (resolvedIds.has(id) && (entry.status === "open" || entry.status === "acknowledged")) {
+        return { ...entry, status: "resolved", resolvedAt: nowIso };
+      }
+      return entry;
+    });
+
     return {
       ...inner,
-      escalations: [...existingEscalations, ...additions] as JsonValue,
-      escalationsLastCheckedAt: new Date().toISOString(),
+      escalations: [...reconciled, ...additions] as JsonValue,
+      escalationsLastCheckedAt: nowIso,
     };
   });
 }
@@ -5162,11 +5202,12 @@ Return ONLY valid JSON.`,
     return {
       system: `You are the Escalation Agent for an enterprise transformation program.
 
-Apply these rules:
-1. Flag any decision pending for more than 48 hours (72 hours for gate approvals) as "stale-decision".
-2. Flag any phase whose pct has not changed in more than 5 days as "phase-stalled".
+Apply these rules. Each input record carries verifiable fields — use them; never guess an age or assume staleness.
+1. Flag a decision as "stale-decision" ONLY if its ageHours >= 48 (>= 72 for gate-approval decisions). Never flag a decision younger than that threshold, regardless of its subject. If ageHours is null you cannot establish staleness — do not flag it.
+2. Flag a phase as "phase-stalled" ONLY if hoursSinceUpdate > 120 (5 days) AND hasArtifactProgress is false. Progress is measured by artifact activity, NOT by pct: never flag a phase merely because pct is 0 or unrecorded, and never flag a phase that has artifacts (especially approved ones) — it is progressing.
 3. Flag any high-severity risk or blocker older than 3 days as "critical-blocker".
 4. Flag any delayed milestone with a target date inside the next 7 days as "milestone-slipping".
+5. Reconcile openEscalations: for every existing open escalation, check whether its triggering condition still holds against the current input. Return the id of any escalation that is now stale — e.g. its linked decision is resolved/absent or under the age threshold, its linked phase now shows artifact progress, its linked risk/blocker is closed, or its milestone is back on track — in "resolvedEscalationIds". Do not re-raise these.
 
 For each escalation:
 - title: concise subject line
@@ -5193,10 +5234,11 @@ Return JSON only:
       "status": "open",
       "source": "agent"
     }
-  ]
+  ],
+  "resolvedEscalationIds": string[]
 }
 
-If nothing meets the criteria, return { "escalations": [] }.`,
+If nothing meets the criteria, return { "escalations": [], "resolvedEscalationIds": [] }.`,
       user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
     };
   }

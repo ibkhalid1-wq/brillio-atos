@@ -40,6 +40,7 @@ interface UseAgentTriggersOptions {
   patternQueryCachedAt: string | null;
   gateReviews: Record<string, GateReview>;
   escalationsLastCheckedAt: string | null;
+  openEscalationCount: number;
   closureGeneratedAt: string | null;
   phases: PhaseSummary[];
   raidEntries: RAIDEntry[];
@@ -87,6 +88,7 @@ export function useAgentTriggers({
   patternQueryCachedAt,
   gateReviews,
   escalationsLastCheckedAt,
+  openEscalationCount,
   closureGeneratedAt,
   phases,
   raidEntries,
@@ -504,8 +506,12 @@ export function useAgentTriggers({
     if (!canRunAgents) return;
     if (!isOlderThan(escalationsLastCheckedAt, SIX_HOURS_MS)) return;
     if (loadTriggerRef.current.escalationProgramId === programId || escalationRunning.current) return;
+    // Open escalations are themselves a trigger: the agent re-checks them and
+    // auto-resolves any whose condition has cleared, so stale entries don't
+    // linger when no new risk/decision is firing.
     const hasFreshTrigger = raidEntries.some((entry) => entry.status !== "closed" && (entry.severity === "high" || entry.severity === "critical"))
-      || hasOverdueDecision(decisions);
+      || hasOverdueDecision(decisions)
+      || openEscalationCount > 0;
     if (!hasFreshTrigger) return;
 
     loadTriggerRef.current.escalationProgramId = programId;
@@ -513,7 +519,7 @@ export function useAgentTriggers({
     void runAgentSafely({ agentId: "escalation", phaseId: "program", triggeredBy: "trigger" }, () => {
       finishEscalationRun();
     });
-  }, [canRunAgents, decisions, escalationsLastCheckedAt, finishEscalationRun, programId, raidEntries, runAgentSafely, startEscalationRun]);
+  }, [canRunAgents, decisions, escalationsLastCheckedAt, finishEscalationRun, openEscalationCount, programId, raidEntries, runAgentSafely, startEscalationRun]);
 
   useEffect(() => {
     if (!canRunAgents) return;

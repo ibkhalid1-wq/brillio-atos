@@ -1611,6 +1611,9 @@ export default function AppShellV3() {
     patternQueryCachedAt: activeProgram?.patternQueryCachedAt || null,
     gateReviews: activeProgram?.gateReviews || {},
     escalationsLastCheckedAt: activeProgram?.escalationsLastCheckedAt || null,
+    openEscalationCount: (activeProgram?.escalations || []).filter(
+      (entry) => entry.status === "open" || entry.status === "acknowledged",
+    ).length,
     closureGeneratedAt: activeProgram?.closureGeneratedAt || null,
     phases: activeProgram?.phases || [],
     raidEntries: activeProgram?.raidEntries || [],
