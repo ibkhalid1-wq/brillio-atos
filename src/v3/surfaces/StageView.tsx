@@ -21,6 +21,7 @@ import { resolveArtifactReview, resolveArtifactQualityScore } from "@/v3/lib/art
 import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
 import { getArtifactInputFields } from "@/v3/lib/phaseFlowEdges";
 import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
+import { resolveGovernanceSelection } from "@/v3/lib/governanceModel";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { runPreFlight } from "@/v3/lib/phaseInputPreFlight";
 import { derivePhaseInputQuality } from "@/v3/lib/phaseInputQuality";
@@ -62,6 +63,8 @@ interface StageViewProps {
   onApproveAllArtifacts: (phaseId: string) => Promise<void>;
   onUnapproveArtifact: (phaseId: string, artifactId: string) => Promise<void>;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; clearReviewDefId?: string; staleDefId?: string }) => Promise<void>;
+  /** Choose the effective governance model from the AI-generated options (replace-but-re-selectable). */
+  onSelectGovernanceOption?: (optionId: string) => Promise<void> | void;
   onSaveRoadmapSchedule?: (schedule: Record<string, { start: string; end: string }>) => Promise<void>;
   onSaveProgram?: (label?: string, kind?: "manual" | "lock") => Promise<void>;
   onRevertProgram?: (snapshotId: string) => Promise<void>;
@@ -499,6 +502,7 @@ export default function StageView({
   onApproveAllArtifacts,
   onUnapproveArtifact,
   onSaveInputs,
+  onSelectGovernanceOption,
   onSaveRoadmapSchedule,
   onSaveProgram,
   onRevertProgram,
@@ -515,6 +519,7 @@ export default function StageView({
   const [approvingAll, setApprovingAll] = React.useState(false);
   const [downloadingArtifacts, setDownloadingArtifacts] = React.useState(false);
   const [lockConfirmOpen, setLockConfirmOpen] = React.useState(false);
+  const [selectingOptionId, setSelectingOptionId] = React.useState<string | null>(null);
   const [lockedModalOpen, setLockedModalOpen] = React.useState(false);
   const [changeRequestOpen, setChangeRequestOpen] = React.useState(false);
   const [previewArtifact, setPreviewArtifact] = React.useState<{ defId?: string; label: string; description?: string; content: string; score: number | null; statusTone: string } | null>(null);
@@ -1104,6 +1109,7 @@ export default function StageView({
   const capacityAssessment = source?.capacityAssessment && typeof source.capacityAssessment === "object" && !Array.isArray(source.capacityAssessment)
     ? source.capacityAssessment as { overallAdequacy?: string; adequacyScore?: number; recommendations?: string[]; roleGaps?: Array<{ role?: string; currentCount?: number; requiredCount?: number; gap?: number }> }
     : null;
+  const governanceSelection = useMemo(() => resolveGovernanceSelection(source?.governanceModel), [source?.governanceModel]);
   const vendorRiskAssessment = source?.vendorRiskAssessment && typeof source.vendorRiskAssessment === "object" && !Array.isArray(source.vendorRiskAssessment)
     ? source.vendorRiskAssessment as { vendorAssessments?: Array<{ vendorName?: string; riskScore?: number; dependencyCriticality?: string; recommendedAction?: string }> }
     : null;
@@ -1570,6 +1576,44 @@ export default function StageView({
                     {gap.role}: have {gap.currentCount || 0}, need {gap.requiredCount || 0}
                   </div>
                 ))}
+              </div>
+            </div>
+          ) : null}
+
+          {activePhase.id === "mobilise" && governanceSelection ? (
+            <div className="v3-card-sm v3-mini-card">
+              <div className="v3-card-title v3-mini-card-title">Governance model</div>
+              <div className="v3-mini-card-list">
+                {governanceSelection.options.map((option) => {
+                  const isSelected = option.id === governanceSelection.selectedId;
+                  const isRecommended = option.id === governanceSelection.recommendedId;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      className={`v3-governance-option${isSelected ? " selected" : ""}`}
+                      aria-pressed={isSelected}
+                      disabled={!onSelectGovernanceOption || isSelected || selectingOptionId !== null}
+                      onClick={async () => {
+                        if (!onSelectGovernanceOption || isSelected) return;
+                        setSelectingOptionId(option.id);
+                        try {
+                          await onSelectGovernanceOption(option.id);
+                        } finally {
+                          setSelectingOptionId(null);
+                        }
+                      }}
+                    >
+                      <span className="v3-governance-option-head">
+                        <span className={`v3-chip ${isSelected ? "green" : "muted"}`}>{isSelected ? "Selected" : selectingOptionId === option.id ? "Selecting…" : "Select"}</span>
+                        <strong>{option.name || option.id}</strong>
+                        {isRecommended ? <span className="v3-chip amber">Recommended</span> : null}
+                      </span>
+                      {option.summary ? <span className="v3-governance-option-summary">{option.summary}</span> : null}
+                      {option.bestFor ? <span className="v3-governance-option-bestfor">Best for: {option.bestFor}</span> : null}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           ) : null}

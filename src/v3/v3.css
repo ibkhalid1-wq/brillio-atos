@@ -7141,6 +7141,52 @@ button.v3-phase-metric:focus-visible {
   font-size: 12px;
 }
 
+.v3-governance-option {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  text-align: left;
+  padding: 10px;
+  border: 1px solid var(--v3-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--v3-text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.5;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.v3-governance-option:hover:not(:disabled) {
+  border-color: var(--v3-accent);
+}
+
+.v3-governance-option.selected {
+  border-color: var(--v3-accent);
+  background: var(--v3-accent-soft, rgba(80, 120, 220, 0.08));
+}
+
+.v3-governance-option:disabled {
+  cursor: default;
+}
+
+.v3-governance-option-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.v3-governance-option-summary {
+  color: var(--v3-text-secondary);
+}
+
+.v3-governance-option-bestfor {
+  color: var(--v3-text-muted);
+  font-size: 11px;
+}
+
 .v3-brief-panel {
   margin-top: 14px;
   padding: 16px;
