@@ -14,6 +14,7 @@ const grid = (over: Partial<PhaseInputField>): PhaseInputField => ({
   id: "g",
   label: "Grid",
   type: "grid",
+  required: false,
   columns: [],
   ...over,
 });
@@ -61,7 +62,7 @@ describe("findRosterGrid", () => {
   });
 
   it("ignores non-grid fields with matching ids", () => {
-    const text: PhaseInputField = { id: "coreTeamRoster", label: "x", type: "textarea" };
+    const text: PhaseInputField = { id: "coreTeamRoster", label: "x", type: "textarea", required: false };
     expect(findRosterGrid([text])).toBeNull();
   });
 });
