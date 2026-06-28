@@ -773,6 +773,10 @@ export default function StageView({
   const allRequiredProduced = phaseArtifacts.required > 0 && phaseArtifacts.present === phaseArtifacts.required;
 
   const gateReview = activePhase ? program?.gateReviews?.[activePhase.id] || null : null;
+  const gateReviewStatus = getRawGateStatus(program, activePhase?.id ?? null) || gateReview?.status || null;
+  // The phase gate is closed/locked: artifacts are finalised, so per-artifact and
+  // bulk approval no longer apply (reopen via the Unlock action to edit again).
+  const gateApproved = gateReviewStatus === "approved";
   const source = typeof program?.rawData === "object" && program.rawData !== null
     ? ("data" in program.rawData && typeof program.rawData.data === "object" && program.rawData.data !== null
       ? program.rawData.data as Record<string, unknown>
@@ -837,7 +841,7 @@ export default function StageView({
   // Bulk approve is offered only when every required artifact is produced, none
   // are stale, and all clear the quality gate. Until then we show an inline hint
   // explaining the condition instead of the button.
-  const showApproveAll = allRequiredProduced && approvableArtifactCount > 0 && !hasStaleArtifact && allArtifactsMeetQualityGate;
+  const showApproveAll = allRequiredProduced && approvableArtifactCount > 0 && !hasStaleArtifact && allArtifactsMeetQualityGate && !gateApproved;
   // Live overlay: the persisted programme with the active phase's *unsaved* input
   // edits merged in, so header metrics / status rings / flow-line tones reflect
   // typing instantly — ahead of the debounced auto-save round-trip. Only the
@@ -994,7 +998,6 @@ export default function StageView({
       setDownloadingArtifacts(false);
     }
   }, [activePhase, downloadingArtifacts, dynamicStore, phaseArtifacts, phaseArtifactContentById, source, program]);
-  const gateReviewStatus = getRawGateStatus(program, activePhase?.id ?? null) || gateReview?.status || null;
   // Same canonical action queue the rail and Action Center count, so the
   // Programme screen never shows two different "open" numbers for one phase.
   const stageDecisions = deriveOpenRecommendedActions(program, "delivery_lead")
@@ -1142,7 +1145,6 @@ export default function StageView({
       ? phaseInputs as Record<string, unknown>
       : {}
   ), [phaseInputs]);
-  const gateApproved = gateReviewStatus === "approved";
 
   if (!program || !activePhase) {
     return (
@@ -1165,19 +1167,19 @@ export default function StageView({
   // below shows only generated results, never a wall of "Generate X" buttons.
   const phaseAgentActions: Array<{ key: string; label: React.ReactNode; disabled: boolean; onClick: () => void }> = [];
   if (activePhase.id === "discover") {
-    phaseAgentActions.push({ key: "discovery-guide-generator", label: agentButtonContent("discovery-guide-generator", discoveryGuide ? "Re-generate discovery pack" : "Generate discovery pack"), disabled: agentButtonDisabled("discovery-guide-generator"), onClick: () => onRunAgent("discovery-guide-generator") });
+    phaseAgentActions.push({ key: "discovery-guide-generator", label: agentButtonContent("discovery-guide-generator", discoveryGuide ? "Re-generate discovery pack" : "Generate discovery pack"), disabled: gateApproved || agentButtonDisabled("discovery-guide-generator"), onClick: () => onRunAgent("discovery-guide-generator") });
   }
   if (activePhase.id === "build") {
-    phaseAgentActions.push({ key: "sprint-planner", label: agentButtonContent("sprint-planner", sprintPlan ? "Re-plan sprints" : "Generate sprint plan"), disabled: agentButtonDisabled("sprint-planner"), onClick: () => onRunAgent("sprint-planner") });
+    phaseAgentActions.push({ key: "sprint-planner", label: agentButtonContent("sprint-planner", sprintPlan ? "Re-plan sprints" : "Generate sprint plan"), disabled: gateApproved || agentButtonDisabled("sprint-planner"), onClick: () => onRunAgent("sprint-planner") });
   }
   if (["mobilise", "build"].includes(activePhase.id)) {
-    phaseAgentActions.push({ key: "capacity-assessor", label: agentButtonContent("capacity-assessor", capacityAssessment ? "Re-assess capacity" : "Assess capacity"), disabled: agentButtonDisabled("capacity-assessor"), onClick: () => onRunAgent("capacity-assessor") });
+    phaseAgentActions.push({ key: "capacity-assessor", label: agentButtonContent("capacity-assessor", capacityAssessment ? "Re-assess capacity" : "Assess capacity"), disabled: gateApproved || agentButtonDisabled("capacity-assessor"), onClick: () => onRunAgent("capacity-assessor") });
   }
   if (["design", "govern"].includes(activePhase.id)) {
-    phaseAgentActions.push({ key: "compliance-checker", label: agentButtonContent("compliance-checker", complianceCheck ? "Re-check compliance" : "Run compliance check"), disabled: agentButtonDisabled("compliance-checker"), onClick: () => onRunAgent("compliance-checker") });
+    phaseAgentActions.push({ key: "compliance-checker", label: agentButtonContent("compliance-checker", complianceCheck ? "Re-check compliance" : "Run compliance check"), disabled: gateApproved || agentButtonDisabled("compliance-checker"), onClick: () => onRunAgent("compliance-checker") });
   }
   if (["design", "build", "operate"].includes(activePhase.id)) {
-    phaseAgentActions.push({ key: "vendor-risk-assessor", label: agentButtonContent("vendor-risk-assessor", vendorRiskAssessment ? "Re-assess vendor risk" : "Assess vendor risk"), disabled: agentButtonDisabled("vendor-risk-assessor"), onClick: () => onRunAgent("vendor-risk-assessor") });
+    phaseAgentActions.push({ key: "vendor-risk-assessor", label: agentButtonContent("vendor-risk-assessor", vendorRiskAssessment ? "Re-assess vendor risk" : "Assess vendor risk"), disabled: gateApproved || agentButtonDisabled("vendor-risk-assessor"), onClick: () => onRunAgent("vendor-risk-assessor") });
   }
 
   return (
@@ -1891,9 +1893,11 @@ export default function StageView({
               const regenGuidance = suggestionCount
                 ? `The previous version of "${def.label}" was quality-reviewed. Apply these specific improvements directly in the artifact you now produce:\n${reviewerSuggestions.map((s, i) => `${i + 1}. ${s.trim()}`).join("\n")}`
                 : undefined;
-              // Sequential generation: this artifact comes after one that has not
-              // yet cleared the 89% quality bar, so its Generate action is locked.
-              const generationLocked = lockedArtifactDefIds.has(def.id);
+              // Generation is locked either because (a) the phase gate is approved
+              // — the artifacts are finalised, so regenerating/re-reviewing them is
+              // off until the phase is unlocked — or (b) sequential generation: this
+              // artifact comes after one that has not yet cleared the 89% quality bar.
+              const generationLocked = gateApproved || lockedArtifactDefIds.has(def.id);
               return (
                 <React.Fragment key={def.id}>
                 {index > 0 ? (
@@ -1928,7 +1932,7 @@ export default function StageView({
                       ▾ Preview
                     </button>
                   ) : null}
-                  {present && state !== "approved" ? (
+                  {present && state !== "approved" && !gateApproved ? (
                     <button
                       type="button"
                       className="v3-button ghost v3-button-inline-xs"
@@ -1948,7 +1952,9 @@ export default function StageView({
                       className={`v3-button ${present ? "ghost" : "primary"} v3-button-inline-xs v3-artifact-regen`}
                       onClick={() => onRunAgent(def.id, activePhase.id, regenGuidance)}
                       disabled={agentButtonDisabled(def.id) || flowedInputsIncomplete || generationLocked}
-                      title={generationLocked
+                      title={gateApproved
+                        ? `${activePhase.displayName ?? "This phase"} is locked — unlock it from Settings to regenerate ${def.label}.`
+                        : generationLocked
                         ? `Produce the earlier artifact${activePhase.displayName ? ` in ${activePhase.displayName}` : ""} to above 89% quality before generating ${def.label} — artifacts are built in order.`
                         : flowedInputsIncomplete
                         ? `Provide these inputs before generating ${def.label}:\n${generateGuidance}`
