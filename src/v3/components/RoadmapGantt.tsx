@@ -46,6 +46,31 @@ export default function RoadmapGantt({ rows, editable = false, onChange }: Roadm
 
   const layout = useMemo(() => layoutGantt(draft), [draft]);
 
+  // Month axis labels: show the month abbreviation on every tick but only print
+  // the year when it changes, so dense (monthly) axes don't overlap.
+  const monthTicks = useMemo(() => {
+    if (!layout) return [];
+    let lastYear = "";
+    return layout.months.map((m) => {
+      const [mon, year] = m.label.split(" ");
+      const showYear = year !== lastYear;
+      lastYear = year;
+      return { ...m, mon, yy: year ? `\u2019${year.slice(2)}` : "", showYear };
+    });
+  }, [layout]);
+
+  // "Today" marker position as a % of the padded timeline, or null when today
+  // falls outside the chart's range.
+  const todayPct = useMemo(() => {
+    if (!layout) return null;
+    const total = daysBetween(layout.rangeStart, layout.rangeEnd);
+    if (total <= 0) return null;
+    const today = new Date().toISOString().slice(0, 10);
+    const offset = daysBetween(layout.rangeStart, today);
+    if (offset < 0 || offset > total) return null;
+    return (offset / total) * 100;
+  }, [layout]);
+
   const commit = useCallback(
     (id: string, start: string, end: string) => {
       onChange?.(id, start, end);
@@ -148,17 +173,19 @@ export default function RoadmapGantt({ rows, editable = false, onChange }: Roadm
         </span>
       </div>
 
-      {/* Month axis */}
+      {/* Month axis (labels only — gridlines live in the grid overlay below) */}
       <div className="v3-gantt-row v3-gantt-axis">
         <span className="v3-gantt-label" aria-hidden="true" />
         <div className="v3-gantt-track v3-gantt-axis-track" ref={trackRef}>
-          {layout.months.map((month) => (
-            <React.Fragment key={month.label}>
-              <span className="v3-gantt-monthline" style={{ left: `${month.offsetPct}%` }} />
-              <span className="v3-gantt-monthlabel" style={{ left: `${month.offsetPct}%` }}>
-                {month.label}
-              </span>
-            </React.Fragment>
+          {monthTicks.map((month) => (
+            <span
+              key={month.label}
+              className={`v3-gantt-monthlabel${month.showYear ? " is-year" : ""}`}
+              style={{ left: `${month.offsetPct}%` }}
+            >
+              {month.mon}
+              {month.showYear ? <span className="v3-gantt-monthyear">{month.yy}</span> : null}
+            </span>
           ))}
         </div>
       </div>
@@ -170,6 +197,18 @@ export default function RoadmapGantt({ rows, editable = false, onChange }: Roadm
         onPointerUp={drag ? onPointerUp : undefined}
         onPointerCancel={drag ? onPointerUp : undefined}
       >
+        {/* Aligned overlay: month gridlines + the "today" marker, confined to the
+            track column so they line up exactly with the bars. */}
+        <div className="v3-gantt-overlay" aria-hidden="true">
+          {layout.months.map((month) => (
+            <span key={month.label} className="v3-gantt-monthline" style={{ left: `${month.offsetPct}%` }} />
+          ))}
+          {todayPct != null ? (
+            <span className="v3-gantt-today" style={{ left: `${todayPct}%` }}>
+              <span className="v3-gantt-today-flag">Today</span>
+            </span>
+          ) : null}
+        </div>
         {layout.bars.map((bar) => (
           <div className="v3-gantt-row" key={bar.id}>
             <span className="v3-gantt-label" title={bar.name}>{bar.name}</span>
@@ -186,7 +225,6 @@ export default function RoadmapGantt({ rows, editable = false, onChange }: Roadm
                     onPointerDown={(e) => onPointerDown(e, bar, "resize-start")}
                   />
                 ) : null}
-                <span style={{ pointerEvents: "none" }}>{bar.name}</span>
                 {editable ? (
                   <span
                     className="v3-gantt-handle end"

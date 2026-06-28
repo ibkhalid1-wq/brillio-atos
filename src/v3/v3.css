@@ -12358,52 +12358,105 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 
 
 /* ── Roadmap Gantt ─────────────────────────────────────────────────────────── */
-.v3-gantt { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
-.v3-gantt-head {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+.v3-gantt {
+  --v3-gantt-label-w: 150px;
+  --v3-gantt-gap: 12px;
+  --v3-gantt-today: #e8553b;
+  display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px;
 }
-.v3-gantt-title { font-size: 13px; font-weight: 600; color: var(--v3-text-primary); }
+.v3-gantt-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  padding-bottom: 8px; border-bottom: 1px solid var(--v3-border-soft);
+}
+.v3-gantt-title { font-size: 13px; font-weight: 650; letter-spacing: -0.01em; color: var(--v3-text-primary); }
 .v3-gantt-hint { font-size: 11px; color: var(--v3-text-muted); }
-.v3-gantt-grid { position: relative; }
-/* Each row is a label column + a flexible track column. */
-.v3-gantt-row { display: grid; grid-template-columns: 132px 1fr; align-items: center; gap: 10px; padding: 3px 0; }
-.v3-gantt-axis { grid-template-columns: 132px 1fr; }
-.v3-gantt-label { font-size: 12px; color: var(--v3-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Each row is a fixed label column + a flexible track column. */
+.v3-gantt-row { display: grid; grid-template-columns: var(--v3-gantt-label-w) 1fr; align-items: center; gap: var(--v3-gantt-gap); padding: 3px 0; }
+.v3-gantt-axis { margin-bottom: 12px; }
+.v3-gantt-label {
+  font-size: 12px; line-height: 1.25; font-weight: 500; color: var(--v3-text-secondary);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; word-break: break-word;
+}
 .v3-gantt-track {
-  position: relative; height: 26px; border-radius: 6px;
+  position: relative; height: 28px; border-radius: 7px;
   background: var(--v3-accent-soft);
   border: 1px solid var(--v3-border-soft);
   overflow: hidden;
 }
-/* Month gridlines + axis labels share the track geometry. */
-.v3-gantt-axis-track { height: 18px; background: transparent; border: none; overflow: visible; }
-.v3-gantt-monthline { position: absolute; top: 0; bottom: -9999px; width: 1px; background: var(--v3-border-soft); }
-.v3-gantt-monthlabel { position: absolute; top: 0; transform: translateX(2px); font-size: 10px; color: var(--v3-text-muted); white-space: nowrap; }
+.v3-gantt-axis-track { height: 16px; background: transparent; border: none; overflow: visible; }
+.v3-gantt-monthlabel {
+  position: absolute; top: 0; transform: translateX(4px);
+  font-size: 10px; font-weight: 500; letter-spacing: 0.02em; text-transform: uppercase;
+  color: var(--v3-text-muted); white-space: nowrap;
+}
+.v3-gantt-monthlabel.is-year { color: var(--v3-text-secondary); font-weight: 650; }
+/* Stack the year beneath its month so wide boundary labels never crowd the next month. */
+.v3-gantt-monthyear { position: absolute; top: 11px; left: 0; font-size: 9px; color: var(--v3-text-muted); font-weight: 500; }
+
+.v3-gantt-grid { position: relative; }
+/* Overlay confined to the track column so gridlines/today align with the bars. */
+.v3-gantt-overlay {
+  position: absolute; top: 0; bottom: 0; right: 0;
+  left: calc(var(--v3-gantt-label-w) + var(--v3-gantt-gap));
+  pointer-events: none; z-index: 2;
+}
+.v3-gantt-monthline { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--v3-border-soft); opacity: 0.55; }
+.v3-gantt-today {
+  position: absolute; top: -4px; bottom: 0; width: 2px; border-radius: 1px;
+  background: var(--v3-gantt-today); box-shadow: 0 0 0 1px rgba(232, 85, 59, 0.16);
+}
+.v3-gantt-today::before {
+  content: ""; position: absolute; top: -3px; left: 50%; transform: translateX(-50%);
+  width: 7px; height: 7px; border-radius: 50%; background: var(--v3-gantt-today);
+  box-shadow: 0 0 0 2px var(--v3-surface);
+}
+.v3-gantt-today-flag {
+  position: absolute; top: -7px; left: 6px; padding: 1px 6px; border-radius: 999px;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  color: #fff; background: var(--v3-gantt-today); white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(232, 85, 59, 0.35);
+}
+
 .v3-gantt-bar {
-  position: absolute; top: 3px; bottom: 3px; min-width: 6px;
-  border-radius: 5px; background: var(--v3-accent);
-  display: flex; align-items: center; padding: 0 8px;
-  font-size: 10px; color: #fff; white-space: nowrap; overflow: hidden;
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.18);
+  position: absolute; top: 3px; bottom: 3px; min-width: 8px; border-radius: 6px;
+  background-color: var(--v3-accent);
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(0, 0, 0, 0.12));
+  display: flex; align-items: center; padding: 0 10px;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.01em; color: #fff;
+  white-space: nowrap; overflow: hidden;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  transition: box-shadow 0.12s ease, filter 0.12s ease;
 }
 .v3-gantt-bar.is-editable { cursor: grab; }
-.v3-gantt-bar.is-dragging { cursor: grabbing; opacity: 0.9; }
+.v3-gantt-bar.is-editable:hover {
+  filter: brightness(1.05);
+  box-shadow: 0 3px 8px rgba(16, 24, 40, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.v3-gantt-bar.is-dragging { cursor: grabbing; opacity: 0.95; box-shadow: 0 4px 12px rgba(16, 24, 40, 0.3); }
 .v3-gantt-handle {
-  position: absolute; top: 0; bottom: 0; width: 8px; cursor: ew-resize;
-  background: rgba(255, 255, 255, 0.001);
+  position: absolute; top: 0; bottom: 0; width: 10px; cursor: ew-resize;
+  background: transparent; z-index: 1;
 }
 .v3-gantt-handle.start { left: 0; }
 .v3-gantt-handle.end { right: 0; }
 .v3-gantt-handle::after {
   content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  width: 2px; height: 12px; border-radius: 1px; background: rgba(255, 255, 255, 0.6);
+  width: 2px; height: 12px; border-radius: 1px; background: rgba(255, 255, 255, 0.65);
+  opacity: 0; transition: opacity 0.12s ease;
 }
-.v3-gantt-editrow { display: grid; grid-template-columns: 132px 1fr; gap: 10px; align-items: center; padding: 0 0 4px; }
+.v3-gantt-bar.is-editable:hover .v3-gantt-handle::after { opacity: 1; }
+
+.v3-gantt-editrow { display: grid; grid-template-columns: var(--v3-gantt-label-w) 1fr; gap: var(--v3-gantt-gap); align-items: center; padding: 0 0 4px; }
+.v3-gantt-editrow:first-of-type { margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--v3-border-soft); }
 .v3-gantt-dates { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .v3-gantt-date {
-  font-size: 11px; padding: 2px 6px; border-radius: 5px; color-scheme: light dark;
+  font-size: 11px; padding: 3px 7px; border-radius: 6px; color-scheme: light dark;
   border: 1px solid var(--v3-border); background: var(--v3-surface); color: var(--v3-text-primary);
+  transition: border-color 0.12s ease;
 }
+.v3-gantt-date:hover:not(:disabled) { border-color: var(--v3-accent); }
 .v3-gantt-date:disabled { opacity: 0.6; }
 .v3-gantt-dates-sep { font-size: 11px; color: var(--v3-text-muted); }
-.v3-gantt-empty { font-size: 12px; color: var(--v3-text-muted); padding: 10px 0; }
+.v3-gantt-empty { font-size: 12px; color: var(--v3-text-muted); padding: 12px 0; }
