@@ -1011,11 +1011,19 @@ export default function StageView({
       // Only show the "complete & locked" confirmation when the phase actually
       // closed. handleApproveGate returns false (and toasts the reason) if the
       // close was rejected, so we never show a misleading success state.
-      if (closed !== false) setLockedModalOpen(true);
+      if (closed !== false) {
+        setLockedModalOpen(true);
+        // Auto-advance to the next phase that isn't already locked, so the user
+        // lands on the next stage to work on instead of the one just closed.
+        const phases = program?.phases ?? [];
+        const idx = phases.findIndex((p) => p.id === activePhase.id);
+        const next = phases.slice(idx + 1).find((p) => !lockedPhaseIds.has(p.id));
+        if (next) onSelectPhase?.(next.id);
+      }
     } finally {
       setIsLocking(false);
     }
-  }, [activePhase, isLocking, onApproveGate]);
+  }, [activePhase, isLocking, onApproveGate, program, lockedPhaseIds, onSelectPhase]);
   // Schema-grounded, deterministic input-quality assessment. Derived from the
   // phase's declared input fields (the single source of truth), so the banner's
   // "Missing:" list can only ever name inputs that genuinely belong to this
