@@ -532,10 +532,31 @@ function getProgramPhaseContext(programData: ProgramState): Array<Record<string,
 
 function getProgramArtifactContext(programData: ProgramState): Array<Record<string, unknown>> {
   const inner = getInnerProgramData(programData);
-  const phaseArtifacts = normalizeProgramData(inner.phaseArtifacts as JsonValue | null);
+
+  // Preferred source: flattened top-level `artifacts` array. This is the
+  // canonical client-facing shape ({ id, phaseId, title, status, ... }) and the
+  // only place that reliably carries the real approval status.
+  const flat = Array.isArray(inner.artifacts) ? inner.artifacts : [];
+  if (flat.length) {
+    return flat.filter(isRecord).map((artifact) => ({
+      id: typeof artifact.id === "string" ? artifact.id : "",
+      phaseId: typeof artifact.phaseId === "string" ? artifact.phaseId : "",
+      title: typeof artifact.title === "string" ? artifact.title : (typeof artifact.id === "string" ? artifact.id : ""),
+      status: typeof artifact.status === "string" ? artifact.status : "draft",
+    }));
+  }
+
+  // Fallbacks: nested phaseArtifacts may live under rawData (canonical nested
+  // store) or at the inner top level (legacy). Both are keyed phaseId -> artifactId.
+  const rawData = normalizeProgramData(inner.rawData as JsonValue | null);
+  const nested = normalizeProgramData(
+    (Object.keys(normalizeProgramData(rawData.phaseArtifacts as JsonValue | null)).length
+      ? rawData.phaseArtifacts
+      : inner.phaseArtifacts) as JsonValue | null,
+  );
   const artifacts: Array<Record<string, unknown>> = [];
 
-  Object.entries(phaseArtifacts).forEach(([phaseId, bucket]) => {
+  Object.entries(nested).forEach(([phaseId, bucket]) => {
     const artifactBucket = normalizeProgramData(bucket as JsonValue | null);
     Object.entries(artifactBucket).forEach(([artifactId, artifactValue]) => {
       const artifact = normalizeProgramData(artifactValue as JsonValue | null);
