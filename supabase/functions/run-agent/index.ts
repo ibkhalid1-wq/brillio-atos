@@ -334,6 +334,30 @@ function normalizeProgramData(raw: JsonValue | null): ProgramState {
   return (raw && typeof raw === "object" && !Array.isArray(raw)) ? { ...(raw as ProgramState) } : {};
 }
 
+/**
+ * Resolve the core-team roster rows from a phase's inputs. The roster is the
+ * ai-derived dynamic grid (canonical id "coreTeamRoster"), persisted as a JSON
+ * string of row objects. Prefers the canonical id; otherwise the first
+ * grid-shaped value whose rows carry both a name and a role column. Returns []
+ * when no roster has been filled — mirrors the client `findRosterGrid` resolver.
+ */
+function resolveRosterRows(phaseInputs: ProgramState): Array<Record<string, unknown>> {
+  const parseGrid = (value: unknown): Array<Record<string, unknown>> => {
+    const arr = typeof value === "string" ? safeJsonParse<unknown>(value, null) : value;
+    return Array.isArray(arr) ? arr.filter(isRecord) : [];
+  };
+  const hasKey = (row: Record<string, unknown>, re: RegExp) => Object.keys(row).some((k) => re.test(k));
+  const canonical = parseGrid(phaseInputs.coreTeamRoster);
+  if (canonical.length) return canonical;
+  for (const value of Object.values(phaseInputs)) {
+    const rows = parseGrid(value);
+    if (rows.length && rows.some((r) => hasKey(r, /name/i) && hasKey(r, /role|title|position/i))) {
+      return rows;
+    }
+  }
+  return [];
+}
+
 function getInnerProgramData(programData: ProgramState): ProgramState {
   const nested = normalizeProgramData(programData.data as JsonValue | null);
   return Object.keys(nested).length ? nested : programData;
@@ -1675,9 +1699,15 @@ function buildSpecialAgentInputContext(
 
   if (target?.agentId === "capacity-assessor") {
     const activePhase = String(inner.activePhase || target.phaseId || "strategy");
-    const phaseInputs = normalizeProgramData(normalizeProgramData(inner.phaseInputs as JsonValue | null)[activePhase] as JsonValue | null);
+    const allPhaseInputs = normalizeProgramData(inner.phaseInputs as JsonValue | null);
+    const phaseInputs = normalizeProgramData(allPhaseInputs[activePhase] as JsonValue | null);
+    // The real team roster is the ai-derived "coreTeamRoster" grid owned by
+    // Mobilise; the legacy `team` key was never written. Read the canonical
+    // roster and fall back to the legacy key only if it is somehow populated.
+    const mobiliseInputs = normalizeProgramData(allPhaseInputs.mobilise as JsonValue | null);
+    const roster = resolveRosterRows(mobiliseInputs);
     return JSON.stringify({
-      team: phaseInputs.team || inner.team || [],
+      team: roster.length > 0 ? roster : (phaseInputs.team || inner.team || []),
       milestones: milestones.filter((entry) => entry.status !== "complete"),
       workstreams: Array.isArray(inner.workstreams) ? inner.workstreams : [],
       timeline: { start: phaseInputs.startDate || null, end: phaseInputs.endDate || null },
