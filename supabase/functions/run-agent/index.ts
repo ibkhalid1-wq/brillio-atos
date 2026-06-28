@@ -4769,6 +4769,11 @@ Confidence rules:
 - Never fabricate risks that aren't supported by the context
 - If a phase has <10% readiness and no artifacts, flag it as a potential blocker
 
+State-awareness rules (avoid stale / false findings):
+- Check each artifact's status field before flagging it. Treat any artifact whose status is "approved" as complete and accepted. NEVER raise a risk, blocker, assumption, or dependency claiming an approved artifact is unapproved, still in draft, pending sign-off, or not baselined.
+- Phase exit is governed solely by artifact approval and artifact quality. Do NOT flag the absence of "phase exit criteria" or "exit gates" as a risk or blocker — that concept is not part of this methodology.
+- Every finding must hold against the CURRENT artifacts and phases in the input. Do not restate a finding the present state has already resolved.
+
 Not-ready condition: if no phases have measurable progress and no artifacts exist, respond with:
 { "raidEntries": null, "reason": "insufficient_data" }
 
