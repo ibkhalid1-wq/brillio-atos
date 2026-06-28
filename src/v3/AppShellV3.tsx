@@ -2721,10 +2721,11 @@ export default function AppShellV3() {
 
   const handleResolveChangeRequest = useCallback(async (id: string, decision: "approved" | "rejected", note?: string) => {
     try {
-      await resolveChangeRequest(id, decision, note);
+      const orderedPhaseIds = (activeProgram?.phases ?? []).map((phase) => phase.id);
+      await resolveChangeRequest(id, decision, note, orderedPhaseIds);
       pushV3Toast(
         decision === "approved"
-          ? "Change request approved — the stage gate has reopened for editing."
+          ? "Change request approved — the target stage and every prior locked stage reopened for editing."
           : "Change request rejected.",
         { tone: decision === "approved" ? "success" : "info", duration: 3500 },
       );
@@ -2732,7 +2733,7 @@ export default function AppShellV3() {
       const detail = err instanceof Error ? err.message : "";
       pushV3Toast(detail ? `Could not update change request: ${detail}` : "Could not update change request.", { tone: "error", duration: 4000 });
     }
-  }, [resolveChangeRequest]);
+  }, [resolveChangeRequest, activeProgram]);
 
   const handleAnswerAgentQuestion = useCallback(async (taskId: string, answer: string) => {
     if (!activeProgram || !activePhaseId || !activeProgramId) return;

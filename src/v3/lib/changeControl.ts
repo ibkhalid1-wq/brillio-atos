@@ -72,6 +72,28 @@ export function makeChangeRequest(input: {
   };
 }
 
+/**
+ * Phases an approved change targeting `targetPhaseId` should reopen: the target
+ * itself plus every prior phase (earlier in program order) that is currently
+ * closed (gate-approved). Editing a closed phase invalidates the closed phases it
+ * was built on, so the whole prior chain reopens together for a coherent edit.
+ * Returned in program order so the caller reopens them deterministically.
+ */
+export function phasesToReopenForChange(
+  orderedPhaseIds: string[],
+  approvedPhaseIds: Iterable<string>,
+  targetPhaseId: string,
+): string[] {
+  const approved = new Set(approvedPhaseIds);
+  const targetIdx = orderedPhaseIds.indexOf(targetPhaseId);
+  if (targetIdx === -1) return [targetPhaseId];
+  const result = orderedPhaseIds
+    .slice(0, targetIdx + 1)
+    .filter((id) => approved.has(id) || id === targetPhaseId);
+  if (!result.includes(targetPhaseId)) result.push(targetPhaseId);
+  return result;
+}
+
 /** Mark one open request approved/rejected. No-op for unknown ids or already-decided requests. */
 export function applyDecision(
   list: ChangeRequest[],

@@ -6,8 +6,11 @@ import {
   openChangeRequests,
   openRequestsForPhase,
   isValidChangeRequest,
+  phasesToReopenForChange,
   type ChangeRequest,
 } from "@/v3/lib/changeControl";
+
+const ORDER = ["strategy", "mobilise", "discover", "design", "build", "operate"];
 
 function sampleCR(overrides: Partial<ChangeRequest> = {}): ChangeRequest {
   return {
@@ -111,5 +114,42 @@ describe("selectors", () => {
       sampleCR({ id: "c", phaseId: "strategy", status: "approved" }),
     ];
     expect(openRequestsForPhase(list, "strategy").map((c) => c.id)).toEqual(["a"]);
+  });
+});
+
+describe("phasesToReopenForChange", () => {
+  it("reopens the target plus every prior approved phase, in program order", () => {
+    // strategy..design are closed; design is the change target.
+    const approved = ["strategy", "mobilise", "discover", "design"];
+    expect(phasesToReopenForChange(ORDER, approved, "design")).toEqual([
+      "strategy", "mobilise", "discover", "design",
+    ]);
+  });
+
+  it("skips prior phases that are not approved", () => {
+    // mobilise was never closed, so it is not reopened.
+    const approved = ["strategy", "discover", "design"];
+    expect(phasesToReopenForChange(ORDER, approved, "design")).toEqual([
+      "strategy", "discover", "design",
+    ]);
+  });
+
+  it("never includes phases after the target", () => {
+    const approved = ["strategy", "mobilise", "discover", "design", "build"];
+    expect(phasesToReopenForChange(ORDER, approved, "discover")).toEqual([
+      "strategy", "mobilise", "discover",
+    ]);
+  });
+
+  it("returns just the target when it is the first phase", () => {
+    expect(phasesToReopenForChange(ORDER, ["strategy"], "strategy")).toEqual(["strategy"]);
+  });
+
+  it("always includes the target even if it is not in the approved set", () => {
+    expect(phasesToReopenForChange(ORDER, ["strategy"], "design")).toEqual(["strategy", "design"]);
+  });
+
+  it("falls back to just the target when order is unknown", () => {
+    expect(phasesToReopenForChange([], ["strategy"], "design")).toEqual(["design"]);
   });
 });

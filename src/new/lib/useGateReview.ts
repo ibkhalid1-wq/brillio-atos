@@ -4,7 +4,7 @@ import type { Json } from "@/integrations/supabase/types";
 import type { GateReview } from "@/new/types";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { recordGateRiskSnapshot } from "@/lib/adamGateRisk";
-import { getChangeRequests, makeChangeRequest, applyDecision } from "@/v3/lib/changeControl";
+import { getChangeRequests, makeChangeRequest, applyDecision, phasesToReopenForChange } from "@/v3/lib/changeControl";
 
 const LEGACY_KEYS = ["brillio-adam-projects", "brillio-atlas-projects"] as const;
 
@@ -53,17 +53,29 @@ function persistLocally(programId: string, payload: Record<string, unknown>) {
   });
 }
 
-/** Pure transform that reopens one phase's gate on a given inner state. Shared by
- *  the direct reopen flow and the change-request approval flow so both produce the
- *  exact same gate/decision-queue mutation in a single atomic write. */
-function buildReopenInner(
+function readGateReviews(inner: Record<string, unknown>): Record<string, GateReview> {
+  return typeof inner.gateReviews === "object" && inner.gateReviews !== null && !Array.isArray(inner.gateReviews)
+    ? inner.gateReviews as Record<string, GateReview>
+    : {};
+}
+
+function readDecisionQueue(inner: Record<string, unknown>): Record<string, unknown>[] {
+  return Array.isArray(inner.decisionQueue) ? inner.decisionQueue as Record<string, unknown>[] : [];
+}
+
+/** Pure transform that reopens one phase's gate on a given inner state. Reads the
+ *  gate reviews and decision queue off the inner it receives so it can be folded
+ *  over several phases without later iterations clobbering earlier reopens. Shared
+ *  by the direct reopen flow and the change-request approval flow so both produce
+ *  the exact same gate/decision-queue mutation in a single atomic write. */
+function reopenPhaseInner(
   inner: Record<string, unknown>,
-  gateReviews: Record<string, GateReview>,
-  decisionQueue: Record<string, unknown>[],
   phaseId: string,
   reason: string,
   reopenedBy: string,
 ): Record<string, unknown> {
+  const gateReviews = readGateReviews(inner);
+  const decisionQueue = readDecisionQueue(inner);
   const review: GateReview = gateReviews[phaseId] ?? defaultGateReview(phaseId);
   const nextReviews = {
     ...gateReviews,
@@ -90,6 +102,17 @@ function buildReopenInner(
     recommendation: "Address the reopen reason, re-run gate review, then re-approve.",
   };
   return { ...inner, gateReviews: nextReviews, decisionQueue: [...decisionQueue, reopenDecision] };
+}
+
+/** Reopen several phases in one atomic transform, folding so each reopen sees the
+ *  prior reopens (no stale-snapshot clobbering). */
+function reopenPhasesInner(
+  inner: Record<string, unknown>,
+  phaseIds: string[],
+  reason: string,
+  reopenedBy: string,
+): Record<string, unknown> {
+  return phaseIds.reduce((acc, phaseId) => reopenPhaseInner(acc, phaseId, reason, reopenedBy), inner);
 }
 
 export function useGateReview(
@@ -300,12 +323,12 @@ export function useGateReview(
   }, [getGateReviewState, persistState]);
 
   const reopenGate = useCallback(async (phaseId: string, reason: string) => {
-    const { inner, gateReviews, decisionQueue } = getGateReviewState();
+    const { inner } = getGateReviewState();
     // A gate can be locked without a stored review (legacy programmes, or a gate
-    // closed before AI review existed). buildReopenInner synthesises a default
+    // closed before AI review existed). reopenPhaseInner synthesises a default
     // rather than failing the reopen.
     const reopenedBy = await getCurrentUserDisplayName().catch(() => "Program owner");
-    await persistState(buildReopenInner(inner, gateReviews, decisionQueue, phaseId, reason, reopenedBy));
+    await persistState(reopenPhaseInner(inner, phaseId, reason, reopenedBy));
   }, [getGateReviewState, persistState]);
 
   // Log a change request against a locked phase. This is the sanctioned entry
@@ -319,15 +342,21 @@ export function useGateReview(
     await persistState({ ...inner, changeRequests: [...list, cr] });
   }, [getGateReviewState, persistState]);
 
-  // Approve or reject a logged change request. Approval also reopens the affected
-  // phase's gate in the SAME write so the request record and the unlocked gate
-  // can never drift out of sync (a second write would race on a stale snapshot).
+  // Approve or reject a logged change request. Approval reopens the target phase
+  // AND every prior closed (gate-approved) phase — editing a closed phase
+  // invalidates the closed phases it was built on, so the whole prior chain
+  // reopens together. All of it lands in the SAME write so the request record and
+  // the unlocked gates can never drift out of sync (a second write would race on a
+  // stale snapshot). `orderedPhaseIds` is the programme's phase order, supplied by
+  // the caller (the hook does not know phase ordering); without it the cascade
+  // safely falls back to reopening just the target.
   const resolveChangeRequest = useCallback(async (
     id: string,
     decision: "approved" | "rejected",
     note?: string,
+    orderedPhaseIds: string[] = [],
   ) => {
-    const { inner, gateReviews, decisionQueue } = getGateReviewState();
+    const { inner, gateReviews } = getGateReviewState();
     const list = getChangeRequests(inner);
     const target = list.find((cr) => cr.id === id);
     if (!target || target.status !== "open") return;
@@ -337,11 +366,13 @@ export function useGateReview(
       changeRequests: applyDecision(list, id, decision, decidedBy, note),
     };
     if (decision === "approved") {
-      nextInner = buildReopenInner(
+      const approvedPhaseIds = Object.entries(gateReviews)
+        .filter(([, review]) => review?.status === "approved")
+        .map(([phaseId]) => phaseId);
+      const phasesToReopen = phasesToReopenForChange(orderedPhaseIds, approvedPhaseIds, target.phaseId);
+      nextInner = reopenPhasesInner(
         nextInner,
-        gateReviews,
-        decisionQueue,
-        target.phaseId,
+        phasesToReopen,
         `Change request approved: ${target.title}`,
         decidedBy,
       );
