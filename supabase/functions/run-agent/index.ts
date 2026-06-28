@@ -3980,6 +3980,36 @@ function sanitizePlannerGridColumns(raw: unknown): Record<string, JsonValue>[] {
 }
 
 /**
+ * Sanitize planner-proposed seed rows for a grid against its sanitized columns.
+ * Keeps only cells whose key is a declared column, coerces values to trimmed
+ * strings, assigns each row a stable id, and drops rows that end up empty. Used
+ * to pre-populate grids the planner can derive from prior context (e.g. the core
+ * team roster's roles, with the name column intentionally left blank for the
+ * user to fill in). Returns [] when nothing usable is proposed.
+ */
+function sanitizePlannerGridRows(raw: unknown, columns: Record<string, JsonValue>[]): Record<string, JsonValue>[] {
+  if (!Array.isArray(raw) || columns.length === 0) return [];
+  const colKeys = new Set(columns.map((c) => String(c.key)));
+  const out: Record<string, JsonValue>[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const r = raw[i];
+    if (!isRecord(r)) continue;
+    const row: Record<string, JsonValue> = {};
+    let hasValue = false;
+    for (const [k, v] of Object.entries(r)) {
+      if (k === "id" || !colKeys.has(k)) continue;
+      const str = typeof v === "string" ? v.trim() : (typeof v === "number" ? String(v) : "");
+      row[k] = str;
+      if (str) hasValue = true;
+    }
+    if (!hasValue) continue;
+    row.id = `seed-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 8)}`;
+    out.push(row);
+  }
+  return out;
+}
+
+/**
  * Write the Phase Transition Planner's proposal straight into the program's
  * dynamicSchema for `phaseId`, replacing any prior entries for that phase. The
  * edge is the single writer: relying on the client to persist from the HTTP
@@ -4006,6 +4036,10 @@ function applyPhaseInputPlannerResultToProgramData(
 
   const promotedArtifacts: Record<string, JsonValue>[] = [];
   const guardrailWarnings: string[] = [];
+  // Grid values the planner can derive from prior context (e.g. roster roles),
+  // keyed by field id. Seeded into phaseInputs below so the grid renders
+  // pre-populated; the user fills the remaining columns (e.g. names).
+  const seededGridValues: Record<string, string> = {};
 
   const fieldIds = new Set<string>();
   const inputFields: Record<string, JsonValue>[] = [];
@@ -4051,6 +4085,8 @@ function applyPhaseInputPlannerResultToProgramData(
         field.columns = columns as JsonValue;
         const minRows = Number(f.minRows);
         if (Number.isFinite(minRows) && minRows > 0) field.minRows = Math.floor(minRows);
+        const seedRows = sanitizePlannerGridRows(f.prefillRows, columns);
+        if (seedRows.length) seededGridValues[id] = JSON.stringify(seedRows);
       } else {
         field.type = "textarea";
         guardrailWarnings.push(`Demoted column-less grid "${label}" to a textarea.`);
@@ -4155,8 +4191,24 @@ function applyPhaseInputPlannerResultToProgramData(
     const prevConflicts = normalizeProgramData(store.conflicts as JsonValue | null);
     const prevGaps = normalizeProgramData(store.gaps as JsonValue | null);
     const prevPlanMeta = normalizeProgramData(store.planMeta as JsonValue | null);
+    // Seed planner-derived grid values (e.g. roster roles) into this phase's
+    // inputs, but never clobber a value the user has already entered.
+    let phaseInputs = inner.phaseInputs as JsonValue | null;
+    if (Object.keys(seededGridValues).length) {
+      const allInputs = normalizeProgramData(inner.phaseInputs as JsonValue | null);
+      const phaseValues = normalizeProgramData(allInputs[phaseId] as JsonValue | null);
+      const nextPhaseValues = { ...phaseValues };
+      let changed = false;
+      for (const [fieldId, value] of Object.entries(seededGridValues)) {
+        const existing = nextPhaseValues[fieldId];
+        const isEmpty = existing == null || existing === "" || existing === "[]";
+        if (isEmpty) { nextPhaseValues[fieldId] = value; changed = true; }
+      }
+      if (changed) phaseInputs = { ...allInputs, [phaseId]: nextPhaseValues } as JsonValue;
+    }
     return {
       ...inner,
+      ...(phaseInputs !== (inner.phaseInputs as JsonValue | null) ? { phaseInputs } : {}),
       dynamicSchema: {
         ...store,
         inputFields: { ...prevInputs, [phaseId]: inputFields as JsonValue },
@@ -5249,6 +5301,14 @@ Rules:
   { "key": "camelCaseKey", "label": "Header", "type": "text|number|select",
   "options": ["..."] (select only) }. A grid with no columns is invalid; if you
   cannot name its columns, use "textarea" instead.
+- When a grid's rows can be DERIVED from the prior-phase context, pre-populate them
+  with a "prefillRows" array (each row keyed by the grid's column keys). Fill only
+  the columns you can ground in context and leave the columns the user must supply
+  as empty strings. SPECIFICALLY for the core team roster ("coreTeamRoster"):
+  derive one row per role the programme needs from the Strategy objective, scope,
+  programType and prior context (e.g. Programme Manager, Solution Architect, Change
+  Lead), set the role column for each, and leave the name column "" for the user to
+  fill in. Do not invent names. Roles are AI-derived; names are user-entered.
 - Use stable camelCase field ids and kebab-case artifact ids.
 - EVERY input field MUST carry a concrete, programme-specific "example" showing the
   exact shape of a good answer (e.g. "2026-09-01", "USD 1.2M", "12%", "Jane Doe — CFO").
@@ -5271,7 +5331,9 @@ Return ONLY valid JSON:
     { "fieldId": "coreTeamRoster", "label": "Named individuals per core team role", "type": "grid",
       "required": true, "usedByArtifacts": ["raci-matrix"],
       "columns": [ { "key": "role", "label": "Role", "type": "text" },
-                   { "key": "name", "label": "Name", "type": "text" } ] }
+                   { "key": "name", "label": "Name", "type": "text" } ],
+      "prefillRows": [ { "role": "Programme Manager", "name": "" },
+                       { "role": "Solution Architect", "name": "" } ] }
   ],
   "artifactsToGenerate": [
     { "artifactId": "kebab-id", "artifactName": "Artifact Name",
