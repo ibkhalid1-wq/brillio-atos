@@ -1665,17 +1665,18 @@ export default function AppShellV3() {
     // the neutral-pending amber tone (same intent as the score==null branch).
     const programme = programmeRag === "muted" ? "amber" : programmeRag;
     const ai = aiStatus.status === "connected" ? "green" : aiStatus.status === "checking" ? "amber" : "red";
-    const escalationCount = (activeProgram?.escalations || []).filter((e: any) => e.status === "open").length;
-    const aiNotReady = aiStatus.status !== "connected" && aiStatus.status !== "checking";
-    // Red is reserved for a genuinely unavailable AI layer. Open escalations and
-    // decisions are "needs attention", not "broken" — they route to amber so the
-    // dot doesn't read as an AI fault when the intelligence layer is healthy.
-    const agents = aiNotReady ? "red"
-      : anyAgentRunning ? "green"
-      : escalationCount > 0 || openDecisions.length > 0 ? "amber"
+    // Intelligence-layer status: red when the AI layer isn't running (not
+    // configured / offline), amber when something errored (the AI check failed or
+    // an agent run failed/cancelled), green when it's running cleanly. Open
+    // decisions/escalations are "needs attention" surfaced elsewhere — not an
+    // intelligence-layer fault — so they no longer drive this dot.
+    const aiDown = aiStatus.status === "not-configured" || aiStatus.status === "offline";
+    const hasAgentErrors = activeRuns.some((run) => run.status === "failed" || run.status === "cancelled");
+    const agents = aiDown ? "red"
+      : aiStatus.status === "error" || hasAgentErrors ? "amber"
       : "green";
     return { programme, ai, agents } as const;
-  }, [programConfidenceScore, aiStatus.status, anyAgentRunning, activeProgram?.escalations, openDecisions.length]);
+  }, [programConfidenceScore, aiStatus.status, activeRuns]);
 
   const lockedPhaseIds = useMemo(
     () => activeProgram ? getLockedPhaseIds(activeProgram) : new Set<string>(),
