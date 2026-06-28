@@ -241,10 +241,11 @@ function AgentDrillDown({ programId, agentId, onClose }: { programId: string; ag
 
 // ─── Agent Status panel (default tab) ────────────────────────────────────────
 
-function AgentStatusPanel({ programId }: { programId: string }) {
+function AgentStatusPanel({ programId, onRunAgent }: { programId: string; onRunAgent?: (agentId: string, phaseId?: string) => void }) {
   const [lastRuns, setLastRuns] = useState<AgentLastRun[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
+  const [runningIds, setRunningIds] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     if (!isSupabaseConfigured || !supabase || !programId) return;
@@ -283,6 +284,22 @@ function AgentStatusPanel({ programId }: { programId: string }) {
     lastRuns.forEach((r) => map.set(r.agentId, r));
     return map;
   }, [lastRuns]);
+
+  const handleRun = useCallback((agentId: string) => {
+    if (!onRunAgent || runningIds.has(agentId)) return;
+    onRunAgent(agentId);
+    setRunningIds((prev) => new Set(prev).add(agentId));
+    // The run is async on the server; reload the status list shortly after so the
+    // card reflects the new run row, then clear the local pending flag.
+    window.setTimeout(() => {
+      void load();
+      setRunningIds((prev) => {
+        const next = new Set(prev);
+        next.delete(agentId);
+        return next;
+      });
+    }, 2500);
+  }, [onRunAgent, runningIds, load]);
 
   const total = AGENT_STATUS_GROUPS.flatMap((g) => g.agents).length;
   const green = AGENT_STATUS_GROUPS.flatMap((g) => g.agents).filter((a) => ryg(runMap.get(a)) === "green").length;
@@ -326,6 +343,7 @@ function AgentStatusPanel({ programId }: { programId: string }) {
               const borderColor = color === "green" ? "var(--v3-green)" : color === "red" ? "var(--v3-red)" : color === "blue" ? "#60a5fa" : "var(--v3-amber)";
               const description = AGENT_DESCRIPTIONS[agentId];
               const isExpanded = expandedAgent === agentId;
+              const isRunning = runningIds.has(agentId);
 
               return (
                 <div
@@ -358,6 +376,31 @@ function AgentStatusPanel({ programId }: { programId: string }) {
                       </div>
                     </div>
                   </div>
+
+                  {onRunAgent ? (
+                    <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
+                      <button
+                        type="button"
+                        className="adam-button-ghost"
+                        style={{
+                          fontSize: 11,
+                          padding: "3px 12px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          ...(isRunning ? { color: "#60a5fa", borderColor: "#60a5fa" } : {}),
+                        }}
+                        disabled={isRunning}
+                        title={isRunning ? "Agent run in progress" : `Run the ${prettyAgent(agentId)} agent now`}
+                        onClick={(e) => { e.stopPropagation(); handleRun(agentId); }}
+                      >
+                        <span aria-hidden style={isRunning ? { animation: "v3-pulse 1.6s ease-in-out infinite" } : undefined}>
+                          {isRunning ? "◴" : "▶"}
+                        </span>
+                        {isRunning ? "Running…" : "Run"}
+                      </button>
+                    </div>
+                  ) : null}
 
                   {/* Drill-down: run history */}
                   {isExpanded ? (
@@ -436,9 +479,10 @@ interface IntelligenceViewProps {
   program: ProgramSummary | null;
   onRefreshProgram?: () => Promise<void> | void;
   initialTab?: AISettingsTab;
+  onRunAgent?: (agentId: string, phaseId?: string) => void;
 }
 
-export function IntelligenceView({ program, onRefreshProgram, initialTab }: IntelligenceViewProps) {
+export function IntelligenceView({ program, onRefreshProgram, initialTab, onRunAgent }: IntelligenceViewProps) {
   const [tab, setTab] = useState<AISettingsTab>("Status");
   // Sync to initialTab whenever it changes (e.g. Agents nav → "Status", AI nav → "Setup")
   useEffect(() => { if (initialTab) setTab(initialTab); }, [initialTab]);
@@ -594,7 +638,7 @@ export function IntelligenceView({ program, onRefreshProgram, initialTab }: Inte
       </div>
 
       {/* ── Status (RYG) ── */}
-      {tab === "Status" ? <AgentStatusPanel programId={program.id} /> : null}
+      {tab === "Status" ? <AgentStatusPanel programId={program.id} onRunAgent={onRunAgent} /> : null}
 
       {/* ── Setup (provider config) ── */}
       {tab === "Setup" ? (

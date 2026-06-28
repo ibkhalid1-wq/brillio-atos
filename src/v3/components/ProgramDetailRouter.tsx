@@ -251,7 +251,7 @@ export default function ProgramDetailRouter({
     case "scope-pcr":
       return <ScopePcrView program={program} isRunning={triggers.scopePcrIsRunning} onTriggerScopePcr={triggers.triggerScopePcr} onNavigate={onNavigate} />;
     case "intelligence":
-      return <IntelligenceView program={program} onRefreshProgram={onRefresh} initialTab={intelligenceInitialTab as "Status" | "Setup" | undefined} />;
+      return <IntelligenceView program={program} onRefreshProgram={onRefresh} initialTab={intelligenceInitialTab as "Status" | "Setup" | undefined} onRunAgent={onRunAgent} />;
     case "artifact-map":
       return (
         <div className="v3-section">
