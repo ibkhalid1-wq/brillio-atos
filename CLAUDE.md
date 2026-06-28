@@ -1,4 +1,4 @@
-# Brillio ATLAS (ATOS) — Claude Code Guide
+# Brillio ATOS — Claude Code Guide
 
 ## Project overview
 

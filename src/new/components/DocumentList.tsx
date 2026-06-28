@@ -11,7 +11,7 @@ export default function DocumentList({ programId }: { programId: string | null }
 
   // Download the stored extraction: raw parsed text plus the structured
   // extracted_data JSON. The original binary is not retained, so this exports
-  // what ATLAS actually holds for the document.
+  // what ATOS actually holds for the document.
   async function handleDownload(id: string, fileName: string) {
     if (!programId) return;
     setBusyId(id);
