@@ -11074,7 +11074,10 @@ button, [role="button"] {
   align-items: center;
   justify-content: center;
   margin: 2px auto 0;
-  color: var(--v3-text-secondary);
+  /* The rail is a dark sidebar in both themes, so use a fixed light tone here
+     (matching the rail's nav icons) rather than a theme-flipping text token —
+     the latter renders dark-on-dark and illegible under the light theme. */
+  color: rgba(255, 255, 255, 0.8);
 }
 .v3-command-rail:not(:hover):not(:focus-within):not(.is-pinned) .v3-command-rail-health-heading {
   display: none;
