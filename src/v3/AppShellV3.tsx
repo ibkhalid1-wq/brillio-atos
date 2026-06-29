@@ -2844,20 +2844,6 @@ export default function AppShellV3() {
     pushV3Toast("Artifact saved. Your version will be used on the next agent run.", { tone: "success", duration: 3000 });
   }, [activePhaseId, activeProgram, refreshPrograms, updateProgramData]);
 
-  const handleSelectGovernanceOption = useCallback(async (optionId: string) => {
-    if (!activeProgram) return;
-    const cloned = cloneRawProgram(activeProgram);
-    const current = cloned.inner.governanceModel;
-    if (!current || typeof current !== "object" || Array.isArray(current)) return;
-    const nextInner = {
-      ...cloned.inner,
-      governanceModel: { ...(current as Record<string, unknown>), selectedOptionId: optionId },
-    };
-    await updateProgramData(activeProgram.id, cloned.commit(nextInner), activeProgram.updatedAt);
-    await refreshPrograms();
-    pushV3Toast("Governance model selected. It's now the effective model — switch any time.", { tone: "success", duration: 3000 });
-  }, [activeProgram, refreshPrograms, updateProgramData]);
-
   const handleApproveArtifact = useCallback(async (phaseId: string, artifactId: string, agentId: string) => {
     if (!activeProgram) return;
     const cloned = cloneRawProgram(activeProgram);
@@ -3233,7 +3219,6 @@ export default function AppShellV3() {
                 onApproveAllArtifacts={handleApproveAllArtifacts}
                 onUnapproveArtifact={handleUnapproveArtifact}
                 onSaveInputs={handleSavePhaseInputs}
-                onSelectGovernanceOption={handleSelectGovernanceOption}
                 onSaveProgram={handleSaveProgramSnapshot}
                 onRevertProgram={handleRevertProgramSnapshot}
                 programSnapshots={programSnapshots}

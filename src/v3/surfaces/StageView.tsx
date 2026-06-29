@@ -21,7 +21,6 @@ import { resolveArtifactReview, resolveArtifactQualityScore } from "@/v3/lib/art
 import { getPhaseArtifactDefs, type PhaseArtifactDef } from "@/v3/lib/phaseArtifacts";
 import { getArtifactInputFields } from "@/v3/lib/phaseFlowEdges";
 import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
-import { resolveGovernanceSelection } from "@/v3/lib/governanceModel";
 import { getDynamicSchemaStore, canonicalArtifactId } from "@/v3/lib/dynamicSchema";
 import { getAgentMeta } from "@/v3/lib/agentMeta";
 import { runPreFlight } from "@/v3/lib/phaseInputPreFlight";
@@ -66,8 +65,6 @@ interface StageViewProps {
   onApproveAllArtifacts: (phaseId: string) => Promise<void>;
   onUnapproveArtifact: (phaseId: string, artifactId: string) => Promise<void>;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; clearReviewDefId?: string; staleDefId?: string }) => Promise<void>;
-  /** Choose the effective governance model from the AI-generated options (replace-but-re-selectable). */
-  onSelectGovernanceOption?: (optionId: string) => Promise<void> | void;
   onSaveProgram?: (label?: string, kind?: "manual" | "lock") => Promise<void>;
   onRevertProgram?: (snapshotId: string) => Promise<void>;
   programSnapshots?: Array<{ id: string; label: string; kind: string; createdAt: string }>;
@@ -433,7 +430,6 @@ export default function StageView({
   onApproveAllArtifacts,
   onUnapproveArtifact,
   onSaveInputs,
-  onSelectGovernanceOption,
   onSaveProgram,
   onRevertProgram,
   programSnapshots = [],
@@ -448,7 +444,6 @@ export default function StageView({
   const [approvingAll, setApprovingAll] = React.useState(false);
   const [downloadingArtifacts, setDownloadingArtifacts] = React.useState(false);
   const [lockConfirmOpen, setLockConfirmOpen] = React.useState(false);
-  const [selectingOptionId, setSelectingOptionId] = React.useState<string | null>(null);
   const [lockedModalOpen, setLockedModalOpen] = React.useState(false);
   const [changeRequestOpen, setChangeRequestOpen] = React.useState(false);
   const [previewArtifact, setPreviewArtifact] = React.useState<{ defId?: string; label: string; description?: string; content: string; score: number | null; statusTone: string } | null>(null);
@@ -1052,7 +1047,6 @@ export default function StageView({
   const capacityAssessment = source?.capacityAssessment && typeof source.capacityAssessment === "object" && !Array.isArray(source.capacityAssessment)
     ? source.capacityAssessment as { overallAdequacy?: string; adequacyScore?: number; recommendations?: string[]; roleGaps?: Array<{ role?: string; currentCount?: number; requiredCount?: number; gap?: number }> }
     : null;
-  const governanceSelection = useMemo(() => resolveGovernanceSelection(source?.governanceModel), [source?.governanceModel]);
   const vendorRiskAssessment = source?.vendorRiskAssessment && typeof source.vendorRiskAssessment === "object" && !Array.isArray(source.vendorRiskAssessment)
     ? source.vendorRiskAssessment as { vendorAssessments?: Array<{ vendorName?: string; riskScore?: number; dependencyCriticality?: string; recommendedAction?: string }> }
     : null;
@@ -1533,116 +1527,6 @@ export default function StageView({
           artifact elements in the side columns (always shown). */}
       <section className="v3-phase-col v3-phase-col--map" aria-hidden="true" />
 
-      {/* BELOW — other phase-relevant cards, stretched full-width and stacked */}
-      <div className="v3-phase-cards">
-        <div className="v3-zone-label">Phase insights</div>
-        <div className="v3-phase-cards-grid">
-          {activePhase.id === "discover" && discoveryGuide ? (
-            <div className="v3-card-sm v3-mini-card">
-              <div className="v3-card-title v3-mini-card-title">Discovery pack</div>
-              <div className="v3-mini-card-list">
-                <div>{Array.isArray((discoveryGuide.executiveInterviewGuide as { questions?: string[] } | undefined)?.questions) ? (discoveryGuide.executiveInterviewGuide as { questions: string[] }).questions.length : 0} executive interview prompts</div>
-                <div>{Array.isArray((discoveryGuide.operationalInterviewGuide as { questions?: string[] } | undefined)?.questions) ? (discoveryGuide.operationalInterviewGuide as { questions: string[] }).questions.length : 0} operational interview prompts</div>
-                <div>{Array.isArray((discoveryGuide.documentRequestList as string[] | undefined)) ? (discoveryGuide.documentRequestList as string[]).length : 0} requested documents</div>
-              </div>
-            </div>
-          ) : null}
-
-          {activePhase.id === "build" && Array.isArray(sprintPlan?.sprints) && sprintPlan.sprints.length ? (
-            <div className="v3-card-sm v3-mini-card">
-              <div className="v3-card-title v3-mini-card-title">Sprint plan</div>
-              <div className="v3-mini-card-list">
-                {(sprintPlan.sprints as Array<{ sprintNumber?: number; goal?: string; startDate?: string; endDate?: string }>).slice(0, 3).map((sprint, index) => (
-                  <div key={index}>
-                    <strong>Sprint {sprint.sprintNumber || index + 1}:</strong> {sprint.goal || "Goal forming"} {sprint.startDate ? `(${formatShortDate(sprint.startDate)} → ${formatShortDate(sprint.endDate)})` : ""}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {["mobilise", "build"].includes(activePhase.id) && capacityAssessment ? (
-            <div className="v3-card-sm v3-mini-card">
-              <div className="v3-card-title v3-mini-card-title">Capacity</div>
-              <div className="v3-mini-card-list">
-                <span className={`v3-chip ${capacityAssessment.overallAdequacy === "sufficient" ? "green" : capacityAssessment.overallAdequacy === "at-risk" ? "amber" : "red"}`}>
-                  {capacityAssessment.overallAdequacy} {Math.round(Number(capacityAssessment.adequacyScore || 0))}%
-                </span>
-                {(capacityAssessment.roleGaps || []).slice(0, 3).map((gap, index) => (
-                  <div key={index}>
-                    {gap.role}: have {gap.currentCount || 0}, need {gap.requiredCount || 0}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {activePhase.id === "mobilise" && governanceSelection ? (
-            <div className="v3-card-sm v3-mini-card">
-              <div className="v3-card-title v3-mini-card-title">Governance model</div>
-              <div className="v3-mini-card-list">
-                {governanceSelection.options.map((option) => {
-                  const isSelected = option.id === governanceSelection.selectedId;
-                  const isRecommended = option.id === governanceSelection.recommendedId;
-                  return (
-                    <button
-                      key={option.id}
-                      type="button"
-                      className={`v3-governance-option${isSelected ? " selected" : ""}`}
-                      aria-pressed={isSelected}
-                      disabled={!onSelectGovernanceOption || isSelected || selectingOptionId !== null}
-                      onClick={async () => {
-                        if (!onSelectGovernanceOption || isSelected) return;
-                        setSelectingOptionId(option.id);
-                        try {
-                          await onSelectGovernanceOption(option.id);
-                        } finally {
-                          setSelectingOptionId(null);
-                        }
-                      }}
-                    >
-                      <span className="v3-governance-option-head">
-                        <span className={`v3-chip ${isSelected ? "green" : "muted"}`}>{isSelected ? "Selected" : selectingOptionId === option.id ? "Selecting…" : "Select"}</span>
-                        <strong>{option.name || option.id}</strong>
-                        {isRecommended ? <span className="v3-chip amber">Recommended</span> : null}
-                      </span>
-                      {option.summary ? <span className="v3-governance-option-summary">{option.summary}</span> : null}
-                      {option.bestFor ? <span className="v3-governance-option-bestfor">Best for: {option.bestFor}</span> : null}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
-
-          {["design", "govern"].includes(activePhase.id) && complianceCheck?.gaps?.length ? (
-            <div className="v3-card-sm v3-mini-card">
-              <div className="v3-card-title v3-mini-card-title">Compliance gaps</div>
-              <div className="v3-mini-card-list">
-                {complianceCheck.gaps.slice(0, 3).map((gap, index) => (
-                  <div key={index}>
-                    <span className={`v3-chip ${gap.severity === "critical" ? "red" : gap.severity === "high" ? "amber" : "muted"}`} style={{ marginRight: 6 }}>{gap.framework} {gap.articleId}</span>
-                    {gap.gap}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {["design", "build", "operate"].includes(activePhase.id) && vendorRiskAssessment?.vendorAssessments?.length ? (
-            <div className="v3-card-sm v3-mini-card">
-              <div className="v3-card-title v3-mini-card-title">Vendor risk</div>
-              <div className="v3-mini-card-list">
-                {vendorRiskAssessment.vendorAssessments.slice(0, 3).map((vendor, index) => (
-                  <div key={index}>
-                    <strong>{vendor.vendorName}</strong> · {Math.round(Number(vendor.riskScore || 0))}% risk · {vendor.dependencyCriticality}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </div>
 
       {/* RIGHT — artifacts card */}
       <section className="v3-phase-col v3-phase-col--artifacts" id="phase-artifacts-anchor" style={{ borderBottom: "none" }}>
