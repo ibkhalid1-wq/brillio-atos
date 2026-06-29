@@ -44,6 +44,12 @@ export type ArtifactGenerationReadiness = "ready" | "needs_input" | "blocked";
 export function canonicalArtifactId(phaseId: string, id: string): string {
   if (AGENT_META[id]) return id;
   if (AGENT_ID_ALIASES[id]) return AGENT_ID_ALIASES[id];
+  // Any planner-invented narrative variant ("current-state-narrative",
+  // "future-state-narrative", …) is the single program-level narrative agent.
+  // Folding them to "narrative" lets dynamicArtifactDefs drop them via its one
+  // exclusion, instead of each slipping through as an unresolvable phase
+  // deliverable whose Generate 400s with `Unknown agentId`.
+  if (/(^|-)narrative$/.test(id)) return "narrative";
   const resolve = (base: string): string | null =>
     AGENT_META[base] ? base : AGENT_ID_ALIASES[base] ?? null;
   // Try the canonical "<phaseId>-" prefix first, then fall back to stripping the

@@ -153,6 +153,20 @@ describe("dynamicArtifactDefs", () => {
     };
     expect(dynamicArtifactDefs("mobilise", store).map((d) => d.id)).toEqual(["risk"]);
   });
+
+  it("drops narrative variants (current-/future-state) the planner invents per phase", () => {
+    // These fold to the single program-level "narrative" agent; left in place they
+    // would render as deliverables whose Generate 400s with `Unknown agentId`.
+    const store: DynamicSchemaStore = {
+      artifacts: {
+        discover: [
+          { id: "current-state-narrative", label: "Current State Narrative", description: "" },
+          { id: "requirements-catalog", label: "Requirements Catalog", description: "" },
+        ],
+      },
+    };
+    expect(dynamicArtifactDefs("discover", store).map((d) => d.id)).toEqual(["requirements-catalog"]);
+  });
 });
 
 describe("dynamicFieldArtifacts", () => {
