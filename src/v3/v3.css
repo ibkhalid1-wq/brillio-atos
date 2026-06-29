@@ -7574,6 +7574,10 @@ button.v3-phase-metric:focus-visible {
 .v3-phase-inputs-body {
   padding: 14px;
   border-top: 1px solid var(--v3-border);
+  /* Long-content fields (e.g. wide <select> options) can exceed the inputs
+     column; scroll them horizontally instead of letting a field overflow its
+     column and push the flow-line input anchor past the artifact column. */
+  overflow-x: auto;
 }
 
 /* ── Inputs panel premium polish ─────────────────────────────────── */
@@ -7624,6 +7628,9 @@ button.v3-phase-metric:focus-visible {
 .v3-input-field {
   position: relative;
   padding-left: 10px;
+  /* Allow a field with wide intrinsic content to shrink within its column so it
+     can't overflow and break the input→artifact flow lines. */
+  min-width: 0;
 }
 .v3-input-field::before {
   content: "";
