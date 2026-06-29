@@ -97,12 +97,13 @@ export function getPhaseInputSchema(phaseId: string, store?: DynamicSchemaStore)
 }
 
 // ─── Canonical core-team roster resolution ────────────────────────────────────
-// The team roster is an ai-derived dynamic grid, never a hard-coded schema. Its
-// canonical address is the field id "coreTeamRoster" (label "Named individuals
-// per core team role"). Every consumer — the inputs panel reference, the
+// The team roster's canonical address is the field id "coreTeamRoster". Mobilise
+// now seeds it as a static grid so it is always present (the single source every
+// downstream owner/lead resolves against); the planner may still add columns, but
+// static wins on id collision. Every consumer — the inputs panel reference, the
 // document-import bridge, the capacity-assessor — resolves it through these
-// helpers so the roster has one shared address even though its columns are
-// proposed by the planner per programme.
+// helpers, which also still match a purely planner-proposed grid (by name+role
+// columns) for programmes generated before the static seed existed.
 
 /** The phase that owns the canonical roster. */
 export const ROSTER_PHASE_ID = "mobilise";

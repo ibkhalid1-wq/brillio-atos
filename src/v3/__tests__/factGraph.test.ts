@@ -123,7 +123,9 @@ describe("grid fields expand to one fact per row", () => {
   });
 
   it("scopes each row fact to the grid field's artifacts", () => {
-    expect(roster[0].impactedArtifacts).toEqual(["raci-matrix"]);
+    // The static coreTeamRoster seed wins over the planner's field (id collision)
+    // and declares usedByArtifacts for both artifacts it grounds.
+    expect(roster[0].impactedArtifacts).toEqual(["raci-matrix", "governance-model"]);
     expect(graph.stats.orphans).toBe(0);
   });
 

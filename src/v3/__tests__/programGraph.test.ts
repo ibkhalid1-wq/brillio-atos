@@ -83,8 +83,10 @@ describe("buildProgramGraph", () => {
 
     expect(graph.stats.byKind.fact).toBe(1);
     const grounds = graph.edges.filter((e) => e.type === "grounds");
-    expect(grounds).toHaveLength(1);
-    expect(grounds[0].to).toBe("artifact:raci-matrix");
+    // The static coreTeamRoster seed wins (id collision) and grounds into both the
+    // raci-matrix (present) and governance-model (added as a planned placeholder so
+    // the grounds edge never dangles).
+    expect(grounds.map((e) => e.to).sort()).toEqual(["artifact:governance-model", "artifact:raci-matrix"]);
   });
 
   it("creates a document node with an extracted_to edge for imported facts", () => {

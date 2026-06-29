@@ -53,12 +53,12 @@ describe("derivePhaseInputQuality", () => {
   });
 
   it("returns null for a dynamic-only phase — no static schema, so no leaked KPI/workstream fields", () => {
-    // Strategy and Design carry static input schemas; the remaining phases are
-    // dynamic-only, so their fields come from the programme's dynamicSchema store,
-    // not from here. With no static fields there is nothing to assess — and crucially
-    // no path for "Outcome KPIs"/"workstreams" to leak into a dynamic-only phase.
+    // Strategy, Mobilise, Discover and Design carry static input schemas; the
+    // remaining phases are dynamic-only, so their fields come from the programme's
+    // dynamicSchema store, not from here. With no static fields there is nothing to
+    // assess — and crucially no path for "Outcome KPIs"/"workstreams" to leak in.
     expect(derivePhaseInputQuality("build", {})).toBeNull();
-    expect(derivePhaseInputQuality("mobilise", { anything: "x" })).toBeNull();
+    expect(derivePhaseInputQuality("operate", { anything: "x" })).toBeNull();
   });
 
   it("scores a dynamic-only phase against its ai-derived fields when a store is supplied", () => {

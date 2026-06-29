@@ -47,11 +47,12 @@ function rows(json: string) {
 }
 
 describe("deriveRosterReviewField", () => {
-  it("returns null when the roster grid is not a declared field (no dynamic schema)", () => {
+  it("returns null when the target phase declares no roster grid", () => {
     const field = deriveRosterReviewField(
       [stakeholder({ name: "Jane Doe", role: "Delivery Lead" })],
       {},
-      undefined, // no store → mobilise has no static inputs, so no roster grid
+      undefined, // no store
+      "strategy", // Strategy has no roster grid (only Mobilise seeds the static roster)
     );
     expect(field).toBeNull();
   });

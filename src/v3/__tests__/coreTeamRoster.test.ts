@@ -4,10 +4,13 @@ import type { DynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import type { PhaseInputField } from "@/v3/lib/phaseInputSchema";
 
 /**
- * Canonical roster resolution. The team roster is an ai-derived dynamic grid,
- * never a hard-coded schema field. These helpers are the single shared address
+ * Canonical roster resolution. Mobilise seeds the roster as a static grid (id
+ * "coreTeamRoster"), so it is always present; the planner may add other fields
+ * but static wins on id collision. These helpers are the single shared address
  * every consumer (inputs-panel reference, document-import bridge,
- * capacity-assessor) uses to find it, so its planner-chosen columns are honoured.
+ * capacity-assessor) uses to find it. The pure findRosterGrid fallback still
+ * resolves a purely planner-proposed roster (by name+role columns) for any field
+ * list that lacks the canonical id.
  */
 
 const grid = (over: Partial<PhaseInputField>): PhaseInputField => ({
@@ -68,11 +71,14 @@ describe("findRosterGrid", () => {
 });
 
 describe("resolveRosterField", () => {
-  it("returns null without a store — Mobilise declares no static roster grid", () => {
-    expect(resolveRosterField(undefined)).toBeNull();
+  it("resolves the static coreTeamRoster grid without a store", () => {
+    const field = resolveRosterField(undefined)!;
+    expect(field.id).toBe("coreTeamRoster");
+    expect(field.type).toBe("grid");
+    expect(field.columns?.map((c) => c.key)).toEqual(expect.arrayContaining(["role", "name"]));
   });
 
-  it("resolves the ai-derived coreTeamRoster from the dynamic store", () => {
+  it("keeps the static roster columns when the planner re-proposes coreTeamRoster (static wins on id collision)", () => {
     const store: DynamicSchemaStore = {
       inputFields: {
         mobilise: [
@@ -91,6 +97,8 @@ describe("resolveRosterField", () => {
     };
     const field = resolveRosterField(store)!;
     expect(field.id).toBe("coreTeamRoster");
-    expect(field.columns?.map((c) => c.key)).toEqual(["role", "name"]);
+    // The static seed wins, so its richer column set (incl. org/allocation) is kept,
+    // not the planner's two-column proposal.
+    expect(field.columns?.map((c) => c.key)).toEqual(["role", "name", "org", "allocation"]);
   });
 });

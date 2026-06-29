@@ -1,6 +1,6 @@
 import { derivePhaseFlowEdges, getArtifactInputFields, getFillableArtifactInputFields } from "@/v3/lib/phaseFlowEdges";
 import { getPhaseArtifactIds } from "@/v3/lib/phaseArtifacts";
-import { PHASE_INPUT_SCHEMAS } from "@/v3/lib/phaseInputSchema";
+import { PHASE_INPUT_SCHEMAS, resolveRosterField } from "@/v3/lib/phaseInputSchema";
 
 // Strategy is the only static phase (a hand-declared field→artifact map +
 // methodology artifactInputFlow), so the static-target behaviour is asserted
@@ -35,8 +35,9 @@ describe("derivePhaseFlowEdges", () => {
 
   it("yields no edges for a dynamic-only phase or unknown phase without a store", () => {
     // A phase with no resolvable artifacts (no store, empty artifact set)
-    // produces nothing rather than a dangling edge.
-    expect(derivePhaseFlowEdges("mobilise", ["governanceModel"])).toEqual([]);
+    // produces nothing rather than a dangling edge. Build is purely dynamic — no
+    // static schema or flow — so without a store it has no artifacts to target.
+    expect(derivePhaseFlowEdges("build", ["someField"])).toEqual([]);
     expect(derivePhaseFlowEdges("unknown-phase", ["whatever"])).toEqual([]);
   });
 
@@ -88,12 +89,12 @@ describe("getArtifactInputFields", () => {
   });
 
   it("returns no fields for a dynamic phase with no store (nothing to wait on)", () => {
-    expect(getArtifactInputFields("mobilise", "governance-model")).toEqual([]);
+    expect(getArtifactInputFields("build", "test-plan")).toEqual([]);
   });
 
   it("reads declared fields from the dynamic schema store for a dynamic phase", () => {
-    const store = { artifactInputFlow: { mobilise: { "governance-model": ["sponsorTier", "raciOwner"] } } };
-    expect(new Set(getArtifactInputFields("mobilise", "governance-model", store))).toEqual(
+    const store = { artifactInputFlow: { build: { "test-plan": ["sponsorTier", "raciOwner"] } } };
+    expect(new Set(getArtifactInputFields("build", "test-plan", store))).toEqual(
       new Set(["sponsorTier", "raciOwner"]),
     );
   });
@@ -106,37 +107,37 @@ describe("getArtifactInputFields", () => {
 // returns only the grounding inputs that exist as fillable fields in the schema.
 describe("getFillableArtifactInputFields", () => {
   it("drops grounding inputs that have no fillable field in the phase schema", () => {
-    // Mobilise is a purely dynamic phase (no static schema/flow), so the only
+    // Build is a purely dynamic phase (no static schema/flow), so the only
     // grounding comes from the store. The planner wired the artifact to two
     // owner/lead fields (roster-resolved, dropped from the rendered inputs) plus
     // one genuinely typed input.
     const store = {
       inputFields: {
-        mobilise: [
-          { id: "governanceCadence", label: "Governance cadence", type: "textarea" as const, required: true },
+        build: [
+          { id: "buildCadence", label: "Build cadence", type: "textarea" as const, required: true },
         ],
       },
       artifacts: {
-        mobilise: [{ id: "governance-model", label: "Governance Model", description: "" }],
+        build: [{ id: "test-plan", label: "Test Plan", description: "" }],
       },
       artifactInputFlow: {
-        mobilise: { "governance-model": ["criticalPathOwner", "qaLead", "governanceCadence"] },
+        build: { "test-plan": ["criticalPathOwner", "qaLead", "buildCadence"] },
       },
     };
     // Raw declared set includes the roster-resolved owner/lead fields…
-    expect(new Set(getArtifactInputFields("mobilise", "governance-model", store))).toEqual(
-      new Set(["criticalPathOwner", "qaLead", "governanceCadence"]),
+    expect(new Set(getArtifactInputFields("build", "test-plan", store))).toEqual(
+      new Set(["criticalPathOwner", "qaLead", "buildCadence"]),
     );
     // …but only the genuinely fillable field gates generation.
-    expect(getFillableArtifactInputFields("mobilise", "governance-model", store)).toEqual(["governanceCadence"]);
+    expect(getFillableArtifactInputFields("build", "test-plan", store)).toEqual(["buildCadence"]);
   });
 
   it("returns nothing to gate when every grounding input is roster-resolved", () => {
     const store = {
-      artifacts: { mobilise: [{ id: "governance-model", label: "Governance Model", description: "" }] },
-      artifactInputFlow: { mobilise: { "governance-model": ["criticalPathOwner", "qaLead"] } },
+      artifacts: { build: [{ id: "test-plan", label: "Test Plan", description: "" }] },
+      artifactInputFlow: { build: { "test-plan": ["criticalPathOwner", "qaLead"] } },
     };
-    expect(getFillableArtifactInputFields("mobilise", "governance-model", store)).toEqual([]);
+    expect(getFillableArtifactInputFields("build", "test-plan", store)).toEqual([]);
   });
 
   it("keeps real static fields (parity with the declared set on a static phase)", () => {
@@ -268,6 +269,60 @@ describe("design static inputs → solution-design artifacts (semantic flow)", (
   it("surfaces the input as feeding the artifact in getArtifactInputFields", () => {
     expect(getArtifactInputFields("design", "architecture-decisions", designStore)).toEqual(
       expect.arrayContaining(["targetArchitecture", "keyDesignDecisions"]),
+    );
+  });
+});
+
+// Mobilise now carries a static input schema: the canonical coreTeamRoster grid
+// (the single source every downstream owner/lead resolves against) and the
+// governance cadence. Both ground the RACI and governance-model artifacts via a
+// static artifactInputFlow, so generation never waits on the planner.
+describe("mobilise static roster + governance schema", () => {
+  it("declares the roster as grounding for raci-matrix and governance-model without a store", () => {
+    expect(getArtifactInputFields("mobilise", "raci-matrix")).toEqual(["coreTeamRoster"]);
+    expect(new Set(getArtifactInputFields("mobilise", "governance-model"))).toEqual(
+      new Set(["coreTeamRoster", "governanceCadence"]),
+    );
+  });
+
+  it("resolves the static coreTeamRoster grid as the roster field without a store", () => {
+    const roster = resolveRosterField();
+    expect(roster?.id).toBe("coreTeamRoster");
+    expect(roster?.type).toBe("grid");
+    // The grid carries both a name and a role column so findRosterGrid's shape
+    // fallback also resolves it on programmes generated before the static seed.
+    const keys = (roster?.columns ?? []).map((c) => c.key);
+    expect(keys).toEqual(expect.arrayContaining(["role", "name"]));
+  });
+
+  it("keeps both static inputs fillable (they are real typed fields, not roster-resolved owners)", () => {
+    expect(new Set(getFillableArtifactInputFields("mobilise", "governance-model"))).toEqual(
+      new Set(["coreTeamRoster", "governanceCadence"]),
+    );
+  });
+
+  it("draws no flow edge until the artifacts actually render (dynamic artifact set)", () => {
+    // The grounding is declared statically, but the flow edge still needs the
+    // artifact to exist in the phase — without a store there is no valid target.
+    expect(derivePhaseFlowEdges("mobilise", ["coreTeamRoster", "governanceCadence"])).toEqual([]);
+  });
+
+  it("wires the static inputs to the artifacts once they render", () => {
+    const store = {
+      artifacts: {
+        mobilise: [
+          { id: "raci-matrix", label: "RACI Matrix", description: "" },
+          { id: "governance-model", label: "Governance Model", description: "" },
+        ],
+      },
+    };
+    const edges = derivePhaseFlowEdges("mobilise", ["coreTeamRoster", "governanceCadence"], store);
+    expect(edges).toEqual(
+      expect.arrayContaining([
+        { from: "coreTeamRoster", to: "raci-matrix" },
+        { from: "coreTeamRoster", to: "governance-model" },
+        { from: "governanceCadence", to: "governance-model" },
+      ]),
     );
   });
 });

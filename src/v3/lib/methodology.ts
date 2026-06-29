@@ -215,8 +215,15 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       id: "mobilise",
       displayName: "Mobilise",
       description: "Stand up the team, governance model, and working environment.",
-      // Dynamic-only: artifacts + inputs are planned from Strategy's approved artifacts.
       requiredArtifacts: [],
+      // Mobilise seeds the two facts every downstream phase depends on: the core-team
+      // roster (the single source every later "Named <role>" owner resolves against,
+      // so the roster-owner guardrail has something to point at) and the governance
+      // cadence its governance-model / RACI agents synthesise. Seeding them as static
+      // inputs means owner resolution and RACI/governance generation never wait on the
+      // planner remembering to ask. dynamicSchema stays true: the planner may still ADD
+      // programme-specific fields; static wins on id collision, so the canonical
+      // `coreTeamRoster` grid (resolved by findRosterGrid) is always present.
       dynamicSchema: true,
       mandatoryExitCriteriaTemplates: [
         "Core team roles filled with named individuals",
@@ -226,6 +233,44 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       entryGuards: ["Strategy gate approved"],
       recommendedAgents: ["governance-model", "raci-matrix", "narrative", "stakeholder"],
       typicalDurationWeeks: { min: 2, max: 4 },
+      inputFields: [
+        {
+          // Canonical roster address (id `coreTeamRoster`, resolved by findRosterGrid):
+          // every later phase's owner/lead fields resolve their named individual from
+          // this grid rather than being re-typed. Required so the roster-owner guardrail
+          // always has a populated source.
+          id: "coreTeamRoster",
+          label: "Core team roster",
+          type: "grid",
+          required: true,
+          hint: "Name the individual filling each core team role — this is the single source every downstream owner/lead resolves against.",
+          // usedByArtifacts mirrors the artifactInputFlow targets below; the fact
+          // graph grounds each roster row into these artifacts via field.usedByArtifacts.
+          usedByArtifacts: ["raci-matrix", "governance-model"],
+          columns: [
+            { key: "role", label: "Core team role", type: "text" },
+            { key: "name", label: "Named individual", type: "text" },
+            { key: "org", label: "Organisation / team", type: "text" },
+            { key: "allocation", label: "Allocation %", type: "text", width: 120 },
+          ],
+        },
+        {
+          id: "governanceCadence",
+          label: "Governance cadence & decision bodies",
+          type: "textarea",
+          required: true,
+          usedByArtifacts: ["governance-model"],
+          placeholder: "Decision forums, who sits on them, how often they meet, and the escalation path",
+          hint: "e.g. Weekly delivery stand-up, fortnightly SteerCo (sponsor + workstream leads), exceptions escalate to the sponsor within 48h",
+        },
+      ],
+      artifactInputFlow: {
+        // RACI maps each activity to an accountable role, so it is grounded entirely by
+        // the roster. The governance model synthesises decision bodies and escalation
+        // from the cadence plus who staffs the forums (the roster).
+        "raci-matrix": ["coreTeamRoster"],
+        "governance-model": ["coreTeamRoster", "governanceCadence"],
+      },
     },
     {
       id: "discover",
