@@ -4,6 +4,7 @@ import { getRiskTrend } from "@/lib/adamGateRisk";
 import type { AgentRun } from "@/lib/adamSync";
 import type { ExitCriterion, GateReview, ProgramSummary } from "@/new/types";
 import ArtifactEditor from "@/v3/components/ArtifactEditor";
+import ArtifactCard, { type ArtifactCardModel, type ArtifactCardHandlers } from "@/v3/components/ArtifactCard";
 import DiscoveryPackPanel, { type DiscoveryPack } from "@/v3/components/DiscoveryPackPanel";
 import PhaseInputsPanel, { type FieldAssistRequest } from "@/v3/components/PhaseInputsPanel";
 import PhaseFlowOverlay from "@/v3/components/PhaseFlowOverlay";
@@ -1873,104 +1874,46 @@ export default function StageView({
               // "Not yet approved" is an always-present informational line, not an
               // actionable fix — exclude it so an at-bar artifact shows no false count.
               const recommendationCount = qualityIssues.filter((issue) => issue.title !== "Not yet approved").length;
-              return (
-                <React.Fragment key={def.id}>
-                {index > 0 ? (
-                  <div className="v3-artifact-flow-arrow" aria-hidden="true" title="Generate artifacts in this order">↓</div>
-                ) : null}
-                <div className="v3-artifact-row" data-io-anchor={`artifact:${def.id}`} data-tone={statusTone} data-present={present ? "true" : "false"}>
-                  <div className="v3-artifact-row-head">
-                    <span className="v3-artifact-row-label">{def.label}</span>
-                    <span className={`v3-chip ${statusTone}`} style={{ flex: "0 0 auto" }}>
-                      {statusLabel}{present && displayScore != null ? ` · ${displayScore}%` : ""}
-                    </span>
-                  </div>
-                  {present && displayScore != null ? (
-                    <div className="v3-artifact-quality-meter" title={`Quality ${displayScore}%`}>
-                      <span className={`v3-artifact-quality-fill ${displayScore >= 90 ? "is-high" : displayScore >= 70 ? "is-mid" : "is-low"}`} style={{ width: `${Math.max(0, Math.min(100, displayScore))}%` }} />
-                    </div>
-                  ) : null}
-                  <p className="v3-artifact-row-desc">{summary}</p>
-                  {/* The input→artifact relationship and any missing-input gaps are
-                      already conveyed by the flow overlay, the artifact status chip,
-                      and the inputs panel, so no per-card "add inputs" nudge is needed.
-                      The Generate tooltip still surfaces preflight.missingFields. */}
-                  <div className="v3-artifact-row-actions">
-                  {present && previewContent ? (
-                    def.id === "strategic-roadmap" ? (
-                      <button
-                        type="button"
-                        className="v3-button ghost v3-button-inline-xs"
-                        onClick={() => onOpenMoreView("roadmap")}
-                        title="Open the Strategic Roadmap"
-                        aria-label="Open the Strategic Roadmap"
-                      >
-                        Open roadmap →
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="v3-button ghost v3-button-inline-xs"
-                        onClick={() => setPreviewArtifact({ defId: def.id, label: def.label, description: def.description, content: previewContent, score: displayScore, statusTone })}
-                        title={`Preview ${def.label}`}
-                        aria-label={`Preview ${def.label}`}
-                      >
-                        ▾ Preview
-                      </button>
-                    )
-                  ) : null}
-                  {present && state !== "approved" && !gateApproved ? (
-                    <button
-                      type="button"
-                      className="v3-button ghost v3-button-inline-xs"
-                      onClick={() => { setApplyError(null); setImprovementsApplied(false); setQualityArtifact({ label: def.label, defId: def.id, score: displayScore, issues: qualityIssues, phaseId: activePhase.id, fields: qualityFields, improvements: (review?.improvements ?? []).filter((s) => !!s && s.trim()) }); }}
-                      disabled={recommendationCount === 0}
-                      title={recommendationCount === 0
-                        ? `No outstanding quality suggestions for ${def.label} — regenerate or re-review to surface new ones`
-                        : `Review and improve the quality of ${def.label} — ${recommendationCount} recommendation${recommendationCount === 1 ? "" : "s"}`}
-                      aria-label={`Improvement recommendations for ${def.label}`}
-                    >
-                      ✦ Recommendations{recommendationCount ? <span className="v3-button-icon-badge">{recommendationCount}</span> : null}
-                    </button>
-                  ) : null}
-                  {state !== "approved" ? (
-                    <button
-                      type="button"
-                      className={`v3-button ${present ? "ghost" : "primary"} v3-button-inline-xs v3-artifact-regen`}
-                      onClick={() => onRunAgent(generatorAgentId, activePhase.id, regenGuidance)}
-                      disabled={agentButtonDisabled(generatorAgentId) || flowedInputsIncomplete || generationLocked}
-                      title={gateApproved
-                        ? `${activePhase.displayName ?? "This phase"} is locked — unlock it from Settings to regenerate ${def.label}.`
-                        : generationLocked
-                        ? `Produce the earlier artifact${activePhase.displayName ? ` in ${activePhase.displayName}` : ""} to above 89% quality before generating ${def.label} — artifacts are built in order.`
-                        : flowedInputsIncomplete
-                        ? `Provide these inputs before generating ${def.label}:\n${generateGuidance}`
-                        : regenGuidance
-                        ? `Regenerate ${def.label} — applies ${suggestionCount} quality suggestion${suggestionCount === 1 ? "" : "s"} directly in the new draft`
-                        : inputsIncomplete
-                        ? `${present ? "Regenerate" : "Generate"} ${def.label} — strengthen these inputs to lift quality:\n${generateGuidance || preflight.missingFields.join(", ")}`
-                        : present ? `Regenerate ${def.label}` : `Generate ${def.label}`}
-                    >
-                      {agentButtonContent(generatorAgentId, generationLocked ? "🔒 Locked" : present ? "↻ Regenerate" : "Generate")}
-                    </button>
-                  ) : null}
-                  {/* Per-artifact approve is replaced by the single "Approve all
-                      artifacts" action in the card header, shown once every required
-                      artifact has been generated. */}
-                  {present && artifactId && state === "approved" && !lockedPhaseIds.has(activePhase.id) ? (
-                    <button
-                      type="button"
-                      className="v3-button ghost v3-button-inline-xs v3-artifact-unlock"
-                      onClick={() => { void onUnapproveArtifact(activePhase.id, artifactId); }}
-                      title={`Unlock ${def.label} to edit, regenerate, or re-review it`}
-                    >
-                      ⤺ Unlock
-                    </button>
-                  ) : null}
-                  </div>
-                </div>
-                </React.Fragment>
-              );
+              const generateTitle = gateApproved
+                ? `${activePhase.displayName ?? "This phase"} is locked — unlock it from Settings to regenerate ${def.label}.`
+                : generationLocked
+                ? `Produce the earlier artifact${activePhase.displayName ? ` in ${activePhase.displayName}` : ""} to above 89% quality before generating ${def.label} — artifacts are built in order.`
+                : flowedInputsIncomplete
+                ? `Provide these inputs before generating ${def.label}:\n${generateGuidance}`
+                : regenGuidance
+                ? `Regenerate ${def.label} — applies ${suggestionCount} quality suggestion${suggestionCount === 1 ? "" : "s"} directly in the new draft`
+                : inputsIncomplete
+                ? `${present ? "Regenerate" : "Generate"} ${def.label} — strengthen these inputs to lift quality:\n${generateGuidance || preflight.missingFields.join(", ")}`
+                : present ? `Regenerate ${def.label}` : `Generate ${def.label}`;
+              const cardModel: ArtifactCardModel = {
+                index,
+                defId: def.id,
+                label: def.label,
+                isStrategicRoadmap: def.id === "strategic-roadmap",
+                statusLabel,
+                statusTone,
+                displayScore,
+                present,
+                summary,
+                state,
+                canPreview: !!(present && previewContent),
+                showRecommendations: present && state !== "approved" && !gateApproved,
+                recommendationCount,
+                showGenerate: state !== "approved",
+                generateDisabled: agentButtonDisabled(generatorAgentId) || flowedInputsIncomplete || generationLocked,
+                generateTitle,
+                generateContent: agentButtonContent(generatorAgentId, generationLocked ? "🔒 Locked" : present ? "↻ Regenerate" : "Generate"),
+                showUnlock: !!(present && artifactId && state === "approved" && !lockedPhaseIds.has(activePhase.id)),
+                unlockTitle: `Unlock ${def.label} to edit, regenerate, or re-review it`,
+              };
+              const cardHandlers: ArtifactCardHandlers = {
+                onPreview: () => setPreviewArtifact({ defId: def.id, label: def.label, description: def.description, content: previewContent ?? "", score: displayScore, statusTone }),
+                onOpenRoadmap: () => onOpenMoreView("roadmap"),
+                onRecommend: () => { setApplyError(null); setImprovementsApplied(false); setQualityArtifact({ label: def.label, defId: def.id, score: displayScore, issues: qualityIssues, phaseId: activePhase.id, fields: qualityFields, improvements: (review?.improvements ?? []).filter((s) => !!s && s.trim()) }); },
+                onGenerate: () => onRunAgent(generatorAgentId, activePhase.id, regenGuidance),
+                onUnlock: () => { if (artifactId) void onUnapproveArtifact(activePhase.id, artifactId); },
+              };
+              return <ArtifactCard key={def.id} model={cardModel} handlers={cardHandlers} />;
             })}
         </div>
         {!artifactPreviews?.narrative && !artifactPreviews?.deck && !expandedOutput && (activePhase?.id === "strategy" || activePhase?.id === "build") ? (
