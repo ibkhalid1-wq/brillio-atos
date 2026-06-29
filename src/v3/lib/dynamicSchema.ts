@@ -23,7 +23,7 @@
  * overlay, and the staleness model with no parallel wiring.
  */
 import { ATOS_STANDARD, type GridColumn, type PhaseInputField } from "@/v3/lib/methodology";
-import { AGENT_META, AGENT_ID_ALIASES } from "@/v3/lib/agentMeta";
+import { AGENT_META, AGENT_ID_ALIASES, RETIRED_AGENT_IDS } from "@/v3/lib/agentMeta";
 
 export type ArtifactGenerationReadiness = "ready" | "needs_input" | "blocked";
 
@@ -81,10 +81,15 @@ export function canonicalArtifactId(phaseId: string, id: string): string {
  * routing to the phase id is what makes their Generate work. Callers that target
  * the phase agent should also tell it which single artifact to emit (by id/label)
  * so the generic output lands in the right ledger slot.
+ *
+ * A retired agent (RETIRED_AGENT_IDS) is treated as if it had no generator: its
+ * artifact (e.g. a planner-emitted "critical-path") routes to the generic phase
+ * agent instead. Otherwise the Generate button would dispatch a dead agent id
+ * that the run-agent guard silently drops, making the click a no-op.
  */
 export function artifactGeneratorAgentId(phaseId: string, artifactId: string): string {
   const canonical = canonicalArtifactId(phaseId, artifactId);
-  return AGENT_META[canonical] ? canonical : phaseId;
+  return AGENT_META[canonical] && !RETIRED_AGENT_IDS.has(canonical) ? canonical : phaseId;
 }
 
 export interface DynamicArtifactDef {

@@ -52,6 +52,26 @@ export const AGENT_META: Record<string, AgentMeta> = {
 };
 
 /**
+ * Retired agent families. These ids still appear in AGENT_META (so historical
+ * runs and stored artifacts keep their labels/icons) but their generator is gone:
+ * the run-agent dispatch chokepoint short-circuits them to a no-op. This is the
+ * single source of truth — `artifactGeneratorAgentId` consults it so a planner
+ * artifact whose canonical id is retired routes to the generic phase agent
+ * instead of a dead one, and AppShellV3's dispatch guard imports it rather than
+ * re-declaring the list. Keep the hand-maintained status-grid groups in
+ * IntelligenceView in lockstep (they exclude these by omission).
+ */
+export const RETIRED_AGENT_IDS = new Set<string>([
+  "critical-path",
+  "retro",
+  "pattern-extract",
+  "pattern-query",
+  "twin-sync",
+  "benchmark-comparator",
+  "closure",
+]);
+
+/**
  * Internal/support artifacts: analysis and assist outputs produced by support
  * agents (capacity, compliance, vendor risk, sprint plan, etc.). They are stored
  * as phase-artifact stubs by `applyProgramSupportArtifact` in the run-agent edge

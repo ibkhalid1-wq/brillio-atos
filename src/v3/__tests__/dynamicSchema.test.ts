@@ -199,6 +199,13 @@ describe("artifactGeneratorAgentId", () => {
   it("canonicalizes a phase-prefixed named deliverable before routing", () => {
     expect(artifactGeneratorAgentId("design", "design-raci-matrix")).toBe("raci-matrix");
   });
+
+  it("routes a retired-agent artifact to the phase agent, not the dead agent", () => {
+    // critical-path still has an AGENT_META entry (so historical runs keep their
+    // label), but its generator is retired. Routing to the retired id would make
+    // Generate a silent no-op at the dispatch guard; it must run the phase agent.
+    expect(artifactGeneratorAgentId("design", "critical-path")).toBe("design");
+  });
 });
 
 describe("dynamicFieldArtifacts", () => {

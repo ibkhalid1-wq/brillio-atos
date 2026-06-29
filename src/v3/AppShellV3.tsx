@@ -55,7 +55,7 @@ import { sanitizeMarkdown } from "@/lib/sanitize";
 import { changedInputFields, relatedArtifactsToStale, fieldsFeedingApprovedArtifacts } from "@/v3/lib/artifactStaleness";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { hasSubstantiveProgramData } from "@/v3/lib/programDataGuard";
-import { AGENT_ID_ALIASES } from "@/v3/lib/agentMeta";
+import { AGENT_ID_ALIASES, RETIRED_AGENT_IDS } from "@/v3/lib/agentMeta";
 import { useRelativeTimeTick } from "@/lib/useRelativeTimeTick";
 import { useAgentCascadeToasts } from "@/v3/hooks/useAgentCascadeToasts";
 import { useCriticalEventAlerts } from "@/v3/hooks/useCriticalEventAlerts";
@@ -126,19 +126,6 @@ function markProactiveFired(key: string): void {
     /* storage unavailable — fall back to in-session behaviour */
   }
 }
-
-// Retired agent families. runProgramAgent short-circuits these ids at the single
-// dispatch chokepoint so any residual auto-trigger, cascade hop, or stale call
-// site becomes a no-op without unpicking the woven trigger logic.
-const DISABLED_AGENTS = new Set<string>([
-  "critical-path",
-  "retro",
-  "pattern-extract",
-  "pattern-query",
-  "twin-sync",
-  "benchmark-comparator",
-  "closure",
-]);
 
 const MORE_ROUTE_MAP: Record<string, V3MoreView> = {
   documents: "documents",
@@ -1361,7 +1348,7 @@ export default function AppShellV3() {
     // sync, benchmark comparison) were removed from the product surface. The
     // chokepoint guard short-circuits any residual auto-trigger or stale call
     // site rather than threading the removal through every woven cascade.
-    if (DISABLED_AGENTS.has(agentId)) return;
+    if (RETIRED_AGENT_IDS.has(agentId)) return;
 
     // Guard: not signed in — agents require an authenticated session
     if (!authed) {

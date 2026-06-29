@@ -24,7 +24,7 @@ function prettyAgent(agentId: string): string {
 
 // ─── Autonomous agents shown in the status grid ───────────────────────────────
 
-// NOTE: keep this in lockstep with DISABLED_AGENTS in AppShellV3 — retired agent
+// NOTE: keep this in lockstep with RETIRED_AGENT_IDS in @/v3/lib/agentMeta — retired agent
 // families (critical-path, retro, pattern-extract, pattern-query, twin-sync,
 // benchmark-comparator, closure) are removed from the product surface, so they must
 // not appear on the status grid as perpetually "pending" cards that can never run.
