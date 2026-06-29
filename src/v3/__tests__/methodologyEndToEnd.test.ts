@@ -1,5 +1,6 @@
 import { normalizeProgram } from "@/new/lib/programData";
 import { ATOS_STANDARD } from "@/v3/lib/methodology";
+import { RETIRED_AGENT_IDS } from "@/v3/lib/agentMeta";
 import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
 import { getMandatoryCriteria } from "@/v3/lib/exitCriteriaLibrary";
 import { computePhaseReadiness, getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
@@ -159,4 +160,19 @@ describe("ATOS sample use case — gate progression unlocks phases in order", ()
     const finalReadiness = computePhaseReadiness(program, "valuerealize");
     expect(finalReadiness.canApproveGate).toBe(true);
   });
+});
+
+describe("ATOS methodology — no phase recommends a retired agent", () => {
+  // recommendedAgents is handed to the phase-input-planner as the set of agents
+  // the phase will run, so it must steer towards live generators only. A retired
+  // id here would plan inputs for an agent whose dispatch is a guarded no-op —
+  // the same dead-agent class of bug as the Critical Path Generate button.
+  it.each(ATOS_STANDARD.phases.map((p) => p.id))(
+    "phase %s recommends only live agents",
+    (phaseId) => {
+      const phase = ATOS_STANDARD.phases.find((p) => p.id === phaseId)!;
+      const retired = phase.recommendedAgents.filter((id) => RETIRED_AGENT_IDS.has(id));
+      expect(retired).toEqual([]);
+    },
+  );
 });

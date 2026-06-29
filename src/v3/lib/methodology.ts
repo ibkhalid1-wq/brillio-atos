@@ -310,7 +310,7 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         "Critical path established",
       ],
       entryGuards: ["Discover gate approved"],
-      recommendedAgents: ["future-state-design", "target-operating-model", "solution-architecture", "narrative", "critical-path", "change-impact"],
+      recommendedAgents: ["future-state-design", "target-operating-model", "solution-architecture", "narrative", "change-impact"],
       typicalDurationWeeks: { min: 4, max: 10 },
       inputFields: [
         { id: "solutionApproach", label: "Solution approach & design principles", type: "textarea", required: true, placeholder: "Overall approach and the guiding principles the design must honour", hint: "e.g. API-first, reuse the existing identity platform, buy-over-build for non-differentiating capabilities" },
@@ -409,7 +409,7 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         "Programme closure approved by sponsor",
       ],
       entryGuards: ["Optimize gate approved"],
-      recommendedAgents: ["narrative", "closure", "benefits-tracker"],
+      recommendedAgents: ["narrative", "benefits-tracker"],
       typicalDurationWeeks: { min: 2, max: 8 },
     },
   ],
