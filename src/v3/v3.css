@@ -11074,7 +11074,7 @@ button, [role="button"] {
   align-items: center;
   justify-content: center;
   margin: 2px auto 0;
-  color: var(--v3-text-muted);
+  color: var(--v3-text-secondary);
 }
 .v3-command-rail:not(:hover):not(:focus-within):not(.is-pinned) .v3-command-rail-health-heading {
   display: none;
