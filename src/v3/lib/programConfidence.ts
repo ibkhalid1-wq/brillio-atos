@@ -88,7 +88,7 @@ export function deriveProgramConfidence(
       : {};
   const activeInputs = phaseId ? phaseInputs[phaseId] ?? {} : {};
   const inputQuality = phaseId
-    ? derivePhaseInputQuality(phaseId, activeInputs, getDynamicSchemaStore(rawData))
+    ? derivePhaseInputQuality(phaseId, activeInputs, getDynamicSchemaStore(rawData), rawData)
     : null;
   const inputCompleteness = inputQuality
     ? inputQuality.overallScore

@@ -978,7 +978,7 @@ export default function StageView({
     const inputs = liveInputs && liveInputs.phaseId === activePhase?.id
       ? { ...persisted, ...liveInputs.inputs }
       : persisted;
-    return derivePhaseInputQuality(activePhase?.id, inputs, dynamicStore);
+    return derivePhaseInputQuality(activePhase?.id, inputs, dynamicStore, source);
   }, [activePhase?.id, source, liveInputs, dynamicStore]);
   const contradictions = Array.isArray(source?.contradictions)
     ? source.contradictions as Array<{ severity: string; description: string }>

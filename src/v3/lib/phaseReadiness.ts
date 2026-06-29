@@ -216,7 +216,7 @@ export function computePhaseReadiness(
   // it here keeps the status rings (inner = input) consistent with the metrics.
   // Dynamic-only phases declare no static schema (it returns null); there we fall
   // back to counting the stored dynamic fields so produced inputs still register.
-  const schemaInputQuality = derivePhaseInputQuality(phaseId, phaseInputData, dynamicStore);
+  const schemaInputQuality = derivePhaseInputQuality(phaseId, phaseInputData, dynamicStore, source);
   const inputScore = schemaInputQuality
     ? schemaInputQuality.overallScore
     : hasStructuredInputs

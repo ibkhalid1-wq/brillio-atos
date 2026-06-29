@@ -16,6 +16,38 @@
 import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
 import type { DynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { parseRows, filledRowCount } from "@/v3/components/StructuredGrid";
+import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
+import { resolveArtifactReview } from "@/v3/lib/artifactReview";
+
+// Each outstanding artifact-review improvement recommendation costs this many
+// points off a perfect input-quality score. A reviewed artifact with no
+// recommendations implies its grounding inputs were complete (100); the score
+// degrades as the average recommendation count per reviewed artifact rises.
+const RECOMMENDATION_PENALTY = 10;
+
+// Input quality derived from the artifact-review improvement recommendations:
+// the AI review for each produced artifact lists what to improve, which is direct
+// evidence of how well the phase inputs grounded that artifact. Averaged across
+// the phase's reviewed artifacts so the score is independent of artifact count.
+// Returns null when no artifact in the phase has been reviewed yet — there is no
+// recommendation signal to score, so the caller keeps the schema-based score.
+function deriveRecommendationInputScore(
+  phaseId: string,
+  source: Record<string, unknown>,
+  store?: DynamicSchemaStore,
+): number | null {
+  let reviewed = 0;
+  let totalRecommendations = 0;
+  for (const def of getPhaseArtifactDefs(phaseId, store)) {
+    const review = resolveArtifactReview(source, def.id, phaseId);
+    if (!review) continue;
+    reviewed += 1;
+    totalRecommendations += review.improvements.length;
+  }
+  if (reviewed === 0) return null;
+  const avgRecommendations = totalRecommendations / reviewed;
+  return Math.max(0, Math.round(100 - avgRecommendations * RECOMMENDATION_PENALTY));
+}
 
 export interface PhaseInputQuality {
   overallScore: number;
@@ -64,6 +96,7 @@ export function derivePhaseInputQuality(
   phaseId: string | null | undefined,
   phaseInputs: Record<string, unknown> | null | undefined,
   store?: DynamicSchemaStore,
+  source?: Record<string, unknown> | null,
 ): PhaseInputQuality | null {
   if (!phaseId) return null;
 
@@ -105,11 +138,18 @@ export function derivePhaseInputQuality(
     : 0;
   const depth = presentScalars.length ? Math.min(1, avgWords / 12) : completeness;
 
-  const overallScore = Math.round((completeness * 0.8 + depth * 0.2) * 100);
+  // Schema-grounded score from field completeness + depth. Used as the baseline
+  // and as the fallback before any artifact has been reviewed.
+  const schemaScore = Math.round((completeness * 0.8 + depth * 0.2) * 100);
+  // Once artifacts exist and carry review recommendations, those recommendations
+  // are the truer measure of input quality — they say, in the AI's own words,
+  // what the inputs failed to ground. Prefer them when available.
+  const recommendationScore = source ? deriveRecommendationInputScore(phaseId, source, store) : null;
+  const overallScore = recommendationScore ?? schemaScore;
   const missingCritical = items.filter((item) => !item.present).map((item) => item.label);
 
   const verdict: PhaseInputQuality["verdict"] =
-    missingCritical.length === 0 ? "sufficient" : overallScore >= 40 ? "partial" : "insufficient";
+    overallScore >= 80 ? "sufficient" : overallScore >= 40 ? "partial" : "insufficient";
 
   return { overallScore, verdict, missingCritical, present: present.length, total: items.length };
 }
