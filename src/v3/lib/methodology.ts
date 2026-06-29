@@ -221,7 +221,7 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         "Risks and assumptions log established",
       ],
       entryGuards: ["Strategy gate approved"],
-      recommendedAgents: ["governance-model", "raci-matrix", "narrative", "plan", "stakeholder", "risk"],
+      recommendedAgents: ["governance-model", "raci-matrix", "narrative", "plan", "stakeholder"],
       typicalDurationWeeks: { min: 2, max: 4 },
     },
     {
@@ -236,7 +236,7 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         "Key stakeholders identified and mapped",
       ],
       entryGuards: ["Mobilise gate approved"],
-      recommendedAgents: ["requirements-catalog", "narrative", "risk", "stakeholder", "milestone"],
+      recommendedAgents: ["requirements-catalog", "narrative", "stakeholder", "milestone"],
       typicalDurationWeeks: { min: 3, max: 8 },
     },
     {
@@ -251,7 +251,7 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         "Critical path established",
       ],
       entryGuards: ["Discover gate approved"],
-      recommendedAgents: ["future-state-design", "target-operating-model", "solution-architecture", "narrative", "plan", "risk", "critical-path", "change-impact"],
+      recommendedAgents: ["future-state-design", "target-operating-model", "solution-architecture", "narrative", "plan", "critical-path", "change-impact"],
       typicalDurationWeeks: { min: 4, max: 10 },
     },
     {
@@ -266,7 +266,7 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         "Go-live readiness confirmed",
       ],
       entryGuards: ["Design gate approved"],
-      recommendedAgents: ["test-plan", "narrative", "plan", "milestone", "risk"],
+      recommendedAgents: ["test-plan", "narrative", "plan", "milestone"],
       typicalDurationWeeks: { min: 8, max: 26 },
     },
     {
@@ -296,7 +296,7 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         "Ongoing reporting cadence established",
       ],
       entryGuards: ["Operate gate approved"],
-      recommendedAgents: ["narrative", "risk", "adoption"],
+      recommendedAgents: ["narrative", "adoption"],
       typicalDurationWeeks: { min: 2, max: 6 },
     },
     {
