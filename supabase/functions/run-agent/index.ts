@@ -2179,6 +2179,16 @@ function buildApprovedArtifactIndex(programData: ProgramState): { ids: Set<strin
     if (typeof artifact.title === "string" && artifact.title.trim().length >= 5) {
       titles.push(artifact.title.trim().toLowerCase());
     }
+    // The delivery plan + milestones are no longer standalone artifacts — they
+    // are folded into the strategic roadmap (strategicRoadmap.deliveryPlan /
+    // .milestones). So when the roadmap is approved, treat those folded
+    // sub-objects as approved too, otherwise the negation filter below can't
+    // recognise a "delivery plan / milestones not baselined" claim as stale.
+    if (artifact.id === "strategic-roadmap") {
+      ids.add("plan");
+      ids.add("milestone");
+      titles.push("delivery plan", "milestones");
+    }
   }
   return { ids, titles };
 }
@@ -4881,6 +4891,7 @@ Confidence rules:
 
 State-awareness rules (avoid stale / false findings):
 - Check each artifact's status field before flagging it. Treat any artifact whose status is "approved" as complete and accepted. NEVER raise a risk, blocker, assumption, or dependency claiming an approved artifact is unapproved, still in draft, pending sign-off, or not baselined.
+- The delivery plan and the milestones are part of the strategic roadmap artifact (carried as strategicRoadmap.deliveryPlan and strategicRoadmap.milestones), not standalone artifacts. When the strategic roadmap is approved, the delivery plan and milestones are baselined and approved by definition. NEVER flag the delivery plan or milestones as not baselined, not approved, missing, or pending sign-off while the strategic roadmap is approved.
 - Phase exit is governed solely by artifact approval and artifact quality. Do NOT flag the absence of "phase exit criteria" or "exit gates" as a risk or blocker — that concept is not part of this methodology.
 - Every finding must hold against the CURRENT artifacts and phases in the input. Do not restate a finding the present state has already resolved.
 
