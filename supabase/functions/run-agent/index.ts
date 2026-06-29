@@ -1445,15 +1445,39 @@ function buildSpecialAgentInputContext(
   }
 
   if (target?.agentId === "health-heatmap") {
-    return JSON.stringify({
-      objective: typeof inner.objective === "string"
+    const strategyInputs = normalizeProgramData(
+      normalizeProgramData(inner.phaseInputs as JsonValue | null).strategy as JsonValue | null,
+    );
+    // The Strategy inputs carry the real programme objective + KPIs; the bare
+    // `inner.objective` is a short generic line, which previously led the agent
+    // to grade Strategy red for "no objectives" even when they are captured.
+    const objective = typeof strategyInputs.businessObjective === "string" && strategyInputs.businessObjective.trim()
+      ? strategyInputs.businessObjective
+      : typeof inner.objective === "string"
         ? inner.objective
         : typeof inner.programObjective === "string"
           ? inner.programObjective
           : typeof projectMeta.objective === "string"
             ? projectMeta.objective
-            : "",
-      phases,
+            : "";
+    // Annotate each phase with its gate decision so the agent grades on the
+    // authoritative gate, not a re-derived guess.
+    const phasesWithGate = phases.map((phase) => {
+      const phaseId = typeof phase.id === "string" ? phase.id : "";
+      const gate = normalizeProgramData(gateReviews[phaseId] as JsonValue | null);
+      return { ...phase, gateStatus: typeof gate.status === "string" ? gate.status : null };
+    });
+    return JSON.stringify({
+      objective,
+      strategyInputs: {
+        businessObjective: strategyInputs.businessObjective ?? null,
+        successMetric: strategyInputs.successMetric ?? null,
+        kpis: strategyInputs.kpis ?? null,
+        startDate: strategyInputs.startDate ?? null,
+        targetEndDate: strategyInputs.targetEndDate ?? null,
+      },
+      phases: phasesWithGate,
+      gateReviews,
       raidEntries: activeRaidEntries,
       openDecisions: decisions.filter((entry) => entry.status !== "resolved"),
       milestones,
@@ -2182,6 +2206,10 @@ const ABSENCE_DEF_VERB =
 const TIMELINE_NOUN =
   "(?:estimated\\s+)?(?:timelines?|milestones?|target\\s+dates?|delivery\\s+dates?|schedules?|start\\s+and\\s+end\\s+dates?)";
 const OWNER_NOUN = "(?:owners?|accountable\\s+(?:owners?|parties)|raci(?:\\s+matrix)?)";
+const OBJECTIVE_NOUN =
+  "(?:(?:program(?:me)?|business|strategic|transformation)\\s+)?(?:objectives?|goals?|vision|mandate)";
+const KPI_NOUN =
+  "(?:kpis?|key\\s+(?:health\\s+)?(?:indicators?|metrics?)|health\\s+indicators?|success\\s+(?:metrics?|criteria)|target\\s+(?:metrics?|outcomes?)|measures\\s+of\\s+success)";
 
 /** True when `text` asserts the absence/undefined-ness of `nounSource`. */
 function claimsMissing(text: string, nounSource: string, allowBare: boolean): boolean {
@@ -2207,11 +2235,34 @@ function rosterHasNamedOwner(rows: Array<Record<string, unknown>>): boolean {
   });
 }
 
+/** A string input that carries real content (a few words, not a placeholder). */
+function inputHasContent(value: unknown, minLen = 12): boolean {
+  return typeof value === "string" && value.trim().length >= minLen;
+}
+
+/** A KPI grid (array or JSON-encoded array) with at least one populated row. */
+function kpiGridHasEntries(value: unknown): boolean {
+  const arr = typeof value === "string" ? safeJsonParse<unknown>(value, null) : value;
+  return Array.isArray(arr) && arr.filter(isRecord).some((row) =>
+    Object.values(row).some((v) => typeof v === "string" && v.trim().length > 0),
+  );
+}
+
+interface PlanGrounding {
+  hasTimeline: boolean;
+  hasOwners: boolean;
+  hasObjective: boolean;
+  hasKpis: boolean;
+}
+
 /**
- * Which "absence" claims are provably false for this programme: the timeline
- * window (Strategy inputs) and the owner roster (Mobilise inputs).
+ * Which "absence" claims are provably false for this programme. Each flag is
+ * read from the Strategy/Mobilise phase inputs (the source of truth the model's
+ * context is built from), so a finding claiming the thing is missing contradicts
+ * captured state: the timeline window and objective/KPIs live on Strategy inputs;
+ * named owners live on the Mobilise core-team roster.
  */
-function buildPlanGroundingIndex(programData: ProgramState): { hasTimeline: boolean; hasOwners: boolean } {
+function buildPlanGroundingIndex(programData: ProgramState): PlanGrounding {
   const inner = getInnerProgramData(programData);
   const phaseInputsAll = normalizeProgramData(inner.phaseInputs as JsonValue | null);
   const strategyInputs = normalizeProgramData(phaseInputsAll.strategy as JsonValue | null);
@@ -2221,7 +2272,16 @@ function buildPlanGroundingIndex(programData: ProgramState): { hasTimeline: bool
     typeof start === "string" && !!start.trim() && typeof end === "string" && !!end.trim();
   const mobiliseInputs = normalizeProgramData(phaseInputsAll.mobilise as JsonValue | null);
   const hasOwners = rosterHasNamedOwner(resolveRosterRows(mobiliseInputs));
-  return { hasTimeline, hasOwners };
+  const hasObjective =
+    inputHasContent(strategyInputs.businessObjective) ||
+    inputHasContent(strategyInputs.objective) ||
+    inputHasContent(strategyInputs.vision);
+  const hasKpis =
+    kpiGridHasEntries(strategyInputs.kpis) ||
+    inputHasContent(strategyInputs.successMetric) ||
+    inputHasContent(strategyInputs.successMetrics) ||
+    inputHasContent(strategyInputs.healthIndicators);
+  return { hasTimeline, hasOwners, hasObjective, hasKpis };
 }
 
 function buildApprovedArtifactIndex(programData: ProgramState): { ids: Set<string>; titles: string[] } {
@@ -2255,13 +2315,15 @@ function buildApprovedArtifactIndex(programData: ProgramState): { ids: Set<strin
 function isProvablyStaleRiskEntry(
   entry: Record<string, unknown>,
   approved: { ids: Set<string>; titles: string[] },
-  grounding: { hasTimeline: boolean; hasOwners: boolean },
+  grounding: PlanGrounding,
 ): boolean {
   const text = `${typeof entry.title === "string" ? entry.title : ""} ${typeof entry.description === "string" ? entry.description : ""}`.toLowerCase();
   if (RAID_EXIT_CRITERIA.test(text)) return true;
-  // Absence-of-timeline / absence-of-owner claims that contradict populated inputs.
+  // Absence claims that contradict populated Strategy/Mobilise inputs.
   if (grounding.hasTimeline && claimsMissing(text, TIMELINE_NOUN, false)) return true;
   if (grounding.hasOwners && claimsMissing(text, OWNER_NOUN, true)) return true;
+  if (grounding.hasObjective && claimsMissing(text, OBJECTIVE_NOUN, true)) return true;
+  if (grounding.hasKpis && claimsMissing(text, KPI_NOUN, true)) return true;
   if (!RAID_APPROVAL_NEGATION.test(text)) return false;
   const rel = typeof entry.relatedArtifactId === "string" ? entry.relatedArtifactId : "";
   if (rel && approved.ids.has(rel)) return true;
@@ -2574,17 +2636,26 @@ function getPhaseArtifactContext(programData: ProgramState, phaseId: string): Ar
  * the same risk/decision signals:
  * - it asserts an approved artifact is unapproved / still in draft, or
  * - its core issue is the absence of phase exit criteria (not part of this methodology), or
+ * - it claims a timeline/owner/objective/KPI is missing that the inputs populate, or
  * - it flags a phase as "stalled" when that phase actually carries artifacts
  *   (the escalation agent's own rule: a phase with artifacts is progressing).
  */
 function isProvablyStaleEscalation(
   entry: Record<string, unknown>,
   approved: { ids: Set<string>; titles: string[] },
+  grounding: PlanGrounding,
   programData: ProgramState,
 ): boolean {
   const text = `${typeof entry.title === "string" ? entry.title : ""} ${typeof entry.summary === "string" ? entry.summary : ""}`.toLowerCase();
   if (RAID_EXIT_CRITERIA.test(text)) return true;
   if (RAID_APPROVAL_NEGATION.test(text) && approved.titles.some((title) => text.includes(title))) return true;
+  // Same absence-claim guards the RAID filter applies — escalations are raised
+  // off the same risk signals, so a phantom "no objectives/timelines/owners"
+  // would otherwise re-raise (and never auto-resolve) on every escalation run.
+  if (grounding.hasTimeline && claimsMissing(text, TIMELINE_NOUN, false)) return true;
+  if (grounding.hasOwners && claimsMissing(text, OWNER_NOUN, true)) return true;
+  if (grounding.hasObjective && claimsMissing(text, OBJECTIVE_NOUN, true)) return true;
+  if (grounding.hasKpis && claimsMissing(text, KPI_NOUN, true)) return true;
   const type = typeof entry.type === "string" ? entry.type : "";
   const phaseId = typeof entry.linkedPhaseId === "string" ? entry.linkedPhaseId : "";
   if (type === "phase-stalled" && phaseId && getPhaseArtifactContext(programData, phaseId).length > 0) return true;
@@ -2597,11 +2668,12 @@ function applyEscalationResultToProgramData(programData: ProgramState, result: R
     const openEscalations = existingEscalations.filter((entry) => entry.status === "open" || entry.status === "acknowledged");
     const existingKeys = new Set(openEscalations.map((entry) => buildEscalationKey(entry)));
     const approvedArtifacts = buildApprovedArtifactIndex(programData);
+    const planGrounding = buildPlanGroundingIndex(programData);
     const additions = isRecord(result) && Array.isArray(result.escalations)
       ? result.escalations
           .filter(isRecord)
           .filter((entry) => !existingKeys.has(buildEscalationKey(entry)))
-          .filter((entry) => !isProvablyStaleEscalation(entry, approvedArtifacts, programData))
+          .filter((entry) => !isProvablyStaleEscalation(entry, approvedArtifacts, planGrounding, programData))
           .map((entry) => ({
             id: typeof entry.id === "string" ? entry.id : crypto.randomUUID(),
             type: typeof entry.type === "string" ? entry.type : "critical-blocker",
@@ -2637,7 +2709,7 @@ function applyEscalationResultToProgramData(programData: ProgramState, result: R
       // Auto-resolve entries the agent reported as cleared, plus any that
       // provably contradict current state (e.g. an approved artifact flagged as
       // unapproved) so stale escalations close instead of lingering forever.
-      if (isOpen && (resolvedIds.has(id) || isProvablyStaleEscalation(entry, approvedArtifacts, programData))) {
+      if (isOpen && (resolvedIds.has(id) || isProvablyStaleEscalation(entry, approvedArtifacts, planGrounding, programData))) {
         return { ...entry, status: "resolved", resolvedAt: nowIso };
       }
       return entry;
@@ -2913,23 +2985,45 @@ function applyHealthHeatmapResultToProgramData(programData: ProgramState, result
       };
     }
 
+    // A passed stakeholder gate is authoritative: force approved/complete phases
+    // green and drop any topRisk, so a model that still grades a gated phase red
+    // (e.g. echoing a stale "no objectives" note) can't override the gate.
+    const gateReviews = normalizeProgramData(inner.gateReviews as JsonValue | null);
+    const gatedPhaseIds = new Set<string>();
+    for (const phase of getProgramPhaseContext(programData)) {
+      const id = typeof phase.id === "string" ? phase.id : "";
+      if (!id) continue;
+      const gate = normalizeProgramData(gateReviews[id] as JsonValue | null);
+      if (phase.status === "complete" || gate.status === "approved") gatedPhaseIds.add(id);
+    }
+
     const phaseHealth = Array.isArray(result.phaseHealth)
       ? result.phaseHealth
           .filter(isRecord)
           .filter((entry) => typeof entry.phaseId === "string" && entry.phaseId.trim().length > 0)
-          .map((entry) => ({
-            phaseId: String(entry.phaseId).trim(),
-            phaseName: typeof entry.phaseName === "string" && entry.phaseName.trim()
-              ? entry.phaseName.trim()
-              : formatPhaseName(String(entry.phaseId)),
-            rag: ["green", "amber", "red", "grey"].includes(String(entry.rag))
-              ? entry.rag
-              : "grey",
-            score: Math.round(clampNumber(entry.score, 0, 100, 0)),
-            confidence: clampNumber(entry.confidence, 0, 1, 0.5),
-            healthNote: truncateText(entry.healthNote, 120),
-            topRisk: typeof entry.topRisk === "string" && entry.topRisk.trim() ? entry.topRisk.trim() : null,
-          }))
+          .map((entry) => {
+            const phaseId = String(entry.phaseId).trim();
+            const isGated = gatedPhaseIds.has(phaseId);
+            return {
+              phaseId,
+              phaseName: typeof entry.phaseName === "string" && entry.phaseName.trim()
+                ? entry.phaseName.trim()
+                : formatPhaseName(phaseId),
+              rag: isGated
+                ? "green"
+                : ["green", "amber", "red", "grey"].includes(String(entry.rag))
+                  ? entry.rag
+                  : "grey",
+              score: isGated
+                ? Math.max(90, Math.round(clampNumber(entry.score, 0, 100, 0)))
+                : Math.round(clampNumber(entry.score, 0, 100, 0)),
+              confidence: clampNumber(entry.confidence, 0, 1, 0.5),
+              healthNote: truncateText(entry.healthNote, 120),
+              topRisk: isGated
+                ? null
+                : (typeof entry.topRisk === "string" && entry.topRisk.trim() ? entry.topRisk.trim() : null),
+            };
+          })
       : [];
 
     return {
@@ -4957,6 +5051,7 @@ State-awareness rules (avoid stale / false findings):
 - Phase exit is governed solely by artifact approval and artifact quality. Do NOT flag the absence of "phase exit criteria" or "exit gates" as a risk or blocker — that concept is not part of this methodology.
 - The programme timeline lives on the Strategy phase inputs (startDate and targetEndDate); every phase's roadmap window is derived from it. When those dates are present, NEVER raise a finding claiming there are no milestones, no timelines, no estimated dates, or no schedule for any/all phases.
 - Phase and artifact owners live on the Mobilise core team roster (named people with roles). When that roster has named members, NEVER raise a finding claiming there are no owners or no accountable parties for the work.
+- The programme objective and the key health indicators / KPIs live on the Strategy phase inputs (businessObjective, kpis, successMetric) and the approved Transformation Charter (objectives, successCriteria). When those are present, NEVER raise a finding claiming the program objective, goals, vision, KPIs, health indicators, or success metrics are missing or undefined.
 - Every finding must hold against the CURRENT artifacts and phases in the input. Do not restate a finding the present state has already resolved.
 
 Not-ready condition: if no phases have measurable progress and no artifacts exist, respond with:
@@ -5243,7 +5338,14 @@ Return a JSON object with exactly this shape:
   "summary": "string"
 }
 
-Use "grey" for phases not yet started. Return ONLY valid JSON.`,
+Use "grey" for phases not yet started.
+
+Grading rules (the gate is authoritative — never contradict it):
+- A phase whose gateStatus is "approved" (or whose status is "complete") has passed its stakeholder gate. Grade it "green". NEVER grade an approved/complete phase red or amber, and NEVER cite missing objectives, KPIs, milestones, or exit criteria as its topRisk.
+- The programme objective and KPIs are provided in strategyInputs (businessObjective, successMetric, kpis) and the timeline in startDate/targetEndDate. When these are present, do NOT report the objective, success metrics, KPIs, or timelines as missing — for any phase or in the overall summary.
+- Base overallRag on the not-yet-approved phases; do not drag the programme red over an already-gated phase.
+
+Return ONLY valid JSON.`,
       user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
     };
   }
