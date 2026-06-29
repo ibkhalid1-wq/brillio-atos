@@ -2678,6 +2678,13 @@ export default function AppShellV3() {
     // resolver merges it on top of the static methodology for this programme.
     const phaseOrder = activeProgram.phases?.map((p) => p.id) ?? [];
     const nextPhaseId = phaseOrder[phaseOrder.indexOf(phaseId) + 1];
+    // Closing a phase advances the workspace to the next phase's cockpit so the
+    // user lands on where the work continues. The gate just cleared, so the next
+    // phase is now unlocked — navigate from here rather than from the caller,
+    // whose lock guard / phase ids are still the pre-approval set in its closure.
+    if (nextPhaseId) {
+      commitNavigation({ surface: "stage", moreView: null, activePhaseId: nextPhaseId, reportId: null });
+    }
     if (supabase && nextPhaseId) {
       // If the next phase already holds inputs/artifacts, regenerating would
       // overwrite that work — so ask the user first. "Keep existing" leaves the
@@ -2752,7 +2759,7 @@ export default function AppShellV3() {
       }
     }
     return true;
-  }, [activeProgram, approveGate, refreshPrograms, updateProgramData]);
+  }, [activeProgram, approveGate, refreshPrograms, updateProgramData, commitNavigation]);
 
   const handleReopenGate = useCallback(async (phaseId: string) => {
     setGateReopenPhase(phaseId);

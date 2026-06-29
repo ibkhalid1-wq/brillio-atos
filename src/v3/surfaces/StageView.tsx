@@ -462,6 +462,9 @@ export default function StageView({
   const [downloadingArtifacts, setDownloadingArtifacts] = React.useState(false);
   const [lockConfirmOpen, setLockConfirmOpen] = React.useState(false);
   const [lockedModalOpen, setLockedModalOpen] = React.useState(false);
+  // The label of the just-closed phase, captured at close time so the completion
+  // modal keeps naming it after the workspace auto-advances to the next phase.
+  const [lockedPhaseLabel, setLockedPhaseLabel] = React.useState<string | null>(null);
   const [changeRequestOpen, setChangeRequestOpen] = React.useState(false);
   const [previewArtifact, setPreviewArtifact] = React.useState<{ defId?: string; label: string; description?: string; content: string; score: number | null; statusTone: string } | null>(null);
   const [showDiscoveryPack, setShowDiscoveryPack] = React.useState(false);
@@ -1092,18 +1095,17 @@ export default function StageView({
       // closed. handleApproveGate returns false (and toasts the reason) if the
       // close was rejected, so we never show a misleading success state.
       if (closed !== false) {
+        // Capture the closed phase's label before the workspace advances, so the
+        // completion modal names the phase just locked, not the next one. The
+        // auto-advance to the next phase is handled by onApproveGate in the shell,
+        // where the gate has actually cleared and the next phase is unlocked.
+        setLockedPhaseLabel(activePhase.displayName ?? activePhase.id);
         setLockedModalOpen(true);
-        // Auto-advance to the next phase that isn't already locked, so the user
-        // lands on the next stage to work on instead of the one just closed.
-        const phases = program?.phases ?? [];
-        const idx = phases.findIndex((p) => p.id === activePhase.id);
-        const next = phases.slice(idx + 1).find((p) => !lockedPhaseIds.has(p.id));
-        if (next) onSelectPhase?.(next.id);
       }
     } finally {
       setIsLocking(false);
     }
-  }, [activePhase, isLocking, onApproveGate, program, lockedPhaseIds, onSelectPhase]);
+  }, [activePhase, isLocking, onApproveGate]);
   // Schema-grounded, deterministic input-quality assessment. Derived from the
   // phase's declared input fields (the single source of truth), so the banner's
   // "Missing:" list can only ever name inputs that genuinely belong to this
@@ -2208,7 +2210,7 @@ export default function StageView({
           >
             <div aria-hidden="true" style={{ width: 52, height: 52, margin: "0 auto 16px", borderRadius: "50%", background: "var(--v3-green-soft, rgba(34,197,94,0.16))", color: "var(--v3-green)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>✓</div>
             <h2 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 600, color: "var(--v3-text)" }}>
-              {activePhase.displayName ?? activePhase.id} stage complete &amp; locked
+              {lockedPhaseLabel ?? activePhase.displayName ?? activePhase.id} stage complete &amp; locked
             </h2>
             <p style={{ margin: "0 0 20px", fontSize: 13.5, lineHeight: 1.5, color: "var(--v3-text-secondary)" }}>
               Every required artifact is complete and quality clears the gate bar. This stage is now locked. Any further changes are managed through <strong>change control</strong>, accessed from the Executive Overview screen.
