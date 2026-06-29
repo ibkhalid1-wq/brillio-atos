@@ -7633,15 +7633,23 @@ Deno.serve(async (req) => {
         }, autonomy.reason),
       ]);
     } else {
-      nextProgramData = applyArtifactsToProgramData(contextProgramData, request.phaseId, parsed.artifacts);
       // Custom planner artifacts (no dedicated agent) are produced here by the
       // generic phase agent. Named agents get an AI quality review above; mirror
       // that for these so the Stage card shows a real score + improvement plan
-      // instead of "Needs improvement" with nothing to act on. Persist under the
-      // same `${camelCase(artifactId)}Quality` key the client resolves.
+      // instead of "Needs improvement" with nothing to act on. Review each
+      // artifact first, then (a) stamp the review score onto the ledger record as
+      // agentConfidence — the generic payload carries no per-artifact confidence,
+      // so without this the ledger entry persists with no quality signal — and
+      // (b) persist the score + improvements under the same
+      // `${camelCase(artifactId)}Quality` key the client resolves.
+      const reviewedArtifacts: ParsedAgentPayload["artifacts"] = [];
+      const artifactQualityRecords: Array<{ fieldKey: string; review: Record<string, unknown> }> = [];
       for (const artifact of parsed.artifacts) {
         const content = stringifyForReview({ title: artifact.title, content: artifact.content });
-        if (!content.trim()) continue;
+        if (!content.trim()) {
+          reviewedArtifacts.push(artifact);
+          continue;
+        }
         const artifactReview = await reviewArtifact(
           artifact.id,
           content,
@@ -7650,11 +7658,15 @@ Deno.serve(async (req) => {
           collectProvidedInputs(contextProgramData, request.phaseId),
           getCurrentPhaseScope(contextProgramData, request.phaseId),
         );
-        nextProgramData = applyArtifactQuality(
-          nextProgramData,
-          `${toCamelCaseId(artifact.id)}Quality`,
-          artifactReview as unknown as Record<string, unknown>,
-        );
+        reviewedArtifacts.push({ ...artifact, confidence: artifactReview.score });
+        artifactQualityRecords.push({
+          fieldKey: `${toCamelCaseId(artifact.id)}Quality`,
+          review: artifactReview as unknown as Record<string, unknown>,
+        });
+      }
+      nextProgramData = applyArtifactsToProgramData(contextProgramData, request.phaseId, reviewedArtifacts);
+      for (const { fieldKey, review } of artifactQualityRecords) {
+        nextProgramData = applyArtifactQuality(nextProgramData, fieldKey, review);
       }
       if (parsed.decisions.length) {
         nextProgramData = appendDecisionQueueItems(nextProgramData, parsed.decisions.map((decision) => ({
