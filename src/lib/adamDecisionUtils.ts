@@ -16,7 +16,6 @@ export type DecisionItemType =
   | "agent_conflict"
   | "handoff_ready"
   | "meeting_agenda"
-  | "raid_alert"
   | "communication_ready"
   | "scope_change"
   | "hypothesis_alert"
@@ -55,11 +54,11 @@ const ADAM_PHASE_SEQUENCE_FALLBACK = [
 export const DECISION_QUEUE_PERSONAS = {
   executive: {
     label: "Executive",
-    types: ["exit_proposal", "escalation", "briefing_ready", "rebaseline", "steering_pack", "risk_mitigation", "agent_conflict", "handoff_ready", "meeting_agenda", "raid_alert", "communication_ready", "scope_change", "hypothesis_alert", "gate_approval", "capacity_alert", "milestone_slip", "change_request", "stakeholder_alert", "benefit_alert", "budget_alert", "closure_ready", "escalation_raised", "plan_action", "inputs_incomplete", "artifacts_incomplete"],
+    types: ["exit_proposal", "escalation", "briefing_ready", "rebaseline", "steering_pack", "risk_mitigation", "agent_conflict", "handoff_ready", "meeting_agenda", "communication_ready", "scope_change", "hypothesis_alert", "gate_approval", "capacity_alert", "milestone_slip", "change_request", "stakeholder_alert", "benefit_alert", "budget_alert", "closure_ready", "escalation_raised", "plan_action", "inputs_incomplete", "artifacts_incomplete"],
   },
   delivery_lead: {
     label: "Delivery Lead",
-    types: ["draft_review", "revision_ready", "question", "escalation", "adr_proposal", "exit_proposal", "steering_pack", "risk_mitigation", "handoff_ready", "meeting_agenda", "raid_alert", "communication_ready", "scope_change", "hypothesis_alert", "gate_approval", "capacity_alert", "uat_ready", "milestone_slip", "change_request", "stakeholder_alert", "calendar_proposal", "budget_alert", "retro_ready", "closure_ready", "critical_path_alert", "escalation_raised", "resource_alert", "plan_action", "inputs_incomplete", "artifacts_incomplete"],
+    types: ["draft_review", "revision_ready", "question", "escalation", "adr_proposal", "exit_proposal", "steering_pack", "risk_mitigation", "handoff_ready", "meeting_agenda", "communication_ready", "scope_change", "hypothesis_alert", "gate_approval", "capacity_alert", "uat_ready", "milestone_slip", "change_request", "stakeholder_alert", "calendar_proposal", "budget_alert", "retro_ready", "closure_ready", "critical_path_alert", "escalation_raised", "resource_alert", "plan_action", "inputs_incomplete", "artifacts_incomplete"],
   },
   architect: {
     label: "Architect",
@@ -150,28 +149,8 @@ function isRaidEntryClosed(entry: any) {
   return entry?.resolved === true || normalizedStatus === "closed" || normalizedStatus === "resolved";
 }
 
-function getRaidEntrySeverity(entry: any) {
-  const severity = String(entry?.severity || "").toLowerCase();
-  if (severity === "critical" || severity === "high" || severity === "medium" || severity === "low") {
-    return severity;
-  }
-  if (String(entry?.impact || "").toLowerCase() === "high" && String(entry?.likelihood || "").toLowerCase() === "high") {
-    return "high";
-  }
-  return "medium";
-}
-
 function getRaidEntryType(entry: any) {
   return String(entry?.type || entry?.category || "").toLowerCase();
-}
-
-function isRaidBlocker(entry: any) {
-  const type = getRaidEntryType(entry);
-  const text = `${entry?.title || entry?.label || ""} ${entry?.description || ""} ${entry?.impactSummary || ""}`.toLowerCase();
-  return type === "blocker"
-    || type === "issue"
-    || type === "dependency"
-    || text.includes("block");
 }
 
 function formatRelativeTimeLabel(hours: number) {
@@ -317,61 +296,6 @@ function buildSyntheticMilestoneSlipItems(projectData: any) {
     });
 
   return items.slice(0, 3);
-}
-
-function buildSyntheticRaidAlertItems(projectData: any) {
-  const grouped = new Map<string, any[]>();
-  getRaidEntries(projectData)
-    .filter((entry: any) => !isRaidEntryClosed(entry))
-    .filter((entry: any) => isRaidBlocker(entry) || getRaidEntrySeverity(entry) === "high" || getRaidEntrySeverity(entry) === "critical")
-    .forEach((entry: any) => {
-      const phaseId = getNormalizedPhaseId(entry?.phaseId || entry?.phase, "raid");
-      grouped.set(phaseId, [...(grouped.get(phaseId) || []), entry]);
-    });
-
-  return [...grouped.entries()]
-    .map(([phaseId, entries]): DecisionItem => {
-      const sortedEntries = entries.slice().sort((left, right) => {
-        const leftSeverity = getRaidEntrySeverity(left) === "critical" ? 0 : getRaidEntrySeverity(left) === "high" ? 1 : 2;
-        const rightSeverity = getRaidEntrySeverity(right) === "critical" ? 0 : getRaidEntrySeverity(right) === "high" ? 1 : 2;
-        if (leftSeverity !== rightSeverity) return leftSeverity - rightSeverity;
-        return getCreatedAt(right?.createdAt || right?.extractedAt) - getCreatedAt(left?.createdAt || left?.extractedAt);
-      });
-      const headline = sortedEntries.slice(0, 2).map((entry) => entry?.title || entry?.label).filter(Boolean).join(" · ");
-      const highestSeverity = sortedEntries.some((entry) => getRaidEntrySeverity(entry) === "critical") ? "critical" : "high";
-      // The group mixes true blockers with high-severity risks; label it by the
-      // actual type breakdown so a high-severity risk is never miscalled a blocker.
-      const blockerCount = entries.filter((entry) => isRaidBlocker(entry)).length;
-      const riskCount = entries.length - blockerCount;
-      const mix = [
-        blockerCount ? `${blockerCount} blocker${blockerCount === 1 ? "" : "s"}` : "",
-        riskCount ? `${riskCount} risk${riskCount === 1 ? "" : "s"}` : "",
-      ].filter(Boolean).join(", ");
-      return {
-        id: `raid-blockers-${phaseId}`,
-        type: "raid_alert" as const,
-        phaseId,
-        priority: highestSeverity === "critical" ? "critical" : "high",
-        title: `${mix} open in ${getPhaseTitle(phaseId)}`,
-        summary: headline || `${mix} need attention.`,
-        createdAt: getCreatedAt(sortedEntries[0]?.createdAt || sortedEntries[0]?.extractedAt),
-        actionLabel: "Open RAID Log",
-        dismissable: false,
-        payload: {
-          count: entries.length,
-          blockers: sortedEntries.slice(0, 5),
-          severity: highestSeverity,
-          phaseId,
-        },
-      };
-    })
-    .sort((left, right) => {
-      const leftRank = left.priority === "critical" ? 0 : 1;
-      const rightRank = right.priority === "critical" ? 0 : 1;
-      if (leftRank !== rightRank) return leftRank - rightRank;
-      return right.createdAt - left.createdAt;
-    })
-    .slice(0, 3);
 }
 
 function buildSyntheticPlanActionItems(projectData: any) {
@@ -1048,7 +972,6 @@ export function buildDecisionQueue(
   }
 
   queue.push(...buildSyntheticMilestoneSlipItems(projectData));
-  queue.push(...buildSyntheticRaidAlertItems(projectData));
   queue.push(...buildSyntheticPlanActionItems(projectData));
   queue.push(...buildSyntheticInputCompletionItems(projectData));
   queue.push(...buildSyntheticArtifactBlockerItems(projectData));
