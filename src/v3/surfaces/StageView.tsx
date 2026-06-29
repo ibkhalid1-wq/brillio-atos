@@ -18,7 +18,7 @@ import { ExpandableSection } from "@/v3/components/ui/ExpandableSection";
 import { RelativeTime } from "@/v3/components/ui/RelativeTime";
 import { StatusBadge } from "@/v3/components/ui/StatusBadge";
 import { computePhaseReadiness, getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
-import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
+import { buildPhaseArtifacts, type ArtifactOrigin } from "@/v3/lib/artifactModel";
 import { resolveArtifactReview, resolveArtifactQualityScore } from "@/v3/lib/artifactReview";
 import { getPhaseArtifactDefs, type PhaseArtifactDef } from "@/v3/lib/phaseArtifacts";
 import { getFillableArtifactInputFields } from "@/v3/lib/phaseFlowEdges";
@@ -74,6 +74,10 @@ interface StageViewProps {
   onRevertProgram?: (snapshotId: string) => Promise<void>;
   programSnapshots?: Array<{ id: string; label: string; kind: string; createdAt: string }>;
   onUploadDocument: () => void;
+  /** Attach (or reattach) a document to a specific artifact slot in a phase. */
+  onAttachArtifact?: (phaseId: string, artifactId: string) => void;
+  /** Delete an attached document artifact from a phase. */
+  onDeleteArtifact?: (phaseId: string, artifactId: string, defId: string) => Promise<void> | void;
   onAssistField?: (phaseId: string, request: FieldAssistRequest) => Promise<string>;
   artifactPreviews?: {
     narrative?: string | null;
@@ -459,6 +463,8 @@ export default function StageView({
   onRevertProgram,
   programSnapshots = [],
   onUploadDocument,
+  onAttachArtifact,
+  onDeleteArtifact,
   onAssistField,
   artifactPreviews,
 }: StageViewProps) {
@@ -484,6 +490,8 @@ export default function StageView({
     phaseId: string;
     fields: Array<{ id: string; label: string; hint?: string; currentValue: string; filled: boolean }>;
     improvements: string[];
+    /** Attached documents surface recommendations read-only — no in-app apply or add-inputs. */
+    readOnly?: boolean;
   } | null>(null);
   const [applyingImprovements, setApplyingImprovements] = React.useState(false);
   const [applyError, setApplyError] = React.useState<string | null>(null);
@@ -625,7 +633,7 @@ export default function StageView({
   // id (e.g. Mobilise → governance-model, raci-matrix), with live state/quality
   // plus the phase's present/required completeness counts.
   const phaseArtifacts = useMemo(() => {
-    const byKey = new Map<string, { present: boolean; quality: number | null; state: string; artifactId: string | null }>();
+    const byKey = new Map<string, { present: boolean; quality: number | null; state: string; artifactId: string | null; origin: ArtifactOrigin }>();
     // Produced artifacts the methodology/dynamic catalogue does not declare. They
     // are kept separate from `byKey` so the required-spine gates (bulk approve, the
     // sequential quality lock, the missing-required count) are unaffected, while
@@ -633,7 +641,7 @@ export default function StageView({
     // Exception: phase progress (`phase-completion-estimator` → "completion-estimate")
     // is an internal metric shown on the rings/Gantt/pipeline, not a deliverable, so
     // it is skipped below rather than surfaced as a (confusing) pseudo-artifact.
-    const orphanByKey = new Map<string, { present: boolean; quality: number | null; state: string; artifactId: string | null }>();
+    const orphanByKey = new Map<string, { present: boolean; quality: number | null; state: string; artifactId: string | null; origin: ArtifactOrigin }>();
     const orphans: PhaseArtifactDef[] = [];
     if (!activePhase) return { byKey, orphanByKey, orphans, present: 0, required: 0 };
     const summary = buildPhaseArtifacts(program, activePhase.id);
@@ -644,7 +652,7 @@ export default function StageView({
     let present = 0;
     for (const node of summary?.artifacts ?? []) {
       if (node.key === "narrative") continue;
-      const record = { present: node.present, quality: node.quality, state: node.state, artifactId: node.artifactId };
+      const record = { present: node.present, quality: node.quality, state: node.state, artifactId: node.artifactId, origin: node.origin };
       if (node.required) {
         byKey.set(node.key, record);
         required += 1;
@@ -1885,6 +1893,11 @@ export default function StageView({
                 : inputsIncomplete
                 ? `${present ? "Regenerate" : "Generate"} ${def.label} — strengthen these inputs to lift quality:\n${generateGuidance || preflight.missingFields.join(", ")}`
                 : present ? `Regenerate ${def.label}` : `Generate ${def.label}`;
+              // Origin drives the action set: an uploaded document offers
+              // improve(read-only)/reattach/delete, a generated artifact offers
+              // preview/improve/regenerate/attach, a missing one generate/attach.
+              const origin = node?.origin ?? "required";
+              const isAttached = origin === "uploaded";
               const cardModel: ArtifactCardModel = {
                 index,
                 defId: def.id,
@@ -1896,8 +1909,10 @@ export default function StageView({
                 present,
                 summary,
                 state,
+                origin,
+                approved: state === "approved",
+                phaseLocked: gateApproved,
                 canPreview: !!(present && previewContent),
-                showRecommendations: present && state !== "approved" && !gateApproved,
                 recommendationCount,
                 showGenerate: state !== "approved",
                 generateDisabled: agentButtonDisabled(generatorAgentId) || flowedInputsIncomplete || generationLocked,
@@ -1909,9 +1924,14 @@ export default function StageView({
               const cardHandlers: ArtifactCardHandlers = {
                 onPreview: () => setPreviewArtifact({ defId: def.id, label: def.label, description: def.description, content: previewContent ?? "", score: displayScore, statusTone }),
                 onOpenRoadmap: () => onOpenMoreView("roadmap"),
-                onRecommend: () => { setApplyError(null); setImprovementsApplied(false); setQualityArtifact({ label: def.label, defId: def.id, score: displayScore, issues: qualityIssues, phaseId: activePhase.id, fields: qualityFields, improvements: (review?.improvements ?? []).filter((s) => !!s && s.trim()) }); },
+                // An attached document's recommendations are read-only: the user acts
+                // on them in the source file, not via in-app input rewrites.
+                onRecommend: () => { setApplyError(null); setImprovementsApplied(false); setQualityArtifact({ label: def.label, defId: def.id, score: displayScore, issues: qualityIssues, phaseId: activePhase.id, fields: qualityFields, improvements: (review?.improvements ?? []).filter((s) => !!s && s.trim()), readOnly: isAttached }); },
                 onGenerate: () => onRunAgent(generatorAgentId, activePhase.id, regenGuidance),
                 onUnlock: () => { if (artifactId) void onUnapproveArtifact(activePhase.id, artifactId); },
+                onAttach: () => onAttachArtifact?.(activePhase.id, def.id),
+                onReattach: () => onAttachArtifact?.(activePhase.id, def.id),
+                onDelete: () => { if (artifactId) void onDeleteArtifact?.(activePhase.id, artifactId, def.id); },
               };
               return <ArtifactCard key={def.id} model={cardModel} handlers={cardHandlers} />;
             })}
@@ -2007,7 +2027,7 @@ export default function StageView({
       ) : null}
 
       {qualityArtifact ? (
-        <StageModal title={`Improve quality — ${qualityArtifact.label}`} onClose={() => setQualityArtifact(null)}>
+        <StageModal title={`${qualityArtifact.readOnly ? "Recommendations" : "Improve quality"} — ${qualityArtifact.label}`} onClose={() => setQualityArtifact(null)}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
             <span className={`v3-chip ${qualityArtifact.score == null ? "muted" : qualityArtifact.score >= 80 ? "green" : qualityArtifact.score >= 60 ? "blue" : "amber"}`}>
               {qualityArtifact.score == null ? "Quality —" : `Quality ${qualityArtifact.score}%`}
@@ -2045,60 +2065,73 @@ export default function StageView({
             </div>
           ) : null}
           <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
-            {onAssistField && qualityArtifact.fields.length && qualityArtifact.improvements.length ? (
+            {qualityArtifact.readOnly ? (
               <button
                 type="button"
                 className="v3-button primary v3-button-inline-sm"
-                onClick={handleApplyImprovements}
-                disabled={applyingImprovements || improvementsApplied}
-                title={improvementsApplied
-                  ? "These suggestions have been applied — regenerate the artifact to get a fresh review"
-                  : "Use AI to fold these suggestions into the grounding inputs, then save"}
+                onClick={() => setQualityArtifact(null)}
+                title="Close — recommendations for an attached document are applied in the source file, not in-app"
               >
-                {improvementsApplied ? "✓ Suggestions applied" : applyingImprovements ? "✨ Applying…" : "✨ Apply suggestions to inputs"}
+                Close
               </button>
-            ) : null}
-            {rosterPlaceholderPlan ? (
-              <button
-                type="button"
-                className="v3-button primary v3-button-inline-sm"
-                onClick={handleAddRosterPlaceholders}
-                disabled={applyingPlaceholders || improvementsApplied}
-                title={`Adds a roster row for each RACI role not yet on the team (${rosterPlaceholderPlan.roles.join(", ")}) so you can fill in the named individual`}
-              >
-                {improvementsApplied
-                  ? "✓ Placeholders added"
-                  : applyingPlaceholders
-                    ? "✨ Adding…"
-                    : `✨ Create ${rosterPlaceholderPlan.count} placeholder role row${rosterPlaceholderPlan.count === 1 ? "" : "s"}`}
-              </button>
-            ) : null}
-            {stakeholderPlaceholderPlan ? (
-              <button
-                type="button"
-                className="v3-button primary v3-button-inline-sm"
-                onClick={handleAddStakeholderPlaceholders}
-                disabled={applyingPlaceholders || improvementsApplied}
-                title={`Adds a stakeholder row for each suggested role not yet on the list (${stakeholderPlaceholderPlan.roles.join(", ")}) so you can fill in the named individual`}
-              >
-                {improvementsApplied
-                  ? "✓ Stakeholders added"
-                  : applyingPlaceholders
-                    ? "✨ Adding…"
-                    : `✨ Add ${stakeholderPlaceholderPlan.count} suggested stakeholder${stakeholderPlaceholderPlan.count === 1 ? "" : "s"}`}
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className={`v3-button ${improvementsApplied || !(onAssistField && qualityArtifact.fields.length && qualityArtifact.improvements.length) ? "primary" : "ghost"} v3-button-inline-sm`}
-              onClick={() => {
-                if (!improvementsApplied) document.getElementById("phase-inputs-anchor")?.scrollIntoView({ behavior: "smooth", block: "start" });
-                setQualityArtifact(null);
-              }}
-              disabled={applyingImprovements}
-            >
-              {improvementsApplied ? "Done" : "Add inputs →"}
-            </button>
+            ) : (
+              <>
+                {onAssistField && qualityArtifact.fields.length && qualityArtifact.improvements.length ? (
+                  <button
+                    type="button"
+                    className="v3-button primary v3-button-inline-sm"
+                    onClick={handleApplyImprovements}
+                    disabled={applyingImprovements || improvementsApplied}
+                    title={improvementsApplied
+                      ? "These suggestions have been applied — regenerate the artifact to get a fresh review"
+                      : "Use AI to fold these suggestions into the grounding inputs, then save"}
+                  >
+                    {improvementsApplied ? "✓ Suggestions applied" : applyingImprovements ? "✨ Applying…" : "✨ Apply suggestions to inputs"}
+                  </button>
+                ) : null}
+                {rosterPlaceholderPlan ? (
+                  <button
+                    type="button"
+                    className="v3-button primary v3-button-inline-sm"
+                    onClick={handleAddRosterPlaceholders}
+                    disabled={applyingPlaceholders || improvementsApplied}
+                    title={`Adds a roster row for each RACI role not yet on the team (${rosterPlaceholderPlan.roles.join(", ")}) so you can fill in the named individual`}
+                  >
+                    {improvementsApplied
+                      ? "✓ Placeholders added"
+                      : applyingPlaceholders
+                        ? "✨ Adding…"
+                        : `✨ Create ${rosterPlaceholderPlan.count} placeholder role row${rosterPlaceholderPlan.count === 1 ? "" : "s"}`}
+                  </button>
+                ) : null}
+                {stakeholderPlaceholderPlan ? (
+                  <button
+                    type="button"
+                    className="v3-button primary v3-button-inline-sm"
+                    onClick={handleAddStakeholderPlaceholders}
+                    disabled={applyingPlaceholders || improvementsApplied}
+                    title={`Adds a stakeholder row for each suggested role not yet on the list (${stakeholderPlaceholderPlan.roles.join(", ")}) so you can fill in the named individual`}
+                  >
+                    {improvementsApplied
+                      ? "✓ Stakeholders added"
+                      : applyingPlaceholders
+                        ? "✨ Adding…"
+                        : `✨ Add ${stakeholderPlaceholderPlan.count} suggested stakeholder${stakeholderPlaceholderPlan.count === 1 ? "" : "s"}`}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className={`v3-button ${improvementsApplied || !(onAssistField && qualityArtifact.fields.length && qualityArtifact.improvements.length) ? "primary" : "ghost"} v3-button-inline-sm`}
+                  onClick={() => {
+                    if (!improvementsApplied) document.getElementById("phase-inputs-anchor")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    setQualityArtifact(null);
+                  }}
+                  disabled={applyingImprovements}
+                >
+                  {improvementsApplied ? "Done" : "Add inputs →"}
+                </button>
+              </>
+            )}
           </div>
         </StageModal>
       ) : null}

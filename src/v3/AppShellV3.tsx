@@ -1107,6 +1107,9 @@ export default function AppShellV3() {
   const [surface, setSurface] = useState<V3Surface>(initialRoute.surface);
   const [activeMode, setActiveMode] = useState<V3CommandMode>(surfaceToCommandMode(initialRoute.surface));
   const [moreView, setMoreView] = useState<V3MoreView | null>(initialRoute.moreView);
+  // Artifact slot a pending document attach targets (set by the per-artifact
+  // Attach action, consumed by the documents import surface).
+  const [attachTarget, setAttachTarget] = useState<{ phaseId: string; defId: string } | null>(null);
   const [decideIntent, setDecideIntent] = useState<{ tab: "blockers" | "risks" | "actions"; nonce: number; openAdd?: boolean } | null>(null);
   const [reportId, setReportId] = useState<V3ReportId | null>(initialRoute.reportId);
   const [activePhaseId, setActivePhaseId] = useState<string | null>(initialRoute.activePhaseId);
@@ -2538,6 +2541,41 @@ export default function AppShellV3() {
     openMoreView("documents");
   }, [openMoreView]);
 
+  // Attach a real document to a specific artifact slot, in place of generating it.
+  // For now this routes to the documents import surface (where the user picks the
+  // file); the per-slot soft-archive + AI-validate pipeline lands on the import
+  // side. Recording the intended target lets the importer attach to this slot.
+  const handleAttachArtifact = useCallback((phaseId: string, defId: string) => {
+    setAttachTarget({ phaseId, defId });
+    openMoreView("documents");
+  }, [openMoreView]);
+
+  // Remove an attached document from an artifact slot. Soft-archive first (a
+  // restorable snapshot), then atomically clear the artifact ledger entry and its
+  // AI quality review so the slot returns to "new" (Generate · Attach).
+  const handleDeleteArtifact = useCallback(async (phaseId: string, artifactId: string, defId: string) => {
+    if (!activeProgram) return;
+    const label = activeProgram.phases.find((p) => p.id === phaseId)?.displayName ?? phaseId;
+    await handleSaveProgramSnapshot(`Before removing ${defId} (${label})`, "manual");
+    const cloned = cloneRawProgram(activeProgram);
+    const nextInner = { ...cloned.inner };
+    const buckets = typeof nextInner.phaseArtifacts === "object" && nextInner.phaseArtifacts !== null
+      ? { ...(nextInner.phaseArtifacts as Record<string, Record<string, unknown>>) }
+      : {};
+    const phaseBucket = buckets[phaseId];
+    if (phaseBucket && typeof phaseBucket === "object") {
+      const nextBucket = { ...(phaseBucket as Record<string, unknown>) };
+      delete nextBucket[artifactId];
+      delete nextBucket[defId];
+      buckets[phaseId] = nextBucket;
+    }
+    nextInner.phaseArtifacts = buckets;
+    const reviewKey = artifactReviewFieldKey(defId);
+    delete nextInner[reviewKey];
+    await updateProgramData(activeProgram.id, cloned.commit(nextInner), activeProgram.updatedAt);
+    pushV3Toast(`Removed the attached document for ${defId}. Snapshot saved — restore it from Saves if needed.`, { tone: "success", duration: 4000 });
+  }, [activeProgram, handleSaveProgramSnapshot, updateProgramData]);
+
   // Per-field AI assist for phase inputs — reuses the copilot-chat endpoint
   // (non-streaming) with a focused, field-scoped prompt. Returns clean text the
   // panel writes straight into the field; throws a friendly message on failure
@@ -3234,6 +3272,8 @@ export default function AppShellV3() {
                 onRevertProgram={handleRevertProgramSnapshot}
                 programSnapshots={programSnapshots}
                 onUploadDocument={handleUploadDocument}
+                onAttachArtifact={handleAttachArtifact}
+                onDeleteArtifact={handleDeleteArtifact}
                 onAssistField={handleAssistField}
                 artifactPreviews={{
                   narrative: activeProgram?.narrative || null,
