@@ -193,10 +193,21 @@ export default function InsightFeedView({
   // Gate completion = share of phase gates approved — the programme's progress
   // through its governance milestones (distinct from input/artifact completion).
   const gateCompletionPct = phases.length ? Math.round((gatesApproved / phases.length) * 100) : 0;
+  // The Today dashboard reports where the PROGRAMME stands, so the canonical frontier
+  // the model owns (program.activePhaseId — the first phase whose gate isn't approved)
+  // is authoritative here. The route/state activePhaseId prop is a drill-in selection
+  // that can go stale (e.g. left pointing at "strategy" after the gate advanced to
+  // "build"); it only fills in when the model names no active phase. Never silently
+  // fall back to phases[0] (Strategy), which made the pill disagree with the rings.
+  const resolvedActiveId =
+    (program?.activePhaseId && phaseIdSetFeed.has(program.activePhaseId)
+      ? program.activePhaseId
+      : null) ??
+    (activePhaseId && phaseIdSetFeed.has(activePhaseId) ? activePhaseId : null);
   // Active phase resolved the same way the insight cards do, so the header pill
   // and "Active Phase" insight never disagree.
   const headerActivePhase =
-    (activePhaseId ? phases.find((p) => p.id === activePhaseId) : null) ??
+    (resolvedActiveId ? phases.find((p) => p.id === resolvedActiveId) : null) ??
     phases.find((p) => p.pct >= 10 && p.pct <= 90) ??
     phases[0] ??
     null;
@@ -206,6 +217,30 @@ export default function InsightFeedView({
   const blockerCount = program ? selectBlockers(program).length : 0;
   const riskCount = program ? selectRisks(program).length : 0;
   const goToProgramme = () => (headerActivePhase ? onNavigateToPhase(headerActivePhase.id) : onNavigateToGates());
+
+  // The daily briefing is frozen agent prose with no embedded phase/timestamp, so a
+  // briefing generated when the programme sat in an earlier phase keeps asserting that
+  // phase forever ("stalled in the Mobilise phase" on a Build-stage programme). Detect
+  // that drift deterministically: if the briefing text names a phase the programme has
+  // already moved past (one before the live active phase) and never names the current
+  // phase, it predates today's reality — flag it so the UI prompts a refresh instead of
+  // presenting stale prose as current. Phase names come from the registry, not literals.
+  const briefingStale = useMemo(() => {
+    if (!dailyBriefing?.headline || !headerActivePhase) return false;
+    const activeIdx = phases.findIndex((p) => p.id === headerActivePhase.id);
+    if (activeIdx <= 0) return false;
+    const text = `${dailyBriefing.headline} ${dailyBriefing.progressHighlight ?? ""}`.toLowerCase();
+    const labelFor = (id: string) =>
+      (PHASE_LABELS[id] ?? phases.find((p) => p.id === id)?.displayName ?? "").toLowerCase();
+    const activeLabel = labelFor(headerActivePhase.id);
+    if (activeLabel && text.includes(activeLabel)) return false;
+    return phases
+      .slice(0, activeIdx)
+      .some((p) => {
+        const l = labelFor(p.id);
+        return l.length > 0 && text.includes(l);
+      });
+  }, [dailyBriefing?.headline, dailyBriefing?.progressHighlight, headerActivePhase, phases]);
 
   // Strict sequential gating: a phase is reachable only once its predecessor's
   // gate is approved. Reuse the canonical lock set (same source the status rings
@@ -218,8 +253,8 @@ export default function InsightFeedView({
 
   // C2: index of the first "upcoming" phase after the active one
   const nextPhaseId = useMemo(() => {
-    if (!activePhaseId || phases.length === 0) return null;
-    const activeIdx = phases.findIndex((p) => p.id === activePhaseId);
+    if (!resolvedActiveId || phases.length === 0) return null;
+    const activeIdx = phases.findIndex((p) => p.id === resolvedActiveId);
     if (activeIdx < 0) return null;
     for (let i = activeIdx + 1; i < phases.length; i++) {
       if (phases[i].pct < 5 && phases[i].status !== "complete") {
@@ -227,21 +262,27 @@ export default function InsightFeedView({
       }
     }
     return null;
-  }, [phases, activePhaseId]);
+  }, [phases, resolvedActiveId]);
 
-  // Auto-trigger daily briefing once per 24 hours
+  // Auto-trigger daily briefing once per 24 hours, OR immediately when the active
+  // phase has advanced since the last run — a frozen briefing that still describes a
+  // superseded phase is worse than none, so a phase change invalidates the cache.
   useEffect(() => {
     if (!program || anyAgentRunning) return;
     const storageKey = `adam-daily-briefing-${program.id ?? "program"}`;
+    const phaseKey = `${storageKey}-phase`;
     const lastRun = typeof window !== "undefined" ? window.localStorage.getItem(storageKey) : null;
+    const lastPhase = typeof window !== "undefined" ? window.localStorage.getItem(phaseKey) : null;
     const now = Date.now();
     const oneDayMs = 24 * 60 * 60 * 1000;
-    if (lastRun && now - parseInt(lastRun, 10) < oneDayMs) return;
+    const phaseUnchanged = !resolvedActiveId || lastPhase === resolvedActiveId;
+    if (lastRun && now - parseInt(lastRun, 10) < oneDayMs && phaseUnchanged) return;
     if (typeof window !== "undefined") {
       window.localStorage.setItem(storageKey, String(now));
+      if (resolvedActiveId) window.localStorage.setItem(phaseKey, resolvedActiveId);
     }
     onRunAgent("daily-briefing");
-  }, [program?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [program?.id, resolvedActiveId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const lastUpdated = getRelativeTime((program as (ProgramSummary & { updatedAt?: string }) | null)?.updatedAt);
 
@@ -285,7 +326,7 @@ export default function InsightFeedView({
         meta: phaseLabel(b.phase),
       });
     }
-    for (const [i, f] of (dailyBriefing?.focusItems ?? []).entries()) {
+    for (const [i, f] of (briefingStale ? [] : (dailyBriefing?.focusItems ?? [])).entries()) {
       const u = (f.urgency ?? "").toLowerCase();
       const rank: 0 | 1 | 2 = u === "now" ? 0 : u === "today" ? 1 : 2;
       push(f.item, {
@@ -309,7 +350,7 @@ export default function InsightFeedView({
       });
     }
     return items.sort((a, b) => a.rank - b.rank);
-  }, [program, dailyBriefing, openActions]);
+  }, [program, dailyBriefing, openActions, briefingStale]);
 
   if (!program) {
     return (
@@ -473,7 +514,12 @@ export default function InsightFeedView({
               <span>{anyAgentRunning ? "Preparing…" : dailyBriefing?.headline ? "Refresh" : "What should I know today?"}</span>
             </button>
           </div>
-          {dailyBriefing?.headline ? (
+          {dailyBriefing?.headline && briefingStale ? (
+            <div style={{ color: "var(--v3-text-muted)" }}>
+              This briefing predates the current phase ({headerActivePhaseLabel}) and no longer
+              reflects where the programme stands — tap “Refresh” for today’s focus.
+            </div>
+          ) : dailyBriefing?.headline ? (
             <>
               {/* Lead sentence — where the programme stands today */}
               <div style={{ fontWeight: 600, fontSize: 14, color: "var(--v3-text-primary)", lineHeight: 1.5 }}>
@@ -622,7 +668,7 @@ export default function InsightFeedView({
                   key={phase.id}
                   program={program}
                   phase={phase}
-                  active={phase.id === activePhaseId}
+                  active={phase.id === resolvedActiveId}
                   isNext={phase.id === nextPhaseId}
                   locked={lockedPhaseIds.has(phase.id)}
                   onClick={() => onOpenPhase(phase.id)}
