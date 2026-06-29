@@ -63,4 +63,24 @@ describe("derivePhaseMethodologyCompleteness", () => {
     expect(result.pct).toBe(Math.round((result.present / result.total) * 100));
     expect(result.complete).toBe(false);
   });
+
+  it("counts a required grid present only when it has a filled row, not a blank one", () => {
+    // A grid persists as a JSON string. An empty "[]" or a single blank seeded
+    // row must NOT count as present — otherwise the completeness panel disagrees
+    // with derivePhaseInputQuality, which scores the same field set row-aware.
+    const rosterInput = (value: string) =>
+      normalizeProgram({
+        id: "p", name: "N", client: "C", industry: "I", updated_at: "2026-06-13T00:00:00.000Z",
+        data: { phases: [{ id: "mobilise", pct: 0 }], phaseInputs: { mobilise: { coreTeamRoster: value } } },
+      });
+
+    const rosterItem = (value: string) =>
+      derivePhaseMethodologyCompleteness(rosterInput(value), "mobilise")!
+        .groups.find((g) => g.kind === "input")!
+        .items.find((i) => i.id === "input:coreTeamRoster")!;
+
+    expect(rosterItem("[]").present).toBe(false);
+    expect(rosterItem(JSON.stringify([{ id: "r1", role: "", name: "" }])).present).toBe(false);
+    expect(rosterItem(JSON.stringify([{ id: "r1", role: "Sponsor", name: "Jane Doe" }])).present).toBe(true);
+  });
 });

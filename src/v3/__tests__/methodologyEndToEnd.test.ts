@@ -24,10 +24,14 @@ function filledInputs(phaseId: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const field of getPhaseInputSchema(phaseId).fields) {
     if (!field.required) continue;
-    out[field.id] =
-      field.type === "grid"
-        ? JSON.stringify([{ role: "Programme Director", person: "Jane Smith", org: "PMO" }])
-        : `Defined ${field.label.toLowerCase()} for the Orion ERP rollout with measurable detail.`;
+    if (field.type === "grid") {
+      // Key the row to the field's declared columns so filledRowCount sees content.
+      const row: Record<string, string> = { id: "r1" };
+      for (const col of field.columns ?? []) row[col.key] = `Defined ${col.label.toLowerCase()}`;
+      out[field.id] = JSON.stringify([row]);
+    } else {
+      out[field.id] = `Defined ${field.label.toLowerCase()} for the Orion ERP rollout with measurable detail.`;
+    }
   }
   // Dynamic-only phases carry no static input schema; a completed run persists
   // ai-derived field responses in data.phaseInputs. Simulate substantive inputs

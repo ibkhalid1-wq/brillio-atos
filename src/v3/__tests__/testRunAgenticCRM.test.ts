@@ -36,10 +36,15 @@ function filledInputs(phaseId: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const fieldDef of getPhaseInputSchema(phaseId).fields) {
     if (!fieldDef.required) continue;
-    out[fieldDef.id] =
-      fieldDef.type === "grid"
-        ? JSON.stringify([{ role: "Programme Director", person: "Jane Smith", org: "PMO" }])
-        : `Defined ${fieldDef.label.toLowerCase()} for the agentic CRM build with measurable detail.`;
+    if (fieldDef.type === "grid") {
+      // Build a genuinely filled row keyed to the field's declared columns, so
+      // filledRowCount (which checks the actual column keys) sees real content.
+      const row: Record<string, string> = { id: "r1" };
+      for (const col of fieldDef.columns ?? []) row[col.key] = `Defined ${col.label.toLowerCase()}`;
+      out[fieldDef.id] = JSON.stringify([row]);
+    } else {
+      out[fieldDef.id] = `Defined ${fieldDef.label.toLowerCase()} for the agentic CRM build with measurable detail.`;
+    }
   }
   // Dynamic-only phases carry no static input schema; a completed run persists
   // ai-derived field responses in data.phaseInputs. Simulate substantive inputs

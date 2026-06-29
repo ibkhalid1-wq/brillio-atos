@@ -14,9 +14,10 @@
  * phase from this surface alone, because every required item is on it.
  */
 import type { ProgramSummary } from "@/new/types";
-import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
+import { getPhaseInputSchema, type GridColumn } from "@/v3/lib/phaseInputSchema";
 import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
 import { getMandatoryCriteria } from "@/v3/lib/exitCriteriaLibrary";
+import { parseRows, filledRowCount } from "@/v3/components/StructuredGrid";
 
 export type RequirementKind = "input" | "artifact" | "exit-criterion";
 
@@ -65,7 +66,14 @@ function readPhaseInputs(program: ProgramSummary, phaseId: string): Record<strin
   return phaseInputs[phaseId] ?? {};
 }
 
-function inputFilled(value: unknown): boolean {
+/** True when a required field carries real content. Grids must have at least one
+ *  filled row (or their declared minRows) — a "[]" / blank-row JSON string is not
+ *  "present", matching how derivePhaseInputQuality scores the same field set. */
+function inputFilled(field: { type: string; columns?: GridColumn[]; minRows?: number }, value: unknown): boolean {
+  if (field.type === "grid") {
+    const columns = field.columns ?? [];
+    return filledRowCount(parseRows(value, columns), columns) >= (field.minRows ?? 1);
+  }
   return typeof value === "string" ? value.trim().length > 0 : value != null && value !== "";
 }
 
@@ -103,7 +111,7 @@ export function derivePhaseMethodologyCompleteness(
       id: `input:${field.id}`,
       kind: "input" as const,
       label: field.label,
-      present: inputFilled(inputs[field.id]),
+      present: inputFilled(field, inputs[field.id]),
       detail: field.hint ?? null,
     }));
 
