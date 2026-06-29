@@ -15,7 +15,7 @@ import { EmptyState } from "@/v3/components/ui/EmptyState";
 import { ExpandableSection } from "@/v3/components/ui/ExpandableSection";
 import { RelativeTime } from "@/v3/components/ui/RelativeTime";
 import { StatusBadge } from "@/v3/components/ui/StatusBadge";
-import { computePhaseReadiness } from "@/v3/lib/phaseReadiness";
+import { computePhaseReadiness, getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
 import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
 import { resolveArtifactReview, resolveArtifactQualityScore } from "@/v3/lib/artifactReview";
 import { getPhaseArtifactDefs, type PhaseArtifactDef } from "@/v3/lib/phaseArtifacts";
@@ -704,6 +704,15 @@ export default function StageView({
   // The phase gate is closed/locked: artifacts are finalised, so per-artifact and
   // bulk approval no longer apply (reopen via the Unlock action to edit again).
   const gateApproved = gateReviewStatus === "approved";
+  // The current frontier phase = the open phase you can actually work in: its gate
+  // is not yet approved AND it is not sequentially locked behind an earlier open
+  // gate. Reset is destructive and only makes sense here — approved past phases are
+  // locked history (use Unlock to edit) and future phases have nothing to reset.
+  const isCurrentPhase = useMemo(() => {
+    if (!program || !activePhase) return false;
+    if (gateApproved) return false;
+    return !getLockedPhaseIds(program).has(activePhase.id);
+  }, [program, activePhase, gateApproved]);
   const source = typeof program?.rawData === "object" && program.rawData !== null
     ? ("data" in program.rawData && typeof program.rawData.data === "object" && program.rawData.data !== null
       ? program.rawData.data as Record<string, unknown>
@@ -1197,7 +1206,7 @@ export default function StageView({
                       </button>
                     </>
                   ) : null}
-                  {(gateApproved || onResetPhase) ? (
+                  {(gateApproved || (onResetPhase && isCurrentPhase)) ? (
                     <>
                       <div className="v3-settings-menu-head">{activePhase.displayName ?? activePhase.id} phase</div>
                       {gateApproved ? (
@@ -1216,7 +1225,7 @@ export default function StageView({
                           </span>
                         </button>
                       ) : null}
-                      {onResetPhase ? (
+                      {onResetPhase && isCurrentPhase ? (
                         <button
                           type="button"
                           role="menuitem"
