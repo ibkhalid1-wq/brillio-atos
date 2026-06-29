@@ -65,6 +65,7 @@ export const AGENT_META: Record<string, AgentMeta> = {
 export const AGENT_ID_ALIASES: Record<string, string> = {
   "risk-log": "risk",
   "risk-register": "risk",
+  "completion-estimate": "phase-completion-estimator",
 };
 
 export function getAgentMeta(agentId: string): AgentMeta {
