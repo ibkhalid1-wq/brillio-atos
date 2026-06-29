@@ -956,7 +956,7 @@ export default function ExecutiveView({
         {/* Gantt timeline — read-only here; the Roadmap surface owns editing. */}
         <div>
           <SectionLabel>Phase Timeline</SectionLabel>
-          <RoadmapGantt rows={roadmapRows} />
+          <RoadmapGantt rows={roadmapRows} showDates={false} />
         </div>
 
         {/* ── 5. Stage progress ───────────────────────────────────────────── */}

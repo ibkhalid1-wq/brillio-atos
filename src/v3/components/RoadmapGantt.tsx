@@ -21,6 +21,8 @@ interface RoadmapGanttProps {
   onChange?: (id: string, start: string, end: string) => void;
   /** Dated milestones overlaid on the timeline (validation/de-risking stages). */
   markers?: GanttMarker[];
+  /** When false the per-row start/end date column is hidden (chart-only view). */
+  showDates?: boolean;
 }
 
 type DragMode = "move" | "resize-start" | "resize-end";
@@ -55,7 +57,7 @@ function formatShortDate(iso: string): string {
  * it / drag its edges to resize, or type exact dates in the per-row inputs. Both
  * paths funnel through one `onChange` so persistence has a single entry point.
  */
-export default function RoadmapGantt({ rows, editable = false, onChange, markers }: RoadmapGanttProps) {
+export default function RoadmapGantt({ rows, editable = false, onChange, markers, showDates = true }: RoadmapGanttProps) {
   // Working copy so drags/edits render live before the parent persists and feeds
   // fresh props back. Re-synced whenever the incoming rows actually change.
   const [draft, setDraft] = useState<GanttRow[]>(rows);
@@ -203,7 +205,7 @@ export default function RoadmapGantt({ rows, editable = false, onChange, markers
   }
 
   return (
-    <div className={`v3-gantt${editable ? " is-editable" : ""}`}>
+    <div className={`v3-gantt${editable ? " is-editable" : ""}${showDates ? "" : " no-dates"}`}>
       <div className="v3-gantt-head">
         <span className="v3-gantt-title">Roadmap timeline</span>
         <span className="v3-gantt-hint">
@@ -216,7 +218,7 @@ export default function RoadmapGantt({ rows, editable = false, onChange, markers
       {/* Month axis (labels only — gridlines live in the grid overlay below) */}
       <div className="v3-gantt-row v3-gantt-axis">
         <span className="v3-gantt-label" aria-hidden="true" />
-        <span className="v3-gantt-dates-head" aria-hidden="true" />
+        {showDates ? <span className="v3-gantt-dates-head" aria-hidden="true" /> : null}
         <div className="v3-gantt-track v3-gantt-axis-track" ref={trackRef}>
           {monthTicks.map((month) => (
             <span
@@ -269,32 +271,34 @@ export default function RoadmapGantt({ rows, editable = false, onChange, markers
                 <span className={`v3-gantt-dot rag-${rag}`} aria-hidden="true" />
                 <span className="v3-gantt-labeltext">{bar.name}</span>
               </span>
-              {editable ? (
-                <div className="v3-gantt-dates">
-                  <input
-                    type="date"
-                    className="v3-gantt-date"
-                    aria-label={`${bar.name} start date`}
-                    value={bar.start}
-                    max={shiftIsoDate(bar.end, -MIN_DAYS)}
-                    onChange={(e) => onDateInput(bar, "start", e.target.value)}
-                  />
-                  <span className="v3-gantt-date-sep" aria-hidden="true">&rarr;</span>
-                  <input
-                    type="date"
-                    className="v3-gantt-date"
-                    aria-label={`${bar.name} end date`}
-                    value={bar.end}
-                    min={shiftIsoDate(bar.start, MIN_DAYS)}
-                    onChange={(e) => onDateInput(bar, "end", e.target.value)}
-                  />
-                </div>
-              ) : (
-                <div className="v3-gantt-dates" aria-label={`${bar.name} dates`}>
-                  <span className="v3-gantt-dateval">{formatShortDate(bar.start)}</span>
-                  <span className="v3-gantt-dateval is-end">{formatShortDate(bar.end)}</span>
-                </div>
-              )}
+              {showDates ? (
+                editable ? (
+                  <div className="v3-gantt-dates">
+                    <input
+                      type="date"
+                      className="v3-gantt-date"
+                      aria-label={`${bar.name} start date`}
+                      value={bar.start}
+                      max={shiftIsoDate(bar.end, -MIN_DAYS)}
+                      onChange={(e) => onDateInput(bar, "start", e.target.value)}
+                    />
+                    <span className="v3-gantt-date-sep" aria-hidden="true">&rarr;</span>
+                    <input
+                      type="date"
+                      className="v3-gantt-date"
+                      aria-label={`${bar.name} end date`}
+                      value={bar.end}
+                      min={shiftIsoDate(bar.start, MIN_DAYS)}
+                      onChange={(e) => onDateInput(bar, "end", e.target.value)}
+                    />
+                  </div>
+                ) : (
+                  <div className="v3-gantt-dates" aria-label={`${bar.name} dates`}>
+                    <span className="v3-gantt-dateval">{formatShortDate(bar.start)}</span>
+                    <span className="v3-gantt-dateval is-end">{formatShortDate(bar.end)}</span>
+                  </div>
+                )
+              ) : null}
               <div className="v3-gantt-track">
                 <div
                   className={`v3-gantt-bar${editable ? " is-editable" : ""}${drag?.id === bar.id ? " is-dragging" : ""}`}

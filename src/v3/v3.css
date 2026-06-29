@@ -12535,6 +12535,7 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
    Rows are vertically contiguous (no padding) so the pinned columns leave no gaps
    for the scrolling overlay to bleed through; lane spacing lives in the track margin. */
 .v3-gantt-row { display: grid; grid-template-columns: var(--v3-gantt-label-w) var(--v3-gantt-dates-w) minmax(var(--v3-gantt-track-min), 1fr); align-items: center; gap: var(--v3-gantt-gap); }
+.v3-gantt.no-dates .v3-gantt-row { grid-template-columns: var(--v3-gantt-label-w) minmax(var(--v3-gantt-track-min), 1fr); }
 .v3-gantt-grid .v3-gantt-track { margin: 3px 0; }
 .v3-gantt-axis { margin-bottom: 12px; }
 .v3-gantt-label {
