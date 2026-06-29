@@ -1201,9 +1201,13 @@ export default function StageView({
   // below shows only generated results, never a wall of "Generate X" buttons.
   const phaseAgentActions: Array<{ key: string; label: React.ReactNode; disabled: boolean; onClick: () => void }> = [];
   if (activePhase.id === "discover") {
-    phaseAgentActions.push({ key: "discovery-guide-generator", label: agentButtonContent("discovery-guide-generator", discoveryGuide ? "Re-generate discovery pack" : "Generate discovery pack"), disabled: gateApproved || agentButtonDisabled("discovery-guide-generator"), onClick: () => onRunAgent("discovery-guide-generator") });
+    // The discovery pack auto-generates when the Discover phase is reached
+    // (useAgentTriggers), so there is no manual "Generate" button — only a "View"
+    // once it exists, or a generating indicator while the auto-run is in flight.
     if (discoveryGuide) {
       phaseAgentActions.push({ key: "view-discovery-pack", label: "View discovery pack", disabled: false, onClick: () => setShowDiscoveryPack(true) });
+    } else if (isAgentRunning("discovery-guide-generator")) {
+      phaseAgentActions.push({ key: "discovery-guide-generator", label: "Generating discovery pack…", disabled: true, onClick: () => undefined });
     }
   }
   if (activePhase.id === "build") {

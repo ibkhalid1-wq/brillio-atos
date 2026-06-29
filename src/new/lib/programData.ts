@@ -1183,6 +1183,7 @@ export function normalizeProgram(row: ProgramRowLike): ProgramSummary {
     retrosGeneratedAt,
     deck,
     deckGeneratedAt: asString(innerData.deckGeneratedAt) || null,
+    discoveryGuideGeneratedAt: asString(asRecord(innerData.discoveryGuide).generatedAt) || null,
     scopePcr,
     scopePcrGeneratedAt: asString(innerData.scopePcrGeneratedAt) || null,
     benefitsTracking,

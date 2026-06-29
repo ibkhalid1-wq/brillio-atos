@@ -33,6 +33,7 @@ interface UseAgentTriggersOptions {
   healthHeatmapGeneratedAt: string | null;
   retrosGeneratedAt: Record<string, string>;
   deckGeneratedAt: string | null;
+  discoveryGuideGeneratedAt: string | null;
   scopePcrGeneratedAt: string | null;
   patternExtractGeneratedAt: string | null;
   patternQueryCachedAt: string | null;
@@ -80,6 +81,7 @@ export function useAgentTriggers({
   adoptionGeneratedAt,
   healthHeatmapGeneratedAt,
   retrosGeneratedAt,
+  discoveryGuideGeneratedAt,
   scopePcrGeneratedAt,
   patternExtractGeneratedAt,
   patternQueryCachedAt,
@@ -111,6 +113,7 @@ export function useAgentTriggers({
     adoptionProgramId: string | null;
     healthHeatmapProgramId: string | null;
     deckProgramId: string | null;
+    discoveryGuideProgramId: string | null;
     scopePcrProgramId: string | null;
     patternExtractProgramId: string | null;
     patternQueryProgramId: string | null;
@@ -126,6 +129,7 @@ export function useAgentTriggers({
     adoptionProgramId: null,
     healthHeatmapProgramId: null,
     deckProgramId: null,
+    discoveryGuideProgramId: null,
     scopePcrProgramId: null,
     patternExtractProgramId: null,
     patternQueryProgramId: null,
@@ -153,6 +157,7 @@ export function useAgentTriggers({
   const phaseEstimatorRunning = useRef(false);
   const phaseEstimatorLastPhase = useRef<string | null>(null);
   const deckRunning = useRef(false);
+  const discoveryGuideRunning = useRef(false);
   const patternExtractRunning = useRef(false);
   const patternQueryRunning = useRef(false);
   const escalationRunning = useRef(false);
@@ -241,6 +246,7 @@ export function useAgentTriggers({
         adoptionProgramId: null,
         healthHeatmapProgramId: null,
         deckProgramId: null,
+        discoveryGuideProgramId: null,
         scopePcrProgramId: null,
         patternExtractProgramId: null,
         patternQueryProgramId: null,
@@ -271,6 +277,7 @@ export function useAgentTriggers({
     if (loadTriggerRef.current.adoptionProgramId !== programId) loadTriggerRef.current.adoptionProgramId = null;
     if (loadTriggerRef.current.healthHeatmapProgramId !== programId) loadTriggerRef.current.healthHeatmapProgramId = null;
     if (loadTriggerRef.current.deckProgramId !== programId) loadTriggerRef.current.deckProgramId = null;
+    if (loadTriggerRef.current.discoveryGuideProgramId !== programId) loadTriggerRef.current.discoveryGuideProgramId = null;
     if (loadTriggerRef.current.scopePcrProgramId !== programId) loadTriggerRef.current.scopePcrProgramId = null;
     if (loadTriggerRef.current.patternExtractProgramId !== programId) loadTriggerRef.current.patternExtractProgramId = null;
     if (loadTriggerRef.current.patternQueryProgramId !== programId) loadTriggerRef.current.patternQueryProgramId = null;
@@ -417,6 +424,24 @@ export function useAgentTriggers({
       scopePcrRunning.current = false;
     });
   }, [canRunAgents, phases, programId, runAgentSafely, scopePcrGeneratedAt]);
+
+  // Auto-generate the Discover discovery pack once the Discover phase is reached
+  // (no longer "inactive"), so the interview guides / workshop agenda are waiting
+  // for the user instead of requiring a manual "Generate" click. Fires once per
+  // programme and never regenerates — an existing pack short-circuits it.
+  useEffect(() => {
+    if (!canRunAgents) return;
+    if (discoveryGuideGeneratedAt) return;
+    if (loadTriggerRef.current.discoveryGuideProgramId === programId || discoveryGuideRunning.current) return;
+    const discoverReached = phases.some((phase) => phase.id === "discover" && phase.status !== "inactive");
+    if (!discoverReached) return;
+
+    loadTriggerRef.current.discoveryGuideProgramId = programId;
+    discoveryGuideRunning.current = true;
+    void runAgentSafely({ agentId: "discovery-guide-generator", phaseId: "discover", triggeredBy: "trigger" }, () => {
+      discoveryGuideRunning.current = false;
+    });
+  }, [canRunAgents, discoveryGuideGeneratedAt, phases, programId, runAgentSafely]);
 
   useEffect(() => {
     if (!canRunAgents || !activePhaseId) return;

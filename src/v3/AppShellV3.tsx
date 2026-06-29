@@ -1616,6 +1616,7 @@ export default function AppShellV3() {
     healthHeatmapGeneratedAt: activeProgram?.healthHeatmapGeneratedAt || null,
     retrosGeneratedAt: activeProgram?.retrosGeneratedAt || {},
     deckGeneratedAt: activeProgram?.deckGeneratedAt || null,
+    discoveryGuideGeneratedAt: activeProgram?.discoveryGuideGeneratedAt || null,
     scopePcrGeneratedAt: activeProgram?.scopePcrGeneratedAt || null,
     patternExtractGeneratedAt: activeProgram?.patternExtractGeneratedAt || null,
     patternQueryCachedAt: activeProgram?.patternQueryCachedAt || null,
@@ -2419,9 +2420,15 @@ export default function AppShellV3() {
     const artifactBuckets = typeof cloned.inner.phaseArtifacts === "object" && cloned.inner.phaseArtifacts !== null
       ? (cloned.inner.phaseArtifacts as Record<string, Record<string, Record<string, unknown>>>)
       : {};
+    // Pass the dynamic schema store so flow edges for planner-generated/custom
+    // artifacts (whose field→artifact map lives in artifactInputFlow, not the
+    // static methodology) resolve too — otherwise reimporting a document on a
+    // dynamic phase could silently overwrite an input feeding an approved
+    // dynamic artifact. Mirrors the staleness path above.
+    const flowStore = getDynamicSchemaStore(cloned.inner);
     let skippedFieldCount = 0;
     for (const [phaseId, inputs] of Object.entries(writableInputs)) {
-      const blocked = fieldsFeedingApprovedArtifacts(phaseId, Object.keys(inputs), artifactBuckets[phaseId]);
+      const blocked = fieldsFeedingApprovedArtifacts(phaseId, Object.keys(inputs), artifactBuckets[phaseId], flowStore);
       const writableFields = blocked.size
         ? Object.fromEntries(Object.entries(inputs).filter(([fieldId]) => !blocked.has(fieldId)))
         : inputs;

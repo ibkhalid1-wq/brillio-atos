@@ -708,6 +708,7 @@ export interface ProgramSummary {
   retrosGeneratedAt: Record<string, string>;
   deck: ExecutiveDeck | null;
   deckGeneratedAt: string | null;
+  discoveryGuideGeneratedAt: string | null;
   scopePcr: ScopePcrSummary | null;
   scopePcrGeneratedAt: string | null;
   benefitsTracking: BenefitsTrackingSummary | null;
