@@ -222,7 +222,7 @@ export default function RoadmapView({
   onSaveRoadmapSchedule,
 }: RoadmapViewProps) {
   const roadmapRows = React.useMemo(
-    () => buildRoadmapRows(program?.rawData, (program?.phases || []) as Array<{ id: string }>),
+    () => buildRoadmapRows(program?.rawData, (program?.phases || []) as Array<{ id: string; status?: string }>),
     [program?.rawData, program?.phases],
   );
 

@@ -225,7 +225,7 @@ function deriveRag(progressPct: number, startMs: number, endMs: number, todayMs:
  * a schedule-vs-today RAG when the agent hasn't run yet. Shared by the
  * strategy-stage artifact preview and the Roadmap workspace.
  */
-export function buildRoadmapRows(rawData: unknown, phases: Array<{ id: string }>): GanttRow[] {
+export function buildRoadmapRows(rawData: unknown, phases: Array<{ id: string; status?: string }>): GanttRow[] {
   const raw = unwrapInner(rawData);
   const phaseInputs = raw.phaseInputs;
   const strategyInputs = typeof phaseInputs === "object" && phaseInputs !== null
@@ -260,7 +260,11 @@ export function buildRoadmapRows(rawData: unknown, phases: Array<{ id: string }>
     const progressPct = artifactProgress.get(p.id) ?? h?.progressPct ?? 0;
     const startMs = parseUtcDay(start) ?? todayMs;
     const endMs = parseUtcDay(end) ?? todayMs;
-    const rag = h?.rag ?? deriveRag(progressPct, startMs, endMs, todayMs);
+    // A gate-approved (complete) phase is healthy by definition: the stakeholder
+    // sign-off is authoritative and overrides a stale agent RAG/risk that may
+    // predate the approval (e.g. a "gate reopened" note written before re-approval).
+    const isComplete = p.status === "complete";
+    const rag = isComplete ? "green" : (h?.rag ?? deriveRag(progressPct, startMs, endMs, todayMs));
     rows.push({
       id: p.id,
       name: getPhaseDefinition(p.id)?.displayName ?? p.id,
@@ -268,7 +272,7 @@ export function buildRoadmapRows(rawData: unknown, phases: Array<{ id: string }>
       end,
       progressPct,
       rag,
-      risk: h?.risk ?? null,
+      risk: isComplete ? null : (h?.risk ?? null),
     });
   }
   return rows;
