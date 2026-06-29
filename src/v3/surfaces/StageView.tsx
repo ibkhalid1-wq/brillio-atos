@@ -1200,16 +1200,11 @@ export default function StageView({
   // Phase-specific agent actions — consolidated into the header so the workspace
   // below shows only generated results, never a wall of "Generate X" buttons.
   const phaseAgentActions: Array<{ key: string; label: React.ReactNode; disabled: boolean; onClick: () => void }> = [];
-  if (activePhase.id === "discover") {
-    // The discovery pack auto-generates when the Discover phase is reached
-    // (useAgentTriggers), so there is no manual "Generate" button — only a "View"
-    // once it exists, or a generating indicator while the auto-run is in flight.
-    if (discoveryGuide) {
-      phaseAgentActions.push({ key: "view-discovery-pack", label: "View discovery pack", disabled: false, onClick: () => setShowDiscoveryPack(true) });
-    } else if (isAgentRunning("discovery-guide-generator")) {
-      phaseAgentActions.push({ key: "discovery-guide-generator", label: "Generating discovery pack…", disabled: true, onClick: () => undefined });
-    }
-  }
+  // The discovery pack auto-generates when the Discover phase is reached
+  // (useAgentTriggers), so there is no manual "Generate" button. The "View
+  // discovery pack" action lives in the inputs column (next to the inputs panel),
+  // not here in the phase header.
+  const discoveryPackRunning = activePhase.id === "discover" && !discoveryGuide && isAgentRunning("discovery-guide-generator");
   if (activePhase.id === "build") {
     phaseAgentActions.push({ key: "sprint-planner", label: agentButtonContent("sprint-planner", sprintPlan ? "Re-plan sprints" : "Generate sprint plan"), disabled: gateApproved || agentButtonDisabled("sprint-planner"), onClick: () => onRunAgent("sprint-planner") });
   }
@@ -1553,11 +1548,23 @@ export default function StageView({
           the inputs panel; the panel itself holds the field editors. */}
       <section className="v3-phase-col v3-phase-col--inputs">
         <div className="v3-zone-label">Input fields</div>
-        {!gateApproved ? (
+        {!gateApproved || (activePhase.id === "discover" && (discoveryGuide || discoveryPackRunning)) ? (
           <div className="v3-phase-col-actions">
-            <button type="button" className="v3-button secondary v3-button-inline-xs" onClick={onUploadDocument}>
-              ↑ Import documents
-            </button>
+            {!gateApproved ? (
+              <button type="button" className="v3-button secondary v3-button-inline-xs" onClick={onUploadDocument}>
+                ↑ Import documents
+              </button>
+            ) : null}
+            {activePhase.id === "discover" && discoveryGuide ? (
+              <button type="button" className="v3-button secondary v3-button-inline-xs" onClick={() => setShowDiscoveryPack(true)}>
+                View discovery pack
+              </button>
+            ) : null}
+            {discoveryPackRunning ? (
+              <button type="button" className="v3-button secondary v3-button-inline-xs" disabled>
+                Generating discovery pack…
+              </button>
+            ) : null}
           </div>
         ) : null}
         {/* The phase-readiness / conflicts / open-gaps planner banner was removed:
