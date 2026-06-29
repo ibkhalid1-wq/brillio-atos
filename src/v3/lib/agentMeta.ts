@@ -25,7 +25,7 @@ export const AGENT_META: Record<string, AgentMeta> = {
   "compliance-checker": { id: "compliance-checker", label: "Compliance", description: "Checks regulatory compliance posture", estimatedSeconds: 30, category: "compliance", icon: "⊞", outputArtifact: "Compliance Report" },
   "capacity-assessor": { id: "capacity-assessor", label: "Capacity", description: "Team capacity and demand assessment", estimatedSeconds: 25, category: "analysis", icon: "▤", outputArtifact: "Capacity Plan" },
   "vendor-risk-assessor": { id: "vendor-risk-assessor", label: "Vendor Risk", description: "Assesses vendor and partner risk", estimatedSeconds: 28, category: "analysis", icon: "⚑", outputArtifact: "Vendor Risk Report" },
-  "phase-completion-estimator": { id: "phase-completion-estimator", label: "Completion Estimator", description: "Forecasts phase completion date", estimatedSeconds: 20, category: "analysis", icon: "◷", outputArtifact: "Completion Forecast" },
+  "phase-completion-estimator": { id: "phase-completion-estimator", label: "Phase Progress", description: "Estimates phase progress % from milestones, exit criteria, tasks and artifacts", estimatedSeconds: 20, category: "analysis", icon: "◷", outputArtifact: "Phase progress" },
   "setup-prefill": { id: "setup-prefill", label: "Setup Pre-fill", description: "Pre-fills setup wizard from context", estimatedSeconds: 12, category: "onboarding", icon: "✧" },
   "discovery-guide-generator": { id: "discovery-guide-generator", label: "Discovery Guide", description: "Generates interview and workshop guides", estimatedSeconds: 25, category: "narrative", icon: "✦", outputArtifact: "Discovery Pack" },
   "sprint-planner": { id: "sprint-planner", label: "Sprint Planner", description: "Breaks phase into sprint plan", estimatedSeconds: 22, category: "narrative", icon: "◎", outputArtifact: "Sprint Plan" },
@@ -65,7 +65,6 @@ export const AGENT_META: Record<string, AgentMeta> = {
 export const AGENT_ID_ALIASES: Record<string, string> = {
   "risk-log": "risk",
   "risk-register": "risk",
-  "completion-estimate": "phase-completion-estimator",
 };
 
 export function getAgentMeta(agentId: string): AgentMeta {

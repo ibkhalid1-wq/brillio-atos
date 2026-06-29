@@ -3241,10 +3241,6 @@ export default function AppShellV3() {
               onOpenPhase={openPhaseSheet}
               onUpdatePhasePct={handleUpdatePhasePct}
               lockedPhaseIds={lockedPhaseIds}
-              completionEstimates={(() => {
-                const inner = getProgramState(activeProgram?.rawData || {}).inner;
-                return (inner.phaseCompletionEstimates as Record<string, { estimate: number }> | undefined) || {};
-              })()}
             />
           </AdamErrorBoundary>
         ) : null}

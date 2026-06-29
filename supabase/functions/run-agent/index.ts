@@ -4692,28 +4692,20 @@ function applyDailyBriefingResultToProgramData(programData: ProgramState, result
 }
 
 function applyCompletionEstimateResultToProgramData(programData: ProgramState, phaseId: string, result: Record<string, unknown>): ProgramState {
+  // The estimator's only durable output is the phase progress %. It is the sole
+  // writer of phasePct, which feeds the progress rings, the Gantt fill and gate
+  // readiness. Progress is an internal metric, not a deliverable, so we no longer
+  // persist a parallel `completion-estimate` artifact or `phaseCompletionEstimates`
+  // map — both duplicated this same number (the artifact also surfaced a confusing
+  // pseudo-deliverable in the phase workspace).
   const estimate = Math.round(clampNumber(result.estimate, 0, 100, 0));
-  let next = updateInnerProgramData(programData, (inner) => ({
+  return updateInnerProgramData(programData, (inner) => ({
     ...inner,
     phasePct: {
       ...(normalizeProgramData(inner.phasePct as JsonValue | null)),
       [phaseId]: estimate,
     } as JsonValue,
-    phaseCompletionEstimates: {
-      ...(normalizeProgramData(inner.phaseCompletionEstimates as JsonValue | null)),
-      [phaseId]: {
-        estimate,
-        signals: isRecord(result.signals) ? result.signals as JsonValue : {},
-        generatedAt: new Date().toISOString(),
-      } as JsonValue,
-    } as JsonValue,
   }));
-  next = setPhaseArtifactValue(next, phaseId, "completion-estimate", {
-    estimate,
-    signals: isRecord(result.signals) ? result.signals : {},
-    generatedAt: new Date().toISOString(),
-  }, "Completion estimate");
-  return next;
 }
 
 function applyProgramSupportArtifact(

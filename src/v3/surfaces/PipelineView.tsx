@@ -11,7 +11,6 @@ interface PipelineViewProps {
   onOpenPhase: (phaseId: string) => void;
   onUpdatePhasePct: (phaseId: string, pct: number) => void;
   lockedPhaseIds: Set<string>;
-  completionEstimates?: Record<string, { estimate: number }>;
   gateReviews?: Record<string, { readinessScore?: number; status?: string } | null>;
 }
 
@@ -19,7 +18,7 @@ function phaseLabel(label: string): string {
   return label.split(" ").slice(0, 3).join(" ");
 }
 
-export default function PipelineView({ program, activePhaseId, onSelectPhase, onOpenPhase, onUpdatePhasePct, lockedPhaseIds, completionEstimates = {}, gateReviews }: PipelineViewProps) {
+export default function PipelineView({ program, activePhaseId, onSelectPhase, onOpenPhase, onUpdatePhasePct, lockedPhaseIds, gateReviews }: PipelineViewProps) {
   const phases = program?.phases || [];
 
   if (!program || !phases.length) {
@@ -116,7 +115,6 @@ export default function PipelineView({ program, activePhaseId, onSelectPhase, on
         {phases.map((phase) => {
           const review = program.gateReviews?.[phase.id] || null;
           const isLocked = lockedPhaseIds.has(phase.id);
-          const agentEstimate = completionEstimates[phase.id]?.estimate;
           const statusTone = review
             ? review.status === "approved" || review.status === "ready"
               ? "green"
@@ -175,17 +173,6 @@ export default function PipelineView({ program, activePhaseId, onSelectPhase, on
                       {Math.round(phase.pct)}%
                     </span>
                   </div>
-                  {agentEstimate !== undefined && agentEstimate !== Math.round(phase.pct) ? (
-                    <button
-                      type="button"
-                      className="v3-button ghost"
-                      style={{ fontSize: 11, paddingLeft: 0, marginTop: 6, color: "var(--v3-text-muted)", textDecoration: "underline" }}
-                      onClick={() => onUpdatePhasePct(phase.id, agentEstimate)}
-                    >
-                      Agent estimates {agentEstimate}% — apply?
-                    </button>
-                  ) : null}
-
                   <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", marginTop: 12, gap: 12 }}>
                     <button type="button" className="v3-button ghost" style={{ fontSize: 12 }} onClick={() => onOpenPhase(phase.id)}>
                       Open work area →
