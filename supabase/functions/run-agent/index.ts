@@ -2170,6 +2170,60 @@ const RAID_APPROVAL_NEGATION =
   /\bnot\s+(been\s+)?(yet\s+)?(formally\s+)?(approved|baselined|signed[\s-]?off|finalized|finalised)\b|\bunapproved\b|\b(only|still)\s+in\s+draft\b|\bin\s+draft\s+state\b|\bdraft\s+state\b|\bpending\s+(sign[\s-]?off|approval)\b|\bawaiting\s+(approval|sign[\s-]?off)\b/i;
 const RAID_EXIT_CRITERIA = /\b(phase\s+)?exit\s+criteria\b|\bexit\s+gate/i;
 
+// The model also emits "there are no timelines / no owners" findings that are
+// provably false when those inputs are actually populated: the programme window
+// lives on the Strategy phase inputs (startDate/targetEndDate, from which every
+// phase's roadmap dates are derived) and named owners live on the Mobilise core
+// team roster. The "no X defined" phrasing slips past RAID_APPROVAL_NEGATION, so
+// we detect absence-claims directly and suppress them when the input exists.
+const ABSENCE_NEG = "(?:no|not|none|missing|lack(?:s|ing)?|absence|without|never|undefined|absent|isn'?t|aren'?t|hasn'?t|haven'?t)";
+const ABSENCE_DEF_VERB =
+  "(?:defined|established|set|provided|identified|assigned|specified|documented|baselined|in\\s+place|exist|present|available|captured)";
+const TIMELINE_NOUN =
+  "(?:estimated\\s+)?(?:timelines?|milestones?|target\\s+dates?|delivery\\s+dates?|schedules?|start\\s+and\\s+end\\s+dates?)";
+const OWNER_NOUN = "(?:owners?|accountable\\s+(?:owners?|parties)|raci(?:\\s+matrix)?)";
+
+/** True when `text` asserts the absence/undefined-ness of `nounSource`. */
+function claimsMissing(text: string, nounSource: string, allowBare: boolean): boolean {
+  const fill = "[\\w\\s,/'\"()-]";
+  // "no <noun> ... defined"  /  "<noun> ... not defined"
+  const negThenNoun = new RegExp(`\\b${ABSENCE_NEG}\\b${fill}{0,60}?\\b${nounSource}\\b${fill}{0,40}?\\b${ABSENCE_DEF_VERB}\\b`, "i");
+  const nounThenNeg = new RegExp(`\\b${nounSource}\\b${fill}{0,40}?\\b${ABSENCE_NEG}\\b${fill}{0,25}?\\b${ABSENCE_DEF_VERB}\\b`, "i");
+  if (negThenNoun.test(text) || nounThenNeg.test(text)) return true;
+  // Unambiguous bare absence ("no owners or due dates") — strong tokens only, tight window.
+  if (allowBare) {
+    const bare = new RegExp(`\\b(?:no|missing|without|lack of|absence of)\\s+(?:\\w+\\s+){0,2}?${nounSource}\\b`, "i");
+    if (bare.test(text)) return true;
+  }
+  return false;
+}
+
+/** Roster row carries a non-empty value in a name-like column. */
+function rosterHasNamedOwner(rows: Array<Record<string, unknown>>): boolean {
+  return rows.some((row) => {
+    const nameKey = Object.keys(row).find((k) => /name/i.test(k));
+    const value = nameKey ? row[nameKey] : null;
+    return typeof value === "string" && value.trim().length > 0;
+  });
+}
+
+/**
+ * Which "absence" claims are provably false for this programme: the timeline
+ * window (Strategy inputs) and the owner roster (Mobilise inputs).
+ */
+function buildPlanGroundingIndex(programData: ProgramState): { hasTimeline: boolean; hasOwners: boolean } {
+  const inner = getInnerProgramData(programData);
+  const phaseInputsAll = normalizeProgramData(inner.phaseInputs as JsonValue | null);
+  const strategyInputs = normalizeProgramData(phaseInputsAll.strategy as JsonValue | null);
+  const start = strategyInputs.startDate;
+  const end = strategyInputs.targetEndDate ?? strategyInputs.endDate;
+  const hasTimeline =
+    typeof start === "string" && !!start.trim() && typeof end === "string" && !!end.trim();
+  const mobiliseInputs = normalizeProgramData(phaseInputsAll.mobilise as JsonValue | null);
+  const hasOwners = rosterHasNamedOwner(resolveRosterRows(mobiliseInputs));
+  return { hasTimeline, hasOwners };
+}
+
 function buildApprovedArtifactIndex(programData: ProgramState): { ids: Set<string>; titles: string[] } {
   const ids = new Set<string>();
   const titles: string[] = [];
@@ -2198,9 +2252,16 @@ function buildApprovedArtifactIndex(programData: ProgramState): { ids: Set<strin
  * - it asserts an approved artifact is unapproved / still in draft, or
  * - its core issue is the absence of phase exit criteria (not part of this methodology).
  */
-function isProvablyStaleRiskEntry(entry: Record<string, unknown>, approved: { ids: Set<string>; titles: string[] }): boolean {
+function isProvablyStaleRiskEntry(
+  entry: Record<string, unknown>,
+  approved: { ids: Set<string>; titles: string[] },
+  grounding: { hasTimeline: boolean; hasOwners: boolean },
+): boolean {
   const text = `${typeof entry.title === "string" ? entry.title : ""} ${typeof entry.description === "string" ? entry.description : ""}`.toLowerCase();
   if (RAID_EXIT_CRITERIA.test(text)) return true;
+  // Absence-of-timeline / absence-of-owner claims that contradict populated inputs.
+  if (grounding.hasTimeline && claimsMissing(text, TIMELINE_NOUN, false)) return true;
+  if (grounding.hasOwners && claimsMissing(text, OWNER_NOUN, true)) return true;
   if (!RAID_APPROVAL_NEGATION.test(text)) return false;
   const rel = typeof entry.relatedArtifactId === "string" ? entry.relatedArtifactId : "";
   if (rel && approved.ids.has(rel)) return true;
@@ -2235,10 +2296,11 @@ function applyRiskResultToProgramData(programData: ProgramState, result: Record<
     }
 
     const approvedArtifacts = buildApprovedArtifactIndex(programData);
+    const planGrounding = buildPlanGroundingIndex(programData);
     const agentEntries = Array.isArray(result.raidEntries)
       ? result.raidEntries
           .filter(isRecord)
-          .filter((entry) => !isProvablyStaleRiskEntry(entry, approvedArtifacts))
+          .filter((entry) => !isProvablyStaleRiskEntry(entry, approvedArtifacts, planGrounding))
           .map((entry, index) => {
             const type = typeof entry.type === "string" ? entry.type : "risk";
             const severity = typeof entry.severity === "string" ? entry.severity : "medium";
@@ -4893,6 +4955,8 @@ State-awareness rules (avoid stale / false findings):
 - Check each artifact's status field before flagging it. Treat any artifact whose status is "approved" as complete and accepted. NEVER raise a risk, blocker, assumption, or dependency claiming an approved artifact is unapproved, still in draft, pending sign-off, or not baselined.
 - The delivery plan and the milestones are part of the strategic roadmap artifact (carried as strategicRoadmap.deliveryPlan and strategicRoadmap.milestones), not standalone artifacts. When the strategic roadmap is approved, the delivery plan and milestones are baselined and approved by definition. NEVER flag the delivery plan or milestones as not baselined, not approved, missing, or pending sign-off while the strategic roadmap is approved.
 - Phase exit is governed solely by artifact approval and artifact quality. Do NOT flag the absence of "phase exit criteria" or "exit gates" as a risk or blocker — that concept is not part of this methodology.
+- The programme timeline lives on the Strategy phase inputs (startDate and targetEndDate); every phase's roadmap window is derived from it. When those dates are present, NEVER raise a finding claiming there are no milestones, no timelines, no estimated dates, or no schedule for any/all phases.
+- Phase and artifact owners live on the Mobilise core team roster (named people with roles). When that roster has named members, NEVER raise a finding claiming there are no owners or no accountable parties for the work.
 - Every finding must hold against the CURRENT artifacts and phases in the input. Do not restate a finding the present state has already resolved.
 
 Not-ready condition: if no phases have measurable progress and no artifacts exist, respond with:
