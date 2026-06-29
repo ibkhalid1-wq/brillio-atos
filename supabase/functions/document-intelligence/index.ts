@@ -200,7 +200,8 @@ RULES:
 - methodologyMappings: map document data ONLY to the declared phase input fields listed above, each under its own phase id. Do NOT invent fields that are not in that list — capture any other material in the entities arrays instead.
 - grid fields: the "value" MUST be a JSON-array STRING (e.g. "[{\\"role\\":\\"Delivery Lead\\",\\"name\\":\\"Jane Doe\\"}]") whose objects use exactly the column keys named for that field. Include one object per row found in the document; omit the field entirely when the document has no such data.
 - Only include methodologyMappings for phases/fields where you found actual data
-- Limit each entity array to a maximum of 5 items (the most important ones)
+- stakeholders: capture EVERY distinct person/role the document names — one entry per role, across ALL sheets/tabs/sections of the document (e.g. a project team roster, advisory/SME list, and steering committee are separate tables that must ALL be extracted). A role with no named person is still a stakeholder: emit it with an empty name. The 5-item entity cap below does NOT apply to stakeholders — never truncate the roster.
+- Limit each entity array (except kpis and stakeholders) to a maximum of 5 items (the most important ones)
 - Omit methodology mapping fields that have no data rather than returning empty strings
 - Keep all string values concise — under 300 characters per field (grid JSON strings excepted)
 - Never fabricate information that is not in the document
