@@ -4249,7 +4249,7 @@ async function reviewArtifact(
   priorPhaseArtifacts: string,
   providedInputs: string,
   phaseScope: string,
-): Promise<{ score: number; dimensions: Record<string, number>; improvements: string[] }> {
+): Promise<{ score: number; dimensions: Record<string, number>; improvements: string[]; suggestedStakeholders: string[] }> {
   const systemPrompt = `You are an independent artifact quality reviewer for ATOS transformation programs.
 Score the artifact on these dimensions (0-100 each):
 - completeness: are all the sections expected FOR THIS PHASE present with substantive content?
@@ -4269,8 +4269,10 @@ Every entry in "improvements" must give the user precise direction on how to imp
 3. ties it to the score (which dimension it lifts).
 Never write generic advice like "add more detail" or "be more specific" — always say WHICH fact and WHAT to write. If the document is already well-grounded by the inputs and prior artifacts, return fewer (even zero) suggestions rather than inventing gaps.
 
+STAKEHOLDER SUGGESTIONS: If — and only if — this artifact is a stakeholder map, stakeholder analysis, or a scope artifact that identifies who is involved, and you can name specific stakeholder roles or people who clearly belong on the programme's stakeholder list but are NOT already captured in the inputs/prior artifacts, list each as a short role string in "suggestedStakeholders" (e.g. "VP Sales", "Delivery Manager", "Data Protection Officer"). One concise role per entry, no sentences. For any other artifact type, or when no concrete stakeholder is missing, return an empty array.
+
 Return ONLY valid JSON:
-{ "score": 0-100, "dimensions": { "completeness": 0-100, "specificity": 0-100, "actionability": 0-100, "consistency": 0-100 }, "improvements": ["Name the executive sponsor with their title in the Sponsor input (e.g. 'Jane Doe, COO') — this lifts specificity and makes accountability unambiguous", "Quantify the cost assumption (e.g. '$2.4M based on vendor quotes and a 6-person core team') so the business case can be resourced"] }`;
+{ "score": 0-100, "dimensions": { "completeness": 0-100, "specificity": 0-100, "actionability": 0-100, "consistency": 0-100 }, "improvements": ["Name the executive sponsor with their title in the Sponsor input (e.g. 'Jane Doe, COO') — this lifts specificity and makes accountability unambiguous", "Quantify the cost assumption (e.g. '$2.4M based on vendor quotes and a 6-person core team') so the business case can be resourced"], "suggestedStakeholders": [] }`;
   const userPrompt = `Artifact type: ${artifactLabel}
 
 Phase scope (judge the artifact only against this phase's remit; never demand detail owned by a later phase):
@@ -4295,6 +4297,7 @@ ${artifactContent}`;
         )
       : {},
     improvements: uniqueStrings(parsed.improvements, 4),
+    suggestedStakeholders: uniqueStrings(parsed.suggestedStakeholders, 8),
   };
 }
 
@@ -4972,6 +4975,7 @@ function applyArtifactQuality(programData: ProgramState, fieldKey: string, revie
       score: Math.round(clampNumber(review.score, 0, 100, 70)),
       dimensions: isRecord(review.dimensions) ? review.dimensions as JsonValue : {},
       improvements: uniqueStrings(review.improvements, 4),
+      suggestedStakeholders: uniqueStrings(review.suggestedStakeholders, 8),
     } as JsonValue,
     ...(confidenceFieldKey ? { [confidenceFieldKey]: clampNumber(review.score, 0, 100, 70) / 100 } : {}),
   }));

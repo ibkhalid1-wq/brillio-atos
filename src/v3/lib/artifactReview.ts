@@ -21,6 +21,12 @@ export function artifactReviewFieldKey(defId: string): string {
 export interface ArtifactReview {
   score: number | null;
   improvements: string[];
+  /**
+   * Concrete stakeholder roles the reviewer judged missing from the programme's
+   * stakeholder list (populated only for stakeholder/scope artifacts). Drives the
+   * "create placeholder rows" action — the stakeholder analogue of RACI gaps.
+   */
+  suggestedStakeholders: string[];
 }
 
 /**
@@ -45,8 +51,11 @@ export function resolveArtifactReview(
   const improvements = Array.isArray(pick.improvements)
     ? pick.improvements.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
     : [];
-  if (score == null && improvements.length === 0) return null;
-  return { score, improvements };
+  const suggestedStakeholders = Array.isArray(pick.suggestedStakeholders)
+    ? pick.suggestedStakeholders.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+  if (score == null && improvements.length === 0 && suggestedStakeholders.length === 0) return null;
+  return { score, improvements, suggestedStakeholders };
 }
 
 /**

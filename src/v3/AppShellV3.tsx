@@ -2340,9 +2340,10 @@ export default function AppShellV3() {
         if (rec && typeof rec === "object" && !Array.isArray(rec)) {
           const nextRec: Record<string, unknown> = { ...(rec as Record<string, unknown>) };
           if ("improvements" in nextRec) nextRec.improvements = [];
+          if ("suggestedStakeholders" in nextRec) nextRec.suggestedStakeholders = [];
           const pb = nextRec[phaseId];
           if (pb && typeof pb === "object" && !Array.isArray(pb)) {
-            nextRec[phaseId] = { ...(pb as Record<string, unknown>), improvements: [] };
+            nextRec[phaseId] = { ...(pb as Record<string, unknown>), improvements: [], suggestedStakeholders: [] };
           }
           reviewPatch[key] = nextRec;
         }

@@ -55,6 +55,20 @@ describe("resolveArtifactReview", () => {
     expect(review.score).toBe(65);
     expect(review.improvements).toEqual(["real"]);
   });
+
+  it("reads suggestedStakeholders, dropping blanks, and surfaces a review that has only them", () => {
+    const source = {
+      scopeMapQuality: { score: 80, improvements: [], suggestedStakeholders: ["VP Sales", "  ", "Delivery Manager"] },
+    };
+    const review = resolveArtifactReview(source, "scope-map", "discover")!;
+    expect(review.suggestedStakeholders).toEqual(["VP Sales", "Delivery Manager"]);
+    // A review with no score/improvements but a non-empty stakeholder list is
+    // still usable — it drives the placeholder action.
+    const onlyStakeholders = resolveArtifactReview({ scopeMapQuality: { suggestedStakeholders: ["DPO"] } }, "scope-map", "discover")!;
+    expect(onlyStakeholders.suggestedStakeholders).toEqual(["DPO"]);
+    // Absent field defaults to an empty array, never undefined.
+    expect(resolveArtifactReview({ planQuality: { score: 70 } }, "plan", "build")!.suggestedStakeholders).toEqual([]);
+  });
 });
 
 describe("resolveArtifactQualityScore", () => {

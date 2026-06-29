@@ -138,6 +138,41 @@ export function resolveRosterField(store?: DynamicSchemaStore, phaseId: string =
   return findRosterGrid(getPhaseInputSchema(phaseId, store).fields);
 }
 
+// ─── Canonical stakeholder-list resolution ────────────────────────────────────
+// Like the roster, the Discover-phase stakeholder list is an ai-derived dynamic
+// grid (the planner proposes its columns per programme), never a static schema.
+// Consumers resolve it through these helpers so the "create placeholder rows for
+// suggested stakeholders" action has one shared address regardless of the exact
+// column shape the planner emitted.
+
+/** The phase that owns the canonical stakeholder list. */
+export const STAKEHOLDER_PHASE_ID = "discover";
+
+/**
+ * Locate the stakeholder-list grid in a set of phase fields. Prefers the
+ * canonical ai-derived ids ("stakeholderList"/"stakeholderMap"); otherwise the
+ * first grid whose columns clearly carry a stakeholder identity (name or a
+ * role/title) alongside an engagement signal (influence/interest/engagement).
+ * Returns null when no such grid is declared — we never fabricate a field.
+ */
+export function findStakeholderGrid(fields: PhaseInputField[]): PhaseInputField | null {
+  const byId = fields.find((f) => f.type === "grid" && (f.id === "stakeholderList" || f.id === "stakeholderMap"));
+  if (byId) return byId;
+  return (
+    fields.find(
+      (f) =>
+        f.type === "grid" &&
+        Boolean(matchColumnKey(f.columns ?? [], /stakeholder|name|role|title/i)) &&
+        Boolean(matchColumnKey(f.columns ?? [], /influence|interest|engagement|impact/i)),
+    ) ?? null
+  );
+}
+
+/** Resolve the stakeholder-list grid field for a programme (defaults to Discover). */
+export function resolveStakeholderField(store?: DynamicSchemaStore, phaseId: string = STAKEHOLDER_PHASE_ID): PhaseInputField | null {
+  return findStakeholderGrid(getPhaseInputSchema(phaseId, store).fields);
+}
+
 // ─── Role matching (roster de-duplication) ────────────────────────────────────
 // The roster is seeded with canonical role slots ("Programme Manager", "Product
 // Owner", …) but document imports describe the same role in free form ("Project

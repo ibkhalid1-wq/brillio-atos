@@ -77,6 +77,20 @@ export function rosterColumnKeys(columns: GridColumn[]): { roleKey: string | und
   };
 }
 
+/**
+ * Resolve the stakeholder grid's identity columns. `roleKey` is the column the
+ * suggested-stakeholder string is written into — a dedicated stakeholder/role/
+ * title column when present, else the name column (some planner grids name the
+ * person directly). `nameKey` is the name column, blanked on placeholder rows.
+ */
+export function stakeholderColumnKeys(columns: GridColumn[]): { roleKey: string | undefined; nameKey: string | undefined } {
+  const nameKey = matchColumnKey(columns, /name/i);
+  return {
+    roleKey: matchColumnKey(columns, /stakeholder|role|title|position/i) ?? nameKey,
+    nameKey,
+  };
+}
+
 /** RACI roles that have no matching row in the roster (by role-family match). */
 export function missingRosterRoles(rows: GridRow[], roleKey: string | undefined, roles: string[]): string[] {
   if (!roleKey) return [];

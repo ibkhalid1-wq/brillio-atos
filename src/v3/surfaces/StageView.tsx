@@ -20,9 +20,9 @@ import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
 import { resolveArtifactReview, resolveArtifactQualityScore } from "@/v3/lib/artifactReview";
 import { getPhaseArtifactDefs, type PhaseArtifactDef } from "@/v3/lib/phaseArtifacts";
 import { getArtifactInputFields } from "@/v3/lib/phaseFlowEdges";
-import { getPhaseInputSchema, resolveRosterField, ROSTER_PHASE_ID } from "@/v3/lib/phaseInputSchema";
+import { getPhaseInputSchema, resolveRosterField, resolveStakeholderField, ROSTER_PHASE_ID } from "@/v3/lib/phaseInputSchema";
 import { parseRows, serializeRows, type GridRow } from "@/v3/components/StructuredGrid";
-import { readRaciMatrix, raciDeliveryRoles, rosterColumnKeys, missingRosterRoles } from "@/v3/lib/rosterRaci";
+import { readRaciMatrix, raciDeliveryRoles, rosterColumnKeys, missingRosterRoles, stakeholderColumnKeys } from "@/v3/lib/rosterRaci";
 import { isFreeTextAssistField } from "@/v3/lib/fieldAssist";
 import { getDynamicSchemaStore, canonicalArtifactId, artifactGeneratorAgentId } from "@/v3/lib/dynamicSchema";
 import { getAgentMeta, SUPPORT_ARTIFACT_IDS } from "@/v3/lib/agentMeta";
@@ -779,6 +779,56 @@ export default function StageView({
       setApplyingPlaceholders(false);
     }
   }, [rosterPlaceholderPlan, onSaveInputs, qualityArtifact]);
+  // Stakeholder analogue of the RACI placeholder plan. The artifact reviewer
+  // emits `suggestedStakeholders` (concrete roles missing from the programme's
+  // stakeholder list); we diff them against the Discover stakeholder grid and
+  // build a placeholder row per genuinely-missing role, so the user just fills
+  // in the named person. Mirrors rosterPlaceholderPlan exactly.
+  const stakeholderPlaceholderPlan = React.useMemo(() => {
+    if (!qualityArtifact || gateApproved) return null;
+    const review = resolveArtifactReview(source, qualityArtifact.defId, qualityArtifact.phaseId);
+    const suggested = review?.suggestedStakeholders ?? [];
+    if (!suggested.length) return null;
+    const field = resolveStakeholderField(dynamicStore, qualityArtifact.phaseId);
+    const columns = field?.columns ?? [];
+    if (!field || !columns.length) return null;
+    const { roleKey, nameKey } = stakeholderColumnKeys(columns);
+    if (!roleKey) return null;
+    const inputs = source?.phaseInputs && typeof source.phaseInputs === "object" && !Array.isArray(source.phaseInputs)
+      ? (source.phaseInputs as Record<string, unknown>)[qualityArtifact.phaseId]
+      : null;
+    const value = inputs && typeof inputs === "object" && !Array.isArray(inputs)
+      ? (inputs as Record<string, unknown>)[field.id]
+      : null;
+    const rows = parseRows(value, columns);
+    const missing = missingRosterRoles(rows, roleKey, suggested);
+    if (!missing.length) return null;
+    const newRows: GridRow[] = missing.map((role, i) => {
+      const row: GridRow = {
+        id: typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `stakeholder-${Date.now()}-${i}`,
+      };
+      for (const col of columns) row[col.key] = "";
+      // A dedicated name column stays blank for the user to fill; if the grid has
+      // no role column the identity IS the name column, so write the role there.
+      if (nameKey && nameKey !== roleKey) row[nameKey] = "";
+      row[roleKey] = role;
+      return row;
+    });
+    return { fieldId: field.id, phaseId: qualityArtifact.phaseId, roles: missing, count: missing.length, mergedJson: serializeRows([...rows, ...newRows], columns) };
+  }, [qualityArtifact, gateApproved, dynamicStore, source]);
+  const handleAddStakeholderPlaceholders = React.useCallback(async () => {
+    if (!stakeholderPlaceholderPlan) return;
+    setApplyingPlaceholders(true);
+    setApplyError(null);
+    try {
+      await onSaveInputs(stakeholderPlaceholderPlan.phaseId, { [stakeholderPlaceholderPlan.fieldId]: stakeholderPlaceholderPlan.mergedJson }, { clearReviewDefId: qualityArtifact?.defId, staleDefId: qualityArtifact?.defId });
+      setImprovementsApplied(true);
+    } catch (err) {
+      setApplyError(err instanceof Error ? err.message : "Could not add placeholder rows. Try again.");
+    } finally {
+      setApplyingPlaceholders(false);
+    }
+  }, [stakeholderPlaceholderPlan, onSaveInputs, qualityArtifact]);
   // Sequential artifact-generation gate. Artifacts must be produced in order:
   // an artifact is "cleared" once it is approved/archived or its quality exceeds
   // 89%. Only the first not-yet-cleared artifact (plus all cleared ones) may be
@@ -2047,6 +2097,21 @@ export default function StageView({
                   : applyingPlaceholders
                     ? "✨ Adding…"
                     : `✨ Create ${rosterPlaceholderPlan.count} placeholder role row${rosterPlaceholderPlan.count === 1 ? "" : "s"}`}
+              </button>
+            ) : null}
+            {stakeholderPlaceholderPlan ? (
+              <button
+                type="button"
+                className="v3-button primary v3-button-inline-sm"
+                onClick={handleAddStakeholderPlaceholders}
+                disabled={applyingPlaceholders || improvementsApplied}
+                title={`Adds a stakeholder row for each suggested role not yet on the list (${stakeholderPlaceholderPlan.roles.join(", ")}) so you can fill in the named individual`}
+              >
+                {improvementsApplied
+                  ? "✓ Stakeholders added"
+                  : applyingPlaceholders
+                    ? "✨ Adding…"
+                    : `✨ Add ${stakeholderPlaceholderPlan.count} suggested stakeholder${stakeholderPlaceholderPlan.count === 1 ? "" : "s"}`}
               </button>
             ) : null}
             <button
