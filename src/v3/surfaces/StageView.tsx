@@ -4,6 +4,7 @@ import { getRiskTrend } from "@/lib/adamGateRisk";
 import type { AgentRun } from "@/lib/adamSync";
 import type { ExitCriterion, GateReview, ProgramSummary } from "@/new/types";
 import ArtifactEditor from "@/v3/components/ArtifactEditor";
+import DiscoveryPackPanel, { type DiscoveryPack } from "@/v3/components/DiscoveryPackPanel";
 import PhaseInputsPanel, { type FieldAssistRequest } from "@/v3/components/PhaseInputsPanel";
 import PhaseFlowOverlay from "@/v3/components/PhaseFlowOverlay";
 import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
@@ -2013,6 +2014,9 @@ export default function StageView({
               </>
             )}
           </div>
+        ) : null}
+        {activePhase?.id === "discover" && discoveryGuide ? (
+          <DiscoveryPackPanel pack={discoveryGuide as DiscoveryPack} />
         ) : null}
       </section>
       </div>
