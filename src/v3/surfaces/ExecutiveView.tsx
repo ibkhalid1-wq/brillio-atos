@@ -5,6 +5,8 @@ import AdamExplainsTooltip from "@/v3/components/AdamExplainsTooltip";
 import { Kpi } from "@/v3/components/ui/Kpi";
 import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
 import { derivePhaseStatusRings } from "@/v3/lib/phaseStatusRings";
+import RoadmapGantt from "@/v3/components/RoadmapGantt";
+import { buildRoadmapRows } from "@/v3/lib/phaseSchedule";
 import { computePhaseReadiness, getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
 import { selectBlockers, selectDecisions, selectHighPriorityDecisions, selectHighRisks, selectRisks } from "@/v3/lib/programRaid";
 import type { ConfidenceScore } from "@/v3/lib/confidenceScore";
@@ -260,6 +262,13 @@ export default function ExecutiveView({
     const locked = getLockedPhaseIds(program);
     return phases.filter((phase) => !locked.has(phase.id));
   }, [program, phases]);
+  // Gantt rows for the Plan-tab timeline — same effective schedule the Roadmap
+  // surface builds (programme window weighted by each phase's typical duration,
+  // with any saved per-phase overrides), so the executive timeline agrees with it.
+  const roadmapRows = useMemo(
+    () => buildRoadmapRows(program?.rawData, (program?.phases ?? []) as Array<{ id: string; status?: string }>),
+    [program?.rawData, program?.phases],
+  );
   const totalGates = program?.phases.length ?? 0;
   // Only count gate reviews that correspond to an actual phase in this programme —
   // stale/orphaned keys (e.g. from a prior methodology) must not inflate the count.
@@ -599,6 +608,83 @@ export default function ExecutiveView({
         </div>
       </div>
 
+      {/* ── 2a. Phase progression — full-journey rings, left→right ──────────── */}
+      {phases.length > 0 && (
+      <div>
+        <SectionLabel>Phase Progression</SectionLabel>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            overflowX: "auto",
+            paddingBottom: 4,
+            background: "var(--v3-surface)",
+            border: "1px solid var(--v3-border-soft)",
+            borderRadius: "var(--v3-radius)",
+            padding: "14px 12px",
+          }}
+        >
+          {phases.map((phase, i) => {
+            const values = derivePhaseStatusRings(program, phase.id);
+            const isActive = phase.status === "active" || phase.status === "ready";
+            const isComplete = phase.status === "complete";
+            return (
+              <React.Fragment key={phase.id}>
+                <button
+                  type="button"
+                  onClick={() => onNavigateToPhase(phase.id)}
+                  title={`${PHASE_LABELS[phase.id] ?? phase.displayName} — ${values.overall}%`}
+                  style={{
+                    appearance: "none",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 7,
+                    minWidth: 76,
+                    padding: "2px",
+                    fontFamily: "var(--v3-font)",
+                  }}
+                >
+                  <PhaseStatusRings values={values} size={54} showCenter />
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: isActive ? 700 : 500,
+                      color: isActive
+                        ? "var(--v3-accent)"
+                        : isComplete
+                        ? "var(--v3-text-primary)"
+                        : "var(--v3-text-muted)",
+                      textAlign: "center",
+                      lineHeight: 1.25,
+                      maxWidth: 76,
+                    }}
+                  >
+                    {PHASE_LABELS[phase.id] ?? phase.displayName}
+                  </span>
+                </button>
+                {i < phases.length - 1 && (
+                  <div
+                    aria-hidden="true"
+                    style={{
+                      flex: "0 0 14px",
+                      height: 2,
+                      borderRadius: 2,
+                      marginTop: 26,
+                      background: isComplete ? "var(--v3-green)" : "var(--v3-border-soft)",
+                    }}
+                  />
+                )}
+              </React.Fragment>
+            );
+          })}
+        </div>
+      </div>
+      )}
+
       {/* ── 2b. Confidence breakdown — per-signal scores behind the headline % ── */}
       <ConfidenceBreakdown confidenceResult={confidenceResult} />
       </>
@@ -860,10 +946,17 @@ export default function ExecutiveView({
       </div>
       )}
 
-      {/* ── PLAN TAB — phase progress ─────────────────────────────────────── */}
-      {/* ── 5. Stage progress ─────────────────────────────────────────────── */}
+      {/* ── PLAN TAB — phase timeline + phase progress ────────────────────── */}
       {tab === "plan" && (
-      <div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+        {/* Gantt timeline — read-only here; the Roadmap surface owns editing. */}
+        <div>
+          <SectionLabel>Phase Timeline</SectionLabel>
+          <RoadmapGantt rows={roadmapRows} />
+        </div>
+
+        {/* ── 5. Stage progress ───────────────────────────────────────────── */}
+        <div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
           <SectionLabel>Phase Progress</SectionLabel>
           {/* Ring legend — canonical KPI mapping */}
@@ -905,6 +998,7 @@ export default function ExecutiveView({
               No phase data available.
             </div>
           )}
+        </div>
         </div>
       </div>
       )}
