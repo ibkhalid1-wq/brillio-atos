@@ -219,12 +219,18 @@ const ACHIEVED_MILESTONE_STATUSES = new Set([
   "completed", "complete", "done", "achieved", "delivered", "closed",
 ]);
 
+// A phase whose gate is approved is signed off — its synthetic blockers/actions
+// (slipping milestones, outstanding artifacts) are no longer workable items and
+// must stop surfacing, otherwise an approved phase keeps raising stale alerts.
+function isPhaseGateApproved(projectData: any, phaseId: string | null | undefined): boolean {
+  const id = String(phaseId || "").trim();
+  if (!id) return false;
+  return String(projectData?.gateReviews?.[id]?.status || "").toLowerCase() === "approved";
+}
+
 function isMilestoneAchieved(projectData: any, milestone: any): boolean {
   if (ACHIEVED_MILESTONE_STATUSES.has(String(milestone?.status || "").toLowerCase())) return true;
-  const phaseId = String(milestone?.phaseId || milestone?.linkedPhase || "").trim();
-  if (!phaseId) return false;
-  const gate = projectData?.gateReviews?.[phaseId];
-  return String(gate?.status || "").toLowerCase() === "approved";
+  return isPhaseGateApproved(projectData, milestone?.phaseId || milestone?.linkedPhase);
 }
 
 function buildSyntheticMilestoneSlipItems(projectData: any) {
@@ -503,6 +509,9 @@ function buildSyntheticArtifactBlockerItems(projectData: any) {
   const workplanPhases = asArray(projectData?.mobilise?.workplan?.phases);
   return ADAM_PHASE_SEQUENCE_FALLBACK
     .map((phaseId) => {
+      // A gate-approved phase is signed off — don't flag its artifacts as
+      // "incomplete" just because one optional artifact is still a draft.
+      if (isPhaseGateApproved(projectData, phaseId)) return null;
       const phaseGuidance = projectData?.phaseGuidance?.[phaseId] ?? {};
       const artifacts = Object.values(projectData?.phaseArtifacts?.[phaseId] ?? {}) as any[];
       if (!artifacts.length) return null;
