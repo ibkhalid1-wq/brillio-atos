@@ -20,7 +20,7 @@
  *               in scope, priority-sorted — ie. "actions" and "decisions" are ONE set.
  */
 import type { DecisionSummary, Escalation, ProgramSummary, RAIDEntry } from "@/new/types";
-import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
+import { deriveOpenRecommendedActions, deriveReclassifiedRiskActions } from "@/v3/lib/recommendedActions";
 import { getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
 
 /** Programme-wide, or scoped to a single phase by id. */
@@ -63,12 +63,54 @@ function selectOpenRaid(
     .sort((a, b) => (SEVERITY_ORDER[a.severity] ?? 2) - (SEVERITY_ORDER[b.severity] ?? 2));
 }
 
-/** Open risks (severity-sorted), programme-wide or scoped to a phase. */
+function priorityToSeverity(priority: string): RAIDEntry["severity"] {
+  if (priority === "critical") return "critical";
+  if (priority === "high") return "high";
+  if (priority === "medium") return "medium";
+  return "low";
+}
+
+// A reclassified decision (milestone slip / incomplete artifacts) presented as a
+// synthetic open risk so it flows through the same Risks list every surface reads.
+function decisionToRiskEntry(decision: DecisionSummary): RAIDEntry {
+  const summary = (decision as { summary?: string }).summary;
+  return {
+    id: decision.id,
+    type: "risk",
+    title: decision.title,
+    description: summary || decision.question || "",
+    severity: priorityToSeverity(decision.priority),
+    phase: decision.phaseId,
+    owner: null,
+    mitigation: null,
+    status: "open",
+    source: "agent",
+    createdAt: decision.createdAt,
+    closedAt: null,
+    closedBy: null,
+    closureNote: null,
+    relatedArtifactId: decision.relatedArtifactId ?? null,
+    relatedInputIds: decision.relatedInputIds,
+  };
+}
+
+/**
+ * Open risks (severity-sorted), programme-wide or scoped to a phase. Combines
+ * the agent-authored RAID risk entries with the synthetic risks reclassified out
+ * of the actions queue (milestone slips, incomplete artifacts) — the latter
+ * already carry the programme-wide locked-phase filter from the actions
+ * derivation, so only the phase-scope narrowing is reapplied here.
+ */
 export function selectRisks(
   program: ProgramSummary | null | undefined,
   scope: RaidScope = "programme",
 ): RAIDEntry[] {
-  return selectOpenRaid(program, "risk", scope);
+  const synthetic = deriveReclassifiedRiskActions(program)
+    .filter((decision) => inScope(decision.phaseId, scope))
+    .map(decisionToRiskEntry);
+  return [...selectOpenRaid(program, "risk", scope), ...synthetic].sort(
+    (a, b) => (SEVERITY_ORDER[a.severity] ?? 2) - (SEVERITY_ORDER[b.severity] ?? 2),
+  );
 }
 
 /** Open blockers (severity-sorted), programme-wide or scoped to a phase. */

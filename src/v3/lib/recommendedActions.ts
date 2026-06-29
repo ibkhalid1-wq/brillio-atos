@@ -9,7 +9,14 @@ import { isDecisionOpen } from "@/v3/utils";
 // persisted resolution is merged on BEFORE the open filter so resolved actions
 // drop out instead of reappearing every render. Keeping this in one place stops
 // the rail badge and the surface from drifting apart.
-export function deriveOpenRecommendedActions(
+// Decision-queue types that are conditions to track, not actionable work: a
+// slipping milestone impacts the timeline and incomplete artifacts impact
+// quality, so both belong in the Risks register (selectRisks) rather than the
+// Actions queue. Split out here so the actions surfaces and the risk surfaces
+// stay consistent — an item is in exactly one of the two sets, never both.
+export const RISK_RECLASSIFIED_TYPES = new Set(["milestone_slip", "artifacts_incomplete"]);
+
+function deriveOpenQueue(
   program: ProgramSummary | null | undefined,
   personaId: string = "delivery_lead",
 ): DecisionSummary[] {
@@ -50,4 +57,23 @@ export function deriveOpenRecommendedActions(
   return [...mergedSynthesized, ...persistedOnly]
     .filter((decision) => isDecisionOpen(decision))
     .filter((decision) => isActionable(decision.phaseId));
+}
+
+/** The actionable queue — the open items minus those reclassified as risks. */
+export function deriveOpenRecommendedActions(
+  program: ProgramSummary | null | undefined,
+  personaId: string = "delivery_lead",
+): DecisionSummary[] {
+  return deriveOpenQueue(program, personaId).filter((decision) => !RISK_RECLASSIFIED_TYPES.has(decision.type));
+}
+
+/**
+ * The open items reclassified as risks (milestone slips, incomplete artifacts).
+ * Surfaced through {@link selectRisks} so they appear under Risks, not Actions.
+ */
+export function deriveReclassifiedRiskActions(
+  program: ProgramSummary | null | undefined,
+  personaId: string = "delivery_lead",
+): DecisionSummary[] {
+  return deriveOpenQueue(program, personaId).filter((decision) => RISK_RECLASSIFIED_TYPES.has(decision.type));
 }
