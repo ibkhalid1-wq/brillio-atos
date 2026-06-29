@@ -21,8 +21,8 @@ import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
 import { resolveArtifactReview, resolveArtifactQualityScore } from "@/v3/lib/artifactReview";
 import { getPhaseArtifactDefs, type PhaseArtifactDef } from "@/v3/lib/phaseArtifacts";
 import { getFillableArtifactInputFields } from "@/v3/lib/phaseFlowEdges";
-import { getPhaseInputSchema, resolveRosterField, resolveStakeholderField, ROSTER_PHASE_ID } from "@/v3/lib/phaseInputSchema";
-import { parseRows, serializeRows, type GridRow } from "@/v3/components/StructuredGrid";
+import { getPhaseInputSchema, resolveRosterField, resolveStakeholderField, ROSTER_PHASE_ID, type GridColumn } from "@/v3/lib/phaseInputSchema";
+import { parseRows, serializeRows, filledRowCount, type GridRow } from "@/v3/components/StructuredGrid";
 import { readRaciMatrix, raciDeliveryRoles, rosterColumnKeys, missingRosterRoles, stakeholderColumnKeys } from "@/v3/lib/rosterRaci";
 import { isFreeTextAssistField } from "@/v3/lib/fieldAssist";
 import { getDynamicSchemaStore, canonicalArtifactId, artifactGeneratorAgentId } from "@/v3/lib/dynamicSchema";
@@ -82,9 +82,16 @@ interface StageViewProps {
 }
 
 /** A captured input value counts as filled when it carries real content — a
- *  non-blank string, or a non-empty grid (JSON array). Used to gate an
- *  artifact's Generate button on the inputs declared to flow into it. */
-function isInputFilled(value: unknown): boolean {
+ *  non-blank string, or a grid with at least one filled row. Used to gate an
+ *  artifact's Generate button on the inputs declared to flow into it. When the
+ *  field is a grid, judge emptiness by row content (filledRowCount), so a "[]"
+ *  or blank-row JSON string does not false-pass the gate — matching how
+ *  derivePhaseInputQuality and derivePhaseMethodologyCompleteness score it. */
+function isInputFilled(value: unknown, field?: { type?: string; columns?: GridColumn[]; minRows?: number }): boolean {
+  if (field?.type === "grid") {
+    const columns = field.columns ?? [];
+    return filledRowCount(parseRows(value, columns), columns) >= (field.minRows ?? 1);
+  }
   if (value == null) return false;
   if (typeof value === "string") {
     const trimmed = value.trim();
@@ -1784,7 +1791,8 @@ export default function StageView({
                 phaseFieldDefs.filter((field) => field.required === false).map((field) => field.id),
               );
               const missingFlowedFields = flowedFieldIds.filter(
-                (fieldId) => !optionalFieldIds.has(fieldId) && !isInputFilled(preFlightInputs[fieldId]),
+                (fieldId) => !optionalFieldIds.has(fieldId)
+                  && !isInputFilled(preFlightInputs[fieldId], phaseFieldDefs.find((field) => field.id === fieldId)),
               );
               const flowedInputsIncomplete = missingFlowedFields.length > 0;
               // Map each grounding input to its label + what it must contain, so
@@ -1795,7 +1803,7 @@ export default function StageView({
                 const requirement = [fieldDef?.placeholder, fieldDef?.hint]
                   .filter((part): part is string => !!part && part.trim().length > 0)
                   .join(" — ") || `Provide ${fieldDef?.label ?? fieldId}.`;
-                return { label: fieldDef?.label ?? fieldId, requirement, filled: isInputFilled(preFlightInputs[fieldId]) };
+                return { label: fieldDef?.label ?? fieldId, requirement, filled: isInputFilled(preFlightInputs[fieldId], fieldDef) };
               });
               // Same grounding inputs, but carrying the id + current value so the
               // "Improve quality → Apply" action can run an AI enrichment pass over
@@ -1815,7 +1823,7 @@ export default function StageView({
                     hint: fieldDef?.hint,
                     type: fieldDef?.type,
                     currentValue,
-                    filled: isInputFilled(raw),
+                    filled: isInputFilled(raw, fieldDef),
                   };
                 })
                 .filter((field) => isFreeTextAssistField(field.type))

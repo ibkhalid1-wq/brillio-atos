@@ -167,7 +167,24 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         { id: "industry", label: "Industry", type: "select", options: INDUSTRY_OPTIONS, required: true },
         { id: "startDate", label: "Programme start date", type: "date", required: true },
         { id: "targetEndDate", label: "Target end date", type: "date", required: true },
-        { id: "costAssumption", label: "Cost assumption", type: "textarea", placeholder: "Estimated programme cost and the basis for it", required: true, hint: "e.g. ~$2.4M based on vendor quotes and a 6-person core team" },
+        {
+          // Cost is captured as a line-item grid rather than free text so the
+          // business case is grounded on a structured cost breakdown — each row is
+          // a cost line with its estimate and the basis for it. The edge's
+          // buildGroundingFacts flattens every grid row into the strategy artifact
+          // prompts, so the breakdown informs the business-case / roadmap directly.
+          // A plain-text legacy value is migrated into a single row by parseRows.
+          id: "costAssumption",
+          label: "Cost assumption",
+          type: "grid",
+          required: true,
+          hint: "Break the estimated programme cost into line items — e.g. vendor licences, core team, infrastructure — with the estimate and the basis for each.",
+          columns: [
+            { key: "category", label: "Cost line", type: "text", placeholder: "e.g. Vendor licences" },
+            { key: "amount", label: "Estimate", type: "text", width: 140, placeholder: "e.g. $1.2M" },
+            { key: "basis", label: "Basis / assumption", type: "text", placeholder: "What the estimate is based on" },
+          ],
+        },
         { id: "constraints", label: "Key constraints", type: "textarea", placeholder: "Budget, timeline, regulatory, or technical constraints", required: true, hint: "e.g. Must go live before Q4 financial year end" },
         { id: "successMetric", label: "Primary success metric", type: "text", placeholder: "KPI name, e.g. Cost to serve", required: true },
         {

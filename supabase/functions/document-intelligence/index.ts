@@ -69,7 +69,7 @@ const STRATEGY_FALLBACK_SCHEMA: PhaseSchema = {
     { id: "industry", label: "Industry", type: "select" },
     { id: "startDate", label: "Start date", type: "date" },
     { id: "targetEndDate", label: "Target end date", type: "date" },
-    { id: "costAssumption", label: "Cost assumption", type: "text" },
+    { id: "costAssumption", label: "Cost assumption", type: "grid", columns: [{ key: "category", label: "Cost line" }, { key: "amount", label: "Estimate" }, { key: "basis", label: "Basis / assumption" }] },
     { id: "constraints", label: "Constraints", type: "textarea" },
     { id: "successMetric", label: "Success metric", type: "textarea" },
   ],
