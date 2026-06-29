@@ -14,7 +14,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
-import { findRosterGrid, getPhaseInputSchema, matchColumnKey } from "@/v3/lib/phaseInputSchema";
+import { canonicalRole, findRosterGrid, getPhaseInputSchema, matchColumnKey, rolesMatch } from "@/v3/lib/phaseInputSchema";
 import type { DynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import type {
   ApprovedInputs,
@@ -346,40 +346,6 @@ function parseRowArray(raw: string): Array<Record<string, unknown>> | null {
 }
 
 const ROLE_KEY_RE = /role|title|position/i;
-/** Min normalized-Levenshtein similarity for two roles to be treated as the same. */
-const ROLE_MATCH_THRESHOLD = 0.82;
-
-/** Lowercase, strip punctuation, collapse whitespace — for tolerant role comparison. */
-function normalizeRole(value: unknown): string {
-  return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-}
-
-function levenshtein(a: string, b: string): number {
-  if (a === b) return 0;
-  const m = a.length;
-  const n = b.length;
-  if (m === 0) return n;
-  if (n === 0) return m;
-  let prev = Array.from({ length: n + 1 }, (_, i) => i);
-  let curr = new Array<number>(n + 1).fill(0);
-  for (let i = 1; i <= m; i++) {
-    curr[0] = i;
-    for (let j = 1; j <= n; j++) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
-    }
-    [prev, curr] = [curr, prev];
-  }
-  return prev[n];
-}
-
-/** 0–1 similarity of two normalized roles (1 = identical). */
-function roleSimilarity(a: string, b: string): number {
-  if (!a || !b) return 0;
-  if (a === b) return 1;
-  const maxLen = Math.max(a.length, b.length);
-  return maxLen === 0 ? 0 : 1 - levenshtein(a, b) / maxLen;
-}
 
 /** The first role-like column key present across the rows, or null if none. */
 function findRoleKey(rows: Array<Record<string, unknown>>): string | null {
@@ -394,12 +360,15 @@ function findRoleKey(rows: Array<Record<string, unknown>>): string | null {
 /**
  * Merge two serialized grids (e.g. the core-team roster) without data loss.
  *
- * A roster is keyed by role — "one named person per role" — so re-importing must
- * UPDATE the row whose role matches an incoming row (e.g. a corrected or newly
- * extracted name) rather than append a second row for the same role, which is
- * what produced duplicate entries on re-import. Roles are matched fuzzily so
- * trivial variations ("Project Manager" vs "Project Mgr") resolve to one row;
- * an incoming role with no match is appended as a genuinely new member.
+ * The roster is seeded with one slot per canonical role and is "one named person
+ * per role", so re-importing must fill/UPDATE the slot matching an incoming
+ * person rather than append a near-duplicate (e.g. an imported "Project Manager"
+ * was landing as a new row beside the empty "Programme Manager" seed). Roles are
+ * matched by canonical family (so "Project Manager" ≡ "Programme Manager", "PM",
+ * etc.), preferring an already-filled slot so a re-import is idempotent and an
+ * empty seed slot otherwise. A person whose role matches no slot is appended. As
+ * a final pass, an empty seed slot is dropped once a real person occupies that
+ * same role family, clearing the duplicate the old behaviour left behind.
  *
  * Grids without a role-like column fall back to signature de-duplication (union
  * rows, dropping exact-content duplicates) so re-import stays idempotent.
@@ -410,36 +379,41 @@ export function mergeGridJson(existingJson: string, incomingJson: string): strin
   const roleKey = findRoleKey([...existing, ...incoming]);
 
   if (roleKey) {
+    const roleOf = (row: Record<string, unknown>) => String(row[roleKey] ?? "");
+    // A row "has a person" if any cell other than id and the role itself is set.
+    const hasContent = (row: Record<string, unknown>) =>
+      Object.entries(row).some(([k, v]) => k !== "id" && k !== roleKey && String(v ?? "").trim() !== "");
+
     const merged: Array<Record<string, unknown>> = existing.map((row) => ({ ...row }));
     for (const incomingRow of incoming) {
-      const incRole = normalizeRole(incomingRow[roleKey]);
-      let targetIdx = -1;
-      if (incRole) {
-        targetIdx = merged.findIndex((row) => normalizeRole(row[roleKey]) === incRole);
-        if (targetIdx < 0) {
-          let best = ROLE_MATCH_THRESHOLD;
-          merged.forEach((row, i) => {
-            const sim = roleSimilarity(normalizeRole(row[roleKey]), incRole);
-            if (sim >= best) {
-              best = sim;
-              targetIdx = i;
-            }
-          });
-        }
-      }
-      if (targetIdx >= 0) {
-        // Update in place: overwrite with the incoming row's non-empty cells,
-        // preserving the existing row's id and any cells the import left blank.
-        const target = merged[targetIdx];
+      const candidates = merged
+        .map((row, i) => ({ row, i }))
+        .filter(({ row }) => rolesMatch(roleOf(row), roleOf(incomingRow)));
+      // Prefer an already-filled matching slot (idempotent refine), else the
+      // first empty matching slot; with no match the person is genuinely new.
+      const target = candidates.find(({ row }) => hasContent(row)) ?? candidates[0];
+      if (target) {
         for (const [k, v] of Object.entries(incomingRow)) {
           if (k === "id") continue;
-          if (String(v ?? "").trim()) target[k] = v;
+          if (String(v ?? "").trim() !== "") merged[target.i][k] = v;
         }
       } else {
         merged.push({ ...incomingRow });
       }
     }
-    return JSON.stringify(merged);
+
+    // Drop empty seed slots whose role family is now occupied by a real person.
+    const occupiedFamilies = new Set<string>();
+    for (const row of merged) {
+      const fam = canonicalRole(roleOf(row));
+      if (fam && hasContent(row)) occupiedFamilies.add(fam);
+    }
+    const cleaned = merged.filter((row) => {
+      if (hasContent(row)) return true;
+      const fam = canonicalRole(roleOf(row));
+      return !fam || !occupiedFamilies.has(fam);
+    });
+    return JSON.stringify(cleaned);
   }
 
   const sig = (row: Record<string, unknown>) =>

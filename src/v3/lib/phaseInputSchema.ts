@@ -137,3 +137,91 @@ export function findRosterGrid(fields: PhaseInputField[]): PhaseInputField | nul
 export function resolveRosterField(store?: DynamicSchemaStore, phaseId: string = ROSTER_PHASE_ID): PhaseInputField | null {
   return findRosterGrid(getPhaseInputSchema(phaseId, store).fields);
 }
+
+// ─── Role matching (roster de-duplication) ────────────────────────────────────
+// The roster is seeded with canonical role slots ("Programme Manager", "Product
+// Owner", …) but document imports describe the same role in free form ("Project
+// Manager", "PM"). Matching imported people back onto the right slot needs more
+// than string equality: we canonicalise a role to a *family* so well-known
+// synonyms collapse together, then fall back to fuzzy similarity for everything
+// else. Kept here, beside the canonical roster address, so the roster has one
+// owner for both *where* it lives and *how its rows are identified*.
+
+const BRITISH_TO_AMERICAN: Array<[RegExp, string]> = [
+  [/\bprogramme\b/g, "program"],
+  [/\borganisation\b/g, "organization"],
+  [/\bcentre\b/g, "center"],
+  [/\bspecialise\b/g, "specialize"],
+];
+
+/** Lowercase, normalise spelling, strip punctuation, collapse whitespace. */
+function normalizeRoleText(value: string): string {
+  let s = String(value ?? "").toLowerCase();
+  for (const [re, rep] of BRITISH_TO_AMERICAN) s = s.replace(re, rep);
+  return s.replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+// Families of synonymous roles. A normalised role belongs to a family if any of
+// its patterns match. Patterns are deliberately conservative — anchored
+// abbreviations and explicit two-word titles only — so genuinely distinct roles
+// (e.g. "Delivery Manager" vs "Programme Manager") are never collapsed.
+const ROLE_FAMILY_PATTERNS: Array<{ family: string; patterns: RegExp[] }> = [
+  { family: "program-manager", patterns: [/\b(program|project)\s+manager\b/, /^pm$/, /^pgm$/] },
+  { family: "product-owner", patterns: [/\bproduct\s+owner\b/, /^po$/] },
+  { family: "scrum-master", patterns: [/\bscrum\s+master\b/] },
+  { family: "business-analyst", patterns: [/\bbusiness\s+analyst\b/, /^ba$/] },
+  { family: "qa-lead", patterns: [/\b(qa|quality assurance|test)\b[\s\w]*\blead\b/] },
+  { family: "solution-architect", patterns: [/\b(solution|technical|enterprise)\s+architect\b/] },
+];
+
+/**
+ * Reduce a role to a canonical family key when it matches a known synonym set,
+ * otherwise return its normalised text. Two roles with the same canonical value
+ * name the same seat on the team.
+ */
+export function canonicalRole(role: string): string {
+  const norm = normalizeRoleText(role);
+  if (!norm) return "";
+  for (const { family, patterns } of ROLE_FAMILY_PATTERNS) {
+    if (patterns.some((re) => re.test(norm))) return family;
+  }
+  return norm;
+}
+
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  const m = a.length;
+  const n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  let prev = Array.from({ length: n + 1 }, (_, i) => i);
+  let curr = new Array<number>(n + 1).fill(0);
+  for (let i = 1; i <= m; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+    }
+    [prev, curr] = [curr, prev];
+  }
+  return prev[n];
+}
+
+/** Min normalised-Levenshtein similarity for two unknown roles to be the same. */
+const ROLE_FUZZY_THRESHOLD = 0.82;
+
+/**
+ * Whether two roles name the same seat: same canonical family, or — for roles in
+ * no known family — close enough by character similarity to be a typo/variant.
+ */
+export function rolesMatch(a: string, b: string): boolean {
+  const ca = canonicalRole(a);
+  const cb = canonicalRole(b);
+  if (!ca || !cb) return false;
+  if (ca === cb) return true;
+  const na = normalizeRoleText(a);
+  const nb = normalizeRoleText(b);
+  const maxLen = Math.max(na.length, nb.length);
+  if (maxLen === 0) return false;
+  return 1 - levenshtein(na, nb) / maxLen >= ROLE_FUZZY_THRESHOLD;
+}

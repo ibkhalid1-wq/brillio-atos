@@ -122,6 +122,42 @@ describe("mergeGridJson", () => {
     expect(merged[0]).toMatchObject({ id: "a", name: "Bobby" });
   });
 
+  it("fills a canonical seed slot from a synonym role and drops the empty slot", () => {
+    // Seeded roster slots (empty) in their canonical wording.
+    const existing = JSON.stringify([
+      { id: "s1", role: "Programme Manager", name: "" },
+      { id: "s2", role: "Product Owner", name: "" },
+    ]);
+    // Import describes the same seat differently ("Project Manager").
+    const incoming = JSON.stringify([{ id: "i1", role: "Project Manager", name: "Prasoon Gupta" }]);
+    const merged = rows(mergeGridJson(existing, incoming));
+    const pm = merged.filter((r) => /manager/i.test(r.role));
+    expect(pm).toHaveLength(1); // no duplicate Programme/Project Manager
+    expect(pm[0].name).toBe("Prasoon Gupta");
+    // The still-empty Product Owner slot is preserved (no person for it yet).
+    expect(merged.find((r) => /product owner/i.test(r.role))).toMatchObject({ name: "" });
+  });
+
+  it("collapses a pre-existing empty/filled duplicate of the same role on re-import", () => {
+    // The legacy bad state: an empty seed slot beside the filled imported row.
+    const existing = JSON.stringify([
+      { id: "s1", role: "Programme Manager", name: "" },
+      { id: "i1", role: "Project Manager", name: "Prasoon Gupta" },
+    ]);
+    const incoming = JSON.stringify([{ id: "i2", role: "Project Manager", name: "Prasoon Gupta" }]);
+    const merged = rows(mergeGridJson(existing, incoming));
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toMatchObject({ name: "Prasoon Gupta" });
+  });
+
+  it("does not collapse distinct roles that merely share a word", () => {
+    const existing = JSON.stringify([{ id: "a", role: "Programme Manager", name: "Pat" }]);
+    const incoming = JSON.stringify([{ id: "b", role: "Delivery Manager", name: "Sam" }]);
+    const merged = rows(mergeGridJson(existing, incoming));
+    expect(merged).toHaveLength(2);
+    expect(merged.map((r) => r.name).sort()).toEqual(["Pat", "Sam"]);
+  });
+
   it("appends a genuinely new role while updating matched ones", () => {
     const existing = JSON.stringify([{ id: "a", role: "Sponsor", name: "Raj" }]);
     const incoming = JSON.stringify([
