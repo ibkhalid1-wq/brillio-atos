@@ -11,6 +11,7 @@ import { computePhaseReadiness, getLockedPhaseIds } from "@/v3/lib/phaseReadines
 import { selectBlockers, selectDecisions, selectHighPriorityDecisions, selectHighRisks, selectRisks } from "@/v3/lib/programRaid";
 import type { ConfidenceScore } from "@/v3/lib/confidenceScore";
 import ConfidenceBreakdown from "@/v3/components/ConfidenceBreakdown";
+import ConfidenceActions from "@/v3/components/ConfidenceActions";
 import { type LockedPhaseOption } from "@/v3/components/ChangeRequestModal";
 import type { ChangeRequest } from "@/v3/lib/changeControl";
 
@@ -687,6 +688,9 @@ export default function ExecutiveView({
 
       {/* ── 2b. Confidence breakdown — per-signal scores behind the headline % ── */}
       <ConfidenceBreakdown confidenceResult={confidenceResult} />
+
+      {/* ── 2c. Actions to address the gaps behind the weak signals ─────────── */}
+      <ConfidenceActions confidenceResult={confidenceResult} />
       </>
       )}
 

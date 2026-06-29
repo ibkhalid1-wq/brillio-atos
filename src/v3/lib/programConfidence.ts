@@ -74,7 +74,7 @@ export function deriveProgramConfidence(
   ).length;
   const milestoneHealth = milestones.length > 0 ? Math.round((onTrack / milestones.length) * 100) : 70;
   const milestonesAtRisk = milestones.filter(
-    (m) => m.status === "at-risk" || m.status === "overdue",
+    (m) => m.status === "at-risk" || m.status === "delayed",
   ).length;
 
   // Input completeness: read from the SAME schema-grounded assessment the phase
