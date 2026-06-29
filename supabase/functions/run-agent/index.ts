@@ -7630,6 +7630,28 @@ Deno.serve(async (req) => {
       ]);
     } else {
       nextProgramData = applyArtifactsToProgramData(contextProgramData, request.phaseId, parsed.artifacts);
+      // Custom planner artifacts (no dedicated agent) are produced here by the
+      // generic phase agent. Named agents get an AI quality review above; mirror
+      // that for these so the Stage card shows a real score + improvement plan
+      // instead of "Needs improvement" with nothing to act on. Persist under the
+      // same `${camelCase(artifactId)}Quality` key the client resolves.
+      for (const artifact of parsed.artifacts) {
+        const content = stringifyForReview({ title: artifact.title, content: artifact.content });
+        if (!content.trim()) continue;
+        const artifactReview = await reviewArtifact(
+          artifact.id,
+          content,
+          `Program: ${programRow.name || "Unknown"}, Phase: ${request.phaseId}`,
+          collectPriorPhaseArtifacts(contextProgramData, request.phaseId),
+          collectProvidedInputs(contextProgramData, request.phaseId),
+          getCurrentPhaseScope(contextProgramData, request.phaseId),
+        );
+        nextProgramData = applyArtifactQuality(
+          nextProgramData,
+          `${toCamelCaseId(artifact.id)}Quality`,
+          artifactReview as unknown as Record<string, unknown>,
+        );
+      }
       if (parsed.decisions.length) {
         nextProgramData = appendDecisionQueueItems(nextProgramData, parsed.decisions.map((decision) => ({
           id: crypto.randomUUID(),
