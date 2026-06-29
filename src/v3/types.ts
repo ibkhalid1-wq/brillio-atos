@@ -20,6 +20,7 @@ export type V3MoreView =
   | "budget"
   | "change-impact"
   | "stakeholders"
+  | "roster"
   | "health"
   | "scope-pcr"
   | "intelligence"

@@ -15,6 +15,7 @@ import { ClosureView } from "@/new/pages/ClosureView";
 import { RisksView } from "@/new/pages/RisksView";
 import { ScopePcrView } from "@/new/pages/ScopePcrView";
 import { StakeholderView } from "@/new/pages/StakeholderView";
+import RosterRaciView from "@/v3/surfaces/RosterRaciView";
 import DocumentImportPanel from "@/new/components/DocumentImportPanel";
 import DocumentList from "@/new/components/DocumentList";
 import MeetingNotesPanel from "@/v3/components/MeetingNotesPanel";
@@ -259,6 +260,8 @@ export default function ProgramDetailRouter({
       return <ChangeImpactView program={program} isRunning={triggers.changeImpactIsRunning} onTriggerChangeImpact={triggers.triggerChangeImpact} />;
     case "stakeholders":
       return <StakeholderView program={program} isRunning={triggers.stakeholderIsRunning} onTriggerStakeholders={triggers.triggerStakeholders} />;
+    case "roster":
+      return <RosterRaciView program={program} />;
     case "health":
       return <HealthHeatmapView program={program} isRunning={healthHeatmapIsRunning} onTriggerHealthHeatmap={triggers.triggerHealthHeatmap} onSelectPhase={onOpenPhase} onRunAgent={onRunAgent} />;
     case "scope-pcr":

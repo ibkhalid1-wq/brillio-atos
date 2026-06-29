@@ -20,7 +20,7 @@ type WorkspaceTile = {
 // Phase-relevant areas — only references tiles that exist in WORKSPACE_GROUPS
 const PHASE_RECOMMENDED_WORKSPACES: Record<string, V3MoreView[]> = {
   strategy:    ["documents"],
-  mobilise:    ["stakeholders", "documents"],
+  mobilise:    ["roster", "stakeholders", "documents"],
   discover:    ["stakeholders", "change-impact", "documents"],
   design:      ["change-impact"],
   build:       ["budget", "scope-pcr"],
@@ -58,6 +58,7 @@ const WORKSPACE_GROUPS: Array<{
     tiles: [
       // Stakeholders and Change Impact consolidated — separate views kept for depth
       { view: "stakeholders", label: "Stakeholders", description: "Stakeholder map, influence and engagement", icon: "◎", accent: "purple" },
+      { view: "roster", label: "Team & RACI", description: "Core-team roster and RACI matrix, reconciled with coverage gaps", icon: "◍", accent: "blue" },
       { view: "change-impact", label: "Change & Adoption", description: "Organisational change impact and adoption readiness", icon: "↺", accent: "amber" },
       // Removed: standalone Adoption view (folded into Change & Adoption above)
     ],
