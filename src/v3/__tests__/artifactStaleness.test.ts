@@ -131,5 +131,17 @@ describe("artifactStaleness", () => {
       expect(blocked.has("industry")).toBe(true);
       expect(blocked.has("successMetric")).toBe(false);
     });
+
+    it("resolves dynamic-store flow edges, so a custom field feeding an approved dynamic artifact is blocked only when the store is passed", () => {
+      // The field→artifact edge for planner-generated/custom inputs lives only in
+      // the dynamic schema store's artifactInputFlow, not the static methodology
+      // map. Reimporting a document on a dynamic phase must not overwrite such a
+      // grounding input when it feeds an approved artifact — but only the store
+      // exposes that edge. Without it the field is wrongly writable (the bug this guards).
+      const store = { artifactInputFlow: { strategy: { charter: ["customGroundingField"] } } };
+      const bucket = { charter: { status: "approved" } };
+      expect(fieldsFeedingApprovedArtifacts("strategy", ["customGroundingField"], bucket).has("customGroundingField")).toBe(false);
+      expect(fieldsFeedingApprovedArtifacts("strategy", ["customGroundingField"], bucket, store).has("customGroundingField")).toBe(true);
+    });
   });
 });
