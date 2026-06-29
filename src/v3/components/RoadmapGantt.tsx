@@ -241,6 +241,7 @@ export default function RoadmapGantt({ rows, editable = false, onChange }: Roadm
                     max={shiftIsoDate(bar.end, -MIN_DAYS)}
                     onChange={(e) => onDateInput(bar, "start", e.target.value)}
                   />
+                  <span className="v3-gantt-date-sep" aria-hidden="true">&rarr;</span>
                   <input
                     type="date"
                     className="v3-gantt-date"
@@ -268,7 +269,6 @@ export default function RoadmapGantt({ rows, editable = false, onChange }: Roadm
                   {bar.expectedPct != null ? (
                     <span className="v3-gantt-expected" style={{ left: `${bar.expectedPct}%` }} aria-hidden="true" />
                   ) : null}
-                  {progress > 12 ? <span className="v3-gantt-pct">{progress}%</span> : null}
                   {bar.risk ? <span className="v3-gantt-risk" title={bar.risk} aria-hidden="true">⚠</span> : null}
                   {editable ? (
                     <span
@@ -283,6 +283,14 @@ export default function RoadmapGantt({ rows, editable = false, onChange }: Roadm
                     />
                   ) : null}
                 </div>
+                {/* % sits just past the bar's end so it's never clipped, even on short bars. */}
+                <span
+                  className="v3-gantt-pct"
+                  data-rag={rag}
+                  style={{ left: `${Math.min(bar.offsetPct + bar.widthPct, 100)}%` }}
+                >
+                  {progress}%
+                </span>
               </div>
             </div>
           );

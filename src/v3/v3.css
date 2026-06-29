@@ -12461,7 +12461,7 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   --v3-gantt-today: #e8553b;
   display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px;
 }
-.v3-gantt.is-editable { --v3-gantt-dates-w: 150px; }
+.v3-gantt.is-editable { --v3-gantt-dates-w: 250px; }
 
 /* Horizontal scroll viewport — label + dates columns stay pinned via sticky. */
 .v3-gantt-scroll {
@@ -12497,9 +12497,10 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   overflow: hidden; word-break: break-word;
 }
 .v3-gantt-track {
-  position: relative; height: 28px; border-radius: 7px;
-  background: var(--v3-accent-soft);
+  position: relative; height: 30px; border-radius: 8px;
+  background: linear-gradient(180deg, var(--v3-surface-muted, rgba(148, 163, 184, 0.06)), rgba(148, 163, 184, 0.1));
   border: 1px solid var(--v3-border-soft);
+  box-shadow: inset 0 1px 2px rgba(16, 24, 40, 0.04);
   overflow: hidden;
 }
 .v3-gantt-axis-track { height: 16px; background: transparent; border: none; overflow: visible; }
@@ -12537,13 +12538,13 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 }
 
 .v3-gantt-bar {
-  position: absolute; top: 3px; bottom: 3px; min-width: 10px; border-radius: 6px;
+  position: absolute; top: 3px; bottom: 3px; min-width: 10px; border-radius: 7px;
   background: var(--rag-soft, var(--v3-accent-soft));
   border: 1px solid var(--rag-line, var(--v3-border-soft));
   display: flex; align-items: center; padding: 0;
   white-space: nowrap; overflow: hidden;
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.12);
-  transition: box-shadow 0.12s ease, filter 0.12s ease;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transition: box-shadow 0.12s ease, filter 0.12s ease, transform 0.12s ease;
 }
 .v3-gantt-bar[data-rag="green"] { --rag: #198754; --rag-soft: rgba(25, 135, 84, 0.15); --rag-line: rgba(25, 135, 84, 0.42); }
 .v3-gantt-bar[data-rag="amber"] { --rag: #d9930b; --rag-soft: rgba(217, 147, 11, 0.16); --rag-line: rgba(217, 147, 11, 0.44); }
@@ -12555,11 +12556,19 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(0, 0, 0, 0.1));
   transition: width 0.25s ease;
 }
+/* The % label sits just past the bar's end (in the track, not inside the bar),
+   so it reads cleanly against the light track and is never clipped on short bars. */
 .v3-gantt-pct {
-  position: absolute; right: 7px; top: 50%; transform: translateY(-50%); z-index: 2;
-  font-size: 10px; font-weight: 700; letter-spacing: 0.01em; color: var(--v3-text-primary);
-  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.55);
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 3;
+  margin-left: 8px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.01em;
+  color: var(--v3-text-secondary); font-variant-numeric: tabular-nums;
+  white-space: nowrap; pointer-events: none;
 }
+.v3-gantt-pct[data-rag="green"] { color: #198754; }
+.v3-gantt-pct[data-rag="amber"] { color: #b5790a; }
+.v3-gantt-pct[data-rag="red"]   { color: #dc3545; }
+.v3-gantt-pct[data-rag="grey"]  { color: var(--v3-text-secondary); }
 .v3-gantt-risk {
   position: absolute; left: 5px; top: 50%; transform: translateY(-50%); z-index: 2;
   font-size: 10px; color: #b42318; filter: drop-shadow(0 1px 1px rgba(255, 255, 255, 0.6));
@@ -12604,8 +12613,10 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   background: var(--v3-surface); padding-right: 8px;
   box-shadow: var(--v3-gantt-gap) 0 0 0 var(--v3-surface), calc(var(--v3-gantt-gap) + 1px) 0 0 0 var(--v3-border-soft);
 }
-/* Editable mode stacks the two native date inputs to fit the narrow column. */
-.v3-gantt.is-editable .v3-gantt-dates { flex-direction: column; align-items: stretch; gap: 2px; justify-content: center; }
+/* Editable mode keeps both native date inputs on one row, split by an arrow. */
+.v3-gantt.is-editable .v3-gantt-dates { flex-direction: row; align-items: center; gap: 4px; justify-content: flex-start; }
+.v3-gantt.is-editable .v3-gantt-date { flex: 1 1 0; min-width: 0; }
+.v3-gantt-date-sep { flex: none; font-size: 11px; line-height: 1; color: var(--v3-text-muted); }
 .v3-gantt-dates-head {
   position: sticky; left: calc(var(--v3-gantt-label-w) + var(--v3-gantt-gap)); z-index: 6; align-self: stretch;
   background: var(--v3-surface);
@@ -12622,10 +12633,12 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 .v3-gantt-dateval.is-end { color: var(--v3-text-muted); }
 .v3-gantt-dateval.is-end::before { content: "→ "; color: var(--v3-text-muted); }
 .v3-gantt-date {
-  font-size: 11px; padding: 3px 6px; border-radius: 6px; color-scheme: light dark; width: 100%;
-  border: 1px solid var(--v3-border); background: var(--v3-surface); color: var(--v3-text-primary);
-  transition: border-color 0.12s ease;
+  font-size: 11px; padding: 4px 8px; border-radius: 7px; color-scheme: light dark; width: 100%;
+  border: 1px solid var(--v3-border); background: var(--v3-surface-muted, var(--v3-surface)); color: var(--v3-text-primary);
+  font-variant-numeric: tabular-nums;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
 }
-.v3-gantt-date:hover:not(:disabled) { border-color: var(--v3-accent); }
+.v3-gantt-date:hover:not(:disabled) { border-color: var(--v3-accent); background: var(--v3-surface); }
+.v3-gantt-date:focus-visible { outline: none; border-color: var(--v3-accent); box-shadow: 0 0 0 3px var(--v3-accent-soft); }
 .v3-gantt-date:disabled { opacity: 0.6; }
 .v3-gantt-empty { font-size: 12px; color: var(--v3-text-muted); padding: 12px 0; }
