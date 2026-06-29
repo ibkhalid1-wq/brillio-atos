@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   buildPhaseSchedule,
   buildMethodologyPhaseSchedule,
+  buildRoadmapRows,
   layoutGantt,
   shiftIsoDate,
   daysBetween,
@@ -137,5 +138,80 @@ describe("shiftIsoDate / daysBetween", () => {
     expect(daysBetween("2026-01-01", "2026-01-08")).toBe(7);
     expect(daysBetween("2026-02-01", "2026-01-01")).toBe(-31);
     expect(daysBetween("bad", "2026-01-01")).toBe(0);
+  });
+});
+
+/**
+ * Roadmap progress is completion against each phase's *expected* deliverables —
+ * its required artifacts plus the planner's declared dynamic artifacts — not the
+ * average state of whatever sits in the bucket. This guards the regression where
+ * a stray program-level agent output (an "adoption" draft) bucketed under the
+ * locked Operate phase made it read 50% complete, ahead of the active phases.
+ */
+describe("buildRoadmapRows — progress scoping", () => {
+  const phases = [
+    { id: "strategy" }, { id: "mobilise" }, { id: "discover" },
+    { id: "design" }, { id: "build" }, { id: "operate" },
+  ];
+  const rawData = {
+    phaseInputs: { strategy: { startDate: "2026-01-01", targetEndDate: "2027-01-01" } },
+    dynamicSchema: {
+      artifacts: {
+        discover: [
+          { id: "current-state-narrative", label: "Narrative", description: "" },
+          { id: "scope-map", label: "Scope Map", description: "" },
+          { id: "requirements-catalog", label: "Requirements", description: "" },
+          { id: "stakeholder-map", label: "Stakeholder Map", description: "" },
+        ],
+        mobilise: [
+          { id: "raci-matrix", label: "RACI", description: "" },
+          { id: "governance-model", label: "Governance", description: "" },
+          { id: "risks-assumptions-log", label: "Risks", description: "" },
+          { id: "mobilisation-narrative", label: "Narrative", description: "" },
+        ],
+      },
+    },
+    phaseArtifacts: {
+      strategy: {
+        charter: { status: "approved" }, "business-case": { status: "approved" },
+        "outcome-framework": { status: "approved" }, "strategic-roadmap": { status: "approved" },
+        risk: { status: "approved" }, "completion-estimate": { status: "approved" },
+      },
+      // Mobilise deliverables landed under the producing-agent ids (risk, narrative),
+      // not the planner's synonyms (risks-assumptions-log, mobilisation-narrative);
+      // the alias/canonicalisation must still credit them.
+      mobilise: {
+        "raci-matrix": { status: "approved" }, "governance-model": { status: "approved" },
+        risk: { status: "approved" }, narrative: { status: "approved" },
+        "capacity-assessor": { status: "approved" },
+      },
+      discover: { "scope-map": { status: "draft" }, "requirements-catalog": { status: "stale" } },
+      operate: { adoption: { status: "draft" } },
+    },
+  };
+
+  const pctById = () => {
+    const rows = buildRoadmapRows(rawData, phases);
+    return Object.fromEntries(rows.map((r) => [r.id, r.progressPct]));
+  };
+
+  it("scores a fully-approved required phase at 100%", () => {
+    expect(pctById().strategy).toBe(100);
+  });
+
+  it("credits deliverables stored under aliased producing-agent ids", () => {
+    // raci-matrix + governance-model + (risks-assumptions-log→risk), all approved.
+    // narrative/capacity-assessor are not expected deliverables and don't dilute.
+    expect(pctById().mobilise).toBe(100);
+  });
+
+  it("measures a dynamic phase against its declared deliverables, not just generated ones", () => {
+    // scope-map(draft .5) + requirements-catalog(stale .4) + stakeholder-map(0), ÷3.
+    expect(pctById().discover).toBe(30);
+  });
+
+  it("ignores a stray agent output bucketed under a phase with no expected deliverables", () => {
+    expect(pctById().operate).toBe(0);
+    expect(pctById().build).toBe(0);
   });
 });

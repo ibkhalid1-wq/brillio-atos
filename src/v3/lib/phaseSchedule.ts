@@ -1,4 +1,5 @@
 import { getMethodology, getPhaseDefinition, type MethodologyVariant } from "@/v3/lib/methodology";
+import { dynamicArtifactDefs, getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 
 /**
  * Deterministic phase scheduling. The strategic-roadmap agent was asked to both
@@ -173,33 +174,34 @@ function readArtifactProgress(inner: Record<string, unknown>, phases: Array<{ id
     if (typeof val !== "object" || val === null) return null;
     return String((val as Record<string, unknown>).status ?? "draft");
   };
+  const store = getDynamicSchemaStore(inner);
   const progress = new Map<string, number>();
   for (const p of phases) {
     const bucket = typeof phaseArtifacts[p.id] === "object" && phaseArtifacts[p.id] !== null
       ? phaseArtifacts[p.id] as Record<string, unknown>
       : {};
     const required = getPhaseDefinition(p.id)?.requiredArtifacts ?? [];
-    if (required.length > 0) {
-      let credit = 0;
-      for (const artifactId of required) {
-        const status = statusOf(bucket, artifactId);
-        if (status === null || status === "archived") continue; // not generated yet → zero credit
-        credit += creditFor(status);
-      }
-      progress.set(p.id, Math.round((credit / required.length) * 100));
+    // Progress is completion against the phase's *expected* deliverables: its
+    // required artifacts plus any the planner declared for it (deduped, canonical).
+    // Measuring against the expected set — not whatever happens to be in the
+    // bucket — means ungenerated deliverables score zero and stray program-level
+    // agent outputs bucketed under a phase id (e.g. an "adoption" draft written
+    // into the locked Operate phase) can't inflate the bar.
+    const expected = Array.from(new Set([
+      ...required,
+      ...dynamicArtifactDefs(p.id, store).map((d) => d.id),
+    ]));
+    if (expected.length === 0) {
+      progress.set(p.id, 0);
       continue;
     }
     let credit = 0;
-    let generated = 0;
-    for (const [artifactId, val] of Object.entries(bucket)) {
-      // Delivery Plan + Milestone Review are folded into the roadmap — not phase artifacts.
-      if (artifactId === "plan" || artifactId === "milestone") continue;
-      const status = typeof val === "object" && val !== null ? String((val as Record<string, unknown>).status ?? "draft") : "draft";
-      if (status === "archived") continue;
-      generated += 1;
+    for (const artifactId of expected) {
+      const status = statusOf(bucket, artifactId);
+      if (status === null || status === "archived") continue; // not generated yet → zero credit
       credit += creditFor(status);
     }
-    progress.set(p.id, generated > 0 ? Math.round((credit / generated) * 100) : 0);
+    progress.set(p.id, Math.round((credit / expected.length) * 100));
   }
   return progress;
 }
