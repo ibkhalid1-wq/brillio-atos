@@ -278,6 +278,62 @@ export function buildRoadmapRows(rawData: unknown, phases: Array<{ id: string; s
   return rows;
 }
 
+/** A validation/de-risking stage the user defined in the Strategy phase grid. */
+export interface ValidationStage {
+  id: string;
+  /** POC / Prototype / Pilot / MVP — the stage label. */
+  stage: string;
+  /** What the stage covers / its considerations. */
+  considerations: string;
+  /** Target ISO yyyy-mm-dd, or "" when undated. */
+  date: string;
+}
+
+/**
+ * Parse the Strategy phase's `validationApproach` grid into ordered stages. The
+ * grid persists as a JSON-stringified array of row objects; we tolerate either a
+ * raw array or the stringified form, drop blank rows, and sort dated stages
+ * chronologically (undated stages keep their authored order at the end). This is
+ * the authoritative, user-supplied de-risking plan the roadmap surfaces.
+ */
+export function buildValidationStages(rawData: unknown): ValidationStage[] {
+  const raw = unwrapInner(rawData);
+  const phaseInputs = raw.phaseInputs;
+  const strategyInputs = typeof phaseInputs === "object" && phaseInputs !== null
+    ? (phaseInputs as Record<string, unknown>).strategy as Record<string, unknown> | undefined
+    : undefined;
+  const value = strategyInputs?.validationApproach;
+  let parsed: unknown = value;
+  if (typeof value === "string") {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(parsed)) return [];
+  const stages: ValidationStage[] = [];
+  for (const entry of parsed) {
+    if (typeof entry !== "object" || entry === null) continue;
+    const e = entry as Record<string, unknown>;
+    const stage = typeof e.stage === "string" ? e.stage.trim() : "";
+    const considerations = typeof e.considerations === "string" ? e.considerations.trim() : "";
+    const date = typeof e.date === "string" && parseUtcDay(e.date) !== null ? e.date.trim() : "";
+    if (!stage && !considerations && !date) continue;
+    const id = typeof e.id === "string" && e.id ? e.id : `${stage}-${date || stages.length}`;
+    stages.push({ id, stage, considerations, date });
+  }
+  stages.sort((a, b) => {
+    const am = parseUtcDay(a.date);
+    const bm = parseUtcDay(b.date);
+    if (am === null && bm === null) return 0;
+    if (am === null) return 1;
+    if (bm === null) return -1;
+    return am - bm;
+  });
+  return stages;
+}
+
 // ── Gantt layout ─────────────────────────────────────────────────────────────
 
 /** A named phase with concrete dates — the input row for a Gantt chart. */

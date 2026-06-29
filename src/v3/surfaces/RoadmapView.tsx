@@ -1,7 +1,8 @@
 import React from "react";
 import type { ProgramSummary } from "@/new/types";
 import RoadmapGantt from "@/v3/components/RoadmapGantt";
-import { buildRoadmapRows } from "@/v3/lib/phaseSchedule";
+import { buildRoadmapRows, buildValidationStages, type ValidationStage } from "@/v3/lib/phaseSchedule";
+import type { GanttMarker } from "@/v3/components/RoadmapGantt";
 import { AdamCard, AdamCardBody, AdamCardHeader } from "@/v3/components/ui/AdamCard";
 import { EmptyState } from "@/v3/components/ui/EmptyState";
 import { RelativeTime } from "@/v3/components/ui/RelativeTime";
@@ -35,6 +36,23 @@ const SEVERITY_COLOR: Record<string, string> = {
   high: "#d9930b",
   medium: "#64748b",
 };
+
+const STAGE_COLOR: Record<string, string> = {
+  poc: "#7c3aed",
+  prototype: "#0ea5e9",
+  pilot: "#0d9488",
+  mvp: "#198754",
+};
+
+const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "2026-07-20" → "20 Jul 2026"; returns "" for blank/unparseable input. */
+function formatStageDate(iso: string): string {
+  const [y, m, d] = (iso || "").split("-");
+  const mi = Number(m) - 1;
+  if (!y || !MONTH_ABBR[mi] || !d) return "";
+  return `${Number(d)} ${MONTH_ABBR[mi]} ${y}`;
+}
 
 function RagPill({ rag, label }: { rag: string; label?: string }) {
   const color = RAG_COLOR[rag] ?? RAG_COLOR.grey;
@@ -206,12 +224,65 @@ function DeliveryFocus({
   );
 }
 
+/** The user-defined validation/de-risking stages, as a dedicated section. */
+function ValidationSection({ stages }: { stages: ValidationStage[] }) {
+  return (
+    <AdamCard>
+      <AdamCardHeader
+        title="Validation & de-risking"
+        subtitle="The proof points that validate outcomes before full rollout — sequenced on the timeline above as markers."
+      />
+      <AdamCardBody>
+        <div style={{ display: "grid", gap: 10 }}>
+          {stages.map((stage, i) => {
+            const color = STAGE_COLOR[stage.stage.toLowerCase()] ?? "#64748b";
+            const dateLabel = formatStageDate(stage.date);
+            return (
+              <div
+                key={stage.id}
+                style={{
+                  display: "flex", gap: 12, alignItems: "flex-start",
+                  paddingBottom: i < stages.length - 1 ? 10 : 0,
+                  borderBottom: i < stages.length - 1 ? "1px solid var(--v3-border-soft)" : "none",
+                }}
+              >
+                <span
+                  style={{
+                    flexShrink: 0, display: "inline-flex", alignItems: "center",
+                    padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 700,
+                    letterSpacing: "0.02em", textTransform: "uppercase",
+                    color, background: `${color}1f`, border: `1px solid ${color}55`,
+                  }}
+                >
+                  {stage.stage || "Stage"}
+                </span>
+                <div style={{ display: "grid", gap: 2, flex: 1, minWidth: 0 }}>
+                  {stage.considerations ? (
+                    <div style={{ fontSize: 13, color: "var(--v3-text-primary)" }}>{stage.considerations}</div>
+                  ) : (
+                    <div style={{ fontSize: 13, color: "var(--v3-text-muted)" }}>No considerations noted.</div>
+                  )}
+                  {dateLabel ? (
+                    <div style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>Target {dateLabel}</div>
+                  ) : (
+                    <div style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>No target date</div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </AdamCardBody>
+    </AdamCard>
+  );
+}
+
 /**
  * The Strategic Roadmap is the single delivery surface. It composes, top to
  * bottom: agent-graded programme health, the phase timeline (with progress/RAG/
- * risk overlay) and the delivery focus (next actions + blockers from the folded
- * plan). The critical-path sequence is read off the timeline rather than
- * repeated as a list.
+ * risk overlay), the user's validation/de-risking stages and the delivery focus
+ * (next actions + blockers from the folded plan). The critical-path sequence is
+ * read off the timeline rather than repeated as a list.
  */
 export default function RoadmapView({
   program,
@@ -224,6 +295,18 @@ export default function RoadmapView({
   const roadmapRows = React.useMemo(
     () => buildRoadmapRows(program?.rawData, (program?.phases || []) as Array<{ id: string; status?: string }>),
     [program?.rawData, program?.phases],
+  );
+
+  const validationStages = React.useMemo(
+    () => buildValidationStages(program?.rawData),
+    [program?.rawData],
+  );
+
+  const validationMarkers = React.useMemo<GanttMarker[]>(
+    () => validationStages
+      .filter((s) => s.date)
+      .map((s) => ({ id: s.id, label: s.stage || "Stage", date: s.date, detail: s.considerations || undefined })),
+    [validationStages],
   );
 
   // Persist the full effective schedule (defaults made explicit) with the one
@@ -259,9 +342,11 @@ export default function RoadmapView({
           subtitle="Programme window weighted by each phase's typical duration. Bars show progress and RAG status against today."
         />
         <AdamCardBody>
-          <RoadmapGantt rows={roadmapRows} editable={!!onSaveRoadmapSchedule} onChange={handleRoadmapChange} />
+          <RoadmapGantt rows={roadmapRows} editable={!!onSaveRoadmapSchedule} onChange={handleRoadmapChange} markers={validationMarkers} />
         </AdamCardBody>
       </AdamCard>
+
+      {validationStages.length ? <ValidationSection stages={validationStages} /> : null}
 
       <DeliveryFocus program={program} planIsRunning={planIsRunning} onTriggerPlan={onTriggerPlan} />
     </div>

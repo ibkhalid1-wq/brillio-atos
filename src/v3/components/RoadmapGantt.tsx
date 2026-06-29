@@ -1,6 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { layoutGantt, shiftIsoDate, daysBetween, type GanttRow } from "@/v3/lib/phaseSchedule";
 
+/** A dated point of interest (e.g. a validation/de-risking stage) drawn over the bars. */
+export interface GanttMarker {
+  id: string;
+  /** Short label shown on the marker flag. */
+  label: string;
+  /** Target ISO yyyy-mm-dd. */
+  date: string;
+  /** Longer description for the marker's tooltip. */
+  detail?: string;
+}
+
 interface RoadmapGanttProps {
   /** Ordered phases with their effective start/end dates. */
   rows: GanttRow[];
@@ -8,6 +19,8 @@ interface RoadmapGanttProps {
   editable?: boolean;
   /** Commit one phase's new dates (fired on drag-end and date-input change). */
   onChange?: (id: string, start: string, end: string) => void;
+  /** Dated milestones overlaid on the timeline (validation/de-risking stages). */
+  markers?: GanttMarker[];
 }
 
 type DragMode = "move" | "resize-start" | "resize-end";
@@ -42,7 +55,7 @@ function formatShortDate(iso: string): string {
  * it / drag its edges to resize, or type exact dates in the per-row inputs. Both
  * paths funnel through one `onChange` so persistence has a single entry point.
  */
-export default function RoadmapGantt({ rows, editable = false, onChange }: RoadmapGanttProps) {
+export default function RoadmapGantt({ rows, editable = false, onChange, markers }: RoadmapGanttProps) {
   // Working copy so drags/edits render live before the parent persists and feeds
   // fresh props back. Re-synced whenever the incoming rows actually change.
   const [draft, setDraft] = useState<GanttRow[]>(rows);
@@ -80,6 +93,21 @@ export default function RoadmapGantt({ rows, editable = false, onChange }: Roadm
     if (offset < 0 || offset > total) return null;
     return (offset / total) * 100;
   }, [layout]);
+
+  // Dated markers positioned as a % of the padded timeline; ones outside the
+  // chart's range are dropped.
+  const positionedMarkers = useMemo(() => {
+    if (!layout || !markers?.length) return [];
+    const total = daysBetween(layout.rangeStart, layout.rangeEnd);
+    if (total <= 0) return [];
+    return markers
+      .map((marker) => {
+        const offset = daysBetween(layout.rangeStart, marker.date);
+        if (offset < 0 || offset > total) return null;
+        return { ...marker, leftPct: (offset / total) * 100 };
+      })
+      .filter((m): m is GanttMarker & { leftPct: number } => m !== null);
+  }, [layout, markers]);
 
   const commit = useCallback(
     (id: string, start: string, end: string) => {
@@ -221,6 +249,16 @@ export default function RoadmapGantt({ rows, editable = false, onChange }: Roadm
               <span className="v3-gantt-today-flag">Today</span>
             </span>
           ) : null}
+          {positionedMarkers.map((marker) => (
+            <span
+              key={marker.id}
+              className="v3-gantt-marker"
+              style={{ left: `${marker.leftPct}%` }}
+              title={marker.detail ? `${marker.label} · ${marker.date}\n${marker.detail}` : `${marker.label} · ${marker.date}`}
+            >
+              <span className="v3-gantt-marker-flag">{marker.label}</span>
+            </span>
+          ))}
         </div>
         {layout.bars.map((bar) => {
           const progress = Math.max(0, Math.min(100, bar.progressPct ?? 0));

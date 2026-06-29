@@ -12552,6 +12552,23 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   color: #fff; background: var(--v3-gantt-today); white-space: nowrap;
   box-shadow: 0 1px 3px rgba(232, 85, 59, 0.35);
 }
+/* Validation/de-risking markers: a dashed line with a bottom-anchored flag so
+   they read distinctly from the solid "today" marker and don't collide with it. */
+.v3-gantt-marker {
+  position: absolute; top: 0; bottom: 0; width: 0;
+  border-left: 2px dashed #0d9488;
+}
+.v3-gantt-marker::before {
+  content: ""; position: absolute; top: -3px; left: -4px;
+  width: 7px; height: 7px; border-radius: 50%; background: #0d9488;
+  box-shadow: 0 0 0 2px var(--v3-surface);
+}
+.v3-gantt-marker-flag {
+  position: absolute; bottom: -7px; left: 6px; padding: 1px 6px; border-radius: 999px;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  color: #fff; background: #0d9488; white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(13, 148, 136, 0.35);
+}
 
 .v3-gantt-bar {
   position: absolute; top: 3px; bottom: 3px; min-width: 10px; border-radius: 7px;
