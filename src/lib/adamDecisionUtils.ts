@@ -210,6 +210,23 @@ function getProjectMilestones(projectData: any) {
   return [];
 }
 
+// A milestone is "achieved" — and so cannot be slipping — when its own status
+// reads complete, or when its phase's gate has been approved. The gate is the
+// authoritative signal: a phase-gate milestone (e.g. "Strategy Phase Gate")
+// keeps a stale "delayed" status from before approval, so without this check an
+// already-locked phase would keep raising a milestone-slip action forever.
+const ACHIEVED_MILESTONE_STATUSES = new Set([
+  "completed", "complete", "done", "achieved", "delivered", "closed",
+]);
+
+function isMilestoneAchieved(projectData: any, milestone: any): boolean {
+  if (ACHIEVED_MILESTONE_STATUSES.has(String(milestone?.status || "").toLowerCase())) return true;
+  const phaseId = String(milestone?.phaseId || milestone?.linkedPhase || "").trim();
+  if (!phaseId) return false;
+  const gate = projectData?.gateReviews?.[phaseId];
+  return String(gate?.status || "").toLowerCase() === "approved";
+}
+
 function buildSyntheticMilestoneSlipItems(projectData: any) {
   const items: DecisionItem[] = [];
   const existingQueueItems = asArray(projectData?.decisionQueue);
@@ -237,6 +254,7 @@ function buildSyntheticMilestoneSlipItems(projectData: any) {
     .slice()
     .sort((left: any, right: any) => getCreatedAt(right?.detectedAt || right?.createdAt) - getCreatedAt(left?.detectedAt || left?.createdAt))
     .forEach((slip: any, index: number) => {
+      if (isMilestoneAchieved(projectData, slip)) return;
       const milestoneKey = String(slip?.milestoneId || slip?.id || slip?.milestoneName || `slip-${index}`);
       const slipDays = Number(slip?.slipDays || 0);
       addMilestoneItem({
@@ -255,6 +273,7 @@ function buildSyntheticMilestoneSlipItems(projectData: any) {
 
   getProjectMilestones(projectData)
     .filter((milestone: any) => {
+      if (isMilestoneAchieved(projectData, milestone)) return false;
       const status = String(milestone?.status || "").toLowerCase();
       const planned = getCreatedAt(milestone?.plannedDate || milestone?.dueDate || milestone?.targetDate);
       const forecast = getCreatedAt(milestone?.forecastDate || milestone?.projectedDate);
