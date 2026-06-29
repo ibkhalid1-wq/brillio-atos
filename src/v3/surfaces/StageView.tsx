@@ -159,6 +159,19 @@ function deriveArtifactQualityIssues(opts: {
           : "The document is usable but ATOS sees headroom. Strengthen the grounding inputs below, then regenerate.",
       });
     }
+  } else if (state !== "approved" && state !== "archived") {
+    // A custom planner artifact produced by the generic phase agent gets no
+    // independent quality review, so it has no score — yet the card still reads
+    // "Needs improvement". Without this, the recommendations panel would be empty.
+    // Give a concrete next step: enrich the grounding inputs (if any are thin) and
+    // regenerate, which runs a fresh draft the reviewer can then score.
+    issues.push({
+      severity: "medium",
+      title: "Not yet quality-reviewed",
+      detail: missing.length
+        ? "This artifact has no quality score yet. Complete the grounding inputs below, then regenerate to produce a reviewed draft."
+        : "This artifact has no quality score yet. Regenerate it to run a fresh quality review, replacing any broad or placeholder detail with concrete specifics first to lift its depth.",
+    });
   }
   // Prescriptive, per-field: name the exact input each artifact is grounded on and
   // what it must contain. Empty grounding inputs are the highest-leverage fixes.
@@ -1772,6 +1785,19 @@ export default function StageView({
               // off until the phase is unlocked — or (b) sequential generation: this
               // artifact comes after one that has not yet cleared the 89% quality bar.
               const generationLocked = gateApproved || lockedArtifactDefIds.has(def.id);
+              // Recommendations are not only the model's improvement plan: a
+              // custom planner artifact produced by the generic phase agent gets a
+              // confidence score but no structured review, so it can read "Needs
+              // improvement" with zero model suggestions. deriveArtifactQualityIssues
+              // still yields actionable advice from the score and grounding inputs,
+              // so drive the Recommendations button off that fuller set — otherwise
+              // the button sits disabled on exactly the artifacts that need it most.
+              const qualityIssues = present
+                ? deriveArtifactQualityIssues({ score: displayScore, state, inputRequirements, improvements: review?.improvements })
+                : [];
+              // "Not yet approved" is an always-present informational line, not an
+              // actionable fix — exclude it so an at-bar artifact shows no false count.
+              const recommendationCount = qualityIssues.filter((issue) => issue.title !== "Not yet approved").length;
               return (
                 <React.Fragment key={def.id}>
                 {index > 0 ? (
@@ -1822,14 +1848,14 @@ export default function StageView({
                     <button
                       type="button"
                       className="v3-button ghost v3-button-inline-xs"
-                      onClick={() => { setApplyError(null); setImprovementsApplied(false); setQualityArtifact({ label: def.label, defId: def.id, score: displayScore, issues: deriveArtifactQualityIssues({ score: displayScore, state, inputRequirements, improvements: review?.improvements }), phaseId: activePhase.id, fields: qualityFields, improvements: (review?.improvements ?? []).filter((s) => !!s && s.trim()) }); }}
-                      disabled={suggestionCount === 0}
-                      title={suggestionCount === 0
+                      onClick={() => { setApplyError(null); setImprovementsApplied(false); setQualityArtifact({ label: def.label, defId: def.id, score: displayScore, issues: qualityIssues, phaseId: activePhase.id, fields: qualityFields, improvements: (review?.improvements ?? []).filter((s) => !!s && s.trim()) }); }}
+                      disabled={recommendationCount === 0}
+                      title={recommendationCount === 0
                         ? `No outstanding quality suggestions for ${def.label} — regenerate or re-review to surface new ones`
-                        : `Review and improve the quality of ${def.label} — ${suggestionCount} suggestion${suggestionCount === 1 ? "" : "s"}`}
+                        : `Review and improve the quality of ${def.label} — ${recommendationCount} recommendation${recommendationCount === 1 ? "" : "s"}`}
                       aria-label={`Improvement recommendations for ${def.label}`}
                     >
-                      ✦ Recommendations{suggestionCount ? <span className="v3-button-icon-badge">{suggestionCount}</span> : null}
+                      ✦ Recommendations{recommendationCount ? <span className="v3-button-icon-badge">{recommendationCount}</span> : null}
                     </button>
                   ) : null}
                   {state !== "approved" ? (
