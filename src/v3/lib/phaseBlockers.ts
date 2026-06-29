@@ -115,7 +115,14 @@ export function derivePhaseBlockers(
   // 3) Open risks & explicit blocker entries scoped to this phase.
   const raid: RAIDEntry[] = program.raidEntries || [];
   const phaseRaid = raid.filter((e) => e.phase === phaseId && e.status !== "closed");
+  // A `blocker` is, by this app's taxonomy, exactly what prevents the phase gate —
+  // so once the gate is approved an open blocker is contradictory and stale (it
+  // predates sign-off). Suppress blocker entries for an approved phase even if the
+  // data still carries them, so an approved phase never reads as blocked. Risks are
+  // not suppressed: a risk can legitimately outlive a gate.
+  const gateApproved = program.gateReviews?.[phaseId]?.status === "approved";
   for (const risk of phaseRaid.filter((e) => e.type === "risk" || e.type === "blocker")) {
+    if (risk.type === "blocker" && gateApproved) continue;
     // Only surface the ones that genuinely block — critical/high risks and all blockers.
     if (risk.type === "risk" && risk.severity !== "critical" && risk.severity !== "high") continue;
     blockers.push({

@@ -52,6 +52,32 @@ describe("derivePhaseBlockers", () => {
     expect(ids).toContain("decision:d1");
   });
 
+  it("suppresses blocker entries for a phase whose gate is approved, but not when pending", () => {
+    const withGate = (status: string) => normalizeProgram({
+      id: "program-2",
+      name: "ERP Transformation",
+      client: "Acme",
+      industry: "Financial Services",
+      updated_at: "2026-06-13T00:00:00.000Z",
+      data: {
+        phases: [{ id: "strategy", pct: 100 }],
+        gateReviews: { strategy: { phaseId: "strategy", status } },
+        raidLog: {
+          entries: [
+            { id: "b1", type: "blocker", title: "Objective not formally approved", severity: "critical", phase: "strategy", status: "open" },
+            { id: "k1", type: "risk", title: "Vendor lock-in risk", severity: "critical", phase: "strategy", status: "open" },
+          ],
+        },
+      },
+    });
+    const approvedIds = derivePhaseBlockers(withGate("approved"), "strategy").map((b) => b.id);
+    expect(approvedIds).not.toContain("risk:b1"); // blocker suppressed once the gate is approved
+    expect(approvedIds).toContain("risk:k1");     // a genuine risk still surfaces
+
+    const pendingIds = derivePhaseBlockers(withGate("pending"), "strategy").map((b) => b.id);
+    expect(pendingIds).toContain("risk:b1");      // blocker surfaces while the gate is open
+  });
+
   it("sorts critical-severity blockers ahead of lower-severity ones", () => {
     const blockers = derivePhaseBlockers(makeProgram(), "mobilise");
     const criticalIdx = blockers.findIndex((b) => b.severity === "critical");

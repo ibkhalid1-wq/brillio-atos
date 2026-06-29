@@ -145,6 +145,37 @@ function resetPhaseInner(inner: Record<string, unknown>, phaseId: string): Recor
   return next;
 }
 
+/** Pure transform that closes a phase's open `blocker` RAID entries. Approving a
+ *  gate is the PM's assertion the phase is complete; by this app's RAID taxonomy a
+ *  `blocker` is precisely what prevents the phase gate, so an open blocker for an
+ *  approved phase is contradictory. Closing them on approval stops stale "not
+ *  approved" blockers — often written by an agent before sign-off — from lingering
+ *  after the gate clears (they otherwise keep showing in the Blockers tab and
+ *  delivery plan even though the gate is green). */
+function closePhaseBlockersInner(inner: Record<string, unknown>, phaseId: string): Record<string, unknown> {
+  const log = inner.raidLog;
+  if (!log || typeof log !== "object" || Array.isArray(log)) return inner;
+  const logRecord = log as Record<string, unknown>;
+  if (!Array.isArray(logRecord.entries)) return inner;
+  const entries = logRecord.entries as Record<string, unknown>[];
+  let changed = false;
+  const nextEntries = entries.map((entry) => {
+    if (entry && entry.type === "blocker" && entry.phase === phaseId && entry.status !== "closed") {
+      changed = true;
+      return {
+        ...entry,
+        status: "closed",
+        closedAt: new Date().toISOString(),
+        closedBy: "human",
+        closureNote: "Auto-closed when the phase gate was approved.",
+      };
+    }
+    return entry;
+  });
+  if (!changed) return inner;
+  return { ...inner, raidLog: { ...logRecord, entries: nextEntries } };
+}
+
 export function useGateReview(
   programId: string,
   rawData: Record<string, unknown>,
@@ -245,7 +276,7 @@ export function useGateReview(
           ),
         }
       : phaseArtifacts;
-    const nextInner = {
+    const nextInner = closePhaseBlockersInner({
       ...inner,
       gateReviews: nextReviews,
       phaseArtifacts: nextPhaseArtifacts,
@@ -253,7 +284,7 @@ export function useGateReview(
         String(decision.type || "") === "gate-approval"
         && String(decision.phaseId || decision.phase_id || "") === phaseId
       )),
-    };
+    }, phaseId);
     await persistState(nextInner);
     recordGateRiskSnapshot(phaseId, {
       phaseId,
