@@ -2630,6 +2630,21 @@ function getPhaseArtifactContext(programData: ProgramState, phaseId: string): Ar
   return getProgramArtifactContext(programData).filter((artifact) => artifact.phaseId === phaseId);
 }
 
+// Phase statuses that mean "hasn't begun yet". A phase can only legitimately
+// stall once it is in progress; flagging a future, not-yet-started phase as
+// "stalled / no progress" is a false positive that never self-clears.
+const NOT_STARTED_PHASE_STATUS = new Set([
+  "inactive", "not-started", "notstarted", "not_started", "upcoming",
+  "pending", "planned", "todo", "queued", "",
+]);
+
+function isPhaseNotStarted(programData: ProgramState, phaseId: string): boolean {
+  const phase = getProgramPhaseContext(programData).find((p) => p.id === phaseId);
+  if (!phase) return false;
+  const status = (typeof phase.status === "string" ? phase.status : "").trim().toLowerCase();
+  return NOT_STARTED_PHASE_STATUS.has(status);
+}
+
 /**
  * True when an escalation provably contradicts current program state — the same
  * failure mode the RAID filter guards against, since escalations are raised off
@@ -2638,7 +2653,9 @@ function getPhaseArtifactContext(programData: ProgramState, phaseId: string): Ar
  * - its core issue is the absence of phase exit criteria (not part of this methodology), or
  * - it claims a timeline/owner/objective/KPI is missing that the inputs populate, or
  * - it flags a phase as "stalled" when that phase actually carries artifacts
- *   (the escalation agent's own rule: a phase with artifacts is progressing).
+ *   (the escalation agent's own rule: a phase with artifacts is progressing), or
+ * - it flags a not-yet-started (inactive/upcoming) phase as "stalled" — a phase
+ *   can only stall once it is in progress, so future phases are never stalled.
  */
 function isProvablyStaleEscalation(
   entry: Record<string, unknown>,
@@ -2659,6 +2676,7 @@ function isProvablyStaleEscalation(
   const type = typeof entry.type === "string" ? entry.type : "";
   const phaseId = typeof entry.linkedPhaseId === "string" ? entry.linkedPhaseId : "";
   if (type === "phase-stalled" && phaseId && getPhaseArtifactContext(programData, phaseId).length > 0) return true;
+  if (type === "phase-stalled" && phaseId && isPhaseNotStarted(programData, phaseId)) return true;
   return false;
 }
 
@@ -5496,7 +5514,7 @@ Return ONLY valid JSON.`,
 
 Apply these rules. Each input record carries verifiable fields — use them; never guess an age or assume staleness.
 1. Flag a decision as "stale-decision" ONLY if its ageHours >= 48 (>= 72 for gate-approval decisions). Never flag a decision younger than that threshold, regardless of its subject. If ageHours is null you cannot establish staleness — do not flag it.
-2. Flag a phase as "phase-stalled" ONLY if hoursSinceUpdate > 120 (5 days) AND hasArtifactProgress is false. Progress is measured by artifact activity, NOT by pct: never flag a phase merely because pct is 0 or unrecorded, and never flag a phase that has artifacts (especially approved ones) — it is progressing.
+2. Flag a phase as "phase-stalled" ONLY if its status is "active" (in progress) AND hoursSinceUpdate > 120 (5 days) AND hasArtifactProgress is false. A phase can only stall once it has started: NEVER flag a phase whose status is inactive/upcoming/not-started/pending (it hasn't begun, so it cannot be "stalled" or "blocking downstream"), and never flag a completed phase. Progress is measured by artifact activity, NOT by pct: never flag a phase merely because pct is 0 or unrecorded, and never flag a phase that has artifacts (especially approved ones) — it is progressing.
 3. Flag any high-severity risk or blocker older than 3 days as "critical-blocker".
 4. Flag any delayed milestone with a target date inside the next 7 days as "milestone-slipping".
 5. Reconcile openEscalations: for every existing open escalation, check whether its triggering condition still holds against the current input. Return the id of any escalation that is now stale — e.g. its linked decision is resolved/absent or under the age threshold, its linked phase now shows artifact progress, its linked risk/blocker is closed, or its milestone is back on track — in "resolvedEscalationIds". Do not re-raise these.
