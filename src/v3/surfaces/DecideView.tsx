@@ -5,6 +5,9 @@ import { selectBlockers, selectRisks, type RaidScope } from "@/v3/lib/programRai
 import { synthesizeRaid, decisionLinkagePressure } from "@/v3/lib/raidSynthesis";
 import { PHASE_LABELS } from "@/v3/lib/uiHelpers";
 import { getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
+import { buildRaciOwnerResolver } from "@/v3/lib/raciOwner";
+import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
+import { ROSTER_PHASE_ID } from "@/v3/lib/phaseInputSchema";
 import { DrillDownLinks, artifactLabelFor, inputLabelFor } from "@/v3/components/DrillDownLinks";
 import type { DecisionSummary, GateReview, ProgramSummary, RAIDEntry, RAIDEntryType } from "@/new/types";
 import type { Persona } from "@/new/types";
@@ -434,11 +437,13 @@ function GateDetailPanel({
 
 function RaidCard({
   entry,
+  suggestedOwner,
   destinationLabel,
   onGoToInput,
   onDrill,
 }: {
   entry: RAIDEntry;
+  suggestedOwner?: string | null;
   destinationLabel: string;
   onGoToInput: () => void;
   onDrill: (anchor: string) => void;
@@ -461,6 +466,11 @@ function RaidCard({
         <div className="v3-governance-decision-title">{entry.title}</div>
         {entry.description ? <div className="v3-governance-decision-recommendation">{entry.description}</div> : null}
         {entry.mitigation ? <div className="v3-governance-decision-analysis">Mitigation: {entry.mitigation}</div> : null}
+        {entry.owner
+          ? <div className="v3-governance-decision-analysis">Owner: {entry.owner}</div>
+          : suggestedOwner
+          ? <div className="v3-governance-decision-analysis" style={{ color: "var(--v3-text-muted)" }}>Suggested owner: {suggestedOwner} (from RACI)</div>
+          : null}
 
         <DrillDownLinks
           phaseId={entry.phase}
@@ -618,6 +628,21 @@ export default function DecideView({
     const firstIncomplete = phases.find((phase) => (phase.pct ?? 0) < 100);
     return inProgress?.id || firstIncomplete?.id || activePhaseId || phases[0]?.id || null;
   }, [program, activePhaseId]);
+
+  // Suggest a primary owner for RAID items/decisions by bridging the RACI matrix
+  // (accountable role per activity) to the core-team roster (person per role).
+  // Display-only and only once the Mobilise gate is approved — that gate is what
+  // locks the roster and RACI as the agreed staffing, so before it they're still
+  // drafts and a suggested owner would be premature.
+  const suggestOwner = useMemo(() => {
+    if (!program) return null;
+    if (program.gateReviews?.[ROSTER_PHASE_ID]?.status !== "approved") return null;
+    const raw = program.rawData as Record<string, unknown> | null;
+    const source = raw && typeof raw.data === "object" && raw.data !== null
+      ? raw.data as Record<string, unknown>
+      : raw;
+    return buildRaciOwnerResolver(source, getDynamicSchemaStore(program.rawData));
+  }, [program]);
 
   // The Action Center always opens on the live (current) phase, and follows it as
   // the programme frontier advances — so it never sits stuck on a phase the team
@@ -895,6 +920,7 @@ export default function DecideView({
             </div>
             <RaidCard
               entry={entry}
+              suggestedOwner={!entry.owner && suggestOwner ? suggestOwner(entry.title) : null}
               destinationLabel={describeItemDestination({ itemPhase: entry.phase, relatedArtifactId: entry.relatedArtifactId, relatedInputIds: entry.relatedInputIds }).label}
               onGoToInput={() => goToItemSource({ itemPhase: entry.phase, title: entry.title, kindLabel: entry.type === "blocker" ? "Blocker" : entry.type === "risk" ? "Risk" : "Item", relatedArtifactId: entry.relatedArtifactId, relatedInputIds: entry.relatedInputIds })}
               onDrill={(anchor) => onNavigateToPhaseInputs(resolveTargetPhase(entry.phase), anchor)}
