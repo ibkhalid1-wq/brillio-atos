@@ -5724,6 +5724,12 @@ button.v3-phase-metric:focus-visible {
   border-color: color-mix(in srgb, var(--v3-amber) 45%, var(--v3-border));
 }
 .v3-settings-item.is-warning:hover:not(:disabled) .v3-settings-item-icon { color: var(--v3-amber); }
+.v3-settings-item.is-danger .v3-settings-item-icon { color: var(--v3-red); border-color: color-mix(in srgb, var(--v3-red) 45%, var(--v3-border)); }
+.v3-settings-item.is-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--v3-red) 12%, transparent);
+  border-color: color-mix(in srgb, var(--v3-red) 45%, var(--v3-border));
+}
+.v3-settings-item.is-danger:hover:not(:disabled) .v3-settings-item-icon { color: var(--v3-red); }
 .v3-phase-head-actions-grp { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
 .v3-phase-body { display: flex; flex-wrap: wrap; align-items: flex-start; min-height: 0; flex: 1; }

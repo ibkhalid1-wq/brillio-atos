@@ -54,6 +54,8 @@ interface StageViewProps {
   onAddItem?: (tab: "blockers" | "risks" | "actions") => void;
   onOpenReport: (reportId: V3ReportId) => void;
   onReopenGate: (phaseId: string) => void;
+  /** Reset a phase to a blank workspace (clears its inputs, artifacts, and gate). */
+  onResetPhase?: (phaseId: string) => Promise<void> | void;
   /** Raise a change request against a locked phase (controlled edit path). */
   onRaiseChangeRequest?: (phaseId: string, title: string, reason: string) => Promise<void> | void;
   onApproveGate: (phaseId: string) => Promise<boolean | void>;
@@ -421,6 +423,7 @@ export default function StageView({
   onAddItem,
   onOpenReport,
   onReopenGate,
+  onResetPhase,
   onRaiseChangeRequest,
   onApproveGate,
   onRunAgent,
@@ -524,6 +527,8 @@ export default function StageView({
     setLiveInputs({ phaseId, inputs });
   }, []);
   const [revertModalOpen, setRevertModalOpen] = React.useState(false);
+  const [resetModalOpen, setResetModalOpen] = React.useState(false);
+  const [resettingPhase, setResettingPhase] = React.useState(false);
   const [savingProgram, setSavingProgram] = React.useState(false);
   const [programSaved, setProgramSaved] = React.useState(false);
   const [revertingId, setRevertingId] = React.useState<string | null>(null);
@@ -566,6 +571,16 @@ export default function StageView({
       setRevertingId(null);
     }
   }, [onRevertProgram, revertingId]);
+  const handleResetPhaseClick = React.useCallback(async () => {
+    if (!onResetPhase || resettingPhase || !activePhaseId) return;
+    setResettingPhase(true);
+    try {
+      await onResetPhase(activePhaseId);
+      setResetModalOpen(false);
+    } finally {
+      setResettingPhase(false);
+    }
+  }, [onResetPhase, resettingPhase, activePhaseId]);
   const phaseMainRef = useRef<HTMLDivElement | null>(null);
   const previousDeckRef = useRef<string | null>(artifactPreviews?.deck || null);
   useEffect(() => {
@@ -1120,7 +1135,7 @@ export default function StageView({
               {verdict ? <div className="v3-phase-head-verdict">{verdict}</div> : null}
             </div>
           </div>
-          {(onSaveProgram || gateApproved) ? (
+          {(onSaveProgram || gateApproved || onResetPhase) ? (
             <div className="v3-settings" ref={settingsRef}>
               <button
                 type="button"
@@ -1181,23 +1196,41 @@ export default function StageView({
                       </button>
                     </>
                   ) : null}
-                  {gateApproved ? (
+                  {(gateApproved || onResetPhase) ? (
                     <>
                       <div className="v3-settings-menu-head">{activePhase.displayName ?? activePhase.id} phase</div>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="v3-settings-item is-warning"
-                        onClick={() => { setSettingsOpen(false); onReopenGate(activePhase.id); }}
-                      >
-                        <span className="v3-settings-item-icon" aria-hidden="true">
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M7 10V7.5a5 5 0 0 1 9.6-2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /><rect x="4.5" y="10" width="15" height="10" rx="2" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg>
-                        </span>
-                        <span className="v3-settings-item-text">
-                          <span className="v3-settings-item-label">Unlock phase</span>
-                          <span className="v3-settings-item-sub">Reopen the gate to edit artifacts</span>
-                        </span>
-                      </button>
+                      {gateApproved ? (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="v3-settings-item is-warning"
+                          onClick={() => { setSettingsOpen(false); onReopenGate(activePhase.id); }}
+                        >
+                          <span className="v3-settings-item-icon" aria-hidden="true">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M7 10V7.5a5 5 0 0 1 9.6-2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /><rect x="4.5" y="10" width="15" height="10" rx="2" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg>
+                          </span>
+                          <span className="v3-settings-item-text">
+                            <span className="v3-settings-item-label">Unlock phase</span>
+                            <span className="v3-settings-item-sub">Reopen the gate to edit artifacts</span>
+                          </span>
+                        </button>
+                      ) : null}
+                      {onResetPhase ? (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="v3-settings-item is-danger"
+                          onClick={() => { setSettingsOpen(false); setResetModalOpen(true); }}
+                        >
+                          <span className="v3-settings-item-icon" aria-hidden="true">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 9a8 8 0 1 1-1 5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /><path d="M4 4v5h5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                          </span>
+                          <span className="v3-settings-item-text">
+                            <span className="v3-settings-item-label">Reset phase</span>
+                            <span className="v3-settings-item-sub">Clear inputs, artifacts &amp; gate to a blank workspace</span>
+                          </span>
+                        </button>
+                      ) : null}
                     </>
                   ) : null}
                 </div>
@@ -2168,6 +2201,35 @@ export default function StageView({
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {resetModalOpen ? (
+        <div
+          role="presentation"
+          onClick={() => { if (!resettingPhase) setResetModalOpen(false); }}
+          style={{ position: "fixed", inset: 0, zIndex: 600, background: "rgba(8,10,16,0.45)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Reset phase to a blank workspace"
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: "100%", maxWidth: 460, display: "flex", flexDirection: "column", background: "var(--v3-surface)", border: "1px solid var(--v3-border)", borderRadius: 16, boxShadow: "0 24px 64px rgba(0,0,0,0.35)", padding: 24 }}
+          >
+            <h2 style={{ margin: "0 0 8px", fontSize: 17, fontWeight: 600, color: "var(--v3-text)" }}>
+              Reset {activePhase.displayName ?? activePhase.id} phase?
+            </h2>
+            <p style={{ margin: "0 0 20px", fontSize: 12.5, lineHeight: 1.55, color: "var(--v3-text-secondary)" }}>
+              This clears this phase's inputs, generated artifacts, gate approval, and decisions, returning it to a blank workspace. Re-run the agents to regenerate it. This cannot be undone — save a version first if you may need to restore it.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button type="button" className="v3-button ghost v3-button-inline-sm" onClick={() => setResetModalOpen(false)} disabled={resettingPhase}>Cancel</button>
+              <button type="button" className="v3-button danger v3-button-inline-sm" onClick={() => void handleResetPhaseClick()} disabled={resettingPhase}>
+                {resettingPhase ? "Resetting…" : "Reset phase"}
+              </button>
             </div>
           </div>
         </div>

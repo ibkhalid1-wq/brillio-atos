@@ -1564,7 +1564,7 @@ export default function AppShellV3() {
   const { addMilestone, completeMilestone, isSaving: milestoneSavePending } = useMilestones(activeProgramId || "", activeProgram?.rawData || {}, refreshPrograms);
   const { saveBudgetInputs, isSaving: budgetSavePending } = useBudgetTracking(activeProgramId || "", activeProgram?.rawData || {}, refreshPrograms);
   useClosure(activeProgramId || "", activeProgram?.rawData || {}, refreshPrograms);
-  const { approveGate, requestRemediation, reopenGate, raiseChangeRequest, resolveChangeRequest } = useGateReview(activeProgramId || "", rawData, refreshPrograms);
+  const { approveGate, requestRemediation, reopenGate, resetPhase, raiseChangeRequest, resolveChangeRequest } = useGateReview(activeProgramId || "", rawData, refreshPrograms);
   const { acknowledgeEscalation, resolveEscalation } = useEscalations(activeProgramId || "", rawData, refreshPrograms);
   const { addNote: addProgramNote } = useProgramNotes(activeProgramId || "", rawData, refreshPrograms);
   const { addDecision } = useDecisionQueue(activeProgramId || "", rawData, refreshPrograms);
@@ -2757,6 +2757,16 @@ export default function AppShellV3() {
     }
   }, [gateReopenPhase, reopenGate]);
 
+  const handleResetPhase = useCallback(async (phaseId: string) => {
+    try {
+      await resetPhase(phaseId);
+      pushV3Toast("Phase reset to a blank workspace. Re-run agents to regenerate it.", { tone: "warning", duration: 4000 });
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "";
+      pushV3Toast(detail ? `Could not reset phase: ${detail}` : "Could not reset phase.", { tone: "error", duration: 4000 });
+    }
+  }, [resetPhase]);
+
   const handleRaiseChangeRequest = useCallback(async (phaseId: string, title: string, reason: string) => {
     try {
       await raiseChangeRequest(phaseId, title, reason);
@@ -3214,6 +3224,7 @@ export default function AppShellV3() {
                 onAddItem={(tab) => { setDecideIntent({ tab, nonce: Date.now() }); navigateSurface("decide"); }}
                 onOpenReport={openReport}
                 onReopenGate={handleReopenGate}
+                onResetPhase={handleResetPhase}
                 onRaiseChangeRequest={handleRaiseChangeRequest}
                 onApproveGate={handleApproveGate}
                 onRunAgent={handleRunAgent}

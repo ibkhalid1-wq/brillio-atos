@@ -115,6 +115,36 @@ function reopenPhasesInner(
   return phaseIds.reduce((acc, phaseId) => reopenPhaseInner(acc, phaseId, reason, reopenedBy), inner);
 }
 
+/** Pure transform that resets one phase to a blank workspace: drops every
+ *  phase-keyed working record (inputs, artifacts, gate review, progress estimate,
+ *  dependency/RACI checks) and removes the phase's entries from the shared
+ *  decision queue and human-notes log. Resetting an approved phase removes its
+ *  gate approval, so downstream phases re-lock automatically (getLockedPhaseIds
+ *  reads gateReviews). RAID/risk entries are intentionally left untouched — they
+ *  live in their own log and may span phases. */
+function resetPhaseInner(inner: Record<string, unknown>, phaseId: string): Record<string, unknown> {
+  const asMap = (value: unknown): Record<string, unknown> | undefined =>
+    value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+  const matchesPhase = (entry: Record<string, unknown>): boolean =>
+    String(entry.phaseId ?? entry.phase_id ?? "") === phaseId;
+
+  const next: Record<string, unknown> = { ...inner };
+  for (const key of ["phaseInputs", "phaseArtifacts", "gateReviews", "phasePct", "dependencyCheck", "raciGaps"]) {
+    const map = asMap(inner[key]);
+    if (map && phaseId in map) {
+      const { [phaseId]: _removed, ...rest } = map;
+      next[key] = rest;
+    }
+  }
+  if (Array.isArray(inner.decisionQueue)) {
+    next.decisionQueue = (inner.decisionQueue as Record<string, unknown>[]).filter((entry) => !matchesPhase(entry));
+  }
+  if (Array.isArray(inner.humanNotes)) {
+    next.humanNotes = (inner.humanNotes as Record<string, unknown>[]).filter((entry) => !matchesPhase(entry));
+  }
+  return next;
+}
+
 export function useGateReview(
   programId: string,
   rawData: Record<string, unknown>,
@@ -331,6 +361,11 @@ export function useGateReview(
     await persistState(reopenPhaseInner(inner, phaseId, reason, reopenedBy));
   }, [getGateReviewState, persistState]);
 
+  const resetPhase = useCallback(async (phaseId: string) => {
+    const { inner } = getGateReviewState();
+    await persistState(resetPhaseInner(inner, phaseId));
+  }, [getGateReviewState, persistState]);
+
   // Log a change request against a locked phase. This is the sanctioned entry
   // point for editing a closed stage: nothing unlocks until the request is
   // approved (see resolveChangeRequest), so the audit trail is never bypassed.
@@ -385,6 +420,7 @@ export function useGateReview(
     requestRemediation,
     saveNote,
     reopenGate,
+    resetPhase,
     raiseChangeRequest,
     resolveChangeRequest,
     isSaving,
