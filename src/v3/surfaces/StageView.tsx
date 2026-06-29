@@ -1219,9 +1219,8 @@ export default function StageView({
   // discovery pack" action lives in the inputs column (next to the inputs panel),
   // not here in the phase header.
   const discoveryPackRunning = activePhase.id === "discover" && !discoveryGuide && isAgentRunning("discovery-guide-generator");
-  if (activePhase.id === "build") {
-    phaseAgentActions.push({ key: "sprint-planner", label: agentButtonContent("sprint-planner", sprintPlan ? "Re-plan sprints" : "Generate sprint plan"), disabled: gateApproved || agentButtonDisabled("sprint-planner"), onClick: () => onRunAgent("sprint-planner") });
-  }
+  // The sprint-planner action lives in the Build inputs-panel header (next to
+  // "View sprint plan"), not here — see PhaseInputsPanel headerAction below.
   // capacity-assessor and vendor-risk-assessor run automatically via useAgentTriggers
   // (like the Discover discovery pack), so they no longer carry manual buttons here.
   if (["design", "govern"].includes(activePhase.id)) {
@@ -1657,14 +1656,22 @@ export default function StageView({
                   <button type="button" className="v3-button secondary v3-button-inline-xs" disabled>
                     Generating discovery pack…
                   </button>
-                ) : activePhase.id === "build" && sprintPlan ? (
-                  <button type="button" className="v3-button secondary v3-button-inline-xs" onClick={() => setShowSprintPlan(true)}>
-                    View sprint plan
-                  </button>
-                ) : activePhase.id === "build" && isAgentRunning("sprint-planner") ? (
-                  <button type="button" className="v3-button secondary v3-button-inline-xs" disabled>
-                    Generating sprint plan…
-                  </button>
+                ) : activePhase.id === "build" ? (
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button
+                      type="button"
+                      className="v3-button secondary v3-button-inline-xs"
+                      disabled={gateApproved || agentButtonDisabled("sprint-planner")}
+                      onClick={() => onRunAgent("sprint-planner")}
+                    >
+                      {agentButtonContent("sprint-planner", sprintPlan ? "Re-plan sprints" : "Generate sprint plan")}
+                    </button>
+                    {sprintPlan ? (
+                      <button type="button" className="v3-button secondary v3-button-inline-xs" onClick={() => setShowSprintPlan(true)}>
+                        View sprint plan
+                      </button>
+                    ) : null}
+                  </div>
                 ) : null
               }
             />
