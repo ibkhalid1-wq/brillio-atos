@@ -297,7 +297,11 @@ export function ArtifactMapTree({
           };
         });
 
-      const artifactNodes: TreeNodeData[] = phase.artifacts.map((node) => {
+      // In the scoped rail graph, show only the methodology artifacts (the
+      // required spine: static requiredArtifacts + ai-derived dynamic defs),
+      // hiding ad-hoc "Extra" artifacts. The full map still shows everything.
+      const artifactSource = scoped ? phase.artifacts.filter((node) => node.required) : phase.artifacts;
+      const artifactNodes: TreeNodeData[] = artifactSource.map((node) => {
         const tone = artifactTone(node);
         const artifactKey = `${phaseKey}>art:${node.key}`;
         const tags: Tag[] = [{ text: artifactStatusLabel(node), color: TONE_COLOR[tone] }];
@@ -327,7 +331,7 @@ export function ArtifactMapTree({
         children: artifactNodes,
       };
     });
-  }, [program, phases, factSourceByField]);
+  }, [program, phases, factSourceByField, scoped]);
 
   const allKeys = React.useMemo(() => collectKeys(tree), [tree]);
 
