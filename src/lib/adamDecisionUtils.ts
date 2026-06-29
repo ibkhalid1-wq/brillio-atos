@@ -397,6 +397,9 @@ function buildSyntheticPlanActionItems(projectData: any) {
   }) => {
     const normalizedTitle = title.trim().toLowerCase();
     if (!normalizedTitle || seenTitles.has(normalizedTitle)) return;
+    // A signed-off phase no longer has workable actions — drop plan/workplan items
+    // for approved gates so they stop re-surfacing as stale decisions.
+    if (isPhaseGateApproved(projectData, phaseId)) return;
     seenTitles.add(normalizedTitle);
     const dueTimestamp = dueDate ? getCreatedAt(dueDate) : 0;
     const overdue = dueTimestamp > 0 && dueTimestamp < Date.now();
