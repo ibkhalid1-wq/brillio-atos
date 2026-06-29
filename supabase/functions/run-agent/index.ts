@@ -4239,6 +4239,38 @@ function sanitizePlannerGridRows(raw: unknown, columns: Record<string, JsonValue
 }
 
 /**
+ * Union planner-seeded grid rows into an existing serialized grid value, instead
+ * of discarding them when the grid is already non-empty. A thin auto-derived row
+ * (e.g. one roster role lifted from an imported document) must not block the
+ * planner's full role spine, yet rows a user already entered must survive. A seed
+ * row is added only when no existing row already matches all of its filled cells,
+ * so re-seeding is idempotent and a role someone has named is never duplicated.
+ * Returns the merged JSON when rows were added, or null when there is nothing to
+ * add or `existing` is not a row array (a free-text value is left untouched).
+ */
+function unionGridSeedRows(existing: JsonValue, seedJson: string): string | null {
+  let existingRows: Record<string, JsonValue>[];
+  let seedRows: Record<string, JsonValue>[];
+  try {
+    const e = typeof existing === "string" ? JSON.parse(existing) : existing;
+    const s = JSON.parse(seedJson);
+    if (!Array.isArray(e) || !Array.isArray(s)) return null;
+    existingRows = e.filter(isRecord);
+    seedRows = s.filter(isRecord);
+  } catch {
+    return null;
+  }
+  const cell = (r: Record<string, JsonValue>, k: string) => String(r[k] ?? "").trim().toLowerCase();
+  const additions = seedRows.filter((row) => {
+    const keys = Object.keys(row).filter((k) => k !== "id" && String(row[k] ?? "").trim() !== "");
+    if (!keys.length) return false;
+    return !existingRows.some((er) => keys.every((k) => cell(er, k) === cell(row, k)));
+  });
+  if (!additions.length) return null;
+  return JSON.stringify([...existingRows, ...additions]);
+}
+
+/**
  * Write the Phase Transition Planner's proposal straight into the program's
  * dynamicSchema for `phaseId`, replacing any prior entries for that phase. The
  * edge is the single writer: relying on the client to persist from the HTTP
@@ -4431,7 +4463,13 @@ function applyPhaseInputPlannerResultToProgramData(
       for (const [fieldId, value] of Object.entries(seededGridValues)) {
         const existing = nextPhaseValues[fieldId];
         const isEmpty = existing == null || existing === "" || existing === "[]";
-        if (isEmpty) { nextPhaseValues[fieldId] = value; changed = true; }
+        if (isEmpty) { nextPhaseValues[fieldId] = value; changed = true; continue; }
+        // Rows already present (e.g. a single roster role lifted from an imported
+        // document). Union the planner's full set in rather than skipping, so
+        // closing the prior phase always yields the complete role spine without
+        // clobbering rows a user already entered.
+        const merged = unionGridSeedRows(existing, value);
+        if (merged) { nextPhaseValues[fieldId] = merged; changed = true; }
       }
       if (changed) phaseInputs = { ...allInputs, [phaseId]: nextPhaseValues } as JsonValue;
     }
