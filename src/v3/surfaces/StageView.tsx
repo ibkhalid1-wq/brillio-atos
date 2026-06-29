@@ -607,7 +607,11 @@ export default function StageView({
         required += 1;
         if (node.present) present += 1;
       } else if (node.present) {
+        // completion-estimate is an internal phase-progress metric, and risk/RAID
+        // is deterministic app design — neither belongs in the artifact-chip list,
+        // so legacy stored values are skipped here.
         if (node.key === "completion-estimate") continue;
+        if (node.key === "risk") continue;
         orphanByKey.set(node.key, record);
         orphans.push({
           id: node.key,
