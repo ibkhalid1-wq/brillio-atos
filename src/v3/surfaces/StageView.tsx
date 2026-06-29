@@ -6,6 +6,7 @@ import type { ExitCriterion, GateReview, ProgramSummary } from "@/new/types";
 import ArtifactEditor from "@/v3/components/ArtifactEditor";
 import ArtifactCard, { type ArtifactCardModel, type ArtifactCardHandlers } from "@/v3/components/ArtifactCard";
 import DiscoveryPackPanel, { type DiscoveryPack } from "@/v3/components/DiscoveryPackPanel";
+import SprintPlanPanel, { type SprintPlan } from "@/v3/components/SprintPlanPanel";
 import PhaseInputsPanel, { type FieldAssistRequest } from "@/v3/components/PhaseInputsPanel";
 import PhaseFlowOverlay from "@/v3/components/PhaseFlowOverlay";
 import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
@@ -482,6 +483,7 @@ export default function StageView({
   const [changeRequestOpen, setChangeRequestOpen] = React.useState(false);
   const [previewArtifact, setPreviewArtifact] = React.useState<{ defId?: string; label: string; description?: string; content: string; score: number | null; statusTone: string } | null>(null);
   const [showDiscoveryPack, setShowDiscoveryPack] = React.useState(false);
+  const [showSprintPlan, setShowSprintPlan] = React.useState(false);
   const [qualityArtifact, setQualityArtifact] = React.useState<{
     label: string;
     defId: string;
@@ -1651,9 +1653,17 @@ export default function StageView({
                   <button type="button" className="v3-button secondary v3-button-inline-xs" onClick={() => setShowDiscoveryPack(true)}>
                     View discovery pack
                   </button>
-                ) : discoveryPackRunning ? (
+                ) : activePhase.id === "discover" && discoveryPackRunning ? (
                   <button type="button" className="v3-button secondary v3-button-inline-xs" disabled>
                     Generating discovery pack…
+                  </button>
+                ) : activePhase.id === "build" && sprintPlan ? (
+                  <button type="button" className="v3-button secondary v3-button-inline-xs" onClick={() => setShowSprintPlan(true)}>
+                    View sprint plan
+                  </button>
+                ) : activePhase.id === "build" && isAgentRunning("sprint-planner") ? (
+                  <button type="button" className="v3-button secondary v3-button-inline-xs" disabled>
+                    Generating sprint plan…
                   </button>
                 ) : null
               }
@@ -1999,6 +2009,12 @@ export default function StageView({
       {showDiscoveryPack && discoveryGuide ? (
         <StageModal title="Discovery pack" onClose={() => setShowDiscoveryPack(false)} maxWidth={720}>
           <DiscoveryPackPanel pack={discoveryGuide as DiscoveryPack} />
+        </StageModal>
+      ) : null}
+
+      {showSprintPlan && sprintPlan ? (
+        <StageModal title="Sprint plan" onClose={() => setShowSprintPlan(false)} maxWidth={720}>
+          <SprintPlanPanel plan={sprintPlan as SprintPlan} />
         </StageModal>
       ) : null}
 
