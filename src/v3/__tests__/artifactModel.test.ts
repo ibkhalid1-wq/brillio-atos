@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { normalizeProgram } from "@/new/lib/programData";
-import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
+import { buildPhaseArtifacts, buildArtifactModel } from "@/v3/lib/artifactModel";
 
 /**
  * Read-path resilience: a formal document lives both as a top-level mirror (the
@@ -67,5 +67,30 @@ describe("buildArtifactModel — formal mirror read-path resilience", () => {
     });
     expect(node.present).toBe(false);
     expect(node.state).toBe("missing");
+  });
+});
+
+describe("buildArtifactModel — phase avgQuality scoping", () => {
+  it("averages only required present artifacts, ignoring additional ad-hoc ones", () => {
+    const program = normalizeProgram({
+      id: "p1",
+      name: "CRM",
+      data: {
+        phases: [{ id: "strategy", pct: 50 }],
+        phaseArtifacts: {
+          strategy: {
+            charter: { title: "Charter", status: "approved", agentDrafted: true, agentConfidence: 80 },
+            "ad-hoc-note": { title: "Ad hoc note", status: "draft", agentDrafted: true, agentConfidence: 20 },
+          },
+        },
+      },
+    });
+    const model = buildArtifactModel(program);
+    const strategy = model.phases.find((p) => p.phaseId === "strategy")!;
+    const adHoc = strategy.artifacts.find((n) => n.label === "Ad hoc note")!;
+    expect(adHoc.required).toBe(false);
+    expect(adHoc.quality).toBe(20);
+    // The low-quality additional artifact must not drag the phase score to 50.
+    expect(strategy.avgQuality).toBe(80);
   });
 });

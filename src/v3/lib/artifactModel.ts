@@ -287,9 +287,13 @@ export function buildArtifactModel(
     }
 
     const requiredNodes = nodes.filter((n) => n.required);
-    const presentNodes = nodes.filter((n) => n.present);
     const approvedNodes = nodes.filter((n) => n.state === "approved");
-    const qualityValues = presentNodes.map((n) => n.quality).filter((q): q is number => typeof q === "number");
+    // Quality reflects deliverable health, so average only required present nodes —
+    // additional/ad-hoc artifacts shouldn't dilute or inflate the phase score.
+    const qualityValues = requiredNodes
+      .filter((n) => n.present)
+      .map((n) => n.quality)
+      .filter((q): q is number => typeof q === "number");
     const avgQuality = qualityValues.length
       ? Math.round(qualityValues.reduce((sum, q) => sum + q, 0) / qualityValues.length)
       : null;
