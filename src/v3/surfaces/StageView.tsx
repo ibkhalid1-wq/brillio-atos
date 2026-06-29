@@ -23,6 +23,7 @@ import { getArtifactInputFields } from "@/v3/lib/phaseFlowEdges";
 import { getPhaseInputSchema, resolveRosterField, ROSTER_PHASE_ID } from "@/v3/lib/phaseInputSchema";
 import { parseRows, serializeRows, type GridRow } from "@/v3/components/StructuredGrid";
 import { readRaciMatrix, raciDeliveryRoles, rosterColumnKeys, missingRosterRoles } from "@/v3/lib/rosterRaci";
+import { isFreeTextAssistField } from "@/v3/lib/fieldAssist";
 import { getDynamicSchemaStore, canonicalArtifactId } from "@/v3/lib/dynamicSchema";
 import { getAgentMeta, SUPPORT_ARTIFACT_IDS } from "@/v3/lib/agentMeta";
 import { runPreFlight } from "@/v3/lib/phaseInputPreFlight";
@@ -1718,8 +1719,11 @@ export default function StageView({
               });
               // Same grounding inputs, but carrying the id + current value so the
               // "Improve quality → Apply" action can run an AI enrichment pass over
-              // each field and persist the result. Only textual fields are eligible;
-              // grid/structured inputs are not free-text rewritable.
+              // each field and persist the result. Only free-text fields are
+              // eligible: a constrained field (select/date) has a fixed value space,
+              // so an AI free-text rewrite would write a value the control can't
+              // render (e.g. an off-list option leaves a dropdown blank); grids are
+              // structured and handled by the deterministic placeholder path.
               const qualityFields = flowedFieldIds
                 .map((fieldId) => {
                   const fieldDef = phaseFieldDefs.find((field) => field.id === fieldId);
@@ -1734,7 +1738,7 @@ export default function StageView({
                     filled: isInputFilled(raw),
                   };
                 })
-                .filter((field) => field.type !== "grid")
+                .filter((field) => isFreeTextAssistField(field.type))
                 .map(({ type: _type, ...rest }) => rest);
               // Prescriptive generate guidance: name each unfilled input prompt and
               // spell out the information it must carry, so a user knows exactly what

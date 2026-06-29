@@ -1,6 +1,7 @@
 import {
   availableModes,
   buildFieldAssistPrompt,
+  isFreeTextAssistField,
   isModeAvailable,
   sanitiseFieldReply,
   type FieldAssistContext,
@@ -16,6 +17,22 @@ const CTX: FieldAssistContext = {
   fieldHint: "What is in and out of scope",
   currentValue: "",
 };
+
+describe("isFreeTextAssistField", () => {
+  it("allows only open prose fields to be AI-rewritten", () => {
+    expect(isFreeTextAssistField("text")).toBe(true);
+    expect(isFreeTextAssistField("textarea")).toBe(true);
+    expect(isFreeTextAssistField(undefined)).toBe(true);
+  });
+
+  it("blocks constrained and structured fields so their value space stays intact", () => {
+    // A free-text rewrite of a select pins an off-list value the dropdown can't
+    // render — the bug this guards against — so select/date/grid are excluded.
+    expect(isFreeTextAssistField("select")).toBe(false);
+    expect(isFreeTextAssistField("date")).toBe(false);
+    expect(isFreeTextAssistField("grid")).toBe(false);
+  });
+});
 
 describe("fieldAssist mode availability", () => {
   it("offers only Generate when the field is empty", () => {

@@ -53,6 +53,18 @@ const MODE_INSTRUCTION: Record<FieldAssistMode, string> = {
 };
 
 /**
+ * Whether a field accepts an AI free-text rewrite. Only open prose fields do:
+ * a constrained field (select/date) has a fixed value space, so a free-text
+ * reply would write a value the control can't render — e.g. an off-list option
+ * leaves a dropdown blank or, worse, gets pinned as an unreadable custom option.
+ * Structured fields (grid) are reconciled by their own deterministic paths. An
+ * undefined type defaults to text, matching the panel's textarea fallback.
+ */
+export function isFreeTextAssistField(type: string | undefined): boolean {
+  return type === undefined || type === "text" || type === "textarea";
+}
+
+/**
  * Modes that require existing text to act on. `generate` is the only empty-state
  * mode. `merge` needs both an existing and an incoming value, so it is never
  * offered as a standalone inline action — it is invoked programmatically.
