@@ -240,6 +240,29 @@ function deriveActivePhaseId(
   return firstStarted?.id || phases[0]?.id || "strategy";
 }
 
+/**
+ * Reconcile each phase's pct-derived status with gate + frontier state. Phase
+ * pct can stay 0 even after a phase is gated past (an approved gate locks a
+ * phase in regardless of input pct), which would otherwise render an approved or
+ * in-flight phase as "inactive". So: an approved gate ⇒ complete, and the
+ * current frontier phase is never inactive (at least "active").
+ */
+function reconcilePhaseStatusWithGates(
+  phases: PhaseSummary[],
+  gateReviews: Record<string, { status?: string }>,
+  activePhaseId: string,
+): PhaseSummary[] {
+  return phases.map((phase) => {
+    if (gateReviews[phase.id]?.status === "approved") {
+      return phase.status === "complete" ? phase : { ...phase, status: "complete" };
+    }
+    if (phase.id === activePhaseId && phase.status === "inactive") {
+      return { ...phase, status: "active" };
+    }
+    return phase;
+  });
+}
+
 /** Normalise an agent confidence (0-1 or 0-100) to a 0-100 quality score. */
 function normalizeConfidenceTo100(value: number): number | undefined {
   if (!Number.isFinite(value) || value <= 0) return undefined;
@@ -1043,8 +1066,12 @@ export function normalizeProgram(row: ProgramRowLike): ProgramSummary {
   const wrapper = asRecord(row.data);
   const innerData = asRecord(wrapper.data ?? wrapper);
   const meta = asRecord(innerData.projectMeta);
+  // Strategy phase inputs are the source of truth for sponsor/objective the user
+  // captures in the Strategy stage; projectMeta only carries them when seeded at
+  // setup. Mirror the edge's resolution order (strategyInputs → inner → meta).
+  const strategyInputs = asRecord(asRecord(innerData.phaseInputs).strategy);
   const raidLog = asRecord(innerData.raidLog);
-  const phases = derivePhases(innerData);
+  const rawPhases = derivePhases(innerData);
   const artifacts = deriveArtifacts(innerData);
   const decisions = deriveDecisions(innerData);
   const raidEntries = deriveRAIDEntries(innerData);
@@ -1059,7 +1086,8 @@ export function normalizeProgram(row: ProgramRowLike): ProgramSummary {
       actionView: "work" as AppView,
     }));
   const gateReviews = deriveGateReviews(innerData);
-  const activePhaseId = deriveActivePhaseId(phases, gateReviews);
+  const activePhaseId = deriveActivePhaseId(rawPhases, gateReviews);
+  const phases = reconcilePhaseStatusWithGates(rawPhases, gateReviews, activePhaseId);
   const businessCase = asRecord(innerData.businessCase);
   const valueRealizeData = asRecord(innerData.valueRealizeData);
   const narrative = asString(innerData.narrative, "");
@@ -1115,7 +1143,10 @@ export function normalizeProgram(row: ProgramRowLike): ProgramSummary {
     name: row.name || asString(meta.name, "Untitled Program"),
     client: row.client || asString(meta.client),
     industry: row.industry || asString(meta.industry, "Transformation Program"),
-    sponsor: asString(meta.sponsor || meta.executiveSponsor, "Sponsor pending"),
+    sponsor: asString(
+      strategyInputs.sponsor || innerData.sponsor || meta.sponsor || meta.executiveSponsor,
+      "Sponsor pending",
+    ),
     objective: asString(innerData.objective || meta.objective || innerData.programObjective, "Define the highest-value next move."),
     readiness: Math.round(phases.reduce((sum, phase) => sum + phase.pct, 0) / Math.max(phases.length, 1)),
     valueDelivered,
