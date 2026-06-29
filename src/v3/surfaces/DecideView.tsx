@@ -3,7 +3,6 @@ import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
 import { selectPhaseMetrics } from "@/v3/lib/programMetrics";
 import { selectBlockers, selectRisks, type RaidScope } from "@/v3/lib/programRaid";
 import { synthesizeRaid, decisionLinkagePressure } from "@/v3/lib/raidSynthesis";
-import { narrateRaidSynthesis } from "@/v3/lib/raidNarrative";
 import { PHASE_LABELS } from "@/v3/lib/uiHelpers";
 import { getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
 import { DrillDownLinks, artifactLabelFor, inputLabelFor } from "@/v3/components/DrillDownLinks";
@@ -101,113 +100,6 @@ function ColdStartNudge({
         </button>
       ) : null}
     </div>
-  );
-}
-
-type RaidStats = { risks: number; blockers: number; decisions: number; highPriority: number; linkages: number };
-
-/** Plain-English count, e.g. "2 risks", "1 decision". */
-function countPhrase(n: number, noun: string): string {
-  return `${n} ${noun}${n === 1 ? "" : "s"}`;
-}
-
-/** Join a list as natural prose: ["a","b","c"] → "a, b and c". */
-function joinNaturally(parts: string[]): string {
-  if (parts.length <= 1) return parts[0] ?? "";
-  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
-}
-
-/**
- * A human-readable one-liner for the connections card, in place of the
- * deterministic "1 risk(s), 0 blocker(s)…" rollup (which still anchors the LLM
- * prompt, but reads like a machine on screen).
- */
-function humanizeRaidStats(stats: RaidStats): string {
-  const open = [
-    stats.risks ? countPhrase(stats.risks, "risk") : "",
-    stats.blockers ? countPhrase(stats.blockers, "blocker") : "",
-    stats.decisions ? countPhrase(stats.decisions, "decision") : "",
-  ].filter(Boolean);
-  const head = open.length ? joinNaturally(open) : "Nothing open";
-  const escalated = stats.highPriority ? `, ${stats.highPriority} high priority` : "";
-  const links = `we found ${countPhrase(stats.linkages, "link")} showing how they connect`;
-  return `${head}${escalated} — ${links}.`;
-}
-
-/**
- * Cross-conversation cache of the connections narrative, keyed by persona + a
- * fingerprint of the deterministic linkage set. The narrative is regenerated
- * automatically whenever that fingerprint changes (a risk/blocker/decision was
- * raised, resolved, or re-linked) and reused verbatim otherwise — so the card
- * stays current without paying for an identical model call on every view.
- */
-const raidNarrativeCache = new Map<string, string>();
-
-/**
- * Connections card — the causal story over the deterministic linkages. Shown only
- * when cross-type links exist. The card is maintained automatically with no manual
- * action: the deterministic rollup is always rendered as the baseline, and an LLM
- * narration silently upgrades it in place when the runtime is available. The
- * upgrade generates on first sight and re-generates whenever the linkage
- * fingerprint changes (a risk/blocker/decision raised, resolved or re-linked),
- * caching the result so unchanged RAID data never re-pays for the call. When the
- * model returns nothing — or no runtime is registered — the deterministic story
- * stands on its own, so the card never shows an error or a retry prompt.
- */
-function RaidCausalSummary({
-  program,
-  personaId,
-  stats,
-  linkageKey,
-}: {
-  program: ProgramSummary;
-  personaId: string;
-  stats: RaidStats;
-  linkageKey: string;
-}) {
-  const linkageCount = stats.linkages;
-  const cacheKey = `${personaId}::${linkageKey}`;
-  const [text, setText] = useState(() => raidNarrativeCache.get(cacheKey) ?? "");
-
-  // Keep the narrative in lock-step with the linkages: serve the cache when the
-  // fingerprint is unchanged, otherwise regenerate. Guard against races so a
-  // stale in-flight call can't overwrite a newer one. Failures are swallowed —
-  // the deterministic baseline below is always present, so there is nothing to
-  // surface and nothing to retry.
-  useEffect(() => {
-    if (!linkageCount) return;
-    const cached = raidNarrativeCache.get(cacheKey);
-    if (cached) {
-      setText(cached);
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      const out = await narrateRaidSynthesis(program, "programme", personaId);
-      if (cancelled || !out) return;
-      raidNarrativeCache.set(cacheKey, out);
-      setText(out);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [program, personaId, cacheKey, linkageCount]);
-
-  if (!linkageCount) return null;
-
-  return (
-    <AdamCard>
-      <AdamCardHeader
-        title="How these connect"
-        subtitle="Open risks, blockers and decisions — and the links between them."
-        badge={<span className="v3-chip muted" style={{ fontSize: 11 }}>{linkageCount} link{linkageCount === 1 ? "" : "s"}</span>}
-      />
-      <AdamCardBody>
-        <p style={{ fontSize: 13, color: "var(--v3-text-secondary)", lineHeight: 1.65, margin: 0 }}>
-          {text || humanizeRaidStats(stats)}
-        </p>
-      </AdamCardBody>
-    </AdamCard>
   );
 }
 
@@ -754,13 +646,6 @@ export default function DecideView({
   // (not the active tab/phase filter) keeps a card's links stable across tabs.
   const synthesis = useMemo(() => synthesizeRaid(program, "programme", personaId), [program, personaId]);
 
-  // Fingerprint of the deterministic linkage set — the connections narrative is
-  // keyed on this so it auto-regenerates only when the links actually change.
-  const linkageKey = useMemo(
-    () => synthesis.linkages.map((l) => l.id).join("|"),
-    [synthesis.linkages],
-  );
-
   // Cold-start: the whole-programme register has zero agent-derived risks,
   // blockers, and decisions — no phase agent has produced governance state yet.
   // Distinguishes "nothing has run" from "everything is resolved" so the empty
@@ -1093,12 +978,6 @@ export default function DecideView({
         </div>
 
         <div className="v3-governance-main">
-          <RaidCausalSummary
-            program={program}
-            personaId={personaId}
-            stats={synthesis.stats}
-            linkageKey={linkageKey}
-          />
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
             <button
               type="button"
