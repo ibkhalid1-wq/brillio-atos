@@ -115,38 +115,31 @@ function reopenPhasesInner(
   return phaseIds.reduce((acc, phaseId) => reopenPhaseInner(acc, phaseId, reason, reopenedBy), inner);
 }
 
-/** Pure transform that resets one phase to a blank workspace: drops every
- *  phase-keyed working record (inputs, artifacts, gate review, progress estimate,
- *  dependency/RACI checks) and removes the phase's entries from the shared
- *  decision queue and human-notes log. Resetting an approved phase removes its
- *  gate approval, so downstream phases re-lock automatically (getLockedPhaseIds
- *  reads gateReviews). RAID/risk entries are intentionally left untouched — they
- *  live in their own log and may span phases.
+/** Pure transform that resets one phase to a blank workspace: drops the phase's
+ *  generated OUTPUTS and gate state — artifacts, gate review, progress estimate,
+ *  and the derived dependency/RACI checks — so the phase reads as un-worked and
+ *  ready to regenerate. Resetting an approved phase removes its gate approval, so
+ *  downstream phases re-lock automatically (getLockedPhaseIds reads gateReviews).
  *
- *  "Blank workspace" means blank of CAPTURED data, not of the seeded scaffolding.
- *  The planner-derived seed — `dynamicSchema` (proposed input fields incl.
- *  suggested core-team roles, proposed artifacts, plan meta) — is deliberately
- *  preserved, so a reset phase still shows its suggested roles/fields to refill.
- *  Only keys in the removal list below are touched; dynamicSchema is never one. */
+ *  Crucially, reset does NOT touch the phase's SEEDED INPUT scaffolding. The
+ *  suggested core-team roles live as seed-slot rows in `phaseInputs[phaseId]`
+ *  (the coreTeamRoster grid), and planner-suggested actions live in the shared
+ *  `decisionQueue` — both are seeded content the user expects to survive a reset,
+ *  not captured work to wipe. So `phaseInputs`, `decisionQueue`, `humanNotes`,
+ *  `dynamicSchema`, and the RAID log are all left intact; only generated output
+ *  keys are cleared. (A reset wiping phaseInputs is what made suggested roles and
+ *  the current phase's Action Center sections vanish.) */
 export function resetPhaseInner(inner: Record<string, unknown>, phaseId: string): Record<string, unknown> {
   const asMap = (value: unknown): Record<string, unknown> | undefined =>
     value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
-  const matchesPhase = (entry: Record<string, unknown>): boolean =>
-    String(entry.phaseId ?? entry.phase_id ?? "") === phaseId;
 
   const next: Record<string, unknown> = { ...inner };
-  for (const key of ["phaseInputs", "phaseArtifacts", "gateReviews", "phasePct", "dependencyCheck", "raciGaps"]) {
+  for (const key of ["phaseArtifacts", "gateReviews", "phasePct", "dependencyCheck", "raciGaps"]) {
     const map = asMap(inner[key]);
     if (map && phaseId in map) {
       const { [phaseId]: _removed, ...rest } = map;
       next[key] = rest;
     }
-  }
-  if (Array.isArray(inner.decisionQueue)) {
-    next.decisionQueue = (inner.decisionQueue as Record<string, unknown>[]).filter((entry) => !matchesPhase(entry));
-  }
-  if (Array.isArray(inner.humanNotes)) {
-    next.humanNotes = (inner.humanNotes as Record<string, unknown>[]).filter((entry) => !matchesPhase(entry));
   }
   return next;
 }

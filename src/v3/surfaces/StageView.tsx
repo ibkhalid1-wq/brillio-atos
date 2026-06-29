@@ -54,7 +54,8 @@ interface StageViewProps {
   onAddItem?: (tab: "blockers" | "risks" | "actions") => void;
   onOpenReport: (reportId: V3ReportId) => void;
   onReopenGate: (phaseId: string) => void;
-  /** Reset a phase to a blank workspace (clears its inputs, artifacts, and gate). */
+  /** Reset a phase: clear its generated artifacts and reopen the gate, keeping the
+   *  phase's captured inputs, suggested roles, and open actions. */
   onResetPhase?: (phaseId: string) => Promise<void> | void;
   /** Raise a change request against a locked phase (controlled edit path). */
   onRaiseChangeRequest?: (phaseId: string, title: string, reason: string) => Promise<void> | void;
@@ -1227,7 +1228,7 @@ export default function StageView({
                           </span>
                           <span className="v3-settings-item-text">
                             <span className="v3-settings-item-label">Reset phase</span>
-                            <span className="v3-settings-item-sub">Clear inputs, artifacts &amp; gate to a blank workspace</span>
+                            <span className="v3-settings-item-sub">Clear generated artifacts &amp; reopen the gate (inputs kept)</span>
                           </span>
                         </button>
                       ) : null}
@@ -2223,7 +2224,7 @@ export default function StageView({
               Reset {activePhase.displayName ?? activePhase.id} phase?
             </h2>
             <p style={{ margin: "0 0 20px", fontSize: 12.5, lineHeight: 1.55, color: "var(--v3-text-secondary)" }}>
-              This clears this phase's inputs, generated artifacts, gate approval, and decisions, returning it to a blank workspace. Re-run the agents to regenerate it. This cannot be undone — save a version first if you may need to restore it.
+              This clears this phase's generated artifacts and reopens its gate, returning it to an un-worked state. Your captured inputs, suggested roles, and open actions are kept — re-run the agents to regenerate the artifacts. This cannot be undone — save a version first if you may need to restore it.
             </p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <button type="button" className="v3-button ghost v3-button-inline-sm" onClick={() => setResetModalOpen(false)} disabled={resettingPhase}>Cancel</button>

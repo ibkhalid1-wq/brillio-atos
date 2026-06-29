@@ -2760,7 +2760,7 @@ export default function AppShellV3() {
   const handleResetPhase = useCallback(async (phaseId: string) => {
     try {
       await resetPhase(phaseId);
-      pushV3Toast("Phase reset to a blank workspace. Re-run agents to regenerate it.", { tone: "warning", duration: 4000 });
+      pushV3Toast("Phase reset: artifacts cleared and gate reopened. Your inputs and suggested roles are kept — re-run agents to regenerate.", { tone: "warning", duration: 4000 });
     } catch (err) {
       const detail = err instanceof Error ? err.message : "";
       pushV3Toast(detail ? `Could not reset phase: ${detail}` : "Could not reset phase.", { tone: "error", duration: 4000 });
