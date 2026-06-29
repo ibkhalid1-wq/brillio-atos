@@ -217,7 +217,7 @@ export function PhaseRailPanels({
   };
 
   const primaryTabs: { id: PrimaryTab; label: string; count: number }[] = [
-    { id: "actions", label: "Action Center", count: openActionCount },
+    { id: "actions", label: "Action", count: openActionCount },
     { id: "guidance", label: "Guidance", count: guidanceCount },
     { id: "intelligence", label: "Intelligence", count: artifactCount },
   ];
