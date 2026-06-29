@@ -246,6 +246,8 @@ export default function ProgramDetailRouter({
           onAddMilestone={onAddMilestone}
           onCompleteMilestone={onCompleteMilestone}
           milestoneSavePending={milestoneSavePending}
+          healthIsRunning={healthHeatmapIsRunning}
+          onTriggerHealth={triggers.triggerHealthHeatmap}
         />
       );
     case "plan":

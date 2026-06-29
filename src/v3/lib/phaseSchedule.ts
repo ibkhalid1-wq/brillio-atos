@@ -153,27 +153,37 @@ function readPhaseHealth(inner: Record<string, unknown>): Map<string, PhaseHealt
   return map;
 }
 
-/** Completed/total milestone ratio per phase → progress %, for the client fallback. */
-function readMilestoneProgress(inner: Record<string, unknown>): Map<string, number> {
-  const roadmap = typeof inner.strategicRoadmap === "object" && inner.strategicRoadmap !== null
-    ? inner.strategicRoadmap as Record<string, unknown>
+/**
+ * Artifact-completion progress per phase, for the client fallback before the
+ * agent runs. Progress is grounded in the artifacts generated for each phase
+ * (read from `phaseArtifacts`): an approved artifact is full credit, a draft is
+ * partial, stale less so, archived excluded. The denominator is the larger of
+ * the artifacts generated and the phase's required-artifact slots, so a phase
+ * isn't "done" until its mandated artifacts exist and are approved.
+ */
+function readArtifactProgress(inner: Record<string, unknown>, phases: Array<{ id: string }>): Map<string, number> {
+  const phaseArtifacts = typeof inner.phaseArtifacts === "object" && inner.phaseArtifacts !== null
+    ? inner.phaseArtifacts as Record<string, unknown>
     : {};
-  const milestones = Array.isArray(roadmap.milestones)
-    ? roadmap.milestones
-    : Array.isArray(inner.milestones) ? inner.milestones : [];
-  const counts = new Map<string, { done: number; total: number }>();
-  for (const m of milestones) {
-    if (typeof m !== "object" || m === null) continue;
-    const rec = m as Record<string, unknown>;
-    const phaseId = typeof rec.phaseId === "string" ? rec.phaseId : null;
-    if (!phaseId) continue;
-    const c = counts.get(phaseId) ?? { done: 0, total: 0 };
-    c.total += 1;
-    if (rec.status === "complete") c.done += 1;
-    counts.set(phaseId, c);
-  }
   const progress = new Map<string, number>();
-  for (const [id, c] of counts) progress.set(id, c.total ? Math.round((c.done / c.total) * 100) : 0);
+  for (const p of phases) {
+    const bucket = typeof phaseArtifacts[p.id] === "object" && phaseArtifacts[p.id] !== null
+      ? phaseArtifacts[p.id] as Record<string, unknown>
+      : {};
+    let credit = 0;
+    let generated = 0;
+    for (const [artifactId, val] of Object.entries(bucket)) {
+      // Delivery Plan + Milestone Review are folded into the roadmap — not phase artifacts.
+      if (artifactId === "plan" || artifactId === "milestone") continue;
+      const status = typeof val === "object" && val !== null ? String((val as Record<string, unknown>).status ?? "draft") : "draft";
+      if (status === "archived") continue;
+      generated += 1;
+      credit += status === "approved" ? 1 : status === "stale" ? 0.4 : 0.5;
+    }
+    const required = getPhaseDefinition(p.id)?.requiredArtifacts?.length ?? 0;
+    const denom = Math.max(generated, required);
+    progress.set(p.id, denom > 0 ? Math.round((credit / denom) * 100) : 0);
+  }
   return progress;
 }
 
@@ -216,7 +226,7 @@ export function buildRoadmapRows(rawData: unknown, phases: Array<{ id: string }>
     ? overrideRaw as Record<string, { start?: unknown; end?: unknown }>
     : {};
   const health = readPhaseHealth(raw);
-  const milestoneProgress = readMilestoneProgress(raw);
+  const artifactProgress = readArtifactProgress(raw, phases);
   const todayMs = parseUtcDay(new Date().toISOString().slice(0, 10)) ?? Date.now();
   const rows: GanttRow[] = [];
   for (const p of phases) {
@@ -226,7 +236,7 @@ export function buildRoadmapRows(rawData: unknown, phases: Array<{ id: string }>
     const end = typeof ov?.end === "string" ? ov.end : def?.end;
     if (!start || !end) continue;
     const h = health.get(p.id);
-    const progressPct = h?.progressPct ?? milestoneProgress.get(p.id) ?? 0;
+    const progressPct = h?.progressPct ?? artifactProgress.get(p.id) ?? 0;
     const startMs = parseUtcDay(start) ?? todayMs;
     const endMs = parseUtcDay(end) ?? todayMs;
     const rag = h?.rag ?? deriveRag(progressPct, startMs, endMs, todayMs);
