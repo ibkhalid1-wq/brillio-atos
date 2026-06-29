@@ -68,31 +68,40 @@ const PHASE_FIELD_ARTIFACTS: Record<string, Record<string, string[]>> = {
 const STAKEHOLDER_CONSUMER_ARTIFACTS = ["scope-map", "requirements-catalog"];
 
 /**
- * Design's static inputs feed its solution-design artifacts by *intent*, not by a
- * fixed artifact id. Design is a dynamic-artifact phase, so the planner may emit
- * the architecture deliverable as "solution-architecture" (the canonical agent id)
- * or as an invented variant ("solution-design", "architecture-decisions", …). A
- * fixed methodology `artifactInputFlow` only wires the canonical ids, so on a
- * planner-divergent programme the architecture/NFR/decision inputs would dangle
- * with no flow line. Matching each input's intent keywords against whatever design
- * artifacts actually render keeps every static design input connected regardless
- * of the planner's naming — targets are still constrained to the phase's real
- * artifact set by `getPhaseArtifactIds`, so nothing dangles.
+ * Static inputs that feed a dynamic-artifact phase's deliverables by *intent*, not
+ * by a fixed artifact id. Design and Build both declare static inputs but let the
+ * planner name the artifacts, so a fixed methodology `artifactInputFlow` only
+ * wires the canonical ids — on a planner-divergent programme the architecture /
+ * delivery / quality inputs would dangle with no flow line (e.g. Build declares a
+ * "milestone" / "test-plan" target, but the planner emits "milestone-register" /
+ * "uat-plan" / "build-phase-delivery-report"). Matching each input's intent
+ * keywords against whatever artifacts actually render keeps every static input
+ * connected regardless of the planner's naming — targets are still constrained to
+ * the phase's real artifact set by `getPhaseArtifactIds`, so nothing dangles.
  */
-const DESIGN_PHASE_ID = "design";
-const DESIGN_FIELD_INTENT: Record<string, string[]> = {
-  solutionApproach: ["solution", "design", "architecture", "operating", "model", "approach", "future"],
-  targetArchitecture: ["architecture", "solution", "design", "technical", "platform"],
-  keyDesignDecisions: ["decision", "architecture", "design", "solution"],
-  nonFunctionalRequirements: ["architecture", "solution", "design", "nfr", "quality", "performance", "security", "operating"],
-  integrationDataConstraints: ["integration", "data", "critical", "path", "constraint", "migration"],
+const PHASE_FIELD_INTENT: Record<string, Record<string, string[]>> = {
+  design: {
+    solutionApproach: ["solution", "design", "architecture", "operating", "model", "approach", "future"],
+    targetArchitecture: ["architecture", "solution", "design", "technical", "platform"],
+    keyDesignDecisions: ["decision", "architecture", "design", "solution"],
+    nonFunctionalRequirements: ["architecture", "solution", "design", "nfr", "quality", "performance", "security", "operating"],
+    integrationDataConstraints: ["integration", "data", "critical", "path", "constraint", "migration"],
+  },
+  build: {
+    deliveryIncrements: ["milestone", "increment", "cadence", "delivery", "release"],
+    testStrategy: ["test", "uat", "quality", "acceptance"],
+    environmentsRelease: ["environment", "release", "go-live", "cutover", "deploy"],
+    definitionOfDone: ["done", "acceptance", "readiness", "quality", "uat"],
+  },
 };
 
-function designFieldArtifacts(store?: DynamicSchemaStore): Record<string, string[]> {
-  const artifactIds = getPhaseArtifactIds(DESIGN_PHASE_ID, store);
+function intentFieldArtifacts(phaseId: string, store?: DynamicSchemaStore): Record<string, string[]> {
+  const intent = PHASE_FIELD_INTENT[phaseId];
+  if (!intent) return {};
+  const artifactIds = getPhaseArtifactIds(phaseId, store);
   if (artifactIds.length === 0) return {};
   const out: Record<string, string[]> = {};
-  for (const [fieldId, keywords] of Object.entries(DESIGN_FIELD_INTENT)) {
+  for (const [fieldId, keywords] of Object.entries(intent)) {
     const matched = artifactIds.filter((id) => {
       const lower = id.toLowerCase();
       return keywords.some((kw) => lower.includes(kw));
@@ -103,7 +112,7 @@ function designFieldArtifacts(store?: DynamicSchemaStore): Record<string, string
 }
 
 function semanticFieldArtifacts(phaseId: string, store?: DynamicSchemaStore): Record<string, string[]> {
-  if (phaseId === DESIGN_PHASE_ID) return designFieldArtifacts(store);
+  if (PHASE_FIELD_INTENT[phaseId]) return intentFieldArtifacts(phaseId, store);
   if (phaseId !== STAKEHOLDER_PHASE_ID) return {};
   const field = resolveStakeholderField(store, phaseId);
   if (!field) return {};
