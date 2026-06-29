@@ -728,13 +728,12 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
 
   return (
     <div className="v3-phase-inputs">
-      <div style={{ display: "flex", alignItems: "stretch", gap: 8 }}>
+      <div className={`v3-phase-inputs-head ${headerAction ? "has-action" : ""}`}>
         <button
           type="button"
           className="v3-phase-inputs-toggle"
           onClick={() => setOpen((current) => !current)}
           aria-expanded={open}
-          style={{ flex: 1 }}
         >
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
             <span className="v3-phase-inputs-toggle-title">{schema.title}</span>
@@ -747,7 +746,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
           </div>
         </button>
         {headerAction ? (
-          <div style={{ display: "flex", alignItems: "center" }}>{headerAction}</div>
+          <div className="v3-phase-inputs-head-action">{headerAction}</div>
         ) : null}
       </div>
 

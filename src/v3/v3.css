@@ -7529,9 +7529,15 @@ button.v3-phase-metric:focus-visible {
   margin-bottom: 12px;
 }
 
+.v3-phase-inputs-head {
+  display: flex;
+  align-items: stretch;
+  background: var(--v3-surface-3);
+}
+
 .v3-phase-inputs-toggle {
   width: 100%;
-  background: var(--v3-surface-2);
+  background: var(--v3-surface-3);
   border: none;
   padding: 12px 14px;
   display: flex;
@@ -7541,7 +7547,18 @@ button.v3-phase-metric:focus-visible {
   color: inherit;
 }
 
-.v3-phase-inputs-toggle:hover { background: var(--v3-surface-3); }
+.v3-phase-inputs-head .v3-phase-inputs-toggle {
+  flex: 1;
+  background: transparent;
+}
+
+.v3-phase-inputs-toggle:hover { background: var(--v3-surface-4, var(--v3-surface-2)); }
+
+.v3-phase-inputs-head-action {
+  display: flex;
+  align-items: center;
+  padding: 0 14px 0 6px;
+}
 
 .v3-phase-inputs-toggle-title {
   font-size: 13px;
