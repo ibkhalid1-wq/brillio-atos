@@ -184,60 +184,77 @@ function humanizeRaidStats(stats: RaidStats): string {
 }
 
 /**
- * Connections card — the LLM narration over the deterministic linkages. Shown
- * only when cross-type links exist. A plain-English count is always visible (it
- * needs no model); the fuller story is written on demand, so a programme nobody
- * is reading never pays for the call. If the call returns nothing the count
- * stands on its own — the story can only ever elaborate it.
+ * Cross-conversation cache of the connections narrative, keyed by persona + a
+ * fingerprint of the deterministic linkage set. The narrative is regenerated
+ * automatically whenever that fingerprint changes (a risk/blocker/decision was
+ * raised, resolved, or re-linked) and reused verbatim otherwise — so the card
+ * stays current without paying for an identical model call on every view.
+ */
+const raidNarrativeCache = new Map<string, string>();
+
+/**
+ * Connections card — the causal story over the deterministic linkages. Shown only
+ * when cross-type links exist. The card is maintained automatically with no manual
+ * action: the deterministic rollup is always rendered as the baseline, and an LLM
+ * narration silently upgrades it in place when the runtime is available. The
+ * upgrade generates on first sight and re-generates whenever the linkage
+ * fingerprint changes (a risk/blocker/decision raised, resolved or re-linked),
+ * caching the result so unchanged RAID data never re-pays for the call. When the
+ * model returns nothing — or no runtime is registered — the deterministic story
+ * stands on its own, so the card never shows an error or a retry prompt.
  */
 function RaidCausalSummary({
   program,
   personaId,
   stats,
+  linkageKey,
 }: {
   program: ProgramSummary;
   personaId: string;
   stats: RaidStats;
+  linkageKey: string;
 }) {
-  const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
-  const [text, setText] = useState("");
-
   const linkageCount = stats.linkages;
-  if (!linkageCount) return null;
+  const cacheKey = `${personaId}::${linkageKey}`;
+  const [text, setText] = useState(() => raidNarrativeCache.get(cacheKey) ?? "");
 
-  const run = async () => {
-    setState("loading");
-    const out = await narrateRaidSynthesis(program, "programme", personaId);
-    if (out) {
-      setText(out);
-      setState("done");
-    } else {
-      setState("error");
+  // Keep the narrative in lock-step with the linkages: serve the cache when the
+  // fingerprint is unchanged, otherwise regenerate. Guard against races so a
+  // stale in-flight call can't overwrite a newer one. Failures are swallowed —
+  // the deterministic baseline below is always present, so there is nothing to
+  // surface and nothing to retry.
+  useEffect(() => {
+    if (!linkageCount) return;
+    const cached = raidNarrativeCache.get(cacheKey);
+    if (cached) {
+      setText(cached);
+      return;
     }
-  };
+    let cancelled = false;
+    void (async () => {
+      const out = await narrateRaidSynthesis(program, "programme", personaId);
+      if (cancelled || !out) return;
+      raidNarrativeCache.set(cacheKey, out);
+      setText(out);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [program, personaId, cacheKey, linkageCount]);
+
+  if (!linkageCount) return null;
 
   return (
     <AdamCard>
       <AdamCardHeader
         title="How these connect"
-        subtitle={humanizeRaidStats(stats)}
+        subtitle="Open risks, blockers and decisions — and the links between them."
         badge={<span className="v3-chip muted" style={{ fontSize: 11 }}>{linkageCount} link{linkageCount === 1 ? "" : "s"}</span>}
       />
       <AdamCardBody>
-        {state === "done" ? (
-          <p style={{ fontSize: 13, color: "var(--v3-text-secondary)", lineHeight: 1.65, margin: 0 }}>{text}</p>
-        ) : state === "loading" ? (
-          <span style={{ fontSize: 12, color: "var(--v3-text-muted)" }}>Connecting the dots…</span>
-        ) : (
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <button type="button" className="v3-button ghost" style={{ fontSize: 12 }} onClick={() => void run()}>
-              {state === "error" ? "Try again" : "Explain how these connect"}
-            </button>
-            {state === "error" ? (
-              <span style={{ fontSize: 12, color: "var(--v3-text-muted)" }}>Couldn't write a summary just now — the details below still apply.</span>
-            ) : null}
-          </div>
-        )}
+        <p style={{ fontSize: 13, color: "var(--v3-text-secondary)", lineHeight: 1.65, margin: 0 }}>
+          {text || humanizeRaidStats(stats)}
+        </p>
       </AdamCardBody>
     </AdamCard>
   );
@@ -794,6 +811,13 @@ export default function DecideView({
   // (not the active tab/phase filter) keeps a card's links stable across tabs.
   const synthesis = useMemo(() => synthesizeRaid(program, "programme", personaId), [program, personaId]);
 
+  // Fingerprint of the deterministic linkage set — the connections narrative is
+  // keyed on this so it auto-regenerates only when the links actually change.
+  const linkageKey = useMemo(
+    () => synthesis.linkages.map((l) => l.id).join("|"),
+    [synthesis.linkages],
+  );
+
   // Cross-type linkage overlay, indexed by entry id — the chips inform even when
   // the linked entry sits in another tab. Pure read; never resolves or counts.
   const linkagesByEntry = useMemo(() => {
@@ -1146,6 +1170,7 @@ export default function DecideView({
             program={program}
             personaId={personaId}
             stats={synthesis.stats}
+            linkageKey={linkageKey}
           />
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
             <button
