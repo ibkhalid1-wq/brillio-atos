@@ -204,6 +204,14 @@ export default function ExecutiveView({
 }: ExecutiveViewProps) {
   const [approvingPhase, setApprovingPhase] = useState<string | null>(null);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  // The executive view is grouped into three tabs so it reads as a structured
+  // report instead of one long dense scroll: Status (narrative + metrics +
+  // confidence), Governance (change control, risks, decisions, leadership review)
+  // and Plan (phase progress).
+  const [tab, setTab] = useState<"status" | "governance" | "plan">("status");
+  // The SteerCo pack is large and report-like, so it lives behind a button that
+  // opens it in a modal rather than inflating the Governance tab inline.
+  const [showSteerco, setShowSteerco] = useState(false);
   // Friendly stage names for the change-control log, keyed by phase id.
   const phaseNameById = useMemo(() => {
     const map: Record<string, string> = {};
@@ -222,21 +230,6 @@ export default function ExecutiveView({
     if (typeof rd.data === "object" && rd.data !== null) return rd.data as Record<string, unknown>;
     return rd;
   }, [program?.rawData]);
-
-  const dailyBriefing = useMemo(() => {
-    const b = innerData.dailyBriefing;
-    if (!b || typeof b !== "object") return null;
-    return b as {
-      headline?: string;
-      focusItems?: Array<{ item: string; urgency?: string; owner?: string; action?: string }>;
-      blockers?: Array<{ description: string; phase?: string; impact?: string }>;
-      decisionsNeeded?: string[];
-      progressHighlight?: string;
-      ragStatus?: "green" | "amber" | "red";
-      generatedAt?: string;
-      reason?: string;
-    };
-  }, [innerData]);
 
   const steercoAgenda = useMemo(() => {
     const a = innerData.steercoAgenda;
@@ -280,23 +273,6 @@ export default function ExecutiveView({
           (g as { status: string }).status === "approved",
       ).length
     : 0;
-  // Programme completion is measured by approved artifacts, not the phase-estimator
-  // pct. Each phase contributes its share of required artifacts that PMs have
-  // actually reviewed and approved (computePhaseReadiness.artifactsComplete — the
-  // same "Artifacts approved" metric shown on the phase screen); we average those
-  // across phases so the executive headline reflects real, signed-off output.
-  const avgPctCopy = useMemo(() => {
-    if (!program || phases.length === 0) return 0;
-    const perPhaseApproved = program.phases.map(
-      (p) => computePhaseReadiness(program, p.id).artifactsComplete,
-    );
-    return Math.round(
-      perPhaseApproved.reduce((s, v) => s + v, 0) / perPhaseApproved.length,
-    );
-  }, [program, phases.length]);
-
-  // handleCopyBrief is defined after useMemo hooks below — see bottom of component
-
   const todayLabel = todayLabelCopy;
 
   // ── Critical risks (severity high/critical, capped at 3) ─────────────────
@@ -309,15 +285,16 @@ export default function ExecutiveView({
     [program],
   );
 
-  // Total open decisions for this persona — the SAME canonical set the list below
-  // slices from, so the KPI can never read lower than the list it caps.
-  const openDecisionCount = useMemo(
+  const shownDecisions = highPriorityDecisions.slice(0, 3);
+  const extraDecisions = highPriorityDecisions.length - shownDecisions.length;
+  // All open decisions for the executive lens (not just high/critical) — lets the
+  // empty state stay honest: when nothing is high-priority but lower-priority
+  // decisions remain in the queue, we point to them rather than implying the
+  // backlog is clear.
+  const allDecisionCount = useMemo(
     () => selectDecisions(program, "programme", "executive").length,
     [program],
   );
-
-  const shownDecisions = highPriorityDecisions.slice(0, 3);
-  const extraDecisions = highPriorityDecisions.length - shownDecisions.length;
 
   // ── Open RAID counts for the header block ─────────────────────────────────
   // Programme-wide open blockers and risks (canonical programRaid selectors, so
@@ -338,7 +315,6 @@ export default function ExecutiveView({
 
   // ── Gate counts (use pre-declared above) ─────────────────────────────────
   const approvedGates = approvedGatesCopy;
-  const avgPct = avgPctCopy;
 
   const health = healthLabel(confidenceScore);
 
@@ -450,8 +426,42 @@ export default function ExecutiveView({
         </div>
       </div>
 
+      {/* ── Tab bar — Status / Governance / Plan ───────────────────────────── */}
+      <div style={{ display: "flex", gap: 4, borderBottom: "1px solid var(--v3-border-soft)", marginTop: -8 }}>
+        {([
+          { id: "status", label: "Status" },
+          { id: "governance", label: "Governance" },
+          { id: "plan", label: "Plan" },
+        ] as const).map((t) => {
+          const active = tab === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              style={{
+                appearance: "none",
+                background: "none",
+                border: "none",
+                borderBottom: `2px solid ${active ? "var(--v3-accent)" : "transparent"}`,
+                padding: "8px 14px",
+                marginBottom: -1,
+                cursor: "pointer",
+                fontFamily: "var(--v3-font)",
+                fontSize: 13,
+                fontWeight: 600,
+                color: active ? "var(--v3-text-primary)" : "var(--v3-text-muted)",
+                transition: "color 0.15s, border-color 0.15s",
+              }}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
       {/* ── Change control log ─────────────────────────────────────────────── */}
-      {onRaiseChangeRequest && changeRequests.length > 0 ? (
+      {tab === "governance" && onRaiseChangeRequest && changeRequests.length > 0 ? (
         <div
           style={{
             padding: "16px 18px",
@@ -522,6 +532,9 @@ export default function ExecutiveView({
         </div>
       ) : null}
 
+      {/* ── STATUS TAB — narrative, metrics, confidence ───────────────────── */}
+      {tab === "status" && (
+      <>
       {/* ── Executive summary — generated on demand, never auto-run ─────────── */}
       <div style={{
         padding: "12px 16px",
@@ -564,16 +577,8 @@ export default function ExecutiveView({
       {/* ── 2. Confidence & Health row ─────────────────────────────────────── */}
       <div>
         <SectionLabel>Programme Metrics</SectionLabel>
+        {/* Confidence is shown once, large, in the header — not duplicated here. */}
         <div className="v3-exec-metrics">
-          {confidenceScore !== null && (
-            <Kpi
-              label="Confidence"
-              value={`${confidenceScore}%`}
-              color={confidenceColor(confidenceScore)}
-              emphasis
-              onClick={onNavigateToGates}
-            />
-          )}
           <Kpi
             label="Gates Approved"
             value={`${approvedGates} of ${totalGates}`}
@@ -596,8 +601,12 @@ export default function ExecutiveView({
 
       {/* ── 2b. Confidence breakdown — per-signal scores behind the headline % ── */}
       <ConfidenceBreakdown confidenceResult={confidenceResult} />
+      </>
+      )}
 
+      {/* ── GOVERNANCE TAB — risks, decisions, leadership review ───────────── */}
       {/* ── 3. Critical risks ─────────────────────────────────────────────── */}
+      {tab === "governance" && (
       <div>
         <SectionLabel>Critical Risks</SectionLabel>
         <div
@@ -699,8 +708,10 @@ export default function ExecutiveView({
           )}
         </div>
       </div>
+      )}
 
       {/* ── 4. Actions awaiting executive input ───────────────────────────── */}
+      {tab === "governance" && (
       <div>
         <SectionLabel>Decisions That Need You</SectionLabel>
         {shownDecisions.length === 0 ? (
@@ -712,13 +723,36 @@ export default function ExecutiveView({
               padding: "16px 20px",
               display: "flex",
               alignItems: "center",
+              justifyContent: "space-between",
               gap: 10,
+              flexWrap: "wrap",
             }}
           >
-            <span style={{ fontSize: 18 }}>✓</span>
-            <span style={{ fontSize: 13, color: "var(--v3-green)", fontWeight: 500 }}>
-              Nothing needs your decision right now.
-            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 18 }}>✓</span>
+              <span style={{ fontSize: 13, color: "var(--v3-green)", fontWeight: 500 }}>
+                {allDecisionCount > 0
+                  ? "No high-priority decisions need you right now."
+                  : "Nothing needs your decision right now."}
+              </span>
+            </div>
+            {allDecisionCount > 0 && (
+              <button
+                onClick={onNavigateToDecide}
+                style={{
+                  background: "none",
+                  border: "none",
+                  padding: "4px 0",
+                  cursor: "pointer",
+                  fontSize: 13,
+                  color: "var(--v3-accent)",
+                  fontWeight: 500,
+                  fontFamily: "var(--v3-font)",
+                }}
+              >
+                View all {allDecisionCount} decisions →
+              </button>
+            )}
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -824,8 +858,11 @@ export default function ExecutiveView({
           </div>
         )}
       </div>
+      )}
 
+      {/* ── PLAN TAB — phase progress ─────────────────────────────────────── */}
       {/* ── 5. Stage progress ─────────────────────────────────────────────── */}
+      {tab === "plan" && (
       <div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
           <SectionLabel>Phase Progress</SectionLabel>
@@ -870,118 +907,69 @@ export default function ExecutiveView({
           )}
         </div>
       </div>
+      )}
 
-      {/* ── 6. Daily Briefing output ──────────────────────────────────────── */}
-      {dailyBriefing && !dailyBriefing.reason && (
+      {/* ── Leadership Review (SteerCo pack) — trigger card opens the full pack in a modal ── */}
+      {tab === "governance" && (
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-            <SectionLabel>Today's Programme Brief</SectionLabel>
-            {dailyBriefing.ragStatus && (
-              <span style={{
-                fontSize: 10,
-                fontWeight: 700,
-                padding: "2px 8px",
-                borderRadius: 10,
-                background: dailyBriefing.ragStatus === "green" ? "rgba(34,197,94,0.12)" : dailyBriefing.ragStatus === "amber" ? "rgba(245,158,11,0.12)" : "rgba(239,68,68,0.12)",
-                color: dailyBriefing.ragStatus === "green" ? "var(--v3-green)" : dailyBriefing.ragStatus === "amber" ? "var(--v3-amber)" : "var(--v3-red, #ef4444)",
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-                marginBottom: 12,
-              }}>{dailyBriefing.ragStatus.toUpperCase()}</span>
-            )}
-            {dailyBriefing.generatedAt && (
-              <span style={{ fontSize: 11, color: "var(--v3-text-muted)", marginLeft: "auto", marginBottom: 12 }}>
-                {new Date(dailyBriefing.generatedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
-              </span>
-            )}
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {dailyBriefing.headline && (
-              <div style={{
-                background: "var(--v3-surface)",
-                border: "1px solid var(--v3-border-soft)",
-                borderRadius: "var(--v3-radius)",
-                padding: "14px 16px",
-                fontSize: 14,
-                fontWeight: 600,
-                color: "var(--v3-text-primary)",
-                lineHeight: 1.5,
-              }}>
-                {dailyBriefing.headline}
+          <SectionLabel>Leadership Review</SectionLabel>
+          <div style={{
+            background: "var(--v3-surface)",
+            border: "1px solid var(--v3-border-soft)",
+            borderRadius: "var(--v3-radius)",
+            padding: "14px 16px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 12,
+          }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: "var(--v3-text-primary)" }}>
+                {steercoAgenda?.title || "Steering Committee Meeting"}
               </div>
-            )}
-            {dailyBriefing.progressHighlight && (
-              <div style={{ fontSize: 12, color: "var(--v3-text-secondary)", fontStyle: "italic", paddingLeft: 4 }}>
-                ◎ {dailyBriefing.progressHighlight}
+              <div style={{ fontSize: 12, color: "var(--v3-text-muted)", marginTop: 3, lineHeight: 1.5 }}>
+                {steercoAgenda ? (
+                  <>
+                    {steercoAgenda.date && <span>{steercoAgenda.date}</span>}
+                    {steercoAgenda.duration && <span> · {steercoAgenda.duration}</span>}
+                    {steercoAgenda.generatedAt && (
+                      <span>{(steercoAgenda.date || steercoAgenda.duration) ? " · " : ""}updated {new Date(steercoAgenda.generatedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+                    )}
+                  </>
+                ) : (
+                  <span>No pack yet — generate the agenda, blockers, and decisions for your next steering committee.</span>
+                )}
               </div>
-            )}
-            {dailyBriefing.focusItems && dailyBriefing.focusItems.length > 0 && (
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--v3-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Focus Today</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  {dailyBriefing.focusItems.map((f, i) => (
-                    <div key={i} style={{
-                      background: "var(--v3-surface)",
-                      border: "1px solid var(--v3-border-soft)",
-                      borderRadius: "var(--v3-radius)",
-                      padding: "10px 14px",
-                      display: "flex",
-                      gap: 10,
-                      alignItems: "flex-start",
-                    }}>
-                      <span style={{
-                        fontSize: 10,
-                        padding: "2px 6px",
-                        borderRadius: 6,
-                        background: f.urgency === "now" ? "rgba(239,68,68,0.1)" : f.urgency === "today" ? "rgba(245,158,11,0.1)" : "rgba(59,130,246,0.1)",
-                        color: f.urgency === "now" ? "var(--v3-red, #ef4444)" : f.urgency === "today" ? "var(--v3-amber)" : "var(--v3-accent)",
-                        fontWeight: 700,
-                        textTransform: "uppercase",
-                        flexShrink: 0,
-                        marginTop: 1,
-                      }}>{f.urgency || "today"}</span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, color: "var(--v3-text-primary)", fontWeight: 500, lineHeight: 1.4 }}>{f.item}</div>
-                        {f.action && <div style={{ fontSize: 12, color: "var(--v3-text-secondary)", marginTop: 2 }}>→ {f.action}</div>}
-                        {f.owner && <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 2 }}>Owner: {f.owner}</div>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {dailyBriefing.blockers && dailyBriefing.blockers.length > 0 && (
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--v3-red, #ef4444)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Blockers</div>
-                {dailyBriefing.blockers.map((b, i) => (
-                  <div key={i} style={{ fontSize: 13, color: "var(--v3-text-primary)", padding: "6px 0", borderBottom: i < (dailyBriefing.blockers?.length ?? 0) - 1 ? "1px solid var(--v3-border-soft)" : undefined }}>
-                    ⊘ {b.description}
-                    {b.impact && <span style={{ fontSize: 12, color: "var(--v3-text-muted)", marginLeft: 8 }}>— {b.impact}</span>}
-                  </div>
-                ))}
-              </div>
-            )}
-            {dailyBriefing.decisionsNeeded && dailyBriefing.decisionsNeeded.length > 0 && (
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--v3-amber)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Decisions Needed</div>
-                {dailyBriefing.decisionsNeeded.map((d, i) => (
-                  <div key={i} style={{ fontSize: 13, color: "var(--v3-text-primary)", padding: "4px 0" }}>⊖ {d}</div>
-                ))}
-              </div>
-            )}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+              {steercoAgenda && (
+                <button type="button" className="v3-button" onClick={() => setShowSteerco(true)}>
+                  View pack
+                </button>
+              )}
+              <button
+                type="button"
+                className="v3-button ghost v3-button-inline-xs"
+                disabled={anyAgentRunning}
+                onClick={() => onRunAgent("steerco-prep", "program")}
+              >
+                {anyAgentRunning ? "Building…" : steercoAgenda ? "Refresh" : "Generate"}
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* ── 8. Leadership Review (SteerCo pack) — generated on demand from the card ─ */}
-      <div>
-        <SectionLabel>Leadership Review</SectionLabel>
-        <div style={{
-          background: "var(--v3-surface)",
-          border: "1px solid var(--v3-border-soft)",
-          borderRadius: "var(--v3-radius)",
-          overflow: "hidden",
-        }}>
+      {/* SteerCo pack modal — opened from the Leadership Review card */}
+      {showSteerco && steercoAgenda && (
+        <div
+          onClick={() => setShowSteerco(false)}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 300, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "5vh 16px", overflowY: "auto" }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: "var(--v3-surface)", border: "1px solid var(--v3-border-soft)", borderRadius: 16, maxWidth: 720, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.4)", overflow: "hidden", fontFamily: "var(--v3-font)" }}
+          >
             <div style={{
               padding: "14px 16px",
               borderBottom: "1px solid var(--v3-border-soft)",
@@ -991,30 +979,15 @@ export default function ExecutiveView({
               gap: 12,
             }}>
               <div>
-                <div style={{ fontWeight: 700, fontSize: 14, color: "var(--v3-text-primary)" }}>{steercoAgenda?.title || "Steering Committee Meeting"}</div>
+                <div style={{ fontWeight: 700, fontSize: 15, color: "var(--v3-text-primary)" }}>{steercoAgenda.title || "Steering Committee Meeting"}</div>
                 <div style={{ fontSize: 12, color: "var(--v3-text-muted)", marginTop: 3 }}>
-                  {steercoAgenda?.date && <span>{steercoAgenda.date}</span>}
-                  {steercoAgenda?.duration && <span> · {steercoAgenda.duration}</span>}
+                  {steercoAgenda.date && <span>{steercoAgenda.date}</span>}
+                  {steercoAgenda.duration && <span> · {steercoAgenda.duration}</span>}
                 </div>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                {steercoAgenda?.generatedAt && (
-                  <span style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>
-                    {new Date(steercoAgenda.generatedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
-                  </span>
-                )}
-                <button
-                  type="button"
-                  className="v3-button ghost v3-button-inline-xs"
-                  disabled={anyAgentRunning}
-                  onClick={() => onRunAgent("steerco-prep", "program")}
-                >
-                  {anyAgentRunning ? "Building…" : steercoAgenda ? "Refresh" : "Generate"}
-                </button>
-              </div>
+              <button type="button" className="v3-button ghost v3-button-inline-xs" onClick={() => setShowSteerco(false)}>Close</button>
             </div>
-            {steercoAgenda ? (
-              <>
+            <>
             {steercoAgenda.attendees && steercoAgenda.attendees.length > 0 && (
               <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--v3-border-soft)", fontSize: 12, color: "var(--v3-text-secondary)" }}>
                 <span style={{ fontWeight: 600, color: "var(--v3-text-muted)", marginRight: 8 }}>ATTENDEES</span>
@@ -1130,14 +1103,10 @@ export default function ExecutiveView({
                 {steercoAgenda.parkingLot.map((p, i) => <div key={i} style={{ fontSize: 12, color: "var(--v3-text-secondary)", padding: "2px 0" }}>• {p}</div>)}
               </div>
             )}
-              </>
-            ) : (
-              <div style={{ padding: "16px", fontSize: 12, color: "var(--v3-text-muted)", lineHeight: 1.6 }}>
-                No leadership review yet — generate a SteerCo pack to build the agenda, critical blockers, and decisions for your next steering committee.
-              </div>
-            )}
+            </>
+          </div>
         </div>
-      </div>
+      )}
 
     </div>
   );
