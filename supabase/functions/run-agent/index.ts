@@ -1225,18 +1225,32 @@ function buildDocumentCarryForward(documents: CarryForwardDocument[], targetPhas
 }
 
 /**
- * Flattens every captured phase input into a readable "phase.field: value" block
+ * Flattens the captured phase inputs into a readable "phase.field: value" block
  * for the artifact reviewer. The reviewer must see exactly what the user has
  * already supplied so it never recommends adding a fact that is already an input
  * (e.g. asking for a target end date when targetEndDate is populated). Values are
  * passed in full — the reviewer must be able to judge specificity against the
  * complete input, not a truncated head.
+ *
+ * Scoped to the target phase + all PRIOR phases: later-phase inputs cannot ground
+ * a current-phase artifact, and surfacing a partially-populated downstream input
+ * (e.g. mobilise.coreTeamRoster while reviewing a strategy charter) makes the
+ * reviewer treat it as a fillable gap and recommend populating an out-of-scope
+ * field. Mirrors collectPriorPhaseArtifacts' sequencing.
  */
-function collectProvidedInputs(programData: ProgramState): string {
+function collectProvidedInputs(programData: ProgramState, targetPhaseId: string): string {
   const inner = getInnerProgramData(programData);
   const phaseInputs = normalizeProgramData(inner.phaseInputs as JsonValue | null);
+  const targetIndex = ATOS_PHASE_SEQUENCE.indexOf(targetPhaseId);
+  const inScope = (phaseId: string): boolean => {
+    if (targetIndex < 0) return true;
+    const phaseIndex = ATOS_PHASE_SEQUENCE.indexOf(phaseId);
+    // Unknown phases (not in the sequence) are kept; known later phases are dropped.
+    return phaseIndex < 0 || phaseIndex <= targetIndex;
+  };
   const lines: string[] = [];
   for (const [phaseId, phaseValue] of Object.entries(phaseInputs)) {
+    if (!inScope(phaseId)) continue;
     const record = normalizeProgramData(phaseValue as JsonValue | null);
     for (const [fieldId, value] of Object.entries(record)) {
       if (fieldId === "savedAt") continue;
@@ -7432,7 +7446,7 @@ Deno.serve(async (req) => {
             reviewTarget.content,
             `Program: ${programRow.name || "Unknown"}, Phase: ${request.phaseId}`,
             collectPriorPhaseArtifacts(contextProgramData, request.phaseId),
-            collectProvidedInputs(contextProgramData),
+            collectProvidedInputs(contextProgramData, request.phaseId),
             getCurrentPhaseScope(contextProgramData, request.phaseId),
           );
           nextProgramData = applyArtifactQuality(nextProgramData, reviewTarget.fieldKey, artifactReview as unknown as Record<string, unknown>, reviewTarget.confidenceFieldKey);
