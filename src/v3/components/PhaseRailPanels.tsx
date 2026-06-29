@@ -4,8 +4,6 @@ import { selectBlockers, selectRisks } from "@/v3/lib/programRaid";
 import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
 import { resolveArtifactReview } from "@/v3/lib/artifactReview";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
-import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
-import { PROVENANCE_KEY, parseProvenance, provenanceMatches } from "@/new/lib/fieldProvenance";
 import { AdamCard, AdamCardBody } from "@/v3/components/ui/AdamCard";
 import { ArtifactMapTree } from "@/v3/components/ArtifactMapTree";
 import { DrillDownLinks } from "@/v3/components/DrillDownLinks";
@@ -16,13 +14,14 @@ import { artifactLabelFor, inputLabelFor } from "@/v3/components/DrillDownLinks"
 import type { V3MoreView } from "@/v3/types";
 
 /**
- * PhaseRailPanels — the canonical Programme right-rail surface. Two tabbed
+ * PhaseRailPanels — the canonical Programme right-rail surface. Three tabbed
  * sections, each self-contained:
  *
- *   • Actions      → Actions (open decisions) · Risks · Blockers, read-only
+ *   • Action Center → Actions (open decisions) · Risks · Blockers, read-only
  *                    lists that deep-link to the decision queue / RAID log.
- *   • Intelligence → Graph · Uploads. The graph maps phase artifacts and their
- *                    lineage; uploads list imported source content for download.
+ *   • Guidance      → Per-artifact AI-review improvement recommendations — the
+ *                    signals behind the phase's input / artifact quality scores.
+ *   • Intelligence → The artifact lineage graph for the phase.
  */
 
 type RaidDraft = {
@@ -49,7 +48,6 @@ type PhaseRailPanelsProps = {
   /** Retained for call-site compatibility; the rail no longer generates artifacts inline. */
   onRunAgent?: (agentId: string) => void;
   onOpenMoreView: (view: V3MoreView) => void;
-  onUploadDocument: () => void;
   /**
    * Resolve an action / blocker / risk by jumping to its source. With no anchor
    * it lands on the phase's input section; with a drill-down anchor
@@ -67,9 +65,6 @@ type PhaseRailPanelsProps = {
 
 export type PrimaryTab = "actions" | "guidance" | "intelligence";
 type ActionTab = "actions" | "blockers" | "risks";
-type IntelTab = "graph" | "uploads";
-
-type UploadItem = { fieldId: string; label: string; source: string; value: string };
 
 function priorityVariant(value: string): "critical" | "high" | "medium" | "low" {
   if (value === "critical") return "critical";
@@ -93,22 +88,6 @@ function getDataBucket(program: ProgramSummary): Record<string, unknown> | null 
     : raw;
 }
 
-function triggerDownload(filename: string, text: string) {
-  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
-}
-
-function slugify(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "document";
-}
-
 export function PhaseRailPanels({
   program,
   phaseId,
@@ -116,13 +95,11 @@ export function PhaseRailPanels({
   onCloseRaid,
   onOpenDecide,
   onOpenMoreView,
-  onUploadDocument,
   onNavigateToPhaseInputs,
   railIntent,
 }: PhaseRailPanelsProps) {
   const [primaryTab, setPrimaryTab] = useState<PrimaryTab>("actions");
   const [actionTab, setActionTab] = useState<ActionTab>("actions");
-  const [intelTab, setIntelTab] = useState<IntelTab>("graph");
   const [closingId, setClosingId] = useState<string | null>(null);
 
   // Honour external tab requests (e.g. the StageView quality tiles opening
@@ -200,25 +177,6 @@ export function PhaseRailPanels({
   // Required-artifact count for this phase, surfaced on the Intelligence tab badge.
   const artifactCount = useMemo(() => getPhaseArtifactDefs(phaseId).length, [phaseId]);
 
-  // Imported source content for this phase, derived from field provenance. Only
-  // values that still match the imported snapshot are listed (a hand-edit drops
-  // the entry), so the uploads list never mislabels content the PM rewrote.
-  const uploads = useMemo<UploadItem[]>(() => {
-    const bucket = getDataBucket(program);
-    const phaseInputs = bucket?.phaseInputs && typeof bucket.phaseInputs === "object" && !Array.isArray(bucket.phaseInputs)
-      ? (bucket.phaseInputs as Record<string, Record<string, string>>)[phaseId] ?? {}
-      : {};
-    const provenance = parseProvenance((phaseInputs as Record<string, unknown>)[PROVENANCE_KEY]);
-    const labels = new Map(getPhaseInputSchema(phaseId).fields.map((field) => [field.id, field.label]));
-    const items: UploadItem[] = [];
-    for (const [fieldId, prov] of Object.entries(provenance)) {
-      const live = phaseInputs[fieldId];
-      if (!provenanceMatches(prov, live)) continue;
-      items.push({ fieldId, label: labels.get(fieldId) ?? fieldId, source: prov.source, value: typeof live === "string" ? live : prov.value });
-    }
-    return items;
-  }, [program, phaseId]);
-
   // Guidance: the per-artifact improvement recommendations from each AI review.
   // These are the exact signals behind the phase's input- and artifact-quality
   // scores, so this tab is the "why is quality X% and what do I fix" surface the
@@ -248,10 +206,6 @@ export function PhaseRailPanels({
     { id: "blockers", label: "Blockers", count: blockers.length },
   ];
   const openActionCount = decisions.length + blockers.length + risks.length;
-  const intelTabs: { id: IntelTab; label: string }[] = [
-    { id: "graph", label: "Graph" },
-    { id: "uploads", label: "Uploads" },
-  ];
 
   const closeRaid = async (entryId: string) => {
     setClosingId(entryId);
@@ -447,61 +401,14 @@ export function PhaseRailPanels({
       </AdamCard>
       ) : null}
 
-      {/* INTELLIGENCE */}
+      {/* INTELLIGENCE — the artifact lineage graph for this phase. */}
       {primaryTab === "intelligence" ? (
       <AdamCard>
         <AdamCardBody>
-          <div className="v3-action-tabs v3-action-tabs--rail" role="tablist" aria-label="Phase intelligence">
-            {intelTabs.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                aria-selected={intelTab === tab.id}
-                className={`v3-action-tab ${intelTab === tab.id ? "is-active" : ""}`}
-                onClick={() => setIntelTab(tab.id)}
-              >
-                {tab.label}
-              </button>
-            ))}
+          <div className="v3-rail-list">
+            <button type="button" className="v3-button ghost v3-button-inline-xs v3-rail-footer-link" onClick={() => onOpenMoreView("artifact-map")}>Open full artifact map →</button>
+            <ArtifactMapTree program={program} phaseId={phaseId} />
           </div>
-
-          {intelTab === "graph" ? (
-            <div className="v3-rail-list">
-              <button type="button" className="v3-button ghost v3-button-inline-xs v3-rail-footer-link" onClick={() => onOpenMoreView("artifact-map")}>Open full artifact map →</button>
-              <ArtifactMapTree program={program} phaseId={phaseId} />
-            </div>
-          ) : null}
-
-          {intelTab === "uploads" ? (
-            <div className="v3-rail-list">
-              {uploads.length ? (
-                <>
-                  <div className="v3-rail-meta">{uploads.length} imported {uploads.length === 1 ? "document" : "documents"}</div>
-                  {uploads.map((item) => (
-                    <div key={item.fieldId} className="v3-rail-item">
-                      <div className="v3-rail-item-head">
-                        <span className="v3-rail-item-title">{item.label}</span>
-                        <button
-                          type="button"
-                          className="v3-button ghost v3-button-inline-xs"
-                          title={`Download ${item.label}`}
-                          onClick={() => triggerDownload(`${slugify(item.label)}.txt`, item.source ? `${item.label}\n\nSource: ${item.source}\n\n${item.value}` : `${item.label}\n\n${item.value}`)}
-                        >
-                          ↓ Download
-                        </button>
-                      </div>
-                      {item.source ? <div className="v3-rail-item-sub">Source: {item.source}</div> : null}
-                    </div>
-                  ))}
-                </>
-              ) : (
-                <div className="v3-rail-empty">Import source documents to ground ATOS's analysis. Files are parsed into phase inputs automatically.</div>
-              )}
-              <button type="button" className="v3-button primary v3-button-inline-xs v3-rail-footer-link" onClick={onUploadDocument}>Upload document →</button>
-              <button type="button" className="v3-button ghost v3-button-inline-xs v3-rail-footer-link" onClick={() => onOpenMoreView("documents")}>Manage documents →</button>
-            </div>
-          ) : null}
         </AdamCardBody>
       </AdamCard>
       ) : null}

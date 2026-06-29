@@ -26,7 +26,6 @@ interface ContextDrawerProps {
   pendingTaskCount: number;
   decisions: DecisionSummary[];
   agentsAvailable?: boolean;
-  onUploadDocument: () => void;
   onAnswerQuestion: (taskId: string, answer: string) => Promise<void>;
   onAcknowledgeTask: (taskId: string) => void;
   onRunAgent: (agentId: string) => void;
@@ -48,7 +47,6 @@ export function ContextDrawer({
   pendingTaskCount,
   decisions,
   agentsAvailable = true,
-  onUploadDocument,
   onAnswerQuestion,
   onAcknowledgeTask,
   onRunAgent,
@@ -101,7 +99,6 @@ export function ContextDrawer({
               onOpenDecide={onOpenDecide ?? (() => {})}
               onRunAgent={onRunAgent}
               onOpenMoreView={onOpenMoreView ?? (() => {})}
-              onUploadDocument={onUploadDocument}
               onNavigateToPhaseInputs={onNavigateToPhaseInputs}
               railIntent={railIntent}
             />

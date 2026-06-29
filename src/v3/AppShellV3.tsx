@@ -3461,7 +3461,6 @@ export default function AppShellV3() {
             (decision) => !decision.phaseId || decision.phaseId === activePhaseId,
           )}
           agentsAvailable={authed && isSupabaseConfigured}
-          onUploadDocument={handleUploadDocument}
           onAnswerQuestion={handleAnswerAgentQuestion}
           onAcknowledgeTask={handleAcknowledgeTask}
           onRunAgent={handleRunAgent}
