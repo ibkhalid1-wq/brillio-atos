@@ -333,13 +333,21 @@ function buildSyntheticRaidAlertItems(projectData: any) {
       });
       const headline = sortedEntries.slice(0, 2).map((entry) => entry?.title || entry?.label).filter(Boolean).join(" · ");
       const highestSeverity = sortedEntries.some((entry) => getRaidEntrySeverity(entry) === "critical") ? "critical" : "high";
+      // The group mixes true blockers with high-severity risks; label it by the
+      // actual type breakdown so a high-severity risk is never miscalled a blocker.
+      const blockerCount = entries.filter((entry) => isRaidBlocker(entry)).length;
+      const riskCount = entries.length - blockerCount;
+      const mix = [
+        blockerCount ? `${blockerCount} blocker${blockerCount === 1 ? "" : "s"}` : "",
+        riskCount ? `${riskCount} risk${riskCount === 1 ? "" : "s"}` : "",
+      ].filter(Boolean).join(", ");
       return {
         id: `raid-blockers-${phaseId}`,
         type: "raid_alert" as const,
         phaseId,
         priority: highestSeverity === "critical" ? "critical" : "high",
-        title: `${entries.length} open blocker${entries.length === 1 ? "" : "s"} in ${getPhaseTitle(phaseId)}`,
-        summary: headline || `${entries.length} RAID blocker${entries.length === 1 ? "" : "s"} need attention.`,
+        title: `${mix} open in ${getPhaseTitle(phaseId)}`,
+        summary: headline || `${mix} need attention.`,
         createdAt: getCreatedAt(sortedEntries[0]?.createdAt || sortedEntries[0]?.extractedAt),
         actionLabel: "Open RAID Log",
         dismissable: false,
