@@ -1240,9 +1240,9 @@ export default function StageView({
           // Each carries an `addTab` so the "+ Add" button under it opens the right
           // Action Center add form.
           const work: Array<{ label: string; value: string | number; tone: string; anchor?: string | null; onClick?: () => void; addTab: "blockers" | "risks" | "actions" }> = [
+            { label: "Actions", value: stageDecisions.length, tone: stageDecisions.length ? "amber" : "", onClick: () => (onOpenDecideTab ? onOpenDecideTab("actions") : onOpenDecide()), addTab: "actions" },
             { label: "Blockers", value: phaseBlockerCount, tone: phaseBlockerCount ? "red" : "green", onClick: () => (onOpenDecideTab ? onOpenDecideTab("blockers") : onOpenDecide()), addTab: "blockers" },
             { label: "Risks", value: phaseRiskCount, tone: phaseRiskCount ? "amber" : "", onClick: () => (onOpenDecideTab ? onOpenDecideTab("risks") : onOpenDecide()), addTab: "risks" },
-            { label: "Actions", value: stageDecisions.length, tone: stageDecisions.length ? "amber" : "", onClick: () => (onOpenDecideTab ? onOpenDecideTab("actions") : onOpenDecide()), addTab: "actions" },
           ];
           const renderMetric = (metric: { label: string; value: string | number; tone: string; anchor?: string | null; onClick?: () => void }) => {
             const cls = `v3-phase-metric-value ${metric.tone}`;
@@ -1469,18 +1469,6 @@ export default function StageView({
             </div>
           </details>
         ) : null}
-        {inputQuality ? (
-          <div className={`v3-input-quality-banner ${inputQuality.verdict}`}>
-            <span className={`v3-chip ${inputQuality.verdict === "sufficient" ? "green" : inputQuality.verdict === "partial" ? "amber" : "red"}`}>
-              Input quality {inputQuality.overallScore}%
-            </span>
-            {inputQuality.missingCritical?.length ? (
-              <span className="v3-banner-detail">Missing: {inputQuality.missingCritical.slice(0, 2).join(" · ")}</span>
-            ) : (
-              <span className="v3-banner-detail">Ready: {inputQuality.readyToRun?.join(", ") || "all analysis"}</span>
-            )}
-          </div>
-        ) : null}
         {program && activePhase?.id ? (
           <div id="phase-inputs-anchor">
             <PhaseInputsPanel
@@ -1654,16 +1642,10 @@ export default function StageView({
             ) : null}
           </div>
         ) : null}
-        {phaseArtifacts.required > 0 ? (
-          missingRequiredArtifacts.length ? (
-            <div className="v3-artifact-summary is-missing">
-              <span className="v3-chip amber v3-chip-tight">{missingRequiredArtifacts.length} required missing</span>
-            </div>
-          ) : (
-            <div className="v3-artifact-summary is-complete">
-              <span className="v3-chip green v3-chip-tight">All required produced</span>
-            </div>
-          )
+        {phaseArtifacts.required > 0 && missingRequiredArtifacts.length ? (
+          <div className="v3-artifact-summary is-missing">
+            <span className="v3-chip amber v3-chip-tight">{missingRequiredArtifacts.length} required missing</span>
+          </div>
         ) : null}
         {approvableArtifactCount > 0 && !showApproveAll ? (
           <div className="v3-artifact-approve-hint">

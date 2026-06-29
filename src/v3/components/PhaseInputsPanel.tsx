@@ -8,6 +8,23 @@ import StructuredGrid, { type GridRow, parseRows, serializeRows, filledRowCount 
 import { PROVENANCE_KEY, parseProvenance, provenanceMatches, type FieldProvenance } from "@/new/lib/fieldProvenance";
 import { EXTRACTION_TYPE_COLORS, EXTRACTION_TYPE_LABELS, confidenceLabel } from "@/new/lib/documentIntelligenceTypes";
 
+// Textarea that grows vertically to fit its content so the full value is always
+// visible without an inner scrollbar. Resizes on every value change — including
+// programmatic ones (AI field-assist) — not just on keystrokes.
+function AutoGrowTextarea({
+  value,
+  ...props
+}: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { value: string }) {
+  const ref = useRef<HTMLTextAreaElement | null>(null);
+  React.useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+  return <textarea ref={ref} value={value} {...props} />;
+}
+
 export interface FieldAssistRequest {
   fieldId: string;
   fieldLabel: string;
@@ -830,9 +847,10 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
                     addLabel={`+ Add ${field.label.toLowerCase()}`}
                   />
                 ) : field.type === "textarea" ? (
-                  <textarea
+                  <AutoGrowTextarea
                     className="v3-input v3-textarea"
                     rows={2}
+                    style={{ overflow: "hidden", resize: "none" }}
                     aria-label={field.label}
                     placeholder={field.placeholder}
                     value={values[field.id] ?? ""}
