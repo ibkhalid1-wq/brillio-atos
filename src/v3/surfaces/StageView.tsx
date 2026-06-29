@@ -464,6 +464,7 @@ export default function StageView({
   const [lockedModalOpen, setLockedModalOpen] = React.useState(false);
   const [changeRequestOpen, setChangeRequestOpen] = React.useState(false);
   const [previewArtifact, setPreviewArtifact] = React.useState<{ defId?: string; label: string; description?: string; content: string; score: number | null; statusTone: string } | null>(null);
+  const [showDiscoveryPack, setShowDiscoveryPack] = React.useState(false);
   const [qualityArtifact, setQualityArtifact] = React.useState<{
     label: string;
     defId: string;
@@ -1201,6 +1202,9 @@ export default function StageView({
   const phaseAgentActions: Array<{ key: string; label: React.ReactNode; disabled: boolean; onClick: () => void }> = [];
   if (activePhase.id === "discover") {
     phaseAgentActions.push({ key: "discovery-guide-generator", label: agentButtonContent("discovery-guide-generator", discoveryGuide ? "Re-generate discovery pack" : "Generate discovery pack"), disabled: gateApproved || agentButtonDisabled("discovery-guide-generator"), onClick: () => onRunAgent("discovery-guide-generator") });
+    if (discoveryGuide) {
+      phaseAgentActions.push({ key: "view-discovery-pack", label: "View discovery pack", disabled: false, onClick: () => setShowDiscoveryPack(true) });
+    }
   }
   if (activePhase.id === "build") {
     phaseAgentActions.push({ key: "sprint-planner", label: agentButtonContent("sprint-planner", sprintPlan ? "Re-plan sprints" : "Generate sprint plan"), disabled: gateApproved || agentButtonDisabled("sprint-planner"), onClick: () => onRunAgent("sprint-planner") });
@@ -2015,12 +2019,15 @@ export default function StageView({
             )}
           </div>
         ) : null}
-        {activePhase?.id === "discover" && discoveryGuide ? (
-          <DiscoveryPackPanel pack={discoveryGuide as DiscoveryPack} />
-        ) : null}
       </section>
       </div>
       </div>
+
+      {showDiscoveryPack && discoveryGuide ? (
+        <StageModal title="Discovery pack" onClose={() => setShowDiscoveryPack(false)} maxWidth={720}>
+          <DiscoveryPackPanel pack={discoveryGuide as DiscoveryPack} />
+        </StageModal>
+      ) : null}
 
       {previewArtifact ? (
         <StageModal title={previewArtifact.label} onClose={() => setPreviewArtifact(null)} maxWidth={720}>

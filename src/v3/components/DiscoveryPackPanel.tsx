@@ -5,9 +5,9 @@ import { RelativeTime } from "@/v3/components/ui/RelativeTime";
  * Renders the Discover-phase Discovery Pack (produced by the
  * `discovery-guide-generator` support agent and stored at `inner.discoveryGuide`).
  * The pack is a support artifact, not a gated deliverable, so it never appears in
- * the methodology-driven output strip — this is the surface that makes it
- * visible. Every field is optional AI output, so each section renders only when
- * it carries content.
+ * the methodology-driven output strip — instead it surfaces through the "View
+ * discovery pack" button, which opens this panel in a modal. Every field is
+ * optional AI output, so each section renders only when it carries content.
  */
 
 interface InterviewGuide {
@@ -85,13 +85,10 @@ export default function DiscoveryPackPanel({ pack }: { pack: DiscoveryPack }) {
   const hypotheses = strings(pack.hypotheses);
 
   return (
-    <div className="v3-output-preview" style={{ marginTop: 16 }}>
+    <div>
       <div className="v3-output-preview-head">
-        <div>
-          <div className="v3-output-preview-label">Discovery pack</div>
-          <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 2 }}>
-            Interview guides, workshop agenda, document requests, and hypotheses to run discovery
-          </div>
+        <div style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>
+          Interview guides, workshop agenda, document requests, and hypotheses to run discovery
         </div>
         {pack.generatedAt ? (
           <span style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>
