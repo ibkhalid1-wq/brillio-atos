@@ -45,12 +45,9 @@ const WORKSPACE_GROUPS: Array<{
   {
     label: "Delivery",
     tiles: [
-      // Risks/blockers live in the Action Center (DecideView). The Plan and
-      // Milestones workspaces are the only entry points to the program-level
-      // Delivery Plan / Milestone Review artifacts (they sit outside the
-      // methodology-phase tree, so the Artifact Map doesn't surface them).
-      { view: "plan", label: "Plan", description: "Delivery plan, critical path and next actions", icon: "▤", accent: "blue" },
-      { view: "milestones", label: "Milestones", description: "Milestone schedule, baselines and forecasts", icon: "◆", accent: "blue" },
+      // Risks/blockers live in the Action Center (DecideView). The delivery plan
+      // and milestones are folded into the single Strategic Roadmap artifact, so
+      // they no longer get standalone tiles — the roadmap is the entry point.
       { view: "budget", label: "Budget", description: "Budget tracking, forecasts and variance", icon: "◈", accent: "amber" },
       { view: "scope-pcr", label: "Scope Changes", description: "Scope baseline and change request log", icon: "◫", accent: "amber" },
     ],
