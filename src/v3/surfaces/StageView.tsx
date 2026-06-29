@@ -20,7 +20,7 @@ import { computePhaseReadiness, getLockedPhaseIds } from "@/v3/lib/phaseReadines
 import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
 import { resolveArtifactReview, resolveArtifactQualityScore } from "@/v3/lib/artifactReview";
 import { getPhaseArtifactDefs, type PhaseArtifactDef } from "@/v3/lib/phaseArtifacts";
-import { getArtifactInputFields } from "@/v3/lib/phaseFlowEdges";
+import { getFillableArtifactInputFields } from "@/v3/lib/phaseFlowEdges";
 import { getPhaseInputSchema, resolveRosterField, resolveStakeholderField, ROSTER_PHASE_ID } from "@/v3/lib/phaseInputSchema";
 import { parseRows, serializeRows, type GridRow } from "@/v3/components/StructuredGrid";
 import { readRaciMatrix, raciDeliveryRoles, rosterColumnKeys, missingRosterRoles, stakeholderColumnKeys } from "@/v3/lib/rosterRaci";
@@ -1774,7 +1774,7 @@ export default function StageView({
               // it can be generated — generating against missing upstream inputs
               // produces a thin artifact and burns a ~90s model run. An artifact
               // with no declared input dependencies has nothing to wait on.
-              const flowedFieldIds = getArtifactInputFields(activePhase.id, def.id, dynamicStore);
+              const flowedFieldIds = getFillableArtifactInputFields(activePhase.id, def.id, dynamicStore);
               const phaseFieldDefs = getPhaseInputSchema(activePhase.id, dynamicStore).fields;
               // Only *required* flow inputs gate generation. An optional flow field
               // (e.g. the appetite-level validation approach) still wires the visual

@@ -14,7 +14,7 @@
 import { getPhaseArtifactIds } from "@/v3/lib/phaseArtifacts";
 import { ATOS_STANDARD } from "@/v3/lib/methodology";
 import { canonicalArtifactId, dynamicFieldArtifacts, type DynamicSchemaStore } from "@/v3/lib/dynamicSchema";
-import { resolveStakeholderField, STAKEHOLDER_PHASE_ID } from "@/v3/lib/phaseInputSchema";
+import { getPhaseInputSchema, resolveStakeholderField, STAKEHOLDER_PHASE_ID } from "@/v3/lib/phaseInputSchema";
 
 export interface FlowEdge {
   from: string;
@@ -138,6 +138,22 @@ export function getArtifactInputFields(phaseId: string, artifactId: string, stor
     if (artifacts.includes(artifactId)) fields.add(fieldId);
   }
   return [...fields];
+}
+
+/**
+ * Of the inputs declared to ground an artifact, the subset the user can actually
+ * fill — i.e. that exist as input fields in the phase's rendered schema. The
+ * dynamic schema's `artifactInputFlow` can name owner/lead fields (e.g.
+ * `criticalPathOwner`, `qaLead`) that the roster-owner guardrail drops from the
+ * rendered inputs because they resolve from the Mobilise roster and are never
+ * typed here. Such a field can never be "filled" from the inputs panel, so
+ * gating generation on it would lock the Generate button permanently. Callers
+ * that gate the Generate button (or list inputs to enrich) must use this, not
+ * the raw declared set, so only genuinely fillable inputs can block generation.
+ */
+export function getFillableArtifactInputFields(phaseId: string, artifactId: string, store?: DynamicSchemaStore): string[] {
+  const fieldIds = new Set(getPhaseInputSchema(phaseId, store).fields.map((field) => field.id));
+  return getArtifactInputFields(phaseId, artifactId, store).filter((fieldId) => fieldIds.has(fieldId));
 }
 
 /**

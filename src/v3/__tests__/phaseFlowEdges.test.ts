@@ -1,4 +1,4 @@
-import { derivePhaseFlowEdges, getArtifactInputFields } from "@/v3/lib/phaseFlowEdges";
+import { derivePhaseFlowEdges, getArtifactInputFields, getFillableArtifactInputFields } from "@/v3/lib/phaseFlowEdges";
 import { getPhaseArtifactIds } from "@/v3/lib/phaseArtifacts";
 import { PHASE_INPUT_SCHEMAS } from "@/v3/lib/phaseInputSchema";
 
@@ -95,6 +95,53 @@ describe("getArtifactInputFields", () => {
     const store = { artifactInputFlow: { mobilise: { "governance-model": ["sponsorTier", "raciOwner"] } } };
     expect(new Set(getArtifactInputFields("mobilise", "governance-model", store))).toEqual(
       new Set(["sponsorTier", "raciOwner"]),
+    );
+  });
+});
+
+// A dynamic artifactInputFlow can name owner/lead grounding fields the
+// roster-owner guardrail drops from the rendered inputs (they resolve from the
+// Mobilise roster, never typed). Gating the Generate button on those would lock
+// it permanently — no field can ever fill them. getFillableArtifactInputFields
+// returns only the grounding inputs that exist as fillable fields in the schema.
+describe("getFillableArtifactInputFields", () => {
+  it("drops grounding inputs that have no fillable field in the phase schema", () => {
+    // Mobilise is a purely dynamic phase (no static schema/flow), so the only
+    // grounding comes from the store. The planner wired the artifact to two
+    // owner/lead fields (roster-resolved, dropped from the rendered inputs) plus
+    // one genuinely typed input.
+    const store = {
+      inputFields: {
+        mobilise: [
+          { id: "governanceCadence", label: "Governance cadence", type: "textarea" as const, required: true },
+        ],
+      },
+      artifacts: {
+        mobilise: [{ id: "governance-model", label: "Governance Model", description: "" }],
+      },
+      artifactInputFlow: {
+        mobilise: { "governance-model": ["criticalPathOwner", "qaLead", "governanceCadence"] },
+      },
+    };
+    // Raw declared set includes the roster-resolved owner/lead fields…
+    expect(new Set(getArtifactInputFields("mobilise", "governance-model", store))).toEqual(
+      new Set(["criticalPathOwner", "qaLead", "governanceCadence"]),
+    );
+    // …but only the genuinely fillable field gates generation.
+    expect(getFillableArtifactInputFields("mobilise", "governance-model", store)).toEqual(["governanceCadence"]);
+  });
+
+  it("returns nothing to gate when every grounding input is roster-resolved", () => {
+    const store = {
+      artifacts: { mobilise: [{ id: "governance-model", label: "Governance Model", description: "" }] },
+      artifactInputFlow: { mobilise: { "governance-model": ["criticalPathOwner", "qaLead"] } },
+    };
+    expect(getFillableArtifactInputFields("mobilise", "governance-model", store)).toEqual([]);
+  });
+
+  it("keeps real static fields (parity with the declared set on a static phase)", () => {
+    expect(new Set(getFillableArtifactInputFields("strategy", "charter"))).toEqual(
+      new Set(getArtifactInputFields("strategy", "charter")),
     );
   });
 });
