@@ -25,18 +25,26 @@ export function useMilestones(
     const nested = asRecord(wrapper.data);
     const usesNestedData = Object.keys(nested).length > 0;
     const inner = usesNestedData ? nested : wrapper;
-    const milestones = Array.isArray(inner.milestones) ? inner.milestones as Milestone[] : [];
-    return { wrapper, inner, milestones, usesNestedData };
+    // Tracked milestones are folded into the Strategic Roadmap container; fall
+    // back to the legacy top-level array for programs written before the fold.
+    const roadmap = asRecord(inner.strategicRoadmap);
+    const milestones = (Array.isArray(roadmap.milestones)
+      ? roadmap.milestones
+      : Array.isArray(inner.milestones) ? inner.milestones : []) as Milestone[];
+    return { wrapper, inner, roadmap, milestones, usesNestedData };
   }, [rawData]);
 
   const persistMilestones = useCallback(async (updatedMilestones: Milestone[]) => {
     if (!isSupabaseConfigured || !supabase || !programId) throw new Error("Not configured.");
     setIsSaving(true);
     try {
-      const { wrapper, inner, usesNestedData } = getMilestoneState();
+      const { wrapper, inner, roadmap, usesNestedData } = getMilestoneState();
       const nextInner = {
         ...inner,
-        milestones: updatedMilestones,
+        strategicRoadmap: {
+          ...roadmap,
+          milestones: updatedMilestones,
+        },
       };
       const payload = usesNestedData
         ? {

@@ -174,6 +174,7 @@ function derivePhases(data: JsonRecord): PhaseSummary[] {
   const hasAgentOutput = Boolean(
     asString(data.narrative) ||
     asRecord(data.plan).nextThreeActions ||
+    asRecord(asRecord(data.strategicRoadmap).deliveryPlan).nextThreeActions ||
     asRecord(data.deck).programHealthSummary,
   );
 
@@ -253,6 +254,10 @@ function deriveArtifacts(data: JsonRecord): ArtifactSummary[] {
   Object.entries(phaseArtifacts).forEach(([phaseId, artifactBucket]) => {
     const artifactRecord = asRecord(artifactBucket);
     Object.entries(artifactRecord).forEach(([artifactId, artifactValue]) => {
+      // Delivery Plan and Milestone Review are folded into the single Strategic
+      // Roadmap artifact — drop any legacy standalone ledger entries so they no
+      // longer surface as separate artifacts (or trigger not-baselined flags).
+      if (artifactId === "plan" || artifactId === "milestone") return;
       const entry = asRecord(artifactValue);
       const title = asString(entry.title, artifactId.replace(/_/g, " "));
       const status = asString(entry.status, "draft");
@@ -451,7 +456,11 @@ function deriveRAIDEntries(data: JsonRecord): RAIDEntry[] {
 }
 
 function deriveMilestones(data: JsonRecord): Milestone[] {
-  return asArray(data.milestones)
+  // Tracked milestones are folded into the Strategic Roadmap; fall back to the
+  // legacy top-level array for programs last written before the fold.
+  const roadmap = asRecord(data.strategicRoadmap);
+  const source = asArray(roadmap.milestones).length ? asArray(roadmap.milestones) : asArray(data.milestones);
+  return source
     .map((entry) => asRecord(entry))
     .filter((entry) => asString(entry.id).length > 0 && asString(entry.title).length > 0)
     .map((entry): Milestone => {
@@ -1056,8 +1065,14 @@ export function normalizeProgram(row: ProgramRowLike): ProgramSummary {
   const narrative = asString(innerData.narrative, "");
   const narrativeGeneratedAt = asString(innerData.narrativeGeneratedAt, "");
   const narrativeConfidenceValue = asNumber(innerData.narrativeConfidence, Number.NaN);
-  const plan = innerData.plan && typeof innerData.plan === "object" && !Array.isArray(innerData.plan)
-    ? innerData.plan as unknown as PlanSummary
+  // The delivery plan is folded into the Strategic Roadmap (strategicRoadmap.deliveryPlan);
+  // fall back to the legacy top-level plan for programs last written before the fold.
+  const roadmapContainer = asRecord(innerData.strategicRoadmap);
+  const planSource = roadmapContainer.deliveryPlan && typeof roadmapContainer.deliveryPlan === "object" && !Array.isArray(roadmapContainer.deliveryPlan)
+    ? roadmapContainer.deliveryPlan
+    : innerData.plan;
+  const plan = planSource && typeof planSource === "object" && !Array.isArray(planSource)
+    ? planSource as unknown as PlanSummary
     : null;
   const planGeneratedAt = asString(innerData.planGeneratedAt, "");
   const planConfidenceValue = asNumber(innerData.planConfidence, Number.NaN);

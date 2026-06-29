@@ -2100,10 +2100,23 @@ function applyBoardPackResultToProgramData(programData: ProgramState, result: Re
   }));
 }
 
+/**
+ * The Strategic Roadmap is the single folded delivery artifact: phase sequencing
+ * (from the strategic-roadmap agent) plus the delivery plan (`deliveryPlan`) and
+ * tracked milestones (`milestones`) folded in from the plan / milestone agents.
+ * Returns a shallow copy of the existing container so callers can merge in one key
+ * without clobbering the others.
+ */
+function getStrategicRoadmapContainer(inner: ProgramState): Record<string, JsonValue> {
+  return isRecord(inner.strategicRoadmap) ? { ...(inner.strategicRoadmap as Record<string, JsonValue>) } : {};
+}
+
 function applyPlanResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
   return updateInnerProgramData(programData, (inner) => ({
     ...inner,
-    plan: isRecord(result.plan) ? (() => {
+    strategicRoadmap: {
+      ...getStrategicRoadmapContainer(inner),
+      deliveryPlan: isRecord(result.plan) ? (() => {
       const p = result.plan as Record<string, unknown>;
       return {
         summary: typeof p.summary === "string" ? p.summary : "",
@@ -2135,7 +2148,8 @@ function applyPlanResultToProgramData(programData: ProgramState, result: Record<
         })) : [],
         confidence: typeof p.confidence === "number" ? Math.max(0, Math.min(1, p.confidence)) : 0.5,
       } as JsonValue;
-    })() : null,
+      })() : (getStrategicRoadmapContainer(inner).deliveryPlan ?? null),
+    } as JsonValue,
     planGeneratedAt: typeof result.planGeneratedAt === "string" ? result.planGeneratedAt : new Date().toISOString(),
     planConfidence: typeof result.confidence === "number"
       ? Math.max(0, Math.min(1, result.confidence))
@@ -2343,9 +2357,15 @@ function applyCapacityRiskToProgramData(
 
 function applyMilestoneResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
   return updateInnerProgramData(programData, (inner) => {
-    const existingMilestones = Array.isArray(inner.milestones)
-      ? inner.milestones.filter(isRecord)
-      : [];
+    const roadmap = getStrategicRoadmapContainer(inner);
+    // Tracked milestones are folded into the Strategic Roadmap; fall back to the
+    // legacy top-level array for programs last written before the fold.
+    const milestoneSource = Array.isArray(roadmap.milestones)
+      ? roadmap.milestones
+      : Array.isArray(inner.milestones)
+        ? inner.milestones
+        : [];
+    const existingMilestones = milestoneSource.filter(isRecord);
     const humanMilestones = existingMilestones.filter((entry) => entry.source === "human");
     const agentMilestones = Array.isArray(result.milestones)
       ? result.milestones
@@ -2379,7 +2399,10 @@ function applyMilestoneResultToProgramData(programData: ProgramState, result: Re
 
     return {
       ...inner,
-      milestones: [...dedupedHuman, ...agentMilestones],
+      strategicRoadmap: {
+        ...roadmap,
+        milestones: [...dedupedHuman, ...agentMilestones] as JsonValue,
+      } as JsonValue,
       milestonesGeneratedAt: new Date().toISOString(),
     };
   });
@@ -2411,7 +2434,8 @@ function applyBudgetResultToProgramData(programData: ProgramState, result: Recor
 
 function applyCriticalPathResultToProgramData(programData: ProgramState, result: Record<string, unknown> | null): ProgramState {
   return updateInnerProgramData(programData, (inner) => {
-    const plan = isRecord(inner.plan) ? inner.plan : null;
+    const roadmap = getStrategicRoadmapContainer(inner);
+    const plan = isRecord(roadmap.deliveryPlan) ? roadmap.deliveryPlan as Record<string, JsonValue> : null;
     const sequence = isRecord(result) && Array.isArray(result.sequence)
       ? result.sequence.filter(isRecord).map((entry) => ({
           phaseId: typeof entry.phaseId === "string" ? entry.phaseId : "",
@@ -2444,12 +2468,15 @@ function applyCriticalPathResultToProgramData(programData: ProgramState, result:
       ...inner,
       criticalPath: criticalPathData as JsonValue,
       criticalPathGeneratedAt: new Date().toISOString(),
-      plan: plan
+      strategicRoadmap: plan
         ? {
-            ...plan,
-            criticalPath: sequenceIds,
+            ...roadmap,
+            deliveryPlan: {
+              ...plan,
+              criticalPath: sequenceIds as JsonValue,
+            } as JsonValue,
           } as JsonValue
-        : inner.plan,
+        : inner.strategicRoadmap,
     };
   });
 }
@@ -3290,9 +3317,10 @@ function buildDefaultHandoff(
  */
 const REQUIRED_ARTIFACT_LABELS: Record<string, string> = {
   narrative: "Phase Narrative",
-  plan: "Delivery Plan",
+  // Delivery Plan and Milestone Review are no longer standalone ledger artifacts:
+  // both are folded into the single Strategic Roadmap artifact (their data lives
+  // under strategicRoadmap.deliveryPlan / strategicRoadmap.milestones).
   risk: "Risk Register",
-  milestone: "Milestone Review",
   budget: "Budget Report",
   "critical-path": "Critical Path",
   "change-impact": "Change Impact",
@@ -7123,7 +7151,24 @@ Deno.serve(async (req) => {
           inputSnapshot,
           generatedAt: new Date().toISOString(),
         };
-        nextProgramData = applyProgramSupportArtifact(contextProgramData, spec.phase, request.agentId, spec.fieldKey, result, spec.title, generationMetadata, confidence);
+        // The Strategic Roadmap is the single folded delivery artifact: its
+        // container also carries the delivery plan (deliveryPlan) and tracked
+        // milestones (milestones) written by the plan / milestone agents.
+        // Regenerating the roadmap sequencing must not wipe that folded data.
+        let formalResult: Record<string, unknown> = result;
+        if (request.agentId === "strategic-roadmap") {
+          const prevRoadmap = getInnerProgramData(contextProgramData).strategicRoadmap;
+          if (isRecord(prevRoadmap)) {
+            formalResult = { ...result };
+            if (formalResult.deliveryPlan === undefined && prevRoadmap.deliveryPlan !== undefined) {
+              formalResult.deliveryPlan = prevRoadmap.deliveryPlan;
+            }
+            if (formalResult.milestones === undefined && prevRoadmap.milestones !== undefined) {
+              formalResult.milestones = prevRoadmap.milestones;
+            }
+          }
+        }
+        nextProgramData = applyProgramSupportArtifact(contextProgramData, spec.phase, request.agentId, spec.fieldKey, formalResult, spec.title, generationMetadata, confidence);
       }
 
       // Surface structured agent output in the artifact ledger. The UI artifact

@@ -193,12 +193,18 @@ function formatDueStatusLabel(value: any) {
 }
 
 function getProjectPlan(projectData: any) {
+  // The delivery plan is folded into the Strategic Roadmap container; fall back
+  // to the legacy top-level plan for programs written before the fold.
+  const roadmap = projectData?.strategicRoadmap ?? projectData?.data?.strategicRoadmap;
+  if (roadmap?.deliveryPlan && typeof roadmap.deliveryPlan === "object") return roadmap.deliveryPlan;
   if (projectData?.plan && typeof projectData.plan === "object") return projectData.plan;
   if (projectData?.data?.plan && typeof projectData.data.plan === "object") return projectData.data.plan;
   return null;
 }
 
 function getProjectMilestones(projectData: any) {
+  const roadmap = projectData?.strategicRoadmap ?? projectData?.data?.strategicRoadmap;
+  if (Array.isArray(roadmap?.milestones) && roadmap.milestones.length) return roadmap.milestones;
   if (Array.isArray(projectData?.milestones) && projectData.milestones.length) return projectData.milestones;
   if (Array.isArray(projectData?.mobilise?.workplan?.milestones)) return projectData.mobilise.workplan.milestones;
   return [];
