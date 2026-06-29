@@ -172,7 +172,7 @@ export function computeConfidenceScore(inputs: {
           : `Risk posture score: ${inputs.riskPosture}%.`,
       topAction:
         inputs.riskPosture < 75 && inputs.openCriticalRisks
-          ? `Mitigate or close ${inputs.openCriticalRisks} critical risk(s) in the Risk workspace.`
+          ? `Mitigate or close ${inputs.openCriticalRisks} critical risk(s) in the Action Center (Risks).`
           : undefined,
     },
     {
@@ -185,12 +185,12 @@ export function computeConfidenceScore(inputs: {
       explanation:
         inputs.milestonesAtRisk !== undefined
           ? inputs.milestonesAtRisk > 0
-            ? `${inputs.milestonesAtRisk} milestone(s) are overdue or at risk.`
+            ? `${inputs.milestonesAtRisk} milestone(s) are at risk or delayed.`
             : "All tracked milestones are on track."
           : `Milestone health: ${inputs.milestoneHealth}%.`,
       topAction:
         inputs.milestoneHealth < 75 && inputs.milestonesAtRisk
-          ? "Review and update overdue milestones in the Milestones workspace."
+          ? "Review and update at-risk milestones in the Strategic Roadmap workspace."
           : undefined,
     },
     {
@@ -209,8 +209,8 @@ export function computeConfidenceScore(inputs: {
       topAction:
         inputs.openDecisionCount > 0
           ? inputs.overdueDecisions && inputs.overdueDecisions > 0
-            ? `Resolve ${inputs.overdueDecisions} overdue decision(s) in the Decision Queue.`
-            : "Resolve open decisions in the Decision Queue to reduce backlog penalty."
+            ? `Resolve ${inputs.overdueDecisions} overdue decision(s) in the Action Center.`
+            : "Resolve open decisions in the Action Center to reduce backlog penalty."
           : undefined,
     },
     {
