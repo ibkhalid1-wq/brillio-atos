@@ -75,7 +75,7 @@ interface StageViewProps {
   programSnapshots?: Array<{ id: string; label: string; kind: string; createdAt: string }>;
   onUploadDocument: () => void;
   /** Attach (or reattach) a document to a specific artifact slot in a phase. */
-  onAttachArtifact?: (phaseId: string, artifactId: string) => void;
+  onAttachArtifact?: (phaseId: string, defId: string, label: string, agentId: string) => void;
   /** Delete an attached document artifact from a phase. */
   onDeleteArtifact?: (phaseId: string, artifactId: string, defId: string) => Promise<void> | void;
   onAssistField?: (phaseId: string, request: FieldAssistRequest) => Promise<string>;
@@ -1929,8 +1929,8 @@ export default function StageView({
                 onRecommend: () => { setApplyError(null); setImprovementsApplied(false); setQualityArtifact({ label: def.label, defId: def.id, score: displayScore, issues: qualityIssues, phaseId: activePhase.id, fields: qualityFields, improvements: (review?.improvements ?? []).filter((s) => !!s && s.trim()), readOnly: isAttached }); },
                 onGenerate: () => onRunAgent(generatorAgentId, activePhase.id, regenGuidance),
                 onUnlock: () => { if (artifactId) void onUnapproveArtifact(activePhase.id, artifactId); },
-                onAttach: () => onAttachArtifact?.(activePhase.id, def.id),
-                onReattach: () => onAttachArtifact?.(activePhase.id, def.id),
+                onAttach: () => onAttachArtifact?.(activePhase.id, def.id, def.label, generatorAgentId),
+                onReattach: () => onAttachArtifact?.(activePhase.id, def.id, def.label, generatorAgentId),
                 onDelete: () => { if (artifactId) void onDeleteArtifact?.(activePhase.id, artifactId, def.id); },
               };
               return <ArtifactCard key={def.id} model={cardModel} handlers={cardHandlers} />;

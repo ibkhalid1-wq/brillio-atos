@@ -68,6 +68,8 @@ import { computePhaseReadiness, getLockedPhaseIds } from "@/v3/lib/phaseReadines
 import { confidenceRag, getGateThreshold } from "@/v3/lib/confidenceScore";
 import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
 import { artifactReviewFieldKey } from "@/v3/lib/artifactReview";
+import { deriveAttachedArtifactReview, buildAttachedArtifactPatch } from "@/v3/lib/attachedArtifact";
+import type { DocumentIntelligence } from "@/new/lib/documentIntelligenceTypes";
 import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
 import { selectOpenEscalations } from "@/v3/lib/programRaid";
 import { buildFieldAssistPrompt, sanitiseFieldReply } from "@/v3/lib/fieldAssist";
@@ -1108,8 +1110,9 @@ export default function AppShellV3() {
   const [activeMode, setActiveMode] = useState<V3CommandMode>(surfaceToCommandMode(initialRoute.surface));
   const [moreView, setMoreView] = useState<V3MoreView | null>(initialRoute.moreView);
   // Artifact slot a pending document attach targets (set by the per-artifact
-  // Attach action, consumed by the documents import surface).
-  const [attachTarget, setAttachTarget] = useState<{ phaseId: string; defId: string } | null>(null);
+  // Attach action, consumed by the hidden file input's change handler).
+  const attachTargetRef = useRef<{ phaseId: string; defId: string; label: string; agentId: string } | null>(null);
+  const attachFileInputRef = useRef<HTMLInputElement>(null);
   const [decideIntent, setDecideIntent] = useState<{ tab: "blockers" | "risks" | "actions"; nonce: number; openAdd?: boolean } | null>(null);
   const [reportId, setReportId] = useState<V3ReportId | null>(initialRoute.reportId);
   const [activePhaseId, setActivePhaseId] = useState<string | null>(initialRoute.activePhaseId);
@@ -2542,13 +2545,80 @@ export default function AppShellV3() {
   }, [openMoreView]);
 
   // Attach a real document to a specific artifact slot, in place of generating it.
-  // For now this routes to the documents import surface (where the user picks the
-  // file); the per-slot soft-archive + AI-validate pipeline lands on the import
-  // side. Recording the intended target lets the importer attach to this slot.
-  const handleAttachArtifact = useCallback((phaseId: string, defId: string) => {
-    setAttachTarget({ phaseId, defId });
-    openMoreView("documents");
-  }, [openMoreView]);
+  // Records the target slot, then opens the native file picker; the file-change
+  // handler runs the AI-validate + write pipeline. The document becomes the slot's
+  // source of truth (origin "uploaded"), replacing any generated body.
+  const handleAttachArtifact = useCallback((phaseId: string, defId: string, label: string, agentId: string) => {
+    if (!isSupabaseConfigured || !supabase) {
+      pushV3Toast("Attaching a document needs a connected workspace.", { tone: "warning", duration: 3500 });
+      return;
+    }
+    attachTargetRef.current = { phaseId, defId, label, agentId };
+    attachFileInputRef.current?.click();
+  }, []);
+
+  // File-change handler for the per-artifact attach: AI-validate the picked file
+  // via document-intelligence, snapshot for reversibility, then clear-on-attach and
+  // write the uploaded document + its quality review into the slot.
+  const handleAttachFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const input = event.target;
+    const file = input.files?.[0];
+    const target = attachTargetRef.current;
+    // Always reset the input so re-picking the same file fires change again.
+    input.value = "";
+    if (!file || !target || !activeProgram || !supabase) return;
+    pushV3Toast(`Attaching “${file.name}” to ${target.label} — validating…`, { tone: "info", duration: 3000 });
+    try {
+      const AI_NATIVE = new Set(["application/pdf", "image/png", "image/jpeg", "image/webp", "image/gif"]);
+      let fileAttachment: { base64: string; mimeType: string; name: string } | undefined;
+      let text = "";
+      if (AI_NATIVE.has(file.type)) {
+        const buffer = await file.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        let binary = "";
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+        fileAttachment = { base64: btoa(binary), mimeType: file.type, name: file.name };
+      } else {
+        text = await file.text();
+      }
+      const invoked = await supabase.functions.invoke("document-intelligence", {
+        body: {
+          programId: activeProgram.id,
+          text: text || undefined,
+          fileName: file.name,
+          fileAttachment,
+          phaseHint: target.phaseId,
+        },
+      });
+      if (invoked.error) throw new Error(invoked.error.message || "Validation failed.");
+      const response = invoked.data as { ok?: boolean; intelligence?: DocumentIntelligence; error?: string };
+      if (!response?.ok || !response.intelligence) throw new Error(response?.error || "The document could not be read.");
+      const intel = response.intelligence;
+
+      // Snapshot first so the attach (which clears the generated body) is reversible.
+      await handleSaveProgramSnapshot(`Before attaching to ${target.defId}`, "manual");
+
+      const review = deriveAttachedArtifactReview(intel);
+      const cloned = cloneRawProgram(activeProgram);
+      const nextInner = buildAttachedArtifactPatch(cloned.inner, {
+        phaseId: target.phaseId,
+        defId: target.defId,
+        label: target.label,
+        agentId: target.agentId,
+        fileName: file.name,
+        review,
+        summary: intel.summary ?? "",
+        content: text || intel.summary || "",
+      });
+      await updateProgramData(activeProgram.id, cloned.commit(nextInner), activeProgram.updatedAt);
+      await refreshPrograms();
+      pushV3Toast(`Attached “${file.name}” to ${target.label} — quality ${review.score}%. Snapshot saved.`, { tone: "success", duration: 4500 });
+    } catch (err) {
+      pushV3Toast(err instanceof Error ? err.message : "Failed to attach the document.", { tone: "error", duration: 5000 });
+    } finally {
+      attachTargetRef.current = null;
+    }
+  }, [activeProgram, handleSaveProgramSnapshot, refreshPrograms, updateProgramData]);
 
   // Remove an attached document from an artifact slot. Soft-archive first (a
   // restorable snapshot), then atomically clear the artifact ledger entry and its
@@ -3117,6 +3187,13 @@ export default function AppShellV3() {
 
   return (
     <div className="v3-shell v3-shell--command">
+      <input
+        ref={attachFileInputRef}
+        type="file"
+        accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.txt,.md,.csv,.json,.docx"
+        style={{ display: "none" }}
+        onChange={handleAttachFileChange}
+      />
       <CommandRail
         activeSurface={surface}
         moreView={moreView}
