@@ -103,19 +103,103 @@ export function buildMethodologyPhaseSchedule(
   return buildPhaseSchedule(startDate, targetEndDate, phases);
 }
 
+export type RagStatus = "green" | "amber" | "red" | "grey";
+
+/** Per-phase health the roadmap-health agent maintains on top of the schedule. */
+export interface PhaseHealth {
+  /** Actual completion 0–100. */
+  progressPct?: number;
+  rag?: RagStatus;
+  /** Headline risk for the phase, if any. */
+  risk?: string | null;
+}
+
+function unwrapInner(rawData: unknown): Record<string, unknown> {
+  if (typeof rawData !== "object" || rawData === null) return {};
+  const record = rawData as Record<string, unknown>;
+  return "data" in record && typeof record.data === "object" && record.data !== null
+    ? record.data as Record<string, unknown>
+    : record;
+}
+
+/**
+ * Pull agent-maintained per-phase health, keyed by phaseId. The roadmap-health
+ * agent folds `phaseHealth` into the strategicRoadmap container; we fall back to
+ * the legacy top-level `healthHeatmap.phaseHealth` for programs written before
+ * that fold so older roadmaps still colour in.
+ */
+function readPhaseHealth(inner: Record<string, unknown>): Map<string, PhaseHealth> {
+  const map = new Map<string, PhaseHealth>();
+  const roadmap = typeof inner.strategicRoadmap === "object" && inner.strategicRoadmap !== null
+    ? inner.strategicRoadmap as Record<string, unknown>
+    : {};
+  const heatmap = typeof inner.healthHeatmap === "object" && inner.healthHeatmap !== null
+    ? inner.healthHeatmap as Record<string, unknown>
+    : {};
+  const source = Array.isArray(roadmap.phaseHealth)
+    ? roadmap.phaseHealth
+    : Array.isArray(heatmap.phaseHealth) ? heatmap.phaseHealth : [];
+  for (const entry of source) {
+    if (typeof entry !== "object" || entry === null) continue;
+    const e = entry as Record<string, unknown>;
+    const id = typeof e.phaseId === "string" ? e.phaseId : null;
+    if (!id) continue;
+    const rag = typeof e.rag === "string" && ["green", "amber", "red", "grey"].includes(e.rag)
+      ? e.rag as RagStatus : undefined;
+    const progressPct = typeof e.progressPct === "number" ? e.progressPct : undefined;
+    const risk = typeof e.topRisk === "string" ? e.topRisk : (typeof e.risk === "string" ? e.risk : null);
+    map.set(id, { progressPct, rag, risk });
+  }
+  return map;
+}
+
+/** Completed/total milestone ratio per phase → progress %, for the client fallback. */
+function readMilestoneProgress(inner: Record<string, unknown>): Map<string, number> {
+  const roadmap = typeof inner.strategicRoadmap === "object" && inner.strategicRoadmap !== null
+    ? inner.strategicRoadmap as Record<string, unknown>
+    : {};
+  const milestones = Array.isArray(roadmap.milestones)
+    ? roadmap.milestones
+    : Array.isArray(inner.milestones) ? inner.milestones : [];
+  const counts = new Map<string, { done: number; total: number }>();
+  for (const m of milestones) {
+    if (typeof m !== "object" || m === null) continue;
+    const rec = m as Record<string, unknown>;
+    const phaseId = typeof rec.phaseId === "string" ? rec.phaseId : null;
+    if (!phaseId) continue;
+    const c = counts.get(phaseId) ?? { done: 0, total: 0 };
+    c.total += 1;
+    if (rec.status === "complete") c.done += 1;
+    counts.set(phaseId, c);
+  }
+  const progress = new Map<string, number>();
+  for (const [id, c] of counts) progress.set(id, c.total ? Math.round((c.done / c.total) * 100) : 0);
+  return progress;
+}
+
+/** Schedule-aware RAG when the agent hasn't supplied one (compares actual vs expected progress). */
+function deriveRag(progressPct: number, startMs: number, endMs: number, todayMs: number): RagStatus {
+  if (startMs > todayMs) return "grey";
+  if (progressPct >= 100) return "green";
+  if (todayMs > endMs) return "red";
+  const expected = Math.max(0, Math.min(1, (todayMs - startMs) / Math.max(1, endMs - startMs))) * 100;
+  const gap = expected - progressPct;
+  if (gap <= 5) return "green";
+  if (gap <= 20) return "amber";
+  return "red";
+}
+
 /**
  * Build the strategic-roadmap timeline rows for a program: the deterministic
  * window split (programme start → target end, weighted by each phase's typical
  * duration) with any saved manual date edits (the top-level `roadmapSchedule`
- * override) winning per phase. Shared by the strategy-stage artifact preview and
- * the standalone Roadmap workspace so both render identical timelines.
+ * override) winning per phase. Each row is enriched with agent-maintained health
+ * (progress %, RAG, top risk), falling back to milestone-completion progress and
+ * a schedule-vs-today RAG when the agent hasn't run yet. Shared by the
+ * strategy-stage artifact preview and the Roadmap workspace.
  */
 export function buildRoadmapRows(rawData: unknown, phases: Array<{ id: string }>): GanttRow[] {
-  const raw = typeof rawData === "object" && rawData !== null
-    ? ("data" in rawData && typeof (rawData as Record<string, unknown>).data === "object" && (rawData as Record<string, unknown>).data !== null
-      ? (rawData as Record<string, unknown>).data as Record<string, unknown>
-      : rawData as Record<string, unknown>)
-    : {};
+  const raw = unwrapInner(rawData);
   const phaseInputs = raw.phaseInputs;
   const strategyInputs = typeof phaseInputs === "object" && phaseInputs !== null
     ? (phaseInputs as Record<string, unknown>).strategy as Record<string, unknown> | undefined
@@ -131,6 +215,9 @@ export function buildRoadmapRows(rawData: unknown, phases: Array<{ id: string }>
   const overrides = typeof overrideRaw === "object" && overrideRaw !== null
     ? overrideRaw as Record<string, { start?: unknown; end?: unknown }>
     : {};
+  const health = readPhaseHealth(raw);
+  const milestoneProgress = readMilestoneProgress(raw);
+  const todayMs = parseUtcDay(new Date().toISOString().slice(0, 10)) ?? Date.now();
   const rows: GanttRow[] = [];
   for (const p of phases) {
     const ov = overrides[p.id];
@@ -138,7 +225,20 @@ export function buildRoadmapRows(rawData: unknown, phases: Array<{ id: string }>
     const start = typeof ov?.start === "string" ? ov.start : def?.start;
     const end = typeof ov?.end === "string" ? ov.end : def?.end;
     if (!start || !end) continue;
-    rows.push({ id: p.id, name: getPhaseDefinition(p.id)?.displayName ?? p.id, start, end });
+    const h = health.get(p.id);
+    const progressPct = h?.progressPct ?? milestoneProgress.get(p.id) ?? 0;
+    const startMs = parseUtcDay(start) ?? todayMs;
+    const endMs = parseUtcDay(end) ?? todayMs;
+    const rag = h?.rag ?? deriveRag(progressPct, startMs, endMs, todayMs);
+    rows.push({
+      id: p.id,
+      name: getPhaseDefinition(p.id)?.displayName ?? p.id,
+      start,
+      end,
+      progressPct,
+      rag,
+      risk: h?.risk ?? null,
+    });
   }
   return rows;
 }
@@ -153,12 +253,20 @@ export interface GanttRow {
   start: string;
   /** ISO yyyy-mm-dd. */
   end: string;
+  /** Actual completion 0–100 (agent-maintained, or milestone-derived). */
+  progressPct?: number;
+  /** Health status (agent-maintained, or schedule-vs-today derived). */
+  rag?: RagStatus;
+  /** Headline risk for the phase, if any. */
+  risk?: string | null;
 }
 
 /** A row positioned on the timeline as percentages of the chart's full width. */
 export interface GanttBar extends GanttRow {
   offsetPct: number;
   widthPct: number;
+  /** Where 'today' falls inside this phase's own window, 0–100; null when today is outside it. */
+  expectedPct: number | null;
 }
 
 /** A month gridline / axis label, positioned as a percentage of chart width. */
@@ -211,10 +319,14 @@ export function layoutGantt(rows: GanttRow[]): GanttLayout | null {
   const totalMs = rangeEndMs - rangeStartMs;
   if (totalMs <= 0) return null;
 
+  const todayMs = parseUtcDay(new Date().toISOString().slice(0, 10));
   const bars: GanttBar[] = parsed.map(({ row, start, end }) => ({
     ...row,
     offsetPct: ((start - rangeStartMs) / totalMs) * 100,
     widthPct: ((end - start) / totalMs) * 100,
+    expectedPct: todayMs !== null && todayMs >= start && todayMs <= end
+      ? ((todayMs - start) / Math.max(1, end - start)) * 100
+      : null,
   }));
 
   const months: GanttMonthTick[] = [];

@@ -209,32 +209,46 @@ export default function RoadmapGantt({ rows, editable = false, onChange }: Roadm
             </span>
           ) : null}
         </div>
-        {layout.bars.map((bar) => (
-          <div className="v3-gantt-row" key={bar.id}>
-            <span className="v3-gantt-label" title={bar.name}>{bar.name}</span>
-            <div className="v3-gantt-track">
-              <div
-                className={`v3-gantt-bar${editable ? " is-editable" : ""}${drag?.id === bar.id ? " is-dragging" : ""}`}
-                style={{ left: `${bar.offsetPct}%`, width: `${bar.widthPct}%` }}
-                title={`${bar.name}: ${bar.start} → ${bar.end}`}
-                onPointerDown={editable ? (e) => onPointerDown(e, bar, "move") : undefined}
-              >
-                {editable ? (
-                  <span
-                    className="v3-gantt-handle start"
-                    onPointerDown={(e) => onPointerDown(e, bar, "resize-start")}
-                  />
-                ) : null}
-                {editable ? (
-                  <span
-                    className="v3-gantt-handle end"
-                    onPointerDown={(e) => onPointerDown(e, bar, "resize-end")}
-                  />
-                ) : null}
+        {layout.bars.map((bar) => {
+          const progress = Math.max(0, Math.min(100, bar.progressPct ?? 0));
+          const rag = bar.rag ?? "grey";
+          return (
+            <div className="v3-gantt-row" key={bar.id}>
+              <span className="v3-gantt-label" title={bar.name}>
+                <span className={`v3-gantt-dot rag-${rag}`} aria-hidden="true" />
+                {bar.name}
+              </span>
+              <div className="v3-gantt-track">
+                <div
+                  className={`v3-gantt-bar${editable ? " is-editable" : ""}${drag?.id === bar.id ? " is-dragging" : ""}`}
+                  data-rag={rag}
+                  style={{ left: `${bar.offsetPct}%`, width: `${bar.widthPct}%` }}
+                  title={`${bar.name}: ${bar.start} → ${bar.end} · ${progress}% complete${bar.risk ? ` · ⚠ ${bar.risk}` : ""}`}
+                  onPointerDown={editable ? (e) => onPointerDown(e, bar, "move") : undefined}
+                >
+                  <span className="v3-gantt-fill" style={{ width: `${progress}%` }} aria-hidden="true" />
+                  {bar.expectedPct != null ? (
+                    <span className="v3-gantt-expected" style={{ left: `${bar.expectedPct}%` }} aria-hidden="true" />
+                  ) : null}
+                  {progress > 12 ? <span className="v3-gantt-pct">{progress}%</span> : null}
+                  {bar.risk ? <span className="v3-gantt-risk" title={bar.risk} aria-hidden="true">⚠</span> : null}
+                  {editable ? (
+                    <span
+                      className="v3-gantt-handle start"
+                      onPointerDown={(e) => onPointerDown(e, bar, "resize-start")}
+                    />
+                  ) : null}
+                  {editable ? (
+                    <span
+                      className="v3-gantt-handle end"
+                      onPointerDown={(e) => onPointerDown(e, bar, "resize-end")}
+                    />
+                  ) : null}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Precise date editors — one row per phase */}
