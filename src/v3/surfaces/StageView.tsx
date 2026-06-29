@@ -1088,7 +1088,7 @@ export default function StageView({
   if (activePhase.id === "build") {
     phaseAgentActions.push({ key: "sprint-planner", label: agentButtonContent("sprint-planner", sprintPlan ? "Re-plan sprints" : "Generate sprint plan"), disabled: gateApproved || agentButtonDisabled("sprint-planner"), onClick: () => onRunAgent("sprint-planner") });
   }
-  if (["mobilise", "build"].includes(activePhase.id)) {
+  if (activePhase.id === "build") {
     phaseAgentActions.push({ key: "capacity-assessor", label: agentButtonContent("capacity-assessor", capacityAssessment ? "Re-assess capacity" : "Assess capacity"), disabled: gateApproved || agentButtonDisabled("capacity-assessor"), onClick: () => onRunAgent("capacity-assessor") });
   }
   if (["design", "govern"].includes(activePhase.id)) {
