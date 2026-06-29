@@ -19,6 +19,7 @@ import { computeConfidenceScore, computeRiskPosture, type ConfidenceScore } from
 import { computePhaseReadiness } from "@/v3/lib/phaseReadiness";
 import { derivePhaseInputQuality } from "@/v3/lib/phaseInputQuality";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
+import { selectRisks } from "@/v3/lib/programRaid";
 import { isDecisionOpen } from "@/v3/utils";
 
 /**
@@ -54,18 +55,16 @@ export function deriveProgramConfidence(
     ? Math.round((approved / Math.max(totalGates, 1)) * 100)
     : 0;
 
-  // Risk posture: severity-weighted open risk penalty
-  const riskEntries = Array.isArray(rawData?.raidEntries)
-    ? (rawData.raidEntries as Array<{ type: string; severity?: string; status?: string }>)
-    : [];
-  const openRisks = riskEntries.filter((r) => r.type === "risk");
+  // Risk posture: severity-weighted open risk penalty. Read the canonical open
+  // risk set (selectRisks) — the SAME set the Executive/Programme risk KPI and
+  // the Action Center show — not the raw top-level `raidEntries`. RAID is not
+  // persisted there; it lives in data.raidLog.entries and is surfaced via the
+  // normalised program.raidEntries. Reading the raw field found zero risks, so
+  // risk posture read a misleading 100% on programmes that had open risks.
+  const openRisks = selectRisks(program);
   const riskPosture = computeRiskPosture(openRisks);
-  const openCriticalRisks = openRisks.filter(
-    (r) => (r.severity || "").toLowerCase() === "critical" && r.status !== "closed",
-  ).length;
-  const openHighRisks = openRisks.filter(
-    (r) => (r.severity || "").toLowerCase() === "high" && r.status !== "closed",
-  ).length;
+  const openCriticalRisks = openRisks.filter((r) => r.severity === "critical").length;
+  const openHighRisks = openRisks.filter((r) => r.severity === "high").length;
 
   // Milestone health: on-track ratio
   const milestones = (program.milestones || []) as unknown as Array<Record<string, unknown>>;
