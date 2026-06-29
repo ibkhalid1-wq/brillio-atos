@@ -98,15 +98,20 @@ export function computePhaseReadiness(
   const presentArtifactIds = new Set(Object.keys(phaseArtifactRecords));
 
   // ── Artifact quality score ──────────────────────────────────────────────────
-  // Quality is scored over THIS phase's own artifacts only — its required set
-  // plus anything actually produced — never a fixed programme-wide review pool.
-  // Each artifact resolves through the same single source of truth the Stage
-  // view cards use (AI review score, else the ledger's stored confidence), so
-  // the header tile equals the average of the visible card scores. Reading a
-  // fixed programme-wide key list instead leaked later-phase quality into a
-  // phase (e.g. Strategy reading 57% off plan/risk/adoption reviews that belong
-  // to Build/Operate) and diverged from the per-artifact card scores.
-  const qualityArtifactIds = Array.from(new Set([...requiredArtifactIds, ...presentArtifactIds]));
+  // Quality is scored over exactly the artifacts the Stage view renders as cards.
+  // When the phase has a def catalogue (getPhaseArtifactDefs = required set +
+  // dynamic defs, which equals requiredArtifactIds) the cards ARE that set, so we
+  // average only the produced defs — intersecting with the ledger. Unioning in
+  // the raw ledger keys instead leaked ORPHAN artifacts (produced records with no
+  // matching def card) into the average, dragging it below the card scores.
+  // Only when a phase has no def catalogue at all (a purely dynamic phase whose
+  // artifacts exist solely as ledger records) do we fall back to scoring every
+  // produced record, so those phases still register quality.
+  // Each artifact resolves through the same single source of truth the cards use
+  // (AI review score, else the ledger's stored confidence).
+  const qualityArtifactIds = requiredArtifactIds.length > 0
+    ? requiredArtifactIds.filter((id) => presentArtifactIds.has(id))
+    : Array.from(presentArtifactIds);
   const phaseQualityScores = qualityArtifactIds
     .map((id) => resolveArtifactQualityScore(source, id, phaseId, phaseArtifactRecords[id]?.confidence ?? null))
     .filter((value): value is number => value !== null);
