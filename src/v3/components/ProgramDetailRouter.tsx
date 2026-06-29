@@ -145,6 +145,7 @@ interface ProgramDetailRouterProps {
   patternsCount: number;
   onExtractPatterns: () => Promise<void>;
   onRunAgent?: (agentId: string, phaseId?: string) => void;
+  onSaveRoadmapSchedule?: (schedule: Record<string, { start: string; end: string }>) => Promise<void>;
   currentUserId?: string | null;
 }
 
@@ -177,6 +178,7 @@ export default function ProgramDetailRouter({
   onSaveAllPhaseInputs,
   onRefineImportField,
   onRunAgent,
+  onSaveRoadmapSchedule,
   currentUserId,
 }: ProgramDetailRouterProps) {
   if (!view && reportId === "narrative") {
@@ -243,6 +245,7 @@ export default function ProgramDetailRouter({
           onTriggerPlan={triggers.triggerPlan}
           healthIsRunning={healthHeatmapIsRunning}
           onTriggerHealth={triggers.triggerHealthHeatmap}
+          onSaveRoadmapSchedule={onSaveRoadmapSchedule}
         />
       );
     case "plan":

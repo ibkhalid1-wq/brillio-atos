@@ -12,6 +12,8 @@ interface RoadmapViewProps {
   onTriggerPlan: () => void;
   healthIsRunning: boolean;
   onTriggerHealth: () => void;
+  /** When provided, the phase timeline becomes editable (drag/resize/date inputs). */
+  onSaveRoadmapSchedule?: (schedule: Record<string, { start: string; end: string }>) => Promise<void>;
 }
 
 const RAG_COLOR: Record<string, string> = {
@@ -217,10 +219,26 @@ export default function RoadmapView({
   onTriggerPlan,
   healthIsRunning,
   onTriggerHealth,
+  onSaveRoadmapSchedule,
 }: RoadmapViewProps) {
   const roadmapRows = React.useMemo(
     () => buildRoadmapRows(program?.rawData, (program?.phases || []) as Array<{ id: string }>),
     [program?.rawData, program?.phases],
+  );
+
+  // Persist the full effective schedule (defaults made explicit) with the one
+  // edited phase replaced, so the saved plan is stable even if the methodology's
+  // duration weights later change.
+  const handleRoadmapChange = React.useCallback(
+    (id: string, start: string, end: string) => {
+      if (!onSaveRoadmapSchedule) return;
+      const schedule: Record<string, { start: string; end: string }> = {};
+      for (const row of roadmapRows) {
+        schedule[row.id] = row.id === id ? { start, end } : { start: row.start, end: row.end };
+      }
+      void onSaveRoadmapSchedule(schedule);
+    },
+    [onSaveRoadmapSchedule, roadmapRows],
   );
 
   if (!program) {
@@ -241,7 +259,7 @@ export default function RoadmapView({
           subtitle="Programme window weighted by each phase's typical duration. Bars show progress and RAG status against today."
         />
         <AdamCardBody>
-          <RoadmapGantt rows={roadmapRows} />
+          <RoadmapGantt rows={roadmapRows} editable={!!onSaveRoadmapSchedule} onChange={handleRoadmapChange} />
         </AdamCardBody>
       </AdamCard>
 

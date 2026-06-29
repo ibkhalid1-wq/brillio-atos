@@ -3217,7 +3217,6 @@ export default function AppShellV3() {
                 onUnapproveArtifact={handleUnapproveArtifact}
                 onSaveInputs={handleSavePhaseInputs}
                 onSelectGovernanceOption={handleSelectGovernanceOption}
-                onSaveRoadmapSchedule={handleSaveRoadmapSchedule}
                 onSaveProgram={handleSaveProgramSnapshot}
                 onRevertProgram={handleRevertProgramSnapshot}
                 programSnapshots={programSnapshots}
@@ -3339,6 +3338,7 @@ export default function AppShellV3() {
                       await refreshPatterns();
                     }}
                     onRunAgent={handleRunAgent}
+                    onSaveRoadmapSchedule={handleSaveRoadmapSchedule}
                     currentUserId={userId}
                   />
                 )}

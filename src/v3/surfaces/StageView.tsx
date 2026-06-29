@@ -27,8 +27,6 @@ import { runPreFlight } from "@/v3/lib/phaseInputPreFlight";
 import { derivePhaseInputQuality } from "@/v3/lib/phaseInputQuality";
 import { getFormalArtifactContent } from "@/v3/lib/formalArtifacts";
 import { buildFactGraph, factsForPhase } from "@/v3/lib/factGraph";
-import { buildRoadmapRows, type GanttRow } from "@/v3/lib/phaseSchedule";
-import RoadmapGantt from "@/v3/components/RoadmapGantt";
 import ChangeRequestModal from "@/v3/components/ChangeRequestModal";
 import type { V3Mode, V3MoreView, V3ReportId } from "@/v3/types";
 
@@ -64,7 +62,6 @@ interface StageViewProps {
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; clearReviewDefId?: string; staleDefId?: string }) => Promise<void>;
   /** Choose the effective governance model from the AI-generated options (replace-but-re-selectable). */
   onSelectGovernanceOption?: (optionId: string) => Promise<void> | void;
-  onSaveRoadmapSchedule?: (schedule: Record<string, { start: string; end: string }>) => Promise<void>;
   onSaveProgram?: (label?: string, kind?: "manual" | "lock") => Promise<void>;
   onRevertProgram?: (snapshotId: string) => Promise<void>;
   programSnapshots?: Array<{ id: string; label: string; kind: string; createdAt: string }>;
@@ -429,7 +426,6 @@ export default function StageView({
   onUnapproveArtifact,
   onSaveInputs,
   onSelectGovernanceOption,
-  onSaveRoadmapSchedule,
   onSaveProgram,
   onRevertProgram,
   programSnapshots = [],
@@ -460,26 +456,6 @@ export default function StageView({
   const [applyingImprovements, setApplyingImprovements] = React.useState(false);
   const [applyError, setApplyError] = React.useState<string | null>(null);
 
-  // Strategic-roadmap timeline rows for the Gantt. Defaults come from the
-  // deterministic window split (programme start → target end, weighted by each
-  // phase's typical duration); any manual date edits the user saved (the
-  // top-level roadmapSchedule override) win per phase.
-  const roadmapRows = React.useMemo<GanttRow[]>(
-    () => buildRoadmapRows(program?.rawData, (program?.phases || []) as Array<{ id: string }>),
-    [program?.rawData, program?.phases],
-  );
-
-  const handleRoadmapChange = React.useCallback((id: string, start: string, end: string) => {
-    if (!onSaveRoadmapSchedule) return;
-    // Persist the full effective schedule (defaults made explicit) with the one
-    // edited phase replaced, so the saved plan is stable even if the methodology's
-    // duration weights later change.
-    const schedule: Record<string, { start: string; end: string }> = {};
-    for (const row of roadmapRows) {
-      schedule[row.id] = row.id === id ? { start, end } : { start: row.start, end: row.end };
-    }
-    void onSaveRoadmapSchedule(schedule);
-  }, [onSaveRoadmapSchedule, roadmapRows]);
   // True once the reviewer's suggestions have been folded into the inputs for the
   // currently-open quality modal, so the Apply button can switch to a disabled
   // "no more suggestions" state instead of the modal silently vanishing.
@@ -1804,15 +1780,27 @@ export default function StageView({
                       The Generate tooltip still surfaces preflight.missingFields. */}
                   <div className="v3-artifact-row-actions">
                   {present && previewContent ? (
-                    <button
-                      type="button"
-                      className="v3-button ghost v3-button-inline-xs"
-                      onClick={() => setPreviewArtifact({ defId: def.id, label: def.label, description: def.description, content: previewContent, score: displayScore, statusTone })}
-                      title={`Preview ${def.label}`}
-                      aria-label={`Preview ${def.label}`}
-                    >
-                      ▾ Preview
-                    </button>
+                    def.id === "strategic-roadmap" ? (
+                      <button
+                        type="button"
+                        className="v3-button ghost v3-button-inline-xs"
+                        onClick={() => onOpenMoreView("roadmap")}
+                        title="Open the Strategic Roadmap"
+                        aria-label="Open the Strategic Roadmap"
+                      >
+                        Open roadmap →
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="v3-button ghost v3-button-inline-xs"
+                        onClick={() => setPreviewArtifact({ defId: def.id, label: def.label, description: def.description, content: previewContent, score: displayScore, statusTone })}
+                        title={`Preview ${def.label}`}
+                        aria-label={`Preview ${def.label}`}
+                      >
+                        ▾ Preview
+                      </button>
+                    )
                   ) : null}
                   {present && state !== "approved" && !gateApproved ? (
                     <button
@@ -1941,7 +1929,7 @@ export default function StageView({
       </div>
 
       {previewArtifact ? (
-        <StageModal title={previewArtifact.label} onClose={() => setPreviewArtifact(null)} maxWidth={previewArtifact.defId === "strategic-roadmap" ? 900 : 720}>
+        <StageModal title={previewArtifact.label} onClose={() => setPreviewArtifact(null)} maxWidth={720}>
           {previewArtifact.description ? (
             <div style={{ fontSize: 12, color: "var(--v3-text-muted)", marginBottom: 12 }}>{previewArtifact.description}</div>
           ) : null}
@@ -1949,9 +1937,6 @@ export default function StageView({
             <div style={{ marginBottom: 12 }}>
               <span className={`v3-chip ${previewArtifact.statusTone}`}>Quality {previewArtifact.score}%</span>
             </div>
-          ) : null}
-          {previewArtifact.defId === "strategic-roadmap" ? (
-            <RoadmapGantt rows={roadmapRows} editable={!!onSaveRoadmapSchedule} onChange={handleRoadmapChange} />
           ) : null}
           <AnimatedArtifactContent content={previewArtifact.content} />
         </StageModal>
