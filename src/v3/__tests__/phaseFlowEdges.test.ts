@@ -157,3 +157,64 @@ describe("stakeholder list → scope-map / requirements-catalog (semantic flow)"
     expect(getArtifactInputFields("discover", "scope-map")).toEqual([]);
   });
 });
+
+// Design's static solution-design inputs feed its architecture deliverables by
+// intent, so every input flows to at least one artifact even when the planner
+// invented its own artifact ids ("solution-design", "architecture-decisions")
+// rather than using the canonical agent ids ("solution-architecture", …).
+describe("design static inputs → solution-design artifacts (semantic flow)", () => {
+  // A planner-divergent programme: the architecture deliverable is "solution-design"
+  // and decisions live in "architecture-decisions" — neither is the canonical
+  // "solution-architecture" agent id the methodology flow targets.
+  const designStore = {
+    artifacts: {
+      design: [
+        { id: "solution-design", label: "Solution Design", description: "" },
+        { id: "architecture-decisions", label: "Architecture Decisions", description: "" },
+        { id: "critical-path", label: "Critical Path", description: "" },
+        { id: "target-operating-model", label: "Target Operating Model", description: "" },
+        { id: "change-impact", label: "Change Impact", description: "" },
+      ],
+    },
+  };
+
+  const DESIGN_INPUTS = [
+    "solutionApproach",
+    "targetArchitecture",
+    "keyDesignDecisions",
+    "nonFunctionalRequirements",
+    "integrationDataConstraints",
+  ];
+
+  it("connects every static design input to at least one rendered artifact", () => {
+    const edges = derivePhaseFlowEdges("design", DESIGN_INPUTS, designStore);
+    for (const field of DESIGN_INPUTS) {
+      expect(edges.some((e) => e.from === field)).toBe(true);
+    }
+  });
+
+  it("wires the architecture/decision/NFR inputs that the canonical flow misses", () => {
+    const edges = derivePhaseFlowEdges("design", DESIGN_INPUTS, designStore);
+    const targetsOf = (field: string) => edges.filter((e) => e.from === field).map((e) => e.to);
+    expect(targetsOf("targetArchitecture")).toEqual(
+      expect.arrayContaining(["solution-design", "architecture-decisions"]),
+    );
+    expect(targetsOf("keyDesignDecisions")).toContain("architecture-decisions");
+    expect(targetsOf("nonFunctionalRequirements")).toEqual(
+      expect.arrayContaining(["solution-design", "architecture-decisions"]),
+    );
+  });
+
+  it("only targets artifacts that exist in the phase", () => {
+    const valid = new Set(getPhaseArtifactIds("design", designStore));
+    for (const edge of derivePhaseFlowEdges("design", DESIGN_INPUTS, designStore)) {
+      expect(valid.has(edge.to)).toBe(true);
+    }
+  });
+
+  it("surfaces the input as feeding the artifact in getArtifactInputFields", () => {
+    expect(getArtifactInputFields("design", "architecture-decisions", designStore)).toEqual(
+      expect.arrayContaining(["targetArchitecture", "keyDesignDecisions"]),
+    );
+  });
+});
