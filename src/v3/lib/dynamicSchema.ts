@@ -193,9 +193,36 @@ function normalizeDynamicField(field: PhaseInputField): PhaseInputField {
 }
 
 /**
+ * Person-role nouns that mark a "Named <role>" field as an owner assignment
+ * (RACI), not an answerable fact. These people are captured once in the Mobilise
+ * core-team roster; re-asking for them on a later phase just duplicates the
+ * roster. The guardrail below drops such planner-proposed fields so owners
+ * resolve from the roster instead of being re-typed each phase.
+ */
+const ROSTER_OWNER_ROLE_WORDS = new Set([
+  "lead", "owner", "architect", "manager", "sponsor", "director", "head",
+  "analyst", "engineer", "specialist", "coordinator", "champion", "officer", "sme",
+]);
+
+/**
+ * True when a label names a roster-resolved owner — it starts with "Named " and
+ * mentions a person-role noun (e.g. "Named QA/Test Lead for Design phase",
+ * "Named owner for critical path"). Requiring the "Named " prefix keeps atomic
+ * facts that merely contain a role word ("Workstream owners", "Confirmed
+ * delivery lead") as inputs.
+ */
+export function isRosterOwnerLabel(label: string): boolean {
+  const lower = label.trim().toLowerCase();
+  if (!lower.startsWith("named ")) return false;
+  const words = lower.split(/[^a-z]+/).filter(Boolean);
+  return words.some((w) => ROSTER_OWNER_ROLE_WORDS.has(w));
+}
+
+/**
  * Merge static + dynamic input fields for a phase. Static fields keep their
  * order and win on id collision; dynamic fields are appended in declared order
- * and tagged `source: "ai-derived"` if not already.
+ * and tagged `source: "ai-derived"` if not already. Roster-owner staffing fields
+ * the planner proposed are dropped — owners resolve from the Mobilise roster.
  */
 export function mergeDynamicInputFields(
   staticFields: PhaseInputField[],
@@ -206,7 +233,8 @@ export function mergeDynamicInputFields(
   if (!Array.isArray(dynamic) || dynamic.length === 0) return staticFields;
   const seen = new Set(staticFields.map((f) => f.id));
   const extra = dynamic
-    .filter((f) => f && typeof f.id === "string" && !seen.has(f.id))
+    .filter((f) => f && typeof f.id === "string" && !seen.has(f.id)
+      && !(typeof f.label === "string" && isRosterOwnerLabel(f.label)))
     .map((f) => normalizeDynamicField({ ...f, source: "ai-derived" as const }));
   return extra.length ? [...staticFields, ...extra] : staticFields;
 }
@@ -388,6 +416,12 @@ export function sanitizePlannerProposal(raw: unknown): DynamicPhaseProposal | nu
     const type = asString(f.type).trim();
     if (!id || fieldIds.has(id) || !ALLOWED_FIELD_TYPES.has(type)) continue;
     const label = asString(f.label).trim() || id;
+    // Guardrail: a "Named <role>" owner assignment is captured once in the
+    // Mobilise roster — drop it rather than re-ask for it on this phase.
+    if (isRosterOwnerLabel(label)) {
+      guardrailWarnings.push(`Dropped roster-owner input "${label}" — owners resolve from the Mobilise roster.`);
+      continue;
+    }
     // Guardrail: a field whose label names a deliverable is not an answerable
     // fact. Demote it to an artifact rather than asking the user to type it.
     if (isArtifactLikeLabel(label)) {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { sanitizePlannerProposal, isArtifactLikeLabel } from "@/v3/lib/dynamicSchema";
+import { sanitizePlannerProposal, isArtifactLikeLabel, isRosterOwnerLabel } from "@/v3/lib/dynamicSchema";
 
 const ARTIFACT_WORDS = [
   "plan", "summary", "report", "register", "map", "model", "deck",
@@ -22,6 +22,51 @@ describe("isArtifactLikeLabel", () => {
     expect(isArtifactLikeLabel("Steering committee cadence")).toBe(false);
     expect(isArtifactLikeLabel("Mobilization budget range")).toBe(false);
     expect(isArtifactLikeLabel("Confirmed delivery lead")).toBe(false);
+  });
+});
+
+describe("isRosterOwnerLabel", () => {
+  it("flags 'Named <role>' owner assignments", () => {
+    expect(isRosterOwnerLabel("Named Engineering Lead / Architect for Design phase")).toBe(true);
+    expect(isRosterOwnerLabel("Named Change Management Lead for Design phase")).toBe(true);
+    expect(isRosterOwnerLabel("Named QA/Test Lead for Design phase")).toBe(true);
+    expect(isRosterOwnerLabel("Named owner for critical path definition")).toBe(true);
+    expect(isRosterOwnerLabel("Named Solution Architect")).toBe(true);
+  });
+
+  it("does not flag atomic facts or non-prefixed role mentions", () => {
+    expect(isRosterOwnerLabel("Target date for solution design approval")).toBe(false);
+    expect(isRosterOwnerLabel("Workstream owners")).toBe(false);
+    expect(isRosterOwnerLabel("Confirmed delivery lead")).toBe(false);
+    expect(isRosterOwnerLabel("Solution approach & design principles")).toBe(false);
+    expect(isRosterOwnerLabel("Named product")).toBe(false);
+  });
+});
+
+describe("Phase Transition Planner guardrail — roster-owner fields dropped", () => {
+  const result = sanitizePlannerProposal({
+    nextPhase: { readiness: "yellow", rationale: "design facts still unknown", purpose: "produce the solution design" },
+    inputFields: [
+      { fieldId: "solutionApproach", label: "Solution approach", type: "textarea", required: true },
+      { fieldId: "designApprovalDate", label: "Target date for solution design approval", type: "date", required: false },
+      { fieldId: "engLead", label: "Named Engineering Lead / Architect for Design phase", type: "text", required: true },
+      { fieldId: "qaLead", label: "Named QA/Test Lead for Design phase", type: "text", required: true },
+      { fieldId: "critPathOwner", label: "Named owner for critical path definition", type: "text", required: true },
+    ],
+    artifactsToGenerate: [],
+  });
+
+  it("keeps only the atomic facts, dropping every roster-owner field", () => {
+    expect(result).not.toBeNull();
+    expect(result!.inputFields.map((f) => f.label)).toEqual([
+      "Solution approach",
+      "Target date for solution design approval",
+    ]);
+  });
+
+  it("records a guardrail warning for each dropped roster-owner field", () => {
+    const warnings = (result!.planMeta.warnings ?? []).filter((w) => w.includes("Dropped roster-owner input"));
+    expect(warnings.length).toBe(3);
   });
 });
 

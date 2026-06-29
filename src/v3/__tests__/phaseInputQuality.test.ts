@@ -36,12 +36,28 @@ describe("derivePhaseInputQuality", () => {
     expect(result.overallScore).toBeGreaterThan(60);
   });
 
+  it("assesses Design against its static solution-design schema", () => {
+    // Design carries a static methodology schema (solution approach, target
+    // architecture, NFRs, …) so its required facts are always assessed regardless
+    // of what the planner proposes — generation never depends on the planner
+    // remembering to ask for design substance.
+    const result = derivePhaseInputQuality("design", {})!;
+    expect(result).not.toBeNull();
+    expect(result.missingCritical).toEqual(
+      expect.arrayContaining([
+        "Solution approach & design principles",
+        "Target architecture summary",
+        "Non-functional requirements",
+      ]),
+    );
+  });
+
   it("returns null for a dynamic-only phase — no static schema, so no leaked KPI/workstream fields", () => {
-    // Strategy is the only phase with a static input schema; every later phase is
-    // dynamic-only, so its fields come from the programme's dynamicSchema store, not
-    // from here. With no static fields there is nothing to assess — and crucially no
-    // path for "Outcome KPIs"/"workstreams" to leak into a non-Strategy phase.
-    expect(derivePhaseInputQuality("design", {})).toBeNull();
+    // Strategy and Design carry static input schemas; the remaining phases are
+    // dynamic-only, so their fields come from the programme's dynamicSchema store,
+    // not from here. With no static fields there is nothing to assess — and crucially
+    // no path for "Outcome KPIs"/"workstreams" to leak into a dynamic-only phase.
+    expect(derivePhaseInputQuality("build", {})).toBeNull();
     expect(derivePhaseInputQuality("mobilise", { anything: "x" })).toBeNull();
   });
 
@@ -52,17 +68,17 @@ describe("derivePhaseInputQuality", () => {
     // exactly what the user can fill in.
     const store = {
       inputFields: {
-        design: [
+        build: [
           { id: "modelRoutingPolicy", label: "Model routing policy", type: "textarea" as const, required: true },
           { id: "dataResidency", label: "Data residency", type: "textarea" as const, required: true },
         ],
       },
     };
-    // With no store, design is dynamic-only → null.
-    expect(derivePhaseInputQuality("design", { modelRoutingPolicy: "Route to Opus for planning." }, undefined)).toBeNull();
+    // With no store, build is dynamic-only → null.
+    expect(derivePhaseInputQuality("build", { modelRoutingPolicy: "Route to Opus for planning." }, undefined)).toBeNull();
     // With the store, the dynamic required fields become the assessed set.
     const result = derivePhaseInputQuality(
-      "design",
+      "build",
       { modelRoutingPolicy: "Route planning to Opus and execution to Sonnet for cost efficiency." },
       store,
     )!;

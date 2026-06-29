@@ -122,11 +122,14 @@ export interface PhaseDefinition {
    */
   artifactInputFlow?: Record<string, string[]>;
   /**
-   * When true, this phase carries NO static inputs or artifacts — its entire
-   * input + artifact schema is generated dynamically from prior-phase artifacts
-   * (the planner writes them into the programme's dynamicSchema overlay at the
-   * preceding gate). Only Strategy is static; every later phase is dynamic, so
-   * the "static vs dynamic" rule lives here in the methodology, not in resolvers.
+   * When true, this phase accepts a dynamic schema overlay: the planner reads the
+   * prior phase's approved artifacts and writes programme-specific input fields +
+   * artifacts into `rawData.dynamicSchema` at the preceding gate. Dynamic entries
+   * are additive — any static `inputFields`/`artifacts` the phase also declares
+   * stay authoritative (static wins on id collision). Strategy is fully static;
+   * Design seeds static solution-design inputs AND takes dynamic additions; the
+   * remaining phases are dynamic-only. So the "static vs dynamic" rule lives here
+   * in the methodology, not in resolvers.
    */
   dynamicSchema?: boolean;
 }
@@ -244,6 +247,13 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       displayName: "Design",
       description: "Produce the solution design, architecture decisions, and delivery plan.",
       requiredArtifacts: [],
+      // Design seeds the solution-design facts its agents need (approach, target
+      // architecture, NFRs, decisions, constraints) as static methodology inputs,
+      // so generation never depends on the planner remembering to ask for them.
+      // dynamicSchema stays true: the planner may still ADD programme-specific
+      // fields on top (e.g. a model-routing policy), and the roster-owner guardrail
+      // drops any "Named <role>" staffing fields — owners resolve from the Mobilise
+      // roster, never re-typed here.
       dynamicSchema: true,
       mandatoryExitCriteriaTemplates: [
         "Solution design approved by architecture review",
@@ -253,6 +263,31 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       entryGuards: ["Discover gate approved"],
       recommendedAgents: ["future-state-design", "target-operating-model", "solution-architecture", "narrative", "critical-path", "change-impact"],
       typicalDurationWeeks: { min: 4, max: 10 },
+      inputFields: [
+        { id: "solutionApproach", label: "Solution approach & design principles", type: "textarea", required: true, placeholder: "Overall approach and the guiding principles the design must honour", hint: "e.g. API-first, reuse the existing identity platform, buy-over-build for non-differentiating capabilities" },
+        { id: "targetArchitecture", label: "Target architecture summary", type: "textarea", required: true, placeholder: "Key components, platforms, and how they integrate", hint: "Major systems, data stores, and integration topology at a glance" },
+        {
+          id: "keyDesignDecisions",
+          label: "Key design decisions",
+          type: "grid",
+          required: false,
+          hint: "Record each significant decision, the options weighed, and why you chose as you did.",
+          columns: [
+            { key: "decision", label: "Decision", type: "text" },
+            { key: "optionsConsidered", label: "Options considered", type: "text" },
+            { key: "rationale", label: "Rationale", type: "text" },
+          ],
+        },
+        { id: "nonFunctionalRequirements", label: "Non-functional requirements", type: "textarea", required: true, placeholder: "Performance, security, scalability, availability, and compliance targets", hint: "e.g. 99.9% availability, sub-200ms p95 latency, SOC 2 controls" },
+        { id: "integrationDataConstraints", label: "Integration & data constraints", type: "textarea", required: false, placeholder: "Systems to integrate, data migration scope, and known dependencies", hint: "Upstream/downstream systems, migration volumes, and sequencing constraints" },
+      ],
+      artifactInputFlow: {
+        "solution-architecture": ["solutionApproach", "targetArchitecture", "nonFunctionalRequirements", "integrationDataConstraints", "keyDesignDecisions"],
+        "future-state-design": ["solutionApproach", "targetArchitecture", "keyDesignDecisions"],
+        "target-operating-model": ["solutionApproach"],
+        "critical-path": ["solutionApproach", "integrationDataConstraints"],
+        "change-impact": ["solutionApproach"],
+      },
     },
     {
       id: "build",
