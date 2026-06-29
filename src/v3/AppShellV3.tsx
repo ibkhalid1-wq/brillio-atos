@@ -1578,7 +1578,7 @@ export default function AppShellV3() {
   const { sanity, validation, hasBlockers, warningCount } = useProgramValidation(activeProgram);
   const copilotMemoryContext = useMemo(() => {
     if (!activeProgramId) return "";
-    return ["narrative", "plan", "risk"]
+    return ["narrative", "strategic-roadmap", "risk"]
       .map((agentId) => buildMemoryContext(agentId, activeProgramId))
       .filter(Boolean)
       .join("\n");
@@ -1599,7 +1599,6 @@ export default function AppShellV3() {
     onRunAgent: runProgramAgent,
     onInvalidate: refreshPrograms,
     narrativeGeneratedAt: activeProgram?.narrativeGeneratedAt || null,
-    planGeneratedAt: activeProgram?.planGeneratedAt || null,
     raidGeneratedAt: activeProgram?.raidGeneratedAt || null,
     milestonesGeneratedAt: activeProgram?.milestonesGeneratedAt || null,
     budgetGeneratedAt: activeProgram?.budgetGeneratedAt || null,
@@ -2168,12 +2167,15 @@ export default function AppShellV3() {
         nextInner.programVersion = (typeof nextInner.programVersion === "number" ? nextInner.programVersion : 0) + 1;
         nextInner.lastPCRAt = new Date().toISOString();
         nextInner.lastPCRDecisionId = decisionId;
-        nextInner.staleArtifacts = ["narrative", "plan", "raidEntries", "criticalPath", "changeImpact", "healthHeatmap"];
+        nextInner.staleArtifacts = ["narrative", "strategicRoadmap", "raidEntries", "criticalPath", "changeImpact", "healthHeatmap"];
         nextInner.artifactsStaleReason = `PCR approved: ${String(decision?.title || decision?.question || "scope change")}`;
         await updateProgramData(activeProgram.id, cloned.commit(nextInner), activeProgram.updatedAt);
-        for (const agentId of ["narrative", "plan", "risk", "critical-path"]) {
+        for (const agentId of ["narrative", "risk", "critical-path"]) {
           await runProgramAgent({ agentId, phaseId: activePhaseId || "program", triggeredBy: "trigger" });
         }
+        // The delivery plan rides with the Strategic Roadmap (strategy phase),
+        // so regenerate the roadmap to refresh the plan after a scope change.
+        await runProgramAgent({ agentId: "strategic-roadmap", phaseId: "strategy", triggeredBy: "trigger" });
       }
       await refreshPrograms();
       pushV3Toast(isPCR && resolution === "approved" ? "PCR approved. Affected artifacts have been flagged for refresh." : "Decision resolved.", { tone: "success", duration: 3000 });

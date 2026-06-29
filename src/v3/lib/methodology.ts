@@ -117,7 +117,7 @@ export interface PhaseDefinition {
   inputFields?: PhaseInputField[];
   /**
    * Declarative flow: which captured input field ids feed each artifact/agent's
-   * generation prompt. Keyed by agent id (e.g. "strategic-roadmap", "plan").
+   * generation prompt. Keyed by agent id (e.g. "strategic-roadmap").
    * The artifact generators read this instead of hard-coding which inputs apply.
    */
   artifactInputFlow?: Record<string, string[]>;
@@ -221,7 +221,7 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         "Risks and assumptions log established",
       ],
       entryGuards: ["Strategy gate approved"],
-      recommendedAgents: ["governance-model", "raci-matrix", "narrative", "plan", "stakeholder"],
+      recommendedAgents: ["governance-model", "raci-matrix", "narrative", "stakeholder"],
       typicalDurationWeeks: { min: 2, max: 4 },
     },
     {
@@ -251,7 +251,7 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         "Critical path established",
       ],
       entryGuards: ["Discover gate approved"],
-      recommendedAgents: ["future-state-design", "target-operating-model", "solution-architecture", "narrative", "plan", "critical-path", "change-impact"],
+      recommendedAgents: ["future-state-design", "target-operating-model", "solution-architecture", "narrative", "critical-path", "change-impact"],
       typicalDurationWeeks: { min: 4, max: 10 },
     },
     {
@@ -266,7 +266,7 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         "Go-live readiness confirmed",
       ],
       entryGuards: ["Design gate approved"],
-      recommendedAgents: ["test-plan", "narrative", "plan", "milestone"],
+      recommendedAgents: ["test-plan", "narrative", "milestone"],
       typicalDurationWeeks: { min: 8, max: 26 },
     },
     {
@@ -310,7 +310,7 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         "At least one improvement cycle completed",
       ],
       entryGuards: ["Govern gate approved"],
-      recommendedAgents: ["optimization-backlog", "narrative", "plan", "benefits-tracker"],
+      recommendedAgents: ["optimization-backlog", "narrative", "benefits-tracker"],
       typicalDurationWeeks: { min: 4, max: 12 },
     },
     {

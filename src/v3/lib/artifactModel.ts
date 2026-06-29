@@ -73,8 +73,8 @@ export interface ProgramArtifactModel {
  * this is the seed of the knowledge graph, refined in Cycle 5.
  */
 const ARTIFACT_DOWNSTREAM: Record<string, string[]> = {
-  narrative: ["plan", "stakeholder"],
-  plan: ["milestone"],
+  narrative: ["stakeholder"],
+  "strategic-roadmap": ["milestone"],
   risk: [],
   milestone: ["critical-path"],
   stakeholder: ["change-impact"],

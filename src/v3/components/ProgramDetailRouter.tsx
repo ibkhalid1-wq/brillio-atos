@@ -102,7 +102,6 @@ interface ProgramDetailRouterProps {
   triggers: {
     triggerNarrative: () => void;
     triggerDeck: () => void;
-    triggerPlan: () => void;
     triggerRisk: () => void;
     triggerMilestones: () => void;
     triggerBudget: () => void;
@@ -241,15 +240,15 @@ export default function ProgramDetailRouter({
       return (
         <RoadmapView
           program={program}
-          planIsRunning={activeRuns.some((r) => r.agent_id === "plan" && r.status === "running")}
-          onTriggerPlan={triggers.triggerPlan}
+          planIsRunning={activeRuns.some((r) => r.agent_id === "strategic-roadmap" && r.status === "running")}
+          onTriggerPlan={() => onRunAgent?.("strategic-roadmap", "strategy")}
           healthIsRunning={healthHeatmapIsRunning}
           onTriggerHealth={triggers.triggerHealthHeatmap}
           onSaveRoadmapSchedule={onSaveRoadmapSchedule}
         />
       );
     case "plan":
-      return <PlanView program={program} plan={program?.plan || null} planGeneratedAt={program?.planGeneratedAt || ""} planIsRunning={activeRuns.some((r) => r.agent_id === "plan" && r.status === "running")} onTriggerPlan={triggers.triggerPlan} />;
+      return <PlanView program={program} plan={program?.plan || null} planGeneratedAt={program?.planGeneratedAt || ""} planIsRunning={activeRuns.some((r) => r.agent_id === "strategic-roadmap" && r.status === "running")} onTriggerPlan={() => onRunAgent?.("strategic-roadmap", "strategy")} />;
     case "milestones":
       return <MilestoneView program={program} milestonesIsRunning={activeRuns.some((r) => r.agent_id === "milestone" && r.status === "running")} onTriggerMilestones={triggers.triggerMilestones} onAddMilestone={onAddMilestone} onCompleteMilestone={onCompleteMilestone} isSaving={milestoneSavePending} />;
     case "risks":

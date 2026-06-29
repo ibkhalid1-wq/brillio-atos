@@ -115,17 +115,6 @@ function ArtifactPreview({ agentId, content }: { agentId: string; content: Recor
     const text = typeof content.narrative === "string" ? content.narrative : JSON.stringify(content, null, 2);
     return <p style={{ fontSize: 13, color: "var(--v3-text-secondary)", lineHeight: 1.65, margin: 0 }}>{text}</p>;
   }
-  if (agentId === "plan") {
-    const actions = Array.isArray(content.nextThreeActions) ? content.nextThreeActions as Array<{ action?: string }> : [];
-    return (
-      <ol style={{ margin: 0, paddingLeft: 16, display: "grid", gap: 6 }}>
-        {actions.slice(0, 5).map((action, index) => (
-          <li key={index} style={{ fontSize: 12, color: "var(--v3-text-secondary)", lineHeight: 1.5 }}>{action.action || JSON.stringify(action)}</li>
-        ))}
-        {!actions.length ? <li style={{ color: "var(--v3-text-muted)", fontSize: 12 }}>No action preview available.</li> : null}
-      </ol>
-    );
-  }
   const readable = Object.entries(content)
     .filter(([, value]) => typeof value === "string" && value.trim())
     .slice(0, 3);

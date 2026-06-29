@@ -32,7 +32,7 @@ const AGENT_STATUS_GROUPS: Array<{ label: string; agents: string[] }> = [
   {
     label: "Core Delivery",
     agents: [
-      "narrative", "plan", "risk", "milestone", "budget",
+      "narrative", "risk", "milestone", "budget",
       "change-impact", "stakeholder", "adoption",
       "health-heatmap", "deck", "scope-pcr", "daily-briefing",
     ],
@@ -97,7 +97,6 @@ function AgentStatusDot({ color }: { color: RYG }) {
 
 const AGENT_DESCRIPTIONS: Record<string, string> = {
   "narrative":             "Generates the full programme narrative for stakeholder communication.",
-  "plan":                  "Produces a prioritised action plan with owner assignments and timelines.",
   "risk":                  "Identifies RAID entries, scores likelihood and impact, proposes mitigations.",
   "milestone":             "Tracks delivery milestones, flags slippage, and recalculates ETA.",
   "budget":                "Monitors spend vs forecast, surfaces variance and burn-rate alerts.",

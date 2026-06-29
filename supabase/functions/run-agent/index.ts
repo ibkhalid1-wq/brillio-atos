@@ -47,7 +47,6 @@ const VALID_AGENT_IDS = new Set([
   "adoption",
   "titan",
   "narrative",
-  "plan",
   "risk",
   "milestone",
   "budget",
@@ -435,7 +434,6 @@ function isProgramLevelAdoptionAgent(agentId: string, phaseId: string): boolean 
 
 function isSpecialProgramAgent(agentId: string, phaseId: string): boolean {
   return agentId === "narrative"
-    || agentId === "plan"
     || agentId === "risk"
     || agentId === "milestone"
     || agentId === "budget"
@@ -754,6 +752,8 @@ Return ONLY valid JSON:
 
 Ground the roadmap in ALL of the programme's strategy inputs provided in the context — the business objective, primary success metric, key constraints, cost assumption, industry, and sponsor (see "groundingFacts" plus the explicit fields) — so the sequencing reflects this programme's actual mandate, not a generic template. Bound the overall timeline by the programme start date and target end date, distributing the phases and milestones across that window. Anchor intermediate dates to existing phase ETAs/milestones where available; do NOT fabricate dates; mark unknown dates "TBD". Let the constraints and success metric shape phase ordering and the critical decisions/gaps you surface.
 
+You also own the DELIVERY PLAN folded into this roadmap: the near-term actions, tracked milestones, critical path, and active blockers that turn the sequencing into work. Derive these from the phase sequencing, exit criteria, and current readiness — do not invent dates or owners. Owners are assigned later via the Mobilise RACI, so leave "owner" null unless a role is unambiguously implied by the inputs; never name individuals. For drill-down, set relatedArtifactId / relatedInputIds only to ids present in the context, else null / [].
+
 Return ONLY valid JSON:
 {
   "horizon": "one sentence describing the overall timeframe",
@@ -761,6 +761,13 @@ Return ONLY valid JSON:
   "dependencies": [ { "from": "phase", "to": "phase", "reason": "why" } ],
   "criticalDecisions": ["decisions that gate progress along the roadmap"],
   "gaps": ["sequencing or date gaps that need resolving"],
+  "deliveryPlan": {
+    "summary": "one sentence on the delivery approach",
+    "criticalPath": ["phase id in the sequence that must complete for value to land"],
+    "nextThreeActions": [ { "action": "the immediate step", "phase": "phase id", "owner": "role or null", "rationale": "why now", "relatedArtifactId": "artifact id or null", "relatedInputIds": ["input field id"] } ],
+    "milestones": [ { "id": "stable id", "title": "milestone", "phase": "phase id", "dueDate": "ISO date or null", "status": "on-track|at-risk|delayed|complete", "owner": "role or null" } ],
+    "blockerSummary": [ { "blocker": "what is blocked", "phase": "phase id", "severity": "critical|high|medium|low", "resolution": "how to unblock", "relatedArtifactId": "artifact id or null", "relatedInputIds": ["input field id"] } ]
+  },
   "summary": "one sentence verdict on roadmap coherence",
   "confidence": 0.0
 }`,
@@ -1076,9 +1083,9 @@ function parseKpiBaselines(raw: unknown): Record<string, unknown>[] {
 const ARTIFACT_INPUT_FLOW: Record<string, string[]> = {
   // Kept in sync with the client methodology's artifactInputFlow. The roadmap is
   // grounded on the full strategy picture (objective, sponsor, industry,
-  // constraints, cost, success metric) bounded by the start/end dates.
-  "strategic-roadmap": ["businessObjective", "sponsor", "industry", "startDate", "targetEndDate", "costAssumption", "constraints", "successMetric"],
-  "plan": ["businessObjective", "startDate", "targetEndDate", "teamSize", "keyRisks", "keyRoles"],
+  // constraints, cost, success metric) bounded by the start/end dates. It also
+  // owns the delivery plan, so it pulls the team/role/risk inputs the plan needs.
+  "strategic-roadmap": ["businessObjective", "sponsor", "industry", "startDate", "targetEndDate", "costAssumption", "constraints", "successMetric", "teamSize", "keyRisks", "keyRoles"],
 };
 
 /** Stringify a phase-input value (string, number, or grid rows) for the prompt. */
@@ -2111,52 +2118,42 @@ function getStrategicRoadmapContainer(inner: ProgramState): Record<string, JsonV
   return isRecord(inner.strategicRoadmap) ? { ...(inner.strategicRoadmap as Record<string, JsonValue>) } : {};
 }
 
-function applyPlanResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
-  return updateInnerProgramData(programData, (inner) => ({
-    ...inner,
-    strategicRoadmap: {
-      ...getStrategicRoadmapContainer(inner),
-      deliveryPlan: isRecord(result.plan) ? (() => {
-      const p = result.plan as Record<string, unknown>;
-      return {
-        summary: typeof p.summary === "string" ? p.summary : "",
-        criticalPath: Array.isArray(p.criticalPath) ? p.criticalPath.filter((v): v is string => typeof v === "string") : [],
-        nextThreeActions: Array.isArray(p.nextThreeActions) ? p.nextThreeActions.filter(isRecord).map((a, i) => ({
-          action: typeof a.action === "string" ? a.action : `Action ${i + 1}`,
-          phase: typeof a.phase === "string" ? a.phase : "",
-          owner: typeof a.owner === "string" ? a.owner : null,
-          rationale: typeof a.rationale === "string" ? a.rationale : "",
-          // Drill-down references to the artifact/inputs that drove this action.
-          relatedArtifactId: typeof a.relatedArtifactId === "string" && a.relatedArtifactId ? a.relatedArtifactId : null,
-          relatedInputIds: Array.isArray(a.relatedInputIds) ? a.relatedInputIds.filter((id): id is string => typeof id === "string" && !!id) : [],
-        })) : [],
-        milestones: Array.isArray(p.milestones) ? p.milestones.filter(isRecord).map((m) => ({
-          id: typeof m.id === "string" ? m.id : crypto.randomUUID(),
-          title: typeof m.title === "string" ? m.title : "",
-          phase: typeof m.phase === "string" ? m.phase : "",
-          dueDate: typeof m.dueDate === "string" ? m.dueDate : null,
-          status: ["on-track", "at-risk", "delayed", "complete"].includes(String(m.status)) ? m.status : "on-track",
-          owner: typeof m.owner === "string" ? m.owner : null,
-        })) : [],
-        blockerSummary: Array.isArray(p.blockerSummary) ? p.blockerSummary.filter(isRecord).map((b) => ({
-          blocker: typeof b.blocker === "string" ? b.blocker : "",
-          phase: typeof b.phase === "string" ? b.phase : "",
-          severity: ["critical", "high", "medium", "low"].includes(String(b.severity)) ? b.severity : "medium",
-          resolution: typeof b.resolution === "string" ? b.resolution : null,
-          relatedArtifactId: typeof b.relatedArtifactId === "string" && b.relatedArtifactId ? b.relatedArtifactId : null,
-          relatedInputIds: Array.isArray(b.relatedInputIds) ? b.relatedInputIds.filter((id): id is string => typeof id === "string" && !!id) : [],
-        })) : [],
-        confidence: typeof p.confidence === "number" ? Math.max(0, Math.min(1, p.confidence)) : 0.5,
-      } as JsonValue;
-      })() : (getStrategicRoadmapContainer(inner).deliveryPlan ?? null),
-    } as JsonValue,
-    planGeneratedAt: typeof result.planGeneratedAt === "string" ? result.planGeneratedAt : new Date().toISOString(),
-    planConfidence: typeof result.confidence === "number"
-      ? Math.max(0, Math.min(1, result.confidence))
-      : isRecord(result.plan) && typeof result.plan.confidence === "number"
-        ? Math.max(0, Math.min(1, result.plan.confidence as number))
-        : null,
-  }));
+/**
+ * Normalize a raw deliveryPlan object (now produced by the strategic-roadmap
+ * agent) into the stored shape consumers expect: sanitised actions, milestones,
+ * blockers, and critical path with drill-down references and safe defaults.
+ */
+function normalizeDeliveryPlan(p: Record<string, unknown>): JsonValue {
+  return {
+    summary: typeof p.summary === "string" ? p.summary : "",
+    criticalPath: Array.isArray(p.criticalPath) ? p.criticalPath.filter((v): v is string => typeof v === "string") : [],
+    nextThreeActions: Array.isArray(p.nextThreeActions) ? p.nextThreeActions.filter(isRecord).map((a, i) => ({
+      action: typeof a.action === "string" ? a.action : `Action ${i + 1}`,
+      phase: typeof a.phase === "string" ? a.phase : "",
+      owner: typeof a.owner === "string" ? a.owner : null,
+      rationale: typeof a.rationale === "string" ? a.rationale : "",
+      // Drill-down references to the artifact/inputs that drove this action.
+      relatedArtifactId: typeof a.relatedArtifactId === "string" && a.relatedArtifactId ? a.relatedArtifactId : null,
+      relatedInputIds: Array.isArray(a.relatedInputIds) ? a.relatedInputIds.filter((id): id is string => typeof id === "string" && !!id) : [],
+    })) : [],
+    milestones: Array.isArray(p.milestones) ? p.milestones.filter(isRecord).map((m) => ({
+      id: typeof m.id === "string" ? m.id : crypto.randomUUID(),
+      title: typeof m.title === "string" ? m.title : "",
+      phase: typeof m.phase === "string" ? m.phase : "",
+      dueDate: typeof m.dueDate === "string" ? m.dueDate : null,
+      status: ["on-track", "at-risk", "delayed", "complete"].includes(String(m.status)) ? m.status : "on-track",
+      owner: typeof m.owner === "string" ? m.owner : null,
+    })) : [],
+    blockerSummary: Array.isArray(p.blockerSummary) ? p.blockerSummary.filter(isRecord).map((b) => ({
+      blocker: typeof b.blocker === "string" ? b.blocker : "",
+      phase: typeof b.phase === "string" ? b.phase : "",
+      severity: ["critical", "high", "medium", "low"].includes(String(b.severity)) ? b.severity : "medium",
+      resolution: typeof b.resolution === "string" ? b.resolution : null,
+      relatedArtifactId: typeof b.relatedArtifactId === "string" && b.relatedArtifactId ? b.relatedArtifactId : null,
+      relatedInputIds: Array.isArray(b.relatedInputIds) ? b.relatedInputIds.filter((id): id is string => typeof id === "string" && !!id) : [],
+    })) : [],
+    confidence: typeof p.confidence === "number" ? Math.max(0, Math.min(1, p.confidence)) : 0.5,
+  } as JsonValue;
 }
 
 /** Collapse a RAID title to a stable dedupe key (lowercased, whitespace-normalized). */
@@ -3415,11 +3412,6 @@ function createAgentReviewDecision(
 
 function buildOutputSummary(agentId: string, result: Record<string, unknown> | null): string {
   if (!result) return `${agentId} completed`;
-  if (agentId === "plan") {
-    const plan = isRecord(result.plan) ? result.plan : null;
-    const milestones = plan && Array.isArray(plan.milestones) ? plan.milestones.length : 0;
-    return `Plan updated with ${milestones} milestones`;
-  }
   if (agentId === "risk") {
     return `Risk scan: ${Array.isArray(result.raidEntries) ? result.raidEntries.length : 0} items`;
   }
@@ -3891,20 +3883,19 @@ async function triggerDownstreamAgents(
   // pattern-query/contradiction-detector/health-heatmap chains) has been
   // retired: it multiplied LLM calls and produced drift. The ONLY automatic
   // follow-on now is the lean post-artifact refresh — when an artifact is
-  // (re)generated, ATOS refreshes exactly two derived views: the plan's next
-  // actions and the risk register, so the actions/risks/blockers surfaces stay
-  // in sync with the latest artifact. Everything else (gate review,
-  // contradiction checks, decks, retros, pattern mining) is on-demand.
+  // (re)generated, ATOS refreshes the risk register so the risks/blockers
+  // surfaces stay in sync with the latest artifact. The delivery plan rides with
+  // the strategic-roadmap artifact itself, so it needs no separate refresh.
+  // Everything else (gate review, contradiction checks, decks, retros, pattern
+  // mining) is on-demand.
   const isFormalArtifact = !!FORMAL_ARTIFACT_AGENTS[completedAgentId];
   const shouldRefreshDerived = (isFormalArtifact || producedArtifact)
     && !!completedPhaseId && completedPhaseId !== "program";
   if (!shouldRefreshDerived) return;
 
-  // plan and risk run at phaseId "program" and are not formal artifacts, so they
-  // never re-enter this branch — the refresh cannot recurse.
-  const downstreamAgents = [
-    { agentId: "plan", phaseId: "program" },
-  ];
+  // risk runs at phaseId "program" and is not a formal artifact, so it never
+  // re-enters this branch — the refresh cannot recurse.
+  const downstreamAgents: { agentId: string; phaseId: string }[] = [];
 
   // Risk register: the app determines the INITIAL risk set (one automatic scan),
   // then leaves the register to the team — additional risks are raised manually,
@@ -4861,33 +4852,6 @@ Rules:
 - Write in present tense. No jargon. No hedging.
 - If the program has less than one phase with measurable progress and no artifacts, respond with: { "narrative": null, "reason": "insufficient_data" }
 - Otherwise respond with: { "narrative": "<2-3 sentences>", "generatedAt": "<ISO timestamp>", "confidence": <0.0-1.0>, "dataPoints": ["<what you used>"] }
-
-Input context will be provided as JSON.`,
-      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
-    };
-  }
-
-  if (request.agentId === "plan") {
-    return {
-      system: `You are the ATOS Plan Agent. Your job is to generate and maintain a structured transformation plan from the program's current state.
-
-The plan must contain:
-- milestones: Array of { id, phase, title, dueDate (ISO), status: "complete"|"on-track"|"at-risk"|"blocked"|"not-started", owner }
-- criticalPath: Array of phase IDs in sequence that must complete for value to land
-- nextThreeActions: Array of { action, owner, phase, rationale, relatedArtifactId, relatedInputIds } — the most important immediate steps
-- blockerSummary: Array of { blocker, phase, severity: "critical"|"high"|"medium", resolution, relatedArtifactId, relatedInputIds }
-- confidence: number (0.0-1.0)
-
-Drill-down rules (for nextThreeActions and blockerSummary):
-- relatedArtifactId: the specific artifact id the action/blocker traces to (use ids present in the input context), or null when not tied to an artifact.
-- relatedInputIds: array of captured input field ids the action/blocker depends on, or [] when none. Use ONLY ids present in the provided context — never invent ids.
-
-Rules:
-- Derive milestones from exit criteria and phase readiness. Do not fabricate dates — use the program's ETA fields if present, otherwise mark as TBD.
-- When flowedInputs is present, anchor the plan to its businessObjective, bound the timeline by startDate / targetEndDate, and size/staff milestones using teamSize, keyRisks, and keyRoles.
-- If objective is blank and no phase has measurable progress, respond with: { "plan": null, "reason": "insufficient_data" }
-- Otherwise respond with the full plan object plus "planGeneratedAt": "<ISO timestamp>"
-- Mark any field as null if data is genuinely unavailable rather than inventing it.
 
 Input context will be provided as JSON.`,
       user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
@@ -6432,13 +6396,14 @@ Deno.serve(async (req) => {
       : null;
     const shouldRefreshPatternContext = isOlderThan(patternQueryCachedAt, 1000 * 60 * 60 * 6);
     // Expand pattern context to all major agents so prior-programme learning
-    // influences narrative, plan, gate review, and change impact (self-improvement)
+    // influences narrative, the strategic roadmap / delivery plan, gate review,
+    // and change impact (self-improvement)
     const shouldUsePatternContext = request.agentId === "risk"
       || request.agentId === "milestone"
       || request.agentId === "pattern-query"
       || request.agentId === "benchmark-comparator"
       || request.agentId === "narrative"
-      || request.agentId === "plan"
+      || request.agentId === "strategic-roadmap"
       || request.agentId === "change-impact"
       || request.agentId === "adoption"
       || request.agentId === "health-heatmap";
@@ -6956,8 +6921,6 @@ Deno.serve(async (req) => {
         ]);
       } else if (request.agentId === "narrative") {
         nextProgramData = applyNarrativeResultToProgramData(contextProgramData, result);
-      } else if (request.agentId === "plan") {
-        nextProgramData = applyPlanResultToProgramData(contextProgramData, result);
       } else if (request.agentId === "risk") {
         nextProgramData = applyRiskResultToProgramData(contextProgramData, result);
       } else if (request.agentId === "milestone") {
@@ -7143,24 +7106,37 @@ Deno.serve(async (req) => {
           inputSnapshot,
           generatedAt: new Date().toISOString(),
         };
-        // The Strategic Roadmap is the single folded delivery artifact: its
-        // container also carries the delivery plan (deliveryPlan) and tracked
-        // milestones (milestones) written by the plan / milestone agents.
-        // Regenerating the roadmap sequencing must not wipe that folded data.
+        // The Strategic Roadmap is the single folded delivery artifact: alongside
+        // the phase sequencing it now produces the delivery plan (deliveryPlan)
+        // directly. Normalize a freshly produced plan; otherwise preserve the
+        // prior folded deliveryPlan / milestones so a sequencing-only regen can't
+        // wipe them.
         let formalResult: Record<string, unknown> = result;
+        let deliveryPlanProduced = false;
         if (request.agentId === "strategic-roadmap") {
           const prevRoadmap = getInnerProgramData(contextProgramData).strategicRoadmap;
-          if (isRecord(prevRoadmap)) {
-            formalResult = { ...result };
-            if (formalResult.deliveryPlan === undefined && prevRoadmap.deliveryPlan !== undefined) {
-              formalResult.deliveryPlan = prevRoadmap.deliveryPlan;
-            }
-            if (formalResult.milestones === undefined && prevRoadmap.milestones !== undefined) {
-              formalResult.milestones = prevRoadmap.milestones;
-            }
+          formalResult = { ...result };
+          if (isRecord(formalResult.deliveryPlan)) {
+            formalResult.deliveryPlan = normalizeDeliveryPlan(formalResult.deliveryPlan as Record<string, unknown>);
+            deliveryPlanProduced = true;
+          } else if (isRecord(prevRoadmap) && prevRoadmap.deliveryPlan !== undefined) {
+            formalResult.deliveryPlan = prevRoadmap.deliveryPlan;
+          }
+          if (formalResult.milestones === undefined && isRecord(prevRoadmap) && prevRoadmap.milestones !== undefined) {
+            formalResult.milestones = prevRoadmap.milestones;
           }
         }
         nextProgramData = applyProgramSupportArtifact(contextProgramData, spec.phase, request.agentId, spec.fieldKey, formalResult, spec.title, generationMetadata, confidence);
+        // Keep the top-level plan freshness/confidence mirrors in step with a
+        // newly produced folded delivery plan (consumers read these as overrides).
+        if (deliveryPlanProduced) {
+          const planConfidence = (formalResult.deliveryPlan as Record<string, unknown>).confidence;
+          nextProgramData = updateInnerProgramData(nextProgramData, (inner) => ({
+            ...inner,
+            planGeneratedAt: new Date().toISOString(),
+            planConfidence: typeof planConfidence === "number" ? Math.max(0, Math.min(1, planConfidence)) : null,
+          }));
+        }
       }
 
       // Surface structured agent output in the artifact ledger. The UI artifact
@@ -7184,11 +7160,6 @@ Deno.serve(async (req) => {
             fieldKey: "narrativeQuality",
             confidenceFieldKey: "narrativeConfidence",
             content: typeof result.narrative === "string" ? result.narrative : "",
-          },
-          plan: {
-            fieldKey: "planQuality",
-            confidenceFieldKey: "planConfidence",
-            content: stringifyForReview(result.plan),
           },
           risk: {
             fieldKey: "riskQuality",

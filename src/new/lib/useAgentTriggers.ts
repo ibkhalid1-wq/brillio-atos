@@ -6,7 +6,6 @@ import type { DecisionSummary, GateReview, Milestone, ProgramClosure, RAIDEntry,
 import { captureSnapshot, computeAgentInterval, hasWatchedFieldChanged } from "@/v3/lib/agentChangeSensitivity";
 import { computeProgramVelocity, type ProgramVelocity } from "@/v3/lib/programVelocity";
 
-const PLAN_TRIGGER_PHASES = new Set(["strategy", "mobilise", "discover"]);
 const RISK_TRIGGER_PHASES = new Set(["discover", "design", "govern", "build"]);
 const MILESTONE_RISK_TYPES = new Set(["dependency", "risk"]);
 const ONE_DAY_MS = 1000 * 60 * 60 * 24;
@@ -24,7 +23,6 @@ interface UseAgentTriggersOptions {
   onRunAgent: (params: { agentId: string; phaseId: string; triggeredBy: "user" | "trigger" }) => Promise<void>;
   onInvalidate?: () => Promise<void> | void;
   narrativeGeneratedAt: string | null;
-  planGeneratedAt: string | null;
   raidGeneratedAt: string | null;
   milestonesGeneratedAt: string | null;
   budgetGeneratedAt: string | null;
@@ -73,7 +71,6 @@ export function useAgentTriggers({
   activeRuns,
   onRunAgent,
   onInvalidate,
-  planGeneratedAt,
   raidGeneratedAt,
   milestonesGeneratedAt,
   budgetGeneratedAt,
@@ -106,7 +103,6 @@ export function useAgentTriggers({
   const lastRunSnapshots = useRef<Record<string, Record<string, unknown>>>({});
   const loadTriggerRef = useRef<{
     narrativeProgramId: string | null;
-    planProgramId: string | null;
     milestoneProgramId: string | null;
     budgetProgramId: string | null;
     criticalPathProgramId: string | null;
@@ -122,7 +118,6 @@ export function useAgentTriggers({
     closureProgramId: string | null;
   }>({
     narrativeProgramId: null,
-    planProgramId: null,
     milestoneProgramId: null,
     budgetProgramId: null,
     criticalPathProgramId: null,
@@ -146,7 +141,6 @@ export function useAgentTriggers({
   const milestoneSnapshotReady = useRef(false);
   const decisionSnapshotReady = useRef(false);
   const narrativeRunning = useRef(false);
-  const planRunning = useRef(false);
   const riskRunning = useRef(false);
   const milestoneRunning = useRef(false);
   const budgetRunning = useRef(false);
@@ -239,7 +233,6 @@ export function useAgentTriggers({
       lastRunSnapshots.current = {};
       loadTriggerRef.current = {
         narrativeProgramId: null,
-        planProgramId: null,
         milestoneProgramId: null,
         budgetProgramId: null,
         criticalPathProgramId: null,
@@ -270,7 +263,6 @@ export function useAgentTriggers({
     }
 
     if (loadTriggerRef.current.narrativeProgramId !== programId) loadTriggerRef.current.narrativeProgramId = null;
-    if (loadTriggerRef.current.planProgramId !== programId) loadTriggerRef.current.planProgramId = null;
     if (loadTriggerRef.current.milestoneProgramId !== programId) loadTriggerRef.current.milestoneProgramId = null;
     if (loadTriggerRef.current.budgetProgramId !== programId) loadTriggerRef.current.budgetProgramId = null;
     if (loadTriggerRef.current.criticalPathProgramId !== programId) loadTriggerRef.current.criticalPathProgramId = null;
@@ -310,22 +302,6 @@ export function useAgentTriggers({
       cancelled = true;
     };
   }, [activePhaseId, activeRuns.length, programId]);
-
-  useEffect(() => {
-    if (!canRunAgents) return;
-    if (!isAgentStale("plan", planGeneratedAt)) return;
-    if (loadTriggerRef.current.planProgramId === programId || planRunning.current) return;
-
-    const hasMeaningfulProgress = phases.some((phase) => phase.pct > 0);
-    if (!hasMeaningfulProgress) return;
-
-    loadTriggerRef.current.planProgramId = programId;
-    planRunning.current = true;
-    void runAgentSafely({ agentId: "plan", phaseId: "program", triggeredBy: "trigger" }, () => {
-      lastRunSnapshots.current.plan = captureSnapshot("plan", rawData);
-      planRunning.current = false;
-    });
-  }, [canRunAgents, isAgentStale, phases, planGeneratedAt, programId, rawData, runAgentSafely]);
 
   useEffect(() => {
     if (!canRunAgents) return;
@@ -541,7 +517,6 @@ export function useAgentTriggers({
 
     const phaseAgentIds = new Set(phases.map((phase) => phase.id));
     const previous = previousRunStatuses.current;
-    const planIsStale = !planGeneratedAt || isOlderThan(planGeneratedAt, ONE_DAY_MS);
     const raidIsStale = !raidGeneratedAt || isOlderThan(raidGeneratedAt, SIX_HOURS_MS);
     const budgetIsStale = isOlderThan(budgetGeneratedAt, ONE_DAY_MS);
     const criticalPathIsStale = isOlderThan(criticalPathGeneratedAt, TWELVE_HOURS_MS);
@@ -550,7 +525,6 @@ export function useAgentTriggers({
     const adoptionIsStale = isOlderThan(adoptionGeneratedAt, ONE_DAY_MS);
     const healthIsStale = isOlderThan(healthHeatmapGeneratedAt, TWELVE_HOURS_MS);
     const scopePcrIsStale = isOlderThan(scopePcrGeneratedAt, FORTY_EIGHT_HOURS_MS);
-    let shouldTriggerPlan = false;
     let shouldTriggerRisk = false;
     let shouldTriggerBudget = false;
     let shouldTriggerCriticalPath = false;
@@ -564,11 +538,10 @@ export function useAgentTriggers({
       const previousStatus = previous.get(run.id);
       if (run.status !== "complete" || !previousStatus || previousStatus === "complete") continue;
 
-      if (planIsStale && PLAN_TRIGGER_PHASES.has(run.agent_id)) shouldTriggerPlan = true;
       if (raidIsStale && RISK_TRIGGER_PHASES.has(run.agent_id)) shouldTriggerRisk = true;
       if (phaseAgentIds.has(run.agent_id) && budgetIsStale) shouldTriggerBudget = true;
       if (phaseAgentIds.has(run.agent_id) && criticalPathIsStale) shouldTriggerCriticalPath = true;
-      if (run.agent_id === "plan" && healthIsStale) shouldTriggerHealth = true;
+      if (run.agent_id === "strategic-roadmap" && healthIsStale) shouldTriggerHealth = true;
       if (run.agent_id === "risk" && changeImpactIsStale) shouldTriggerChangeImpact = true;
       if (run.agent_id === "risk" && stakeholderIsStale) shouldTriggerStakeholder = true;
       if (run.agent_id === "milestone" && adoptionIsStale) shouldTriggerAdoption = true;
@@ -576,13 +549,6 @@ export function useAgentTriggers({
     }
 
     previousRunStatuses.current = new Map(activeRuns.map((run) => [run.id, run.status]));
-
-    if (shouldTriggerPlan && !planRunning.current) {
-      planRunning.current = true;
-      void runAgentSafely({ agentId: "plan", phaseId: "program", triggeredBy: "trigger" }, () => {
-        planRunning.current = false;
-      });
-    }
 
     if (shouldTriggerRisk && !riskRunning.current) {
       riskRunning.current = true;
@@ -639,7 +605,7 @@ export function useAgentTriggers({
         scopePcrRunning.current = false;
       });
     }
-  }, [activeRuns, adoptionGeneratedAt, budgetGeneratedAt, canRunAgents, changeImpactGeneratedAt, criticalPathGeneratedAt, healthHeatmapGeneratedAt, phases, planGeneratedAt, programId, raidGeneratedAt, runAgentSafely, scopePcrGeneratedAt, stakeholderGeneratedAt]);
+  }, [activeRuns, adoptionGeneratedAt, budgetGeneratedAt, canRunAgents, changeImpactGeneratedAt, criticalPathGeneratedAt, healthHeatmapGeneratedAt, phases, programId, raidGeneratedAt, runAgentSafely, scopePcrGeneratedAt, stakeholderGeneratedAt]);
 
   useEffect(() => {
     if (!canRunAgents) return;
@@ -824,14 +790,6 @@ export function useAgentTriggers({
     });
   }, [runAgentSafely]);
 
-  const triggerPlan = useCallback(() => {
-    if (planRunning.current) return;
-    planRunning.current = true;
-    void runAgentSafely({ agentId: "plan", phaseId: "program", triggeredBy: "user" }, () => {
-      planRunning.current = false;
-    });
-  }, [runAgentSafely]);
-
   const triggerRisk = useCallback(() => {
     if (riskRunning.current) return;
     riskRunning.current = true;
@@ -942,7 +900,6 @@ export function useAgentTriggers({
 
   return {
     triggerNarrative,
-    triggerPlan,
     triggerRisk,
     triggerMilestones,
     triggerBudget,

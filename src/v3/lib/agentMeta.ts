@@ -12,7 +12,6 @@ export interface AgentMeta {
 
 export const AGENT_META: Record<string, AgentMeta> = {
   "narrative": { id: "narrative", label: "Narrative", description: "Generates phase narrative summary", estimatedSeconds: 20, category: "narrative", icon: "✦", outputArtifact: "Phase Narrative" },
-  "plan": { id: "plan", label: "Plan", description: "Builds structured delivery plan", estimatedSeconds: 25, category: "narrative", icon: "◎", outputArtifact: "Delivery Plan" },
   "risk": { id: "risk", label: "Risk", description: "Analyses and ranks programme risks", estimatedSeconds: 22, category: "analysis", icon: "⚑", outputArtifact: "Risk Register" },
   "milestone": { id: "milestone", label: "Milestones", description: "Reviews milestone health and forecasts", estimatedSeconds: 18, category: "analysis", icon: "◆", outputArtifact: "Milestone Review" },
   "budget": { id: "budget", label: "Budget", description: "Tracks budget variance and burn", estimatedSeconds: 20, category: "analysis", icon: "◈", outputArtifact: "Budget Report" },
