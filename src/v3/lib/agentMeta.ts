@@ -86,6 +86,8 @@ export const SUPPORT_ARTIFACT_IDS = new Set<string>([
 export const AGENT_ID_ALIASES: Record<string, string> = {
   "risk-log": "risk",
   "risk-register": "risk",
+  "risks-assumptions-log": "risk",
+  "risks-and-assumptions-log": "risk",
 };
 
 export function getAgentMeta(agentId: string): AgentMeta {

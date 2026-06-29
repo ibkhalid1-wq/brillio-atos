@@ -118,6 +118,41 @@ describe("dynamicArtifactDefs", () => {
     const defs = dynamicArtifactDefs("mobilise", store);
     expect(defs.map((d) => d.id)).toEqual(["risk"]);
   });
+
+  it("canonicalises the risks-and-assumptions-log synonym to the risk agent", () => {
+    // The Mobilise planner names the Risk Register "risks-assumptions-log"; it
+    // must resolve to "risk" so Generate doesn't 400 with Unknown agentId.
+    const store: DynamicSchemaStore = {
+      artifacts: { mobilise: [{ id: "risks-assumptions-log", label: "Risks and Assumptions Log", description: "" }] },
+    };
+    expect(dynamicArtifactDefs("mobilise", store).map((d) => d.id)).toEqual(["risk"]);
+  });
+
+  it("strips a non-canonical (British) phase descriptor prefix to reach the agent", () => {
+    // Phase id is "mobilise" but the planner wrote "mobilisation-stakeholder"; the
+    // prefix doesn't equal "<phaseId>-", so the first-segment fallback must still
+    // resolve it to the bare "stakeholder" agent.
+    const store: DynamicSchemaStore = {
+      artifacts: { mobilise: [{ id: "mobilisation-stakeholder", label: "Stakeholder Map", description: "" }] },
+    };
+    expect(dynamicArtifactDefs("mobilise", store).map((d) => d.id)).toEqual(["stakeholder"]);
+  });
+
+  it("drops narrative — a program-level briefing, never a phase deliverable", () => {
+    // The planner proposes "Mobilisation Narrative" (canonical "narrative"), but
+    // the narrative agent stores no phaseArtifacts stub, so the slot could never
+    // be satisfied. It must not appear in any phase artifact list.
+    const store: DynamicSchemaStore = {
+      artifacts: {
+        mobilise: [
+          { id: "mobilisation-narrative", label: "Mobilisation Narrative", description: "" },
+          { id: "narrative", label: "Narrative", description: "" },
+          { id: "risk-log", label: "Risk Log", description: "" },
+        ],
+      },
+    };
+    expect(dynamicArtifactDefs("mobilise", store).map((d) => d.id)).toEqual(["risk"]);
+  });
 });
 
 describe("dynamicFieldArtifacts", () => {

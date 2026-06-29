@@ -36,18 +36,29 @@ export type ArtifactGenerationReadiness = "ready" | "needs_input" | "blocked";
  * agent id) and the run-agent endpoint's VALID_AGENT_IDS check key off the bare
  * producing-agent id — so a phase-prefixed id never matches a generated artifact
  * and "Generate"/"Improve quality" 400 with `Unknown agentId`. Strip a leading
- * "<phaseId>-" only when the remainder is a real producing agent (AGENT_META is
- * the registry of those); every other id passes through untouched, so genuinely
- * hyphenated agent ids ("gate-review", "raci-matrix") are never mangled.
+ * phase descriptor only when the remainder is a real producing agent (AGENT_META
+ * is the registry of those) or a known alias; genuinely hyphenated agent ids
+ * ("gate-review", "raci-matrix") return at the top before any stripping, so they
+ * are never mangled.
  */
 export function canonicalArtifactId(phaseId: string, id: string): string {
   if (AGENT_META[id]) return id;
   if (AGENT_ID_ALIASES[id]) return AGENT_ID_ALIASES[id];
+  const resolve = (base: string): string | null =>
+    AGENT_META[base] ? base : AGENT_ID_ALIASES[base] ?? null;
+  // Try the canonical "<phaseId>-" prefix first, then fall back to stripping the
+  // first hyphen segment so a British or otherwise-spelled phase descriptor the
+  // planner invents ("mobilisation-narrative" when the phase id is "mobilise")
+  // still resolves to its producing agent.
   const prefix = `${phaseId}-`;
   if (id.startsWith(prefix)) {
-    const base = id.slice(prefix.length);
-    if (AGENT_META[base]) return base;
-    if (AGENT_ID_ALIASES[base]) return AGENT_ID_ALIASES[base];
+    const hit = resolve(id.slice(prefix.length));
+    if (hit) return hit;
+  }
+  const hyphen = id.indexOf("-");
+  if (hyphen > 0) {
+    const hit = resolve(id.slice(hyphen + 1));
+    if (hit) return hit;
   }
   return id;
 }
@@ -187,6 +198,12 @@ export function dynamicArtifactDefs(phaseId: string, store?: DynamicSchemaStore)
   for (const def of defs) {
     if (!def || typeof def.id !== "string") continue;
     const id = canonicalArtifactId(phaseId, def.id);
+    // Narrative is a program-level briefing, not a phase deliverable: the agent
+    // stores a single program narrative, never a phaseArtifacts stub, so a
+    // planner-proposed "phase narrative" can never be satisfied and would sit
+    // permanently "Missing". Drop it here — the one chokepoint every phase
+    // artifact consumer reads through — so it never appears in any phase list.
+    if (id === "narrative") continue;
     if (seen.has(id)) continue;
     seen.add(id);
     const entry: DynamicArtifactDef = { id, label: def.label || id, description: def.description || "" };
