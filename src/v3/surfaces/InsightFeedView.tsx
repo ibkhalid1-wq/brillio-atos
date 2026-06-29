@@ -2,14 +2,13 @@ import React, { useMemo, useEffect } from "react";
 import type { ProgramSummary } from "@/new/types";
 import { PHASE_LABELS, confidenceChipClass } from "@/v3/lib/uiHelpers";
 import AdamExplainsTooltip from "@/v3/components/AdamExplainsTooltip";
-import type { ConfidenceScore, ConfidenceForecast } from "@/v3/lib/confidenceScore";
-import { forecastConfidence, getGateThreshold } from "@/v3/lib/confidenceScore";
+import type { ConfidenceScore } from "@/v3/lib/confidenceScore";
 import type { V3MoreView } from "@/v3/types";
 import { Kpi } from "@/v3/components/ui/Kpi";
 import { PhaseStripCard } from "@/v3/components/PhaseStripCard";
 import { selectBlockers, selectDecisions, selectRisks } from "@/v3/lib/programRaid";
 import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
-import { getLockedPhaseIds, computePhaseReadiness } from "@/v3/lib/phaseReadiness";
+import { getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
 
 interface InsightFeedViewProps {
   program: ProgramSummary | null;
@@ -50,108 +49,22 @@ function getRelativeTime(dateStr: string | undefined | null): string | null {
   return `${days} day${days !== 1 ? "s" : ""} ago`;
 }
 
-// ─── InsightCard ────────────────────────────────────────────────────────────
+// ─── NowItem — a single row in the consolidated "What needs you now" queue ────
+// One ranked list merges three previously separate surfaces (heuristic focus
+// cards, the briefing's focus items, and the recommended-actions queue) so the
+// user sees exactly one prioritised to-do list instead of three overlapping ones.
 
-interface InsightCardProps {
-  priority: 1 | 2 | 3;
-  accent: string;
-  icon: string;
-  title: string;
-  description: string;
-  actionLabel?: string;
-  onAction?: () => void;
+interface NowItem {
+  id: string;
+  /** 0 = now/critical, 1 = today/high, 2 = soon — drives sort order and tone. */
+  rank: 0 | 1 | 2;
+  badge: string;
+  text: string;
+  detail?: string;
+  meta?: string;
 }
 
-function InsightCard({ priority, accent, icon, title, description, actionLabel, onAction }: InsightCardProps) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        gap: 16,
-        padding: "20px 20px 20px 0",
-        borderRadius: "var(--v3-radius)",
-        background: "var(--v3-surface)",
-        border: "1px solid var(--v3-border-soft)",
-        borderLeft: `4px solid ${accent}`,
-        paddingLeft: 16,
-        position: "relative",
-      }}
-    >
-      {/* Priority number */}
-      <div
-        style={{
-          flexShrink: 0,
-          width: 28,
-          height: 28,
-          borderRadius: "50%",
-          background: accent + "22",
-          color: accent,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontWeight: 700,
-          fontSize: 13,
-          fontFamily: "var(--v3-font)",
-        }}
-      >
-        {priority}
-      </div>
-
-      {/* Icon */}
-      <div style={{ flexShrink: 0, fontSize: 22, lineHeight: 1, marginTop: 2 }}>{icon}</div>
-
-      {/* Content */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div
-          style={{
-            fontFamily: "var(--v3-font)",
-            fontWeight: 600,
-            fontSize: 15,
-            color: "var(--v3-text-primary)",
-            marginBottom: 6,
-          }}
-        >
-          {title}
-        </div>
-        <div
-          style={{
-            fontFamily: "var(--v3-font)",
-            fontSize: 13,
-            color: "var(--v3-text-secondary)",
-            lineHeight: 1.6,
-            marginBottom: actionLabel ? 14 : 0,
-          }}
-        >
-          {description}
-        </div>
-        {actionLabel && onAction && (
-          <button
-            onClick={onAction}
-            style={{
-              background: "none",
-              border: "none",
-              padding: 0,
-              cursor: "pointer",
-              fontFamily: "var(--v3-font)",
-              fontSize: 13,
-              fontWeight: 600,
-              color: accent,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 4,
-            }}
-          >
-            {actionLabel}
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── MetricPill ─────────────────────────────────────────────────────────────
-// Compact inline metric used in the welcome header strip (replaces the full Programme card).
-
+const RANK_TONE = ["var(--v3-red, #ef4444)", "var(--v3-amber)", "var(--v3-text-muted)"] as const;
 
 // ─── AgentActionButton ───────────────────────────────────────────────────────
 
@@ -246,15 +159,6 @@ export default function InsightFeedView({
     year: "numeric",
   });
 
-  // Phase-calibrated minimum gate readiness. Resolved from the same active phase
-  // the insight alert below uses, so the command panel and the "Gate Readiness
-  // Alert" always quote the same threshold number for the phase the user is on.
-  const gateThresholdPhase =
-    (activePhaseId ? program?.phases.find((p) => p.id === activePhaseId) : null) ??
-    program?.phases.find((p) => p.pct >= 10 && p.pct <= 90) ??
-    null;
-  const gateThreshold = getGateThreshold(gateThresholdPhase?.id ?? "");
-
   // The daily-briefing agent ("What should I know today?") writes its structured
   // output to program.rawData.data.dailyBriefing — headline + ≤3 focus items. This
   // is the genuine "focus for today" (distinct from the programme narrative, which
@@ -274,84 +178,8 @@ export default function InsightFeedView({
     };
   }, [program?.rawData]);
 
-  // ── Derive insight cards ─────────────────────────────────────────────────
-  const insights = useMemo(() => {
-    type Card = InsightCardProps;
-    const cards: Card[] = [];
-
-    // Decisions are owned solely by the Decision Queue card below — no duplicate
-    // insight card here.
-
-    // "Active phase" must resolve to the same phase the rest of the app treats as
-    // active (the phase strip highlight and Quick Nav both key off activePhaseId).
-    // Prefer activePhaseId; only fall back to the in-progress heuristic when no
-    // phase is explicitly active, so Home never contradicts itself.
-    const activePhase =
-      (activePhaseId ? program?.phases.find((p) => p.id === activePhaseId) : null) ??
-      program?.phases.find((p) => p.pct >= 10 && p.pct <= 90) ??
-      null;
-
-    if (activePhase) {
-      const label = PHASE_LABELS[activePhase.id] ?? activePhase.displayName;
-      cards.push({
-        priority: 2 as 1 | 2 | 3,
-        accent: "var(--v3-accent)",
-        icon: "→",
-        title: `Active Phase: ${label}`,
-        description: `Your programme is currently in ${label}. Keep momentum by reviewing phase readiness and updating progress.`,
-        actionLabel: `Go to ${label} →`,
-        onAction: () => onNavigateToPhase(activePhase.id),
-      });
-    }
-
-    // Gate readiness reflects the ONLY two things that gate closing a phase:
-    // every required artifact approved (completeness 100%) and artifact quality
-    // above 85%. We surface the alert when the active phase isn't closeable yet,
-    // describing exactly which of the two metrics is short — no exit-criteria or
-    // generic-threshold language that doesn't map to the close action.
-    const activeReadiness =
-      activePhase && program ? computePhaseReadiness(program, activePhase.id) : null;
-    const activeGateApproved =
-      (activePhase && (program?.gateReviews?.[activePhase.id] as { status?: string } | undefined)?.status === "approved") || false;
-    if (activePhase && activeReadiness && !activeReadiness.canApproveGate && !activeGateApproved) {
-      const phaseLabel = PHASE_LABELS[activePhase.id] ?? activePhase.displayName;
-      const needsArtifacts = activeReadiness.artifactsComplete < 100;
-      const gateAccent = needsArtifacts && activeReadiness.artifactsComplete < 50 ? "var(--v3-red)" : "var(--v3-amber)";
-      const description = needsArtifacts
-        ? `${activeReadiness.artifactsComplete}% of required ${phaseLabel} artifacts are approved. Closing the phase needs all of them approved (100%) at above 85% quality.`
-        : `${phaseLabel} artifacts are 100% approved but quality is ${activeReadiness.artifactScore}%. Closing the phase needs quality above 85%.`;
-      cards.push({
-        priority: 3 as 1 | 2 | 3,
-        accent: gateAccent,
-        icon: "⬡",
-        title: "Phase Readiness Alert",
-        description,
-        actionLabel: "View Gates →",
-        onAction: onNavigateToGates,
-      });
-    }
-
-    if (cards.length === 0) {
-      cards.push({
-        priority: 1,
-        accent: "var(--v3-green)",
-        icon: "✓",
-        title: "No critical issues detected",
-        description: "Programme is on track. Use the actions below to stay ahead.",
-        actionLabel: "View programme status →",
-        onAction: onNavigateToGates,
-      });
-    }
-
-    return cards.slice(0, 3).map((c, i) => ({ ...c, priority: (i + 1) as 1 | 2 | 3 }));
-  }, [program, activePhaseId, gateThreshold, confidenceResult, openDecisionCount, onNavigateToDecide, onNavigateToGates, onNavigateToPhase, onRunAgent]);
-
   // ── Metrics ──────────────────────────────────────────────────────────────
   const phases = program?.phases ?? [];
-  // Fresh programme = no phase progress yet. Used to suppress confidence-heavy
-  // sections (they're noise before any signal exists) and to show the welcome guide.
-  const totalPct = phases.reduce((sum, p) => sum + (p.pct ?? 0), 0);
-  const isFresh = totalPct === 0 && phases.length > 0;
   const phaseIdSetFeed = new Set(program?.phases.map((p) => p.id) ?? []);
   const gatesApproved = program?.gateReviews
     ? Object.entries(program.gateReviews).filter(
@@ -417,35 +245,8 @@ export default function InsightFeedView({
 
   const lastUpdated = getRelativeTime((program as (ProgramSummary & { updatedAt?: string }) | null)?.updatedAt);
 
-  // ── Confidence trajectory forecast (Priority — forecastConfidence integration) ──
-  // Build a history from stored confidence snapshots or synthesise a 2-point history
-  // from previousConfidenceScore (if available in rawData) and current score.
-  const confidenceForecast = useMemo((): ConfidenceForecast | null => {
-    if (confidenceScore === null || confidenceScore === undefined) return null;
-    const rawSource = program
-      ? (typeof program.rawData === "object" && program.rawData !== null
-        ? ("data" in program.rawData && typeof (program.rawData as Record<string,unknown>).data === "object"
-          ? (program.rawData as Record<string,unknown>).data as Record<string,unknown>
-          : program.rawData as Record<string,unknown>)
-        : null)
-      : null;
-    // Use stored confidence history if available (array of {ts, score}), else synthesise
-    const storedHistory = Array.isArray(rawSource?.confidenceHistory)
-      ? (rawSource.confidenceHistory as Array<{ts: number; score: number}>)
-      : null;
-    const history: Array<{ts: number; score: number}> = storedHistory
-      ?? [
-        // Synthesise: assume score was ~5 pts lower 7 days ago if we have no history
-        { ts: Date.now() - 7 * 86_400_000, score: Math.max(0, confidenceScore - 5) },
-        { ts: Date.now(), score: confidenceScore },
-      ];
-    const target = getGateThreshold(activePhaseId ?? "build");
-    return forecastConfidence(history, target);
-  }, [confidenceScore, program, activePhaseId]);
-
   // ── Open actions — the same delivery-lead recommended-action queue the header
-  //    pill and Action Center count from, surfaced inline so the user can act
-  //    without leaving Today. Top 4 by priority. ──
+  //    pill and Action Center count from. ──
   const openActions = useMemo(() => {
     if (!program) return [] as ReturnType<typeof deriveOpenRecommendedActions>;
     const order: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
@@ -453,6 +254,62 @@ export default function InsightFeedView({
       (a, b) => (order[a.priority as string] ?? 2) - (order[b.priority as string] ?? 2),
     );
   }, [program]);
+
+  // ── Consolidated "What needs you now" queue ──────────────────────────────
+  // ONE prioritised to-do list, merged from the three sources that used to render
+  // as separate, overlapping panels: open blockers (RAID), the daily briefing's
+  // focus items (AI-curated), and the recommended-actions queue (decisions). Items
+  // are de-duplicated by normalised text so a blocker that also appears as a focus
+  // item or action shows once, and ranked: now/critical → today/high → soon.
+  const nowQueue = useMemo<NowItem[]>(() => {
+    if (!program) return [];
+    const items: NowItem[] = [];
+    const seen = new Set<string>();
+    const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+    const push = (key: string, item: NowItem) => {
+      const k = norm(key);
+      if (!k || seen.has(k)) return;
+      seen.add(k);
+      items.push(item);
+    };
+    const phaseLabel = (id?: string | null) =>
+      id && id !== "all" ? (PHASE_LABELS[id] ?? id) : undefined;
+
+    for (const b of selectBlockers(program)) {
+      push(b.title, {
+        id: `blk-${b.id}`,
+        rank: 0,
+        badge: "Blocker",
+        text: b.title,
+        detail: b.description || undefined,
+        meta: phaseLabel(b.phase),
+      });
+    }
+    for (const [i, f] of (dailyBriefing?.focusItems ?? []).entries()) {
+      const u = (f.urgency ?? "").toLowerCase();
+      const rank: 0 | 1 | 2 = u === "now" ? 0 : u === "today" ? 1 : 2;
+      push(f.item, {
+        id: `foc-${i}`,
+        rank,
+        badge: u ? u.replace("-", " ") : "Focus",
+        text: f.item,
+        detail: f.action || undefined,
+        meta: f.owner ? `Owner: ${f.owner}` : undefined,
+      });
+    }
+    for (const a of openActions) {
+      const p = a.priority as string;
+      const rank: 0 | 1 | 2 = p === "critical" ? 0 : p === "high" ? 1 : 2;
+      push(a.question || a.title, {
+        id: `act-${a.id}`,
+        rank,
+        badge: p,
+        text: a.question || a.title,
+        meta: phaseLabel(a.phaseId),
+      });
+    }
+    return items.sort((a, b) => a.rank - b.rank);
+  }, [program, dailyBriefing, openActions]);
 
   if (!program) {
     return (
@@ -587,30 +444,12 @@ export default function InsightFeedView({
         </div>
       </div>
 
-      {/* ── 1a. Today's Focus — lead with the one thing that needs attention ──── */}
-      <div>
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "var(--v3-text-primary)", marginBottom: 4 }}>
-            Today's Focus
-          </div>
-          {/* A2: dynamic subtitle */}
-          <div style={{ fontSize: 13, color: "var(--v3-text-muted)" }}>
-            {insights.length} thing{insights.length !== 1 ? "s" : ""} that need{insights.length === 1 ? "s" : ""} your attention
-          </div>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {insights.map((card) => (
-            <InsightCard key={card.priority} {...card} />
-          ))}
-        </div>
-      </div>
-
-      {/* ── 1a-ii. Today's briefing — the daily-briefing agent's focus for today ─
-          Always rendered: this card hosts the primary "What should I know today?"
-          CTA, so it must be present even on a fresh programme. Otherwise there is
-          nowhere to trigger the briefing and no surface for its Preparing → result
-          state, which is exactly what made the button read as dead. */}
+      {/* ── 1a. Today's briefing — the daily-briefing agent's headline for today ─
+          The narrative hero: a one-line read on where the programme stands. Its
+          actionable focus items now flow into the single "What needs you now"
+          queue below, so this box stays a hero, not a competing list. Always
+          rendered so the "What should I know today?" CTA and its Preparing → result
+          state have a home even on a fresh programme. */}
       <div style={{
           padding: "16px 18px",
           background: "var(--v3-surface-2)",
@@ -640,30 +479,9 @@ export default function InsightFeedView({
               <div style={{ fontWeight: 600, fontSize: 14, color: "var(--v3-text-primary)", lineHeight: 1.5 }}>
                 {dailyBriefing.headline}
               </div>
-              {Array.isArray(dailyBriefing.focusItems) && dailyBriefing.focusItems.length > 0 && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
-                  {dailyBriefing.focusItems.slice(0, 3).map((f, i) => {
-                    const urgency = (f.urgency ?? "").toLowerCase();
-                    const tone = urgency === "now" ? "var(--v3-red)" : urgency === "today" ? "var(--v3-amber)" : "var(--v3-text-muted)";
-                    return (
-                      <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                        <span style={{ color: tone, fontSize: 13, lineHeight: 1.5, flexShrink: 0 }}>•</span>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--v3-text-primary)", lineHeight: 1.5 }}>
-                            {f.item}
-                            {f.urgency && (
-                              <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, color: tone, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                                {urgency.replace("-", " ")}
-                              </span>
-                            )}
-                          </div>
-                          {f.action && (
-                            <div style={{ fontSize: 12, color: "var(--v3-text-secondary)", lineHeight: 1.5, marginTop: 2 }}>{f.action}</div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+              {dailyBriefing.progressHighlight && (
+                <div style={{ fontSize: 12, color: "var(--v3-text-secondary)", fontStyle: "italic", marginTop: 8 }}>
+                  ◎ {dailyBriefing.progressHighlight}
                 </div>
               )}
               {program.narrative && (
@@ -699,6 +517,68 @@ export default function InsightFeedView({
             </div>
           )}
         </div>
+
+      {/* ── 2. What needs you now — the single consolidated action queue ───────
+          Blockers + briefing focus items + recommended actions, de-duplicated and
+          ranked. Replaces the three overlapping lists this page used to show. */}
+      {nowQueue.length > 0 && (
+        <div
+          style={{
+            padding: 18,
+            borderRadius: "var(--v3-radius)",
+            border: "1px solid var(--v3-border-soft)",
+            background: "var(--v3-surface)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "var(--v3-text-primary)" }}>
+                What needs you now
+              </div>
+              <div style={{ fontSize: 12, color: "var(--v3-text-muted)", marginTop: 2 }}>
+                {nowQueue.length} item{nowQueue.length !== 1 ? "s" : ""} that need{nowQueue.length === 1 ? "s" : ""} your attention, most urgent first
+              </div>
+            </div>
+            <button type="button" className="v3-button ghost sm" onClick={onNavigateToDecide}>
+              See all →
+            </button>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {nowQueue.slice(0, 6).map((item) => (
+              <div
+                key={item.id}
+                onClick={onNavigateToDecide}
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 10,
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  background: "var(--v3-surface-2)",
+                  border: "1px solid var(--v3-border-soft)",
+                  borderLeft: `3px solid ${RANK_TONE[item.rank]}`,
+                  cursor: "pointer",
+                }}
+              >
+                <span style={{ fontSize: 10, fontWeight: 700, color: RANK_TONE[item.rank], textTransform: "uppercase", letterSpacing: "0.05em", flexShrink: 0, marginTop: 2, minWidth: 52 }}>
+                  {item.badge}
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--v3-text-primary)", lineHeight: 1.45 }} title={item.text}>
+                    {item.text}
+                  </div>
+                  {item.detail && (
+                    <div style={{ fontSize: 12, color: "var(--v3-text-secondary)", lineHeight: 1.45, marginTop: 2 }}>{item.detail}</div>
+                  )}
+                </div>
+                {item.meta && (
+                  <span style={{ fontSize: 11, color: "var(--v3-text-muted)", flexShrink: 0, marginTop: 2 }}>{item.meta}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── 1b. Phase Pipeline — horizontal scroll (C1) ──────────────────────── */}
       {phases.length > 0 && (
@@ -760,112 +640,7 @@ export default function InsightFeedView({
         </div>
       )}
 
-      {/* Confidence Breakdown moved to the Executive summary screen. */}
-
-      {/* ── 1d. Confidence Trajectory — compact one-line trend (full chart retired) ── */}
-      {!isFresh && confidenceForecast && confidenceScore !== null && (
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          flexWrap: "wrap",
-          padding: "10px 16px",
-          background: "var(--v3-surface)",
-          border: "1px solid var(--v3-border-soft)",
-          borderRadius: "var(--v3-radius)",
-          fontSize: 12.5,
-        }}>
-          <span style={{
-            fontSize: 11,
-            padding: "2px 8px",
-            borderRadius: 10,
-            fontWeight: 600,
-            background: confidenceForecast.trend === "improving" ? "rgba(34,197,94,0.12)" : confidenceForecast.trend === "declining" ? "rgba(239,68,68,0.12)" : "rgba(148,163,184,0.12)",
-            color: confidenceForecast.trend === "improving" ? "var(--v3-green)" : confidenceForecast.trend === "declining" ? "var(--v3-red, #ef4444)" : "var(--v3-text-muted)",
-          }}>
-            {confidenceForecast.trend === "improving" ? "↑ Improving" : confidenceForecast.trend === "declining" ? "↓ Declining" : "→ Stable"}
-          </span>
-          <strong style={{ color: confidenceForecast.weeklyVelocity > 0 ? "var(--v3-green)" : confidenceForecast.weeklyVelocity < 0 ? "var(--v3-red, #ef4444)" : "var(--v3-text-primary)" }}>
-            {confidenceForecast.weeklyVelocity > 0 ? "+" : ""}{confidenceForecast.weeklyVelocity.toFixed(1)} pts/wk
-          </strong>
-          <span style={{ color: "var(--v3-text-muted)" }}>·</span>
-          <span style={{ color: "var(--v3-text-secondary)" }}>
-            {confidenceScore >= confidenceForecast.targetScore
-              ? <span style={{ color: "var(--v3-green)", fontWeight: 600 }}>✓ At {confidenceForecast.targetScore}% gate target</span>
-              : confidenceForecast.estimatedDaysToTarget !== null
-              ? <>~<strong style={{ color: "var(--v3-text-primary)" }}>{confidenceForecast.estimatedDaysToTarget} days</strong> to {confidenceForecast.targetScore}% gate target</>
-              : <>Not improving toward {confidenceForecast.targetScore}% gate target</>}
-          </span>
-        </div>
-      )}
-
-      {/* ── 4. Top Actions — top-priority inline queue so the user can act without leaving Today ── */}
-      {openActions.length > 0 && (
-        <div
-          style={{
-            padding: 18,
-            borderRadius: "var(--v3-radius)",
-            border: "1px solid var(--v3-border-soft)",
-            background: "var(--v3-surface)",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "var(--v3-text-primary)" }}>
-                ◈ Top Actions
-              </div>
-              <div style={{ fontSize: 12, color: "var(--v3-text-muted)", marginTop: 2 }}>
-                {openActions.length} open action{openActions.length !== 1 ? "s" : ""} awaiting a decision
-              </div>
-            </div>
-            <button
-              type="button"
-              className="v3-button ghost sm"
-              onClick={onNavigateToDecide}
-            >
-              See all →
-            </button>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {openActions.slice(0, 4).map((action) => {
-              const priorityColor = action.priority === "critical"
-                ? "var(--v3-red)"
-                : action.priority === "high" ? "var(--v3-amber)" : "var(--v3-text-muted)";
-              const phaseLabel = action.phaseId && action.phaseId !== "all"
-                ? (PHASE_LABELS[action.phaseId] ?? action.phaseId)
-                : null;
-              return (
-                <div
-                  key={action.id}
-                  onClick={onNavigateToDecide}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: "8px 12px",
-                    borderRadius: 10,
-                    background: "var(--v3-surface-2)",
-                    border: "1px solid var(--v3-border-soft)",
-                    cursor: "pointer",
-                  }}
-                >
-                  <span style={{ fontSize: 10, fontWeight: 700, color: priorityColor, textTransform: "uppercase", letterSpacing: "0.05em", flexShrink: 0 }}>
-                    {action.priority}
-                  </span>
-                  <span style={{ flex: 1, fontSize: 13, color: "var(--v3-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={action.question || action.title}>
-                    {action.question || action.title}
-                  </span>
-                  {phaseLabel && (
-                    <span style={{ fontSize: 11, color: "var(--v3-text-muted)", flexShrink: 0 }}>{phaseLabel}</span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* ── 8. Portfolio quick-link ───────────────────────────────────────────── */}
+      {/* ── 3. Portfolio quick-link ───────────────────────────────────────────── */}
       {programs.length > 1 && (
         <div
           style={{
