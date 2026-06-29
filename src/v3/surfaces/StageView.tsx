@@ -49,6 +49,8 @@ interface StageViewProps {
   onResolveDecision: (id: string, resolution: "approved" | "deferred" | "rejected" | "modified", modifiedContent?: string) => void | Promise<void>;
   onOpenDecide: () => void;
   onOpenDecideTab?: (tab: "blockers" | "risks" | "actions") => void;
+  /** Open the right-rail Guidance tab (the quality tiles deep-link here). */
+  onOpenGuidance?: () => void;
   onAddItem?: (tab: "blockers" | "risks" | "actions") => void;
   onOpenReport: (reportId: V3ReportId) => void;
   onReopenGate: (phaseId: string) => void;
@@ -415,6 +417,7 @@ export default function StageView({
   onResolveDecision,
   onOpenDecide,
   onOpenDecideTab,
+  onOpenGuidance,
   onAddItem,
   onOpenReport,
   onReopenGate,
@@ -1222,12 +1225,12 @@ export default function StageView({
           // The gate pipeline, in the order work flows toward the gate.
           const pipeline: Array<{ label: string; value: string | number; tone: string; anchor?: string | null; onClick?: () => void }> = [
             { label: "Inputs complete", value: `${inputsComplete}%`, tone: pctTone(inputsComplete), anchor: "phase-inputs-anchor" },
-            { label: "Input quality", value: inputQuality ? `${inputQuality.overallScore}%` : "—", tone: inputQuality ? pctTone(inputQuality.overallScore) : "", anchor: "phase-inputs-anchor" },
+            { label: "Input quality", value: inputQuality ? `${inputQuality.overallScore}%` : "—", tone: inputQuality ? pctTone(inputQuality.overallScore) : "", onClick: onOpenGuidance, anchor: "phase-inputs-anchor" },
             { label: "Artifacts approved", value: `${artifactsComplete}%`, tone: pctTone(artifactsComplete), anchor: "phase-artifacts-anchor" },
             // Quality is only meaningful once something is produced; mirror the
             // "—" treatment of input quality / gate score so a stale review score
             // never shows next to a 0%/all-missing artifact column.
-            { label: "Artifact quality", value: hasProducedArtifacts ? `${readiness.artifactScore}%` : "—", tone: hasProducedArtifacts ? pctTone(readiness.artifactScore) : "", anchor: "phase-artifacts-anchor" },
+            { label: "Artifact quality", value: hasProducedArtifacts ? `${readiness.artifactScore}%` : "—", tone: hasProducedArtifacts ? pctTone(readiness.artifactScore) : "", onClick: onOpenGuidance, anchor: "phase-artifacts-anchor" },
             // Gate score = average of artifacts complete and artifact quality (the
             // two signals that move the phase toward its gate). This is the single
             // definition of "gate score" across the app — the header metric, the

@@ -1,7 +1,9 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import type { DecisionSummary, ProgramSummary, RAIDEntry, RAIDEntryType } from "@/new/types";
 import { selectBlockers, selectRisks } from "@/v3/lib/programRaid";
 import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
+import { resolveArtifactReview } from "@/v3/lib/artifactReview";
+import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
 import { PROVENANCE_KEY, parseProvenance, provenanceMatches } from "@/new/lib/fieldProvenance";
 import { AdamCard, AdamCardBody } from "@/v3/components/ui/AdamCard";
@@ -55,9 +57,15 @@ type PhaseRailPanelsProps = {
    * highlights it. Optional so older call sites keep compiling.
    */
   onNavigateToPhaseInputs?: (phaseId: string, anchor?: string) => void;
+  /**
+   * External signal to focus a primary rail tab. The nonce makes repeat requests
+   * for the same tab re-fire (e.g. tapping the Input-quality tile twice), so the
+   * rail always lands on Guidance even if the user already had it open.
+   */
+  railIntent?: { tab: PrimaryTab; nonce: number } | null;
 };
 
-type PrimaryTab = "actions" | "intelligence";
+export type PrimaryTab = "actions" | "guidance" | "intelligence";
 type ActionTab = "actions" | "blockers" | "risks";
 type IntelTab = "graph" | "uploads";
 
@@ -110,11 +118,19 @@ export function PhaseRailPanels({
   onOpenMoreView,
   onUploadDocument,
   onNavigateToPhaseInputs,
+  railIntent,
 }: PhaseRailPanelsProps) {
   const [primaryTab, setPrimaryTab] = useState<PrimaryTab>("actions");
   const [actionTab, setActionTab] = useState<ActionTab>("actions");
   const [intelTab, setIntelTab] = useState<IntelTab>("graph");
   const [closingId, setClosingId] = useState<string | null>(null);
+
+  // Honour external tab requests (e.g. the StageView quality tiles opening
+  // Guidance). Keyed on the nonce so the same tab can be re-requested.
+  useEffect(() => {
+    if (railIntent) setPrimaryTab(railIntent.tab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [railIntent?.nonce]);
 
   const blockers = useMemo(() => selectBlockers(program, { phaseId }), [program, phaseId]);
   const risks = useMemo(() => selectRisks(program, { phaseId }), [program, phaseId]);
@@ -203,6 +219,29 @@ export function PhaseRailPanels({
     return items;
   }, [program, phaseId]);
 
+  // Guidance: the per-artifact improvement recommendations from each AI review.
+  // These are the exact signals behind the phase's input- and artifact-quality
+  // scores, so this tab is the "why is quality X% and what do I fix" surface the
+  // quality tiles deep-link into. Only artifacts that carry recommendations show.
+  const guidanceItems = useMemo(() => {
+    const bucket = getDataBucket(program);
+    const store = getDynamicSchemaStore(program.rawData);
+    return getPhaseArtifactDefs(phaseId, store)
+      .map((def) => {
+        const review = resolveArtifactReview(bucket, def.id, phaseId);
+        if (!review || review.improvements.length === 0) return null;
+        return { id: def.id, label: def.label, score: review.score, improvements: review.improvements };
+      })
+      .filter(
+        (item): item is { id: string; label: string; score: number | null; improvements: string[] } =>
+          item !== null,
+      );
+  }, [program, phaseId]);
+  const guidanceCount = useMemo(
+    () => guidanceItems.reduce((sum, item) => sum + item.improvements.length, 0),
+    [guidanceItems],
+  );
+
   const actionTabs: { id: ActionTab; label: string; count: number }[] = [
     { id: "actions", label: "Actions", count: decisions.length },
     { id: "risks", label: "Risks", count: risks.length },
@@ -225,6 +264,7 @@ export function PhaseRailPanels({
 
   const primaryTabs: { id: PrimaryTab; label: string; count: number }[] = [
     { id: "actions", label: "Action Center", count: openActionCount },
+    { id: "guidance", label: "Guidance", count: guidanceCount },
     { id: "intelligence", label: "Intelligence", count: artifactCount },
   ];
 
@@ -371,6 +411,38 @@ export function PhaseRailPanels({
               <div className="v3-rail-empty">No open risks logged for this phase.</div>
             )
           ) : null}
+        </AdamCardBody>
+      </AdamCard>
+      ) : null}
+
+      {/* GUIDANCE */}
+      {primaryTab === "guidance" ? (
+      <AdamCard>
+        <AdamCardBody>
+          {guidanceItems.length ? (
+            <div className="v3-rail-list">
+              <div className="v3-rail-meta">
+                Improvement recommendations from each artifact's AI review — the same signals behind this phase's input &amp; artifact quality scores.
+              </div>
+              {guidanceItems.map((item) => (
+                <div key={item.id} className="v3-rail-item">
+                  <div className="v3-rail-item-head">
+                    <span className="v3-rail-item-title">{item.label}</span>
+                    {item.score != null ? (
+                      <span className={`v3-chip v3-chip-tight ${item.score >= 75 ? "green" : item.score >= 50 ? "amber" : "red"}`}>{item.score}%</span>
+                    ) : null}
+                  </div>
+                  <ul className="v3-rail-guidance-list">
+                    {item.improvements.map((rec, idx) => (
+                      <li key={idx} className="v3-rail-item-sub">{rec}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="v3-rail-empty">No artifact reviews yet. Generate and review this phase's artifacts to see improvement guidance.</div>
+          )}
         </AdamCardBody>
       </AdamCard>
       ) : null}

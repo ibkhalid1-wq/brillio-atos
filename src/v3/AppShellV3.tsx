@@ -1208,6 +1208,9 @@ export default function AppShellV3() {
     if (typeof window === "undefined") return true;
     return window.localStorage.getItem(CONTEXT_DRAWER_STORAGE_KEY) !== "false";
   });
+  // Pending request to focus a specific right-rail tab (e.g. the StageView
+  // quality tiles opening Guidance). Nonce-keyed so repeat taps re-fire.
+  const [railIntent, setRailIntent] = useState<{ tab: "actions" | "guidance" | "intelligence"; nonce: number } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const backendPanelRef = useRef<HTMLDivElement>(null);
 
@@ -3207,6 +3210,7 @@ export default function AppShellV3() {
                 onResolveDecision={handleResolveDecision}
                 onOpenDecide={() => navigateSurface("decide")}
                 onOpenDecideTab={(tab) => { setDecideIntent({ tab, nonce: Date.now(), openAdd: false }); navigateSurface("decide"); }}
+                onOpenGuidance={() => { setContextDrawerOpen(true); setRailIntent({ tab: "guidance", nonce: Date.now() }); }}
                 onAddItem={(tab) => { setDecideIntent({ tab, nonce: Date.now() }); navigateSurface("decide"); }}
                 onOpenReport={openReport}
                 onReopenGate={handleReopenGate}
@@ -3467,6 +3471,7 @@ export default function AppShellV3() {
           onOpenMoreView={(view) => openMoreView(view)}
           onOpenDecide={() => navigateSurface("decide")}
           onNavigateToPhaseInputs={navigateToPhaseInputs}
+          railIntent={railIntent}
         />
       ) : null}
       </div>

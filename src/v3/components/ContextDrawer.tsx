@@ -3,7 +3,7 @@ import type { PhaseAgentTask } from "@/lib/adamPhaseAgentTypes";
 import type { DecisionSummary, ProgramSummary, RAIDEntry, RAIDEntryType } from "@/new/types";
 import type { V3MoreView } from "@/v3/types";
 import TaskQueuePanel from "@/v3/components/TaskQueuePanel";
-import { PhaseRailPanels } from "@/v3/components/PhaseRailPanels";
+import { PhaseRailPanels, type PrimaryTab } from "@/v3/components/PhaseRailPanels";
 
 // The expandable right rail. Its body is the canonical two-section rail surface
 // (Action Center + Intelligence). Pending agent tasks — questions ATOS needs
@@ -36,6 +36,7 @@ interface ContextDrawerProps {
   onOpenMoreView?: (view: V3MoreView) => void;
   onOpenDecide?: () => void;
   onNavigateToPhaseInputs?: (phaseId: string, anchor?: string) => void;
+  railIntent?: { tab: PrimaryTab; nonce: number } | null;
 }
 
 export function ContextDrawer({
@@ -57,6 +58,7 @@ export function ContextDrawer({
   onOpenMoreView,
   onOpenDecide,
   onNavigateToPhaseInputs,
+  railIntent,
 }: ContextDrawerProps) {
   return (
     <div className={`v3-context-drawer-shell ${open ? "is-open" : ""}`}>
@@ -101,6 +103,7 @@ export function ContextDrawer({
               onOpenMoreView={onOpenMoreView ?? (() => {})}
               onUploadDocument={onUploadDocument}
               onNavigateToPhaseInputs={onNavigateToPhaseInputs}
+              railIntent={railIntent}
             />
           ) : null}
         </div>
