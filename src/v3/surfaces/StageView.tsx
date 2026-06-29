@@ -22,7 +22,7 @@ import { getPhaseArtifactDefs, type PhaseArtifactDef } from "@/v3/lib/phaseArtif
 import { getArtifactInputFields } from "@/v3/lib/phaseFlowEdges";
 import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
 import { getDynamicSchemaStore, canonicalArtifactId } from "@/v3/lib/dynamicSchema";
-import { getAgentMeta } from "@/v3/lib/agentMeta";
+import { getAgentMeta, SUPPORT_ARTIFACT_IDS } from "@/v3/lib/agentMeta";
 import { runPreFlight } from "@/v3/lib/phaseInputPreFlight";
 import { derivePhaseInputQuality } from "@/v3/lib/phaseInputQuality";
 import { getFormalArtifactContent } from "@/v3/lib/formalArtifacts";
@@ -626,6 +626,10 @@ export default function StageView({
         // so legacy stored values are skipped here.
         if (node.key === "completion-estimate") continue;
         if (node.key === "risk") continue;
+        // Support agents (capacity, compliance, vendor risk, etc.) write artifact
+        // stubs too, but they back cards/metrics — not gateable deliverables — so
+        // they are excluded from the artifacts column. Registry is the source of truth.
+        if (SUPPORT_ARTIFACT_IDS.has(node.key)) continue;
         orphanByKey.set(node.key, record);
         orphans.push({
           id: node.key,

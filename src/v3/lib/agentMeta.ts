@@ -52,6 +52,28 @@ export const AGENT_META: Record<string, AgentMeta> = {
 };
 
 /**
+ * Internal/support artifacts: analysis and assist outputs produced by support
+ * agents (capacity, compliance, vendor risk, sprint plan, etc.). They are stored
+ * as phase-artifact stubs by `applyProgramSupportArtifact` in the run-agent edge
+ * function, but they are NOT formal phase deliverables — they back cards/metrics
+ * elsewhere. Surfaces that list deliverables (the phase artifacts column) must
+ * exclude these so the column shows only real, gateable artifacts. This set is
+ * the single source of truth for "which produced artifacts are internal".
+ */
+export const SUPPORT_ARTIFACT_IDS = new Set<string>([
+  "discovery-guide-generator",
+  "sprint-planner",
+  "stakeholder-comms-drafter",
+  "steerco-agenda-builder",
+  "kpi-validator",
+  "compliance-checker",
+  "capacity-assessor",
+  "lessons-synthesiser",
+  "vendor-risk-assessor",
+  "meeting-notes-extractor",
+]);
+
+/**
  * Synonym artifact-id → canonical producing-agent id. The phase planner
  * sometimes emits a dynamic artifact under a descriptive synonym ("risk-log")
  * instead of the canonical producing-agent id ("risk"). The run-agent edge
