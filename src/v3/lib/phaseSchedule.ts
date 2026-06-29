@@ -155,21 +155,40 @@ function readPhaseHealth(inner: Record<string, unknown>): Map<string, PhaseHealt
 
 /**
  * Artifact-completion progress per phase, for the client fallback before the
- * agent runs. Progress is grounded in the artifacts generated for each phase
- * (read from `phaseArtifacts`): an approved artifact is full credit, a draft is
- * partial, stale less so, archived excluded. The denominator is the larger of
- * the artifacts generated and the phase's required-artifact slots, so a phase
- * isn't "done" until its mandated artifacts exist and are approved.
+ * agent runs. When a phase defines required artifacts, progress is the completion
+ * share of exactly that mandated set — approved is full credit, draft/stale
+ * partial, a required artifact not yet generated counts as zero. Non-required
+ * artifacts the agent happens to emit (e.g. a draft completion-estimate) neither
+ * help nor dilute the score, so a phase whose mandated artifacts are all approved
+ * reads 100%. Phases with no required set fall back to the generated-artifact mix.
  */
 function readArtifactProgress(inner: Record<string, unknown>, phases: Array<{ id: string }>): Map<string, number> {
   const phaseArtifacts = typeof inner.phaseArtifacts === "object" && inner.phaseArtifacts !== null
     ? inner.phaseArtifacts as Record<string, unknown>
     : {};
+  const creditFor = (status: string): number =>
+    status === "approved" ? 1 : status === "stale" ? 0.4 : 0.5;
+  const statusOf = (bucket: Record<string, unknown>, artifactId: string): string | null => {
+    const val = bucket[artifactId];
+    if (typeof val !== "object" || val === null) return null;
+    return String((val as Record<string, unknown>).status ?? "draft");
+  };
   const progress = new Map<string, number>();
   for (const p of phases) {
     const bucket = typeof phaseArtifacts[p.id] === "object" && phaseArtifacts[p.id] !== null
       ? phaseArtifacts[p.id] as Record<string, unknown>
       : {};
+    const required = getPhaseDefinition(p.id)?.requiredArtifacts ?? [];
+    if (required.length > 0) {
+      let credit = 0;
+      for (const artifactId of required) {
+        const status = statusOf(bucket, artifactId);
+        if (status === null || status === "archived") continue; // not generated yet → zero credit
+        credit += creditFor(status);
+      }
+      progress.set(p.id, Math.round((credit / required.length) * 100));
+      continue;
+    }
     let credit = 0;
     let generated = 0;
     for (const [artifactId, val] of Object.entries(bucket)) {
@@ -178,11 +197,9 @@ function readArtifactProgress(inner: Record<string, unknown>, phases: Array<{ id
       const status = typeof val === "object" && val !== null ? String((val as Record<string, unknown>).status ?? "draft") : "draft";
       if (status === "archived") continue;
       generated += 1;
-      credit += status === "approved" ? 1 : status === "stale" ? 0.4 : 0.5;
+      credit += creditFor(status);
     }
-    const required = getPhaseDefinition(p.id)?.requiredArtifacts?.length ?? 0;
-    const denom = Math.max(generated, required);
-    progress.set(p.id, denom > 0 ? Math.round((credit / denom) * 100) : 0);
+    progress.set(p.id, generated > 0 ? Math.round((credit / generated) * 100) : 0);
   }
   return progress;
 }
@@ -236,7 +253,11 @@ export function buildRoadmapRows(rawData: unknown, phases: Array<{ id: string }>
     const end = typeof ov?.end === "string" ? ov.end : def?.end;
     if (!start || !end) continue;
     const h = health.get(p.id);
-    const progressPct = h?.progressPct ?? artifactProgress.get(p.id) ?? 0;
+    // Progress tracks artifact completion deterministically — the share of the
+    // phase's required artifacts that are approved. The agent-maintained
+    // phaseHealth.progressPct is only a fallback when no artifacts exist yet, so
+    // a stale/low agent estimate can't contradict what the ledger actually holds.
+    const progressPct = artifactProgress.get(p.id) ?? h?.progressPct ?? 0;
     const startMs = parseUtcDay(start) ?? todayMs;
     const endMs = parseUtcDay(end) ?? todayMs;
     const rag = h?.rag ?? deriveRag(progressPct, startMs, endMs, todayMs);
