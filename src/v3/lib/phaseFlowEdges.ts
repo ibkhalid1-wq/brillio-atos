@@ -14,6 +14,7 @@
 import { getPhaseArtifactIds } from "@/v3/lib/phaseArtifacts";
 import { ATOS_STANDARD } from "@/v3/lib/methodology";
 import { canonicalArtifactId, dynamicFieldArtifacts, type DynamicSchemaStore } from "@/v3/lib/dynamicSchema";
+import { resolveStakeholderField, STAKEHOLDER_PHASE_ID } from "@/v3/lib/phaseInputSchema";
 
 export interface FlowEdge {
   from: string;
@@ -53,6 +54,27 @@ const PHASE_FIELD_ARTIFACTS: Record<string, Record<string, string[]>> = {
 };
 
 /**
+ * Semantic input → artifact relationships that hold for any programme regardless
+ * of the exact field ids the planner emitted. The Discover stakeholder list
+ * always feeds the scope map and requirements catalog — both synthesise who the
+ * programme serves and what they need — so we wire that edge deterministically
+ * rather than depending on the planner to declare it in `artifactInputFlow`.
+ *
+ * The stakeholder field is resolved by shape (`resolveStakeholderField`), so this
+ * holds whatever column set the planner proposed; targets are still constrained
+ * to the phase's real artifact set by callers, so an edge only appears once the
+ * scope map / requirements catalog actually exist in the phase.
+ */
+const STAKEHOLDER_CONSUMER_ARTIFACTS = ["scope-map", "requirements-catalog"];
+
+function semanticFieldArtifacts(phaseId: string, store?: DynamicSchemaStore): Record<string, string[]> {
+  if (phaseId !== STAKEHOLDER_PHASE_ID) return {};
+  const field = resolveStakeholderField(store, phaseId);
+  if (!field) return {};
+  return { [field.id]: [...STAKEHOLDER_CONSUMER_ARTIFACTS] };
+}
+
+/**
  * The input field ids declared to flow into a given artifact, across all three
  * sources that wire the phase flow: the methodology's `artifactInputFlow`
  * (artifact → fields), Strategy's hand-declared field → artifact map, and the
@@ -75,6 +97,10 @@ export function getArtifactInputFields(phaseId: string, artifactId: string, stor
     if (canonicalArtifactId(phaseId, flowArtifactId) !== artifactId) continue;
     for (const fieldId of fieldIds ?? []) fields.add(fieldId);
   }
+  const semanticMap = semanticFieldArtifacts(phaseId, store);
+  for (const [fieldId, artifacts] of Object.entries(semanticMap)) {
+    if (artifacts.includes(artifactId)) fields.add(fieldId);
+  }
   return [...fields];
 }
 
@@ -89,11 +115,12 @@ export function derivePhaseFlowEdges(phaseId: string, fieldIds: string[], store?
   const map = PHASE_FIELD_ARTIFACTS[phaseId] ?? {};
   const methodologyMap = methodologyFieldArtifacts(phaseId);
   const dynamicMap = dynamicFieldArtifacts(phaseId, store);
+  const semanticMap = semanticFieldArtifacts(phaseId, store);
   const valid = new Set(getPhaseArtifactIds(phaseId, store));
   const edges: FlowEdge[] = [];
   for (const fieldId of fieldIds) {
     const seen = new Set<string>();
-    const targets = [...(map[fieldId] ?? []), ...(methodologyMap[fieldId] ?? []), ...(dynamicMap[fieldId] ?? [])];
+    const targets = [...(map[fieldId] ?? []), ...(methodologyMap[fieldId] ?? []), ...(dynamicMap[fieldId] ?? []), ...(semanticMap[fieldId] ?? [])];
     for (const to of targets) {
       if (seen.has(to) || !valid.has(to)) continue;
       seen.add(to);

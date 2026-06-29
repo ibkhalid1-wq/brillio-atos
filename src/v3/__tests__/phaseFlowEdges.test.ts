@@ -98,3 +98,62 @@ describe("getArtifactInputFields", () => {
     );
   });
 });
+
+// The Discover stakeholder list feeds the scope map and requirements catalog by
+// semantics, not by a planner-declared flow — both synthesise who the programme
+// serves. The edge is resolved by the stakeholder grid's shape, so it holds for
+// any column set the planner emitted, with no parallel hand-maintained map.
+describe("stakeholder list → scope-map / requirements-catalog (semantic flow)", () => {
+  const discoverStore = {
+    inputFields: {
+      discover: [
+        {
+          id: "stakeholderList",
+          label: "Stakeholders",
+          type: "grid" as const,
+          required: true,
+          columns: [
+            { key: "name", label: "Name" },
+            { key: "influence", label: "Influence" },
+          ],
+        },
+      ],
+    },
+    artifacts: {
+      discover: [
+        { id: "scope-map", label: "Scope Map", description: "" },
+        { id: "requirements-catalog", label: "Requirements Catalog", description: "" },
+      ],
+    },
+  };
+
+  it("wires the resolved stakeholder field to both consumer artifacts", () => {
+    const edges = derivePhaseFlowEdges("discover", ["stakeholderList"], discoverStore);
+    expect(edges).toEqual([
+      { from: "stakeholderList", to: "scope-map" },
+      { from: "stakeholderList", to: "requirements-catalog" },
+    ]);
+  });
+
+  it("surfaces the stakeholder field as an input feeding each consumer artifact", () => {
+    expect(getArtifactInputFields("discover", "scope-map", discoverStore)).toContain("stakeholderList");
+    expect(getArtifactInputFields("discover", "requirements-catalog", discoverStore)).toContain("stakeholderList");
+  });
+
+  it("only targets consumer artifacts that exist in the phase", () => {
+    // Store with the stakeholder grid but no scope-map artifact: the catalog edge
+    // survives, the scope-map edge is dropped (no dangling target).
+    const onlyCatalog = {
+      inputFields: discoverStore.inputFields,
+      artifacts: { discover: [{ id: "requirements-catalog", label: "Requirements Catalog", description: "" }] },
+    };
+    expect(derivePhaseFlowEdges("discover", ["stakeholderList"], onlyCatalog)).toEqual([
+      { from: "stakeholderList", to: "requirements-catalog" },
+    ]);
+  });
+
+  it("yields no semantic edge without a store (no resolvable stakeholder grid)", () => {
+    expect(derivePhaseFlowEdges("discover", ["stakeholderList"])).toEqual([]);
+    expect(getArtifactInputFields("discover", "scope-map")).toEqual([]);
+  });
+});
