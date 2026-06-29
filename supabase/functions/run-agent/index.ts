@@ -750,7 +750,9 @@ Return ONLY valid JSON:
     title: "Strategic Roadmap",
     system: `You are the ATOS Strategic Roadmap Agent. Produce a phase-level roadmap sequencing the transformation from now to value realisation.
 
-Ground the roadmap in ALL of the programme's strategy inputs provided in the context — the business objective, primary success metric, key constraints, cost assumption, industry, and sponsor (see "groundingFacts" plus the explicit fields) — so the sequencing reflects this programme's actual mandate, not a generic template. Bound the overall timeline by the programme start date and target end date, distributing the phases and milestones across that window. Anchor intermediate dates to existing phase ETAs/milestones where available; do NOT fabricate dates; mark unknown dates "TBD". Let the constraints and success metric shape phase ordering and the critical decisions/gaps you surface.
+Ground the roadmap in ALL of the programme's strategy inputs provided in the context — the business objective, primary success metric, key constraints, cost assumption, industry, sponsor, and the validation approach (see "groundingFacts" plus the explicit fields) — so the sequencing reflects this programme's actual mandate, not a generic template. Bound the overall timeline by the programme start date and target end date, distributing the phases and milestones across that window. Anchor intermediate dates to existing phase ETAs/milestones where available; do NOT fabricate dates; mark unknown dates "TBD". Let the constraints and success metric shape phase ordering and the critical decisions/gaps you surface.
+
+When a validation approach is provided, sequence the roadmap to PROVE outcomes in the order it implies: place the pilots, proof-of-concepts, experiments, or de-risking checkpoints it describes as keyMilestones and gates at the points where each assumption must be validated before the programme commits further. The critical path and decision gates should reflect this de-risking ladder, not just calendar order. If no validation approach is provided, do not invent one.
 
 You also own the DELIVERY PLAN folded into this roadmap: the near-term actions, tracked milestones, critical path, and active blockers that turn the sequencing into work. Derive these from the phase sequencing, exit criteria, and current readiness — do not invent dates or owners. Owners are assigned later via the Mobilise RACI, so leave "owner" null unless a role is unambiguously implied by the inputs; never name individuals. For drill-down, set relatedArtifactId / relatedInputIds only to ids present in the context, else null / [].
 
@@ -1088,9 +1090,10 @@ function parseKpiBaselines(raw: unknown): Record<string, unknown>[] {
 const ARTIFACT_INPUT_FLOW: Record<string, string[]> = {
   // Kept in sync with the client methodology's artifactInputFlow. The roadmap is
   // grounded on the full strategy picture (objective, sponsor, industry,
-  // constraints, cost, success metric) bounded by the start/end dates. It also
-  // owns the delivery plan, so it pulls the team/role/risk inputs the plan needs.
-  "strategic-roadmap": ["businessObjective", "sponsor", "industry", "startDate", "targetEndDate", "costAssumption", "constraints", "successMetric", "teamSize", "keyRisks", "keyRoles"],
+  // constraints, cost, success metric) bounded by the start/end dates, and on the
+  // validation approach so the sequencing proves outcomes in the right order. It
+  // also owns the delivery plan, so it pulls the team/role/risk inputs it needs.
+  "strategic-roadmap": ["businessObjective", "sponsor", "industry", "startDate", "targetEndDate", "costAssumption", "constraints", "successMetric", "validationApproach", "teamSize", "keyRisks", "keyRoles"],
 };
 
 /** Stringify a phase-input value (string, number, or grid rows) for the prompt. */
