@@ -13,6 +13,7 @@ export type V3ReportId = "narrative" | "deck" | "status" | "closure";
 export type V3MoreView =
   | "documents"
   | "narrative"
+  | "roadmap"
   | "plan"
   | "milestones"
   | "risks"

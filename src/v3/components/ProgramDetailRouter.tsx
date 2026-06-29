@@ -10,6 +10,7 @@ import { IntelligenceView } from "@/new/pages/IntelligenceView";
 import { MilestoneView } from "@/new/pages/MilestoneView";
 import { NarrativeView } from "@/new/pages/NarrativeView";
 import { PlanView } from "@/new/pages/PlanView";
+import RoadmapView from "@/v3/surfaces/RoadmapView";
 import { ClosureView } from "@/new/pages/ClosureView";
 import { RisksView } from "@/new/pages/RisksView";
 import { ScopePcrView } from "@/new/pages/ScopePcrView";
@@ -234,6 +235,19 @@ export default function ProgramDetailRouter({
       );
     case "narrative":
       return <NarrativeView program={program} onRefresh={triggers.triggerNarrative} isRunning={narrativeIsRunning} onSaveCorrection={onSaveNarrativeCorrection} onOpenIntelligence={onOpenIntelligence} />;
+    case "roadmap":
+      return (
+        <RoadmapView
+          program={program}
+          planIsRunning={activeRuns.some((r) => r.agent_id === "plan" && r.status === "running")}
+          onTriggerPlan={triggers.triggerPlan}
+          milestonesIsRunning={activeRuns.some((r) => r.agent_id === "milestone" && r.status === "running")}
+          onTriggerMilestones={triggers.triggerMilestones}
+          onAddMilestone={onAddMilestone}
+          onCompleteMilestone={onCompleteMilestone}
+          milestoneSavePending={milestoneSavePending}
+        />
+      );
     case "plan":
       return <PlanView program={program} plan={program?.plan || null} planGeneratedAt={program?.planGeneratedAt || ""} planIsRunning={activeRuns.some((r) => r.agent_id === "plan" && r.status === "running")} onTriggerPlan={triggers.triggerPlan} />;
     case "milestones":

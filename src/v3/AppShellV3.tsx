@@ -143,6 +143,7 @@ const DISABLED_AGENTS = new Set<string>([
 const MORE_ROUTE_MAP: Record<string, V3MoreView> = {
   documents: "documents",
   narrative: "narrative",
+  roadmap: "roadmap",
   plan: "plan",
   milestones: "milestones",
   milestone: "milestones",
@@ -169,6 +170,7 @@ const MORE_ROUTE_MAP: Record<string, V3MoreView> = {
 const MORE_VIEW_PATHS: Record<V3MoreView, string> = {
   documents: "/documents",
   narrative: "/narrative",
+  roadmap: "/roadmap",
   plan: "/plan",
   milestones: "/milestones",
   risks: "/risks",
@@ -367,6 +369,7 @@ const MORE_VIEW_LABELS: Partial<Record<string, string>> = {
   health: "Health Dashboard",
   "scope-pcr": "Scope Changes",
   narrative: "Programme Narrative",
+  roadmap: "Strategic Roadmap",
   plan: "Action Plan",
   documents: "Documents",
   "artifact-map": "Artifact Map",

@@ -1,4 +1,4 @@
-import { getMethodology, type MethodologyVariant } from "@/v3/lib/methodology";
+import { getMethodology, getPhaseDefinition, type MethodologyVariant } from "@/v3/lib/methodology";
 
 /**
  * Deterministic phase scheduling. The strategic-roadmap agent was asked to both
@@ -101,6 +101,46 @@ export function buildMethodologyPhaseSchedule(
     weight: (phase.typicalDurationWeeks.min + phase.typicalDurationWeeks.max) / 2,
   }));
   return buildPhaseSchedule(startDate, targetEndDate, phases);
+}
+
+/**
+ * Build the strategic-roadmap timeline rows for a program: the deterministic
+ * window split (programme start → target end, weighted by each phase's typical
+ * duration) with any saved manual date edits (the top-level `roadmapSchedule`
+ * override) winning per phase. Shared by the strategy-stage artifact preview and
+ * the standalone Roadmap workspace so both render identical timelines.
+ */
+export function buildRoadmapRows(rawData: unknown, phases: Array<{ id: string }>): GanttRow[] {
+  const raw = typeof rawData === "object" && rawData !== null
+    ? ("data" in rawData && typeof (rawData as Record<string, unknown>).data === "object" && (rawData as Record<string, unknown>).data !== null
+      ? (rawData as Record<string, unknown>).data as Record<string, unknown>
+      : rawData as Record<string, unknown>)
+    : {};
+  const phaseInputs = raw.phaseInputs;
+  const strategyInputs = typeof phaseInputs === "object" && phaseInputs !== null
+    ? (phaseInputs as Record<string, unknown>).strategy as Record<string, unknown> | undefined
+    : undefined;
+  const startDate = typeof strategyInputs?.startDate === "string" ? strategyInputs.startDate : undefined;
+  const targetEndDate = typeof strategyInputs?.targetEndDate === "string" ? strategyInputs.targetEndDate : undefined;
+  const weights = phases.map((p) => {
+    const def = getPhaseDefinition(p.id);
+    return { id: p.id, weight: def ? (def.typicalDurationWeeks.min + def.typicalDurationWeeks.max) / 2 : 1 };
+  });
+  const defaultsById = new Map(buildPhaseSchedule(startDate, targetEndDate, weights).map((d) => [d.id, d]));
+  const overrideRaw = raw.roadmapSchedule;
+  const overrides = typeof overrideRaw === "object" && overrideRaw !== null
+    ? overrideRaw as Record<string, { start?: unknown; end?: unknown }>
+    : {};
+  const rows: GanttRow[] = [];
+  for (const p of phases) {
+    const ov = overrides[p.id];
+    const def = defaultsById.get(p.id);
+    const start = typeof ov?.start === "string" ? ov.start : def?.start;
+    const end = typeof ov?.end === "string" ? ov.end : def?.end;
+    if (!start || !end) continue;
+    rows.push({ id: p.id, name: getPhaseDefinition(p.id)?.displayName ?? p.id, start, end });
+  }
+  return rows;
 }
 
 // ── Gantt layout ─────────────────────────────────────────────────────────────

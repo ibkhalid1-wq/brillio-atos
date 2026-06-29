@@ -47,7 +47,8 @@ const WORKSPACE_GROUPS: Array<{
     tiles: [
       // Risks/blockers live in the Action Center (DecideView). The delivery plan
       // and milestones are folded into the single Strategic Roadmap artifact, so
-      // they no longer get standalone tiles — the roadmap is the entry point.
+      // the roadmap tile is their entry point rather than standalone tiles.
+      { view: "roadmap", label: "Strategic Roadmap", description: "Phase timeline with the folded delivery plan and milestones", icon: "◇", accent: "blue" },
       { view: "budget", label: "Budget", description: "Budget tracking, forecasts and variance", icon: "◈", accent: "amber" },
       { view: "scope-pcr", label: "Scope Changes", description: "Scope baseline and change request log", icon: "◫", accent: "amber" },
     ],
