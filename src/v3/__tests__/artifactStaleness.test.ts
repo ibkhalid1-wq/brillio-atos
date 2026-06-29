@@ -101,6 +101,18 @@ describe("artifactStaleness", () => {
       });
       expect(stale).toContain("outcome-framework");
     });
+
+    it("resolves dynamic-store flow edges, so a custom grounding field stales the locked artifact it feeds", () => {
+      // The field→artifact edge for planner-generated/custom inputs lives only in
+      // the dynamic schema store's artifactInputFlow, not the static methodology
+      // map. Editing such a grounding input on a reopened (PCR) phase must stale
+      // the locked artifact — but only when the store is passed. Without it the
+      // edge is invisible and the artifact wrongly stays fresh (the bug this guards).
+      const store = { artifactInputFlow: { strategy: { charter: ["customGroundingField"] } } };
+      const bucket = { charter: { status: "approved" } };
+      expect(relatedArtifactsToStale("strategy", ["customGroundingField"], bucket)).toEqual([]);
+      expect(relatedArtifactsToStale("strategy", ["customGroundingField"], bucket, store)).toEqual(["charter"]);
+    });
   });
 
   describe("fieldsFeedingApprovedArtifacts", () => {

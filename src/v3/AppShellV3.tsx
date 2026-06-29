@@ -2303,8 +2303,13 @@ export default function AppShellV3() {
       const phaseBucket = artifactBuckets[phaseId];
       // Any artifact fed by a changed input is now out of date — flag it stale
       // regardless of status (draft, ready, OR approved), so every document built
-      // from the old inputs is regenerated rather than silently drifting.
-      const staled = relatedArtifactsToStale(phaseId, changedFields, phaseBucket);
+      // from the old inputs is regenerated rather than silently drifting. Pass the
+      // dynamic schema store so flow edges for planner-generated/custom artifacts
+      // (whose field→artifact map lives in artifactInputFlow, not the static
+      // methodology) resolve too — otherwise editing a grounding input on a
+      // reopened (PCR) dynamic phase would leave its locked artifacts marked fresh.
+      const flowStore = getDynamicSchemaStore(cloned.inner);
+      const staled = relatedArtifactsToStale(phaseId, changedFields, phaseBucket, flowStore);
       // Applying a reviewer's improvement list rewrites the artifact's grounding
       // inputs, so the existing draft/approved document built from the old inputs
       // is now out of date. Flag it stale explicitly (even when it isn't approved),
