@@ -249,8 +249,28 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       typicalDurationWeeks: { min: 3, max: 8 },
       inputFields: [
         { id: "currentStateSummary", label: "Current state summary & key pain points", type: "textarea", required: true, placeholder: "How things work today and the problems driving this programme", hint: "Today's processes, systems, and the pain points the programme must resolve" },
-        { id: "scopeInclusions", label: "In-scope processes, systems & geographies", type: "textarea", required: true, placeholder: "What this programme will cover", hint: "The processes, systems, business units, and regions explicitly in scope" },
-        { id: "scopeExclusions", label: "Out-of-scope processes, systems & geographies", type: "textarea", required: true, placeholder: "What this programme will NOT cover", hint: "Explicit exclusions that protect the boundary and prevent scope creep" },
+        {
+          id: "scopeInclusions",
+          label: "In-scope processes, systems & geographies",
+          type: "grid",
+          required: true,
+          hint: "List each in-scope element on its own row and tag what kind it is — one item per row keeps the scope boundary explicit.",
+          columns: [
+            { key: "item", label: "In-scope element", type: "text" },
+            { key: "category", label: "Type (process / system / geography)", type: "text" },
+          ],
+        },
+        {
+          id: "scopeExclusions",
+          label: "Out-of-scope processes, systems & geographies",
+          type: "grid",
+          required: true,
+          hint: "List each explicit exclusion on its own row — naming what the programme will NOT cover protects the boundary against scope creep.",
+          columns: [
+            { key: "item", label: "Out-of-scope element", type: "text" },
+            { key: "category", label: "Type (process / system / geography)", type: "text" },
+          ],
+        },
         {
           id: "stakeholderList",
           label: "Key stakeholders",

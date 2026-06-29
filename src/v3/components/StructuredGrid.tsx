@@ -18,6 +18,28 @@ function newId(): string {
     : `row-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/**
+ * Coerce a plain-text value into one row per line under the grid's first column.
+ * Used when a field migrates from free text to a grid (e.g. a textarea promoted
+ * to a grid in the methodology, or a planner free-text field upgraded by a static
+ * schema): the legacy string is split on lines — bullet markers stripped — so no
+ * content is lost. It re-serializes to JSON on the next save, making this a
+ * self-healing, one-time migration with no destructive write.
+ */
+function coercePlainTextRows(text: string, columns: GridColumn[]): GridRow[] {
+  const firstKey = columns[0]?.key;
+  if (!firstKey) return [];
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^\s*[-*•·]\s*/, "").trim())
+    .filter((line) => line.length > 0)
+    .map((line) => {
+      const row: GridRow = { id: newId() };
+      for (const col of columns) row[col.key] = col.key === firstKey ? line : "";
+      return row;
+    });
+}
+
 /** Parse a persisted grid value (JSON string) into typed rows. */
 export function parseRows(raw: unknown, columns: GridColumn[]): GridRow[] {
   if (typeof raw !== "string" || !raw.trim()) return [];
@@ -25,7 +47,10 @@ export function parseRows(raw: unknown, columns: GridColumn[]): GridRow[] {
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return [];
+    // Genuine plain text (JSON.parse only throws on non-JSON) — migrate it into
+    // rows rather than dropping it. A JSON object/number that isn't an array is
+    // not user list text, so that case still yields no rows (below).
+    return coercePlainTextRows(raw, columns);
   }
   if (!Array.isArray(parsed)) return [];
   return parsed
