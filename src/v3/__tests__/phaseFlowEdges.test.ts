@@ -35,9 +35,9 @@ describe("derivePhaseFlowEdges", () => {
 
   it("yields no edges for a dynamic-only phase or unknown phase without a store", () => {
     // A phase with no resolvable artifacts (no store, empty artifact set)
-    // produces nothing rather than a dangling edge. Build is purely dynamic — no
+    // produces nothing rather than a dangling edge. operate is purely dynamic — no
     // static schema or flow — so without a store it has no artifacts to target.
-    expect(derivePhaseFlowEdges("build", ["someField"])).toEqual([]);
+    expect(derivePhaseFlowEdges("operate", ["someField"])).toEqual([]);
     expect(derivePhaseFlowEdges("unknown-phase", ["whatever"])).toEqual([]);
   });
 
@@ -89,12 +89,14 @@ describe("getArtifactInputFields", () => {
   });
 
   it("returns no fields for a dynamic phase with no store (nothing to wait on)", () => {
-    expect(getArtifactInputFields("build", "test-plan")).toEqual([]);
+    // operate is dynamic-only (no static schema/flow), so without a store there is
+    // nothing declared to wait on.
+    expect(getArtifactInputFields("operate", "runbook")).toEqual([]);
   });
 
   it("reads declared fields from the dynamic schema store for a dynamic phase", () => {
-    const store = { artifactInputFlow: { build: { "test-plan": ["sponsorTier", "raciOwner"] } } };
-    expect(new Set(getArtifactInputFields("build", "test-plan", store))).toEqual(
+    const store = { artifactInputFlow: { operate: { runbook: ["sponsorTier", "raciOwner"] } } };
+    expect(new Set(getArtifactInputFields("operate", "runbook", store))).toEqual(
       new Set(["sponsorTier", "raciOwner"]),
     );
   });
@@ -107,37 +109,37 @@ describe("getArtifactInputFields", () => {
 // returns only the grounding inputs that exist as fillable fields in the schema.
 describe("getFillableArtifactInputFields", () => {
   it("drops grounding inputs that have no fillable field in the phase schema", () => {
-    // Build is a purely dynamic phase (no static schema/flow), so the only
+    // operate is a purely dynamic phase (no static schema/flow), so the only
     // grounding comes from the store. The planner wired the artifact to two
     // owner/lead fields (roster-resolved, dropped from the rendered inputs) plus
     // one genuinely typed input.
     const store = {
       inputFields: {
-        build: [
-          { id: "buildCadence", label: "Build cadence", type: "textarea" as const, required: true },
+        operate: [
+          { id: "supportCadence", label: "Support cadence", type: "textarea" as const, required: true },
         ],
       },
       artifacts: {
-        build: [{ id: "test-plan", label: "Test Plan", description: "" }],
+        operate: [{ id: "runbook", label: "Runbook", description: "" }],
       },
       artifactInputFlow: {
-        build: { "test-plan": ["criticalPathOwner", "qaLead", "buildCadence"] },
+        operate: { runbook: ["incidentOwner", "opsLead", "supportCadence"] },
       },
     };
     // Raw declared set includes the roster-resolved owner/lead fields…
-    expect(new Set(getArtifactInputFields("build", "test-plan", store))).toEqual(
-      new Set(["criticalPathOwner", "qaLead", "buildCadence"]),
+    expect(new Set(getArtifactInputFields("operate", "runbook", store))).toEqual(
+      new Set(["incidentOwner", "opsLead", "supportCadence"]),
     );
     // …but only the genuinely fillable field gates generation.
-    expect(getFillableArtifactInputFields("build", "test-plan", store)).toEqual(["buildCadence"]);
+    expect(getFillableArtifactInputFields("operate", "runbook", store)).toEqual(["supportCadence"]);
   });
 
   it("returns nothing to gate when every grounding input is roster-resolved", () => {
     const store = {
-      artifacts: { build: [{ id: "test-plan", label: "Test Plan", description: "" }] },
-      artifactInputFlow: { build: { "test-plan": ["criticalPathOwner", "qaLead"] } },
+      artifacts: { operate: [{ id: "runbook", label: "Runbook", description: "" }] },
+      artifactInputFlow: { operate: { runbook: ["incidentOwner", "opsLead"] } },
     };
-    expect(getFillableArtifactInputFields("build", "test-plan", store)).toEqual([]);
+    expect(getFillableArtifactInputFields("operate", "runbook", store)).toEqual([]);
   });
 
   it("keeps real static fields (parity with the declared set on a static phase)", () => {
@@ -324,5 +326,68 @@ describe("mobilise static roster + governance schema", () => {
         { from: "governanceCadence", to: "governance-model" },
       ]),
     );
+  });
+});
+
+// Build now carries a static delivery schema: the increment plan the milestone
+// agent forecasts against and the test strategy / environments / definition of
+// done the test-plan agent maps requirements to. Both ground their artifacts via
+// a static artifactInputFlow, so generation never waits on the planner.
+describe("build static delivery schema", () => {
+  it("declares the delivery inputs grounding test-plan and milestone without a store", () => {
+    expect(new Set(getArtifactInputFields("build", "test-plan"))).toEqual(
+      new Set(["testStrategy", "environmentsRelease", "definitionOfDone"]),
+    );
+    expect(new Set(getArtifactInputFields("build", "milestone"))).toEqual(
+      new Set(["deliveryIncrements", "environmentsRelease"]),
+    );
+  });
+
+  it("keeps the static inputs fillable (they are real typed fields, not roster-resolved owners)", () => {
+    expect(new Set(getFillableArtifactInputFields("build", "test-plan"))).toEqual(
+      new Set(["testStrategy", "environmentsRelease", "definitionOfDone"]),
+    );
+  });
+
+  it("draws no flow edge until the artifacts actually render (dynamic artifact set)", () => {
+    expect(derivePhaseFlowEdges("build", ["deliveryIncrements", "testStrategy"])).toEqual([]);
+  });
+
+  it("wires the static inputs to the artifacts once they render", () => {
+    const store = {
+      artifacts: {
+        build: [
+          { id: "test-plan", label: "Test Plan", description: "" },
+          { id: "milestone", label: "Milestones", description: "" },
+        ],
+      },
+    };
+    const edges = derivePhaseFlowEdges(
+      "build",
+      ["deliveryIncrements", "testStrategy", "environmentsRelease", "definitionOfDone"],
+      store,
+    );
+    expect(edges).toEqual(
+      expect.arrayContaining([
+        { from: "deliveryIncrements", to: "milestone" },
+        { from: "testStrategy", to: "test-plan" },
+        { from: "environmentsRelease", to: "test-plan" },
+        { from: "environmentsRelease", to: "milestone" },
+        { from: "definitionOfDone", to: "test-plan" },
+      ]),
+    );
+  });
+
+  it("flows every static input field into at least one artifact — no dangling inputs", () => {
+    // A static input that no artifact consumes is dead weight: the user fills it
+    // and nothing downstream is grounded on it. Pin that every declared Build
+    // field appears in some artifact's input flow.
+    const grounded = new Set([
+      ...getArtifactInputFields("build", "test-plan"),
+      ...getArtifactInputFields("build", "milestone"),
+    ]);
+    for (const field of PHASE_INPUT_SCHEMAS.build.fields) {
+      expect(grounded).toContain(field.id);
+    }
   });
 });

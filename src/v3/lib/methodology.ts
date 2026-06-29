@@ -405,6 +405,15 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       displayName: "Build",
       description: "Deliver the solution against the agreed design.",
       requiredArtifacts: [],
+      // Build seeds the delivery facts its agents synthesise — the increment plan
+      // the milestone agent forecasts against, and the test strategy / environments
+      // / definition of done the test-plan agent maps requirements to. Seeding them
+      // as static inputs means milestone and test-plan generation never depends on
+      // the planner remembering to ask for delivery substance. dynamicSchema stays
+      // true: the planner may still ADD programme-specific build fields on top
+      // (static wins on id collision), and any "Named <role>" staffing field is
+      // dropped by the roster-owner guardrail — owners resolve from the Mobilise
+      // roster, never re-typed here.
       dynamicSchema: true,
       mandatoryExitCriteriaTemplates: [
         "All must-have requirements delivered and tested",
@@ -414,6 +423,55 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       entryGuards: ["Design gate approved"],
       recommendedAgents: ["test-plan", "narrative", "milestone"],
       typicalDurationWeeks: { min: 8, max: 26 },
+      inputFields: [
+        {
+          id: "deliveryIncrements",
+          label: "Delivery increments & cadence",
+          type: "grid",
+          required: true,
+          hint: "Break delivery into increments (sprints, releases, or workstream waves) with the scope each carries and its target date — this is what milestone forecasting tracks against.",
+          usedByArtifacts: ["milestone"],
+          columns: [
+            { key: "increment", label: "Increment", type: "text", placeholder: "e.g. Release 1 — Pipeline agent" },
+            { key: "scope", label: "Scope delivered", type: "text", placeholder: "What ships in this increment" },
+            { key: "date", label: "Target date", type: "date", width: 160 },
+          ],
+        },
+        {
+          id: "testStrategy",
+          label: "Test strategy & coverage targets",
+          type: "textarea",
+          required: true,
+          usedByArtifacts: ["test-plan"],
+          placeholder: "Test types in scope, coverage targets, and entry/exit criteria",
+          hint: "e.g. Unit + integration + UAT; 80% unit coverage; entry = code-complete, exit = zero P1 defects",
+        },
+        {
+          id: "environmentsRelease",
+          label: "Environments & release approach",
+          type: "textarea",
+          required: true,
+          usedByArtifacts: ["test-plan", "milestone"],
+          placeholder: "Environment path to production and how releases are cut and promoted",
+          hint: "e.g. dev → staging → prod; fortnightly release train; blue-green cutover with rollback",
+        },
+        {
+          id: "definitionOfDone",
+          label: "Definition of done & quality gates",
+          type: "textarea",
+          required: false,
+          usedByArtifacts: ["test-plan"],
+          placeholder: "The bar each increment must clear before it counts as delivered",
+          hint: "e.g. Code reviewed, tests green, docs updated, product owner accepted, no open P1/P2 defects",
+        },
+      ],
+      artifactInputFlow: {
+        // The test plan maps the test strategy, environments and definition of done
+        // into test types, criteria and cases; milestone forecasting is grounded on
+        // the increment plan bounded by the release approach.
+        "test-plan": ["testStrategy", "environmentsRelease", "definitionOfDone"],
+        "milestone": ["deliveryIncrements", "environmentsRelease"],
+      },
     },
     {
       id: "operate",

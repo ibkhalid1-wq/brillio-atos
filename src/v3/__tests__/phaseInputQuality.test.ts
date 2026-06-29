@@ -53,12 +53,13 @@ describe("derivePhaseInputQuality", () => {
   });
 
   it("returns null for a dynamic-only phase — no static schema, so no leaked KPI/workstream fields", () => {
-    // Strategy, Mobilise, Discover and Design carry static input schemas; the
-    // remaining phases are dynamic-only, so their fields come from the programme's
-    // dynamicSchema store, not from here. With no static fields there is nothing to
-    // assess — and crucially no path for "Outcome KPIs"/"workstreams" to leak in.
-    expect(derivePhaseInputQuality("build", {})).toBeNull();
-    expect(derivePhaseInputQuality("operate", { anything: "x" })).toBeNull();
+    // Strategy, Mobilise, Discover, Design and Build carry static input schemas;
+    // the remaining phases are dynamic-only, so their fields come from the
+    // programme's dynamicSchema store, not from here. With no static fields there is
+    // nothing to assess — and crucially no path for "Outcome KPIs"/"workstreams" to
+    // leak in.
+    expect(derivePhaseInputQuality("operate", {})).toBeNull();
+    expect(derivePhaseInputQuality("govern", { anything: "x" })).toBeNull();
   });
 
   it("scores a dynamic-only phase against its ai-derived fields when a store is supplied", () => {
@@ -68,18 +69,18 @@ describe("derivePhaseInputQuality", () => {
     // exactly what the user can fill in.
     const store = {
       inputFields: {
-        build: [
-          { id: "modelRoutingPolicy", label: "Model routing policy", type: "textarea" as const, required: true },
+        operate: [
+          { id: "supportModelPolicy", label: "Support model policy", type: "textarea" as const, required: true },
           { id: "dataResidency", label: "Data residency", type: "textarea" as const, required: true },
         ],
       },
     };
-    // With no store, build is dynamic-only → null.
-    expect(derivePhaseInputQuality("build", { modelRoutingPolicy: "Route to Opus for planning." }, undefined)).toBeNull();
+    // With no store, operate is dynamic-only → null.
+    expect(derivePhaseInputQuality("operate", { supportModelPolicy: "Tier-2 support during hyper-care." }, undefined)).toBeNull();
     // With the store, the dynamic required fields become the assessed set.
     const result = derivePhaseInputQuality(
-      "build",
-      { modelRoutingPolicy: "Route planning to Opus and execution to Sonnet for cost efficiency." },
+      "operate",
+      { supportModelPolicy: "Run tier-2 support during hyper-care, then hand to ops with a runbook." },
       store,
     )!;
     expect(result).not.toBeNull();
