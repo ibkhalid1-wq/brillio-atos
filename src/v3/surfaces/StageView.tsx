@@ -20,7 +20,9 @@ import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
 import { resolveArtifactReview, resolveArtifactQualityScore } from "@/v3/lib/artifactReview";
 import { getPhaseArtifactDefs, type PhaseArtifactDef } from "@/v3/lib/phaseArtifacts";
 import { getArtifactInputFields } from "@/v3/lib/phaseFlowEdges";
-import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
+import { getPhaseInputSchema, resolveRosterField, ROSTER_PHASE_ID } from "@/v3/lib/phaseInputSchema";
+import { parseRows, serializeRows, type GridRow } from "@/v3/components/StructuredGrid";
+import { readRaciMatrix, raciDeliveryRoles, rosterColumnKeys, missingRosterRoles } from "@/v3/lib/rosterRaci";
 import { getDynamicSchemaStore, canonicalArtifactId } from "@/v3/lib/dynamicSchema";
 import { getAgentMeta, SUPPORT_ARTIFACT_IDS } from "@/v3/lib/agentMeta";
 import { runPreFlight } from "@/v3/lib/phaseInputPreFlight";
@@ -717,6 +719,52 @@ export default function StageView({
       ? program.rawData.data as Record<string, unknown>
       : program.rawData as Record<string, unknown>)
     : null;
+  // The roster is a structured grid, so the AI text-rewrite "Apply suggestions"
+  // path does not apply to the RACI matrix (its only grounding input). Instead,
+  // a RACI quality recommendation to staff a role is actioned deterministically:
+  // seed a placeholder roster row (role filled, name blank) for every RACI
+  // delivery role the roster does not yet carry, so the user just types the name.
+  const rosterPlaceholderPlan = React.useMemo(() => {
+    if (!qualityArtifact || qualityArtifact.defId !== "raci-matrix" || gateApproved) return null;
+    const rosterField = resolveRosterField(dynamicStore);
+    const columns = rosterField?.columns ?? [];
+    if (!rosterField || !columns.length) return null;
+    const { roleKey, nameKey } = rosterColumnKeys(columns);
+    if (!roleKey) return null;
+    const rosterInputs = source?.phaseInputs && typeof source.phaseInputs === "object" && !Array.isArray(source.phaseInputs)
+      ? (source.phaseInputs as Record<string, unknown>)[ROSTER_PHASE_ID]
+      : null;
+    const rosterValue = rosterInputs && typeof rosterInputs === "object" && !Array.isArray(rosterInputs)
+      ? (rosterInputs as Record<string, unknown>)[rosterField.id]
+      : null;
+    const rows = parseRows(rosterValue, columns);
+    const missing = missingRosterRoles(rows, roleKey, raciDeliveryRoles(readRaciMatrix(source)));
+    if (!missing.length) return null;
+    const newRows: GridRow[] = missing.map((role, i) => {
+      const row: GridRow = {
+        id: typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `raci-role-${Date.now()}-${i}`,
+      };
+      for (const col of columns) row[col.key] = "";
+      row[roleKey] = role;
+      if (nameKey) row[nameKey] = "";
+      return row;
+    });
+    return { fieldId: rosterField.id, roles: missing, count: missing.length, mergedJson: serializeRows([...rows, ...newRows], columns) };
+  }, [qualityArtifact, gateApproved, dynamicStore, source]);
+  const [applyingPlaceholders, setApplyingPlaceholders] = React.useState(false);
+  const handleAddRosterPlaceholders = React.useCallback(async () => {
+    if (!rosterPlaceholderPlan) return;
+    setApplyingPlaceholders(true);
+    setApplyError(null);
+    try {
+      await onSaveInputs(ROSTER_PHASE_ID, { [rosterPlaceholderPlan.fieldId]: rosterPlaceholderPlan.mergedJson }, { clearReviewDefId: qualityArtifact?.defId, staleDefId: qualityArtifact?.defId });
+      setImprovementsApplied(true);
+    } catch (err) {
+      setApplyError(err instanceof Error ? err.message : "Could not add placeholder rows. Try again.");
+    } finally {
+      setApplyingPlaceholders(false);
+    }
+  }, [rosterPlaceholderPlan, onSaveInputs, qualityArtifact]);
   // Sequential artifact-generation gate. Artifacts must be produced in order:
   // an artifact is "cleared" once it is approved/archived or its quality exceeds
   // 89%. Only the first not-yet-cleared artifact (plus all cleared ones) may be
@@ -1943,6 +1991,21 @@ export default function StageView({
                   : "Use AI to fold these suggestions into the grounding inputs, then save"}
               >
                 {improvementsApplied ? "✓ Suggestions applied" : applyingImprovements ? "✨ Applying…" : "✨ Apply suggestions to inputs"}
+              </button>
+            ) : null}
+            {rosterPlaceholderPlan ? (
+              <button
+                type="button"
+                className="v3-button primary v3-button-inline-sm"
+                onClick={handleAddRosterPlaceholders}
+                disabled={applyingPlaceholders || improvementsApplied}
+                title={`Adds a roster row for each RACI role not yet on the team (${rosterPlaceholderPlan.roles.join(", ")}) so you can fill in the named individual`}
+              >
+                {improvementsApplied
+                  ? "✓ Placeholders added"
+                  : applyingPlaceholders
+                    ? "✨ Adding…"
+                    : `✨ Create ${rosterPlaceholderPlan.count} placeholder role row${rosterPlaceholderPlan.count === 1 ? "" : "s"}`}
               </button>
             ) : null}
             <button

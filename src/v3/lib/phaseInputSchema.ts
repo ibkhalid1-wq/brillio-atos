@@ -154,9 +154,13 @@ const BRITISH_TO_AMERICAN: Array<[RegExp, string]> = [
   [/\bspecialise\b/g, "specialize"],
 ];
 
-/** Lowercase, normalise spelling, strip punctuation, collapse whitespace. */
+/** Lowercase, drop parenthetical qualifiers, normalise spelling, strip punctuation, collapse whitespace. */
 function normalizeRoleText(value: string): string {
   let s = String(value ?? "").toLowerCase();
+  // A RACI cell often names the person inside the role ("Executive Sponsor (Raj
+  // Mamodia)"); the parenthetical is a qualifier, not part of the role title, so
+  // drop it before matching or "Executive Sponsor" on the roster looks unstaffed.
+  s = s.replace(/\([^)]*\)/g, " ");
   for (const [re, rep] of BRITISH_TO_AMERICAN) s = s.replace(re, rep);
   return s.replace(/[^a-z0-9]+/g, " ").trim();
 }
