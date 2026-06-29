@@ -6,6 +6,7 @@ import {
   dynamicFieldArtifacts,
   sanitizePlannerProposal,
   applyDynamicProposal,
+  artifactGeneratorAgentId,
   type DynamicSchemaStore,
   type DynamicPhaseProposal,
 } from "@/v3/lib/dynamicSchema";
@@ -166,6 +167,37 @@ describe("dynamicArtifactDefs", () => {
       },
     };
     expect(dynamicArtifactDefs("discover", store).map((d) => d.id)).toEqual(["requirements-catalog"]);
+  });
+
+  it("keeps custom planner artifacts that have no dedicated agent (scope-map)", () => {
+    // scope-map has no AGENT_META producer, but it is a first-class custom
+    // deliverable produced by the phase agent's generic branch — it must survive
+    // and sit alongside named deliverables, not be dropped.
+    const store: DynamicSchemaStore = {
+      artifacts: {
+        discover: [
+          { id: "scope-map", label: "Scope Map", description: "" },
+          { id: "stakeholder", label: "Stakeholder Map", description: "" },
+        ],
+      },
+    };
+    expect(dynamicArtifactDefs("discover", store).map((d) => d.id)).toEqual(["scope-map", "stakeholder"]);
+  });
+});
+
+describe("artifactGeneratorAgentId", () => {
+  it("routes a custom artifact with no dedicated agent to the phase agent", () => {
+    // scope-map has no AGENT_META producer, so passing its own id as the agentId
+    // would 400 with `Unknown agentId`; it must run the phase agent instead.
+    expect(artifactGeneratorAgentId("discover", "scope-map")).toBe("discover");
+  });
+
+  it("routes a named deliverable to its own producing agent", () => {
+    expect(artifactGeneratorAgentId("strategy", "charter")).toBe("charter");
+  });
+
+  it("canonicalizes a phase-prefixed named deliverable before routing", () => {
+    expect(artifactGeneratorAgentId("design", "design-raci-matrix")).toBe("raci-matrix");
   });
 });
 

@@ -69,6 +69,24 @@ export function canonicalArtifactId(phaseId: string, id: string): string {
   return id;
 }
 
+/**
+ * Which agent actually produces a given phase artifact.
+ *
+ * Named deliverables (charter, raci-matrix, future-state-design, …) each have a
+ * dedicated producing agent in AGENT_META, so the artifact's own canonical id is
+ * the agent to run. But the planner also invents *custom* phase artifacts
+ * (scope-map, routing-policy, …) that have no per-artifact agent — those are
+ * produced by the phase agent's generic branch, whose agentId is the phase id.
+ * Passing the bare custom artifact id as the agentId 400s with `Unknown agentId`;
+ * routing to the phase id is what makes their Generate work. Callers that target
+ * the phase agent should also tell it which single artifact to emit (by id/label)
+ * so the generic output lands in the right ledger slot.
+ */
+export function artifactGeneratorAgentId(phaseId: string, artifactId: string): string {
+  const canonical = canonicalArtifactId(phaseId, artifactId);
+  return AGENT_META[canonical] ? canonical : phaseId;
+}
+
 export interface DynamicArtifactDef {
   id: string;
   label: string;

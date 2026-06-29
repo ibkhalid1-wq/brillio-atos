@@ -24,7 +24,7 @@ import { getPhaseInputSchema, resolveRosterField, ROSTER_PHASE_ID } from "@/v3/l
 import { parseRows, serializeRows, type GridRow } from "@/v3/components/StructuredGrid";
 import { readRaciMatrix, raciDeliveryRoles, rosterColumnKeys, missingRosterRoles } from "@/v3/lib/rosterRaci";
 import { isFreeTextAssistField } from "@/v3/lib/fieldAssist";
-import { getDynamicSchemaStore, canonicalArtifactId } from "@/v3/lib/dynamicSchema";
+import { getDynamicSchemaStore, canonicalArtifactId, artifactGeneratorAgentId } from "@/v3/lib/dynamicSchema";
 import { getAgentMeta, SUPPORT_ARTIFACT_IDS } from "@/v3/lib/agentMeta";
 import { runPreFlight } from "@/v3/lib/phaseInputPreFlight";
 import { derivePhaseInputQuality } from "@/v3/lib/phaseInputQuality";
@@ -1753,9 +1753,20 @@ export default function StageView({
               // regeneration prompt (via crossPhaseContext → prompt.system) so a
               // single Regenerate applies them directly — no separate per-field
               // input-rewrite LLM round trip.
-              const regenGuidance = suggestionCount
+              const reviewGuidance = suggestionCount
                 ? `The previous version of "${def.label}" was quality-reviewed. Apply these specific improvements directly in the artifact you now produce:\n${reviewerSuggestions.map((s, i) => `${i + 1}. ${s.trim()}`).join("\n")}`
                 : undefined;
+              // Custom planner-invented artifacts (scope-map, routing-policy, …)
+              // have no dedicated producing agent, so they run the phase agent's
+              // generic branch. That agent needs to be told which single artifact
+              // to emit — and with the exact id/label — so its output persists into
+              // this def's ledger slot instead of a mismatched one. Named
+              // deliverables resolve to their own agent and need no such steering.
+              const generatorAgentId = artifactGeneratorAgentId(activePhase.id, def.id);
+              const targetGuidance = generatorAgentId === activePhase.id
+                ? `Generate ONLY the "${def.label}" artifact for this phase. Return it in "artifacts" as a single entry with id "${def.id}" and title "${def.label}".${def.description ? ` Purpose: ${def.description}` : ""}`
+                : undefined;
+              const regenGuidance = [targetGuidance, reviewGuidance].filter(Boolean).join("\n\n") || undefined;
               // Generation is locked either because (a) the phase gate is approved
               // — the artifacts are finalised, so regenerating/re-reviewing them is
               // off until the phase is unlocked — or (b) sequential generation: this
@@ -1825,8 +1836,8 @@ export default function StageView({
                     <button
                       type="button"
                       className={`v3-button ${present ? "ghost" : "primary"} v3-button-inline-xs v3-artifact-regen`}
-                      onClick={() => onRunAgent(def.id, activePhase.id, regenGuidance)}
-                      disabled={agentButtonDisabled(def.id) || flowedInputsIncomplete || generationLocked}
+                      onClick={() => onRunAgent(generatorAgentId, activePhase.id, regenGuidance)}
+                      disabled={agentButtonDisabled(generatorAgentId) || flowedInputsIncomplete || generationLocked}
                       title={gateApproved
                         ? `${activePhase.displayName ?? "This phase"} is locked — unlock it from Settings to regenerate ${def.label}.`
                         : generationLocked
@@ -1839,7 +1850,7 @@ export default function StageView({
                         ? `${present ? "Regenerate" : "Generate"} ${def.label} — strengthen these inputs to lift quality:\n${generateGuidance || preflight.missingFields.join(", ")}`
                         : present ? `Regenerate ${def.label}` : `Generate ${def.label}`}
                     >
-                      {agentButtonContent(def.id, generationLocked ? "🔒 Locked" : present ? "↻ Regenerate" : "Generate")}
+                      {agentButtonContent(generatorAgentId, generationLocked ? "🔒 Locked" : present ? "↻ Regenerate" : "Generate")}
                     </button>
                   ) : null}
                   {/* Per-artifact approve is replaced by the single "Approve all
