@@ -406,6 +406,13 @@ textarea:-webkit-autofill {
   background: var(--v3-surface-2);
 }
 
+/* The default hover (--v3-surface-2) matches the light sidebar background, so the
+   gate-timeline hover highlight vanishes in light mode. Step one shade darker. */
+[data-theme="light"] .v3-governance-timeline-item:hover:not(:disabled),
+:root:not([data-theme="dark"]) .v3-governance-timeline-item:hover:not(:disabled) {
+  background: var(--v3-surface-3);
+}
+
 [data-theme="light"] .v3-governance-detail,
 :root:not([data-theme="dark"]) .v3-governance-detail {
   background: var(--v3-surface);
