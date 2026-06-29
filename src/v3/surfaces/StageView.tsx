@@ -1548,23 +1548,11 @@ export default function StageView({
           the inputs panel; the panel itself holds the field editors. */}
       <section className="v3-phase-col v3-phase-col--inputs">
         <div className="v3-zone-label">Input fields</div>
-        {!gateApproved || (activePhase.id === "discover" && (discoveryGuide || discoveryPackRunning)) ? (
+        {!gateApproved ? (
           <div className="v3-phase-col-actions">
-            {!gateApproved ? (
-              <button type="button" className="v3-button secondary v3-button-inline-xs" onClick={onUploadDocument}>
-                ↑ Import documents
-              </button>
-            ) : null}
-            {activePhase.id === "discover" && discoveryGuide ? (
-              <button type="button" className="v3-button secondary v3-button-inline-xs" onClick={() => setShowDiscoveryPack(true)}>
-                View discovery pack
-              </button>
-            ) : null}
-            {discoveryPackRunning ? (
-              <button type="button" className="v3-button secondary v3-button-inline-xs" disabled>
-                Generating discovery pack…
-              </button>
-            ) : null}
+            <button type="button" className="v3-button secondary v3-button-inline-xs" onClick={onUploadDocument}>
+              ↑ Import documents
+            </button>
           </div>
         ) : null}
         {/* The phase-readiness / conflicts / open-gaps planner banner was removed:
@@ -1650,6 +1638,17 @@ export default function StageView({
               onAssistField={onAssistField}
               onValuesChange={handleLiveInputs}
               locked={gateApproved}
+              headerAction={
+                activePhase.id === "discover" && discoveryGuide ? (
+                  <button type="button" className="v3-button secondary v3-button-inline-xs" onClick={() => setShowDiscoveryPack(true)}>
+                    View discovery pack
+                  </button>
+                ) : discoveryPackRunning ? (
+                  <button type="button" className="v3-button secondary v3-button-inline-xs" disabled>
+                    Generating discovery pack…
+                  </button>
+                ) : null
+              }
             />
           </div>
         ) : null}

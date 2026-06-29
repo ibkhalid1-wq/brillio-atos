@@ -53,6 +53,8 @@ interface PhaseInputsPanelProps {
   onValuesChange?: (phaseId: string, inputs: Record<string, string>) => void;
   /** When the phase gate is approved the inputs are frozen: read-only, no save. */
   locked?: boolean;
+  /** Optional action rendered in the header card, beside the title. */
+  headerAction?: React.ReactNode;
 }
 
 /**
@@ -238,7 +240,7 @@ function workstreamsFromBucket(
     : [];
 }
 
-export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistField, onValuesChange, locked = false }: PhaseInputsPanelProps) {
+export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistField, onValuesChange, locked = false, headerAction }: PhaseInputsPanelProps) {
   // Merge any ai-derived dynamic fields for this phase on top of the static
   // methodology schema, so planner-proposed inputs render in this panel.
   const dynamicStore = useMemo(() => getDynamicSchemaStore(program.rawData), [program.rawData]);
@@ -726,22 +728,28 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
 
   return (
     <div className="v3-phase-inputs">
-      <button
-        type="button"
-        className="v3-phase-inputs-toggle"
-        onClick={() => setOpen((current) => !current)}
-        aria-expanded={open}
-      >
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
-          <span className="v3-phase-inputs-toggle-title">{schema.title}</span>
-          <span className="v3-phase-inputs-toggle-sub">
-            {filledCount}/{schema.fields.length} fields · {open ? "collapse" : "expand"}
-          </span>
-        </div>
-        <div className="v3-phase-inputs-toggle-aside">
-          <span className={`v3-input-chevron ${open ? "is-open" : ""}`} aria-hidden>▾</span>
-        </div>
-      </button>
+      <div style={{ display: "flex", alignItems: "stretch", gap: 8 }}>
+        <button
+          type="button"
+          className="v3-phase-inputs-toggle"
+          onClick={() => setOpen((current) => !current)}
+          aria-expanded={open}
+          style={{ flex: 1 }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
+            <span className="v3-phase-inputs-toggle-title">{schema.title}</span>
+            <span className="v3-phase-inputs-toggle-sub">
+              {filledCount}/{schema.fields.length} fields · {open ? "collapse" : "expand"}
+            </span>
+          </div>
+          <div className="v3-phase-inputs-toggle-aside">
+            <span className={`v3-input-chevron ${open ? "is-open" : ""}`} aria-hidden>▾</span>
+          </div>
+        </button>
+        {headerAction ? (
+          <div style={{ display: "flex", alignItems: "center" }}>{headerAction}</div>
+        ) : null}
+      </div>
 
       {open ? (
         <div className="v3-phase-inputs-body">
