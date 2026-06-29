@@ -345,15 +345,103 @@ function parseRowArray(raw: string): Array<Record<string, unknown>> | null {
   }
 }
 
+const ROLE_KEY_RE = /role|title|position/i;
+/** Min normalized-Levenshtein similarity for two roles to be treated as the same. */
+const ROLE_MATCH_THRESHOLD = 0.82;
+
+/** Lowercase, strip punctuation, collapse whitespace — for tolerant role comparison. */
+function normalizeRole(value: unknown): string {
+  return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  const m = a.length;
+  const n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  let prev = Array.from({ length: n + 1 }, (_, i) => i);
+  let curr = new Array<number>(n + 1).fill(0);
+  for (let i = 1; i <= m; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+    }
+    [prev, curr] = [curr, prev];
+  }
+  return prev[n];
+}
+
+/** 0–1 similarity of two normalized roles (1 = identical). */
+function roleSimilarity(a: string, b: string): number {
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  const maxLen = Math.max(a.length, b.length);
+  return maxLen === 0 ? 0 : 1 - levenshtein(a, b) / maxLen;
+}
+
+/** The first role-like column key present across the rows, or null if none. */
+function findRoleKey(rows: Array<Record<string, unknown>>): string | null {
+  for (const row of rows) {
+    for (const key of Object.keys(row)) {
+      if (key !== "id" && ROLE_KEY_RE.test(key)) return key;
+    }
+  }
+  return null;
+}
+
 /**
- * Union two serialized grids (e.g. the core-team roster) without data loss. Rows
- * are de-duplicated by a signature of their cells excluding `id`, so re-importing
- * the same document is idempotent while genuinely new rows are appended. Used on
- * import conflict — the default text refine/concat path would corrupt the JSON.
+ * Merge two serialized grids (e.g. the core-team roster) without data loss.
+ *
+ * A roster is keyed by role — "one named person per role" — so re-importing must
+ * UPDATE the row whose role matches an incoming row (e.g. a corrected or newly
+ * extracted name) rather than append a second row for the same role, which is
+ * what produced duplicate entries on re-import. Roles are matched fuzzily so
+ * trivial variations ("Project Manager" vs "Project Mgr") resolve to one row;
+ * an incoming role with no match is appended as a genuinely new member.
+ *
+ * Grids without a role-like column fall back to signature de-duplication (union
+ * rows, dropping exact-content duplicates) so re-import stays idempotent.
  */
 export function mergeGridJson(existingJson: string, incomingJson: string): string {
   const existing = parseRowArray(existingJson) ?? [];
   const incoming = parseRowArray(incomingJson) ?? [];
+  const roleKey = findRoleKey([...existing, ...incoming]);
+
+  if (roleKey) {
+    const merged: Array<Record<string, unknown>> = existing.map((row) => ({ ...row }));
+    for (const incomingRow of incoming) {
+      const incRole = normalizeRole(incomingRow[roleKey]);
+      let targetIdx = -1;
+      if (incRole) {
+        targetIdx = merged.findIndex((row) => normalizeRole(row[roleKey]) === incRole);
+        if (targetIdx < 0) {
+          let best = ROLE_MATCH_THRESHOLD;
+          merged.forEach((row, i) => {
+            const sim = roleSimilarity(normalizeRole(row[roleKey]), incRole);
+            if (sim >= best) {
+              best = sim;
+              targetIdx = i;
+            }
+          });
+        }
+      }
+      if (targetIdx >= 0) {
+        // Update in place: overwrite with the incoming row's non-empty cells,
+        // preserving the existing row's id and any cells the import left blank.
+        const target = merged[targetIdx];
+        for (const [k, v] of Object.entries(incomingRow)) {
+          if (k === "id") continue;
+          if (String(v ?? "").trim()) target[k] = v;
+        }
+      } else {
+        merged.push({ ...incomingRow });
+      }
+    }
+    return JSON.stringify(merged);
+  }
+
   const sig = (row: Record<string, unknown>) =>
     JSON.stringify(
       Object.entries(row)

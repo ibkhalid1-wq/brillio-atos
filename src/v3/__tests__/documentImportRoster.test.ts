@@ -106,6 +106,42 @@ describe("mergeGridJson", () => {
     expect(merged.map((r) => r.name).sort()).toEqual(["Alice", "Bob"]);
   });
 
+  it("updates the matching role rather than appending a duplicate (corrected name)", () => {
+    const existing = JSON.stringify([{ id: "a", role: "Delivery Lead", name: "Jane Doe" }]);
+    const incoming = JSON.stringify([{ id: "b", role: "Delivery Lead", name: "Jane A. Doe" }]);
+    const merged = rows(mergeGridJson(existing, incoming));
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toMatchObject({ id: "a", role: "Delivery Lead", name: "Jane A. Doe" });
+  });
+
+  it("matches roles fuzzily so trivial variations resolve to one row", () => {
+    const existing = JSON.stringify([{ id: "a", role: "Project Manager", name: "Bob" }]);
+    const incoming = JSON.stringify([{ id: "b", role: "Project Manager ", name: "Bobby" }]);
+    const merged = rows(mergeGridJson(existing, incoming));
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toMatchObject({ id: "a", name: "Bobby" });
+  });
+
+  it("appends a genuinely new role while updating matched ones", () => {
+    const existing = JSON.stringify([{ id: "a", role: "Sponsor", name: "Raj" }]);
+    const incoming = JSON.stringify([
+      { id: "b", role: "Sponsor", name: "Raj Patel" }, // updates existing
+      { id: "c", role: "Architect", name: "Mei" }, // new role → append
+    ]);
+    const merged = rows(mergeGridJson(existing, incoming));
+    expect(merged).toHaveLength(2);
+    expect(merged.find((r) => r.role === "Sponsor")).toMatchObject({ id: "a", name: "Raj Patel" });
+    expect(merged.find((r) => r.role === "Architect")).toMatchObject({ name: "Mei" });
+  });
+
+  it("preserves cells the import leaves blank", () => {
+    const existing = JSON.stringify([{ id: "a", role: "PM", name: "Alice", org: "Acme" }]);
+    const incoming = JSON.stringify([{ id: "b", role: "PM", name: "Alice", org: "" }]);
+    const merged = rows(mergeGridJson(existing, incoming));
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toMatchObject({ id: "a", name: "Alice", org: "Acme" });
+  });
+
   it("survives corrupt/empty input without throwing", () => {
     expect(rows(mergeGridJson("", ""))).toEqual([]);
     expect(rows(mergeGridJson("not json", "[{bad}]"))).toEqual([]);
