@@ -1,6 +1,5 @@
 import React from "react";
-import type { Milestone, ProgramSummary } from "@/new/types";
-import { MilestoneView } from "@/new/pages/MilestoneView";
+import type { ProgramSummary } from "@/new/types";
 import RoadmapGantt from "@/v3/components/RoadmapGantt";
 import { buildRoadmapRows } from "@/v3/lib/phaseSchedule";
 import { AdamCard, AdamCardBody, AdamCardHeader } from "@/v3/components/ui/AdamCard";
@@ -11,11 +10,6 @@ interface RoadmapViewProps {
   program: ProgramSummary | null;
   planIsRunning: boolean;
   onTriggerPlan: () => void;
-  milestonesIsRunning: boolean;
-  onTriggerMilestones: () => void;
-  onAddMilestone: (milestone: Omit<Milestone, "id" | "source" | "lastUpdatedAt">) => Promise<void>;
-  onCompleteMilestone: (milestoneId: string) => Promise<void>;
-  milestoneSavePending: boolean;
   healthIsRunning: boolean;
   onTriggerHealth: () => void;
 }
@@ -213,20 +207,14 @@ function DeliveryFocus({
 /**
  * The Strategic Roadmap is the single delivery surface. It composes, top to
  * bottom: agent-graded programme health, the phase timeline (with progress/RAG/
- * risk overlay), the delivery focus (next actions + blockers from the folded
- * plan) and the milestone tracker. The previously separate Plan and Milestone
- * views are folded in here, so milestones are shown once and the critical-path
- * sequence is read off the timeline rather than repeated as a list.
+ * risk overlay) and the delivery focus (next actions + blockers from the folded
+ * plan). The critical-path sequence is read off the timeline rather than
+ * repeated as a list.
  */
 export default function RoadmapView({
   program,
   planIsRunning,
   onTriggerPlan,
-  milestonesIsRunning,
-  onTriggerMilestones,
-  onAddMilestone,
-  onCompleteMilestone,
-  milestoneSavePending,
   healthIsRunning,
   onTriggerHealth,
 }: RoadmapViewProps) {
@@ -258,15 +246,6 @@ export default function RoadmapView({
       </AdamCard>
 
       <DeliveryFocus program={program} planIsRunning={planIsRunning} onTriggerPlan={onTriggerPlan} />
-
-      <MilestoneView
-        program={program}
-        milestonesIsRunning={milestonesIsRunning}
-        onTriggerMilestones={onTriggerMilestones}
-        onAddMilestone={onAddMilestone}
-        onCompleteMilestone={onCompleteMilestone}
-        isSaving={milestoneSavePending}
-      />
     </div>
   );
 }

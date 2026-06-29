@@ -25,6 +25,16 @@ interface DragState {
 
 const MIN_DAYS = 1;
 
+const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "2026-06-12" → "12 Jun ’26" for the compact inline date labels. */
+function formatShortDate(iso: string): string {
+  const [y, m, d] = iso.split("-");
+  const mi = Number(m) - 1;
+  if (!y || !MONTH_ABBR[mi]) return iso;
+  return `${Number(d)} ${MONTH_ABBR[mi]} \u2019${y.slice(2)}`;
+}
+
 /**
  * A compact, responsive Gantt for the strategic roadmap. Bars are positioned by
  * percentage (layout math lives in the pure `layoutGantt` helper), so the chart
@@ -165,7 +175,7 @@ export default function RoadmapGantt({ rows, editable = false, onChange }: Roadm
   }
 
   return (
-    <div className="v3-gantt">
+    <div className={`v3-gantt${editable ? " is-editable" : ""}`}>
       <div className="v3-gantt-head">
         <span className="v3-gantt-title">Roadmap timeline</span>
         <span className="v3-gantt-hint">
@@ -173,9 +183,12 @@ export default function RoadmapGantt({ rows, editable = false, onChange }: Roadm
         </span>
       </div>
 
+      {/* Scrolls horizontally; the label and date columns stay pinned via sticky. */}
+      <div className="v3-gantt-scroll">
       {/* Month axis (labels only — gridlines live in the grid overlay below) */}
       <div className="v3-gantt-row v3-gantt-axis">
         <span className="v3-gantt-label" aria-hidden="true" />
+        <span className="v3-gantt-dates-head" aria-hidden="true" />
         <div className="v3-gantt-track v3-gantt-axis-track" ref={trackRef}>
           {monthTicks.map((month) => (
             <span
@@ -216,8 +229,33 @@ export default function RoadmapGantt({ rows, editable = false, onChange }: Roadm
             <div className="v3-gantt-row" key={bar.id}>
               <span className="v3-gantt-label" title={bar.name}>
                 <span className={`v3-gantt-dot rag-${rag}`} aria-hidden="true" />
-                {bar.name}
+                <span className="v3-gantt-labeltext">{bar.name}</span>
               </span>
+              {editable ? (
+                <div className="v3-gantt-dates">
+                  <input
+                    type="date"
+                    className="v3-gantt-date"
+                    aria-label={`${bar.name} start date`}
+                    value={bar.start}
+                    max={shiftIsoDate(bar.end, -MIN_DAYS)}
+                    onChange={(e) => onDateInput(bar, "start", e.target.value)}
+                  />
+                  <input
+                    type="date"
+                    className="v3-gantt-date"
+                    aria-label={`${bar.name} end date`}
+                    value={bar.end}
+                    min={shiftIsoDate(bar.start, MIN_DAYS)}
+                    onChange={(e) => onDateInput(bar, "end", e.target.value)}
+                  />
+                </div>
+              ) : (
+                <div className="v3-gantt-dates" aria-label={`${bar.name} dates`}>
+                  <span className="v3-gantt-dateval">{formatShortDate(bar.start)}</span>
+                  <span className="v3-gantt-dateval is-end">{formatShortDate(bar.end)}</span>
+                </div>
+              )}
               <div className="v3-gantt-track">
                 <div
                   className={`v3-gantt-bar${editable ? " is-editable" : ""}${drag?.id === bar.id ? " is-dragging" : ""}`}
@@ -250,34 +288,7 @@ export default function RoadmapGantt({ rows, editable = false, onChange }: Roadm
           );
         })}
       </div>
-
-      {/* Precise date editors — one row per phase */}
-      {draft.map((row) => (
-        <div className="v3-gantt-editrow" key={`edit-${row.id}`}>
-          <span className="v3-gantt-label" title={row.name}>{row.name}</span>
-          <div className="v3-gantt-dates">
-            <input
-              type="date"
-              className="v3-gantt-date"
-              aria-label={`${row.name} start date`}
-              value={row.start}
-              max={shiftIsoDate(row.end, -MIN_DAYS)}
-              disabled={!editable}
-              onChange={(e) => onDateInput(row, "start", e.target.value)}
-            />
-            <span className="v3-gantt-dates-sep">→</span>
-            <input
-              type="date"
-              className="v3-gantt-date"
-              aria-label={`${row.name} end date`}
-              value={row.end}
-              min={shiftIsoDate(row.start, MIN_DAYS)}
-              disabled={!editable}
-              onChange={(e) => onDateInput(row, "end", e.target.value)}
-            />
-          </div>
-        </div>
-      ))}
+      </div>
     </div>
   );
 }

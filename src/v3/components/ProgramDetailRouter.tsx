@@ -241,11 +241,6 @@ export default function ProgramDetailRouter({
           program={program}
           planIsRunning={activeRuns.some((r) => r.agent_id === "plan" && r.status === "running")}
           onTriggerPlan={triggers.triggerPlan}
-          milestonesIsRunning={activeRuns.some((r) => r.agent_id === "milestone" && r.status === "running")}
-          onTriggerMilestones={triggers.triggerMilestones}
-          onAddMilestone={onAddMilestone}
-          onCompleteMilestone={onCompleteMilestone}
-          milestoneSavePending={milestoneSavePending}
           healthIsRunning={healthHeatmapIsRunning}
           onTriggerHealth={triggers.triggerHealthHeatmap}
         />

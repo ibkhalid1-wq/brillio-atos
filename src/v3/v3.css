@@ -12456,9 +12456,21 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 .v3-gantt {
   --v3-gantt-label-w: 150px;
   --v3-gantt-gap: 12px;
+  --v3-gantt-dates-w: 178px;
+  --v3-gantt-track-min: 520px;
   --v3-gantt-today: #e8553b;
   display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px;
 }
+.v3-gantt.is-editable { --v3-gantt-dates-w: 150px; }
+
+/* Horizontal scroll viewport — label + dates columns stay pinned via sticky. */
+.v3-gantt-scroll {
+  overflow-x: auto; overflow-y: hidden;
+  display: flex; flex-direction: column; gap: 10px;
+  scrollbar-width: thin;
+}
+.v3-gantt-scroll > .v3-gantt-row { min-width: max-content; }
+.v3-gantt-scroll .v3-gantt-grid { min-width: max-content; }
 .v3-gantt-head {
   display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
   padding-bottom: 8px; border-bottom: 1px solid var(--v3-border-soft);
@@ -12466,11 +12478,21 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 .v3-gantt-title { font-size: 13px; font-weight: 650; letter-spacing: -0.01em; color: var(--v3-text-primary); }
 .v3-gantt-hint { font-size: 11px; color: var(--v3-text-muted); }
 
-/* Each row is a fixed label column + a flexible track column. */
-.v3-gantt-row { display: grid; grid-template-columns: var(--v3-gantt-label-w) 1fr; align-items: center; gap: var(--v3-gantt-gap); padding: 3px 0; }
+/* Each row: pinned label + pinned dates columns, then the flexible track.
+   Rows are vertically contiguous (no padding) so the pinned columns leave no gaps
+   for the scrolling overlay to bleed through; lane spacing lives in the track margin. */
+.v3-gantt-row { display: grid; grid-template-columns: var(--v3-gantt-label-w) var(--v3-gantt-dates-w) minmax(var(--v3-gantt-track-min), 1fr); align-items: center; gap: var(--v3-gantt-gap); }
+.v3-gantt-grid .v3-gantt-track { margin: 3px 0; }
 .v3-gantt-axis { margin-bottom: 12px; }
 .v3-gantt-label {
   font-size: 12px; line-height: 1.25; font-weight: 500; color: var(--v3-text-secondary);
+  display: flex; align-items: center; gap: 6px;
+  position: sticky; left: 0; z-index: 6; align-self: stretch;
+  background: var(--v3-surface);
+  padding-right: 8px;
+  box-shadow: var(--v3-gantt-gap) 0 0 0 var(--v3-surface);
+}
+.v3-gantt-labeltext {
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden; word-break: break-word;
 }
@@ -12494,7 +12516,7 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 /* Overlay confined to the track column so gridlines/today align with the bars. */
 .v3-gantt-overlay {
   position: absolute; top: 0; bottom: 0; right: 0;
-  left: calc(var(--v3-gantt-label-w) + var(--v3-gantt-gap));
+  left: calc(var(--v3-gantt-label-w) + var(--v3-gantt-dates-w) + var(--v3-gantt-gap) * 2);
   pointer-events: none; z-index: 2;
 }
 .v3-gantt-monthline { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--v3-border-soft); opacity: 0.55; }
@@ -12547,8 +12569,8 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   background: rgba(15, 23, 42, 0.5); border-radius: 1px;
 }
 .v3-gantt-dot {
-  display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px;
-  vertical-align: middle; background: #cbd5e1;
+  flex: none; width: 8px; height: 8px; border-radius: 50%;
+  background: #cbd5e1;
 }
 .v3-gantt-dot.rag-green { background: #198754; }
 .v3-gantt-dot.rag-amber { background: #d9930b; }
@@ -12573,15 +12595,37 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 }
 .v3-gantt-bar.is-editable:hover .v3-gantt-handle::after { opacity: 1; }
 
-.v3-gantt-editrow { display: grid; grid-template-columns: var(--v3-gantt-label-w) 1fr; gap: var(--v3-gantt-gap); align-items: center; padding: 0 0 4px; }
-.v3-gantt-editrow:first-of-type { margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--v3-border-soft); }
-.v3-gantt-dates { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+/* Inline per-row dates: the bar's start/end share the row with the bar; pinned left.
+   The box-shadow paints over the grid gap to the right + a hairline separator so the
+   scrolling track (today marker, month labels) never bleeds through the pinned column. */
+.v3-gantt-dates {
+  display: flex; flex-direction: row; align-items: center; gap: 5px; flex-wrap: nowrap; min-width: 0;
+  position: sticky; left: calc(var(--v3-gantt-label-w) + var(--v3-gantt-gap)); z-index: 6; align-self: stretch;
+  background: var(--v3-surface); padding-right: 8px;
+  box-shadow: var(--v3-gantt-gap) 0 0 0 var(--v3-surface), calc(var(--v3-gantt-gap) + 1px) 0 0 0 var(--v3-border-soft);
+}
+/* Editable mode stacks the two native date inputs to fit the narrow column. */
+.v3-gantt.is-editable .v3-gantt-dates { flex-direction: column; align-items: stretch; gap: 2px; justify-content: center; }
+.v3-gantt-dates-head {
+  position: sticky; left: calc(var(--v3-gantt-label-w) + var(--v3-gantt-gap)); z-index: 6; align-self: stretch;
+  background: var(--v3-surface);
+  box-shadow: var(--v3-gantt-gap) 0 0 0 var(--v3-surface), calc(var(--v3-gantt-gap) + 1px) 0 0 0 var(--v3-border-soft);
+}
+/* Axis pinned cells extend over the axis-month labels and the axis→grid gap so the
+   scrolling month/year ticks and the "today" flag never bleed into the frozen columns. */
+.v3-gantt-axis .v3-gantt-label,
+.v3-gantt-axis .v3-gantt-dates-head {
+  z-index: 7;
+  margin: -8px 0 -28px; padding-top: 8px; padding-bottom: 28px;
+}
+.v3-gantt-dateval { font-size: 11px; line-height: 1.3; color: var(--v3-text-secondary); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.v3-gantt-dateval.is-end { color: var(--v3-text-muted); }
+.v3-gantt-dateval.is-end::before { content: "→ "; color: var(--v3-text-muted); }
 .v3-gantt-date {
-  font-size: 11px; padding: 3px 7px; border-radius: 6px; color-scheme: light dark;
+  font-size: 11px; padding: 3px 6px; border-radius: 6px; color-scheme: light dark; width: 100%;
   border: 1px solid var(--v3-border); background: var(--v3-surface); color: var(--v3-text-primary);
   transition: border-color 0.12s ease;
 }
 .v3-gantt-date:hover:not(:disabled) { border-color: var(--v3-accent); }
 .v3-gantt-date:disabled { opacity: 0.6; }
-.v3-gantt-dates-sep { font-size: 11px; color: var(--v3-text-muted); }
 .v3-gantt-empty { font-size: 12px; color: var(--v3-text-muted); padding: 12px 0; }
