@@ -151,6 +151,10 @@ function GateTimeline({
         const isSelected = phase.id === selectedPhaseId;
         const isLocked = lockedPhaseIds.has(phase.id);
         const variant = gateVariant(gate?.status);
+        // Gate timeline shows artifact-completion % (share of the phase's
+        // required artifacts approved) — the same deterministic progress signal
+        // the roadmap uses — rather than the composite readiness score.
+        const artifactsComplete = selectPhaseMetrics(program, phase.id).detail.artifactsComplete;
 
         return (
           <button
@@ -169,8 +173,8 @@ function GateTimeline({
                 {gate?.approvedAt ? <RelativeTime date={gate.approvedAt} /> : isActive ? "Active phase" : gate?.status ? gate.status.replace(/-/g, " ") : "No review yet"}
               </div>
             </div>
-            {gate?.readinessScore !== undefined ? (
-              <div className="v3-governance-timeline-score">{selectPhaseMetrics(program, phase.id).readiness}%</div>
+            {gate?.readinessScore !== undefined || artifactsComplete > 0 ? (
+              <div className="v3-governance-timeline-score">{artifactsComplete}%</div>
             ) : null}
           </button>
         );
