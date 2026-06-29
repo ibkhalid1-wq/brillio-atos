@@ -152,9 +152,15 @@ describe("stakeholder list → scope-map / requirements-catalog (semantic flow)"
     ]);
   });
 
-  it("yields no semantic edge without a store (no resolvable stakeholder grid)", () => {
+  it("declares scope-map inputs statically but draws no edge until the artifacts render", () => {
+    // Discover now carries a static input schema + artifactInputFlow, so the
+    // scope-map's declared inputs resolve without a store. The flow edge still
+    // needs the artifact to actually render (dynamic artifact set), so without a
+    // store there is no valid target and no edge is drawn.
     expect(derivePhaseFlowEdges("discover", ["stakeholderList"])).toEqual([]);
-    expect(getArtifactInputFields("discover", "scope-map")).toEqual([]);
+    expect(new Set(getArtifactInputFields("discover", "scope-map"))).toEqual(
+      new Set(["currentStateSummary", "scopeInclusions", "scopeExclusions", "stakeholderList"]),
+    );
   });
 });
 

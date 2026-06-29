@@ -232,6 +232,12 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       displayName: "Discover",
       description: "Establish current state, scope, and discovery findings.",
       requiredArtifacts: [],
+      // Discover seeds the discovery facts its agents synthesise (current state,
+      // scope boundaries, and the stakeholder map) as static methodology inputs,
+      // so scope/requirements/stakeholder generation never depends on the planner
+      // remembering to ask for them. dynamicSchema stays true: the planner may
+      // still ADD programme-specific fields on top; static wins on id collision,
+      // so a planner-emitted free-text stakeholder field is upgraded to the grid.
       dynamicSchema: true,
       mandatoryExitCriteriaTemplates: [
         "Current state documented",
@@ -241,6 +247,29 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       entryGuards: ["Mobilise gate approved"],
       recommendedAgents: ["requirements-catalog", "narrative", "stakeholder", "milestone"],
       typicalDurationWeeks: { min: 3, max: 8 },
+      inputFields: [
+        { id: "currentStateSummary", label: "Current state summary & key pain points", type: "textarea", required: true, placeholder: "How things work today and the problems driving this programme", hint: "Today's processes, systems, and the pain points the programme must resolve" },
+        { id: "scopeInclusions", label: "In-scope processes, systems & geographies", type: "textarea", required: true, placeholder: "What this programme will cover", hint: "The processes, systems, business units, and regions explicitly in scope" },
+        { id: "scopeExclusions", label: "Out-of-scope processes, systems & geographies", type: "textarea", required: true, placeholder: "What this programme will NOT cover", hint: "Explicit exclusions that protect the boundary and prevent scope creep" },
+        {
+          id: "stakeholderList",
+          label: "Key stakeholders",
+          type: "grid",
+          required: true,
+          hint: "Capture the people the programme serves and must keep aligned, with their influence and interest.",
+          columns: [
+            { key: "name", label: "Name", type: "text" },
+            { key: "role", label: "Role / title", type: "text" },
+            { key: "influence", label: "Influence", type: "text" },
+            { key: "interest", label: "Interest", type: "text" },
+          ],
+        },
+      ],
+      artifactInputFlow: {
+        "scope-map": ["currentStateSummary", "scopeInclusions", "scopeExclusions", "stakeholderList"],
+        "requirements-catalog": ["currentStateSummary", "scopeInclusions", "stakeholderList"],
+        "stakeholder-map": ["stakeholderList"],
+      },
     },
     {
       id: "design",

@@ -59,8 +59,12 @@ describe("findStakeholderGrid", () => {
 });
 
 describe("resolveStakeholderField", () => {
-  it("returns null without a store — Discover declares no static stakeholder grid", () => {
-    expect(resolveStakeholderField(undefined)).toBeNull();
+  it("resolves the static Discover stakeholder grid without a store", () => {
+    // Discover now seeds a static stakeholderList grid in the methodology, so it
+    // resolves even before the planner emits a dynamic schema.
+    const field = resolveStakeholderField(undefined)!;
+    expect(field.id).toBe("stakeholderList");
+    expect(field.type).toBe("grid");
   });
 
   it("resolves the ai-derived stakeholderList from the dynamic store at the Discover phase", () => {
