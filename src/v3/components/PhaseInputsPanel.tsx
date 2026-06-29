@@ -481,9 +481,10 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
   const showActuals = phaseId === "valuerealize";
   // Roles are defined once at Mobilise (canonical roster). Phases after Mobilise
   // reference that roster read-only — single source of truth for people. Strategy
-  // runs before Mobilise, so the roster doesn't exist there yet. Design captures
-  // solution substance, not staffing, so it omits the roster reference entirely.
-  const showRolesReference = phaseId !== "mobilise" && phaseId !== "strategy" && phaseId !== "design";
+  // runs before Mobilise, so the roster doesn't exist there yet. Discover and
+  // Design capture substance, not staffing, so they omit the roster reference.
+  const HIDE_ROLES_REFERENCE = new Set(["mobilise", "strategy", "discover", "design"]);
+  const showRolesReference = !HIDE_ROLES_REFERENCE.has(phaseId);
   // The roster is the ai-derived dynamic "coreTeamRoster" grid on Mobilise, not a
   // static schema field — resolve it (and its planner-chosen columns) through the
   // shared resolver so this reference stays aligned with what Mobilise renders.
