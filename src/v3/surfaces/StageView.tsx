@@ -1805,13 +1805,11 @@ export default function StageView({
               );
             })}
         </div>
-        {!artifactPreviews?.narrative && !artifactPreviews?.deck && !expandedOutput ? (
+        {!artifactPreviews?.narrative && !artifactPreviews?.deck && !expandedOutput && (activePhase?.id === "strategy" || activePhase?.id === "build") ? (
           <div className="v3-output-empty-hint" style={{ fontSize: 12, color: "var(--v3-text-muted)", marginTop: 10, padding: "0 2px" }}>
             {activePhase?.id === "strategy"
               ? "Generate your transformation strategy document"
-              : activePhase?.id === "build"
-              ? "Generate milestone tracking for delivery progress"
-              : "Generate your first artifact for this phase to get started"}
+              : "Generate milestone tracking for delivery progress"}
           </div>
         ) : null}
         {expandedOutput === "deck" && artifactPreviews?.deck ? (
