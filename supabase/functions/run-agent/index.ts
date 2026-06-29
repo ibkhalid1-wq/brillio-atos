@@ -2472,15 +2472,40 @@ function getPhaseArtifactContext(programData: ProgramState, phaseId: string): Ar
   return getProgramArtifactContext(programData).filter((artifact) => artifact.phaseId === phaseId);
 }
 
+/**
+ * True when an escalation provably contradicts current program state — the same
+ * failure mode the RAID filter guards against, since escalations are raised off
+ * the same risk/decision signals:
+ * - it asserts an approved artifact is unapproved / still in draft, or
+ * - its core issue is the absence of phase exit criteria (not part of this methodology), or
+ * - it flags a phase as "stalled" when that phase actually carries artifacts
+ *   (the escalation agent's own rule: a phase with artifacts is progressing).
+ */
+function isProvablyStaleEscalation(
+  entry: Record<string, unknown>,
+  approved: { ids: Set<string>; titles: string[] },
+  programData: ProgramState,
+): boolean {
+  const text = `${typeof entry.title === "string" ? entry.title : ""} ${typeof entry.summary === "string" ? entry.summary : ""}`.toLowerCase();
+  if (RAID_EXIT_CRITERIA.test(text)) return true;
+  if (RAID_APPROVAL_NEGATION.test(text) && approved.titles.some((title) => text.includes(title))) return true;
+  const type = typeof entry.type === "string" ? entry.type : "";
+  const phaseId = typeof entry.linkedPhaseId === "string" ? entry.linkedPhaseId : "";
+  if (type === "phase-stalled" && phaseId && getPhaseArtifactContext(programData, phaseId).length > 0) return true;
+  return false;
+}
+
 function applyEscalationResultToProgramData(programData: ProgramState, result: Record<string, unknown> | null): ProgramState {
   return updateInnerProgramData(programData, (inner) => {
     const existingEscalations = Array.isArray(inner.escalations) ? inner.escalations.filter(isRecord) : [];
     const openEscalations = existingEscalations.filter((entry) => entry.status === "open" || entry.status === "acknowledged");
     const existingKeys = new Set(openEscalations.map((entry) => buildEscalationKey(entry)));
+    const approvedArtifacts = buildApprovedArtifactIndex(programData);
     const additions = isRecord(result) && Array.isArray(result.escalations)
       ? result.escalations
           .filter(isRecord)
           .filter((entry) => !existingKeys.has(buildEscalationKey(entry)))
+          .filter((entry) => !isProvablyStaleEscalation(entry, approvedArtifacts, programData))
           .map((entry) => ({
             id: typeof entry.id === "string" ? entry.id : crypto.randomUUID(),
             type: typeof entry.type === "string" ? entry.type : "critical-blocker",
@@ -2512,7 +2537,11 @@ function applyEscalationResultToProgramData(programData: ProgramState, result: R
     const nowIso = new Date().toISOString();
     const reconciled = existingEscalations.map((entry) => {
       const id = typeof entry.id === "string" ? entry.id : "";
-      if (resolvedIds.has(id) && (entry.status === "open" || entry.status === "acknowledged")) {
+      const isOpen = entry.status === "open" || entry.status === "acknowledged";
+      // Auto-resolve entries the agent reported as cleared, plus any that
+      // provably contradict current state (e.g. an approved artifact flagged as
+      // unapproved) so stale escalations close instead of lingering forever.
+      if (isOpen && (resolvedIds.has(id) || isProvablyStaleEscalation(entry, approvedArtifacts, programData))) {
         return { ...entry, status: "resolved", resolvedAt: nowIso };
       }
       return entry;
