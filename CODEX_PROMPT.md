@@ -1,8 +1,8 @@
-# Brillio ATLAS™ — Codex Build Prompt
+# Brillio ATOS™ — Codex Build Prompt
 
 ## Platform Identity
 
-**Product Name:** Brillio ATLAS™
+**Product Name:** Brillio ATOS™
 **Engine:** ATOS™ — Agentic Transformation Operating System
 **Tagline:** AI-Native Transformation. Delivered.
 
@@ -80,7 +80,7 @@ All code lives in one file, organized into these sections:
     - IndustryView         — Industry Accelerators (6 industries)
     - PortfolioView        — Program portfolio grid
 13. VIEW_MAP               — Routes nav IDs to view components
-14. App Shell              — BrillioATLAS() — layout, state orchestration, modals
+14. App Shell              — BrillioATOS() — layout, state orchestration, modals
 ```
 
 ---

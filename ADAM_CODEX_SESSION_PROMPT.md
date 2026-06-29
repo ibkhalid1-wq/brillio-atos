@@ -1,4 +1,4 @@
-# ADAM — Brillio Atlas Codex · Codex Session Prompt
+# ADAM — Brillio Atos Codex · Codex Session Prompt
 
 ## What this project is
 

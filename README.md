@@ -1,4 +1,4 @@
-# Brillio ATLAS™
+# Brillio ATOS™
 
 ### AI-Native Transformation. Delivered.
 
