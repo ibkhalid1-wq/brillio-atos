@@ -12454,8 +12454,8 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 
 /* ── Roadmap Gantt ─────────────────────────────────────────────────────────── */
 .v3-gantt {
-  --v3-gantt-label-w: 150px;
-  --v3-gantt-gap: 12px;
+  --v3-gantt-label-w: 118px;
+  --v3-gantt-gap: 10px;
   --v3-gantt-dates-w: 178px;
   --v3-gantt-track-min: 520px;
   --v3-gantt-today: #e8553b;
