@@ -114,6 +114,8 @@ export function useAgentTriggers({
     healthHeatmapProgramId: string | null;
     deckProgramId: string | null;
     discoveryGuideProgramId: string | null;
+    capacityProgramId: string | null;
+    vendorRiskProgramId: string | null;
     scopePcrProgramId: string | null;
     patternExtractProgramId: string | null;
     patternQueryProgramId: string | null;
@@ -130,6 +132,8 @@ export function useAgentTriggers({
     healthHeatmapProgramId: null,
     deckProgramId: null,
     discoveryGuideProgramId: null,
+    capacityProgramId: null,
+    vendorRiskProgramId: null,
     scopePcrProgramId: null,
     patternExtractProgramId: null,
     patternQueryProgramId: null,
@@ -158,6 +162,8 @@ export function useAgentTriggers({
   const phaseEstimatorLastPhase = useRef<string | null>(null);
   const deckRunning = useRef(false);
   const discoveryGuideRunning = useRef(false);
+  const capacityRunning = useRef(false);
+  const vendorRiskRunning = useRef(false);
   const patternExtractRunning = useRef(false);
   const patternQueryRunning = useRef(false);
   const escalationRunning = useRef(false);
@@ -247,6 +253,8 @@ export function useAgentTriggers({
         healthHeatmapProgramId: null,
         deckProgramId: null,
         discoveryGuideProgramId: null,
+        capacityProgramId: null,
+        vendorRiskProgramId: null,
         scopePcrProgramId: null,
         patternExtractProgramId: null,
         patternQueryProgramId: null,
@@ -278,6 +286,8 @@ export function useAgentTriggers({
     if (loadTriggerRef.current.healthHeatmapProgramId !== programId) loadTriggerRef.current.healthHeatmapProgramId = null;
     if (loadTriggerRef.current.deckProgramId !== programId) loadTriggerRef.current.deckProgramId = null;
     if (loadTriggerRef.current.discoveryGuideProgramId !== programId) loadTriggerRef.current.discoveryGuideProgramId = null;
+    if (loadTriggerRef.current.capacityProgramId !== programId) loadTriggerRef.current.capacityProgramId = null;
+    if (loadTriggerRef.current.vendorRiskProgramId !== programId) loadTriggerRef.current.vendorRiskProgramId = null;
     if (loadTriggerRef.current.scopePcrProgramId !== programId) loadTriggerRef.current.scopePcrProgramId = null;
     if (loadTriggerRef.current.patternExtractProgramId !== programId) loadTriggerRef.current.patternExtractProgramId = null;
     if (loadTriggerRef.current.patternQueryProgramId !== programId) loadTriggerRef.current.patternQueryProgramId = null;
@@ -442,6 +452,43 @@ export function useAgentTriggers({
       discoveryGuideRunning.current = false;
     });
   }, [canRunAgents, discoveryGuideGeneratedAt, phases, programId, runAgentSafely]);
+
+  // Auto-generate the Build capacity assessment once the Build phase is reached, so
+  // the support output is waiting for the user instead of requiring a manual click.
+  // Fires once per programme and never regenerates — an existing assessment in the
+  // programme data short-circuits it (mirrors the discovery-pack trigger).
+  useEffect(() => {
+    if (!canRunAgents) return;
+    const inner = (rawData.data && typeof rawData.data === "object" ? rawData.data : rawData) as Record<string, unknown>;
+    if (inner.capacityAssessment) return;
+    if (loadTriggerRef.current.capacityProgramId === programId || capacityRunning.current) return;
+    const buildReached = phases.some((phase) => phase.id === "build" && phase.status !== "inactive");
+    if (!buildReached) return;
+
+    loadTriggerRef.current.capacityProgramId = programId;
+    capacityRunning.current = true;
+    void runAgentSafely({ agentId: "capacity-assessor", phaseId: "build", triggeredBy: "trigger" }, () => {
+      capacityRunning.current = false;
+    });
+  }, [canRunAgents, phases, programId, rawData, runAgentSafely]);
+
+  // Auto-generate the vendor-risk assessment once any of its phases (Design, Build,
+  // Operate) is reached. Fires once per programme; an existing assessment in the
+  // programme data short-circuits it.
+  useEffect(() => {
+    if (!canRunAgents) return;
+    const inner = (rawData.data && typeof rawData.data === "object" ? rawData.data : rawData) as Record<string, unknown>;
+    if (inner.vendorRiskAssessment) return;
+    if (loadTriggerRef.current.vendorRiskProgramId === programId || vendorRiskRunning.current) return;
+    const vendorPhase = phases.find((phase) => ["design", "build", "operate"].includes(phase.id) && phase.status !== "inactive");
+    if (!vendorPhase) return;
+
+    loadTriggerRef.current.vendorRiskProgramId = programId;
+    vendorRiskRunning.current = true;
+    void runAgentSafely({ agentId: "vendor-risk-assessor", phaseId: vendorPhase.id, triggeredBy: "trigger" }, () => {
+      vendorRiskRunning.current = false;
+    });
+  }, [canRunAgents, phases, programId, rawData, runAgentSafely]);
 
   useEffect(() => {
     if (!canRunAgents || !activePhaseId) return;

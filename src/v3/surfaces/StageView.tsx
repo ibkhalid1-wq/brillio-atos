@@ -1180,12 +1180,6 @@ export default function StageView({
   const complianceCheck = source?.complianceCheck && typeof source.complianceCheck === "object" && !Array.isArray(source.complianceCheck)
     ? source.complianceCheck as { gaps?: Array<{ framework?: string; articleId?: string; gap?: string; severity?: string; requiredAction?: string }> }
     : null;
-  const capacityAssessment = source?.capacityAssessment && typeof source.capacityAssessment === "object" && !Array.isArray(source.capacityAssessment)
-    ? source.capacityAssessment as { overallAdequacy?: string; adequacyScore?: number; recommendations?: string[]; roleGaps?: Array<{ role?: string; currentCount?: number; requiredCount?: number; gap?: number }> }
-    : null;
-  const vendorRiskAssessment = source?.vendorRiskAssessment && typeof source.vendorRiskAssessment === "object" && !Array.isArray(source.vendorRiskAssessment)
-    ? source.vendorRiskAssessment as { vendorAssessments?: Array<{ vendorName?: string; riskScore?: number; dependencyCriticality?: string; recommendedAction?: string }> }
-    : null;
   const phaseInputs = source?.phaseInputs && typeof source.phaseInputs === "object" && !Array.isArray(source.phaseInputs)
     ? (source.phaseInputs as Record<string, unknown>)[activePhase?.id ?? ""]
     : null;
@@ -1226,14 +1220,10 @@ export default function StageView({
   if (activePhase.id === "build") {
     phaseAgentActions.push({ key: "sprint-planner", label: agentButtonContent("sprint-planner", sprintPlan ? "Re-plan sprints" : "Generate sprint plan"), disabled: gateApproved || agentButtonDisabled("sprint-planner"), onClick: () => onRunAgent("sprint-planner") });
   }
-  if (activePhase.id === "build") {
-    phaseAgentActions.push({ key: "capacity-assessor", label: agentButtonContent("capacity-assessor", capacityAssessment ? "Re-assess capacity" : "Assess capacity"), disabled: gateApproved || agentButtonDisabled("capacity-assessor"), onClick: () => onRunAgent("capacity-assessor") });
-  }
+  // capacity-assessor and vendor-risk-assessor run automatically via useAgentTriggers
+  // (like the Discover discovery pack), so they no longer carry manual buttons here.
   if (["design", "govern"].includes(activePhase.id)) {
     phaseAgentActions.push({ key: "compliance-checker", label: agentButtonContent("compliance-checker", complianceCheck ? "Re-check compliance" : "Run compliance check"), disabled: gateApproved || agentButtonDisabled("compliance-checker"), onClick: () => onRunAgent("compliance-checker") });
-  }
-  if (["design", "build", "operate"].includes(activePhase.id)) {
-    phaseAgentActions.push({ key: "vendor-risk-assessor", label: agentButtonContent("vendor-risk-assessor", vendorRiskAssessment ? "Re-assess vendor risk" : "Assess vendor risk"), disabled: gateApproved || agentButtonDisabled("vendor-risk-assessor"), onClick: () => onRunAgent("vendor-risk-assessor") });
   }
 
   return (
