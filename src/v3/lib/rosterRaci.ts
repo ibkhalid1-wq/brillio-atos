@@ -85,6 +85,42 @@ export function missingRosterRoles(rows: GridRow[], roleKey: string | undefined,
 }
 
 /**
+ * Role keyword tiers, most senior first — used to present the roster top-down by
+ * org seniority rather than the arbitrary order rows were entered. Each role is
+ * ranked by the first tier whose pattern it matches; senior patterns are checked
+ * before junior ones so "Engineering Lead / Architect" ranks as architect, not a
+ * generic lead, and "Project Manager" as programme leadership, not a plain manager.
+ */
+const SENIORITY_KEYWORDS: RegExp[] = [
+  /sponsor|steering|exec|executive|\bboard\b|chief|\bvp\b|vice president|director|\bhead\b/i,
+  /program(me)? manager|project manager|delivery (lead|manager|head)|\bpmo\b|engagement manager|program(me)? lead/i,
+  /product owner|product manager/i,
+  /architect|engineering lead|tech(nical)? lead|lead engineer|principal/i,
+  /\blead\b/i,
+  /manager|officer|controller/i,
+  /analyst|\bba\b|business analyst|\bsme\b|specialist|designer|engineer|developer|consultant/i,
+];
+
+/** Seniority rank for a role (lower = more senior). Unmatched roles, then empty roles, sink last. */
+export function rosterSeniorityRank(role: string | undefined | null): number {
+  const text = String(role ?? "").toLowerCase();
+  if (!text.trim()) return SENIORITY_KEYWORDS.length + 1;
+  for (let i = 0; i < SENIORITY_KEYWORDS.length; i++) {
+    if (SENIORITY_KEYWORDS[i].test(text)) return i;
+  }
+  return SENIORITY_KEYWORDS.length;
+}
+
+/** Roster rows ordered top-down by role seniority, stable within the same rank. */
+export function sortRosterRowsBySeniority(rows: GridRow[], roleKey: string | undefined): GridRow[] {
+  if (!roleKey) return rows;
+  return rows
+    .map((row, index) => ({ row, index, rank: rosterSeniorityRank(row[roleKey]) }))
+    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .map((entry) => entry.row);
+}
+
+/**
  * Map of canonical role family → named person, built from roster rows that carry
  * a non-empty name. Used to resolve a primary owner for a piece of work from the
  * role the RACI holds accountable.

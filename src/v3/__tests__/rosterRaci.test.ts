@@ -5,6 +5,8 @@ import {
   rosterColumnKeys,
   missingRosterRoles,
   rosterRoleToNameMap,
+  rosterSeniorityRank,
+  sortRosterRowsBySeniority,
 } from "@/v3/lib/rosterRaci";
 
 /**
@@ -97,6 +99,44 @@ describe("missingRosterRoles", () => {
     // RACI names the same seat as "Executive Sponsor (Raj Mamodia)" — the
     // parenthetical is a qualifier, not a distinct role, so nothing is missing.
     expect(missingRosterRoles(rows, roleKey, ["Executive Sponsor (Raj Mamodia)"])).toEqual([]);
+  });
+});
+
+describe("rosterSeniorityRank", () => {
+  it("ranks governance/exec roles above programme leadership above ICs", () => {
+    expect(rosterSeniorityRank("Program Sponsor")).toBeLessThan(rosterSeniorityRank("Project Manager"));
+    expect(rosterSeniorityRank("Project Manager")).toBeLessThan(rosterSeniorityRank("Product Owner"));
+    expect(rosterSeniorityRank("Product Owner")).toBeLessThan(rosterSeniorityRank("Engineering Lead / Architect"));
+    expect(rosterSeniorityRank("Engineering Lead / Architect")).toBeLessThan(rosterSeniorityRank("Integration Lead"));
+    expect(rosterSeniorityRank("Integration Lead")).toBeLessThan(rosterSeniorityRank("Finance Controller"));
+    expect(rosterSeniorityRank("Finance Controller")).toBeLessThan(rosterSeniorityRank("Business Analyst"));
+  });
+
+  it("ranks an architect ahead of a generic lead despite both keywords appearing", () => {
+    expect(rosterSeniorityRank("Engineering Lead / Architect")).toBe(3);
+  });
+
+  it("sinks unknown roles below ranked ones and empty roles last", () => {
+    expect(rosterSeniorityRank("Office Cat")).toBeGreaterThan(rosterSeniorityRank("QA Lead"));
+    expect(rosterSeniorityRank("")).toBeGreaterThan(rosterSeniorityRank("Office Cat"));
+  });
+});
+
+describe("sortRosterRowsBySeniority", () => {
+  it("orders rows top-down by role, stable within a rank", () => {
+    const rows = [
+      { id: "1", role: "QA Lead", name: "A" },
+      { id: "2", role: "Program Sponsor", name: "B" },
+      { id: "3", role: "Project Manager", name: "C" },
+      { id: "4", role: "Integration Lead", name: "D" },
+    ];
+    const ordered = sortRosterRowsBySeniority(rows, "role").map((r) => r.role);
+    expect(ordered).toEqual(["Program Sponsor", "Project Manager", "QA Lead", "Integration Lead"]);
+  });
+
+  it("returns rows unchanged when the role key is unknown", () => {
+    const rows = [{ id: "1", role: "QA Lead", name: "A" }];
+    expect(sortRosterRowsBySeniority(rows, undefined)).toBe(rows);
   });
 });
 

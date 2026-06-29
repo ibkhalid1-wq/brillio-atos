@@ -10,6 +10,7 @@ import {
   raciDeliveryRoles,
   rosterColumnKeys,
   missingRosterRoles,
+  sortRosterRowsBySeniority,
 } from "@/v3/lib/rosterRaci";
 
 /**
@@ -52,10 +53,11 @@ export default function RosterRaciView({ program }: { program: ProgramSummary | 
     const staffedRows = roleKey
       ? rows.filter((row) => (row[roleKey] ?? "").trim() || (nameKey ? (row[nameKey] ?? "").trim() : false))
       : rows;
+    const orderedRows = sortRosterRowsBySeniority(staffedRows, roleKey);
     const deliveryRoles = raciDeliveryRoles(raci);
     const unstaffedRoles = missingRosterRoles(rows, roleKey, deliveryRoles);
 
-    return { raci, columns, roleKey, nameKey, rows: staffedRows, deliveryRoles, unstaffedRoles };
+    return { raci, columns, roleKey, nameKey, rows: orderedRows, deliveryRoles, unstaffedRoles };
   }, [program]);
 
   const { raci, columns, roleKey, rows, deliveryRoles, unstaffedRoles } = model;
