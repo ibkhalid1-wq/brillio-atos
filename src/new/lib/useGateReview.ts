@@ -121,8 +121,14 @@ function reopenPhasesInner(
  *  decision queue and human-notes log. Resetting an approved phase removes its
  *  gate approval, so downstream phases re-lock automatically (getLockedPhaseIds
  *  reads gateReviews). RAID/risk entries are intentionally left untouched — they
- *  live in their own log and may span phases. */
-function resetPhaseInner(inner: Record<string, unknown>, phaseId: string): Record<string, unknown> {
+ *  live in their own log and may span phases.
+ *
+ *  "Blank workspace" means blank of CAPTURED data, not of the seeded scaffolding.
+ *  The planner-derived seed — `dynamicSchema` (proposed input fields incl.
+ *  suggested core-team roles, proposed artifacts, plan meta) — is deliberately
+ *  preserved, so a reset phase still shows its suggested roles/fields to refill.
+ *  Only keys in the removal list below are touched; dynamicSchema is never one. */
+export function resetPhaseInner(inner: Record<string, unknown>, phaseId: string): Record<string, unknown> {
   const asMap = (value: unknown): Record<string, unknown> | undefined =>
     value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
   const matchesPhase = (entry: Record<string, unknown>): boolean =>
