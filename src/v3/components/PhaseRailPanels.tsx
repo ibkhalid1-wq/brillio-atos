@@ -376,7 +376,7 @@ export function PhaseRailPanels({
           {guidanceItems.length ? (
             <div className="v3-rail-list">
               <div className="v3-rail-meta">
-                Improvement recommendations from each artifact's AI review — the same signals behind this phase's input &amp; artifact quality scores.
+                Improvement Recommendations
               </div>
               {guidanceItems.map((item) => (
                 <div key={item.id} className="v3-rail-item">
