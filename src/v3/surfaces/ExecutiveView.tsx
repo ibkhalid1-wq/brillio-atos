@@ -9,7 +9,7 @@ import { computePhaseReadiness, getLockedPhaseIds } from "@/v3/lib/phaseReadines
 import { selectBlockers, selectDecisions, selectHighPriorityDecisions, selectHighRisks, selectRisks } from "@/v3/lib/programRaid";
 import type { ConfidenceScore } from "@/v3/lib/confidenceScore";
 import ConfidenceBreakdown from "@/v3/components/ConfidenceBreakdown";
-import ChangeRequestModal, { type LockedPhaseOption } from "@/v3/components/ChangeRequestModal";
+import { type LockedPhaseOption } from "@/v3/components/ChangeRequestModal";
 import type { ChangeRequest } from "@/v3/lib/changeControl";
 
 interface ExecutiveViewProps {
@@ -203,7 +203,6 @@ export default function ExecutiveView({
   onResolveChangeRequest,
 }: ExecutiveViewProps) {
   const [approvingPhase, setApprovingPhase] = useState<string | null>(null);
-  const [changeRequestOpen, setChangeRequestOpen] = useState(false);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   // Friendly stage names for the change-control log, keyed by phase id.
   const phaseNameById = useMemo(() => {
@@ -427,21 +426,6 @@ export default function ExecutiveView({
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 14 }}>
-          {/* Executive actions live in the header so the primary controls are
-              reachable without scrolling to the foot of the brief. */}
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            {onRaiseChangeRequest ? (
-              <button
-                type="button"
-                className="v3-button secondary v3-button-inline-sm"
-                title={lockedPhases.length ? "Raise a change request against a locked stage" : "No locked stages yet"}
-                onClick={() => setChangeRequestOpen(true)}
-              >
-                Change Request{openChangeRequests.length ? ` (${openChangeRequests.length})` : ""}
-              </button>
-            ) : null}
-          </div>
-
           {confidenceScore !== null && (
             <AdamExplainsTooltip metric="confidence" value={confidenceScore} placement="left">
               <div style={{ textAlign: "right", cursor: "help" }}>
@@ -1155,17 +1139,6 @@ export default function ExecutiveView({
         </div>
       </div>
 
-      {onRaiseChangeRequest ? (
-        <ChangeRequestModal
-          open={changeRequestOpen}
-          lockedPhases={lockedPhases}
-          onClose={() => setChangeRequestOpen(false)}
-          onSubmit={async (phaseId, title, reason) => {
-            await onRaiseChangeRequest(phaseId, title, reason);
-            setChangeRequestOpen(false);
-          }}
-        />
-      ) : null}
     </div>
   );
 }
