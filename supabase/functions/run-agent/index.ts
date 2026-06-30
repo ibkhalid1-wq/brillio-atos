@@ -3116,11 +3116,13 @@ function applyHealthHeatmapResultToProgramData(programData: ProgramState, result
     // (e.g. echoing a stale "no objectives" note) can't override the gate.
     const gateReviews = normalizeProgramData(inner.gateReviews as JsonValue | null);
     const gatedPhaseIds = new Set<string>();
+    const notStartedPhaseIds = new Set<string>();
     for (const phase of getProgramPhaseContext(programData)) {
       const id = typeof phase.id === "string" ? phase.id : "";
       if (!id) continue;
       const gate = normalizeProgramData(gateReviews[id] as JsonValue | null);
       if (phase.status === "complete" || gate.status === "approved") gatedPhaseIds.add(id);
+      else if (isPhaseNotStarted(programData, id)) notStartedPhaseIds.add(id);
     }
 
     const phaseHealth = Array.isArray(result.phaseHealth)
@@ -3130,6 +3132,12 @@ function applyHealthHeatmapResultToProgramData(programData: ProgramState, result
           .map((entry) => {
             const phaseId = String(entry.phaseId).trim();
             const isGated = gatedPhaseIds.has(phaseId);
+            // A phase the programme hasn't reached yet can't be at risk or
+            // blocked now: a model that grades a future phase red (e.g.
+            // "Adoption Plan not approved" against an inactive Operate) presents
+            // a future concern as a live one. Force it grey with no topRisk, the
+            // same rule the gantt applies — gated wins if both somehow match.
+            const isNotStarted = !isGated && notStartedPhaseIds.has(phaseId);
             return {
               phaseId,
               phaseName: typeof entry.phaseName === "string" && entry.phaseName.trim()
@@ -3137,15 +3145,19 @@ function applyHealthHeatmapResultToProgramData(programData: ProgramState, result
                 : formatPhaseName(phaseId),
               rag: isGated
                 ? "green"
-                : ["green", "amber", "red", "grey"].includes(String(entry.rag))
-                  ? entry.rag
-                  : "grey",
+                : isNotStarted
+                  ? "grey"
+                  : ["green", "amber", "red", "grey"].includes(String(entry.rag))
+                    ? entry.rag
+                    : "grey",
               score: isGated
                 ? Math.max(90, Math.round(clampNumber(entry.score, 0, 100, 0)))
-                : Math.round(clampNumber(entry.score, 0, 100, 0)),
+                : isNotStarted
+                  ? 0
+                  : Math.round(clampNumber(entry.score, 0, 100, 0)),
               confidence: clampNumber(entry.confidence, 0, 1, 0.5),
               healthNote: truncateText(entry.healthNote, 120),
-              topRisk: isGated
+              topRisk: (isGated || isNotStarted)
                 ? null
                 : (typeof entry.topRisk === "string" && entry.topRisk.trim() ? entry.topRisk.trim() : null),
             };
@@ -5567,8 +5579,10 @@ Use "grey" for phases not yet started.
 
 Grading rules (the gate is authoritative — never contradict it):
 - A phase whose gateStatus is "approved" (or whose status is "complete") has passed its stakeholder gate. Grade it "green". NEVER grade an approved/complete phase red or amber, and NEVER cite missing objectives, KPIs, milestones, or exit criteria as its topRisk.
+- A phase that has NOT yet started (status inactive/upcoming/pending/planned, i.e. the programme has not reached it) cannot be at risk or blocked yet. Grade it "grey" with score 0 and topRisk null. NEVER grade a not-started phase red or amber, and NEVER raise a future deliverable (e.g. an adoption plan, hypercare readiness, an operate-phase artifact) as a current risk just because the work hasn't begun — work that isn't due yet is not a live problem.
+- Only phases that are in progress (started but not yet gated) may be graded amber or red. The topRisk and healthNote you report must describe an issue happening NOW in an in-progress phase, not a future one.
 - The programme objective and KPIs are provided in strategyInputs (businessObjective, successMetric, kpis) and the timeline in startDate/targetEndDate. When these are present, do NOT report the objective, success metrics, KPIs, or timelines as missing — for any phase or in the overall summary.
-- Base overallRag on the not-yet-approved phases; do not drag the programme red over an already-gated phase.
+- Base overallRag, overallHealthScore, programMomentum, trend AND the summary only on phases that are in progress or already gated. Not-started phases must NOT drag the overall score down, must NOT make momentum "stalled", and must NOT be named as blockers in the summary. The summary describes the live state of the programme today — never frame a not-yet-reached phase as blocking or stalling the programme.
 
 Return ONLY valid JSON.`,
       user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
