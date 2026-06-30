@@ -224,26 +224,10 @@ const RULES: ValidationRule[] = [
           evidence: [`baseline="${k.baseline}", target="${k.target}"`],
         })),
   },
-  {
-    id: "milestone-without-exit-criteria",
-    domain: "delivery-readiness",
-    run: (p) =>
-      (p.milestones ?? [])
-        .filter((m) => m.status !== "complete" && (m.exitCriteria?.length ?? 0) === 0)
-        .map((m) => ({
-          findingId: `milestone-exit:${m.id}`,
-          severity: "low",
-          domain: "delivery-readiness",
-          phaseId: m.phaseId,
-          sourceArtifact: "milestones",
-          targetArtifact: "",
-          sourceItem: m.id,
-          issue: `Milestone "${m.title}" has no exit criteria.`,
-          recommendation: "Define measurable exit criteria so completion is verifiable.",
-          confidence: 1,
-          evidence: [`phase=${m.phaseId}, status=${m.status}, exitCriteria=0`],
-        })),
-  },
+  // (No "milestone has no exit criteria" rule: exit criteria are derived by the
+  // methodology from artifact quality and completeness at the gate — they are never
+  // authored by the user — so flagging an empty exitCriteria field as a blocker
+  // asked the user to define something the system owns. See readinessModel.)
   {
     id: "milestone-broken-dependency",
     domain: "delivery-readiness",

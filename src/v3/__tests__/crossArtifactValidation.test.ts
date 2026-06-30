@@ -148,7 +148,7 @@ describe("runDeterministicValidation — benefits traceability", () => {
 });
 
 describe("runDeterministicValidation — delivery, governance, scope", () => {
-  it("flags a milestone with no exit criteria and a broken dependency", () => {
+  it("flags a milestone with a broken dependency", () => {
     const findings = runDeterministicValidation({
       milestones: [
         {
@@ -165,7 +165,9 @@ describe("runDeterministicValidation — delivery, governance, scope", () => {
         },
       ],
     });
-    expect(findings.some((f) => f.findingId === "milestone-exit:M-1")).toBe(true);
+    // An empty exitCriteria field is NOT flagged — exit criteria are derived by the
+    // methodology, never authored by the user.
+    expect(findings.some((f) => f.findingId === "milestone-exit:M-1")).toBe(false);
     expect(findings.some((f) => f.findingId === "milestone-dep:M-1:M-missing")).toBe(true);
   });
 
