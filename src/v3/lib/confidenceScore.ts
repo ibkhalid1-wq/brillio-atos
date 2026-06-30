@@ -6,16 +6,17 @@
 // here, and AppShellV3 calls computeConfidenceScore() for the rail badge.
 //
 // Score composition:
-//   gateReadiness    30%   — weighted avg of approved/pending gate scores
-//   riskPosture      25%   — severity-weighted open risk penalty
-//   milestoneHealth  20%   — milestone on-track ratio
+//   gateReadiness    25%   — weighted avg of approved/pending gate scores
+//   riskPosture      20%   — severity-weighted open risk penalty
+//   milestoneHealth  15%   — milestone on-track ratio
+//   scheduleAdherence 15%  — in-flight phases' progress vs planned pace
 //   decisionBacklog  15%   — open decision count penalty
 //   inputCompleteness 10%  — quality-weighted input score (not binary)
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Stable, machine-routable identity for each confidence signal so the UI can
 // deep-link the "Top Action" to the right surface (not a hardcoded guess).
-export type ConfidenceCategory = "gate" | "risk" | "milestone" | "decision" | "input";
+export type ConfidenceCategory = "gate" | "risk" | "milestone" | "schedule" | "decision" | "input";
 
 export interface ConfidenceSignal {
   label: string;
@@ -36,6 +37,7 @@ export interface ConfidenceScore {
     gateReadiness: number;
     riskPosture: number;
     milestoneHealth: number;
+    scheduleAdherence: number;
     decisionBacklog: number;
     inputCompleteness: number;
   };
@@ -127,6 +129,7 @@ export function computeConfidenceScore(inputs: {
   gateReadiness: number;
   riskPosture: number;
   milestoneHealth: number;
+  scheduleAdherence: number;
   openDecisionCount: number;
   inputCompleteness: number;
   previousScore?: number;
@@ -138,6 +141,7 @@ export function computeConfidenceScore(inputs: {
   totalGates?: number;
   overdueDecisions?: number;
   milestonesAtRisk?: number;
+  phasesBehindSchedule?: number;
 }): ConfidenceScore {
   const decisionBacklog = Math.max(0, 100 - inputs.openDecisionCount * 10);
 
@@ -146,8 +150,8 @@ export function computeConfidenceScore(inputs: {
       label: "Gate readiness",
       category: "gate",
       score: inputs.gateReadiness,
-      weight: 0.30,
-      contribution: Math.round(inputs.gateReadiness * 0.30),
+      weight: 0.25,
+      contribution: Math.round(inputs.gateReadiness * 0.25),
       status: inputs.gateReadiness >= 70 ? "good" : inputs.gateReadiness >= 50 ? "warn" : "poor",
       explanation:
         inputs.approvedGates !== undefined && inputs.totalGates !== undefined
@@ -166,8 +170,8 @@ export function computeConfidenceScore(inputs: {
       label: "Risk posture",
       category: "risk",
       score: inputs.riskPosture,
-      weight: 0.25,
-      contribution: Math.round(inputs.riskPosture * 0.25),
+      weight: 0.20,
+      contribution: Math.round(inputs.riskPosture * 0.20),
       status: inputs.riskPosture >= 75 ? "good" : inputs.riskPosture >= 50 ? "warn" : "poor",
       explanation:
         inputs.openCriticalRisks !== undefined
@@ -184,8 +188,8 @@ export function computeConfidenceScore(inputs: {
       label: "Milestone health",
       category: "milestone",
       score: inputs.milestoneHealth,
-      weight: 0.20,
-      contribution: Math.round(inputs.milestoneHealth * 0.20),
+      weight: 0.15,
+      contribution: Math.round(inputs.milestoneHealth * 0.15),
       status: inputs.milestoneHealth >= 75 ? "good" : inputs.milestoneHealth >= 50 ? "warn" : "poor",
       explanation:
         inputs.milestonesAtRisk !== undefined
@@ -196,6 +200,24 @@ export function computeConfidenceScore(inputs: {
       topAction:
         inputs.milestoneHealth < 75 && inputs.milestonesAtRisk
           ? "Review and update at-risk milestones in the Strategic Roadmap workspace."
+          : undefined,
+    },
+    {
+      label: "Schedule adherence",
+      category: "schedule",
+      score: inputs.scheduleAdherence,
+      weight: 0.15,
+      contribution: Math.round(inputs.scheduleAdherence * 0.15),
+      status: inputs.scheduleAdherence >= 75 ? "good" : inputs.scheduleAdherence >= 50 ? "warn" : "poor",
+      explanation:
+        inputs.phasesBehindSchedule !== undefined
+          ? inputs.phasesBehindSchedule > 0
+            ? `${inputs.phasesBehindSchedule} in-flight phase(s) are behind their planned pace.`
+            : "In-flight phases are keeping pace with the plan."
+          : `Schedule adherence: ${inputs.scheduleAdherence}%.`,
+      topAction:
+        inputs.scheduleAdherence < 75
+          ? "Re-plan or accelerate phases running behind in the Strategic Roadmap workspace."
           : undefined,
     },
     {
@@ -280,6 +302,7 @@ export function computeConfidenceScore(inputs: {
       gateReadiness: inputs.gateReadiness,
       riskPosture: inputs.riskPosture,
       milestoneHealth: inputs.milestoneHealth,
+      scheduleAdherence: inputs.scheduleAdherence,
       decisionBacklog,
       inputCompleteness: inputs.inputCompleteness,
     },

@@ -18,6 +18,7 @@ import type { ProgramSummary } from "@/new/types";
 import { computeConfidenceScore, computeRiskPosture, type ConfidenceScore } from "@/v3/lib/confidenceScore";
 import { computePhaseReadiness } from "@/v3/lib/phaseReadiness";
 import { derivePhaseInputQuality } from "@/v3/lib/phaseInputQuality";
+import { computeScheduleAdherence } from "@/v3/lib/phaseSchedule";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { selectRisks } from "@/v3/lib/programRaid";
 import { isDecisionOpen } from "@/v3/utils";
@@ -110,6 +111,15 @@ export function deriveProgramConfidence(
     ? inputQuality.overallScore
     : phaseReadiness?.inputScore ?? 0;
 
+  // Schedule adherence: are in-flight phases keeping pace with their planned
+  // windows? Computed from the SAME roadmap rows the Strategic Roadmap workspace
+  // renders (buildRoadmapRows), so the confidence signal and the Gantt agree on
+  // who is behind. Null (no parseable schedule) falls back to a neutral 70 —
+  // mirroring milestone health — so programmes without roadmap dates aren't
+  // penalised for a signal they can't yet produce.
+  const scheduleAdherenceRaw = computeScheduleAdherence(rawData, phases);
+  const scheduleAdherence = scheduleAdherenceRaw ?? 70;
+
   // Decision metrics
   const openDecisions = (program.decisionQueue || []).filter(isDecisionOpen);
   const overdueDecisions = openDecisions.filter((d) => {
@@ -122,6 +132,7 @@ export function deriveProgramConfidence(
     currentPhaseReadiness,
     riskPosture,
     milestoneHealth,
+    scheduleAdherence,
     openDecisionCount: openDecisions.length,
     inputCompleteness,
     openCriticalRisks,

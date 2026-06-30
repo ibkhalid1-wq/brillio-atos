@@ -3,6 +3,7 @@ import {
   buildPhaseSchedule,
   buildMethodologyPhaseSchedule,
   buildRoadmapRows,
+  computeScheduleAdherence,
   layoutGantt,
   shiftIsoDate,
   daysBetween,
@@ -213,5 +214,48 @@ describe("buildRoadmapRows — progress scoping", () => {
   it("ignores a stray agent output bucketed under a phase with no expected deliverables", () => {
     expect(pctById().operate).toBe(0);
     expect(pctById().build).toBe(0);
+  });
+});
+
+/**
+ * Schedule adherence is the confidence model's "are we on time?" signal: it only
+ * judges in-flight phases (started, not yet complete) and compares each phase's
+ * actual progress to the pace its elapsed window implies. Far-past / far-future
+ * windows keep these cases deterministic regardless of the real "today".
+ */
+describe("computeScheduleAdherence", () => {
+  it("returns null when there is no parseable schedule", () => {
+    // strategy inputs exist but carry no dates → no roadmap rows → no signal.
+    expect(computeScheduleAdherence({ phaseInputs: { strategy: {} } }, [{ id: "build" }])).toBeNull();
+    expect(computeScheduleAdherence({}, [{ id: "build" }])).toBeNull();
+  });
+
+  it("returns 100 when no phase has started yet (nothing can be behind)", () => {
+    const rawData = { phaseInputs: { strategy: { startDate: "2099-01-01", targetEndDate: "2099-12-31" } } };
+    expect(computeScheduleAdherence(rawData, [{ id: "build" }, { id: "operate" }])).toBe(100);
+  });
+
+  it("scores a started phase with no progress against its elapsed window as behind", () => {
+    // Whole window is in the past with zero artifacts produced → fully behind.
+    const rawData = { phaseInputs: { strategy: { startDate: "2020-01-01", targetEndDate: "2020-12-31" } } };
+    const score = computeScheduleAdherence(rawData, [{ id: "build" }]);
+    expect(score).not.toBeNull();
+    expect(score).toBeLessThanOrEqual(10);
+  });
+
+  it("excludes complete phases so finished work never drags the pace", () => {
+    // A fully-approved (100%) past phase is excluded; the only other phase is in
+    // the future and also excluded → nothing in-flight → fully on schedule.
+    const rawData = {
+      phaseInputs: { strategy: { startDate: "2020-01-01", targetEndDate: "2020-12-31" } },
+      phaseArtifacts: {
+        strategy: {
+          charter: { status: "approved" }, "business-case": { status: "approved" },
+          "outcome-framework": { status: "approved" }, "strategic-roadmap": { status: "approved" },
+          risk: { status: "approved" }, "completion-estimate": { status: "approved" },
+        },
+      },
+    };
+    expect(computeScheduleAdherence(rawData, [{ id: "strategy" }])).toBe(100);
   });
 });

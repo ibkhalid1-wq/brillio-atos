@@ -280,6 +280,46 @@ export function buildRoadmapRows(rawData: unknown, phases: Array<{ id: string; s
   return rows;
 }
 
+/**
+ * Schedule adherence 0–100 (or null when there is no usable schedule), measuring
+ * whether work is keeping pace with the planned phase windows. This is the
+ * dedicated "are we on time?" signal the confidence model was missing — gate
+ * readiness and milestone health speak to *quality* and *risk*, but neither
+ * penalises a phase that is simply running late against its own plan.
+ *
+ * Only in-flight phases are judged: a phase that hasn't started yet can't be
+ * behind, and a phase already at 100% can't drag the score. For each in-flight
+ * phase we compare actual progress to the progress its elapsed-time fraction
+ * implies (today's position in its window) and credit `min(1, actual/expected)`
+ * — fully on or ahead of pace scores 100, half the expected progress scores 50.
+ * Returns null when no phase has parseable dates (so the caller can fall back to
+ * a neutral default rather than tank the score on programmes with no roadmap).
+ */
+export function computeScheduleAdherence(
+  rawData: unknown,
+  phases: Array<{ id: string; status?: string }>,
+): number | null {
+  const rows = buildRoadmapRows(rawData, phases);
+  if (rows.length === 0) return null;
+  const todayMs = parseUtcDay(new Date().toISOString().slice(0, 10)) ?? Date.now();
+  const inFlight = rows.filter((r) => {
+    const startMs = parseUtcDay(r.start);
+    if (startMs === null) return false;
+    if (startMs > todayMs) return false; // not started → can't be behind
+    return (r.progressPct ?? 0) < 100; // already complete → not dragging pace
+  });
+  if (inFlight.length === 0) return 100; // nothing in-flight is behind
+  const sum = inFlight.reduce((acc, r) => {
+    const startMs = parseUtcDay(r.start)!;
+    const endMs = parseUtcDay(r.end) ?? startMs;
+    const expected = Math.max(0, Math.min(1, (todayMs - startMs) / Math.max(1, endMs - startMs)));
+    const actual = Math.max(0, Math.min(1, (r.progressPct ?? 0) / 100));
+    if (expected <= 0) return acc + 1; // window just opened → on pace by default
+    return acc + Math.max(0, Math.min(1, actual / expected));
+  }, 0);
+  return Math.round((sum / inFlight.length) * 100);
+}
+
 /** A validation/de-risking stage the user defined in the Strategy phase grid. */
 export interface ValidationStage {
   id: string;
