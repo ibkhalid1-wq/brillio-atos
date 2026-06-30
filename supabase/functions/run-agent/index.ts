@@ -5072,56 +5072,95 @@ function applySetupPrefillResultToProgramData(programData: ProgramState, result:
   });
 }
 
-// Backfill empty milestone target dates in the Build phase-input grid(s) from a
-// generated sprint plan: each scheduled milestone takes the end date of the sprint
-// it is assigned to. STRICTLY additive — only blank targetDate cells are filled, so
-// a date the user typed is never overwritten; only milestone-shaped grids are
-// rewritten, leaving the rest of program.data untouched. The grid field id is
-// ai-derived, so grids are matched by row shape (a milestone/deliverable/gate
-// column), and each grid's original storage format (JSON string vs array) is kept.
-function applySprintPlanMilestoneDates(programData: ProgramState, result: Record<string, unknown>): ProgramState {
+// Feed a generated sprint plan back into the Build phase INPUT grids so planning
+// fills the user-facing fields (the prior behaviour left them blank). Two writes,
+// both strictly additive so existing user input is never clobbered:
+//   1. The canonical "deliveryIncrements" grid (methodology field, columns
+//      increment/scope/date — what the user sees as "Delivery increments &
+//      cadence") is populated from the sprints, but ONLY while it is still empty.
+//      The field id and column keys mirror the client methodology registry, which
+//      the edge can't import — same pattern as applySetupPrefillResultToProgramData.
+//   2. Any milestone-shaped grid (e.g. the ai-derived "buildPhaseMilestoneDates")
+//      has its blank target-date cells backfilled per row, matched by milestone
+//      name; a date the user typed is never overwritten. Grids are matched by row
+//      shape (a milestone/deliverable/gate column) so this never depends on the
+//      ai-derived field id, and each grid's storage format (JSON string vs array)
+//      is preserved.
+// Dates are stored as YYYY-MM-DD so date inputs render them.
+function applySprintPlanToBuildInputs(programData: ProgramState, result: Record<string, unknown>): ProgramState {
   const sprints = Array.isArray(result.sprints) ? result.sprints.filter(isRecord) : [];
   if (sprints.length === 0) return programData;
-  const dateByMilestone = new Map<string, string>();
+  const toDay = (value: unknown): string => (typeof value === "string" ? value.trim().slice(0, 10) : "");
+  const milestoneNames = (sprint: Record<string, unknown>): string[] =>
+    (Array.isArray(sprint.milestones) ? sprint.milestones : [])
+      .map((m) => typeof m === "string" ? m.trim() : (isRecord(m) && typeof m.name === "string" ? m.name.trim() : ""))
+      .filter(Boolean);
+
+  const dayByMilestone = new Map<string, string>();
   for (const sprint of sprints) {
-    const end = typeof sprint.endDate === "string" ? sprint.endDate.trim() : "";
-    if (!end) continue;
-    const names = Array.isArray(sprint.milestones) ? sprint.milestones : [];
-    for (const entry of names) {
-      const name = typeof entry === "string"
-        ? entry.trim().toLowerCase()
-        : (isRecord(entry) && typeof entry.name === "string" ? entry.name.trim().toLowerCase() : "");
-      if (name && !dateByMilestone.has(name)) dateByMilestone.set(name, end);
+    const day = toDay(sprint.endDate);
+    if (!day) continue;
+    for (const name of milestoneNames(sprint)) {
+      const key = name.toLowerCase();
+      if (!dayByMilestone.has(key)) dayByMilestone.set(key, day);
     }
   }
-  if (dateByMilestone.size === 0) return programData;
+
+  const incrementRows = sprints.map((sprint, index) => {
+    const number = typeof sprint.sprintNumber === "number" ? sprint.sprintNumber : index + 1;
+    const names = milestoneNames(sprint);
+    const goal = typeof sprint.goal === "string" ? sprint.goal.trim() : "";
+    return {
+      increment: `Sprint ${number}`,
+      scope: names.length ? names.join(", ") : goal,
+      date: toDay(sprint.endDate),
+      id: `sprintplan-${number}-${Math.random().toString(36).slice(2, 8)}`,
+    };
+  }).filter((row) => row.scope || row.date);
 
   return updateInnerProgramData(programData, (inner) => {
     const phaseInputs = isRecord(inner.phaseInputs) ? { ...inner.phaseInputs } : {};
     const buildInputs = normalizeProgramData(phaseInputs.build as JsonValue | null);
     const nextBuild = { ...buildInputs };
     let changed = false;
-    for (const [fieldKey, value] of Object.entries(buildInputs)) {
-      const parsed = typeof value === "string" ? safeJsonParse<unknown>(value, null) : value;
-      const rows = Array.isArray(parsed) ? parsed.filter(isRecord) : [];
-      const isMilestoneGrid = rows.length > 0
-        && rows.some((row) => Object.keys(row).some((key) => /milestone|deliverable|gate/i.test(key)));
-      if (!isMilestoneGrid) continue;
-      let gridChanged = false;
-      const nextRows = rows.map((row) => {
-        const nameKey = Object.keys(row).find((key) => /milestone|name|title/i.test(key));
-        const dateKey = Object.keys(row).find((key) => /targetdate|date|due/i.test(key)) || "targetDate";
-        const name = nameKey && typeof row[nameKey] === "string" ? (row[nameKey] as string).trim().toLowerCase() : "";
-        const current = typeof row[dateKey] === "string" ? (row[dateKey] as string).trim() : "";
-        const scheduled = name ? dateByMilestone.get(name) : undefined;
-        if (scheduled && !current) { gridChanged = true; return { ...row, [dateKey]: scheduled }; }
-        return row;
-      });
-      if (gridChanged) {
-        nextBuild[fieldKey] = (typeof value === "string" ? JSON.stringify(nextRows) : nextRows) as JsonValue;
-        changed = true;
+
+    // (1) deliveryIncrements — populate only while the grid is still empty.
+    const existingInc = typeof buildInputs.deliveryIncrements === "string"
+      ? safeJsonParse<unknown>(buildInputs.deliveryIncrements, null)
+      : buildInputs.deliveryIncrements;
+    const existingIncRows = Array.isArray(existingInc) ? existingInc.filter(isRecord) : [];
+    const incHasContent = existingIncRows.some((row) =>
+      ["increment", "scope", "date"].some((k) => typeof row[k] === "string" && (row[k] as string).trim()));
+    if (!incHasContent && incrementRows.length > 0) {
+      nextBuild.deliveryIncrements = JSON.stringify(incrementRows) as JsonValue;
+      changed = true;
+    }
+
+    // (2) milestone-shaped grids — backfill blank target-date cells per row.
+    if (dayByMilestone.size > 0) {
+      for (const [fieldKey, value] of Object.entries(buildInputs)) {
+        const parsed = typeof value === "string" ? safeJsonParse<unknown>(value, null) : value;
+        const rows = Array.isArray(parsed) ? parsed.filter(isRecord) : [];
+        const isMilestoneGrid = rows.length > 0
+          && rows.some((row) => Object.keys(row).some((key) => /milestone|deliverable|gate/i.test(key)));
+        if (!isMilestoneGrid) continue;
+        let gridChanged = false;
+        const nextRows = rows.map((row) => {
+          const nameKey = Object.keys(row).find((key) => /milestone|name|title/i.test(key));
+          const dateKey = Object.keys(row).find((key) => /targetdate|date|due/i.test(key)) || "targetDate";
+          const name = nameKey && typeof row[nameKey] === "string" ? (row[nameKey] as string).trim().toLowerCase() : "";
+          const current = typeof row[dateKey] === "string" ? (row[dateKey] as string).trim() : "";
+          const scheduled = name ? dayByMilestone.get(name) : undefined;
+          if (scheduled && !current) { gridChanged = true; return { ...row, [dateKey]: scheduled }; }
+          return row;
+        });
+        if (gridChanged) {
+          nextBuild[fieldKey] = (typeof value === "string" ? JSON.stringify(nextRows) : nextRows) as JsonValue;
+          changed = true;
+        }
       }
     }
+
     if (!changed) return inner;
     phaseInputs.build = nextBuild as JsonValue;
     return { ...inner, phaseInputs };
@@ -7428,7 +7467,7 @@ Deno.serve(async (req) => {
         nextProgramData = applyProgramSupportArtifact(contextProgramData, "discover", "discovery-guide-generator", "discoveryGuide", result, "Discovery pack");
       } else if (request.agentId === "sprint-planner") {
         nextProgramData = applyProgramSupportArtifact(contextProgramData, "build", "sprint-planner", "sprintPlan", result, "Sprint plan");
-        nextProgramData = applySprintPlanMilestoneDates(nextProgramData, result);
+        nextProgramData = applySprintPlanToBuildInputs(nextProgramData, result);
       } else if (request.agentId === "stakeholder-comms-drafter") {
         nextProgramData = applyProgramSupportArtifact(contextProgramData, request.phaseId, "stakeholder-comms-drafter", "stakeholderComms", { ...result, audienceGroup: request.audienceGroup || "all" }, "Stakeholder communications");
       } else if (request.agentId === "steerco-agenda-builder") {
