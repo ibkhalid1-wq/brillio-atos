@@ -421,7 +421,7 @@ function GateDetailPanel({
           </div>
         ))}
         {!gateReview?.exitCriteriaStatus?.length ? (
-          <div className="v3-governance-empty-copy">No exit criteria captured for this phase yet.</div>
+          <div className="v3-governance-empty-copy">Exit criteria are derived at gate review from artifact completeness and quality.</div>
         ) : null}
       </div>
 
