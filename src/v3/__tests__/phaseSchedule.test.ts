@@ -4,6 +4,7 @@ import {
   buildMethodologyPhaseSchedule,
   buildRoadmapRows,
   computeScheduleAdherence,
+  computeScheduleAdherenceDetail,
   layoutGantt,
   shiftIsoDate,
   daysBetween,
@@ -257,5 +258,38 @@ describe("computeScheduleAdherence", () => {
       },
     };
     expect(computeScheduleAdherence(rawData, [{ id: "strategy" }])).toBe(100);
+  });
+});
+
+/**
+ * The detail variant also reports HOW MANY in-flight phases are behind pace, so
+ * the confidence breakdown can say "N phase(s) behind" rather than restate the
+ * percentage. The count is derived from the same per-phase comparison as the
+ * score, so the two can never disagree.
+ */
+describe("computeScheduleAdherenceDetail", () => {
+  it("reports no usable schedule with a zero behind-count", () => {
+    expect(computeScheduleAdherenceDetail({}, [{ id: "build" }])).toEqual({
+      score: null,
+      phasesBehind: 0,
+      inFlight: 0,
+    });
+  });
+
+  it("counts a started, zero-progress phase as behind", () => {
+    const rawData = { phaseInputs: { strategy: { startDate: "2020-01-01", targetEndDate: "2020-12-31" } } };
+    const detail = computeScheduleAdherenceDetail(rawData, [{ id: "build" }]);
+    expect(detail.inFlight).toBe(1);
+    expect(detail.phasesBehind).toBe(1);
+    expect(detail.score).toBeLessThanOrEqual(10);
+  });
+
+  it("reports zero behind when nothing is in flight", () => {
+    const rawData = { phaseInputs: { strategy: { startDate: "2099-01-01", targetEndDate: "2099-12-31" } } };
+    expect(computeScheduleAdherenceDetail(rawData, [{ id: "build" }])).toEqual({
+      score: 100,
+      phasesBehind: 0,
+      inFlight: 0,
+    });
   });
 });

@@ -168,6 +168,7 @@ export function computeConfidenceScore(inputs: {
   totalGates?: number;
   overdueDecisions?: number;
   milestonesAtRisk?: number;
+  milestonesInFlight?: number;
   phasesBehindSchedule?: number;
 }): ConfidenceScore {
   const decisionBacklog = Math.max(0, 100 - inputs.openDecisionCount * 10);
@@ -217,8 +218,18 @@ export function computeConfidenceScore(inputs: {
       weight: 0.15,
       contribution: Math.round(inputs.milestoneHealth * 0.15),
       status: inputs.milestoneHealth >= 75 ? "good" : inputs.milestoneHealth >= 50 ? "warn" : "poor",
+      // The on-track line must not fire when there is nothing in flight: a
+      // programme with no in-flight milestones reads the neutral default (70 →
+      // "warn"), so claiming "all on track" would contradict its own status chip
+      // — the same explanation/score divergence just fixed on risk posture.
       explanation:
-        inputs.milestonesAtRisk !== undefined
+        inputs.milestonesInFlight !== undefined
+          ? inputs.milestonesInFlight === 0
+            ? "No in-flight milestones to track."
+            : (inputs.milestonesAtRisk ?? 0) > 0
+            ? `${inputs.milestonesAtRisk} of ${inputs.milestonesInFlight} in-flight milestone(s) at risk or delayed.`
+            : `All ${inputs.milestonesInFlight} in-flight milestone(s) on track.`
+          : inputs.milestonesAtRisk !== undefined
           ? inputs.milestonesAtRisk > 0
             ? `${inputs.milestonesAtRisk} milestone(s) are at risk or delayed.`
             : "All tracked milestones are on track."

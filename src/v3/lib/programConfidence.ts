@@ -18,7 +18,7 @@ import type { ProgramSummary } from "@/new/types";
 import { computeConfidenceScore, computeRiskPosture, type ConfidenceScore } from "@/v3/lib/confidenceScore";
 import { computePhaseReadiness } from "@/v3/lib/phaseReadiness";
 import { derivePhaseInputQuality } from "@/v3/lib/phaseInputQuality";
-import { computeScheduleAdherence } from "@/v3/lib/phaseSchedule";
+import { computeScheduleAdherenceDetail } from "@/v3/lib/phaseSchedule";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { selectRisks } from "@/v3/lib/programRaid";
 import { isDecisionOpen } from "@/v3/utils";
@@ -118,8 +118,9 @@ export function deriveProgramConfidence(
   // who is behind. Null (no parseable schedule) falls back to a neutral 70 —
   // mirroring milestone health — so programmes without roadmap dates aren't
   // penalised for a signal they can't yet produce.
-  const scheduleAdherenceRaw = computeScheduleAdherence(rawData, phases);
-  const scheduleAdherence = scheduleAdherenceRaw ?? 70;
+  const scheduleDetail = computeScheduleAdherenceDetail(rawData, phases);
+  const scheduleAdherence = scheduleDetail.score ?? 70;
+  const phasesBehindSchedule = scheduleDetail.phasesBehind;
 
   // Decision metrics
   const openDecisions = (program.decisionQueue || []).filter(isDecisionOpen);
@@ -144,5 +145,7 @@ export function deriveProgramConfidence(
     totalGates,
     overdueDecisions,
     milestonesAtRisk,
+    milestonesInFlight: inFlightMilestones.length,
+    phasesBehindSchedule,
   });
 }

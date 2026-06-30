@@ -295,12 +295,28 @@ export function buildRoadmapRows(rawData: unknown, phases: Array<{ id: string; s
  * Returns null when no phase has parseable dates (so the caller can fall back to
  * a neutral default rather than tank the score on programmes with no roadmap).
  */
-export function computeScheduleAdherence(
+export interface ScheduleAdherence {
+  /** 0–100 adherence, or null when there is no usable schedule. */
+  score: number | null;
+  /** Count of in-flight phases trailing their planned pace (actual < expected). */
+  phasesBehind: number;
+  /** Count of in-flight phases judged (started, not yet complete). */
+  inFlight: number;
+}
+
+/**
+ * Detailed schedule adherence: the 0–100 score AND the count of in-flight phases
+ * actually behind pace. The confidence breakdown surfaces the count ("N in-flight
+ * phase(s) are behind their planned pace") — without it the explanation could only
+ * restate the percentage, so the human-readable reason is derived here from the
+ * same per-phase comparison that drives the score (they can never disagree).
+ */
+export function computeScheduleAdherenceDetail(
   rawData: unknown,
   phases: Array<{ id: string; status?: string }>,
-): number | null {
+): ScheduleAdherence {
   const rows = buildRoadmapRows(rawData, phases);
-  if (rows.length === 0) return null;
+  if (rows.length === 0) return { score: null, phasesBehind: 0, inFlight: 0 };
   const todayMs = parseUtcDay(new Date().toISOString().slice(0, 10)) ?? Date.now();
   const inFlight = rows.filter((r) => {
     const startMs = parseUtcDay(r.start);
@@ -308,16 +324,26 @@ export function computeScheduleAdherence(
     if (startMs > todayMs) return false; // not started → can't be behind
     return (r.progressPct ?? 0) < 100; // already complete → not dragging pace
   });
-  if (inFlight.length === 0) return 100; // nothing in-flight is behind
+  if (inFlight.length === 0) return { score: 100, phasesBehind: 0, inFlight: 0 }; // nothing in-flight is behind
+  let phasesBehind = 0;
   const sum = inFlight.reduce((acc, r) => {
     const startMs = parseUtcDay(r.start)!;
     const endMs = parseUtcDay(r.end) ?? startMs;
     const expected = Math.max(0, Math.min(1, (todayMs - startMs) / Math.max(1, endMs - startMs)));
     const actual = Math.max(0, Math.min(1, (r.progressPct ?? 0) / 100));
     if (expected <= 0) return acc + 1; // window just opened → on pace by default
-    return acc + Math.max(0, Math.min(1, actual / expected));
+    const ratio = Math.max(0, Math.min(1, actual / expected));
+    if (ratio < 1) phasesBehind++; // trailing the pace its elapsed window implies
+    return acc + ratio;
   }, 0);
-  return Math.round((sum / inFlight.length) * 100);
+  return { score: Math.round((sum / inFlight.length) * 100), phasesBehind, inFlight: inFlight.length };
+}
+
+export function computeScheduleAdherence(
+  rawData: unknown,
+  phases: Array<{ id: string; status?: string }>,
+): number | null {
+  return computeScheduleAdherenceDetail(rawData, phases).score;
 }
 
 /** A validation/de-risking stage the user defined in the Strategy phase grid. */
