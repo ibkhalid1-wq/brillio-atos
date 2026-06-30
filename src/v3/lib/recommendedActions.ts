@@ -1,6 +1,7 @@
 import type { DecisionSummary, ProgramSummary } from "@/new/types";
 import { buildDecisionQueue } from "@/lib/adamDecisionUtils";
 import { getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
+import { buildPlanGroundingIndex, isGroundedFalsePositiveDecision } from "@/v3/lib/decisionGrounding";
 import { isDecisionOpen } from "@/v3/utils";
 
 // Single source of truth for the "Recommended Actions" queue shown in the Action
@@ -65,10 +66,17 @@ function deriveOpenQueue(
   const isSupersededTransition = (decision: DecisionSummary) =>
     (decision.type === "handoff_ready" || decision.type === "gate_approval") &&
     gateApproved(decision.phaseId);
+  // A persisted change-request claiming objectives/owners/timeline/KPIs are
+  // missing — or demanding phase exit criteria — is a stale false positive once
+  // the programme grounds it. The edge function suppresses these at generation
+  // time, but persisted PCRs re-emit on every render; grounding them here stops
+  // a resolved-by-reality PCR from reappearing without a manual rejection.
+  const grounding = buildPlanGroundingIndex(program);
   return [...mergedSynthesized, ...persistedOnly]
     .filter((decision) => isDecisionOpen(decision))
     .filter((decision) => isActionable(decision.phaseId))
-    .filter((decision) => !isSupersededTransition(decision));
+    .filter((decision) => !isSupersededTransition(decision))
+    .filter((decision) => !isGroundedFalsePositiveDecision(decision, grounding));
 }
 
 /** The actionable queue — the open items minus those reclassified as risks. */
