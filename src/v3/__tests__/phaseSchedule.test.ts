@@ -217,6 +217,21 @@ describe("buildRoadmapRows — progress scoping", () => {
     expect(pctById().operate).toBe(0);
     expect(pctById().build).toBe(0);
   });
+
+  it("reads a gate-approved (complete) phase as 100% even if an artifact is still draft", () => {
+    // Discover's ledger is only 30% by artifact tally, but once its gate is
+    // approved the phase is done — the gate is authoritative over a stray draft.
+    const completed = [
+      { id: "strategy", status: "complete" }, { id: "mobilise", status: "complete" },
+      { id: "discover", status: "complete" }, { id: "design", status: "complete" },
+      { id: "build", status: "active" }, { id: "operate", status: "inactive" },
+    ];
+    const rows = buildRoadmapRows(rawData, completed);
+    const byId = Object.fromEntries(rows.map((r) => [r.id, r.progressPct]));
+    expect(byId.discover).toBe(100);
+    expect(byId.strategy).toBe(100);
+    expect(byId.mobilise).toBe(100);
+  });
 });
 
 /**

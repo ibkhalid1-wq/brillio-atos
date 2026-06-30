@@ -256,17 +256,18 @@ export function buildRoadmapRows(rawData: unknown, phases: Array<{ id: string; s
     const end = typeof ov?.end === "string" ? ov.end : def?.end;
     if (!start || !end) continue;
     const h = health.get(p.id);
-    // Progress tracks artifact completion deterministically — the share of the
-    // phase's required artifacts that are approved. The agent-maintained
-    // phaseHealth.progressPct is only a fallback when no artifacts exist yet, so
-    // a stale/low agent estimate can't contradict what the ledger actually holds.
-    const progressPct = artifactProgress.get(p.id) ?? h?.progressPct ?? 0;
     const startMs = parseUtcDay(start) ?? todayMs;
     const endMs = parseUtcDay(end) ?? todayMs;
-    // A gate-approved (complete) phase is healthy by definition: the stakeholder
-    // sign-off is authoritative and overrides a stale agent RAG/risk that may
-    // predate the approval (e.g. a "gate reopened" note written before re-approval).
+    // A gate-approved (complete) phase is healthy and done by definition: the
+    // stakeholder sign-off is authoritative and overrides a stale agent RAG/risk
+    // (e.g. a "gate reopened" note written before re-approval).
     const isComplete = p.status === "complete";
+    // Progress reads from the gate first: an approved gate means the phase is
+    // 100% complete regardless of how many of its artifacts the ledger happens
+    // to mark "approved" (a single stale/draft artifact must not make a
+    // signed-off phase read 83%). Otherwise it tracks artifact completion
+    // deterministically, with the agent estimate only as a last-resort fallback.
+    const progressPct = isComplete ? 100 : (artifactProgress.get(p.id) ?? h?.progressPct ?? 0);
     const rag = isComplete ? "green" : (h?.rag ?? deriveRag(progressPct, startMs, endMs, todayMs));
     rows.push({
       id: p.id,
