@@ -505,8 +505,9 @@ function getProgramPhaseContext(programData: ProgramState): Array<Record<string,
   const inner = getInnerProgramData(programData);
   const explicitPhases = Array.isArray(inner.phases) ? inner.phases : [];
   const phaseGuidance = normalizeProgramData(inner.phaseGuidance as JsonValue | null);
+  let base: Array<Record<string, unknown>>;
   if (explicitPhases.length) {
-    return explicitPhases.map((entry, index) => {
+    base = explicitPhases.map((entry, index) => {
       const record = isRecord(entry) ? entry : {};
       const id = typeof record.id === "string" ? record.id : ATOS_PHASE_SEQUENCE[index] || `phase-${index + 1}`;
       const guidance = normalizeProgramData(phaseGuidance[id] as JsonValue | null);
@@ -532,20 +533,47 @@ function getProgramPhaseContext(programData: ProgramState): Array<Record<string,
               : "",
       };
     });
+  } else {
+    const phaseIds = Array.from(new Set([...ATOS_PHASE_SEQUENCE, ...Object.keys(phaseGuidance)]));
+    base = phaseIds.map((phaseId) => {
+      const guidance = normalizeProgramData(phaseGuidance[phaseId] as JsonValue | null);
+      return {
+        id: phaseId,
+        name: typeof guidance.name === "string" ? guidance.name : formatPhaseName(phaseId),
+        pct: coerceNumber(guidance.readiness, 0),
+        objective: typeof guidance.objective === "string" ? guidance.objective : "",
+        status: typeof guidance.status === "string" ? guidance.status : "",
+        exitCriteria: extractStringList(guidance.exitCriteria),
+        lastUpdatedAt: typeof guidance.lastUpdatedAt === "string" ? guidance.lastUpdatedAt : "",
+      };
+    });
   }
 
-  const phaseIds = Array.from(new Set([...ATOS_PHASE_SEQUENCE, ...Object.keys(phaseGuidance)]));
-  return phaseIds.map((phaseId) => {
-    const guidance = normalizeProgramData(phaseGuidance[phaseId] as JsonValue | null);
-    return {
-      id: phaseId,
-      name: typeof guidance.name === "string" ? guidance.name : formatPhaseName(phaseId),
-      pct: coerceNumber(guidance.readiness, 0),
-      objective: typeof guidance.objective === "string" ? guidance.objective : "",
-      status: typeof guidance.status === "string" ? guidance.status : "",
-      exitCriteria: extractStringList(guidance.exitCriteria),
-      lastUpdatedAt: typeof guidance.lastUpdatedAt === "string" ? guidance.lastUpdatedAt : "",
-    };
+  // Phase status (complete/active/inactive) is not always persisted — in degraded
+  // data inner.phases is empty and phaseGuidance carries no status, so every phase
+  // arrives blank. Derive it from gate approvals exactly as the client does
+  // (deriveActivePhaseId + reconcilePhaseStatusWithGates in programData.ts): an
+  // approved gate ⇒ complete; the frontier (first phase whose gate is not approved)
+  // ⇒ active; the remaining blank phases ⇒ inactive. Without this the briefing/
+  // health context reads a fully-gated programme as "stalled at inception".
+  const gateReviews = normalizeProgramData(inner.gateReviews as JsonValue | null);
+  const isApproved = (id: string) =>
+    normalizeProgramData(gateReviews[id] as JsonValue | null).status === "approved";
+  const frontier = base.find((p) => !isApproved(String(p.id)));
+  const activePhaseId = frontier ? String(frontier.id) : (base.length ? String(base[base.length - 1].id) : "");
+  return base.map((p) => {
+    const id = String(p.id);
+    let status = typeof p.status === "string" ? p.status : "";
+    let pct = coerceNumber(p.pct, 0);
+    if (isApproved(id)) {
+      status = "complete";
+      if (pct <= 0) pct = 100; // an approved gate means the phase cleared its bar
+    } else if (id === activePhaseId && (status === "" || status === "inactive")) {
+      status = "active";
+    } else if (status === "") {
+      status = "inactive";
+    }
+    return { ...p, status, pct };
   });
 }
 
@@ -2115,10 +2143,26 @@ function buildSpecialAgentInputContext(
   );
   // The live active phase, so generic-context agents (e.g. daily-briefing) anchor
   // their narrative on where the programme actually is — not the first phase or a
-  // phase they infer from prose. Sourced from the same canonical `inner.activePhase`
-  // pointer the specialised contexts use, enriched with the phase's name/progress.
-  const activePhaseId = typeof inner.activePhase === "string" ? inner.activePhase : "";
+  // phase they infer from prose. Prefer the canonical `inner.activePhase` pointer,
+  // but fall back to the phase statuses when it is missing/stale: a null pointer
+  // (seen after a data reset) otherwise told daily-briefing there was "no active
+  // phase", so it narrated the programme as "stalled at inception" though several
+  // gates were already approved. Deriving from statuses keeps the context honest
+  // regardless of the pointer — the in-progress phase is the one marked "active",
+  // else the first phase that is neither complete nor not-yet-started.
+  const pointerActiveId = typeof inner.activePhase === "string" ? inner.activePhase : "";
+  const activePhaseId = (pointerActiveId && phases.some((p) => p.id === pointerActiveId))
+    ? pointerActiveId
+    : (phases.find((p) => p.status === "active")?.id
+      ?? phases.find((p) => p.status !== "complete" && !NOT_STARTED_PHASE_STATUS.has(String(p.status ?? "").trim().toLowerCase()))?.id
+      ?? "");
   const activePhase = phases.find((phase) => phase.id === activePhaseId) ?? null;
+  // Progress evidence so the briefing can't claim "no progress / stalled at
+  // inception": count the phases whose stakeholder gate has been approved.
+  const approvedGateCount = phases.filter((p) =>
+    p.status === "complete"
+    || normalizeProgramData(gateReviews[p.id] as JsonValue | null).status === "approved",
+  ).length;
   return JSON.stringify({
     programName: meta.name || (typeof projectMeta.name === "string" ? projectMeta.name : ""),
     client: meta.client || (typeof projectMeta.client === "string" ? projectMeta.client : ""),
@@ -2151,6 +2195,9 @@ function buildSpecialAgentInputContext(
     activePhaseName: activePhase ? activePhase.name : null,
     activePhaseProgress: activePhase ? activePhase.pct : null,
     activePhaseStatus: activePhase ? activePhase.status : null,
+    gatesApproved: approvedGateCount,
+    phasesComplete: phases.filter((p) => p.status === "complete").length,
+    phaseCount: phases.length,
     phases,
     artifactCount: artifacts.length,
     activeArtifacts: artifacts.slice(0, 10),
@@ -4982,8 +5029,21 @@ function applyWeeklyDigestResultToProgramData(programData: ProgramState, result:
 }
 
 function applyDailyBriefingResultToProgramData(programData: ProgramState, result: Record<string, unknown>): ProgramState {
+  // A gate-approved (complete) phase's work is signed off, so a blocker pinned to
+  // it is a stale agent leftover (e.g. "Transformation Charter unapproved" on a
+  // complete Strategy). Drop those deterministically so the briefing can't present
+  // resolved work as a live blocker even if the model regresses.
+  const completePhaseIds = new Set(
+    getProgramPhaseContext(programData)
+      .filter((p) => typeof p.id === "string" && p.id && p.status === "complete")
+      .map((p) => String(p.id)),
+  );
+  const blockers = Array.isArray(result.blockers)
+    ? result.blockers.filter((b) => !(isRecord(b) && typeof b.phase === "string" && completePhaseIds.has(b.phase)))
+    : result.blockers;
   return setInnerField(programData, "dailyBriefing", {
     ...result,
+    ...(blockers !== undefined ? { blockers } : {}),
     generatedAt: new Date().toISOString(),
     dateOf: new Date().toISOString().slice(0, 10),
   } as JsonValue);
@@ -6242,6 +6302,25 @@ Rules:
   "activePhaseName" (id "activePhase"), at "activePhaseProgress"% progress. Speak
   as if that is "today". Never describe an earlier phase as current or imply the
   programme is still mobilising/starting if it has advanced past that phase.
+- "activePhaseProgress" is PHASE-level, not programme-level. A freshly-entered
+  active phase legitimately sits at 0% — that means the phase has just begun, NOT
+  that the programme is stalled or stuck. Never call the programme "stalled",
+  "stuck", or "at 0% progress" because the active phase is early; judge programme
+  progress by "gatesApproved"/"phaseCount" instead.
+- Progress is real and measured by context "gatesApproved" (of "phaseCount"). When
+  gatesApproved > 0, the programme is NOT "at inception" and has made material
+  progress — NEVER say it is "stalled" (at inception, at 0%, or otherwise), "has no
+  active phase", "no progress has been made", or that foundational artifacts /
+  objectives / approvals are "missing" or "unresolved". Those gatesApproved phases
+  passed stakeholder sign-off, so their foundations are DONE by definition.
+- A phase with status "complete" has passed its gate: its objectives, charter, exit
+  criteria and roster are DONE. NEVER raise a focusItem, blocker, or decision that
+  re-does completed-phase work (e.g. "define programme objectives", "assign owners
+  for the Transformation Charter", "approve exit criteria") when the phase that owns
+  it is complete. Focus only on the active phase and what unblocks the NEXT gate.
+- Treat context fields as ground truth over your own inference: if "objective",
+  "activePhaseName" or "gatesApproved" are populated, do not report them as missing
+  or absent.
 - If insufficient data, return { "headline": null, "reason": "insufficient_data" }`,
       user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
     };
