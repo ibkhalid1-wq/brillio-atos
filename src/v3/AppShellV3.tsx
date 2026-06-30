@@ -1660,8 +1660,13 @@ export default function AppShellV3() {
     // the Programme health KPI, so the active program's score here matches what
     // every other surface shows for it. (rawData/openDecisions are derived from
     // activeProgram inside the helper; listed here only to track recomputation.)
-    return deriveProgramConfidence(activeProgram, activePhaseId);
-  }, [activeProgram, activePhaseId, rawData, openDecisions]);
+    // NB: score against the programme's CANONICAL active phase (the helper's
+    // default), never the mutable nav-state activePhaseId — otherwise the headline
+    // confidence swings as the user drills into different phases (e.g. 66% on Today
+    // while pointed at a completed Strategy phase vs 31% on Brief while pointed at
+    // the Build frontier), contradicting itself across surfaces.
+    return deriveProgramConfidence(activeProgram);
+  }, [activeProgram, rawData, openDecisions]);
 
   const programConfidenceScore = programConfidenceResult?.score ?? null;
   const programHealth = useMemo(() => {
