@@ -3591,6 +3591,8 @@ export default function AppShellV3() {
               onRunAgent={handleRunAgent}
               anyAgentRunning={anyAgentRunning}
               confidenceScore={programConfidenceScore}
+              confidenceResult={programConfidenceResult}
+              confidenceForecast={programConfidenceForecast ?? undefined}
               onNavigateToPhase={openPhaseSheet}
             />
           </AdamErrorBoundary>

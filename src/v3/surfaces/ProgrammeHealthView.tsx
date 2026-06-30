@@ -9,7 +9,7 @@ import { getLockedPhaseIds, computePhaseReadiness } from "@/v3/lib/phaseReadines
 import { buildArtifactModel, type ArtifactNode } from "@/v3/lib/artifactModel";
 import { selectDecisions } from "@/v3/lib/programRaid";
 import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
-import type { ConfidenceScore } from "@/v3/lib/confidenceScore";
+import type { ConfidenceScore, ConfidenceForecast } from "@/v3/lib/confidenceScore";
 import ConfidenceBreakdown from "@/v3/components/ConfidenceBreakdown";
 
 interface ProgrammeHealthViewProps {
@@ -27,6 +27,10 @@ interface ProgrammeHealthViewProps {
   onRunAgent: (agentId: string, phaseId?: string) => void;
   anyAgentRunning: boolean;
   confidenceScore: number | null;
+  /** Trend-aware confidence + forecast computed by the shell, so the Health screen
+   *  shows the same trend chip/projection as the Executive summary for this program. */
+  confidenceResult?: ConfidenceScore | null;
+  confidenceForecast?: ConfidenceForecast | null;
   onNavigateToPhase?: (phaseId: string) => void;
 }
 
@@ -557,6 +561,7 @@ function HealthTab({
   phases,
   rawData,
   confidenceResult,
+  confidenceForecast,
   onRunAgent,
   anyAgentRunning,
 }: {
@@ -564,6 +569,7 @@ function HealthTab({
   phases: Array<{ id: string; displayName: string; pct: number; status: string }>;
   rawData: Record<string, unknown>;
   confidenceResult: ConfidenceScore | null;
+  confidenceForecast?: ConfidenceForecast | null;
   onRunAgent: (agentId: string, phaseId?: string) => void;
   anyAgentRunning: boolean;
 }) {
@@ -576,7 +582,7 @@ function HealthTab({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24, padding: 24, overflowY: "auto" }}>
       {/* Confidence breakdown — the per-signal scores behind the headline % */}
-      <ConfidenceBreakdown confidenceResult={confidenceResult} />
+      <ConfidenceBreakdown confidenceResult={confidenceResult} forecast={confidenceForecast} />
 
       {/* Phase completion bars */}
       <div>
@@ -947,6 +953,8 @@ export default function ProgrammeHealthView({
   onRunAgent,
   anyAgentRunning,
   confidenceScore,
+  confidenceResult: confidenceResultProp,
+  confidenceForecast,
   onNavigateToPhase,
 }: ProgrammeHealthViewProps) {
   const [rightTab, setRightTab] = useState<RightTab>("gates");
@@ -989,9 +997,11 @@ export default function ProgrammeHealthView({
 
   // Per-signal confidence breakdown — derived from the single source of truth so
   // the Health screen explains the same headline % the Executive summary shows.
+  // Prefer the shell-computed result (trend-aware, history-backed) so the trend
+  // chip matches Executive; fall back to a local derivation for standalone use.
   const confidenceResult = useMemo<ConfidenceScore | null>(
-    () => (program ? deriveProgramConfidence(program, activePhaseId) : null),
-    [program, activePhaseId],
+    () => confidenceResultProp ?? (program ? deriveProgramConfidence(program, activePhaseId) : null),
+    [confidenceResultProp, program, activePhaseId],
   );
 
   // Gates approved progress
@@ -1291,6 +1301,7 @@ export default function ProgrammeHealthView({
               phases={phases}
               rawData={inner}
               confidenceResult={confidenceResult}
+              confidenceForecast={confidenceForecast}
               onRunAgent={onRunAgent}
               anyAgentRunning={anyAgentRunning}
             />
