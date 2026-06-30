@@ -175,6 +175,8 @@ export default function InsightFeedView({
       progressHighlight?: string;
       ragStatus?: "green" | "amber" | "red";
       reason?: string;
+      generatedAt?: string;
+      dateOf?: string;
     };
   }, [program?.rawData]);
 
@@ -227,6 +229,15 @@ export default function InsightFeedView({
   // presenting stale prose as current. Phase names come from the registry, not literals.
   const briefingStale = useMemo(() => {
     if (!dailyBriefing?.headline || !headerActivePhase) return false;
+    // A briefing generated today reflects today's reality by construction — the
+    // auto-trigger regenerates whenever the active phase advances. So never flag a
+    // same-day briefing as "predating the current phase" just because its prose
+    // mentions an earlier phase by name (the agent often narrates phase history).
+    // Without this guard a fresh briefing whose prose references an earlier phase is
+    // suppressed forever: every Refresh regenerates similar prose and re-trips the
+    // heuristic, so the card permanently shows the stale warning instead of content.
+    const stamp = dailyBriefing.dateOf ?? dailyBriefing.generatedAt;
+    if (stamp && stamp.slice(0, 10) === new Date().toISOString().slice(0, 10)) return false;
     const activeIdx = phases.findIndex((p) => p.id === headerActivePhase.id);
     if (activeIdx <= 0) return false;
     const text = `${dailyBriefing.headline} ${dailyBriefing.progressHighlight ?? ""}`.toLowerCase();
@@ -240,7 +251,7 @@ export default function InsightFeedView({
         const l = labelFor(p.id);
         return l.length > 0 && text.includes(l);
       });
-  }, [dailyBriefing?.headline, dailyBriefing?.progressHighlight, headerActivePhase, phases]);
+  }, [dailyBriefing?.headline, dailyBriefing?.progressHighlight, dailyBriefing?.dateOf, dailyBriefing?.generatedAt, headerActivePhase, phases]);
 
   // Strict sequential gating: a phase is reachable only once its predecessor's
   // gate is approved. Reuse the canonical lock set (same source the status rings
