@@ -1,5 +1,6 @@
 import { getMethodology, getPhaseDefinition, type MethodologyVariant } from "@/v3/lib/methodology";
 import { dynamicArtifactDefs, getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
+import { FORMAL_ARTIFACT_PHASES } from "@/v3/lib/formalArtifacts";
 
 /**
  * Deterministic phase scheduling. The strategic-roadmap agent was asked to both
@@ -513,4 +514,20 @@ export function daysBetween(a: string, b: string): number {
   const bms = parseUtcDay(b);
   if (ams === null || bms === null) return 0;
   return Math.round((bms - ams) / DAY_MS);
+}
+
+/**
+ * The strategic roadmap is a Strategy-phase deliverable: it is shaped while
+ * Strategy is in flight and becomes the committed baseline the moment that
+ * phase's gate is approved. After approval the timeline must stop being directly
+ * editable — any change is a re-baseline that belongs in change control (a CR),
+ * not a quiet drag of a bar. The owning phase is read from the formal-artifact
+ * registry rather than hard-coded so it stays in lockstep with methodology.
+ */
+export function isRoadmapBaselineLocked(
+  gateReviews: Record<string, { status?: string } | null | undefined> | null | undefined,
+): boolean {
+  const ownerPhase = FORMAL_ARTIFACT_PHASES["strategic-roadmap"];
+  if (!ownerPhase) return false;
+  return gateReviews?.[ownerPhase]?.status === "approved";
 }

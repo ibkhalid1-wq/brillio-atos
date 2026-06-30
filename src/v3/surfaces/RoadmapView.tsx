@@ -1,7 +1,7 @@
 import React from "react";
 import type { ProgramSummary } from "@/new/types";
 import RoadmapGantt from "@/v3/components/RoadmapGantt";
-import { buildRoadmapRows, buildValidationStages, type ValidationStage } from "@/v3/lib/phaseSchedule";
+import { buildRoadmapRows, buildValidationStages, isRoadmapBaselineLocked, type ValidationStage } from "@/v3/lib/phaseSchedule";
 import type { GanttMarker } from "@/v3/components/RoadmapGantt";
 import { AdamCard, AdamCardBody, AdamCardHeader } from "@/v3/components/ui/AdamCard";
 import { EmptyState } from "@/v3/components/ui/EmptyState";
@@ -309,19 +309,24 @@ export default function RoadmapView({
     [validationStages],
   );
 
+  // The roadmap is a Strategy deliverable; once the Strategy gate is approved the
+  // baseline is committed and direct edits are disabled — changes go through a CR.
+  const baselineLocked = isRoadmapBaselineLocked(program?.gateReviews);
+  const timelineEditable = !!onSaveRoadmapSchedule && !baselineLocked;
+
   // Persist the full effective schedule (defaults made explicit) with the one
   // edited phase replaced, so the saved plan is stable even if the methodology's
   // duration weights later change.
   const handleRoadmapChange = React.useCallback(
     (id: string, start: string, end: string) => {
-      if (!onSaveRoadmapSchedule) return;
+      if (!onSaveRoadmapSchedule || baselineLocked) return;
       const schedule: Record<string, { start: string; end: string }> = {};
       for (const row of roadmapRows) {
         schedule[row.id] = row.id === id ? { start, end } : { start: row.start, end: row.end };
       }
       void onSaveRoadmapSchedule(schedule);
     },
-    [onSaveRoadmapSchedule, roadmapRows],
+    [onSaveRoadmapSchedule, baselineLocked, roadmapRows],
   );
 
   if (!program) {
@@ -342,7 +347,15 @@ export default function RoadmapView({
           subtitle="Programme window weighted by each phase's typical duration. Bars show progress and RAG status against today."
         />
         <AdamCardBody>
-          <RoadmapGantt rows={roadmapRows} editable={!!onSaveRoadmapSchedule} onChange={handleRoadmapChange} markers={validationMarkers} />
+          {baselineLocked ? (
+            <div className="v3-roadmap-lock-notice" role="note">
+              <span className="v3-roadmap-lock-icon" aria-hidden="true">🔒</span>
+              <span>
+                Baseline locked at Strategy gate approval. The timeline is read-only — raise a change request to re-baseline.
+              </span>
+            </div>
+          ) : null}
+          <RoadmapGantt rows={roadmapRows} editable={timelineEditable} onChange={handleRoadmapChange} markers={validationMarkers} />
         </AdamCardBody>
       </AdamCard>
 

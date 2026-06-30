@@ -5,6 +5,7 @@ import {
   buildRoadmapRows,
   computeScheduleAdherence,
   computeScheduleAdherenceDetail,
+  isRoadmapBaselineLocked,
   layoutGantt,
   shiftIsoDate,
   daysBetween,
@@ -291,5 +292,31 @@ describe("computeScheduleAdherenceDetail", () => {
       phasesBehind: 0,
       inFlight: 0,
     });
+  });
+});
+
+/**
+ * The roadmap is a Strategy deliverable, so it locks the moment the Strategy
+ * gate is approved — after that the timeline is read-only and changes go through
+ * change control. The owning phase comes from the formal-artifact registry.
+ */
+describe("isRoadmapBaselineLocked", () => {
+  it("is locked once the Strategy gate is approved", () => {
+    expect(isRoadmapBaselineLocked({ strategy: { status: "approved" } })).toBe(true);
+  });
+
+  it("is unlocked while Strategy is still in review", () => {
+    expect(isRoadmapBaselineLocked({ strategy: { status: "pending-review" } })).toBe(false);
+    expect(isRoadmapBaselineLocked({ strategy: { status: "ready" } })).toBe(false);
+  });
+
+  it("ignores approvals on other phases", () => {
+    expect(isRoadmapBaselineLocked({ mobilise: { status: "approved" }, design: { status: "approved" } })).toBe(false);
+  });
+
+  it("is unlocked for empty or missing gate reviews", () => {
+    expect(isRoadmapBaselineLocked({})).toBe(false);
+    expect(isRoadmapBaselineLocked(null)).toBe(false);
+    expect(isRoadmapBaselineLocked(undefined)).toBe(false);
   });
 });

@@ -12609,6 +12609,15 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   box-shadow: 0 1px 3px rgba(13, 148, 136, 0.35);
 }
 
+.v3-roadmap-lock-notice {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+  padding: 8px 12px; border-radius: 8px;
+  background: var(--v3-accent-soft, rgba(13, 148, 136, 0.1));
+  border: 1px solid var(--v3-border-soft);
+  font-size: 12px; color: var(--v3-text-secondary);
+}
+.v3-roadmap-lock-icon { font-size: 13px; line-height: 1; }
+
 .v3-gantt-bar {
   position: absolute; top: 3px; bottom: 3px; min-width: 10px; border-radius: 7px;
   background: var(--rag-soft, var(--v3-accent-soft));
