@@ -136,21 +136,57 @@ export function buildPlanGroundingIndex(program: ProgramSummary | null | undefin
 }
 
 /**
+ * True when a piece of text provably contradicts current programme state: it
+ * claims objectives / owners / timeline / KPIs are missing while those inputs
+ * are populated, or it demands phase exit criteria (which are derived at gate
+ * review, never authored). Operates on free text so both PCR decisions and scope
+ * signals can be grounded through the same logic.
+ */
+export function isGroundedAbsenceClaim(text: string, grounding: PlanGrounding): boolean {
+  const lower = (text ?? "").toLowerCase();
+  if (EXIT_CRITERIA.test(lower)) return true;
+  if (grounding.hasTimeline && claimsMissing(lower, TIMELINE_NOUN, false)) return true;
+  if (grounding.hasOwners && claimsMissing(lower, OWNER_NOUN, true)) return true;
+  if (grounding.hasObjective && claimsMissing(lower, OBJECTIVE_NOUN, true)) return true;
+  if (grounding.hasKpis && claimsMissing(lower, KPI_NOUN, true)) return true;
+  return false;
+}
+
+// Imperative verbs that ask someone to supply a missing artefact value.
+const PROVIDE_VERB =
+  "(?:define|establish|set(?:\\s+up)?|provide|document|baseline|create|assign|identify|specify|capture|add|approve)";
+
+/**
+ * True when a piece of text *directs* the reader to supply something the
+ * programme already owns: "define the objectives", "establish exit criteria",
+ * "assign owners". The absence-claim check catches negated statements ("no
+ * objectives are defined"); this catches the imperative phrasing recommendation
+ * lists use. Only fires when the named thing is grounded (or is exit criteria,
+ * which are always gate-derived), so genuine gaps are left intact.
+ */
+export function isGroundedDirective(text: string, grounding: PlanGrounding): boolean {
+  const lower = (text ?? "").toLowerCase();
+  if (EXIT_CRITERIA.test(lower)) return true;
+  const directs = (noun: string) =>
+    new RegExp(`\\b${PROVIDE_VERB}\\b[\\w\\s,/'"()-]{0,40}?\\b${noun}\\b`, "i").test(lower);
+  if (grounding.hasTimeline && directs(TIMELINE_NOUN)) return true;
+  if (grounding.hasOwners && directs(OWNER_NOUN)) return true;
+  if (grounding.hasObjective && directs(OBJECTIVE_NOUN)) return true;
+  if (grounding.hasKpis && directs(KPI_NOUN)) return true;
+  return false;
+}
+
+/**
  * True when a persisted change-request decision provably contradicts current
- * programme state: it claims objectives / owners / timeline / KPIs are missing
- * while those inputs are populated, or it demands phase exit criteria (which are
- * derived at gate review, never authored). Non-PCR decisions always return false.
+ * programme state (see {@link isGroundedAbsenceClaim}). Non-PCR decisions always
+ * return false — a gate approval or escalation that merely mentions "objectives"
+ * in passing is never touched.
  */
 export function isGroundedFalsePositiveDecision(
   decision: DecisionSummary,
   grounding: PlanGrounding,
 ): boolean {
   if (!PCR_DECISION_TYPES.has(decision.type)) return false;
-  const text = `${decision.title ?? ""} ${decision.question ?? ""} ${decision.recommendation ?? ""}`.toLowerCase();
-  if (EXIT_CRITERIA.test(text)) return true;
-  if (grounding.hasTimeline && claimsMissing(text, TIMELINE_NOUN, false)) return true;
-  if (grounding.hasOwners && claimsMissing(text, OWNER_NOUN, true)) return true;
-  if (grounding.hasObjective && claimsMissing(text, OBJECTIVE_NOUN, true)) return true;
-  if (grounding.hasKpis && claimsMissing(text, KPI_NOUN, true)) return true;
-  return false;
+  const text = `${decision.title ?? ""} ${decision.question ?? ""} ${decision.recommendation ?? ""}`;
+  return isGroundedAbsenceClaim(text, grounding);
 }

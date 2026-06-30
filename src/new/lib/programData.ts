@@ -45,6 +45,7 @@ import type {
   Workstream,
 } from "@/new/types";
 import { getPhaseSequence } from "@/v3/lib/methodology";
+import { buildPlanGroundingIndex, isGroundedAbsenceClaim, isGroundedDirective } from "@/v3/lib/decisionGrounding";
 
 type JsonRecord = Record<string, Json | undefined>;
 export type ProgramRowLike = {
@@ -956,7 +957,7 @@ function deriveScopePcr(data: JsonRecord): ScopePcrSummary | null {
   const value = asRecord(data.scopePcr);
   if (!Object.keys(value).length) return null;
 
-  const scopeSignals = asArray(value.scopeSignals)
+  const allSignals = asArray(value.scopeSignals)
     .map((item) => asRecord(item))
     .filter((item) => asString(item.id).length > 0 && asString(item.description).length > 0)
     .map((item): ScopeSignal => ({
@@ -975,15 +976,62 @@ function deriveScopePcr(data: JsonRecord): ScopePcrSummary | null {
       pcrRationale: asString(item.pcrRationale) || null,
     }));
 
+  // The scope-pcr agent emits absence-claim signals ("no objectives", "no exit
+  // criteria", "no milestones/timelines") that the persisted re-emit path keeps
+  // resurfacing even after the programme grounds them — the same false-positive
+  // class the Action Center and confidence model already suppress. Ground them
+  // here, the single read chokepoint for the Scope Changes page, so a resolved-
+  // by-reality signal stops driving phantom PCRs and scope-risk inflation.
+  const grounding = buildPlanGroundingIndex({ rawData: data } as unknown as ProgramSummary);
+  const scopeSignals = allSignals.filter(
+    (signal) => !isGroundedAbsenceClaim(`${signal.description} ${signal.pcrRationale ?? ""}`, grounding),
+  );
+  const grounded = scopeSignals.length !== allSignals.length;
+
+  // When grounding removed signals, recompute the headline metrics from the
+  // survivors so the badges and risk band match what the page actually shows —
+  // a stale agent count of "4 open PCRs" must not persist once they're filtered.
+  const SEVERITY_TO_RISK: Record<ScopeSignal["severity"], ScopePcrSummary["overallScopeRisk"]> = {
+    critical: "high", high: "high", medium: "medium", low: "low",
+  };
+  const recomputedRisk: ScopePcrSummary["overallScopeRisk"] = scopeSignals.length === 0
+    ? "contained"
+    : scopeSignals.reduce<ScopePcrSummary["overallScopeRisk"]>((worst, signal) => {
+        const order = ["contained", "low", "medium", "high"];
+        const next = SEVERITY_TO_RISK[signal.severity];
+        return order.indexOf(next) > order.indexOf(worst) ? next : worst;
+      }, "contained");
+  const persistedRisk = (["high", "medium", "low", "contained"].includes(asString(value.overallScopeRisk))
+    ? asString(value.overallScopeRisk)
+    : "contained") as ScopePcrSummary["overallScopeRisk"];
+  const persistedOpenPcr = Math.max(0, Math.round(asNumber(value.openPcrCount, 0)));
+  const survivingPcr = scopeSignals.filter((signal) => signal.recommendPcr).length;
+
+  // The agent's recommended actions and summary prose are written off the same
+  // premises as the signals, so they can still tell the user to "define the
+  // objectives" / "establish exit criteria" the programme already owns. Drop
+  // those directives, and once grounding has changed the picture, replace the
+  // stale summary blob with a deterministic one derived from the survivors.
+  const allActions = asArray(value.recommendedActions).map((item) => asString(item)).filter(Boolean);
+  const recommendedActions = allActions
+    .filter((item) => !isGroundedAbsenceClaim(item, grounding) && !isGroundedDirective(item, grounding))
+    .slice(0, 5);
+
+  const overallScopeRisk = grounded ? recomputedRisk : persistedRisk;
+  let summary = asString(value.summary);
+  if (grounded) {
+    summary = scopeSignals.length === 0
+      ? "No grounded scope-creep signals are active — objectives, owners, timeline and KPIs are all defined, and exit criteria are derived at each gate review."
+      : `${scopeSignals.length} grounded scope signal${scopeSignals.length === 1 ? "" : "s"} active (${overallScopeRisk} scope risk). ${allSignals.length - scopeSignals.length} stale absence-claim${allSignals.length - scopeSignals.length === 1 ? "" : "s"} the programme already satisfies ${allSignals.length - scopeSignals.length === 1 ? "was" : "were"} filtered out.`;
+  }
+
   return {
     scopeSignals,
-    overallScopeRisk: (["high", "medium", "low", "contained"].includes(asString(value.overallScopeRisk))
-      ? asString(value.overallScopeRisk)
-      : "contained") as ScopePcrSummary["overallScopeRisk"],
-    recommendedActions: asArray(value.recommendedActions).map((item) => asString(item)).filter(Boolean).slice(0, 5),
-    openPcrCount: Math.max(0, Math.round(asNumber(value.openPcrCount, 0))),
+    overallScopeRisk,
+    recommendedActions,
+    openPcrCount: grounded ? Math.min(persistedOpenPcr, survivingPcr) : persistedOpenPcr,
     confidence: Math.max(0, Math.min(1, asNumber(value.confidence, 0))),
-    summary: asString(value.summary),
+    summary,
   };
 }
 

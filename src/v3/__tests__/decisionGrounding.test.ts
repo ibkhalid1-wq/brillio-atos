@@ -3,6 +3,8 @@ import type { DecisionSummary, ProgramSummary } from "@/new/types";
 import {
   buildPlanGroundingIndex,
   claimsMissing,
+  isGroundedAbsenceClaim,
+  isGroundedDirective,
   isGroundedFalsePositiveDecision,
   type PlanGrounding,
 } from "@/v3/lib/decisionGrounding";
@@ -86,6 +88,46 @@ describe("buildPlanGroundingIndex", () => {
     const grounding = buildPlanGroundingIndex(program);
     expect(grounding.hasObjective).toBe(true);
     expect(grounding.hasOwners).toBe(true);
+  });
+});
+
+describe("isGroundedAbsenceClaim (free-text, no PCR gate)", () => {
+  it("flags a grounded missing-objectives scope signal", () => {
+    expect(isGroundedAbsenceClaim("No objectives are defined at the program level", GROUNDED)).toBe(true);
+  });
+
+  it("flags an exit-criteria signal regardless of grounding", () => {
+    expect(isGroundedAbsenceClaim("No exit criteria are defined for any phase", UNGROUNDED)).toBe(true);
+  });
+
+  it("leaves a genuine capacity signal intact", () => {
+    expect(isGroundedAbsenceClaim("Critical capacity shortfall in the Change Management Lead role", GROUNDED)).toBe(false);
+  });
+
+  it("does not flag a missing-objectives signal when objectives are ungrounded", () => {
+    expect(isGroundedAbsenceClaim("No objectives are defined", UNGROUNDED)).toBe(false);
+  });
+});
+
+describe("isGroundedDirective (imperative recommendations)", () => {
+  it("flags 'define and approve program objectives' when objectives are grounded", () => {
+    expect(isGroundedDirective("Immediately define and approve program and phase objectives", GROUNDED)).toBe(true);
+  });
+
+  it("flags 'establish exit criteria' unconditionally", () => {
+    expect(isGroundedDirective("Establish and approve exit criteria for all phases", UNGROUNDED)).toBe(true);
+  });
+
+  it("flags 'assign owners' when owners are grounded", () => {
+    expect(isGroundedDirective("Assign accountable owners to each workstream", GROUNDED)).toBe(true);
+  });
+
+  it("keeps a directive about non-grounded things (capacity gaps)", () => {
+    expect(isGroundedDirective("Close capacity gaps in the QA Lead role before Build", GROUNDED)).toBe(false);
+  });
+
+  it("does not flag 'define objectives' when objectives are ungrounded", () => {
+    expect(isGroundedDirective("Define program objectives", UNGROUNDED)).toBe(false);
   });
 });
 
