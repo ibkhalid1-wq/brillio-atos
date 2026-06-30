@@ -417,18 +417,39 @@ function deriveTwinGraph(data: JsonRecord): { nodes: Array<Record<string, unknow
 // "Team capacity shortfall" build risks). Both render as redundant rows on every
 // risk/blocker surface, so collapse them at this single derivation point, keeping
 // the first occurrence (insertion order is significance order from the agent).
+//
+// A second, subtler duplication crosses agents: capacity-shortfall risks for a
+// phase are owned by the capacity-assessor's deterministic `capacity-gap-${phase}`
+// entry, but the risk agent — unaware of that — sometimes restates the same gap
+// for the same phase under a more specific title (e.g. "Team capacity shortfall in
+// Change Management Lead role"). Drop the restatement so the gap is listed once,
+// keeping the canonical capacity-gap entry as the owner.
 function dedupeRAIDEntries(entries: RAIDEntry[]): RAIDEntry[] {
   const seenIds = new Set<string>();
   const seenComposite = new Set<string>();
-  const result: RAIDEntry[] = [];
+  const deduped: RAIDEntry[] = [];
   for (const entry of entries) {
     const composite = `${entry.type}|${entry.phase}|${entry.title.trim().toLowerCase()}`;
     if (seenIds.has(entry.id) || seenComposite.has(composite)) continue;
     seenIds.add(entry.id);
     seenComposite.add(composite);
-    result.push(entry);
+    deduped.push(entry);
   }
-  return result;
+
+  const capacityTitleByPhase = new Map<string, string>();
+  for (const entry of deduped) {
+    if (entry.id.startsWith("capacity-gap-")) {
+      capacityTitleByPhase.set(entry.phase, entry.title.trim().toLowerCase());
+    }
+  }
+  if (capacityTitleByPhase.size === 0) return deduped;
+  return deduped.filter((entry) => {
+    if (entry.id.startsWith("capacity-gap-")) return true;
+    const capTitle = capacityTitleByPhase.get(entry.phase);
+    if (!capTitle) return true;
+    const title = entry.title.trim().toLowerCase();
+    return !(title.includes(capTitle) || capTitle.includes(title));
+  });
 }
 
 function deriveRAIDEntries(data: JsonRecord): RAIDEntry[] {

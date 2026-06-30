@@ -113,6 +113,32 @@ describe("RAID de-duplication", () => {
     // distinct and survives.
     expect(titlesByPhase).toEqual(["mobilise:cap-build", "strategy:distinct"]);
   });
+
+  it("drops a risk-agent restatement of a capacity gap the capacity-assessor owns", () => {
+    const program = normalizeProgram({
+      id: "program-cap",
+      name: "Capacity",
+      updated_at: "2026-06-13T00:00:00.000Z",
+      data: {
+        objective: "x",
+        gateReviews: { strategy: { status: "approved" } },
+        raidLog: {
+          entries: [
+            // The capacity-assessor's deterministic owner for the mobilise gap.
+            { id: "capacity-gap-mobilise", type: "risk", title: "Team capacity shortfall", severity: "high", phase: "mobilise", status: "open" },
+            // The risk agent's overlapping restatement of the same gap — must drop.
+            { id: "uuid-1", type: "risk", title: "Team capacity shortfall in Change Management Lead role", severity: "high", phase: "mobilise", status: "open" },
+            // A genuinely different mobilise risk — must survive.
+            { id: "uuid-2", type: "risk", title: "Vendor onboarding delay", severity: "high", phase: "mobilise", status: "open" },
+          ],
+        },
+      },
+    });
+    const ids = selectRisks(program, { phaseId: "mobilise" }).map((r) => r.id);
+    expect(ids).toContain("capacity-gap-mobilise");
+    expect(ids).toContain("uuid-2");
+    expect(ids).not.toContain("uuid-1");
+  });
 });
 
 /**
