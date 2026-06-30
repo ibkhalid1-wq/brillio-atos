@@ -412,6 +412,25 @@ function deriveTwinGraph(data: JsonRecord): { nodes: Array<Record<string, unknow
   return { nodes, edges };
 }
 
+// The agent occasionally emits the same RAID item twice — either with an
+// identical id, or as separate uuids carrying the same type/phase/title (e.g. two
+// "Team capacity shortfall" build risks). Both render as redundant rows on every
+// risk/blocker surface, so collapse them at this single derivation point, keeping
+// the first occurrence (insertion order is significance order from the agent).
+function dedupeRAIDEntries(entries: RAIDEntry[]): RAIDEntry[] {
+  const seenIds = new Set<string>();
+  const seenComposite = new Set<string>();
+  const result: RAIDEntry[] = [];
+  for (const entry of entries) {
+    const composite = `${entry.type}|${entry.phase}|${entry.title.trim().toLowerCase()}`;
+    if (seenIds.has(entry.id) || seenComposite.has(composite)) continue;
+    seenIds.add(entry.id);
+    seenComposite.add(composite);
+    result.push(entry);
+  }
+  return result;
+}
+
 function deriveRAIDEntries(data: JsonRecord): RAIDEntry[] {
   const raidLog = asRecord(data.raidLog);
   const newEntries = asArray(raidLog.entries)
@@ -453,9 +472,9 @@ function deriveRAIDEntries(data: JsonRecord): RAIDEntry[] {
       };
     });
 
-  if (newEntries.length > 0) return newEntries;
+  if (newEntries.length > 0) return dedupeRAIDEntries(newEntries);
 
-  return asArray(raidLog.risks)
+  return dedupeRAIDEntries(asArray(raidLog.risks)
     .map((entry) => asRecord(entry))
     .filter((entry) => asString(entry.title || entry.label).length > 0)
     .map((entry, index): RAIDEntry => ({
@@ -475,7 +494,7 @@ function deriveRAIDEntries(data: JsonRecord): RAIDEntry[] {
       closedAt: null,
       closedBy: null,
       closureNote: null,
-    }));
+    })));
 }
 
 function deriveMilestones(data: JsonRecord): Milestone[] {

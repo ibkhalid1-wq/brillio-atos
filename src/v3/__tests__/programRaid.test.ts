@@ -80,6 +80,42 @@ describe("selectRisks / selectBlockers", () => {
 });
 
 /**
+ * The agent sometimes emits the same RAID item twice — with an identical id, or as
+ * distinct uuids carrying the same type/phase/title. Both render as redundant rows,
+ * so deriveRAIDEntries collapses them to the first occurrence.
+ */
+describe("RAID de-duplication", () => {
+  function makeDupProgram() {
+    return normalizeProgram({
+      id: "program-dup",
+      name: "Dups",
+      updated_at: "2026-06-13T00:00:00.000Z",
+      data: {
+        objective: "x",
+        gateReviews: { strategy: { status: "approved" } },
+        raidLog: {
+          entries: [
+            { id: "cap-build", type: "risk", title: "Team capacity shortfall", severity: "high", phase: "mobilise", status: "open" },
+            { id: "cap-build", type: "risk", title: "Team capacity shortfall", severity: "high", phase: "mobilise", status: "open" },
+            { id: "other-uuid", type: "risk", title: "team capacity shortfall", severity: "high", phase: "mobilise", status: "open" },
+            { id: "distinct", type: "risk", title: "Team capacity shortfall", severity: "high", phase: "strategy", status: "open" },
+          ],
+        },
+      },
+    });
+  }
+
+  it("collapses entries sharing an id and entries sharing type/phase/title", () => {
+    const risks = selectRisks(makeDupProgram());
+    const titlesByPhase = risks.map((r) => `${r.phase}:${r.id}`);
+    // The two "cap-build" (same id) and the "other-uuid" (same type/phase/title,
+    // case-insensitive) collapse to one; the strategy-phase one is genuinely
+    // distinct and survives.
+    expect(titlesByPhase).toEqual(["mobilise:cap-build", "strategy:distinct"]);
+  });
+});
+
+/**
  * Programme-wide lists must surface only ACTIONABLE items: a risk or blocker
  * tied to a locked (future) phase is behind an unapproved gate and cannot be
  * worked yet, so it drops out of the programme view. Scoping INTO that phase is
