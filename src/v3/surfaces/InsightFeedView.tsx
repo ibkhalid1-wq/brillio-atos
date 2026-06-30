@@ -9,6 +9,7 @@ import { PhaseStripCard } from "@/v3/components/PhaseStripCard";
 import { selectBlockers, selectDecisions, selectRisks } from "@/v3/lib/programRaid";
 import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
 import { getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
+import { ONE_DAY_MS, isSameUtcDay, isWithinMs } from "@/v3/lib/freshness";
 
 interface InsightFeedViewProps {
   program: ProgramSummary | null;
@@ -236,8 +237,7 @@ export default function InsightFeedView({
     // Without this guard a fresh briefing whose prose references an earlier phase is
     // suppressed forever: every Refresh regenerates similar prose and re-trips the
     // heuristic, so the card permanently shows the stale warning instead of content.
-    const stamp = dailyBriefing.dateOf ?? dailyBriefing.generatedAt;
-    if (stamp && stamp.slice(0, 10) === new Date().toISOString().slice(0, 10)) return false;
+    if (isSameUtcDay(dailyBriefing.dateOf ?? dailyBriefing.generatedAt)) return false;
     const activeIdx = phases.findIndex((p) => p.id === headerActivePhase.id);
     if (activeIdx <= 0) return false;
     const text = `${dailyBriefing.headline} ${dailyBriefing.progressHighlight ?? ""}`.toLowerCase();
@@ -300,12 +300,10 @@ export default function InsightFeedView({
     if (!program || anyAgentRunning || typeof window === "undefined") return;
     const stampKey = `adam-daily-briefing-${program.id ?? "program"}`;
     const phaseKey = `${stampKey}-phase`;
-    const lastStamp = window.localStorage.getItem(stampKey);
     const lastPhase = window.localStorage.getItem(phaseKey);
-    const oneDayMs = 24 * 60 * 60 * 1000;
-    // Date.parse handles the ISO generatedAt; a legacy epoch-millis value (pre-fix)
-    // yields NaN → treated as not-fresh → one migrating run that re-stamps as ISO.
-    const fresh = lastStamp ? Date.now() - Date.parse(lastStamp) < oneDayMs : false;
+    // isWithinMs treats a legacy epoch-millis stamp (pre-ISO) as not-fresh →
+    // one migrating run re-stamps it as ISO.
+    const fresh = isWithinMs(window.localStorage.getItem(stampKey), ONE_DAY_MS);
     const phaseUnchanged = !resolvedActiveId || lastPhase === resolvedActiveId;
     if (fresh && phaseUnchanged) return;
     onRunAgent("daily-briefing");
