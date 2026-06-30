@@ -11,6 +11,7 @@
  */
 
 import { getFormalArtifactConfidence } from "@/v3/lib/formalArtifacts";
+import { filterActionableImprovements } from "@/v3/lib/qualityImprovementFilter";
 
 /** Convert a producing-agent/artifact id to its persisted review key. */
 export function artifactReviewFieldKey(defId: string): string {
@@ -49,7 +50,9 @@ export function resolveArtifactReview(
     : record) as Record<string, unknown>;
   const score = typeof pick.score === "number" ? Math.round(pick.score) : null;
   const improvements = Array.isArray(pick.improvements)
-    ? pick.improvements.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    ? filterActionableImprovements(
+        pick.improvements.filter((item): item is string => typeof item === "string" && item.trim().length > 0),
+      )
     : [];
   const suggestedStakeholders = Array.isArray(pick.suggestedStakeholders)
     ? pick.suggestedStakeholders.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
