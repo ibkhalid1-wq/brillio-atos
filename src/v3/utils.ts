@@ -41,8 +41,26 @@ export function timeAgo(iso: string | null | undefined): string {
   return formatRelative(iso) || "just now";
 }
 
+// A decision is closed only once it carries a terminal status. Resolution writes
+// one of approved/deferred/rejected/modified (see usePrograms.resolveDecision),
+// and the synthesiser additionally retires dismissed/resolved/closed records. Any
+// other value — including "pending", the initial unresolved state persisted PCRs
+// are seeded with — is still OPEN. Enumerating the terminal set (rather than
+// whitelisting only "open") keeps this in step with buildDecisionQueue, which
+// already treats "pending" as live; the previous "open"-only check silently
+// dropped every pending PCR from the Actions queue, badge and confidence inputs.
+const RESOLVED_DECISION_STATUSES = new Set([
+  "approved",
+  "deferred",
+  "rejected",
+  "modified",
+  "dismissed",
+  "resolved",
+  "closed",
+]);
+
 export function isDecisionOpen(decision: DecisionSummary): boolean {
-  return !decision.status || decision.status === "open";
+  return !decision.status || !RESOLVED_DECISION_STATUSES.has(decision.status);
 }
 
 export function confidenceTone(value: number | null | undefined): "green" | "amber" | "red" | "muted" {
