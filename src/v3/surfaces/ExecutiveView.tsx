@@ -323,6 +323,28 @@ export default function ExecutiveView({
     return incomplete?.id ?? list[list.length - 1]?.id ?? "strategy";
   }, [program]);
 
+  // The executive summary is frozen agent prose with no embedded phase, so a
+  // narrative written when the programme sat in an earlier phase keeps asserting it
+  // forever ("…in the Mobilise phase…" on a Build-stage programme). Detect that drift
+  // deterministically: if the narrative names a phase the programme has already moved
+  // past (one before the current phase) and never names the current phase, it predates
+  // today's reality — flag it so the UI prompts a refresh instead of stale prose.
+  const narrativeStale = useMemo(() => {
+    const text = (typeof program?.narrative === "string" ? program.narrative : "").toLowerCase();
+    if (!text) return false;
+    const list = program?.phases ?? [];
+    const activeIdx = list.findIndex((p) => p.id === currentPhaseId);
+    if (activeIdx <= 0) return false;
+    const labelFor = (id: string) =>
+      (PHASE_LABELS[id] ?? list.find((p) => p.id === id)?.displayName ?? "").toLowerCase();
+    const activeLabel = labelFor(currentPhaseId);
+    if (activeLabel && text.includes(activeLabel)) return false;
+    return list.slice(0, activeIdx).some((p) => {
+      const l = labelFor(p.id);
+      return l.length > 0 && text.includes(l);
+    });
+  }, [program?.narrative, program?.phases, currentPhaseId]);
+
   // ── Gate counts (use pre-declared above) ─────────────────────────────────
   const approvedGates = approvedGatesCopy;
 
@@ -572,6 +594,11 @@ export default function ExecutiveView({
           <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--v3-accent)" }}>
             <span style={{ animation: "v3-spin 1.2s linear infinite", display: "inline-block" }}>◎</span>
             <span>ATOS is generating the summary…</span>
+          </div>
+        ) : program.narrative && narrativeStale ? (
+          <div style={{ color: "var(--v3-text-muted)" }}>
+            This summary predates the current phase ({PHASE_LABELS[currentPhaseId] ?? currentPhaseId})
+            and no longer reflects where the programme stands — click Refresh to regenerate it.
           </div>
         ) : program.narrative ? (
           <div style={{ whiteSpace: "pre-wrap" }}>
