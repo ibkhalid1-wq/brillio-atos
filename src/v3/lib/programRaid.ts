@@ -21,7 +21,7 @@
  */
 import type { DecisionSummary, Escalation, ProgramSummary, RAIDEntry } from "@/new/types";
 import { deriveOpenRecommendedActions, deriveReclassifiedRiskActions } from "@/v3/lib/recommendedActions";
-import { getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
+import { getCompletedPhaseIds, getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
 
 /** Programme-wide, or scoped to a single phase by id. */
 export type RaidScope = "programme" | { phaseId: string };
@@ -46,19 +46,44 @@ function isActionablePhase(
   return !phase || phase === "all" || !locked.has(phase);
 }
 
+// The capacity-assessor's `capacity-gap-{phase}` risk is forward-looking: its
+// whole point is that resourcing must be in place BEFORE the phase's delivery
+// load lands. Once that phase's gate is approved the load has landed and the
+// shortfall is moot, but the deterministic entry is never re-run for a closed
+// phase, so it lingers as a stale "Team capacity shortfall" row. Drop it
+// programme-wide once its phase is complete. (Genuine missed-activity risks on a
+// closed phase are NOT capacity-gap entries, so they survive; and scoping INTO
+// the phase still shows everything, the stale gap included, for the record.)
+function isStaleCapacityGap(
+  entry: RAIDEntry,
+  scope: RaidScope,
+  completed: Set<string>,
+): boolean {
+  return (
+    scope === "programme" &&
+    typeof entry.id === "string" &&
+    entry.id.startsWith("capacity-gap-") &&
+    !!entry.phase &&
+    completed.has(entry.phase)
+  );
+}
+
 function selectOpenRaid(
   program: ProgramSummary | null | undefined,
   type: RAIDEntry["type"],
   scope: RaidScope,
 ): RAIDEntry[] {
-  const locked = scope === "programme" && program ? getLockedPhaseIds(program) : new Set<string>();
+  const isProgramme = scope === "programme" && !!program;
+  const locked = isProgramme ? getLockedPhaseIds(program!) : new Set<string>();
+  const completed = isProgramme ? getCompletedPhaseIds(program!) : new Set<string>();
   return (program?.raidEntries || [])
     .filter(
       (entry) =>
         entry.type === type &&
         entry.status !== "closed" &&
         inScope(entry.phase, scope) &&
-        isActionablePhase(entry.phase, scope, locked),
+        isActionablePhase(entry.phase, scope, locked) &&
+        !isStaleCapacityGap(entry, scope, completed),
     )
     .sort((a, b) => (SEVERITY_ORDER[a.severity] ?? 2) - (SEVERITY_ORDER[b.severity] ?? 2));
 }

@@ -181,3 +181,62 @@ describe("locked-phase actionability filter", () => {
     expect(selectBlockers(makeLockedProgram(), { phaseId: "mobilise" }).map((b) => b.id)).toEqual(["b1"]);
   });
 });
+
+/**
+ * The capacity-assessor's `capacity-gap-{phase}` risk is forward-looking — it
+ * exists so resourcing is closed BEFORE a phase's delivery load lands. Once that
+ * phase's gate is approved the load has landed, so the gap is stale and drops out
+ * programme-wide. It is never re-run for a closed phase, so without this it would
+ * linger as a duplicate "Team capacity shortfall" alongside the active phase's.
+ * Crucially, genuine non-capacity risks on a closed phase (key activities missed)
+ * are still valid and must remain.
+ */
+describe("stale capacity-gap retirement on completed phases", () => {
+  function makeProgram() {
+    return normalizeProgram({
+      id: "program-cap-complete",
+      name: "Completed phases",
+      updated_at: "2026-06-13T00:00:00.000Z",
+      data: {
+        objective: "x",
+        phases: [
+          { id: "mobilise", pct: 100 },
+          { id: "build", pct: 30 },
+        ],
+        // Gates through Design approved → Mobilise is complete and Build is the
+        // active, unlocked frontier (normalize expands to the full methodology
+        // sequence, so earlier gates must be approved or Build would be locked).
+        gateReviews: {
+          strategy: { status: "approved" },
+          mobilise: { status: "approved" },
+          discover: { status: "approved" },
+          design: { status: "approved" },
+        },
+        raidLog: {
+          entries: [
+            { id: "capacity-gap-mobilise", type: "risk", title: "Team capacity shortfall", severity: "high", phase: "mobilise", status: "open" },
+            { id: "capacity-gap-build", type: "risk", title: "Team capacity shortfall", severity: "high", phase: "build", status: "open" },
+            // A genuine missed-activity risk in the closed phase — must survive.
+            { id: "missed-uat", type: "risk", title: "UAT sign-off skipped in mobilise", severity: "high", phase: "mobilise", status: "open" },
+          ],
+        },
+      },
+    });
+  }
+
+  it("drops the completed phase's capacity gap but keeps the active one", () => {
+    const ids = selectRisks(makeProgram()).map((r) => r.id);
+    expect(ids).toContain("capacity-gap-build");
+    expect(ids).not.toContain("capacity-gap-mobilise");
+  });
+
+  it("keeps genuine non-capacity risks on the completed phase", () => {
+    const ids = selectRisks(makeProgram()).map((r) => r.id);
+    expect(ids).toContain("missed-uat");
+  });
+
+  it("still shows the stale capacity gap when scoped into the completed phase", () => {
+    const ids = selectRisks(makeProgram(), { phaseId: "mobilise" }).map((r) => r.id);
+    expect(ids).toContain("capacity-gap-mobilise");
+  });
+});

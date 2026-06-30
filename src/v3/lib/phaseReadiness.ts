@@ -390,6 +390,19 @@ export function computePhaseReadiness(
   };
 }
 
+// Phases whose own gate has been approved are complete — their delivery sits
+// behind a passed gate. Used to retire forward-looking artifacts that only made
+// sense while a phase was still being worked (e.g. the capacity-assessor's
+// pre-delivery resourcing gap). Genuine risks about missed activities in a
+// closed phase are kept — only the deterministic forward-looking entries retire.
+export function getCompletedPhaseIds(program: ProgramSummary): Set<string> {
+  const completed = new Set<string>();
+  for (const phase of program.phases || []) {
+    if (program.gateReviews?.[phase.id]?.status === "approved") completed.add(phase.id);
+  }
+  return completed;
+}
+
 export function getLockedPhaseIds(program: ProgramSummary): Set<string> {
   const locked = new Set<string>();
   const phases = program.phases || [];
