@@ -357,6 +357,27 @@ function resolveRosterRows(phaseInputs: ProgramState): Array<Record<string, unkn
   return [];
 }
 
+/**
+ * Resolve milestone rows from a phase's inputs. Build milestones are captured as
+ * an ai-derived grid (rows of { milestone, targetDate }) under a per-programme
+ * field id, so we match by row shape — a milestone/deliverable/gate-named column
+ * — rather than a fixed key. Returns [] when no milestone grid has been filled.
+ */
+function resolveMilestoneRows(phaseInputs: ProgramState): Array<Record<string, unknown>> {
+  const parseGrid = (value: unknown): Array<Record<string, unknown>> => {
+    const arr = typeof value === "string" ? safeJsonParse<unknown>(value, null) : value;
+    return Array.isArray(arr) ? arr.filter(isRecord) : [];
+  };
+  const hasKey = (row: Record<string, unknown>, re: RegExp) => Object.keys(row).some((k) => re.test(k));
+  for (const value of Object.values(phaseInputs)) {
+    const rows = parseGrid(value);
+    if (rows.length && rows.some((r) => hasKey(r, /milestone|deliverable|gate/i))) {
+      return rows;
+    }
+  }
+  return [];
+}
+
 function getInnerProgramData(programData: ProgramState): ProgramState {
   const nested = normalizeProgramData(programData.data as JsonValue | null);
   return Object.keys(nested).length ? nested : programData;
@@ -1764,14 +1785,39 @@ function buildSpecialAgentInputContext(
   }
 
   if (target?.agentId === "sprint-planner") {
-    const buildInputs = normalizeProgramData(normalizeProgramData(inner.phaseInputs as JsonValue | null).build as JsonValue | null);
+    const allPhaseInputs = normalizeProgramData(inner.phaseInputs as JsonValue | null);
+    const buildInputs = normalizeProgramData(allPhaseInputs.build as JsonValue | null);
+    const mobiliseInputs = normalizeProgramData(allPhaseInputs.mobilise as JsonValue | null);
+    // Build milestones live in an ai-derived grid on the Build phase inputs (rows
+    // of { milestone, targetDate }) — NOT in the global `inner.milestones` array,
+    // which only carries milestones promoted from earlier phases. Resolve the grid
+    // by row shape so we never depend on the per-programme field id; fall back to
+    // any global build-tagged milestones.
+    const buildMilestoneRows = resolveMilestoneRows(buildInputs);
+    const milestonesForSprints = buildMilestoneRows.length > 0
+      ? buildMilestoneRows
+          .map((row) => ({
+            name: String(row.milestone ?? row.name ?? row.title ?? "").trim(),
+            targetDate: String(row.targetDate ?? row.date ?? row.dueDate ?? "").trim() || null,
+          }))
+          .filter((entry) => entry.name)
+      : milestones.filter((entry) => entry.phaseId === "build" || entry.phase === "build");
+    // Team capacity is the named-role roster (canonical "coreTeamRoster" grid),
+    // owned per-phase by Build/Mobilise — read the roster rows, not a non-existent
+    // numeric `teamSize` field. Prefer the Build roster, then the Mobilise one.
+    const buildRoster = resolveRosterRows(buildInputs);
+    const team = buildRoster.length > 0 ? buildRoster : resolveRosterRows(mobiliseInputs);
+    const workstreams = Array.isArray(inner.workstreams) && inner.workstreams.length > 0
+      ? inner.workstreams
+      : (Array.isArray(mobiliseInputs.workstreams) ? mobiliseInputs.workstreams : []);
     return JSON.stringify({
-      milestones: milestones.filter((entry) => entry.phaseId === "build" || entry.phase === "build"),
-      teamSize: buildInputs.teamSize || 5,
+      milestones: milestonesForSprints,
+      team,
+      teamSize: team.length > 0 ? team.length : (buildInputs.teamSize || 5),
       sprintLengthWeeks: buildInputs.sprintLengthWeeks || 2,
       startDate: buildInputs.startDate || new Date().toISOString(),
       endDate: buildInputs.endDate || null,
-      workstreams: Array.isArray(inner.workstreams) ? inner.workstreams : [],
+      workstreams,
     }, null, 2);
   }
 
@@ -6165,7 +6211,13 @@ Return JSON with:
   if (request.agentId === "sprint-planner") {
     return {
       system: `You are an agile delivery planner.
-Given milestones, team size, sprint length, and timeline, produce a sprint plan.
+Given Build milestones (context "milestones": rows of { name, targetDate }), the
+team roster (context "team": rows naming each role, with "teamSize" as the headcount),
+the sprint length (context "sprintLengthWeeks") and timeline (context "startDate"/"endDate"),
+produce a sprint plan. Sequence the named milestones across sprints. When a milestone's
+targetDate is blank, derive sprint dates by stepping sprintLengthWeeks forward from
+startDate. Set each sprint's "capacity" from the team headcount. Never return an empty
+plan when milestones are present — schedule the milestones you were given.
 Return JSON:
 {
   "sprints": [{ "sprintNumber": 1, "startDate": "ISO", "endDate": "ISO", "goal": "string", "milestones": ["string"], "workstreams": ["string"], "capacity": 0, "risks": ["string"] }],
