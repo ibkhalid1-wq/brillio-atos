@@ -54,9 +54,21 @@ function deriveOpenQueue(
   const locked = getLockedPhaseIds(program);
   const isActionable = (phaseId: string | null | undefined) =>
     !phaseId || phaseId === "all" || !locked.has(phaseId);
+  // Symmetric to the locked-phase filter: a forward-transition action (hand the
+  // phase off / approve its gate) for a phase whose gate is ALREADY approved is
+  // resolved by definition — the transition it proposes has happened. Such items
+  // (e.g. "Handoff Ready: discover → next_phase" on a phase already past the gate)
+  // are stale agent leftovers; drop them so completed phases stop surfacing work.
+  const gateApproved = (phaseId: string | null | undefined) =>
+    !!phaseId && phaseId !== "all" &&
+    (program.gateReviews?.[phaseId] as { status?: string } | undefined)?.status === "approved";
+  const isSupersededTransition = (decision: DecisionSummary) =>
+    (decision.type === "handoff_ready" || decision.type === "gate_approval") &&
+    gateApproved(decision.phaseId);
   return [...mergedSynthesized, ...persistedOnly]
     .filter((decision) => isDecisionOpen(decision))
-    .filter((decision) => isActionable(decision.phaseId));
+    .filter((decision) => isActionable(decision.phaseId))
+    .filter((decision) => !isSupersededTransition(decision));
 }
 
 /** The actionable queue — the open items minus those reclassified as risks. */
