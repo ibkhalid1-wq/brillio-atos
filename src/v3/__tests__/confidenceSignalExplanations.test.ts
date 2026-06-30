@@ -54,3 +54,49 @@ describe("schedule-adherence signal explanation", () => {
     expect(sig.explanation).toBe("In-flight phases are keeping pace with the plan.");
   });
 });
+
+// Regression guards for the three signals audited clean: their qualitative
+// "clear/healthy" phrasing must only ever appear alongside a "good" status, so
+// the explanation can never contradict its own chip (the bug class fixed on
+// risk/milestone/schedule).
+describe("decision-backlog signal explanation", () => {
+  it("only reads 'clear' when there are zero open decisions (a good status)", () => {
+    const sig = signal("decision", { openDecisionCount: 0 });
+    expect(sig.status).toBe("good");
+    expect(sig.explanation).toBe("No open decisions. Decision backlog is clear.");
+  });
+
+  it("never claims 'clear' once a decision is open", () => {
+    const sig = signal("decision", { openDecisionCount: 3 });
+    expect(sig.status).not.toBe("good");
+    expect(sig.explanation).not.toMatch(/clear/i);
+  });
+
+  it("names the overdue count when supplied", () => {
+    const sig = signal("decision", { openDecisionCount: 5, overdueDecisions: 2 });
+    expect(sig.explanation).toBe("5 open decision(s), 2 overdue (≥14 days).");
+  });
+});
+
+describe("input-completeness signal explanation", () => {
+  it("never reads 'low' once quality clears the warn threshold", () => {
+    const sig = signal("input", { inputCompleteness: 80 });
+    expect(sig.status).toBe("good");
+    expect(sig.explanation).not.toMatch(/low/i);
+  });
+
+  it("calls quality 'low' only below the good threshold", () => {
+    const sig = signal("input", { inputCompleteness: 45 });
+    expect(sig.status).not.toBe("good");
+    expect(sig.explanation).toMatch(/low/i);
+  });
+});
+
+describe("gate-readiness signal explanation", () => {
+  it("stays factual — no health claim that could contradict a poor status", () => {
+    const sig = signal("gate", { gateReadiness: 30, approvedGates: 1, totalGates: 6 });
+    expect(sig.status).toBe("poor");
+    expect(sig.explanation).toBe("1 of 6 phase gates approved.");
+    expect(sig.explanation).not.toMatch(/healthy|on track|clear/i);
+  });
+});
