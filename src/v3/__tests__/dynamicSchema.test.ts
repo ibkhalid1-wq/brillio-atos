@@ -183,6 +183,29 @@ describe("dynamicArtifactDefs", () => {
     };
     expect(dynamicArtifactDefs("discover", store).map((d) => d.id)).toEqual(["scope-map", "stakeholder"]);
   });
+
+  it("drops a canonical formal artifact proposed outside its home phase", () => {
+    // RACI is a Mobilise deliverable that writes the shared `raciMatrix` key.
+    // The planner proposing a "Build Phase RACI Matrix" both duplicates it and
+    // would overwrite the Mobilise document on generation — so it is dropped on
+    // Build while the genuine Build deliverables survive.
+    const store: DynamicSchemaStore = {
+      artifacts: {
+        build: [
+          { id: "raci-matrix", label: "Build Phase RACI Matrix", description: "" },
+          { id: "uat-plan", label: "UAT Plan", description: "" },
+        ],
+      },
+    };
+    expect(dynamicArtifactDefs("build", store).map((d) => d.id)).toEqual(["uat-plan"]);
+  });
+
+  it("keeps a formal artifact proposed on its own home phase", () => {
+    const store: DynamicSchemaStore = {
+      artifacts: { build: [{ id: "test-plan", label: "Test Plan", description: "" }] },
+    };
+    expect(dynamicArtifactDefs("build", store).map((d) => d.id)).toEqual(["test-plan"]);
+  });
 });
 
 describe("artifactGeneratorAgentId", () => {

@@ -24,6 +24,7 @@
  */
 import { ATOS_STANDARD, type GridColumn, type PhaseInputField } from "@/v3/lib/methodology";
 import { AGENT_META, AGENT_ID_ALIASES, RETIRED_AGENT_IDS } from "@/v3/lib/agentMeta";
+import { FORMAL_ARTIFACT_PHASES } from "@/v3/lib/formalArtifacts";
 
 export type ArtifactGenerationReadiness = "ready" | "needs_input" | "blocked";
 
@@ -266,6 +267,14 @@ export function dynamicArtifactDefs(phaseId: string, store?: DynamicSchemaStore)
     // permanently "Missing". Drop it here — the one chokepoint every phase
     // artifact consumer reads through — so it never appears in any phase list.
     if (id === "narrative") continue;
+    // A canonical formal artifact (charter, raci-matrix, governance-model, …) is
+    // owned by exactly one phase and writes a single shared top-level field key.
+    // The planner sometimes re-proposes one on a later phase ("Build Phase RACI
+    // Matrix"), which both duplicates the home-phase deliverable and would, on
+    // generation, overwrite that home-phase document. Drop it on any phase but
+    // its own so formal artifacts stay pinned to their methodology home.
+    const homePhase = FORMAL_ARTIFACT_PHASES[id];
+    if (homePhase && homePhase !== phaseId) continue;
     if (seen.has(id)) continue;
     seen.add(id);
     const entry: DynamicArtifactDef = { id, label: def.label || id, description: def.description || "" };
