@@ -6,13 +6,20 @@ import { AdamErrorBoundary } from "@/v3/components/AdamErrorBoundary";
 // Workspace tile definitions
 // ---------------------------------------------------------------------------
 
+// A tile opens either a More-view workspace (`view`) or a top-level surface
+// (`surface`) — the latter for surfaces that have no rail entry of their own
+// (Workstreams, Programme Health) and would otherwise be reachable only via
+// ProgramView KPI cards.
 type WorkspaceTile = {
-  view: V3MoreView;
+  view?: V3MoreView;
+  surface?: V3SurfaceLink;
   label: string;
   description: string;
   icon: string;
   accent?: "green" | "amber" | "red" | "blue" | "purple";
 };
+
+type V3SurfaceLink = "pipeline" | "programme-health";
 
 // ── Phase-aware workspace recommendations (Priority 6) ────────────────────────
 // Maps each methodology phase to the workspaces most useful for that phase.
@@ -49,6 +56,7 @@ const WORKSPACE_GROUPS: Array<{
       // and milestones are folded into the single Strategic Roadmap artifact, so
       // the roadmap tile is their entry point rather than standalone tiles.
       { view: "roadmap", label: "Strategic Roadmap", description: "Phase timeline with the folded delivery plan and milestones", icon: "◇", accent: "blue" },
+      { surface: "pipeline", label: "Workstreams", description: "Delivery workstreams and their phase pipeline", icon: "⊥", accent: "blue" },
       { view: "budget", label: "Budget", description: "Budget tracking, forecasts and variance", icon: "◈", accent: "amber" },
       { view: "scope-pcr", label: "Scope Changes", description: "Scope baseline and change request log", icon: "◫", accent: "amber" },
     ],
@@ -66,6 +74,7 @@ const WORKSPACE_GROUPS: Array<{
   {
     label: "Governance & Closure",
     tiles: [
+      { surface: "programme-health", label: "Programme Health", description: "Health score, benefits and confidence breakdown", icon: "◉", accent: "green" },
       { view: "decision-audit", label: "Decision Audit", description: "Full decision audit trail and history", icon: "⊟", accent: "amber" },
       { view: "access", label: "Access & Sharing", description: "Invite collaborators and manage admin / editor / viewer roles", icon: "◐", accent: "blue" },
       { view: "closure", label: "Benefits & Closure", description: "Benefits realisation tracking, lessons learned, and programme closure pack", icon: "◈", accent: "green" },
@@ -194,19 +203,28 @@ interface MoreViewProps {
   activePhaseId?: string | null;
   /** Active phase display name — shown in the recommendation header. */
   activePhaseName?: string | null;
+  /** Navigate to a top-level surface that has no rail entry of its own. */
+  onNavigateToSurface?: (surface: V3SurfaceLink) => void;
 }
 
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
-export default function MoreView({ currentView, onSelectView, renderView, activePhaseId, activePhaseName }: MoreViewProps) {
+export default function MoreView({ currentView, onSelectView, renderView, activePhaseId, activePhaseName, onNavigateToSurface }: MoreViewProps) {
   const [search, setSearch] = useState("");
   const { installed, toggle } = useMarketplace();
   const phaseRecommendedTiles = useMemo(
     () => getPhaseRecommendedTiles(activePhaseId ?? null),
     [activePhaseId],
   );
+  // A tile routes to a surface when it declares one, otherwise it opens a
+  // More-view workspace. Surface tiles fall back to no-op if the host didn't
+  // wire navigation (keeps MoreView usable in isolation/tests).
+  const handleTileSelect = (tile: WorkspaceTile) => {
+    if (tile.surface) onNavigateToSurface?.(tile.surface);
+    else if (tile.view) onSelectView(tile.view);
+  };
 
   // Detail view mode — rendered in ProgramView/ProgramDetailRouter
   if (currentView) {
@@ -305,9 +323,9 @@ export default function MoreView({ currentView, onSelectView, renderView, active
           <div className="v3-workspace-tile-grid">
             {phaseRecommendedTiles.map((tile) => (
               <WorkspaceTileCard
-                key={tile.view}
+                key={tile.view ?? tile.surface}
                 tile={tile}
-                onClick={() => onSelectView(tile.view)}
+                onClick={() => handleTileSelect(tile)}
               />
             ))}
           </div>
@@ -321,9 +339,9 @@ export default function MoreView({ currentView, onSelectView, renderView, active
           <div className="v3-workspace-tile-grid">
             {group.tiles.map((tile) => (
               <WorkspaceTileCard
-                key={tile.view}
+                key={tile.view ?? tile.surface}
                 tile={tile}
-                onClick={() => onSelectView(tile.view)}
+                onClick={() => handleTileSelect(tile)}
               />
             ))}
           </div>

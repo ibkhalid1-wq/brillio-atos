@@ -3445,6 +3445,7 @@ export default function AppShellV3() {
                 renderView={() => null}
                 activePhaseId={activePhaseId}
                 activePhaseName={activePhaseId ? phaseNameById(activeProgram, activePhaseId) : null}
+                onNavigateToSurface={navigateSurface}
               />
             ) : (
               <ProgramView
