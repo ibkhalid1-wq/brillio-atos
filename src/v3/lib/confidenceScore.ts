@@ -124,6 +124,32 @@ export function computeInputQualityScore(
   return Math.min(100, raw);
 }
 
+// Risk-posture explanation that reflects EVERY open severity, not just critical.
+// The previous message branched solely on openCriticalRisks, so a programme with
+// open high/medium/low risks (posture well below 100) still read "No critical or
+// high risks open. Risk posture is healthy." — flatly contradicting its own score.
+function riskExplanation(inputs: {
+  riskPosture: number;
+  openCriticalRisks?: number;
+  openHighRisks?: number;
+  openRiskCount?: number;
+}): string {
+  if (inputs.openCriticalRisks === undefined) return `Risk posture score: ${inputs.riskPosture}%.`;
+  const critical = inputs.openCriticalRisks;
+  const high = inputs.openHighRisks ?? 0;
+  if (critical > 0 || high > 0) {
+    const parts: string[] = [];
+    if (critical > 0) parts.push(`${critical} critical`);
+    if (high > 0) parts.push(`${high} high`);
+    return `${parts.join(" and ")} risk(s) open and unmitigated.`;
+  }
+  const lower = inputs.openRiskCount ?? 0;
+  if (lower > 0) {
+    return `${lower} lower-severity risk(s) open, weighing on posture (${inputs.riskPosture}%).`;
+  }
+  return "No open risks. Risk posture is healthy.";
+}
+
 // ── Main computation ──────────────────────────────────────────────────────────
 export function computeConfidenceScore(inputs: {
   gateReadiness: number;
@@ -137,6 +163,7 @@ export function computeConfidenceScore(inputs: {
   currentPhaseReadiness?: number;
   openCriticalRisks?: number;
   openHighRisks?: number;
+  openRiskCount?: number;
   approvedGates?: number;
   totalGates?: number;
   overdueDecisions?: number;
@@ -173,15 +200,14 @@ export function computeConfidenceScore(inputs: {
       weight: 0.20,
       contribution: Math.round(inputs.riskPosture * 0.20),
       status: inputs.riskPosture >= 75 ? "good" : inputs.riskPosture >= 50 ? "warn" : "poor",
-      explanation:
-        inputs.openCriticalRisks !== undefined
-          ? inputs.openCriticalRisks > 0
-            ? `${inputs.openCriticalRisks} critical risk(s) and ${inputs.openHighRisks ?? 0} high risk(s) are open and unmitigated.`
-            : "No critical or high risks open. Risk posture is healthy."
-          : `Risk posture score: ${inputs.riskPosture}%.`,
+      explanation: riskExplanation(inputs),
       topAction:
-        inputs.riskPosture < 75 && inputs.openCriticalRisks
-          ? `Mitigate or close ${inputs.openCriticalRisks} critical risk(s) in the Action Center (Risks).`
+        inputs.riskPosture < 75
+          ? (inputs.openCriticalRisks ?? 0) > 0
+            ? `Mitigate or close ${inputs.openCriticalRisks} critical risk(s) in the Action Center (Risks).`
+            : (inputs.openHighRisks ?? 0) > 0
+            ? `Mitigate or close ${inputs.openHighRisks} high risk(s) in the Action Center (Risks).`
+            : "Review and mitigate open risks in the Action Center (Risks)."
           : undefined,
     },
     {

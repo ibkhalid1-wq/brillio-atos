@@ -137,6 +137,7 @@ export function deriveProgramConfidence(
     inputCompleteness,
     openCriticalRisks,
     openHighRisks,
+    openRiskCount: openRisks.length,
     approvedGates: approved,
     totalGates,
     overdueDecisions,
