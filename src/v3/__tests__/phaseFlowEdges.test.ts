@@ -1,4 +1,4 @@
-import { derivePhaseFlowEdges, getArtifactInputFields, getFillableArtifactInputFields } from "@/v3/lib/phaseFlowEdges";
+import { derivePhaseFlowEdges, getArtifactInputFields, getFillableArtifactInputFields, artifactReferenceSatisfied } from "@/v3/lib/phaseFlowEdges";
 import { getPhaseArtifactIds } from "@/v3/lib/phaseArtifacts";
 import { PHASE_INPUT_SCHEMAS, resolveRosterField } from "@/v3/lib/phaseInputSchema";
 
@@ -389,5 +389,32 @@ describe("build static delivery schema", () => {
     for (const field of PHASE_INPUT_SCHEMAS.build.fields) {
       expect(grounded).toContain(field.id);
     }
+  });
+});
+
+// An artifact-reference input names an upstream deliverable the programme already
+// produces; once that artifact exists the reference is satisfied without a manual
+// re-selection, so it must not keep the Generate button locked.
+describe("artifactReferenceSatisfied", () => {
+  const titles = ["Requirements Catalog", "Solution Design Document", "Budget Report"];
+
+  it("matches a reference label to an existing artifact ignoring approval phrasing", () => {
+    expect(artifactReferenceSatisfied("Reference to approved must-have requirements catalog", titles)).toBe(true);
+  });
+
+  it("matches singular/plural forms via light stemming", () => {
+    expect(artifactReferenceSatisfied("Link to requirement catalogs", titles)).toBe(true);
+  });
+
+  it("does not match when no artifact carries every content token", () => {
+    expect(artifactReferenceSatisfied("Reference to approved data migration plan", titles)).toBe(false);
+  });
+
+  it("returns false when the label has no content tokens left after stripping phrasing", () => {
+    expect(artifactReferenceSatisfied("Reference to the approved document", titles)).toBe(false);
+  });
+
+  it("returns false against an empty artifact set", () => {
+    expect(artifactReferenceSatisfied("Reference to approved requirements catalog", [])).toBe(false);
   });
 });

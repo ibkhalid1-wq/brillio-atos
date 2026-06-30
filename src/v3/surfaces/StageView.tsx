@@ -21,7 +21,7 @@ import { computePhaseReadiness, getLockedPhaseIds } from "@/v3/lib/phaseReadines
 import { buildPhaseArtifacts, type ArtifactOrigin } from "@/v3/lib/artifactModel";
 import { resolveArtifactReview, resolveArtifactQualityScore } from "@/v3/lib/artifactReview";
 import { getPhaseArtifactDefs, type PhaseArtifactDef } from "@/v3/lib/phaseArtifacts";
-import { getFillableArtifactInputFields } from "@/v3/lib/phaseFlowEdges";
+import { getFillableArtifactInputFields, artifactReferenceSatisfied } from "@/v3/lib/phaseFlowEdges";
 import { getPhaseInputSchema, resolveRosterField, resolveStakeholderField, ROSTER_PHASE_ID, type GridColumn } from "@/v3/lib/phaseInputSchema";
 import { parseRows, serializeRows, filledRowCount, type GridRow } from "@/v3/components/StructuredGrid";
 import { readRaciMatrix, raciDeliveryRoles, rosterColumnKeys, missingRosterRoles, stakeholderColumnKeys } from "@/v3/lib/rosterRaci";
@@ -1191,6 +1191,14 @@ export default function StageView({
       ? phaseInputs as Record<string, unknown>
       : {}
   ), [phaseInputs]);
+  // Titles of every artifact in the programme — the resolution set for
+  // `artifact-reference` inputs, which point at an upstream deliverable that an
+  // earlier phase already produced (so the reference is satisfied without a manual
+  // re-selection once that artifact exists).
+  const programArtifactTitles = useMemo<string[]>(
+    () => (program?.artifacts ?? []).map((artifact) => artifact.title).filter((title): title is string => !!title),
+    [program?.artifacts],
+  );
 
   if (!program || !activePhase) {
     return (
@@ -1797,9 +1805,20 @@ export default function StageView({
               const optionalFieldIds = new Set(
                 phaseFieldDefs.filter((field) => field.required === false).map((field) => field.id),
               );
+              // A flowed input counts as satisfied if it has a value, OR — for an
+              // `artifact-reference` input — if the upstream deliverable it names
+              // already exists in the programme. The generating agent receives that
+              // artifact via cross-phase context regardless, so requiring a manual
+              // re-selection just to unlock generation asks the user to re-declare
+              // what the system already owns.
+              const isFlowedFieldSatisfied = (fieldId: string) => {
+                const fieldDef = phaseFieldDefs.find((field) => field.id === fieldId);
+                if (isInputFilled(preFlightInputs[fieldId], fieldDef)) return true;
+                return fieldDef?.type === "artifact-reference"
+                  && artifactReferenceSatisfied(fieldDef.label ?? "", programArtifactTitles);
+              };
               const missingFlowedFields = flowedFieldIds.filter(
-                (fieldId) => !optionalFieldIds.has(fieldId)
-                  && !isInputFilled(preFlightInputs[fieldId], phaseFieldDefs.find((field) => field.id === fieldId)),
+                (fieldId) => !optionalFieldIds.has(fieldId) && !isFlowedFieldSatisfied(fieldId),
               );
               const flowedInputsIncomplete = missingFlowedFields.length > 0;
               // Map each grounding input to its label + what it must contain, so
@@ -1810,7 +1829,7 @@ export default function StageView({
                 const requirement = [fieldDef?.placeholder, fieldDef?.hint]
                   .filter((part): part is string => !!part && part.trim().length > 0)
                   .join(" — ") || `Provide ${fieldDef?.label ?? fieldId}.`;
-                return { label: fieldDef?.label ?? fieldId, requirement, filled: isInputFilled(preFlightInputs[fieldId], fieldDef) };
+                return { label: fieldDef?.label ?? fieldId, requirement, filled: isFlowedFieldSatisfied(fieldId) };
               });
               // Same grounding inputs, but carrying the id + current value so the
               // "Improve quality → Apply" action can run an AI enrichment pass over

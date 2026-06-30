@@ -165,6 +165,51 @@ export function getFillableArtifactInputFields(phaseId: string, artifactId: stri
   return getArtifactInputFields(phaseId, artifactId, store).filter((fieldId) => fieldIds.has(fieldId));
 }
 
+// Reference/approval phrasing that carries no artifact identity — stripped from a
+// reference field's label before matching so only the deliverable name remains
+// (e.g. "Reference to approved must-have requirements catalog" → requirement,
+// catalog).
+const REFERENCE_LABEL_STOPWORDS = new Set([
+  "reference", "ref", "refs", "link", "linked", "to", "the", "a", "an", "of",
+  "for", "and", "or", "approved", "approval", "signed", "signoff", "sign", "off",
+  "final", "current", "latest", "must", "have", "see", "attached", "this",
+  "phase", "id", "document", "doc", "docs",
+]);
+
+function contentTokens(text: string): string[] {
+  return (text ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .split(" ")
+    .filter((token) => token.length > 1 && !REFERENCE_LABEL_STOPWORDS.has(token))
+    // Light stem so plural/singular forms match (requirements ↔ requirement).
+    .map((token) => (token.length > 3 && token.endsWith("s") ? token.slice(0, -1) : token));
+}
+
+/**
+ * Whether an `artifact-reference` input is already satisfied by an existing
+ * programme artifact. Such a field names an upstream deliverable (e.g. "Reference
+ * to approved must-have requirements catalog") that an earlier phase typically
+ * already produced; the generating agent receives those artifacts via cross-phase
+ * context regardless, so a *required* reference should not hard-block generation
+ * once the artifact it points at exists — forcing a manual re-selection asks the
+ * user to re-declare what the system already owns.
+ *
+ * Resolution is by semantic label match (mirroring `intentFieldArtifacts`): every
+ * content token of the field label — stripped of reference/approval phrasing and
+ * lightly stemmed — must appear in some artifact's title. Returns false when the
+ * label carries no content tokens, so an unmatched reference still gates
+ * generation rather than silently passing.
+ */
+export function artifactReferenceSatisfied(fieldLabel: string, artifactTitles: string[]): boolean {
+  const wanted = contentTokens(fieldLabel);
+  if (wanted.length === 0) return false;
+  return artifactTitles.some((title) => {
+    const have = new Set(contentTokens(title));
+    return wanted.every((token) => have.has(token));
+  });
+}
+
 /**
  * Derive the input → artifact edges for a phase. Each field yields one edge per
  * declared target (from Strategy's static map, the methodology's
