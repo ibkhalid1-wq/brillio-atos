@@ -493,7 +493,18 @@ export function buildDecisionQueue(
         dismissable: false,
       });
     }
+  }
 
+  // An agent-drafted artifact awaiting review is a genuine next step on its own —
+  // the artifact record (agentDrafted + draft/revised) carries the whole signal,
+  // independent of whether the phase's agentState is still present. Deriving these
+  // review actions from phaseArtifacts directly (rather than only phases that still
+  // have a live agentState) keeps them surfacing after a state reset, which is
+  // exactly when the queue would otherwise go empty despite drafts sitting unread.
+  // Gate-approved phases are signed off, so their lingering drafts are not
+  // re-surfaced — matching the synthetic artifact/plan builders.
+  for (const phaseId of Object.keys(phaseAgents || {})) {
+    if (isPhaseGateApproved(projectData, phaseId)) continue;
     const phaseArtifacts = projectData?.phaseArtifacts?.[phaseId] ?? {};
     for (const [artifactId, artifact] of Object.entries(phaseArtifacts as Record<string, any>)) {
       if (
