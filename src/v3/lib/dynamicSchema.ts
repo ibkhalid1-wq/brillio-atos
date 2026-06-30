@@ -207,6 +207,11 @@ function normalizeDynamicField(field: PhaseInputField): PhaseInputField {
 const ROSTER_OWNER_ROLE_WORDS = new Set([
   "lead", "owner", "architect", "manager", "sponsor", "director", "head",
   "analyst", "engineer", "specialist", "coordinator", "champion", "officer", "sme",
+  // Generic staffing nouns: "Named individuals per core team role", "Named
+  // roster for Build phase" — these re-ask for the roster wholesale, not a
+  // specific role, but are still pure owner assignments.
+  "role", "roles", "roster", "team", "staff", "personnel",
+  "individual", "individuals", "resource", "resources", "member", "members",
 ]);
 
 /**

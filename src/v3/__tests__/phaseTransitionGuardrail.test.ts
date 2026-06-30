@@ -32,6 +32,8 @@ describe("isRosterOwnerLabel", () => {
     expect(isRosterOwnerLabel("Named QA/Test Lead for Design phase")).toBe(true);
     expect(isRosterOwnerLabel("Named owner for critical path definition")).toBe(true);
     expect(isRosterOwnerLabel("Named Solution Architect")).toBe(true);
+    expect(isRosterOwnerLabel("Named individuals per core team role for Build phase")).toBe(true);
+    expect(isRosterOwnerLabel("Named roster for Build phase")).toBe(true);
   });
 
   it("does not flag atomic facts or non-prefixed role mentions", () => {

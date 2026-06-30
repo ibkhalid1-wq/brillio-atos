@@ -67,10 +67,10 @@ describe("mergeDynamicInputFields", () => {
   });
 
   it("coerces a persisted column-less grid to a textarea (data-preserving repair)", () => {
-    const grid: PhaseInputField = { id: "coreTeamAssignments", label: "Named individuals", type: "grid", required: false };
+    const grid: PhaseInputField = { id: "integrationCheckpoints", label: "Integration checkpoints", type: "grid", required: false };
     const store: DynamicSchemaStore = { inputFields: { mobilise: [grid] } };
     const merged = mergeDynamicInputFields(staticFields, "mobilise", store);
-    const coerced = merged.find((f) => f.id === "coreTeamAssignments");
+    const coerced = merged.find((f) => f.id === "integrationCheckpoints");
     expect(coerced?.type).toBe("textarea");
     expect(coerced?.columns).toBeUndefined();
   });
@@ -308,7 +308,7 @@ describe("sanitizePlannerProposal", () => {
 
   it("demotes a column-less grid to a textarea and warns", () => {
     const out = sanitizePlannerProposal({
-      inputFields: [{ id: "coreTeamAssignments", label: "Named individuals", type: "grid", required: true }],
+      inputFields: [{ id: "integrationCheckpoints", label: "Integration checkpoints", type: "grid", required: true }],
       artifacts: [],
     });
     expect(out?.inputFields[0].type).toBe("textarea");
