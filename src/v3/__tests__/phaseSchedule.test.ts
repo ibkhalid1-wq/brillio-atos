@@ -247,6 +247,29 @@ describe("buildRoadmapRows — progress scoping", () => {
     expect(byId.strategy).toBe(100);
     expect(byId.mobilise).toBe(100);
   });
+
+  it("uses the supplied composite gate score for progress (e.g. Strategy 97%)", () => {
+    // When the caller passes per-phase gate scores, the Gantt reads them verbatim
+    // so the timeline agrees with the gate (Strategy's composite is 97, not 100).
+    const completed = [
+      { id: "strategy", status: "complete" }, { id: "build", status: "active" },
+      { id: "operate", status: "inactive" },
+    ];
+    const gateScores = new Map([
+      ["strategy", 97], ["build", 42], ["operate", 0],
+    ]);
+    const rows = buildRoadmapRows(rawData, completed, gateScores);
+    const byId = Object.fromEntries(rows.map((r) => [r.id, r.progressPct]));
+    expect(byId.strategy).toBe(97);
+    expect(byId.build).toBe(42);
+  });
+
+  it("still reads a not-started phase as 0% even when a gate score is supplied", () => {
+    const phasesIn = [{ id: "operate", status: "inactive" }];
+    // A stray positive score for a not-started phase must not light up its bar.
+    const rows = buildRoadmapRows(rawData, phasesIn, new Map([["operate", 80]]));
+    expect(rows.find((r) => r.id === "operate")?.progressPct).toBe(0);
+  });
 });
 
 /**

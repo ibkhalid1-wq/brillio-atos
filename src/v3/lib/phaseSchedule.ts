@@ -228,7 +228,11 @@ function deriveRag(progressPct: number, startMs: number, endMs: number, todayMs:
  * a schedule-vs-today RAG when the agent hasn't run yet. Shared by the
  * strategy-stage artifact preview and the Roadmap workspace.
  */
-export function buildRoadmapRows(rawData: unknown, phases: Array<{ id: string; status?: string }>): GanttRow[] {
+export function buildRoadmapRows(
+  rawData: unknown,
+  phases: Array<{ id: string; status?: string }>,
+  gateScores?: Map<string, number> | null,
+): GanttRow[] {
   const raw = unwrapInner(rawData);
   const phaseInputs = raw.phaseInputs;
   const strategyInputs = typeof phaseInputs === "object" && phaseInputs !== null
@@ -268,12 +272,15 @@ export function buildRoadmapRows(rawData: unknown, phases: Array<{ id: string; s
     // its RAG/risk must not present a future concern as a live one. Such phases
     // read grey ("not started") regardless of the agent estimate.
     const notStarted = p.status === "inactive";
-    // Progress reads from the gate first: an approved gate means the phase is
-    // 100% complete regardless of how many of its artifacts the ledger happens
-    // to mark "approved" (a single stale/draft artifact must not make a
-    // signed-off phase read 83%). Otherwise it tracks artifact completion
-    // deterministically, with the agent estimate only as a last-resort fallback.
-    const progressPct = isComplete ? 100 : (artifactProgress.get(p.id) ?? h?.progressPct ?? 0);
+    // Progress reads from the phase's composite gate score when supplied — the
+    // same readiness number the rest of the app shows (e.g. Strategy 97%), so the
+    // Gantt agrees with the gate. A not-started phase reads 0. When no gate score
+    // is passed we fall back to: an approved gate ⇒ 100%, otherwise deterministic
+    // artifact completion, with the agent estimate only as a last resort.
+    const gateScore = gateScores?.get(p.id);
+    const progressPct = gateScore != null
+      ? (notStarted ? 0 : gateScore)
+      : isComplete ? 100 : (artifactProgress.get(p.id) ?? h?.progressPct ?? 0);
     const rag = isComplete ? "green" : notStarted ? "grey" : (h?.rag ?? deriveRag(progressPct, startMs, endMs, todayMs));
     rows.push({
       id: p.id,

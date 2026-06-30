@@ -241,8 +241,6 @@ export default function ProgramDetailRouter({
       return (
         <RoadmapView
           program={program}
-          planIsRunning={activeRuns.some((r) => r.agent_id === "strategic-roadmap" && r.status === "running")}
-          onTriggerPlan={() => onRunAgent?.("strategic-roadmap", "strategy")}
           healthIsRunning={healthHeatmapIsRunning}
           onTriggerHealth={triggers.triggerHealthHeatmap}
           onSaveRoadmapSchedule={onSaveRoadmapSchedule}

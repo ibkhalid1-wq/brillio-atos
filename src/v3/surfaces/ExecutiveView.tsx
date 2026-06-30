@@ -269,9 +269,16 @@ export default function ExecutiveView({
   // Gantt rows for the Plan-tab timeline — same effective schedule the Roadmap
   // surface builds (programme window weighted by each phase's typical duration,
   // with any saved per-phase overrides), so the executive timeline agrees with it.
+  const gateScores = useMemo(() => {
+    const map = new Map<string, number>();
+    if (program) {
+      for (const p of program.phases) map.set(p.id, computePhaseReadiness(program, p.id).score);
+    }
+    return map;
+  }, [program]);
   const roadmapRows = useMemo(
-    () => buildRoadmapRows(program?.rawData, (program?.phases ?? []) as Array<{ id: string; status?: string }>),
-    [program?.rawData, program?.phases],
+    () => buildRoadmapRows(program?.rawData, (program?.phases ?? []) as Array<{ id: string; status?: string }>, gateScores),
+    [program?.rawData, program?.phases, gateScores],
   );
   const totalGates = program?.phases.length ?? 0;
   // Only count gate reviews that correspond to an actual phase in this programme —
