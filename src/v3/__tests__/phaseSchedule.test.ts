@@ -218,6 +218,21 @@ describe("buildRoadmapRows — progress scoping", () => {
     expect(pctById().build).toBe(0);
   });
 
+  it("greys a not-started phase even when the health agent graded it red", () => {
+    // The agent flagged Operate red ("Adoption Plan not approved"), but Operate
+    // is still inactive — a future concern must not read as a live blocker.
+    const withHeat = {
+      ...rawData,
+      healthHeatmap: { phaseHealth: [{ phaseId: "operate", rag: "red", topRisk: "Adoption Plan not approved" }] },
+    };
+    const rows = buildRoadmapRows(withHeat, [
+      { id: "strategy", status: "complete" }, { id: "operate", status: "inactive" },
+    ]);
+    const operate = rows.find((r) => r.id === "operate");
+    expect(operate?.rag).toBe("grey");
+    expect(operate?.risk).toBeNull();
+  });
+
   it("reads a gate-approved (complete) phase as 100% even if an artifact is still draft", () => {
     // Discover's ledger is only 30% by artifact tally, but once its gate is
     // approved the phase is done — the gate is authoritative over a stray draft.

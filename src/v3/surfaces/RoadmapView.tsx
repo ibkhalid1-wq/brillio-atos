@@ -76,11 +76,17 @@ function RoadmapHealthStrip({
   program, healthIsRunning, onTriggerHealth,
 }: { program: ProgramSummary; healthIsRunning: boolean; onTriggerHealth: () => void }) {
   const health = program.healthHeatmap;
-  const atRisk = health ? health.phaseHealth.filter((p) => p.rag === "amber" || p.rag === "red").length : 0;
-  const topRisks = health
-    ? health.phaseHealth.filter((p) => p.topRisk && (p.rag === "amber" || p.rag === "red"))
-        .slice(0, 3)
-    : [];
+  // A phase the programme hasn't reached yet can't be "at risk" or "blocked" now:
+  // the health agent sometimes grades future phases red (e.g. "Adoption Plan not
+  // approved" against an Operate phase that is still inactive), which misleadingly
+  // surfaces them as current blockers. Judge only started phases — the same rule
+  // the gantt already applies when it greys out not-yet-started bars.
+  const startedPhaseIds = new Set(program.phases.filter((p) => p.status !== "inactive").map((p) => p.id));
+  const judgedHealth = health ? health.phaseHealth.filter((p) => startedPhaseIds.has(p.phaseId)) : [];
+  const atRisk = judgedHealth.filter((p) => p.rag === "amber" || p.rag === "red").length;
+  const topRisks = judgedHealth
+    .filter((p) => p.topRisk && (p.rag === "amber" || p.rag === "red"))
+    .slice(0, 3);
 
   return (
     <AdamCard>
@@ -144,7 +150,22 @@ function DeliveryFocus({
   program, planIsRunning, onTriggerPlan,
 }: { program: ProgramSummary; planIsRunning: boolean; onTriggerPlan: () => void }) {
   const plan = program.plan;
-  if (!plan || (!plan.nextThreeActions.length && !plan.blockerSummary.length)) {
+  // A gate-approved (complete) phase cannot have open blockers or pending next
+  // actions — sign-off closes them out. The delivery plan is an agent snapshot
+  // that goes stale the moment a gate is approved (here it still lists Strategy
+  // charter-approval blockers though Strategy is signed off), so drop any entry
+  // pinned to an already-complete phase rather than show resolved work as live.
+  const completedPhases = new Set<string>();
+  for (const p of program.phases) {
+    if (p.status === "complete") {
+      completedPhases.add(p.id.toLowerCase());
+      completedPhases.add(p.displayName.toLowerCase());
+    }
+  }
+  const isLivePhase = (phase: string) => !completedPhases.has((phase || "").toLowerCase());
+  const nextActions = plan ? plan.nextThreeActions.filter((a) => isLivePhase(a.phase)) : [];
+  const openBlockers = plan ? plan.blockerSummary.filter((b) => isLivePhase(b.phase)) : [];
+  if (!plan || (!nextActions.length && !openBlockers.length)) {
     return (
       <AdamCard>
         <AdamCardHeader title="Delivery focus" subtitle="Immediate actions and open blockers across the roadmap." />
@@ -178,10 +199,10 @@ function DeliveryFocus({
             <div style={{ fontSize: 12, fontWeight: 700, color: "var(--v3-text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>
               Next actions
             </div>
-            {plan.nextThreeActions.length ? (
+            {nextActions.length ? (
               <div style={{ display: "grid", gap: 8 }}>
-                {plan.nextThreeActions.map((a, i) => (
-                  <div key={i} style={{ display: "grid", gap: 2, paddingBottom: 8, borderBottom: i < plan.nextThreeActions.length - 1 ? "1px solid var(--v3-border-soft)" : "none" }}>
+                {nextActions.map((a, i) => (
+                  <div key={i} style={{ display: "grid", gap: 2, paddingBottom: 8, borderBottom: i < nextActions.length - 1 ? "1px solid var(--v3-border-soft)" : "none" }}>
                     <div style={{ fontSize: 13, color: "var(--v3-text-primary)", fontWeight: 550 }}>{a.action}</div>
                     <div style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>
                       {a.phase}{a.owner ? ` · ${a.owner}` : ""}
@@ -198,10 +219,10 @@ function DeliveryFocus({
             <div style={{ fontSize: 12, fontWeight: 700, color: "var(--v3-text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>
               Open blockers
             </div>
-            {plan.blockerSummary.length ? (
+            {openBlockers.length ? (
               <div style={{ display: "grid", gap: 8 }}>
-                {plan.blockerSummary.map((b, i) => (
-                  <div key={i} style={{ display: "grid", gap: 2, paddingBottom: 8, borderBottom: i < plan.blockerSummary.length - 1 ? "1px solid var(--v3-border-soft)" : "none" }}>
+                {openBlockers.map((b, i) => (
+                  <div key={i} style={{ display: "grid", gap: 2, paddingBottom: 8, borderBottom: i < openBlockers.length - 1 ? "1px solid var(--v3-border-soft)" : "none" }}>
                     <div style={{ display: "flex", gap: 6, alignItems: "baseline" }}>
                       <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", color: SEVERITY_COLOR[b.severity] ?? SEVERITY_COLOR.medium }}>
                         {b.severity}

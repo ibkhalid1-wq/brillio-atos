@@ -262,13 +262,19 @@ export function buildRoadmapRows(rawData: unknown, phases: Array<{ id: string; s
     // stakeholder sign-off is authoritative and overrides a stale agent RAG/risk
     // (e.g. a "gate reopened" note written before re-approval).
     const isComplete = p.status === "complete";
+    // A phase the programme hasn't reached yet (status "inactive") can't be at
+    // risk or blocked now: the health agent sometimes grades a future phase red
+    // (e.g. "Adoption Plan not approved" against a not-yet-started Operate), so
+    // its RAG/risk must not present a future concern as a live one. Such phases
+    // read grey ("not started") regardless of the agent estimate.
+    const notStarted = p.status === "inactive";
     // Progress reads from the gate first: an approved gate means the phase is
     // 100% complete regardless of how many of its artifacts the ledger happens
     // to mark "approved" (a single stale/draft artifact must not make a
     // signed-off phase read 83%). Otherwise it tracks artifact completion
     // deterministically, with the agent estimate only as a last-resort fallback.
     const progressPct = isComplete ? 100 : (artifactProgress.get(p.id) ?? h?.progressPct ?? 0);
-    const rag = isComplete ? "green" : (h?.rag ?? deriveRag(progressPct, startMs, endMs, todayMs));
+    const rag = isComplete ? "green" : notStarted ? "grey" : (h?.rag ?? deriveRag(progressPct, startMs, endMs, todayMs));
     rows.push({
       id: p.id,
       name: getPhaseDefinition(p.id)?.displayName ?? p.id,
@@ -276,7 +282,7 @@ export function buildRoadmapRows(rawData: unknown, phases: Array<{ id: string; s
       end,
       progressPct,
       rag,
-      risk: isComplete ? null : (h?.risk ?? null),
+      risk: (isComplete || notStarted) ? null : (h?.risk ?? null),
     });
   }
   return rows;
