@@ -2497,6 +2497,25 @@ function applyRiskResultToProgramData(programData: ProgramState, result: Record<
     const capacityEntries = existingEntries.filter(
       (entry) => entry.source !== "human" && typeof entry.id === "string" && entry.id.startsWith("capacity-gap-"),
     );
+    // The capacity-assessor owns one capacity-shortfall risk per phase (its
+    // capacity-gap-${phase} entry). The risk agent, unaware of that, sometimes
+    // restates the same gap (e.g. "Team capacity shortfall in Change Management
+    // Lead role") for a phase already covered — which then lists the same risk
+    // twice. Index the covered phases + canonical titles so we can drop the
+    // overlapping agent restatement below.
+    const capacityPhases = new Set(
+      capacityEntries.map((entry) => (typeof entry.phase === "string" ? entry.phase : "")).filter(Boolean),
+    );
+    const capacityTitleKeys = capacityEntries
+      .map((entry) => normalizeRaidTitle(entry.title))
+      .filter(Boolean);
+    const overlapsCapacityEntry = (entry: Record<string, unknown>): boolean => {
+      const phase = typeof entry.phase === "string" ? entry.phase : "";
+      if (!capacityPhases.has(phase)) return false;
+      const key = normalizeRaidTitle(entry.title);
+      if (!key) return false;
+      return capacityTitleKeys.some((capKey) => key.includes(capKey) || capKey.includes(key));
+    };
 
     // Reconcile-don't-replace: index prior agent entries so regenerated risks can
     // inherit any human triage (resolve / reopen / validate) applied to the same
@@ -2518,6 +2537,7 @@ function applyRiskResultToProgramData(programData: ProgramState, result: Record<
       ? result.raidEntries
           .filter(isRecord)
           .filter((entry) => !isProvablyStaleRiskEntry(entry, approvedArtifacts, planGrounding))
+          .filter((entry) => !overlapsCapacityEntry(entry))
           .map((entry, index) => {
             const type = typeof entry.type === "string" ? entry.type : "risk";
             const severity = typeof entry.severity === "string" ? entry.severity : "medium";
