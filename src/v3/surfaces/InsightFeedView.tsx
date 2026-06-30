@@ -275,23 +275,39 @@ export default function InsightFeedView({
     return null;
   }, [phases, resolvedActiveId]);
 
-  // Auto-trigger daily briefing once per 24 hours, OR immediately when the active
-  // phase has advanced since the last run — a frozen briefing that still describes a
-  // superseded phase is worse than none, so a phase change invalidates the cache.
+  // The auto-trigger throttle is keyed to the timestamp of the briefing that
+  // actually LANDED (its server-stamped generatedAt) plus the phase it was
+  // generated under — recorded here, only when a new briefing arrives. The
+  // trigger effect below must NOT pre-stamp before running: a run that fails
+  // (rate limit, AI offline, network) would otherwise poison the 24h window and
+  // suppress every retry until tomorrow. Recording only on success means a
+  // failed run leaves no marker and is retried on the next mount or phase change.
+  // Declared before the trigger effect so the marker is fresh when it reads.
   useEffect(() => {
-    if (!program || anyAgentRunning) return;
-    const storageKey = `adam-daily-briefing-${program.id ?? "program"}`;
-    const phaseKey = `${storageKey}-phase`;
-    const lastRun = typeof window !== "undefined" ? window.localStorage.getItem(storageKey) : null;
-    const lastPhase = typeof window !== "undefined" ? window.localStorage.getItem(phaseKey) : null;
-    const now = Date.now();
+    if (!program?.id || !dailyBriefing?.generatedAt || typeof window === "undefined") return;
+    const stampKey = `adam-daily-briefing-${program.id}`;
+    const phaseKey = `${stampKey}-phase`;
+    if (window.localStorage.getItem(stampKey) === dailyBriefing.generatedAt) return;
+    window.localStorage.setItem(stampKey, dailyBriefing.generatedAt);
+    if (resolvedActiveId) window.localStorage.setItem(phaseKey, resolvedActiveId);
+  }, [program?.id, dailyBriefing?.generatedAt, resolvedActiveId]);
+
+  // Auto-trigger daily briefing once per 24 hours, OR immediately when the active
+  // phase has advanced since the last landed briefing — a briefing that still
+  // describes a superseded phase is worse than none, so a phase change invalidates
+  // the cache. No pre-run stamp: the record effect above stamps only on success.
+  useEffect(() => {
+    if (!program || anyAgentRunning || typeof window === "undefined") return;
+    const stampKey = `adam-daily-briefing-${program.id ?? "program"}`;
+    const phaseKey = `${stampKey}-phase`;
+    const lastStamp = window.localStorage.getItem(stampKey);
+    const lastPhase = window.localStorage.getItem(phaseKey);
     const oneDayMs = 24 * 60 * 60 * 1000;
+    // Date.parse handles the ISO generatedAt; a legacy epoch-millis value (pre-fix)
+    // yields NaN → treated as not-fresh → one migrating run that re-stamps as ISO.
+    const fresh = lastStamp ? Date.now() - Date.parse(lastStamp) < oneDayMs : false;
     const phaseUnchanged = !resolvedActiveId || lastPhase === resolvedActiveId;
-    if (lastRun && now - parseInt(lastRun, 10) < oneDayMs && phaseUnchanged) return;
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(storageKey, String(now));
-      if (resolvedActiveId) window.localStorage.setItem(phaseKey, resolvedActiveId);
-    }
+    if (fresh && phaseUnchanged) return;
     onRunAgent("daily-briefing");
   }, [program?.id, resolvedActiveId]); // eslint-disable-line react-hooks/exhaustive-deps
 
