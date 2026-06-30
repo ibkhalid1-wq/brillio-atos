@@ -5,6 +5,7 @@ import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { availableModes, FIELD_ASSIST_MODE_LABEL, type FieldAssistMode } from "@/v3/lib/fieldAssist";
 import { prioritizePhaseFields } from "@/v3/lib/phaseInputPriority";
 import StructuredGrid, { type GridRow, parseRows, serializeRows, filledRowCount } from "@/v3/components/StructuredGrid";
+import { V3Select, V3Combobox } from "@/v3/components/ui/V3Dropdown";
 import { PROVENANCE_KEY, parseProvenance, provenanceMatches, type FieldProvenance } from "@/new/lib/fieldProvenance";
 import { EXTRACTION_TYPE_COLORS, EXTRACTION_TYPE_LABELS, confidenceLabel } from "@/new/lib/documentIntelligenceTypes";
 
@@ -866,38 +867,21 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
                     onChange={(event) => setValues((current) => ({ ...current, [field.id]: event.target.value }))}
                   />
                 ) : field.type === "select" ? (
-                  (() => {
-                    // A select only displays its value when that value matches an
-                    // <option>. AI extraction (and older free-text captures) can
-                    // store an off-list value — e.g. industry "Enterprise Software,
-                    // CRM Platforms…" against a fixed option list — which then
-                    // rendered as blank, looking like the saved value had vanished.
-                    // Surface any off-list current value as its own option so it
-                    // stays visible and selected (and isn't silently dropped on the
-                    // next save) until the user picks a canonical option.
-                    const current = values[field.id] ?? "";
-                    const options = field.options ?? [];
-                    const hasCurrent = current !== "" && !options.includes(current);
-                    return (
-                      <select
-                        className="v3-input"
-                        aria-label={field.label}
-                        value={current}
-                        onChange={(event) => setValues((c) => ({ ...c, [field.id]: event.target.value }))}
-                      >
-                        <option value="">Select…</option>
-                        {hasCurrent ? <option value={current}>{current}</option> : null}
-                        {options.map((option) => <option key={option} value={option}>{option}</option>)}
-                      </select>
-                    );
-                  })()
+                  // Off-list current values (e.g. an AI-extracted option the schema
+                  // doesn't list) are surfaced by V3Select as their own entry so
+                  // they stay visible and selected rather than rendering blank.
+                  <V3Select
+                    ariaLabel={field.label}
+                    value={values[field.id] ?? ""}
+                    options={field.options ?? []}
+                    onChange={(value) => setValues((c) => ({ ...c, [field.id]: value }))}
+                  />
                 ) : (field.type === "stakeholder" || field.type === "organization" || field.type === "document" || field.type === "artifact-reference") ? (
                   // Semantic reference types. Persist as a plain string but offer
-                  // a context-aware datalist drawn from the programme (roster /
-                  // orgs / documents / artifacts) so the value resolves to a real
-                  // entity. With no suggestions it degrades to a plain text input.
+                  // a context-aware suggestion list drawn from the programme (roster
+                  // / orgs / documents / artifacts) so the value resolves to a real
+                  // entity. Free text is still allowed when nothing matches.
                   (() => {
-                    const listId = `ref-${phaseId}-${field.id}`;
                     const suggestions = referenceSuggestions[field.type] ?? [];
                     const refPlaceholder = field.placeholder ?? (
                       field.type === "stakeholder" ? "Name a person…"
@@ -906,22 +890,13 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
                       : "Reference an artifact…"
                     );
                     return (
-                      <>
-                        <input
-                          type="text"
-                          list={suggestions.length ? listId : undefined}
-                          className="v3-input"
-                          aria-label={field.label}
-                          placeholder={refPlaceholder}
-                          value={values[field.id] ?? ""}
-                          onChange={(event) => setValues((current) => ({ ...current, [field.id]: event.target.value }))}
-                        />
-                        {suggestions.length ? (
-                          <datalist id={listId}>
-                            {suggestions.map((opt) => <option key={opt} value={opt} />)}
-                          </datalist>
-                        ) : null}
-                      </>
+                      <V3Combobox
+                        ariaLabel={field.label}
+                        value={values[field.id] ?? ""}
+                        suggestions={suggestions}
+                        placeholder={refPlaceholder}
+                        onChange={(value) => setValues((current) => ({ ...current, [field.id]: value }))}
+                      />
                     );
                   })()
                 ) : field.id === "successMetric" ? (
