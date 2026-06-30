@@ -67,6 +67,7 @@ import { buildPhaseSchedule } from "@/v3/lib/phaseSchedule";
 import { computePhaseReadiness, getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
 import { confidenceRag, getGateThreshold } from "@/v3/lib/confidenceScore";
 import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
+import { getPreviousScore, recordConfidenceSnapshot, getConfidenceForecast } from "@/v3/lib/confidenceHistory";
 import { artifactReviewFieldKey } from "@/v3/lib/artifactReview";
 import { deriveAttachedArtifactReview, buildAttachedArtifactPatch } from "@/v3/lib/attachedArtifact";
 import type { DocumentIntelligence } from "@/new/lib/documentIntelligenceTypes";
@@ -1665,10 +1666,30 @@ export default function AppShellV3() {
     // confidence swings as the user drills into different phases (e.g. 66% on Today
     // while pointed at a completed Strategy phase vs 31% on Brief while pointed at
     // the Build frontier), contradicting itself across surfaces.
-    return deriveProgramConfidence(activeProgram);
+    // previousScore (prior-day snapshot from local history) turns the model's
+    // up/down trend from a permanent "stable" placeholder into a real signal.
+    return deriveProgramConfidence(activeProgram, undefined, getPreviousScore(activeProgram.id));
   }, [activeProgram, rawData, openDecisions]);
 
   const programConfidenceScore = programConfidenceResult?.score ?? null;
+
+  // Persist the active programme's score so tomorrow's trend has a baseline, and
+  // project a target date from the accumulated history. Recording lives in an
+  // effect (never during render) and is throttled to one snapshot per day inside
+  // the helper, so idle re-renders don't churn localStorage.
+  useEffect(() => {
+    if (activeProgram?.id && programConfidenceScore != null) {
+      recordConfidenceSnapshot(activeProgram.id, programConfidenceScore);
+    }
+  }, [activeProgram?.id, programConfidenceScore]);
+
+  const programConfidenceForecast = useMemo(
+    () =>
+      activeProgram?.id && programConfidenceScore != null
+        ? getConfidenceForecast(activeProgram.id, programConfidenceScore)
+        : null,
+    [activeProgram?.id, programConfidenceScore],
+  );
   const programHealth = useMemo(() => {
     const score = programConfidenceScore;
     // null → "amber" preserves the rail badge's long-standing neutral-pending
@@ -3536,6 +3557,7 @@ export default function AppShellV3() {
               programs={programs}
               confidenceScore={programConfidenceScore}
               confidenceResult={programConfidenceResult ?? undefined}
+              confidenceForecast={programConfidenceForecast ?? undefined}
               onApproveGate={handleApproveGate}
               onRunAgent={handleRunAgent}
               anyAgentRunning={anyUserAgentRunning}

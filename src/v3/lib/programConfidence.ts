@@ -36,6 +36,7 @@ import { isDecisionOpen } from "@/v3/utils";
 export function deriveProgramConfidence(
   program: ProgramSummary,
   activePhaseId?: string | null,
+  previousScore?: number,
 ): ConfidenceScore {
   const phaseId = activePhaseId ?? program.activePhaseId ?? null;
   const rawData = (program.rawData || {}) as Record<string, unknown>;
@@ -135,6 +136,7 @@ export function deriveProgramConfidence(
     scheduleAdherence,
     openDecisionCount: openDecisions.length,
     inputCompleteness,
+    previousScore,
     openCriticalRisks,
     openHighRisks,
     openRiskCount: openRisks.length,

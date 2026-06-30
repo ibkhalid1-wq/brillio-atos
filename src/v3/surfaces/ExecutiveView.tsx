@@ -9,7 +9,7 @@ import RoadmapGantt from "@/v3/components/RoadmapGantt";
 import { buildRoadmapRows } from "@/v3/lib/phaseSchedule";
 import { computePhaseReadiness, getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
 import { selectBlockers, selectDecisions, selectHighPriorityDecisions, selectHighRisks, selectRisks } from "@/v3/lib/programRaid";
-import type { ConfidenceScore } from "@/v3/lib/confidenceScore";
+import type { ConfidenceScore, ConfidenceForecast } from "@/v3/lib/confidenceScore";
 import ConfidenceBreakdown from "@/v3/components/ConfidenceBreakdown";
 import ConfidenceActions from "@/v3/components/ConfidenceActions";
 import { type LockedPhaseOption } from "@/v3/components/ChangeRequestModal";
@@ -21,6 +21,8 @@ interface ExecutiveViewProps {
   confidenceScore: number | null;
   /** Full confidence result — drives the signal breakdown (moved from Today). */
   confidenceResult?: ConfidenceScore;
+  /** Score-history forecast — drives the trend chip and target-date projection. */
+  confidenceForecast?: ConfidenceForecast;
   onApproveGate: (phaseId: string) => Promise<boolean | void>;
   onRunAgent: (agentId: string, phaseId?: string) => void;
   anyAgentRunning: boolean;
@@ -191,6 +193,7 @@ export default function ExecutiveView({
   program,
   confidenceScore,
   confidenceResult,
+  confidenceForecast,
   onApproveGate,
   onRunAgent,
   anyAgentRunning,
@@ -714,7 +717,7 @@ export default function ExecutiveView({
       )}
 
       {/* ── 2b. Confidence breakdown — per-signal scores behind the headline % ── */}
-      <ConfidenceBreakdown confidenceResult={confidenceResult} />
+      <ConfidenceBreakdown confidenceResult={confidenceResult} forecast={confidenceForecast} />
 
       {/* ── 2c. Actions to address the gaps behind the weak signals ─────────── */}
       <ConfidenceActions confidenceResult={confidenceResult} />

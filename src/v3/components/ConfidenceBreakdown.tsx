@@ -7,14 +7,30 @@
  * source of truth (deriveProgramConfidence / computeConfidenceScore).
  */
 import React from "react";
-import type { ConfidenceScore } from "@/v3/lib/confidenceScore";
+import type { ConfidenceScore, ConfidenceForecast } from "@/v3/lib/confidenceScore";
 
 export default function ConfidenceBreakdown({
   confidenceResult,
+  forecast,
 }: {
   confidenceResult: ConfidenceScore | null | undefined;
+  /** Optional score-history forecast — when present, shows a trend chip + projection. */
+  forecast?: ConfidenceForecast | null;
 }) {
   if (!confidenceResult?.signals?.length) return null;
+
+  // The trend chip and forecast line only render when a forecast is supplied
+  // (i.e. the caller has score history). Surfaces that derive confidence without
+  // history pass nothing and see the breakdown exactly as before.
+  const trend = confidenceResult.trend;
+  const trendChip =
+    forecast == null
+      ? null
+      : trend === "up"
+        ? { glyph: "↑", label: "Improving", color: "var(--v3-green)", bg: "rgba(34,197,94,0.12)" }
+        : trend === "down"
+          ? { glyph: "↓", label: "Declining", color: "var(--v3-red, #ef4444)", bg: "rgba(239,68,68,0.12)" }
+          : { glyph: "→", label: "Stable", color: "var(--v3-text-muted)", bg: "var(--v3-border-soft)" };
 
   return (
     <div>
@@ -27,10 +43,42 @@ export default function ConfidenceBreakdown({
           letterSpacing: "0.07em",
           marginBottom: 12,
           fontFamily: "var(--v3-font)",
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          flexWrap: "wrap",
         }}
       >
-        Confidence Breakdown{confidenceResult.explanation ? ` — ${confidenceResult.explanation}` : ""}
+        <span>Confidence Breakdown{confidenceResult.explanation ? ` — ${confidenceResult.explanation}` : ""}</span>
+        {trendChip ? (
+          <span
+            style={{
+              fontSize: 10,
+              padding: "1px 7px",
+              borderRadius: 10,
+              background: trendChip.bg,
+              color: trendChip.color,
+              fontWeight: 700,
+              letterSpacing: 0.3,
+            }}
+            title={forecast?.message}
+          >
+            {trendChip.glyph} {trendChip.label}
+          </span>
+        ) : null}
       </div>
+      {forecast?.message ? (
+        <div
+          style={{
+            fontSize: 12,
+            color: "var(--v3-text-secondary)",
+            marginBottom: 12,
+            fontFamily: "var(--v3-font)",
+          }}
+        >
+          {forecast.message}
+        </div>
+      ) : null}
       <div
         style={{
           background: "var(--v3-surface)",
