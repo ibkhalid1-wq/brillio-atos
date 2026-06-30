@@ -21,6 +21,7 @@ import { derivePhaseInputQuality } from "@/v3/lib/phaseInputQuality";
 import { computeScheduleAdherenceDetail } from "@/v3/lib/phaseSchedule";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { selectRisks } from "@/v3/lib/programRaid";
+import { buildPlanGroundingIndex, isGroundedFalsePositiveDecision } from "@/v3/lib/decisionGrounding";
 import { isDecisionOpen } from "@/v3/utils";
 
 /**
@@ -122,8 +123,16 @@ export function deriveProgramConfidence(
   const scheduleAdherence = scheduleDetail.score ?? 70;
   const phasesBehindSchedule = scheduleDetail.phasesBehind;
 
-  // Decision metrics
-  const openDecisions = (program.decisionQueue || []).filter(isDecisionOpen);
+  // Decision metrics. Grounded false-positive decisions (stale PCRs the
+  // programme already satisfies — e.g. "define exit criteria" after they're
+  // derived) are suppressed everywhere they surface, so they must not silently
+  // drag the confidence score down here either. Apply the same grounding
+  // predicate the Action Center queue uses so the backlog signal and the visible
+  // queue agree on what counts as an open decision.
+  const grounding = buildPlanGroundingIndex(program);
+  const openDecisions = (program.decisionQueue || [])
+    .filter(isDecisionOpen)
+    .filter((decision) => !isGroundedFalsePositiveDecision(decision, grounding));
   const overdueDecisions = openDecisions.filter((d) => {
     const created = d.createdAt as string | undefined;
     return created && Date.now() - new Date(created).getTime() > 14 * 86_400_000;

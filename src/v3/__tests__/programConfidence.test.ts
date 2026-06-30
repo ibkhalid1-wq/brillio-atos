@@ -67,6 +67,39 @@ describe("deriveProgramConfidence under dynamic-only phases", () => {
     expect(conf.breakdown.inputCompleteness).toBeGreaterThan(0);
   });
 
+  it("does not let grounded false-positive decisions penalise the backlog signal", () => {
+    // A persisted exit-criteria PCR is a stale false positive (exit criteria are
+    // derived at gate review, never authored) — it is suppressed in the Action
+    // Center, so it must not silently drag the confidence backlog down either.
+    const withFalsePositive = normalizeProgram({
+      id: "crm", name: "Agentic CRM", client: "Brillio", industry: "Software",
+      updated_at: new Date().toISOString(),
+      data: {
+        phases: PHASE_IDS.map((id) => ({ id, pct: 0 })),
+        decisionQueue: [
+          { id: "fp", type: "pcr-review", status: "open", title: "Define phase exit criteria" },
+        ],
+      },
+    });
+    const bare = deriveProgramConfidence(programOnOperate(), "operate").breakdown.decisionBacklog;
+    expect(deriveProgramConfidence(withFalsePositive, "operate").breakdown.decisionBacklog).toBe(bare);
+  });
+
+  it("still penalises the backlog for a genuine open decision", () => {
+    const withRealDecision = normalizeProgram({
+      id: "crm", name: "Agentic CRM", client: "Brillio", industry: "Software",
+      updated_at: new Date().toISOString(),
+      data: {
+        phases: PHASE_IDS.map((id) => ({ id, pct: 0 })),
+        decisionQueue: [
+          { id: "real", type: "escalation", status: "open", title: "Approve vendor budget overrun" },
+        ],
+      },
+    });
+    const bare = deriveProgramConfidence(programOnOperate(), "operate").breakdown.decisionBacklog;
+    expect(deriveProgramConfidence(withRealDecision, "operate").breakdown.decisionBacklog).toBeLessThan(bare);
+  });
+
   it("reflects produced dynamic artifacts in gate readiness", () => {
     const bare = deriveProgramConfidence(programOnOperate(), "operate").breakdown.gateReadiness;
     const withArtifact = deriveProgramConfidence(
