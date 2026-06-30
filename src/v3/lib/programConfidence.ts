@@ -45,15 +45,17 @@ export function deriveProgramConfidence(
   ).length;
   const totalGates = phases.length;
 
-  // Gate readiness: active phase readiness score (or ratio of approved gates).
-  // Computed once and reused below so the Today confidence breakdown reads the
-  // exact same readiness object the phase header KPIs render from.
+  // Gate readiness blends locked-in progress with current-phase readiness. The
+  // current phase's readiness alone resets to ~0 at every phase transition, so a
+  // programme that has cleared four of nine gates and just opened the fifth read a
+  // 0 here — scoring a healthy, mid-journey programme as if it were at the start
+  // line. Floor the signal at the approved-gate ratio (4/9 ≈ 44%, the same figure
+  // the "Progress" KPI shows) so completed gates can't be thrown away, while the
+  // current phase's own readiness still drives the score up as it nears the gate.
   const phaseReadiness = phaseId ? computePhaseReadiness(program, phaseId) : null;
-  const activePhaseReadiness = phaseReadiness
-    ? phaseReadiness.score
-    : approved > 0
-    ? Math.round((approved / Math.max(totalGates, 1)) * 100)
-    : 0;
+  const currentPhaseReadiness = phaseReadiness ? phaseReadiness.score : 0;
+  const approvedGateRatio = totalGates > 0 ? Math.round((approved / totalGates) * 100) : 0;
+  const activePhaseReadiness = Math.max(currentPhaseReadiness, approvedGateRatio);
 
   // Risk posture: severity-weighted open risk penalty. Read the canonical open
   // risk set (selectRisks) — the SAME set the Executive/Programme risk KPI and
@@ -66,15 +68,30 @@ export function deriveProgramConfidence(
   const openCriticalRisks = openRisks.filter((r) => r.severity === "critical").length;
   const openHighRisks = openRisks.filter((r) => r.severity === "high").length;
 
-  // Milestone health: on-track ratio
+  // Milestone health measures whether IN-FLIGHT milestones are slipping — not the
+  // raw on-track ratio, which punished a programme for milestones that simply
+  // haven't been reached yet and, worse, for stale milestones left "delayed" on a
+  // phase whose gate is already approved (the phase is done; the milestone is
+  // historical). Treat a milestone as historical when it is complete or belongs to
+  // an already-approved phase, and score only the remainder by how many are
+  // actually at risk. All-historical → fully healthy; no milestones at all →
+  // neutral default, unchanged.
+  const gateApproved = (id: unknown): boolean =>
+    typeof id === "string" &&
+    (program.gateReviews?.[id] as { status?: string } | undefined)?.status === "approved";
   const milestones = (program.milestones || []) as unknown as Array<Record<string, unknown>>;
-  const onTrack = milestones.filter(
-    (m) => m.status === "on-track" || m.status === "complete",
-  ).length;
-  const milestoneHealth = milestones.length > 0 ? Math.round((onTrack / milestones.length) * 100) : 70;
-  const milestonesAtRisk = milestones.filter(
+  const inFlightMilestones = milestones.filter(
+    (m) => m.status !== "complete" && !gateApproved(m.phaseId),
+  );
+  const milestonesAtRisk = inFlightMilestones.filter(
     (m) => m.status === "at-risk" || m.status === "delayed",
   ).length;
+  const milestoneHealth =
+    milestones.length === 0
+      ? 70
+      : inFlightMilestones.length === 0
+      ? 100
+      : Math.round(((inFlightMilestones.length - milestonesAtRisk) / inFlightMilestones.length) * 100);
 
   // Input completeness: read from the SAME schema-grounded assessment the phase
   // header "Input quality" KPI renders (derivePhaseInputQuality.overallScore),
@@ -102,6 +119,7 @@ export function deriveProgramConfidence(
 
   return computeConfidenceScore({
     gateReadiness: activePhaseReadiness,
+    currentPhaseReadiness,
     riskPosture,
     milestoneHealth,
     openDecisionCount: openDecisions.length,

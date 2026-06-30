@@ -131,6 +131,7 @@ export function computeConfidenceScore(inputs: {
   inputCompleteness: number;
   previousScore?: number;
   // Optional rich context for explanations
+  currentPhaseReadiness?: number;
   openCriticalRisks?: number;
   openHighRisks?: number;
   approvedGates?: number;
@@ -150,7 +151,11 @@ export function computeConfidenceScore(inputs: {
       status: inputs.gateReadiness >= 70 ? "good" : inputs.gateReadiness >= 50 ? "warn" : "poor",
       explanation:
         inputs.approvedGates !== undefined && inputs.totalGates !== undefined
-          ? `${inputs.approvedGates} of ${inputs.totalGates} phase gates approved. Current phase readiness: ${inputs.gateReadiness}%.`
+          ? `${inputs.approvedGates} of ${inputs.totalGates} phase gates approved.${
+              inputs.currentPhaseReadiness !== undefined
+                ? ` Current phase ${inputs.currentPhaseReadiness}% ready.`
+                : ""
+            }`
           : `Current gate readiness is ${inputs.gateReadiness}%.`,
       topAction:
         inputs.gateReadiness < 70

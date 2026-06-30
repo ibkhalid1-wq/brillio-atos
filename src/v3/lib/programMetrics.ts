@@ -58,9 +58,13 @@ export interface ProgramMetrics {
   activePhaseId: string | null;
   activePhase: PhaseMetrics | null;
   /**
-   * Active-phase readiness — identical to `activePhase.readiness` and to
-   * `confidence.breakdown.gateReadiness` by construction (all three resolve to
-   * `computePhaseReadiness(program, activePhaseId).score`).
+   * Active-phase readiness — identical to `activePhase.readiness` and the
+   * standalone phase selector (all resolve to `computePhaseReadiness().score`).
+   * This is the CURRENT phase's own gate readiness, shown on phase surfaces.
+   * It is NOT necessarily equal to `confidence.breakdown.gateReadiness`: the
+   * confidence gate signal floors that value at the approved-gate ratio so a
+   * freshly-opened phase (readiness ~0) doesn't drag the programme score to zero
+   * while four of nine gates are already cleared (see deriveProgramConfidence).
    */
   gateReadiness: number;
   /** Active-phase gate threshold. */

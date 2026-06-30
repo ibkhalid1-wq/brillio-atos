@@ -34,15 +34,27 @@ function makeProgram() {
 }
 
 describe("selectProgramMetrics", () => {
-  it("keeps active-phase readiness identical across every access path", () => {
+  it("keeps active-phase readiness identical across the phase access paths", () => {
     const program = makeProgram();
     const metrics = selectProgramMetrics(program, "mobilise");
 
-    // The three numbers a surface might reach for "active phase readiness".
+    // The phase-scoped surfaces all read the SAME raw active-phase readiness.
     expect(metrics.gateReadiness).toBe(metrics.activePhase!.readiness);
-    expect(metrics.gateReadiness).toBe(metrics.confidence.breakdown.gateReadiness);
-    // …and all equal the standalone phase selector a per-phase view would call.
     expect(metrics.gateReadiness).toBe(selectPhaseMetrics(program, "mobilise").readiness);
+  });
+
+  it("floors the confidence gate signal at the approved-gate ratio", () => {
+    const program = makeProgram();
+    const metrics = selectProgramMetrics(program, "mobilise");
+
+    // The confidence breakdown's gate signal is NOT the raw active-phase
+    // readiness: it is floored at the approved-gate ratio so completed gates
+    // (1 of 3 here ≈ 33%) aren't thrown away when a freshly-opened phase reads
+    // ~0. It rises with the current phase's readiness once that exceeds the floor.
+    const approvedRatio = Math.round((metrics.approvedGates / metrics.totalGates) * 100);
+    expect(metrics.confidence.breakdown.gateReadiness).toBe(
+      Math.max(metrics.activePhase!.readiness, approvedRatio),
+    );
   });
 
   it("mirrors deriveProgramConfidence for the same scope", () => {
