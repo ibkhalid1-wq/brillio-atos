@@ -2067,6 +2067,12 @@ function buildSpecialAgentInputContext(
   const defaultStrategyInputs = normalizeProgramData(
     normalizeProgramData(inner.phaseInputs as JsonValue | null).strategy as JsonValue | null,
   );
+  // The live active phase, so generic-context agents (e.g. daily-briefing) anchor
+  // their narrative on where the programme actually is — not the first phase or a
+  // phase they infer from prose. Sourced from the same canonical `inner.activePhase`
+  // pointer the specialised contexts use, enriched with the phase's name/progress.
+  const activePhaseId = typeof inner.activePhase === "string" ? inner.activePhase : "";
+  const activePhase = phases.find((phase) => phase.id === activePhaseId) ?? null;
   return JSON.stringify({
     programName: meta.name || (typeof projectMeta.name === "string" ? projectMeta.name : ""),
     client: meta.client || (typeof projectMeta.client === "string" ? projectMeta.client : ""),
@@ -2095,6 +2101,10 @@ function buildSpecialAgentInputContext(
     narrative,
     valueProjected: coerceNumber(inner.valueProjected ?? businessCase.projectedValue ?? valueRealizeData.projectedValue, 0),
     valueDelivered: coerceNumber(inner.valueDelivered ?? valueRealizeData.valueDelivered ?? businessCase.valueDelivered, 0),
+    activePhase: activePhaseId || null,
+    activePhaseName: activePhase ? activePhase.name : null,
+    activePhaseProgress: activePhase ? activePhase.pct : null,
+    activePhaseStatus: activePhase ? activePhase.status : null,
     phases,
     artifactCount: artifacts.length,
     activeArtifacts: artifacts.slice(0, 10),
@@ -6073,6 +6083,10 @@ Return ONLY valid JSON:
 
 Rules:
 - Keep focusItems to 3 or fewer. Be ruthlessly specific.
+- Anchor on the live phase: the programme is in the phase named by context
+  "activePhaseName" (id "activePhase"), at "activePhaseProgress"% progress. Speak
+  as if that is "today". Never describe an earlier phase as current or imply the
+  programme is still mobilising/starting if it has advanced past that phase.
 - If insufficient data, return { "headline": null, "reason": "insufficient_data" }`,
       user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
     };
