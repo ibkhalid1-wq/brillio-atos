@@ -1156,6 +1156,13 @@ const ARTIFACT_INPUT_FLOW: Record<string, string[]> = {
   // only sees the fields named here — grounds its ranking on the current baseline
   // and the captured improvement candidates.
   "optimization-backlog": ["optimisationBaseline", "improvementCandidates"],
+  // Mobilise seeds the risks-and-assumptions log. `risk` is a PROGRAM-LEVEL agent
+  // (it writes the shared RAID log, not a phase artifact) and falls through to the
+  // default context, which ships only these named fields — not the raw phaseInputs.
+  // So the Mobilise initialRisks/initialAssumptions grids are delivered here rather
+  // than via a client artifactInputFlow phase edge (risk has no phase-chip artifact
+  // to draw one to), letting the risk scan start from the team's own seeded view.
+  "risk": ["initialRisks", "initialAssumptions"],
 };
 
 /** Stringify a phase-input value (string, number, or grid rows) for the prompt. */

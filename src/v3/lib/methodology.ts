@@ -248,7 +248,7 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         "Risks and assumptions log established",
       ],
       entryGuards: ["Strategy gate approved"],
-      recommendedAgents: ["governance-model", "raci-matrix", "narrative", "stakeholder"],
+      recommendedAgents: ["governance-model", "raci-matrix", "risk", "narrative", "stakeholder"],
       typicalDurationWeeks: { min: 2, max: 4 },
       inputFields: [
         {
@@ -280,11 +280,50 @@ export const ATOS_STANDARD: MethodologyDefinition = {
           placeholder: "Decision forums, who sits on them, how often they meet, and the escalation path",
           hint: "e.g. Weekly delivery stand-up, fortnightly SteerCo (sponsor + workstream leads), exceptions escalate to the sponsor within 48h",
         },
+        // Seed the risks-and-assumptions log — the third Mobilise mandatory exit
+        // criterion. Unlike the roster/cadence (which ground the RACI and governance
+        // *phase* documents), the `risk` agent is PROGRAM-LEVEL: it writes the shared
+        // programme RAID log (applyRiskResultToProgramData), never a phaseArtifacts
+        // stub, so — exactly like `narrative` in Value Realize — it has no renderable
+        // phase-chip artifact to draw a flow edge to. These two inputs are therefore
+        // retained as grounding captured on the phase with their consumer recorded via
+        // usedByArtifacts, and delivered to the program-level risk agent through the
+        // edge ARTIFACT_INPUT_FLOW ("risk": [...]) — NOT wired into artifactInputFlow
+        // below (that would dangle on a non-rendering target). required:false so
+        // seeding the log never retroactively fails a programme already in Mobilise.
+        {
+          id: "initialRisks",
+          label: "Initial programme risks",
+          type: "grid",
+          required: false,
+          hint: "Seed the known risks now so the Risk agent starts from the team's own view rather than a cold scan — one risk per row with its impact, likelihood and mitigation.",
+          usedByArtifacts: ["risk"],
+          columns: [
+            { key: "risk", label: "Risk", type: "text" },
+            { key: "impact", label: "Impact", type: "text" },
+            { key: "likelihood", label: "Likelihood", type: "text" },
+            { key: "mitigation", label: "Mitigation", type: "text" },
+          ],
+        },
+        {
+          id: "initialAssumptions",
+          label: "Key assumptions to validate",
+          type: "grid",
+          required: false,
+          hint: "Capture the beliefs the programme is built on and how each will be proven — unvalidated assumptions are the risks the RAID log must track.",
+          usedByArtifacts: ["risk"],
+          columns: [
+            { key: "assumption", label: "Assumption", type: "text" },
+            { key: "validation", label: "How / when validated", type: "text" },
+          ],
+        },
       ],
       artifactInputFlow: {
         // RACI maps each activity to an accountable role, so it is grounded entirely by
         // the roster. The governance model synthesises decision bodies and escalation
-        // from the cadence plus who staffs the forums (the roster).
+        // from the cadence plus who staffs the forums (the roster). The risks-and-
+        // assumptions log is deliberately absent: `risk` is a program-level RAID agent
+        // (no phase-chip artifact), grounded via the edge flow, not a phase edge here.
         "raci-matrix": ["coreTeamRoster"],
         "governance-model": ["coreTeamRoster", "governanceCadence"],
       },

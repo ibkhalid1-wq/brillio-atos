@@ -337,6 +337,42 @@ describe("mobilise static roster + governance schema", () => {
       ]),
     );
   });
+
+  it("keeps the seeded risk/assumption inputs fillable typed grids", () => {
+    const fillable = new Set(getFillableArtifactInputFields("mobilise", "governance-model"));
+    // They are real typed inputs, so they are fillable — but they ground the
+    // program-level `risk` agent, not the governance-model chip, so they must NOT
+    // appear as governance-model grounding.
+    expect(fillable.has("initialRisks")).toBe(false);
+    expect(fillable.has("initialAssumptions")).toBe(false);
+    const roster = resolveRosterField(); // sanity: schema still resolves
+    expect(roster?.id).toBe("coreTeamRoster");
+  });
+
+  it("draws no phase edge for the program-level risk inputs — risk is not a phase chip", () => {
+    // Even with a `risk` artifact forced into the phase set, no edge is drawn: the
+    // methodology deliberately omits a `risk` artifactInputFlow entry because the
+    // risk agent writes the shared RAID log, not a phaseArtifacts stub. The inputs
+    // reach it via the edge ARTIFACT_INPUT_FLOW, not a client phase edge.
+    expect(getArtifactInputFields("mobilise", "risk")).toEqual([]);
+    const store = { artifacts: { mobilise: [{ id: "risk", label: "Risk Register", description: "" }] } };
+    const edges = derivePhaseFlowEdges("mobilise", ["initialRisks", "initialAssumptions"], store);
+    expect(edges).toEqual([]);
+  });
+
+  it("leaves no orphaned input — each grounds a chip or names its non-chip consumer", () => {
+    // Roster + cadence ground the RACI / governance chips; the risk & assumption
+    // grids feed the program-level risk agent (declared via usedByArtifacts), which
+    // is not a phase chip. No input is silently captured with no downstream reader.
+    const grounded = new Set([
+      ...getArtifactInputFields("mobilise", "raci-matrix"),
+      ...getArtifactInputFields("mobilise", "governance-model"),
+    ]);
+    for (const field of PHASE_INPUT_SCHEMAS.mobilise.fields) {
+      const hasConsumer = grounded.has(field.id) || (field.usedByArtifacts?.length ?? 0) > 0;
+      expect(hasConsumer).toBe(true);
+    }
+  });
 });
 
 // Build now carries a static delivery schema: the increment plan the milestone
