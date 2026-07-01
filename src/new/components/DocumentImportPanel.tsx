@@ -86,6 +86,7 @@ export default function DocumentImportPanel({
     programId,
     existingPhaseInputs,
     dynamicSchemaStore,
+    lockedPhaseIds,
     onComplete,
   });
 

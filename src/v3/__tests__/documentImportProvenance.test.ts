@@ -163,3 +163,109 @@ describe("buildApprovedInputs — provenance persistence", () => {
     expect(merged.constraints.source).toBe("doc2");
   });
 });
+
+/**
+ * Explicit conflict resolution: a populated field offers Replace / Merge /
+ * Dismiss. Replace is modelled as an "edited" state whose value equals the
+ * import verbatim (overwrite, no blend); Merge is an "approved" state on a
+ * conflict (the deterministic/AI merge path); Dismiss is "rejected".
+ */
+describe("buildApprovedInputs — explicit Replace vs Merge", () => {
+  it("Replace overwrites the existing value with the import verbatim (no blend)", async () => {
+    const out = await buildApprovedInputs([
+      field({
+        fieldId: "constraints",
+        existingValue: "Budget capped at £2m",
+        hasConflict: true,
+        // Replace: edited state carrying the import value verbatim.
+        mapping: mapping({ value: "Must launch before regulatory deadline", reviewState: "edited", editedValue: "Must launch before regulatory deadline" }),
+      }),
+    ]);
+    expect(out.strategy.constraints).toBe("Must launch before regulatory deadline");
+    expect(out.strategy.constraints).not.toContain("Budget capped at £2m");
+  });
+
+  it("Merge blends the existing value with the import (keeps both)", async () => {
+    const out = await buildApprovedInputs([
+      field({
+        fieldId: "constraints",
+        existingValue: "Budget capped at £2m",
+        hasConflict: true,
+        mapping: mapping({ value: "Must launch before regulatory deadline", reviewState: "approved" }),
+      }),
+    ]);
+    expect(out.strategy.constraints).toContain("Budget capped at £2m");
+    expect(out.strategy.constraints).toContain("Must launch before regulatory deadline");
+  });
+});
+
+/**
+ * Gate-locked phases are frozen: an import touches them only when the user
+ * explicitly overrides a field (Replace/Merge). Untouched (pending) or dismissed
+ * locked fields are skipped so an import never silently disturbs approved work.
+ */
+describe("buildApprovedInputs — gate-locked phase overrides", () => {
+  const locked = new Set(["strategy"]);
+
+  it("skips an untouched (pending) locked field", async () => {
+    const out = await buildApprovedInputs(
+      [field({ fieldId: "sponsor", mapping: mapping({ value: "Jane", reviewState: "pending" }) })],
+      undefined,
+      undefined,
+      false,
+      locked,
+    );
+    expect(out.strategy).toBeUndefined();
+  });
+
+  it("still skips a locked field even with no reviewState set (defaults to frozen)", async () => {
+    const out = await buildApprovedInputs(
+      [field({ fieldId: "sponsor", mapping: mapping({ value: "Jane" }) })],
+      undefined,
+      undefined,
+      false,
+      locked,
+    );
+    expect(out.strategy).toBeUndefined();
+  });
+
+  it("imports a locked field the user explicitly Replaced (edited verbatim)", async () => {
+    const out = await buildApprovedInputs(
+      [field({ fieldId: "sponsor", existingValue: "Old sponsor", hasConflict: true, mapping: mapping({ value: "Jane Doe, CFO", reviewState: "edited", editedValue: "Jane Doe, CFO" }) })],
+      undefined,
+      undefined,
+      false,
+      locked,
+    );
+    expect(out.strategy.sponsor).toBe("Jane Doe, CFO");
+  });
+
+  it("merges a locked field the user explicitly Merged (approved conflict)", async () => {
+    const out = await buildApprovedInputs(
+      [field({ fieldId: "constraints", existingValue: "Budget £2m", hasConflict: true, mapping: mapping({ value: "Tight timeline", reviewState: "approved" }) })],
+      undefined,
+      undefined,
+      false,
+      locked,
+    );
+    expect(out.strategy.constraints).toContain("Budget £2m");
+    expect(out.strategy.constraints).toContain("Tight timeline");
+  });
+
+  it("freezes only the locked phase — a non-locked phase in the same import still commits", async () => {
+    const out = await buildApprovedInputs(
+      [
+        // Locked + untouched → skipped.
+        field({ fieldId: "sponsor", mapping: mapping({ value: "Frozen Jane", reviewState: "pending" }) }),
+        // Non-locked + approved → imported.
+        field({ phaseId: "discover", fieldId: "currentStateSummary", fieldLabel: "Current state", mapping: mapping({ value: "As-is captured", reviewState: "approved" }) }),
+      ],
+      undefined,
+      undefined,
+      false,
+      locked,
+    );
+    expect(out.strategy).toBeUndefined();
+    expect(out.discover.currentStateSummary).toBe("As-is captured");
+  });
+});

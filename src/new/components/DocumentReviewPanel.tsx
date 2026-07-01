@@ -107,6 +107,79 @@ function ExtractionBadge({ type }: { type: string }) {
   );
 }
 
+// ─── Value pane (one side of the current-vs-imported comparison) ──────────────
+
+function ValuePane({
+  heading,
+  value,
+  tone,
+}: {
+  heading: string;
+  value: string;
+  tone: "current" | "incoming";
+}) {
+  const accent = tone === "current" ? "var(--v3-text-muted)" : "var(--v3-accent)";
+  return (
+    <div
+      style={{
+        flex: 1,
+        minWidth: 0,
+        background: "var(--v3-surface-3, rgba(255,255,255,0.03))",
+        border: "1px solid var(--v3-border, rgba(255,255,255,0.08))",
+        borderRadius: 6,
+        padding: "7px 9px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 4,
+      }}
+    >
+      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: accent }}>
+        {heading}
+      </span>
+      <div style={{ fontSize: 12, color: "var(--v3-text-secondary)", lineHeight: 1.55, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+        {(formatKpiDisplay(value) ?? value) || <em style={{ opacity: 0.5 }}>(empty)</em>}
+      </div>
+    </div>
+  );
+}
+
+// ─── Resolution action button (Replace / Merge / Dismiss / Import) ────────────
+
+function ResolutionButton({
+  label,
+  hint,
+  color,
+  active,
+  onClick,
+}: {
+  label: string;
+  hint: string;
+  color: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={hint}
+      style={{
+        background: active ? `${color}26` : "transparent",
+        border: `1px solid ${active ? color : "var(--v3-border, rgba(255,255,255,0.12))"}`,
+        borderRadius: 5,
+        color: active ? color : "var(--v3-text-secondary)",
+        fontSize: 11,
+        fontWeight: active ? 700 : 600,
+        padding: "3px 10px",
+        cursor: "pointer",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {active ? `✓ ${label}` : label}
+    </button>
+  );
+}
+
 // ─── Single review field row ──────────────────────────────────────────────────
 
 function ReviewFieldRow({
@@ -117,7 +190,7 @@ function ReviewFieldRow({
   onEdit,
 }: {
   field: ReviewField;
-  /** Phase gate is approved → field is frozen: shown read-only, never imported. */
+  /** Phase gate is approved → field is frozen: imports only on explicit override. */
   locked?: boolean;
   onApprove: () => void;
   onReject: () => void;
@@ -128,74 +201,53 @@ function ReviewFieldRow({
     field.mapping.editedValue ?? field.mapping.value,
   );
   const state = field.mapping.reviewState ?? "pending";
-  const displayValueLocked =
-    state === "edited" ? (field.mapping.editedValue ?? field.mapping.value) : field.mapping.value;
-  const kpiDisplayLocked = formatKpiDisplay(displayValueLocked);
+  const incomingValue = field.mapping.value;
+  const existingValue = field.existingValue ?? "";
+  // A populated field: the programme already holds a value the import would touch,
+  // so the user gets an explicit Replace / Merge / Dismiss choice side by side.
+  const hasExisting = field.hasConflict && !!existingValue.trim();
 
-  // Locked phases render a stripped-down, read-only row: no approve/reject/edit
-  // controls, dimmed, with a "frozen" note explaining why it won't be imported.
-  if (locked) {
-    return (
-      <div
-        style={{
-          background: "var(--v3-surface-2, rgba(255,255,255,0.02))",
-          border: "1px dashed var(--v3-border, rgba(255,255,255,0.08))",
-          borderRadius: 8,
-          padding: "10px 12px",
-          display: "flex",
-          flexDirection: "column",
-          gap: 6,
-          opacity: 0.6,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 600,
-              color: "var(--v3-text-secondary)",
-              textTransform: "uppercase",
-              letterSpacing: "0.05em",
-              flex: 1,
-            }}
-          >
-            {field.fieldLabel}
-          </span>
-          <span style={{ fontSize: 10, color: "var(--v3-text-muted)", fontWeight: 600 }}>🔒 Frozen</span>
-        </div>
-        <div style={{ fontSize: 12, color: "var(--v3-text-muted)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
-          {kpiDisplayLocked ?? displayValueLocked}
-        </div>
-      </div>
-    );
-  }
-  const displayValue =
-    state === "edited" ? (field.mapping.editedValue ?? field.mapping.value) : field.mapping.value;
-  const kpiDisplay = formatKpiDisplay(displayValue);
+  // Replace is modelled as an "edited" state whose value equals the import verbatim
+  // (overwrite); a hand-edit is an "edited" state whose value diverges from it.
+  const isReplace = state === "edited" && (field.mapping.editedValue ?? "").trim() === incomingValue.trim();
+  const isMerge = state === "approved";
+  const isDismiss = state === "rejected";
+  const resolutionLabel = isDismiss
+    ? "Dismissed"
+    : state === "edited"
+      ? (isReplace ? "Replaced" : "Edited")
+      : isMerge
+        ? (hasExisting ? "Merged" : "Imported")
+        : null;
+
+  const decidedValue = state === "edited" ? (field.mapping.editedValue ?? incomingValue) : incomingValue;
+
+  const borderColor = isDismiss
+    ? "rgba(239,68,68,0.25)"
+    : resolutionLabel
+      ? "rgba(34,197,94,0.28)"
+      : locked
+        ? "rgba(148,163,184,0.3)"
+        : hasExisting
+          ? "rgba(245,158,11,0.32)"
+          : "var(--v3-border, rgba(255,255,255,0.08))";
+  const bg = isDismiss
+    ? "rgba(239,68,68,0.04)"
+    : resolutionLabel
+      ? "rgba(34,197,94,0.04)"
+      : "var(--v3-surface-2, rgba(255,255,255,0.03))";
 
   return (
     <div
       style={{
-        background: state === "rejected"
-          ? "rgba(239,68,68,0.04)"
-          : state === "approved" || state === "edited"
-            ? "rgba(34,197,94,0.04)"
-            : "var(--v3-surface-2, rgba(255,255,255,0.03))",
-        border: `1px solid ${
-          field.hasConflict && state === "pending"
-            ? "rgba(245,158,11,0.3)"
-            : state === "rejected"
-              ? "rgba(239,68,68,0.2)"
-              : state === "approved" || state === "edited"
-                ? "rgba(34,197,94,0.2)"
-                : "var(--v3-border, rgba(255,255,255,0.08))"
-        }`,
+        background: bg,
+        border: `1px solid ${borderColor}`,
         borderRadius: 8,
         padding: "10px 12px",
         display: "flex",
         flexDirection: "column",
-        gap: 6,
-        opacity: state === "rejected" ? 0.55 : 1,
+        gap: 8,
+        opacity: isDismiss ? 0.6 : 1,
         transition: "all 0.15s",
       }}
     >
@@ -213,101 +265,48 @@ function ReviewFieldRow({
         >
           {field.fieldLabel}
         </span>
+        {locked && (
+          <span
+            style={{
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: "0.04em",
+              color: "var(--v3-text-muted)",
+              background: "var(--v3-surface-2, rgba(255,255,255,0.04))",
+              border: "1px solid var(--v3-border)",
+              borderRadius: 4,
+              padding: "1px 6px",
+            }}
+            title="This phase's gate is approved — its inputs are frozen and import only if you explicitly override."
+          >
+            🔒 Gate approved
+          </span>
+        )}
         <ExtractionBadge type={field.mapping.extractionType} />
         <ConfidenceBar score={field.mapping.confidence} />
-
-        {/* Approve / Reject / Edit controls */}
-        <div style={{ display: "flex", gap: 4 }}>
-          {state !== "approved" && state !== "edited" && (
-            <button
-              type="button"
-              onClick={onApprove}
-              title="Approve"
-              style={{
-                background: "rgba(34,197,94,0.15)",
-                border: "1px solid rgba(34,197,94,0.3)",
-                borderRadius: 5,
-                color: "#22c55e",
-                fontSize: 11,
-                padding: "2px 8px",
-                cursor: "pointer",
-                fontWeight: 600,
-              }}
-            >
-              ✓
-            </button>
-          )}
-          {(state === "approved" || state === "edited") && (
-            <span style={{ color: "#22c55e", fontSize: 11, fontWeight: 700 }}>✓ Approved</span>
-          )}
-          {state !== "rejected" && (
-            <button
-              type="button"
-              onClick={onReject}
-              title="Reject"
-              style={{
-                background: "rgba(239,68,68,0.1)",
-                border: "1px solid rgba(239,68,68,0.2)",
-                borderRadius: 5,
-                color: "#ef4444",
-                fontSize: 11,
-                padding: "2px 8px",
-                cursor: "pointer",
-              }}
-            >
-              ✕
-            </button>
-          )}
-          {state === "rejected" && (
-            <span style={{ color: "#ef4444", fontSize: 11, fontWeight: 700 }}>✕ Rejected</span>
-          )}
-          {!editing && state !== "rejected" && (
-            <button
-              type="button"
-              onClick={() => {
-                setEditValue(displayValue);
-                setEditing(true);
-              }}
-              title="Edit value"
-              style={{
-                background: "transparent",
-                border: "1px solid var(--v3-border)",
-                borderRadius: 5,
-                color: "var(--v3-text-muted)",
-                fontSize: 11,
-                padding: "2px 7px",
-                cursor: "pointer",
-              }}
-            >
-              ✎
-            </button>
-          )}
-        </div>
+        {resolutionLabel && (
+          <span style={{ color: isDismiss ? "#ef4444" : "#22c55e", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
+            {isDismiss ? "✕" : "✓"} {resolutionLabel}
+          </span>
+        )}
       </div>
 
-      {/* Conflict warning */}
-      {field.hasConflict && state === "pending" && (
+      {/* Frozen-by-default note for an untouched locked field. */}
+      {locked && !resolutionLabel && !isDismiss && (
         <div
           style={{
             fontSize: 10,
-            color: "#f59e0b",
-            background: "rgba(245,158,11,0.1)",
+            color: "var(--v3-text-muted)",
+            background: "var(--v3-surface-2, rgba(255,255,255,0.04))",
             borderRadius: 4,
             padding: "3px 7px",
-            display: "flex",
-            gap: 5,
-            alignItems: "center",
           }}
         >
-          <span>⚠</span>
-          <span>
-            Conflicts with existing value:{" "}
-            <em style={{ opacity: 0.8 }}>"{(field.existingValue ?? "").slice(0, 80)}"</em>
-          </span>
+          Frozen — will not import unless you Replace or Merge below.
         </div>
       )}
 
-      {/* Value display / edit */}
+      {/* Value comparison / edit */}
       {editing ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <textarea
@@ -350,6 +349,12 @@ function ReviewFieldRow({
             </button>
           </div>
         </div>
+      ) : hasExisting ? (
+        // Side-by-side: the value already in the programme vs. what the import brings.
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <ValuePane heading="Current value" value={existingValue} tone="current" />
+          <ValuePane heading="Imported value" value={incomingValue} tone="incoming" />
+        </div>
       ) : (
         <div
           style={{
@@ -359,7 +364,68 @@ function ReviewFieldRow({
             whiteSpace: "pre-wrap",
           }}
         >
-          {kpiDisplay ?? displayValue}
+          {formatKpiDisplay(decidedValue) ?? decidedValue}
+        </div>
+      )}
+
+      {/* Resolution actions — Replace / Merge / Dismiss for a populated field,
+          Import / Dismiss for a fresh one. Always available so a decision can be
+          changed; the active choice is highlighted. */}
+      {!editing && (
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+          {hasExisting ? (
+            <>
+              <ResolutionButton
+                label="Replace"
+                hint="Overwrite the existing value with the imported one"
+                color="#22c55e"
+                active={isReplace}
+                onClick={() => onEdit(incomingValue)}
+              />
+              <ResolutionButton
+                label="Merge"
+                hint="Blend the existing value with the imported one (keeps both)"
+                color="#6366f1"
+                active={isMerge}
+                onClick={onApprove}
+              />
+            </>
+          ) : (
+            <ResolutionButton
+              label="Import"
+              hint="Add this value to the programme"
+              color="#22c55e"
+              active={isMerge}
+              onClick={onApprove}
+            />
+          )}
+          <ResolutionButton
+            label="Dismiss"
+            hint="Discard the imported value — keep the programme as is"
+            color="#ef4444"
+            active={isDismiss}
+            onClick={onReject}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              setEditValue(decidedValue);
+              setEditing(true);
+            }}
+            title="Edit the value before importing"
+            style={{
+              background: "transparent",
+              border: "1px solid var(--v3-border)",
+              borderRadius: 5,
+              color: "var(--v3-text-muted)",
+              fontSize: 11,
+              padding: "3px 9px",
+              cursor: "pointer",
+              marginLeft: "auto",
+            }}
+          >
+            ✎ Edit
+          </button>
         </div>
       )}
 
@@ -425,7 +491,7 @@ function PhaseGroup({
               textTransform: "none",
             }}
           >
-            🔒 Gate approved — inputs frozen, not imported
+            🔒 Gate approved — frozen unless you override
           </span>
         )}
       </div>
@@ -520,12 +586,18 @@ export function DocumentReviewPanel({
     return acc;
   }, {});
 
-  // Fields in gate-locked phases are frozen — they are displayed read-only but
-  // play no part in the approve/save/auto-commit flow. All counts and the
-  // auto-commit decision are scoped to the importable (non-locked) fields only.
+  // Fields in gate-locked phases are frozen by default: they play no part in the
+  // auto-commit gate (so an untouched locked field never blocks or triggers a
+  // save), but the user can now explicitly override each one (Replace/Merge) and
+  // those overrides do persist. Counts and auto-commit scope to the non-locked
+  // (active) set; locked overrides are tracked separately.
   const activeFields = reviewFields.filter((f) => !isPhaseLocked(f.phaseId));
-  const lockedFieldCount = reviewFields.length - activeFields.length;
+  const lockedFields = reviewFields.filter((f) => isPhaseLocked(f.phaseId));
+  const lockedFieldCount = lockedFields.length;
   const lockedPhaseCount = Object.keys(byPhase).filter((phaseId) => isPhaseLocked(phaseId)).length;
+  const lockedOverrideCount = lockedFields.filter(
+    (f) => f.mapping.reviewState === "approved" || f.mapping.reviewState === "edited",
+  ).length;
 
   const approvedCount = activeFields.filter(
     (f) => f.mapping.reviewState === "approved" || f.mapping.reviewState === "edited",
@@ -553,11 +625,13 @@ export function DocumentReviewPanel({
     if (!allDecided || saving || firedRef.current) return;
     const timer = window.setTimeout(() => {
       firedRef.current = true;
-      if (approvedCount > 0) onSaveRef.current();
+      // Persist if anything is importable — an active approval/edit or an
+      // explicit locked-phase override; otherwise there is nothing to save.
+      if (approvedCount > 0 || lockedOverrideCount > 0) onSaveRef.current();
       else onCancelRef.current();
     }, 600);
     return () => window.clearTimeout(timer);
-  }, [allDecided, approvedCount, saving]);
+  }, [allDecided, approvedCount, lockedOverrideCount, saving]);
 
   const ent = intelligence.entities ?? {};
   const entityCounts = [
@@ -668,6 +742,7 @@ export function DocumentReviewPanel({
               {lockedFieldCount > 0 && (
                 <span style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>
                   🔒 {lockedFieldCount} frozen in {lockedPhaseCount} locked phase{lockedPhaseCount !== 1 ? "s" : ""}
+                  {lockedOverrideCount > 0 ? ` · ${lockedOverrideCount} overridden` : ""}
                 </span>
               )}
               {conflictCount > 0 && (
@@ -773,21 +848,50 @@ export function DocumentReviewPanel({
             Done
           </button>
         ) : activeFields.length === 0 ? (
-          // Every mapped phase is gate-locked — there is nothing importable to
-          // decide, so auto-commit never fires. Offer an explicit dismiss.
-          <>
-            <span style={{ fontSize: 12, color: "var(--v3-text-muted)" }} aria-live="polite">
-              All mapped phases are gate-locked — nothing to import.
-            </span>
-            <button
-              type="button"
-              className="v3-button ghost"
-              style={{ fontSize: 12 }}
-              onClick={onCancel}
-            >
-              Done
-            </button>
-          </>
+          // Every mapped phase is gate-locked, so auto-commit never fires. If the
+          // user has explicitly overridden one or more frozen inputs, offer a
+          // manual import for just those; otherwise there is nothing to import.
+          lockedOverrideCount > 0 ? (
+            <>
+              <span style={{ fontSize: 12, color: "var(--v3-text-muted)" }} aria-live="polite">
+                {saving
+                  ? "Importing overrides…"
+                  : `${lockedOverrideCount} locked field${lockedOverrideCount !== 1 ? "s" : ""} overridden`}
+              </span>
+              <button
+                type="button"
+                className="v3-button ghost"
+                style={{ fontSize: 12 }}
+                onClick={onCancel}
+                disabled={saving}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="v3-button primary"
+                style={{ fontSize: 12 }}
+                onClick={onSave}
+                disabled={saving}
+              >
+                Import {lockedOverrideCount} override{lockedOverrideCount !== 1 ? "s" : ""}
+              </button>
+            </>
+          ) : (
+            <>
+              <span style={{ fontSize: 12, color: "var(--v3-text-muted)" }} aria-live="polite">
+                All mapped phases are gate-locked — override a field above to import it.
+              </span>
+              <button
+                type="button"
+                className="v3-button ghost"
+                style={{ fontSize: 12 }}
+                onClick={onCancel}
+              >
+                Done
+              </button>
+            </>
+          )
         ) : (
           <span style={{ fontSize: 12, color: "var(--v3-text-muted)" }} aria-live="polite">
             {saving

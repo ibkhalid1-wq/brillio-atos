@@ -553,6 +553,14 @@ export async function buildApprovedInputs(
   refineField?: RefineFieldFn,
   documentName?: string,
   reextract = false,
+  /**
+   * Gate-approved (locked) phases. Their inputs are frozen: a locked field is
+   * imported only when the user explicitly overrides it — Merge (reviewState
+   * "approved") or Replace (reviewState "edited"). Left untouched (pending) or
+   * dismissed (rejected), it is skipped, so an import never silently disturbs
+   * work behind an approved gate.
+   */
+  lockedPhaseIds?: Set<string>,
 ): Promise<ApprovedInputs> {
   const result: ApprovedInputs = {};
   const provByPhase: Record<string, ProvenanceMap> = {};
@@ -582,6 +590,15 @@ export async function buildApprovedInputs(
   await Promise.all(
     reviewFields.map(async (field) => {
       if (field.mapping.reviewState === "rejected") return;
+
+      // Frozen behind an approved gate: import only on an explicit override.
+      if (
+        lockedPhaseIds?.has(field.phaseId) &&
+        field.mapping.reviewState !== "approved" &&
+        field.mapping.reviewState !== "edited"
+      ) {
+        return;
+      }
 
       // User hand-edited this field in the review panel — honour it verbatim.
       // The PM restructured the extracted text, so record it as "enriched".
@@ -644,6 +661,12 @@ export interface UseDocumentIntelligenceOptions {
   existingPhaseInputs?: Record<string, Record<string, string>>;
   /** Programme's dynamic schema — gates which phases/fields an import can target */
   dynamicSchemaStore?: DynamicSchemaStore;
+  /**
+   * Gate-approved (locked) phases. Their fields are imported only on an explicit
+   * user override (Replace/Merge) in the review panel; untouched or dismissed
+   * locked fields are skipped so an import never disturbs work behind a gate.
+   */
+  lockedPhaseIds?: Set<string>;
   /** Called after approved inputs are persisted */
   onComplete?: (result?: DocumentImportResult) => void | Promise<void>;
 }
@@ -652,6 +675,7 @@ export function useDocumentIntelligence({
   programId,
   existingPhaseInputs = {},
   dynamicSchemaStore,
+  lockedPhaseIds,
   onComplete,
 }: UseDocumentIntelligenceOptions) {
   const [stage, setStage] = useState<DocumentImportStage>("idle");
@@ -668,6 +692,10 @@ export function useDocumentIntelligence({
   // re-extract the user's intent is to refresh from the source, so the KPI merge
   // lets the document's values win over the existing grid (see mergeKpiJson).
   const isReextractRef = useRef<boolean>(false);
+  // Latch the locked-phase set so the save callback reads the latest value
+  // without re-creating on every render (the parent passes a fresh Set each time).
+  const lockedPhaseIdsRef = useRef<Set<string> | undefined>(lockedPhaseIds);
+  lockedPhaseIdsRef.current = lockedPhaseIds;
 
   // ── importFile: parse + extract → move to reviewing ──────────────────────
   const importFile = useCallback(async (file: File, phaseHint?: string) => {
@@ -937,10 +965,13 @@ export function useDocumentIntelligence({
   }, []);
 
   // ── approveAll: mark all pending fields as approved ───────────────────────
+  // Skips gate-locked phases: their inputs are frozen and only import on an
+  // explicit per-field override, so "Accept all" never silently unfreezes them.
   const approveAll = useCallback(() => {
+    const locked = lockedPhaseIdsRef.current;
     setReviewFields((prev) =>
       prev.map((f) =>
-        f.mapping.reviewState === "pending"
+        f.mapping.reviewState === "pending" && !locked?.has(f.phaseId)
           ? { ...f, mapping: { ...f.mapping, reviewState: "approved" } }
           : f,
       ),
@@ -965,7 +996,7 @@ export function useDocumentIntelligence({
     setProgress(90);
 
     try {
-      const approved = await buildApprovedInputs(reviewFields, refineField, importedFileNameRef.current, isReextractRef.current);
+      const approved = await buildApprovedInputs(reviewFields, refineField, importedFileNameRef.current, isReextractRef.current, lockedPhaseIdsRef.current);
       // Filter out empty phases
       const nonEmpty = Object.fromEntries(
         Object.entries(approved).filter(([, inputs]) => Object.keys(inputs).length > 0),
