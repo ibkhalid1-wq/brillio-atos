@@ -26,6 +26,9 @@ export function isPcrDecision(decision: DecisionSummary): boolean {
   return PCR_TYPES.has(decision.type) || decision.source === "scope-pcr";
 }
 
+/** Why a change request sits in history rather than the open list. */
+export type ChangeRequestHistoryKind = "resolved" | "auto-filtered";
+
 export interface ChangeRequestItem {
   id: string;
   title: string;
@@ -37,16 +40,24 @@ export interface ChangeRequestItem {
   resolution: string | null;
   resolvedAt: string | null;
   resolvedBy: string | null;
+  /** Set on history entries: how the request left the open list. */
+  historyKind?: ChangeRequestHistoryKind;
 }
 
 export interface ChangeRequestLog {
   open: ChangeRequestItem[];
-  resolved: ChangeRequestItem[];
-  /** Open PCRs suppressed as grounded false positives (stale absence-claims). */
+  /**
+   * Every change request no longer awaiting a call, newest first — resolved
+   * records plus PCRs auto-filtered as grounded false positives. Gives the
+   * screen a complete change-request history rather than silently dropping the
+   * suppressed ones.
+   */
+  history: ChangeRequestItem[];
+  /** Subset of `history` that was auto-filtered (stale absence-claims). */
   suppressedCount: number;
 }
 
-function toItem(decision: DecisionSummary): ChangeRequestItem {
+function toItem(decision: DecisionSummary, historyKind?: ChangeRequestHistoryKind): ChangeRequestItem {
   return {
     id: decision.id,
     title: decision.title || decision.question || "Change request",
@@ -57,6 +68,7 @@ function toItem(decision: DecisionSummary): ChangeRequestItem {
     resolution: decision.status ?? null,
     resolvedAt: decision.resolvedAt ?? null,
     resolvedBy: decision.resolvedBy ?? null,
+    historyKind,
   };
 }
 
@@ -68,24 +80,25 @@ export function deriveChangeRequests(program: ProgramSummary | null | undefined)
   const grounding = buildPlanGroundingIndex(program ?? null);
 
   const open: ChangeRequestItem[] = [];
-  const resolved: ChangeRequestItem[] = [];
+  const history: ChangeRequestItem[] = [];
   let suppressedCount = 0;
 
   for (const decision of pcrs) {
     if (isDecisionOpen(decision)) {
       if (isGroundedFalsePositiveDecision(decision, grounding)) {
         suppressedCount += 1;
+        history.push(toItem(decision, "auto-filtered"));
         continue;
       }
       open.push(toItem(decision));
     } else {
-      resolved.push(toItem(decision));
+      history.push(toItem(decision, "resolved"));
     }
   }
 
   return {
     open: open.sort(byNewest),
-    resolved: resolved.sort(byNewest),
+    history: history.sort(byNewest),
     suppressedCount,
   };
 }

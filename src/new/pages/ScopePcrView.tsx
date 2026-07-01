@@ -151,25 +151,34 @@ export function ScopePcrView({
             <div className="adam-body adam-muted">
               No open change requests.
               {changeRequests.suppressedCount
-                ? ` ${changeRequests.suppressedCount} stale absence-claim request${changeRequests.suppressedCount === 1 ? "" : "s"} filtered out as already satisfied.`
+                ? ` ${changeRequests.suppressedCount} stale absence-claim request${changeRequests.suppressedCount === 1 ? "" : "s"} filtered out as already satisfied — see history.`
                 : ""}
             </div>
           )}
         </div>
 
-        {changeRequests.resolved.length ? (
+        {changeRequests.history.length ? (
           <div className="mt-5 adam-stack" style={{ gap: 8 }}>
-            <div className="adam-micro adam-muted">Resolved history</div>
-            {changeRequests.resolved.map((cr) => (
+            <div className="adam-micro adam-muted">Change request history</div>
+            {changeRequests.history.map((cr) => (
               <div key={cr.id} className="adam-row adam-space-between" style={{ alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                <div className="adam-body">{cr.title}</div>
+                <div className="adam-stack" style={{ gap: 2 }}>
+                  <div className="adam-body">{cr.title}</div>
+                  <div className="adam-micro adam-muted">
+                    {cr.phaseId} · raised {new Date(cr.createdAt).toLocaleDateString()}
+                  </div>
+                </div>
                 <div className="adam-row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                  {cr.resolvedAt ? (
+                  {cr.historyKind === "resolved" && cr.resolvedAt ? (
                     <span className="adam-micro adam-muted">{new Date(cr.resolvedAt).toLocaleDateString()}</span>
                   ) : null}
-                  <span className={`adam-badge ${cr.resolution === "rejected" ? "red" : cr.resolution === "approved" ? "green" : "slate"}`}>
-                    {cr.resolution ?? "resolved"}
-                  </span>
+                  {cr.historyKind === "auto-filtered" ? (
+                    <span className="adam-badge slate">auto-filtered · already satisfied</span>
+                  ) : (
+                    <span className={`adam-badge ${cr.resolution === "rejected" ? "red" : cr.resolution === "approved" ? "green" : "slate"}`}>
+                      {cr.resolution ?? "resolved"}
+                    </span>
+                  )}
                 </div>
               </div>
             ))}

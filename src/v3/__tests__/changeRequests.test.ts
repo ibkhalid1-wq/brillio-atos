@@ -51,7 +51,7 @@ describe("isPcrDecision", () => {
 
 describe("deriveChangeRequests", () => {
   it("returns empty log for a null program", () => {
-    expect(deriveChangeRequests(null)).toEqual({ open: [], resolved: [], suppressedCount: 0 });
+    expect(deriveChangeRequests(null)).toEqual({ open: [], history: [], suppressedCount: 0 });
   });
 
   it("lists a genuine open change request", () => {
@@ -59,15 +59,18 @@ describe("deriveChangeRequests", () => {
     const log = deriveChangeRequests(program);
     expect(log.open).toHaveLength(1);
     expect(log.open[0].title).toBe("Add mobile payments to scope");
+    expect(log.history).toHaveLength(0);
     expect(log.suppressedCount).toBe(0);
   });
 
-  it("suppresses a grounded false-positive open PCR", () => {
+  it("suppresses a grounded false-positive open PCR but keeps it in history", () => {
     const fp = decision({ id: "fp", title: "No objectives are defined at the program level" });
     const program = { ...GROUNDED_PROGRAM, decisionQueue: [fp] } as ProgramSummary;
     const log = deriveChangeRequests(program);
     expect(log.open).toHaveLength(0);
     expect(log.suppressedCount).toBe(1);
+    expect(log.history).toHaveLength(1);
+    expect(log.history[0].historyKind).toBe("auto-filtered");
   });
 
   it("keeps resolved PCRs as history even when they were absence-claims", () => {
@@ -79,8 +82,9 @@ describe("deriveChangeRequests", () => {
     });
     const program = { ...GROUNDED_PROGRAM, decisionQueue: [resolved] } as ProgramSummary;
     const log = deriveChangeRequests(program);
-    expect(log.resolved).toHaveLength(1);
-    expect(log.resolved[0].resolution).toBe("rejected");
+    expect(log.history).toHaveLength(1);
+    expect(log.history[0].resolution).toBe("rejected");
+    expect(log.history[0].historyKind).toBe("resolved");
     expect(log.suppressedCount).toBe(0);
   });
 
@@ -95,6 +99,15 @@ describe("deriveChangeRequests", () => {
   it("ignores non-PCR decisions entirely", () => {
     const other = decision({ type: "gate_approval", source: undefined });
     const program = { ...GROUNDED_PROGRAM, decisionQueue: [other] } as ProgramSummary;
-    expect(deriveChangeRequests(program)).toEqual({ open: [], resolved: [], suppressedCount: 0 });
+    expect(deriveChangeRequests(program)).toEqual({ open: [], history: [], suppressedCount: 0 });
+  });
+
+  it("orders history newest-first across resolved and auto-filtered", () => {
+    const oldResolved = decision({ id: "old", status: "approved", createdAt: "2026-04-01T00:00:00Z" });
+    const newFiltered = decision({ id: "new", title: "No objectives are defined", createdAt: "2026-06-20T00:00:00Z" });
+    const program = { ...GROUNDED_PROGRAM, decisionQueue: [oldResolved, newFiltered] } as ProgramSummary;
+    const log = deriveChangeRequests(program);
+    expect(log.history.map((c) => c.id)).toEqual(["new", "old"]);
+    expect(log.suppressedCount).toBe(1);
   });
 });
