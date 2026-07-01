@@ -1,4 +1,4 @@
-import { parseRows, serializeRows, isLegacyFreeTextGridValue } from "@/v3/components/StructuredGrid";
+import { parseRows, serializeRows, isLegacyFreeTextGridValue, mergeGridDraft, type GridRow } from "@/v3/components/StructuredGrid";
 import type { GridColumn } from "@/v3/lib/phaseInputSchema";
 
 // When a field migrates from a free-text textarea to a grid (e.g. Discover's
@@ -89,5 +89,53 @@ describe("isLegacyFreeTextGridValue", () => {
     expect(isLegacyFreeTextGridValue(null)).toBe(false);
     expect(isLegacyFreeTextGridValue(undefined)).toBe(false);
     expect(isLegacyFreeTextGridValue(["Process A"])).toBe(false);
+  });
+});
+
+// Merging an agent draft into a grid the user has already populated must keep
+// their rows and add only the genuinely new drafted items — never duplicating an
+// item they already have, never discarding what they entered.
+describe("mergeGridDraft", () => {
+  const row = (item: string, category = ""): GridRow => ({ id: `id-${item}`, item, category });
+
+  it("appends drafted rows onto existing rows", () => {
+    const existing = [row("Order-to-cash")];
+    const draft = [row("Billing"), row("Campaign execution")];
+    expect(mergeGridDraft(existing, draft, "item").map((r) => r.item)).toEqual([
+      "Order-to-cash",
+      "Billing",
+      "Campaign execution",
+    ]);
+  });
+
+  it("skips drafted rows whose lead value already exists (case/space-insensitive)", () => {
+    const existing = [row("  Order-to-Cash ")];
+    const draft = [row("order-to-cash"), row("Billing")];
+    // The duplicate is dropped; only the new item is appended.
+    expect(mergeGridDraft(existing, draft, "item").map((r) => r.item)).toEqual([
+      "  Order-to-Cash ",
+      "Billing",
+    ]);
+  });
+
+  it("never drops or mutates the existing rows", () => {
+    const existing = [row("Existing A"), row("Existing B")];
+    const merged = mergeGridDraft(existing, [row("New")], "item");
+    expect(merged.slice(0, 2)).toEqual(existing);
+    expect(existing).toHaveLength(2); // input not mutated
+  });
+
+  it("skips drafted rows with an empty lead value (nothing to key on)", () => {
+    const existing = [row("Keep")];
+    const draft = [row(""), row("   "), row("Real")];
+    expect(mergeGridDraft(existing, draft, "item").map((r) => r.item)).toEqual(["Keep", "Real"]);
+  });
+
+  it("appends the whole draft when the grid starts empty", () => {
+    expect(mergeGridDraft([], [row("A"), row("B")], "item").map((r) => r.item)).toEqual(["A", "B"]);
+  });
+
+  it("adds nothing without a lead key (a merge can only dedupe against a key)", () => {
+    expect(mergeGridDraft([row("A")], [row("B")], undefined)).toEqual([row("A")]);
   });
 });

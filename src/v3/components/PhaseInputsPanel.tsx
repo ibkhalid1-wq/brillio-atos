@@ -7,7 +7,7 @@ import { prioritizePhaseFields } from "@/v3/lib/phaseInputPriority";
 import { projectArchitectureDecisions } from "@/v3/lib/designDecisions";
 import { projectCharterInScope, projectCharterOutOfScope } from "@/v3/lib/scopeDrafts";
 import { preserveUntouchedGrids } from "@/v3/lib/gridSaveGuard";
-import StructuredGrid, { type GridRow, parseRows, serializeRows, filledRowCount, isLegacyFreeTextGridValue } from "@/v3/components/StructuredGrid";
+import StructuredGrid, { type GridRow, parseRows, serializeRows, filledRowCount, isLegacyFreeTextGridValue, mergeGridDraft } from "@/v3/components/StructuredGrid";
 import { V3Select, V3Combobox } from "@/v3/components/ui/V3Dropdown";
 import AutoGrowTextarea from "@/v3/components/ui/AutoGrowTextarea";
 import { PROVENANCE_KEY, parseProvenance, provenanceMatches, type FieldProvenance } from "@/new/lib/fieldProvenance";
@@ -901,21 +901,12 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
                       };
                       const adoptMerge = () => {
                         gridsTouchedRef.current.add(field.id);
-                        setGrids((current) => {
-                          const existing = current[field.id] ?? [];
-                          const seen = new Set(
-                            existing
-                              .map((r) => (leadKey ? (r[leadKey] ?? "") : "").trim().toLowerCase())
-                              .filter((k) => k.length > 0),
-                          );
-                          // Append only drafted rows whose lead value isn't already
-                          // present, so a merge never duplicates an existing item.
-                          const additions = draftRows().filter((r) => {
-                            const key = (leadKey ? (r[leadKey] ?? "") : "").trim().toLowerCase();
-                            return key.length > 0 && !seen.has(key);
-                          });
-                          return { ...current, [field.id]: [...existing, ...additions] };
-                        });
+                        // Append only drafted rows not already present (by lead value),
+                        // so a merge never duplicates an item or discards existing rows.
+                        setGrids((current) => ({
+                          ...current,
+                          [field.id]: mergeGridDraft(current[field.id] ?? [], draftRows(), leadKey),
+                        }));
                       };
                       return (
                       <div className="v3-decision-draft" role="note">

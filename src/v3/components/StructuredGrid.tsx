@@ -86,6 +86,25 @@ export function isLegacyFreeTextGridValue(raw: unknown): boolean {
   }
 }
 
+/**
+ * Merge projected draft rows into an existing grid non-destructively: keep every
+ * existing row, then append only the draft rows whose lead-column value isn't
+ * already present (compared case-insensitively, whitespace-trimmed). Rows with an
+ * empty lead value are never appended (nothing to key on), and without a lead key
+ * nothing is added — a merge can only dedupe against a key. Used when the user
+ * adopts an agent draft over content they've already entered, so a merge never
+ * duplicates an item and never discards what they had.
+ */
+export function mergeGridDraft(existing: GridRow[], draftRows: GridRow[], leadKey: string | undefined): GridRow[] {
+  const keyOf = (row: GridRow): string => (leadKey ? (row[leadKey] ?? "") : "").trim().toLowerCase();
+  const seen = new Set(existing.map(keyOf).filter((key) => key.length > 0));
+  const additions = draftRows.filter((row) => {
+    const key = keyOf(row);
+    return key.length > 0 && !seen.has(key);
+  });
+  return [...existing, ...additions];
+}
+
 /** True when a row has at least one non-empty cell across the grid's columns. */
 export function rowHasContent(row: GridRow, columns: GridColumn[]): boolean {
   return columns.some((col) => (row[col.key] ?? "").trim().length > 0);
