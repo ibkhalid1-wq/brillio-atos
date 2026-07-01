@@ -293,7 +293,13 @@ export default function ProgramDetailRouter({
     case "decision-audit":
       return <DecisionAuditView program={program} />;
     case "ontology":
-      return <OntologyView program={program} />;
+      return (
+        <OntologyView
+          program={program}
+          onRunValidation={onRunAgent ? () => onRunAgent("cross-artifact-validator", "program") : undefined}
+          validationIsRunning={activeRuns.some((r) => r.agent_id === "cross-artifact-validator" && r.status === "running")}
+        />
+      );
     case "closure":
       return (
         <ClosureView

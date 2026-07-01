@@ -177,7 +177,17 @@ function BlockerRow({ blocker }: { blocker: ConfidenceBlocker }) {
  * of sequence, a broken dependency — so the user can see *where* in the chain the
  * confidence erodes, not just the programme-level number.
  */
-function PhaseFidelityCard({ phases, semanticValidated }: { phases: PhaseFidelity[]; semanticValidated: boolean }) {
+function PhaseFidelityCard({
+  phases,
+  semanticValidated,
+  onRunValidation,
+  validationIsRunning = false,
+}: {
+  phases: PhaseFidelity[];
+  semanticValidated: boolean;
+  onRunValidation?: () => void;
+  validationIsRunning?: boolean;
+}) {
   return (
     <AdamCard>
       <AdamCardHeader
@@ -259,8 +269,29 @@ function PhaseFidelityCard({ phases, semanticValidated }: { phases: PhaseFidelit
           })}
         </div>
         {!semanticValidated && (
-          <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 10 }}>
-            “Not validated” = the zero-cost structural floor found no gap, but backward fidelity (does each phase honour the phases it builds on?) is a semantic question that has not been checked yet. Run validation to turn these into a real score.
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
+            <div style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>
+              “Not validated” = the zero-cost structural floor found no gap, but backward fidelity (does each phase honour the phases it builds on?) is a semantic question that has not been checked yet. Run validation to turn these into a real score.
+            </div>
+            {onRunValidation && (
+              <button
+                type="button"
+                onClick={onRunValidation}
+                disabled={validationIsRunning}
+                style={{
+                  alignSelf: "flex-start",
+                  fontSize: 12, fontWeight: 600,
+                  padding: "6px 12px", borderRadius: 6,
+                  border: "1px solid var(--v3-border)",
+                  background: validationIsRunning ? "var(--v3-surface-2)" : "var(--v3-accent)",
+                  color: validationIsRunning ? "var(--v3-text-muted)" : "var(--v3-accent-contrast, #fff)",
+                  cursor: validationIsRunning ? "default" : "pointer",
+                  opacity: validationIsRunning ? 0.7 : 1,
+                }}
+              >
+                {validationIsRunning ? "Validating…" : "Run validation"}
+              </button>
+            )}
           </div>
         )}
       </AdamCardBody>
@@ -268,7 +299,18 @@ function PhaseFidelityCard({ phases, semanticValidated }: { phases: PhaseFidelit
   );
 }
 
-export function OntologyView({ program }: { program: ProgramSummary | null }) {
+export function OntologyView({
+  program,
+  onRunValidation,
+  validationIsRunning = false,
+}: {
+  program: ProgramSummary | null;
+  // User-initiated trigger for the semantic cross-artifact validator. Optional so
+  // the view still renders in contexts (tests, previews) with no agent wiring; the
+  // "Run validation" affordance only appears when a handler is threaded in.
+  onRunValidation?: () => void;
+  validationIsRunning?: boolean;
+}) {
   const { assessment, phaseFidelity, semanticValidated } = useMemo(() => {
     if (!program) return { assessment: null, phaseFidelity: [] as PhaseFidelity[], semanticValidated: false };
     // Feed the roll-up both the zero-cost deterministic findings and any persisted
@@ -325,7 +367,14 @@ export function OntologyView({ program }: { program: ProgramSummary | null }) {
         </AdamCardBody>
       </AdamCard>
 
-      {phaseFidelity.length > 0 && <PhaseFidelityCard phases={phaseFidelity} semanticValidated={semanticValidated} />}
+      {phaseFidelity.length > 0 && (
+        <PhaseFidelityCard
+          phases={phaseFidelity}
+          semanticValidated={semanticValidated}
+          onRunValidation={onRunValidation}
+          validationIsRunning={validationIsRunning}
+        />
+      )}
 
       {assessment.recommendations.length > 0 && (
         <AdamCard>
