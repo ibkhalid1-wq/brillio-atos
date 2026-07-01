@@ -597,7 +597,10 @@ function deriveGateReviews(data: JsonRecord): Record<string, GateReview> {
       openRisks: Math.max(0, Math.round(asNumber(entry.openRisks, 0))),
       exitCriteriaStatus,
       recommendation: asString(entry.recommendation),
-      generatedAt: asString(entry.generatedAt, new Date().toISOString()),
+      // Deterministic: fall back to "" (not a call-time timestamp) so normalizeProgram
+      // stays a pure function of its input — a wall-clock default made two calls with
+      // identical input differ across a ms boundary.
+      generatedAt: asString(entry.generatedAt, ""),
       approvedAt: asString(entry.approvedAt) || null,
       approvedBy: asString(entry.approvedBy) || null,
       remediationNote: asString(entry.remediationNote) || null,
