@@ -140,7 +140,8 @@ export function buildObjectiveGraph(
   // Index artifacts by their producing phase, and separately collect
   // programme-global artifacts (those not scoped to any methodology phase, e.g.
   // an imported charter tagged phaseId "program") — these deliver every objective.
-  const phaseIdSet = new Set((program.phases || []).map((p) => p.id));
+  const phaseOrder = (program.phases || []).map((p) => p.id);
+  const phaseIdSet = new Set(phaseOrder);
   const artifactsByPhase = new Map<string, SemanticNode[]>();
   const globalArtifacts: SemanticNode[] = [];
   for (const node of byKind("artifact")) {
@@ -192,14 +193,19 @@ export function buildObjectiveGraph(
     }
     // Fallback: when explicit grounding metadata is absent (the objective fact
     // carries no impactedArtifacts — common when the methodology's input-flow was
-    // not persisted at runtime), attribute the artifacts produced in the
-    // objective's own phase plus any programme-global artifacts. This keeps the
-    // delivery chain honest — a business case in the same phase, or a programme
-    // charter, demonstrably carries the objective forward — rather than falsely
-    // reporting "no delivery traced".
+    // not persisted at runtime), attribute the artifacts across the objective's
+    // whole downstream delivery chain: its own phase and every phase that follows
+    // it in the methodology sequence, plus programme-global artifacts. A business
+    // objective is delivered progressively — the design, build and operate phases
+    // are where it is actually realised — so validating it against only its origin
+    // phase understates the chain. Downstream phases that produced nothing simply
+    // contribute nothing (no artifacts to attribute), so not-yet-started phases
+    // are never unfairly counted.
     if (groundedCount === 0) {
+      const startIndex = objective.phaseId ? phaseOrder.indexOf(objective.phaseId) : -1;
+      const chainPhases = startIndex >= 0 ? phaseOrder.slice(startIndex) : phaseOrder;
       const fallbackArtifacts = [
-        ...(objective.phaseId ? artifactsByPhase.get(objective.phaseId) ?? [] : []),
+        ...chainPhases.flatMap((pid) => artifactsByPhase.get(pid) ?? []),
         ...globalArtifacts,
       ];
       for (const artifact of fallbackArtifacts) {

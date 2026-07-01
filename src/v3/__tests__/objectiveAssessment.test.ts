@@ -116,6 +116,29 @@ describe("buildObjectiveGraph", () => {
     expect(deliveredBy.some((r) => r.to === "artifact:business-case")).toBe(true);
   });
 
+  it("spans the delivery chain into downstream phases when grounding is absent", () => {
+    // Objective sits in strategy; the real delivery lands in design and build.
+    // With no grounding metadata, those downstream artifacts must still be traced.
+    const spanning = program({
+      phases: [
+        { id: "strategy", displayName: "Strategy", pct: 100, status: "complete", objective: "" },
+        { id: "design", displayName: "Design", pct: 100, status: "complete", objective: "" },
+        { id: "build", displayName: "Build", pct: 100, status: "complete", objective: "" },
+      ],
+      artifacts: [
+        { id: "business-case", phaseId: "strategy", title: "Business Case", status: "approved", agentGenerated: true, lastEditedBy: "agent", lastEditedAt: "", contentSummary: "", versionNumber: 1, agentConfidence: 80 },
+        { id: "solution-architecture", phaseId: "design", title: "Solution Architecture", status: "approved", agentGenerated: true, lastEditedBy: "agent", lastEditedAt: "", contentSummary: "", versionNumber: 1, agentConfidence: 70 },
+        { id: "build-report", phaseId: "build", title: "Build Delivery Report", status: "approved", agentGenerated: true, lastEditedBy: "agent", lastEditedAt: "", contentSummary: "", versionNumber: 1, agentConfidence: 90 },
+      ],
+      rawData: { phaseInputs: { strategy: { businessObjective: OBJECTIVE } } },
+    });
+    const graph = buildObjectiveGraph(spanning);
+    const objId = graph.objectiveIds[0];
+    const targets = graph.relations.filter((r) => r.from === objId && r.kind === "delivered-by").map((r) => r.to);
+    expect(targets).toContain("artifact:solution-architecture");
+    expect(targets).toContain("artifact:build-report");
+  });
+
   it("attributes a programme-global artifact as delivery when grounding is absent", () => {
     // The one artifact is scoped to a non-phase bucket ("program"), as a
     // programme charter would be. It should still count as delivery.
