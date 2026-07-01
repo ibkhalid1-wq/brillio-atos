@@ -383,6 +383,14 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       typicalDurationWeeks: { min: 4, max: 10 },
       inputFields: [
         { id: "solutionApproach", label: "Solution approach & design principles", type: "textarea", required: true, placeholder: "Overall approach and the guiding principles the design must honour", hint: "e.g. API-first, reuse the existing identity platform, buy-over-build for non-differentiating capabilities" },
+        // Functional (process/workflow) design — the WHAT, distinct from the
+        // technical HOW captured by targetArchitecture. Without this field the
+        // document extractor had no target for a functional/workflow design doc
+        // (it maps only to declared fields), so such documents couldn't be mapped.
+        // Feeds future-state-design (futureCapabilities/processChanges) and the
+        // TOM (coreProcesses). Prose so an imported workflow catalogue summarises
+        // cleanly here while the full document stays attached as the source.
+        { id: "functionalDesignSummary", label: "Functional design summary", type: "textarea", required: false, placeholder: "Core business processes and workflows the solution must support, and how users/agents move through them", hint: "Summarise the functional/process design — key workflows, use cases, and the roles/agents that act in them. Attach the detailed workflow catalogue as a document and the extractor will summarise it here." },
         { id: "targetArchitecture", label: "Target architecture summary", type: "textarea", required: true, placeholder: "Key components, platforms, and how they integrate", hint: "Major systems, data stores, and integration topology at a glance" },
         {
           id: "keyDesignDecisions",
@@ -400,11 +408,11 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         { id: "integrationDataConstraints", label: "Integration & data constraints", type: "textarea", required: false, placeholder: "Systems to integrate, data migration scope, and known dependencies", hint: "Upstream/downstream systems, migration volumes, and sequencing constraints" },
       ],
       artifactInputFlow: {
-        "solution-architecture": ["solutionApproach", "targetArchitecture", "nonFunctionalRequirements", "integrationDataConstraints", "keyDesignDecisions"],
-        "future-state-design": ["solutionApproach", "targetArchitecture", "keyDesignDecisions"],
-        "target-operating-model": ["solutionApproach"],
+        "solution-architecture": ["solutionApproach", "functionalDesignSummary", "targetArchitecture", "nonFunctionalRequirements", "integrationDataConstraints", "keyDesignDecisions"],
+        "future-state-design": ["solutionApproach", "functionalDesignSummary", "targetArchitecture", "keyDesignDecisions"],
+        "target-operating-model": ["solutionApproach", "functionalDesignSummary"],
         "critical-path": ["solutionApproach", "integrationDataConstraints"],
-        "change-impact": ["solutionApproach"],
+        "change-impact": ["solutionApproach", "functionalDesignSummary"],
       },
     },
     {
