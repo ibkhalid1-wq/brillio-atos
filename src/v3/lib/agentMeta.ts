@@ -108,6 +108,13 @@ export const AGENT_ID_ALIASES: Record<string, string> = {
   "risk-register": "risk",
   "risks-assumptions-log": "risk",
   "risks-and-assumptions-log": "risk",
+  // The adoption agent's deliverable is the "Adoption Plan"; the planner
+  // sometimes emits it under that descriptive id ("adoption-plan") rather than
+  // the canonical agent id ("adoption"). Without this fold, canonicalArtifactId
+  // resolves only the post-hyphen token ("plan", not an agent) and leaves the
+  // variant as-is, so the planner artifact and the produced "adoption" orphan
+  // render as two identical "Adoption Plan" chips in the operate phase.
+  "adoption-plan": "adoption",
 };
 
 export function getAgentMeta(agentId: string): AgentMeta {

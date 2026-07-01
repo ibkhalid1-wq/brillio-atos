@@ -7,6 +7,7 @@ import {
   sanitizePlannerProposal,
   applyDynamicProposal,
   artifactGeneratorAgentId,
+  canonicalArtifactId,
   type DynamicSchemaStore,
   type DynamicPhaseProposal,
 } from "@/v3/lib/dynamicSchema";
@@ -246,6 +247,19 @@ describe("artifactGeneratorAgentId", () => {
     // label), but its generator is retired. Routing to the retired id would make
     // Generate a silent no-op at the dispatch guard; it must run the phase agent.
     expect(artifactGeneratorAgentId("design", "critical-path")).toBe("design");
+  });
+});
+
+describe("canonicalArtifactId folds descriptive planner variants to the producing agent", () => {
+  it("folds the adoption agent's descriptive deliverable id to the agent id", () => {
+    // The planner sometimes emits the Adoption Plan under its descriptive id
+    // rather than the canonical agent id; both must canonicalize to one chip.
+    expect(canonicalArtifactId("operate", "adoption-plan")).toBe("adoption");
+    expect(canonicalArtifactId("operate", "adoption")).toBe("adoption");
+  });
+
+  it("does not mangle a genuinely-hyphenated agent id", () => {
+    expect(canonicalArtifactId("design", "raci-matrix")).toBe("raci-matrix");
   });
 });
 
