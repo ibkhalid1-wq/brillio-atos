@@ -14,7 +14,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
-import { canonicalRole, findRosterGrid, getPhaseInputSchema, matchColumnKey, PHASE_INPUT_SCHEMAS, rolesMatch } from "@/v3/lib/phaseInputSchema";
+import { canonicalRole, findRosterGrid, findStakeholderGrid, getPhaseInputSchema, matchColumnKey, PHASE_INPUT_SCHEMAS, rolesMatch, STAKEHOLDER_PHASE_ID } from "@/v3/lib/phaseInputSchema";
 import type { DynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import type {
   ApprovedInputs,
@@ -313,6 +313,99 @@ export function deriveRosterReviewField(
     row[roleKey] = (s.role ?? "").trim();
     row[nameKey] = (s.name ?? "").trim();
     if (orgKey) row[orgKey] = (s.organization ?? "").trim();
+    return row;
+  });
+  const value = JSON.stringify(rows);
+  const existingValue = existingPhaseInputs[phaseId]?.[grid.id] ?? "";
+  const avgConfidence = named.reduce((sum, s) => sum + (Number(s.confidence) || 0), 0) / named.length;
+
+  return {
+    phaseId,
+    fieldId: grid.id,
+    fieldLabel: grid.label,
+    mapping: {
+      value,
+      confidence: avgConfidence > 0 ? avgConfidence : 0.75,
+      source: named.find((s) => s.source?.trim())?.source ?? "",
+      extractionType: "extracted",
+      reviewState: "pending",
+    },
+    existingValue: existingValue || undefined,
+    hasConflict: Boolean(existingValue && existingValue.trim() !== value),
+  };
+}
+
+// ─── Stakeholder-persona vs project-team classification ───────────────────────
+
+export type StakeholderClass = "team" | "persona";
+
+/**
+ * Role titles that mark a person as a *stakeholder persona* (someone the
+ * programme must keep aligned) rather than a *project-team* member (someone who
+ * delivers it). A team roster export routinely mixes both — delivery roles plus
+ * advisory/SME/steering-committee entries — and they belong in different places:
+ * team members in the Mobilise roster, personas in the Discover stakeholder
+ * register. Patterns are conservative so ordinary delivery titles stay on the
+ * team; only unambiguous governance/advisory/external signals route to personas.
+ */
+const STAKEHOLDER_PERSONA_PATTERNS: RegExp[] = [
+  /\badvis(or|ory|er)\b/i,
+  /\bsme\b/i,
+  /subject[-\s]?matter/i,
+  /\bsteer(ing|co)?\b/i,
+  /\bboard\b/i,
+  /committee/i,
+  /\bchampion\b/i,
+  /end[-\s]?user/i,
+  /\b(regulator|auditor)\b/i,
+  /works council|\bunion\b/i,
+  /\bstakeholder\b/i,
+];
+
+/**
+ * Classify an extracted role as project-team or stakeholder-persona. Empty/unknown
+ * roles default to "team" (the roster is the historical catch-all), so the change
+ * only ever *moves* clearly-advisory people out — it never strands a delivery role.
+ */
+export function classifyStakeholderRole(role: string | undefined): StakeholderClass {
+  const r = (role ?? "").trim();
+  if (!r) return "team";
+  return STAKEHOLDER_PERSONA_PATTERNS.some((re) => re.test(r)) ? "persona" : "team";
+}
+
+/**
+ * Bridge extracted stakeholder *personas* into the Discover stakeholder-register
+ * grid (id "stakeholderList"), mirroring the roster bridge. Advisory members and
+ * SMEs land in `entities.stakeholders` but must not be forced into the project-
+ * team roster — they belong here, with the register's influence/interest columns
+ * left blank for the PM to grade. Returns null when no stakeholder grid is
+ * declared or there are no named personas — we never fabricate a field.
+ */
+export function deriveStakeholderReviewField(
+  stakeholders: StakeholderEntity[] | undefined,
+  existingPhaseInputs: Record<string, Record<string, string>>,
+  store?: DynamicSchemaStore,
+  phaseId = STAKEHOLDER_PHASE_ID,
+): ReviewField | null {
+  const named = (stakeholders ?? []).filter((s) => s.name?.trim() || s.role?.trim());
+  if (named.length === 0) return null;
+
+  const grid = findStakeholderGrid(getPhaseInputSchema(phaseId, store).fields);
+  if (!grid) return null;
+
+  const cols = grid.columns ?? [];
+  const nameKey = matchColumnKey(cols, /name/i, "name")!;
+  const roleKey = matchColumnKey(cols, /role|title|position/i, "role")!;
+  const influenceKey = matchColumnKey(cols, /influence|impact/i);
+  const interestKey = matchColumnKey(cols, /interest|engagement/i);
+
+  const rows = named.map((s) => {
+    const row: Record<string, string> = { id: kpiRowId() };
+    row[roleKey] = (s.role ?? "").trim();
+    row[nameKey] = (s.name ?? "").trim();
+    // Influence/interest aren't in the document — seed empty so the PM grades them.
+    if (influenceKey) row[influenceKey] = "";
+    if (interestKey) row[interestKey] = "";
     return row;
   });
   const value = JSON.stringify(rows);
@@ -776,16 +869,32 @@ export function useDocumentIntelligence({
       const derived: ReviewField[] = [];
       const kpiField = deriveKpiReviewField(intel.kpis, existingPhaseInputs);
       if (kpiField) derived.push(kpiField);
-      // Bridge extracted stakeholders into the Mobilise core-team roster grid,
-      // unless the model already mapped that grid directly (avoid a duplicate
-      // review row for the same field).
+      // Split extracted people by role: project-team members bridge into the
+      // Mobilise roster; advisory/SME/governance personas bridge into the Discover
+      // stakeholder register. A team-roster export mixes both, so routing each to
+      // its rightful grid stops advisory members being forced into the delivery
+      // roster (and stops them being dropped entirely). Each bridge is skipped when
+      // the model already mapped that grid directly (avoid a duplicate review row).
+      const allStakeholders = intel.entities?.stakeholders ?? [];
+      const teamStakeholders = allStakeholders.filter((s) => classifyStakeholderRole(s.role) === "team");
+      const personaStakeholders = allStakeholders.filter((s) => classifyStakeholderRole(s.role) === "persona");
+
       const rosterField = deriveRosterReviewField(
-        intel.entities?.stakeholders,
+        teamStakeholders,
         existingPhaseInputs,
         dynamicSchemaStore,
       );
       if (rosterField && !fields.some((f) => f.phaseId === rosterField.phaseId && f.fieldId === rosterField.fieldId)) {
         derived.push(rosterField);
+      }
+
+      const stakeholderField = deriveStakeholderReviewField(
+        personaStakeholders,
+        existingPhaseInputs,
+        dynamicSchemaStore,
+      );
+      if (stakeholderField && !fields.some((f) => f.phaseId === stakeholderField.phaseId && f.fieldId === stakeholderField.fieldId)) {
+        derived.push(stakeholderField);
       }
       setReviewFields(derived.length ? [...fields, ...derived] : fields);
 

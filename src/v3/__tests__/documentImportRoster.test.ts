@@ -1,4 +1,4 @@
-import { mergeGridJson, deriveRosterReviewField } from "@/new/lib/useDocumentIntelligence";
+import { mergeGridJson, deriveRosterReviewField, deriveStakeholderReviewField, classifyStakeholderRole } from "@/new/lib/useDocumentIntelligence";
 import type { StakeholderEntity } from "@/new/lib/documentIntelligenceTypes";
 import type { DynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 
@@ -92,6 +92,46 @@ describe("deriveRosterReviewField", () => {
     );
     expect(field!.hasConflict).toBe(true);
     expect(field!.existingValue).toBe(existing);
+  });
+});
+
+describe("classifyStakeholderRole", () => {
+  it("routes advisory/SME/governance roles to personas", () => {
+    for (const role of ["Advisory Board Member", "SME - Tax", "Subject Matter Expert", "Steering Committee", "Programme Board", "Change Champion", "External Auditor", "End User Rep"]) {
+      expect(classifyStakeholderRole(role)).toBe("persona");
+    }
+  });
+
+  it("keeps delivery/team roles (and blank/unknown) on the team", () => {
+    for (const role of ["Delivery Lead", "Project Manager", "Solution Architect", "Business Analyst", "Developer", "Sponsor", "", undefined]) {
+      expect(classifyStakeholderRole(role)).toBe("team");
+    }
+  });
+});
+
+describe("deriveStakeholderReviewField", () => {
+  it("serializes personas into the Discover stakeholder register (static grid, no store needed)", () => {
+    const field = deriveStakeholderReviewField(
+      [
+        stakeholder({ name: "Dr Amina Yusuf", role: "Advisory Board Member" }),
+        stakeholder({ name: "Lee Chan", role: "SME - Data Privacy" }),
+      ],
+      {},
+    );
+    expect(field).not.toBeNull();
+    expect(field!.phaseId).toBe("discover");
+    expect(field!.fieldId).toBe("stakeholderList");
+    const parsed = rows(field!.mapping.value);
+    expect(parsed).toHaveLength(2);
+    expect(parsed[0]).toMatchObject({ name: "Dr Amina Yusuf", role: "Advisory Board Member" });
+    // Influence/interest columns are seeded blank for the PM to grade.
+    expect(parsed[0].influence).toBe("");
+    expect(parsed[0].interest).toBe("");
+  });
+
+  it("returns null when there are no named personas", () => {
+    expect(deriveStakeholderReviewField([], {})).toBeNull();
+    expect(deriveStakeholderReviewField([stakeholder({ name: "  ", role: "" })], {})).toBeNull();
   });
 });
 
