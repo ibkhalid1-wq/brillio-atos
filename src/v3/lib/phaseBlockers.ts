@@ -21,6 +21,7 @@ import type { ReadinessFactorKind } from "@/v3/lib/readinessModel";
 import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
 import { runDeterministicValidation, selectFindingsForPhase, selectModelValidationFindings } from "@/v3/lib/crossArtifactValidation";
 import { isDecisionOpen } from "@/v3/utils";
+import { buildPlanGroundingIndex, isGroundedFalsePositiveDecision } from "@/v3/lib/decisionGrounding";
 
 export type BlockerCategory =
   | "readiness"
@@ -150,9 +151,11 @@ export function derivePhaseBlockers(
   }
 
   // 5) Overdue governance decisions (≥14 days open) — the highest-friction subset.
+  const decisionGrounding = buildPlanGroundingIndex(program);
   const openDecisions = (program.decisionQueue || [])
     .filter(isDecisionOpen)
-    .filter((d) => !d.phaseId || d.phaseId === phaseId);
+    .filter((d) => !d.phaseId || d.phaseId === phaseId)
+    .filter((d) => !isGroundedFalsePositiveDecision(d, decisionGrounding));
   for (const decision of openDecisions) {
     const ageDays = decision.createdAt
       ? Math.floor((Date.now() - new Date(decision.createdAt).getTime()) / DAY_MS)

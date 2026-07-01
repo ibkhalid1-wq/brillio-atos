@@ -4,6 +4,7 @@ import { derivePhaseInputQuality } from "@/v3/lib/phaseInputQuality";
 import { ATOS_STANDARD } from "@/v3/lib/methodology";
 import { getDynamicSchemaStore, dynamicArtifactDefs } from "@/v3/lib/dynamicSchema";
 import { resolveArtifactQualityScore } from "@/v3/lib/artifactReview";
+import { buildPlanGroundingIndex, isGroundedFalsePositiveDecision } from "@/v3/lib/decisionGrounding";
 
 // ─── Readiness Action ─────────────────────────────────────────────────────────
 // Ranked action with estimated readiness impact — powers the "what to do next"
@@ -245,9 +246,14 @@ export function computePhaseReadiness(
   }
 
   // ── Open decisions blocking gate (Priority 8 — decision-to-readiness linkage) ─
-  const openPhaseDecisions = (program.decisionQueue ?? []).filter(
-    (d) => (!d.status || d.status === "open") && (!d.phaseId || d.phaseId === phaseId),
-  );
+  // Grounded false-positive PCRs (stale absence-claims the programme already
+  // satisfies) must not gate the phase — they are suppressed in the Action
+  // Center and confidence model, so counting them here as "unresolved decisions
+  // blocking gate approval" would deadlock a gate on phantom work.
+  const decisionGrounding = buildPlanGroundingIndex(program);
+  const openPhaseDecisions = (program.decisionQueue ?? [])
+    .filter((d) => (!d.status || d.status === "open") && (!d.phaseId || d.phaseId === phaseId))
+    .filter((d) => !isGroundedFalsePositiveDecision(d, decisionGrounding));
   if (openPhaseDecisions.length > 0) {
     missing.push(`${openPhaseDecisions.length} unresolved decision(s) must be resolved before gate approval`);
     recommendedActions.push({
