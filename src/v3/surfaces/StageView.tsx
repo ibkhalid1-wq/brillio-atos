@@ -1335,41 +1335,23 @@ export default function StageView({
                       </button>
                     </>
                   ) : null}
-                  {(gateApproved || (onResetPhase && isCurrentPhase)) ? (
+                  {onResetPhase && isCurrentPhase ? (
                     <>
                       <div className="v3-settings-menu-head">{activePhase.displayName ?? activePhase.id} phase</div>
-                      {gateApproved ? (
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className="v3-settings-item is-warning"
-                          onClick={() => { setSettingsOpen(false); onReopenGate(activePhase.id); }}
-                        >
-                          <span className="v3-settings-item-icon" aria-hidden="true">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M7 10V7.5a5 5 0 0 1 9.6-2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /><rect x="4.5" y="10" width="15" height="10" rx="2" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg>
-                          </span>
-                          <span className="v3-settings-item-text">
-                            <span className="v3-settings-item-label">Unlock phase</span>
-                            <span className="v3-settings-item-sub">Reopen the gate to edit artifacts</span>
-                          </span>
-                        </button>
-                      ) : null}
-                      {onResetPhase && isCurrentPhase ? (
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className="v3-settings-item is-danger"
-                          onClick={() => { setSettingsOpen(false); setResetModalOpen(true); }}
-                        >
-                          <span className="v3-settings-item-icon" aria-hidden="true">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 9a8 8 0 1 1-1 5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /><path d="M4 4v5h5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                          </span>
-                          <span className="v3-settings-item-text">
-                            <span className="v3-settings-item-label">Reset phase</span>
-                            <span className="v3-settings-item-sub">Clear generated artifacts &amp; reopen the gate (inputs kept)</span>
-                          </span>
-                        </button>
-                      ) : null}
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="v3-settings-item is-danger"
+                        onClick={() => { setSettingsOpen(false); setResetModalOpen(true); }}
+                      >
+                        <span className="v3-settings-item-icon" aria-hidden="true">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 9a8 8 0 1 1-1 5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /><path d="M4 4v5h5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                        </span>
+                        <span className="v3-settings-item-text">
+                          <span className="v3-settings-item-label">Reset phase</span>
+                          <span className="v3-settings-item-sub">Clear generated artifacts &amp; reopen the gate (inputs kept)</span>
+                        </span>
+                      </button>
                     </>
                   ) : null}
                 </div>
