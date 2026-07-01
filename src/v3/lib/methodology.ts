@@ -587,6 +587,17 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       displayName: "Govern",
       description: "Establish ongoing governance, compliance, and performance monitoring.",
       requiredArtifacts: [],
+      // Govern seeds the regulatory frameworks its compliance check verifies against
+      // — the one fact the compliance-checker needs but that was captured nowhere,
+      // so the check ran on programType/industry alone. Unlike `risk`/`narrative`,
+      // compliance-checker is NOT program-level: applyProgramSupportArtifact writes a
+      // real phaseArtifacts stub, so it renders as a phase chip and can anchor a
+      // flow edge. Its edge context comes from a DEDICATED branch (not the
+      // fall-through ARTIFACT_INPUT_FLOW), so the grounding is synced there — the
+      // branch reads this Govern input, falling back to a legacy strategy field.
+      // required:false (like every greenfield spine input) so seeding the frameworks
+      // never retroactively fails a programme already in Govern; not every programme
+      // is regulated, so it stays recommended, never required.
       dynamicSchema: true,
       mandatoryExitCriteriaTemplates: [
         "Governance model operational",
@@ -594,8 +605,28 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         "Ongoing reporting cadence established",
       ],
       entryGuards: ["Operate gate approved"],
-      recommendedAgents: ["narrative", "adoption"],
+      recommendedAgents: ["compliance-checker", "narrative", "adoption"],
       typicalDurationWeeks: { min: 2, max: 6 },
+      inputFields: [
+        {
+          id: "regulatoryFrameworks",
+          label: "Regulatory frameworks in scope",
+          type: "grid",
+          required: false,
+          usedByArtifacts: ["compliance-checker"],
+          hint: "Name each regulation or standard the programme must comply with and what it applies to — the compliance check finds gaps against these rather than guessing from the industry.",
+          columns: [
+            { key: "framework", label: "Framework / regulation", type: "text" },
+            { key: "applicability", label: "What it applies to", type: "text" },
+          ],
+        },
+      ],
+      artifactInputFlow: {
+        // compliance-checker renders as a phase chip (setPhaseArtifactValue), so this
+        // edge anchors. Delivery to generation is synced in the agent's dedicated
+        // edge context branch, not the fall-through ARTIFACT_INPUT_FLOW map.
+        "compliance-checker": ["regulatoryFrameworks"],
+      },
     },
     {
       id: "optimize",

@@ -577,6 +577,42 @@ describe("optimize static improvement schema", () => {
   });
 });
 
+// Govern now captures the regulatory frameworks its compliance check verifies
+// against — the one fact the compliance-checker needs but that had no home. Unlike
+// the program-level risk agent, compliance-checker writes a real phase-artifact
+// stub, so it renders as a chip and its flow edge anchors. (Its edge delivery is
+// synced in the agent's dedicated context branch, not the fall-through map.)
+describe("govern static compliance schema", () => {
+  it("grounds compliance-checker on the regulatory frameworks without a store", () => {
+    expect(getArtifactInputFields("govern", "compliance-checker")).toEqual(["regulatoryFrameworks"]);
+  });
+
+  it("keeps the frameworks input fillable (a real typed grid field)", () => {
+    expect(getFillableArtifactInputFields("govern", "compliance-checker")).toEqual(["regulatoryFrameworks"]);
+  });
+
+  it("draws no flow edge until the compliance check renders (dynamic artifact set)", () => {
+    expect(derivePhaseFlowEdges("govern", ["regulatoryFrameworks"])).toEqual([]);
+  });
+
+  it("wires the frameworks input to the compliance check once it renders", () => {
+    const store = {
+      artifacts: {
+        govern: [{ id: "compliance-checker", label: "Compliance Check", description: "" }],
+      },
+    };
+    const edges = derivePhaseFlowEdges("govern", ["regulatoryFrameworks"], store);
+    expect(edges).toEqual([{ from: "regulatoryFrameworks", to: "compliance-checker" }]);
+  });
+
+  it("flows every static input field into at least one artifact — no dangling inputs", () => {
+    const grounded = new Set(getArtifactInputFields("govern", "compliance-checker"));
+    for (const field of PHASE_INPUT_SCHEMAS.govern.fields) {
+      expect(grounded).toContain(field.id);
+    }
+  });
+});
+
 // The user's rule when building the static spine: "make sure the input to
 // artifact flows also exist." Every artifactId a phase declares in its
 // artifactInputFlow must be a *renderable* phase artifact — otherwise the flow

@@ -1899,14 +1899,20 @@ function buildSpecialAgentInputContext(
   }
 
   if (target?.agentId === "compliance-checker") {
-    const strategyInputs = normalizeProgramData(normalizeProgramData(inner.phaseInputs as JsonValue | null).strategy as JsonValue | null);
+    const allPhaseInputs = normalizeProgramData(inner.phaseInputs as JsonValue | null);
+    const strategyInputs = normalizeProgramData(allPhaseInputs.strategy as JsonValue | null);
+    const governInputs = normalizeProgramData(allPhaseInputs.govern as JsonValue | null);
     return JSON.stringify({
       programType: projectMeta.programType || inner.programType || null,
       industry: meta.industry,
       scopeIn: strategyInputs.scopeInclusions || strategyInputs.scopeIn || null,
       decisions: decisions.slice(-10),
       activePhase: inner.activePhase || target.phaseId || null,
-      regulatoryContext: strategyInputs.regulatoryContext || null,
+      // The regulatory frameworks to check against are captured on the Govern static
+      // spine (regulatoryFrameworks — kept in sync with the client artifactInputFlow
+      // for compliance-checker). Fall back to a legacy strategy regulatoryContext for
+      // programmes generated before that field existed.
+      regulatoryContext: governInputs.regulatoryFrameworks || strategyInputs.regulatoryContext || null,
     }, null, 2);
   }
 
