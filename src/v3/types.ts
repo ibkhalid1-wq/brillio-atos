@@ -18,6 +18,7 @@ export type V3MoreView =
   | "milestones"
   | "risks"
   | "budget"
+  | "twin"
   | "change-impact"
   | "stakeholders"
   | "roster"

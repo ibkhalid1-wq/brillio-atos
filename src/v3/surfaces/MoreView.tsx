@@ -58,6 +58,7 @@ const WORKSPACE_GROUPS: Array<{
       { view: "roadmap", label: "Strategic Roadmap", description: "Phase timeline with the folded delivery plan and milestones", icon: "◇", accent: "blue" },
       { surface: "pipeline", label: "Workstreams", description: "Delivery workstreams and their phase pipeline", icon: "⊥", accent: "blue" },
       { view: "budget", label: "Budget", description: "Budget tracking, forecasts and variance", icon: "◈", accent: "amber" },
+      { view: "twin", label: "Digital Twin", description: "Live program model with what-if scenario planning", icon: "⬡", accent: "purple" },
       { view: "scope-pcr", label: "Scope Changes", description: "Scope baseline and change request log", icon: "◫", accent: "amber" },
     ],
   },

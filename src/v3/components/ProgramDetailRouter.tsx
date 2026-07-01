@@ -3,6 +3,7 @@ import type { AgentRun } from "@/lib/adamSync";
 import { buildAgentActivityMap, buildAgentCards } from "@/new/lib/programData";
 import { AcceleratorsView } from "@/new/pages/AcceleratorsView";
 import { BudgetView } from "@/new/pages/BudgetView";
+import { TwinView } from "@/new/pages/TwinView";
 import { ChangeImpactView } from "@/new/pages/ChangeImpactView";
 import { DeckView } from "@/new/pages/DeckView";
 import { HealthHeatmapView } from "@/new/pages/HealthHeatmapView";
@@ -254,6 +255,8 @@ export default function ProgramDetailRouter({
       return <RisksView program={program} raidAgentRunning={activeRuns.some((r) => r.agent_id === "risk" && r.status === "running")} onTriggerRiskAgent={triggers.triggerRisk} onRefresh={onRefresh} />;
     case "budget":
       return <BudgetView program={program} budgetIsRunning={activeRuns.some((r) => r.agent_id === "budget" && r.status === "running")} onTriggerBudget={triggers.triggerBudget} onSaveBudgetInputs={onSaveBudgetInputs} savePending={budgetSavePending} />;
+    case "twin":
+      return <TwinView program={program} />;
     case "change-impact":
       return <ChangeImpactView program={program} isRunning={triggers.changeImpactIsRunning} onTriggerChangeImpact={triggers.triggerChangeImpact} />;
     case "stakeholders":
