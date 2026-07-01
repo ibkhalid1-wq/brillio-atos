@@ -89,6 +89,42 @@ async function fileToBase64(file: File): Promise<string> {
 // ─── Build review fields from intelligence ────────────────────────────────────
 
 /**
+ * Normalise one extractor field mapping into a well-formed FieldMapping,
+ * tolerating the two shapes the model drifts to in practice despite the prompt's
+ * `{value,confidence,source,extractionType}` skeleton:
+ *  - a bare string/number — the model returns the value directly, dropping the
+ *    envelope (e.g. `"functionalDesignSummary": "Covers case intake…"`); and
+ *  - a null / value-less entry — the model lists a field it found no data for
+ *    (e.g. `"designApprovalDate": null`).
+ *
+ * Without this, a bare-string mapping was *silently dropped* (its `.value` is
+ * undefined, so the caller's `!mapping.value?.trim()` guard skipped it) and a
+ * null mapping *crashed the entire review build* (`null.value` throws — the
+ * optional chain guards `.value`, not `mapping`). Either malformed field could
+ * sink a whole import, so a correctly-extracted value never reached the panel.
+ * Returns null when there is no usable string value to review.
+ */
+function normalizeFieldMapping(raw: unknown): FieldMapping | null {
+  // Envelope dropped — the model returned the value itself as a scalar.
+  if (typeof raw === "string" || typeof raw === "number") {
+    const value = String(raw).trim();
+    return value ? { value, confidence: 0.75, source: "", extractionType: "extracted" } : null;
+  }
+  if (!raw || typeof raw !== "object") return null;
+  const m = raw as Record<string, unknown>;
+  const value = typeof m.value === "string" ? m.value.trim() : m.value == null ? "" : String(m.value).trim();
+  if (!value) return null;
+  const extractionType =
+    m.extractionType === "enriched" || m.extractionType === "inferred" ? m.extractionType : "extracted";
+  return {
+    value,
+    confidence: typeof m.confidence === "number" ? m.confidence : 0.75,
+    source: typeof m.source === "string" ? m.source : "",
+    extractionType,
+  };
+}
+
+/**
  * Turn the AI's per-phase field mappings into reviewable fields, gated by the
  * methodology. A mapping is only surfaced when its `(phaseId, fieldId)` is a
  * *declared* input field of that phase — i.e. it exists in the phase's resolved
@@ -115,8 +151,11 @@ export function buildReviewFields(
     const schemaFields = getPhaseInputSchema(phaseId, store).fields;
     const declared = new Map(schemaFields.map((f) => [f.id, f]));
 
-    for (const [fieldId, mapping] of Object.entries(fieldMappings)) {
-      if (!mapping.value?.trim()) continue;
+    for (const [fieldId, rawMapping] of Object.entries(fieldMappings)) {
+      // Defend against model format-drift: a bare-string or null mapping must
+      // not silently drop a real value or crash the whole review build.
+      const mapping = normalizeFieldMapping(rawMapping);
+      if (!mapping) continue;
 
       const schemaField = declared.get(fieldId);
       // Not a declared field for this phase → drop it rather than create a

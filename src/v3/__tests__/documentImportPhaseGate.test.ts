@@ -69,3 +69,71 @@ describe("buildReviewFields — methodology phase gate", () => {
     expect(fields[0].existingValue).toBe("Jane");
   });
 });
+
+/**
+ * The extractor is an LLM: despite the prompt's {value,confidence,...} skeleton,
+ * it drifts to returning a mapping as a bare string, or lists a field it found
+ * no data for as null. buildReviewFields must survive both — a bare string is a
+ * real value to review (not silently dropped) and a null is skipped (not a crash
+ * that sinks the whole import). Regression for "field extracted but not populated
+ * via import": a bare-string design.functionalDesignSummary was being dropped and
+ * a sibling null field was throwing before this normalisation.
+ */
+describe("buildReviewFields — tolerates model mapping-shape drift", () => {
+  // A cast is used because these malformed shapes cannot occur under the
+  // FieldMapping type, yet do occur at runtime in the raw extractor JSON.
+  const mappings = (obj: unknown) => obj as MethodologyMappings;
+
+  it("wraps a bare-string mapping as a reviewable value rather than dropping it", () => {
+    const fields = buildReviewFields(
+      mappings({ strategy: { businessObjective: "Cut cost 20%" } }),
+      {},
+    );
+    expect(fields.map((f) => f.fieldId)).toEqual(["businessObjective"]);
+    expect(fields[0].mapping.value).toBe("Cut cost 20%");
+    // Synthesised envelope carries sensible defaults.
+    expect(fields[0].mapping.extractionType).toBe("extracted");
+    expect(fields[0].mapping.reviewState).toBe("pending");
+  });
+
+  it("skips a null / value-less mapping instead of throwing", () => {
+    const build = () =>
+      buildReviewFields(
+        mappings({
+          strategy: {
+            businessObjective: "Real value",
+            sponsor: null,
+            constraints: { confidence: 0.9, source: "doc", extractionType: "extracted" },
+            successMetric: { value: null },
+          },
+        }),
+        {},
+      );
+    expect(build).not.toThrow();
+    // Only the field with a usable value survives; the malformed siblings drop.
+    expect(build().map((f) => f.fieldId)).toEqual(["businessObjective"]);
+  });
+
+  it("does not let one malformed field sink the rest of the mappings", () => {
+    const fields = buildReviewFields(
+      mappings({
+        strategy: {
+          sponsor: null, // would previously crash the whole build
+          businessObjective: "Cut cost 20%", // bare string, previously dropped
+          successMetric: m({ value: "NPS +10" }), // well-formed
+        },
+      }),
+      {},
+    );
+    expect(fields.map((f) => f.fieldId).sort()).toEqual(["businessObjective", "successMetric"]);
+  });
+
+  it("coerces a numeric mapping value to string", () => {
+    const fields = buildReviewFields(mappings({ strategy: { businessObjective: 42 } }), {});
+    expect(fields[0].mapping.value).toBe("42");
+  });
+
+  it("treats an empty-string / whitespace bare mapping as no value", () => {
+    expect(buildReviewFields(mappings({ strategy: { businessObjective: "   " } }), {})).toEqual([]);
+  });
+});
