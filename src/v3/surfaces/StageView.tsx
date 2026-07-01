@@ -10,7 +10,6 @@ import PhaseInputsPanel, { type FieldAssistRequest } from "@/v3/components/Phase
 import PhaseFlowOverlay from "@/v3/components/PhaseFlowOverlay";
 import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
 import { PhaseRail } from "@/v3/components/PhaseRail";
-import { requestArtifactMapFocus } from "@/v3/components/ArtifactMapTree";
 import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
 import { selectBlockers, selectRisks } from "@/v3/lib/programRaid";
 import { EmptyState } from "@/v3/components/ui/EmptyState";
@@ -31,7 +30,6 @@ import { getAgentMeta, SUPPORT_ARTIFACT_IDS } from "@/v3/lib/agentMeta";
 import { runPreFlight } from "@/v3/lib/phaseInputPreFlight";
 import { derivePhaseInputQuality } from "@/v3/lib/phaseInputQuality";
 import { getFormalArtifactContent } from "@/v3/lib/formalArtifacts";
-import { buildFactGraph, factsForPhase } from "@/v3/lib/factGraph";
 import ChangeRequestModal from "@/v3/components/ChangeRequestModal";
 import type { V3Mode, V3MoreView, V3ReportId } from "@/v3/types";
 
@@ -944,71 +942,6 @@ export default function StageView({
     return { ...program, rawData: nextRaw } as ProgramSummary;
   }, [program, activePhase, liveInputs]);
 
-  // Traceability: atomic facts derived from confirmed inputs for the active phase,
-  // with a source-type breakdown. Built off liveProgram so unsaved edits surface
-  // instantly. This is the human-readable view of the same Fact Graph that LLM
-  // calls cite by short id, instead of re-sending document excerpts.
-  const phaseFacts = useMemo(() => {
-    if (!activePhase) return null;
-    const graph = buildFactGraph(liveProgram ?? program);
-    const facts = factsForPhase(graph, activePhase.id);
-    if (!facts.length) return null;
-    const imported = facts.filter((f) => f.sourceType === "imported_document").length;
-    // Group by factType so a multi-row grid (roster, RACI) collapses under one
-    // field label instead of repeating it on every row. normalizedValue carries
-    // the row cells without the label prefix, so grouped rows read cleanly.
-    const groups: { key: string; label: string; items: typeof facts }[] = [];
-    const groupIndex = new Map<string, number>();
-    for (const f of facts) {
-      let gi = groupIndex.get(f.factType);
-      if (gi === undefined) {
-        gi = groups.length;
-        groupIndex.set(f.factType, gi);
-        const label = f.normalizedValue && f.factText.endsWith(f.normalizedValue)
-          ? f.factText.slice(0, f.factText.length - f.normalizedValue.length).replace(/[:\s]+$/, "")
-          : f.factText;
-        groups.push({ key: f.factType, label, items: [] });
-      }
-      groups[gi].items.push(f);
-    }
-    return { facts, total: facts.length, imported, userInput: facts.length - imported, groups };
-  }, [liveProgram, program, activePhase]);
-
-  // Traceability drill-down: a fact endpoint resolves back to where the value
-  // came from. User-input facts scroll to (and briefly flash) their input field
-  // on this same phase screen — every fact shown here originates from the active
-  // phase, so the anchor is always mounted locally. Imported facts open the
-  // Document Centre, where the source document lives.
-  const traceFactToSource = React.useCallback((fact: { factType: string; sourceType: string }) => {
-    if (fact.sourceType === "imported_document") {
-      onOpenMoreView("documents");
-      return;
-    }
-    if (typeof window === "undefined") return;
-    let attempts = 0;
-    const tryScroll = () => {
-      const el = document.querySelector(`[data-io-anchor="input:${fact.factType}"]`) as HTMLElement | null;
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-        el.classList.add("v3-io-anchor-flash");
-        window.setTimeout(() => el.classList.remove("v3-io-anchor-flash"), 5000);
-        return;
-      }
-      if (attempts++ < 20) window.setTimeout(tryScroll, 100);
-    };
-    tryScroll();
-  }, [onOpenMoreView]);
-
-  // Traceability → graph: jump from a fact to its node in the full artifact map,
-  // where the input's place in the phase → artifact → input lineage is shown.
-  // The map mounts on the view switch, then reads the queued focus request to
-  // expand the branch and highlight the matching input rows.
-  const traceFactToGraph = React.useCallback((fact: { factType: string }) => {
-    if (!activePhase?.id) return;
-    requestArtifactMapFocus(activePhase.id, fact.factType);
-    onOpenMoreView("artifact-map");
-  }, [activePhase?.id, onOpenMoreView]);
-
   // Timestamped programme snapshots (newest first) the user can revert to. Manual
   // saves + auto-saves taken when a phase gate locks. Read straight off persisted
   // rawData so the revert modal always lists the authoritative history.
@@ -1564,74 +1497,6 @@ export default function StageView({
             conflicts and gaps (missing required inputs, contradictions) are the
             same items shown as recommended actions, blockers, risks and
             escalations in the Action Center and the phase right rail. */}
-        {phaseFacts ? (
-          <details className="v3-fact-graph-panel" style={{ marginBottom: 12, border: "1px solid var(--v3-border)", borderRadius: 8, padding: "8px 10px" }}>
-            <summary style={{ cursor: "pointer", fontSize: 11, fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
-              <span>Traceability — {phaseFacts.total} fact{phaseFacts.total === 1 ? "" : "s"}</span>
-              <span style={{ fontSize: 10, fontWeight: 400, color: "var(--v3-text-muted)" }}>
-                {phaseFacts.userInput} user · {phaseFacts.imported} imported
-              </span>
-            </summary>
-            <div style={{ display: "grid", gap: 4, marginTop: 8 }}>
-              {phaseFacts.groups.map((g) =>
-                g.items.length === 1 ? (
-                  <div key={g.items[0].id} style={{ display: "flex", alignItems: "baseline", gap: 6, fontSize: 11 }}>
-                    <button
-                      type="button"
-                      style={{ fontFamily: "var(--v3-mono, monospace)", color: "var(--v3-accent)", flexShrink: 0, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline dotted" }}
-                      title="Open in artifact map"
-                      onClick={() => traceFactToGraph(g.items[0])}
-                    >
-                      {g.items[0].id}
-                    </button>
-                    <span style={{ color: "var(--v3-text)" }}>{g.items[0].factText}</span>
-                    <button
-                      type="button"
-                      className={`v3-chip ${g.items[0].confidence >= 0.85 ? "green" : g.items[0].confidence >= 0.6 ? "amber" : "red"}`}
-                      style={{ fontSize: 9, marginLeft: "auto", flexShrink: 0, cursor: "pointer", border: "none" }}
-                      title={g.items[0].sourceType === "imported_document"
-                        ? `From ${g.items[0].sourceName}${g.items[0].sourceLocation ? ` — ${g.items[0].sourceLocation}` : ""} · open Document Centre`
-                        : "User input · jump to field"}
-                      onClick={() => traceFactToSource(g.items[0])}
-                    >
-                      {g.items[0].sourceType === "imported_document" ? "imported ↗" : "user ↗"}
-                    </button>
-                  </div>
-                ) : (
-                  <div key={g.key} style={{ display: "grid", gap: 2 }}>
-                    <div style={{ fontSize: 10, fontWeight: 600, color: "var(--v3-text-muted)" }}>
-                      {g.label} · {g.items.length}
-                    </div>
-                    {g.items.map((f) => (
-                      <div key={f.id} style={{ display: "flex", alignItems: "baseline", gap: 6, fontSize: 11, paddingLeft: 8 }}>
-                        <button
-                          type="button"
-                          style={{ fontFamily: "var(--v3-mono, monospace)", color: "var(--v3-accent)", flexShrink: 0, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline dotted" }}
-                          title="Open in artifact map"
-                          onClick={() => traceFactToGraph(f)}
-                        >
-                          {f.id}
-                        </button>
-                        <span style={{ color: "var(--v3-text)" }}>{f.normalizedValue}</span>
-                        <button
-                          type="button"
-                          className={`v3-chip ${f.confidence >= 0.85 ? "green" : f.confidence >= 0.6 ? "amber" : "red"}`}
-                          style={{ fontSize: 9, marginLeft: "auto", flexShrink: 0, cursor: "pointer", border: "none" }}
-                          title={f.sourceType === "imported_document"
-                            ? `From ${f.sourceName}${f.sourceLocation ? ` — ${f.sourceLocation}` : ""} · open Document Centre`
-                            : "User input · jump to field"}
-                          onClick={() => traceFactToSource(f)}
-                        >
-                          {f.sourceType === "imported_document" ? "imported ↗" : "user ↗"}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )
-              )}
-            </div>
-          </details>
-        ) : null}
         {program && activePhase?.id ? (
           <div id="phase-inputs-anchor">
             <PhaseInputsPanel
