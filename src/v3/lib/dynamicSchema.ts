@@ -230,10 +230,37 @@ export function isRosterOwnerLabel(label: string): boolean {
 }
 
 /**
+ * The inherited programme fundamental a field captures — currently the in-scope
+ * and out-of-scope lists. These are PROGRAMME FUNDAMENTALS (see the Phase
+ * Transition Planner prompt): established once and inherited by every phase, never
+ * re-requested. Each phase's static methodology schema already owns the scope
+ * lists as required inputs, but the planner sometimes mints a dynamic "Confirm
+ * in/out-of-scope items" twin anyway (a different id, e.g. `scopeExclusionsConfirmed`,
+ * so it slips past the id-collision dedupe). Mapping both the static field and the
+ * dynamic twin to the same fundamental key lets the merge drop the duplicate.
+ * Out-of-scope is tested first because its phrasing also contains "scope".
+ */
+type InheritedFundamental = "scope-in" | "scope-out";
+function inheritedFundamentalKey(id: string, label?: string): InheritedFundamental | null {
+  const hay = `${id} ${label ?? ""}`.toLowerCase();
+  if (/out[- ]?of[- ]?scope|scope\s*exclusion/.test(hay)) return "scope-out";
+  if (/in[- ]?scope|scope\s*inclusion/.test(hay)) return "scope-in";
+  return null;
+}
+
+/**
  * Merge static + dynamic input fields for a phase. Static fields keep their
  * order and win on id collision; dynamic fields are appended in declared order
- * and tagged `source: "ai-derived"` if not already. Roster-owner staffing fields
- * the planner proposed are dropped — owners resolve from the Mobilise roster.
+ * and tagged `source: "ai-derived"` if not already. Two classes of planner-
+ * proposed field are dropped so they never render or gate generation:
+ *  - Roster-owner staffing fields — owners resolve from the Mobilise roster.
+ *  - Inherited-fundamental duplicates — a dynamic "Confirm in/out-of-scope items"
+ *    twin of a scope list the phase's static schema already captures. Dropping it
+ *    here (the single chokepoint every consumer reads through) means
+ *    `getFillableArtifactInputFields` also excludes it, so an artifact wired to the
+ *    twin (e.g. a Discover scope-agreement) is no longer blocked behind a
+ *    redundant, often un-prefilled confirmation the user already answered via the
+ *    static scope grid.
  */
 export function mergeDynamicInputFields(
   staticFields: PhaseInputField[],
@@ -243,9 +270,21 @@ export function mergeDynamicInputFields(
   const dynamic = store?.inputFields?.[phaseId];
   if (!Array.isArray(dynamic) || dynamic.length === 0) return staticFields;
   const seen = new Set(staticFields.map((f) => f.id));
+  // Fundamentals the static schema already covers — a dynamic twin of one of
+  // these is pure duplication and is dropped below.
+  const staticFundamentals = new Set<InheritedFundamental>();
+  for (const f of staticFields) {
+    const key = inheritedFundamentalKey(f.id, f.label);
+    if (key) staticFundamentals.add(key);
+  }
   const extra = dynamic
-    .filter((f) => f && typeof f.id === "string" && !seen.has(f.id)
-      && !(typeof f.label === "string" && isRosterOwnerLabel(f.label)))
+    .filter((f) => {
+      if (!f || typeof f.id !== "string" || seen.has(f.id)) return false;
+      if (typeof f.label === "string" && isRosterOwnerLabel(f.label)) return false;
+      const fundamental = inheritedFundamentalKey(f.id, typeof f.label === "string" ? f.label : "");
+      if (fundamental && staticFundamentals.has(fundamental)) return false;
+      return true;
+    })
     .map((f) => normalizeDynamicField({ ...f, source: "ai-derived" as const }));
   return extra.length ? [...staticFields, ...extra] : staticFields;
 }

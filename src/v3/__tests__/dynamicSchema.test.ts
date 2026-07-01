@@ -87,6 +87,36 @@ describe("mergeDynamicInputFields", () => {
     expect(kept?.type).toBe("grid");
     expect(kept?.columns?.map((c) => c.key)).toEqual(["role", "name"]);
   });
+
+  it("drops a dynamic scope-confirmation twin the static schema already covers", () => {
+    // The Discover static schema owns scopeInclusions + scopeExclusions grids; a
+    // planner "Confirm in/out-of-scope items" twin (different id) is a redundant
+    // re-request of an inherited fundamental and must not render or gate.
+    const scopeStatics: PhaseInputField[] = [
+      { id: "scopeInclusions", label: "In-scope items", type: "grid", required: true, columns: [{ key: "item", label: "Item" }] },
+      { id: "scopeExclusions", label: "Out-of-scope items", type: "grid", required: true, columns: [{ key: "item", label: "Item" }] },
+    ];
+    const store: DynamicSchemaStore = {
+      inputFields: {
+        discover: [
+          { id: "scopeInclusionsConfirmed", label: "Confirm in-scope items for Discover phase", type: "text", required: true },
+          { id: "scopeExclusionsConfirmed", label: "Confirm out-of-scope items for Discover phase", type: "text", required: true },
+        ],
+      },
+    };
+    const merged = mergeDynamicInputFields(scopeStatics, "discover", store);
+    expect(merged.map((f) => f.id)).toEqual(["scopeInclusions", "scopeExclusions"]);
+  });
+
+  it("keeps a dynamic scope field when the static schema does not cover that fundamental", () => {
+    // No static scope field present → the dynamic scope field is the only capture
+    // of that fundamental, so it must survive (never drop what nothing else owns).
+    const store: DynamicSchemaStore = {
+      inputFields: { design: [{ id: "scopeExclusionsConfirmed", label: "Confirm out-of-scope items", type: "text", required: true }] },
+    };
+    const merged = mergeDynamicInputFields(staticFields, "design", store);
+    expect(merged.map((f) => f.id)).toContain("scopeExclusionsConfirmed");
+  });
 });
 
 describe("dynamicArtifactDefs", () => {
