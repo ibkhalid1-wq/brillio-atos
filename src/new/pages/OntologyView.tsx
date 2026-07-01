@@ -12,6 +12,8 @@ import {
 import {
   runDeterministicValidation,
   selectModelValidationFindings,
+  assessPhaseFidelity,
+  type PhaseFidelity,
 } from "@/v3/lib/crossArtifactValidation";
 
 /**
@@ -168,9 +170,51 @@ function BlockerRow({ blocker }: { blocker: ConfidenceBlocker }) {
   );
 }
 
+/**
+ * Per-phase "supports its foundations" strip. Each tile scores one phase from the
+ * fidelity gaps attributed to it — an upstream KPI dropped, a gate signed off out
+ * of sequence, a broken dependency — so the user can see *where* in the chain the
+ * confidence erodes, not just the programme-level number.
+ */
+function PhaseFidelityCard({ phases }: { phases: PhaseFidelity[] }) {
+  return (
+    <AdamCard>
+      <AdamCardHeader
+        title="Phase fidelity"
+        subtitle="Does each phase hold up the ones around it? Scored from the fidelity gaps attributed to the phase — upstream commitments dropped, gates jumped, dependencies broken."
+      />
+      <AdamCardBody>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {phases.map((p) => (
+            <div
+              key={p.phaseId}
+              title={p.topIssue ? p.topIssue.issue : "No fidelity gap attributed to this phase"}
+              style={{
+                display: "flex", flexDirection: "column", gap: 4, minWidth: 116,
+                padding: "8px 10px", borderRadius: 8, background: "var(--v3-surface-2)",
+                border: `1px solid ${p.summary.total ? BAND_COLOR[p.band] : "var(--v3-border)"}`,
+              }}
+            >
+              <div style={{ fontSize: 12, color: "var(--v3-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {p.label}
+              </div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                <span style={{ fontSize: 20, fontWeight: 700, color: BAND_COLOR[p.band] }}>{p.score}</span>
+                <span style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>
+                  {p.summary.total ? `${p.summary.total} gap${p.summary.total > 1 ? "s" : ""}` : "clean"}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </AdamCardBody>
+    </AdamCard>
+  );
+}
+
 export function OntologyView({ program }: { program: ProgramSummary | null }) {
-  const assessment = useMemo(() => {
-    if (!program) return null;
+  const { assessment, phaseFidelity } = useMemo(() => {
+    if (!program) return { assessment: null, phaseFidelity: [] as PhaseFidelity[] };
     // Feed the roll-up both the zero-cost deterministic findings and any persisted
     // semantic-validator findings already on the program, so requirement/design
     // gaps show up on the objective's delivery chain.
@@ -178,7 +222,12 @@ export function OntologyView({ program }: { program: ProgramSummary | null }) {
       ...runDeterministicValidation(program),
       ...selectModelValidationFindings(program),
     ];
-    return assessObjectives(program, { findings });
+    return {
+      assessment: assessObjectives(program, { findings }),
+      // Per-phase "supports its foundations" score, scoped to each phase's own
+      // attributed gaps (program-wide findings are not double-counted per phase).
+      phaseFidelity: assessPhaseFidelity(program.phases ?? [], findings),
+    };
   }, [program]);
 
   if (!assessment || assessment.objectives.length === 0) {
@@ -216,6 +265,8 @@ export function OntologyView({ program }: { program: ProgramSummary | null }) {
           </div>
         </AdamCardBody>
       </AdamCard>
+
+      {phaseFidelity.length > 0 && <PhaseFidelityCard phases={phaseFidelity} />}
 
       {assessment.recommendations.length > 0 && (
         <AdamCard>
