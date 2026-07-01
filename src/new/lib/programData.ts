@@ -211,12 +211,22 @@ function derivePhases(data: JsonRecord): PhaseSummary[] {
     });
   });
 
-  return PHASE_SEQUENCE.map((id) => fromData.get(id) || {
-    id,
-    displayName: PHASE_LABELS[id] || id,
-    pct: 0,
-    status: "inactive",
-    objective: deriveObjective(id),
+  return PHASE_SEQUENCE.map((id) => {
+    const existing = fromData.get(id);
+    if (existing) return existing;
+    // When data.phases is empty (e.g. after partial data recovery) the loop above
+    // never ran, so the agent's phasePct estimate would be lost and every phase
+    // would render 0%. Honour phasePct here too — it stays gated by hasAgentOutput.
+    const overridePct = id in phasePctOverrides
+      ? Math.max(0, Math.min(100, asNumber(phasePctOverrides[id], 0)))
+      : 0;
+    return {
+      id,
+      displayName: PHASE_LABELS[id] || id,
+      pct: overridePct,
+      status: overridePct > 0 ? normalizePhaseStatus(overridePct) : "inactive",
+      objective: deriveObjective(id),
+    };
   });
 }
 

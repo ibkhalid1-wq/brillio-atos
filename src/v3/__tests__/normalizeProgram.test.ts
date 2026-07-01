@@ -47,6 +47,42 @@ describe("normalizeProgram", () => {
     expect(program.activePhaseId).toBeTruthy();
   });
 
+  it("honours phasePct when data.phases is empty (partial-recovery case)", () => {
+    // ATOS-Validation-style program: the phases[] array was lost but the agent's
+    // phasePct estimate survived. Completion must come through, not default to 0.
+    const program = normalizeProgram({
+      ...baseRow,
+      data: {
+        objective: "Recovered program",
+        narrative: "Grounded narrative so agent output is detected",
+        phases: [],
+        phasePct: { strategy: 10, mobilise: 10, build: 10, discover: 0 },
+      },
+    });
+    const byId = Object.fromEntries(program.phases.map((phase) => [phase.id, phase]));
+    expect(byId.strategy.pct).toBe(10);
+    expect(byId.mobilise.pct).toBe(10);
+    expect(byId.build.pct).toBe(10);
+    expect(byId.strategy.status).not.toBe("inactive");
+    expect(byId.discover.pct).toBe(0);
+    expect(byId.discover.status).toBe("inactive");
+  });
+
+  it("does not resurrect phasePct without agent output", () => {
+    // Fresh program with no narrative/plan/deck: phasePct is treated as untrusted
+    // init noise, so completion stays 0 (guards the fresh-program case).
+    const program = normalizeProgram({
+      ...baseRow,
+      data: {
+        objective: "Fresh program",
+        phases: [],
+        phasePct: { strategy: 80 },
+      },
+    });
+    const strategy = program.phases.find((phase) => phase.id === "strategy");
+    expect(strategy?.pct).toBe(0);
+  });
+
   it("returns stable output for the same input", () => {
     const first = normalizeProgram(baseRow);
     const second = normalizeProgram(baseRow);
