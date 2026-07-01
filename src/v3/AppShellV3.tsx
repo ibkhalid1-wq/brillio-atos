@@ -1823,6 +1823,10 @@ export default function AppShellV3() {
   }, []);
 
   const lastLandedProgramIdRef = useRef<string | null>(null);
+  // True once the user has explicitly opened a specific phase (clicked a phase
+  // pill / opened a phase sheet). While set, auto-landing never yanks them off
+  // that phase — even a completed one they chose to review. Reset per programme.
+  const explicitPhasePickRef = useRef(false);
   useEffect(() => {
     if (!activeProgram) return;
     // Phase ids are shared across programmes, so a stale phase from the previous
@@ -1830,15 +1834,28 @@ export default function AppShellV3() {
     // programme's frontier phase when the active programme changes.
     const programChanged = lastLandedProgramIdRef.current !== activeProgramId;
     lastLandedProgramIdRef.current = activeProgramId;
-    const validCurrent = activeProgram.phases.some((phase) => phase.id === activePhaseId);
-    if (validCurrent && !programChanged) return;
+    if (programChanged) explicitPhasePickRef.current = false;
+    // A phase is finished when its gate is approved (status "complete") or its
+    // progress is full. A completed phase can still read pct 0 (approved on
+    // imported inputs), so status must be checked too.
+    const isComplete = (phase: (typeof activeProgram.phases)[number]) =>
+      phase.status === "complete" || (phase.pct ?? 0) >= 100;
+    const currentPhase = activeProgram.phases.find((phase) => phase.id === activePhaseId);
+    // Keep the current phase when it is a valid, non-completed phase, or when the
+    // user explicitly chose it. The completed-phase case is deliberately NOT kept
+    // on a programme reload: phase data streams in, so the first pass can land on
+    // a phase before its "complete" status arrives; re-running once it completes
+    // then advances to the live frontier instead of staying stuck behind it.
+    if (currentPhase && !programChanged && (explicitPhasePickRef.current || !isComplete(currentPhase))) return;
     // Prefer the canonical active phase so the landing phase matches what every
-    // surface labels "Active phase"; fall back to the pct-based frontier.
+    // surface labels "Active phase" — but only while that phase is still open, so
+    // landing advances to the frontier instead of reopening a closed-out phase.
     const canonical = activeProgram.activePhaseId;
-    const canonicalValid = canonical && activeProgram.phases.some((phase) => phase.id === canonical);
-    const inProgress = activeProgram.phases.find((phase) => (phase.pct ?? 0) > 0 && (phase.pct ?? 0) < 100);
-    const firstIncomplete = activeProgram.phases.find((phase) => (phase.pct ?? 0) < 100);
-    setActivePhaseId((canonicalValid ? canonical : null) || inProgress?.id || firstIncomplete?.id || activeProgram.phases[0]?.id || null);
+    const canonicalPhase = canonical ? activeProgram.phases.find((phase) => phase.id === canonical) : null;
+    const canonicalUsable = !!canonicalPhase && !isComplete(canonicalPhase);
+    const inProgress = activeProgram.phases.find((phase) => (phase.pct ?? 0) > 0 && !isComplete(phase));
+    const firstIncomplete = activeProgram.phases.find((phase) => !isComplete(phase));
+    setActivePhaseId((canonicalUsable ? canonical : null) || inProgress?.id || firstIncomplete?.id || activeProgram.phases[0]?.id || null);
   }, [activeProgramId, activePhaseId, activeProgram]);
 
   useEffect(() => {
@@ -1930,10 +1947,20 @@ export default function AppShellV3() {
   const resolveCurrentPhaseId = useCallback((): string | null => {
     const phases = activeProgram?.phases ?? [];
     if (!phases.length) return null;
-    const canonical = activeProgram?.activePhaseId;
-    if (canonical && phases.some((phase) => phase.id === canonical)) return canonical;
-    const inProgress = phases.find((phase) => (phase.pct ?? 0) > 0 && (phase.pct ?? 0) < 100);
-    const firstIncomplete = phases.find((phase) => (phase.pct ?? 0) < 100);
+    // A phase is finished when its gate is approved (status "complete") or its
+    // progress is full. A completed phase can still read pct 0 (e.g. approved on
+    // imported inputs), so status must be checked too — otherwise a pct-only test
+    // treats a finished phase as the frontier.
+    const isComplete = (phase: (typeof phases)[number]) =>
+      phase.status === "complete" || (phase.pct ?? 0) >= 100;
+    const canonical = activeProgram?.activePhaseId ?? null;
+    const canonicalPhase = canonical ? phases.find((phase) => phase.id === canonical) : null;
+    // Honour the canonical active phase only while it is still open. Once it is
+    // complete, the phase to land on is the next unfinished one — so the cockpit
+    // never reopens on a phase the user has already closed out.
+    if (canonicalPhase && !isComplete(canonicalPhase)) return canonical;
+    const inProgress = phases.find((phase) => (phase.pct ?? 0) > 0 && !isComplete(phase));
+    const firstIncomplete = phases.find((phase) => !isComplete(phase));
     return inProgress?.id || firstIncomplete?.id || phases[0]?.id || null;
   }, [activeProgram]);
 
@@ -1975,6 +2002,9 @@ export default function AppShellV3() {
       pushV3Toast("Approve the previous phase gate to unlock this phase.", { tone: "warning", duration: 3000 });
       return;
     }
+    // Clicking a phase pill is an explicit choice — record it so auto-landing
+    // never yanks the user off the phase they picked (even a completed one).
+    explicitPhasePickRef.current = true;
     // Navigate directly via commitNavigation so the new phaseId is committed atomically.
     // Calling setActivePhaseId() then navigateSurface() doesn't work because navigateSurface
     // closes over the stale activePhaseId and overwrites the new value inside commitNavigation.
@@ -1999,6 +2029,9 @@ export default function AppShellV3() {
 
   const openPhaseSheet = useCallback((phaseId: string) => {
     if (!phaseId) return;
+    // Opening a specific phase sheet is an explicit choice — preserve it against
+    // auto-landing (see explicitPhasePickRef in the landing effect).
+    explicitPhasePickRef.current = true;
     setActivePhaseId(phaseId);
     commitNavigation({ surface: "stage", moreView: null, activePhaseId: phaseId, reportId: null });
   }, [commitNavigation]);
