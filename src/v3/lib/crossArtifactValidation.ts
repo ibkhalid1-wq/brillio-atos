@@ -608,6 +608,12 @@ export interface PhaseFidelity {
   summary: ValidationSummary;
   /** The single most severe finding attributed to the phase, if any. */
   topIssue: ValidationFinding | null;
+  /**
+   * Every gap attributed to the phase, most-severe first — each carries the
+   * issue and the recommendation for how to correct it. Empty for a clean or
+   * not-yet-started phase.
+   */
+  gaps: ValidationFinding[];
 }
 
 /** A phase has fidelity worth scoring only once it has begun producing work. */
@@ -621,10 +627,11 @@ export function assessPhaseFidelity(
   options: PhaseSelectOptions = {},
 ): PhaseFidelity[] {
   return phases.map((ph) => {
-    const scoped = selectFindingsForPhase(findings, ph.id, options);
+    const scoped = [...selectFindingsForPhase(findings, ph.id, options)].sort(
+      (a, b) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity],
+    );
     const summary = summariseValidation(scoped);
-    const topIssue =
-      [...scoped].sort((a, b) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity])[0] ?? null;
+    const topIssue = scoped[0] ?? null;
     // A not-yet-started phase has nothing to be faithful to; scoring it 100
     // reads as a false "Strong". Report it as unassessed instead.
     if (!phaseHasStarted(ph.status)) {
@@ -636,6 +643,7 @@ export function assessPhaseFidelity(
         band: null,
         summary,
         topIssue: null,
+        gaps: [],
       };
     }
     return {
@@ -646,6 +654,7 @@ export function assessPhaseFidelity(
       band: confidenceLabel(summary.coverageScore),
       summary,
       topIssue,
+      gaps: scoped,
     };
   });
 }
@@ -848,4 +857,36 @@ export function selectModelValidationFindings(
       } satisfies ValidationFinding;
     })
     .filter((f) => f.issue.length > 0);
+}
+
+export interface SemanticValidationMeta {
+  /** True once the Layer-2 semantic validator has run against this program. */
+  hasRun: boolean;
+  /** ISO timestamp of the last semantic validation, or null if never run. */
+  validatedAt: string | null;
+  /** Phase the last run was scoped to, or null for a program-wide run. */
+  validatedPhaseId: string | null;
+}
+
+/**
+ * Whether — and when — the Layer-2 semantic validator last ran for a program.
+ * A single run reasons over every phase at once, so this is a program-level
+ * fact. Surfaces let a "clean" phase say whether its score is backed by a
+ * semantic pass or only the zero-cost deterministic floor.
+ */
+export function getSemanticValidationMeta(
+  program: { rawData?: Record<string, unknown> } | null,
+): SemanticValidationMeta {
+  const none: SemanticValidationMeta = { hasRun: false, validatedAt: null, validatedPhaseId: null };
+  if (!program?.rawData) return none;
+  const { inner } = getProgramState(program.rawData);
+  const block = inner.crossArtifactValidation;
+  if (typeof block !== "object" || block === null) return none;
+  const record = block as Record<string, unknown>;
+  const validatedAt = typeof record.validatedAt === "string" ? record.validatedAt : null;
+  return {
+    hasRun: validatedAt !== null,
+    validatedAt,
+    validatedPhaseId: typeof record.validatedPhaseId === "string" ? record.validatedPhaseId : null,
+  };
 }

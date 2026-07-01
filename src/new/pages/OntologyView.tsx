@@ -13,6 +13,7 @@ import {
   runDeterministicValidation,
   selectModelValidationFindings,
   assessPhaseFidelity,
+  getSemanticValidationMeta,
   type PhaseFidelity,
 } from "@/v3/lib/crossArtifactValidation";
 
@@ -176,7 +177,7 @@ function BlockerRow({ blocker }: { blocker: ConfidenceBlocker }) {
  * of sequence, a broken dependency — so the user can see *where* in the chain the
  * confidence erodes, not just the programme-level number.
  */
-function PhaseFidelityCard({ phases }: { phases: PhaseFidelity[] }) {
+function PhaseFidelityCard({ phases, semanticValidated }: { phases: PhaseFidelity[]; semanticValidated: boolean }) {
   return (
     <AdamCard>
       <AdamCardHeader
@@ -184,54 +185,92 @@ function PhaseFidelityCard({ phases }: { phases: PhaseFidelity[] }) {
         subtitle="Does each phase hold up the ones around it? Scored from the fidelity gaps attributed to the phase — upstream commitments dropped, gates jumped, dependencies broken."
       />
       <AdamCardBody>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {phases.map((p) => {
-            const accent = p.assessed && p.band ? BAND_COLOR[p.band] : "var(--v3-text-muted)";
+            const hasGaps = p.summary.total > 0;
+            // A phase gets a real score only when we actually have a fidelity
+            // verdict: either the semantic validator has run, or the
+            // deterministic floor attributed a concrete gap. A clean phase that
+            // has never been semantically checked is UNKNOWN, not 100 — backward
+            // fidelity is a semantic question the structural floor can't confirm.
+            const scored = p.assessed && (semanticValidated || hasGaps);
+            const accent = scored && p.band ? BAND_COLOR[p.band] : "var(--v3-text-muted)";
+            const statusLabel = !p.assessed
+              ? "not started"
+              : hasGaps
+                ? `${p.summary.total} gap${p.summary.total > 1 ? "s" : ""}`
+                : semanticValidated
+                  ? "clean"
+                  : "not validated";
+            const tileTitle = !p.assessed
+              ? "Phase has not started — nothing to assess yet"
+              : hasGaps
+                ? p.topIssue!.issue
+                : semanticValidated
+                  ? "No fidelity gap attributed to this phase"
+                  : "Fidelity not verified yet — the deterministic floor found no structural gap, but semantic validation (does this phase honour the phases before it?) has not run.";
             return (
               <div
                 key={p.phaseId}
-                title={
-                  !p.assessed
-                    ? "Phase has not started — nothing to assess yet"
-                    : p.topIssue
-                      ? p.topIssue.issue
-                      : "No fidelity gap attributed to this phase"
-                }
                 style={{
-                  display: "flex", flexDirection: "column", gap: 4, minWidth: 116,
-                  padding: "8px 10px", borderRadius: 8, background: "var(--v3-surface-2)",
-                  border: `1px solid ${p.assessed && p.summary.total && p.band ? BAND_COLOR[p.band] : "var(--v3-border)"}`,
-                  opacity: p.assessed ? 1 : 0.7,
+                  display: "flex", flexDirection: "column",
+                  borderRadius: 8, background: "var(--v3-surface-2)",
+                  border: `1px solid ${scored && hasGaps && p.band ? BAND_COLOR[p.band] : "var(--v3-border)"}`,
+                  opacity: scored ? 1 : 0.7, overflow: "hidden",
                 }}
               >
-                <div style={{ fontSize: 12, color: "var(--v3-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {p.label}
-                </div>
-                {p.assessed ? (
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                    <span style={{ fontSize: 20, fontWeight: 700, color: accent }}>{p.score}</span>
-                    <span style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>
-                      {p.summary.total ? `${p.summary.total} gap${p.summary.total > 1 ? "s" : ""}` : "clean"}
+                <div
+                  title={tileTitle}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "8px 12px" }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                    <span style={{ flexShrink: 0, width: 8, height: 8, borderRadius: "50%", background: accent }} />
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--v3-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {p.label}
                     </span>
                   </div>
-                ) : (
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                    <span style={{ fontSize: 20, fontWeight: 700, color: accent }}>–</span>
-                    <span style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>not started</span>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexShrink: 0 }}>
+                    <span style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>{statusLabel}</span>
+                    <span style={{ fontSize: 18, fontWeight: 700, color: accent, minWidth: 28, textAlign: "right" }}>
+                      {scored ? p.score : "–"}
+                    </span>
+                  </div>
+                </div>
+                {p.gaps.length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "2px 12px 10px 12px" }}>
+                    {p.gaps.map((g) => (
+                      <div key={g.findingId} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                        <span
+                          title={`${g.severity} severity`}
+                          style={{ marginTop: 5, flexShrink: 0, width: 6, height: 6, borderRadius: "50%", background: SEVERITY_COLOR[g.severity] }}
+                        />
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 12, color: "var(--v3-text-secondary)" }}>{g.issue}</div>
+                          {g.recommendation && (
+                            <div style={{ fontSize: 12, color: "var(--v3-accent)", marginTop: 1 }}>→ {g.recommendation}</div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
             );
           })}
         </div>
+        {!semanticValidated && (
+          <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 10 }}>
+            “Not validated” = the zero-cost structural floor found no gap, but backward fidelity (does each phase honour the phases it builds on?) is a semantic question that has not been checked yet. Run validation to turn these into a real score.
+          </div>
+        )}
       </AdamCardBody>
     </AdamCard>
   );
 }
 
 export function OntologyView({ program }: { program: ProgramSummary | null }) {
-  const { assessment, phaseFidelity } = useMemo(() => {
-    if (!program) return { assessment: null, phaseFidelity: [] as PhaseFidelity[] };
+  const { assessment, phaseFidelity, semanticValidated } = useMemo(() => {
+    if (!program) return { assessment: null, phaseFidelity: [] as PhaseFidelity[], semanticValidated: false };
     // Feed the roll-up both the zero-cost deterministic findings and any persisted
     // semantic-validator findings already on the program, so requirement/design
     // gaps show up on the objective's delivery chain.
@@ -244,6 +283,9 @@ export function OntologyView({ program }: { program: ProgramSummary | null }) {
       // Per-phase "supports its foundations" score, scoped to each phase's own
       // attributed gaps (program-wide findings are not double-counted per phase).
       phaseFidelity: assessPhaseFidelity(program.phases ?? [], findings),
+      // Whether the Layer-2 semantic validator has run — decides if a clean
+      // phase reads "clean" (both layers) or "structural only" (deterministic).
+      semanticValidated: getSemanticValidationMeta(program).hasRun,
     };
   }, [program]);
 
@@ -283,7 +325,7 @@ export function OntologyView({ program }: { program: ProgramSummary | null }) {
         </AdamCardBody>
       </AdamCard>
 
-      {phaseFidelity.length > 0 && <PhaseFidelityCard phases={phaseFidelity} />}
+      {phaseFidelity.length > 0 && <PhaseFidelityCard phases={phaseFidelity} semanticValidated={semanticValidated} />}
 
       {assessment.recommendations.length > 0 && (
         <AdamCard>

@@ -5,6 +5,7 @@ import {
   decideValidation,
   selectFindingsForPhase,
   assessPhaseFidelity,
+  getSemanticValidationMeta,
   type ValidatableProgram,
   type ValidationFinding,
 } from "@/v3/lib/crossArtifactValidation";
@@ -387,11 +388,14 @@ describe("assessPhaseFidelity — per-phase supports-foundations score", () => {
     expect(design.score).toBe(100);
     expect(design.band).toBe("Strong");
     expect(design.topIssue).toBeNull();
+    expect(design.gaps).toEqual([]);
     // Build carries a critical + medium, so its score is materially lower.
     expect(build.score!).toBeLessThan(design.score!);
     expect(build.summary.critical).toBe(1);
     // The most severe attributed finding is surfaced first.
     expect(build.topIssue?.findingId).toBe("a");
+    // Every attributed gap is exposed, most-severe first, with a recommendation.
+    expect(build.gaps.map((g) => g.findingId)).toEqual(["a", "b"]);
   });
 
   it("can pull in severe program-wide findings when asked", () => {
@@ -417,6 +421,37 @@ describe("assessPhaseFidelity — per-phase supports-foundations score", () => {
     expect(govern.topIssue).toBeNull();
     // Started phases are still scored as before.
     expect(out.find((p) => p.phaseId === "design")!.assessed).toBe(true);
+  });
+});
+
+describe("getSemanticValidationMeta — has the Layer-2 validator run?", () => {
+  it("reports not-run when the program carries no validation block", () => {
+    const meta = getSemanticValidationMeta({ rawData: { data: { phases: [] } } });
+    expect(meta.hasRun).toBe(false);
+    expect(meta.validatedAt).toBeNull();
+    expect(meta.validatedPhaseId).toBeNull();
+  });
+
+  it("reports the timestamp and scope once the validator has persisted a run", () => {
+    const meta = getSemanticValidationMeta({
+      rawData: {
+        data: {
+          crossArtifactValidation: {
+            findings: [],
+            validatedAt: "2026-07-01T12:00:00.000Z",
+            validatedPhaseId: "design",
+          },
+        },
+      },
+    });
+    expect(meta.hasRun).toBe(true);
+    expect(meta.validatedAt).toBe("2026-07-01T12:00:00.000Z");
+    expect(meta.validatedPhaseId).toBe("design");
+  });
+
+  it("treats a block without a validatedAt as not-run", () => {
+    const meta = getSemanticValidationMeta({ rawData: { data: { crossArtifactValidation: { findings: [] } } } });
+    expect(meta.hasRun).toBe(false);
   });
 });
 
