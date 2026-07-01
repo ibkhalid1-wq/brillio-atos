@@ -337,6 +337,26 @@ describe("assessObjectives", () => {
     expect(measurable.detail).toContain("1/1");
   });
 
+  it("routes a benefits-traceability finding onto the evidence chain, not into the void", () => {
+    // benefits-traceability maps to satisfied-by (a benefit traced to a tracking
+    // artifact). Mapping it to measured-by would be rejected by the ontology
+    // (measured-by targets KPIs only) and the finding would vanish. Here it must
+    // demonstrably lower the evidenced component and surface as a blocker.
+    const finding: ValidationFinding = {
+      findingId: "ben-trace-1", severity: "high", domain: "benefits-traceability",
+      phaseId: "strategy", sourceArtifact: "businessCaseDoc", targetArtifact: "benefitsTracking",
+      sourceItem: "projectedBenefits", issue: "Benefit not reflected in any tracked KPI.",
+      recommendation: "Define a KPI per projected benefit.", confidence: 1, evidence: ["no kpi"],
+    };
+    const withFinding = assessObjectives(healthyProgram(), { findings: [finding] });
+    const without = assessObjectives(healthyProgram());
+    const evWith = withFinding.objectives[0].components.find((c) => c.key === "evidenced")!;
+    const evNo = without.objectives[0].components.find((c) => c.key === "evidenced")!;
+    expect(evWith.score).toBeLessThan(evNo.score);
+    // The specific finding is traceable on the evidence component's citations.
+    expect(evWith.citations.some((c) => c.kind === "finding" && c.ref === "ben-trace-1")).toBe(true);
+  });
+
   it("penalises an objective threatened by an open severe risk", () => {
     const prog = healthyProgram();
     (prog as unknown as Record<string, unknown>).raidEntries = [

@@ -87,7 +87,12 @@ const DOMAIN_RELATION: Partial<Record<ValidationDomain, RelationKind>> = {
   "architecture-consistency": "satisfied-by",
   "delivery-readiness": "delivered-by",
   "scope-coverage": "delivered-by",
-  "benefits-traceability": "measured-by",
+  // Benefits traceability is a *traceability* concern (a benefit satisfied-by a
+  // tracking artifact), modelled like requirements. It must NOT map to
+  // measured-by: the ontology constrains measured-by to KPI targets, so a
+  // benefits finding folded there would be rejected by addRelation and silently
+  // dropped — never reaching the evidenced component that should carry it.
+  "benefits-traceability": "satisfied-by",
 };
 
 const SEVERE = new Set<ValidationSeverity>(["critical", "high"]);
