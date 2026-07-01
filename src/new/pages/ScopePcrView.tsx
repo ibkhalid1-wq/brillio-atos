@@ -1,6 +1,7 @@
 import React from "react";
 import { NotReadyCard } from "@/new/components/ui/NotReadyCard";
 import type { AppView, ProgramSummary } from "@/new/types";
+import { deriveChangeRequests } from "@/v3/lib/changeRequests";
 
 interface ScopePcrViewProps {
   program: ProgramSummary | null;
@@ -36,6 +37,8 @@ export function ScopePcrView({
       />
     );
   }
+
+  const changeRequests = deriveChangeRequests(program);
 
   return (
     <div className="adam-stack" style={{ maxWidth: 1120 }}>
@@ -111,6 +114,68 @@ export function ScopePcrView({
           </section>
         )}
       </div>
+
+      <section className="adam-card p-5">
+        <div className="adam-row adam-space-between" style={{ alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div className="adam-title">Change requests</div>
+          <button type="button" className="adam-button-ghost" onClick={() => onNavigate("decisions")}>
+            Open decision queue
+          </button>
+        </div>
+
+        <div className="mt-4 adam-stack" style={{ gap: 10 }}>
+          {changeRequests.open.length ? changeRequests.open.map((cr) => (
+            <div key={cr.id} className="adam-card p-4" style={{ borderLeft: "4px solid var(--adam-amber)" }}>
+              <div className="adam-row adam-space-between" style={{ alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+                <div className="adam-stack" style={{ gap: 4 }}>
+                  <div className="adam-title">{cr.title}</div>
+                  <div className="adam-micro adam-muted">
+                    {cr.phaseId} · raised {new Date(cr.createdAt).toLocaleDateString()}
+                  </div>
+                </div>
+                <div className="adam-row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                  <span className={`adam-badge ${cr.priority === "critical" || cr.priority === "high" ? "red" : cr.priority === "medium" ? "amber" : "slate"}`}>
+                    {cr.priority}
+                  </span>
+                  <span className="adam-badge amber">open</span>
+                </div>
+              </div>
+              {cr.rationale ? <div className="mt-3 adam-body adam-muted">{cr.rationale}</div> : null}
+              <div className="mt-3">
+                <button type="button" className="adam-button" onClick={() => onNavigate("decisions")}>
+                  Review &amp; decide
+                </button>
+              </div>
+            </div>
+          )) : (
+            <div className="adam-body adam-muted">
+              No open change requests.
+              {changeRequests.suppressedCount
+                ? ` ${changeRequests.suppressedCount} stale absence-claim request${changeRequests.suppressedCount === 1 ? "" : "s"} filtered out as already satisfied.`
+                : ""}
+            </div>
+          )}
+        </div>
+
+        {changeRequests.resolved.length ? (
+          <div className="mt-5 adam-stack" style={{ gap: 8 }}>
+            <div className="adam-micro adam-muted">Resolved history</div>
+            {changeRequests.resolved.map((cr) => (
+              <div key={cr.id} className="adam-row adam-space-between" style={{ alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <div className="adam-body">{cr.title}</div>
+                <div className="adam-row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                  {cr.resolvedAt ? (
+                    <span className="adam-micro adam-muted">{new Date(cr.resolvedAt).toLocaleDateString()}</span>
+                  ) : null}
+                  <span className={`adam-badge ${cr.resolution === "rejected" ? "red" : cr.resolution === "approved" ? "green" : "slate"}`}>
+                    {cr.resolution ?? "resolved"}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </section>
 
       <section className="adam-card p-5">
         <div className="adam-title">Recommended actions</div>
