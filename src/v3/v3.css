@@ -896,7 +896,7 @@ select {
   overflow: hidden;
   white-space: nowrap;
   flex-shrink: 0;
-  min-height: 44px;
+  min-height: 56px;
 }
 
 /* ── Collapsed: "ATOS" wordmark, centered ── */
@@ -922,10 +922,11 @@ select {
   min-width: 0;
 }
 .v3-command-rail-brillio-img {
-  height: 40px;
+  height: 54px;
   width: auto;
   object-fit: contain;
   flex-shrink: 0;
+  /* Vertically centred with the ATOS badge via the lockup's align-items:center. */
   /* The asset is a white "brillio" wordmark with brand-green accent dots on a
      transparent ground. The rail is dark in both light and dark app themes, so
      the white wordmark reads directly — no invert filter (which used to flatten
