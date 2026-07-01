@@ -91,7 +91,14 @@ function describeField(field: PhaseFieldSchema): string {
   }
   const opts = type === "select" && field.options?.length ? ` (one of: ${field.options.slice(0, 24).join(" | ")})` : "";
   const hint = field.hint ? ` — ${field.hint}` : "";
-  return `  - ${id} (${type})${opts}: ${label}${hint}`;
+  // Textarea fields are long-form narrative slots (e.g. a functional design
+  // summary): they must hold a thorough, multi-sentence summary that actually
+  // covers the material, not a single compressed line. Flag them so the model
+  // does not squeeze them to fit the short-field character budget below.
+  const longForm = type === "textarea"
+    ? " — LONG-FORM: write a complete, substantive summary (several sentences or short paragraphs, up to ~1500 chars) that captures the document's structure and specifics for this field; do NOT compress to one sentence"
+    : "";
+  return `  - ${id} (${type})${opts}: ${label}${hint}${longForm}`;
 }
 
 /**
@@ -203,7 +210,7 @@ RULES:
 - stakeholders: capture EVERY distinct person/role the document names — one entry per role, across ALL sheets/tabs/sections of the document (e.g. a project team roster, advisory/SME list, and steering committee are separate tables that must ALL be extracted). A role with no named person is still a stakeholder: emit it with an empty name. The 5-item entity cap below does NOT apply to stakeholders — never truncate the roster.
 - Limit each entity array (except kpis and stakeholders) to a maximum of 5 items (the most important ones)
 - Omit methodology mapping fields that have no data rather than returning empty strings
-- Keep all string values concise — under 300 characters per field (grid JSON strings excepted)
+- Keep short text/select/date field values concise — under 300 characters (grid JSON strings and LONG-FORM textarea fields excepted). For a LONG-FORM textarea field, write a full, substantive summary that covers the relevant content — several sentences or short paragraphs — rather than a single compressed line; a terse one-liner for such a field is an extraction failure
 - Never fabricate information that is not in the document
 - Convert bullets, tables, and informal notes into structured values where appropriate (mark as "enriched")
 - If you are running low on tokens, prioritise completing methodologyMappings over entities arrays`;
