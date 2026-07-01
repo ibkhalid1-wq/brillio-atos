@@ -3301,7 +3301,6 @@ export default function AppShellV3() {
       <div className="v3-main-frame">
       <div className="v3-topbar">
         <div className="v3-topbar-brand-group">
-          <BrandLogo />
           <TopbarBreadcrumb
             surface={surface}
             activePhaseLabel={activePhaseId ? phaseNameById(activeProgram, activePhaseId) : null}
