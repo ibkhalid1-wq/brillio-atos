@@ -1117,10 +1117,11 @@ export default function ProgrammeHealthView({
                   disabled={locked}
                   aria-disabled={locked}
                   title={locked ? "Locked — clear the previous phase gate to unlock this phase" : undefined}
-                  onClick={locked ? undefined : () => {
-                    onSetPhase(phaseId);
-                    onNavigateToPhase?.(phaseId);
-                  }}
+                  // Selecting a phase in the rail only toggles which gate the
+                  // detail panel shows — it must NOT drill down to the phase
+                  // screen. The explicit "open phase" control in the gate detail
+                  // panel is the one place that navigates away.
+                  onClick={locked ? undefined : () => onSetPhase(phaseId)}
                   style={{
                     display: "flex",
                     alignItems: "center",
