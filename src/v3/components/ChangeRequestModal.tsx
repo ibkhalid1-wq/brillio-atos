@@ -27,6 +27,12 @@ export default function ChangeRequestModal({
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // Reset ONLY when the modal transitions to open. Depending on `lockedPhases`
+  // here is a trap: callers pass a fresh array (or the default `[]`) on every
+  // render, so an unstable reference would re-run this effect after each
+  // keystroke and wipe `title`/`reason` — making the Summary and Reason/impact
+  // fields impossible to fill in. The props are read at open time inside the
+  // effect, which is all the reset needs.
   useEffect(() => {
     if (open) {
       setPhaseId(fixedPhase?.id ?? lockedPhases[0]?.id ?? "");
@@ -34,7 +40,8 @@ export default function ChangeRequestModal({
       setReason("");
       setSubmitting(false);
     }
-  }, [open, fixedPhase?.id, lockedPhases]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   if (!open) return null;
 
