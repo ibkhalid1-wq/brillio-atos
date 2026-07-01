@@ -6,6 +6,7 @@ import { availableModes, FIELD_ASSIST_MODE_LABEL, type FieldAssistMode } from "@
 import { prioritizePhaseFields } from "@/v3/lib/phaseInputPriority";
 import { projectArchitectureDecisions } from "@/v3/lib/designDecisions";
 import { projectCharterInScope, projectCharterOutOfScope } from "@/v3/lib/scopeDrafts";
+import { preserveUntouchedGrids } from "@/v3/lib/gridSaveGuard";
 import StructuredGrid, { type GridRow, parseRows, serializeRows, filledRowCount } from "@/v3/components/StructuredGrid";
 import { V3Select, V3Combobox } from "@/v3/components/ui/V3Dropdown";
 import AutoGrowTextarea from "@/v3/components/ui/AutoGrowTextarea";
@@ -346,6 +347,13 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
   // Lets the user hide a projected-draft banner (per grid field id) without
   // adopting it (e.g. they'd rather type their own).
   const [dismissedDrafts, setDismissedDrafts] = useState<Record<string, boolean>>({});
+  // Grid field ids the user has deliberately interacted with this phase (edited a
+  // cell, added/removed a row, cleared it, or adopted a projected draft). The
+  // auto-save guard restores the persisted value for any *untouched* grid that
+  // would otherwise be written empty, so a phantom empty buffer (remount / external
+  // -write window) can never clobber real rows — but a deliberate clear always
+  // persists. Reset whenever the phase changes, since a different editor is shown.
+  const gridsTouchedRef = useRef<Set<string>>(new Set());
   // Debounced auto-save plumbing. `isDirtyRef` lets the persisted-resync effect
   // tell our own save echo (safe to ignore) from an external change (must apply)
   // so it never clobbers in-progress typing. `prevPhaseIdRef` forces a full
@@ -417,6 +425,9 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
     // dirty; always resync when the phase itself changed (a different editor).
     const phaseChanged = prevPhaseIdRef.current !== phaseId;
     prevPhaseIdRef.current = phaseId;
+    // A phase switch shows a different editor, so grid-interaction history from the
+    // leaving phase no longer applies to the incoming (freshly-resynced) buffers.
+    if (phaseChanged) gridsTouchedRef.current = new Set();
     // Block the resync only for our *own* save echo while the buffer is dirty —
     // that's the focus-steal case the guard exists for. An external write (e.g. a
     // document import populating phaseInputs.kpis) carries a different signature
@@ -609,13 +620,13 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
   // both by the save path and by `onValuesChange` so read-only consumers (header
   // metrics, status rings, flow-line tones) can reflect in-progress edits without
   // an explicit save or a heavy network round-trip.
-  const liveSnapshot = useMemo<Record<string, string>>(() => ({
+  const liveSnapshot = useMemo<Record<string, string>>(() => {
+    const gridFieldIds = schema.fields.filter((field) => field.type === "grid").map((field) => field.id);
+    const raw: Record<string, string> = {
     ...values,
     // Serialize structured grid fields (overrides any stale string in values).
     ...Object.fromEntries(
-      schema.fields
-        .filter((field) => field.type === "grid")
-        .map((field) => [field.id, serializeRows(grids[field.id] ?? [], field.columns ?? [])]),
+      gridFieldIds.map((id) => [id, serializeRows(grids[id] ?? [], schema.fields.find((f) => f.id === id)?.columns ?? [])]),
     ),
     workstreams: JSON.stringify(localWorkstreams),
     // Strategy-only: persist baseline/target KPIs so benefits realisation
@@ -637,7 +648,13 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
         })),
       ),
     } : {}),
-  }), [values, schema.fields, grids, localWorkstreams, showKpis, localKpis, showActuals, strategyKpiDefs, localActuals]);
+    };
+    // Safety net: never let an *untouched* grid buffer that reads empty overwrite
+    // non-empty persisted rows. Guards the remount / external-write window where a
+    // buffer can momentarily be "[]" while persisted data already holds rows — a
+    // deliberate clear/edit marks the field touched, so real edits still persist.
+    return preserveUntouchedGrids(raw, existingInputs as Record<string, unknown>, gridFieldIds, gridsTouchedRef.current);
+  }, [values, schema.fields, grids, localWorkstreams, showKpis, localKpis, showActuals, strategyKpiDefs, localActuals, existingInputs]);
 
   // Emit the live snapshot to read-only consumers on every edit. The panel keeps
   // editing against the persisted `program`, so this never feeds back into the
@@ -879,12 +896,13 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
                             <button
                               type="button"
                               className="v3-field-assist-btn"
-                              onClick={() =>
+                              onClick={() => {
+                                gridsTouchedRef.current.add(field.id);
                                 setGrids((current) => ({
                                   ...current,
                                   [field.id]: parseRows(JSON.stringify(draft.rows), field.columns ?? []),
-                                }))
-                              }
+                                }));
+                              }}
                             >
                               Use these
                             </button>
@@ -908,7 +926,10 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
                     <StructuredGrid
                       columns={field.columns ?? []}
                       rows={grids[field.id] ?? []}
-                      onChange={(rows) => setGrids((current) => ({ ...current, [field.id]: rows }))}
+                      onChange={(rows) => {
+                        gridsTouchedRef.current.add(field.id);
+                        setGrids((current) => ({ ...current, [field.id]: rows }));
+                      }}
                       addLabel={`+ Add ${field.label.toLowerCase()}`}
                     />
                   </>
