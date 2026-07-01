@@ -185,27 +185,44 @@ function PhaseFidelityCard({ phases }: { phases: PhaseFidelity[] }) {
       />
       <AdamCardBody>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {phases.map((p) => (
-            <div
-              key={p.phaseId}
-              title={p.topIssue ? p.topIssue.issue : "No fidelity gap attributed to this phase"}
-              style={{
-                display: "flex", flexDirection: "column", gap: 4, minWidth: 116,
-                padding: "8px 10px", borderRadius: 8, background: "var(--v3-surface-2)",
-                border: `1px solid ${p.summary.total ? BAND_COLOR[p.band] : "var(--v3-border)"}`,
-              }}
-            >
-              <div style={{ fontSize: 12, color: "var(--v3-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {p.label}
+          {phases.map((p) => {
+            const accent = p.assessed && p.band ? BAND_COLOR[p.band] : "var(--v3-text-muted)";
+            return (
+              <div
+                key={p.phaseId}
+                title={
+                  !p.assessed
+                    ? "Phase has not started — nothing to assess yet"
+                    : p.topIssue
+                      ? p.topIssue.issue
+                      : "No fidelity gap attributed to this phase"
+                }
+                style={{
+                  display: "flex", flexDirection: "column", gap: 4, minWidth: 116,
+                  padding: "8px 10px", borderRadius: 8, background: "var(--v3-surface-2)",
+                  border: `1px solid ${p.assessed && p.summary.total && p.band ? BAND_COLOR[p.band] : "var(--v3-border)"}`,
+                  opacity: p.assessed ? 1 : 0.7,
+                }}
+              >
+                <div style={{ fontSize: 12, color: "var(--v3-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {p.label}
+                </div>
+                {p.assessed ? (
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                    <span style={{ fontSize: 20, fontWeight: 700, color: accent }}>{p.score}</span>
+                    <span style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>
+                      {p.summary.total ? `${p.summary.total} gap${p.summary.total > 1 ? "s" : ""}` : "clean"}
+                    </span>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                    <span style={{ fontSize: 20, fontWeight: 700, color: accent }}>–</span>
+                    <span style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>not started</span>
+                  </div>
+                )}
               </div>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                <span style={{ fontSize: 20, fontWeight: 700, color: BAND_COLOR[p.band] }}>{p.score}</span>
-                <span style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>
-                  {p.summary.total ? `${p.summary.total} gap${p.summary.total > 1 ? "s" : ""}` : "clean"}
-                </span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </AdamCardBody>
     </AdamCard>

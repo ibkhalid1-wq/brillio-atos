@@ -596,16 +596,27 @@ export function summariseValidation(findings: ValidationFinding[]): ValidationSu
 export interface PhaseFidelity {
   phaseId: string;
   label: string;
-  /** 0–100; 100 = no fidelity gap attributed to the phase. */
-  score: number;
-  band: ReturnType<typeof confidenceLabel>;
+  /**
+   * False for phases that have not started yet (no work exists to hold
+   * fidelity). Such phases carry a null score rather than a misleading 100 —
+   * "no gap detected" only means something once the phase has produced work.
+   */
+  assessed: boolean;
+  /** 0–100; 100 = no fidelity gap attributed to the phase. Null when not assessed. */
+  score: number | null;
+  band: ReturnType<typeof confidenceLabel> | null;
   summary: ValidationSummary;
   /** The single most severe finding attributed to the phase, if any. */
   topIssue: ValidationFinding | null;
 }
 
+/** A phase has fidelity worth scoring only once it has begun producing work. */
+function phaseHasStarted(status: string | undefined): boolean {
+  return status !== "inactive";
+}
+
 export function assessPhaseFidelity(
-  phases: Array<{ id: string; displayName?: string }>,
+  phases: Array<{ id: string; displayName?: string; status?: string }>,
   findings: ValidationFinding[],
   options: PhaseSelectOptions = {},
 ): PhaseFidelity[] {
@@ -614,9 +625,23 @@ export function assessPhaseFidelity(
     const summary = summariseValidation(scoped);
     const topIssue =
       [...scoped].sort((a, b) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity])[0] ?? null;
+    // A not-yet-started phase has nothing to be faithful to; scoring it 100
+    // reads as a false "Strong". Report it as unassessed instead.
+    if (!phaseHasStarted(ph.status)) {
+      return {
+        phaseId: ph.id,
+        label: ph.displayName ?? ph.id,
+        assessed: false,
+        score: null,
+        band: null,
+        summary,
+        topIssue: null,
+      };
+    }
     return {
       phaseId: ph.id,
       label: ph.displayName ?? ph.id,
+      assessed: true,
       score: summary.coverageScore,
       band: confidenceLabel(summary.coverageScore),
       summary,

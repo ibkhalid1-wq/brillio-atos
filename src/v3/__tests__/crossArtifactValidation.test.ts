@@ -383,11 +383,12 @@ describe("assessPhaseFidelity — per-phase supports-foundations score", () => {
     const out = assessPhaseFidelity(phases, findings);
     const design = out.find((p) => p.phaseId === "design")!;
     const build = out.find((p) => p.phaseId === "build")!;
+    expect(design.assessed).toBe(true);
     expect(design.score).toBe(100);
     expect(design.band).toBe("Strong");
     expect(design.topIssue).toBeNull();
     // Build carries a critical + medium, so its score is materially lower.
-    expect(build.score).toBeLessThan(design.score);
+    expect(build.score!).toBeLessThan(design.score!);
     expect(build.summary.critical).toBe(1);
     // The most severe attributed finding is surfaced first.
     expect(build.topIssue?.findingId).toBe("a");
@@ -399,7 +400,23 @@ describe("assessPhaseFidelity — per-phase supports-foundations score", () => {
     // Program-wide finding (no phaseId) is ignored by default.
     expect(base.find((p) => p.phaseId === "design")!.score).toBe(100);
     const pulled = assessPhaseFidelity(phases, [programWide], { includeProgramWideAtLeast: "high" });
-    expect(pulled.find((p) => p.phaseId === "design")!.score).toBeLessThan(100);
+    expect(pulled.find((p) => p.phaseId === "design")!.score!).toBeLessThan(100);
+  });
+
+  it("does not score a phase that has not started — reports it unassessed", () => {
+    const withFuture = [
+      { id: "design", displayName: "Design", status: "complete" },
+      { id: "govern", displayName: "Govern", status: "inactive" },
+    ];
+    const out = assessPhaseFidelity(withFuture, findings);
+    const govern = out.find((p) => p.phaseId === "govern")!;
+    // A not-yet-started phase must not read a confident 100/Strong.
+    expect(govern.assessed).toBe(false);
+    expect(govern.score).toBeNull();
+    expect(govern.band).toBeNull();
+    expect(govern.topIssue).toBeNull();
+    // Started phases are still scored as before.
+    expect(out.find((p) => p.phaseId === "design")!.assessed).toBe(true);
   });
 });
 
