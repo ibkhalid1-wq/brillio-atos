@@ -735,7 +735,7 @@ export default function InsightFeedView({
               padding: 0,
             }}
           >
-            Viewing 1 of {programs.length} programmes — View Portfolio →
+            View Portfolio →
           </button>
         </div>
       )}
