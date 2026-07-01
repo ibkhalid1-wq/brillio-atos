@@ -4,6 +4,7 @@ import { getPhaseInputSchema, resolveRosterField, type GridColumn } from "@/v3/l
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { availableModes, FIELD_ASSIST_MODE_LABEL, type FieldAssistMode } from "@/v3/lib/fieldAssist";
 import { prioritizePhaseFields } from "@/v3/lib/phaseInputPriority";
+import { projectArchitectureDecisions } from "@/v3/lib/designDecisions";
 import StructuredGrid, { type GridRow, parseRows, serializeRows, filledRowCount } from "@/v3/components/StructuredGrid";
 import { V3Select, V3Combobox } from "@/v3/components/ui/V3Dropdown";
 import { PROVENANCE_KEY, parseProvenance, provenanceMatches, type FieldProvenance } from "@/new/lib/fieldProvenance";
@@ -293,6 +294,16 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
     return parseKpis((phaseInputs.strategy ?? {}).kpis);
   }, [program.rawData]);
 
+  // Draft decisions projected from the Solution Architecture agent's output. The
+  // agent already emits `{ decision, rationale, alternatives }` per decision; we
+  // surface it as a review banner over the (empty) keyDesignDecisions grid so the
+  // human curates a pre-filled draft instead of typing a blank table. Read-only:
+  // nothing persists until the user adopts the draft and the grid is saved.
+  const decisionDraft = useMemo(
+    () => (phaseId === "design" ? projectArchitectureDecisions(program.rawData) : []),
+    [program.rawData, phaseId],
+  );
+
   // Re-sync the local edit buffer from props only when the *persisted content*
   // actually changes — not on every new program.rawData reference. Background
   // refreshes (Supabase Realtime echoes, agent-run polling) hand us a fresh
@@ -336,6 +347,9 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
   // Per-field AI assist: which field is currently generating, and any per-field error.
   const [assistingField, setAssistingField] = useState<string | null>(null);
   const [assistErrors, setAssistErrors] = useState<Record<string, string>>({});
+  // Lets the user hide the "draft decisions from Solution Architecture" banner
+  // without adopting it (e.g. they'd rather type their own).
+  const [decisionDraftDismissed, setDecisionDraftDismissed] = useState(false);
   // Debounced auto-save plumbing. `isDirtyRef` lets the persisted-resync effect
   // tell our own save echo (safe to ignore) from an external change (must apply)
   // so it never clobbers in-progress typing. `prevPhaseIdRef` forces a full
@@ -850,12 +864,54 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
                   </div>
                 </div>
                 {field.type === "grid" ? (
-                  <StructuredGrid
-                    columns={field.columns ?? []}
-                    rows={grids[field.id] ?? []}
-                    onChange={(rows) => setGrids((current) => ({ ...current, [field.id]: rows }))}
-                    addLabel={`+ Add ${field.label.toLowerCase()}`}
-                  />
+                  <>
+                    {field.id === "keyDesignDecisions"
+                      && decisionDraft.length > 0
+                      && !decisionDraftDismissed
+                      && filledRowCount(grids[field.id] ?? [], field.columns ?? []) === 0 ? (
+                      <div className="v3-decision-draft" role="note">
+                        <div className="v3-decision-draft-head">
+                          <span>
+                            ✨ The Solution Architecture agent drafted{" "}
+                            {decisionDraft.length} decision{decisionDraft.length === 1 ? "" : "s"}. Review and edit,
+                            or dismiss to enter your own.
+                          </span>
+                          <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                            <button
+                              type="button"
+                              className="v3-field-assist-btn"
+                              onClick={() =>
+                                setGrids((current) => ({
+                                  ...current,
+                                  [field.id]: parseRows(JSON.stringify(decisionDraft), field.columns ?? []),
+                                }))
+                              }
+                            >
+                              Use these
+                            </button>
+                            <button
+                              type="button"
+                              className="v3-field-assist-btn"
+                              onClick={() => setDecisionDraftDismissed(true)}
+                            >
+                              Dismiss
+                            </button>
+                          </div>
+                        </div>
+                        <ul className="v3-decision-draft-list">
+                          {decisionDraft.map((row, index) => (
+                            <li key={index}>{row.decision}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                    <StructuredGrid
+                      columns={field.columns ?? []}
+                      rows={grids[field.id] ?? []}
+                      onChange={(rows) => setGrids((current) => ({ ...current, [field.id]: rows }))}
+                      addLabel={`+ Add ${field.label.toLowerCase()}`}
+                    />
+                  </>
                 ) : field.type === "textarea" ? (
                   <AutoGrowTextarea
                     className="v3-input v3-textarea"

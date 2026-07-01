@@ -9368,6 +9368,32 @@ button.v3-chip:disabled {
   color: var(--v3-red);
 }
 
+.v3-decision-draft {
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border: 1px dashed var(--v3-accent);
+  border-radius: 8px;
+  background: var(--v3-surface-2);
+}
+.v3-decision-draft-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--v3-text-secondary);
+  line-height: 1.4;
+}
+.v3-decision-draft-list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 11px;
+  color: var(--v3-text-primary);
+}
+.v3-decision-draft-list li {
+  margin-top: 2px;
+}
+
 .v3-input {
   width: 100%;
   background: var(--v3-bg-surface, var(--v3-surface));

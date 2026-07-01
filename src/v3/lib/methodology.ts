@@ -389,7 +389,7 @@ export const ATOS_STANDARD: MethodologyDefinition = {
           label: "Key design decisions",
           type: "grid",
           required: false,
-          hint: "Record each significant decision, the options weighed, and why you chose as you did.",
+          hint: "The Solution Architecture agent drafts these from your approach and target architecture — review, refine, and add any it missed rather than typing the whole log from scratch.",
           columns: [
             { key: "decision", label: "Decision", type: "text" },
             { key: "optionsConsidered", label: "Options considered", type: "text" },
