@@ -373,9 +373,10 @@ function TopbarBreadcrumb({
   if (surface === "insight-feed" || surface === "pipeline") return null;
 
   // Programme drill-down: "Programme › Risk & Issues" (moreView) or
-  // "Programme › Narrative" (report). Both are reached from the Programme
-  // overview, and the root crumb navigates back there (onClearMoreView →
-  // openMoreView(null)), so it is labelled to match its destination.
+  // "Programme › Narrative" (report). The root crumb navigates back to the
+  // Programme overview (the "status" report — the canonical /program screen),
+  // NOT the workspace browser (moreView null + reportId null), so "Programme"
+  // lands where its label promises.
   if (surface === "program" && (moreView || (reportId && REPORT_CRUMB_LABELS[reportId]))) {
     const drilldownLabel = moreView
       ? MORE_VIEW_LABELS[moreView] || moreView
@@ -3290,7 +3291,7 @@ export default function AppShellV3() {
             moreView={moreView}
             reportId={reportId}
             onNavigate={navigateSurface}
-            onClearMoreView={() => openMoreView(null)}
+            onClearMoreView={() => commitNavigation({ surface: "program", moreView: null, reportId: "status" })}
           />
         </div>
 
