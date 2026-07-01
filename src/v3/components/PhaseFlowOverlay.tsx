@@ -28,7 +28,12 @@ interface PhaseFlowOverlayProps {
 }
 
 type FieldTone = "green" | "amber" | "red" | "muted";
-type Line = { x1: number; y1: number; x2: number; y2: number; tone: FieldTone; key: string };
+type Line = { x1: number; y1: number; x2: number; y2: number; tone: FieldTone; key: string; from: string; to: string };
+
+// Resting opacity for the "quiet by default" circuit-board state. Every wire is
+// drawn this faint until the PM hovers/focuses a field row or artifact chip, at
+// which point only its connected edges light up to full tone.
+const REST_OPACITY = 0.12;
 
 // Stroke styling per source-field quality, mirroring the inline field-quality
 // badges (green = complete, amber = fair, red = brief/thin, muted = empty). Each
@@ -77,6 +82,9 @@ function readProducedArtifactIds(program: ProgramSummary, phaseId: string): stri
 export default function PhaseFlowOverlay({ containerRef, program, phaseId, enabled }: PhaseFlowOverlayProps) {
   const [lines, setLines] = useState<Line[]>([]);
   const [size, setSize] = useState({ w: 0, h: 0 });
+  // The `data-io-anchor` (e.g. "input:scope" or "artifact:risk") the PM is
+  // currently hovering/focusing, or null at rest. Drives the reveal.
+  const [activeAnchor, setActiveAnchor] = useState<string | null>(null);
   const rafRef = useRef<number | null>(null);
 
   // Edges come from the declared per-phase input → artifact dependency model.
@@ -117,7 +125,7 @@ export default function PhaseFlowOverlay({ containerRef, program, phaseId, enabl
       const from = anchor(`input:${edge.from}`, "right");
       const to = anchor(`artifact:${edge.to}`, "left");
       if (!from || !to || to.x <= from.x) return;
-      next.push({ x1: from.x, y1: from.y, x2: to.x, y2: to.y, tone: edge.tone, key: `${edge.from}-${edge.to}-${index}` });
+      next.push({ x1: from.x, y1: from.y, x2: to.x, y2: to.y, tone: edge.tone, key: `${edge.from}-${edge.to}-${index}`, from: edge.from, to: edge.to });
     });
     setSize({ w: container.clientWidth, h: container.scrollHeight });
     setLines(next);
@@ -131,6 +139,38 @@ export default function PhaseFlowOverlay({ containerRef, program, phaseId, enabl
   useLayoutEffect(() => {
     schedule();
   }, [schedule]);
+
+  // Reveal-on-focus wiring. The SVG is pointer-events:none, so we detect intent
+  // on the real field rows / artifact chips (which already expose their edge
+  // identity via `data-io-anchor`) using delegated pointer + focus listeners.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const resolve = (target: EventTarget | null): string | null => {
+      if (!(target instanceof Element)) return null;
+      const el = target.closest("[data-io-anchor]") as HTMLElement | null;
+      return el?.getAttribute("data-io-anchor") ?? null;
+    };
+    const onEnter = (e: Event) => {
+      const id = resolve(e.target);
+      if (id) setActiveAnchor(id);
+    };
+    const onLeave = (e: Event) => {
+      // Only drop the highlight when the pointer/focus lands outside any anchor.
+      const to = resolve((e as PointerEvent | FocusEvent).relatedTarget as EventTarget | null);
+      if (!to) setActiveAnchor(null);
+    };
+    container.addEventListener("pointerover", onEnter);
+    container.addEventListener("pointerout", onLeave);
+    container.addEventListener("focusin", onEnter);
+    container.addEventListener("focusout", onLeave);
+    return () => {
+      container.removeEventListener("pointerover", onEnter);
+      container.removeEventListener("pointerout", onLeave);
+      container.removeEventListener("focusin", onEnter);
+      container.removeEventListener("focusout", onLeave);
+    };
+  }, [containerRef]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -150,6 +190,9 @@ export default function PhaseFlowOverlay({ containerRef, program, phaseId, enabl
   }, [containerRef, schedule]);
 
   if (!enabled || lines.length === 0 || size.w === 0) return null;
+
+  const isActive = (line: Line) =>
+    activeAnchor != null && (activeAnchor === `input:${line.from}` || activeAnchor === `artifact:${line.to}`);
 
   return (
     <svg
@@ -173,10 +216,11 @@ export default function PhaseFlowOverlay({ containerRef, program, phaseId, enabl
         ))}
       </defs>
 
-      {/* Soft glow underlay — gives the connectors depth without obscuring text. */}
+      {/* Soft glow underlay — only for revealed (active) wires, so the resting
+          circuit board stays flat and quiet. */}
       {lines.map((line) => {
         const style = TONE_STYLE[line.tone];
-        if (style.glow === 0) return null;
+        if (style.glow === 0 || !isActive(line)) return null;
         const dx = Math.max(36, (line.x2 - line.x1) * 0.5);
         return (
           <path
@@ -192,17 +236,20 @@ export default function PhaseFlowOverlay({ containerRef, program, phaseId, enabl
         );
       })}
 
-      {/* Crisp gradient strokes + endpoint nodes. */}
+      {/* Crisp gradient strokes + endpoint nodes. Faint at rest (REST_OPACITY),
+          full tone only when their source field or target artifact is focused. */}
       {lines.map((line) => {
         const style = TONE_STYLE[line.tone];
         const dx = Math.max(36, (line.x2 - line.x1) * 0.5);
+        const active = isActive(line);
+        const opacity = active ? 1 : REST_OPACITY;
         return (
-          <g key={line.key}>
+          <g key={line.key} style={{ opacity, transition: "opacity 160ms ease" }}>
             <path
               d={`M ${line.x1} ${line.y1} C ${line.x1 + dx} ${line.y1}, ${line.x2 - dx} ${line.y2}, ${line.x2} ${line.y2}`}
               fill="none"
               stroke={`url(#v3-flow-grad-${line.tone})`}
-              strokeWidth={style.width}
+              strokeWidth={active ? style.width + 0.35 : style.width}
               strokeLinecap="round"
             />
             <circle cx={line.x1} cy={line.y1} r={2.1} fill={style.stroke} fillOpacity={style.dot} />
