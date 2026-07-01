@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { ProgramSummary, Workstream } from "@/new/types";
 import { getPhaseInputSchema, resolveRosterField, type GridColumn } from "@/v3/lib/phaseInputSchema";
+import { getPhaseDefinition } from "@/v3/lib/methodology";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { availableModes, FIELD_ASSIST_MODE_LABEL, type FieldAssistMode } from "@/v3/lib/fieldAssist";
 import { prioritizePhaseFields } from "@/v3/lib/phaseInputPriority";
@@ -501,12 +502,12 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
 
   const showKpis = phaseId === "strategy";
   const showActuals = phaseId === "valuerealize";
-  // Roles are defined once at Mobilise (canonical roster). Phases after Mobilise
-  // reference that roster read-only — single source of truth for people. Strategy
-  // runs before Mobilise, so the roster doesn't exist there yet. Discover and
-  // Design capture substance, not staffing, so they omit the roster reference.
-  const HIDE_ROLES_REFERENCE = new Set(["mobilise", "strategy", "discover", "design"]);
-  const showRolesReference = !HIDE_ROLES_REFERENCE.has(phaseId);
+  // Roles are defined once at Mobilise (canonical roster). Which later phases
+  // surface that roster read-only is declared per-phase in the methodology
+  // (`referencesRoster`) — governance/value phases show it; Mobilise itself and
+  // the execution phases (discover/design/build/operate) don't, keeping the
+  // single-source-of-truth visibility registry-driven, not hard-coded here.
+  const showRolesReference = getPhaseDefinition(phaseId)?.referencesRoster ?? false;
   // The roster is the ai-derived dynamic "coreTeamRoster" grid on Mobilise, not a
   // static schema field — resolve it (and its planner-chosen columns) through the
   // shared resolver so this reference stays aligned with what Mobilise renders.
