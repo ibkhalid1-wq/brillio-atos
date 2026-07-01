@@ -29,6 +29,7 @@ export function useBudgetTracking(
     actualSpend: number | null;
     projectedBenefits: number | null;
     realisedBenefits: number | null;
+    phaseActuals?: Record<string, number>;
   }) => {
     if (!isSupabaseConfigured || !supabase || !programId) {
       throw new Error("Not configured.");

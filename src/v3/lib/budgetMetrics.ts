@@ -99,6 +99,57 @@ export function summariseMilestones(milestones: BenefitMilestone[], now: number 
   return { total: milestones.length, realised, atRisk, overdue, pending };
 }
 
+/**
+ * Estimated per-phase budget: the total projected cost split evenly across
+ * phases. Phases carry no size/weight/effort field, so an even split is the only
+ * defensible allocation — callers should label it as such.
+ */
+export function estimatedPhaseBudget(projectedCost: number | null, phaseCount: number): number | null {
+  if (projectedCost === null || projectedCost <= 0 || phaseCount <= 0) return null;
+  return projectedCost / phaseCount;
+}
+
+export interface PhaseSpendRow {
+  phaseId: string;
+  phaseName: string;
+  /** Even-split allocation of projectedCost, or null when no total budget is set. */
+  estimated: number | null;
+  /** Human-entered spend for this phase, or null when not yet entered. */
+  actual: number | null;
+  /** estimated − actual (positive = under the phase allocation). */
+  variance: number | null;
+  status: "under" | "on-budget" | "over" | "unknown";
+}
+
+/** Combine the even-split estimate with entered per-phase actuals into per-phase variance rows. */
+export function derivePhaseSpendRows(
+  projectedCost: number | null,
+  phases: ReadonlyArray<{ id: string; displayName: string }>,
+  phaseActuals: Record<string, number>,
+): PhaseSpendRow[] {
+  const estimated = estimatedPhaseBudget(projectedCost, phases.length);
+  return phases.map((phase) => {
+    const raw = phaseActuals[phase.id];
+    const actual = typeof raw === "number" && Number.isFinite(raw) ? raw : null;
+    let variance: number | null = null;
+    let status: PhaseSpendRow["status"] = "unknown";
+    if (estimated !== null && actual !== null) {
+      variance = estimated - actual;
+      const utilization = estimated > 0 ? actual / estimated : 0;
+      status = utilization > 1 + BUDGET_TOLERANCE ? "over" : utilization < 1 - BUDGET_TOLERANCE ? "under" : "on-budget";
+    }
+    return { phaseId: phase.id, phaseName: phase.displayName, estimated, actual, variance, status };
+  });
+}
+
+/** Total of the finite entered per-phase actuals. */
+export function sumPhaseActuals(phaseActuals: Record<string, number>): number {
+  return Object.values(phaseActuals).reduce(
+    (total, value) => (typeof value === "number" && Number.isFinite(value) ? total + value : total),
+    0,
+  );
+}
+
 /** Chronological by target date; undated milestones sort last. */
 export function sortMilestonesByTarget(milestones: BenefitMilestone[]): BenefitMilestone[] {
   return [...milestones].sort((a, b) => {

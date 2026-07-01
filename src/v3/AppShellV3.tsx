@@ -2240,6 +2240,7 @@ export default function AppShellV3() {
     actualSpend: number | null;
     projectedBenefits: number | null;
     realisedBenefits: number | null;
+    phaseActuals?: Record<string, number>;
   }) => {
     try {
       await saveBudgetInputs(patch);

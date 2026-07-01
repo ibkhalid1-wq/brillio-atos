@@ -132,7 +132,7 @@ interface ProgramDetailRouterProps {
   onRefresh: () => Promise<void>;
   onAddMilestone: (m: Omit<Milestone, "id" | "source" | "lastUpdatedAt">) => Promise<void>;
   onCompleteMilestone: (id: string) => Promise<void>;
-  onSaveBudgetInputs: (patch: { projectedCost: number | null; actualSpend: number | null; projectedBenefits: number | null; realisedBenefits: number | null }) => Promise<void>;
+  onSaveBudgetInputs: (patch: { projectedCost: number | null; actualSpend: number | null; projectedBenefits: number | null; realisedBenefits: number | null; phaseActuals?: Record<string, number> }) => Promise<void>;
   onSaveNarrativeCorrection: (note: string) => Promise<void>;
   onSavePhaseInputs: (phaseId: string, inputs: Record<string, string>) => Promise<void>;
   onSaveAllPhaseInputs?: (allInputs: Record<string, Record<string, string>>, firstPhaseId?: string) => Promise<void>;

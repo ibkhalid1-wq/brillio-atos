@@ -9,6 +9,8 @@ import {
   isMilestoneOverdue,
   summariseMilestones,
   sortMilestonesByTarget,
+  derivePhaseSpendRows,
+  sumPhaseActuals,
 } from "@/v3/lib/budgetMetrics";
 
 interface BudgetViewProps {
@@ -20,6 +22,7 @@ interface BudgetViewProps {
     actualSpend: number | null;
     projectedBenefits: number | null;
     realisedBenefits: number | null;
+    phaseActuals?: Record<string, number>;
   }) => Promise<void> | void;
   savePending?: boolean;
 }
@@ -35,11 +38,17 @@ function parseBudgetInputs(rawData: Record<string, unknown>) {
   const nested = asRecord(wrapper.data);
   const inner = Object.keys(nested).length ? nested : wrapper;
   const budget = asRecord(inner.budget);
+  const rawPhaseActuals = asRecord(budget.phaseActuals);
+  const phaseActuals: Record<string, number> = {};
+  for (const [key, value] of Object.entries(rawPhaseActuals)) {
+    if (typeof value === "number" && Number.isFinite(value)) phaseActuals[key] = value;
+  }
   return {
     projectedCost: typeof budget.projectedCost === "number" ? budget.projectedCost : null,
     actualSpend: typeof budget.actualSpend === "number" ? budget.actualSpend : null,
     projectedBenefits: typeof budget.projectedBenefits === "number" ? budget.projectedBenefits : null,
     realisedBenefits: typeof budget.realisedBenefits === "number" ? budget.realisedBenefits : null,
+    phaseActuals,
   };
 }
 
@@ -52,12 +61,6 @@ function signalBadge(signal: BudgetTracking["healthSignal"] | null | undefined) 
 function roiLabel(roi: number | null): string {
   if (roi === null || !Number.isFinite(roi)) return "ROI pending";
   return `${roi.toFixed(1)}x return`;
-}
-
-function phaseStatusBadge(status: string) {
-  if (status === "on-budget" || status === "underspend") return "green";
-  if (status === "overspend") return "red";
-  return "slate";
 }
 
 function benefitStatusBadge(status: BenefitMilestone["status"]) {
@@ -99,6 +102,11 @@ export function BudgetView({
     projectedBenefits: initialInputs.projectedBenefits?.toString() || "",
     realisedBenefits: initialInputs.realisedBenefits?.toString() || "",
   });
+  const [phaseActuals, setPhaseActuals] = useState<Record<string, string>>(() => {
+    const seed: Record<string, string> = {};
+    for (const [key, value] of Object.entries(initialInputs.phaseActuals)) seed[key] = value.toString();
+    return seed;
+  });
 
   useEffect(() => {
     setInputs({
@@ -107,6 +115,9 @@ export function BudgetView({
       projectedBenefits: initialInputs.projectedBenefits?.toString() || "",
       realisedBenefits: initialInputs.realisedBenefits?.toString() || "",
     });
+    const seed: Record<string, string> = {};
+    for (const [key, value] of Object.entries(initialInputs.phaseActuals)) seed[key] = value.toString();
+    setPhaseActuals(seed);
   }, [initialInputs]);
 
   if (!program) {
@@ -124,16 +135,35 @@ export function BudgetView({
   const net = budget ? netValue(budget) : null;
   const milestoneSummary = budget ? summariseMilestones(budget.benefitMilestones) : null;
   const sortedMilestones = budget ? sortMilestonesByTarget(budget.benefitMilestones) : [];
-  const saveInputs = async () => {
-    const toNumber = (value: string) => {
+
+  const toNumberOrNull = (value: string) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && value !== "" ? parsed : null;
+  };
+  const projectedCostNum = toNumberOrNull(inputs.projectedCost);
+  const phaseActualsNum = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const [key, value] of Object.entries(phaseActuals)) {
       const parsed = Number(value);
-      return Number.isFinite(parsed) && value !== "" ? parsed : null;
-    };
+      if (Number.isFinite(parsed) && value !== "") out[key] = parsed;
+    }
+    return out;
+  }, [phaseActuals]);
+  const phaseRows = derivePhaseSpendRows(
+    projectedCostNum,
+    program.phases.map((phase) => ({ id: phase.id, displayName: phase.displayName })),
+    phaseActualsNum,
+  );
+  const totalEnteredActual = sumPhaseActuals(phaseActualsNum);
+  const anyPhaseEntered = Object.keys(phaseActualsNum).length > 0;
+
+  const saveInputs = async () => {
     await onSaveBudgetInputs({
-      projectedCost: toNumber(inputs.projectedCost),
-      actualSpend: toNumber(inputs.actualSpend),
-      projectedBenefits: toNumber(inputs.projectedBenefits),
-      realisedBenefits: toNumber(inputs.realisedBenefits),
+      projectedCost: projectedCostNum,
+      actualSpend: anyPhaseEntered ? totalEnteredActual : toNumberOrNull(inputs.actualSpend),
+      projectedBenefits: toNumberOrNull(inputs.projectedBenefits),
+      realisedBenefits: toNumberOrNull(inputs.realisedBenefits),
+      phaseActuals: phaseActualsNum,
     });
   };
 
@@ -267,95 +297,124 @@ export function BudgetView({
             </div>
           </section>
 
-          <section className="adam-grid two" style={{ alignItems: "start" }}>
-            <div className="adam-card p-5">
-              <div className="adam-title">Phase spend posture</div>
-              <div className="mt-4 adam-list">
-                {budget.phaseSpend.length ? budget.phaseSpend.map((phase) => (
-                  <div key={phase.phaseId} className="adam-list-item">
-                    <div className="adam-row adam-space-between" style={{ alignItems: "flex-start" }}>
-                      <div className="adam-stack" style={{ gap: 4 }}>
-                        <div className="adam-body">{phase.phaseName}</div>
-                        <div className="adam-micro adam-muted">
-                          Budgeted {phase.budgetedEffort || "TBD"} · Actual {phase.actualEffort || "TBD"}
-                        </div>
+          <section className="adam-card p-5">
+            <div className="adam-row adam-space-between" style={{ alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+              <div>
+                <div className="adam-title">Phase spend</div>
+                <div className="adam-micro adam-muted">
+                  Estimated cost splits the projected budget evenly across phases. Enter actual spend per phase to track variance.
+                </div>
+              </div>
+              {anyPhaseEntered ? (
+                <span className="adam-badge slate">{formatCurrency(totalEnteredActual)} entered</span>
+              ) : null}
+            </div>
+            <div className="mt-4 adam-list">
+              {phaseRows.map((row) => (
+                <div key={row.phaseId} className="adam-list-item">
+                  <div className="adam-row adam-space-between" style={{ alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                    <div className="adam-stack" style={{ gap: 4, minWidth: 160, flex: 1 }}>
+                      <div className="adam-body">{row.phaseName}</div>
+                      <div className="adam-micro adam-muted">
+                        Est. {row.estimated !== null ? formatCurrency(row.estimated) : "—"}
                       </div>
-                      <span className={`adam-badge ${phaseStatusBadge(phase.status)}`}>
-                        {phase.status.replace("-", " ")}
-                      </span>
+                    </div>
+                    <div className="adam-stack" style={{ gap: 4, width: 160 }}>
+                      <label className="adam-micro adam-muted">Actual spend</label>
+                      <input
+                        className="adam-input"
+                        type="number"
+                        value={phaseActuals[row.phaseId] ?? ""}
+                        onChange={(event) => {
+                          const next = event.target.value;
+                          setPhaseActuals((current) => ({ ...current, [row.phaseId]: next }));
+                        }}
+                        placeholder="0"
+                      />
+                    </div>
+                    <div style={{ width: 96, textAlign: "right" }}>
+                      {row.status !== "unknown" && row.variance !== null ? (
+                        <span className={`adam-badge ${row.status === "over" ? "red" : row.status === "under" ? "green" : "slate"}`}>
+                          {row.status === "over"
+                            ? `${formatCurrency(Math.abs(row.variance))} over`
+                            : row.status === "under"
+                              ? `${formatCurrency(row.variance)} under`
+                              : "on budget"}
+                        </span>
+                      ) : (
+                        <span className="adam-micro adam-muted">—</span>
+                      )}
                     </div>
                   </div>
-                )) : (
-                  <div className="adam-list-item adam-body adam-muted">No phase spend signals yet.</div>
-                )}
+                </div>
+              ))}
+            </div>
+            <div
+              className="adam-row adam-space-between"
+              style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(148,163,184,0.22)" }}
+            >
+              <span className="adam-micro adam-muted">
+                Total estimated {projectedCostNum !== null ? formatCurrency(projectedCostNum) : "—"}
+              </span>
+              <span className="adam-micro adam-muted">Total entered {formatCurrency(totalEnteredActual)}</span>
+            </div>
+          </section>
+
+          <section className="adam-card p-5">
+            <div className="adam-title">Budget inputs</div>
+            <div className="mt-2 adam-body adam-muted">
+              These values are stored as program context and fed back into the Budget Agent on the next run.
+              Actual spend is rolled up from the phase entries above.
+            </div>
+            <div className="adam-grid two" style={{ marginTop: 16 }}>
+              <div className="adam-stack" style={{ gap: 6 }}>
+                <label className="adam-micro adam-muted">Projected cost</label>
+                <input
+                  className="adam-input"
+                  type="number"
+                  value={inputs.projectedCost}
+                  onChange={(event) => setInputs((current) => ({ ...current, projectedCost: event.target.value }))}
+                  placeholder="0"
+                />
+              </div>
+              <div className="adam-stack" style={{ gap: 6 }}>
+                <label className="adam-micro adam-muted">Projected benefits</label>
+                <input
+                  className="adam-input"
+                  type="number"
+                  value={inputs.projectedBenefits}
+                  onChange={(event) => setInputs((current) => ({ ...current, projectedBenefits: event.target.value }))}
+                  placeholder="0"
+                />
+              </div>
+              <div className="adam-stack" style={{ gap: 6 }}>
+                <label className="adam-micro adam-muted">Realised benefits</label>
+                <input
+                  className="adam-input"
+                  type="number"
+                  value={inputs.realisedBenefits}
+                  onChange={(event) => setInputs((current) => ({ ...current, realisedBenefits: event.target.value }))}
+                  placeholder="0"
+                />
               </div>
             </div>
-
-            <div className="adam-card p-5">
-              <div className="adam-title">Budget inputs</div>
-              <div className="mt-2 adam-body adam-muted">
-                These values are stored as program context and fed back into the Budget Agent on the next run.
-              </div>
-              <div className="adam-grid two" style={{ marginTop: 16 }}>
-                <div className="adam-stack" style={{ gap: 6 }}>
-                  <label className="adam-micro adam-muted">Projected cost</label>
-                  <input
-                    className="adam-input"
-                    type="number"
-                    value={inputs.projectedCost}
-                    onChange={(event) => setInputs((current) => ({ ...current, projectedCost: event.target.value }))}
-                    placeholder="0"
-                  />
-                </div>
-                <div className="adam-stack" style={{ gap: 6 }}>
-                  <label className="adam-micro adam-muted">Actual spend</label>
-                  <input
-                    className="adam-input"
-                    type="number"
-                    value={inputs.actualSpend}
-                    onChange={(event) => setInputs((current) => ({ ...current, actualSpend: event.target.value }))}
-                    placeholder="0"
-                  />
-                </div>
-                <div className="adam-stack" style={{ gap: 6 }}>
-                  <label className="adam-micro adam-muted">Projected benefits</label>
-                  <input
-                    className="adam-input"
-                    type="number"
-                    value={inputs.projectedBenefits}
-                    onChange={(event) => setInputs((current) => ({ ...current, projectedBenefits: event.target.value }))}
-                    placeholder="0"
-                  />
-                </div>
-                <div className="adam-stack" style={{ gap: 6 }}>
-                  <label className="adam-micro adam-muted">Realised benefits</label>
-                  <input
-                    className="adam-input"
-                    type="number"
-                    value={inputs.realisedBenefits}
-                    onChange={(event) => setInputs((current) => ({ ...current, realisedBenefits: event.target.value }))}
-                    placeholder="0"
-                  />
-                </div>
-              </div>
-              <div className="adam-row" style={{ gap: 8, marginTop: 16 }}>
-                <button
-                  type="button"
-                  className="adam-button"
-                  onClick={() => void saveInputs()}
-                  disabled={savePending}
-                >
-                  {savePending ? "Saving…" : "Save inputs"}
-                </button>
-                <button
-                  type="button"
-                  className="adam-button-ghost"
-                  onClick={onTriggerBudget}
-                  disabled={budgetIsRunning}
-                >
-                  {budgetIsRunning ? "Refreshing…" : "Refresh agent view"}
-                </button>
-              </div>
+            <div className="adam-row" style={{ gap: 8, marginTop: 16 }}>
+              <button
+                type="button"
+                className="adam-button"
+                onClick={() => void saveInputs()}
+                disabled={savePending}
+              >
+                {savePending ? "Saving…" : "Save inputs"}
+              </button>
+              <button
+                type="button"
+                className="adam-button-ghost"
+                onClick={onTriggerBudget}
+                disabled={budgetIsRunning}
+              >
+                {budgetIsRunning ? "Refreshing…" : "Refresh agent view"}
+              </button>
             </div>
           </section>
 

@@ -7,6 +7,9 @@ import {
   isMilestoneOverdue,
   summariseMilestones,
   sortMilestonesByTarget,
+  estimatedPhaseBudget,
+  derivePhaseSpendRows,
+  sumPhaseActuals,
 } from "@/v3/lib/budgetMetrics";
 
 function budget(overrides: Partial<BudgetTracking> = {}): BudgetTracking {
@@ -123,5 +126,44 @@ describe("milestone timing", () => {
       milestone({ id: "early", targetDate: "2026-01-01" }),
     ]);
     expect(sorted.map((m) => m.id)).toEqual(["early", "late", "none"]);
+  });
+});
+
+describe("phase spend", () => {
+  const phases = [
+    { id: "p1", displayName: "Discover" },
+    { id: "p2", displayName: "Design" },
+    { id: "p3", displayName: "Deliver" },
+  ];
+
+  it("estimatedPhaseBudget splits the total evenly, null when no budget", () => {
+    expect(estimatedPhaseBudget(1200, 3)).toBe(400);
+    expect(estimatedPhaseBudget(null, 3)).toBeNull();
+    expect(estimatedPhaseBudget(0, 3)).toBeNull();
+    expect(estimatedPhaseBudget(1200, 0)).toBeNull();
+  });
+
+  it("derivePhaseSpendRows pairs the even-split estimate with entered actuals and variance", () => {
+    const rows = derivePhaseSpendRows(1200, phases, { p1: 300, p2: 500 });
+    expect(rows.map((r) => r.estimated)).toEqual([400, 400, 400]);
+    expect(rows[0]).toMatchObject({ phaseId: "p1", actual: 300, variance: 100, status: "under" });
+    expect(rows[1]).toMatchObject({ phaseId: "p2", actual: 500, variance: -100, status: "over" });
+    // No actual entered for p3 → unknown, no variance.
+    expect(rows[2]).toMatchObject({ phaseId: "p3", actual: null, variance: null, status: "unknown" });
+  });
+
+  it("derivePhaseSpendRows treats spend within tolerance as on-budget", () => {
+    const rows = derivePhaseSpendRows(1200, phases, { p1: 410 });
+    expect(rows[0].status).toBe("on-budget");
+  });
+
+  it("derivePhaseSpendRows leaves estimate null when no total budget is set", () => {
+    const rows = derivePhaseSpendRows(null, phases, { p1: 300 });
+    expect(rows[0]).toMatchObject({ estimated: null, actual: 300, variance: null, status: "unknown" });
+  });
+
+  it("sumPhaseActuals totals finite entered values", () => {
+    expect(sumPhaseActuals({ p1: 300, p2: 500, p3: 0 })).toBe(800);
+    expect(sumPhaseActuals({})).toBe(0);
   });
 });
