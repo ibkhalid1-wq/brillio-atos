@@ -14,7 +14,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
-import { canonicalRole, findRosterGrid, getPhaseInputSchema, matchColumnKey, rolesMatch } from "@/v3/lib/phaseInputSchema";
+import { canonicalRole, findRosterGrid, getPhaseInputSchema, matchColumnKey, PHASE_INPUT_SCHEMAS, rolesMatch } from "@/v3/lib/phaseInputSchema";
 import type { DynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import type {
   ApprovedInputs,
@@ -675,16 +675,20 @@ export function useDocumentIntelligence({
     isReextractRef.current = Boolean(reextractId);
     setStage("extracting");
 
-    // Declare the activated phases' input fields (static methodology + ai-derived
-    // dynamic) so the extractor maps document data onto the SAME registry fields
-    // the review panel will surface — not a hard-coded Strategy-only set. A phase
-    // is "activated" once it has captured inputs or accrued dynamic fields; we
-    // always include Strategy and the upload's target phase.
-    const activatedPhaseIds = new Set<string>(["strategy"]);
-    if (phaseHint) activatedPhaseIds.add(phaseHint);
-    for (const pid of Object.keys(existingPhaseInputs)) activatedPhaseIds.add(pid);
-    for (const pid of Object.keys(dynamicSchemaStore?.inputFields ?? {})) activatedPhaseIds.add(pid);
-    const phaseSchemas = [...activatedPhaseIds].map((pid) => ({
+    // Declare EVERY methodology phase's input fields (static + ai-derived dynamic)
+    // so the extractor maps document data onto the registry fields the review panel
+    // surfaces — wherever the content belongs. Restricting to "activated" phases
+    // (Strategy + phases with inputs/dynamic fields) meant a document for a phase
+    // that hasn't been started yet — e.g. a Design workflow catalogue imported
+    // before any Design inputs exist and without a hand-picked phase hint — had no
+    // declared target and mapped to nothing ("0 fields to populate"). The review
+    // panel still freezes fields that resolve to gate-locked phases downstream, so
+    // widening the target set never writes into a frozen phase.
+    const phaseIds = new Set<string>(Object.keys(PHASE_INPUT_SCHEMAS));
+    if (phaseHint) phaseIds.add(phaseHint);
+    for (const pid of Object.keys(existingPhaseInputs)) phaseIds.add(pid);
+    for (const pid of Object.keys(dynamicSchemaStore?.inputFields ?? {})) phaseIds.add(pid);
+    const phaseSchemas = [...phaseIds].map((pid) => ({
       phaseId: pid,
       title: getPhaseInputSchema(pid, dynamicSchemaStore).title,
       fields: getPhaseInputSchema(pid, dynamicSchemaStore).fields.map((f) => ({
