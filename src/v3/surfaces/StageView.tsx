@@ -866,7 +866,13 @@ export default function StageView({
         locked.add(def.id);
         continue;
       }
-      const node = phaseArtifacts.byKey.get(def.id);
+      // Resolve required AND orphan (present-but-not-required) nodes, exactly as
+      // the chip row does. A phase whose deliverables are all optional (e.g.
+      // Mobilise: requiredArtifacts=[]) keeps every produced artifact in
+      // orphanByKey — reading only byKey would see the predecessor as missing,
+      // never clear it, and wrongly lock everything after it (the reason a
+      // regenerated-but-optional RACI never unlocked the Governance Model).
+      const node = phaseArtifacts.byKey.get(def.id) ?? phaseArtifacts.orphanByKey.get(def.id);
       const state = node?.state ?? "missing";
       if (state === "approved" || state === "archived") continue; // already cleared
       const score = resolveArtifactQualityScore(
