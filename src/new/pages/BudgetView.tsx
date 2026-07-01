@@ -2,6 +2,14 @@ import React, { useEffect, useMemo, useState } from "react";
 import { NotReadyCard } from "@/new/components/ui/NotReadyCard";
 import { formatCurrency } from "@/new/lib/programData";
 import type { BenefitMilestone, BudgetTracking, ProgramSummary } from "@/new/types";
+import {
+  costVariance,
+  benefitRealization,
+  netValue,
+  isMilestoneOverdue,
+  summariseMilestones,
+  sortMilestonesByTarget,
+} from "@/v3/lib/budgetMetrics";
 
 interface BudgetViewProps {
   program: ProgramSummary | null;
@@ -58,6 +66,22 @@ function benefitStatusBadge(status: BenefitMilestone["status"]) {
   return "slate";
 }
 
+function MeterBar({ ratio, tone }: { ratio: number; tone: "green" | "amber" | "red" }) {
+  const pct = Math.max(0, Math.min(1, ratio)) * 100;
+  const color = tone === "red" ? "var(--adam-red)" : tone === "amber" ? "var(--adam-amber)" : "var(--adam-green)";
+  return (
+    <div
+      role="progressbar"
+      aria-valuenow={Math.round(pct)}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      style={{ height: 8, borderRadius: 999, background: "rgba(148,163,184,0.22)", overflow: "hidden" }}
+    >
+      <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 999 }} />
+    </div>
+  );
+}
+
 export function BudgetView({
   program,
   budgetIsRunning,
@@ -95,6 +119,11 @@ export function BudgetView({
   }
 
   const budget = program.budgetTracking;
+  const cost = budget ? costVariance(budget) : null;
+  const realization = budget ? benefitRealization(budget) : null;
+  const net = budget ? netValue(budget) : null;
+  const milestoneSummary = budget ? summariseMilestones(budget.benefitMilestones) : null;
+  const sortedMilestones = budget ? sortMilestonesByTarget(budget.benefitMilestones) : [];
   const saveInputs = async () => {
     const toNumber = (value: string) => {
       const parsed = Number(value);
@@ -184,6 +213,57 @@ export function BudgetView({
             >
               <div className="adam-title">Health signal</div>
               <div className="mt-2 adam-body">{budget.healthReason}</div>
+            </div>
+          </section>
+
+          <section className="adam-card p-5">
+            <div className="adam-title">Cost &amp; value tracking</div>
+            <div className="adam-grid two" style={{ marginTop: 16, gap: 24, alignItems: "start" }}>
+              <div className="adam-stack" style={{ gap: 8 }}>
+                <div className="adam-row adam-space-between" style={{ alignItems: "center" }}>
+                  <span className="adam-micro adam-muted">Budget utilization</span>
+                  {cost && cost.kind === "known" ? (
+                    <span className={`adam-badge ${cost.status === "over" ? "red" : cost.status === "under" ? "green" : "slate"}`}>
+                      {cost.status === "over"
+                        ? `${formatCurrency(Math.abs(cost.variance))} over`
+                        : cost.status === "under"
+                          ? `${formatCurrency(cost.variance)} under`
+                          : "on budget"}
+                    </span>
+                  ) : null}
+                </div>
+                {cost && cost.kind === "known" ? (
+                  <>
+                    <MeterBar ratio={cost.utilization} tone={cost.status === "over" ? "red" : cost.status === "under" ? "green" : "amber"} />
+                    <div className="adam-micro adam-muted">
+                      {formatCurrency(cost.spent)} of {formatCurrency(cost.budgeted)} spent · {Math.round(cost.utilization * 100)}%
+                    </div>
+                  </>
+                ) : (
+                  <div className="adam-body adam-muted">Add projected cost and actual spend below to track utilization.</div>
+                )}
+              </div>
+
+              <div className="adam-stack" style={{ gap: 8 }}>
+                <div className="adam-row adam-space-between" style={{ alignItems: "center" }}>
+                  <span className="adam-micro adam-muted">Benefit realization</span>
+                  {net !== null ? (
+                    <span className={`adam-badge ${net >= 0 ? "green" : "red"}`}>
+                      {net >= 0 ? `${formatCurrency(net)} net value` : `${formatCurrency(Math.abs(net))} net cost`}
+                    </span>
+                  ) : null}
+                </div>
+                {realization && realization.kind === "known" ? (
+                  <>
+                    <MeterBar ratio={realization.ratio} tone={realization.ratio >= 0.75 ? "green" : realization.ratio >= 0.4 ? "amber" : "red"} />
+                    <div className="adam-micro adam-muted">
+                      {formatCurrency(realization.realised)} of {formatCurrency(realization.projected)} captured · {Math.round(realization.ratio * 100)}%
+                    </div>
+                  </>
+                ) : (
+                  <div className="adam-body adam-muted">Add projected and realised benefits below to track value capture.</div>
+                )}
+              </div>
             </div>
           </section>
 
@@ -280,27 +360,49 @@ export function BudgetView({
           </section>
 
           <section className="adam-card p-5">
-            <div className="adam-row adam-space-between" style={{ alignItems: "flex-start" }}>
+            <div className="adam-row adam-space-between" style={{ alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
               <div>
                 <div className="adam-title">Benefit milestones</div>
                 <div className="adam-micro adam-muted">Where value is expected to land across the program.</div>
               </div>
+              {milestoneSummary && milestoneSummary.total ? (
+                <div className="adam-row" style={{ gap: 8, flexWrap: "wrap" }}>
+                  {milestoneSummary.overdue ? (
+                    <span className="adam-badge red">{milestoneSummary.overdue} overdue</span>
+                  ) : null}
+                  {milestoneSummary.atRisk ? (
+                    <span className="adam-badge amber">{milestoneSummary.atRisk} at risk</span>
+                  ) : null}
+                  {milestoneSummary.realised ? (
+                    <span className="adam-badge green">{milestoneSummary.realised} realised</span>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
             <div className="adam-budget-timeline">
-              {budget.benefitMilestones.length ? budget.benefitMilestones.map((milestone) => (
-                <div key={milestone.id} className="adam-budget-timeline-card">
-                  <div className="adam-row adam-space-between" style={{ alignItems: "flex-start", gap: 8 }}>
-                    <span className={`adam-badge ${benefitStatusBadge(milestone.status)}`}>{milestone.status.replace("-", " ")}</span>
-                    <span className="adam-micro adam-muted">
-                      {milestone.targetDate ? new Date(milestone.targetDate).toLocaleDateString() : "TBD"}
-                    </span>
+              {sortedMilestones.length ? sortedMilestones.map((milestone) => {
+                const overdue = isMilestoneOverdue(milestone);
+                return (
+                  <div
+                    key={milestone.id}
+                    className="adam-budget-timeline-card"
+                    style={overdue ? { borderColor: "rgba(220,38,38,0.35)", background: "rgba(220,38,38,0.06)" } : undefined}
+                  >
+                    <div className="adam-row adam-space-between" style={{ alignItems: "flex-start", gap: 8 }}>
+                      <span className={`adam-badge ${overdue ? "red" : benefitStatusBadge(milestone.status)}`}>
+                        {overdue ? "overdue" : milestone.status.replace("-", " ")}
+                      </span>
+                      <span className={`adam-micro ${overdue ? "" : "adam-muted"}`} style={overdue ? { color: "var(--adam-red)" } : undefined}>
+                        {milestone.targetDate ? new Date(milestone.targetDate).toLocaleDateString() : "TBD"}
+                      </span>
+                    </div>
+                    <div className="mt-3 adam-body">{milestone.title}</div>
+                    <div className="mt-2 adam-micro adam-muted">
+                      {milestone.estimatedValue} · {program.phases.find((phase) => phase.id === milestone.phaseId)?.displayName || milestone.phaseId}
+                    </div>
                   </div>
-                  <div className="mt-3 adam-body">{milestone.title}</div>
-                  <div className="mt-2 adam-micro adam-muted">
-                    {milestone.estimatedValue} · {program.phases.find((phase) => phase.id === milestone.phaseId)?.displayName || milestone.phaseId}
-                  </div>
-                </div>
-              )) : (
+                );
+              }) : (
                 <div className="adam-list-item adam-body adam-muted">No benefit milestones identified yet.</div>
               )}
             </div>
