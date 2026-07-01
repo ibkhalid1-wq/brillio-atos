@@ -240,6 +240,18 @@ describe("runDeterministicValidation — delivery, governance, scope", () => {
     expect(findings.some((f) => f.findingId === "milestone-dep:M-1:M-missing")).toBe(true);
   });
 
+  it("flags a milestone anchored to an unknown phase, but not a real one", () => {
+    const milestone = (phaseId: string) => ({
+      id: "M-9", title: "Cutover", phaseId, targetDate: null, status: "on-track" as const,
+      dependsOn: [], exitCriteria: [], confidence: 0.6, source: "agent" as const, lastUpdatedAt: "2026-01-01T00:00:00.000Z",
+    });
+    const phases = [{ id: "build", displayName: "Build", status: "active" } as unknown as NonNullable<ValidatableProgram["phases"]>[number]];
+    const broken = runDeterministicValidation({ phases, milestones: [milestone("ghost-phase")] });
+    expect(broken.some((f) => f.findingId === "milestone-phase:M-9")).toBe(true);
+    const ok = runDeterministicValidation({ phases, milestones: [milestone("build")] });
+    expect(ok.some((f) => f.findingId === "milestone-phase:M-9")).toBe(false);
+  });
+
   it("flags a gate criterion marked met without evidence", () => {
     const findings = runDeterministicValidation({
       gateReviews: {

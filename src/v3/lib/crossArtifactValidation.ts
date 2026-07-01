@@ -375,6 +375,32 @@ const RULES: ValidationRule[] = [
     },
   },
   {
+    // Reference integrity: a delivery milestone anchored to a phase that does not
+    // exist cannot be scheduled or gated. Mirrors the benefit-milestone check on
+    // the delivery side; guarded to run only once the phase set is known.
+    id: "milestone-unknown-phase",
+    domain: "delivery-readiness",
+    run: (p) => {
+      const phases = p.phases ?? [];
+      if (phases.length === 0) return [];
+      const known = new Set(phases.map((ph) => ph.id));
+      return (p.milestones ?? [])
+        .filter((m) => !isBlank(m.phaseId) && !known.has(m.phaseId))
+        .map((m) => ({
+          findingId: `milestone-phase:${m.id}`,
+          severity: "medium",
+          domain: "delivery-readiness",
+          sourceArtifact: "milestones",
+          targetArtifact: "phases",
+          sourceItem: m.id,
+          issue: `Milestone "${m.title}" is anchored to unknown phase "${m.phaseId}".`,
+          recommendation: "Re-anchor the milestone to a real delivery phase so it can be scheduled and gated.",
+          confidence: 1,
+          evidence: [`phaseId="${m.phaseId}" is not among ${phases.length} known phases`],
+        }));
+    },
+  },
+  {
     id: "gate-criterion-without-evidence",
     domain: "governance",
     run: (p) => {
