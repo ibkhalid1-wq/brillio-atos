@@ -1550,7 +1550,7 @@ export default function StageView({
           the column (beside the zone label) so it's reachable without expanding
           the inputs panel; the panel itself holds the field editors. */}
       <section className="v3-phase-col v3-phase-col--inputs">
-        <div className="v3-zone-label">Input fields</div>
+        <div className="v3-zone-label">Inputs</div>
         {!gateApproved ? (
           <div className="v3-phase-col-actions">
             <button type="button" className="v3-button secondary v3-button-inline-xs" onClick={onUploadDocument}>

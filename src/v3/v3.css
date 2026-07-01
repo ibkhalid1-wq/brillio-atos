@@ -5841,25 +5841,25 @@ button.v3-phase-metric:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 12.5px;
+  font-size: 15px;
   font-weight: 800;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--v3-text);
   margin-bottom: 16px;
-  padding: 0 0 10px 13px;
+  padding: 0 0 11px 14px;
   border-bottom: 1px solid var(--v3-border);
 }
 /* Premium section-header accent: a gradient rule pinned to the left of the
-   column heading (Input fields / Artifacts) so each column reads as a distinct,
+   column heading (Inputs / Artifacts) so each column reads as a distinct,
    deliberate zone rather than a faint muted caption. */
 .v3-zone-label::before {
   content: "";
   position: absolute;
   left: 0;
-  top: 0;
-  height: 14px;
-  width: 3px;
+  top: 1px;
+  height: 17px;
+  width: 4px;
   border-radius: 2px;
   background: linear-gradient(180deg, var(--v3-accent), var(--v3-accent-b));
 }
