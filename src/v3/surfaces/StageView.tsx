@@ -16,7 +16,7 @@ import { EmptyState } from "@/v3/components/ui/EmptyState";
 import { ExpandableSection } from "@/v3/components/ui/ExpandableSection";
 import { RelativeTime } from "@/v3/components/ui/RelativeTime";
 import { StatusBadge } from "@/v3/components/ui/StatusBadge";
-import { computePhaseReadiness, getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
+import { computePhaseReadiness } from "@/v3/lib/phaseReadiness";
 import { buildPhaseArtifacts, type ArtifactOrigin } from "@/v3/lib/artifactModel";
 import { resolveArtifactReview, resolveArtifactQualityScore } from "@/v3/lib/artifactReview";
 import { getPhaseArtifactDefs, type PhaseArtifactDef } from "@/v3/lib/phaseArtifacts";
@@ -56,9 +56,6 @@ interface StageViewProps {
   onAddItem?: (tab: "blockers" | "risks" | "actions") => void;
   onOpenReport: (reportId: V3ReportId) => void;
   onReopenGate: (phaseId: string) => void;
-  /** Reset a phase: clear its generated artifacts and reopen the gate, keeping the
-   *  phase's captured inputs, suggested roles, and open actions. */
-  onResetPhase?: (phaseId: string) => Promise<void> | void;
   /** Raise a change request against a locked phase (controlled edit path). */
   onRaiseChangeRequest?: (phaseId: string, title: string, reason: string) => Promise<void> | void;
   onApproveGate: (phaseId: string) => Promise<boolean | void>;
@@ -448,7 +445,6 @@ export default function StageView({
   onAddItem,
   onOpenReport,
   onReopenGate,
-  onResetPhase,
   onRaiseChangeRequest,
   onApproveGate,
   onRunAgent,
@@ -558,8 +554,6 @@ export default function StageView({
     setLiveInputs({ phaseId, inputs });
   }, []);
   const [revertModalOpen, setRevertModalOpen] = React.useState(false);
-  const [resetModalOpen, setResetModalOpen] = React.useState(false);
-  const [resettingPhase, setResettingPhase] = React.useState(false);
   const [savingProgram, setSavingProgram] = React.useState(false);
   const [programSaved, setProgramSaved] = React.useState(false);
   const [revertingId, setRevertingId] = React.useState<string | null>(null);
@@ -602,16 +596,6 @@ export default function StageView({
       setRevertingId(null);
     }
   }, [onRevertProgram, revertingId]);
-  const handleResetPhaseClick = React.useCallback(async () => {
-    if (!onResetPhase || resettingPhase || !activePhaseId) return;
-    setResettingPhase(true);
-    try {
-      await onResetPhase(activePhaseId);
-      setResetModalOpen(false);
-    } finally {
-      setResettingPhase(false);
-    }
-  }, [onResetPhase, resettingPhase, activePhaseId]);
   const phaseMainRef = useRef<HTMLDivElement | null>(null);
   const previousDeckRef = useRef<string | null>(artifactPreviews?.deck || null);
   useEffect(() => {
@@ -738,15 +722,6 @@ export default function StageView({
   // The phase gate is closed/locked: artifacts are finalised, so per-artifact and
   // bulk approval no longer apply (reopen via the Unlock action to edit again).
   const gateApproved = gateReviewStatus === "approved";
-  // The current frontier phase = the open phase you can actually work in: its gate
-  // is not yet approved AND it is not sequentially locked behind an earlier open
-  // gate. Reset is destructive and only makes sense here — approved past phases are
-  // locked history (use Unlock to edit) and future phases have nothing to reset.
-  const isCurrentPhase = useMemo(() => {
-    if (!program || !activePhase) return false;
-    if (gateApproved) return false;
-    return !getLockedPhaseIds(program).has(activePhase.id);
-  }, [program, activePhase, gateApproved]);
   const source = typeof program?.rawData === "object" && program.rawData !== null
     ? ("data" in program.rawData && typeof program.rawData.data === "object" && program.rawData.data !== null
       ? program.rawData.data as Record<string, unknown>
@@ -1213,7 +1188,7 @@ export default function StageView({
               {verdict ? <div className="v3-phase-head-verdict">{verdict}</div> : null}
             </div>
           </div>
-          {(onSaveProgram || gateApproved || onResetPhase) ? (
+          {(onSaveProgram || phaseArtifacts.present > 0 || phaseArtifacts.orphanByKey.size > 0) ? (
             <div className="v3-settings" ref={settingsRef}>
               <button
                 type="button"
@@ -1274,21 +1249,22 @@ export default function StageView({
                       </button>
                     </>
                   ) : null}
-                  {onResetPhase && isCurrentPhase ? (
+                  {phaseArtifacts.present > 0 || phaseArtifacts.orphanByKey.size > 0 ? (
                     <>
-                      <div className="v3-settings-menu-head">{activePhase.displayName ?? activePhase.id} phase</div>
+                      <div className="v3-settings-menu-head">Artifacts</div>
                       <button
                         type="button"
                         role="menuitem"
-                        className="v3-settings-item is-danger"
-                        onClick={() => { setSettingsOpen(false); setResetModalOpen(true); }}
+                        className="v3-settings-item"
+                        disabled={downloadingArtifacts}
+                        onClick={() => { setSettingsOpen(false); void handleDownloadArtifacts(); }}
                       >
                         <span className="v3-settings-item-icon" aria-hidden="true">
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 9a8 8 0 1 1-1 5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /><path d="M4 4v5h5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0 4-4m-4 4-4-4" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /></svg>
                         </span>
                         <span className="v3-settings-item-text">
-                          <span className="v3-settings-item-label">Reset phase</span>
-                          <span className="v3-settings-item-sub">Clear generated artifacts &amp; reopen the gate (inputs kept)</span>
+                          <span className="v3-settings-item-label">{downloadingArtifacts ? "Preparing package…" : "Download artifacts package"}</span>
+                          <span className="v3-settings-item-sub">Every produced artifact as a .zip</span>
                         </span>
                       </button>
                     </>
@@ -1546,38 +1522,25 @@ export default function StageView({
             </span>
           ) : null}
         </div>
-        {phaseArtifacts.present > 0 || showApproveAll ? (
+        {showApproveAll ? (
           <div className="v3-phase-col-actions v3-artifact-download-row">
-            {phaseArtifacts.present > 0 ? (
-              <button
-                type="button"
-                className="v3-button ghost v3-button-inline-xs"
-                onClick={() => void handleDownloadArtifacts()}
-                disabled={downloadingArtifacts}
-                title={`Download every produced ${activePhase.displayName ?? activePhase.id} artifact as a .zip package`}
-              >
-                {downloadingArtifacts ? "Preparing package…" : "⬇ Download artifacts package"}
-              </button>
-            ) : null}
-            {showApproveAll ? (
-              <button
-                type="button"
-                className="v3-button primary v3-button-inline-xs"
-                onClick={async () => {
-                  if (approvingAll) return;
-                  setApprovingAll(true);
-                  try {
-                    await onApproveAllArtifacts(activePhase.id);
-                  } finally {
-                    setApprovingAll(false);
-                  }
-                }}
-                disabled={approvingAll}
-                title={`Approve all ${approvableArtifactCount} produced ${activePhase.displayName ?? activePhase.id} artifact${approvableArtifactCount > 1 ? "s" : ""} — running the gate check once`}
-              >
-                {approvingAll ? "⋯ Finalizing artifacts…" : `✓ Approve all artifacts (${approvableArtifactCount})`}
-              </button>
-            ) : null}
+            <button
+              type="button"
+              className="v3-button primary v3-button-inline-xs"
+              onClick={async () => {
+                if (approvingAll) return;
+                setApprovingAll(true);
+                try {
+                  await onApproveAllArtifacts(activePhase.id);
+                } finally {
+                  setApprovingAll(false);
+                }
+              }}
+              disabled={approvingAll}
+              title={`Approve all ${approvableArtifactCount} produced ${activePhase.displayName ?? activePhase.id} artifact${approvableArtifactCount > 1 ? "s" : ""} — running the gate check once`}
+            >
+              {approvingAll ? "⋯ Finalizing artifacts…" : `✓ Approve all artifacts (${approvableArtifactCount})`}
+            </button>
           </div>
         ) : null}
         {phaseArtifacts.required > 0 && missingRequiredArtifacts.length ? (
@@ -2148,34 +2111,6 @@ export default function StageView({
         </div>
       ) : null}
 
-      {resetModalOpen ? (
-        <div
-          role="presentation"
-          onClick={() => { if (!resettingPhase) setResetModalOpen(false); }}
-          style={{ position: "fixed", inset: 0, zIndex: 600, background: "rgba(8,10,16,0.45)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="Reset phase to a blank workspace"
-            onClick={(e) => e.stopPropagation()}
-            style={{ width: "100%", maxWidth: 460, display: "flex", flexDirection: "column", background: "var(--v3-surface)", border: "1px solid var(--v3-border)", borderRadius: 16, boxShadow: "0 24px 64px rgba(0,0,0,0.35)", padding: 24 }}
-          >
-            <h2 style={{ margin: "0 0 8px", fontSize: 17, fontWeight: 600, color: "var(--v3-text)" }}>
-              Reset {activePhase.displayName ?? activePhase.id} phase?
-            </h2>
-            <p style={{ margin: "0 0 20px", fontSize: 12.5, lineHeight: 1.55, color: "var(--v3-text-secondary)" }}>
-              This clears this phase's generated artifacts and reopens its gate, returning it to an un-worked state. Your captured inputs, suggested roles, and open actions are kept — re-run the agents to regenerate the artifacts. This cannot be undone — save a version first if you may need to restore it.
-            </p>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button type="button" className="v3-button ghost v3-button-inline-sm" onClick={() => setResetModalOpen(false)} disabled={resettingPhase}>Cancel</button>
-              <button type="button" className="v3-button danger v3-button-inline-sm" onClick={() => void handleResetPhaseClick()} disabled={resettingPhase}>
-                {resettingPhase ? "Resetting…" : "Reset phase"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
