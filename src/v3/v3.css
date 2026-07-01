@@ -12780,11 +12780,16 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   overflow: hidden; word-break: break-word;
 }
 .v3-gantt-track {
-  position: relative; height: 30px; border-radius: 8px;
-  background: linear-gradient(180deg, var(--v3-surface-muted, rgba(148, 163, 184, 0.06)), rgba(148, 163, 184, 0.1));
+  position: relative; height: 30px; border-radius: 9px;
+  background: linear-gradient(180deg, rgba(148, 163, 184, 0.045), rgba(148, 163, 184, 0.12));
   border: 1px solid var(--v3-border-soft);
-  box-shadow: inset 0 1px 2px rgba(16, 24, 40, 0.04);
+  box-shadow: inset 0 1px 2px rgba(16, 24, 40, 0.05), inset 0 0 0 1px rgba(255, 255, 255, 0.35);
   overflow: hidden;
+}
+/* Subtle lane highlight on hover so scanning a long roadmap feels responsive. */
+.v3-gantt-grid .v3-gantt-row { transition: background 0.15s ease; }
+.v3-gantt-grid .v3-gantt-row:hover .v3-gantt-track {
+  background: linear-gradient(180deg, rgba(148, 163, 184, 0.07), rgba(148, 163, 184, 0.15));
 }
 .v3-gantt-axis-track { height: 16px; background: transparent; border: none; overflow: visible; }
 .v3-gantt-monthlabel {
@@ -12806,7 +12811,8 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 .v3-gantt-monthline { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--v3-border-soft); opacity: 0.55; }
 .v3-gantt-today {
   position: absolute; top: -4px; bottom: 0; width: 2px; border-radius: 1px;
-  background: var(--v3-gantt-today); box-shadow: 0 0 0 1px rgba(232, 85, 59, 0.16);
+  background: linear-gradient(180deg, var(--v3-gantt-today), rgba(232, 85, 59, 0.72));
+  box-shadow: 0 0 0 1px rgba(232, 85, 59, 0.14), 0 0 10px rgba(232, 85, 59, 0.28);
 }
 .v3-gantt-today::before {
   content: ""; position: absolute; top: -3px; left: 50%; transform: translateX(-50%);
@@ -12849,22 +12855,36 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 
 .v3-gantt-bar {
   position: absolute; top: 3px; bottom: 3px; min-width: 10px; border-radius: 7px;
-  background: var(--rag-soft, var(--v3-accent-soft));
+  background-color: var(--rag-soft, var(--v3-accent-soft));
+  /* Glassy top sheen fading to nothing gives the bar depth without a second colour var. */
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0) 55%, rgba(16, 24, 40, 0.05));
   border: 1px solid var(--rag-line, var(--v3-border-soft));
   display: flex; align-items: center; padding: 0;
   white-space: nowrap; overflow: hidden;
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.25);
-  transition: box-shadow 0.12s ease, filter 0.12s ease, transform 0.12s ease;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.1), 0 2px 5px rgba(16, 24, 40, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition: box-shadow 0.14s ease, filter 0.14s ease, transform 0.14s ease;
+}
+/* All bars lift subtly on hover (read-only included) — a premium, tactile cue. */
+.v3-gantt-bar:hover {
+  box-shadow: 0 3px 9px rgba(16, 24, 40, 0.16), 0 1px 2px rgba(16, 24, 40, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 .v3-gantt-bar[data-rag="green"] { --rag: #198754; --rag-soft: rgba(25, 135, 84, 0.15); --rag-line: rgba(25, 135, 84, 0.42); }
 .v3-gantt-bar[data-rag="amber"] { --rag: #d9930b; --rag-soft: rgba(217, 147, 11, 0.16); --rag-line: rgba(217, 147, 11, 0.44); }
 .v3-gantt-bar[data-rag="red"]   { --rag: #dc3545; --rag-soft: rgba(220, 53, 69, 0.14); --rag-line: rgba(220, 53, 69, 0.44); }
-.v3-gantt-bar[data-rag="grey"]  { --rag: #94a3b8; --rag-soft: rgba(148, 163, 184, 0.16); --rag-line: rgba(148, 163, 184, 0.4); }
+.v3-gantt-bar[data-rag="grey"]  { --rag: #94a3b8; --rag-soft: rgba(148, 163, 184, 0.14); --rag-line: rgba(148, 163, 184, 0.38); }
+/* Not-yet-started phases read as "planned" via a faint diagonal hatch, so completed
+   and in-flight bars visually pop against future work rather than all reading flat. */
+.v3-gantt-bar[data-rag="grey"] {
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0) 60%),
+    repeating-linear-gradient(135deg, rgba(148, 163, 184, 0.16) 0 5px, rgba(148, 163, 184, 0) 5px 11px);
+}
 .v3-gantt-fill {
   position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px 0 0 5px;
   background-color: var(--rag, var(--v3-accent));
-  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(0, 0, 0, 0.1));
-  transition: width 0.25s ease;
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.04) 48%, rgba(0, 0, 0, 0.12));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 1px 0 0 rgba(16, 24, 40, 0.06);
+  transition: width 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 /* The % label sits just past the bar's end (in the track, not inside the bar),
    so it reads cleanly against the light track and is never clipped on short bars. */
@@ -12890,10 +12910,11 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 .v3-gantt-dot {
   flex: none; width: 8px; height: 8px; border-radius: 50%;
   background: #cbd5e1;
+  box-shadow: 0 0 0 2px var(--v3-surface), 0 0 0 3px rgba(148, 163, 184, 0.18);
 }
-.v3-gantt-dot.rag-green { background: #198754; }
-.v3-gantt-dot.rag-amber { background: #d9930b; }
-.v3-gantt-dot.rag-red { background: #dc3545; }
+.v3-gantt-dot.rag-green { background: #198754; box-shadow: 0 0 0 2px var(--v3-surface), 0 0 0 3px rgba(25, 135, 84, 0.28); }
+.v3-gantt-dot.rag-amber { background: #d9930b; box-shadow: 0 0 0 2px var(--v3-surface), 0 0 0 3px rgba(217, 147, 11, 0.28); }
+.v3-gantt-dot.rag-red { background: #dc3545; box-shadow: 0 0 0 2px var(--v3-surface), 0 0 0 3px rgba(220, 53, 69, 0.28); }
 .v3-gantt-dot.rag-grey { background: #cbd5e1; }
 .v3-gantt-bar.is-editable { cursor: grab; }
 .v3-gantt-bar.is-editable:hover {
