@@ -355,9 +355,14 @@ function scoreEvidence(
     ? 0.5
     : perPhase.reduce((s, v) => s + v, 0) / perPhase.length;
 
-  // Requirements / benefits traceability gaps directly erode evidence.
+  // Requirements / benefits traceability gaps directly erode evidence — but only
+  // those originating from a validation *finding* (they carry a findingId). The
+  // intrinsic "KPI is missing a baseline/target" gaps on measured-by edges are
+  // already scored by the `measurable` component, so folding them here too would
+  // double-penalise the same weakness and mislabel a KPI gap as a traceability
+  // gap.
   const evidenceGaps = graphGapsFor(graph, objectiveId).filter((g) =>
-    g.kind === "satisfied-by" || (g.kind === "measured-by" && g.gap));
+    !!g.gap?.findingId && (g.kind === "satisfied-by" || g.kind === "measured-by"));
   const penalty = weightedGapPenalty(evidenceGaps.map((g) => g.gap!), config);
   const score = Math.max(0, base - penalty);
   // Fold the findings behind traceability gaps into the citation trail.

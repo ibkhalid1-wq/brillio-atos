@@ -235,6 +235,19 @@ describe("assessObjectives", () => {
     expect(obj.blockers.some((b) => b.component === "unthreatened")).toBe(true);
   });
 
+  it("does not double-count an intrinsic KPI baseline gap against evidence", () => {
+    // A KPI missing its target is a measurable gap only — it must not also erode
+    // the evidenced component nor surface as a 'traceability' blocker.
+    const result = assessObjectives(healthyProgram({
+      kpis: JSON.stringify([{ id: "k1", name: "Cost to serve", baseline: "100", target: "", unit: "$" }]),
+    }));
+    const obj = result.objectives[0];
+    expect(obj.components.find((c) => c.key === "measurable")!.score).toBeLessThan(1);
+    // Evidence stays whole (healthy strategy phase), unaffected by the KPI gap.
+    expect(obj.components.find((c) => c.key === "evidenced")!.score).toBe(1);
+    expect(obj.blockers.some((b) => b.label === "Requirement/benefit not traceable")).toBe(false);
+  });
+
   it("cites the KPI behind the measurable component and the finding behind an evidence blocker", () => {
     const result = assessObjectives(healthyProgram({}, 80), { findings: [requirementFinding] });
     const obj = result.objectives[0];
