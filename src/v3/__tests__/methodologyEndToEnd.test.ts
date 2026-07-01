@@ -180,22 +180,3 @@ describe("ATOS methodology — no phase recommends a retired agent", () => {
     },
   );
 });
-
-describe("ATOS methodology — Mobilise roster reference is registry-driven", () => {
-  // The read-only "Key roles (from Mobilise)" reference is shown only where the
-  // phase declares referencesRoster. Governance/value phases surface it; Mobilise
-  // itself and the execution phases (build, operate, discover, design) do not, so
-  // their input panels aren't cluttered with staffing they don't act on.
-  const byId = (id: string) => ATOS_STANDARD.phases.find((p) => p.id === id);
-
-  it.each(["govern", "optimize", "valuerealize"])("phase %s references the roster", (id) => {
-    expect(byId(id)?.referencesRoster).toBe(true);
-  });
-
-  it.each(["strategy", "mobilise", "discover", "design", "build", "operate"])(
-    "phase %s does not reference the roster",
-    (id) => {
-      expect(byId(id)?.referencesRoster ?? false).toBe(false);
-    },
-  );
-});

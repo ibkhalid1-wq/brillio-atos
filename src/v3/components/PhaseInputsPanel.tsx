@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { ProgramSummary, Workstream } from "@/new/types";
 import { getPhaseInputSchema, resolveRosterField, type GridColumn } from "@/v3/lib/phaseInputSchema";
-import { getPhaseDefinition } from "@/v3/lib/methodology";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { availableModes, FIELD_ASSIST_MODE_LABEL, type FieldAssistMode } from "@/v3/lib/fieldAssist";
 import { prioritizePhaseFields } from "@/v3/lib/phaseInputPriority";
@@ -502,17 +501,12 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
 
   const showKpis = phaseId === "strategy";
   const showActuals = phaseId === "valuerealize";
-  // Roles are defined once at Mobilise (canonical roster). Which later phases
-  // surface that roster read-only is declared per-phase in the methodology
-  // (`referencesRoster`) — governance/value phases show it; Mobilise itself and
-  // the execution phases (discover/design/build/operate) don't, keeping the
-  // single-source-of-truth visibility registry-driven, not hard-coded here.
-  const showRolesReference = getPhaseDefinition(phaseId)?.referencesRoster ?? false;
-  // The roster is the ai-derived dynamic "coreTeamRoster" grid on Mobilise, not a
-  // static schema field — resolve it (and its planner-chosen columns) through the
-  // shared resolver so this reference stays aligned with what Mobilise renders.
+  // The Mobilise roster ("Key roles") is the single source of truth for the
+  // project team, edited only on Mobilise. It is intentionally NOT echoed as a
+  // read-only reference on later phases — governance/value/execution panels act
+  // on their own working detail, not staffing — but it still powers the name
+  // suggestions below, so the roster field/rows are resolved here.
   const rosterField = useMemo(() => resolveRosterField(dynamicStore), [dynamicStore]);
-  const rosterCols: GridColumn[] = rosterField?.columns ?? [];
   const mobiliseRoles = useMemo(() => {
     if (!rosterField) return [];
     const raw = program.rawData as Record<string, unknown>;
@@ -1104,30 +1098,6 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
               );
             })}
           </div>
-
-          {showRolesReference ? (
-            <div style={{ marginTop: 12, marginBottom: 12 }}>
-              <div className="v3-field-label">Key roles (from Mobilise)</div>
-              <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginBottom: 6 }}>
-                Roles are defined once in the Mobilise phase and referenced here, so the team roster
-                stays a single source of truth across phases.
-              </div>
-              {mobiliseRoles.length === 0 ? (
-                <div style={{
-                  fontSize: 11,
-                  color: "var(--v3-text-muted)",
-                  padding: "10px 12px",
-                  border: "1px dashed var(--v3-border)",
-                  borderRadius: 8,
-                }}>
-                  No roles defined yet. Add them in the <strong>Mobilise</strong> phase
-                  (Key roles) and they will appear here.
-                </div>
-              ) : (
-                <StructuredGrid columns={rosterCols} rows={mobiliseRoles} onChange={() => {}} readOnly />
-              )}
-            </div>
-          ) : null}
 
           {showKpis ? (() => {
             const successField = schema.fields.find((field) => field.id === "successMetric");

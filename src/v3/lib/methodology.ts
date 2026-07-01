@@ -132,15 +132,6 @@ export interface PhaseDefinition {
    * in the methodology, not in resolvers.
    */
   dynamicSchema?: boolean;
-  /**
-   * When true, this phase surfaces the Mobilise team roster ("Key roles") as a
-   * read-only reference in its input panel — a governance/value view where
-   * knowing who owns delivery is relevant. Execution phases (build, operate)
-   * capture their own working detail and would only be cluttered by it, so they
-   * leave this unset. Kept here in the methodology so roster-reference visibility
-   * is registry-driven rather than a hard-coded exclusion list in the component.
-   */
-  referencesRoster?: boolean;
 }
 
 export interface MethodologyDefinition {
@@ -596,7 +587,6 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       displayName: "Govern",
       description: "Establish ongoing governance, compliance, and performance monitoring.",
       requiredArtifacts: [],
-      referencesRoster: true,
       // Govern seeds the regulatory frameworks its compliance check verifies against
       // — the one fact the compliance-checker needs but that was captured nowhere,
       // so the check ran on programType/industry alone. Unlike `risk`/`narrative`,
@@ -643,7 +633,6 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       displayName: "Optimize",
       description: "Drive continuous improvement against baseline metrics.",
       requiredArtifacts: [],
-      referencesRoster: true,
       // Optimize seeds the two facts the optimisation backlog ranks against — the
       // current performance baseline and the known improvement candidates — as
       // static methodology inputs, so the backlog is grounded on real numbers and
@@ -689,7 +678,6 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       displayName: "Value Realize",
       description: "Formally measure and document benefits realisation.",
       requiredArtifacts: [],
-      referencesRoster: true,
       // Value Realize seeds the closure facts its agents synthesise — realised
       // benefits measured against baseline, lessons learned, and sponsor closure
       // sign-off — as static methodology inputs, so closure never depends on the
