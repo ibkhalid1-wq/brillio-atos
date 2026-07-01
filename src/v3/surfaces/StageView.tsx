@@ -694,28 +694,45 @@ export default function StageView({
       .map((def) => def.label);
   }, [activePhase, phaseArtifacts, dynamicStore]);
 
+  // The artifacts that gate this phase's close. Normally the required spine
+  // (`byKey`). But a phase can declare NO required artifacts (e.g. Mobilise:
+  // `requiredArtifacts: []`) yet still produce real deliverables (RACI,
+  // Governance) — those land in `orphanByKey`. With an empty required spine such
+  // a phase would have nothing to approve, so bulk-approve (and therefore the
+  // gate close, which needs artifactsComplete=100) could never fire and the phase
+  // was un-closable. When there is no required spine, fall back to the produced
+  // orphan artifacts so an orphan-only phase is still approvable and closable.
+  const gateArtifactEntries = useMemo(() => {
+    const entries = Array.from(phaseArtifacts.byKey.entries());
+    if (phaseArtifacts.required === 0) entries.push(...phaseArtifacts.orphanByKey.entries());
+    return entries;
+  }, [phaseArtifacts]);
   // Produced artifacts still awaiting approval (present, not approved/archived).
   // Drives the single "Approve all artifacts" action that replaces per-row approve.
   const approvableArtifactCount = useMemo(() => {
     if (!activePhase) return 0;
     let count = 0;
-    for (const node of phaseArtifacts.byKey.values()) {
+    for (const [, node] of gateArtifactEntries) {
       if (node.present && node.artifactId && node.state !== "approved" && node.state !== "archived") count += 1;
     }
     return count;
-  }, [activePhase, phaseArtifacts]);
+  }, [activePhase, gateArtifactEntries]);
   // Any produced artifact is stale → bulk approve must NOT be offered: a stale
   // artifact has drifted from its inputs and must be regenerated before it can
   // be approved, so approving the set wholesale would lock in stale output.
   const hasStaleArtifact = useMemo(() => {
     if (!activePhase) return false;
-    for (const node of phaseArtifacts.byKey.values()) {
+    for (const [, node] of gateArtifactEntries) {
       if (node.present && node.state === "stale") return true;
     }
     return false;
-  }, [activePhase, phaseArtifacts]);
-  // All required artifacts generated → the gate for surfacing bulk approve.
-  const allRequiredProduced = phaseArtifacts.required > 0 && phaseArtifacts.present === phaseArtifacts.required;
+  }, [activePhase, gateArtifactEntries]);
+  // Every gate artifact is produced → the gate for surfacing bulk approve. For a
+  // required spine that means all required present; for an orphan-only phase it
+  // means at least one produced orphan (they are present by definition).
+  const allRequiredProduced = phaseArtifacts.required > 0
+    ? phaseArtifacts.present === phaseArtifacts.required
+    : phaseArtifacts.orphanByKey.size > 0;
 
   const gateReview = activePhase ? program?.gateReviews?.[activePhase.id] || null : null;
   const gateReviewStatus = getRawGateStatus(program, activePhase?.id ?? null) || gateReview?.status || null;
@@ -869,22 +886,21 @@ export default function StageView({
   const allArtifactsMeetQualityGate = useMemo(() => {
     if (!activePhase) return false;
     let anyProduced = false;
-    for (const def of getPhaseArtifactDefs(activePhase.id, dynamicStore)) {
-      const node = phaseArtifacts.byKey.get(def.id);
-      if (!node?.present) continue;
+    for (const [key, node] of gateArtifactEntries) {
+      if (!node.present) continue;
       anyProduced = true;
       const state = node.state;
       if (state === "approved" || state === "archived") continue;
       const score = resolveArtifactQualityScore(
         source,
-        def.id,
+        key,
         activePhase.id,
         typeof node.quality === "number" ? node.quality : null,
       );
       if (!(typeof score === "number" && score >= ARTIFACT_QUALITY_GATE)) return false;
     }
     return anyProduced;
-  }, [activePhase, dynamicStore, phaseArtifacts, source]);
+  }, [activePhase, gateArtifactEntries, source]);
   // Bulk approve is offered only when every required artifact is produced, none
   // are stale, and all clear the quality gate. Until then we show an inline hint
   // explaining the condition instead of the button.
