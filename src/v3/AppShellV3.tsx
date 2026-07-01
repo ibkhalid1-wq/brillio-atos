@@ -410,8 +410,10 @@ function TopbarBreadcrumb({
   // Single context chip — no deep breadcrumb chains
   if (surface === "insight-feed" || surface === "pipeline") return null;
 
-  // Workspace drill-down: "Workspaces › Risk & Issues" (moreView) or
-  // "Workspaces › Narrative" (report). Both are reached from the Workspaces grid.
+  // Programme drill-down: "Programme › Risk & Issues" (moreView) or
+  // "Programme › Narrative" (report). Both are reached from the Programme
+  // overview, and the root crumb navigates back there (onClearMoreView →
+  // openMoreView(null)), so it is labelled to match its destination.
   if (surface === "program" && (moreView || (reportId && REPORT_CRUMB_LABELS[reportId]))) {
     const drilldownLabel = moreView
       ? MORE_VIEW_LABELS[moreView] || moreView
@@ -419,7 +421,7 @@ function TopbarBreadcrumb({
     return (
       <nav className="v3-topbar-breadcrumb" aria-label="Breadcrumb">
         <button type="button" className="v3-topbar-breadcrumb-link" onClick={onClearMoreView}>
-          Workspaces
+          Programme
         </button>
         <span className="v3-topbar-breadcrumb-sep" aria-hidden="true">›</span>
         <span className="v3-topbar-breadcrumb-current" aria-current="page">{drilldownLabel}</span>
