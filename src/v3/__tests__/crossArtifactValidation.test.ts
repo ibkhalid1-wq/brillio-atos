@@ -4,6 +4,7 @@ import {
   summariseValidation,
   decideValidation,
   selectFindingsForPhase,
+  assessPhaseFidelity,
   type ValidatableProgram,
   type ValidationFinding,
 } from "@/v3/lib/crossArtifactValidation";
@@ -353,6 +354,40 @@ describe("selectFindingsForPhase", () => {
       includeProgramWideAtLeast: "high",
     });
     expect(out.map((f) => f.findingId).sort()).toEqual(["a", "c"]);
+  });
+});
+
+describe("assessPhaseFidelity — per-phase supports-foundations score", () => {
+  const phases = [
+    { id: "design", displayName: "Design" },
+    { id: "build", displayName: "Build" },
+  ];
+  const findings: ValidationFinding[] = [
+    { findingId: "a", severity: "critical", domain: "delivery-readiness", phaseId: "build", sourceArtifact: "milestones", targetArtifact: "", sourceItem: "M-1", issue: "Broken dep", recommendation: "", confidence: 1, evidence: [] },
+    { findingId: "b", severity: "medium", domain: "delivery-readiness", phaseId: "build", sourceArtifact: "milestones", targetArtifact: "", sourceItem: "M-2", issue: "Late", recommendation: "", confidence: 1, evidence: [] },
+  ];
+
+  it("gives a clean phase a perfect score and a gapped phase a lower one", () => {
+    const out = assessPhaseFidelity(phases, findings);
+    const design = out.find((p) => p.phaseId === "design")!;
+    const build = out.find((p) => p.phaseId === "build")!;
+    expect(design.score).toBe(100);
+    expect(design.band).toBe("Strong");
+    expect(design.topIssue).toBeNull();
+    // Build carries a critical + medium, so its score is materially lower.
+    expect(build.score).toBeLessThan(design.score);
+    expect(build.summary.critical).toBe(1);
+    // The most severe attributed finding is surfaced first.
+    expect(build.topIssue?.findingId).toBe("a");
+  });
+
+  it("can pull in severe program-wide findings when asked", () => {
+    const programWide: ValidationFinding = { findingId: "pw", severity: "high", domain: "benefits-traceability", sourceArtifact: "x", targetArtifact: "", sourceItem: "y", issue: "Benefit dropped", recommendation: "", confidence: 1, evidence: [] };
+    const base = assessPhaseFidelity(phases, [programWide]);
+    // Program-wide finding (no phaseId) is ignored by default.
+    expect(base.find((p) => p.phaseId === "design")!.score).toBe(100);
+    const pulled = assessPhaseFidelity(phases, [programWide], { includeProgramWideAtLeast: "high" });
+    expect(pulled.find((p) => p.phaseId === "design")!.score).toBeLessThan(100);
   });
 });
 

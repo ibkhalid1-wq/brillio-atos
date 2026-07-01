@@ -31,6 +31,7 @@ import type {
   BudgetTracking,
 } from "@/new/types";
 import { getProgramState } from "@/new/lib/programState";
+import { confidenceLabel } from "@/v3/lib/confidenceScore";
 
 export type ValidationSeverity = "critical" | "high" | "medium" | "low";
 
@@ -551,6 +552,51 @@ export function summariseValidation(findings: ValidationFinding[]): ValidationSu
     byDomain,
     recommendation,
   };
+}
+
+/**
+ * Per-phase "supports its foundations" confidence — the phase-wise view the
+ * ontology arc was missing. Each phase's score reflects only the fidelity gaps
+ * attributed to it (a milestone whose dependency is broken, a gate signed off
+ * out of sequence, a benefit anchored to that phase), so the number answers
+ * "does this phase hold up the ones before and after it?" rather than mere
+ * process health. Bands come from the shared `confidenceLabel`, so a phase reads
+ * "At Risk" identically here and on every other surface.
+ *
+ * Pure and derived: takes the phase list + already-computed findings, returns a
+ * ranked score per phase. Reuses `selectFindingsForPhase` + `summariseValidation`
+ * so attribution and severity weighting stay single-sourced.
+ */
+export interface PhaseFidelity {
+  phaseId: string;
+  label: string;
+  /** 0–100; 100 = no fidelity gap attributed to the phase. */
+  score: number;
+  band: ReturnType<typeof confidenceLabel>;
+  summary: ValidationSummary;
+  /** The single most severe finding attributed to the phase, if any. */
+  topIssue: ValidationFinding | null;
+}
+
+export function assessPhaseFidelity(
+  phases: Array<{ id: string; displayName?: string }>,
+  findings: ValidationFinding[],
+  options: PhaseSelectOptions = {},
+): PhaseFidelity[] {
+  return phases.map((ph) => {
+    const scoped = selectFindingsForPhase(findings, ph.id, options);
+    const summary = summariseValidation(scoped);
+    const topIssue =
+      [...scoped].sort((a, b) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity])[0] ?? null;
+    return {
+      phaseId: ph.id,
+      label: ph.displayName ?? ph.id,
+      score: summary.coverageScore,
+      band: confidenceLabel(summary.coverageScore),
+      summary,
+      topIssue,
+    };
+  });
 }
 
 // ── Triggering framework (change-aware, on-demand) ───────────────────────────
