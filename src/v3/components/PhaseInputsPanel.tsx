@@ -234,6 +234,27 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
   // methodology schema, so planner-proposed inputs render in this panel.
   const dynamicStore = useMemo(() => getDynamicSchemaStore(program.rawData), [program.rawData]);
   const schema = useMemo(() => getPhaseInputSchema(phaseId, dynamicStore), [phaseId, dynamicStore]);
+  // Canonical roster field + its role column, resolved early so the grid-state
+  // initializer/resync can present the roster ordered top-down by seniority at
+  // *display* time only — never reshuffled while a role is being typed.
+  const rosterField = useMemo(() => resolveRosterField(dynamicStore), [dynamicStore]);
+  const rosterRoleKey = useMemo(
+    () => (rosterField ? rosterColumnKeys(rosterField.columns ?? []).roleKey : undefined),
+    [rosterField],
+  );
+  // Parse a grid field's persisted value into rows, applying the seniority order
+  // to the roster field only. Used at load/resync so a saved roster reads
+  // most-senior-first when the panel next renders, without touching row order
+  // during editing (onChange writes rows verbatim).
+  const parseGridRowsForDisplay = React.useCallback(
+    (field: { id: string; columns?: GridColumn[] }, raw: unknown): GridRow[] => {
+      const rows = parseRows(raw, field.columns ?? []);
+      return rosterField && field.id === rosterField.id && rosterRoleKey
+        ? sortRosterRowsBySeniority(rows, rosterRoleKey)
+        : rows;
+    },
+    [rosterField, rosterRoleKey],
+  );
   // useMemo prevents a new object reference on every render, which would cause an
   // infinite loop: new existingInputs reference → useEffect fires → setValues → re-render → repeat.
   const existingInputs = useMemo(() => {
@@ -334,7 +355,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
   const [grids, setGrids] = useState<Record<string, GridRow[]>>(() => {
     const next: Record<string, GridRow[]> = {};
     for (const field of schema.fields) {
-      if (field.type === "grid") next[field.id] = parseRows((existingInputs as Record<string, unknown>)[field.id], field.columns ?? []);
+      if (field.type === "grid") next[field.id] = parseGridRowsForDisplay(field, (existingInputs as Record<string, unknown>)[field.id]);
     }
     return next;
   });
@@ -464,10 +485,12 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
           if (field.type !== "grid") continue;
           const cols = field.columns ?? [];
           const ourRows = ours[field.id] ?? [];
-          const baseSer = serializeRows(parseRows((base as Record<string, unknown>)[field.id], cols), cols);
+          // Compare against the display-ordered base so a pure presentational
+          // reorder (roster seniority sort) never reads as a user edit here.
+          const baseSer = serializeRows(parseGridRowsForDisplay(field, (base as Record<string, unknown>)[field.id]), cols);
           next[field.id] = serializeRows(ourRows, cols) !== baseSer
             ? ourRows
-            : parseRows((existingInputs as Record<string, unknown>)[field.id], cols);
+            : parseGridRowsForDisplay(field, (existingInputs as Record<string, unknown>)[field.id]);
         }
         return next;
       });
@@ -494,7 +517,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
     setLocalActuals(parseKpiActuals((existingInputs as Record<string, unknown>).kpiActuals));
     const nextGrids: Record<string, GridRow[]> = {};
     for (const field of schema.fields) {
-      if (field.type === "grid") nextGrids[field.id] = parseRows((existingInputs as Record<string, unknown>)[field.id], field.columns ?? []);
+      if (field.type === "grid") nextGrids[field.id] = parseGridRowsForDisplay(field, (existingInputs as Record<string, unknown>)[field.id]);
     }
     setGrids(nextGrids);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -506,15 +529,8 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
   // project team, edited only on Mobilise. It is intentionally NOT echoed as a
   // read-only reference on later phases — governance/value/execution panels act
   // on their own working detail, not staffing — but it still powers the name
-  // suggestions below, so the roster field/rows are resolved here.
-  const rosterField = useMemo(() => resolveRosterField(dynamicStore), [dynamicStore]);
-  // Role column of the canonical roster — drives the seniority ordering applied to
-  // the roster grid on blur (rows settle top-down by org seniority once a role is
-  // entered, matching how the RACI/governance views already present the team).
-  const rosterRoleKey = useMemo(
-    () => (rosterField ? rosterColumnKeys(rosterField.columns ?? []).roleKey : undefined),
-    [rosterField],
-  );
+  // suggestions below. (rosterField / rosterRoleKey are resolved higher up so the
+  // grid-state initializer can present the roster seniority-ordered on load.)
   const mobiliseRoles = useMemo(() => {
     if (!rosterField) return [];
     const raw = program.rawData as Record<string, unknown>;
@@ -580,7 +596,11 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
   const isDirty = useMemo(() => {
     for (const field of schema.fields) {
       if (field.type === "grid") {
-        const persisted = serializeRows(parseRows((existingInputs as Record<string, unknown>)[field.id], field.columns ?? []), field.columns ?? []);
+        // Order the persisted side the same way we display it, so the roster's
+        // seniority sort at load is presentational only — it never marks the
+        // panel dirty or triggers a phantom auto-save. A genuine content edit
+        // still diverges from this baseline and registers as dirty.
+        const persisted = serializeRows(parseGridRowsForDisplay(field, (existingInputs as Record<string, unknown>)[field.id]), field.columns ?? []);
         const live = serializeRows(grids[field.id] ?? [], field.columns ?? []);
         if (persisted !== live) return true;
         continue;
@@ -601,7 +621,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
     if (showKpis && JSON.stringify(localKpis) !== JSON.stringify(parseKpis((existingInputs as Record<string, unknown>).kpis))) return true;
     if (showActuals && JSON.stringify(localActuals) !== JSON.stringify(parseKpiActuals((existingInputs as Record<string, unknown>).kpiActuals))) return true;
     return false;
-  }, [schema.fields, values, existingInputs, localWorkstreams, localKpis, localActuals, grids, program.workstreams, phaseId, showKpis, showActuals]);
+  }, [schema.fields, values, existingInputs, localWorkstreams, localKpis, localActuals, grids, program.workstreams, phaseId, showKpis, showActuals, parseGridRowsForDisplay]);
   // Keep the ref in sync so the persisted-resync effect can read the latest
   // dirtiness without taking it as a dependency.
   isDirtyRef.current = isDirty;
@@ -955,11 +975,6 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
                         setGrids((current) => ({ ...current, [field.id]: rows }));
                       }}
                       addLabel={`+ Add ${field.label.toLowerCase()}`}
-                      sortRows={
-                        rosterField && field.id === rosterField.id && rosterRoleKey
-                          ? (rows) => sortRosterRowsBySeniority(rows, rosterRoleKey)
-                          : undefined
-                      }
                     />
                   </>
                 ) : field.type === "textarea" ? (
