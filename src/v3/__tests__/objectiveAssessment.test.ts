@@ -295,6 +295,48 @@ describe("assessObjectives", () => {
     expect(progressing.detail).toContain("100%");
   });
 
+  it("does not let a folded delivery-gap finding masquerade as a delivered artifact", () => {
+    // A delivery-readiness finding (broken milestone dependency) folds into the
+    // graph as a delivered-by gap edge to a synthetic target. It must penalise
+    // delivery as a gap — not be averaged in as a 50%-quality 'artifact', and
+    // its phantom phase must not leak into the evidence/progress phase set.
+    const finding: ValidationFinding = {
+      findingId: "ms-dep-1", severity: "high", domain: "delivery-readiness",
+      phaseId: "operate", sourceArtifact: "milestones", targetArtifact: "",
+      sourceItem: "m1", issue: "Milestone depends on an unknown milestone.",
+      recommendation: "Repair the dependency.", confidence: 1,
+      evidence: ["dangling dependency"],
+    };
+    const withGap = assessObjectives(healthyProgram(), { findings: [finding] });
+    const noGap = assessObjectives(healthyProgram());
+    const delWith = withGap.objectives[0].components.find((c) => c.key === "delivered")!;
+    const delNo = noGap.objectives[0].components.find((c) => c.key === "delivered")!;
+    // Same real artifact set drives quality; the gap only subtracts a penalty,
+    // so the "artifact(s)" count in the detail is unchanged (no phantom added).
+    expect(delWith.detail).toContain("1 artifact(s)");
+    // The gap lowers delivered strictly below the ungapped baseline.
+    expect(delWith.score).toBeLessThan(delNo.score);
+    // The phantom "operate" phase must not appear as a delivering-phase citation.
+    const progressing = withGap.objectives[0].components.find((c) => c.key === "progressing")!;
+    expect(progressing.citations.some((c) => c.ref === "operate")).toBe(false);
+  });
+
+  it("does not count a folded benefits finding as an unhealthy KPI in measurable", () => {
+    // A benefits-traceability finding folds as a measured-by gap edge to a
+    // synthetic artifact. It belongs to evidence, not measurable — so a fully
+    // baselined KPI keeps measurable whole.
+    const finding: ValidationFinding = {
+      findingId: "ben-1", severity: "high", domain: "benefits-traceability",
+      phaseId: "strategy", sourceArtifact: "benefitsTracking", targetArtifact: "",
+      sourceItem: "projectedBenefits", issue: "Benefit not reflected in a KPI.",
+      recommendation: "Add a KPI.", confidence: 1, evidence: ["no kpi"],
+    };
+    const result = assessObjectives(healthyProgram(), { findings: [finding] });
+    const measurable = result.objectives[0].components.find((c) => c.key === "measurable")!;
+    expect(measurable.score).toBe(1);
+    expect(measurable.detail).toContain("1/1");
+  });
+
   it("penalises an objective threatened by an open severe risk", () => {
     const prog = healthyProgram();
     (prog as unknown as Record<string, unknown>).raidEntries = [

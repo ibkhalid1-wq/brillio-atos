@@ -203,7 +203,12 @@ function scoreObjective(
   };
 
   // ── measurable ──────────────────────────────────────────────────────────
-  const measures = relationsFrom(graph, objective.id, "measured-by");
+  // Only the objective's own KPI edges measure measurability. Folded validation
+  // findings (e.g. a benefits-traceability finding) also arrive as measured-by
+  // gap edges to synthetic artifact targets — those carry a findingId and are
+  // owned by the `evidenced` component, so counting them here as unhealthy
+  // "KPIs" would both mislabel them and double-penalise the same weakness.
+  const measures = relationsFrom(graph, objective.id, "measured-by").filter((rel) => !rel.gap?.findingId);
   const kpiCitations = measures.map((rel) => nodeCitation(graph, rel.to, "kpi"));
   let measurable: number;
   if (measures.length === 0) {
@@ -228,16 +233,32 @@ function scoreObjective(
 
   // ── delivered ───────────────────────────────────────────────────────────
   const deliveries = relationsFrom(graph, objective.id, "delivered-by");
-  const deliveryArtifacts = deliveries.map((rel) => nodeOf(graph, rel.to)).filter((n): n is SemanticNode => !!n);
+  const deliveryGaps = deliveries.filter((rel) => rel.gap);
+  // Delivery quality is measured only over *real* delivered artifacts. A
+  // delivered-by edge that exists solely to carry a folded gap (e.g. a
+  // broken-milestone finding synthesises an edge to a phantom target) represents
+  // a missing/broken delivery, not a deliverable with measurable quality — so it
+  // drives the gap penalty below rather than diluting the quality average or
+  // masquerading as a delivering phase for the evidence/progress components.
+  const deliveryArtifacts = deliveries
+    .filter((rel) => !rel.gap)
+    .map((rel) => nodeOf(graph, rel.to))
+    .filter((n): n is SemanticNode => !!n);
   const artifactCitations = deliveryArtifacts.map((a) => ({ kind: "artifact" as const, ref: a.id, label: a.label }));
   let delivered: number;
-  const deliveryGaps = deliveries.filter((rel) => rel.gap);
   if (deliveryArtifacts.length === 0) {
     delivered = 0;
-    pushComponent("delivered", delivered, "No artifact is traced to this objective.");
-    addBlocker("delivered", delivered, "No delivery traced to objective",
-      "No generated artifact grounds this objective.",
-      "Generate the phase artifacts that carry this objective forward (charter, business case, design).");
+    // If the only delivery signal is a folded gap, name it; otherwise nothing is traced.
+    const worst = deliveryGaps[0];
+    const worstCitation = worst ? gapCitation(worst.gap!) : null;
+    pushComponent("delivered", delivered,
+      worst ? worst.gap!.issue : "No artifact is traced to this objective.",
+      worstCitation ? [worstCitation] : []);
+    addBlocker("delivered", delivered,
+      worst ? "Delivery gap on objective chain" : "No delivery traced to objective",
+      worst ? worst.gap!.issue : "No generated artifact grounds this objective.",
+      worst ? worst.gap!.recommendation : "Generate the phase artifacts that carry this objective forward (charter, business case, design).",
+      worstCitation ? [worstCitation] : []);
   } else {
     const quality = deliveryArtifacts.map((a) => normalisedConfidence(a.confidence));
     const avg = quality.reduce((s, q) => s + q, 0) / quality.length;
