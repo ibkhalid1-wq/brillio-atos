@@ -82,6 +82,7 @@ const STAKEHOLDER_CONSUMER_ARTIFACTS = ["scope-map", "requirements-catalog"];
 const PHASE_FIELD_INTENT: Record<string, Record<string, string[]>> = {
   design: {
     solutionApproach: ["solution", "design", "architecture", "operating", "model", "approach", "future"],
+    functionalDesignSummary: ["solution", "design", "functional", "process", "workflow", "operating", "model", "future", "change", "impact"],
     targetArchitecture: ["architecture", "solution", "design", "technical", "platform"],
     keyDesignDecisions: ["decision", "architecture", "design", "solution"],
     nonFunctionalRequirements: ["architecture", "solution", "design", "nfr", "quality", "performance", "security", "operating"],
