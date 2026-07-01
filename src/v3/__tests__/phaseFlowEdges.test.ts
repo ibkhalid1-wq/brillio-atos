@@ -236,6 +236,7 @@ describe("design static inputs → solution-design artifacts (semantic flow)", (
 
   const DESIGN_INPUTS = [
     "solutionApproach",
+    "functionalDesignSummary",
     "targetArchitecture",
     "keyDesignDecisions",
     "nonFunctionalRequirements",
@@ -258,6 +259,13 @@ describe("design static inputs → solution-design artifacts (semantic flow)", (
     expect(targetsOf("keyDesignDecisions")).toContain("architecture-decisions");
     expect(targetsOf("nonFunctionalRequirements")).toEqual(
       expect.arrayContaining(["solution-design", "architecture-decisions"]),
+    );
+    // Regression: the functional/process design summary must reach the solution
+    // design deliverable (and the operating-model / change-impact consumers) even
+    // when the planner names the artifact "solution-design" rather than the
+    // canonical "solution-architecture" the methodology flow targets.
+    expect(targetsOf("functionalDesignSummary")).toEqual(
+      expect.arrayContaining(["solution-design", "target-operating-model", "change-impact"]),
     );
   });
 
