@@ -372,6 +372,43 @@ const RULES: ValidationRule[] = [
     },
   },
   {
+    // Upstream-fidelity (governance): a phase cannot validly be signed off on
+    // foundations an earlier phase never cleared. A later phase marked complete /
+    // gate-approved while an *earlier* phase in the methodology sequence has not
+    // cleared its own gate is an out-of-sequence approval — the downstream
+    // confidence rests on an ungoverned upstream.
+    id: "gate-approved-out-of-sequence",
+    domain: "governance",
+    run: (p) => {
+      const phases = p.phases ?? [];
+      const reviews = p.gateReviews ?? {};
+      // A phase is "cleared" when it is complete or its gate is approved. Phase
+      // array order is the methodology sequence, so index < i means "upstream".
+      const cleared = (ph: PhaseSummary) => ph.status === "complete" || reviews[ph.id]?.status === "approved";
+      const findings: ValidationFinding[] = [];
+      for (let i = 0; i < phases.length; i++) {
+        const ph = phases[i];
+        if (!cleared(ph)) continue;
+        const blocker = phases.slice(0, i).find((e) => !cleared(e));
+        if (!blocker) continue;
+        findings.push({
+          findingId: `gate-sequence:${ph.id}:${blocker.id}`,
+          severity: "high",
+          domain: "governance",
+          phaseId: ph.id,
+          sourceArtifact: "gateReviews",
+          targetArtifact: "phases",
+          sourceItem: ph.id,
+          issue: `Phase "${ph.displayName ?? ph.id}" is signed off while the earlier phase "${blocker.displayName ?? blocker.id}" has not cleared its gate.`,
+          recommendation: `Approve or remediate the "${blocker.displayName ?? blocker.id}" gate before treating "${ph.displayName ?? ph.id}" as complete, or correct the phase status.`,
+          confidence: 1,
+          evidence: [`downstream "${ph.id}" cleared; upstream "${blocker.id}" status=${blocker.status}, gate=${reviews[blocker.id]?.status ?? "none"}`],
+        });
+      }
+      return findings;
+    },
+  },
+  {
     id: "phase-without-workstream",
     domain: "scope-coverage",
     run: (p) => {

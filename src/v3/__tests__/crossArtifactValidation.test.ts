@@ -248,6 +248,37 @@ describe("runDeterministicValidation — delivery, governance, scope", () => {
     expect(findings.some((f) => f.domain === "governance")).toBe(true);
   });
 
+  it("flags a phase signed off while an earlier phase has not cleared its gate", () => {
+    const ph = (id: string, name: string, status: string) =>
+      ({ id, displayName: name, status } as unknown as NonNullable<ValidatableProgram["phases"]>[number]);
+    const findings = runDeterministicValidation({
+      phases: [ph("discover", "Discover", "active"), ph("design", "Design", "complete")],
+    });
+    expect(findings.some((f) => f.findingId === "gate-sequence:design:discover")).toBe(true);
+    expect(findings.find((f) => f.findingId === "gate-sequence:design:discover")!.severity).toBe("high");
+  });
+
+  it("does not flag phases that clear in sequence", () => {
+    const ph = (id: string, name: string, status: string) =>
+      ({ id, displayName: name, status } as unknown as NonNullable<ValidatableProgram["phases"]>[number]);
+    const findings = runDeterministicValidation({
+      phases: [ph("discover", "Discover", "complete"), ph("design", "Design", "complete"), ph("build", "Build", "active")],
+    });
+    expect(findings.some((f) => f.findingId.startsWith("gate-sequence:"))).toBe(false);
+  });
+
+  it("treats an approved upstream gate as clearing that phase for the sequence check", () => {
+    const ph = (id: string, name: string, status: string) =>
+      ({ id, displayName: name, status } as unknown as NonNullable<ValidatableProgram["phases"]>[number]);
+    const findings = runDeterministicValidation({
+      phases: [ph("discover", "Discover", "active"), ph("design", "Design", "complete")],
+      gateReviews: {
+        discover: { phaseId: "discover", status: "approved" } as unknown as NonNullable<ValidatableProgram["gateReviews"]>[string],
+      },
+    });
+    expect(findings.some((f) => f.findingId.startsWith("gate-sequence:"))).toBe(false);
+  });
+
   it("flags an active phase with no workstream, but not when workstreams are unplanned", () => {
     const phases = [{ id: "build", name: "Build", status: "active" as const } as unknown as NonNullable<ValidatableProgram["phases"]>[number]];
     const withWs = runDeterministicValidation({
