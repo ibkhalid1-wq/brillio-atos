@@ -277,7 +277,7 @@ function ReviewFieldRow({
               borderRadius: 4,
               padding: "1px 6px",
             }}
-            title="This phase's gate is approved — its inputs are frozen and import only if you explicitly override."
+            title="This phase's gate is approved (completed) — its inputs are frozen. Replace or Merge raises a change request instead of writing directly."
           >
             🔒 Gate approved
           </span>
@@ -302,7 +302,7 @@ function ReviewFieldRow({
             padding: "3px 7px",
           }}
         >
-          Frozen — will not import unless you Replace or Merge below.
+          Completed phase — Replace or Merge raises a change request to apply; it won't write directly.
         </div>
       )}
 
@@ -491,7 +491,7 @@ function PhaseGroup({
               textTransform: "none",
             }}
           >
-            🔒 Gate approved — frozen unless you override
+            🔒 Gate approved — overrides raise a change request
           </span>
         )}
       </div>
@@ -848,15 +848,16 @@ export function DocumentReviewPanel({
             Done
           </button>
         ) : activeFields.length === 0 ? (
-          // Every mapped phase is gate-locked, so auto-commit never fires. If the
-          // user has explicitly overridden one or more frozen inputs, offer a
-          // manual import for just those; otherwise there is nothing to import.
+          // Every mapped phase is gate-approved (completed), so auto-commit never
+          // fires. If the user has explicitly overridden one or more frozen inputs,
+          // offer to raise a change request for just those (approving it reopens the
+          // gate and applies them); otherwise there is nothing to do.
           lockedOverrideCount > 0 ? (
             <>
               <span style={{ fontSize: 12, color: "var(--v3-text-muted)" }} aria-live="polite">
                 {saving
-                  ? "Importing overrides…"
-                  : `${lockedOverrideCount} locked field${lockedOverrideCount !== 1 ? "s" : ""} overridden`}
+                  ? "Raising change requests…"
+                  : `${lockedOverrideCount} completed-phase field${lockedOverrideCount !== 1 ? "s" : ""} to raise as change request${lockedOverrideCount !== 1 ? "s" : ""}`}
               </span>
               <button
                 type="button"
@@ -874,13 +875,13 @@ export function DocumentReviewPanel({
                 onClick={onSave}
                 disabled={saving}
               >
-                Import {lockedOverrideCount} override{lockedOverrideCount !== 1 ? "s" : ""}
+                Raise {lockedOverrideCount} change request{lockedOverrideCount !== 1 ? "s" : ""}
               </button>
             </>
           ) : (
             <>
               <span style={{ fontSize: 12, color: "var(--v3-text-muted)" }} aria-live="polite">
-                All mapped phases are gate-locked — override a field above to import it.
+                All mapped phases are gate-approved (completed) — override a field above to raise a change request.
               </span>
               <button
                 type="button"

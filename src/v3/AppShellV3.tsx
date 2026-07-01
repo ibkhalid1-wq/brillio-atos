@@ -75,12 +75,13 @@ import type { DocumentIntelligence } from "@/new/lib/documentIntelligenceTypes";
 import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
 import { selectOpenEscalations } from "@/v3/lib/programRaid";
 import { buildFieldAssistPrompt, sanitiseFieldReply } from "@/v3/lib/fieldAssist";
-import { PROVENANCE_KEY, mergeProvenance } from "@/new/lib/fieldProvenance";
+import { PROVENANCE_KEY, parseProvenance } from "@/new/lib/fieldProvenance";
+import { mergePhaseInputBucket } from "@/v3/lib/phaseInputMerge";
 import type { FieldAssistRequest } from "@/v3/components/PhaseInputsPanel";
 const DecideView = React.lazy(() => import("@/v3/surfaces/DecideView"));
 import GateReopenModal from "@/v3/components/GateReopenModal";
 import RemediationNoteModal from "@/v3/components/RemediationNoteModal";
-import { getChangeRequests } from "@/v3/lib/changeControl";
+import { getChangeRequests, makeImportChangeRequest } from "@/v3/lib/changeControl";
 import PhaseDataOverwriteModal from "@/v3/components/PhaseDataOverwriteModal";
 const MoreView = React.lazy(() => import("@/v3/surfaces/MoreView"));
 const PipelineView = React.lazy(() => import("@/v3/surfaces/PipelineView"));
@@ -296,18 +297,6 @@ function phaseHasExistingData(inner: Record<string, unknown>, phaseId: string): 
  * are overwritten last-write-wins; the `_provenance` metadata map is deep-merged
  * so a second document import keeps the source traceability the first recorded.
  */
-function mergePhaseInputBucket(
-  prevBucket: unknown,
-  inputs: Record<string, string>,
-): Record<string, unknown> {
-  const prev = (typeof prevBucket === "object" && prevBucket !== null ? prevBucket : {}) as Record<string, unknown>;
-  const mergedProvenance = mergeProvenance(prev[PROVENANCE_KEY], inputs[PROVENANCE_KEY]);
-  const bucket: Record<string, unknown> = { ...prev, ...inputs, savedAt: new Date().toISOString() };
-  if (mergedProvenance) bucket[PROVENANCE_KEY] = mergedProvenance;
-  else delete bucket[PROVENANCE_KEY];
-  return bucket;
-}
-
 type ShellToast = {
   id: string;
   message: string;
@@ -2425,16 +2414,39 @@ export default function AppShellV3() {
     const existing = typeof cloned.inner.phaseInputs === "object" && cloned.inner.phaseInputs !== null
       ? { ...(cloned.inner.phaseInputs as Record<string, unknown>) }
       : {};
-    // Skip any phase whose gate is already approved — its inputs are frozen, so an
-    // import must not overwrite them. Dropped phases are surfaced to the user below.
+    // Pass the dynamic schema store so flow edges + field labels for
+    // planner-generated/custom artifacts resolve too (their field→artifact map
+    // lives in artifactInputFlow, not the static methodology).
+    const flowStore = getDynamicSchemaStore(cloned.inner);
+    // A phase whose gate is already approved is COMPLETED — its inputs are frozen.
+    // An import that targets one is not written directly; it is auto-managed as a
+    // governed change request. Approving that request (Scope & PCR / executive
+    // change log) reopens the gate chain and applies these inputs, so completed
+    // work is never silently overwritten by a re-import.
     const lockedPhases = Object.keys(allInputs).filter(
       (phaseId) => activeProgram.gateReviews?.[phaseId]?.status === "approved",
     );
     const writableInputs = Object.fromEntries(
       Object.entries(allInputs).filter(([phaseId]) => !lockedPhases.includes(phaseId)),
     );
-    if (Object.keys(writableInputs).length === 0) {
-      pushV3Toast("All targeted phases are gate-locked — nothing imported.", { tone: "warning", duration: 4000 });
+    const importChangeRequests = lockedPhases
+      .map((phaseId) => {
+        const inputs = allInputs[phaseId] ?? {};
+        // Only real field values count as a change — the _provenance metadata
+        // bucket rides along in proposedInputs but is not a field the user edited.
+        const fieldIds = Object.keys(inputs).filter((key) => !key.startsWith("_"));
+        if (fieldIds.length === 0) return null;
+        const labelOf = new Map(getPhaseInputSchema(phaseId, flowStore).fields.map((f) => [f.id, f.label]));
+        const fieldLabels = fieldIds.map((id) => labelOf.get(id) ?? id);
+        const phaseLabel = activeProgram.phases?.find((p) => p.id === phaseId)?.displayName ?? phaseId;
+        // Name the source document from any field's recorded provenance.
+        const documentName = Object.values(parseProvenance(inputs[PROVENANCE_KEY])).find((p) => p.documentName)?.documentName;
+        return makeImportChangeRequest({ phaseId, phaseLabel, fieldLabels, proposedInputs: inputs, documentName });
+      })
+      .filter((cr): cr is NonNullable<typeof cr> => cr !== null);
+
+    if (Object.keys(writableInputs).length === 0 && importChangeRequests.length === 0) {
+      pushV3Toast("Nothing to import — all targeted fields were empty.", { tone: "warning", duration: 4000 });
       return;
     }
     // Reimport guard: an approved artifact's inputs must not be silently overwritten
@@ -2445,12 +2457,6 @@ export default function AppShellV3() {
     const artifactBuckets = typeof cloned.inner.phaseArtifacts === "object" && cloned.inner.phaseArtifacts !== null
       ? (cloned.inner.phaseArtifacts as Record<string, Record<string, Record<string, unknown>>>)
       : {};
-    // Pass the dynamic schema store so flow edges for planner-generated/custom
-    // artifacts (whose field→artifact map lives in artifactInputFlow, not the
-    // static methodology) resolve too — otherwise reimporting a document on a
-    // dynamic phase could silently overwrite an input feeding an approved
-    // dynamic artifact. Mirrors the staleness path above.
-    const flowStore = getDynamicSchemaStore(cloned.inner);
     let skippedFieldCount = 0;
     for (const [phaseId, inputs] of Object.entries(writableInputs)) {
       // Pass the phase's currently-persisted inputs so the guard only preserves
@@ -2468,10 +2474,15 @@ export default function AppShellV3() {
       if (Object.keys(writableFields).length === 0) continue;
       existing[phaseId] = mergePhaseInputBucket(existing[phaseId], writableFields);
     }
-    const payload = cloned.commit({ ...cloned.inner, phaseInputs: existing });
+    const nextInner: Record<string, unknown> = { ...cloned.inner, phaseInputs: existing };
+    if (importChangeRequests.length > 0) {
+      nextInner.changeRequests = [...getChangeRequests(cloned.inner), ...importChangeRequests];
+    }
+    const payload = cloned.commit(nextInner);
     // updateProgramData already refreshes on success — no second refetch needed.
     await updateProgramData(activeProgram.id, payload, activeProgram.updatedAt);
-    // Navigate to the first writable phase that received inputs and open the drawer
+    // Navigate to the first writable phase that received inputs and open the drawer.
+    // A CR-only import (all targets completed) has no writable phase — stay put.
     const targetPhase = (firstPhaseId && !lockedPhases.includes(firstPhaseId) ? firstPhaseId : null) ?? Object.keys(writableInputs)[0];
     if (targetPhase) {
       setActivePhaseId(targetPhase);
@@ -2482,13 +2493,19 @@ export default function AppShellV3() {
     const phaseCount = Object.keys(writableInputs).length;
     const totalIncoming = Object.values(writableInputs).reduce((sum, fields) => sum + Object.keys(fields).length, 0);
     const fieldCount = totalIncoming - skippedFieldCount;
-    const lockedNote = lockedPhases.length
-      ? ` ${lockedPhases.length} gate-locked phase${lockedPhases.length > 1 ? "s" : ""} skipped.`
+    const crCount = importChangeRequests.length;
+    const crNote = crCount
+      ? ` ${crCount} change request${crCount > 1 ? "s" : ""} raised for completed phase${crCount > 1 ? "s" : ""} — approve in Scope & PCR to apply.`
       : "";
     const protectedNote = skippedFieldCount
       ? ` ${skippedFieldCount} field${skippedFieldCount > 1 ? "s" : ""} feeding approved artifacts preserved.`
       : "";
-    pushV3Toast(`${fieldCount} field${fieldCount !== 1 ? "s" : ""} saved across ${phaseCount} phase${phaseCount !== 1 ? "s" : ""}. Ready to run agents.${lockedNote}${protectedNote}`, { tone: "success", duration: 3500 });
+    if (phaseCount === 0) {
+      // Only completed phases were targeted — everything became a change request.
+      pushV3Toast(crNote.trim(), { tone: "info", duration: 5000 });
+    } else {
+      pushV3Toast(`${fieldCount} field${fieldCount !== 1 ? "s" : ""} saved across ${phaseCount} phase${phaseCount !== 1 ? "s" : ""}. Ready to run agents.${crNote}${protectedNote}`, { tone: "success", duration: 4000 });
+    }
   }, [activeProgram, commitNavigation, refreshPrograms, updateProgramData]);
 
   // ── Program save snapshots ──────────────────────────────────────────────────

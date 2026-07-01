@@ -18,6 +18,16 @@ export interface ChangeRequest {
   decidedBy: string | null;
   decidedAt: string | null;
   decisionNote: string | null;
+  /** How the request was raised: a user via the modal, or an auto-managed import. */
+  origin?: "manual" | "import";
+  /** Human-readable origin detail (e.g. the imported document's file name). */
+  source?: string;
+  /**
+   * Import-originated CRs only: the phase-input map to apply when the request is
+   * approved (fieldId → value, including the serialized `_provenance` bucket).
+   * Absent on manually-raised CRs, which reopen the gate for hand-editing only.
+   */
+  proposedInputs?: Record<string, string>;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -55,10 +65,13 @@ export function makeChangeRequest(input: {
   reason: string;
   requestedBy: string;
   now?: string;
+  origin?: "manual" | "import";
+  source?: string;
+  proposedInputs?: Record<string, string>;
 }): ChangeRequest {
   const now = input.now ?? new Date().toISOString();
   const rand = Math.random().toString(36).slice(2, 8);
-  return {
+  const cr: ChangeRequest = {
     id: `cr-${input.phaseId}-${Date.now()}-${rand}`,
     phaseId: input.phaseId,
     title: input.title.trim(),
@@ -69,7 +82,53 @@ export function makeChangeRequest(input: {
     decidedBy: null,
     decidedAt: null,
     decisionNote: null,
+    origin: input.origin ?? "manual",
   };
+  const source = input.source?.trim();
+  if (source) cr.source = source;
+  if (input.proposedInputs && Object.keys(input.proposedInputs).length > 0) {
+    cr.proposedInputs = input.proposedInputs;
+  }
+  return cr;
+}
+
+/**
+ * Build an auto-managed change request for a document import that targets an
+ * already-completed (gate-approved) phase. Rather than silently overwriting the
+ * frozen work behind that gate, the import is captured as a governed change:
+ * approving it reopens the gate chain and applies `proposedInputs`; rejecting it
+ * leaves the completed phase untouched. This is the single source that turns an
+ * import-into-a-completed-phase into a change request, so the save layer and any
+ * test exercise the exact same title/reason/payload shape.
+ */
+export function makeImportChangeRequest(input: {
+  phaseId: string;
+  phaseLabel?: string;
+  fieldLabels: string[];
+  proposedInputs: Record<string, string>;
+  documentName?: string;
+  requestedBy?: string;
+  now?: string;
+}): ChangeRequest {
+  const phase = input.phaseLabel?.trim() || input.phaseId;
+  const fields = input.fieldLabels.map((label) => label.trim()).filter(Boolean);
+  const count = fields.length;
+  const doc = input.documentName?.trim();
+  const fieldList = count ? fields.join(", ") : "one or more fields";
+  const title = `Document import: ${count || "field"} ${count === 1 ? "update" : "updates"} to ${phase}`;
+  const reason =
+    `A document import${doc ? ` from "${doc}"` : ""} proposes updating ${fieldList} in the completed ${phase} phase. ` +
+    `Approve to reopen the gate and apply these changes; reject to keep the phase as-is.`;
+  return makeChangeRequest({
+    phaseId: input.phaseId,
+    title,
+    reason,
+    requestedBy: input.requestedBy?.trim() || "Document import",
+    now: input.now,
+    origin: "import",
+    source: doc,
+    proposedInputs: input.proposedInputs,
+  });
 }
 
 /**

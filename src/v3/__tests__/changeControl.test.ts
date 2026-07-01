@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   getChangeRequests,
   makeChangeRequest,
+  makeImportChangeRequest,
   applyDecision,
   openChangeRequests,
   openRequestsForPhase,
@@ -68,6 +69,79 @@ describe("makeChangeRequest", () => {
     expect(cr.requestedAt).toBe("2026-06-10T12:00:00.000Z");
     expect(cr.decidedBy).toBeNull();
     expect(cr.id).toMatch(/^cr-design-/);
+  });
+
+  it("defaults origin to manual and omits source/proposedInputs when absent", () => {
+    const cr = makeChangeRequest({
+      phaseId: "design",
+      title: "t",
+      reason: "r",
+      requestedBy: "Sam",
+    });
+    expect(cr.origin).toBe("manual");
+    expect(cr).not.toHaveProperty("source");
+    expect(cr).not.toHaveProperty("proposedInputs");
+  });
+
+  it("passes through origin, source and proposedInputs when provided", () => {
+    const proposedInputs = { field_a: "value" };
+    const cr = makeChangeRequest({
+      phaseId: "design",
+      title: "t",
+      reason: "r",
+      requestedBy: "Sam",
+      origin: "import",
+      source: "  spec.pdf  ",
+      proposedInputs,
+    });
+    expect(cr.origin).toBe("import");
+    expect(cr.source).toBe("spec.pdf");
+    expect(cr.proposedInputs).toEqual(proposedInputs);
+  });
+
+  it("omits an empty proposedInputs map", () => {
+    const cr = makeChangeRequest({
+      phaseId: "design",
+      title: "t",
+      reason: "r",
+      requestedBy: "Sam",
+      proposedInputs: {},
+    });
+    expect(cr).not.toHaveProperty("proposedInputs");
+  });
+});
+
+describe("makeImportChangeRequest", () => {
+  it("builds an import-origin CR with a summarising title/reason and the proposed inputs", () => {
+    const proposedInputs = { end_date: "2026-09-01", budget: "1.2M" };
+    const cr = makeImportChangeRequest({
+      phaseId: "strategy",
+      phaseLabel: "Strategy",
+      fieldLabels: ["Target end date", "Budget"],
+      proposedInputs,
+      documentName: "kickoff.pdf",
+    });
+    expect(cr.phaseId).toBe("strategy");
+    expect(cr.origin).toBe("import");
+    expect(cr.status).toBe("open");
+    expect(cr.source).toBe("kickoff.pdf");
+    expect(cr.requestedBy).toBe("Document import");
+    expect(cr.proposedInputs).toEqual(proposedInputs);
+    expect(cr.title).toBe("Document import: 2 updates to Strategy");
+    expect(cr.reason).toContain('from "kickoff.pdf"');
+    expect(cr.reason).toContain("Target end date, Budget");
+    expect(cr.reason).toContain("completed Strategy phase");
+  });
+
+  it("uses singular wording for a single field and falls back to the phaseId label", () => {
+    const cr = makeImportChangeRequest({
+      phaseId: "design",
+      fieldLabels: ["Org model"],
+      proposedInputs: { org_model: "x" },
+    });
+    expect(cr.title).toBe("Document import: 1 update to design");
+    expect(cr.requestedBy).toBe("Document import");
+    expect(cr).not.toHaveProperty("source");
   });
 });
 

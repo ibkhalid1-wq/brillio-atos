@@ -5,6 +5,7 @@ import type { GateReview } from "@/new/types";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { recordGateRiskSnapshot } from "@/lib/adamGateRisk";
 import { getChangeRequests, makeChangeRequest, applyDecision, phasesToReopenForChange } from "@/v3/lib/changeControl";
+import { mergePhaseInputBucket } from "@/v3/lib/phaseInputMerge";
 
 const LEGACY_KEYS = ["brillio-adam-projects", "brillio-atlas-projects"] as const;
 
@@ -441,6 +442,17 @@ export function useGateReview(
         `Change request approved: ${target.title}`,
         decidedBy,
       );
+      // Import-originated CRs carry the proposed inputs captured at import time.
+      // Approving the request commits the change end-to-end: merge those inputs
+      // into the (now reopened) target phase rather than only unlocking the gate
+      // for a manual re-entry. Manual CRs have no payload, so nothing is applied.
+      if (target.proposedInputs && Object.keys(target.proposedInputs).some((key) => !key.startsWith("_"))) {
+        const phaseInputs = typeof nextInner.phaseInputs === "object" && nextInner.phaseInputs !== null && !Array.isArray(nextInner.phaseInputs)
+          ? { ...(nextInner.phaseInputs as Record<string, unknown>) }
+          : {};
+        phaseInputs[target.phaseId] = mergePhaseInputBucket(phaseInputs[target.phaseId], target.proposedInputs);
+        nextInner = { ...nextInner, phaseInputs };
+      }
     }
     await persistState(nextInner);
   }, [getGateReviewState, persistState]);
