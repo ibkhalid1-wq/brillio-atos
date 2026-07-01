@@ -116,12 +116,7 @@ export function ScopePcrView({
       </div>
 
       <section className="adam-card p-5">
-        <div className="adam-row adam-space-between" style={{ alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <div className="adam-title">Change requests</div>
-          <button type="button" className="adam-button-ghost" onClick={() => onNavigate("decisions")}>
-            Open decision queue
-          </button>
-        </div>
+        <div className="adam-title">Change requests</div>
 
         <div className="mt-4 adam-stack" style={{ gap: 10 }}>
           {changeRequests.open.length ? changeRequests.open.map((cr) => (
@@ -130,30 +125,15 @@ export function ScopePcrView({
                 <div className="adam-stack" style={{ gap: 4 }}>
                   <div className="adam-title">{cr.title}</div>
                   <div className="adam-micro adam-muted">
-                    {cr.phaseId} · raised {new Date(cr.createdAt).toLocaleDateString()}
+                    {cr.phaseId} · raised {new Date(cr.requestedAt).toLocaleDateString()} by {cr.requestedBy}
                   </div>
                 </div>
-                <div className="adam-row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                  <span className={`adam-badge ${cr.priority === "critical" || cr.priority === "high" ? "red" : cr.priority === "medium" ? "amber" : "slate"}`}>
-                    {cr.priority}
-                  </span>
-                  <span className="adam-badge amber">open</span>
-                </div>
+                <span className="adam-badge amber">open</span>
               </div>
-              {cr.rationale ? <div className="mt-3 adam-body adam-muted">{cr.rationale}</div> : null}
-              <div className="mt-3">
-                <button type="button" className="adam-button" onClick={() => onNavigate("decisions")}>
-                  Review &amp; decide
-                </button>
-              </div>
+              {cr.reason ? <div className="mt-3 adam-body adam-muted">{cr.reason}</div> : null}
             </div>
           )) : (
-            <div className="adam-body adam-muted">
-              No open change requests.
-              {changeRequests.suppressedCount
-                ? ` ${changeRequests.suppressedCount} stale absence-claim request${changeRequests.suppressedCount === 1 ? "" : "s"} filtered out as already satisfied — see history.`
-                : ""}
-            </div>
+            <div className="adam-body adam-muted">No open change requests awaiting a decision.</div>
           )}
         </div>
 
@@ -161,25 +141,28 @@ export function ScopePcrView({
           <div className="mt-5 adam-stack" style={{ gap: 8 }}>
             <div className="adam-micro adam-muted">Change request history</div>
             {changeRequests.history.map((cr) => (
-              <div key={cr.id} className="adam-row adam-space-between" style={{ alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                <div className="adam-stack" style={{ gap: 2 }}>
-                  <div className="adam-body">{cr.title}</div>
-                  <div className="adam-micro adam-muted">
-                    {cr.phaseId} · raised {new Date(cr.createdAt).toLocaleDateString()}
+              <div key={cr.id} className="adam-card p-4">
+                <div className="adam-row adam-space-between" style={{ alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+                  <div className="adam-stack" style={{ gap: 2 }}>
+                    <div className="adam-body">{cr.title}</div>
+                    <div className="adam-micro adam-muted">
+                      {cr.phaseId} · raised {new Date(cr.requestedAt).toLocaleDateString()} by {cr.requestedBy}
+                    </div>
+                  </div>
+                  <div className="adam-row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                    <span className={`adam-badge ${cr.status === "rejected" ? "red" : "green"}`}>
+                      {cr.status}
+                    </span>
                   </div>
                 </div>
-                <div className="adam-row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                  {cr.historyKind === "resolved" && cr.resolvedAt ? (
-                    <span className="adam-micro adam-muted">{new Date(cr.resolvedAt).toLocaleDateString()}</span>
-                  ) : null}
-                  {cr.historyKind === "auto-filtered" ? (
-                    <span className="adam-badge slate">auto-filtered · already satisfied</span>
-                  ) : (
-                    <span className={`adam-badge ${cr.resolution === "rejected" ? "red" : cr.resolution === "approved" ? "green" : "slate"}`}>
-                      {cr.resolution ?? "resolved"}
-                    </span>
-                  )}
-                </div>
+                {cr.reason ? <div className="mt-2 adam-body adam-muted">{cr.reason}</div> : null}
+                {cr.decidedAt ? (
+                  <div className="mt-2 adam-micro adam-muted">
+                    {cr.status === "approved" ? "Approved" : "Rejected"} {new Date(cr.decidedAt).toLocaleDateString()}
+                    {cr.decidedBy ? ` by ${cr.decidedBy}` : ""}
+                    {cr.decisionNote ? ` — ${cr.decisionNote}` : ""}
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>
