@@ -5835,33 +5835,40 @@ button.v3-phase-metric:focus-visible {
   .v3-phase-col--inputs, .v3-phase-col--map, .v3-phase-col--artifacts { flex: 1 1 100%; }
 }
 
+/* Premium banded section header: the column heading (Inputs / Artifacts) sits in
+   a tinted, bordered band with a gradient accent stripe flush to its left edge,
+   so each side of the phase workspace reads as a distinct, deliberate zone. A
+   faint top sheen and soft card shadow give the band depth without shouting. */
 .v3-zone-label {
   position: relative;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 800;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.15em;
   text-transform: uppercase;
   color: var(--v3-text);
   margin-bottom: 16px;
-  padding: 0 0 11px 14px;
-  border-bottom: 1px solid var(--v3-border);
+  padding: 12px 16px 12px 20px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0)),
+    var(--v3-accent-soft);
+  border: 1px solid var(--v3-border);
+  border-radius: 12px;
+  box-shadow: var(--v3-shadow-card);
 }
-/* Premium section-header accent: a gradient rule pinned to the left of the
-   column heading (Inputs / Artifacts) so each column reads as a distinct,
-   deliberate zone rather than a faint muted caption. */
 .v3-zone-label::before {
   content: "";
   position: absolute;
   left: 0;
-  top: 1px;
-  height: 17px;
+  top: 0;
+  bottom: 0;
   width: 4px;
-  border-radius: 2px;
   background: linear-gradient(180deg, var(--v3-accent), var(--v3-accent-b));
+  box-shadow: 0 0 12px var(--v3-accent-glow);
 }
 
 .v3-zone-label-meta {
@@ -5870,9 +5877,16 @@ button.v3-phase-metric:focus-visible {
   letter-spacing: 0.04em;
   color: var(--v3-text-muted);
   text-transform: none;
+  flex: none;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--v3-surface-2);
+  border: 1px solid var(--v3-border);
 }
 .v3-zone-label-meta.is-complete {
   color: var(--v3-accent-b, #2DD4BF);
+  background: var(--v3-accent-b-soft);
+  border-color: var(--v3-accent-b-soft);
 }
 
 /* Action row directly beneath a column's zone label. Keeps the inputs column's
