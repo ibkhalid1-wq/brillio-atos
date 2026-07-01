@@ -369,6 +369,23 @@ describe("assessObjectives", () => {
     expect(obj.blockers.some((b) => b.component === "unthreatened")).toBe(true);
   });
 
+  it("erodes the unthreatened score harder for a critical risk than a high one", () => {
+    const withSeverity = (severity: "critical" | "high") => {
+      const prog = healthyProgram();
+      (prog as unknown as Record<string, unknown>).raidEntries = [
+        { id: "r1", type: "risk", status: "open", severity, title: "Vendor delay", phase: "strategy" },
+      ];
+      return assessObjectives(prog).objectives[0].components.find((c) => c.key === "unthreatened")!;
+    };
+    const critical = withSeverity("critical");
+    const high = withSeverity("high");
+    // A critical risk weighs more (severityWeight 1.0 vs 0.7), so it must leave a
+    // strictly lower unthreatened score than the same risk at high severity.
+    expect(critical.score).toBeLessThan(high.score);
+    expect(critical.detail).toContain("1 critical");
+    expect(high.detail).not.toContain("critical");
+  });
+
   it("normalises 0-100 artifact confidence so delivery quality is not inflated", () => {
     // Real programmes carry agentConfidence on a 0-100 scale; a raw 70 must read
     // as 0.70 delivery quality, never clamp delivered to a free full score.

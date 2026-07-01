@@ -302,16 +302,25 @@ function scoreObjective(
   }
 
   // ── unthreatened ────────────────────────────────────────────────────────
+  // Each severe risk erodes attainment confidence in proportion to its severity,
+  // so an open *critical* risk hurts harder than an open *high* one — mirroring
+  // the severityWeight-scaled aggregation every other multi-source component uses
+  // (a flat per-risk count would rate a critical and a high identically).
   const threats = relationsFrom(graph, objective.id, "threatened-by");
   const riskCitations = threats.map((rel) => nodeCitation(graph, rel.to, "risk"));
-  const unthreatened = Math.max(0, 1 - Math.min(1, threats.length * config.riskPenaltyUnit));
+  const threatSeverityOf = (rel: SemanticRelation): ValidationSeverity =>
+    (nodeOf(graph, rel.to)?.properties?.severity as ValidationSeverity) ?? "high";
+  const threatWeight = threats.reduce((sum, rel) => sum + config.severityWeight[threatSeverityOf(rel)], 0);
+  const unthreatened = Math.max(0, 1 - Math.min(1, threatWeight * config.riskPenaltyUnit));
+  const criticalCount = threats.filter((rel) => threatSeverityOf(rel) === "critical").length;
+  const threatBreakdown = criticalCount > 0 ? ` (${criticalCount} critical)` : "";
   pushComponent("unthreatened", unthreatened,
-    threats.length === 0 ? "No open severe risk on the objective." : `${threats.length} open severe risk(s) threaten the objective.`,
+    threats.length === 0 ? "No open severe risk on the objective." : `${threats.length} open severe risk(s)${threatBreakdown} threaten the objective.`,
     riskCitations);
   if (threats.length > 0) {
     const first = nodeOf(graph, threats[0].to);
     addBlocker("unthreatened", unthreatened, "Objective is threatened by open risk(s)",
-      `${threats.length} open severe risk(s), e.g. "${first?.label ?? "risk"}".`,
+      `${threats.length} open severe risk(s)${threatBreakdown}, e.g. "${first?.label ?? "risk"}".`,
       "Mitigate or close the severe risks threatening this objective.", riskCitations);
   }
 
