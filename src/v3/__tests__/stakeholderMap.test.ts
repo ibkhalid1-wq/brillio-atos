@@ -5,6 +5,7 @@ import {
   engagementDelta,
   needsMovement,
   isBlindSpot,
+  isUnowned,
   isUnownedHighInfluence,
 } from "@/v3/lib/stakeholderMap";
 
@@ -77,6 +78,12 @@ describe("needsMovement / isBlindSpot / isUnownedHighInfluence", () => {
     expect(isBlindSpot(sh({ currentEngagement: "unknown" }))).toBe(true);
     expect(isBlindSpot(sh({ sentiment: "unknown" }))).toBe(true);
     expect(isBlindSpot(sh())).toBe(false);
+  });
+
+  it("isUnowned flags any stakeholder with no owner regardless of influence", () => {
+    expect(isUnowned(sh({ owner: null }))).toBe(true);
+    expect(isUnowned(sh({ influence: "medium", owner: null }))).toBe(true);
+    expect(isUnowned(sh({ owner: "Dana" }))).toBe(false);
   });
 
   it("isUnownedHighInfluence flags high-influence stakeholders with no owner", () => {

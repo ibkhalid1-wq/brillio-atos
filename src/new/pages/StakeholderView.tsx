@@ -3,7 +3,7 @@ import { NotReadyCard } from "@/new/components/ui/NotReadyCard";
 import type { ProgramSummary, StakeholderProfile } from "@/new/types";
 import { RiskBadge } from "@/v3/components/ui/RiskBadge";
 import { confidenceLabel, confidenceTone } from "@/v3/utils";
-import { quadrantStrategy, engagementDelta, needsMovement, isBlindSpot } from "@/v3/lib/stakeholderMap";
+import { quadrantStrategy, engagementDelta, needsMovement, isBlindSpot, isUnowned, isUnownedHighInfluence } from "@/v3/lib/stakeholderMap";
 
 interface StakeholderViewProps {
   program: ProgramSummary | null;
@@ -11,7 +11,7 @@ interface StakeholderViewProps {
   onTriggerStakeholders: () => void;
 }
 
-type StakeholderFilter = "all" | "champions" | "movement" | "at-risk" | "resistant" | "unknown";
+type StakeholderFilter = "all" | "champions" | "movement" | "at-risk" | "resistant" | "unknown" | "unassigned";
 
 function initials(name: string): string {
   return name
@@ -28,6 +28,7 @@ function filterStakeholders(stakeholders: StakeholderProfile[], filter: Stakehol
   if (filter === "at-risk") return stakeholders.filter((entry) => entry.riskOfDisengagement === "high");
   if (filter === "resistant") return stakeholders.filter((entry) => entry.currentEngagement === "resistant");
   if (filter === "unknown") return stakeholders.filter(isBlindSpot);
+  if (filter === "unassigned") return stakeholders.filter(isUnowned);
   return stakeholders;
 }
 
@@ -104,6 +105,8 @@ export function StakeholderView({
   const allStakeholders = program.stakeholders || [];
   const blindSpotCount = allStakeholders.filter(isBlindSpot).length;
   const movementCount = allStakeholders.filter(needsMovement).length;
+  const unownedCount = allStakeholders.filter(isUnowned).length;
+  const unownedHighInfluence = allStakeholders.some(isUnownedHighInfluence);
 
   if (!program.stakeholders.length) {
     return (
@@ -140,6 +143,11 @@ export function StakeholderView({
               {blindSpotCount ? (
                 <span className="adam-badge slate">{blindSpotCount} need assessment (unknown)</span>
               ) : null}
+              {unownedCount ? (
+                <span className={`adam-badge ${unownedHighInfluence ? "red" : "slate"}`}>
+                  {unownedCount} owner unassigned{unownedHighInfluence ? " · high-influence exposed" : ""}
+                </span>
+              ) : null}
             </div>
             {program.stakeholderGeneratedAt ? (
               <div className="adam-micro adam-muted">
@@ -168,6 +176,7 @@ export function StakeholderView({
             ["at-risk", "At risk"],
             ["resistant", "Resistant"],
             ["unknown", "Needs assessment"],
+            ["unassigned", "Unassigned"],
           ] as [StakeholderFilter, string][]).map(([id, label]) => (
             <button
               key={id}
@@ -231,7 +240,7 @@ export function StakeholderView({
                   <div className="adam-micro adam-muted">
                     {entry.role || "Role pending"}
                     {entry.organisation ? ` · ${entry.organisation}` : ""}
-                    {entry.owner ? ` · Owner ${entry.owner}` : ""}
+                    {entry.owner ? ` · Owner ${entry.owner}` : " · Owner unassigned"}
                   </div>
                 </div>
                 <div className="adam-row" style={{ gap: 8, flexWrap: "wrap" }}>

@@ -83,7 +83,12 @@ export function isBlindSpot(entry: StakeholderProfile): boolean {
   return entry.currentEngagement === "unknown" || entry.sentiment === "unknown";
 }
 
-/** High-influence stakeholder without a named owner — a governance gap. */
+/** No named owner assigned — the relationship is unmanaged. */
+export function isUnowned(entry: StakeholderProfile): boolean {
+  return !entry.owner;
+}
+
+/** High-influence stakeholder without a named owner — the sharpest governance gap. */
 export function isUnownedHighInfluence(entry: StakeholderProfile): boolean {
   return entry.influence === "high" && !entry.owner;
 }
