@@ -155,6 +155,36 @@ describe("runDeterministicValidation — benefits traceability", () => {
     expect(wrapped.some((f) => f.findingId === "benefits-no-kpis")).toBe(false);
   });
 
+  it("flags a strategy KPI that the populated benefits tracker dropped", () => {
+    const kpisJson = JSON.stringify([
+      { id: "k1", name: "Cost to serve", baseline: "100", target: "80", unit: "$" },
+      { id: "k2", name: "NPS", baseline: "20", target: "40", unit: "pts" },
+    ]);
+    const findings = runDeterministicValidation({
+      benefitsTracking: {
+        overallRag: "amber", summary: "",
+        // Only "Cost to serve" is carried forward; "NPS" is silently dropped.
+        kpis: [{ name: "Cost to serve", baseline: "100", target: "80", current: "95", rag: "green", trend: "improving", commentary: "" }],
+        atRisk: [], onTrack: [], confidence: 0.7, trackedAt: "2026-01-01T00:00:00.000Z",
+      },
+      rawData: { phaseInputs: { strategy: { kpis: kpisJson } } },
+    });
+    expect(findings.some((f) => f.findingId === "benefits-kpi-untracked:NPS")).toBe(true);
+    // The carried-forward KPI does not flag.
+    expect(findings.some((f) => f.findingId === "benefits-kpi-untracked:Cost to serve")).toBe(false);
+  });
+
+  it("does not flag strategy-KPI drops when the benefits tracker is empty", () => {
+    // An unbuilt tracker is the benefits-no-kpis concern, not a per-KPI fidelity
+    // gap — flagging every strategy KPI here would be a false positive.
+    const kpisJson = JSON.stringify([{ id: "k1", name: "Cost to serve", baseline: "100", target: "80", unit: "$" }]);
+    const findings = runDeterministicValidation({
+      benefitsTracking: null,
+      rawData: { phaseInputs: { strategy: { kpis: kpisJson } } },
+    });
+    expect(findings.some((f) => f.findingId.startsWith("benefits-kpi-untracked:"))).toBe(false);
+  });
+
   it("flags a KPI missing a baseline", () => {
     const findings = runDeterministicValidation({
       benefitsTracking: {

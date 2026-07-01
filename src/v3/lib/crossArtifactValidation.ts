@@ -113,6 +113,23 @@ function strategyKpiRows(p: ValidatableProgram): unknown[] {
   return [];
 }
 
+/** Normalise a KPI/criterion label for tolerant name matching. */
+const norm = (s: string): string => s.trim().toLowerCase().replace(/\s+/g, " ");
+
+/**
+ * Best-effort display name of a strategy KPI row. Strategy KPIs are authored as
+ * loose objects (array or JSON-string sourced), so read the common name keys
+ * defensively rather than assuming a fixed shape.
+ */
+function kpiRowName(row: unknown): string {
+  if (row && typeof row === "object") {
+    const r = row as Record<string, unknown>;
+    const n = r.name ?? r.title ?? r.kpi ?? r.metric;
+    if (typeof n === "string") return n.trim();
+  }
+  return "";
+}
+
 /** A deterministic rule: pure function from program state to findings. */
 interface ValidationRule {
   id: string;
@@ -254,6 +271,45 @@ const RULES: ValidationRule[] = [
           confidence: 1,
           evidence: [`baseline="${k.baseline}", target="${k.target}"`],
         })),
+  },
+  {
+    // Upstream-fidelity: a KPI committed to in Strategy must be carried into the
+    // benefits tracker downstream, or the measurable promise is silently dropped.
+    // This is the directional "does a later phase honour the earlier phase?"
+    // check — the deterministic floor beneath the model-backed benefits agent.
+    id: "strategy-kpi-not-tracked-in-benefits",
+    domain: "benefits-traceability",
+    run: (p) => {
+      const tracked = p.benefitsTracking?.kpis ?? [];
+      // Only a *populated* tracker can drop a KPI. An empty/absent tracker is the
+      // benefits-no-kpis concern (handled above), not a per-KPI fidelity gap — so
+      // we never flag every strategy KPI merely because tracking is unbuilt.
+      if (tracked.length === 0) return [];
+      const trackedNames = tracked.map((k) => norm(k.name)).filter((n) => n.length > 0);
+      const findings: ValidationFinding[] = [];
+      for (const row of strategyKpiRows(p)) {
+        const name = kpiRowName(row);
+        if (!name) continue;
+        const key = norm(name);
+        // Tolerant match (either name contains the other) so a lightly reworded
+        // benefit KPI still counts as carried forward — only true drops flag.
+        const carried = trackedNames.some((t) => t === key || t.includes(key) || key.includes(t));
+        if (carried) continue;
+        findings.push({
+          findingId: `benefits-kpi-untracked:${name}`,
+          severity: "medium",
+          domain: "benefits-traceability",
+          sourceArtifact: "phaseInputs.strategy.kpis",
+          targetArtifact: "benefitsTracking",
+          sourceItem: name,
+          issue: `Strategy KPI "${name}" is not carried into benefits tracking.`,
+          recommendation: "Add this KPI to the benefits tracker (baselined) so its attainment is measured, or retire it in strategy.",
+          confidence: 1,
+          evidence: [`strategy KPI "${name}" has no matching tracked benefit KPI (${tracked.length} tracked)`],
+        });
+      }
+      return findings;
+    },
   },
   // (No "milestone has no exit criteria" rule: exit criteria are derived by the
   // methodology from artifact quality and completeness at the gate — they are never
