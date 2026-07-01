@@ -1169,9 +1169,24 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
                   value={values.successMetricUnit ?? ""}
                   onChange={(event) => setValues((current) => ({ ...current, successMetricUnit: event.target.value }))}
                 />
-                {/* Hidden spacer mirroring the supporting KPIs' remove button so the
-                    columns line up — the primary metric can't be removed. */}
-                <button type="button" className="v3-button ghost" style={{ fontSize: 11, visibility: "hidden", width: 28 }} tabIndex={-1} aria-hidden>✕</button>
+                {/* Clear the pinned primary metric row. It's a singular field (not an
+                    array entry) so "delete" empties its four values rather than
+                    removing the row; the row itself stays as the always-present
+                    headline slot the PM can re-fill. */}
+                <button
+                  type="button"
+                  className="v3-button ghost"
+                  style={{ fontSize: 11, width: 28 }}
+                  aria-label="Clear primary success metric"
+                  title="Clear primary success metric"
+                  onClick={() => setValues((current) => ({
+                    ...current,
+                    successMetric: "",
+                    successMetricBaseline: "",
+                    successMetricTarget: "",
+                    successMetricUnit: "",
+                  }))}
+                >✕</button>
               </div>
               {localKpis.map((kpi, index) => (
                 <div key={kpi.id} style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
