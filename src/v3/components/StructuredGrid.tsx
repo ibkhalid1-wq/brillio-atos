@@ -133,9 +133,15 @@ interface StructuredGridProps {
   addLabel?: string;
   /** Render inputs as disabled, read-only reference (e.g. referenced roster). */
   readOnly?: boolean;
+  /**
+   * Optional stable reordering applied when a cell loses focus (never mid-typing,
+   * which would make rows jump under the caret). Used by the core-team roster to
+   * settle rows top-down by seniority once the user finishes editing a role.
+   */
+  sortRows?: (rows: GridRow[]) => GridRow[];
 }
 
-export default function StructuredGrid({ columns, rows, onChange, addLabel = "+ Add row", readOnly = false }: StructuredGridProps) {
+export default function StructuredGrid({ columns, rows, onChange, addLabel = "+ Add row", readOnly = false, sortRows }: StructuredGridProps) {
   // Always present at least one editable row so the grid reads as a form, not an
   // empty void. The placeholder lives outside parent state (its keystrokes commit
   // it via updateCell) and is omitted in read-only mode, where an empty grid
@@ -157,6 +163,15 @@ export default function StructuredGrid({ columns, rows, onChange, addLabel = "+ 
 
   function addRow() {
     onChange([...rows, makeEmptyRow(columns)]);
+  }
+
+  // Reorder on blur, not on change: sorting per keystroke would move the row out
+  // from under the caret as the user types a role. Only commit if the order
+  // actually changed, so a blur on an already-sorted grid is a no-op (no churn).
+  function handleCellBlur() {
+    if (!sortRows || rows.length < 2) return;
+    const sorted = sortRows(rows);
+    if (sorted.some((row, i) => row.id !== rows[i].id)) onChange(sorted);
   }
 
   return (
@@ -187,6 +202,7 @@ export default function StructuredGrid({ columns, rows, onChange, addLabel = "+ 
                 value={row[col.key] ?? ""}
                 disabled={readOnly}
                 onChange={(event) => updateCell(index, col.key, event.target.value)}
+                onBlur={handleCellBlur}
               >
                 <option value="">—</option>
                 {col.options?.map((option) => <option key={option} value={option}>{option}</option>)}
@@ -202,6 +218,7 @@ export default function StructuredGrid({ columns, rows, onChange, addLabel = "+ 
                 placeholder={col.placeholder ?? col.label}
                 disabled={readOnly}
                 onChange={(event) => updateCell(index, col.key, event.target.value)}
+                onBlur={handleCellBlur}
               />
             ) : (
               // Free-text cells auto-grow vertically so long values (e.g. an
@@ -216,6 +233,7 @@ export default function StructuredGrid({ columns, rows, onChange, addLabel = "+ 
                 placeholder={col.placeholder ?? col.label}
                 disabled={readOnly}
                 onChange={(event) => updateCell(index, col.key, event.target.value)}
+                onBlur={handleCellBlur}
               />
             ),
           )}

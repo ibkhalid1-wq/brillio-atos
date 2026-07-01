@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { ProgramSummary, Workstream } from "@/new/types";
 import { getPhaseInputSchema, resolveRosterField, type GridColumn } from "@/v3/lib/phaseInputSchema";
+import { rosterColumnKeys, sortRosterRowsBySeniority } from "@/v3/lib/rosterRaci";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { availableModes, FIELD_ASSIST_MODE_LABEL, type FieldAssistMode } from "@/v3/lib/fieldAssist";
 import { prioritizePhaseFields } from "@/v3/lib/phaseInputPriority";
@@ -507,6 +508,13 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
   // on their own working detail, not staffing — but it still powers the name
   // suggestions below, so the roster field/rows are resolved here.
   const rosterField = useMemo(() => resolveRosterField(dynamicStore), [dynamicStore]);
+  // Role column of the canonical roster — drives the seniority ordering applied to
+  // the roster grid on blur (rows settle top-down by org seniority once a role is
+  // entered, matching how the RACI/governance views already present the team).
+  const rosterRoleKey = useMemo(
+    () => (rosterField ? rosterColumnKeys(rosterField.columns ?? []).roleKey : undefined),
+    [rosterField],
+  );
   const mobiliseRoles = useMemo(() => {
     if (!rosterField) return [];
     const raw = program.rawData as Record<string, unknown>;
@@ -947,6 +955,11 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
                         setGrids((current) => ({ ...current, [field.id]: rows }));
                       }}
                       addLabel={`+ Add ${field.label.toLowerCase()}`}
+                      sortRows={
+                        rosterField && field.id === rosterField.id && rosterRoleKey
+                          ? (rows) => sortRosterRowsBySeniority(rows, rosterRoleKey)
+                          : undefined
+                      }
                     />
                   </>
                 ) : field.type === "textarea" ? (
