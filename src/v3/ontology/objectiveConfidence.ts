@@ -29,6 +29,17 @@ import type { ValidationFinding, ValidationSeverity } from "@/v3/lib/crossArtifa
 import type { ProgramDocument } from "@/v3/lib/programGraph";
 import { EXIT_CRITERIA_LIBRARY } from "@/v3/lib/exitCriteriaLibrary";
 import {
+  DEFAULT_ONTOLOGY_CONFIG,
+  COMPONENT_LABEL,
+  bandForScore,
+  statusForScore,
+  severityForGain,
+  severityRank,
+  type OntologyConfig,
+  type ComponentKey,
+  type ConfidenceBand,
+} from "@/v3/ontology/ontologyConfig";
+import {
   buildObjectiveGraph,
   type ObjectiveSemanticGraph,
   type SemanticNode,
@@ -36,9 +47,7 @@ import {
   type RelationGap,
 } from "@/v3/ontology/objectiveGraph";
 
-export type ConfidenceBand = "Critical" | "At Risk" | "On Track" | "Strong";
-
-export type ComponentKey = "measurable" | "delivered" | "evidenced" | "unthreatened" | "progressing";
+export type { ConfidenceBand, ComponentKey } from "@/v3/ontology/ontologyConfig";
 
 export interface ConfidenceComponent {
   key: ComponentKey;
@@ -92,46 +101,22 @@ export interface OntologyAssessment {
 export interface AssessObjectivesOptions {
   findings?: ValidationFinding[];
   documents?: ProgramDocument[];
+  /** Override any model tunable; defaults to DEFAULT_ONTOLOGY_CONFIG. */
+  config?: OntologyConfig;
 }
 
-const WEIGHTS: Record<ComponentKey, number> = {
-  measurable: 0.25,
-  delivered: 0.30,
-  evidenced: 0.20,
-  unthreatened: 0.15,
-  progressing: 0.10,
-};
-
-const COMPONENT_LABEL: Record<ComponentKey, string> = {
-  measurable: "Measurable",
-  delivered: "Delivered",
-  evidenced: "Evidenced",
-  unthreatened: "Unthreatened",
-  progressing: "Progressing",
-};
-
-/** Artifact confidence at/above this is treated as delivering quality. */
-const QUALITY_BAR = 0.6;
-const SEVERE = new Set<ValidationSeverity>(["critical", "high"]);
-
-function band(score: number): ConfidenceBand {
-  if (score >= 80) return "Strong";
-  if (score >= 65) return "On Track";
-  if (score >= 45) return "At Risk";
-  return "Critical";
-}
-
-function statusFor(score: number): "good" | "warn" | "poor" {
-  if (score >= 0.75) return "good";
-  if (score >= 0.45) return "warn";
-  return "poor";
-}
-
-function severityForGain(gain: number): ValidationSeverity {
-  if (gain >= 18) return "critical";
-  if (gain >= 10) return "high";
-  if (gain >= 5) return "medium";
-  return "low";
+/**
+ * Confidence-weighted erosion from a set of gap-bearing relations: each gap
+ * contributes `severityWeight × gapConfidence × gapPenaltyUnit`, capped by
+ * `maxGapPenalty`. A low-severity or low-confidence gap barely moves the score;
+ * a critical, certain one erodes it hard — but never past the cap.
+ */
+function weightedGapPenalty(gaps: RelationGap[], config: OntologyConfig): number {
+  const raw = gaps.reduce((sum, gap) => {
+    const conf = typeof gap.confidence === "number" ? gap.confidence : 1;
+    return sum + config.severityWeight[gap.severity] * conf * config.gapPenaltyUnit;
+  }, 0);
+  return Math.min(config.maxGapPenalty, raw);
 }
 
 /** Relations of a kind leaving a given objective. */
@@ -150,6 +135,7 @@ function scoreObjective(
   program: ProgramSummary,
   graph: ObjectiveSemanticGraph,
   objective: SemanticNode,
+  config: OntologyConfig,
 ): ObjectiveConfidence {
   const blockers: ConfidenceBlocker[] = [];
   const drivers: string[] = [];
@@ -157,16 +143,17 @@ function scoreObjective(
 
   const pushComponent = (key: ComponentKey, score: number, detail: string) => {
     const clamped = Math.max(0, Math.min(1, score));
+    const weight = config.weights[key];
     components.push({
-      key, label: COMPONENT_LABEL[key], score: clamped, weight: WEIGHTS[key],
-      contribution: Math.round(clamped * WEIGHTS[key] * 100), status: statusFor(clamped), detail,
+      key, label: COMPONENT_LABEL[key], score: clamped, weight,
+      contribution: Math.round(clamped * weight * 100), status: statusForScore(clamped, config), detail,
     });
-    if (clamped >= 0.75) drivers.push(`${COMPONENT_LABEL[key]}: ${detail}`);
+    if (clamped >= config.status.good) drivers.push(`${COMPONENT_LABEL[key]}: ${detail}`);
     return clamped;
   };
 
   const addBlocker = (key: ComponentKey, subScore: number, label: string, detail: string, recommendation: string) => {
-    const gain = Math.round(WEIGHTS[key] * (1 - Math.max(0, Math.min(1, subScore))) * 100);
+    const gain = Math.round(config.weights[key] * (1 - Math.max(0, Math.min(1, subScore))) * 100);
     if (gain <= 0) return;
     blockers.push({
       id: `${objective.id}:${key}`, label, detail, recommendation,
@@ -209,12 +196,13 @@ function scoreObjective(
   } else {
     const quality = deliveryArtifacts.map((a) => (typeof a.confidence === "number" ? a.confidence : 0.5));
     const avg = quality.reduce((s, q) => s + q, 0) / quality.length;
-    // Each open severe delivery-chain gap discounts delivery confidence.
-    const severePenalty = Math.min(0.5, deliveryGaps.filter((g) => SEVERE.has(g.gap!.severity)).length * 0.2);
+    // Each open delivery-chain gap discounts delivery confidence, weighted by
+    // its severity and the finding's own confidence, capped by maxGapPenalty.
+    const severePenalty = weightedGapPenalty(deliveryGaps.map((g) => g.gap!), config);
     delivered = Math.max(0, avg - severePenalty);
     pushComponent("delivered", delivered,
       `${deliveryArtifacts.length} artifact(s), avg quality ${(avg * 100).toFixed(0)}%${severePenalty ? `, −${(severePenalty * 100).toFixed(0)}% for gaps` : ""}.`);
-    if (delivered < 0.75) {
+    if (delivered < config.status.good) {
       const worst = deliveryGaps[0];
       addBlocker("delivered", delivered,
         worst ? "Delivery gap on objective chain" : "Delivering artifacts are below quality",
@@ -226,9 +214,9 @@ function scoreObjective(
   // ── evidenced ───────────────────────────────────────────────────────────
   const deliveringPhaseIds = new Set(deliveryArtifacts.map((a) => a.phaseId).filter((p): p is string => !!p));
   if (objective.phaseId) deliveringPhaseIds.add(objective.phaseId);
-  const evidenced = scoreEvidence(program, graph, objective.id, deliveringPhaseIds);
+  const evidenced = scoreEvidence(program, graph, objective.id, deliveringPhaseIds, config);
   pushComponent("evidenced", evidenced.score, evidenced.detail);
-  if (evidenced.score < 0.75) {
+  if (evidenced.score < config.status.good) {
     // Prefer the specific traceability gap (e.g. "REQ-14 has no design coverage")
     // over a generic evidence prompt, so the top recommendation is actionable.
     addBlocker("evidenced", evidenced.score,
@@ -239,7 +227,7 @@ function scoreObjective(
 
   // ── unthreatened ────────────────────────────────────────────────────────
   const threats = relationsFrom(graph, objective.id, "threatened-by");
-  const unthreatened = Math.max(0, 1 - Math.min(1, threats.length * 0.25));
+  const unthreatened = Math.max(0, 1 - Math.min(1, threats.length * config.riskPenaltyUnit));
   pushComponent("unthreatened", unthreatened,
     threats.length === 0 ? "No open severe risk on the objective." : `${threats.length} open severe risk(s) threaten the objective.`);
   if (threats.length > 0) {
@@ -252,7 +240,7 @@ function scoreObjective(
   // ── progressing ─────────────────────────────────────────────────────────
   const progressing = scoreProgress(program, deliveringPhaseIds);
   pushComponent("progressing", progressing.score, progressing.detail);
-  if (progressing.score < 0.75) {
+  if (progressing.score < config.status.good) {
     addBlocker("progressing", progressing.score, "Delivering phases are behind",
       progressing.detail, "Accelerate the delivering phases or re-baseline the plan.");
   }
@@ -260,7 +248,7 @@ function scoreObjective(
   const confidence = Math.round(components.reduce((sum, c) => sum + c.score * c.weight, 0) * 100);
   blockers.sort((a, b) => b.expectedGain - a.expectedGain);
 
-  return { objectiveId: objective.id, label: objective.label, confidence, band: band(confidence), components, drivers, blockers };
+  return { objectiveId: objective.id, label: objective.label, confidence, band: bandForScore(confidence), components, drivers, blockers };
 }
 
 function scoreEvidence(
@@ -268,6 +256,7 @@ function scoreEvidence(
   graph: ObjectiveSemanticGraph,
   objectiveId: string,
   deliveringPhaseIds: Set<string>,
+  config: OntologyConfig,
 ): { score: number; detail: string; recommendation: string; worst?: RelationGap } {
   const phases = program.phases || [];
   const relevant = phases.filter((p) => deliveringPhaseIds.has(p.id));
@@ -281,7 +270,7 @@ function scoreEvidence(
   // Requirements / benefits traceability gaps directly erode evidence.
   const evidenceGaps = graphGapsFor(graph, objectiveId).filter((g) =>
     g.kind === "satisfied-by" || (g.kind === "measured-by" && g.gap));
-  const penalty = Math.min(0.5, evidenceGaps.filter((g) => SEVERE.has(g.gap!.severity)).length * 0.2);
+  const penalty = weightedGapPenalty(evidenceGaps.map((g) => g.gap!), config);
   const score = Math.max(0, base - penalty);
   // Surface the most severe traceability gap so the blocker can name it.
   const worst = [...evidenceGaps]
@@ -295,10 +284,6 @@ function scoreEvidence(
     ? "Close the requirements/benefits traceability gaps and capture exit-criterion evidence."
     : "Capture evidence against the delivering phases' mandatory exit criteria.";
   return { score, detail, recommendation, worst };
-}
-
-function severityRank(severity: ValidationSeverity): number {
-  return severity === "critical" ? 3 : severity === "high" ? 2 : severity === "medium" ? 1 : 0;
 }
 
 function graphGapsFor(graph: ObjectiveSemanticGraph, objectiveId: string): SemanticRelation[] {
@@ -320,6 +305,7 @@ export function assessObjectives(
   program: ProgramSummary | null | undefined,
   options: AssessObjectivesOptions = {},
 ): OntologyAssessment {
+  const config = options.config ?? DEFAULT_ONTOLOGY_CONFIG;
   const graph = buildObjectiveGraph(program, { findings: options.findings, documents: options.documents });
   if (!program || graph.objectiveIds.length === 0) {
     return { objectives: [], overall: 0, band: "Critical", recommendations: [], graph };
@@ -328,7 +314,7 @@ export function assessObjectives(
   const objectives = graph.objectiveIds
     .map((id) => graph.nodes.find((n) => n.id === id))
     .filter((n): n is SemanticNode => !!n)
-    .map((objective) => scoreObjective(program, graph, objective));
+    .map((objective) => scoreObjective(program, graph, objective, config));
 
   const overall = objectives.length
     ? Math.round(objectives.reduce((s, o) => s + o.confidence, 0) / objectives.length)
@@ -345,5 +331,5 @@ export function assessObjectives(
   }
   const recommendations = [...byRecommendation.values()].sort((a, b) => b.expectedGain - a.expectedGain);
 
-  return { objectives, overall, band: band(overall), recommendations, graph };
+  return { objectives, overall, band: bandForScore(overall), recommendations, graph };
 }

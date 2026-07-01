@@ -44,6 +44,8 @@ export interface RelationGap {
   recommendation: string;
   /** Originating finding id, for traceability back to the validation layer. */
   findingId?: string;
+  /** 0–1 confidence of the originating finding; weights how hard the gap erodes. */
+  confidence?: number;
 }
 
 export interface SemanticRelation {
@@ -214,6 +216,7 @@ function foldFindings(
       issue: finding.issue,
       recommendation: finding.recommendation,
       findingId: finding.findingId,
+      confidence: finding.confidence,
     };
 
     // requirement/architecture findings: model as a requirement `satisfied-by`
