@@ -137,6 +137,22 @@ export function buildObjectiveGraph(
   const objectiveIds = objectives.map((o) => o.id);
   const kpis = byKind("kpi");
   const risks = byKind("risk");
+  // Index artifacts by their producing phase, and separately collect
+  // programme-global artifacts (those not scoped to any methodology phase, e.g.
+  // an imported charter tagged phaseId "program") — these deliver every objective.
+  const phaseIdSet = new Set((program.phases || []).map((p) => p.id));
+  const artifactsByPhase = new Map<string, SemanticNode[]>();
+  const globalArtifacts: SemanticNode[] = [];
+  for (const node of byKind("artifact")) {
+    if (!node.phaseId) continue;
+    if (!phaseIdSet.has(node.phaseId)) {
+      globalArtifacts.push(node);
+      continue;
+    }
+    const bucket = artifactsByPhase.get(node.phaseId) ?? [];
+    bucket.push(node);
+    artifactsByPhase.set(node.phaseId, bucket);
+  }
 
   // Carry the structural `grounds` edges (fact/objective → artifact) across, then
   // add the objective delivery semantics.
@@ -167,9 +183,27 @@ export function buildObjectiveGraph(
     }
 
     // delivered-by: artifacts this objective grounds (from the carried grounds edges).
+    let groundedCount = 0;
     for (const edge of pg.edges) {
       if (edge.type === "grounds" && edge.from === objective.id) {
         addRelation({ id: `delivered-by:${objective.id}->${edge.to}`, from: objective.id, to: edge.to, kind: "delivered-by" });
+        groundedCount += 1;
+      }
+    }
+    // Fallback: when explicit grounding metadata is absent (the objective fact
+    // carries no impactedArtifacts — common when the methodology's input-flow was
+    // not persisted at runtime), attribute the artifacts produced in the
+    // objective's own phase plus any programme-global artifacts. This keeps the
+    // delivery chain honest — a business case in the same phase, or a programme
+    // charter, demonstrably carries the objective forward — rather than falsely
+    // reporting "no delivery traced".
+    if (groundedCount === 0) {
+      const fallbackArtifacts = [
+        ...(objective.phaseId ? artifactsByPhase.get(objective.phaseId) ?? [] : []),
+        ...globalArtifacts,
+      ];
+      for (const artifact of fallbackArtifacts) {
+        addRelation({ id: `delivered-by:${objective.id}->${artifact.id}`, from: objective.id, to: artifact.id, kind: "delivered-by" });
       }
     }
 

@@ -94,6 +94,48 @@ describe("buildObjectiveGraph", () => {
     expect(satisfied?.gap?.findingId).toBe("rc-req14");
   });
 
+  it("falls back to same-phase artifacts for delivery when grounding metadata is absent", () => {
+    // No dynamicSchema.artifactInputFlow ⇒ the objective fact grounds no artifact,
+    // but a business case sits in the objective's own (strategy) phase.
+    const ungrounded = program({
+      phases: [{ id: "strategy", displayName: "Strategy", pct: 100, status: "complete", objective: "" }],
+      artifacts: [businessCaseArtifact(0.9)],
+      rawData: {
+        phaseInputs: {
+          strategy: {
+            businessObjective: OBJECTIVE,
+            kpis: JSON.stringify([{ id: "k1", name: "Cost to serve", baseline: "100", target: "80", unit: "$" }]),
+          },
+        },
+      },
+    });
+    const graph = buildObjectiveGraph(ungrounded);
+    const objId = graph.objectiveIds[0];
+    const deliveredBy = graph.relations.filter((r) => r.from === objId && r.kind === "delivered-by");
+    expect(deliveredBy.length).toBeGreaterThanOrEqual(1);
+    expect(deliveredBy.some((r) => r.to === "artifact:business-case")).toBe(true);
+  });
+
+  it("attributes a programme-global artifact as delivery when grounding is absent", () => {
+    // The one artifact is scoped to a non-phase bucket ("program"), as a
+    // programme charter would be. It should still count as delivery.
+    const globalArtifact = program({
+      phases: [{ id: "strategy", displayName: "Strategy", pct: 0, status: "active", objective: "" }],
+      artifacts: [{
+        id: "charter", phaseId: "program", title: "Programme Charter", status: "approved",
+        agentGenerated: true, lastEditedBy: "agent", lastEditedAt: "", contentSummary: "", versionNumber: 1,
+        agentConfidence: 0.8,
+      }],
+      rawData: {
+        phaseInputs: { strategy: { businessObjective: OBJECTIVE } },
+      },
+    });
+    const graph = buildObjectiveGraph(globalArtifact);
+    const objId = graph.objectiveIds[0];
+    const deliveredBy = graph.relations.filter((r) => r.from === objId && r.kind === "delivered-by");
+    expect(deliveredBy.some((r) => r.to === "artifact:charter")).toBe(true);
+  });
+
   it("never admits a relation that violates the ontology", () => {
     const graph = buildObjectiveGraph(healthyProgram());
     // Every relation's endpoints must exist as nodes (guard side-effect).
