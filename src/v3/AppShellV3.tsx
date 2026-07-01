@@ -54,6 +54,7 @@ import { reportError } from "@/lib/errorReporter";
 import { sanitizeMarkdown } from "@/lib/sanitize";
 import { changedInputFields, relatedArtifactsToStale, fieldsFeedingApprovedArtifacts } from "@/v3/lib/artifactStaleness";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
+import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
 import { hasSubstantiveProgramData } from "@/v3/lib/programDataGuard";
 import { AGENT_ID_ALIASES, RETIRED_AGENT_IDS } from "@/v3/lib/agentMeta";
 import { useRelativeTimeTick } from "@/lib/useRelativeTimeTick";
@@ -2612,6 +2613,17 @@ export default function AppShellV3() {
       } else {
         text = await file.text();
       }
+      // Forward every activated phase's registry-resolved input schema (static
+      // methodology fields + ai-derived dynamic fields) so the extractor maps
+      // document data onto the SAME fields the UI surfaces — not just the
+      // Strategy fallback the edge uses when no schema is supplied. Without this
+      // a Design/Discover/etc. document (e.g. a functional workflow catalogue)
+      // has no declared target and silently can't be mapped.
+      const dynamicStore = getDynamicSchemaStore(activeProgram.rawData);
+      const phaseSchemas = activeProgram.phases.map((phase) => {
+        const resolved = getPhaseInputSchema(phase.id, dynamicStore);
+        return { phaseId: resolved.phaseId, title: resolved.title, fields: resolved.fields };
+      });
       const invoked = await supabase.functions.invoke("document-intelligence", {
         body: {
           programId: activeProgram.id,
@@ -2619,6 +2631,7 @@ export default function AppShellV3() {
           fileName: file.name,
           fileAttachment,
           phaseHint: target.phaseId,
+          phaseSchemas,
         },
       });
       if (invoked.error) throw new Error(invoked.error.message || "Validation failed.");
