@@ -66,6 +66,26 @@ export function parseRows(raw: unknown, columns: GridColumn[]): GridRow[] {
     });
 }
 
+/**
+ * True when a persisted grid value is legacy free text — a non-empty string that
+ * is NOT a serialized JSON array. Such a value was authored before the field
+ * became a grid; `parseRows` migrates it into row(s) on read, but structurally it
+ * is unstructured content, so a caller can still offer a projected draft over it
+ * (replace or merge) rather than treating it as a curated grid. Empty / "[]" /
+ * genuine JSON-array values return false — those are an empty or real structured
+ * grid, never a legacy paragraph.
+ */
+export function isLegacyFreeTextGridValue(raw: unknown): boolean {
+  if (typeof raw !== "string") return false;
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed === "[]") return false;
+  try {
+    return !Array.isArray(JSON.parse(trimmed));
+  } catch {
+    return true;
+  }
+}
+
 /** True when a row has at least one non-empty cell across the grid's columns. */
 export function rowHasContent(row: GridRow, columns: GridColumn[]): boolean {
   return columns.some((col) => (row[col.key] ?? "").trim().length > 0);

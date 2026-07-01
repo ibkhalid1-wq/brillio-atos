@@ -7,7 +7,7 @@ import { prioritizePhaseFields } from "@/v3/lib/phaseInputPriority";
 import { projectArchitectureDecisions } from "@/v3/lib/designDecisions";
 import { projectCharterInScope, projectCharterOutOfScope } from "@/v3/lib/scopeDrafts";
 import { preserveUntouchedGrids } from "@/v3/lib/gridSaveGuard";
-import StructuredGrid, { type GridRow, parseRows, serializeRows, filledRowCount } from "@/v3/components/StructuredGrid";
+import StructuredGrid, { type GridRow, parseRows, serializeRows, filledRowCount, isLegacyFreeTextGridValue } from "@/v3/components/StructuredGrid";
 import { V3Select, V3Combobox } from "@/v3/components/ui/V3Dropdown";
 import AutoGrowTextarea from "@/v3/components/ui/AutoGrowTextarea";
 import { PROVENANCE_KEY, parseProvenance, provenanceMatches, type FieldProvenance } from "@/new/lib/fieldProvenance";
@@ -880,32 +880,62 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
                   <>
                     {(() => {
                       const draft = gridDrafts[field.id];
-                      if (!draft || dismissedDrafts[field.id]
-                        || filledRowCount(grids[field.id] ?? [], field.columns ?? []) !== 0) return null;
+                      // Hide once dismissed or the user has interacted (typed,
+                      // cleared, or already adopted/merged the draft this phase).
+                      if (!draft || dismissedDrafts[field.id] || gridsTouchedRef.current.has(field.id)) return null;
+                      const cols = field.columns ?? [];
+                      const currentRows = grids[field.id] ?? [];
+                      const filled = filledRowCount(currentRows, cols);
+                      // Offer the draft over an empty grid, or over a legacy free-text
+                      // value migrated into row(s) (structurally unstructured) — but
+                      // never over a genuinely curated structured grid.
+                      const isLegacy = isLegacyFreeTextGridValue((existingInputs as Record<string, unknown>)[field.id]);
+                      if (filled > 0 && !isLegacy) return null;
+                      const hasExisting = filled > 0;
                       // Preview each drafted row by its lead (first) column value.
-                      const leadKey = field.columns?.[0]?.key;
+                      const leadKey = cols[0]?.key;
+                      const draftRows = () => parseRows(JSON.stringify(draft.rows), cols);
+                      const adoptReplace = () => {
+                        gridsTouchedRef.current.add(field.id);
+                        setGrids((current) => ({ ...current, [field.id]: draftRows() }));
+                      };
+                      const adoptMerge = () => {
+                        gridsTouchedRef.current.add(field.id);
+                        setGrids((current) => {
+                          const existing = current[field.id] ?? [];
+                          const seen = new Set(
+                            existing
+                              .map((r) => (leadKey ? (r[leadKey] ?? "") : "").trim().toLowerCase())
+                              .filter((k) => k.length > 0),
+                          );
+                          // Append only drafted rows whose lead value isn't already
+                          // present, so a merge never duplicates an existing item.
+                          const additions = draftRows().filter((r) => {
+                            const key = (leadKey ? (r[leadKey] ?? "") : "").trim().toLowerCase();
+                            return key.length > 0 && !seen.has(key);
+                          });
+                          return { ...current, [field.id]: [...existing, ...additions] };
+                        });
+                      };
                       return (
                       <div className="v3-decision-draft" role="note">
                         <div className="v3-decision-draft-head">
                           <span>
                             ✨ The {draft.sourceLabel} drafted{" "}
-                            {draft.rows.length} {draft.noun}{draft.rows.length === 1 ? "" : "s"}. Review and edit,
-                            or dismiss to enter your own.
+                            {draft.rows.length} {draft.noun}{draft.rows.length === 1 ? "" : "s"}.{" "}
+                            {hasExisting
+                              ? "Replace your current entry, merge these in, or dismiss."
+                              : "Review and edit, or dismiss to enter your own."}
                           </span>
                           <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                            <button
-                              type="button"
-                              className="v3-field-assist-btn"
-                              onClick={() => {
-                                gridsTouchedRef.current.add(field.id);
-                                setGrids((current) => ({
-                                  ...current,
-                                  [field.id]: parseRows(JSON.stringify(draft.rows), field.columns ?? []),
-                                }));
-                              }}
-                            >
-                              Use these
+                            <button type="button" className="v3-field-assist-btn" onClick={adoptReplace}>
+                              {hasExisting ? "Replace" : "Use these"}
                             </button>
+                            {hasExisting ? (
+                              <button type="button" className="v3-field-assist-btn" onClick={adoptMerge}>
+                                Merge
+                              </button>
+                            ) : null}
                             <button
                               type="button"
                               className="v3-field-assist-btn"

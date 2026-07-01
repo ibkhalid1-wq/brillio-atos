@@ -1,4 +1,4 @@
-import { parseRows, serializeRows } from "@/v3/components/StructuredGrid";
+import { parseRows, serializeRows, isLegacyFreeTextGridValue } from "@/v3/components/StructuredGrid";
 import type { GridColumn } from "@/v3/lib/phaseInputSchema";
 
 // When a field migrates from a free-text textarea to a grid (e.g. Discover's
@@ -51,5 +51,43 @@ describe("grid free-text → rows migration (parseRows)", () => {
   it("does not coerce a non-array JSON value (object/number) into rows", () => {
     expect(parseRows('{"item":"x"}', SCOPE_COLUMNS)).toEqual([]);
     expect(parseRows("42", SCOPE_COLUMNS)).toEqual([]);
+  });
+});
+
+// A field that migrated from free text still holds an unstructured value until the
+// first re-save. isLegacyFreeTextGridValue lets the panel tell that legacy value
+// (over which a projected draft may still be offered as replace/merge) apart from
+// an empty grid and a genuinely curated JSON-array grid.
+describe("isLegacyFreeTextGridValue", () => {
+  it("is true for plain-text values (single line or paragraph)", () => {
+    expect(isLegacyFreeTextGridValue("Customer onboarding journey")).toBe(true);
+    expect(isLegacyFreeTextGridValue("In scope are sales and service processes across EMEA.")).toBe(true);
+    // A bullet list is still plain text, not a JSON array.
+    expect(isLegacyFreeTextGridValue("- Order-to-cash\n- Billing")).toBe(true);
+  });
+
+  it("is false for an empty / blank / '[]' value (that is an empty grid)", () => {
+    expect(isLegacyFreeTextGridValue("")).toBe(false);
+    expect(isLegacyFreeTextGridValue("   ")).toBe(false);
+    expect(isLegacyFreeTextGridValue("[]")).toBe(false);
+    expect(isLegacyFreeTextGridValue(" [] ")).toBe(false);
+  });
+
+  it("is false for a genuine serialized JSON-array grid (already structured)", () => {
+    expect(isLegacyFreeTextGridValue(JSON.stringify([{ id: "x", item: "Process A", category: "" }]))).toBe(false);
+    expect(isLegacyFreeTextGridValue("[{}]")).toBe(false);
+  });
+
+  it("treats a non-array JSON value (object/number) as legacy free text", () => {
+    // parseRows yields no rows for these, but they are not a structured grid, so
+    // the draft may still be offered rather than the value silently blocking it.
+    expect(isLegacyFreeTextGridValue('{"item":"x"}')).toBe(true);
+    expect(isLegacyFreeTextGridValue("42")).toBe(true);
+  });
+
+  it("is false for non-string input", () => {
+    expect(isLegacyFreeTextGridValue(null)).toBe(false);
+    expect(isLegacyFreeTextGridValue(undefined)).toBe(false);
+    expect(isLegacyFreeTextGridValue(["Process A"])).toBe(false);
   });
 });
