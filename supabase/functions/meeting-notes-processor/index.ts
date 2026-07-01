@@ -19,6 +19,7 @@ import {
   completeClaudeText,
   toClaudeMessages,
 } from "../_shared/claudeClient.ts";
+import { parseLenientJson } from "../_shared/jsonRepair.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -193,23 +194,17 @@ async function handleExtract(payload: ExtractPayload): Promise<Response> {
   let parseError: string | null = null;
 
   try {
-    const cleaned = result.text
-      .replace(/^```[a-z]*\n?/m, "")
-      .replace(/\n?```$/m, "")
-      .trim();
-    extracted = JSON.parse(cleaned) as ExtractedMeetingNotes;
+    // Tolerate fences, surrounding prose, truncation and raw control chars —
+    // salvage a partial extraction rather than losing it to a formatting glitch.
+    const parsed = parseLenientJson<ExtractedMeetingNotes>(result.text);
+    extracted = parsed.value;
+    if (parsed.repaired) {
+      console.warn(
+        `meeting-notes-processor: AI JSON required repair (strategy=${parsed.strategy}) — output was likely truncated or malformed. Extraction salvaged.`,
+      );
+    }
   } catch (err) {
     parseError = `Failed to parse AI response as JSON: ${err instanceof Error ? err.message : String(err)}`;
-    // Attempt to extract JSON substring as fallback
-    const jsonMatch = result.text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      try {
-        extracted = JSON.parse(jsonMatch[0]) as ExtractedMeetingNotes;
-        parseError = null;
-      } catch {
-        // Give up — return partial error
-      }
-    }
   }
 
   // Ensure arrays are always present

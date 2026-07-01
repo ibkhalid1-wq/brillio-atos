@@ -15,6 +15,7 @@ import {
   toClaudeMessages,
   type FileAttachment,
 } from "../_shared/claudeClient.ts";
+import { parseLenientJson } from "../_shared/jsonRepair.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -287,25 +288,22 @@ Deno.serve(async (req) => {
 
     const latencyMs = Date.now() - startedAt;
 
-    // Parse JSON from the response
+    // Parse JSON from the response. LLM output is frequently fence-wrapped,
+    // truncated at the max-token ceiling, or carries raw control characters in
+    // string values; parseLenientJson strips/repairs those so a salvageable
+    // extraction isn't thrown away over a formatting glitch.
     let intelligence: Record<string, unknown> = {};
     let parseError: string | null = null;
     try {
-      // Strip any accidental markdown fences
-      const cleaned = result.text.replace(/^```[a-z]*\n?/m, "").replace(/\n?```$/m, "").trim();
-      intelligence = JSON.parse(cleaned) as Record<string, unknown>;
+      const parsed = parseLenientJson<Record<string, unknown>>(result.text);
+      intelligence = parsed.value;
+      if (parsed.repaired) {
+        console.warn(
+          `document-intelligence: AI JSON required repair (strategy=${parsed.strategy}) — output was likely truncated or malformed. Extraction salvaged.`,
+        );
+      }
     } catch (err) {
       parseError = `Failed to parse AI response as JSON: ${err instanceof Error ? err.message : String(err)}`;
-      // Attempt to extract JSON substring as fallback
-      const jsonMatch = result.text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        try {
-          intelligence = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
-          parseError = null;
-        } catch {
-          // Give up — return partial error with raw text
-        }
-      }
     }
 
     // Store the extraction record
