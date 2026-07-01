@@ -204,12 +204,15 @@ describe("stakeholder list → scope-map / requirements-catalog (semantic flow)"
     ]);
   });
 
-  it("declares scope-map inputs statically but draws no edge until the artifacts render", () => {
-    // Discover now carries a static input schema + artifactInputFlow, so the
-    // scope-map's declared inputs resolve without a store. The flow edge still
-    // needs the artifact to actually render (dynamic artifact set), so without a
-    // store there is no valid target and no edge is drawn.
-    expect(derivePhaseFlowEdges("discover", ["stakeholderList"])).toEqual([]);
+  it("resolves the requirements-catalog edge from the methodology registry, but scope-map waits on the planner", () => {
+    // requirements-catalog has a real producing agent, so it renders as a
+    // methodology-declared fall-through chip and its stakeholder flow edge resolves
+    // without a planner store. scope-map / stakeholder-map are declared flow targets
+    // with no static producing agent, so they only render once the planner produces
+    // them — the fall-through surfacing deliberately only lists renderable agents.
+    expect(derivePhaseFlowEdges("discover", ["stakeholderList"])).toEqual([
+      { from: "stakeholderList", to: "requirements-catalog" },
+    ]);
     expect(new Set(getArtifactInputFields("discover", "scope-map"))).toEqual(
       new Set(["currentStateSummary", "scopeInclusions", "scopeExclusions", "stakeholderList"]),
     );
@@ -341,10 +344,17 @@ describe("mobilise static roster + governance schema", () => {
     );
   });
 
-  it("draws no flow edge until the artifacts actually render (dynamic artifact set)", () => {
-    // The grounding is declared statically, but the flow edge still needs the
-    // artifact to exist in the phase — without a store there is no valid target.
-    expect(derivePhaseFlowEdges("mobilise", ["coreTeamRoster", "governanceCadence"])).toEqual([]);
+  it("resolves the static flow edges from the methodology registry even without a store", () => {
+    // The RACI and governance-model deliverables are methodology-declared
+    // fall-through artifacts (mobilise.artifactInputFlow), so they render as
+    // optional chips and their input→artifact flow resolves without a planner store.
+    expect(derivePhaseFlowEdges("mobilise", ["coreTeamRoster", "governanceCadence"])).toEqual(
+      expect.arrayContaining([
+        { from: "coreTeamRoster", to: "raci-matrix" },
+        { from: "coreTeamRoster", to: "governance-model" },
+        { from: "governanceCadence", to: "governance-model" },
+      ]),
+    );
   });
 
   it("wires the static inputs to the artifacts once they render", () => {
@@ -494,8 +504,17 @@ describe("operate static go-live schema", () => {
     );
   });
 
-  it("draws no flow edge until the artifacts actually render (dynamic artifact set)", () => {
-    expect(derivePhaseFlowEdges("operate", ["supportModel", "adoptionBaseline"])).toEqual([]);
+  it("resolves the static flow edges from the methodology registry even without a store", () => {
+    // support-model, runbook and adoption are methodology-declared fall-through
+    // Operate deliverables (operate.artifactInputFlow), so they render as optional
+    // chips and their input→artifact flow resolves without a planner store.
+    expect(derivePhaseFlowEdges("operate", ["supportModel", "adoptionBaseline"])).toEqual(
+      expect.arrayContaining([
+        { from: "supportModel", to: "support-model" },
+        { from: "supportModel", to: "runbook" },
+        { from: "adoptionBaseline", to: "adoption" },
+      ]),
+    );
   });
 
   it("wires the static inputs to the artifacts once they render", () => {
