@@ -192,6 +192,11 @@ export function StakeholderView({
 
       <section className="adam-card p-5">
         <div className="adam-title">Influence / interest matrix</div>
+        <div className="adam-row adam-micro adam-muted" style={{ gap: 12, flexWrap: "wrap", marginTop: 6 }}>
+          <span>Chip colour = sentiment</span>
+          <span><span className="adam-badge amber">↑N</span> move up N engagement bands</span>
+          <span><span className="adam-badge slate">?</span> needs assessment</span>
+        </div>
         <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
           <div style={{ minWidth: 480 }}>
             <div className="mt-4 adam-stakeholder-matrix">
@@ -203,18 +208,33 @@ export function StakeholderView({
                 return (
                   <div key={`${interest}-${influence}`} className="adam-stakeholder-quadrant">
                     <div className="adam-micro adam-muted">{interest} interest · {influence} influence</div>
-                    <div className="adam-micro" style={{ color: "rgba(255,255,255,0.86)" }}>{label}</div>
+                    <div className="adam-micro" style={{ fontWeight: 600 }}>{label}</div>
                     <div className="adam-row" style={{ gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-                      {matches.length ? matches.map((entry) => (
-                        <span
-                          key={entry.id}
-                          className="adam-stakeholder-chip"
-                          title={`${entry.name} · ${entry.role} · ${entry.currentEngagement} · ${entry.sentiment}`}
-                        >
-                          <span className={`adam-badge ${sentimentClass(entry.sentiment)}`}>{initials(entry.name)}</span>
-                          <span>{entry.name}</span>
-                        </span>
-                      )) : (
+                      {matches.length ? matches.map((entry) => {
+                        const delta = engagementDelta(entry);
+                        const blind = isBlindSpot(entry);
+                        const marker = blind ? "?" : delta.kind === "move" ? `↑${delta.steps}` : null;
+                        const state = blind
+                          ? "needs assessment"
+                          : delta.kind === "move"
+                            ? `move up ${delta.steps} ${delta.steps === 1 ? "band" : "bands"} to ${delta.to}`
+                            : "on target";
+                        const chipLabel = `${entry.name}, ${entry.role || "role pending"}, ${entry.currentEngagement} engagement, ${entry.sentiment} sentiment, ${state}`;
+                        return (
+                          <span
+                            key={entry.id}
+                            className="adam-stakeholder-chip"
+                            title={chipLabel}
+                            aria-label={chipLabel}
+                          >
+                            <span className={`adam-badge ${sentimentClass(entry.sentiment)}`}>{initials(entry.name)}</span>
+                            <span>{entry.name}</span>
+                            {marker ? (
+                              <span className={`adam-badge ${blind ? "slate" : "amber"}`} aria-hidden="true">{marker}</span>
+                            ) : null}
+                          </span>
+                        );
+                      }) : (
                         <span className="adam-micro adam-muted">No mapped stakeholders</span>
                       )}
                     </div>

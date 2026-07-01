@@ -514,7 +514,7 @@ html.dark body {
   padding: 6px 10px 6px 6px;
   font-size: 11px;
   line-height: 1;
-  color: var(--adam-slate-100);
+  color: inherit;
 }
 
 .adam-health-grid {
