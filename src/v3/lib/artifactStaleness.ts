@@ -66,14 +66,28 @@ function approvedArtifactIds(bucket: PhaseArtifactBucket): Set<string> {
   return approved;
 }
 
-/** Artifact ids (within the phase) that the given input fields flow into. */
+/** All artifact ids present in a phase bucket (whatever their status). */
+function bucketArtifactIds(bucket: PhaseArtifactBucket): string[] {
+  if (!bucket || typeof bucket !== "object") return [];
+  return Object.keys(bucket);
+}
+
+/**
+ * Artifact ids (within the phase) that the given input fields flow into. The
+ * bucket's own artifact ids are supplied as valid edge targets so a field that
+ * feeds a *produced* artifact a recommended agent made (not a declared
+ * `requiredArtifact`, e.g. Design's `solution-architecture`/`future-state-design`)
+ * is still recognised — otherwise the edge is dropped for not being in the static
+ * catalogue and the artifact never stales / never blocks reimport.
+ */
 export function artifactsForInputFields(
   phaseId: string,
   fieldIds: string[],
   store?: DynamicSchemaStore,
+  extraArtifactIds?: Iterable<string>,
 ): Set<string> {
   const targets = new Set<string>();
-  for (const edge of derivePhaseFlowEdges(phaseId, expandWithAliases(fieldIds), store)) targets.add(edge.to);
+  for (const edge of derivePhaseFlowEdges(phaseId, expandWithAliases(fieldIds), store, extraArtifactIds)) targets.add(edge.to);
   return targets;
 }
 
@@ -106,7 +120,7 @@ export function approvedArtifactsToStale(
   if (!changedFieldIds.length) return [];
   const approved = approvedArtifactIds(bucket);
   if (!approved.size) return [];
-  const targets = artifactsForInputFields(phaseId, changedFieldIds, store);
+  const targets = artifactsForInputFields(phaseId, changedFieldIds, store, bucketArtifactIds(bucket));
   return [...targets].filter((artifactId) => approved.has(artifactId));
 }
 
@@ -125,7 +139,7 @@ export function relatedArtifactsToStale(
 ): string[] {
   if (!changedFieldIds.length) return [];
   if (!bucket || typeof bucket !== "object") return [];
-  const targets = artifactsForInputFields(phaseId, changedFieldIds, store);
+  const targets = artifactsForInputFields(phaseId, changedFieldIds, store, bucketArtifactIds(bucket));
   return [...targets].filter((artifactId) => {
     const entry = (bucket as Record<string, unknown>)[artifactId];
     if (!entry || typeof entry !== "object") return false;
@@ -135,25 +149,51 @@ export function relatedArtifactsToStale(
 }
 
 /**
+ * Whether a persisted input value represents real captured content worth
+ * protecting. Text fields are empty when blank; grids persist as JSON and are
+ * empty when absent or the empty array (`"[]"`). Used by the reimport guard so a
+ * field with no prior content is never "protected" — there is nothing to lose.
+ */
+function hasInputValue(value: unknown): boolean {
+  if (value == null) return false;
+  if (typeof value !== "string") return value !== "";
+  const trimmed = value.trim();
+  return trimmed.length > 0 && trimmed !== "[]";
+}
+
+/**
  * The subset of `fieldIds` that must NOT be overwritten on reimport because
  * they feed an already-approved artifact. Protecting these keeps an approved
  * artifact's source inputs stable rather than silently staling it on every
  * document re-scan.
+ *
+ * `priorInputs` (the phase's currently-persisted inputs) makes the guard
+ * value-aware: a field is only protected when it ALREADY holds content. An empty
+ * field feeding an approved artifact has no PM work to preserve, so blocking its
+ * reimport would just discard the accepted mapping and leave the input blank —
+ * the bug where an accepted document import never populated an empty field. When
+ * `priorInputs` is omitted the guard blocks regardless (back-compatible).
  */
 export function fieldsFeedingApprovedArtifacts(
   phaseId: string,
   fieldIds: string[],
   bucket: PhaseArtifactBucket,
   store?: DynamicSchemaStore,
+  priorInputs?: Record<string, unknown>,
 ): Set<string> {
   const blocked = new Set<string>();
   const approved = approvedArtifactIds(bucket);
   if (!approved.size) return blocked;
   for (const fieldId of fieldIds) {
+    // Nothing to protect when the target field is currently empty — let the
+    // import populate it rather than silently dropping the accepted value.
+    if (priorInputs && !hasInputValue(priorInputs[fieldId])) continue;
     // Expand to the canonical field(s) this key aliases to (e.g. kpis →
     // successMetric) so a companion key feeding an approved artifact is protected
-    // on reimport just like the canonical field would be.
-    for (const edge of derivePhaseFlowEdges(phaseId, expandWithAliases([fieldId]), store)) {
+    // on reimport just like the canonical field would be. The approved ids are
+    // supplied as valid edge targets so a field feeding a produced (recommended-
+    // agent) approved artifact — one not in the static catalogue — is still caught.
+    for (const edge of derivePhaseFlowEdges(phaseId, expandWithAliases([fieldId]), store, approved)) {
       if (approved.has(edge.to)) {
         blocked.add(fieldId);
         break;

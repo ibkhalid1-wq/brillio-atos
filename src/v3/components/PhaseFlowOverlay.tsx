@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import type { ProgramSummary } from "@/new/types";
 import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
 import { derivePhaseFlowEdges } from "@/v3/lib/phaseFlowEdges";
-import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
+import { canonicalArtifactId, getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { assessField } from "@/v3/components/PhaseInputsPanel";
 
 /**
@@ -42,15 +42,36 @@ const TONE_STYLE: Record<FieldTone, { stroke: string; soft: string; width: numbe
 
 const TONES: FieldTone[] = ["green", "amber", "red", "muted"];
 
-function readPhaseInputs(program: ProgramSummary, phaseId: string): Record<string, unknown> {
+function programDataSource(program: ProgramSummary): Record<string, unknown> {
   const raw = program.rawData as Record<string, unknown> | null;
-  const source = raw && typeof raw.data === "object" && raw.data !== null
+  return raw && typeof raw.data === "object" && raw.data !== null
     ? (raw.data as Record<string, unknown>)
     : raw ?? {};
+}
+
+function readPhaseInputs(program: ProgramSummary, phaseId: string): Record<string, unknown> {
+  const source = programDataSource(program);
   const phaseInputs = source.phaseInputs && typeof source.phaseInputs === "object" && !Array.isArray(source.phaseInputs)
     ? (source.phaseInputs as Record<string, Record<string, unknown>>)
     : {};
   return phaseInputs[phaseId] ?? {};
+}
+
+/**
+ * Ids of the artifacts already produced in a phase (canonicalised). These are
+ * passed as extra valid edge targets so a flow line resolves to a produced
+ * artifact a *recommended* agent made — e.g. Design's `solution-architecture` —
+ * which renders as a chip but is not in the static/dynamic catalogue. Without
+ * this the incoming edge is dropped and the artifact appears with no flow.
+ */
+function readProducedArtifactIds(program: ProgramSummary, phaseId: string): string[] {
+  const source = programDataSource(program);
+  const buckets = source.phaseArtifacts && typeof source.phaseArtifacts === "object" && !Array.isArray(source.phaseArtifacts)
+    ? (source.phaseArtifacts as Record<string, unknown>)
+    : {};
+  const bucket = buckets[phaseId];
+  if (!bucket || typeof bucket !== "object") return [];
+  return Object.keys(bucket as Record<string, unknown>).map((id) => canonicalArtifactId(phaseId, id));
 }
 
 export default function PhaseFlowOverlay({ containerRef, program, phaseId, enabled }: PhaseFlowOverlayProps) {
@@ -71,7 +92,8 @@ export default function PhaseFlowOverlay({ containerRef, program, phaseId, enabl
       const str = typeof value === "string" ? value : value != null ? String(value) : undefined;
       return assessField(str, typeOf.get(id) ?? "text").tone;
     };
-    return derivePhaseFlowEdges(phaseId, schema.fields.map((field) => field.id), store)
+    const produced = readProducedArtifactIds(program, phaseId);
+    return derivePhaseFlowEdges(phaseId, schema.fields.map((field) => field.id), store, produced)
       .map((edge) => ({ ...edge, tone: toneOf(edge.from) }));
   }, [program, phaseId]);
 

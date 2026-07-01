@@ -96,10 +96,18 @@ const PHASE_FIELD_INTENT: Record<string, Record<string, string[]>> = {
   },
 };
 
-function intentFieldArtifacts(phaseId: string, store?: DynamicSchemaStore): Record<string, string[]> {
+function intentFieldArtifacts(
+  phaseId: string,
+  store?: DynamicSchemaStore,
+  artifactIdsOverride?: string[],
+): Record<string, string[]> {
   const intent = PHASE_FIELD_INTENT[phaseId];
   if (!intent) return {};
-  const artifactIds = getPhaseArtifactIds(phaseId, store);
+  // Callers may widen the candidate set beyond the static/dynamic catalogue to
+  // include artifacts that actually exist (produced "orphans" not declared as
+  // required, or the entries in a staleness bucket), so an intent match resolves
+  // to a real rendered chip rather than being dropped for not being catalogued.
+  const artifactIds = artifactIdsOverride ?? getPhaseArtifactIds(phaseId, store);
   if (artifactIds.length === 0) return {};
   const out: Record<string, string[]> = {};
   for (const [fieldId, keywords] of Object.entries(intent)) {
@@ -112,8 +120,12 @@ function intentFieldArtifacts(phaseId: string, store?: DynamicSchemaStore): Reco
   return out;
 }
 
-function semanticFieldArtifacts(phaseId: string, store?: DynamicSchemaStore): Record<string, string[]> {
-  if (PHASE_FIELD_INTENT[phaseId]) return intentFieldArtifacts(phaseId, store);
+function semanticFieldArtifacts(
+  phaseId: string,
+  store?: DynamicSchemaStore,
+  artifactIdsOverride?: string[],
+): Record<string, string[]> {
+  if (PHASE_FIELD_INTENT[phaseId]) return intentFieldArtifacts(phaseId, store, artifactIdsOverride);
   if (phaseId !== STAKEHOLDER_PHASE_ID) return {};
   const field = resolveStakeholderField(store, phaseId);
   if (!field) return {};
@@ -217,13 +229,28 @@ export function artifactReferenceSatisfied(fieldLabel: string, artifactTitles: s
  * `artifactInputFlow`, and the dynamic schema) that exists in the phase's
  * artifact set, de-duplicated in a stable order. Nothing is hard-coded: a field
  * with no declared targets produces no edges.
+ *
+ * `extraArtifactIds` widens the valid-target set beyond the static/dynamic
+ * catalogue (`getPhaseArtifactIds`). A phase's inputs can feed an artifact a
+ * *recommended* agent produces (e.g. Design's `solution-architecture`) that is
+ * neither a `requiredArtifact` nor a planner-declared dynamic artifact — such a
+ * produced "orphan" renders as a chip but would otherwise have no valid edge
+ * target, so its incoming flow line silently vanishes. Passing the actually-
+ * present artifact ids (the produced set for the flow overlay, or a staleness
+ * bucket's keys) lets those declared edges resolve to the real rendered chip.
  */
-export function derivePhaseFlowEdges(phaseId: string, fieldIds: string[], store?: DynamicSchemaStore): FlowEdge[] {
+export function derivePhaseFlowEdges(
+  phaseId: string,
+  fieldIds: string[],
+  store?: DynamicSchemaStore,
+  extraArtifactIds?: Iterable<string>,
+): FlowEdge[] {
   const map = PHASE_FIELD_ARTIFACTS[phaseId] ?? {};
   const methodologyMap = methodologyFieldArtifacts(phaseId);
   const dynamicMap = dynamicFieldArtifacts(phaseId, store);
-  const semanticMap = semanticFieldArtifacts(phaseId, store);
   const valid = new Set(getPhaseArtifactIds(phaseId, store));
+  if (extraArtifactIds) for (const id of extraArtifactIds) valid.add(id);
+  const semanticMap = semanticFieldArtifacts(phaseId, store, [...valid]);
   const edges: FlowEdge[] = [];
   for (const fieldId of fieldIds) {
     const seen = new Set<string>();

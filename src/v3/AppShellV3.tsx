@@ -2453,7 +2453,14 @@ export default function AppShellV3() {
     const flowStore = getDynamicSchemaStore(cloned.inner);
     let skippedFieldCount = 0;
     for (const [phaseId, inputs] of Object.entries(writableInputs)) {
-      const blocked = fieldsFeedingApprovedArtifacts(phaseId, Object.keys(inputs), artifactBuckets[phaseId], flowStore);
+      // Pass the phase's currently-persisted inputs so the guard only preserves
+      // fields that ACTUALLY hold content: an empty field feeding an approved
+      // artifact has no PM work to protect, so the import must be allowed to
+      // populate it rather than being silently dropped (leaving the field blank).
+      const priorBucket = (existing[phaseId] && typeof existing[phaseId] === "object")
+        ? existing[phaseId] as Record<string, unknown>
+        : undefined;
+      const blocked = fieldsFeedingApprovedArtifacts(phaseId, Object.keys(inputs), artifactBuckets[phaseId], flowStore, priorBucket);
       const writableFields = blocked.size
         ? Object.fromEntries(Object.entries(inputs).filter(([fieldId]) => !blocked.has(fieldId)))
         : inputs;

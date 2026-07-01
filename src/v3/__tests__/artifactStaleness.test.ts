@@ -143,5 +143,28 @@ describe("artifactStaleness", () => {
       expect(fieldsFeedingApprovedArtifacts("strategy", ["customGroundingField"], bucket).has("customGroundingField")).toBe(false);
       expect(fieldsFeedingApprovedArtifacts("strategy", ["customGroundingField"], bucket, store).has("customGroundingField")).toBe(true);
     });
+
+    it("does not protect an EMPTY field feeding an approved artifact, so an import can populate it", () => {
+      // The reported bug: functionalDesignSummary maps from a document and is
+      // accepted, but Design has an approved artifact it feeds — the guard dropped
+      // the import even though the field was blank, leaving it unpopulated. With the
+      // phase's prior inputs passed, an empty/absent/[]-grid field is NOT protected.
+      const bucket = { "future-state-design": { status: "approved" } };
+      const fields = ["functionalDesignSummary"];
+      // No prior inputs given → back-compatible blocking (nothing to compare against).
+      expect(fieldsFeedingApprovedArtifacts("design", fields, bucket).has("functionalDesignSummary")).toBe(true);
+      // Field absent, blank, or an empty grid ⇒ nothing to protect ⇒ writable.
+      expect(fieldsFeedingApprovedArtifacts("design", fields, bucket, undefined, {}).has("functionalDesignSummary")).toBe(false);
+      expect(fieldsFeedingApprovedArtifacts("design", fields, bucket, undefined, { functionalDesignSummary: "   " }).has("functionalDesignSummary")).toBe(false);
+      expect(fieldsFeedingApprovedArtifacts("design", fields, bucket, undefined, { functionalDesignSummary: "[]" }).has("functionalDesignSummary")).toBe(false);
+    });
+
+    it("still protects a field that ALREADY holds content from being overwritten on reimport", () => {
+      const bucket = { "future-state-design": { status: "approved" } };
+      const prior = { functionalDesignSummary: "Existing PM-authored workflow summary" };
+      expect(
+        fieldsFeedingApprovedArtifacts("design", ["functionalDesignSummary"], bucket, undefined, prior).has("functionalDesignSummary"),
+      ).toBe(true);
+    });
   });
 });

@@ -285,6 +285,34 @@ describe("design static inputs → solution-design artifacts (semantic flow)", (
   });
 });
 
+// A phase's inputs can feed an artifact a *recommended* agent produces (Design's
+// solution-architecture / future-state-design are recommended, not required, and
+// the planner need not declare them as dynamic artifacts). Such a produced
+// artifact renders as a chip ("orphan") but is absent from getPhaseArtifactIds,
+// so its incoming edge is dropped and the artifact shows with no flow — the bug.
+// Passing the produced artifact ids as extra valid targets restores the edge.
+describe("derivePhaseFlowEdges resolves produced (recommended-agent) artifacts", () => {
+  it("drops the edge to a non-catalogued artifact without the produced set", () => {
+    // solution-architecture is neither a Design requiredArtifact nor in any store,
+    // so with no extra targets the declared functionalDesignSummary edge vanishes.
+    const edges = derivePhaseFlowEdges("design", ["functionalDesignSummary"]);
+    expect(edges.some((e) => e.to === "solution-architecture")).toBe(false);
+  });
+
+  it("resolves the declared edge once the artifact is passed as produced", () => {
+    const edges = derivePhaseFlowEdges("design", ["functionalDesignSummary"], undefined, ["solution-architecture"]);
+    expect(edges).toContainEqual({ from: "functionalDesignSummary", to: "solution-architecture" });
+  });
+
+  it("also resolves a planner-renamed produced artifact via intent keywords", () => {
+    // The methodology flow targets canonical "solution-architecture"; a produced
+    // "solution-design" is caught through the design intent keyword match now that
+    // the produced set widens the intent candidate pool.
+    const edges = derivePhaseFlowEdges("design", ["functionalDesignSummary"], undefined, ["solution-design"]);
+    expect(edges.some((e) => e.to === "solution-design")).toBe(true);
+  });
+});
+
 // Mobilise now carries a static input schema: the canonical coreTeamRoster grid
 // (the single source every downstream owner/lead resolves against) and the
 // governance cadence. Both ground the RACI and governance-model artifacts via a
