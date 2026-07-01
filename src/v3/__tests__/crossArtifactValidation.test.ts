@@ -155,6 +155,20 @@ describe("runDeterministicValidation — benefits traceability", () => {
     expect(wrapped.some((f) => f.findingId === "benefits-no-kpis")).toBe(false);
   });
 
+  it("flags a benefit milestone anchored to an unknown phase, but not a real one", () => {
+    const budget = (phaseId: string) => ({
+      projectedCost: 1000, actualSpend: null, projectedBenefits: 5000, realisedBenefits: null,
+      roi: null, burnRate: "healthy" as const, valueDeliveryRate: "on-track" as const, phaseSpend: [],
+      benefitMilestones: [{ id: "bm1", title: "Go-live benefit", targetDate: null, estimatedValue: "100", status: "pending" as const, phaseId }],
+      healthSignal: "green" as const, healthReason: "", confidence: 0.8,
+    });
+    const phases = [{ id: "operate", displayName: "Operate", status: "active" } as unknown as NonNullable<ValidatableProgram["phases"]>[number]];
+    const broken = runDeterministicValidation({ phases, budgetTracking: budget("ghost-phase") });
+    expect(broken.some((f) => f.findingId === "benefit-phase:bm1")).toBe(true);
+    const ok = runDeterministicValidation({ phases, budgetTracking: budget("operate") });
+    expect(ok.some((f) => f.findingId === "benefit-phase:bm1")).toBe(false);
+  });
+
   it("flags a strategy KPI that the populated benefits tracker dropped", () => {
     const kpisJson = JSON.stringify([
       { id: "k1", name: "Cost to serve", baseline: "100", target: "80", unit: "$" },

@@ -273,6 +273,35 @@ const RULES: ValidationRule[] = [
         })),
   },
   {
+    // Reference integrity: a benefit anchored to a phase that does not exist can
+    // never be gated or realised — the value chain points at nothing. Guarded to
+    // only run when the phase set is known, so it validates references rather
+    // than inventing them.
+    id: "benefit-milestone-unknown-phase",
+    domain: "benefits-traceability",
+    run: (p) => {
+      const phases = p.phases ?? [];
+      if (phases.length === 0) return [];
+      const known = new Set(phases.map((ph) => ph.id));
+      return (p.budgetTracking?.benefitMilestones ?? [])
+        .filter((m) => !isBlank(m.phaseId) && !known.has(m.phaseId))
+        .map((m) => ({
+          findingId: `benefit-phase:${m.id}`,
+          severity: "medium",
+          domain: "benefits-traceability",
+          // The referenced phase does not exist, so the finding is not attributable
+          // to a real phase — surface it programme-wide.
+          sourceArtifact: "budgetTracking.benefitMilestones",
+          targetArtifact: "phases",
+          sourceItem: m.id,
+          issue: `Benefit milestone "${m.title}" is anchored to unknown phase "${m.phaseId}".`,
+          recommendation: "Re-anchor the benefit to a real delivery phase so its realisation can be gated and tracked.",
+          confidence: 1,
+          evidence: [`phaseId="${m.phaseId}" is not among ${phases.length} known phases`],
+        }));
+    },
+  },
+  {
     // Upstream-fidelity: a KPI committed to in Strategy must be carried into the
     // benefits tracker downstream, or the measurable promise is silently dropped.
     // This is the directional "does a later phase honour the earlier phase?"
