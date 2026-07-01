@@ -158,6 +158,18 @@ function gapCitation(gap: RelationGap): Citation | null {
 }
 
 /**
+ * Confidence values reach the graph on two scales: facts carry a 0–1 confidence,
+ * while generated artifacts carry `agentConfidence` on a 0–100 scale. Fold both
+ * to 0–1 so the delivery-quality average is meaningful (a raw 75 must read as
+ * 0.75, not 7500%). Values already in [0,1] pass through untouched.
+ */
+function normalisedConfidence(value: unknown, fallback = 0.5): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  if (value < 0) return 0;
+  return value > 1 ? Math.min(1, value / 100) : value;
+}
+
+/**
  * Score one objective across the five components and derive its blockers.
  */
 function scoreObjective(
@@ -227,7 +239,7 @@ function scoreObjective(
       "No generated artifact grounds this objective.",
       "Generate the phase artifacts that carry this objective forward (charter, business case, design).");
   } else {
-    const quality = deliveryArtifacts.map((a) => (typeof a.confidence === "number" ? a.confidence : 0.5));
+    const quality = deliveryArtifacts.map((a) => normalisedConfidence(a.confidence));
     const avg = quality.reduce((s, q) => s + q, 0) / quality.length;
     // Each open delivery-chain gap discounts delivery confidence, weighted by
     // its severity and the finding's own confidence, capped by maxGapPenalty.

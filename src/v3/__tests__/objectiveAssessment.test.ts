@@ -235,6 +235,18 @@ describe("assessObjectives", () => {
     expect(obj.blockers.some((b) => b.component === "unthreatened")).toBe(true);
   });
 
+  it("normalises 0-100 artifact confidence so delivery quality is not inflated", () => {
+    // Real programmes carry agentConfidence on a 0-100 scale; a raw 70 must read
+    // as 0.70 delivery quality, never clamp delivered to a free full score.
+    const prog = healthyProgram();
+    (prog.artifacts as unknown as Array<Record<string, unknown>>)[0].agentConfidence = 70;
+    const result = assessObjectives(prog);
+    const delivered = result.objectives[0].components.find((c) => c.key === "delivered")!;
+    expect(delivered.score).toBeGreaterThan(0.6);
+    expect(delivered.score).toBeLessThan(0.8);
+    expect(delivered.detail).toContain("70%");
+  });
+
   it("does not double-count an intrinsic KPI baseline gap against evidence", () => {
     // A KPI missing its target is a measurable gap only — it must not also erode
     // the evidenced component nor surface as a 'traceability' blocker.
