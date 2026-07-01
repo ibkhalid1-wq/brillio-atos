@@ -357,7 +357,14 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       id: "design",
       displayName: "Design",
       description: "Produce the solution design, architecture decisions, and delivery plan.",
-      requiredArtifacts: [],
+      // The critical path is a CONTRACT artifact: downstream models (the Digital
+      // Twin phase spine + bottleneck rail, schedule projections) read the
+      // structured `data.criticalPath` it produces, and "Critical path established"
+      // is already a mandatory Design exit criterion. Declaring it here guarantees
+      // every programme produces it, rather than leaving it to the planner's
+      // discretion as a dynamic artifact. dynamicArtifactDefs drops the dynamic
+      // duplicate so the merged required set never double-counts it.
+      requiredArtifacts: ["critical-path"],
       // Design seeds the solution-design facts its agents need (approach, target
       // architecture, NFRs, decisions, constraints) as static methodology inputs,
       // so generation never depends on the planner remembering to ask for them.

@@ -257,6 +257,14 @@ export function dynamicArtifactDefs(phaseId: string, store?: DynamicSchemaStore)
   const defs = store?.artifacts?.[phaseId];
   if (!Array.isArray(defs)) return [];
   const seen = new Set<string>();
+  // A phase's STATIC contract artifacts (methodology.requiredArtifacts) are merged
+  // with these dynamic defs by every consumer (readiness completeness, schedule,
+  // artifact model). If the planner also proposes one dynamically, the id would
+  // appear in both halves of that merge and be double-counted. Drop the dynamic
+  // duplicate here — the single chokepoint — so the static contract entry wins.
+  const staticRequired = new Set(
+    ATOS_STANDARD.phases.find((p) => p.id === phaseId)?.requiredArtifacts ?? [],
+  );
   const out: DynamicArtifactDef[] = [];
   for (const def of defs) {
     if (!def || typeof def.id !== "string") continue;
@@ -275,6 +283,9 @@ export function dynamicArtifactDefs(phaseId: string, store?: DynamicSchemaStore)
     // its own so formal artifacts stay pinned to their methodology home.
     const homePhase = FORMAL_ARTIFACT_PHASES[id];
     if (homePhase && homePhase !== phaseId) continue;
+    // Already a static contract artifact for this phase — the merge would double
+    // it. The static entry is authoritative, so drop the dynamic duplicate.
+    if (staticRequired.has(id)) continue;
     if (seen.has(id)) continue;
     seen.add(id);
     const entry: DynamicArtifactDef = { id, label: def.label || id, description: def.description || "" };

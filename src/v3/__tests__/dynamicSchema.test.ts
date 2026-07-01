@@ -104,6 +104,24 @@ describe("dynamicArtifactDefs", () => {
     expect(defs[0].label).toBe("a");
   });
 
+  it("drops a dynamic def that duplicates a static contract artifact for the phase", () => {
+    // critical-path is a STATIC design contract artifact. When the planner also
+    // proposes it dynamically, the merge of static requiredArtifacts + dynamic
+    // defs would double-count it (inflating gate completeness denominators). The
+    // chokepoint drops the dynamic duplicate so the static entry is the single
+    // source; genuinely dynamic-only defs (solution-design) still come through.
+    const store: DynamicSchemaStore = {
+      artifacts: {
+        design: [
+          { id: "critical-path", label: "Critical Path Plan", description: "" },
+          { id: "solution-design", label: "Solution Design", description: "" },
+        ],
+      },
+    };
+    const defs = dynamicArtifactDefs("design", store);
+    expect(defs.map((d) => d.id)).toEqual(["solution-design"]);
+  });
+
   it("canonicalises a planner artifact-id synonym to its producing agent", () => {
     // The planner emitted the Risk Register under the synonym "risk-log" (and a
     // phase-prefixed variant); both must collapse to the canonical "risk" agent
