@@ -1152,6 +1152,10 @@ const ARTIFACT_INPUT_FLOW: Record<string, string[]> = {
   "support-model": ["supportModel", "hyperCarePeriod"],
   "runbook": ["supportModel"],
   "adoption": ["adoptionBaseline", "goLiveDate"],
+  // Optimize's static schema. optimization-backlog is a fall-through agent, so it
+  // only sees the fields named here — grounds its ranking on the current baseline
+  // and the captured improvement candidates.
+  "optimization-backlog": ["optimisationBaseline", "improvementCandidates"],
 };
 
 /** Stringify a phase-input value (string, number, or grid rows) for the prompt. */

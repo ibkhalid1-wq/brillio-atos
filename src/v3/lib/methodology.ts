@@ -563,6 +563,18 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       displayName: "Optimize",
       description: "Drive continuous improvement against baseline metrics.",
       requiredArtifacts: [],
+      // Optimize seeds the two facts the optimisation backlog ranks against — the
+      // current performance baseline and the known improvement candidates — as
+      // static methodology inputs, so the backlog is grounded on real numbers and
+      // real pain points rather than the planner remembering to ask. Landed
+      // required:false for the same gate-safety reason as Operate; dynamicSchema
+      // stays true for programme-specific additions (static wins on id collision).
+      //
+      // Only optimization-backlog is wired: it is the one renderable, fall-through
+      // Optimize agent these inputs ground (kept in sync with the edge
+      // ARTIFACT_INPUT_FLOW). narrative is program-level (dropped from every phase
+      // artifact set) and benefits-tracker already receives the full phaseInputs
+      // blob in its own edge branch, so neither needs a phase-chip flow here.
       dynamicSchema: true,
       mandatoryExitCriteriaTemplates: [
         "Optimisation opportunities identified and prioritised",
@@ -571,6 +583,25 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       entryGuards: ["Govern gate approved"],
       recommendedAgents: ["optimization-backlog", "narrative", "benefits-tracker"],
       typicalDurationWeeks: { min: 4, max: 12 },
+      inputFields: [
+        {
+          id: "optimisationBaseline",
+          label: "Performance baseline",
+          type: "grid",
+          required: false,
+          usedByArtifacts: ["optimization-backlog"],
+          hint: "The current performance metrics the improvement backlog prioritises against — each with where it stands now and the target you're driving toward.",
+          columns: [
+            { key: "metric", label: "Metric", type: "text" },
+            { key: "current", label: "Current", type: "text" },
+            { key: "target", label: "Target", type: "text" },
+          ],
+        },
+        { id: "improvementCandidates", label: "Improvement candidates", type: "textarea", required: false, usedByArtifacts: ["optimization-backlog"], placeholder: "Known pain points, inefficiencies, or opportunities to seed the backlog", hint: "The raw opportunities the backlog ranks by value vs effort — captured here so real signals seed it rather than a cold start." },
+      ],
+      artifactInputFlow: {
+        "optimization-backlog": ["optimisationBaseline", "improvementCandidates"],
+      },
     },
     {
       id: "valuerealize",

@@ -502,6 +502,45 @@ describe("valuerealize static closure schema", () => {
   });
 });
 
+// Optimize now carries a static schema grounding the optimisation backlog on the
+// current performance baseline and the captured improvement candidates — the one
+// renderable, fall-through Optimize agent these inputs feed.
+describe("optimize static improvement schema", () => {
+  it("grounds the optimization-backlog on the baseline + candidates without a store", () => {
+    expect(new Set(getArtifactInputFields("optimize", "optimization-backlog"))).toEqual(
+      new Set(["optimisationBaseline", "improvementCandidates"]),
+    );
+  });
+
+  it("keeps both static inputs fillable (real typed fields)", () => {
+    expect(new Set(getFillableArtifactInputFields("optimize", "optimization-backlog"))).toEqual(
+      new Set(["optimisationBaseline", "improvementCandidates"]),
+    );
+  });
+
+  it("wires the static inputs to the backlog once it renders", () => {
+    const store = {
+      artifacts: {
+        optimize: [{ id: "optimization-backlog", label: "Optimization Backlog", description: "" }],
+      },
+    };
+    const edges = derivePhaseFlowEdges("optimize", ["optimisationBaseline", "improvementCandidates"], store);
+    expect(edges).toEqual(
+      expect.arrayContaining([
+        { from: "optimisationBaseline", to: "optimization-backlog" },
+        { from: "improvementCandidates", to: "optimization-backlog" },
+      ]),
+    );
+  });
+
+  it("flows every static input field into at least one artifact — no dangling inputs", () => {
+    const grounded = new Set(getArtifactInputFields("optimize", "optimization-backlog"));
+    for (const field of PHASE_INPUT_SCHEMAS.optimize.fields) {
+      expect(grounded).toContain(field.id);
+    }
+  });
+});
+
 // The user's rule when building the static spine: "make sure the input to
 // artifact flows also exist." Every artifactId a phase declares in its
 // artifactInputFlow must be a *renderable* phase artifact — otherwise the flow
