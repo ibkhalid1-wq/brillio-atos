@@ -5,6 +5,7 @@ import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { availableModes, FIELD_ASSIST_MODE_LABEL, type FieldAssistMode } from "@/v3/lib/fieldAssist";
 import { prioritizePhaseFields } from "@/v3/lib/phaseInputPriority";
 import { projectArchitectureDecisions } from "@/v3/lib/designDecisions";
+import { projectCharterInScope, projectCharterOutOfScope } from "@/v3/lib/scopeDrafts";
 import StructuredGrid, { type GridRow, parseRows, serializeRows, filledRowCount } from "@/v3/components/StructuredGrid";
 import { V3Select, V3Combobox } from "@/v3/components/ui/V3Dropdown";
 import AutoGrowTextarea from "@/v3/components/ui/AutoGrowTextarea";
@@ -278,15 +279,26 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
     return parseKpis((phaseInputs.strategy ?? {}).kpis);
   }, [program.rawData]);
 
-  // Draft decisions projected from the Solution Architecture agent's output. The
-  // agent already emits `{ decision, rationale, alternatives }` per decision; we
-  // surface it as a review banner over the (empty) keyDesignDecisions grid so the
-  // human curates a pre-filled draft instead of typing a blank table. Read-only:
-  // nothing persists until the user adopts the draft and the grid is saved.
-  const decisionDraft = useMemo(
-    () => (phaseId === "design" ? projectArchitectureDecisions(program.rawData) : []),
-    [program.rawData, phaseId],
-  );
+  // Grid drafts projected from an upstream formal artifact, keyed by the grid
+  // field id they pre-fill. An agent already emitted the content elsewhere, so we
+  // surface it as a review banner over the (empty) grid — the human curates a
+  // pre-filled draft instead of typing a blank table. Read-only: nothing persists
+  // until the user adopts a draft and the grid is saved.
+  //   - Design › keyDesignDecisions ← Solution Architecture agent's decisions
+  //   - Discover › scopeInclusions / scopeExclusions ← Transformation Charter scope
+  const gridDrafts = useMemo<Record<string, { rows: Array<Record<string, string>>; sourceLabel: string; noun: string }>>(() => {
+    const drafts: Record<string, { rows: Array<Record<string, string>>; sourceLabel: string; noun: string }> = {};
+    if (phaseId === "design") {
+      const rows = projectArchitectureDecisions(program.rawData);
+      if (rows.length) drafts.keyDesignDecisions = { rows, sourceLabel: "Solution Architecture agent", noun: "decision" };
+    } else if (phaseId === "discover") {
+      const inScope = projectCharterInScope(program.rawData);
+      if (inScope.length) drafts.scopeInclusions = { rows: inScope, sourceLabel: "Transformation Charter", noun: "in-scope item" };
+      const outOfScope = projectCharterOutOfScope(program.rawData);
+      if (outOfScope.length) drafts.scopeExclusions = { rows: outOfScope, sourceLabel: "Transformation Charter", noun: "out-of-scope item" };
+    }
+    return drafts;
+  }, [program.rawData, phaseId]);
 
   // Re-sync the local edit buffer from props only when the *persisted content*
   // actually changes — not on every new program.rawData reference. Background
@@ -331,9 +343,9 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
   // Per-field AI assist: which field is currently generating, and any per-field error.
   const [assistingField, setAssistingField] = useState<string | null>(null);
   const [assistErrors, setAssistErrors] = useState<Record<string, string>>({});
-  // Lets the user hide the "draft decisions from Solution Architecture" banner
-  // without adopting it (e.g. they'd rather type their own).
-  const [decisionDraftDismissed, setDecisionDraftDismissed] = useState(false);
+  // Lets the user hide a projected-draft banner (per grid field id) without
+  // adopting it (e.g. they'd rather type their own).
+  const [dismissedDrafts, setDismissedDrafts] = useState<Record<string, boolean>>({});
   // Debounced auto-save plumbing. `isDirtyRef` lets the persisted-resync effect
   // tell our own save echo (safe to ignore) from an external change (must apply)
   // so it never clobbers in-progress typing. `prevPhaseIdRef` forces a full
@@ -849,15 +861,18 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
                 </div>
                 {field.type === "grid" ? (
                   <>
-                    {field.id === "keyDesignDecisions"
-                      && decisionDraft.length > 0
-                      && !decisionDraftDismissed
-                      && filledRowCount(grids[field.id] ?? [], field.columns ?? []) === 0 ? (
+                    {(() => {
+                      const draft = gridDrafts[field.id];
+                      if (!draft || dismissedDrafts[field.id]
+                        || filledRowCount(grids[field.id] ?? [], field.columns ?? []) !== 0) return null;
+                      // Preview each drafted row by its lead (first) column value.
+                      const leadKey = field.columns?.[0]?.key;
+                      return (
                       <div className="v3-decision-draft" role="note">
                         <div className="v3-decision-draft-head">
                           <span>
-                            ✨ The Solution Architecture agent drafted{" "}
-                            {decisionDraft.length} decision{decisionDraft.length === 1 ? "" : "s"}. Review and edit,
+                            ✨ The {draft.sourceLabel} drafted{" "}
+                            {draft.rows.length} {draft.noun}{draft.rows.length === 1 ? "" : "s"}. Review and edit,
                             or dismiss to enter your own.
                           </span>
                           <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
@@ -867,7 +882,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
                               onClick={() =>
                                 setGrids((current) => ({
                                   ...current,
-                                  [field.id]: parseRows(JSON.stringify(decisionDraft), field.columns ?? []),
+                                  [field.id]: parseRows(JSON.stringify(draft.rows), field.columns ?? []),
                                 }))
                               }
                             >
@@ -876,19 +891,20 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
                             <button
                               type="button"
                               className="v3-field-assist-btn"
-                              onClick={() => setDecisionDraftDismissed(true)}
+                              onClick={() => setDismissedDrafts((current) => ({ ...current, [field.id]: true }))}
                             >
                               Dismiss
                             </button>
                           </div>
                         </div>
                         <ul className="v3-decision-draft-list">
-                          {decisionDraft.map((row, index) => (
-                            <li key={index}>{row.decision}</li>
+                          {draft.rows.map((row, index) => (
+                            <li key={index}>{leadKey ? row[leadKey] : ""}</li>
                           ))}
                         </ul>
                       </div>
-                    ) : null}
+                      );
+                    })()}
                     <StructuredGrid
                       columns={field.columns ?? []}
                       rows={grids[field.id] ?? []}

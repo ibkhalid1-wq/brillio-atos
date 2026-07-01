@@ -23,6 +23,9 @@ export interface ProjectedDecisionRow {
   decision: string;
   optionsConsidered: string;
   rationale: string;
+  // Index signature mirrors GridRow so a projected row is assignable wherever a
+  // generic grid row (Record<string, string>) is expected — e.g. the draft banner.
+  [key: string]: string;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
