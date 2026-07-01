@@ -82,7 +82,6 @@ const DecideView = React.lazy(() => import("@/v3/surfaces/DecideView"));
 import GateReopenModal from "@/v3/components/GateReopenModal";
 import RemediationNoteModal from "@/v3/components/RemediationNoteModal";
 import { getChangeRequests, makeImportChangeRequest } from "@/v3/lib/changeControl";
-import PhaseDataOverwriteModal from "@/v3/components/PhaseDataOverwriteModal";
 const MoreView = React.lazy(() => import("@/v3/surfaces/MoreView"));
 const PipelineView = React.lazy(() => import("@/v3/surfaces/PipelineView"));
 const PortfolioView = React.lazy(() => import("@/v3/surfaces/PortfolioView"));
@@ -253,43 +252,6 @@ function cloneRawProgram(program: ProgramSummary) {
       return wrapProgramState(wrapper, nextInner, usesNestedData);
     },
   };
-}
-
-/**
- * Whether a phase already holds work the planner would overwrite: an existing
- * AI-derived input/artifact schema, captured input values, or produced
- * artifacts. Used to decide whether closing the prior phase should prompt before
- * regenerating this (subsequent) phase's inputs and artifacts.
- */
-function phaseHasExistingData(inner: Record<string, unknown>, phaseId: string): boolean {
-  const store = getDynamicSchemaStore(inner);
-  if ((store.inputFields?.[phaseId]?.length ?? 0) > 0) return true;
-  if ((store.artifacts?.[phaseId]?.length ?? 0) > 0) return true;
-
-  const phaseInputs = inner.phaseInputs;
-  const inputBucket = typeof phaseInputs === "object" && phaseInputs !== null
-    ? (phaseInputs as Record<string, unknown>)[phaseId]
-    : undefined;
-  if (typeof inputBucket === "object" && inputBucket !== null) {
-    const hasValue = Object.entries(inputBucket as Record<string, unknown>).some(([key, value]) =>
-      !key.startsWith("_") && value != null && String(value).trim() !== "");
-    if (hasValue) return true;
-  }
-
-  const phaseArtifacts = inner.phaseArtifacts;
-  const artifactBucket = typeof phaseArtifacts === "object" && phaseArtifacts !== null
-    ? (phaseArtifacts as Record<string, unknown>)[phaseId]
-    : undefined;
-  if (typeof artifactBucket === "object" && artifactBucket !== null) {
-    const hasArtifact = Object.values(artifactBucket as Record<string, unknown>).some((entry) =>
-      typeof entry === "object" && entry !== null
-      && Boolean((entry as Record<string, unknown>).content
-        || (entry as Record<string, unknown>).status === "approved"
-        || (entry as Record<string, unknown>).status === "produced"));
-    if (hasArtifact) return true;
-  }
-
-  return false;
 }
 
 /**
@@ -1176,9 +1138,6 @@ export default function AppShellV3() {
   // When closing a phase whose next phase already holds data, the planner step
   // waits on this prompt: the resolver is fulfilled with the user's choice
   // (overwrite & recreate vs. keep existing) before any regeneration runs.
-  const [overwritePrompt, setOverwritePrompt] = useState<
-    { nextPhaseId: string; resolve: (overwrite: boolean) => void } | null
-  >(null);
   const [remediationPhase, setRemediationPhase] = useState<string | null>(null);
   const [traceRunId, setTraceRunId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ShellToast[]>([]);
@@ -2851,21 +2810,12 @@ export default function AppShellV3() {
       commitNavigation({ surface: "stage", moreView: null, activePhaseId: nextPhaseId, reportId: null });
     }
     if (supabase && nextPhaseId) {
-      // If the next phase already holds inputs/artifacts, regenerating would
-      // overwrite that work — so ask the user first. "Keep existing" leaves the
-      // next phase untouched (the gate is still approved); only "Overwrite &
-      // recreate" runs the planner below. A pristine next phase skips the prompt.
-      const { inner: closingInner } = cloneRawProgram(activeProgram);
-      if (phaseHasExistingData(closingInner, nextPhaseId)) {
-        const overwrite = await new Promise<boolean>((resolve) => {
-          setOverwritePrompt({ nextPhaseId, resolve });
-        });
-        setOverwritePrompt(null);
-        if (!overwrite) {
-          pushV3Toast(`Phase closed. ${nextPhaseId} inputs and artifacts were left unchanged.`, { tone: "info", duration: 4000 });
-          return true;
-        }
-      }
+      // Always let the planner regenerate the next phase — but it only rewrites
+      // the *dynamic* schema (AI-proposed extra input fields / artifacts) for
+      // that phase. The static methodology inputs and artifacts, captured input
+      // values, and user-entered grid rows are all left untouched (the edge
+      // unions grid rows and never clears phaseInputs/phaseArtifacts). So there
+      // is no prompt: regeneration is safe because static data is skipped.
       try {
         // The edge can't import the methodology, so pass the next phase's spine
         // (mandatory exit criteria + recommended agents) for the planner to
@@ -3811,12 +3761,6 @@ export default function AppShellV3() {
         phaseName={gateReopenPhase ? (phaseNameById(activeProgram, gateReopenPhase) ?? gateReopenPhase) : ""}
         onClose={() => setGateReopenPhase(null)}
         onConfirm={handleConfirmGateReopen}
-      />
-      <PhaseDataOverwriteModal
-        open={!!overwritePrompt}
-        phaseName={overwritePrompt ? (phaseNameById(activeProgram, overwritePrompt.nextPhaseId) ?? overwritePrompt.nextPhaseId) : ""}
-        onOverwrite={() => overwritePrompt?.resolve(true)}
-        onKeep={() => overwritePrompt?.resolve(false)}
       />
       <RemediationNoteModal
         open={!!remediationPhase}
