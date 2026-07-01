@@ -156,6 +156,31 @@ describe("assessObjectives", () => {
     expect(result.recommendations.some((r) => r.recommendation === "Add design coverage for REQ-14")).toBe(true);
   });
 
+  it("scores evidence from the real gate-review exit criteria and names an unmet one", () => {
+    const prog = healthyProgram();
+    (prog as unknown as Record<string, unknown>).gateReviews = {
+      strategy: {
+        phaseId: "strategy", phaseName: "Strategy", status: "pending-review",
+        readinessScore: 40, artifactsSummary: [], openDecisions: 0, openRisks: 0,
+        exitCriteriaStatus: [
+          { criterion: "Business case approved", met: true, evidence: "signed" },
+          { criterion: "Objectives defined and measurable", met: false, evidence: null },
+          { criterion: "Sponsor confirmed and committed", met: false, evidence: null },
+        ],
+        recommendation: "", generatedAt: "", approvedAt: null, approvedBy: null, remediationNote: null,
+      },
+    };
+    const result = assessObjectives(prog);
+    const obj = result.objectives[0];
+    const evidenced = obj.components.find((c) => c.key === "evidenced")!;
+    // 1 of 3 mandatory strategy exit criteria met — evidence is the real fraction,
+    // not the phase-progress proxy.
+    expect(evidenced.score).toBeCloseTo(1 / 3, 5);
+    const blocker = obj.blockers.find((b) => b.component === "evidenced");
+    expect(blocker).toBeDefined();
+    expect(blocker!.recommendation).toContain("Objectives defined and measurable");
+  });
+
   it("penalises an objective threatened by an open severe risk", () => {
     const prog = healthyProgram();
     (prog as unknown as Record<string, unknown>).raidEntries = [

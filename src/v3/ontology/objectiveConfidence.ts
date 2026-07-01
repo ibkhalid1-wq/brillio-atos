@@ -10,8 +10,10 @@
  *
  *   measurable   — objective has ≥1 KPI, ideally with baseline + target
  *   delivered    — objective grounds real artifacts that clear a quality bar
- *   evidenced    — delivering phases' mandatory exit criteria are satisfiable,
- *                  minus requirements/benefits traceability gaps
+ *   evidenced    — delivering phases' mandatory exit criteria are actually met
+ *                  (per the real gate reviews), minus requirements/benefits
+ *                  traceability gaps; phases without a gate review yet fall back
+ *                  to a progress proxy
  *   unthreatened — no open, severe risk sits on the chain
  *   progressing  — the delivering phases are advancing on plan
  *
@@ -27,7 +29,7 @@
 import type { ProgramSummary } from "@/new/types";
 import type { ValidationFinding, ValidationSeverity } from "@/v3/lib/crossArtifactValidation";
 import type { ProgramDocument } from "@/v3/lib/programGraph";
-import { EXIT_CRITERIA_LIBRARY } from "@/v3/lib/exitCriteriaLibrary";
+import { getMandatoryCriteria } from "@/v3/lib/exitCriteriaLibrary";
 import {
   DEFAULT_ONTOLOGY_CONFIG,
   COMPONENT_LABEL,
@@ -251,6 +253,18 @@ function scoreObjective(
   return { objectiveId: objective.id, label: objective.label, confidence, band: bandForScore(confidence), components, drivers, blockers };
 }
 
+/** Normalise a criterion string for tolerant matching against a library label. */
+function normaliseCriterion(text: string): string {
+  return text.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/** True when a gate-review criterion refers to the given library exit criterion. */
+function criterionMatches(reviewCriterion: string, libraryLabel: string): boolean {
+  const a = normaliseCriterion(reviewCriterion);
+  const b = normaliseCriterion(libraryLabel);
+  return a === b || a.includes(b) || b.includes(a);
+}
+
 function scoreEvidence(
   program: ProgramSummary,
   graph: ObjectiveSemanticGraph,
@@ -260,12 +274,38 @@ function scoreEvidence(
 ): { score: number; detail: string; recommendation: string; worst?: RelationGap } {
   const phases = program.phases || [];
   const relevant = phases.filter((p) => deliveringPhaseIds.has(p.id));
-  // Base evidence = how far the delivering phases have progressed (a proxy for
-  // exit criteria being satisfiable), enumerated against the exit-criteria library.
-  const mandatory = EXIT_CRITERIA_LIBRARY.filter((c) => c.mandatory && deliveringPhaseIds.has(c.phaseId));
-  const base = relevant.length === 0
+  const gateReviews = program.gateReviews ?? {};
+
+  // Base evidence = the fraction of each delivering phase's *mandatory* exit
+  // criteria that its real gate review marks met. Phases with no gate review yet
+  // fall back to their progress percentage as a proxy, so early phases are not
+  // unfairly zeroed. Each phase contributes equally to the mean.
+  const perPhase: number[] = [];
+  const unmetLabels: string[] = [];
+  let reviewedMandatory = 0;
+  let reviewedMet = 0;
+  for (const phase of relevant) {
+    const mandatory = getMandatoryCriteria(phase.id);
+    const statuses = Array.isArray(gateReviews[phase.id]?.exitCriteriaStatus)
+      ? gateReviews[phase.id]!.exitCriteriaStatus
+      : [];
+    if (mandatory.length > 0 && statuses.length > 0) {
+      let met = 0;
+      for (const crit of mandatory) {
+        const status = statuses.find((s) => criterionMatches(s.criterion, crit.label));
+        if (status?.met) met += 1;
+        else unmetLabels.push(crit.label);
+      }
+      reviewedMandatory += mandatory.length;
+      reviewedMet += met;
+      perPhase.push(met / mandatory.length);
+    } else {
+      perPhase.push(Math.max(0, Math.min(1, (phase.pct ?? 0) / 100)));
+    }
+  }
+  const base = perPhase.length === 0
     ? 0.5
-    : relevant.reduce((s, p) => s + Math.max(0, Math.min(1, (p.pct ?? 0) / 100)), 0) / relevant.length;
+    : perPhase.reduce((s, v) => s + v, 0) / perPhase.length;
 
   // Requirements / benefits traceability gaps directly erode evidence.
   const evidenceGaps = graphGapsFor(graph, objectiveId).filter((g) =>
@@ -276,13 +316,25 @@ function scoreEvidence(
   const worst = [...evidenceGaps]
     .sort((a, b) => severityRank(b.gap!.severity) - severityRank(a.gap!.severity))[0]?.gap;
 
-  const remaining = mandatory.length;
-  const detail = relevant.length === 0
-    ? "No delivering phase identified, so exit-criteria evidence is unknown."
-    : `${remaining} mandatory exit criteria across delivering phases; ${(base * 100).toFixed(0)}% phase progress${penalty ? `, −${(penalty * 100).toFixed(0)}% for traceability gaps` : ""}.`;
-  const recommendation = penalty > 0
-    ? "Close the requirements/benefits traceability gaps and capture exit-criterion evidence."
-    : "Capture evidence against the delivering phases' mandatory exit criteria.";
+  const gapNote = penalty ? `, −${(penalty * 100).toFixed(0)}% for traceability gaps` : "";
+  let detail: string;
+  if (relevant.length === 0) {
+    detail = "No delivering phase identified, so exit-criteria evidence is unknown.";
+  } else if (reviewedMandatory > 0) {
+    detail = `${reviewedMet}/${reviewedMandatory} mandatory exit criteria met across delivering phases${gapNote}.`;
+  } else {
+    detail = `No gate review yet; ${(base * 100).toFixed(0)}% phase progress as an evidence proxy${gapNote}.`;
+  }
+
+  let recommendation: string;
+  if (unmetLabels.length > 0) {
+    const more = unmetLabels.length > 1 ? ` and ${unmetLabels.length - 1} more` : "";
+    recommendation = `Capture evidence for the unmet exit criterion "${unmetLabels[0]}"${more}.`;
+  } else if (penalty > 0) {
+    recommendation = "Close the requirements/benefits traceability gaps and capture exit-criterion evidence.";
+  } else {
+    recommendation = "Capture evidence against the delivering phases' mandatory exit criteria.";
+  }
   return { score, detail, recommendation, worst };
 }
 
