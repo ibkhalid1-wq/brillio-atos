@@ -556,8 +556,6 @@ interface DocumentReviewPanelProps {
     fieldId: string,
     patch: { reviewState?: "approved" | "rejected" | "edited"; editedValue?: string },
   ) => void;
-  onApproveAll: () => void;
-  onRejectAll: () => void;
   onSave: () => void;
   onCancel: () => void;
 }
@@ -568,8 +566,6 @@ export function DocumentReviewPanel({
   lockedPhaseIds,
   saving,
   onUpdateField,
-  onApproveAll,
-  onRejectAll,
   onSave,
   onCancel,
 }: DocumentReviewPanelProps) {
@@ -611,7 +607,7 @@ export function DocumentReviewPanel({
   // Auto-commit once every extracted field has been decided (approved/edited or
   // rejected) — no explicit Save/Cancel. Approved fields persist; if everything
   // was rejected there is nothing to import, so the review just dismisses. A
-  // short debounce lets a burst of decisions (e.g. "Accept all") settle, and the
+  // short debounce lets a burst of rapid per-field decisions settle, and the
   // ref guard ensures it fires exactly once.
   const firedRef = useRef(false);
   // Latch the latest callbacks so the debounce timer below doesn't reset every
@@ -768,26 +764,15 @@ export function DocumentReviewPanel({
               )}
             </div>
 
-            <div style={{ display: "flex", gap: 6 }}>
-              {pendingCount > 0 && (
-                <button
-                  type="button"
-                  className="v3-button ghost"
-                  style={{ fontSize: 11 }}
-                  onClick={onApproveAll}
-                >
-                  Accept all ({pendingCount})
-                </button>
-              )}
-              <button
-                type="button"
-                className="v3-button ghost"
-                style={{ fontSize: 11, color: "var(--v3-text-muted)" }}
-                onClick={onRejectAll}
-              >
-                Reject all
-              </button>
-            </div>
+            {pendingCount > 0 && (
+              // Every field is decided individually — there is deliberately no
+              // batch Accept-all / Reject-all. Forcing a per-field Replace / Merge /
+              // Dismiss keeps the PM accountable for each imported value rather than
+              // rubber-stamping an extraction.
+              <span style={{ fontSize: 11, color: "var(--v3-text-muted)" }} aria-live="polite">
+                {pendingCount} field{pendingCount !== 1 ? "s" : ""} awaiting your decision
+              </span>
+            )}
           </div>
 
           {/* ── Fields grouped by phase ── */}

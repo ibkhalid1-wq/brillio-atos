@@ -964,26 +964,9 @@ export function useDocumentIntelligence({
     );
   }, []);
 
-  // ── approveAll: mark all pending fields as approved ───────────────────────
-  // Skips gate-locked phases: their inputs are frozen and only import on an
-  // explicit per-field override, so "Accept all" never silently unfreezes them.
-  const approveAll = useCallback(() => {
-    const locked = lockedPhaseIdsRef.current;
-    setReviewFields((prev) =>
-      prev.map((f) =>
-        f.mapping.reviewState === "pending" && !locked?.has(f.phaseId)
-          ? { ...f, mapping: { ...f.mapping, reviewState: "approved" } }
-          : f,
-      ),
-    );
-  }, []);
-
-  // ── rejectAll: mark all pending fields as rejected ────────────────────────
-  const rejectAll = useCallback(() => {
-    setReviewFields((prev) =>
-      prev.map((f) => ({ ...f, mapping: { ...f.mapping, reviewState: "rejected" } })),
-    );
-  }, []);
+  // No batch approve/reject: every extracted field must be decided individually
+  // (Replace / Merge / Dismiss) so the PM stays accountable for each imported
+  // value rather than rubber-stamping the whole extraction.
 
   // ── save: persist approved inputs ────────────────────────────────────────
   const save = useCallback(async (
@@ -1057,8 +1040,6 @@ export function useDocumentIntelligence({
     importFile,
     importText,
     updateReviewField,
-    approveAll,
-    rejectAll,
     save,
     reset,
   };

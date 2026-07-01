@@ -78,8 +78,6 @@ export default function DocumentImportPanel({
     importFile,
     importText,
     updateReviewField,
-    approveAll,
-    rejectAll,
     save,
     reset,
   } = useDocumentIntelligence({
@@ -368,8 +366,6 @@ export default function DocumentImportPanel({
           lockedPhaseIds={lockedPhaseIds}
           saving={false}
           onUpdateField={(phaseId, fieldId, patch) => updateReviewField(phaseId, fieldId, patch)}
-          onApproveAll={approveAll}
-          onRejectAll={rejectAll}
           onSave={() => {
             if (onSavePhaseInputs || onSaveAllPhaseInputs) {
               // Prefer batch save to avoid stale closure overwrites across multiple phases
