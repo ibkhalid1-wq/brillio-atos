@@ -926,8 +926,11 @@ select {
   width: auto;
   object-fit: contain;
   flex-shrink: 0;
-  filter: brightness(0) invert(1);
-  opacity: 0.95;
+  /* The asset is a white "brillio" wordmark with brand-green accent dots on a
+     transparent ground. The rail is dark in both light and dark app themes, so
+     the white wordmark reads directly — no invert filter (which used to flatten
+     the green dots to white). Keeps the brand green visible in both modes. */
+  opacity: 1;
 }
 /* ATOS reads identically in both states: same wordmark typography, divided
    from the Brillio logo by a hairline when expanded. */
