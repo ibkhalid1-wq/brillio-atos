@@ -1471,18 +1471,11 @@ export default function StageView({
 
       <div className="v3-phase-main" ref={phaseMainRef}>
       <PhaseFlowOverlay containerRef={phaseMainRef} program={liveProgram ?? program} phaseId={activePhase.id} enabled />
-      {/* LEFT — input fields card. The upload-document action sits at the top of
-          the column (beside the zone label) so it's reachable without expanding
-          the inputs panel; the panel itself holds the field editors. */}
+      {/* LEFT — input fields card. Document import is reached via the "Attach doc"
+          action beside the Inputs-complete metric; the panel itself holds the
+          field editors. */}
       <section className="v3-phase-col v3-phase-col--inputs">
         <div className="v3-zone-label">Inputs</div>
-        {!gateApproved ? (
-          <div className="v3-phase-col-actions">
-            <button type="button" className="v3-button secondary v3-button-inline-xs" onClick={onUploadDocument}>
-              ↑ Import documents
-            </button>
-          </div>
-        ) : null}
         {/* The phase-readiness / conflicts / open-gaps planner banner was removed:
             it duplicated signals already surfaced elsewhere — readiness restates
             the Gate score and readiness rings at the top of this screen, while the
