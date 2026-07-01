@@ -24,6 +24,7 @@ import type { AppView, Milestone, ProgramSummary } from "@/new/types";
 import ProgramAccessPanel from "@/v3/components/ProgramAccessPanel";
 import { ArtifactMapTree } from "@/v3/components/ArtifactMapTree";
 import ProgramGraphPanel from "@/v3/components/ProgramGraphPanel";
+import { OntologyView } from "@/new/pages/OntologyView";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { AdamCard, AdamCardBody, AdamCardHeader } from "@/v3/components/ui/AdamCard";
 import { EmptyState } from "@/v3/components/ui/EmptyState";
@@ -291,6 +292,8 @@ export default function ProgramDetailRouter({
       return <ProgramAccessPanel programId={programId} currentUserId={currentUserId ?? null} />;
     case "decision-audit":
       return <DecisionAuditView program={program} />;
+    case "ontology":
+      return <OntologyView program={program} />;
     case "closure":
       return (
         <ClosureView

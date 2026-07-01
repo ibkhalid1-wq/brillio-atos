@@ -159,6 +159,7 @@ const MORE_ROUTE_MAP: Record<string, V3MoreView> = {
   graph: "program-graph",
   accelerators: "accelerators",
   "decision-audit": "decision-audit",
+  ontology: "ontology",
   access: "access",
   "closure-workspace": "closure",
 };
@@ -183,6 +184,7 @@ const MORE_VIEW_PATHS: Record<V3MoreView, string> = {
   accelerators: "/accelerators",
   access: "/access",
   "decision-audit": "/decision-audit",
+  ontology: "/ontology",
   closure: "/closure-workspace",
 };
 
@@ -327,6 +329,7 @@ const MORE_VIEW_LABELS: Partial<Record<string, string>> = {
   accelerators: "Accelerators",
   access: "Access & Sharing",
   "decision-audit": "Decision Audit",
+  ontology: "Ontology",
   intelligence: "AI Settings",
 };
 

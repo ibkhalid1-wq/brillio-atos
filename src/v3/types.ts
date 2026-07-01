@@ -29,6 +29,7 @@ export type V3MoreView =
   | "program-graph"
   | "accelerators"
   | "decision-audit"
+  | "ontology"
   | "access"
   | "closure";
 

@@ -76,6 +76,7 @@ const WORKSPACE_GROUPS: Array<{
     label: "Governance & Closure",
     tiles: [
       { surface: "programme-health", label: "Programme Health", description: "Health score, benefits and confidence breakdown", icon: "◉", accent: "green" },
+      { view: "ontology", label: "Ontology", description: "Objective-attainment confidence — will the business objectives be met, and what raises that confidence", icon: "⬢", accent: "purple" },
       { view: "decision-audit", label: "Decision Audit", description: "Full decision audit trail and history", icon: "⊟", accent: "amber" },
       { view: "access", label: "Access & Sharing", description: "Invite collaborators and manage admin / editor / viewer roles", icon: "◐", accent: "blue" },
       { view: "closure", label: "Benefits & Closure", description: "Benefits realisation tracking, lessons learned, and programme closure pack", icon: "◈", accent: "green" },
