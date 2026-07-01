@@ -9286,7 +9286,18 @@ button.v3-chip:disabled {
 .v3-grid-input-row {
   display: flex;
   gap: 6px;
-  align-items: center;
+  /* Top-align so cells of differing height (auto-growing text cells) line up at
+     their first line and the remove button sits by the row's top edge. */
+  align-items: flex-start;
+}
+/* Free-text grid cells: grow with content, no manual resize handle or scrollbar. */
+.v3-grid-input-textarea {
+  resize: none;
+  overflow: hidden;
+  min-height: 34px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* Phase input prioritisation banner — "what matters now" */

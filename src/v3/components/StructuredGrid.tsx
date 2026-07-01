@@ -1,5 +1,6 @@
 import React from "react";
 import type { GridColumn } from "@/v3/lib/phaseInputSchema";
+import AutoGrowTextarea from "@/v3/components/ui/AutoGrowTextarea";
 
 /**
  * A single grid row. Always carries a stable `id`; every column value is stored
@@ -151,11 +152,26 @@ export default function StructuredGrid({ columns, rows, onChange, addLabel = "+ 
                 <option value="">—</option>
                 {col.options?.map((option) => <option key={option} value={option}>{option}</option>)}
               </select>
-            ) : (
+            ) : col.type === "number" || col.type === "date" ? (
+              // Single-value controls: a multi-line box makes no sense for them.
               <input
                 key={col.key}
-                type={col.type === "number" ? "number" : col.type === "date" ? "date" : "text"}
+                type={col.type === "number" ? "number" : "date"}
                 className="v3-input"
+                style={col.width ? { width: col.width, flex: "none" } : { flex: 1 }}
+                value={row[col.key] ?? ""}
+                placeholder={col.placeholder ?? col.label}
+                disabled={readOnly}
+                onChange={(event) => updateCell(index, col.key, event.target.value)}
+              />
+            ) : (
+              // Free-text cells auto-grow vertically so long values (e.g. an
+              // agent-drafted decision rationale) are fully visible without a
+              // cramped single line or an inner scrollbar.
+              <AutoGrowTextarea
+                key={col.key}
+                className="v3-input v3-grid-input-textarea"
+                rows={1}
                 style={col.width ? { width: col.width, flex: "none" } : { flex: 1 }}
                 value={row[col.key] ?? ""}
                 placeholder={col.placeholder ?? col.label}

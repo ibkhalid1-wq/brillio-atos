@@ -7,25 +7,9 @@ import { prioritizePhaseFields } from "@/v3/lib/phaseInputPriority";
 import { projectArchitectureDecisions } from "@/v3/lib/designDecisions";
 import StructuredGrid, { type GridRow, parseRows, serializeRows, filledRowCount } from "@/v3/components/StructuredGrid";
 import { V3Select, V3Combobox } from "@/v3/components/ui/V3Dropdown";
+import AutoGrowTextarea from "@/v3/components/ui/AutoGrowTextarea";
 import { PROVENANCE_KEY, parseProvenance, provenanceMatches, type FieldProvenance } from "@/new/lib/fieldProvenance";
 import { EXTRACTION_TYPE_COLORS, EXTRACTION_TYPE_LABELS, confidenceLabel } from "@/new/lib/documentIntelligenceTypes";
-
-// Textarea that grows vertically to fit its content so the full value is always
-// visible without an inner scrollbar. Resizes on every value change — including
-// programmatic ones (AI field-assist) — not just on keystrokes.
-function AutoGrowTextarea({
-  value,
-  ...props
-}: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { value: string }) {
-  const ref = useRef<HTMLTextAreaElement | null>(null);
-  React.useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
-  }, [value]);
-  return <textarea ref={ref} value={value} {...props} />;
-}
 
 export interface FieldAssistRequest {
   fieldId: string;
