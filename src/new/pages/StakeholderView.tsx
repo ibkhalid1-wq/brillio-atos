@@ -3,6 +3,7 @@ import { NotReadyCard } from "@/new/components/ui/NotReadyCard";
 import type { ProgramSummary, StakeholderProfile } from "@/new/types";
 import { RiskBadge } from "@/v3/components/ui/RiskBadge";
 import { confidenceLabel, confidenceTone } from "@/v3/utils";
+import { quadrantStrategy, engagementDelta, needsMovement, isBlindSpot } from "@/v3/lib/stakeholderMap";
 
 interface StakeholderViewProps {
   program: ProgramSummary | null;
@@ -10,7 +11,7 @@ interface StakeholderViewProps {
   onTriggerStakeholders: () => void;
 }
 
-type StakeholderFilter = "all" | "champions" | "at-risk" | "resistant";
+type StakeholderFilter = "all" | "champions" | "movement" | "at-risk" | "resistant" | "unknown";
 
 function initials(name: string): string {
   return name
@@ -23,8 +24,10 @@ function initials(name: string): string {
 
 function filterStakeholders(stakeholders: StakeholderProfile[], filter: StakeholderFilter) {
   if (filter === "champions") return stakeholders.filter((entry) => entry.currentEngagement === "champion");
+  if (filter === "movement") return stakeholders.filter(needsMovement);
   if (filter === "at-risk") return stakeholders.filter((entry) => entry.riskOfDisengagement === "high");
   if (filter === "resistant") return stakeholders.filter((entry) => entry.currentEngagement === "resistant");
+  if (filter === "unknown") return stakeholders.filter(isBlindSpot);
   return stakeholders;
 }
 
@@ -98,6 +101,9 @@ export function StakeholderView({
   }
 
   const confidence = stakeholderConfidence(program);
+  const allStakeholders = program.stakeholders || [];
+  const blindSpotCount = allStakeholders.filter(isBlindSpot).length;
+  const movementCount = allStakeholders.filter(needsMovement).length;
 
   if (!program.stakeholders.length) {
     return (
@@ -127,6 +133,14 @@ export function StakeholderView({
             <div className="adam-body adam-muted">
               {program.stakeholders.length} stakeholders identified across the current transformation context.
             </div>
+            <div className="adam-row" style={{ gap: 8, flexWrap: "wrap" }}>
+              {movementCount ? (
+                <span className="adam-badge amber">{movementCount} need engagement movement</span>
+              ) : null}
+              {blindSpotCount ? (
+                <span className="adam-badge slate">{blindSpotCount} need assessment (unknown)</span>
+              ) : null}
+            </div>
             {program.stakeholderGeneratedAt ? (
               <div className="adam-micro adam-muted">
                 Updated {new Date(program.stakeholderGeneratedAt).toLocaleString()}
@@ -150,8 +164,10 @@ export function StakeholderView({
           {([
             ["all", "All"],
             ["champions", "Champions"],
+            ["movement", "Movement needed"],
             ["at-risk", "At risk"],
             ["resistant", "Resistant"],
+            ["unknown", "Needs assessment"],
           ] as [StakeholderFilter, string][]).map(([id, label]) => (
             <button
               key={id}
@@ -174,13 +190,7 @@ export function StakeholderView({
                 ["low", "medium", "high"] as const
               ).map((influence) => {
                 const matches = stakeholders.filter((entry) => entry.interest === interest && entry.influence === influence);
-                const label = interest === "high" && influence === "high"
-                  ? "Manage closely"
-                  : interest === "high" && influence === "low"
-                    ? "Keep informed"
-                    : interest === "low" && influence === "high"
-                      ? "Keep satisfied"
-                      : "Monitor";
+                const label = quadrantStrategy(influence, interest);
                 return (
                   <div key={`${interest}-${influence}`} className="adam-stakeholder-quadrant">
                     <div className="adam-micro adam-muted">{interest} interest · {influence} influence</div>
@@ -243,8 +253,21 @@ export function StakeholderView({
                   )}
                 </div>
                 <div className="adam-stack" style={{ gap: 6 }}>
-                  <div className="adam-micro adam-muted">Target posture</div>
-                  <div className="adam-body">{entry.targetEngagement}</div>
+                  <div className="adam-micro adam-muted">Engagement plan</div>
+                  {(() => {
+                    const delta = engagementDelta(entry);
+                    if (delta.kind === "unknown") {
+                      return <div className="adam-body"><span className="adam-badge slate">Assess engagement</span> current posture unknown</div>;
+                    }
+                    if (delta.kind === "on-target") {
+                      return <div className="adam-body"><span className="adam-badge green">On target</span> holding at {entry.targetEngagement}</div>;
+                    }
+                    return (
+                      <div className="adam-body">
+                        <span className="adam-badge amber">Move up {delta.steps} {delta.steps === 1 ? "band" : "bands"}</span> {delta.from} → {delta.to}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
