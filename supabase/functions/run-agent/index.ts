@@ -1143,6 +1143,15 @@ const ARTIFACT_INPUT_FLOW: Record<string, string[]> = {
   // validation approach so the sequencing proves outcomes in the right order. It
   // also owns the delivery plan, so it pulls the team/role/risk inputs it needs.
   "strategic-roadmap": ["businessObjective", "sponsor", "industry", "startDate", "targetEndDate", "costAssumption", "constraints", "successMetric", "validationApproach", "teamSize", "keyRisks", "keyRoles"],
+  // Operate's static go-live schema. These agents fall through to the default
+  // context (no dedicated context branch), so — unlike the formal artifacts, which
+  // receive every phase input via buildGroundingFacts — they only see the fields
+  // named here. Mirrors the Operate artifactInputFlow in the client methodology so
+  // the support model, runbook and adoption reporting are grounded on the same
+  // facts the UI declares feed them.
+  "support-model": ["supportModel", "hyperCarePeriod"],
+  "runbook": ["supportModel"],
+  "adoption": ["adoptionBaseline", "goLiveDate"],
 };
 
 /** Stringify a phase-input value (string, number, or grid rows) for the prompt. */

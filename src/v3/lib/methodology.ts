@@ -493,6 +493,23 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       displayName: "Operate",
       description: "Transition to live operation with appropriate support.",
       requiredArtifacts: [],
+      // Operate seeds the go-live / support / adoption facts its agents synthesise
+      // as static methodology inputs, so support-model, runbook and adoption
+      // generation never depends on the planner remembering to ask. Promoted from
+      // the generic dynamic fields the planner was emitting per programme; landed
+      // as required:false so tightening the gate is a deliberate later step
+      // (runPreFlight fails a phase on any blank required field, which would
+      // retroactively regress a programme already in Operate). dynamicSchema stays
+      // true: the planner may still ADD programme-specific fields; static wins on
+      // id collision, and "Named <role>" owner fields resolve from the Mobilise
+      // roster rather than being re-captured here.
+      //
+      // Each artifactInputFlow target is a *renderable, fall-through* Operate agent
+      // whose prompt the edge grounds from these inputs (kept in sync with the edge
+      // ARTIFACT_INPUT_FLOW). health-heatmap is deliberately NOT wired: its edge
+      // branch grades programme health from the phase/gate state and strategy KPIs,
+      // not from a manually-entered adoption baseline, so gating it on these inputs
+      // would be a flow with no real consumer.
       dynamicSchema: true,
       mandatoryExitCriteriaTemplates: [
         "Live operation stable for agreed hyper-care period",
@@ -502,6 +519,29 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       entryGuards: ["Build gate approved"],
       recommendedAgents: ["runbook", "support-model", "narrative", "adoption", "health-heatmap"],
       typicalDurationWeeks: { min: 4, max: 12 },
+      inputFields: [
+        { id: "goLiveDate", label: "Go-live date", type: "date", required: false, hint: "Actual (or planned) production cutover date — anchors the hyper-care window and adoption baseline." },
+        { id: "hyperCarePeriod", label: "Hyper-care period", type: "text", required: false, placeholder: "e.g. 4 weeks post go-live", hint: "How long heightened support runs before steady-state operations take over." },
+        { id: "supportModel", label: "Support model & handover", type: "textarea", required: false, usedByArtifacts: ["support-model", "runbook"], placeholder: "Support tiers, ownership, SLAs, and how support is handed to operations", hint: "e.g. L1 service desk, L2 product team, L3 vendor; P1 response 30m; handover to Ops at end of hyper-care." },
+        {
+          id: "adoptionBaseline",
+          label: "Adoption metrics baseline",
+          type: "grid",
+          required: false,
+          usedByArtifacts: ["adoption"],
+          hint: "The adoption metrics tracked from go-live, with their starting baseline and target — this is what adoption reporting trends against.",
+          columns: [
+            { key: "metric", label: "Adoption metric", type: "text" },
+            { key: "baseline", label: "Baseline at go-live", type: "text" },
+            { key: "target", label: "Target", type: "text" },
+          ],
+        },
+      ],
+      artifactInputFlow: {
+        "support-model": ["supportModel", "hyperCarePeriod"],
+        "runbook": ["supportModel"],
+        "adoption": ["adoptionBaseline", "goLiveDate"],
+      },
     },
     {
       id: "govern",
@@ -537,6 +577,21 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       displayName: "Value Realize",
       description: "Formally measure and document benefits realisation.",
       requiredArtifacts: [],
+      // Value Realize seeds the closure facts its agents synthesise — realised
+      // benefits measured against baseline, lessons learned, and sponsor closure
+      // sign-off — as static methodology inputs, so closure never depends on the
+      // planner remembering to ask. Landed as required:false for the same
+      // gate-safety reason as Operate; dynamicSchema stays true for programme-
+      // specific additions (static wins on id collision).
+      //
+      // Only benefits-tracker is in artifactInputFlow because it is the only
+      // *renderable* Value Realize phase deliverable. The closure narrative is a
+      // program-level briefing (dropped from every phase's artifact set), so a
+      // "narrative" flow target would dangle with no chip to anchor or gate. The
+      // narrative agent already receives the full phaseInputs blob at generation,
+      // so lessonsLearned / closureApproval reach it without a phase-chip edge;
+      // they are retained as inputs (documented via usedByArtifacts, and mirroring
+      // the mandatory closure exit criteria) rather than dropped.
       dynamicSchema: true,
       mandatoryExitCriteriaTemplates: [
         "Benefits measured against baseline",
@@ -546,6 +601,27 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       entryGuards: ["Optimize gate approved"],
       recommendedAgents: ["narrative", "benefits-tracker"],
       typicalDurationWeeks: { min: 2, max: 8 },
+      inputFields: [
+        {
+          id: "realisedBenefits",
+          label: "Realised benefits vs baseline",
+          type: "grid",
+          required: false,
+          usedByArtifacts: ["benefits-tracker"],
+          hint: "Each target benefit with its baseline, target, and the actual value measured at closure — this is what benefits realisation is scored against.",
+          columns: [
+            { key: "benefit", label: "Benefit", type: "text" },
+            { key: "baseline", label: "Baseline", type: "text" },
+            { key: "target", label: "Target", type: "text" },
+            { key: "actual", label: "Actual at closure", type: "text" },
+          ],
+        },
+        { id: "lessonsLearned", label: "Lessons learned", type: "textarea", required: false, usedByArtifacts: ["narrative"], placeholder: "What worked, what didn't, and what to carry into the next programme", hint: "The retrospective that closes the programme — feeds the closure narrative." },
+        { id: "closureApproval", label: "Sponsor closure sign-off", type: "select", required: false, usedByArtifacts: ["narrative"], options: ["Yes", "No"], hint: "Has the executive sponsor formally approved programme closure? Mirrors the mandatory closure exit criterion." },
+      ],
+      artifactInputFlow: {
+        "benefits-tracker": ["realisedBenefits"],
+      },
     },
   ],
 };

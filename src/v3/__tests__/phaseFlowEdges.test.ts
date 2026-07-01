@@ -1,6 +1,7 @@
 import { derivePhaseFlowEdges, getArtifactInputFields, getFillableArtifactInputFields, artifactReferenceSatisfied } from "@/v3/lib/phaseFlowEdges";
 import { getPhaseArtifactIds } from "@/v3/lib/phaseArtifacts";
 import { PHASE_INPUT_SCHEMAS, resolveRosterField } from "@/v3/lib/phaseInputSchema";
+import { ATOS_STANDARD } from "@/v3/lib/methodology";
 
 // Strategy is the only static phase (a hand-declared field→artifact map +
 // methodology artifactInputFlow), so the static-target behaviour is asserted
@@ -88,15 +89,16 @@ describe("getArtifactInputFields", () => {
     );
   });
 
-  it("returns no fields for a dynamic phase with no store (nothing to wait on)", () => {
-    // operate is dynamic-only (no static schema/flow), so without a store there is
-    // nothing declared to wait on.
-    expect(getArtifactInputFields("operate", "runbook")).toEqual([]);
+  it("returns no fields for a store-only phase with no store (nothing to wait on)", () => {
+    // A phase carrying no static schema/flow (modelled here by a synthetic id so it
+    // stays store-only even as real phases gain a static spine) has nothing
+    // declared to wait on until the programme's dynamicSchema supplies it.
+    expect(getArtifactInputFields("custom-phase", "runbook")).toEqual([]);
   });
 
-  it("reads declared fields from the dynamic schema store for a dynamic phase", () => {
-    const store = { artifactInputFlow: { operate: { runbook: ["sponsorTier", "raciOwner"] } } };
-    expect(new Set(getArtifactInputFields("operate", "runbook", store))).toEqual(
+  it("reads declared fields from the dynamic schema store for a store-only phase", () => {
+    const store = { artifactInputFlow: { "custom-phase": { runbook: ["sponsorTier", "raciOwner"] } } };
+    expect(new Set(getArtifactInputFields("custom-phase", "runbook", store))).toEqual(
       new Set(["sponsorTier", "raciOwner"]),
     );
   });
@@ -109,37 +111,37 @@ describe("getArtifactInputFields", () => {
 // returns only the grounding inputs that exist as fillable fields in the schema.
 describe("getFillableArtifactInputFields", () => {
   it("drops grounding inputs that have no fillable field in the phase schema", () => {
-    // operate is a purely dynamic phase (no static schema/flow), so the only
-    // grounding comes from the store. The planner wired the artifact to two
+    // A store-only phase (synthetic id so its grounding stays purely dynamic even
+    // as real phases gain a static spine): the planner wired the artifact to two
     // owner/lead fields (roster-resolved, dropped from the rendered inputs) plus
     // one genuinely typed input.
     const store = {
       inputFields: {
-        operate: [
+        "custom-phase": [
           { id: "supportCadence", label: "Support cadence", type: "textarea" as const, required: true },
         ],
       },
       artifacts: {
-        operate: [{ id: "runbook", label: "Runbook", description: "" }],
+        "custom-phase": [{ id: "runbook", label: "Runbook", description: "" }],
       },
       artifactInputFlow: {
-        operate: { runbook: ["incidentOwner", "opsLead", "supportCadence"] },
+        "custom-phase": { runbook: ["incidentOwner", "opsLead", "supportCadence"] },
       },
     };
     // Raw declared set includes the roster-resolved owner/lead fields…
-    expect(new Set(getArtifactInputFields("operate", "runbook", store))).toEqual(
+    expect(new Set(getArtifactInputFields("custom-phase", "runbook", store))).toEqual(
       new Set(["incidentOwner", "opsLead", "supportCadence"]),
     );
     // …but only the genuinely fillable field gates generation.
-    expect(getFillableArtifactInputFields("operate", "runbook", store)).toEqual(["supportCadence"]);
+    expect(getFillableArtifactInputFields("custom-phase", "runbook", store)).toEqual(["supportCadence"]);
   });
 
   it("returns nothing to gate when every grounding input is roster-resolved", () => {
     const store = {
-      artifacts: { operate: [{ id: "runbook", label: "Runbook", description: "" }] },
-      artifactInputFlow: { operate: { runbook: ["incidentOwner", "opsLead"] } },
+      artifacts: { "custom-phase": [{ id: "runbook", label: "Runbook", description: "" }] },
+      artifactInputFlow: { "custom-phase": { runbook: ["incidentOwner", "opsLead"] } },
     };
-    expect(getFillableArtifactInputFields("operate", "runbook", store)).toEqual([]);
+    expect(getFillableArtifactInputFields("custom-phase", "runbook", store)).toEqual([]);
   });
 
   it("keeps real static fields (parity with the declared set on a static phase)", () => {
@@ -398,6 +400,126 @@ describe("build static delivery schema", () => {
       expect(grounded).toContain(field.id);
     }
   });
+});
+
+// Operate now carries a static go-live / support / adoption schema: the support
+// model the support-model and runbook agents synthesise, and the adoption
+// baseline the adoption reporting trends against. Each grounds a *renderable,
+// fall-through* Operate agent via a static artifactInputFlow, so generation never
+// waits on the planner even before the programme reaches Operate. health-heatmap
+// is intentionally excluded — its agent grades health from phase/gate state, not
+// from these inputs.
+describe("operate static go-live schema", () => {
+  it("declares the support/adoption inputs grounding the operate artifacts without a store", () => {
+    expect(new Set(getArtifactInputFields("operate", "support-model"))).toEqual(
+      new Set(["supportModel", "hyperCarePeriod"]),
+    );
+    expect(getArtifactInputFields("operate", "runbook")).toEqual(["supportModel"]);
+    expect(new Set(getArtifactInputFields("operate", "adoption"))).toEqual(
+      new Set(["adoptionBaseline", "goLiveDate"]),
+    );
+  });
+
+  it("does not gate health-heatmap on the adoption inputs (it grades from phase/gate state)", () => {
+    expect(getArtifactInputFields("operate", "health-heatmap")).toEqual([]);
+  });
+
+  it("keeps the static inputs fillable (they are real typed fields, not roster-resolved owners)", () => {
+    expect(new Set(getFillableArtifactInputFields("operate", "support-model"))).toEqual(
+      new Set(["supportModel", "hyperCarePeriod"]),
+    );
+  });
+
+  it("draws no flow edge until the artifacts actually render (dynamic artifact set)", () => {
+    expect(derivePhaseFlowEdges("operate", ["supportModel", "adoptionBaseline"])).toEqual([]);
+  });
+
+  it("wires the static inputs to the artifacts once they render", () => {
+    const store = {
+      artifacts: {
+        operate: [
+          { id: "support-model", label: "Support Model", description: "" },
+          { id: "adoption", label: "Adoption", description: "" },
+        ],
+      },
+    };
+    const edges = derivePhaseFlowEdges("operate", ["supportModel", "hyperCarePeriod", "adoptionBaseline", "goLiveDate"], store);
+    expect(edges).toEqual(
+      expect.arrayContaining([
+        { from: "supportModel", to: "support-model" },
+        { from: "hyperCarePeriod", to: "support-model" },
+        { from: "adoptionBaseline", to: "adoption" },
+        { from: "goLiveDate", to: "adoption" },
+      ]),
+    );
+  });
+
+  it("flows every static input field into at least one artifact — no dangling inputs", () => {
+    const grounded = new Set([
+      ...getArtifactInputFields("operate", "support-model"),
+      ...getArtifactInputFields("operate", "runbook"),
+      ...getArtifactInputFields("operate", "adoption"),
+    ]);
+    for (const field of PHASE_INPUT_SCHEMAS.operate.fields) {
+      expect(grounded).toContain(field.id);
+    }
+  });
+});
+
+// Value Realize now carries a static closure schema. Only benefits-tracker is
+// wired into the phase-chip artifactInputFlow — it is the only renderable Value
+// Realize deliverable. The closure inputs (lessons learned, sponsor sign-off)
+// feed the program-level narrative, which is not a phase chip, so they are
+// captured as inputs (documented via usedByArtifacts) rather than gating a chip.
+describe("valuerealize static closure schema", () => {
+  it("grounds the benefits-tracker on the realised-benefits baseline without a store", () => {
+    expect(getArtifactInputFields("valuerealize", "benefits-tracker")).toEqual(["realisedBenefits"]);
+  });
+
+  it("keeps the realised-benefits input fillable (a real typed grid field)", () => {
+    expect(getFillableArtifactInputFields("valuerealize", "benefits-tracker")).toEqual(["realisedBenefits"]);
+  });
+
+  it("wires the realised-benefits input to the tracker once it renders", () => {
+    const store = {
+      artifacts: {
+        valuerealize: [{ id: "benefits-tracker", label: "Benefits Tracker", description: "" }],
+      },
+    };
+    const edges = derivePhaseFlowEdges("valuerealize", ["realisedBenefits", "lessonsLearned", "closureApproval"], store);
+    expect(edges).toEqual([{ from: "realisedBenefits", to: "benefits-tracker" }]);
+  });
+
+  it("leaves no orphaned input — each either grounds a chip or names its non-chip consumer", () => {
+    // realisedBenefits grounds the benefits-tracker chip; the closure inputs feed
+    // the program-level narrative (declared via usedByArtifacts), which is not a
+    // phase chip. No input is silently captured with no downstream consumer.
+    const grounded = new Set(getArtifactInputFields("valuerealize", "benefits-tracker"));
+    for (const field of PHASE_INPUT_SCHEMAS.valuerealize.fields) {
+      const hasConsumer = grounded.has(field.id) || (field.usedByArtifacts?.length ?? 0) > 0;
+      expect(hasConsumer).toBe(true);
+    }
+  });
+});
+
+// The user's rule when building the static spine: "make sure the input to
+// artifact flows also exist." Every artifactId a phase declares in its
+// artifactInputFlow must be a *renderable* phase artifact — otherwise the flow
+// dangles (no chip to anchor the edge, and the Generate gate can never clear).
+// The one trap is the program-level narrative, which every phase's artifact set
+// deliberately drops; wiring it would silently break the flow.
+describe("static artifactInputFlow targets are renderable phase artifacts", () => {
+  for (const phase of ATOS_STANDARD.phases) {
+    const flow = phase.artifactInputFlow ?? {};
+    for (const artifactId of Object.keys(flow)) {
+      it(`${phase.id}: "${artifactId}" renders as a phase artifact`, () => {
+        // Force the artifact into the phase's set the way the planner would, then
+        // assert it survives — a non-renderable id (e.g. narrative) is dropped.
+        const store = { artifacts: { [phase.id]: [{ id: artifactId, label: artifactId, description: "" }] } };
+        expect(getPhaseArtifactIds(phase.id, store)).toContain(artifactId);
+      });
+    }
+  }
 });
 
 // An artifact-reference input names an upstream deliverable the programme already
