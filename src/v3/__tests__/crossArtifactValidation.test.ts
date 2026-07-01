@@ -422,4 +422,10 @@ describe("decideValidation — triggering framework", () => {
     expect(d.domains).toContain("benefits-traceability");
     expect(d.domains).not.toContain("stakeholder-readiness");
   });
+
+  it("re-validates governance when a gate review or sign-off is edited", () => {
+    const d = decideValidation("input_change", [{ field: "design.gateReview.status", changeType: "changed" }]);
+    expect(d.shouldValidate).toBe(true);
+    expect(d.domains).toContain("governance");
+  });
 });

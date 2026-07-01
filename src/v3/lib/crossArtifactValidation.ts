@@ -655,6 +655,9 @@ const MATERIAL_FIELD_HINTS = [
   "stakeholder",
   "milestone",
   "workstream",
+  "gate",
+  "signoff",
+  "approval",
 ];
 
 /** Maps a changed-input field to the validation domains it can invalidate. */
@@ -676,6 +679,9 @@ const FIELD_DOMAIN_HINTS: Array<[string, ValidationDomain]> = [
   ["regulat", "risk-controls"],
   ["stakeholder", "stakeholder-readiness"],
   ["milestone", "delivery-readiness"],
+  ["gate", "governance"],
+  ["signoff", "governance"],
+  ["approval", "governance"],
 ];
 
 export type ValidationTriggerEvent =
