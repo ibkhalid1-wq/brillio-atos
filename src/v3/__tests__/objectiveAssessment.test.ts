@@ -193,6 +193,24 @@ describe("assessObjectives", () => {
     expect(obj.blockers.some((b) => b.component === "unthreatened")).toBe(true);
   });
 
+  it("cites the KPI behind the measurable component and the finding behind an evidence blocker", () => {
+    const result = assessObjectives(healthyProgram({}, 80), { findings: [requirementFinding] });
+    const obj = result.objectives[0];
+    // The measurable component is traceable to its KPI node.
+    const measurable = obj.components.find((c) => c.key === "measurable")!;
+    expect(measurable.citations.length).toBeGreaterThanOrEqual(1);
+    expect(measurable.citations.every((c) => c.kind === "kpi")).toBe(true);
+    // The evidence blocker cites the specific validation finding that eroded it.
+    const evidenceBlocker = obj.blockers.find((b) => b.component === "evidenced")!;
+    expect(evidenceBlocker.citations.some((c) => c.kind === "finding" && c.ref === "rc-req14")).toBe(true);
+  });
+
+  it("cites the delivering phase behind the evidenced component", () => {
+    const result = assessObjectives(healthyProgram());
+    const evidenced = result.objectives[0].components.find((c) => c.key === "evidenced")!;
+    expect(evidenced.citations.some((c) => c.kind === "phase" && c.ref === "strategy")).toBe(true);
+  });
+
   it("ranks recommendations by expected gain, de-duplicated", () => {
     const result = assessObjectives(healthyProgram({ kpis: JSON.stringify([]) }), { findings: [requirementFinding] });
     const gains = result.recommendations.map((r) => r.expectedGain);

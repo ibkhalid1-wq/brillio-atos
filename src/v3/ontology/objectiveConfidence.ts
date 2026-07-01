@@ -51,6 +51,19 @@ import {
 
 export type { ConfidenceBand, ComponentKey } from "@/v3/ontology/ontologyConfig";
 
+/**
+ * A traceable reference from a score back to the evidence that produced it — a
+ * graph node (KPI/artifact/risk), a delivering phase, or a validation finding.
+ * Explainability > Trust: every number can be audited to its source.
+ */
+export interface Citation {
+  kind: "kpi" | "artifact" | "risk" | "phase" | "finding";
+  /** The cited id: a graph node id, a phaseId, or a validation findingId. */
+  ref: string;
+  /** Human-readable label for display. */
+  label: string;
+}
+
 export interface ConfidenceComponent {
   key: ComponentKey;
   label: string;
@@ -62,6 +75,8 @@ export interface ConfidenceComponent {
   contribution: number;
   status: "good" | "warn" | "poor";
   detail: string;
+  /** Sources this sub-score was derived from. */
+  citations: Citation[];
 }
 
 export interface ConfidenceBlocker {
@@ -75,6 +90,8 @@ export interface ConfidenceBlocker {
   component: ComponentKey;
   /** Objective this blocker belongs to; "*" for programme-wide. */
   objectiveId: string;
+  /** Sources that justify this blocker. */
+  citations: Citation[];
 }
 
 export interface ObjectiveConfidence {
@@ -130,6 +147,16 @@ function nodeOf(graph: ObjectiveSemanticGraph, id: string): SemanticNode | undef
   return graph.nodes.find((n) => n.id === id);
 }
 
+/** Cite a graph node by id, using its label where resolvable. */
+function nodeCitation(graph: ObjectiveSemanticGraph, id: string, kind: Citation["kind"]): Citation {
+  return { kind, ref: id, label: nodeOf(graph, id)?.label ?? id };
+}
+
+/** Cite the validation finding behind a gap, when it carries one. */
+function gapCitation(gap: RelationGap): Citation | null {
+  return gap.findingId ? { kind: "finding", ref: gap.findingId, label: gap.issue } : null;
+}
+
 /**
  * Score one objective across the five components and derive its blockers.
  */
@@ -143,28 +170,29 @@ function scoreObjective(
   const drivers: string[] = [];
   const components: ConfidenceComponent[] = [];
 
-  const pushComponent = (key: ComponentKey, score: number, detail: string) => {
+  const pushComponent = (key: ComponentKey, score: number, detail: string, citations: Citation[] = []) => {
     const clamped = Math.max(0, Math.min(1, score));
     const weight = config.weights[key];
     components.push({
       key, label: COMPONENT_LABEL[key], score: clamped, weight,
-      contribution: Math.round(clamped * weight * 100), status: statusForScore(clamped, config), detail,
+      contribution: Math.round(clamped * weight * 100), status: statusForScore(clamped, config), detail, citations,
     });
     if (clamped >= config.status.good) drivers.push(`${COMPONENT_LABEL[key]}: ${detail}`);
     return clamped;
   };
 
-  const addBlocker = (key: ComponentKey, subScore: number, label: string, detail: string, recommendation: string) => {
+  const addBlocker = (key: ComponentKey, subScore: number, label: string, detail: string, recommendation: string, citations: Citation[] = []) => {
     const gain = Math.round(config.weights[key] * (1 - Math.max(0, Math.min(1, subScore))) * 100);
     if (gain <= 0) return;
     blockers.push({
       id: `${objective.id}:${key}`, label, detail, recommendation,
-      expectedGain: gain, severity: severityForGain(gain), component: key, objectiveId: objective.id,
+      expectedGain: gain, severity: severityForGain(gain), component: key, objectiveId: objective.id, citations,
     });
   };
 
   // ── measurable ──────────────────────────────────────────────────────────
   const measures = relationsFrom(graph, objective.id, "measured-by");
+  const kpiCitations = measures.map((rel) => nodeCitation(graph, rel.to, "kpi"));
   let measurable: number;
   if (measures.length === 0) {
     measurable = 0;
@@ -176,17 +204,20 @@ function scoreObjective(
     const healthy = measures.filter((rel) => !rel.gap).length;
     measurable = healthy / measures.length;
     pushComponent("measurable", measurable,
-      `${healthy}/${measures.length} linked KPIs have a baseline and target.`);
+      `${healthy}/${measures.length} linked KPIs have a baseline and target.`, kpiCitations);
     if (measurable < 1) {
+      // Cite the specific KPIs that are missing a baseline or target.
+      const incomplete = measures.filter((rel) => rel.gap).map((rel) => nodeCitation(graph, rel.to, "kpi"));
       addBlocker("measurable", measurable, "Some KPIs lack a baseline or target",
         `${measures.length - healthy} of ${measures.length} KPIs are missing a baseline or target.`,
-        "Complete baseline and target values so attainment can be verified.");
+        "Complete baseline and target values so attainment can be verified.", incomplete);
     }
   }
 
   // ── delivered ───────────────────────────────────────────────────────────
   const deliveries = relationsFrom(graph, objective.id, "delivered-by");
   const deliveryArtifacts = deliveries.map((rel) => nodeOf(graph, rel.to)).filter((n): n is SemanticNode => !!n);
+  const artifactCitations = deliveryArtifacts.map((a) => ({ kind: "artifact" as const, ref: a.id, label: a.label }));
   let delivered: number;
   const deliveryGaps = deliveries.filter((rel) => rel.gap);
   if (deliveryArtifacts.length === 0) {
@@ -202,14 +233,22 @@ function scoreObjective(
     // its severity and the finding's own confidence, capped by maxGapPenalty.
     const severePenalty = weightedGapPenalty(deliveryGaps.map((g) => g.gap!), config);
     delivered = Math.max(0, avg - severePenalty);
+    // Cite the delivering artifacts plus any findings behind the gaps.
+    const deliveredCitations = [
+      ...artifactCitations,
+      ...deliveryGaps.map((g) => gapCitation(g.gap!)).filter((c): c is Citation => !!c),
+    ];
     pushComponent("delivered", delivered,
-      `${deliveryArtifacts.length} artifact(s), avg quality ${(avg * 100).toFixed(0)}%${severePenalty ? `, −${(severePenalty * 100).toFixed(0)}% for gaps` : ""}.`);
+      `${deliveryArtifacts.length} artifact(s), avg quality ${(avg * 100).toFixed(0)}%${severePenalty ? `, −${(severePenalty * 100).toFixed(0)}% for gaps` : ""}.`,
+      deliveredCitations);
     if (delivered < config.status.good) {
       const worst = deliveryGaps[0];
+      const worstCitation = worst ? gapCitation(worst.gap!) : null;
       addBlocker("delivered", delivered,
         worst ? "Delivery gap on objective chain" : "Delivering artifacts are below quality",
         worst ? worst.gap!.issue : `Average artifact quality is ${(avg * 100).toFixed(0)}%.`,
-        worst ? worst.gap!.recommendation : "Improve or regenerate the low-quality delivering artifacts.");
+        worst ? worst.gap!.recommendation : "Improve or regenerate the low-quality delivering artifacts.",
+        worstCitation ? [worstCitation] : artifactCitations);
     }
   }
 
@@ -217,34 +256,41 @@ function scoreObjective(
   const deliveringPhaseIds = new Set(deliveryArtifacts.map((a) => a.phaseId).filter((p): p is string => !!p));
   if (objective.phaseId) deliveringPhaseIds.add(objective.phaseId);
   const evidenced = scoreEvidence(program, graph, objective.id, deliveringPhaseIds, config);
-  pushComponent("evidenced", evidenced.score, evidenced.detail);
+  pushComponent("evidenced", evidenced.score, evidenced.detail, evidenced.citations);
   if (evidenced.score < config.status.good) {
     // Prefer the specific traceability gap (e.g. "REQ-14 has no design coverage")
     // over a generic evidence prompt, so the top recommendation is actionable.
+    const worstCitation = evidenced.worst ? gapCitation(evidenced.worst) : null;
     addBlocker("evidenced", evidenced.score,
       evidenced.worst ? "Requirement/benefit not traceable" : "Objective evidence is thin",
       evidenced.worst ? evidenced.worst.issue : evidenced.detail,
-      evidenced.worst ? evidenced.worst.recommendation : evidenced.recommendation);
+      evidenced.worst ? evidenced.worst.recommendation : evidenced.recommendation,
+      worstCitation ? [worstCitation] : evidenced.citations);
   }
 
   // ── unthreatened ────────────────────────────────────────────────────────
   const threats = relationsFrom(graph, objective.id, "threatened-by");
+  const riskCitations = threats.map((rel) => nodeCitation(graph, rel.to, "risk"));
   const unthreatened = Math.max(0, 1 - Math.min(1, threats.length * config.riskPenaltyUnit));
   pushComponent("unthreatened", unthreatened,
-    threats.length === 0 ? "No open severe risk on the objective." : `${threats.length} open severe risk(s) threaten the objective.`);
+    threats.length === 0 ? "No open severe risk on the objective." : `${threats.length} open severe risk(s) threaten the objective.`,
+    riskCitations);
   if (threats.length > 0) {
     const first = nodeOf(graph, threats[0].to);
     addBlocker("unthreatened", unthreatened, "Objective is threatened by open risk(s)",
       `${threats.length} open severe risk(s), e.g. "${first?.label ?? "risk"}".`,
-      "Mitigate or close the severe risks threatening this objective.");
+      "Mitigate or close the severe risks threatening this objective.", riskCitations);
   }
 
   // ── progressing ─────────────────────────────────────────────────────────
   const progressing = scoreProgress(program, deliveringPhaseIds);
-  pushComponent("progressing", progressing.score, progressing.detail);
+  const phaseCitations = (program.phases || [])
+    .filter((p) => deliveringPhaseIds.has(p.id))
+    .map((p) => ({ kind: "phase" as const, ref: p.id, label: p.displayName ?? p.id }));
+  pushComponent("progressing", progressing.score, progressing.detail, phaseCitations);
   if (progressing.score < config.status.good) {
     addBlocker("progressing", progressing.score, "Delivering phases are behind",
-      progressing.detail, "Accelerate the delivering phases or re-baseline the plan.");
+      progressing.detail, "Accelerate the delivering phases or re-baseline the plan.", phaseCitations);
   }
 
   const confidence = Math.round(components.reduce((sum, c) => sum + c.score * c.weight, 0) * 100);
@@ -271,10 +317,12 @@ function scoreEvidence(
   objectiveId: string,
   deliveringPhaseIds: Set<string>,
   config: OntologyConfig,
-): { score: number; detail: string; recommendation: string; worst?: RelationGap } {
+): { score: number; detail: string; recommendation: string; worst?: RelationGap; citations: Citation[] } {
   const phases = program.phases || [];
   const relevant = phases.filter((p) => deliveringPhaseIds.has(p.id));
   const gateReviews = program.gateReviews ?? {};
+  // Cite each delivering phase (its gate review is the evidence source).
+  const citations: Citation[] = relevant.map((p) => ({ kind: "phase", ref: p.id, label: p.displayName ?? p.id }));
 
   // Base evidence = the fraction of each delivering phase's *mandatory* exit
   // criteria that its real gate review marks met. Phases with no gate review yet
@@ -312,6 +360,11 @@ function scoreEvidence(
     g.kind === "satisfied-by" || (g.kind === "measured-by" && g.gap));
   const penalty = weightedGapPenalty(evidenceGaps.map((g) => g.gap!), config);
   const score = Math.max(0, base - penalty);
+  // Fold the findings behind traceability gaps into the citation trail.
+  for (const g of evidenceGaps) {
+    const c = gapCitation(g.gap!);
+    if (c) citations.push(c);
+  }
   // Surface the most severe traceability gap so the blocker can name it.
   const worst = [...evidenceGaps]
     .sort((a, b) => severityRank(b.gap!.severity) - severityRank(a.gap!.severity))[0]?.gap;
@@ -335,7 +388,7 @@ function scoreEvidence(
   } else {
     recommendation = "Capture evidence against the delivering phases' mandatory exit criteria.";
   }
-  return { score, detail, recommendation, worst };
+  return { score, detail, recommendation, worst, citations };
 }
 
 function graphGapsFor(graph: ObjectiveSemanticGraph, objectiveId: string): SemanticRelation[] {

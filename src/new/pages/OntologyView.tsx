@@ -7,6 +7,7 @@ import {
   type ConfidenceBand,
   type ConfidenceComponent,
   type ConfidenceBlocker,
+  type Citation,
 } from "@/v3/ontology";
 import {
   runDeterministicValidation,
@@ -47,6 +48,36 @@ const SEVERITY_COLOR: Record<ConfidenceBlocker["severity"], string> = {
   medium: "#f59e0b",
   low: "#94a3b8",
 };
+
+const CITATION_ICON: Record<Citation["kind"], string> = {
+  kpi: "📊",
+  artifact: "📄",
+  risk: "⚠︎",
+  phase: "◧",
+  finding: "🔗",
+};
+
+/**
+ * The evidence trail behind a score or blocker — every number can be audited to
+ * the KPI, artifact, risk, phase, or validation finding that produced it.
+ */
+function CitationTrail({ citations }: { citations: Citation[] }) {
+  if (!citations.length) return null;
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
+      {citations.map((c, i) => (
+        <span
+          key={`${c.kind}:${c.ref}:${i}`}
+          title={`${c.kind}: ${c.label}`}
+          className="v3-chip muted"
+          style={{ fontSize: 10, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+        >
+          {CITATION_ICON[c.kind]} {c.label}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 function BandChip({ band }: { band: ConfidenceBand }) {
   return (
@@ -130,6 +161,7 @@ function BlockerRow({ blocker }: { blocker: ConfidenceBlocker }) {
         <div style={{ fontSize: 13, fontWeight: 600, color: "var(--v3-text-primary)" }}>{blocker.label}</div>
         <div style={{ fontSize: 12, color: "var(--v3-text-secondary)", marginTop: 2 }}>{blocker.detail}</div>
         <div style={{ fontSize: 12, color: "var(--v3-accent)", marginTop: 4 }}>→ {blocker.recommendation}</div>
+        <CitationTrail citations={blocker.citations} />
       </div>
       <span className="v3-chip muted" style={{ fontSize: 11, flexShrink: 0, whiteSpace: "nowrap" }}>+{blocker.expectedGain} pts</span>
     </div>
