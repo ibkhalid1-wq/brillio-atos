@@ -6017,6 +6017,19 @@ semantic traceability the deterministic layer cannot judge:
 - Stakeholder change actions or interventions that do not address the stated impact.
 - Scope present in objectives but absent from workstreams.
 
+BACKWARD PHASE FIDELITY — the phases are ordered in the ATOS sequence, each
+carrying its objective, exit criteria and artifacts. For every phase, judge
+whether it still HONOURS the commitments of the phases before it (the ones it
+was built on). Emit a finding when a later phase:
+- drops or narrows a scope item, requirement or objective an earlier phase committed to;
+- contradicts a decision, constraint or design an earlier phase established;
+- carries artifacts that no longer trace back to the upstream intent that justified them;
+- claims readiness (gate cleared, milestone met) that its own artifacts do not substantiate.
+Attribute each such finding to the LATER phase that broke fidelity: set "phaseId"
+to that offending phase (NOT the upstream phase whose commitment was dropped), so
+the gap lands on the phase whose work must change to close it. Name the upstream
+commitment in "sourceItem" and the offending phase's artifact in "targetArtifact".
+
 Be conservative: only emit a finding when the gap is real and supported by the
 context. Prefer fewer, high-confidence findings over speculation.
 
