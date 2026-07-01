@@ -81,10 +81,37 @@ export interface ValidatableProgram {
   gateReviews?: Record<string, GateReview>;
   workstreams?: Workstream[];
   phases?: PhaseSummary[];
+  /** Raw programme payload; read only for phaseInputs-scoped signals (e.g. strategy KPIs). */
+  rawData?: Record<string, unknown> | null;
 }
 
 const isBlank = (s: string | null | undefined): boolean => !s || s.trim().length === 0;
 const SEVERE = new Set<ValidationSeverity>(["critical", "high"]);
+
+/**
+ * The strategy-phase KPI rows a programme carries in `phaseInputs.strategy.kpis`
+ * (stored as an array or a JSON string, optionally under a `data` wrapper). These
+ * are the canonical measurable KPIs authored in Strategy — the benefits tracker
+ * mirrors them later — so a programme with strategy KPIs demonstrably *has*
+ * tracked KPIs even when `benefitsTracking` has not been populated yet.
+ */
+function strategyKpiRows(p: ValidatableProgram): unknown[] {
+  const raw = (p.rawData ?? {}) as Record<string, unknown>;
+  const inner = typeof raw.data === "object" && raw.data !== null ? (raw.data as Record<string, unknown>) : raw;
+  const pi = inner.phaseInputs;
+  const strategy = pi && typeof pi === "object" ? (pi as Record<string, unknown>).strategy : null;
+  const kpis = strategy && typeof strategy === "object" ? (strategy as Record<string, unknown>).kpis : null;
+  if (Array.isArray(kpis)) return kpis;
+  if (typeof kpis === "string" && kpis.trim()) {
+    try {
+      const parsed = JSON.parse(kpis);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
 
 /** A deterministic rule: pure function from program state to findings. */
 interface ValidationRule {
@@ -183,8 +210,12 @@ const RULES: ValidationRule[] = [
       const projected = p.budgetTracking?.projectedBenefits ?? null;
       const milestones = p.budgetTracking?.benefitMilestones ?? [];
       const kpis = p.benefitsTracking?.kpis ?? [];
+      // A programme with measurable strategy KPIs is not "without tracked KPIs",
+      // even before the benefits tracker mirrors them — count both sources so the
+      // finding is not a false positive on the common phaseInputs-only shape.
+      const strategyKpis = strategyKpiRows(p);
       const benefitsAsserted = (projected != null && projected > 0) || milestones.length > 0;
-      if (!benefitsAsserted || kpis.length > 0) return [];
+      if (!benefitsAsserted || kpis.length > 0 || strategyKpis.length > 0) return [];
       return [
         {
           findingId: "benefits-no-kpis",

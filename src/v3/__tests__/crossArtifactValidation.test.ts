@@ -131,6 +131,30 @@ describe("runDeterministicValidation — benefits traceability", () => {
     expect(findings.some((f) => f.findingId === "benefits-no-kpis")).toBe(true);
   });
 
+  it("does not flag benefits-no-kpis when strategy phaseInputs carry measurable KPIs", () => {
+    // The common live shape: KPIs are authored in phaseInputs.strategy.kpis and
+    // benefitsTracking has not been populated yet. That is tracked measurability,
+    // not a missing-KPI gap, so the finding must not fire (no false positive).
+    const budgetTracking = {
+      projectedCost: 1000, actualSpend: null, projectedBenefits: 0, realisedBenefits: null,
+      roi: null, burnRate: "healthy" as const, valueDeliveryRate: "on-track" as const,
+      phaseSpend: [], benefitMilestones: [{ id: "bm1", title: "Go-live benefit", targetDate: null, estimatedValue: "100", status: "pending" as const, phaseId: "operate" }],
+      healthSignal: "green" as const, healthReason: "", confidence: 0.8,
+    };
+    const kpisJson = JSON.stringify([{ id: "k1", name: "Cost to serve", baseline: "100", target: "80", unit: "$" }]);
+    // Both the flat and the `data`-wrapped rawData shapes must be recognised.
+    const flat = runDeterministicValidation({
+      budgetTracking, benefitsTracking: null,
+      rawData: { phaseInputs: { strategy: { kpis: kpisJson } } },
+    });
+    const wrapped = runDeterministicValidation({
+      budgetTracking, benefitsTracking: null,
+      rawData: { data: { phaseInputs: { strategy: { kpis: kpisJson } } } },
+    });
+    expect(flat.some((f) => f.findingId === "benefits-no-kpis")).toBe(false);
+    expect(wrapped.some((f) => f.findingId === "benefits-no-kpis")).toBe(false);
+  });
+
   it("flags a KPI missing a baseline", () => {
     const findings = runDeterministicValidation({
       benefitsTracking: {
