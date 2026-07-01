@@ -34,8 +34,11 @@ function businessCaseArtifact(confidence: number) {
  * flow is captured there at runtime, so the fixture mirrors that.
  */
 function healthyProgram(overInputs: Record<string, unknown> = {}, pct = 100) {
+  // Status mirrors real data: a phase is only "complete" at full progress;
+  // partial pct means it is still "active" (so pct drives the progress proxy).
+  const status = pct >= 100 ? "complete" : "active";
   return program({
-    phases: [{ id: "strategy", displayName: "Strategy", pct, status: "complete", objective: "" }],
+    phases: [{ id: "strategy", displayName: "Strategy", pct, status, objective: "" }],
     artifacts: [businessCaseArtifact(0.9)],
     rawData: {
       phaseInputs: {
@@ -244,6 +247,52 @@ describe("assessObjectives", () => {
     const blocker = obj.blockers.find((b) => b.component === "evidenced");
     expect(blocker).toBeDefined();
     expect(blocker!.recommendation).toContain("Objectives defined and measurable");
+  });
+
+  it("derives evidence from an approved gate review when no per-criterion breakdown exists", () => {
+    // The common live shape: gates are approved but carry no exitCriteriaStatus.
+    // An approved gate is authoritative proof the phase cleared its bar, so
+    // evidence should read full — not fall to the phase-progress proxy.
+    const prog = healthyProgram();
+    (prog as unknown as Record<string, unknown>).gateReviews = {
+      strategy: {
+        phaseId: "strategy", phaseName: "Strategy", status: "approved",
+        readinessScore: 95, artifactsSummary: [], openDecisions: 0, openRisks: 0,
+        exitCriteriaStatus: [],
+        recommendation: "", generatedAt: "", approvedAt: "", approvedBy: "lead", remediationNote: null,
+      },
+    };
+    const result = assessObjectives(prog);
+    const evidenced = result.objectives[0].components.find((c) => c.key === "evidenced")!;
+    expect(evidenced.score).toBe(1);
+    expect(evidenced.detail).toContain("cleared their gate review");
+  });
+
+  it("uses a pending gate's readiness score (0-100) as evidence, normalised", () => {
+    const prog = healthyProgram();
+    (prog as unknown as Record<string, unknown>).gateReviews = {
+      strategy: {
+        phaseId: "strategy", phaseName: "Strategy", status: "pending-review",
+        readinessScore: 60, artifactsSummary: [], openDecisions: 0, openRisks: 0,
+        exitCriteriaStatus: [],
+        recommendation: "", generatedAt: "", approvedAt: null, approvedBy: null, remediationNote: null,
+      },
+    };
+    const result = assessObjectives(prog);
+    const evidenced = result.objectives[0].components.find((c) => c.key === "evidenced")!;
+    expect(evidenced.score).toBeCloseTo(0.6, 5);
+  });
+
+  it("honours phase.status 'complete' for progress even when pct is stale", () => {
+    // Real programmes routinely carry status:'complete' with a lagging pct of 10.
+    // Progress must trust the status, not the stale percentage.
+    const prog = healthyProgram();
+    (prog.phases as unknown as Array<Record<string, unknown>>)[0].pct = 10;
+    (prog.phases as unknown as Array<Record<string, unknown>>)[0].status = "complete";
+    const result = assessObjectives(prog);
+    const progressing = result.objectives[0].components.find((c) => c.key === "progressing")!;
+    expect(progressing.score).toBe(1);
+    expect(progressing.detail).toContain("100%");
   });
 
   it("penalises an objective threatened by an open severe risk", () => {

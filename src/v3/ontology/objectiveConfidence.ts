@@ -336,19 +336,23 @@ function scoreEvidence(
   // Cite each delivering phase (its gate review is the evidence source).
   const citations: Citation[] = relevant.map((p) => ({ kind: "phase", ref: p.id, label: p.displayName ?? p.id }));
 
-  // Base evidence = the fraction of each delivering phase's *mandatory* exit
-  // criteria that its real gate review marks met. Phases with no gate review yet
-  // fall back to their progress percentage as a proxy, so early phases are not
-  // unfairly zeroed. Each phase contributes equally to the mean.
+  // Base evidence per delivering phase, in descending order of signal strength:
+  //   1. explicit exit-criteria statuses on the gate review  → fraction met
+  //   2. an approved / readiness-scored gate review          → gate is the proof
+  //   3. no gate review                                      → progress proxy
+  // Real programmes almost always land on (2): the gate reviews exist and are
+  // approved but carry no per-criterion breakdown, so an approved gate is the
+  // authoritative "this phase met its exit bar" signal. Each phase contributes
+  // equally to the mean.
   const perPhase: number[] = [];
   const unmetLabels: string[] = [];
   let reviewedMandatory = 0;
   let reviewedMet = 0;
+  let gatedPhases = 0;
   for (const phase of relevant) {
+    const review = gateReviews[phase.id];
     const mandatory = getMandatoryCriteria(phase.id);
-    const statuses = Array.isArray(gateReviews[phase.id]?.exitCriteriaStatus)
-      ? gateReviews[phase.id]!.exitCriteriaStatus
-      : [];
+    const statuses = Array.isArray(review?.exitCriteriaStatus) ? review!.exitCriteriaStatus : [];
     if (mandatory.length > 0 && statuses.length > 0) {
       let met = 0;
       for (const crit of mandatory) {
@@ -359,8 +363,19 @@ function scoreEvidence(
       reviewedMandatory += mandatory.length;
       reviewedMet += met;
       perPhase.push(met / mandatory.length);
+    } else if (review) {
+      // An approved gate is full evidence the phase met its bar; a pending gate
+      // contributes its readiness score; otherwise fall back to progress.
+      if (review.status === "approved") {
+        perPhase.push(1);
+      } else if (typeof review.readinessScore === "number") {
+        perPhase.push(normalisedConfidence(review.readinessScore, phaseProgress(phase)));
+      } else {
+        perPhase.push(phaseProgress(phase));
+      }
+      gatedPhases += 1;
     } else {
-      perPhase.push(Math.max(0, Math.min(1, (phase.pct ?? 0) / 100)));
+      perPhase.push(phaseProgress(phase));
     }
   }
   const base = perPhase.length === 0
@@ -392,6 +407,8 @@ function scoreEvidence(
     detail = "No delivering phase identified, so exit-criteria evidence is unknown.";
   } else if (reviewedMandatory > 0) {
     detail = `${reviewedMet}/${reviewedMandatory} mandatory exit criteria met across delivering phases${gapNote}.`;
+  } else if (gatedPhases > 0) {
+    detail = `${gatedPhases}/${relevant.length} delivering phases cleared their gate review (no per-criterion breakdown recorded); ${(base * 100).toFixed(0)}% evidence${gapNote}.`;
   } else {
     detail = `No gate review yet; ${(base * 100).toFixed(0)}% phase progress as an evidence proxy${gapNote}.`;
   }
@@ -402,6 +419,8 @@ function scoreEvidence(
     recommendation = `Capture evidence for the unmet exit criterion "${unmetLabels[0]}"${more}.`;
   } else if (penalty > 0) {
     recommendation = "Close the requirements/benefits traceability gaps and capture exit-criterion evidence.";
+  } else if (gatedPhases > 0) {
+    recommendation = "Record the per-criterion exit-review breakdown so gate approvals are auditable, not just aggregate.";
   } else {
     recommendation = "Capture evidence against the delivering phases' mandatory exit criteria.";
   }
@@ -412,10 +431,21 @@ function graphGapsFor(graph: ObjectiveSemanticGraph, objectiveId: string): Seman
   return graph.relations.filter((rel) => rel.gap && (rel.from === objectiveId || rel.kind === "satisfied-by"));
 }
 
+/**
+ * A phase's progress toward its objective. A phase the programme marks
+ * `complete` counts as fully progressed even when its stored `pct` is stale
+ * (real programmes routinely carry `status: "complete"` with a `pct` of 10 or
+ * 0) — the status is the authoritative signal, the percentage a lagging proxy.
+ */
+function phaseProgress(phase: { status?: string; pct?: number }): number {
+  if (phase.status === "complete") return 1;
+  return Math.max(0, Math.min(1, (phase.pct ?? 0) / 100));
+}
+
 function scoreProgress(program: ProgramSummary, deliveringPhaseIds: Set<string>): { score: number; detail: string } {
   const phases = (program.phases || []).filter((p) => deliveringPhaseIds.has(p.id));
   if (phases.length === 0) return { score: 0.6, detail: "No delivering phase identified; progress assumed neutral." };
-  const avg = phases.reduce((s, p) => s + Math.max(0, Math.min(1, (p.pct ?? 0) / 100)), 0) / phases.length;
+  const avg = phases.reduce((s, p) => s + phaseProgress(p), 0) / phases.length;
   return { score: avg, detail: `Delivering phases average ${(avg * 100).toFixed(0)}% complete.` };
 }
 
