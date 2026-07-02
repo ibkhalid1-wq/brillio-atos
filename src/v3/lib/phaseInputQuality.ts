@@ -9,9 +9,9 @@
  * input schema (the single source of truth for which fields a phase actually
  * has), so the "Missing:" list can only ever name real inputs for that phase.
  *
- * Zero-token by construction — no model call. The only phase-specific companion
- * input outside the field schema is the Strategy "Outcome KPIs" grid, which is
- * included for Strategy alone.
+ * Zero-token by construction — no model call. Every assessed item comes straight
+ * from the phase's declared required fields (the Strategy KPI grid included, now
+ * that it is a first-class required input rather than a special-cased companion).
  */
 import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
 import type { DynamicSchemaStore } from "@/v3/lib/dynamicSchema";
@@ -75,22 +75,6 @@ function assessScalar(value: unknown): { present: boolean; words: number } {
   return { present: true, words: str.split(/\s+/).filter(Boolean).length };
 }
 
-function countNamedKpis(raw: unknown): number {
-  if (typeof raw !== "string" || !raw.trim()) return 0;
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return 0;
-    return parsed.filter(
-      (kpi) =>
-        kpi &&
-        typeof kpi === "object" &&
-        typeof (kpi as Record<string, unknown>).name === "string" &&
-        ((kpi as Record<string, unknown>).name as string).trim().length > 0,
-    ).length;
-  } catch {
-    return 0;
-  }
-}
 
 export function derivePhaseInputQuality(
   phaseId: string | null | undefined,
@@ -120,11 +104,11 @@ export function derivePhaseInputQuality(
     }
   }
 
-  // Strategy is the only phase with the Outcome KPIs companion grid; it is a
-  // genuine Strategy input, so a missing KPI set is a valid quality gap there.
-  if (phaseId === "strategy") {
-    items.push({ label: "Outcome KPIs", present: countNamedKpis(inputs.kpis) >= 1, words: 0, scalar: false });
-  }
+  // The Strategy `kpis` grid used to be scored here as a special-cased companion
+  // because it was an optional field the required-fields loop skipped. It is now a
+  // first-class required Strategy input (`required: true`), so the loop above already
+  // scores it under its own label ("Success KPIs") — a dedicated special case here
+  // would double-count the same grid.
 
   if (items.length === 0) return null;
 

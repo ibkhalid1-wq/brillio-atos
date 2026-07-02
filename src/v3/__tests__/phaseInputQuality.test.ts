@@ -10,9 +10,10 @@ describe("derivePhaseInputQuality", () => {
       businessObjective: "Modernise finance operations to cut cost-to-serve.",
       // sponsor, constraints, successMetric and KPIs left empty
     })!;
-    // Only real Strategy inputs may appear.
+    // Only real Strategy inputs may appear. The KPI grid now surfaces under its
+    // own field label ("Success KPIs") rather than the old special-cased "Outcome KPIs".
     expect(result.missingCritical).toEqual(
-      expect.arrayContaining(["Executive sponsor", "Key constraints", "Primary success metric", "Outcome KPIs"]),
+      expect.arrayContaining(["Executive sponsor", "Key constraints", "Primary success metric", "Success KPIs"]),
     );
     expect(result.missingCritical).not.toContain("Defined workstreams");
     expect(result.missingCritical.join(" ").toLowerCase()).not.toContain("workstream");
