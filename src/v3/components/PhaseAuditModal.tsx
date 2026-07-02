@@ -4,6 +4,7 @@ import { timeAgo } from "@/v3/utils";
 import {
   classifyFinding,
   FINDING_CLASS_ORDER,
+  FINDING_CLASS_DESCRIPTION,
   type FindingClass,
   type ValidationDomain,
 } from "@/v3/lib/crossArtifactValidation";
@@ -301,6 +302,7 @@ export default function PhaseAuditModal({ programId, phaseId, phaseLabel, onClos
                           type="button"
                           onClick={() => toggleClass(cls)}
                           aria-expanded={!collapsed}
+                          title={`${FINDING_CLASS_DESCRIPTION[cls]} — click to ${collapsed ? "show" : "hide"}.`}
                           style={{
                             display: "flex", alignItems: "center", gap: 8, width: "100%",
                             background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left",

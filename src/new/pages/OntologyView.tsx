@@ -15,6 +15,7 @@ import {
   getSemanticValidationMeta,
   classifyFinding,
   FINDING_CLASS_ORDER,
+  FINDING_CLASS_DESCRIPTION,
   type FindingClass,
   type PhaseFidelity,
 } from "@/v3/lib/crossArtifactValidation";
@@ -230,7 +231,7 @@ function PhaseFidelityCard({
                             type="button"
                             onClick={() => toggleSection(key)}
                             aria-expanded={!collapsed}
-                            title={`${collapsed ? "Show" : "Hide"} ${cls} findings`}
+                            title={`${FINDING_CLASS_DESCRIPTION[cls]} — click to ${collapsed ? "show" : "hide"}.`}
                             style={{
                               display: "flex", alignItems: "center", gap: 6,
                               padding: "3px 8px", borderRadius: 6, cursor: "pointer",
