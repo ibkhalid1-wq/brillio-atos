@@ -6209,6 +6209,18 @@ commitment in "sourceItem" and the offending phase's artifact in "targetArtifact
 Be conservative: only emit a finding when the gap is real and supported by the
 context. Prefer fewer, high-confidence findings over speculation.
 
+SHOW YOUR WORK. Every finding MUST populate "evidence" with what you checked it
+against — make the basis of the check visible, not just the verdict:
+- the phase intent element: the phase objective, or a SPECIFIC exit criterion, you
+  measured against (e.g. "checked against Design exit criterion: 'Solution
+  architecture approved'");
+- the knowledge-graph link you traced: the relation and node from objectiveGraph
+  (e.g. "measured-by: KPI 'Win Rate' has target=null", "delivered-by: Build phase
+  produced no artifact for objective", "threatened-by: risk 'Data migration'").
+State at least one such reference per finding; cite both intent and graph when both
+apply. This is what surfaces in the Ontology view, so it must read as a concrete
+"checked X against Y", never a bare restatement of the issue.
+
 Return ONLY valid JSON:
 {
   "findings": [
@@ -6222,6 +6234,7 @@ Return ONLY valid JSON:
       "sourceItem": "specific item id/name at issue",
       "issue": "one sentence: what is not traceable/supported",
       "recommendation": "one sentence: how to close the gap",
+      "evidence": ["what you checked this against — the phase intent element (objective / a specific exit criterion) and/or the objectiveGraph link (measured-by / delivered-by / threatened-by) you traced"],
       "confidence": 0.0
     }
   ],

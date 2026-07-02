@@ -177,6 +177,14 @@ function PhaseFidelityCard({
                           {g.recommendation && (
                             <div style={{ fontSize: 12, color: "var(--v3-accent)", marginTop: 1 }}>→ {g.recommendation}</div>
                           )}
+                          {/* What the finding was checked against — the phase intent
+                              element and/or the ontology delivery-chain link the
+                              validator traced. Makes the basis of each gap visible. */}
+                          {g.evidence.length > 0 && (
+                            <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 2 }}>
+                              checked against: {g.evidence.join("; ")}
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
