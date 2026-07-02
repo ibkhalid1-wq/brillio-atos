@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { ProgramSummary } from "@/new/types";
 import { buildProgramGraph } from "@/v3/lib/programGraph";
-import { detectCoverageGaps, summarizeCoverageGaps } from "@/v3/lib/graphInference";
+import { detectCoverageGaps, summarizeCoverageGaps, impactedBy, dependenciesOf } from "@/v3/lib/graphInference";
 
 function program(over: Record<string, unknown>): ProgramSummary {
   return {
@@ -114,5 +114,60 @@ describe("detectCoverageGaps", () => {
     const summary = summarizeCoverageGaps(detectCoverageGaps(graph));
     expect(summary["untraced-requirement"]).toBe(2);
     expect(summary["undelivered-scope"]).toBe(1);
+  });
+});
+
+describe("impact / reachability analysis", () => {
+  // A programme where a decision addresses a requirement (addresses edge) and a
+  // fact grounds an artifact (grounds edge), so both a requirement change and a
+  // fact change have a real, deterministic downstream blast radius.
+  const graph = () => buildProgramGraph(program({
+    phases,
+    artifacts: [
+      { id: "charter", phaseId: "strategy", title: "Programme Charter", status: "approved", agentGenerated: true, lastEditedBy: "agent", lastEditedAt: "", contentSummary: "", versionNumber: 1 },
+    ],
+    rawData: {
+      phaseInputs: {
+        strategy: { businessContext: "Legacy platform is end-of-life" },
+        discover: { requirements: JSON.stringify([{ id: "REQ-1", requirement: "System must support SSO" }]) },
+        design: {
+          keyDesignDecisions: JSON.stringify([{ id: "D-1", decision: "Adopt Okta", addresses: "System must support SSO" }]),
+        },
+      },
+      dynamicSchema: {
+        inputFields: {
+          strategy: [{ id: "businessContext", label: "Business context", type: "textarea", required: false, usedByArtifacts: ["charter"] }],
+        },
+      },
+    },
+  }));
+
+  it("finds what a requirement change impacts (the decision that addresses it)", () => {
+    const impacted = impactedBy(graph(), "requirement:REQ-1").nodeIds;
+    expect(impacted).toContain("decision:D-1");
+  });
+
+  it("finds what a fact change impacts (the artifact it grounds)", () => {
+    const g = graph();
+    const fact = g.nodes.find((n) => n.type === "fact");
+    expect(fact).toBeDefined();
+    expect(impactedBy(g, fact!.id).nodeIds).toContain("artifact:charter");
+  });
+
+  it("excludes the start node and returns an empty set for an unknown node", () => {
+    const impacted = impactedBy(graph(), "requirement:REQ-1").nodeIds;
+    expect(impacted).not.toContain("requirement:REQ-1");
+    expect(impactedBy(graph(), "requirement:NOPE").nodeIds).toEqual([]);
+  });
+
+  it("walks provenance backward: an artifact depends on the fact that grounds it", () => {
+    const g = graph();
+    const fact = g.nodes.find((n) => n.type === "fact");
+    expect(dependenciesOf(g, "artifact:charter").nodeIds).toContain(fact!.id);
+  });
+
+  it("returns empty reachability for an empty graph", () => {
+    expect(impactedBy(buildProgramGraph(null), "x").nodeIds).toEqual([]);
+    expect(dependenciesOf(buildProgramGraph(null), "x").nodeIds).toEqual([]);
   });
 });

@@ -100,6 +100,115 @@ export function detectCoverageGaps(graph: ProgramGraph): CoverageGap[] {
   return [...requirements, ...scope, ...facts];
 }
 
+/**
+ * Dependency edges and the direction the dependency runs, expressed so a single
+ * normalised adjacency (dependency → dependent) can be built regardless of the
+ * edge's stored from/to orientation.
+ *
+ *  - `grounds`   fact --grounds--> artifact:      the artifact is derived from the
+ *                fact, so the artifact (edge.to) depends on the fact (edge.from).
+ *  - `traces_to` artifact --traces_to--> input:   the artifact was built from the
+ *                requirement/kpi/scope, so the artifact (edge.from) depends on the
+ *                input (edge.to).
+ *  - `addresses` decision --addresses--> requirement: the decision responds to the
+ *                requirement, so the decision (edge.from) depends on it (edge.to).
+ *  - `delivers`  increment --delivers--> scope:    the increment realises the scope
+ *                item, so the increment (edge.from) depends on it (edge.to).
+ *
+ * "forward" means dependency = edge.from and dependent = edge.to; "reverse" is the
+ * opposite. Structural edges (sequence, in_phase, mentions, extracted_to) carry no
+ * derivation dependency and are excluded.
+ */
+const DEPENDENCY_EDGES: Record<string, "forward" | "reverse"> = {
+  grounds: "forward",
+  traces_to: "reverse",
+  addresses: "reverse",
+  delivers: "reverse",
+};
+
+/** dependency node id → dependent node ids (the nodes that would be impacted if
+ *  the dependency changed). */
+function dependencyAdjacency(edges: ProgramGraphEdge[]): Map<string, Set<string>> {
+  const adj = new Map<string, Set<string>>();
+  const link = (dependency: string, dependent: string) => {
+    if (dependency === dependent) return;
+    const set = adj.get(dependency) ?? new Set<string>();
+    set.add(dependent);
+    adj.set(dependency, set);
+  };
+  for (const edge of edges) {
+    const dir = DEPENDENCY_EDGES[edge.type];
+    if (!dir) continue;
+    if (dir === "forward") link(edge.from, edge.to);
+    else link(edge.to, edge.from);
+  }
+  return adj;
+}
+
+/** Breadth-first reachable set from `startId` over an adjacency map, excluding the
+ *  start, in first-seen (deterministic) order. */
+function bfs(adj: Map<string, Set<string>>, startId: string): string[] {
+  const seen = new Set<string>([startId]);
+  const order: string[] = [];
+  const queue: string[] = [startId];
+  while (queue.length) {
+    const current = queue.shift() as string;
+    for (const next of adj.get(current) ?? []) {
+      if (seen.has(next)) continue;
+      seen.add(next);
+      order.push(next);
+      queue.push(next);
+    }
+  }
+  return order;
+}
+
+/** A reachability result: the reached node ids and their resolved nodes. */
+export interface Reachability {
+  nodeIds: string[];
+  nodes: ProgramGraphNode[];
+}
+
+function resolve(graph: ProgramGraph, ids: string[]): Reachability {
+  const byId = new Map(graph.nodes.map((n) => [n.id, n]));
+  return { nodeIds: ids, nodes: ids.map((id) => byId.get(id)).filter((n): n is ProgramGraphNode => Boolean(n)) };
+}
+
+/**
+ * Every node whose correctness depends, transitively, on `startId` — the blast
+ * radius of changing it. Answers "if this requirement changes, what downstream
+ * work must be revisited?" by walking the dependency adjacency forward: a
+ * requirement reaches the decisions that address it and the artifacts that trace
+ * to it; a fact reaches the artifacts it grounds; and so on transitively.
+ */
+export function impactedBy(graph: ProgramGraph, startId: string): Reachability {
+  if (!graph || !graph.nodes.length) return { nodeIds: [], nodes: [] };
+  return resolve(graph, bfs(dependencyAdjacency(graph.edges), startId));
+}
+
+/** Reverse adjacency: dependent → the dependencies it was derived from. */
+function reverseAdjacency(adj: Map<string, Set<string>>): Map<string, Set<string>> {
+  const rev = new Map<string, Set<string>>();
+  for (const [dependency, dependents] of adj) {
+    for (const dependent of dependents) {
+      const set = rev.get(dependent) ?? new Set<string>();
+      set.add(dependency);
+      rev.set(dependent, set);
+    }
+  }
+  return rev;
+}
+
+/**
+ * Every node `startId` transitively depends on — its provenance / upstream
+ * grounding. Answers "what was this artifact built from?" by walking the
+ * dependency adjacency backward.
+ */
+export function dependenciesOf(graph: ProgramGraph, startId: string): Reachability {
+  if (!graph || !graph.nodes.length) return { nodeIds: [], nodes: [] };
+  return resolve(graph, bfs(reverseAdjacency(dependencyAdjacency(graph.edges)), startId));
+}
+
 /** Count coverage gaps by kind — a compact health summary for a dashboard. */
 export function summarizeCoverageGaps(gaps: CoverageGap[]): Record<CoverageGap["kind"], number> {
   const out: Record<CoverageGap["kind"], number> = {
