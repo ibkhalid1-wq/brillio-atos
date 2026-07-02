@@ -532,6 +532,48 @@ export function compressProgramEdges(edges: ProgramGraphEdge[], nodes: ProgramGr
 }
 
 /**
+ * Signal weight per node kind — how much a node of this kind is worth carrying
+ * into a budget-limited prompt. Open risks and decisions steer the next phase
+ * most; facts and artifacts are the grounding; requirements/KPIs/scope are the
+ * traceability spine; insights and stakeholders are supporting colour; documents
+ * and phase markers are the least additive as standalone citation lines.
+ */
+const NODE_KIND_WEIGHT: Record<ProgramGraphNodeKind, number> = {
+  risk: 5, decision: 5, fact: 4, artifact: 4,
+  requirement: 3, kpi: 3, scope: 3, increment: 3,
+  insight: 2, stakeholder: 2, document: 1, phase: 0,
+};
+
+/**
+ * Rank a phase slice's nodes by relevance to `targetPhaseId`, most-relevant
+ * first, so a budget-limited prompt keeps the highest-signal citations instead of
+ * whatever happened to sit at the head of the list. Relevance combines phase
+ * recency (a node from the current or an adjacent phase outranks an ancient one),
+ * node-kind signal, and — for facts/artifacts — grounding confidence. Programme-
+ * global nodes (no phase) are treated as current-phase relevant. Pure and stable:
+ * ties preserve the input order.
+ */
+export function rankNodesForPhase(
+  nodes: ProgramGraphNode[],
+  phaseOrder: string[],
+  targetPhaseId: string,
+): ProgramGraphNode[] {
+  const targetIndex = phaseOrder.indexOf(targetPhaseId);
+  const recency = (node: ProgramGraphNode): number => {
+    if (node.phaseCreated === undefined) return targetIndex >= 0 ? targetIndex : 0; // global ≈ current
+    const idx = phaseOrder.indexOf(node.phaseCreated);
+    return idx >= 0 ? idx : 0;
+  };
+  const score = (node: ProgramGraphNode): number =>
+    recency(node) * 2 + (NODE_KIND_WEIGHT[node.type] ?? 0) + (node.confidence ?? 0) * 2;
+
+  return nodes
+    .map((node, index) => ({ node, index, s: score(node) }))
+    .sort((a, b) => (b.s !== a.s ? b.s - a.s : a.index - b.index))
+    .map((entry) => entry.node);
+}
+
+/**
  * Slice the graph to the context relevant when an agent runs for `phaseId`:
  * the phase itself, every prior phase (so later phases build on earlier
  * outputs), all nodes belonging to those phases, the documents feeding the
@@ -571,9 +613,11 @@ const GRAPH_CONTEXT_HEADER =
 const GRAPH_RELATIONSHIPS_HEADER = "Relationships (how the above connect):";
 
 /**
- * Fit `header` + as many whole `body` lines as `maxChars` allows, dropping lines
- * from the tail so a line is never cut mid-item. Returns "" when not even the
- * first line fits under the header.
+ * Fit `header` + as many whole `body` lines as `maxChars` allows, preserving the
+ * body's order (which is relevance-ranked upstream) but skipping any single line
+ * that would overflow so a lower-priority line that still fits is not lost behind
+ * one long high-priority line. Whole lines only — a line is never cut mid-item.
+ * Returns "" when no line fits under the header.
  */
 function fitBlock(header: string, body: string, maxChars: number): string {
   const full = `${header}\n${body}`;
@@ -582,7 +626,7 @@ function fitBlock(header: string, body: string, maxChars: number): string {
   let used = header.length;
   for (const line of body.split("\n")) {
     const next = used + 1 + line.length;
-    if (next > maxChars) break;
+    if (next > maxChars) continue; // skip the overflow, keep trying shorter lines
     kept.push(line);
     used = next;
   }
@@ -610,7 +654,12 @@ export function buildProgramGraphContext(
   const graph = buildProgramGraph(program);
   if (!graph.nodes.length) return "";
   const selection = selectGraphForPhase(graph, targetPhaseId);
-  const body = selection.citations.trim();
+
+  // Order citations by relevance so a budget-limited block keeps the highest-
+  // signal nodes rather than dropping them off the tail by list position.
+  const phaseOrder = graph.nodes.filter((n) => n.type === "phase").map((n) => n.phaseCreated as string);
+  const rankedNodes = rankNodesForPhase(selection.nodes, phaseOrder, targetPhaseId);
+  const body = compressProgramGraph(rankedNodes).trim();
   if (!body) return "";
 
   // Node citations first — the grounding facts/artifacts/risks share the budget.

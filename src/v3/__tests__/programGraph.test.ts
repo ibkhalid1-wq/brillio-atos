@@ -6,6 +6,7 @@ import {
   buildProgramGraphContext,
   compressProgramNode,
   compressProgramEdges,
+  rankNodesForPhase,
   type ProgramGraph,
   type ProgramGraphNode,
   type ProgramGraphEdge,
@@ -649,6 +650,48 @@ describe("compressProgramNode", () => {
     }));
     const fact = graph.nodes.find((n) => n.type === "fact")!;
     expect(compressProgramNode(fact)).toBe("fact [strategy]: Executive sponsor: Jane, CIO (confidence: high)");
+  });
+});
+
+describe("rankNodesForPhase", () => {
+  const node = (over: Partial<ProgramGraphNode>): ProgramGraphNode =>
+    ({ id: "n", type: "fact", label: "L", ...over });
+  const order = ["strategy", "discover", "design", "build"];
+
+  it("ranks a current-phase risk above an ancient supporting insight", () => {
+    const nodes = [
+      node({ id: "insight", type: "insight", label: "old note", phaseCreated: "strategy" }),
+      node({ id: "risk", type: "risk", label: "live risk", phaseCreated: "design" }),
+    ];
+    const ranked = rankNodesForPhase(nodes, order, "design");
+    expect(ranked[0].id).toBe("risk");
+  });
+
+  it("prefers a more recent node over an older one of the same kind", () => {
+    const nodes = [
+      node({ id: "old", type: "fact", label: "old fact", phaseCreated: "strategy" }),
+      node({ id: "new", type: "fact", label: "new fact", phaseCreated: "design" }),
+    ];
+    expect(rankNodesForPhase(nodes, order, "design")[0].id).toBe("new");
+  });
+
+  it("breaks ties by preserving input order (stable)", () => {
+    const nodes = [
+      node({ id: "a", type: "fact", label: "A", phaseCreated: "design" }),
+      node({ id: "b", type: "fact", label: "B", phaseCreated: "design" }),
+    ];
+    expect(rankNodesForPhase(nodes, order, "design").map((n) => n.id)).toEqual(["a", "b"]);
+  });
+
+  it("treats a programme-global node as current-phase relevant", () => {
+    const nodes = [
+      node({ id: "old", type: "fact", label: "old", phaseCreated: "strategy" }),
+      node({ id: "global", type: "stakeholder", label: "CIO" }), // no phaseCreated
+    ];
+    const ranked = rankNodesForPhase(nodes, order, "build");
+    // Global stakeholder gets build-level recency, beating a strategy-era fact
+    // despite the lower kind weight.
+    expect(ranked[0].id).toBe("global");
   });
 });
 
