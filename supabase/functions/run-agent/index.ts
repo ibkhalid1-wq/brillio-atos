@@ -636,6 +636,92 @@ function getProgramRiskContext(programData: ProgramState): Array<Record<string, 
   return raidRisks.filter(isRecord).slice(0, 10);
 }
 
+/**
+ * Lean, edge-side reconstruction of the ontology's objective knowledge graph
+ * (the frontend `buildObjectiveGraph` in src/v3/ontology/objectiveGraph.ts, which
+ * the Deno edge cannot import). It re-expresses the programme in the ontology's
+ * delivery-chain vocabulary so the semantic validator can reason over the SAME
+ * structure the Ontology view rolls up:
+ *   objective --measured-by--> KPI      (weak when a baseline or target is missing)
+ *   objective --delivered-by--> artifact (ordered along the phase sequence)
+ *   objective --threatened-by--> risk    (open, severe risks only)
+ * Surfacing this chain lets the model flag BROKEN links (an unmeasurable KPI, a
+ * downstream phase that delivered nothing, a benefit traced to no artifact) — the
+ * exact gaps the ontology's confidence roll-up penalises — rather than re-deriving
+ * the structure from scattered context.
+ */
+function buildObjectiveKnowledgeGraph(programData: ProgramState): Record<string, unknown> {
+  const inner = getInnerProgramData(programData);
+  const projectMeta = normalizeProgramData(inner.projectMeta as JsonValue | null);
+  const strategyInputs = normalizeProgramData(
+    normalizeProgramData(inner.phaseInputs as JsonValue | null).strategy as JsonValue | null,
+  );
+  const objective =
+    typeof strategyInputs.businessObjective === "string" && strategyInputs.businessObjective.trim()
+      ? strategyInputs.businessObjective.trim()
+      : typeof inner.objective === "string" && inner.objective.trim()
+        ? inner.objective.trim()
+        : typeof inner.programObjective === "string" && inner.programObjective.trim()
+          ? inner.programObjective.trim()
+          : typeof projectMeta.objective === "string"
+            ? projectMeta.objective
+            : "";
+
+  // measured-by: KPIs from the Strategy inputs. A KPI missing a baseline OR a
+  // target is a WEAK measure — the ontology's measured-by gap.
+  const measuredBy = parseKpiBaselines(strategyInputs.kpis).map((k) => {
+    const name = typeof k.name === "string" && k.name
+      ? k.name
+      : typeof k.metric === "string" && k.metric
+        ? k.metric
+        : "KPI";
+    const baseline = typeof k.baseline === "string" ? k.baseline : k.baseline != null ? String(k.baseline) : "";
+    const target = typeof k.target === "string" ? k.target : k.target != null ? String(k.target) : "";
+    return {
+      relation: "measured-by",
+      name,
+      baseline: baseline.trim() || null,
+      target: target.trim() || null,
+      weak: !baseline.trim() || !target.trim(),
+    };
+  });
+
+  // delivered-by: artifacts along the programme's phase-ordered delivery chain, so
+  // the model can see which downstream phases have (or have not) produced the
+  // deliverables that progressively realise the objective.
+  const phaseOrder = getProgramPhaseContext(programData).map((p) => (typeof p.id === "string" ? p.id : ""));
+  const deliveredBy = [...getProgramArtifactContext(programData)]
+    .sort((a, b) => {
+      const ai = phaseOrder.indexOf(typeof a.phaseId === "string" ? a.phaseId : "");
+      const bi = phaseOrder.indexOf(typeof b.phaseId === "string" ? b.phaseId : "");
+      return (ai < 0 ? phaseOrder.length : ai) - (bi < 0 ? phaseOrder.length : bi);
+    })
+    .map((a) => ({
+      relation: "delivered-by",
+      phaseId: typeof a.phaseId === "string" ? a.phaseId : "",
+      artifact: typeof a.title === "string" && a.title ? a.title : typeof a.id === "string" ? a.id : "",
+      status: typeof a.status === "string" ? a.status : "draft",
+    }));
+
+  // threatened-by: open, severe (critical/high) risks threaten objective attainment.
+  const threatenedBy = getProgramRiskContext(programData)
+    .filter((r) => {
+      const sev = (typeof r.severity === "string" ? r.severity : typeof r.impact === "string" ? r.impact : "").toLowerCase();
+      return sev === "critical" || sev === "high";
+    })
+    .map((r) => ({
+      relation: "threatened-by",
+      risk: typeof r.title === "string" && r.title
+        ? r.title
+        : typeof r.description === "string" && r.description
+          ? r.description
+          : "Risk",
+      severity: typeof r.severity === "string" ? r.severity : typeof r.impact === "string" ? r.impact : "",
+    }));
+
+  return { objective, measuredBy, deliveredBy, threatenedBy };
+}
+
 async function queryPatternContext(
   admin: SupabaseClient,
   params: {
@@ -1468,6 +1554,9 @@ function buildSpecialAgentInputContext(
           : typeof projectMeta.objective === "string"
             ? projectMeta.objective
             : "",
+      // The ontology's objective delivery chain (measured-by / delivered-by /
+      // threatened-by). Validating this graph's integrity is Layer 2's core job.
+      objectiveGraph: buildObjectiveKnowledgeGraph(programData),
       phases,
       artifacts,
       milestones,
@@ -6088,6 +6177,21 @@ traceability the deterministic layer cannot judge:
 - Milestones / workstreams that do not advance the program objective or phase objectives.
 - Stakeholder change actions or interventions that do not address the stated impact.
 - Scope present in objectives but absent from workstreams.
+
+OBJECTIVE KNOWLEDGE GRAPH — the input context carries an "objectiveGraph": the
+programme objective and its ontology delivery chain — the KPIs that MEASURE it
+(measured-by), the artifacts that DELIVER it along the phase sequence
+(delivered-by), and the severe risks that THREATEN it (threatened-by). Validate
+the INTEGRITY of this chain, mapping each broken link to the phase that must fix it:
+- measured-by: an objective whose KPIs are absent, or a KPI flagged "weak":true
+  (missing baseline or target), is not verifiably measurable — a benefits-traceability gap.
+- delivered-by: a phase that has STARTED yet contributes no delivering artifact
+  to the objective — or artifacts that do not trace back to the objective they
+  claim to deliver — is a delivery-readiness / scope-coverage gap on THAT phase.
+- threatened-by: a severe risk with no mitigation reflected in the downstream
+  artifacts leaves the objective exposed — a governance / delivery-readiness gap.
+Use the graph to trace the requirement→design→build chain; a link the chain
+needs but the graph lacks is itself the finding.
 
 BACKWARD PHASE FIDELITY — the phases are ordered in the ATOS sequence, each
 carrying its objective, exit criteria and artifacts. For every phase, judge
