@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { ProgramSummary } from "@/new/types";
 import type { ValidationFinding } from "@/v3/lib/crossArtifactValidation";
-import { buildObjectiveGraph, graphGaps } from "@/v3/ontology/objectiveGraph";
+import { buildObjectiveGraph, graphGaps, unreportedKpis } from "@/v3/ontology/objectiveGraph";
 import { assessObjectives } from "@/v3/ontology/objectiveConfidence";
 
 /** Minimal ProgramSummary stub carrying only what the ontology selectors read. */
@@ -266,6 +266,29 @@ describe("buildObjectiveGraph", () => {
     expect(edge?.gap?.issue).toMatch(/stale/i);
     // A staleness gap is derived from node status, not a validation finding.
     expect(edge?.gap?.findingId).toBeUndefined();
+  });
+
+  it("adds a reported-by edge from a measured KPI to a reporting artifact", () => {
+    // A programme with a reporting artifact (an outcome framework) alongside the
+    // KPI: the KPI gains a reported-by edge, so it is not unreported.
+    const withReporting = healthyProgram();
+    (withReporting.artifacts as unknown as Array<Record<string, unknown>>).push({
+      id: "outcome-framework", phaseId: "strategy", title: "Outcome Framework", status: "approved",
+      agentGenerated: true, lastEditedBy: "agent", lastEditedAt: "", contentSummary: "", versionNumber: 1,
+      agentConfidence: 0.9,
+    });
+    const graph = buildObjectiveGraph(withReporting);
+    const reportedBy = graph.relations.filter((r) => r.kind === "reported-by");
+    expect(reportedBy.some((r) => r.from === "kpi:k1" && r.to === "artifact:outcome-framework")).toBe(true);
+    expect(unreportedKpis(graph).map((n) => n.id)).not.toContain("kpi:k1");
+  });
+
+  it("flags a measured KPI with no reporting artifact as unreported", () => {
+    // healthyProgram has only a business-case artifact (not a reporting artifact),
+    // so its KPI is measured but tracked nowhere.
+    const graph = buildObjectiveGraph(healthyProgram());
+    expect(graph.relations.some((r) => r.kind === "reported-by")).toBe(false);
+    expect(unreportedKpis(graph).map((n) => n.id)).toContain("kpi:k1");
   });
 
   it("never admits a relation that violates the ontology", () => {

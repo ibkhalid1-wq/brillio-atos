@@ -279,10 +279,42 @@ export function buildObjectiveGraph(
     }
   }
 
+  // reported-by: a KPI's actuals are tracked by a reporting artifact (an outcome
+  // framework, benefits tracker, KPI dashboard, value-realisation report). This
+  // records *where a KPI is actually reported* so the graph distinguishes a KPI
+  // that is merely defined from one whose attainment is being tracked. A KPI with
+  // no reported-by edge is unreported — see `unreportedKpis`.
+  const reportingArtifacts = byKind("artifact").filter(
+    (a) => REPORTING_ARTIFACT.test(a.id) || REPORTING_ARTIFACT.test(a.label),
+  );
+  for (const kpi of kpis) {
+    for (const artifact of reportingArtifacts) {
+      addRelation({ id: `reported-by:${kpi.id}->${artifact.id}`, from: kpi.id, to: artifact.id, kind: "reported-by" });
+    }
+  }
+
   // Fold validation findings in as gap annotations on the delivery chain.
   foldFindings(program, options.findings ?? [], objectiveIds, nodes, addRelation);
 
   return { nodes: [...nodes.values()], relations: [...relations.values()], objectiveIds };
+}
+
+/**
+ * Artifact ids/labels that report KPI actuals. Deliberately broad (id or label
+ * match) so both a methodology `outcome-framework` and a planner-minted
+ * "KPI Dashboard" are recognised as the place a KPI is tracked.
+ */
+const REPORTING_ARTIFACT = /outcome|benefit|kpi|value.?realiz|dashboard|scorecard|performance|tracking/i;
+
+/**
+ * KPIs that measure an objective but are tracked by no reporting artifact — the
+ * "unreported KPI" gap (ontology `reported-by`, gapWhenMissing). A KPI here is
+ * defined but its attainment is not actually being tracked anywhere.
+ */
+export function unreportedKpis(graph: ObjectiveSemanticGraph): SemanticNode[] {
+  const reported = new Set(graph.relations.filter((r) => r.kind === "reported-by").map((r) => r.from));
+  const measured = new Set(graph.relations.filter((r) => r.kind === "measured-by").map((r) => r.to));
+  return graph.nodes.filter((n) => n.kind === "kpi" && measured.has(n.id) && !reported.has(n.id));
 }
 
 /**

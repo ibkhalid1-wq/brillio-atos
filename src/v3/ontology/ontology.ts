@@ -65,6 +65,7 @@ export type RelationKind =
   | "measured-by"
   | "delivered-by"
   | "evidenced-by"
+  | "reported-by"
   | "threatened-by"
   | "satisfied-by"
   | "grounds"
@@ -102,6 +103,13 @@ export const RELATION_TYPES: Record<RelationKind, RelationType> = {
   "evidenced-by": {
     kind: "evidenced-by", curie: "atos:evidencedBy", label: "is evidenced by", inverseLabel: "evidences",
     from: ["objective", "phase"], to: ["exit-criterion", "artifact"], gapWhenMissing: true,
+  },
+  "reported-by": {
+    kind: "reported-by", curie: "atos:reportedBy", label: "is reported by", inverseLabel: "reports",
+    // A KPI's actuals must be tracked by a reporting artifact (outcome framework,
+    // benefits tracker, KPI dashboard). A KPI with no reporting artifact is
+    // defined but unmeasured in practice, so its absence is itself a gap.
+    from: ["kpi"], to: ["artifact"], gapWhenMissing: true,
   },
   "threatened-by": {
     kind: "threatened-by", curie: "atos:threatenedBy", label: "is threatened by", inverseLabel: "threatens",
