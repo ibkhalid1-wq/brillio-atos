@@ -7696,6 +7696,20 @@ button.v3-phase-metric:focus-visible {
      can't overflow and break the input→artifact flow lines. */
   min-width: 0;
 }
+/* Staggered field reveal on phase open (Option D). Each field fades and lifts
+   into place, offset by its position, so opening a phase reads as a calm cascade
+   rather than a hard pop. Runs once on mount (fields don't remount on keystroke),
+   and is fully disabled under reduced-motion. */
+.v3-input-field-enter {
+  animation: v3-input-field-enter var(--v3-dur-slow, 0.28s) var(--v3-ease, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+@keyframes v3-input-field-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .v3-input-field-enter { animation: none; }
+}
 .v3-input-field::before {
   content: "";
   position: absolute;

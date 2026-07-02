@@ -909,7 +909,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
           ) : null}
 
           {(() => {
-            const renderField = (field: PhaseInputField) => {
+            const renderField = (field: PhaseInputField, index: number) => {
               // On Strategy (showKpis), both the Primary success metric AND the
               // Success KPIs grid are rendered by the bespoke Outcome KPIs editor
               // below — a pinned required primary-metric row plus removable KPI
@@ -928,9 +928,10 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
               <div
                 key={field.id}
                 data-io-anchor={`input:${field.id}`}
-                className="v3-input-field"
+                className="v3-input-field v3-input-field-enter"
                 data-filled={verdict.tone === "green" ? "true" : "false"}
                 data-required={field.required ? "true" : "false"}
+                style={{ animationDelay: `${Math.min(index, 12) * 26}ms` }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 8, marginBottom: 4 }}>
                   <div style={{ minWidth: 0 }}>
