@@ -4,6 +4,7 @@ import {
   findFlowFieldGaps,
   analyzeExitCriteriaCoverage,
   analyzeMethodologySpine,
+  indexGovernanceEvidenceFields,
 } from "@/v3/lib/methodologySpine";
 
 // A minimal phase stub — only the fields the spine analyzer reads.
@@ -130,6 +131,46 @@ describe("analyzeMethodologySpine (whole-registry coherence)", () => {
       expect(criterion.covered).toBe(false);
       expect(criterion.backingFieldIds).toEqual([]);
     }
+  });
+});
+
+describe("indexGovernanceEvidenceFields (planning-vs-evidence tier, Option E)", () => {
+  it("returns only governance-signoff fields, each with the criteria it backs", () => {
+    const entries = indexGovernanceEvidenceFields(
+      phase({
+        id: "strategy",
+        inputFields: [
+          { id: "sponsor", label: "Executive sponsor", type: "text", required: true, role: "mandate" },
+          { id: "sponsorSignOffDate", label: "Sponsor sign-off date", type: "date", required: false, role: "governance-signoff", hint: "Date the sponsor signed off." },
+          { id: "industry", label: "Industry", type: "text", required: true },
+        ],
+      }),
+    );
+    // sponsor is a mandate (planning), industry has no role — only the sign-off
+    // date is an evidence field.
+    expect(entries.map((e) => e.fieldId)).toEqual(["sponsorSignOffDate"]);
+    expect(entries[0].role).toBe("governance-signoff");
+    // It overlaps the sponsor criterion, so it names that gate.
+    expect(entries[0].criteria.map((c) => c.criterionId)).toContain("strategy-3");
+  });
+
+  it("tags the real registry's governance-evidence fields with their gate", () => {
+    const strategy = getMethodology("atos-lite").phases.find((p) => p.id === "strategy")!;
+    const entries = indexGovernanceEvidenceFields(strategy);
+    const ids = entries.map((e) => e.fieldId);
+    expect(ids).toContain("sponsorSignOffDate");
+    expect(ids).toContain("businessCaseApproval");
+    // The business-case approval reference proves the business-case gate.
+    const bc = entries.find((e) => e.fieldId === "businessCaseApproval");
+    expect(bc?.criteria.map((c) => c.criterionId)).toContain("strategy-1");
+  });
+
+  it("returns [] for a phase with no governance-signoff fields", () => {
+    expect(
+      indexGovernanceEvidenceFields(
+        phase({ id: "strategy", inputFields: [{ id: "industry", label: "Industry", type: "text", required: true }] }),
+      ),
+    ).toEqual([]);
   });
 });
 

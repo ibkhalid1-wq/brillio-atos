@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { ProgramSummary, Workstream } from "@/new/types";
 import { getPhaseInputSchema, resolveRosterField, type GridColumn } from "@/v3/lib/phaseInputSchema";
+import { indexGovernanceEvidenceFields } from "@/v3/lib/methodologySpine";
+import type { PhaseDefinition } from "@/v3/lib/methodology";
 import { rosterColumnKeys, sortRosterRowsBySeniority } from "@/v3/lib/rosterRaci";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { availableModes, FIELD_ASSIST_MODE_LABEL, type FieldAssistMode } from "@/v3/lib/fieldAssist";
@@ -639,6 +641,17 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
     ? schema.fields.find((field) => field.id === prioritized.firstGapId)?.label ?? null
     : null;
 
+  // Planning-vs-evidence tier (Option E). The methodology owns the field order,
+  // so instead of splitting evidence fields into a separate panel (which would
+  // reshuffle the sequence and make fields jump), we tag them in place. An
+  // evidence field's only job is to prove a governance gate — its role is
+  // `governance-signoff` — so we look up which mandatory exit criteria it backs
+  // and badge it with the gate its fact proves.
+  const evidenceByFieldId = useMemo(() => {
+    const entries = indexGovernanceEvidenceFields({ id: phaseId, inputFields: schema.fields } as PhaseDefinition);
+    return new Map(entries.map((entry) => [entry.fieldId, entry] as const));
+  }, [phaseId, schema.fields]);
+
   // The exact payload `handleSave` would persist, recomputed on every edit. Used
   // both by the save path and by `onValuesChange` so read-only consumers (header
   // metrics, status rings, flow-line tones) can reflect in-progress edits without
@@ -882,6 +895,23 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
                           ✦ AI
                         </span>
                       ) : null}
+                      {(() => {
+                        const evidence = evidenceByFieldId.get(field.id);
+                        if (!evidence) return null;
+                        const gates = evidence.criteria.map((c) => c.label);
+                        const title = gates.length
+                          ? `Gate evidence — proves the exit ${gates.length > 1 ? "criteria" : "criterion"}: ${gates.join("; ")}`
+                          : "Gate evidence — captured to prove this phase's exit gate.";
+                        return (
+                          <span
+                            className="v3-chip"
+                            style={{ fontSize: 9, marginLeft: 6, verticalAlign: "middle" }}
+                            title={title}
+                          >
+                            ⛨ Gate evidence
+                          </span>
+                        );
+                      })()}
                     </div>
                     {field.hint ? (
                       <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 2 }}>{field.hint}</div>

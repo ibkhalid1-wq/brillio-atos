@@ -157,6 +157,37 @@ export function analyzeExitCriteriaCoverage(phase: PhaseDefinition): ExitCriteri
   });
 }
 
+/** One governance-evidence field and the mandatory gate(s) its fact proves. */
+export interface FieldEvidenceEntry {
+  fieldId: string;
+  /** The evidentiary role that puts this field in the evidence tier. */
+  role: FieldRole;
+  /** Mandatory exit criteria this field helps prove (may be empty). */
+  criteria: { criterionId: string; label: string }[];
+}
+
+/**
+ * The "evidence" half of the planning-vs-evidence split (Option E). A phase's
+ * inputs are two kinds of fact: PLANNING inputs that shape the work, and
+ * EVIDENCE inputs whose only job is to prove a governance gate (an approval,
+ * sign-off or confirmation — i.e. role `governance-signoff`). The methodology
+ * owns the field order, so we surface the tier in place rather than reordering:
+ * this returns each evidence field paired with the mandatory exit criteria it
+ * backs, so the UI can badge it and name the gate its fact proves.
+ */
+export function indexGovernanceEvidenceFields(phase: PhaseDefinition): FieldEvidenceEntry[] {
+  const coverage = analyzeExitCriteriaCoverage(phase);
+  return (phase.inputFields ?? [])
+    .filter((field): field is PhaseInputField & { role: FieldRole } => field.role === "governance-signoff")
+    .map((field) => ({
+      fieldId: field.id,
+      role: field.role,
+      criteria: coverage
+        .filter((c) => c.backingFieldIds.includes(field.id))
+        .map((c) => ({ criterionId: c.criterionId, label: c.label })),
+    }));
+}
+
 /** Full spine coherence report for a methodology variant. */
 export function analyzeMethodologySpine(variant: MethodologyVariant = "atos-lite"): MethodologySpineReport {
   const phases = getMethodology(variant).phases;
