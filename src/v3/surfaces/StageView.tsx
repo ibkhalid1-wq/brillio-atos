@@ -36,6 +36,7 @@ import {
   findingsToRecommendations,
   selfReportedGapRecommendations,
   groupRecommendationsByCategory,
+  matchGroundingFields,
   type RecommendationCategory,
 } from "@/v3/lib/artifactRecommendations";
 import ChangeRequestModal from "@/v3/components/ChangeRequestModal";
@@ -1979,29 +1980,36 @@ export default function StageView({
                   </div>
                   <ul className="v3-quality-issue-list">
                     {group.items.map((issue, index) => {
-                      // The specific field this guidance is about, so we can render
-                      // a jump chip INLINE with the advice — the input to fix sits
-                      // right beside what to fix, not only in the index below.
-                      const issueField = issue.fieldId
-                        ? qualityArtifact.groundingFields.find((field) => field.id === issue.fieldId)
-                        : undefined;
+                      // Fields this guidance points at, rendered as jump chips INLINE
+                      // with the advice so the input to fix sits beside what to fix.
+                      // An explicit fieldId (a deterministic "Add …" gap) resolves to
+                      // one field; a free-form model suggestion or self-reported gap
+                      // has none, so we surface any grounding field it NAMES in prose
+                      // (e.g. "the Cost assumption input") — turning vague guidance
+                      // into a direct link to the exact field(s) to improve.
+                      const chipFields = issue.fieldId
+                        ? qualityArtifact.groundingFields.filter((field) => field.id === issue.fieldId)
+                        : matchGroundingFields(`${issue.title} ${issue.detail ?? ""}`, qualityArtifact.groundingFields);
                       return (
                       <li key={index} className="v3-quality-issue">
                         <span className={`v3-chip v3-chip-tight ${issue.severity === "high" ? "red" : issue.severity === "medium" ? "amber" : "muted"}`}>{issue.severity}</span>
                         <div>
                           <div className="v3-quality-issue-title">{issue.title}</div>
                           {issue.detail ? <div className="v3-quality-issue-detail">{issue.detail}</div> : null}
-                          {!qualityArtifact.readOnly && issue.fieldId ? (
+                          {!qualityArtifact.readOnly && chipFields.length ? (
                             <div className="v3-drilldown-row" style={{ marginTop: 8 }}>
-                              <button
-                                type="button"
-                                className={`v3-drilldown-chip${issueField && !issueField.filled ? " thin" : ""}`}
-                                onClick={() => scrollToInputField(issue.fieldId as string)}
-                                title={`Go to "${issueField?.label ?? issue.fieldId}" to update it`}
-                              >
-                                <span aria-hidden="true">→</span>
-                                {issueField?.label ?? issue.fieldId}
-                              </button>
+                              {chipFields.map((field) => (
+                                <button
+                                  key={field.id}
+                                  type="button"
+                                  className={`v3-drilldown-chip${field.filled ? "" : " thin"}`}
+                                  onClick={() => scrollToInputField(field.id)}
+                                  title={`Go to "${field.label}" to update it`}
+                                >
+                                  <span aria-hidden="true">→</span>
+                                  {field.label}
+                                </button>
+                              ))}
                             </div>
                           ) : null}
                         </div>

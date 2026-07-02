@@ -158,3 +158,24 @@ export function groupRecommendationsByCategory<T extends ArtifactRecommendation>
       .sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]),
   })).filter((group) => group.items.length > 0);
 }
+
+/**
+ * The grounding fields a free-form recommendation is talking about, found by
+ * matching each field's label as a whole phrase inside the issue text. A model
+ * suggestion like "add per-line estimates to the Cost assumption input" carries
+ * no explicit fieldId, but it names the field in prose — so the Improve modal can
+ * still surface a jump-to-field chip for exactly the input(s) it mentions rather
+ * than leaving the user to hunt the field index. Whole-word matching (with the
+ * label regex-escaped) keeps a short label like "Industry" from firing on a
+ * substring, and returns fields in their original order so chips read stably.
+ */
+export function matchGroundingFields<T extends { label: string }>(text: string, fields: T[]): T[] {
+  const haystack = (text ?? "").toLowerCase();
+  if (!haystack.trim()) return [];
+  return fields.filter((field) => {
+    const label = field.label.trim().toLowerCase();
+    if (!label) return false;
+    const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`\\b${escaped}\\b`).test(haystack);
+  });
+}

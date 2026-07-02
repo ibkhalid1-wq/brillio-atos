@@ -6,6 +6,7 @@ import {
   reviewImprovementsToRecommendations,
   selfReportedGapRecommendations,
   groupRecommendationsByCategory,
+  matchGroundingFields,
   type ArtifactRecommendation,
 } from "@/v3/lib/artifactRecommendations";
 import type { ValidationFinding } from "@/v3/lib/crossArtifactValidation";
@@ -134,6 +135,34 @@ describe("groupRecommendationsByCategory", () => {
 
   it("returns [] for no recommendations", () => {
     expect(groupRecommendationsByCategory([])).toEqual([]);
+  });
+
+  it("matches grounding fields named in a free-form recommendation", () => {
+    const fields = [
+      { id: "costAssumption", label: "Cost assumption", filled: true },
+      { id: "executiveSponsor", label: "Executive sponsor", filled: true },
+      { id: "industry", label: "Industry", filled: true },
+      { id: "successMetric", label: "Primary success metric", filled: true },
+    ];
+    // Names two fields in prose → both surfaced, in original order.
+    const matched = matchGroundingFields(
+      "Add per-line estimates to the Cost assumption input, confirmed by the executive sponsor.",
+      fields,
+    );
+    expect(matched.map((f) => f.id)).toEqual(["costAssumption", "executiveSponsor"]);
+  });
+
+  it("matches a field label as a whole word, not a substring", () => {
+    const fields = [{ id: "industry", label: "Industry", filled: true }];
+    // "industrialisation" contains "industr…" but not the whole word "industry".
+    expect(matchGroundingFields("Plan the industrialisation rollout.", fields)).toEqual([]);
+    expect(matchGroundingFields("Specify the Industry vertical.", fields).map((f) => f.id)).toEqual(["industry"]);
+  });
+
+  it("returns [] when no field is named or text is empty", () => {
+    const fields = [{ id: "costAssumption", label: "Cost assumption", filled: true }];
+    expect(matchGroundingFields("Review and approve the document.", fields)).toEqual([]);
+    expect(matchGroundingFields("", fields)).toEqual([]);
   });
 
   it("preserves caller-specific extra fields on grouped items", () => {
