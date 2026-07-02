@@ -602,6 +602,15 @@ export interface PhaseFidelity {
    * "no gap detected" only means something once the phase has produced work.
    */
   assessed: boolean;
+  /**
+   * True for the earliest phase in the sequence — the foundation the others are
+   * built on. Backward fidelity ("does this phase honour the phases before it?")
+   * is undefined for it: nothing precedes it, so the validator can never attribute
+   * a fidelity gap to it and a clean read is vacuous, not a genuine 100. Such a
+   * phase carries a null score (unless a concrete gap is independently attributed
+   * to it) so surfaces render it as "foundation", not a false "Strong".
+   */
+  foundational: boolean;
   /** 0–100; 100 = no fidelity gap attributed to the phase. Null when not assessed. */
   score: number | null;
   band: ReturnType<typeof confidenceLabel> | null;
@@ -626,12 +635,15 @@ export function assessPhaseFidelity(
   findings: ValidationFinding[],
   options: PhaseSelectOptions = {},
 ): PhaseFidelity[] {
-  return phases.map((ph) => {
+  return phases.map((ph, index) => {
     const scoped = [...selectFindingsForPhase(findings, ph.id, options)].sort(
       (a, b) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity],
     );
     const summary = summariseValidation(scoped);
     const topIssue = scoped[0] ?? null;
+    // The earliest phase in the ordered list is the foundation — callers pass
+    // phases in sequence (strategy first), so index 0 has no predecessor.
+    const foundational = index === 0;
     // A not-yet-started phase has nothing to be faithful to; scoring it 100
     // reads as a false "Strong". Report it as unassessed instead.
     if (!phaseHasStarted(ph.status)) {
@@ -639,6 +651,25 @@ export function assessPhaseFidelity(
         phaseId: ph.id,
         label: ph.displayName ?? ph.id,
         assessed: false,
+        foundational,
+        score: null,
+        band: null,
+        summary,
+        topIssue: null,
+        gaps: [],
+      };
+    }
+    // The foundation with no attributed gap is UNSCORABLE by backward fidelity —
+    // nothing precedes it to honour, so a "clean" read is vacuous. Report it as a
+    // foundation (null score) rather than a false 100. If a concrete gap IS
+    // attributed to it (e.g. a deterministic structural gap), fall through and
+    // score it on that gap — that is real, not a backward-fidelity artefact.
+    if (foundational && scoped.length === 0) {
+      return {
+        phaseId: ph.id,
+        label: ph.displayName ?? ph.id,
+        assessed: true,
+        foundational,
         score: null,
         band: null,
         summary,
@@ -650,6 +681,7 @@ export function assessPhaseFidelity(
       phaseId: ph.id,
       label: ph.displayName ?? ph.id,
       assessed: true,
+      foundational,
       score: summary.coverageScore,
       band: confidenceLabel(summary.coverageScore),
       summary,

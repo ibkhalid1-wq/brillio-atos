@@ -371,7 +371,10 @@ describe("selectFindingsForPhase", () => {
 });
 
 describe("assessPhaseFidelity — per-phase supports-foundations score", () => {
+  // Phases are passed in sequence; index 0 (strategy) is the foundation, which
+  // backward fidelity cannot score, so downstream phases carry the verdicts.
   const phases = [
+    { id: "strategy", displayName: "Strategy" },
     { id: "design", displayName: "Design" },
     { id: "build", displayName: "Build" },
   ];
@@ -385,6 +388,7 @@ describe("assessPhaseFidelity — per-phase supports-foundations score", () => {
     const design = out.find((p) => p.phaseId === "design")!;
     const build = out.find((p) => p.phaseId === "build")!;
     expect(design.assessed).toBe(true);
+    expect(design.foundational).toBe(false);
     expect(design.score).toBe(100);
     expect(design.band).toBe("Strong");
     expect(design.topIssue).toBeNull();
@@ -396,6 +400,30 @@ describe("assessPhaseFidelity — per-phase supports-foundations score", () => {
     expect(build.topIssue?.findingId).toBe("a");
     // Every attributed gap is exposed, most-severe first, with a recommendation.
     expect(build.gaps.map((g) => g.findingId)).toEqual(["a", "b"]);
+  });
+
+  it("does not score the foundation phase — backward fidelity can't assess it", () => {
+    const out = assessPhaseFidelity(phases, findings);
+    const strategy = out.find((p) => p.phaseId === "strategy")!;
+    // The first phase has no predecessor to honour, so a clean read is vacuous:
+    // report it as an assessed foundation with a null score, not a false 100.
+    expect(strategy.foundational).toBe(true);
+    expect(strategy.assessed).toBe(true);
+    expect(strategy.score).toBeNull();
+    expect(strategy.band).toBeNull();
+    expect(strategy.gaps).toEqual([]);
+  });
+
+  it("still scores the foundation when a concrete gap is attributed to it", () => {
+    // A deterministic structural gap that genuinely lands on strategy is real —
+    // not a backward-fidelity artefact — so the foundation IS scored on it.
+    const onStrategy: ValidationFinding = { findingId: "s1", severity: "high", domain: "benefits-traceability", phaseId: "strategy", sourceArtifact: "businessCase", targetArtifact: "", sourceItem: "B-1", issue: "No baseline", recommendation: "Add baseline", confidence: 1, evidence: [] };
+    const out = assessPhaseFidelity(phases, [onStrategy]);
+    const strategy = out.find((p) => p.phaseId === "strategy")!;
+    expect(strategy.foundational).toBe(true);
+    expect(strategy.score).not.toBeNull();
+    expect(strategy.score!).toBeLessThan(100);
+    expect(strategy.gaps.map((g) => g.findingId)).toEqual(["s1"]);
   });
 
   it("can pull in severe program-wide findings when asked", () => {
