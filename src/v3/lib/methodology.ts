@@ -1059,6 +1059,10 @@ export const ATOS_STANDARD: MethodologyDefinition = {
             { key: "baseline", label: "Baseline", type: "text" },
             { key: "target", label: "Target", type: "text" },
             { key: "actual", label: "Actual at closure", type: "text" },
+            // Unit keeps baseline/target/actual on one comparable scale (%, $, FTE)
+            // so realisation is measured like-for-like instead of units being crammed
+            // into value cells. Additive column — never demotes an already-filled row.
+            { key: "unit", label: "Unit", type: "text", width: 100, placeholder: "e.g. %, $, FTE" },
           ],
         },
         { id: "lessonsLearned", label: "Lessons learned", type: "textarea", required: false, usedByArtifacts: ["narrative"], placeholder: "What worked, what didn't, and what to carry into the next programme", hint: "The retrospective that closes the programme — feeds the closure narrative." },
