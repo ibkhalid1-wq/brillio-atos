@@ -95,12 +95,13 @@ describe("analyzeMethodologySpine (whole-registry coherence)", () => {
   it("pins the exit-criteria coverage gaps for the default (atos-lite) variant", () => {
     const uncovered = analyzeMethodologySpine("atos-lite").uncoveredCriteria.map((c) => c.criterionId);
     expect(uncovered).toEqual([
-      "mobilise-4", // Budget baseline confirmed — no budget/baseline input on Mobilise
-      "discover-1", // As-is assessment complete — captured only as an artifact
-      "discover-2", // Stakeholder interviews completed — no interview-log input
-      "build-3", // Training material ready — no training input
-      "operate-3", // KPIs being measured — no KPI-measurement input on Operate
-      "valuerealize-4", // Handover to BAU confirmed — no BAU handover input
+      // Remaining gaps are ARTIFACT-derived by design — a deliverable proves them,
+      // not a captured atomic fact — so they are intentionally left uncovered:
+      "discover-1", // As-is assessment complete — proven by the current-state artifact
+      "discover-2", // Stakeholder interviews completed — proven by the interview-log artifact
+      "build-3", // Training material ready — proven by the training-pack artifact
+      "operate-3", // KPIs being measured — proven by the KPI tracking artifact
+      "valuerealize-4", // Handover to BAU confirmed — no BAU handover input yet
     ]);
   });
 
@@ -132,5 +133,26 @@ describe("Strategy governance-evidence fields (Option A)", () => {
     const f = field("businessCaseApproval");
     expect(f?.type).toBe("text");
     expect(f?.required).toBe(false);
+  });
+});
+
+describe("Mobilise governance-evidence fields (Option A)", () => {
+  const mobilise = getMethodology("atos-lite").phases.find((p) => p.id === "mobilise")!;
+
+  // "Budget baseline confirmed" (mobilise-4) asks for a budget approval reference —
+  // the Strategy cost grid holds the estimate, not the approved baseline — so it
+  // now has a backing input and is no longer in the uncovered inventory above.
+  it("declares an optional budget baseline approval reference field", () => {
+    const f = mobilise.inputFields?.find((x) => x.id === "budgetBaselineApproval");
+    expect(f?.type).toBe("text");
+    expect(f?.required).toBe(false);
+  });
+
+  it("makes mobilise-4 covered in the spine report", () => {
+    const covered = analyzeMethodologySpine("atos-lite").exitCriteriaCoverage.find(
+      (c) => c.criterionId === "mobilise-4",
+    );
+    expect(covered?.covered).toBe(true);
+    expect(covered?.backingFieldIds).toContain("budgetBaselineApproval");
   });
 });

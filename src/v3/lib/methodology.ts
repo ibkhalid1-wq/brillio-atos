@@ -332,6 +332,13 @@ export const ATOS_STANDARD: MethodologyDefinition = {
           placeholder: "Decision forums, who sits on them, how often they meet, and the escalation path",
           hint: "e.g. Weekly delivery stand-up, fortnightly SteerCo (sponsor + workstream leads), exceptions escalate to the sponsor within 48h",
         },
+        // Governance evidence for the "Budget baseline confirmed" exit criterion.
+        // Its evidencePrompt asks for a "budget approval reference" — the Strategy
+        // cost grid holds the ESTIMATE, but nothing recorded that a baseline was
+        // ALLOCATED and APPROVED, so the criterion had no backing input. Optional
+        // (never retroactively gates an in-flight Mobilise); grounded into the
+        // phase artifact prompts via the edge's buildGroundingFacts.
+        { id: "budgetBaselineApproval", label: "Budget baseline approval reference", type: "text", required: false, usedByArtifacts: ["governance-model"], placeholder: "Link or reference to the approved budget baseline", hint: "A link or reference confirming the programme budget baseline has been allocated and approved. Backs the Mobilise exit criterion \"Budget baseline confirmed\".", example: "FY26 budget board approval BR-1183" },
         // Seed the risks-and-assumptions log — the third Mobilise mandatory exit
         // criterion. Unlike the roster/cadence (which ground the RACI and governance
         // *phase* documents), the `risk` agent is PROGRAM-LEVEL: it writes the shared
