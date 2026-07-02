@@ -253,7 +253,7 @@ describe("stakeholder list → scope-map / requirements-catalog (semantic flow)"
       { from: "stakeholderList", to: "requirements-catalog" },
     ]);
     expect(new Set(getArtifactInputFields("discover", "scope-map"))).toEqual(
-      new Set(["currentStateSummary", "scopeInclusions", "scopeExclusions", "stakeholderList"]),
+      new Set(["currentStateSummary", "currentStateMetrics", "scopeInclusions", "scopeExclusions", "stakeholderList"]),
     );
   });
 });

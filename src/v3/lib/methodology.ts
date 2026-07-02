@@ -460,6 +460,26 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       typicalDurationWeeks: { min: 3, max: 8 },
       inputFields: [
         { id: "currentStateSummary", label: "Current state summary & key pain points", type: "textarea", required: true, placeholder: "How things work today and the problems driving this programme", hint: "Today's processes, systems, and the pain points the programme must resolve" },
+        // Baseline numbers behind the current-state prose. The summary narrates the
+        // pain; this grid quantifies it, so "current state documented" carries a
+        // measurable starting point the Value Realize benefit variance is later scored
+        // against (a benefit with no baseline can only be asserted, not measured).
+        // Optional grounding wired into scope-map/requirements-catalog (optional flow
+        // inputs never block generation).
+        {
+          id: "currentStateMetrics",
+          label: "Current-state baseline metrics",
+          type: "grid",
+          role: "measure",
+          required: false,
+          hint: "Quantify today's performance on the dimensions the programme aims to move — one metric per row with its current value and unit. These are the baselines benefits are later measured against.",
+          usedByArtifacts: ["scope-map", "requirements-catalog"],
+          columns: [
+            { key: "metric", label: "Metric", type: "text", placeholder: "e.g. Order-to-cash cycle time" },
+            { key: "current", label: "Current value", type: "text", width: 140 },
+            { key: "unit", label: "Unit", type: "text", width: 120, placeholder: "days / % / $" },
+          ],
+        },
         {
           id: "scopeInclusions",
           label: "In-scope processes, systems & geographies",
@@ -493,6 +513,11 @@ export const ATOS_STANDARD: MethodologyDefinition = {
             { key: "role", label: "Role / title", type: "text" },
             { key: "influence", label: "Influence", type: "text" },
             { key: "interest", label: "Interest", type: "text" },
+            // Evidence for the "Key stakeholders identified and mapped" exit criterion:
+            // a name on the list proves identification, but only an engagement status
+            // proves they have actually been reached and aligned. The stakeholder-map
+            // agent reads this to prioritise who still needs an interview.
+            { key: "engagementStatus", label: "Engagement status", type: "select", width: 170, options: ["Not started", "Identified", "Contacted", "Interviewed", "Aligned"] },
           ],
         },
         {
@@ -502,17 +527,20 @@ export const ATOS_STANDARD: MethodologyDefinition = {
           // ids carried on the rows), which the objective graph's satisfied-by
           // chain and the cross-artifact validator attach design coverage to — so a
           // requirement with no covering design is a structural gap, not a semantic
-          // inference. Optional: making it required would retroactively fail every
-          // existing programme's Discover gate (none carry requirements yet). The
-          // requirements-catalog agent drafts these from current state + scope; the
-          // grid rows flatten into its prompt via the edge's buildGroundingFacts, so
-          // they inform generation automatically. Wired into requirements-catalog's
-          // input flow for the visual flow + staleness (optional flow inputs never
-          // block generation).
+          // inference. Required via the requiredSince ratchet rather than an outright
+          // flag: a bare `required:true` would retroactively fail every existing
+          // programme's Discover gate (none carry requirements yet), so it counts as a
+          // gap only for programmes created on/after the cutoff — design needs traceable
+          // inputs and a post-cutoff Discover with no captured requirements is genuinely
+          // incomplete. The requirements-catalog agent drafts these from current state +
+          // scope; the grid rows flatten into its prompt via the edge's buildGroundingFacts,
+          // so they inform generation automatically. Wired into requirements-catalog's
+          // input flow for the visual flow + staleness.
           id: "requirements",
           label: "Requirements",
           type: "grid",
-          required: false,
+          required: true,
+          requiredSince: "2026-07-02",
           hint: "The functional and non-functional needs the solution must satisfy — one per row, with its type and priority. Each becomes a tracked requirement the design must cover.",
           usedByArtifacts: ["requirements-catalog"],
           columns: [
@@ -523,8 +551,8 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         },
       ],
       artifactInputFlow: {
-        "scope-map": ["currentStateSummary", "scopeInclusions", "scopeExclusions", "stakeholderList"],
-        "requirements-catalog": ["currentStateSummary", "scopeInclusions", "stakeholderList", "requirements"],
+        "scope-map": ["currentStateSummary", "currentStateMetrics", "scopeInclusions", "scopeExclusions", "stakeholderList"],
+        "requirements-catalog": ["currentStateSummary", "currentStateMetrics", "scopeInclusions", "stakeholderList", "requirements"],
         "stakeholder-map": ["stakeholderList"],
       },
     },
