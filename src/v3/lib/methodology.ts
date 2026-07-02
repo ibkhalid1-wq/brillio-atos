@@ -209,14 +209,6 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       inputFields: [
         { id: "businessObjective", label: "Business objective", type: "textarea", placeholder: "What outcome is this programme trying to achieve?", required: true, example: "Reduce cost-to-serve by 20% within 18 months by consolidating three regional service desks onto one platform.", validationRule: "A measurable outcome, not an activity — name the change, the magnitude, and the horizon." },
         { id: "sponsor", label: "Executive sponsor", type: "text", role: "mandate", placeholder: "Name and title", required: true, example: "Jane Okafor, Chief Operating Officer", validationRule: "A named individual with their role, not a team or department." },
-        // Governance evidence for the "Sponsor confirmed and committed" exit
-        // criterion. The `sponsor` field captures WHO; this captures WHEN they
-        // signed off — the criterion's evidencePrompt asks for exactly "date of
-        // sign-off", which no field could hold, so the artifact reviewer used to
-        // point at "the relevant input" that didn't exist. Optional so it never
-        // retroactively gates an in-flight programme's Strategy gate; the edge's
-        // buildGroundingFacts still flows it into the charter prompt.
-        { id: "sponsorSignOffDate", label: "Sponsor sign-off date", type: "date", role: "governance-signoff", required: false, usedByArtifacts: ["charter"], hint: "The date the executive sponsor formally signed off the programme mandate. Backs the Strategy exit criterion \"Sponsor confirmed and committed\" (evidence: date of sign-off).", example: "2026-04-20" },
         { id: "industry", label: "Industry", type: "select", options: INDUSTRY_OPTIONS, required: true, hint: "The client's primary sector. Sets the regulatory backdrop, benchmark cost/benefit norms, and sector language the charter and business case are written in." },
         { id: "startDate", label: "Programme start date", type: "date", required: true, validationRule: "The programme kickoff date." },
         { id: "targetEndDate", label: "Target end date", type: "date", required: true, validationRule: "Must fall after the programme start date." },
@@ -251,12 +243,6 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         // artifact goes stale when the ask changes.
         { id: "investmentAsk", label: "Investment ask", type: "text", role: "cost", required: false, usedByArtifacts: ["business-case"], placeholder: "Total funding requested, e.g. $2.4M over 18 months", hint: "The single headline funding figure the business case seeks approval for — the total investment ask, distinct from the itemised cost breakdown above. This is what SteerCo signs against.", example: "$2.4M capital over 18 months, funded from the FY26 transformation budget" },
         { id: "constraints", label: "Key constraints", type: "textarea", role: "constraint", placeholder: "Budget, timeline, regulatory, or technical constraints", required: true, hint: "e.g. Must go live before Q4 financial year end", example: "Must go live before Q4 FY-end; no additional headcount; core-banking change freeze in December.", validationRule: "The hard boundaries the solution must respect — budget, timeline, regulatory, or technical." },
-        // Governance evidence for the "Business case approved" exit criterion.
-        // Its evidencePrompt asks for a "link or reference to the approved business
-        // case document" — a fact the cost grid can't hold — so the reviewer had
-        // nowhere to point. Optional (never retroactively gates); flows into the
-        // business-case prompt via buildGroundingFacts.
-        { id: "businessCaseApproval", label: "Business case approval reference", type: "text", role: "governance-signoff", required: false, usedByArtifacts: ["business-case"], placeholder: "Link or reference to the approved business case", hint: "A link or document reference showing the business case has been formally approved. Backs the Strategy exit criterion \"Business case approved\".", example: "SteerCo minutes 2026-04-18, item 4" },
         { id: "successMetric", label: "Primary success metric", type: "text", role: "measure", placeholder: "KPI name, e.g. Cost to serve", required: true, example: "Cost to serve per transaction", validationRule: "A single measurable KPI name — its baseline and target are captured in the Success KPIs grid." },
         {
           // KPIs captured as a structured grid — each with a baseline and target —
@@ -317,6 +303,19 @@ export const ATOS_STANDARD: MethodologyDefinition = {
             { key: "date", label: "Target date", type: "date", width: 160 },
           ],
         },
+        // ── Governance evidence (sign-off tier) ──────────────────────────────
+        // These two fields prove Strategy exit criteria rather than shaping the
+        // programme's substance, so they sit at the end of the panel — the user
+        // provides them once the mandate above is settled. Both optional (never
+        // retroactively gate an in-flight Strategy); flow into their artifacts via
+        // buildGroundingFacts.
+        //
+        // Backs "Sponsor confirmed and committed" — the `sponsor` field captures
+        // WHO, this captures WHEN they signed off (evidencePrompt: "date of sign-off").
+        { id: "sponsorSignOffDate", label: "Sponsor sign-off date", type: "date", role: "governance-signoff", required: false, usedByArtifacts: ["charter"], hint: "The date the executive sponsor formally signed off the programme mandate. Backs the Strategy exit criterion \"Sponsor confirmed and committed\" (evidence: date of sign-off).", example: "2026-04-20" },
+        // Backs "Business case approved" (evidencePrompt: "link or reference to the
+        // approved business case document") — a fact the cost grid can't hold.
+        { id: "businessCaseApproval", label: "Business case approval reference", type: "text", role: "governance-signoff", required: false, usedByArtifacts: ["business-case"], placeholder: "Link or reference to the approved business case", hint: "A link or document reference showing the business case has been formally approved. Backs the Strategy exit criterion \"Business case approved\".", example: "SteerCo minutes 2026-04-18, item 4" },
       ],
       artifactInputFlow: {
         // The roadmap is sequenced from the whole strategy picture — objective,
@@ -396,13 +395,6 @@ export const ATOS_STANDARD: MethodologyDefinition = {
           placeholder: "Decision forums, who sits on them, how often they meet, and the escalation path",
           hint: "e.g. Weekly delivery stand-up, fortnightly SteerCo (sponsor + workstream leads), exceptions escalate to the sponsor within 48h",
         },
-        // Governance evidence for the "Budget baseline confirmed" exit criterion.
-        // Its evidencePrompt asks for a "budget approval reference" — the Strategy
-        // cost grid holds the ESTIMATE, but nothing recorded that a baseline was
-        // ALLOCATED and APPROVED, so the criterion had no backing input. Optional
-        // (never retroactively gates an in-flight Mobilise); grounded into the
-        // phase artifact prompts via the edge's buildGroundingFacts.
-        { id: "budgetBaselineApproval", label: "Budget baseline approval reference", type: "text", role: "governance-signoff", required: false, usedByArtifacts: ["governance-model"], placeholder: "Link or reference to the approved budget baseline", hint: "A link or reference confirming the programme budget baseline has been allocated and approved. Backs the Mobilise exit criterion \"Budget baseline confirmed\".", example: "FY26 budget board approval BR-1183" },
         // Seed the risks-and-assumptions log — the third Mobilise mandatory exit
         // criterion. Unlike the roster/cadence (which ground the RACI and governance
         // *phase* documents), the `risk` agent is PROGRAM-LEVEL: it writes the shared
@@ -442,6 +434,14 @@ export const ATOS_STANDARD: MethodologyDefinition = {
             { key: "validation", label: "How / when validated", type: "text" },
           ],
         },
+        // ── Governance evidence (sign-off tier) ──────────────────────────────
+        // Backs the "Budget baseline confirmed" exit criterion (evidencePrompt: a
+        // "budget approval reference"). The Strategy cost grid holds the ESTIMATE;
+        // this records that a baseline was ALLOCATED and APPROVED. Placed at the end
+        // as an attestation of the substantive team/governance/RAID work above.
+        // Optional (never retroactively gates an in-flight Mobilise); grounded into
+        // the phase artifact prompts via the edge's buildGroundingFacts.
+        { id: "budgetBaselineApproval", label: "Budget baseline approval reference", type: "text", role: "governance-signoff", required: false, usedByArtifacts: ["governance-model"], placeholder: "Link or reference to the approved budget baseline", hint: "A link or reference confirming the programme budget baseline has been allocated and approved. Backs the Mobilise exit criterion \"Budget baseline confirmed\".", example: "FY26 budget board approval BR-1183" },
       ],
       artifactInputFlow: {
         // RACI maps each activity to an accountable role, so it is grounded entirely by
@@ -616,19 +616,6 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         { id: "functionalDesignSummary", label: "Functional design summary", type: "textarea", required: true, requiredSince: "2026-07-02", placeholder: "Core business processes and workflows the solution must support, and how users/agents move through them", hint: "Summarise the functional/process design — key workflows, use cases, and the roles/agents that act in them. Attach the detailed workflow catalogue as a document and the extractor will summarise it here." },
         { id: "targetArchitecture", label: "Target architecture summary", type: "textarea", required: true, placeholder: "Key components, platforms, and how they integrate", hint: "Major systems, data stores, and integration topology at a glance" },
         {
-          id: "keyDesignDecisions",
-          label: "Key design decisions",
-          type: "grid",
-          required: false,
-          hint: "The Solution Architecture agent drafts these from your approach and target architecture — review, refine, and add any it missed rather than typing the whole log from scratch. Name the requirement(s) each decision addresses so the graph can trace design back to the need it satisfies.",
-          columns: [
-            { key: "decision", label: "Decision", type: "text" },
-            { key: "optionsConsidered", label: "Options considered", type: "text" },
-            { key: "rationale", label: "Rationale", type: "text" },
-            { key: "addresses", label: "Addresses requirement(s)", type: "text", placeholder: "Requirement text this decision satisfies, comma-separated" },
-          ],
-        },
-        {
           // Non-functional requirements as a structured grid so each quality
           // attribute is a first-class, measurable requirement rather than prose.
           // Like the Discover requirements grid, the Program Graph mints one
@@ -661,6 +648,23 @@ export const ATOS_STANDARD: MethodologyDefinition = {
           ],
         },
         { id: "integrationDataConstraints", label: "Integration & data constraints", type: "textarea", required: false, placeholder: "Systems to integrate, data migration scope, and known dependencies", hint: "Upstream/downstream systems, migration volumes, and sequencing constraints" },
+        // The design-decisions log is agent-drafted from the required substance
+        // above (approach, functional design, target architecture, NFRs) — so it
+        // follows them in the panel: the user reviews and refines a synthesis
+        // rather than authoring it cold before the design is stated.
+        {
+          id: "keyDesignDecisions",
+          label: "Key design decisions",
+          type: "grid",
+          required: false,
+          hint: "The Solution Architecture agent drafts these from your approach and target architecture — review, refine, and add any it missed rather than typing the whole log from scratch. Name the requirement(s) each decision addresses so the graph can trace design back to the need it satisfies.",
+          columns: [
+            { key: "decision", label: "Decision", type: "text" },
+            { key: "optionsConsidered", label: "Options considered", type: "text" },
+            { key: "rationale", label: "Rationale", type: "text" },
+            { key: "addresses", label: "Addresses requirement(s)", type: "text", placeholder: "Requirement text this decision satisfies, comma-separated" },
+          ],
+        },
         // Governance evidence for the "Solution design approved by architecture review"
         // exit criterion. The design content lives in solution-architecture, but nothing
         // recorded that the review board actually signed it off — so the gate criterion
@@ -847,23 +851,12 @@ export const ATOS_STANDARD: MethodologyDefinition = {
             { key: "sla", label: "SLA", type: "text", width: 200, placeholder: "e.g. P1 response 30m, resolve 4h" },
           ],
         },
-        {
-          id: "adoptionBaseline",
-          label: "Adoption metrics baseline",
-          type: "grid",
-          required: false,
-          usedByArtifacts: ["adoption"],
-          hint: "The adoption metrics tracked from go-live, with their starting baseline and target — this is what adoption reporting trends against.",
-          columns: [
-            { key: "metric", label: "Adoption metric", type: "text" },
-            { key: "baseline", label: "Baseline at go-live", type: "text" },
-            { key: "target", label: "Target", type: "text" },
-          ],
-        },
         // Evidence for the "Live operation stable for agreed hyper-care period"
         // criterion: proof the window was actually held stable (incidents resolved,
-        // stability thresholds met), not just that a period was agreed. Optional; a
-        // programme still inside hyper-care legitimately has no exit evidence yet.
+        // stability thresholds met), not just that a period was agreed. Kept next to
+        // the support model/tiers it closes out, so the go-live → support → hyper-care
+        // narrative stays contiguous. Optional; a programme still inside hyper-care
+        // legitimately has no exit evidence yet.
         {
           id: "hyperCareExit",
           label: "Hyper-care exit evidence",
@@ -876,6 +869,21 @@ export const ATOS_STANDARD: MethodologyDefinition = {
             { key: "measure", label: "Stability measure", type: "text", placeholder: "e.g. Open P1 incidents, uptime, MTTR" },
             { key: "threshold", label: "Exit threshold", type: "text", width: 160 },
             { key: "actual", label: "Achieved", type: "text", width: 160 },
+          ],
+        },
+        // Adoption is a distinct post-go-live workstream (its own agent), so it
+        // follows the support/hyper-care cluster rather than splitting it.
+        {
+          id: "adoptionBaseline",
+          label: "Adoption metrics baseline",
+          type: "grid",
+          required: false,
+          usedByArtifacts: ["adoption"],
+          hint: "The adoption metrics tracked from go-live, with their starting baseline and target — this is what adoption reporting trends against.",
+          columns: [
+            { key: "metric", label: "Adoption metric", type: "text" },
+            { key: "baseline", label: "Baseline at go-live", type: "text" },
+            { key: "target", label: "Target", type: "text" },
           ],
         },
       ],
