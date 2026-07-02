@@ -593,7 +593,12 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         // Feeds future-state-design (futureCapabilities/processChanges) and the
         // TOM (coreProcesses). Prose so an imported workflow catalogue summarises
         // cleanly here while the full document stays attached as the source.
-        { id: "functionalDesignSummary", label: "Functional design summary", type: "textarea", required: false, placeholder: "Core business processes and workflows the solution must support, and how users/agents move through them", hint: "Summarise the functional/process design — key workflows, use cases, and the roles/agents that act in them. Attach the detailed workflow catalogue as a document and the extractor will summarise it here." },
+        // Ratcheted required (2026-07-02): the functional design is the WHAT the
+        // solution delivers, and a Design with a target architecture but no functional
+        // design records only the technical HOW — leaving the TOM and future-state
+        // agents ungrounded on process. Ratchet, not a bare flag, so no in-flight
+        // programme (which never had this input) is retroactively gated.
+        { id: "functionalDesignSummary", label: "Functional design summary", type: "textarea", required: true, requiredSince: "2026-07-02", placeholder: "Core business processes and workflows the solution must support, and how users/agents move through them", hint: "Summarise the functional/process design — key workflows, use cases, and the roles/agents that act in them. Attach the detailed workflow catalogue as a document and the extractor will summarise it here." },
         { id: "targetArchitecture", label: "Target architecture summary", type: "textarea", required: true, placeholder: "Key components, platforms, and how they integrate", hint: "Major systems, data stores, and integration topology at a glance" },
         {
           id: "keyDesignDecisions",
@@ -641,6 +646,12 @@ export const ATOS_STANDARD: MethodologyDefinition = {
           ],
         },
         { id: "integrationDataConstraints", label: "Integration & data constraints", type: "textarea", required: false, placeholder: "Systems to integrate, data migration scope, and known dependencies", hint: "Upstream/downstream systems, migration volumes, and sequencing constraints" },
+        // Governance evidence for the "Solution design approved by architecture review"
+        // exit criterion. The design content lives in solution-architecture, but nothing
+        // recorded that the review board actually signed it off — so the gate criterion
+        // had no backing input. Optional (never retroactively gates an in-flight Design);
+        // grounded into the solution-architecture prompt via the edge's buildGroundingFacts.
+        { id: "designReviewSignOff", label: "Architecture review sign-off reference", type: "text", role: "governance-signoff", required: false, usedByArtifacts: ["solution-architecture"], placeholder: "Link or reference to the architecture review approval", hint: "A link or reference confirming the solution design was reviewed and approved by the architecture review board. Backs the Design exit criterion \"Solution design approved by architecture review\".", example: "ARB approval ARB-2026-047" },
       ],
       artifactInputFlow: {
         "solution-architecture": ["solutionApproach", "functionalDesignSummary", "targetArchitecture", "nonFunctionalRequirements", "integrationDataConstraints", "keyDesignDecisions"],
