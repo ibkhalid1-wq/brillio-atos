@@ -5088,6 +5088,9 @@ function applyCrossArtifactValidationResultToProgramData(programData: ProgramSta
         sourceItem: typeof entry.sourceItem === "string" ? entry.sourceItem : "",
         issue: typeof entry.issue === "string" ? entry.issue : "",
         recommendation: typeof entry.recommendation === "string" ? entry.recommendation : "",
+        evidence: Array.isArray(entry.evidence)
+          ? entry.evidence.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+          : [],
         confidence: clampNumber(entry.confidence, 0, 1, 0.6),
         source: "cross-artifact-validator",
       }));
@@ -7064,6 +7067,20 @@ Deno.serve(async (req) => {
         programsProcessed: programs?.length || 0,
         successes: results.filter((result) => result.status === "fulfilled").length,
         failures: results.filter((result) => result.status === "rejected").length,
+      });
+    }
+
+    // Cross-artifact validation is USER-INITIATED ONLY. It runs exclusively from
+    // the Ontology view's "Validate" buttons (which send triggeredBy:"user"); it
+    // must never fire from the downstream fan-out, a schedule, a handoff, or any
+    // other automatic path. This is a hard backstop for that contract: reject any
+    // non-user invocation before the LLM call, so no future auto-trigger can spend
+    // a validation run behind the user's back.
+    if (request.agentId === "cross-artifact-validator" && request.triggeredBy !== "user") {
+      return jsonResponse({
+        status: "skipped",
+        reason: "Cross-artifact validation is user-initiated only; it runs from the Validate button, never automatically.",
+        runId: null,
       });
     }
 
