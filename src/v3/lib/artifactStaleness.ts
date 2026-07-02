@@ -14,7 +14,9 @@
  *
  * Pure, deterministic, unit-testable. No AI, no backend.
  */
-import { derivePhaseFlowEdges } from "@/v3/lib/phaseFlowEdges";
+import { derivePhaseFlowEdges, artifactReferenceSatisfied } from "@/v3/lib/phaseFlowEdges";
+import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
+import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
 import { type DynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 
 /** A phase's artifact bucket: artifactId → entry (we only read `status`). */
@@ -146,6 +148,68 @@ export function relatedArtifactsToStale(
     const status = (entry as { status?: unknown }).status;
     return status !== "archived" && status !== "stale";
   });
+}
+
+/** Titles of the given artifact ids in a phase, resolved from its catalogue. */
+function artifactTitles(phaseId: string, artifactIds: string[], store?: DynamicSchemaStore): string[] {
+  const defs = getPhaseArtifactDefs(phaseId, store);
+  return artifactIds.map((id) => defs.find((d) => d.id === id)?.label ?? id);
+}
+
+/** A downstream artifact to stale, named by its owning phase. */
+export interface CrossPhaseStaleTarget {
+  phaseId: string;
+  artifactId: string;
+}
+
+/**
+ * Cross-phase staleness propagation. `relatedArtifactsToStale` handles the phase
+ * whose inputs just changed; this handles the ripple *into later phases*. When an
+ * upstream deliverable changes (or is itself staled), any downstream artifact
+ * built on top of it is now standing on shifted ground and must be regenerated
+ * too — otherwise a Design that referenced the old requirements catalog silently
+ * keeps citing a version that no longer exists.
+ *
+ * The cross-phase dependency signal is a later phase's `artifact-reference` input:
+ * its label names an upstream deliverable by title (e.g. "Reference to approved
+ * requirements catalog"). We match that label against the changed artifacts'
+ * titles (`artifactReferenceSatisfied`, the same token model the flow wiring
+ * uses), then follow those reference fields to the downstream artifacts they feed
+ * (`artifactsForInputFields`, the same methodology edge model as intra-phase
+ * staleness). Downstream artifacts that are present and neither `archived` nor
+ * already `stale` are returned as `{ phaseId, artifactId }` pairs.
+ *
+ * `allBuckets` is the whole `phaseArtifacts` map (phaseId → bucket); the origin
+ * phase is skipped, and titles resolve from the artifact catalogue so no
+ * bucket-stored title is needed. Pure and deterministic — no I/O, no AI.
+ */
+export function crossPhaseArtifactsToStale(
+  originPhaseId: string,
+  changedArtifactIds: string[],
+  allBuckets: Record<string, PhaseArtifactBucket>,
+  store?: DynamicSchemaStore,
+): CrossPhaseStaleTarget[] {
+  if (!changedArtifactIds.length || !allBuckets || typeof allBuckets !== "object") return [];
+  const changedTitles = artifactTitles(originPhaseId, changedArtifactIds, store);
+  const out: CrossPhaseStaleTarget[] = [];
+  for (const [phaseId, bucket] of Object.entries(allBuckets)) {
+    if (phaseId === originPhaseId || !bucket || typeof bucket !== "object") continue;
+    // artifact-reference inputs whose label points at one of the changed upstream
+    // deliverables — the fields that make this phase depend on the origin phase.
+    const refFieldIds = getPhaseInputSchema(phaseId, store)
+      .fields.filter((f) => f.type === "artifact-reference" && artifactReferenceSatisfied(f.label, changedTitles))
+      .map((f) => f.id);
+    if (!refFieldIds.length) continue;
+    const targets = artifactsForInputFields(phaseId, refFieldIds, store, bucketArtifactIds(bucket));
+    for (const artifactId of targets) {
+      const entry = (bucket as Record<string, unknown>)[artifactId];
+      if (!entry || typeof entry !== "object") continue;
+      const status = (entry as { status?: unknown }).status;
+      if (status === "archived" || status === "stale") continue;
+      out.push({ phaseId, artifactId });
+    }
+  }
+  return out;
 }
 
 /**
