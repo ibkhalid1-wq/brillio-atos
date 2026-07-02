@@ -319,6 +319,69 @@ describe("runDeterministicValidation — delivery, governance, scope", () => {
   });
 });
 
+describe("runDeterministicValidation — self-reported artifact gaps", () => {
+  it("emits a phase-attributed finding for each gap a formal deliverable declares", () => {
+    const findings = runDeterministicValidation({
+      // requirements-catalog → discover phase; its own `gaps` array.
+      rawData: {
+        requirementsCatalog: {
+          title: "Requirements Catalog",
+          gaps: [
+            "No requirements for training, onboarding, or change management.",
+            "No requirements for detailed data migration.",
+          ],
+        },
+      },
+    });
+    const own = findings.filter((f) => f.domain === "artifact-completeness");
+    expect(own).toHaveLength(2);
+    expect(own.every((f) => f.phaseId === "discover")).toBe(true);
+    expect(own.every((f) => f.severity === "low")).toBe(true);
+    expect(own.every((f) => f.sourceArtifact === "requirementsCatalog")).toBe(true);
+    expect(own[0].issue).toContain("training");
+  });
+
+  it("reads the `data`-wrapped rawData shape and object-form gap entries", () => {
+    const findings = runDeterministicValidation({
+      rawData: {
+        data: {
+          solutionArchitecture: {
+            gaps: [{ description: "Specific product selections incomplete." }, "  ", ""],
+          },
+        },
+      },
+    });
+    const own = findings.filter((f) => f.domain === "artifact-completeness");
+    // Blank/whitespace entries are dropped; only the object-form gap survives.
+    expect(own).toHaveLength(1);
+    expect(own[0].phaseId).toBe("design");
+    expect(own[0].issue).toContain("product selections");
+  });
+
+  it("stays silent when a deliverable declares no gaps", () => {
+    const findings = runDeterministicValidation({
+      rawData: { businessCaseDoc: { title: "Business Case", gaps: [] } },
+    });
+    expect(findings.filter((f) => f.domain === "artifact-completeness")).toHaveLength(0);
+  });
+
+  it("drags a phase off a vacuous clean-100 once its deliverable admits gaps", () => {
+    const phases = [
+      { id: "strategy", name: "Strategy", status: "active" as const },
+      { id: "discover", name: "Discover", status: "active" as const },
+    ] as unknown as NonNullable<ValidatableProgram["phases"]>;
+    const rawData = {
+      requirementsCatalog: { gaps: ["A", "B", "C", "D", "E", "F", "G", "H", "I"] },
+    };
+    const findings = runDeterministicValidation({ phases, rawData });
+    const fidelity = assessPhaseFidelity(phases, findings);
+    const discover = fidelity.find((f) => f.phaseId === "discover")!;
+    // 9 low-severity gaps → coverageScore 100 − 9×4 = 64, no longer a clean 100.
+    expect(discover.score).toBe(64);
+    expect(discover.summary.total).toBe(9);
+  });
+});
+
 describe("summariseValidation", () => {
   it("returns a perfect score for no findings", () => {
     const s = summariseValidation([]);

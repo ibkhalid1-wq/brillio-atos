@@ -76,7 +76,7 @@ function PhaseFidelityCard({
     <AdamCard>
       <AdamCardHeader
         title="Phase fidelity"
-        subtitle="Does each phase hold up the ones around it? Scored from the fidelity gaps attributed to the phase — upstream commitments dropped, gates jumped, dependencies broken."
+        subtitle="Does each phase hold up the ones around it? Scored from the gaps attributed to the phase — upstream commitments dropped, gates jumped, dependencies broken — plus the gaps the phase's own deliverables declare about themselves."
       />
       <AdamCardBody>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>

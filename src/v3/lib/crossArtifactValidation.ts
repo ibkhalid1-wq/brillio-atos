@@ -32,6 +32,7 @@ import type {
 } from "@/new/types";
 import { getProgramState } from "@/new/lib/programState";
 import { confidenceLabel } from "@/v3/lib/confidenceScore";
+import { FORMAL_ARTIFACT_FIELD_KEYS, FORMAL_ARTIFACT_PHASES } from "@/v3/lib/formalArtifacts";
 
 export type ValidationSeverity = "critical" | "high" | "medium" | "low";
 
@@ -69,7 +70,11 @@ export type ValidationDomain =
   | "governance"
   | "scope-coverage"
   | "requirements-coverage"
-  | "architecture-consistency";
+  | "architecture-consistency"
+  // A deliverable's own declared shortfalls: each formal artifact is generated
+  // with a `gaps` array — the model's explicit list of what it could not yet
+  // complete. Intra-artifact completeness, not cross-artifact traceability.
+  | "artifact-completeness";
 
 /** Minimal program surface the deterministic rules read. */
 export interface ValidatableProgram {
@@ -127,6 +132,24 @@ function kpiRowName(row: unknown): string {
     const r = row as Record<string, unknown>;
     const n = r.name ?? r.title ?? r.kpi ?? r.metric;
     if (typeof n === "string") return n.trim();
+  }
+  return "";
+}
+
+/**
+ * Extract the readable text of one self-reported gap entry. Formal artifacts
+ * usually store `gaps` as plain strings, but the generating agent occasionally
+ * emits objects — read the common text keys defensively so a shape change does
+ * not silently drop the admission.
+ */
+function selfReportedGapText(entry: unknown): string {
+  if (typeof entry === "string") return entry.trim();
+  if (entry && typeof entry === "object") {
+    const e = entry as Record<string, unknown>;
+    for (const k of ["description", "gap", "issue", "text", "title", "detail", "summary"]) {
+      const v = e[k];
+      if (typeof v === "string" && v.trim()) return v.trim();
+    }
   }
   return "";
 }
@@ -486,6 +509,51 @@ const RULES: ValidationRule[] = [
           confidence: 1,
           evidence: [`phase ${ph.id} active, workstreams covering it = 0`],
         }));
+    },
+  },
+  {
+    // Self-reported completeness: every formal deliverable (charter, business
+    // case, requirements catalog, solution architecture, …) is generated with
+    // its own `gaps` array — the model's explicit list of what it could NOT yet
+    // complete. Those admissions were invisible to phase fidelity, so a phase
+    // whose deliverables openly declared 5–9 gaps still read a vacuous "clean
+    // 100". Fold each admitted gap in as a low-severity finding attributed to the
+    // deliverable's phase, so the score reflects the gaps the artifacts declare
+    // about themselves. Low severity: an honest self-report is a soft signal, not
+    // a hard traceability failure — many gaps still erode the score, but gently.
+    id: "formal-artifact-self-reported-gap",
+    domain: "artifact-completeness",
+    run: (p) => {
+      if (!p.rawData) return [];
+      const { inner } = getProgramState(p.rawData);
+      const findings: ValidationFinding[] = [];
+      for (const [agentId, fieldKey] of Object.entries(FORMAL_ARTIFACT_FIELD_KEYS)) {
+        const doc = inner[fieldKey];
+        if (!doc || typeof doc !== "object" || Array.isArray(doc)) continue;
+        const gaps = (doc as Record<string, unknown>).gaps;
+        if (!Array.isArray(gaps)) continue;
+        const phaseId = FORMAL_ARTIFACT_PHASES[agentId];
+        gaps.forEach((entry, i) => {
+          const text = selfReportedGapText(entry);
+          if (!text) return;
+          findings.push({
+            findingId: `artifact-gap:${fieldKey}:${i}`,
+            severity: "low",
+            domain: "artifact-completeness",
+            phaseId,
+            sourceArtifact: fieldKey,
+            targetArtifact: "",
+            sourceItem: fieldKey,
+            issue: text,
+            // The gap text is itself the corrective ("add X / define Y"), so a
+            // generic recommendation would only add a repetitive arrow per gap.
+            recommendation: "",
+            confidence: 1,
+            evidence: [`${fieldKey}.gaps[${i}] — self-reported by the generating agent`],
+          });
+        });
+      }
+      return findings;
     },
   },
 ];
@@ -851,6 +919,7 @@ const VALID_DOMAINS = new Set<ValidationDomain>([
   "scope-coverage",
   "requirements-coverage",
   "architecture-consistency",
+  "artifact-completeness",
 ]);
 const VALID_SEVERITIES = new Set<ValidationSeverity>(["critical", "high", "medium", "low"]);
 
