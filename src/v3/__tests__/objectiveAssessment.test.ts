@@ -257,6 +257,17 @@ describe("buildObjectiveGraph", () => {
     expect(targets).toContain("kpi:k1");
   });
 
+  it("marks a delivered-by edge to a stale artifact with a drift gap (no findingId)", () => {
+    const stale = healthyProgram();
+    (stale.artifacts as unknown as Array<Record<string, unknown>>)[0].status = "stale";
+    const graph = buildObjectiveGraph(stale);
+    const objId = graph.objectiveIds[0];
+    const edge = graph.relations.find((r) => r.from === objId && r.kind === "delivered-by" && r.to === "artifact:business-case");
+    expect(edge?.gap?.issue).toMatch(/stale/i);
+    // A staleness gap is derived from node status, not a validation finding.
+    expect(edge?.gap?.findingId).toBeUndefined();
+  });
+
   it("never admits a relation that violates the ontology", () => {
     const graph = buildObjectiveGraph(healthyProgram());
     // Every relation's endpoints must exist as nodes (guard side-effect).
@@ -479,6 +490,33 @@ describe("assessObjectives", () => {
     expect(critical.score).toBeLessThan(high.score);
     expect(critical.detail).toContain("1 critical");
     expect(high.detail).not.toContain("critical");
+  });
+
+  it("treats a stale delivering artifact as drift — quality still counts, confidence erodes", () => {
+    const stale = healthyProgram();
+    (stale.artifacts as unknown as Array<Record<string, unknown>>)[0].status = "stale";
+    const staleRes = assessObjectives(stale);
+    const freshRes = assessObjectives(healthyProgram());
+    const delStale = staleRes.objectives[0].components.find((c) => c.key === "delivered")!;
+    const delFresh = freshRes.objectives[0].components.find((c) => c.key === "delivered")!;
+    // The stale artifact still counts as a delivery (not erased to a phantom)...
+    expect(delStale.detail).toContain("1 artifact(s)");
+    expect(delStale.detail).toContain("for gaps");
+    // ...but the drift gap lowers delivery confidence below the fresh baseline.
+    expect(delStale.score).toBeLessThan(delFresh.score);
+  });
+
+  it("names staleness in a delivery blocker when drift pushes delivery below the bar", () => {
+    // A lower-quality artifact means the staleness penalty tips delivered under
+    // the good threshold, so the blocker surfaces and names the drift.
+    const stale = healthyProgram();
+    const artifact = (stale.artifacts as unknown as Array<Record<string, unknown>>)[0];
+    artifact.status = "stale";
+    artifact.agentConfidence = 0.7;
+    const result = assessObjectives(stale);
+    const blocker = result.objectives[0].blockers.find((b) => b.component === "delivered");
+    expect(blocker).toBeDefined();
+    expect(blocker!.detail).toMatch(/stale/i);
   });
 
   it("normalises 0-100 artifact confidence so delivery quality is not inflated", () => {

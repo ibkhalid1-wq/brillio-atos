@@ -97,6 +97,23 @@ const DOMAIN_RELATION: Partial<Record<ValidationDomain, RelationKind>> = {
 
 const SEVERE = new Set<ValidationSeverity>(["critical", "high"]);
 
+/**
+ * A drift gap for a delivered-by edge whose target artifact is stale — its
+ * source inputs changed after it was approved, so the delivery no longer
+ * reflects the current programme. Unlike a folded validation finding this gap
+ * carries no `findingId`; the roll-up uses that to keep the (real, if stale)
+ * artifact in the delivery-quality set while still applying the drift penalty,
+ * rather than discarding it as a phantom. Returns undefined for a fresh artifact.
+ */
+function staleDeliveryGap(node: SemanticNode | undefined): RelationGap | undefined {
+  if (node?.properties?.status !== "stale") return undefined;
+  return {
+    severity: "medium",
+    issue: `Delivering artifact "${node.label}" is stale — its inputs changed after it was approved.`,
+    recommendation: "Regenerate the stale artifact so it reflects the current inputs.",
+  };
+}
+
 export interface ObjectiveGraphOptions {
   findings?: ValidationFinding[];
   documents?: ProgramDocument[];
@@ -223,7 +240,7 @@ export function buildObjectiveGraph(
     let groundedCount = 0;
     for (const edge of pg.edges) {
       if (edge.type === "grounds" && edge.from === objective.id) {
-        addRelation({ id: `delivered-by:${objective.id}->${edge.to}`, from: objective.id, to: edge.to, kind: "delivered-by" });
+        addRelation({ id: `delivered-by:${objective.id}->${edge.to}`, from: objective.id, to: edge.to, kind: "delivered-by", gap: staleDeliveryGap(nodes.get(edge.to)) });
         groundedCount += 1;
       }
     }
@@ -243,7 +260,7 @@ export function buildObjectiveGraph(
         ...globalArtifacts,
       ];
       for (const artifact of fallbackArtifacts) {
-        addRelation({ id: `delivered-by:${objective.id}->${artifact.id}`, from: objective.id, to: artifact.id, kind: "delivered-by" });
+        addRelation({ id: `delivered-by:${objective.id}->${artifact.id}`, from: objective.id, to: artifact.id, kind: "delivered-by", gap: staleDeliveryGap(artifact) });
       }
     }
 

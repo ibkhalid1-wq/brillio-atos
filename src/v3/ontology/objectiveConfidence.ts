@@ -234,14 +234,17 @@ function scoreObjective(
   // ── delivered ───────────────────────────────────────────────────────────
   const deliveries = relationsFrom(graph, objective.id, "delivered-by");
   const deliveryGaps = deliveries.filter((rel) => rel.gap);
-  // Delivery quality is measured only over *real* delivered artifacts. A
-  // delivered-by edge that exists solely to carry a folded gap (e.g. a
+  // Delivery quality is measured over *real* delivered artifacts. A delivered-by
+  // edge that exists solely to carry a folded validation finding (e.g. a
   // broken-milestone finding synthesises an edge to a phantom target) represents
-  // a missing/broken delivery, not a deliverable with measurable quality — so it
-  // drives the gap penalty below rather than diluting the quality average or
-  // masquerading as a delivering phase for the evidence/progress components.
+  // a missing/broken delivery, not a deliverable with measurable quality — those
+  // carry a findingId and only drive the gap penalty below. A stale artifact,
+  // by contrast, carries a drift gap with NO findingId: it is a real deliverable
+  // whose quality still counts, so it stays in the set here *and* contributes its
+  // gap to the penalty — a stale high-quality artifact scores below a fresh one
+  // without being erased from delivery entirely.
   const deliveryArtifacts = deliveries
-    .filter((rel) => !rel.gap)
+    .filter((rel) => !rel.gap?.findingId)
     .map((rel) => nodeOf(graph, rel.to))
     .filter((n): n is SemanticNode => !!n);
   const artifactCitations = deliveryArtifacts.map((a) => ({ kind: "artifact" as const, ref: a.id, label: a.label }));
