@@ -7500,6 +7500,24 @@ Deno.serve(async (req) => {
       prompt.system += `\n\n## Recent run history for this agent on this programme\n${memoryContext}`;
     }
     prompt.user += extractHumanNotes(contextProgramData, request.agentId, request.phaseId);
+    // Persist the fully-assembled prompt (system + user, after every cross-phase,
+    // handoff, pattern and memory augmentation) onto the run so the Ontology
+    // validation audit can show the COMPLETE AI prompt, not just the context
+    // snapshot. Scoped to the validator — the only agent the audit surfaces — so
+    // large system prompts don't bloat every run row. Nested under `fullPrompt`
+    // so resume-agent's context passthrough (which stringifies input_context
+    // wholesale) is unaffected.
+    if (request.agentId === "cross-artifact-validator") {
+      await auth.admin
+        .from("adam_agent_runs")
+        .update({
+          input_context: {
+            ...contextSnapshot,
+            fullPrompt: { system: prompt.system, user: prompt.user },
+          } as JsonValue,
+        })
+        .eq("id", runId);
+    }
     await logObservation(auth.admin, {
       runId,
       programId: request.programId,

@@ -59,6 +59,22 @@ function formatValue(value: unknown): string {
   }
 }
 
+/**
+ * Pull the fully-assembled prompt (system + user) the edge function persisted on
+ * the run. Present on validator runs from the fullPrompt-capable edge build; older
+ * runs won't have it, in which case the caller falls back to the raw context.
+ */
+function extractFullPrompt(inputContext: unknown): { system: string; user: string } | null {
+  if (!inputContext || typeof inputContext !== "object") return null;
+  const fp = (inputContext as Record<string, unknown>).fullPrompt;
+  if (!fp || typeof fp !== "object") return null;
+  const record = fp as Record<string, unknown>;
+  const system = typeof record.system === "string" ? record.system : "";
+  const user = typeof record.user === "string" ? record.user : "";
+  if (!system && !user) return null;
+  return { system, user };
+}
+
 /** Pull the finding list out of the validator output regardless of wrapper shape. */
 function extractFindings(output: unknown): Array<Record<string, unknown>> {
   if (!output || typeof output !== "object") return [];
@@ -145,6 +161,7 @@ export default function PhaseAuditModal({ programId, phaseId, phaseLabel, onClos
   }, [programId, phaseId]);
 
   const findings = useMemo(() => (run ? extractFindings(run.output) : []), [run]);
+  const fullPrompt = useMemo(() => (run ? extractFullPrompt(run.input_context) : null), [run]);
   const durationSec = run?.started_at && run?.completed_at
     ? ((new Date(run.completed_at).getTime() - new Date(run.started_at).getTime()) / 1000).toFixed(1)
     : null;
@@ -194,12 +211,29 @@ export default function PhaseAuditModal({ programId, phaseId, phaseLabel, onClos
                 <span className="v3-chip muted">{timeAgo(run.completed_at || run.created_at)}</span>
               </div>
 
-              <Section
-                title="What was checked"
-                subtitle="The prompt context sent to the validator — the objective, phase intent, delivery-chain knowledge graph and artifacts it reasoned over."
-              >
-                <CodeBlock text={formatValue(run.input_context) || "No input context recorded."} />
-              </Section>
+              {fullPrompt ? (
+                <>
+                  <Section
+                    title="AI prompt · system"
+                    subtitle="The full instruction set the validator was given — its role, the phase intent, the objective knowledge graph, the integrity checks and the required output schema."
+                  >
+                    <CodeBlock text={fullPrompt.system || "No system prompt recorded."} />
+                  </Section>
+                  <Section
+                    title="AI prompt · user (what was checked)"
+                    subtitle="The input context the validator reasoned over — objective, phase intent, delivery-chain knowledge graph and artifacts."
+                  >
+                    <CodeBlock text={fullPrompt.user || "No user prompt recorded."} />
+                  </Section>
+                </>
+              ) : (
+                <Section
+                  title="What was checked"
+                  subtitle="The prompt context sent to the validator — the objective, phase intent, delivery-chain knowledge graph and artifacts it reasoned over. (Run again to capture the complete system + user prompt.)"
+                >
+                  <CodeBlock text={formatValue(run.input_context) || "No input context recorded."} />
+                </Section>
+              )}
 
               <Section
                 title="Response"
