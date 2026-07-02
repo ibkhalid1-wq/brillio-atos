@@ -235,6 +235,16 @@ export const ATOS_STANDARD: MethodologyDefinition = {
             { key: "basis", label: "Basis / assumption", type: "text", placeholder: "What the estimate is based on" },
           ],
         },
+        // The headline funding figure the business case seeks approval for. The
+        // costAssumption grid holds the itemised cost BREAKDOWN, but a business case
+        // also states a single INVESTMENT ASK — the total the sponsor is being asked
+        // to approve (often the costed sum plus contingency, and the figure SteerCo
+        // signs against). No field held it, so the business-case artifact reviewer
+        // kept recommending "enter the investment ask" with no input to point at.
+        // Optional so it never retroactively gates an in-flight Strategy gate; wired
+        // into the business-case input flow below so it grounds generation and the
+        // artifact goes stale when the ask changes.
+        { id: "investmentAsk", label: "Investment ask", type: "text", role: "cost", required: false, usedByArtifacts: ["business-case"], placeholder: "Total funding requested, e.g. $2.4M over 18 months", hint: "The single headline funding figure the business case seeks approval for — the total investment ask, distinct from the itemised cost breakdown above. This is what SteerCo signs against.", example: "$2.4M capital over 18 months, funded from the FY26 transformation budget" },
         { id: "constraints", label: "Key constraints", type: "textarea", role: "constraint", placeholder: "Budget, timeline, regulatory, or technical constraints", required: true, hint: "e.g. Must go live before Q4 financial year end", example: "Must go live before Q4 FY-end; no additional headcount; core-banking change freeze in December.", validationRule: "The hard boundaries the solution must respect — budget, timeline, regulatory, or technical." },
         // Governance evidence for the "Business case approved" exit criterion.
         // Its evidencePrompt asks for a "link or reference to the approved business
@@ -310,7 +320,7 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         // feeds it: all must be present to generate, and any change stales it.
         "strategic-roadmap": ["businessObjective", "sponsor", "industry", "startDate", "targetEndDate", "costAssumption", "constraints", "successMetric", "validationApproach"],
         "charter": ["industry", "startDate", "targetEndDate"],
-        "business-case": ["industry", "costAssumption"],
+        "business-case": ["industry", "costAssumption", "investmentAsk"],
         // The validation/de-risking ladder shapes how outcomes are sequenced and
         // proven, so it feeds the outcome framework and the roadmap. It is
         // optional, so the generation gate (StageView) treats unfilled optional
