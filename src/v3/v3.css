@@ -7436,6 +7436,28 @@ button.v3-phase-metric:focus-visible {
   color: var(--v3-text-muted);
 }
 
+.v3-quality-issue-groups {
+  display: flex; flex-direction: column; gap: 18px;
+}
+.v3-quality-issue-group {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.v3-quality-issue-group-header {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  padding-bottom: 2px; border-bottom: 1px solid var(--v3-border-soft);
+}
+.v3-quality-issue-group-title {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--v3-text-primary);
+}
+.v3-quality-issue-group-desc {
+  font-size: 11px; line-height: 1.4; color: var(--v3-text-muted);
+}
+.v3-quality-issue-note {
+  font-size: 12px; line-height: 1.5; color: var(--v3-text-muted);
+  padding: 10px 12px; border: 1px dashed var(--v3-border-soft);
+  border-radius: var(--radius-md); background: var(--v3-surface-2);
+}
 .v3-quality-issue-list {
   list-style: none; margin: 0; padding: 0;
   display: flex; flex-direction: column; gap: 10px;

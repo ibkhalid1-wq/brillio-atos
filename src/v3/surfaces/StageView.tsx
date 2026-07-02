@@ -30,6 +30,14 @@ import { getAgentMeta, SUPPORT_ARTIFACT_IDS } from "@/v3/lib/agentMeta";
 import { runPreFlight } from "@/v3/lib/phaseInputPreFlight";
 import { derivePhaseInputQuality } from "@/v3/lib/phaseInputQuality";
 import { getFormalArtifactContent } from "@/v3/lib/formalArtifacts";
+import { selectModelValidationFindings, getSemanticValidationMeta } from "@/v3/lib/crossArtifactValidation";
+import {
+  selectFindingsForArtifact,
+  findingsToRecommendations,
+  selfReportedGapRecommendations,
+  groupRecommendationsByCategory,
+  type RecommendationCategory,
+} from "@/v3/lib/artifactRecommendations";
 import ChangeRequestModal from "@/v3/components/ChangeRequestModal";
 import type { V3Mode, V3MoreView, V3ReportId } from "@/v3/types";
 
@@ -121,6 +129,12 @@ interface ArtifactQualityIssue {
   title: string;
   detail: string;
   severity: "high" | "medium" | "low";
+  /**
+   * Discipline this recommendation belongs to (shared with the finding taxonomy).
+   * Local score/input/depth signals are the artifact's own Completeness; approval
+   * is Governance; folded-in semantic findings carry Ontology/Change/Governance.
+   */
+  category: RecommendationCategory;
 }
 
 /** One grounding input the artifact is generated from, with what it must hold. */
@@ -153,6 +167,7 @@ function deriveArtifactQualityIssues(opts: {
     if (score < 60) {
       issues.push({
         severity: "high",
+        category: "Completeness",
         title: `Low quality score — ${score}%`,
         detail: allInputsFilled
           ? `ATOS rated this document below the quality bar even though every grounding input is filled. The lever now is depth, not coverage — see the step below to enrich the inputs, then regenerate.`
@@ -161,6 +176,7 @@ function deriveArtifactQualityIssues(opts: {
     } else if (score < 80) {
       issues.push({
         severity: "medium",
+        category: "Completeness",
         title: `Quality score ${score}% — room to improve`,
         detail: allInputsFilled
           ? `The document is usable, but ATOS sees headroom even though every grounding input is filled. See the step below to push the score higher, or regenerate for another pass.`
@@ -175,6 +191,7 @@ function deriveArtifactQualityIssues(opts: {
     // regenerate, which runs a fresh draft the reviewer can then score.
     issues.push({
       severity: "medium",
+      category: "Completeness",
       title: "Not yet quality-reviewed",
       detail: missing.length
         ? "This artifact has no quality score yet. Complete the grounding inputs below, then regenerate to produce a reviewed draft."
@@ -184,7 +201,7 @@ function deriveArtifactQualityIssues(opts: {
   // Prescriptive, per-field: name the exact input each artifact is grounded on and
   // what it must contain. Empty grounding inputs are the highest-leverage fixes.
   for (const req of missing) {
-    issues.push({ severity: "high", title: `Add "${req.label}"`, detail: req.requirement });
+    issues.push({ severity: "high", category: "Completeness", title: `Add "${req.label}"`, detail: req.requirement });
   }
   // Generic depth nudge — only when the model returned no specific suggestions to
   // show below it. When `improvements` exist, they carry the actionable advice and
@@ -192,15 +209,16 @@ function deriveArtifactQualityIssues(opts: {
   if (allInputsFilled && typeof score === "number" && score < 80 && !hasModelImprovements) {
     issues.push({
       severity: "medium",
+      category: "Completeness",
       title: "Deepen the grounding inputs",
       detail: `Every grounding input already has a value, so nothing is missing — the score reflects how specific those values are. Revisit ${present.map((req) => req.label).join(", ")} and replace any broad or placeholder answers with concrete detail: real names and titles, dated milestones, quantified figures, and named constraints. Once the inputs read like a briefing rather than a summary, regenerate to lift the score.`,
     });
   }
   for (const improvement of improvements ?? []) {
-    if (improvement && improvement.trim()) issues.push({ severity: "low", title: "Suggested improvement", detail: improvement.trim() });
+    if (improvement && improvement.trim()) issues.push({ severity: "low", category: "Completeness", title: "Suggested improvement", detail: improvement.trim() });
   }
   if (state !== "approved" && state !== "archived") {
-    issues.push({ severity: "low", title: "Not yet approved", detail: "Review the document and approve it to lock this artifact and run the gate check." });
+    issues.push({ severity: "low", category: "Governance", title: "Not yet approved", detail: "Review the document and approve it to lock this artifact and run the gate check." });
   }
   return issues;
 }
@@ -486,6 +504,8 @@ export default function StageView({
     improvements: string[];
     /** Attached documents surface recommendations read-only — no in-app apply or add-inputs. */
     readOnly?: boolean;
+    /** Whether the Layer-2 semantic validator has run — gates the "run it" hint. */
+    semanticValidated?: boolean;
   } | null>(null);
   const [applyingImprovements, setApplyingImprovements] = React.useState(false);
   const [applyError, setApplyError] = React.useState<string | null>(null);
@@ -744,6 +764,12 @@ export default function StageView({
       ? program.rawData.data as Record<string, unknown>
       : program.rawData as Record<string, unknown>)
     : null;
+  // Semantic layer (Layer 2): the cross-artifact validator's persisted findings.
+  // Folded into each artifact's recommendations so the panel names the objective-
+  // chain gaps (an un-traced requirement, an unsupported benefit) the local
+  // score/input signals are blind to — categorized alongside them.
+  const modelFindings = React.useMemo(() => selectModelValidationFindings(program), [program]);
+  const semanticValidated = React.useMemo(() => getSemanticValidationMeta(program).hasRun, [program]);
   // The roster is a structured grid, so the AI text-rewrite "Apply suggestions"
   // path does not apply to the RACI matrix (its only grounding input). Instead,
   // a RACI quality recommendation to staff a role is actioned deterministically:
@@ -1721,8 +1747,19 @@ export default function StageView({
               // still yields actionable advice from the score and grounding inputs,
               // so drive the Recommendations button off that fuller set — otherwise
               // the button sits disabled on exactly the artifacts that need it most.
+              // Semantic layer: the objective-chain findings that cite THIS artifact
+              // (excluding self-reported gaps, which come from the mirror directly
+              // below so they render even before a semantic run persists findings).
+              const artifactFindings = selectFindingsForArtifact(modelFindings, def.id, activePhase.id)
+                .filter((f) => f.domain !== "artifact-completeness");
+              const semanticRecs = findingsToRecommendations(artifactFindings);
+              const gapRecs = selfReportedGapRecommendations(source, def.id);
               const qualityIssues = present
-                ? deriveArtifactQualityIssues({ score: displayScore, state, inputRequirements, improvements: review?.improvements })
+                ? [
+                    ...deriveArtifactQualityIssues({ score: displayScore, state, inputRequirements, improvements: review?.improvements }),
+                    ...semanticRecs,
+                    ...gapRecs,
+                  ]
                 : [];
               // "Not yet approved" is an always-present informational line, not an
               // actionable fix — exclude it so an at-bar artifact shows no false count.
@@ -1771,7 +1808,7 @@ export default function StageView({
                 onOpenRoadmap: () => onOpenMoreView("roadmap"),
                 // An attached document's recommendations are read-only: the user acts
                 // on them in the source file, not via in-app input rewrites.
-                onRecommend: () => { setApplyError(null); setImprovementsApplied(false); setQualityArtifact({ label: def.label, defId: def.id, score: displayScore, issues: qualityIssues, phaseId: activePhase.id, fields: qualityFields, improvements: (review?.improvements ?? []).filter((s) => !!s && s.trim()), readOnly: isAttached }); },
+                onRecommend: () => { setApplyError(null); setImprovementsApplied(false); setQualityArtifact({ label: def.label, defId: def.id, score: displayScore, issues: qualityIssues, phaseId: activePhase.id, fields: qualityFields, improvements: (review?.improvements ?? []).filter((s) => !!s && s.trim()), readOnly: isAttached, semanticValidated }); },
                 onGenerate: () => onRunAgent(generatorAgentId, activePhase.id, regenGuidance),
                 onUnlock: () => { if (artifactId) void onUnapproveArtifact(activePhase.id, artifactId); },
                 onAttach: () => onAttachArtifact?.(activePhase.id, def.id, def.label, generatorAgentId),
@@ -1884,17 +1921,32 @@ export default function StageView({
             </span>
           </div>
           {qualityArtifact.issues.length ? (
-            <ul className="v3-quality-issue-list">
-              {qualityArtifact.issues.map((issue, index) => (
-                <li key={index} className="v3-quality-issue">
-                  <span className={`v3-chip v3-chip-tight ${issue.severity === "high" ? "red" : issue.severity === "medium" ? "amber" : "muted"}`}>{issue.severity}</span>
-                  <div>
-                    <div className="v3-quality-issue-title">{issue.title}</div>
-                    <div className="v3-quality-issue-detail">{issue.detail}</div>
+            <div className="v3-quality-issue-groups">
+              {groupRecommendationsByCategory(qualityArtifact.issues).map((group) => (
+                <div key={group.category} className="v3-quality-issue-group">
+                  <div className="v3-quality-issue-group-header">
+                    <span className="v3-quality-issue-group-title">{group.category}</span>
+                    <span className="v3-quality-issue-group-desc">{group.description}</span>
                   </div>
-                </li>
+                  <ul className="v3-quality-issue-list">
+                    {group.items.map((issue, index) => (
+                      <li key={index} className="v3-quality-issue">
+                        <span className={`v3-chip v3-chip-tight ${issue.severity === "high" ? "red" : issue.severity === "medium" ? "amber" : "muted"}`}>{issue.severity}</span>
+                        <div>
+                          <div className="v3-quality-issue-title">{issue.title}</div>
+                          {issue.detail ? <div className="v3-quality-issue-detail">{issue.detail}</div> : null}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ))}
-            </ul>
+              {!qualityArtifact.semanticValidated ? (
+                <div className="v3-quality-issue-note">
+                  Semantic validation has not run for this program yet — Ontology and Change recommendations appear once the cross-artifact validator runs at the next gate review.
+                </div>
+              ) : null}
+            </div>
           ) : (
             <div style={{ fontSize: 13, color: "var(--v3-text-secondary)" }}>
               ATOS found no outstanding quality issues for this artifact.

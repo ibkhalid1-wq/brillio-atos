@@ -1,0 +1,142 @@
+/**
+ * Categorized artifact recommendations.
+ *
+ * The "Improve quality" panel historically showed only *local* signals — the AI
+ * score, missing grounding inputs, and the reviewer's free-text improvements. It
+ * was blind to the **semantic layer**: the cross-artifact validator (Layer 2)
+ * detects that a deliverable breaks the objective delivery chain (a requirement
+ * with no design, a benefit with no KPI, a risk with no control), but those
+ * findings only surfaced in Objective Confidence — never beside the artifact that
+ * caused them. So a card could read "regenerate to lift depth" while the real
+ * problem was an un-traced requirement the reviewer never mentioned.
+ *
+ * This module folds an artifact's semantic findings (and its own self-reported
+ * gaps) into its recommendation set, and groups every recommendation by the same
+ * top-level class the rest of the platform uses — Ontology, Change, Governance,
+ * Completeness — so the panel reads as "here's what's wrong, by discipline"
+ * rather than one flat list. Pure and framework-free so it unit-tests without a
+ * render.
+ */
+import {
+  classifyFinding,
+  FINDING_CLASS_DESCRIPTION,
+  FINDING_CLASS_ORDER,
+  type FindingClass,
+  type ValidationFinding,
+  type ValidationSeverity,
+} from "@/v3/lib/crossArtifactValidation";
+import { FORMAL_ARTIFACT_FIELD_KEYS, listFormalArtifactGaps } from "@/v3/lib/formalArtifacts";
+
+/** Recommendations are grouped under the same top-level classes as findings. */
+export type RecommendationCategory = FindingClass;
+
+export type RecommendationSeverity = "high" | "medium" | "low";
+
+export interface ArtifactRecommendation {
+  title: string;
+  detail: string;
+  severity: RecommendationSeverity;
+  /** Top-level discipline this recommendation belongs to. */
+  category: RecommendationCategory;
+}
+
+export interface RecommendationGroup {
+  category: RecommendationCategory;
+  /** One-line description of what this discipline covers. */
+  description: string;
+  items: ArtifactRecommendation[];
+}
+
+const SEVERITY_RANK: Record<RecommendationSeverity, number> = { high: 0, medium: 1, low: 2 };
+
+/** Collapse the four validation severities onto the panel's three-level scale. */
+const FINDING_SEVERITY: Record<ValidationSeverity, RecommendationSeverity> = {
+  critical: "high",
+  high: "high",
+  medium: "medium",
+  low: "low",
+};
+
+/**
+ * The field keys that identify one artifact inside a finding's source/target/item
+ * slots. Formal documents live under a dedicated top-level mirror key (e.g.
+ * charter → transformationCharter), so match both that and the raw def id — a
+ * finding may cite either the producing-agent id or the stored field.
+ */
+export function artifactFieldKeysFor(defId: string): string[] {
+  const mirror = FORMAL_ARTIFACT_FIELD_KEYS[defId];
+  return mirror ? [mirror, defId] : [defId];
+}
+
+/**
+ * The findings that pertain to one artifact: those citing its field key in the
+ * source, target, or item slot. Optionally scoped to a phase — a finding with no
+ * phase is program-wide and always kept; one with a different phase is dropped.
+ * Pure filter over an already-resolved finding list (deterministic + model).
+ */
+export function selectFindingsForArtifact(
+  findings: ValidationFinding[],
+  defId: string,
+  phaseId?: string,
+): ValidationFinding[] {
+  const keys = new Set(artifactFieldKeysFor(defId));
+  return findings.filter((f) => {
+    const cites = keys.has(f.sourceArtifact) || keys.has(f.targetArtifact) || keys.has(f.sourceItem);
+    if (!cites) return false;
+    return !phaseId || !f.phaseId || f.phaseId === phaseId;
+  });
+}
+
+/**
+ * Turn artifact-scoped findings into categorized recommendations. The finding's
+ * `issue` is the headline; its `recommendation` is the fix (falling back to the
+ * first evidence line when a rule left the recommendation blank, e.g. a
+ * self-reported gap whose text is itself the corrective). Its `domain` rolls up
+ * to the top-level category via the shared classifier.
+ */
+export function findingsToRecommendations(findings: ValidationFinding[]): ArtifactRecommendation[] {
+  return findings
+    .filter((f) => f.issue.trim().length > 0)
+    .map((f) => ({
+      title: f.issue.trim(),
+      detail: (f.recommendation.trim() || f.evidence[0]?.trim() || ""),
+      severity: FINDING_SEVERITY[f.severity] ?? "medium",
+      category: classifyFinding(f.domain),
+    }));
+}
+
+/**
+ * A formal artifact's self-reported gaps as Completeness recommendations. These
+ * are the generating agent's own "could not complete" admissions, read straight
+ * from the mirror's `gaps` array (the same source the quality reader erodes by),
+ * so the panel names the exact shortfalls that dragged the score down. Returns []
+ * for attached or non-formal artifacts (no mirror / mirror cleared on attach).
+ */
+export function selfReportedGapRecommendations(
+  source: Record<string, unknown> | null,
+  defId: string,
+): ArtifactRecommendation[] {
+  return listFormalArtifactGaps(source, defId).map((gap) => ({
+    title: "Self-reported gap",
+    detail: gap.text,
+    severity: "low" as const,
+    category: "Completeness" as const,
+  }));
+}
+
+/**
+ * Group recommendations by category in the canonical class order, sorting each
+ * group's items by severity (high → low). Empty categories are dropped, so the
+ * panel only renders disciplines that actually have something to say.
+ */
+export function groupRecommendationsByCategory(
+  recommendations: ArtifactRecommendation[],
+): RecommendationGroup[] {
+  return FINDING_CLASS_ORDER.map((category) => ({
+    category,
+    description: FINDING_CLASS_DESCRIPTION[category],
+    items: recommendations
+      .filter((r) => r.category === category)
+      .sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]),
+  })).filter((group) => group.items.length > 0);
+}
