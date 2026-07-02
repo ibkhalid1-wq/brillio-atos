@@ -846,10 +846,15 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
 
           <div style={{ display: "grid", gap: 12, marginBottom: 12 }}>
             {schema.fields.map((field) => {
-              // The Primary success metric is folded into the unified Outcome KPIs
-              // table below (it is the headline KPI), so don't also render it as a
-              // standalone field here. Only Strategy shows that table (showKpis).
-              if (field.id === "successMetric" && showKpis) return null;
+              // On Strategy (showKpis), both the Primary success metric AND the
+              // Success KPIs grid are rendered by the bespoke Outcome KPIs editor
+              // below — a pinned required primary-metric row plus removable KPI
+              // rows, saved from `localKpis` (see liveSnapshot). Rendering `kpis`
+              // again here via the generic StructuredGrid produced a second,
+              // duplicate KPI table whose edits were silently discarded on save
+              // (the localKpis serialization overrides it). Skip both fields so the
+              // bespoke editor is the single source of truth.
+              if ((field.id === "successMetric" || field.id === "kpis") && showKpis) return null;
               const verdict = field.type === "grid"
                 ? (filledRowCount(grids[field.id] ?? [], field.columns ?? []) > 0
                     ? { label: "Complete", tone: "green" as const }
