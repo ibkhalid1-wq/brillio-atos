@@ -5,6 +5,7 @@ import {
   findingsToRecommendations,
   reviewImprovementsToRecommendations,
   selfReportedGapRecommendations,
+  groundingGapRecommendations,
   groupRecommendationsByCategory,
   matchGroundingFields,
   type ArtifactRecommendation,
@@ -111,6 +112,37 @@ describe("selfReportedGapRecommendations", () => {
 
   it("returns [] for a non-formal artifact (no mirror)", () => {
     expect(selfReportedGapRecommendations({ scopeMapQuality: { gaps: ["x"] } }, "scope-map")).toEqual([]);
+  });
+});
+
+describe("groundingGapRecommendations", () => {
+  it("emits a high-severity Completeness gap carrying the fieldId for each EMPTY input", () => {
+    const recs = groundingGapRecommendations([
+      { id: "costAssumption", label: "Cost assumption", filled: false, requirement: "Per-line estimates." },
+      { id: "sponsor", label: "Executive sponsor", filled: true },
+    ]);
+    expect(recs).toEqual([
+      {
+        title: 'Add "Cost assumption"',
+        detail: "Per-line estimates.",
+        severity: "high",
+        category: "Completeness",
+        fieldId: "costAssumption",
+      },
+    ]);
+  });
+
+  it("falls back to a generic requirement when none is supplied", () => {
+    const [rec] = groundingGapRecommendations([{ id: "industry", label: "Industry", filled: false }]);
+    expect(rec.detail).toBe("Provide Industry.");
+  });
+
+  it("keeps the fieldId resolvable so the rail can filter its grounding fields to a chip", () => {
+    // The rail resolves a deterministic gap by id (not prose), so the fieldId must
+    // always match a real grounding field — mirrors the Improve modal's chip path.
+    const fields = [{ id: "kpis", label: "Success KPIs" }];
+    const [rec] = groundingGapRecommendations([{ id: "kpis", label: "Success KPIs", filled: false }]);
+    expect(fields.filter((f) => f.id === rec.fieldId).map((f) => f.id)).toEqual(["kpis"]);
   });
 });
 

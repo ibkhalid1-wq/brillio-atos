@@ -8,11 +8,14 @@ import {
   reviewImprovementsToRecommendations,
   findingsToRecommendations,
   selfReportedGapRecommendations,
+  groundingGapRecommendations,
   selectFindingsForArtifact,
   groupRecommendationsByCategory,
   matchGroundingFields,
+  type ArtifactRecommendation,
   type RecommendationGroup,
 } from "@/v3/lib/artifactRecommendations";
+import { parseRows, filledRowCount } from "@/v3/components/StructuredGrid";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { getGuidanceInputFields } from "@/v3/lib/phaseFlowEdges";
 import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
@@ -201,25 +204,59 @@ export function PhaseRailPanels({
     // reviewer prose is Completeness, but an un-traced requirement is Ontology.
     const findings = selectModelValidationFindings(program);
     const schema = getPhaseInputSchema(phaseId, store);
+    // The persisted values for this phase's inputs, so we can tell which grounding
+    // inputs are still empty — those become deterministic "Add X" gaps below.
+    const phaseInputsRaw = bucket && typeof bucket.phaseInputs === "object" && bucket.phaseInputs
+      ? (bucket.phaseInputs as Record<string, unknown>)[phaseId]
+      : null;
+    const phaseInputs = phaseInputsRaw && typeof phaseInputsRaw === "object"
+      ? (phaseInputsRaw as Record<string, unknown>)
+      : {};
+    // Grid-aware fill test, matching derivePhaseInputQuality / the Improve modal:
+    // a grid needs its minRows of filled rows, a scalar needs non-blank content.
+    const isFieldFilled = (field: (typeof schema.fields)[number] | undefined, value: unknown): boolean => {
+      if (field?.type === "grid") {
+        const columns = field.columns ?? [];
+        return filledRowCount(parseRows(value, columns), columns) >= (field.minRows ?? 1);
+      }
+      return typeof value === "string" ? value.trim().length > 0 : value != null && value !== "";
+    };
     return getPhaseArtifactDefs(phaseId, store)
       .map((def) => {
         const review = resolveArtifactReview(bucket, def.id, phaseId);
         const artifactFindings = selectFindingsForArtifact(findings, def.id, phaseId)
           .filter((f) => f.domain !== "artifact-completeness");
-        const recommendations = [
+        // The grounding inputs this artifact is generated from, with what each must
+        // hold and whether it is filled — the same set the Improve modal prescribes.
+        const groundingFields = getGuidanceInputFields(phaseId, def.id, store).map((fieldId) => {
+          const fieldDef = schema.fields.find((field) => field.id === fieldId);
+          const requirement = [fieldDef?.placeholder, fieldDef?.hint]
+            .filter((part): part is string => !!part && part.trim().length > 0)
+            .join(" — ") || `Provide ${fieldDef?.label ?? fieldId}.`;
+          return {
+            id: fieldId,
+            label: fieldDef?.label ?? fieldId,
+            type: fieldDef?.type,
+            requirement,
+            filled: isFieldFilled(fieldDef, phaseInputs[fieldId]),
+          };
+        });
+        const recommendations: (ArtifactRecommendation & { fieldId?: string })[] = [
+          // Empty grounding inputs are the highest-leverage, most concrete fixes, so
+          // they lead — and each carries a fieldId so it renders a jump-to-field chip,
+          // matching the Improve modal. Skip artifact-reference inputs: the generating
+          // agent receives the upstream deliverable via cross-phase context, so a blank
+          // selector is not a real gap the user must fill.
+          ...groundingGapRecommendations(
+            groundingFields.filter((field) => field.type !== "artifact-reference"),
+          ),
           ...reviewImprovementsToRecommendations(review?.improvements ?? []),
           ...findingsToRecommendations(artifactFindings),
           ...selfReportedGapRecommendations(bucket, def.id),
         ];
         if (recommendations.length === 0) return null;
-        // The grounding inputs this artifact is generated from (id + label), so a
-        // guidance line that names one in prose can render a jump-to-field chip —
-        // the same "fields to update" signal the Improve modal shows, surfaced
-        // here on the rail without opening a modal.
-        const fields = getGuidanceInputFields(phaseId, def.id, store).map((fieldId) => ({
-          id: fieldId,
-          label: schema.fields.find((field) => field.id === fieldId)?.label ?? fieldId,
-        }));
+        // id + label only, for the prose chip-matching path (recs with no fieldId).
+        const fields = groundingFields.map(({ id, label }) => ({ id, label }));
         return {
           id: def.id,
           label: def.label,
@@ -229,7 +266,7 @@ export function PhaseRailPanels({
         };
       })
       .filter(
-        (item): item is { id: string; label: string; score: number | null; fields: Array<{ id: string; label: string }>; groups: RecommendationGroup[] } =>
+        (item): item is { id: string; label: string; score: number | null; fields: Array<{ id: string; label: string }>; groups: RecommendationGroup<ArtifactRecommendation & { fieldId?: string }>[] } =>
           item !== null,
       );
   }, [program, phaseId]);
@@ -432,10 +469,14 @@ export function PhaseRailPanels({
                       <div className="v3-rail-guidance-category" title={group.description}>{group.category}</div>
                       <ul className="v3-rail-guidance-list">
                         {group.items.map((rec, idx) => {
-                          // The grounding field(s) this line names in prose, so the
-                          // user can jump straight to the input to update — the same
-                          // "fields to update" signal from the Improve modal.
-                          const recFields = matchGroundingFields(`${rec.title} ${rec.detail ?? ""}`, item.fields);
+                          // The grounding field(s) this line points at. A
+                          // deterministic gap carries an explicit fieldId (resolve it
+                          // directly); a prose recommendation names the field in text
+                          // (match it) — either way the user jumps straight to the
+                          // input to update, the same signal as the Improve modal.
+                          const recFields = rec.fieldId
+                            ? item.fields.filter((field) => field.id === rec.fieldId)
+                            : matchGroundingFields(`${rec.title} ${rec.detail ?? ""}`, item.fields);
                           return (
                           <li key={idx} className="v3-rail-item-sub">
                             {rec.title}{rec.detail ? ` — ${rec.detail}` : ""}

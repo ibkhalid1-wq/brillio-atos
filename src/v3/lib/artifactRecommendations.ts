@@ -142,6 +142,37 @@ export function selfReportedGapRecommendations(
   }));
 }
 
+/** A grounding input the artifact is generated from, with its fill state. */
+export interface GroundingFieldGap {
+  id: string;
+  label: string;
+  filled: boolean;
+  /** What the field must hold — placeholder/hint prose, or a fallback. */
+  requirement?: string;
+}
+
+/**
+ * Deterministic "Add X" recommendations for the artifact's EMPTY grounding
+ * inputs, carrying an explicit `fieldId` so the caller renders a jump-to-field
+ * chip that drills straight to the input. This is the same high-leverage signal
+ * the Improve modal shows — an empty grounding input is the most actionable fix —
+ * surfaced on the Guidance rail too, so the two surfaces name the same fields.
+ * A filled input is dropped; the returned recs always carry a resolvable fieldId.
+ */
+export function groundingGapRecommendations(
+  fields: GroundingFieldGap[],
+): (ArtifactRecommendation & { fieldId: string })[] {
+  return fields
+    .filter((field) => !field.filled)
+    .map((field) => ({
+      title: `Add "${field.label}"`,
+      detail: field.requirement?.trim() || `Provide ${field.label}.`,
+      severity: "high" as const,
+      category: "Completeness" as const,
+      fieldId: field.id,
+    }));
+}
+
 /**
  * Group recommendations by category in the canonical class order, sorting each
  * group's items by severity (high → low). Empty categories are dropped, so the
