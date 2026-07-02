@@ -1079,7 +1079,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
                   <AutoGrowTextarea
                     className="v3-input v3-textarea"
                     rows={2}
-                    style={{ overflow: "hidden", resize: "none" }}
+                    style={{ overflow: "hidden", resize: "vertical" }}
                     aria-label={field.label}
                     placeholder={field.placeholder}
                     value={values[field.id] ?? ""}
