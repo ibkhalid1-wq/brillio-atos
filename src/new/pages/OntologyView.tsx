@@ -2,7 +2,6 @@ import React, { useMemo, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import { AdamCard, AdamCardBody, AdamCardHeader } from "@/v3/components/ui/AdamCard";
 import { EmptyState } from "@/v3/components/ui/EmptyState";
-import PhaseAuditModal from "@/v3/components/PhaseAuditModal";
 import {
   assessObjectives,
   severityColor,
@@ -72,17 +71,12 @@ function PhaseFidelityCard({
   phases,
   semanticValidated,
   onRunValidation,
-  onOpenAudit,
   validationIsRunning = false,
   validatingPhaseId = null,
 }: {
   phases: PhaseFidelity[];
   semanticValidated: boolean;
   onRunValidation?: (phaseId?: string) => void;
-  // Opens the read-only audit for a phase — the latest validator run's prompt,
-  // what was checked, and the response. Optional so the view still renders
-  // without agent wiring; the button only appears when a handler is threaded in.
-  onOpenAudit?: (phaseId: string, label: string) => void;
   validationIsRunning?: boolean;
   validatingPhaseId?: string | null;
 }) {
@@ -184,24 +178,6 @@ function PhaseFidelityCard({
                         }}
                       >
                         {validatingPhaseId === p.phaseId ? "Validating…" : "Validate"}
-                      </button>
-                    )}
-                    {onOpenAudit && p.assessed && (
-                      <button
-                        type="button"
-                        onClick={() => onOpenAudit(p.phaseId, p.label)}
-                        title={`Audit the last validation of "${p.label}" — prompt, what was checked, response`}
-                        style={{
-                          fontSize: 11, fontWeight: 600,
-                          padding: "3px 9px", borderRadius: 6,
-                          border: "1px solid var(--v3-border)",
-                          background: "var(--v3-surface-1)",
-                          color: "var(--v3-text-secondary)",
-                          cursor: "pointer",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        Audit
                       </button>
                     )}
                     <span style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>{statusLabel}</span>
@@ -330,9 +306,6 @@ export function OntologyView({
   // "Validating…" while the others merely disable. Null when none is running.
   validatingPhaseId?: string | null;
 }) {
-  // Which phase's validation audit is open (read-only inspection of the last
-  // validator run). Null when the modal is closed.
-  const [auditPhase, setAuditPhase] = useState<{ phaseId: string; label: string } | null>(null);
   const { assessment, phaseFidelity, semanticValidated } = useMemo(() => {
     if (!program) return { assessment: null, phaseFidelity: [] as PhaseFidelity[], semanticValidated: false };
     // Feed the roll-up both the zero-cost deterministic findings and any persisted
@@ -394,18 +367,8 @@ export function OntologyView({
           phases={phaseFidelity}
           semanticValidated={semanticValidated}
           onRunValidation={onRunValidation}
-          onOpenAudit={program ? (phaseId, label) => setAuditPhase({ phaseId, label }) : undefined}
           validationIsRunning={validationIsRunning}
           validatingPhaseId={validatingPhaseId}
-        />
-      )}
-
-      {auditPhase && program && (
-        <PhaseAuditModal
-          programId={program.id}
-          phaseId={auditPhase.phaseId}
-          phaseLabel={auditPhase.label}
-          onClose={() => setAuditPhase(null)}
         />
       )}
     </div>
