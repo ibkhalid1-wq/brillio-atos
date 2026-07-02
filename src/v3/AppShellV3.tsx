@@ -339,7 +339,7 @@ const MORE_VIEW_LABELS: Partial<Record<string, string>> = {
   accelerators: "Accelerators",
   access: "Access & Sharing",
   "decision-audit": "Decision Audit",
-  ontology: "Ontology",
+  ontology: "Objective Confidence",
   intelligence: "AI Settings",
 };
 
