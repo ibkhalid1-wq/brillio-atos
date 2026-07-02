@@ -42,7 +42,7 @@ describe("isFieldRequiredForProgram", () => {
   it("ratchets the Design NFR grid: not required for a pre-cutoff programme, required for a new one", () => {
     const nfr = ATOS_STANDARD.phases
       .find((p) => p.id === "design")!
-      .inputFields.find((f) => f.id === "nonFunctionalRequirements")!;
+      .inputFields!.find((f) => f.id === "nonFunctionalRequirements")!;
     expect(nfr.required).toBe(true);
     expect(nfr.requiredSince).toBeTruthy();
     // A programme started before the NFR grid landed must not have its solution
