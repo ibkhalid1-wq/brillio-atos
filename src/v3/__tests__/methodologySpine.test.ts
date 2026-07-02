@@ -74,6 +74,26 @@ describe("analyzeExitCriteriaCoverage (subject-overlap heuristic)", () => {
     // "Industry" carries no sponsor/business-case/objective noun.
     expect(coverage.every((c) => c.backingFieldIds.every((id) => id === "industry"))).toBe(true);
   });
+
+  it("surfaces the distinct roles of the backing fields (Option B), deduped and role-less filtered", () => {
+    // Two fields overlap the sponsor criterion: one tagged mandate, one
+    // governance-signoff; a third overlapping field carries no role and a fourth
+    // repeats governance-signoff. backingRoles must be the DISTINCT set, in
+    // field-declaration order, with the role-less field contributing nothing.
+    const coverage = analyzeExitCriteriaCoverage(
+      phase({
+        id: "strategy",
+        inputFields: [
+          { id: "sponsor", label: "Executive sponsor", type: "text", required: true, role: "mandate" },
+          { id: "sponsorDate", label: "Sponsor sign-off date", type: "date", required: false, role: "governance-signoff" },
+          { id: "sponsorNote", label: "Sponsor note", type: "text", required: false },
+          { id: "sponsorRef", label: "Sponsor approval reference", type: "text", required: false, role: "governance-signoff" },
+        ],
+      }),
+    );
+    const sponsorCriterion = coverage.find((c) => c.criterionId === "strategy-3");
+    expect(sponsorCriterion?.backingRoles).toEqual(["mandate", "governance-signoff"]);
+  });
 });
 
 describe("analyzeMethodologySpine (whole-registry coherence)", () => {
@@ -110,6 +130,35 @@ describe("analyzeMethodologySpine (whole-registry coherence)", () => {
       expect(criterion.covered).toBe(false);
       expect(criterion.backingFieldIds).toEqual([]);
     }
+  });
+});
+
+describe("Semantic field roles (Option B)", () => {
+  const phasesById = Object.fromEntries(
+    getMethodology("atos-lite").phases.map((p) => [p.id, p]),
+  );
+  const roleOf = (phaseId: string, fieldId: string) =>
+    phasesById[phaseId]?.inputFields?.find((f) => f.id === fieldId)?.role;
+
+  // Pins the role tags the spine relies on. A role is the field's KIND of
+  // evidence (orthogonal to its editor `type`); dropping or mistagging one
+  // silently weakens role-based coverage, so lock the mapping here.
+  it.each([
+    ["strategy", "sponsor", "mandate"],
+    ["strategy", "sponsorSignOffDate", "governance-signoff"],
+    ["strategy", "costAssumption", "cost"],
+    ["strategy", "constraints", "constraint"],
+    ["strategy", "successMetric", "measure"],
+    ["strategy", "kpis", "measure"],
+    ["strategy", "businessCaseApproval", "governance-signoff"],
+    ["mobilise", "budgetBaselineApproval", "governance-signoff"],
+    ["mobilise", "initialRisks", "risk"],
+    ["mobilise", "initialAssumptions", "risk"],
+    ["valuerealize", "realisedBenefits", "measure"],
+    ["valuerealize", "closureApproval", "governance-signoff"],
+    ["valuerealize", "bauHandoverConfirmation", "governance-signoff"],
+  ] as const)("tags %s.%s with role %s", (phaseId, fieldId, role) => {
+    expect(roleOf(phaseId, fieldId)).toBe(role);
   });
 });
 
@@ -153,6 +202,9 @@ describe("Mobilise governance-evidence fields (Option A)", () => {
     );
     expect(covered?.covered).toBe(true);
     expect(covered?.backingFieldIds).toContain("budgetBaselineApproval");
+    // The budget approval field carries a governance-signoff role, so the
+    // financial gate is grounded by meaning, not just by the word "budget".
+    expect(covered?.backingRoles).toContain("governance-signoff");
   });
 });
 
@@ -174,5 +226,6 @@ describe("Value Realize governance-evidence fields (Option A)", () => {
     );
     expect(covered?.covered).toBe(true);
     expect(covered?.backingFieldIds).toContain("bauHandoverConfirmation");
+    expect(covered?.backingRoles).toContain("governance-signoff");
   });
 });

@@ -1,5 +1,6 @@
 import {
   getMethodology,
+  type FieldRole,
   type MethodologyVariant,
   type PhaseDefinition,
   type PhaseInputField,
@@ -47,6 +48,14 @@ export interface ExitCriterionCoverage {
   category: ExitCriterion["category"];
   /** Input field ids whose subject matter overlaps the criterion's evidence. */
   backingFieldIds: string[];
+  /**
+   * The distinct semantic roles carried by the backing fields (Option B). Word
+   * overlap tells us WHICH fields relate to the criterion; roles tell us WHAT
+   * kind of evidence they carry — so a governance criterion backed by a field
+   * whose role is `governance-signoff` is grounded by meaning, not just by a
+   * shared noun. Empty when no backing field declares a role.
+   */
+  backingRoles: FieldRole[];
   /** True when at least one input field plausibly captures the criterion's evidence. */
   covered: boolean;
 }
@@ -124,18 +133,25 @@ export function findFlowFieldGaps(phase: PhaseDefinition): FlowFieldGap[] {
  */
 export function analyzeExitCriteriaCoverage(phase: PhaseDefinition): ExitCriterionCoverage[] {
   const fields = phase.inputFields ?? [];
-  const fieldTokenSets = fields.map((field) => ({ id: field.id, tokens: toTokens(fieldSubjectText(field)) }));
+  const fieldTokenSets = fields.map((field) => ({
+    id: field.id,
+    role: field.role,
+    tokens: toTokens(fieldSubjectText(field)),
+  }));
   return getMandatoryCriteria(phase.id).map((criterion) => {
     const criterionTokens = toTokens(`${criterion.label} ${criterion.evidencePrompt}`);
-    const backingFieldIds = fieldTokenSets
-      .filter((field) => hasOverlap(field.tokens, criterionTokens))
-      .map((field) => field.id);
+    const backing = fieldTokenSets.filter((field) => hasOverlap(field.tokens, criterionTokens));
+    const backingFieldIds = backing.map((field) => field.id);
+    const backingRoles = [
+      ...new Set(backing.map((field) => field.role).filter((role): role is FieldRole => !!role)),
+    ];
     return {
       phaseId: phase.id,
       criterionId: criterion.id,
       label: criterion.label,
       category: criterion.category,
       backingFieldIds,
+      backingRoles,
       covered: backingFieldIds.length > 0,
     };
   });
