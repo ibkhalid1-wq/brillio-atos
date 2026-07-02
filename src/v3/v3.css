@@ -14,7 +14,9 @@
   --color-info: #3b82f6;
   --color-text-primary: #f1f5f9;
   --color-text-secondary: #94a3b8;
-  --color-text-muted: #7a8fa8;
+  /* Lightened from #7a8fa8 so muted text clears WCAG AA (4.5:1) even on the
+     most-elevated dark surface (#22263a), where the old value sat at ~4.49:1. */
+  --color-text-muted: #869ab1;
   --radius-sm: 4px;
   --radius-md: 8px;
   --radius-lg: 12px;
@@ -1726,6 +1728,24 @@ select {
   .v3-command-rail-item-copy,
   .v3-command-rail-status-label {
     transition: none !important;
+  }
+}
+
+/* Reduced-motion backstop (Option I). Scoped to the v3 shell so it never touches
+   other apps. Individual components already opt out where it matters; this
+   catches everything else — collapsing animations and transitions to instant so
+   no decorative motion slips through, while leaving functional
+   animation/transition end events firing and content fully visible. */
+@media (prefers-reduced-motion: reduce) {
+  .v3-shell *,
+  .v3-shell *::before,
+  .v3-shell *::after {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
   }
 }
 

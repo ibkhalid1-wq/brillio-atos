@@ -893,7 +893,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
             style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}
           >
           {prioritized.requiredGaps > 0 ? (
-            <div className="v3-input-priority-banner">
+            <div className="v3-input-priority-banner" role="status" aria-live="polite">
               <span className="v3-chip red" style={{ fontSize: 10 }}>
                 {prioritized.requiredGaps} required {prioritized.requiredGaps === 1 ? "field" : "fields"} left
               </span>
@@ -902,7 +902,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
               ) : null}
             </div>
           ) : prioritized.optionalGaps > 0 ? (
-            <div className="v3-input-priority-banner">
+            <div className="v3-input-priority-banner" role="status" aria-live="polite">
               <span className="v3-chip amber" style={{ fontSize: 10 }}>All required complete</span>
               <span className="v3-input-priority-detail">{prioritized.optionalGaps} optional {prioritized.optionalGaps === 1 ? "field" : "fields"} can add depth.</span>
             </div>
