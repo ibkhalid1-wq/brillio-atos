@@ -9,6 +9,7 @@ import {
   type ProgramDocument,
 } from "@/v3/lib/programGraph";
 import type { DocumentIntelligence } from "@/new/lib/documentIntelligenceTypes";
+import { ATOS_STANDARD } from "@/v3/lib/methodology";
 
 function doc(over: Partial<DocumentIntelligence>, fileName = "deck.pdf", id = "doc1"): ProgramDocument {
   return {
@@ -123,6 +124,28 @@ describe("buildProgramGraph", () => {
     }));
     const kpi = graph.nodes.find((n) => n.type === "kpi");
     expect(kpi).toMatchObject({ phaseCreated: "strategy", label: "Accuracy: 55% → 80% → %" });
+  });
+
+  it("keeps the Strategy kpis field's columns aligned with the graph's KPI reader", () => {
+    // The graph reads phaseInputs.strategy.kpis rows by the keys name/baseline/
+    // target/unit (parseKpiRows). The methodology's `kpis` grid must expose exactly
+    // those column keys, or a user-entered KPI would be silently dropped from the
+    // measured-by chain. This guards the field↔consumer contract across edits.
+    const strategy = ATOS_STANDARD.phases.find((p) => p.id === "strategy");
+    const kpisField = strategy?.inputFields?.find((f) => f.id === "kpis");
+    expect(kpisField?.type).toBe("grid");
+    const columnKeys = new Set((kpisField?.columns ?? []).map((c) => c.key));
+    for (const key of ["name", "baseline", "target", "unit"]) {
+      expect(columnKeys.has(key)).toBe(true);
+    }
+    // And a grid serialized from those columns must produce a KPI node end-to-end.
+    const row: Record<string, string> = { id: "k1" };
+    for (const col of kpisField?.columns ?? []) row[col.key] = col.key === "name" ? "Win rate" : "x";
+    const graph = buildProgramGraph(program({
+      phases,
+      rawData: { phaseInputs: { strategy: { kpis: JSON.stringify([row]) } } },
+    }));
+    expect(graph.nodes.some((n) => n.type === "kpi" && n.label.startsWith("Win rate"))).toBe(true);
   });
 
   it("includes open risks and decisions but excludes closed ones", () => {

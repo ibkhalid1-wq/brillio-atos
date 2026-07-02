@@ -188,6 +188,34 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         { id: "constraints", label: "Key constraints", type: "textarea", placeholder: "Budget, timeline, regulatory, or technical constraints", required: true, hint: "e.g. Must go live before Q4 financial year end" },
         { id: "successMetric", label: "Primary success metric", type: "text", placeholder: "KPI name, e.g. Cost to serve", required: true },
         {
+          // KPIs captured as a structured grid — each with a baseline and target —
+          // so the objective's `measured-by` chain has verifiable measures, not a
+          // lone metric name. The Program Graph already reads phaseInputs.strategy.kpis
+          // (strategyKpiRaw → parseKpiRows) into KPI nodes; declaring the field here is
+          // what lets users finally populate that existing consumer. A KPI missing a
+          // baseline or target is flagged "weak" by the objective graph's measured-by
+          // edge, so these two columns turn the validator's weak-KPI check from a
+          // semantic inference into a structural fact. Optional: making it required
+          // would retroactively fail every existing programme's Strategy gate (none
+          // carry kpis yet); the required `successMetric` stays the headline measure.
+          // Grid rows flatten into the strategy artifact prompts via the edge's
+          // buildGroundingFacts, so the KPIs inform charter/business-case/outcome
+          // automatically; wired into outcome-framework's input flow below for the
+          // visual flow + staleness (optional flow inputs never block generation).
+          id: "kpis",
+          label: "Success KPIs",
+          type: "grid",
+          required: false,
+          hint: "The measurable KPIs that prove the objective — each with its baseline (where it stands today) and its target. A KPI without both can't verify attainment.",
+          usedByArtifacts: ["outcome-framework"],
+          columns: [
+            { key: "name", label: "KPI", type: "text", placeholder: "e.g. Cost to serve" },
+            { key: "baseline", label: "Baseline", type: "text", width: 140, placeholder: "Where it stands today" },
+            { key: "target", label: "Target", type: "text", width: 140, placeholder: "The goal" },
+            { key: "unit", label: "Unit", type: "text", width: 120, placeholder: "e.g. $, %, days" },
+          ],
+        },
+        {
           // Validation / delivery posture: an explicit, recorded plan for how much
           // the programme will prove before committing to full build. POC →
           // Prototype → Pilot → MVP is a fidelity/investment ladder; each stage
@@ -225,7 +253,7 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         // optional, so the generation gate (StageView) treats unfilled optional
         // flow inputs as non-blocking — the edge wires the visual flow + staleness
         // without locking generation on an appetite-level field.
-        "outcome-framework": ["successMetric", "validationApproach"],
+        "outcome-framework": ["successMetric", "kpis", "validationApproach"],
       },
     },
     {

@@ -82,10 +82,12 @@ describe("getArtifactInputFields", () => {
   });
 
   it("merges the static success-metric edge with the methodology flow for outcome-framework", () => {
-    // successMetric comes from the static field→artifact map; validationApproach is
-    // declared in the methodology artifactInputFlow. Both must surface, deduped.
+    // successMetric comes from the static field→artifact map; kpis and
+    // validationApproach are declared in the methodology artifactInputFlow. All
+    // must surface, deduped — the structured KPIs feed the outcome tree alongside
+    // the headline metric and the de-risking ladder.
     expect(new Set(getArtifactInputFields("strategy", "outcome-framework"))).toEqual(
-      new Set(["successMetric", "validationApproach"]),
+      new Set(["successMetric", "kpis", "validationApproach"]),
     );
   });
 
