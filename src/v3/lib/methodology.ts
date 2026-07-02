@@ -413,10 +413,36 @@ export const ATOS_STANDARD: MethodologyDefinition = {
             { key: "interest", label: "Interest", type: "text" },
           ],
         },
+        {
+          // Requirements captured as a structured grid so each is a first-class,
+          // citable requirement rather than prose buried in the current-state
+          // summary. The Program Graph mints one `requirement` node per row (stable
+          // ids carried on the rows), which the objective graph's satisfied-by
+          // chain and the cross-artifact validator attach design coverage to — so a
+          // requirement with no covering design is a structural gap, not a semantic
+          // inference. Optional: making it required would retroactively fail every
+          // existing programme's Discover gate (none carry requirements yet). The
+          // requirements-catalog agent drafts these from current state + scope; the
+          // grid rows flatten into its prompt via the edge's buildGroundingFacts, so
+          // they inform generation automatically. Wired into requirements-catalog's
+          // input flow for the visual flow + staleness (optional flow inputs never
+          // block generation).
+          id: "requirements",
+          label: "Requirements",
+          type: "grid",
+          required: false,
+          hint: "The functional and non-functional needs the solution must satisfy — one per row, with its type and priority. Each becomes a tracked requirement the design must cover.",
+          usedByArtifacts: ["requirements-catalog"],
+          columns: [
+            { key: "requirement", label: "Requirement", type: "text", placeholder: "e.g. Single sign-on across all portals" },
+            { key: "category", label: "Type", type: "select", width: 160, options: ["Functional", "Non-functional", "Data", "Integration", "Compliance"] },
+            { key: "priority", label: "Priority", type: "select", width: 140, options: ["Must", "Should", "Could", "Won't"] },
+          ],
+        },
       ],
       artifactInputFlow: {
         "scope-map": ["currentStateSummary", "scopeInclusions", "scopeExclusions", "stakeholderList"],
-        "requirements-catalog": ["currentStateSummary", "scopeInclusions", "stakeholderList"],
+        "requirements-catalog": ["currentStateSummary", "scopeInclusions", "stakeholderList", "requirements"],
         "stakeholder-map": ["stakeholderList"],
       },
     },

@@ -91,12 +91,13 @@ const NODE_COLORS: Record<string, string> = {
   Phase: "#1e3a5f",
   Artifact: "#5b21b6",
   Stakeholder: "#1a5c8f",
+  Requirement: "#0369a1",
 };
 
 const TWIN_NODE_TYPE_ORDER = [
   "Strategy", "Outcome", "KPI", "Capability", "Decision",
   "Role", "Agent", "Skill", "Data", "Risk", "Governance", "Value", "Learning",
-  "Source", "Insight", "Fact", "Phase", "Artifact", "Stakeholder",
+  "Source", "Insight", "Fact", "Requirement", "Phase", "Artifact", "Stakeholder",
 ];
 
 const SEMANTIC_LANES = [
@@ -105,6 +106,7 @@ const SEMANTIC_LANES = [
   // disjoint), so adding them does not alter twin layout.
   { id: "pg-sources", label: "Sources", types: ["Source"] },
   { id: "pg-knowledge", label: "Knowledge", types: ["Insight", "Fact"] },
+  { id: "pg-requirements", label: "Requirements", types: ["Requirement"] },
   { id: "pg-phases", label: "Phases", types: ["Phase"] },
   { id: "pg-artifacts", label: "Artifacts", types: ["Artifact"] },
   { id: "strategy", label: "Strategy", types: ["Strategy"] },

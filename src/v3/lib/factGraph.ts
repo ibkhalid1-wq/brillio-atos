@@ -66,6 +66,10 @@ export interface FactGraph {
 const NON_FACT_KEYS = new Set([
   PROVENANCE_KEY, "savedAt", "workstreams", "kpis", "kpiActuals",
   "successMetricBaseline", "successMetricTarget", "successMetricUnit",
+  // Requirements are minted as first-class requirement nodes by the Program
+  // Graph (buildProgramGraph), not as generic facts — excluded here to avoid
+  // double-counting the same rows in both structures.
+  "requirements",
 ]);
 
 function unwrapProgramData(rawData: unknown): Record<string, unknown> {

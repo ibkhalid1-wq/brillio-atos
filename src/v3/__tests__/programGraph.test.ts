@@ -148,6 +148,61 @@ describe("buildProgramGraph", () => {
     expect(graph.nodes.some((n) => n.type === "kpi" && n.label.startsWith("Win rate"))).toBe(true);
   });
 
+  it("mints a requirement node per Discover requirements row, scoped to discover", () => {
+    const graph = buildProgramGraph(program({
+      phases,
+      rawData: {
+        phaseInputs: {
+          discover: {
+            requirements: JSON.stringify([
+              { id: "req-a", requirement: "Single sign-on across all portals", category: "Functional", priority: "Must" },
+              { id: "req-b", requirement: "99.9% availability", category: "Non-functional", priority: "Should" },
+            ]),
+          },
+        },
+      },
+    }));
+    expect(graph.stats.byKind.requirement).toBe(2);
+    const req = graph.nodes.find((n) => n.id === "requirement:req-a");
+    expect(req).toMatchObject({ type: "requirement", label: "Single sign-on across all portals", phaseCreated: "discover" });
+    expect(req!.properties).toMatchObject({ category: "Functional", priority: "Must" });
+    // Each requirement is anchored to its phase.
+    expect(graph.edges.some((e) => e.type === "in_phase" && e.from === "requirement:req-a" && e.to === "phase:discover")).toBe(true);
+  });
+
+  it("does not double-count requirements as facts (excluded from the Fact Graph)", () => {
+    const graph = buildProgramGraph(program({
+      phases,
+      rawData: {
+        phaseInputs: {
+          discover: { requirements: JSON.stringify([{ id: "req-a", requirement: "SSO", category: "Functional", priority: "Must" }]) },
+        },
+      },
+    }));
+    expect(graph.stats.byKind.requirement).toBe(1);
+    expect(graph.stats.byKind.fact).toBe(0);
+  });
+
+  it("keeps the Discover requirements field's columns aligned with the graph's requirement reader", () => {
+    // The graph reads discover.requirements rows by the key `requirement`
+    // (parseGridRows). The methodology's `requirements` grid must expose that
+    // column key end-to-end, or a user-entered requirement would never become a node.
+    const discover = ATOS_STANDARD.phases.find((p) => p.id === "discover");
+    const field = discover?.inputFields?.find((f) => f.id === "requirements");
+    expect(field?.type).toBe("grid");
+    const columnKeys = new Set((field?.columns ?? []).map((c) => c.key));
+    for (const key of ["requirement", "category", "priority"]) {
+      expect(columnKeys.has(key)).toBe(true);
+    }
+    const row: Record<string, string> = { id: "req-x" };
+    for (const col of field?.columns ?? []) row[col.key] = col.key === "requirement" ? "Audit logging" : "x";
+    const graph = buildProgramGraph(program({
+      phases,
+      rawData: { phaseInputs: { discover: { requirements: JSON.stringify([row]) } } },
+    }));
+    expect(graph.nodes.some((n) => n.type === "requirement" && n.label === "Audit logging")).toBe(true);
+  });
+
   it("includes open risks and decisions but excludes closed ones", () => {
     const graph = buildProgramGraph(program({
       phases,

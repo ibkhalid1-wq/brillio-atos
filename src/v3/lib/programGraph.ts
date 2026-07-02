@@ -24,7 +24,7 @@ import { buildFactGraph, type Fact } from "@/v3/lib/factGraph";
 import type { DocumentIntelligence, ExtractedEntities } from "@/new/lib/documentIntelligenceTypes";
 
 export type ProgramGraphNodeKind =
-  | "phase" | "fact" | "document" | "artifact" | "kpi" | "risk" | "decision" | "stakeholder" | "insight";
+  | "phase" | "fact" | "document" | "artifact" | "kpi" | "risk" | "decision" | "stakeholder" | "insight" | "requirement";
 
 /**
  * A processed document supplied to the graph. The entities the extractor found
@@ -95,26 +95,30 @@ const KPI = (id: string) => `kpi:${id}`;
 const RISK = (id: string) => `risk:${id}`;
 const DECISION = (id: string) => `decision:${id}`;
 const STAKEHOLDER = (id: string) => `stakeholder:${id}`;
+const REQUIREMENT = (id: string) => `requirement:${id}`;
 
 interface KpiRow { id?: string; name?: string; baseline?: string; target?: string; unit?: string; objective?: string }
+interface RequirementRow { id?: string; requirement?: string; category?: string; priority?: string }
 
-function parseKpiRows(raw: unknown): KpiRow[] {
+function parseGridRows<T>(raw: unknown): T[] {
   if (typeof raw !== "string" || !raw.trim()) return [];
   try {
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as KpiRow[]) : [];
+    return Array.isArray(parsed) ? (parsed as T[]) : [];
   } catch {
     return [];
   }
 }
 
-function strategyKpiRaw(program: ProgramSummary): unknown {
+/** Read one phase-input field's raw value, tolerant of the wrapped/unwrapped
+ *  rawData shapes both persist in the wild. */
+function phaseInputRaw(program: ProgramSummary, phaseId: string, fieldId: string): unknown {
   const raw = (program.rawData || {}) as Record<string, unknown>;
   const inner = typeof raw.data === "object" && raw.data !== null ? raw.data as Record<string, unknown> : raw;
   const pi = inner.phaseInputs;
   if (typeof pi !== "object" || pi === null) return undefined;
-  const strategy = (pi as Record<string, unknown>).strategy;
-  return typeof strategy === "object" && strategy !== null ? (strategy as Record<string, unknown>).kpis : undefined;
+  const bucket = (pi as Record<string, unknown>)[phaseId];
+  return typeof bucket === "object" && bucket !== null ? (bucket as Record<string, unknown>)[fieldId] : undefined;
 }
 
 /**
@@ -222,7 +226,7 @@ export function buildProgramGraph(
   });
 
   // Strategy KPIs (structured, excluded from the Fact Graph) as their own nodes.
-  parseKpiRows(strategyKpiRaw(program)).forEach((row, index) => {
+  parseGridRows<KpiRow>(phaseInputRaw(program, "strategy", "kpis")).forEach((row, index) => {
     const name = (row.name || "").trim();
     if (!name) return;
     const id = row.id || String(index);
@@ -236,6 +240,26 @@ export function buildProgramGraph(
     });
     if (phaseIds.has("strategy")) {
       addEdge({ id: `inphase:kpi:${id}`, from: KPI(id), to: PHASE("strategy"), type: "in_phase" });
+    }
+  });
+
+  // Discovered requirements (structured grid, excluded from the Fact Graph) as
+  // first-class requirement nodes. The objective graph's satisfied-by chain and
+  // the cross-artifact validator attach to these *declared* requirements — with
+  // stable ids carried on the grid rows — rather than only requirements
+  // synthesised from validation findings. The requirements-catalog agent still
+  // reads the grid directly via artifactInputFlow, so excluding them from facts
+  // does not remove them from generation prompts (mirrors the KPI treatment).
+  parseGridRows<RequirementRow>(phaseInputRaw(program, "discover", "requirements")).forEach((row, index) => {
+    const text = (row.requirement || "").trim();
+    if (!text) return;
+    const id = row.id || String(index);
+    addNode({
+      id: REQUIREMENT(id), type: "requirement", label: text, phaseCreated: "discover",
+      properties: { category: row.category, priority: row.priority },
+    });
+    if (phaseIds.has("discover")) {
+      addEdge({ id: `inphase:req:${id}`, from: REQUIREMENT(id), to: PHASE("discover"), type: "in_phase" });
     }
   });
 
@@ -294,7 +318,7 @@ export function buildProgramGraph(
 }
 
 function emptyKindCounts(): Record<ProgramGraphNodeKind, number> {
-  return { phase: 0, fact: 0, document: 0, artifact: 0, kpi: 0, risk: 0, decision: 0, stakeholder: 0, insight: 0 };
+  return { phase: 0, fact: 0, document: 0, artifact: 0, kpi: 0, risk: 0, decision: 0, stakeholder: 0, insight: 0, requirement: 0 };
 }
 
 export interface ProgramGraphSelection {
