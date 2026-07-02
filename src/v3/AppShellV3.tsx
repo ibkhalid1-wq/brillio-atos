@@ -64,6 +64,7 @@ import { useLocalProgramMigration } from "@/v3/hooks/useLocalProgramMigration";
 import { usePhaseAgentState } from "@/v3/hooks/usePhaseAgentState";
 import { useProgramValidation } from "@/v3/hooks/useProgramValidation";
 import { getPhaseSequence, getPhaseDefinition, buildPhaseOwnershipContext, ATOS_STANDARD } from "@/v3/lib/methodology";
+import type { MethodologyVariant } from "@/v3/lib/methodology";
 import { FORMAL_ARTIFACT_FIELD_KEYS } from "@/v3/lib/formalArtifacts";
 import { buildPhaseSchedule } from "@/v3/lib/phaseSchedule";
 import { computePhaseReadiness, getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
@@ -215,8 +216,14 @@ const APP_VIEW_TO_MORE_VIEW: Partial<Record<AppView, V3MoreView>> = {
 };
 
 const DEFAULT_V3_MODE: V3Mode = "power";
+// The methodology variant this app operates in. Single source of truth so the
+// phase sequence programmes are seeded with and the phase-ownership map fed into
+// formal-artifact gap discipline can never drift apart — the map's design intent
+// ("stays correct as the registry evolves", methodology.ts) depends on both
+// reading the same variant.
+const APP_METHODOLOGY_VARIANT: MethodologyVariant = "atos-lite";
 // Lite is the default methodology for new programmes; standard covers all known phase IDs for URL routing
-const DEFAULT_PHASE_SEQUENCE = getPhaseSequence("atos-lite");
+const DEFAULT_PHASE_SEQUENCE = getPhaseSequence(APP_METHODOLOGY_VARIANT);
 const ALL_KNOWN_PHASE_IDS = getPhaseSequence("atos-standard");
 
 
@@ -1402,7 +1409,7 @@ export default function AppShellV3() {
     // and artifact. No deploy needed — the edge folds crossPhaseContext into
     // prompt.system.
     if (resolvedAgentId in FORMAL_ARTIFACT_FIELD_KEYS) {
-      const ownershipMap = buildPhaseOwnershipContext(phaseId);
+      const ownershipMap = buildPhaseOwnershipContext(phaseId, APP_METHODOLOGY_VARIANT);
       if (ownershipMap) {
         crossPhaseContext += `${crossPhaseContext ? "\n\n" : ""}${ownershipMap}`;
       }
