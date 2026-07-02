@@ -193,10 +193,15 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       displayName: "Strategy",
       description: "Define the transformation mandate, value hypothesis, and success metrics.",
       requiredArtifacts: ["charter", "business-case", "outcome-framework", "strategic-roadmap"],
+      // Kept in sync with EXIT_CRITERIA_LIBRARY (strategy-1..3) so the inline
+      // fallback matches what the load-time reconciliation below derives. The
+      // budget gate is a Mobilise concern (mobilise-4 "Budget baseline
+      // confirmed"), not a Strategy exit criterion, so it is intentionally not
+      // listed here.
       mandatoryExitCriteriaTemplates: [
-        "Executive sponsor confirmed and mandate documented",
-        "Business objective and primary success metric defined",
-        "Programme budget approved",
+        "Business case approved",
+        "Objectives defined and measurable",
+        "Sponsor confirmed and committed",
       ],
       entryGuards: ["Programme created", "Sponsor identified"],
       recommendedAgents: ["charter", "business-case", "outcome-framework", "narrative"],
