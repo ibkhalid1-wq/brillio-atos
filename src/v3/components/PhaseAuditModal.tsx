@@ -1,6 +1,19 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 import { timeAgo } from "@/v3/utils";
+import {
+  classifyFinding,
+  FINDING_CLASS_ORDER,
+  type FindingClass,
+  type ValidationDomain,
+} from "@/v3/lib/crossArtifactValidation";
+
+const CLASS_COLOR: Record<FindingClass, string> = {
+  Ontology: "#6366f1",
+  Governance: "#f59e0b",
+  Change: "#22c55e",
+  Completeness: "#94a3b8",
+};
 
 /**
  * Per-phase validation audit.
@@ -135,6 +148,16 @@ export default function PhaseAuditModal({ programId, phaseId, phaseLabel, onClos
   const [run, setRun] = useState<AuditRun | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Which class buckets are collapsed. Empty = all expanded (default).
+  const [collapsedClasses, setCollapsedClasses] = useState<Set<FindingClass>>(new Set());
+
+  const toggleClass = (cls: FindingClass) =>
+    setCollapsedClasses((prev) => {
+      const next = new Set(prev);
+      if (next.has(cls)) next.delete(cls);
+      else next.add(cls);
+      return next;
+    });
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
@@ -175,6 +198,20 @@ export default function PhaseAuditModal({ programId, phaseId, phaseLabel, onClos
   const findings = useMemo(() => (run ? extractFindings(run.output) : []), [run]);
   const checkedChain = useMemo(() => (run ? extractCheckedChain(run.output) : []), [run]);
   const fullPrompt = useMemo(() => (run ? extractFullPrompt(run.input_context) : null), [run]);
+  // Group findings by top-level class (Ontology / Governance / Change /
+  // Completeness) in the shared order, so the audit reads as classified buckets.
+  const groupedFindings = useMemo(() => {
+    const groups = new Map<FindingClass, Array<Record<string, unknown>>>();
+    for (const f of findings) {
+      const cls = classifyFinding((typeof f.domain === "string" ? f.domain : "delivery-readiness") as ValidationDomain);
+      const bucket = groups.get(cls) ?? [];
+      bucket.push(f);
+      groups.set(cls, bucket);
+    }
+    return FINDING_CLASS_ORDER
+      .filter((cls) => groups.has(cls))
+      .map((cls) => ({ cls, items: groups.get(cls)! }));
+  }, [findings]);
   const durationSec = run?.started_at && run?.completed_at
     ? ((new Date(run.completed_at).getTime() - new Date(run.started_at).getTime()) / 1000).toFixed(1)
     : null;
@@ -251,37 +288,58 @@ export default function PhaseAuditModal({ programId, phaseId, phaseLabel, onClos
               <Section
                 title="Response"
                 subtitle={findings.length > 0
-                  ? "The findings the validator returned. Each names the gap, a recommendation, and what it was checked against."
+                  ? "The findings the validator returned, classified into Ontology / Governance / Change / Completeness. Each names the gap, a recommendation, and what it was checked against."
                   : "The validator returned no cross-artifact gaps for this phase."}
               >
                 {findings.length > 0 ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {findings.map((f, index) => (
-                      <div
-                        key={(typeof f.findingId === "string" && f.findingId) || index}
-                        style={{ padding: "10px 12px", borderRadius: 8, background: "var(--v3-surface-2)", border: "1px solid var(--v3-border)" }}
-                      >
-                        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
-                          {typeof f.severity === "string" ? (
-                            <span className="v3-chip muted" style={{ fontSize: 10 }}>{f.severity}</span>
-                          ) : null}
-                          {typeof f.domain === "string" ? (
-                            <span style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>{f.domain}</span>
-                          ) : null}
-                        </div>
-                        {typeof f.issue === "string" ? (
-                          <div style={{ fontSize: 13, color: "var(--v3-text-primary)" }}>{f.issue}</div>
-                        ) : null}
-                        {typeof f.recommendation === "string" && f.recommendation ? (
-                          <div style={{ fontSize: 12, color: "var(--v3-accent)", marginTop: 2 }}>→ {f.recommendation}</div>
-                        ) : null}
-                        {Array.isArray(f.evidence) && f.evidence.length > 0 ? (
-                          <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 4 }}>
-                            checked against: {(f.evidence as unknown[]).filter((e) => typeof e === "string").join("; ")}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                    {groupedFindings.map(({ cls, items }) => {
+                      const collapsed = collapsedClasses.has(cls);
+                      return (
+                      <div key={cls} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        <button
+                          type="button"
+                          onClick={() => toggleClass(cls)}
+                          aria-expanded={!collapsed}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 8, width: "100%",
+                            background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left",
+                          }}
+                        >
+                          <span style={{ fontSize: 10, color: "var(--v3-text-muted)", width: 10, display: "inline-block", transition: "transform 0.15s", transform: collapsed ? "rotate(0deg)" : "rotate(90deg)" }}>▶</span>
+                          <span style={{ width: 8, height: 8, borderRadius: "50%", background: CLASS_COLOR[cls] }} />
+                          <span style={{ fontSize: 12, fontWeight: 700, color: CLASS_COLOR[cls] }}>{cls}</span>
+                          <span style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>{items.length}</span>
+                        </button>
+                        {collapsed ? null : items.map((f, index) => (
+                          <div
+                            key={(typeof f.findingId === "string" && f.findingId) || `${cls}-${index}`}
+                            style={{ padding: "10px 12px", borderRadius: 8, background: "var(--v3-surface-2)", border: "1px solid var(--v3-border)", borderLeft: `3px solid ${CLASS_COLOR[cls]}` }}
+                          >
+                            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
+                              {typeof f.severity === "string" ? (
+                                <span className="v3-chip muted" style={{ fontSize: 10 }}>{f.severity}</span>
+                              ) : null}
+                              {typeof f.domain === "string" ? (
+                                <span style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>{f.domain}</span>
+                              ) : null}
+                            </div>
+                            {typeof f.issue === "string" ? (
+                              <div style={{ fontSize: 13, color: "var(--v3-text-primary)" }}>{f.issue}</div>
+                            ) : null}
+                            {typeof f.recommendation === "string" && f.recommendation ? (
+                              <div style={{ fontSize: 12, color: "var(--v3-accent)", marginTop: 2 }}>→ {f.recommendation}</div>
+                            ) : null}
+                            {Array.isArray(f.evidence) && f.evidence.length > 0 ? (
+                              <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 4 }}>
+                                checked against: {(f.evidence as unknown[]).filter((e) => typeof e === "string").join("; ")}
+                              </div>
+                            ) : null}
                           </div>
-                        ) : null}
+                        ))}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : checkedChain.length > 0 ? (
                   <div style={{ fontSize: 13, color: "var(--v3-text-secondary)" }}>

@@ -13,6 +13,8 @@ import {
   selectModelValidationFindings,
   assessPhaseFidelity,
   getSemanticValidationMeta,
+  classifyFinding,
+  type FindingClass,
   type PhaseFidelity,
 } from "@/v3/lib/crossArtifactValidation";
 
@@ -44,6 +46,31 @@ const SEVERITY_COLOR: Record<ConfidenceBlocker["severity"], string> = {
   medium: "#f59e0b",
   low: "#94a3b8",
 };
+
+// Top-level finding class → accent. Ontology (delivery-chain traceability) is the
+// primary lens, so it carries the ontology/indigo accent; the others are muted.
+const CLASS_COLOR: Record<FindingClass, string> = {
+  Ontology: "#6366f1",
+  Governance: "#f59e0b",
+  Change: "#22c55e",
+  Completeness: "#94a3b8",
+};
+
+function ClassChip({ cls }: { cls: FindingClass }) {
+  return (
+    <span
+      style={{
+        fontSize: 10, fontWeight: 600, lineHeight: 1.4,
+        padding: "1px 6px", borderRadius: 4,
+        color: CLASS_COLOR[cls],
+        border: `1px solid ${CLASS_COLOR[cls]}`,
+        background: "transparent", whiteSpace: "nowrap",
+      }}
+    >
+      {cls}
+    </span>
+  );
+}
 
 function BandChip({ band }: { band: ConfidenceBand }) {
   return (
@@ -197,6 +224,9 @@ function PhaseFidelityCard({
                           style={{ marginTop: 5, flexShrink: 0, width: 6, height: 6, borderRadius: "50%", background: SEVERITY_COLOR[g.severity] }}
                         />
                         <div style={{ minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                            <ClassChip cls={classifyFinding(g.domain)} />
+                          </div>
                           <div style={{ fontSize: 12, color: "var(--v3-text-secondary)" }}>{g.issue}</div>
                           {g.recommendation && (
                             <div style={{ fontSize: 12, color: "var(--v3-accent)", marginTop: 1 }}>→ {g.recommendation}</div>

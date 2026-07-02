@@ -6,8 +6,11 @@ import {
   selectFindingsForPhase,
   assessPhaseFidelity,
   getSemanticValidationMeta,
+  classifyFinding,
+  FINDING_CLASS_ORDER,
   type ValidatableProgram,
   type ValidationFinding,
+  type ValidationDomain,
 } from "@/v3/lib/crossArtifactValidation";
 
 const risk = (over: Partial<NonNullable<ValidatableProgram["raidEntries"]>[number]> = {}) => ({
@@ -570,5 +573,38 @@ describe("decideValidation — triggering framework", () => {
     const d = decideValidation("input_change", [{ field: "design.gateReview.status", changeType: "changed" }]);
     expect(d.shouldValidate).toBe(true);
     expect(d.domains).toContain("governance");
+  });
+});
+
+describe("classifyFinding", () => {
+  it("rolls delivery-chain traceability domains up to Ontology", () => {
+    const ontologyDomains: ValidationDomain[] = [
+      "requirements-coverage",
+      "architecture-consistency",
+      "benefits-traceability",
+      "scope-coverage",
+      "delivery-readiness",
+    ];
+    for (const domain of ontologyDomains) {
+      expect(classifyFinding(domain)).toBe("Ontology");
+    }
+  });
+
+  it("maps oversight domains to Governance, people to Change, self-declared gaps to Completeness", () => {
+    expect(classifyFinding("governance")).toBe("Governance");
+    expect(classifyFinding("risk-controls")).toBe("Governance");
+    expect(classifyFinding("stakeholder-readiness")).toBe("Change");
+    expect(classifyFinding("artifact-completeness")).toBe("Completeness");
+  });
+
+  it("classifies every domain into a known, ordered class", () => {
+    const allDomains: ValidationDomain[] = [
+      "risk-controls", "stakeholder-readiness", "benefits-traceability", "delivery-readiness",
+      "governance", "scope-coverage", "requirements-coverage", "architecture-consistency",
+      "artifact-completeness",
+    ];
+    for (const domain of allDomains) {
+      expect(FINDING_CLASS_ORDER).toContain(classifyFinding(domain));
+    }
   });
 });

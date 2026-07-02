@@ -76,6 +76,48 @@ export type ValidationDomain =
   // complete. Intra-artifact completeness, not cross-artifact traceability.
   | "artifact-completeness";
 
+/**
+ * Top-level class a finding rolls up to. The nine domains are the fine-grained
+ * detection buckets; this is the coarse lens the surfaces group by:
+ * - Ontology     — traceability of the objective delivery chain (the domains that
+ *                  participate in the objective knowledge graph: requirements →
+ *                  design → delivery → benefits → scope).
+ * - Governance   — oversight integrity: gates, decisions, risk controls.
+ * - Change       — people / adoption readiness: stakeholder impact & interventions.
+ * - Completeness — a deliverable's own self-declared shortfalls (intra-artifact).
+ * Single source of truth — surfaces classify via `classifyFinding`, never by
+ * re-deriving the mapping locally.
+ */
+export type FindingClass = "Ontology" | "Governance" | "Change" | "Completeness";
+
+const DOMAIN_CLASS: Record<ValidationDomain, FindingClass> = {
+  "requirements-coverage": "Ontology",
+  "architecture-consistency": "Ontology",
+  "benefits-traceability": "Ontology",
+  "scope-coverage": "Ontology",
+  "delivery-readiness": "Ontology",
+  "governance": "Governance",
+  "risk-controls": "Governance",
+  "stakeholder-readiness": "Change",
+  "artifact-completeness": "Completeness",
+};
+
+/** Stable display order for the finding classes. */
+export const FINDING_CLASS_ORDER: FindingClass[] = ["Ontology", "Governance", "Change", "Completeness"];
+
+/** One-line description of what each class covers (for tooltips / subtitles). */
+export const FINDING_CLASS_DESCRIPTION: Record<FindingClass, string> = {
+  Ontology: "Traceability of the objective delivery chain — requirements, design, delivery, benefits and scope.",
+  Governance: "Oversight integrity — gates, decisions and risk controls.",
+  Change: "People and adoption readiness — stakeholder impact and interventions.",
+  Completeness: "A deliverable's own self-declared shortfalls.",
+};
+
+/** Roll a finding's fine-grained domain up to its top-level class. */
+export function classifyFinding(domain: ValidationDomain): FindingClass {
+  return DOMAIN_CLASS[domain] ?? "Ontology";
+}
+
 /** Minimal program surface the deterministic rules read. */
 export interface ValidatableProgram {
   raidEntries?: RAIDEntry[];
