@@ -1,4 +1,5 @@
 import React from "react";
+import { useCountUp } from "@/v3/lib/useCountUp";
 
 interface BenefitForecast {
   forecastedRealization: number | null;
@@ -112,7 +113,6 @@ function CircularGauge({ pct, color }: { pct: number; color: string }) {
         strokeDashoffset={dashOffset}
         strokeLinecap="round"
         transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        style={{ transition: "stroke-dashoffset 0.6s ease" }}
       />
       {/* Centre label */}
       <text
@@ -140,6 +140,14 @@ export default function BenefitsTrajectoryWidget({
   onRunAgent,
   isRunning = false,
 }: BenefitsTrajectoryWidgetProps) {
+  // Tween the realisation percentage so a refreshed forecast glides to its new
+  // value instead of snapping. Computed before the empty-state early return so
+  // the hook runs on every render (rules of hooks); a null forecast just tweens
+  // toward 0 and is never shown.
+  const displayPct = Math.round(
+    useCountUp(Math.max(0, Math.min(100, benefitForecast?.forecastedRealization ?? 0))),
+  );
+
   // ── Empty state ──────────────────────────────────────────────────────────
   if (!benefitForecast) {
     return (
@@ -179,7 +187,7 @@ export default function BenefitsTrajectoryWidget({
   }
 
   const trajectoryConfig = getTrajectoryConfig(benefitForecast.trajectoryStatus);
-  const pct = benefitForecast.forecastedRealization ?? 0;
+  const pct = displayPct;
   const visibleGaps = (benefitForecast.gaps ?? []).slice(0, 4);
 
   return (
