@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { ProgramSummary, Workstream } from "@/new/types";
 import { getPhaseInputSchema, resolveRosterField, type GridColumn } from "@/v3/lib/phaseInputSchema";
 import { indexGovernanceEvidenceFields } from "@/v3/lib/methodologySpine";
-import type { PhaseDefinition } from "@/v3/lib/methodology";
+import type { PhaseDefinition, PhaseInputField } from "@/v3/lib/methodology";
+import { ExpandableSection } from "@/v3/components/ui/ExpandableSection";
 import { rosterColumnKeys, sortRosterRowsBySeniority } from "@/v3/lib/rosterRaci";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { availableModes, FIELD_ASSIST_MODE_LABEL, type FieldAssistMode } from "@/v3/lib/fieldAssist";
@@ -652,6 +653,25 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
     return new Map(entries.map((entry) => [entry.fieldId, entry] as const));
   }, [phaseId, schema.fields]);
 
+  // Progressive disclosure (Option A). Governance sign-off fields exist only to
+  // prove a gate — they are never the substance a user reasons about while
+  // shaping the phase. Splitting them into a collapsed "Evidence & sign-offs"
+  // band keeps the required substance front-and-centre and defers the approval
+  // references until they are actually needed. Partitioning by role preserves
+  // methodology order within each group (sign-off fields already sit at the tail
+  // of every phase's field list), so nothing reshuffles.
+  const { primaryFields, evidenceFields } = useMemo(() => {
+    const primary: PhaseInputField[] = [];
+    const evidence: PhaseInputField[] = [];
+    for (const field of schema.fields) {
+      (field.role === "governance-signoff" ? evidence : primary).push(field);
+    }
+    return { primaryFields: primary, evidenceFields: evidence };
+  }, [schema.fields]);
+  const filledEvidenceCount = evidenceFields.filter(
+    (field) => (values[field.id] ?? "").toString().trim().length > 0,
+  ).length;
+
   // The exact payload `handleSave` would persist, recomputed on every edit. Used
   // both by the save path and by `onValuesChange` so read-only consumers (header
   // metrics, status rings, flow-line tones) can reflect in-progress edits without
@@ -857,8 +877,8 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
             </div>
           ) : null}
 
-          <div style={{ display: "grid", gap: 12, marginBottom: 12 }}>
-            {schema.fields.map((field) => {
+          {(() => {
+            const renderField = (field: PhaseInputField) => {
               // On Strategy (showKpis), both the Primary success metric AND the
               // Success KPIs grid are rendered by the bespoke Outcome KPIs editor
               // below — a pinned required primary-metric row plus removable KPI
@@ -1169,8 +1189,26 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
                 ) : null}
               </div>
               );
-            })}
-          </div>
+            };
+            return (
+              <>
+                <div style={{ display: "grid", gap: 12, marginBottom: 12 }}>
+                  {primaryFields.map(renderField)}
+                </div>
+                {evidenceFields.length > 0 ? (
+                  <ExpandableSection
+                    title="Evidence & sign-offs"
+                    subtitle="Approval references and gate confirmations — capture these once the substance above is agreed."
+                    badge={`${filledEvidenceCount}/${evidenceFields.length}`}
+                  >
+                    <div style={{ display: "grid", gap: 12 }}>
+                      {evidenceFields.map(renderField)}
+                    </div>
+                  </ExpandableSection>
+                ) : null}
+              </>
+            );
+          })()}
 
           {showKpis ? (() => {
             const successField = schema.fields.find((field) => field.id === "successMetric");
