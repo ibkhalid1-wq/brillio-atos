@@ -20,7 +20,7 @@ import { computePhaseReadiness } from "@/v3/lib/phaseReadiness";
 import { buildPhaseArtifacts, type ArtifactOrigin } from "@/v3/lib/artifactModel";
 import { resolveArtifactReview, resolveArtifactQualityScore } from "@/v3/lib/artifactReview";
 import { getPhaseArtifactDefs, type PhaseArtifactDef } from "@/v3/lib/phaseArtifacts";
-import { getFillableArtifactInputFields, artifactReferenceSatisfied } from "@/v3/lib/phaseFlowEdges";
+import { getFillableArtifactInputFields, getGuidanceInputFields, artifactReferenceSatisfied } from "@/v3/lib/phaseFlowEdges";
 import { getPhaseInputSchema, isFieldRequiredForProgram, resolveRosterField, resolveStakeholderField, ROSTER_PHASE_ID, type GridColumn } from "@/v3/lib/phaseInputSchema";
 import { parseRows, serializeRows, filledRowCount, type GridRow } from "@/v3/components/StructuredGrid";
 import { readRaciMatrix, raciDeliveryRoles, rosterColumnKeys, missingRosterRoles, stakeholderColumnKeys } from "@/v3/lib/rosterRaci";
@@ -1648,6 +1648,12 @@ export default function StageView({
               // produces a thin artifact and burns a ~90s model run. An artifact
               // with no declared input dependencies has nothing to wait on.
               const flowedFieldIds = getFillableArtifactInputFields(activePhase.id, def.id, dynamicStore);
+              // The fields the "Improve quality" guidance may point at. For a formal
+              // artifact this is the phase's FULL input set (the edge grounds formal
+              // documents on every phase input via buildGroundingFacts), so guidance
+              // can name any grounding input that's thin — not just the narrower flow
+              // subset that gates generation. Non-formal artifacts keep the flow set.
+              const guidanceFieldIds = getGuidanceInputFields(activePhase.id, def.id, dynamicStore);
               const phaseFieldDefs = getPhaseInputSchema(activePhase.id, dynamicStore).fields;
               // Only *required* flow inputs gate generation. An optional flow field
               // (e.g. the appetite-level validation approach) still wires the visual
@@ -1678,7 +1684,7 @@ export default function StageView({
               // Map each grounding input to its label + what it must contain, so
               // "Improve quality" can prescribe the exact field to enrich, not a
               // generic "add inputs" nudge.
-              const inputRequirements = flowedFieldIds.map((fieldId) => {
+              const inputRequirements = guidanceFieldIds.map((fieldId) => {
                 const fieldDef = phaseFieldDefs.find((field) => field.id === fieldId);
                 const requirement = [fieldDef?.placeholder, fieldDef?.hint]
                   .filter((part): part is string => !!part && part.trim().length > 0)
@@ -1692,7 +1698,7 @@ export default function StageView({
               // so an AI free-text rewrite would write a value the control can't
               // render (e.g. an off-list option leaves a dropdown blank); grids are
               // structured and handled by the deterministic placeholder path.
-              const qualityFields = flowedFieldIds
+              const qualityFields = guidanceFieldIds
                 .map((fieldId) => {
                   const fieldDef = phaseFieldDefs.find((field) => field.id === fieldId);
                   const raw = preFlightInputs[fieldId];

@@ -15,6 +15,7 @@ import { getPhaseArtifactIds } from "@/v3/lib/phaseArtifacts";
 import { ATOS_STANDARD } from "@/v3/lib/methodology";
 import { canonicalArtifactId, dynamicFieldArtifacts, type DynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { getPhaseInputSchema, resolveStakeholderField, STAKEHOLDER_PHASE_ID } from "@/v3/lib/phaseInputSchema";
+import { FORMAL_ARTIFACT_FIELD_KEYS } from "@/v3/lib/formalArtifacts";
 
 export interface FlowEdge {
   from: string;
@@ -176,6 +177,32 @@ export function getArtifactInputFields(phaseId: string, artifactId: string, stor
 export function getFillableArtifactInputFields(phaseId: string, artifactId: string, store?: DynamicSchemaStore): string[] {
   const fieldIds = new Set(getPhaseInputSchema(phaseId, store).fields.map((field) => field.id));
   return getArtifactInputFields(phaseId, artifactId, store).filter((fieldId) => fieldIds.has(fieldId));
+}
+
+/**
+ * The input fields the "Improve quality" guidance should consider for an
+ * artifact — i.e. the fields a user can update to make it better.
+ *
+ * FORMAL (document-style) artifacts are grounded by the edge on EVERY input of
+ * their phase: buildGroundingFacts flattens the whole phase's captured inputs
+ * into the generation prompt, so any of them shapes the draft. Their updatable
+ * set is therefore the phase's full fillable input schema — NOT just the
+ * artifact's declared flow subset, which exists to define generation gating and
+ * staleness (a narrower, deliberately gate-scoped list). Using the flow subset
+ * for guidance is why a charter that grounds on the whole Strategy picture could
+ * only ever name industry/start/end as fields to fix, never the cost or KPI
+ * inputs that actually dragged its quality down.
+ *
+ * A fall-through (non-formal) artifact only receives its declared flow inputs
+ * (see ARTIFACT_INPUT_FLOW in run-agent), so it keeps the narrow set. Keeping
+ * this distinct from {@link getFillableArtifactInputFields} means broadening what
+ * guidance can point at never widens the Generate gate.
+ */
+export function getGuidanceInputFields(phaseId: string, artifactId: string, store?: DynamicSchemaStore): string[] {
+  if (artifactId in FORMAL_ARTIFACT_FIELD_KEYS) {
+    return getPhaseInputSchema(phaseId, store).fields.map((field) => field.id);
+  }
+  return getFillableArtifactInputFields(phaseId, artifactId, store);
 }
 
 // Reference/approval phrasing that carries no artifact identity — stripped from a

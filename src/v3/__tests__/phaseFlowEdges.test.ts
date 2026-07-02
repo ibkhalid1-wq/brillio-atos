@@ -1,4 +1,4 @@
-import { derivePhaseFlowEdges, getArtifactInputFields, getFillableArtifactInputFields, artifactReferenceSatisfied } from "@/v3/lib/phaseFlowEdges";
+import { derivePhaseFlowEdges, getArtifactInputFields, getFillableArtifactInputFields, getGuidanceInputFields, artifactReferenceSatisfied } from "@/v3/lib/phaseFlowEdges";
 import { getPhaseArtifactIds } from "@/v3/lib/phaseArtifacts";
 import { PHASE_INPUT_SCHEMAS, resolveRosterField } from "@/v3/lib/phaseInputSchema";
 import { ATOS_STANDARD } from "@/v3/lib/methodology";
@@ -150,6 +150,43 @@ describe("getFillableArtifactInputFields", () => {
     expect(new Set(getFillableArtifactInputFields("strategy", "charter"))).toEqual(
       new Set(getArtifactInputFields("strategy", "charter")),
     );
+  });
+});
+
+// Guidance ("Improve quality") may point at ANY input a formal artifact is
+// grounded on, because the edge flattens the whole phase's inputs into every
+// formal document's prompt (buildGroundingFacts) — not just the narrower flow
+// subset that gates generation. So a charter's guidance can name the cost and KPI
+// inputs, not only industry/start/end.
+describe("getGuidanceInputFields", () => {
+  it("returns the FULL phase input set for a formal artifact, wider than the gating flow subset", () => {
+    const guidance = new Set(getGuidanceInputFields("strategy", "charter"));
+    const gating = new Set(getFillableArtifactInputFields("strategy", "charter"));
+    // Cost and KPI inputs ground the charter but are NOT in its flow/gating subset —
+    // guidance must still be able to name them as fields to strengthen.
+    expect(guidance.has("costAssumption")).toBe(true);
+    expect(guidance.has("kpis")).toBe(true);
+    expect(gating.has("costAssumption")).toBe(false);
+    // Guidance is a strict superset of the gating subset for a formal artifact.
+    for (const id of gating) expect(guidance.has(id)).toBe(true);
+    expect(guidance.size).toBeGreaterThan(gating.size);
+    // It equals the phase's full fillable input schema.
+    expect(guidance).toEqual(new Set(PHASE_INPUT_SCHEMAS.strategy.fields.map((f) => f.id)));
+  });
+
+  it("falls back to the flow subset for a non-formal (fall-through) artifact", () => {
+    const store = {
+      inputFields: {
+        "custom-phase": [
+          { id: "supportCadence", label: "Support cadence", type: "textarea" as const, required: true },
+          { id: "unrelatedField", label: "Unrelated", type: "text" as const, required: false },
+        ],
+      },
+      artifacts: { "custom-phase": [{ id: "custom-doc", label: "Custom doc", description: "" }] },
+      artifactInputFlow: { "custom-phase": { "custom-doc": ["supportCadence"] } },
+    };
+    // custom-doc is not a formal artifact, so guidance stays scoped to its flow input.
+    expect(getGuidanceInputFields("custom-phase", "custom-doc", store)).toEqual(["supportCadence"]);
   });
 });
 
