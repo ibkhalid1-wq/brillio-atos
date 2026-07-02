@@ -17,7 +17,7 @@ import type { ProgramSummary } from "@/new/types";
 import { getPhaseInputSchema, type GridColumn } from "@/v3/lib/phaseInputSchema";
 import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
 import { getMandatoryCriteria } from "@/v3/lib/exitCriteriaLibrary";
-import { parseRows, filledRowCount } from "@/v3/components/StructuredGrid";
+import { isFieldValueFilled } from "@/v3/components/StructuredGrid";
 
 export type RequirementKind = "input" | "artifact" | "exit-criterion";
 
@@ -68,13 +68,10 @@ function readPhaseInputs(program: ProgramSummary, phaseId: string): Record<strin
 
 /** True when a required field carries real content. Grids must have at least one
  *  filled row (or their declared minRows) — a "[]" / blank-row JSON string is not
- *  "present", matching how derivePhaseInputQuality scores the same field set. */
+ *  "present", matching how derivePhaseInputQuality scores the same field set.
+ *  Delegates to the shared isFieldValueFilled so every reader judges fill alike. */
 function inputFilled(field: { type: string; columns?: GridColumn[]; minRows?: number }, value: unknown): boolean {
-  if (field.type === "grid") {
-    const columns = field.columns ?? [];
-    return filledRowCount(parseRows(value, columns), columns) >= (field.minRows ?? 1);
-  }
-  return typeof value === "string" ? value.trim().length > 0 : value != null && value !== "";
+  return isFieldValueFilled(field, value);
 }
 
 /** Build the set of mandatory exit-criterion labels that are marked met on the gate. */

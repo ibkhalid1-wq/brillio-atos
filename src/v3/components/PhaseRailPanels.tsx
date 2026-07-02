@@ -15,7 +15,7 @@ import {
   type ArtifactRecommendation,
   type RecommendationGroup,
 } from "@/v3/lib/artifactRecommendations";
-import { parseRows, filledRowCount } from "@/v3/components/StructuredGrid";
+import { isFieldValueFilled } from "@/v3/components/StructuredGrid";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { getGuidanceInputFields } from "@/v3/lib/phaseFlowEdges";
 import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
@@ -212,15 +212,6 @@ export function PhaseRailPanels({
     const phaseInputs = phaseInputsRaw && typeof phaseInputsRaw === "object"
       ? (phaseInputsRaw as Record<string, unknown>)
       : {};
-    // Grid-aware fill test, matching derivePhaseInputQuality / the Improve modal:
-    // a grid needs its minRows of filled rows, a scalar needs non-blank content.
-    const isFieldFilled = (field: (typeof schema.fields)[number] | undefined, value: unknown): boolean => {
-      if (field?.type === "grid") {
-        const columns = field.columns ?? [];
-        return filledRowCount(parseRows(value, columns), columns) >= (field.minRows ?? 1);
-      }
-      return typeof value === "string" ? value.trim().length > 0 : value != null && value !== "";
-    };
     return getPhaseArtifactDefs(phaseId, store)
       .map((def) => {
         const review = resolveArtifactReview(bucket, def.id, phaseId);
@@ -238,7 +229,7 @@ export function PhaseRailPanels({
             label: fieldDef?.label ?? fieldId,
             type: fieldDef?.type,
             requirement,
-            filled: isFieldFilled(fieldDef, phaseInputs[fieldId]),
+            filled: isFieldValueFilled(fieldDef, phaseInputs[fieldId]),
           };
         });
         const recommendations: (ArtifactRecommendation & { fieldId?: string })[] = [

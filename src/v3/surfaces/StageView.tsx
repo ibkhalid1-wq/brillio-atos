@@ -22,7 +22,7 @@ import { resolveArtifactReview, resolveArtifactQualityScore } from "@/v3/lib/art
 import { getPhaseArtifactDefs, type PhaseArtifactDef } from "@/v3/lib/phaseArtifacts";
 import { getFillableArtifactInputFields, getGuidanceInputFields, artifactReferenceSatisfied } from "@/v3/lib/phaseFlowEdges";
 import { getPhaseInputSchema, isFieldRequiredForProgram, resolveRosterField, resolveStakeholderField, ROSTER_PHASE_ID, type GridColumn } from "@/v3/lib/phaseInputSchema";
-import { parseRows, serializeRows, filledRowCount, type GridRow } from "@/v3/components/StructuredGrid";
+import { parseRows, serializeRows, isFieldValueFilled, type GridRow } from "@/v3/components/StructuredGrid";
 import { readRaciMatrix, raciDeliveryRoles, rosterColumnKeys, missingRosterRoles, stakeholderColumnKeys } from "@/v3/lib/rosterRaci";
 import { isFreeTextAssistField } from "@/v3/lib/fieldAssist";
 import { getDynamicSchemaStore, canonicalArtifactId, artifactGeneratorAgentId } from "@/v3/lib/dynamicSchema";
@@ -97,10 +97,7 @@ interface StageViewProps {
  *  or blank-row JSON string does not false-pass the gate — matching how
  *  derivePhaseInputQuality and derivePhaseMethodologyCompleteness score it. */
 function isInputFilled(value: unknown, field?: { type?: string; columns?: GridColumn[]; minRows?: number }): boolean {
-  if (field?.type === "grid") {
-    const columns = field.columns ?? [];
-    return filledRowCount(parseRows(value, columns), columns) >= (field.minRows ?? 1);
-  }
+  if (field?.type === "grid") return isFieldValueFilled(field, value);
   if (value == null) return false;
   if (typeof value === "string") {
     const trimmed = value.trim();

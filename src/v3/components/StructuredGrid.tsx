@@ -120,6 +120,25 @@ export function filledRowCount(rows: GridRow[], columns: GridColumn[]): number {
   return rows.filter((row) => rowHasContent(row, columns)).length;
 }
 
+/**
+ * Whether a persisted input value counts as "filled" for its field type — the one
+ * fill test the whole surface shares. A grid needs its `minRows` of content-bearing
+ * rows (default 1); a scalar (text/textarea/select/date) needs non-blank content.
+ * Consolidates what used to be re-implemented per surface (rail, Improve modal,
+ * methodology-completeness), so every reader judges emptiness identically.
+ */
+export function isFieldValueFilled(
+  field: { type?: string; columns?: GridColumn[]; minRows?: number } | undefined,
+  value: unknown,
+): boolean {
+  if (field?.type === "grid") {
+    const columns = field.columns ?? [];
+    return filledRowCount(parseRows(value, columns), columns) >= (field.minRows ?? 1);
+  }
+  if (typeof value === "string") return value.trim().length > 0;
+  return value != null && value !== "";
+}
+
 function makeEmptyRow(columns: GridColumn[]): GridRow {
   const row: GridRow = { id: newId() };
   for (const col of columns) row[col.key] = "";
