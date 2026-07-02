@@ -908,12 +908,43 @@ export const ATOS_STANDARD: MethodologyDefinition = {
             { key: "applicability", label: "What it applies to", type: "text" },
           ],
         },
+        // Backing for the Govern exit criterion "Control matrix approved" (govern-2,
+        // evidencePrompt: "Control matrix reference or governance sign-off"). Frameworks
+        // say WHAT must be complied with; this grid pins the operational controls that
+        // enforce them — each with an owner, a test status, and its approval — so the
+        // compliance check verifies real controls rather than assuming coverage.
+        {
+          id: "controlMatrix",
+          label: "Operational control matrix",
+          type: "grid",
+          required: false,
+          usedByArtifacts: ["compliance-checker"],
+          hint: "One row per key operational control: what it does, who owns it, whether it has been tested, and its approval status. Backs the Govern exit criterion \"Control matrix approved\".",
+          columns: [
+            { key: "control", label: "Control", type: "text" },
+            { key: "owner", label: "Owner", type: "text", width: 150 },
+            { key: "testStatus", label: "Test status", type: "select", width: 150, options: ["Not tested", "In test", "Passed", "Failed"] },
+            { key: "approval", label: "Approval", type: "select", width: 140, options: ["Pending", "Approved", "Rejected"] },
+          ],
+        },
+        // Backing for "Audit evidence plan in place" (govern-3, evidencePrompt: "Audit
+        // evidence plan document"). Optional free-text plan for how audit evidence is
+        // collected on an ongoing basis — the fact the criterion asks for but that no
+        // other Govern input held.
+        { id: "auditEvidencePlan", label: "Audit evidence plan", type: "textarea", required: false, usedByArtifacts: ["compliance-checker"], placeholder: "How ongoing audit evidence is collected, by whom, at what cadence, and where it is stored", hint: "The agreed plan for collecting audit evidence over time — backs the Govern exit criterion \"Audit evidence plan in place\"." },
+        // Backing for "Escalation policies tested" (govern-4, evidencePrompt: "Escalation
+        // test results or confirmation"). A governance sign-off confirming the escalation
+        // routes established in Mobilise were actually exercised and confirmed operational
+        // in Govern — proof of a test, not just a defined path.
+        { id: "escalationTested", label: "Escalation policies tested", type: "select", role: "governance-signoff", required: false, usedByArtifacts: ["compliance-checker"], options: ["Yes", "No"], hint: "Have the escalation routes and decision rights been exercised and confirmed operational? Mirrors the Govern exit criterion \"Escalation policies tested\"." },
       ],
       artifactInputFlow: {
-        // compliance-checker renders as a phase chip (setPhaseArtifactValue), so this
-        // edge anchors. Delivery to generation is synced in the agent's dedicated
-        // edge context branch, not the fall-through ARTIFACT_INPUT_FLOW map.
-        "compliance-checker": ["regulatoryFrameworks"],
+        // compliance-checker renders as a phase chip (setPhaseArtifactValue), so these
+        // edges anchor. Delivery to generation is synced in the agent's dedicated
+        // edge context branch, not the fall-through ARTIFACT_INPUT_FLOW map. Every
+        // Govern static input grounds this one chip (the sole renderable Govern
+        // deliverable), keeping the "no dangling inputs" invariant intact.
+        "compliance-checker": ["regulatoryFrameworks", "controlMatrix", "auditEvidencePlan", "escalationTested"],
       },
     },
     {

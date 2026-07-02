@@ -669,26 +669,44 @@ describe("optimize static improvement schema", () => {
 // stub, so it renders as a chip and its flow edge anchors. (Its edge delivery is
 // synced in the agent's dedicated context branch, not the fall-through map.)
 describe("govern static compliance schema", () => {
-  it("grounds compliance-checker on the regulatory frameworks without a store", () => {
-    expect(getArtifactInputFields("govern", "compliance-checker")).toEqual(["regulatoryFrameworks"]);
+  it("grounds compliance-checker on the frameworks and the control/audit/escalation evidence without a store", () => {
+    expect(getArtifactInputFields("govern", "compliance-checker")).toEqual([
+      "regulatoryFrameworks",
+      "controlMatrix",
+      "auditEvidencePlan",
+      "escalationTested",
+    ]);
   });
 
-  it("keeps the frameworks input fillable (a real typed grid field)", () => {
-    expect(getFillableArtifactInputFields("govern", "compliance-checker")).toEqual(["regulatoryFrameworks"]);
+  it("keeps every govern input fillable (real typed grid/text/select fields)", () => {
+    expect(new Set(getFillableArtifactInputFields("govern", "compliance-checker"))).toEqual(
+      new Set(["regulatoryFrameworks", "controlMatrix", "auditEvidencePlan", "escalationTested"]),
+    );
   });
 
   it("draws no flow edge until the compliance check renders (dynamic artifact set)", () => {
     expect(derivePhaseFlowEdges("govern", ["regulatoryFrameworks"])).toEqual([]);
   });
 
-  it("wires the frameworks input to the compliance check once it renders", () => {
+  it("wires the govern inputs to the compliance check once it renders", () => {
     const store = {
       artifacts: {
         govern: [{ id: "compliance-checker", label: "Compliance Check", description: "" }],
       },
     };
-    const edges = derivePhaseFlowEdges("govern", ["regulatoryFrameworks"], store);
-    expect(edges).toEqual([{ from: "regulatoryFrameworks", to: "compliance-checker" }]);
+    const edges = derivePhaseFlowEdges(
+      "govern",
+      ["regulatoryFrameworks", "controlMatrix", "auditEvidencePlan", "escalationTested"],
+      store,
+    );
+    expect(edges).toEqual(
+      expect.arrayContaining([
+        { from: "regulatoryFrameworks", to: "compliance-checker" },
+        { from: "controlMatrix", to: "compliance-checker" },
+        { from: "auditEvidencePlan", to: "compliance-checker" },
+        { from: "escalationTested", to: "compliance-checker" },
+      ]),
+    );
   });
 
   it("flows every static input field into at least one artifact — no dangling inputs", () => {
