@@ -5342,6 +5342,31 @@ function buildContextSnapshot(
   };
 }
 
+/**
+ * A compact, ordered "phase timeline" for prompts whose reasoning spans the ATOS
+ * sequence (change impact peaks per phase; stakeholder engagement shifts per
+ * phase). Lists each STARTED phase — inactive phases carry no work yet, so they
+ * would only invite speculation — with its status and objective, so the model
+ * anchors its output to real phases instead of inferring the sequence from the
+ * raw context JSON. Returns "" when no phase has started.
+ */
+function buildPhaseTimeline(programData: ProgramState): string {
+  const started = getProgramPhaseContext(programData).filter(
+    (p) => (typeof p.status === "string" ? p.status : "") !== "inactive",
+  );
+  if (!started.length) return "";
+  return started
+    .map((p, i) => {
+      const name = typeof p.name === "string" && p.name ? p.name : String(p.id);
+      const status = typeof p.status === "string" && p.status ? p.status : "active";
+      const objective = typeof p.objective === "string" && p.objective.trim()
+        ? p.objective.trim()
+        : "(no objective recorded)";
+      return `${i + 1}. ${name} (phaseId="${p.id}", ${status}) — ${objective}`;
+    })
+    .join("\n");
+}
+
 function buildAgentPrompt(
   request: RunAgentRequest,
   programData: ProgramState,
@@ -5565,8 +5590,12 @@ If no phases have meaningful data, return null.`,
   }
 
   if (request.agentId === "change-impact") {
+    const timeline = buildPhaseTimeline(programData);
+    const phaseWalk = timeline
+      ? `\n\nThe programme moves through these phases IN ORDER. Reason phase-by-phase: anchor each impacted group's peak change window and interventions to the phase(s) that actually drive that change, and weight change load toward the active and upcoming phases:\n${timeline}`
+      : "";
     return {
-      system: `You are ATOS's Change Impact Intelligence agent for a Brillio transformation program.
+      system: `You are ATOS's Change Impact Intelligence agent for a Brillio transformation program.${phaseWalk}
 
 Analyse the program context and return a JSON object with exactly this shape:
 {
@@ -5595,8 +5624,12 @@ Return ONLY valid JSON. No markdown fences.`,
   }
 
   if (request.agentId === "stakeholder") {
+    const timeline = buildPhaseTimeline(programData);
+    const phaseWalk = timeline
+      ? `\n\nThe programme moves through these phases IN ORDER. Reason phase-by-phase: consider how each stakeholder's influence, engagement and risk of disengagement shifts across them, and set targetEngagement / recommendedActions for where the programme is now and heading next:\n${timeline}`
+      : "";
     return {
-      system: `You are ATOS's Stakeholder Intelligence agent for a Brillio transformation program.
+      system: `You are ATOS's Stakeholder Intelligence agent for a Brillio transformation program.${phaseWalk}
 
 Return a JSON object with exactly this shape:
 {
