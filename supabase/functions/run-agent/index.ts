@@ -1184,7 +1184,30 @@ current inputs.
 Agent memory and run history are supplemental context only. They may aid
 continuity, terminology, and narrative consistency, but must never override
 current inputs, KPI baselines, cross-phase context, or upstream findings. When
-they conflict with current inputs, ignore memory.`;
+they conflict with current inputs, ignore memory.
+
+### Gap discipline (phase-scoped)
+The "gaps" you list become this artifact's own guidance — they surface directly to
+the user as what to fix. Scope them strictly to THIS artifact's intent within the
+CURRENT phase (see "phaseScope" in the context: its objective, the artifacts it
+owns, and the detail owned by later phases). A gap is legitimate ONLY when the
+current phase is responsible for the missing information AND that information is
+absent from every source above (current inputs, KPI baselines, grounding facts,
+prior-phase artifacts, existing artifacts, document carry-forward). Check those
+sources before listing a gap. Specifically, do NOT list as a gap:
+- Detail the methodology assigns to a LATER phase — delivery/milestone schedules,
+  RACI or named-role/ownership matrices, resource/staffing plans, phase exit
+  criteria, UAT/go-live/run-operate plans. Those are owned downstream, not missing
+  here.
+- Information already established elsewhere in the context — e.g. named roles that
+  exist in a RACI matrix or stakeholder list, scope already recorded in the inputs
+  or a prior-phase artifact, objectives/KPIs already captured.
+- Approval or sign-off STATE — e.g. "not yet approved", "objectives not formally
+  approved", "plan not signed off". Approval is a governance workflow tracked by
+  gate reviews, not a content gap in this artifact.
+Prefer fewer, phase-appropriate gaps over an exhaustive wish-list of everything a
+fully mature programme would eventually hold. If nothing within this phase's intent
+is genuinely missing, return an empty "gaps" array.`;
 
 /**
  * Downstream areas a formal artifact's change is most likely to impact (Change 7).
@@ -2167,6 +2190,11 @@ function buildSpecialAgentInputContext(
     return JSON.stringify({
       artifact: formalSpec.title,
       phase: formalSpec.phase,
+      // The current phase's intent boundary: its objective, the artifacts it owns,
+      // and the detail owned by LATER phases that must not be demanded here. This
+      // scopes the artifact's self-reported "gaps" to what this phase is actually
+      // responsible for (see the phase-scoped gap discipline).
+      phaseScope: getCurrentPhaseScope(programData, formalSpec.phase),
       runMode,
       changedInputs,
       programName: meta.name || (typeof projectMeta.name === "string" ? projectMeta.name : ""),
