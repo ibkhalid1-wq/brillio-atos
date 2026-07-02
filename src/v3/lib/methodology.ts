@@ -1,4 +1,5 @@
 import type { ArchetypeDefinition } from "@/v3/types";
+import { getMandatoryCriteria } from "@/v3/lib/exitCriteriaLibrary";
 
 export type MethodologyVariant = "atos-standard" | "atos-lite" | "atos-regulated";
 
@@ -808,6 +809,26 @@ export const ATOS_STANDARD: MethodologyDefinition = {
     },
   ],
 };
+
+// ── Exit-criteria single source of truth ─────────────────────────────────────
+// `EXIT_CRITERIA_LIBRARY` is the authoritative registry of mandatory exit
+// criteria: it is what `objectiveConfidence` evidences a phase against (via
+// `getMandatoryCriteria` + `criterionMatches`) and what the gate-review UI reads.
+// The gate criteria seeded at each phase boundary come from
+// `mandatoryExitCriteriaTemplates` (AppShellV3 passes them to the phase-input
+// planner as the next phase's `exitCriteria`). Those two vocabularies used to be
+// maintained independently and had drifted — different wording, even different
+// counts — so a stored gate criterion never matched its library label and the
+// evidence score silently fell back to the approved-gate proxy. We reconcile them
+// here by deriving each phase's templates from the library rather than keeping a
+// second, drift-prone copy. The inline arrays above remain only as a documented
+// fallback for any phase the library does not (yet) cover. Because ATOS_LITE and
+// atos-regulated reuse these phase objects by reference, this single pass keeps
+// every methodology variant aligned. The invariant is enforced by test.
+for (const phase of ATOS_STANDARD.phases) {
+  const derived = getMandatoryCriteria(phase.id).map((c) => c.label);
+  if (derived.length > 0) phase.mandatoryExitCriteriaTemplates = derived;
+}
 
 export const ATOS_LITE: MethodologyDefinition = {
   ...ATOS_STANDARD,
