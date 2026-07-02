@@ -7,6 +7,12 @@ import {
   type ProgramDocument,
   type ProgramGraphNodeKind,
 } from "@/v3/lib/programGraph";
+import { fingerprintGraph } from "@/v3/lib/graphFingerprint";
+import {
+  reviewGraphChanges,
+  commitGraphSnapshot,
+  type GraphChangeSummary,
+} from "@/v3/lib/graphChangeLog";
 import { TransformationTwinGraph } from "@/new/components/ui/TransformationTwinGraph";
 import { AdamCard, AdamCardBody, AdamCardHeader } from "@/v3/components/ui/AdamCard";
 import { EmptyState } from "@/v3/components/ui/EmptyState";
@@ -85,6 +91,21 @@ export default function ProgramGraphPanel({ program, programId }: ProgramGraphPa
 
   const graph = useMemo(() => buildProgramGraph(program, documents), [program, documents]);
 
+  // Run-over-run change surface: diff the current graph against the device-local
+  // baseline (the last fingerprint this browser saw for this programme), show a
+  // "since your last view" banner, then advance the baseline. Keyed on the
+  // fingerprint hash so it only fires when the graph's shape actually changed —
+  // review is idempotent (does not persist), commit advances the baseline.
+  const fingerprint = useMemo(() => fingerprintGraph(graph), [graph]);
+  const [changeSummary, setChangeSummary] = useState<GraphChangeSummary | null>(null);
+  useEffect(() => {
+    if (!programId || !graph.stats.nodeCount) return;
+    const summary = reviewGraphChanges(programId, graph);
+    setChangeSummary(summary.changed ? summary : null);
+    commitGraphSnapshot(programId, graph);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [programId, fingerprint.hash]);
+
   const twinGraph = useMemo(
     () => ({
       nodes: graph.nodes.map((node) => ({
@@ -120,6 +141,9 @@ export default function ProgramGraphPanel({ program, programId }: ProgramGraphPa
         <AdamCardBody>
           {stats.nodeCount ? (
             <>
+              {changeSummary ? (
+                <GraphChangeBanner summary={changeSummary} onDismiss={() => setChangeSummary(null)} />
+              ) : null}
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
                 <StatChip label="Documents" value={stats.documentCount} />
                 <StatChip label="Facts" value={stats.byKind.fact} />
@@ -147,6 +171,52 @@ export default function ProgramGraphPanel({ program, programId }: ProgramGraphPa
           )}
         </AdamCardBody>
       </AdamCard>
+    </div>
+  );
+}
+
+function GraphChangeBanner({ summary, onDismiss }: { summary: GraphChangeSummary; onDismiss: () => void }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: 12,
+        alignItems: "flex-start",
+        justifyContent: "space-between",
+        padding: "10px 12px",
+        marginBottom: 12,
+        borderRadius: 8,
+        border: "1px solid rgba(37,99,235,0.28)",
+        background: "rgba(37,99,235,0.06)",
+      }}
+    >
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: "#1d4ed8" }}>{summary.headline}</div>
+        {summary.details.length ? (
+          <ul style={{ margin: "6px 0 0", padding: "0 0 0 16px", fontSize: 11.5, color: "#334155" }}>
+            {summary.details.map((line, i) => (
+              <li key={i}>{line}</li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label="Dismiss change summary"
+        style={{
+          flexShrink: 0,
+          border: "none",
+          background: "transparent",
+          color: "#64748b",
+          cursor: "pointer",
+          fontSize: 16,
+          lineHeight: 1,
+          padding: 2,
+        }}
+      >
+        ×
+      </button>
     </div>
   );
 }
