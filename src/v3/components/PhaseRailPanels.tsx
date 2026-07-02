@@ -3,6 +3,15 @@ import type { DecisionSummary, ProgramSummary, RAIDEntry, RAIDEntryType } from "
 import { selectBlockers, selectRisks } from "@/v3/lib/programRaid";
 import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
 import { resolveArtifactReview } from "@/v3/lib/artifactReview";
+import { selectModelValidationFindings } from "@/v3/lib/crossArtifactValidation";
+import {
+  reviewImprovementsToRecommendations,
+  findingsToRecommendations,
+  selfReportedGapRecommendations,
+  selectFindingsForArtifact,
+  groupRecommendationsByCategory,
+  type RecommendationGroup,
+} from "@/v3/lib/artifactRecommendations";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { AdamCard, AdamCardBody } from "@/v3/components/ui/AdamCard";
 import { ArtifactMapTree } from "@/v3/components/ArtifactMapTree";
@@ -184,19 +193,38 @@ export function PhaseRailPanels({
   const guidanceItems = useMemo(() => {
     const bucket = getDataBucket(program);
     const store = getDynamicSchemaStore(program.rawData);
+    // Semantic layer: the cross-artifact validator's persisted findings, folded
+    // into each artifact's guidance so the categories reflect real disciplines —
+    // reviewer prose is Completeness, but an un-traced requirement is Ontology.
+    const findings = selectModelValidationFindings(program);
     return getPhaseArtifactDefs(phaseId, store)
       .map((def) => {
         const review = resolveArtifactReview(bucket, def.id, phaseId);
-        if (!review || review.improvements.length === 0) return null;
-        return { id: def.id, label: def.label, score: review.score, improvements: review.improvements };
+        const artifactFindings = selectFindingsForArtifact(findings, def.id, phaseId)
+          .filter((f) => f.domain !== "artifact-completeness");
+        const recommendations = [
+          ...reviewImprovementsToRecommendations(review?.improvements ?? []),
+          ...findingsToRecommendations(artifactFindings),
+          ...selfReportedGapRecommendations(bucket, def.id),
+        ];
+        if (recommendations.length === 0) return null;
+        return {
+          id: def.id,
+          label: def.label,
+          score: review?.score ?? null,
+          groups: groupRecommendationsByCategory(recommendations),
+        };
       })
       .filter(
-        (item): item is { id: string; label: string; score: number | null; improvements: string[] } =>
+        (item): item is { id: string; label: string; score: number | null; groups: RecommendationGroup[] } =>
           item !== null,
       );
   }, [program, phaseId]);
   const guidanceCount = useMemo(
-    () => guidanceItems.reduce((sum, item) => sum + item.improvements.length, 0),
+    () => guidanceItems.reduce(
+      (sum, item) => sum + item.groups.reduce((n, g) => n + g.items.length, 0),
+      0,
+    ),
     [guidanceItems],
   );
 
@@ -386,11 +414,16 @@ export function PhaseRailPanels({
                       <span className={`v3-chip v3-chip-tight ${item.score >= 75 ? "green" : item.score >= 50 ? "amber" : "red"}`}>{item.score}%</span>
                     ) : null}
                   </div>
-                  <ul className="v3-rail-guidance-list">
-                    {item.improvements.map((rec, idx) => (
-                      <li key={idx} className="v3-rail-item-sub">{rec}</li>
-                    ))}
-                  </ul>
+                  {item.groups.map((group) => (
+                    <div key={group.category} className="v3-rail-guidance-group">
+                      <div className="v3-rail-guidance-category" title={group.description}>{group.category}</div>
+                      <ul className="v3-rail-guidance-list">
+                        {group.items.map((rec, idx) => (
+                          <li key={idx} className="v3-rail-item-sub">{rec.title}{rec.detail ? ` — ${rec.detail}` : ""}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>

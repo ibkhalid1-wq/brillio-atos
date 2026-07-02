@@ -3,6 +3,7 @@ import {
   artifactFieldKeysFor,
   selectFindingsForArtifact,
   findingsToRecommendations,
+  reviewImprovementsToRecommendations,
   selfReportedGapRecommendations,
   groupRecommendationsByCategory,
   type ArtifactRecommendation,
@@ -80,6 +81,15 @@ describe("findingsToRecommendations", () => {
     ]);
     expect(recs).toHaveLength(1);
     expect(recs[0].severity).toBe("high");
+  });
+});
+
+describe("reviewImprovementsToRecommendations", () => {
+  it("maps free-text improvements to low-severity Completeness recommendations, dropping blanks", () => {
+    const recs = reviewImprovementsToRecommendations(["Name the sponsor", "  ", ""]);
+    expect(recs).toEqual([
+      { title: "Name the sponsor", detail: "", severity: "low", category: "Completeness" },
+    ]);
   });
 });
 

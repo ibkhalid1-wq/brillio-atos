@@ -8277,6 +8277,16 @@ button.v3-phase-metric:focus-visible {
   line-height: 1.45;
 }
 
+.v3-rail-guidance-group {
+  margin-top: 8px;
+}
+.v3-rail-guidance-category {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--v3-text-muted);
+}
 .v3-rail-guidance-list {
   margin: 4px 0 0;
   padding-left: 16px;

@@ -106,6 +106,24 @@ export function findingsToRecommendations(findings: ValidationFinding[]): Artifa
 }
 
 /**
+ * A reviewer's free-text improvement plan as recommendations. These carry no
+ * domain metadata (the AI review emits prose, not typed findings), so they land
+ * under Completeness — "make this draft better" — the same class StageView tags
+ * them. The genuinely categorized guidance (Ontology / Change / Governance)
+ * comes from the semantic findings folded in beside them.
+ */
+export function reviewImprovementsToRecommendations(improvements: string[]): ArtifactRecommendation[] {
+  return improvements
+    .filter((s) => typeof s === "string" && s.trim().length > 0)
+    .map((s) => ({
+      title: s.trim(),
+      detail: "",
+      severity: "low" as const,
+      category: "Completeness" as const,
+    }));
+}
+
+/**
  * A formal artifact's self-reported gaps as Completeness recommendations. These
  * are the generating agent's own "could not complete" admissions, read straight
  * from the mirror's `gaps` array (the same source the quality reader erodes by),
