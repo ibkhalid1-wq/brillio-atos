@@ -1269,7 +1269,18 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
                     placeholder="Unit"
                     onChange={(event) => updateKpi(index, "unit", event.target.value)}
                   />
-                  <button type="button" className="v3-button ghost" style={{ fontSize: 11 }} onClick={() => removeKpi(index)}>✕</button>
+                  {/* KPI rows are removable array entries, so this control deletes the
+                      whole row (the ✕ the primary metric's clear control deliberately
+                      avoids). Width/size matched to that control so the right-hand
+                      column stays uniform across the pinned row and the KPI rows. */}
+                  <button
+                    type="button"
+                    className="v3-button ghost"
+                    style={{ fontSize: 12, width: 28 }}
+                    aria-label="Remove this KPI"
+                    title="Remove this KPI row"
+                    onClick={() => removeKpi(index)}
+                  >✕</button>
                 </div>
               ))}
               <button type="button" className="v3-button ghost" style={{ fontSize: 11, marginTop: 4 }} onClick={addKpi}>
