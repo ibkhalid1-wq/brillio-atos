@@ -6004,13 +6004,44 @@ Return ONLY valid JSON:
   }
 
   if (request.agentId === "cross-artifact-validator") {
+    // Walk the model phase-by-phase rather than issuing one generic "for every
+    // phase" instruction: inject each STARTED phase (inactive phases carry no
+    // work to validate) as a numbered step with its objective, exit criteria and
+    // the ordered list of predecessors it must honour. Concrete per-phase framing
+    // tightens attribution so the model sets phaseId to the right offending phase.
+    const startedPhases = getProgramPhaseContext(programData).filter(
+      (p) => (typeof p.status === "string" ? p.status : "") !== "inactive",
+    );
+    const phaseChecklist = startedPhases
+      .map((p, i) => {
+        const name = typeof p.name === "string" && p.name ? p.name : String(p.id);
+        const objective = typeof p.objective === "string" && p.objective.trim()
+          ? p.objective.trim()
+          : "(no objective recorded)";
+        const predecessors = startedPhases
+          .slice(0, i)
+          .map((q) => (typeof q.name === "string" && q.name ? q.name : String(q.id)));
+        const exit = Array.isArray(p.exitCriteria)
+          ? (p.exitCriteria as unknown[]).map((c) => String(c)).filter(Boolean)
+          : [];
+        const honours = predecessors.length
+          ? `must honour: ${predecessors.join(", ")}`
+          : "foundation — nothing precedes it; do NOT invent a backward-fidelity gap here, only flag an internal inconsistency in its own artifacts";
+        const exitLine = exit.length ? `; exit criteria: ${exit.join("; ")}` : "";
+        return `${i + 1}. ${name} (phaseId="${p.id}") — ${objective} [${honours}${exitLine}]`;
+      })
+      .join("\n");
+    const phaseWalk = phaseChecklist
+      ? `\n\nWalk THESE phases in order. For each, verify it honours every phase listed before it, and attribute any gap to THIS phase's id:\n${phaseChecklist}`
+      : "";
     return {
       system: `You are the ATOS Cross-Artifact Validator — Layer 2 semantic validation.
 
 A deterministic Layer 1 already covers structural gaps (missing owners, risks
 without mitigations, milestones without exit criteria, KPIs without baselines,
-gate criteria marked met without evidence). DO NOT repeat those. Focus ONLY on
-semantic traceability the deterministic layer cannot judge:
+gate criteria marked met without evidence) AND each formal deliverable's own
+self-reported "gaps" list. DO NOT repeat any of those. Focus ONLY on semantic
+traceability the deterministic layer cannot judge:
 - Solution Design / Architecture that does not actually support stated requirements or NFRs.
 - Business Case benefits that are not reflected in tracked KPIs.
 - Milestones / workstreams that do not advance the program objective or phase objectives.
@@ -6028,7 +6059,7 @@ was built on). Emit a finding when a later phase:
 Attribute each such finding to the LATER phase that broke fidelity: set "phaseId"
 to that offending phase (NOT the upstream phase whose commitment was dropped), so
 the gap lands on the phase whose work must change to close it. Name the upstream
-commitment in "sourceItem" and the offending phase's artifact in "targetArtifact".
+commitment in "sourceItem" and the offending phase's artifact in "targetArtifact".${phaseWalk}
 
 Be conservative: only emit a finding when the gap is real and supported by the
 context. Prefer fewer, high-confidence findings over speculation.
