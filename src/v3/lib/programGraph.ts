@@ -21,6 +21,7 @@
  */
 import type { ProgramSummary } from "@/new/types";
 import { buildFactGraph, type Fact } from "@/v3/lib/factGraph";
+import { ATOS_STANDARD } from "@/v3/lib/methodology";
 import type { DocumentIntelligence, ExtractedEntities } from "@/new/lib/documentIntelligenceTypes";
 
 export type ProgramGraphNodeKind =
@@ -134,6 +135,26 @@ function parseGridRows<T>(raw: unknown): T[] {
   }
 }
 
+/**
+ * The artifact ids that consume a given phase-input field, per the static
+ * methodology — the union of the field's `usedByArtifacts` and every artifact
+ * whose `artifactInputFlow` lists the field. Drives `traces_to` provenance: an
+ * artifact generated from a requirement/scope/KPI field traces back to the nodes
+ * minted from it, a link the Fact Graph cannot carry (those fields are excluded
+ * from facts). Reads the same ATOS_STANDARD registry the Fact Graph uses.
+ */
+function artifactsConsumingField(phaseId: string, fieldId: string): string[] {
+  const phase = ATOS_STANDARD.phases.find((p) => p.id === phaseId);
+  if (!phase) return [];
+  const out = new Set<string>();
+  const field = phase.inputFields?.find((f) => f.id === fieldId);
+  for (const artifactId of field?.usedByArtifacts ?? []) out.add(artifactId);
+  for (const [artifactId, fields] of Object.entries(phase.artifactInputFlow ?? {})) {
+    if (fields.includes(fieldId)) out.add(artifactId);
+  }
+  return [...out];
+}
+
 /** Read one phase-input field's raw value, tolerant of the wrapped/unwrapped
  *  rawData shapes both persist in the wild. */
 function phaseInputRaw(program: ProgramSummary, phaseId: string, fieldId: string): unknown {
@@ -159,6 +180,16 @@ export function buildProgramGraph(
   const edges = new Map<string, ProgramGraphEdge>();
   const addNode = (node: ProgramGraphNode) => { if (!nodes.has(node.id)) nodes.set(node.id, node); };
   const addEdge = (edge: ProgramGraphEdge) => { if (!edges.has(edge.id)) edges.set(edge.id, edge); };
+  // Link a minted input node (requirement/scope/KPI) back to the artifacts that
+  // consume its source field, but only to artifacts that already exist as nodes,
+  // so a `traces_to` edge never dangles to an ungenerated artifact.
+  const addTracesTo = (nodeId: string, phaseId: string, fieldId: string) => {
+    for (const artifactId of artifactsConsumingField(phaseId, fieldId)) {
+      if (nodes.has(ARTIFACT(artifactId))) {
+        addEdge({ id: `traces_to:${ARTIFACT(artifactId)}->${nodeId}`, from: ARTIFACT(artifactId), to: nodeId, type: "traces_to" });
+      }
+    }
+  };
 
   if (!program) {
     return {
@@ -265,6 +296,7 @@ export function buildProgramGraph(
     if (phaseIds.has("strategy")) {
       addEdge({ id: `inphase:kpi:${id}`, from: KPI(id), to: PHASE("strategy"), type: "in_phase" });
     }
+    addTracesTo(KPI(id), "strategy", "kpis");
   });
 
   // Declared requirements (structured grids, excluded from the Fact Graph) as
@@ -296,6 +328,7 @@ export function buildProgramGraph(
       if (phaseIds.has(src.phaseId)) {
         addEdge({ id: `inphase:req:${id}`, from: REQUIREMENT(id), to: PHASE(src.phaseId), type: "in_phase" });
       }
+      addTracesTo(REQUIREMENT(id), src.phaseId, src.fieldId);
       const key = normalizeRef(text);
       if (key && !requirementByLabel.has(key)) requirementByLabel.set(key, REQUIREMENT(id));
     });
@@ -347,6 +380,7 @@ export function buildProgramGraph(
     if (phaseIds.has("discover")) {
       addEdge({ id: `inphase:scope:${id}`, from: SCOPE(id), to: PHASE("discover"), type: "in_phase" });
     }
+    addTracesTo(SCOPE(id), "discover", "scopeInclusions");
     const key = normalizeRef(text);
     if (key && !scopeByLabel.has(key)) scopeByLabel.set(key, SCOPE(id));
   });

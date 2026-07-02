@@ -69,6 +69,7 @@ export type RelationKind =
   | "threatened-by"
   | "satisfied-by"
   | "grounds"
+  | "traces-to"
   | "sequence"
   | "in-phase"
   | "depends-on";
@@ -122,6 +123,16 @@ export const RELATION_TYPES: Record<RelationKind, RelationType> = {
   grounds: {
     kind: "grounds", curie: "atos:grounds", label: "grounds", inverseLabel: "is grounded by",
     from: ["fact", "objective"], to: ["artifact", "design"], gapWhenMissing: false,
+  },
+  "traces-to": {
+    kind: "traces-to", curie: "atos:tracesTo", label: "traces to", inverseLabel: "is traced from",
+    // Forward provenance: an artifact/design traces back to the declared inputs it
+    // was generated from. Requirements, scope items and KPIs are excluded from the
+    // Fact Graph, so they carry no `grounds` edge to the artifacts they feed; this
+    // relation records that otherwise-missing provenance from the methodology's
+    // artifactInputFlow. Never a gap on its own — not every artifact declares a
+    // structured input source.
+    from: ["artifact", "design"], to: ["requirement", "kpi", "fact", "objective", "design"], gapWhenMissing: false,
   },
   sequence: {
     kind: "sequence", curie: "atos:sequence", label: "precedes", inverseLabel: "follows",

@@ -398,6 +398,38 @@ describe("buildProgramGraph", () => {
     expect(columnKeys.has("delivers")).toBe(true);
   });
 
+  it("adds a traces_to edge from a consuming artifact back to the requirement node it was built from", () => {
+    // The requirements-catalog artifact consumes the discover.requirements field
+    // (artifactInputFlow + usedByArtifacts), but requirements are excluded from the
+    // Fact Graph, so no `grounds` edge links them. traces_to records that provenance.
+    const graph = buildProgramGraph(program({
+      phases,
+      artifacts: [
+        { id: "requirements-catalog", title: "Requirements Catalog", phaseId: "discover", status: "approved", versionNumber: 1, agentConfidence: 0.9 },
+      ],
+      rawData: {
+        phaseInputs: {
+          discover: { requirements: JSON.stringify([{ id: "req-a", requirement: "Single sign-on" }]) },
+        },
+      },
+    }));
+    expect(graph.edges.some((e) => e.type === "traces_to" && e.from === "artifact:requirements-catalog" && e.to === "requirement:req-a")).toBe(true);
+  });
+
+  it("does not emit a traces_to edge to an artifact that has not been generated", () => {
+    // Same requirement, but no requirements-catalog artifact node exists yet — the
+    // provenance edge must not dangle to an ungenerated artifact.
+    const graph = buildProgramGraph(program({
+      phases,
+      rawData: {
+        phaseInputs: {
+          discover: { requirements: JSON.stringify([{ id: "req-a", requirement: "Single sign-on" }]) },
+        },
+      },
+    }));
+    expect(graph.edges.some((e) => e.type === "traces_to")).toBe(false);
+  });
+
   it("includes open risks and decisions but excludes closed ones", () => {
     const graph = buildProgramGraph(program({
       phases,

@@ -207,6 +207,13 @@ export function buildObjectiveGraph(
     if (edge.type === "sequence") {
       addRelation({ id: `seq:${edge.from}->${edge.to}`, from: edge.from, to: edge.to, kind: "sequence" });
     }
+    // Artifact provenance: carry `traces_to` (artifact → requirement/kpi/…) so the
+    // otherwise-missing link from a generated artifact back to the structured
+    // inputs it was built from is representable. addRelation drops any endpoint the
+    // ontology does not permit (e.g. a scope target, which is not an EntityKind).
+    if (edge.type === "traces_to") {
+      addRelation({ id: `traces-to:${edge.from}->${edge.to}`, from: edge.from, to: edge.to, kind: "traces-to" });
+    }
   }
 
   for (const objective of objectives) {
@@ -258,7 +265,13 @@ export function buildObjectiveGraph(
       const fallbackArtifacts = [
         ...chainPhases.flatMap((pid) => artifactsByPhase.get(pid) ?? []),
         ...globalArtifacts,
-      ];
+      ]
+        // Tighten the fallback: a reporting artifact (outcome framework, benefits
+        // tracker, KPI dashboard) *reports* an objective's KPIs via reported-by; it
+        // does not *deliver* the objective. Blanket-attributing it as delivered-by
+        // inflated delivery coverage and double-counted against the reporting chain,
+        // so exclude reporting artifacts from the delivery fallback set.
+        .filter((artifact) => !(REPORTING_ARTIFACT.test(artifact.id) || REPORTING_ARTIFACT.test(artifact.label)));
       for (const artifact of fallbackArtifacts) {
         addRelation({ id: `delivered-by:${objective.id}->${artifact.id}`, from: objective.id, to: artifact.id, kind: "delivered-by", gap: staleDeliveryGap(artifact) });
       }

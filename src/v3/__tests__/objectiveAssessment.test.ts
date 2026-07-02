@@ -162,6 +162,24 @@ describe("buildObjectiveGraph", () => {
     expect(deliveredBy.some((r) => r.to === "artifact:charter")).toBe(true);
   });
 
+  it("excludes a reporting artifact from the delivered-by fallback (it reports, it does not deliver)", () => {
+    // The only on-chain artifact is an outcome framework — a reporting artifact.
+    // With grounding absent the objective would previously fall back to it as
+    // delivery; the tightened fallback must not, so the objective has no delivery.
+    const onlyReporting = program({
+      phases: [{ id: "strategy", displayName: "Strategy", pct: 100, status: "complete", objective: "" }],
+      artifacts: [{
+        id: "outcome-framework", phaseId: "strategy", title: "Outcome Framework", status: "approved",
+        agentGenerated: true, lastEditedBy: "agent", lastEditedAt: "", contentSummary: "", versionNumber: 1, agentConfidence: 0.9,
+      }],
+      rawData: { phaseInputs: { strategy: { businessObjective: OBJECTIVE } } },
+    });
+    const graph = buildObjectiveGraph(onlyReporting);
+    const objId = graph.objectiveIds[0];
+    const deliveredBy = graph.relations.filter((r) => r.from === objId && r.kind === "delivered-by");
+    expect(deliveredBy.some((r) => r.to === "artifact:outcome-framework")).toBe(false);
+  });
+
   it("attributes a severe risk on the objective's delivery chain but not one upstream of it", () => {
     // Objective originates in strategy, which here sits *after* discover in the
     // spine. A severe risk raised in discover (upstream, already cleared) must not
