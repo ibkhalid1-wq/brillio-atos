@@ -143,6 +143,11 @@ export default function StructuredGrid({ columns, rows, onChange, addLabel = "+ 
   const placeholderRow = React.useMemo(() => makeEmptyRow(columns), [columns]);
   const displayRows = rows.length > 0 ? rows : readOnly ? [] : [placeholderRow];
 
+  // Give the per-row remove control an accessible name derived from the add
+  // label (e.g. "+ Add assumption" → "assumption"), so screen readers announce
+  // "Remove assumption" instead of a bare "button". Falls back to "row".
+  const itemNoun = addLabel.replace(/^\s*\+?\s*add\s+/i, "").trim() || "row";
+
   function updateCell(index: number, key: string, value: string) {
     if (rows.length === 0) {
       onChange([{ ...placeholderRow, [key]: value }]);
@@ -220,7 +225,14 @@ export default function StructuredGrid({ columns, rows, onChange, addLabel = "+ 
             ),
           )}
           {!readOnly ? (
-            <button type="button" className="v3-button ghost" style={{ fontSize: 11, flexShrink: 0 }} onClick={() => removeRow(index)}>
+            <button
+              type="button"
+              className="v3-button ghost"
+              style={{ fontSize: 12, width: 28, flexShrink: 0 }}
+              aria-label={`Remove ${itemNoun}`}
+              title={`Remove this ${itemNoun}`}
+              onClick={() => removeRow(index)}
+            >
               ✕
             </button>
           ) : null}

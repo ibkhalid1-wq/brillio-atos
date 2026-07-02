@@ -9344,7 +9344,9 @@ button.v3-chip:disabled {
   min-width: 0;
 }
 .v3-grid-input-col-spacer {
-  width: 24px;
+  /* Matches the per-row remove button width so the header column labels line up
+     with the input columns above the remove control. */
+  width: 28px;
   flex-shrink: 0;
 }
 .v3-grid-input-row {
