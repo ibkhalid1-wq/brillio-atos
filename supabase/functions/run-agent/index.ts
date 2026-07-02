@@ -5660,8 +5660,12 @@ Return ONLY valid JSON. No markdown fences.`,
   }
 
   if (isProgramLevelAdoptionAgent(request.agentId, request.phaseId)) {
+    const timeline = buildPhaseTimeline(programData);
+    const phaseWalk = timeline
+      ? `\n\nThe programme moves through these phases IN ORDER. Reason phase-by-phase: judge adoption and go-live readiness relative to where the programme is now — adoption pressure builds as it approaches and enters Operate, so do not report a not-yet-reached phase's adoption as a current shortfall:\n${timeline}`
+      : "";
     return {
-      system: `You are ATOS's Adoption Intelligence agent for a Brillio transformation program.
+      system: `You are ATOS's Adoption Intelligence agent for a Brillio transformation program.${phaseWalk}
 
 Return a JSON object with exactly this shape:
 {
@@ -5690,8 +5694,12 @@ Return ONLY valid JSON.`,
   }
 
   if (request.agentId === "health-heatmap") {
+    const timeline = buildPhaseTimeline(programData);
+    const phaseWalk = timeline
+      ? `\n\nThese are the phases that have STARTED (each with its status) — grade LIVE health only on these: a complete/approved phase is green, an in-progress one may be amber or red. EVERY other phase in the context is not-yet-reached and must be grey (score 0, topRisk null):\n${timeline}`
+      : "";
     return {
-      system: `You are ATOS's Health Heatmap agent for a Brillio transformation program following the ATOS 13-phase lifecycle.
+      system: `You are ATOS's Health Heatmap agent for a Brillio transformation program following the ATOS 13-phase lifecycle.${phaseWalk}
 
 Return a JSON object with exactly this shape:
 {
