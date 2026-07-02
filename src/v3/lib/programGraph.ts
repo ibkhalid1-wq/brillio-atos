@@ -491,6 +491,47 @@ export function compressProgramGraph(nodes: ProgramGraphNode[]): string {
 }
 
 /**
+ * The semantic (ontology-bearing) edge types worth serialising into a prompt —
+ * the ones that answer "how does this connect to that". Structural edges
+ * (`sequence`, `in_phase`) and pure provenance plumbing (`extracted_to`,
+ * `mentions`) are omitted: they add lines without telling the agent anything it
+ * can act on.
+ */
+const RELATIONSHIP_PHRASE: Record<string, string> = {
+  grounds: "grounds",
+  traces_to: "traces to",
+  addresses: "addresses",
+  delivers: "delivers",
+};
+
+/** Trim a node label to keep a relationship line compact in the prompt budget. */
+function shortLabel(label: string, max = 48): string {
+  const clean = label.replace(/\s+/g, " ").trim();
+  return clean.length <= max ? clean : `${clean.slice(0, max - 1)}…`;
+}
+
+/**
+ * Render the graph's semantic edges as compact `subject relation object` lines,
+ * resolving endpoint ids to their node labels. Skips structural/provenance edges
+ * and any edge whose endpoints are not both in `nodes` (so it composes with a
+ * phase-scoped selection). This is the relationship complement to
+ * {@link compressProgramGraph}, which only ever listed nodes in isolation.
+ */
+export function compressProgramEdges(edges: ProgramGraphEdge[], nodes: ProgramGraphNode[]): string {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const lines: string[] = [];
+  for (const edge of edges) {
+    const phrase = RELATIONSHIP_PHRASE[edge.type];
+    if (!phrase) continue;
+    const from = byId.get(edge.from);
+    const to = byId.get(edge.to);
+    if (!from || !to) continue;
+    lines.push(`${from.type} "${shortLabel(from.label)}" ${phrase} ${to.type} "${shortLabel(to.label)}"`);
+  }
+  return lines.join("\n");
+}
+
+/**
  * Slice the graph to the context relevant when an agent runs for `phaseId`:
  * the phase itself, every prior phase (so later phases build on earlier
  * outputs), all nodes belonging to those phases, the documents feeding the
@@ -527,6 +568,26 @@ export function selectGraphForPhase(graph: ProgramGraph, phaseId: string): Progr
 
 const GRAPH_CONTEXT_HEADER =
   "Program graph (prior phases — facts, artifacts, risks, decisions, KPIs):";
+const GRAPH_RELATIONSHIPS_HEADER = "Relationships (how the above connect):";
+
+/**
+ * Fit `header` + as many whole `body` lines as `maxChars` allows, dropping lines
+ * from the tail so a line is never cut mid-item. Returns "" when not even the
+ * first line fits under the header.
+ */
+function fitBlock(header: string, body: string, maxChars: number): string {
+  const full = `${header}\n${body}`;
+  if (full.length <= maxChars) return full;
+  const kept: string[] = [];
+  let used = header.length;
+  for (const line of body.split("\n")) {
+    const next = used + 1 + line.length;
+    if (next > maxChars) break;
+    kept.push(line);
+    used = next;
+  }
+  return kept.length ? `${header}\n${kept.join("\n")}` : "";
+}
 
 /**
  * Prompt-ready cross-phase grounding for an agent running at `targetPhaseId`:
@@ -548,19 +609,22 @@ export function buildProgramGraphContext(
   if (!program || !targetPhaseId) return "";
   const graph = buildProgramGraph(program);
   if (!graph.nodes.length) return "";
-  const body = selectGraphForPhase(graph, targetPhaseId).citations.trim();
+  const selection = selectGraphForPhase(graph, targetPhaseId);
+  const body = selection.citations.trim();
   if (!body) return "";
 
-  const full = `${GRAPH_CONTEXT_HEADER}\n${body}`;
-  if (full.length <= maxChars) return full;
+  // Node citations first — the grounding facts/artifacts/risks share the budget.
+  const nodeBlock = fitBlock(GRAPH_CONTEXT_HEADER, body, maxChars);
+  if (!nodeBlock) return "";
 
-  const kept: string[] = [];
-  let used = GRAPH_CONTEXT_HEADER.length;
-  for (const line of body.split("\n")) {
-    const next = used + 1 + line.length;
-    if (next > maxChars) break;
-    kept.push(line);
-    used = next;
+  // Then append the semantic relationships with whatever budget remains, so the
+  // agent sees not just the entities but how they connect (grounds / traces to /
+  // addresses / delivers). Whole lines only; the block is dropped if it can't fit.
+  const remaining = maxChars - nodeBlock.length - 1; // -1 for the joining newline
+  const edgeBody = compressProgramEdges(selection.edges, selection.nodes).trim();
+  if (edgeBody && remaining > GRAPH_RELATIONSHIPS_HEADER.length + 1) {
+    const edgeBlock = fitBlock(GRAPH_RELATIONSHIPS_HEADER, edgeBody, remaining);
+    if (edgeBlock) return `${nodeBlock}\n${edgeBlock}`;
   }
-  return kept.length ? `${GRAPH_CONTEXT_HEADER}\n${kept.join("\n")}` : "";
+  return nodeBlock;
 }

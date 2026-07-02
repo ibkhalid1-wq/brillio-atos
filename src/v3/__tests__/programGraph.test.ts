@@ -5,7 +5,10 @@ import {
   selectGraphForPhase,
   buildProgramGraphContext,
   compressProgramNode,
+  compressProgramEdges,
   type ProgramGraph,
+  type ProgramGraphNode,
+  type ProgramGraphEdge,
   type ProgramDocument,
 } from "@/v3/lib/programGraph";
 import type { DocumentIntelligence } from "@/new/lib/documentIntelligenceTypes";
@@ -597,6 +600,29 @@ describe("buildProgramGraphContext", () => {
     expect(ctx).not.toContain("Build risk");
   });
 
+  it("appends a relationships block serialising the semantic edges", () => {
+    const ctx = buildProgramGraphContext(
+      program({
+        phases,
+        artifacts: [
+          { id: "charter", phaseId: "strategy", title: "Programme Charter", status: "approved", agentGenerated: true, lastEditedBy: "agent", lastEditedAt: "", contentSummary: "", versionNumber: 1 },
+        ],
+        rawData: {
+          phaseInputs: { strategy: { businessContext: "Legacy platform is end-of-life" } },
+          dynamicSchema: {
+            inputFields: {
+              strategy: [{ id: "businessContext", label: "Business context", type: "textarea", required: false, usedByArtifacts: ["charter"] }],
+            },
+          },
+        },
+      }),
+      "strategy",
+      2000,
+    );
+    expect(ctx).toContain("Relationships (how the above connect):");
+    expect(ctx).toContain("grounds artifact");
+  });
+
   it("caps the block to maxChars by dropping whole lines from the tail", () => {
     const ctx = buildProgramGraphContext(
       program({
@@ -623,5 +649,51 @@ describe("compressProgramNode", () => {
     }));
     const fact = graph.nodes.find((n) => n.type === "fact")!;
     expect(compressProgramNode(fact)).toBe("fact [strategy]: Executive sponsor: Jane, CIO (confidence: high)");
+  });
+});
+
+describe("compressProgramEdges", () => {
+  const node = (over: Partial<ProgramGraphNode>): ProgramGraphNode =>
+    ({ id: "n", type: "fact", label: "L", ...over });
+  const edge = (over: Partial<ProgramGraphEdge>): ProgramGraphEdge =>
+    ({ id: "e", from: "a", to: "b", type: "grounds", ...over });
+
+  const nodes = [
+    node({ id: "fact:1", type: "fact", label: "Legacy platform is end-of-life" }),
+    node({ id: "artifact:charter", type: "artifact", label: "Programme Charter" }),
+    node({ id: "requirement:REQ-1", type: "requirement", label: "System must support SSO" }),
+    node({ id: "decision:D-1", type: "decision", label: "Adopt Okta" }),
+  ];
+
+  it("renders semantic edges as subject relation object with node labels", () => {
+    const out = compressProgramEdges(
+      [edge({ from: "fact:1", to: "artifact:charter", type: "grounds" })],
+      nodes,
+    );
+    expect(out).toBe('fact "Legacy platform is end-of-life" grounds artifact "Programme Charter"');
+  });
+
+  it("maps each relationship type to its phrase", () => {
+    const out = compressProgramEdges(
+      [
+        edge({ id: "e1", from: "decision:D-1", to: "requirement:REQ-1", type: "addresses" }),
+        edge({ id: "e2", from: "artifact:charter", to: "requirement:REQ-1", type: "traces_to" }),
+      ],
+      nodes,
+    );
+    expect(out).toContain('decision "Adopt Okta" addresses requirement "System must support SSO"');
+    expect(out).toContain('artifact "Programme Charter" traces to requirement "System must support SSO"');
+  });
+
+  it("skips structural/provenance edges and edges with a missing endpoint", () => {
+    const out = compressProgramEdges(
+      [
+        edge({ id: "e1", from: "fact:1", to: "artifact:charter", type: "in_phase" }),
+        edge({ id: "e2", from: "fact:1", to: "artifact:charter", type: "extracted_to" }),
+        edge({ id: "e3", from: "fact:MISSING", to: "artifact:charter", type: "grounds" }),
+      ],
+      nodes,
+    );
+    expect(out).toBe("");
   });
 });
