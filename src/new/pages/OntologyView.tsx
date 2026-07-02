@@ -14,6 +14,7 @@ import {
   assessPhaseFidelity,
   getSemanticValidationMeta,
   classifyFinding,
+  FINDING_CLASS_ORDER,
   type FindingClass,
   type PhaseFidelity,
 } from "@/v3/lib/crossArtifactValidation";
@@ -56,22 +57,6 @@ const CLASS_COLOR: Record<FindingClass, string> = {
   Completeness: "#94a3b8",
 };
 
-function ClassChip({ cls }: { cls: FindingClass }) {
-  return (
-    <span
-      style={{
-        fontSize: 10, fontWeight: 600, lineHeight: 1.4,
-        padding: "1px 6px", borderRadius: 4,
-        color: CLASS_COLOR[cls],
-        border: `1px solid ${CLASS_COLOR[cls]}`,
-        background: "transparent", whiteSpace: "nowrap",
-      }}
-    >
-      {cls}
-    </span>
-  );
-}
-
 function BandChip({ band }: { band: ConfidenceBand }) {
   return (
     <span
@@ -107,6 +92,16 @@ function PhaseFidelityCard({
   validationIsRunning?: boolean;
   validatingPhaseId?: string | null;
 }) {
+  // Which category sections are collapsed, keyed `${phaseId}::${class}`.
+  // Empty = all expanded (default).
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+  const toggleSection = (key: string) =>
+    setCollapsedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   return (
     <AdamCard>
       <AdamCardHeader
@@ -148,6 +143,12 @@ function PhaseFidelityCard({
                   : semanticValidated
                     ? "No fidelity gap attributed to this phase"
                     : "Fidelity not verified yet — the deterministic floor found no structural gap, but semantic validation (does this phase honour the phases before it?) has not run.";
+            // Group this phase's gaps by top-level class so the card can show a
+            // category tile (with count) header block and a collapsible section
+            // per category underneath it.
+            const gapGroups = FINDING_CLASS_ORDER
+              .map((cls) => ({ cls, items: p.gaps.filter((g) => classifyFinding(g.domain) === cls) }))
+              .filter((group) => group.items.length > 0);
             return (
               <div
                 key={p.phaseId}
@@ -215,33 +216,66 @@ function PhaseFidelityCard({
                     </span>
                   </div>
                 </div>
-                {p.gaps.length > 0 && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "2px 12px 10px 12px" }}>
-                    {p.gaps.map((g) => (
-                      <div key={g.findingId} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                        <span
-                          title={`${g.severity} severity`}
-                          style={{ marginTop: 5, flexShrink: 0, width: 6, height: 6, borderRadius: "50%", background: SEVERITY_COLOR[g.severity] }}
-                        />
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                            <ClassChip cls={classifyFinding(g.domain)} />
-                          </div>
-                          <div style={{ fontSize: 12, color: "var(--v3-text-secondary)" }}>{g.issue}</div>
-                          {g.recommendation && (
-                            <div style={{ fontSize: 12, color: "var(--v3-accent)", marginTop: 1 }}>→ {g.recommendation}</div>
-                          )}
-                          {/* What the finding was checked against — the phase intent
-                              element and/or the ontology delivery-chain link the
-                              validator traced. Makes the basis of each gap visible. */}
-                          {g.evidence.length > 0 && (
-                            <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 2 }}>
-                              checked against: {g.evidence.join("; ")}
+                {gapGroups.length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", padding: "0 12px 10px 12px" }}>
+                    {/* Header block: one category tile per class present, with its
+                        count. Clicking a tile collapses/expands that section. */}
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "2px 0 8px 0" }}>
+                      {gapGroups.map(({ cls, items }) => {
+                        const key = `${p.phaseId}::${cls}`;
+                        const collapsed = collapsedSections.has(key);
+                        return (
+                          <button
+                            key={cls}
+                            type="button"
+                            onClick={() => toggleSection(key)}
+                            aria-expanded={!collapsed}
+                            title={`${collapsed ? "Show" : "Hide"} ${cls} findings`}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 6,
+                              padding: "3px 8px", borderRadius: 6, cursor: "pointer",
+                              border: `1px solid ${CLASS_COLOR[cls]}`,
+                              background: collapsed ? "transparent" : `${CLASS_COLOR[cls]}1a`,
+                            }}
+                          >
+                            <span style={{ width: 8, height: 8, borderRadius: "50%", background: CLASS_COLOR[cls] }} />
+                            <span style={{ fontSize: 11, fontWeight: 600, color: CLASS_COLOR[cls] }}>{cls}</span>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--v3-text-secondary)" }}>{items.length}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {/* Collapsible area per category. */}
+                    {gapGroups.map(({ cls, items }) => {
+                      const key = `${p.phaseId}::${cls}`;
+                      if (collapsedSections.has(key)) return null;
+                      return (
+                        <div key={cls} style={{ display: "flex", flexDirection: "column", gap: 6, paddingBottom: 8 }}>
+                          {items.map((g) => (
+                            <div key={g.findingId} style={{ display: "flex", gap: 8, alignItems: "flex-start", borderLeft: `2px solid ${CLASS_COLOR[cls]}`, paddingLeft: 8 }}>
+                              <span
+                                title={`${g.severity} severity`}
+                                style={{ marginTop: 5, flexShrink: 0, width: 6, height: 6, borderRadius: "50%", background: SEVERITY_COLOR[g.severity] }}
+                              />
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: 12, color: "var(--v3-text-secondary)" }}>{g.issue}</div>
+                                {g.recommendation && (
+                                  <div style={{ fontSize: 12, color: "var(--v3-accent)", marginTop: 1 }}>→ {g.recommendation}</div>
+                                )}
+                                {/* What the finding was checked against — the phase intent
+                                    element and/or the ontology delivery-chain link the
+                                    validator traced. Makes the basis of each gap visible. */}
+                                {g.evidence.length > 0 && (
+                                  <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 2 }}>
+                                    checked against: {g.evidence.join("; ")}
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                          )}
+                          ))}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
