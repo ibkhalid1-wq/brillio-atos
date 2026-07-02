@@ -5,6 +5,7 @@ import { ragLabel } from "@/v3/lib/uiHelpers";
 import { confidenceRag } from "@/v3/lib/confidenceScore";
 import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
 import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
+import { SkeletonBlock } from "@/v3/components/ui/Skeleton";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -92,16 +93,16 @@ function programObjective(program: ProgramSummary): string {
 // Skeleton card
 // ---------------------------------------------------------------------------
 
+// Skeleton placeholder for a ProgramCard. Uses the shared SkeletonBlock so the
+// portfolio, phase panel and everywhere else animate from one shimmer
+// implementation; the 140px height and card chrome match ProgramCard so nothing
+// shifts when the real card swaps in.
 function SkeletonCard() {
   return (
-    <div
-      className="v3-shimmer"
-      style={{
-        background: "var(--v3-surface-2)",
-        borderRadius: "var(--v3-radius-lg, 10px)",
-        height: 140,
-        border: "1px solid var(--v3-border)",
-      }}
+    <SkeletonBlock
+      height={140}
+      borderRadius="var(--v3-radius-lg, 10px)"
+      style={{ border: "1px solid var(--v3-border)" }}
     />
   );
 }
