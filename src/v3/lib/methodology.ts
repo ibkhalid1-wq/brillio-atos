@@ -807,9 +807,31 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       recommendedAgents: ["runbook", "support-model", "narrative", "adoption", "health-heatmap"],
       typicalDurationWeeks: { min: 4, max: 12 },
       inputFields: [
+        // goLiveDate + hyperCarePeriod stay optional by design: Operate is a
+        // dynamic-only phase for scoring (derivePhaseInputQuality / deriveProgramConfidence
+        // treat it as carrying no static required inputs and return null), so promoting a
+        // static field to required would flip that invariant for every Operate programme,
+        // not just post-cutoff ones. The go-live criterion is instead grounded by the
+        // additive hyperCareExit evidence below.
         { id: "goLiveDate", label: "Go-live date", type: "date", required: false, hint: "Actual (or planned) production cutover date — anchors the hyper-care window and adoption baseline." },
         { id: "hyperCarePeriod", label: "Hyper-care period", type: "text", required: false, placeholder: "e.g. 4 weeks post go-live", hint: "How long heightened support runs before steady-state operations take over." },
         { id: "supportModel", label: "Support model & handover", type: "textarea", required: false, usedByArtifacts: ["support-model", "runbook"], placeholder: "Support tiers, ownership, SLAs, and how support is handed to operations", hint: "e.g. L1 service desk, L2 product team, L3 vendor; P1 response 30m; handover to Ops at end of hyper-care." },
+        // Structured backing for the "Support model handed to operations" criterion.
+        // The supportModel textarea narrates the model; this grid pins the actual tier
+        // responsibilities and SLAs so the handover is a checkable contract, not prose.
+        {
+          id: "supportTiers",
+          label: "Support tiers & SLAs",
+          type: "grid",
+          required: false,
+          usedByArtifacts: ["support-model"],
+          hint: "One row per support tier with what it owns and its response/resolution SLA — the concrete contract behind the support narrative.",
+          columns: [
+            { key: "tier", label: "Tier", type: "text", width: 120, placeholder: "e.g. L1 / L2 / L3" },
+            { key: "responsibility", label: "Responsibility", type: "text" },
+            { key: "sla", label: "SLA", type: "text", width: 200, placeholder: "e.g. P1 response 30m, resolve 4h" },
+          ],
+        },
         {
           id: "adoptionBaseline",
           label: "Adoption metrics baseline",
@@ -823,9 +845,27 @@ export const ATOS_STANDARD: MethodologyDefinition = {
             { key: "target", label: "Target", type: "text" },
           ],
         },
+        // Evidence for the "Live operation stable for agreed hyper-care period"
+        // criterion: proof the window was actually held stable (incidents resolved,
+        // stability thresholds met), not just that a period was agreed. Optional; a
+        // programme still inside hyper-care legitimately has no exit evidence yet.
+        {
+          id: "hyperCareExit",
+          label: "Hyper-care exit evidence",
+          type: "grid",
+          role: "measure",
+          required: false,
+          usedByArtifacts: ["support-model"],
+          hint: "The stability gates that must be met to close hyper-care — each with its threshold and the achieved result. Backs the Operate exit criterion \"Live operation stable for agreed hyper-care period\".",
+          columns: [
+            { key: "measure", label: "Stability measure", type: "text", placeholder: "e.g. Open P1 incidents, uptime, MTTR" },
+            { key: "threshold", label: "Exit threshold", type: "text", width: 160 },
+            { key: "actual", label: "Achieved", type: "text", width: 160 },
+          ],
+        },
       ],
       artifactInputFlow: {
-        "support-model": ["supportModel", "hyperCarePeriod"],
+        "support-model": ["supportModel", "supportTiers", "hyperCarePeriod", "hyperCareExit"],
         "runbook": ["supportModel"],
         "adoption": ["adoptionBaseline", "goLiveDate"],
       },

@@ -525,7 +525,7 @@ describe("build static delivery schema", () => {
 describe("operate static go-live schema", () => {
   it("declares the support/adoption inputs grounding the operate artifacts without a store", () => {
     expect(new Set(getArtifactInputFields("operate", "support-model"))).toEqual(
-      new Set(["supportModel", "hyperCarePeriod"]),
+      new Set(["supportModel", "supportTiers", "hyperCarePeriod", "hyperCareExit"]),
     );
     expect(getArtifactInputFields("operate", "runbook")).toEqual(["supportModel"]);
     expect(new Set(getArtifactInputFields("operate", "adoption"))).toEqual(
@@ -539,7 +539,7 @@ describe("operate static go-live schema", () => {
 
   it("keeps the static inputs fillable (they are real typed fields, not roster-resolved owners)", () => {
     expect(new Set(getFillableArtifactInputFields("operate", "support-model"))).toEqual(
-      new Set(["supportModel", "hyperCarePeriod"]),
+      new Set(["supportModel", "supportTiers", "hyperCarePeriod", "hyperCareExit"]),
     );
   });
 
