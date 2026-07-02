@@ -142,6 +142,27 @@ export function buildObjectiveGraph(
   const objectiveIds = objectives.map((o) => o.id);
   const kpis = byKind("kpi");
   const risks = byKind("risk");
+
+  // Per-objective KPI attribution. A KPI row may name the objective it measures
+  // (its `objective` property). When that name resolves to an objective node, the
+  // KPI is attributed only to matching objectives; a KPI with no name, or a name
+  // matching no objective, stays a programme-level measure attributed to every
+  // objective (the historical many-to-many, and the norm for single-objective
+  // programmes). Tolerant containment matching mirrors the rest of the ontology.
+  const objectiveMatchesHint = (obj: SemanticNode, hint: string): boolean => {
+    const a = obj.label.toLowerCase();
+    const b = hint.toLowerCase();
+    return a.includes(b) || b.includes(a);
+  };
+  const kpiHint = (kpi: SemanticNode): string => ((kpi.properties?.objective as string) || "").trim();
+  const targetedKpiIds = new Set(
+    kpis
+      .filter((k) => {
+        const hint = kpiHint(k);
+        return hint.length > 0 && objectives.some((o) => objectiveMatchesHint(o, hint));
+      })
+      .map((k) => k.id),
+  );
   // Index artifacts by their producing phase, and separately collect
   // programme-global artifacts (those not scoped to any methodology phase, e.g.
   // an imported charter tagged phaseId "program") — these deliver every objective.
@@ -182,10 +203,10 @@ export function buildObjectiveGraph(
     const chainPhases = startIndex >= 0 ? phaseOrder.slice(startIndex) : phaseOrder;
     const chainPhaseSet = new Set(chainPhases);
 
-    // measured-by: every KPI is a candidate measure for the (typically singular)
-    // programme objective. When the programme has multiple objectives this is a
-    // conservative many-to-many; per-objective KPI attribution is a later refinement.
+    // measured-by: attribute each KPI to this objective unless the KPI names a
+    // *different* objective (per-objective attribution; see targetedKpiIds above).
     for (const kpi of kpis) {
+      if (targetedKpiIds.has(kpi.id) && !objectiveMatchesHint(objective, kpiHint(kpi))) continue;
       const baseline = (kpi.properties?.baseline as string) || "";
       const target = (kpi.properties?.target as string) || "";
       const weak = !baseline.trim() || !target.trim();

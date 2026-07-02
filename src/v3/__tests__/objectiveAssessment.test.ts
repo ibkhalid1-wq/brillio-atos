@@ -200,6 +200,63 @@ describe("buildObjectiveGraph", () => {
     expect(threats).toContain("risk:global");
   });
 
+  it("attributes a hinted KPI only to the objective it names, and an unhinted KPI to all", () => {
+    // Two objectives: the static businessObjective plus a dynamic secondary
+    // objective field (id carries the "objective" token, so its value becomes a
+    // second objective node). k1 names objective A, k2 names objective B, k3 names
+    // none — k3 is a programme-level measure attributed to both.
+    const twoObjectives = program({
+      phases: [{ id: "strategy", displayName: "Strategy", pct: 100, status: "complete", objective: "" }],
+      artifacts: [businessCaseArtifact(0.9)],
+      rawData: {
+        data: {
+          phaseInputs: {
+            strategy: {
+              businessObjective: "Reduce cost to serve",
+              secondaryObjective: "Grow net revenue retention",
+              kpis: JSON.stringify([
+                { id: "k1", name: "Cost to serve", baseline: "100", target: "80", unit: "$", objective: "Reduce cost to serve" },
+                { id: "k2", name: "NRR", baseline: "95", target: "110", unit: "%", objective: "Grow net revenue retention" },
+                { id: "k3", name: "CSAT", baseline: "4.0", target: "4.5", unit: "pt" },
+              ]),
+            },
+          },
+          dynamicSchema: {
+            inputFields: { strategy: [{ id: "secondaryObjective", label: "Secondary objective", type: "textarea" }] },
+          },
+        },
+      },
+    });
+    const graph = buildObjectiveGraph(twoObjectives);
+    expect(graph.objectiveIds.length).toBe(2);
+    const costObj = graph.nodes.find((n) => n.kind === "objective" && n.label.includes("Reduce cost to serve"))!;
+    const nrrObj = graph.nodes.find((n) => n.kind === "objective" && n.label.includes("Grow net revenue retention"))!;
+    const kpiTargetsOf = (objId: string) =>
+      graph.relations.filter((r) => r.from === objId && r.kind === "measured-by").map((r) => r.to);
+    const costKpis = kpiTargetsOf(costObj.id);
+    const nrrKpis = kpiTargetsOf(nrrObj.id);
+    // Cost objective: its own KPI + the unhinted CSAT, never the NRR KPI.
+    expect(costKpis).toContain("kpi:k1");
+    expect(costKpis).toContain("kpi:k3");
+    expect(costKpis).not.toContain("kpi:k2");
+    // NRR objective: its own KPI + the unhinted CSAT, never the cost KPI.
+    expect(nrrKpis).toContain("kpi:k2");
+    expect(nrrKpis).toContain("kpi:k3");
+    expect(nrrKpis).not.toContain("kpi:k1");
+  });
+
+  it("falls back to many-to-many when a KPI names an objective that does not exist", () => {
+    // A KPI hint that resolves to no objective must not orphan the KPI — it stays
+    // a programme-level measure attributed to the single objective.
+    const prog = healthyProgram({
+      kpis: JSON.stringify([{ id: "k1", name: "Cost to serve", baseline: "100", target: "80", unit: "$", objective: "A non-existent objective" }]),
+    });
+    const graph = buildObjectiveGraph(prog);
+    const objId = graph.objectiveIds[0];
+    const targets = graph.relations.filter((r) => r.from === objId && r.kind === "measured-by").map((r) => r.to);
+    expect(targets).toContain("kpi:k1");
+  });
+
   it("never admits a relation that violates the ontology", () => {
     const graph = buildObjectiveGraph(healthyProgram());
     // Every relation's endpoints must exist as nodes (guard side-effect).

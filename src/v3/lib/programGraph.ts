@@ -96,7 +96,7 @@ const RISK = (id: string) => `risk:${id}`;
 const DECISION = (id: string) => `decision:${id}`;
 const STAKEHOLDER = (id: string) => `stakeholder:${id}`;
 
-interface KpiRow { id?: string; name?: string; baseline?: string; target?: string; unit?: string }
+interface KpiRow { id?: string; name?: string; baseline?: string; target?: string; unit?: string; objective?: string }
 
 function parseKpiRows(raw: unknown): KpiRow[] {
   if (typeof raw !== "string" || !raw.trim()) return [];
@@ -229,7 +229,10 @@ export function buildProgramGraph(
     const detail = [row.baseline, row.target, row.unit].filter(Boolean).join(" → ");
     addNode({
       id: KPI(id), type: "kpi", label: detail ? `${name}: ${detail}` : name, phaseCreated: "strategy",
-      properties: { baseline: row.baseline, target: row.target, unit: row.unit },
+      // `objective` (optional) names the specific objective this KPI measures, so
+      // the objective graph can attribute it per-objective rather than to every
+      // objective. Absent for single-objective programmes (the common case).
+      properties: { baseline: row.baseline, target: row.target, unit: row.unit, objective: row.objective },
     });
     if (phaseIds.has("strategy")) {
       addEdge({ id: `inphase:kpi:${id}`, from: KPI(id), to: PHASE("strategy"), type: "in_phase" });
