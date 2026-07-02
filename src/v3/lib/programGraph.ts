@@ -24,7 +24,8 @@ import { buildFactGraph, type Fact } from "@/v3/lib/factGraph";
 import type { DocumentIntelligence, ExtractedEntities } from "@/new/lib/documentIntelligenceTypes";
 
 export type ProgramGraphNodeKind =
-  | "phase" | "fact" | "document" | "artifact" | "kpi" | "risk" | "decision" | "stakeholder" | "insight" | "requirement";
+  | "phase" | "fact" | "document" | "artifact" | "kpi" | "risk" | "decision" | "stakeholder" | "insight" | "requirement"
+  | "scope" | "increment";
 
 /**
  * A processed document supplied to the graph. The entities the extractor found
@@ -96,10 +97,14 @@ const RISK = (id: string) => `risk:${id}`;
 const DECISION = (id: string) => `decision:${id}`;
 const STAKEHOLDER = (id: string) => `stakeholder:${id}`;
 const REQUIREMENT = (id: string) => `requirement:${id}`;
+const SCOPE = (id: string) => `scope:${id}`;
+const INCREMENT = (id: string) => `increment:${id}`;
 
 interface KpiRow { id?: string; name?: string; baseline?: string; target?: string; unit?: string; objective?: string }
 interface RequirementRow { id?: string; requirement?: string; category?: string; priority?: string; target?: string }
 interface DesignDecisionRow { id?: string; decision?: string; optionsConsidered?: string; rationale?: string; addresses?: string }
+interface ScopeRow { id?: string; item?: string; category?: string }
+interface IncrementRow { id?: string; increment?: string; scope?: string; date?: string; delivers?: string }
 
 /** Normalise a requirement reference for label-matching: lowercase, strip
  *  punctuation, collapse whitespace. Lets a design decision's free-text
@@ -323,6 +328,48 @@ export function buildProgramGraph(
     }
   });
 
+  // In-scope items (Discover scopeInclusions grid) as first-class scope nodes,
+  // and delivery increments (Build deliveryIncrements grid) as increment nodes
+  // linked to the scope items they deliver via `delivers` edges. This closes the
+  // delivery → scope traceability chain: the graph can show which increment ships
+  // each declared scope item and (by absence) which in-scope items no increment
+  // yet delivers. Refs are matched by normalised item label, so the PM/agent
+  // writes the scope text rather than an internal id.
+  const scopeByLabel = new Map<string, string>();
+  parseGridRows<ScopeRow>(phaseInputRaw(program, "discover", "scopeInclusions")).forEach((row, index) => {
+    const text = (row.item || "").trim();
+    if (!text) return;
+    const id = row.id || `scopeInclusions-${index}`;
+    addNode({
+      id: SCOPE(id), type: "scope", label: text, phaseCreated: "discover",
+      properties: { category: row.category },
+    });
+    if (phaseIds.has("discover")) {
+      addEdge({ id: `inphase:scope:${id}`, from: SCOPE(id), to: PHASE("discover"), type: "in_phase" });
+    }
+    const key = normalizeRef(text);
+    if (key && !scopeByLabel.has(key)) scopeByLabel.set(key, SCOPE(id));
+  });
+
+  parseGridRows<IncrementRow>(phaseInputRaw(program, "build", "deliveryIncrements")).forEach((row, index) => {
+    const text = (row.increment || "").trim();
+    if (!text) return;
+    const id = row.id || `deliveryIncrements-${index}`;
+    addNode({
+      id: INCREMENT(id), type: "increment", label: text, phaseCreated: "build",
+      properties: { scope: row.scope, date: row.date },
+    });
+    if (phaseIds.has("build")) {
+      addEdge({ id: `inphase:increment:${id}`, from: INCREMENT(id), to: PHASE("build"), type: "in_phase" });
+    }
+    for (const ref of splitRefs(row.delivers)) {
+      const scopeNodeId = scopeByLabel.get(normalizeRef(ref));
+      if (scopeNodeId) {
+        addEdge({ id: `delivers:${id}->${scopeNodeId}`, from: INCREMENT(id), to: scopeNodeId, type: "delivers" });
+      }
+    }
+  });
+
   // Open risks/blockers and open decisions, scoped to their phase.
   (program.raidEntries || [])
     .filter((entry) => entry.status !== "closed")
@@ -378,7 +425,7 @@ export function buildProgramGraph(
 }
 
 function emptyKindCounts(): Record<ProgramGraphNodeKind, number> {
-  return { phase: 0, fact: 0, document: 0, artifact: 0, kpi: 0, risk: 0, decision: 0, stakeholder: 0, insight: 0, requirement: 0 };
+  return { phase: 0, fact: 0, document: 0, artifact: 0, kpi: 0, risk: 0, decision: 0, stakeholder: 0, insight: 0, requirement: 0, scope: 0, increment: 0 };
 }
 
 export interface ProgramGraphSelection {

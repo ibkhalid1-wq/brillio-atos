@@ -92,12 +92,14 @@ const NODE_COLORS: Record<string, string> = {
   Artifact: "#5b21b6",
   Stakeholder: "#1a5c8f",
   Requirement: "#0369a1",
+  Scope: "#0e7490",
+  Increment: "#b45309",
 };
 
 const TWIN_NODE_TYPE_ORDER = [
   "Strategy", "Outcome", "KPI", "Capability", "Decision",
   "Role", "Agent", "Skill", "Data", "Risk", "Governance", "Value", "Learning",
-  "Source", "Insight", "Fact", "Requirement", "Phase", "Artifact", "Stakeholder",
+  "Source", "Insight", "Fact", "Requirement", "Scope", "Phase", "Artifact", "Increment", "Stakeholder",
 ];
 
 const SEMANTIC_LANES = [
@@ -107,8 +109,10 @@ const SEMANTIC_LANES = [
   { id: "pg-sources", label: "Sources", types: ["Source"] },
   { id: "pg-knowledge", label: "Knowledge", types: ["Insight", "Fact"] },
   { id: "pg-requirements", label: "Requirements", types: ["Requirement"] },
+  { id: "pg-scope", label: "Scope", types: ["Scope"] },
   { id: "pg-phases", label: "Phases", types: ["Phase"] },
   { id: "pg-artifacts", label: "Artifacts", types: ["Artifact"] },
+  { id: "pg-increments", label: "Increments", types: ["Increment"] },
   { id: "strategy", label: "Strategy", types: ["Strategy"] },
   { id: "outcomes", label: "Outcomes", types: ["Outcome", "KPI"] },
   { id: "capability", label: "Capability", types: ["Capability"] },

@@ -30,6 +30,8 @@ const KIND_TO_DISPLAY: Record<ProgramGraphNodeKind, string> = {
   stakeholder: "Stakeholder",
   insight: "Insight",
   requirement: "Requirement",
+  scope: "Scope",
+  increment: "Increment",
 };
 
 interface ProgramGraphPanelProps {

@@ -564,12 +564,13 @@ export const ATOS_STANDARD: MethodologyDefinition = {
           label: "Delivery increments & cadence",
           type: "grid",
           required: true,
-          hint: "Break delivery into increments (sprints, releases, or workstream waves) with the scope each carries and its target date — this is what milestone forecasting tracks against.",
+          hint: "Break delivery into increments (sprints, releases, or workstream waves) with the scope each carries and its target date — this is what milestone forecasting tracks against. Name the in-scope item(s) each increment delivers so the graph can trace delivery back to the scope boundary.",
           usedByArtifacts: ["milestone"],
           columns: [
             { key: "increment", label: "Increment", type: "text", placeholder: "e.g. Release 1 — Pipeline agent" },
             { key: "scope", label: "Scope delivered", type: "text", placeholder: "What ships in this increment" },
             { key: "date", label: "Target date", type: "date", width: 160 },
+            { key: "delivers", label: "Delivers in-scope item(s)", type: "text", placeholder: "In-scope item(s) this increment delivers, comma-separated" },
           ],
         },
         {

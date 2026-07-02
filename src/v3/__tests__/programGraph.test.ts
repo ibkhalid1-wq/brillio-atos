@@ -335,6 +335,69 @@ describe("buildProgramGraph", () => {
     expect(columnKeys.has("addresses")).toBe(true);
   });
 
+  it("mints scope + increment nodes and links each increment to the scope items it delivers", () => {
+    const graph = buildProgramGraph(program({
+      phases,
+      rawData: {
+        phaseInputs: {
+          discover: {
+            scopeInclusions: JSON.stringify([
+              { id: "scope-in-order-to-cash", item: "Order-to-cash process", category: "process" },
+              { id: "scope-in-billing", item: "Billing", category: "process" },
+            ]),
+          },
+          build: {
+            deliveryIncrements: JSON.stringify([
+              { id: "inc-1", increment: "Release 1", scope: "Core flow", date: "2026-09-01", delivers: "Order-to-cash process" },
+            ]),
+          },
+        },
+      },
+    }));
+    expect(graph.stats.byKind.scope).toBe(2);
+    expect(graph.stats.byKind.increment).toBe(1);
+    const scope = graph.nodes.find((n) => n.id === "scope:scope-in-order-to-cash");
+    expect(scope).toMatchObject({ type: "scope", label: "Order-to-cash process", phaseCreated: "discover" });
+    const increment = graph.nodes.find((n) => n.id === "increment:inc-1");
+    expect(increment).toMatchObject({ type: "increment", label: "Release 1", phaseCreated: "build" });
+    // The delivery → scope traceability edge, matched by normalised label.
+    expect(graph.edges.some((e) => e.type === "delivers" && e.from === "increment:inc-1" && e.to === "scope:scope-in-order-to-cash")).toBe(true);
+    // Billing is in scope but no increment delivers it — no delivers edge to it.
+    expect(graph.edges.some((e) => e.type === "delivers" && e.to === "scope:scope-in-billing")).toBe(false);
+  });
+
+  it("splits multiple delivers refs and ignores a ref that resolves to no scope item", () => {
+    const graph = buildProgramGraph(program({
+      phases,
+      rawData: {
+        phaseInputs: {
+          discover: {
+            scopeInclusions: JSON.stringify([
+              { id: "s-a", item: "Order-to-cash process" },
+              { id: "s-b", item: "Billing" },
+            ]),
+          },
+          build: {
+            deliveryIncrements: JSON.stringify([
+              { id: "inc-1", increment: "Release 1", delivers: "order to cash process, Billing, Never declared" },
+            ]),
+          },
+        },
+      },
+    }));
+    const delivered = graph.edges.filter((e) => e.type === "delivers" && e.from === "increment:inc-1").map((e) => e.to).sort();
+    expect(delivered).toEqual(["scope:s-a", "scope:s-b"]);
+  });
+
+  it("keeps the deliveryIncrements grid columns aligned with the graph's increment reader (increment + delivers)", () => {
+    const build = ATOS_STANDARD.phases.find((p) => p.id === "build");
+    const field = build?.inputFields?.find((f) => f.id === "deliveryIncrements");
+    expect(field?.type).toBe("grid");
+    const columnKeys = new Set((field?.columns ?? []).map((c) => c.key));
+    expect(columnKeys.has("increment")).toBe(true);
+    expect(columnKeys.has("delivers")).toBe(true);
+  });
+
   it("includes open risks and decisions but excludes closed ones", () => {
     const graph = buildProgramGraph(program({
       phases,
