@@ -2062,6 +2062,15 @@ function buildSpecialAgentInputContext(
       // for compliance-checker). Fall back to a legacy strategy regulatoryContext for
       // programmes generated before that field existed.
       regulatoryContext: governInputs.regulatoryFrameworks || strategyInputs.regulatoryContext || null,
+      // The rest of the Govern static spine (kept in sync with the client
+      // artifactInputFlow for compliance-checker): the operational controls that
+      // enforce the frameworks, the audit-evidence plan, and whether escalation was
+      // tested. Without these the check saw only the frameworks and had to assume
+      // control/audit/escalation coverage — so it could never flag an untested
+      // control or a missing audit plan as a gap.
+      controlMatrix: governInputs.controlMatrix || null,
+      auditEvidencePlan: governInputs.auditEvidencePlan || null,
+      escalationTested: governInputs.escalationTested || null,
     }, null, 2);
   }
 
@@ -6940,6 +6949,11 @@ Return a JSON array.`,
     return {
       system: `You are a regulatory compliance expert.
 Given programme context and regulatory frameworks, identify compliance gaps.
+Ground every gap in the supplied context, not generic best practice:
+- regulatoryContext lists the frameworks in scope — every gap must trace to one of them.
+- controlMatrix lists the operational controls that enforce those frameworks, each with an owner, test status and approval status. Flag a gap when a framework has no mapping control, or a mapped control is untested or unapproved.
+- auditEvidencePlan describes how compliance evidence is captured for audit. Flag a gap when it is absent or does not cover a framework in scope.
+- escalationTested indicates whether escalation/breach paths have been exercised. Flag a gap when escalation has not been tested.
 For each gap return:
 {
   "framework": "string",
@@ -6951,7 +6965,7 @@ For each gap return:
   "owner": "legal|it|programme|data-officer",
   "duePhase": "string"
 }
-Return a JSON array. Only flag real gaps, not generic observations.`,
+Return a JSON array. Only flag real gaps grounded in the supplied context, not generic observations.`,
       user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
     };
   }
