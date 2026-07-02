@@ -5075,31 +5075,54 @@ function applyContradictionResultToProgramData(programData: ProgramState, phaseI
   });
 }
 
+/**
+ * Deterministic finding id derived from (phase, domain, source) rather than the
+ * model's slug. Models are unreliable slug generators, so trusting them breaks
+ * cross-run dedupe/merge; deriving server-side guarantees the SAME underlying gap
+ * gets the SAME id across reruns as long as its phase/domain/source are stable.
+ */
+function deriveFindingId(phaseId: string, domain: string, sourceItem: string, issue: string): string {
+  const scope = phaseId && phaseId.trim() ? phaseId.trim() : "program";
+  const slug = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
+  const source = slug(sourceItem) || slug(issue) || "finding";
+  return `${scope}:${domain}:${source}`;
+}
+
 function applyCrossArtifactValidationResultToProgramData(programData: ProgramState, phaseId: string, result: Record<string, unknown>): ProgramState {
   return updateInnerProgramData(programData, (inner) => {
-    const incoming = (Array.isArray(result.findings) ? result.findings.filter(isRecord) : [])
-      .map((entry) => ({
-        findingId: typeof entry.findingId === "string" && entry.findingId ? entry.findingId : crypto.randomUUID(),
-        severity: ["critical", "high", "medium", "low"].includes(String(entry.severity)) ? entry.severity : "medium",
-        domain: typeof entry.domain === "string" ? entry.domain : "delivery-readiness",
-        phaseId: typeof entry.phaseId === "string" ? entry.phaseId : null,
-        sourceArtifact: typeof entry.sourceArtifact === "string" ? entry.sourceArtifact : "",
-        targetArtifact: typeof entry.targetArtifact === "string" ? entry.targetArtifact : "",
-        sourceItem: typeof entry.sourceItem === "string" ? entry.sourceItem : "",
-        issue: typeof entry.issue === "string" ? entry.issue : "",
-        recommendation: typeof entry.recommendation === "string" ? entry.recommendation : "",
-        evidence: Array.isArray(entry.evidence)
-          ? entry.evidence.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
-          : [],
-        confidence: clampNumber(entry.confidence, 0, 1, 0.6),
-        source: "cross-artifact-validator",
-      }));
-
     // Phase-scoped runs validate ONE phase, so a full replace would wipe the
     // findings other phases earned on their own runs. Merge instead: retain every
     // prior finding NOT attributed to the validated phase, then add this run's
     // findings for it. Program-wide runs (phaseId === "program") fully refresh.
     const scoped = phaseId !== "program" && phaseId !== "";
+    const incoming = (Array.isArray(result.findings) ? result.findings.filter(isRecord) : [])
+      .map((entry) => {
+        const domain = typeof entry.domain === "string" ? entry.domain : "delivery-readiness";
+        // A scoped run's findings all belong to its phase; default a missing
+        // phaseId to the scoped one so the derived id and attribution are correct.
+        const entryPhaseId = typeof entry.phaseId === "string" && entry.phaseId
+          ? entry.phaseId
+          : (scoped ? phaseId : null);
+        const sourceItem = typeof entry.sourceItem === "string" ? entry.sourceItem : "";
+        const issue = typeof entry.issue === "string" ? entry.issue : "";
+        return {
+          findingId: deriveFindingId(entryPhaseId ?? "", domain, sourceItem, issue),
+          severity: ["critical", "high", "medium", "low"].includes(String(entry.severity)) ? entry.severity : "medium",
+          domain,
+          phaseId: entryPhaseId,
+          sourceArtifact: typeof entry.sourceArtifact === "string" ? entry.sourceArtifact : "",
+          targetArtifact: typeof entry.targetArtifact === "string" ? entry.targetArtifact : "",
+          sourceItem,
+          issue,
+          recommendation: typeof entry.recommendation === "string" ? entry.recommendation : "",
+          evidence: Array.isArray(entry.evidence)
+            ? entry.evidence.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+            : [],
+          confidence: clampNumber(entry.confidence, 0, 1, 0.6),
+          source: "cross-artifact-validator",
+        };
+      });
+
     let mergedFindings: Record<string, unknown>[] = incoming;
     if (scoped) {
       const priorBlock = inner.crossArtifactValidation;
@@ -6206,6 +6229,26 @@ Return ONLY valid JSON:
         ? `\n\nThis run is SCOPED to ONE phase: "${targetName}" (phaseId="${request.phaseId}"). The list below gives that phase last, preceded by the phases it must honour (context only). Emit findings ONLY where the phase whose work must change is "${targetName}": set every finding's "phaseId"="${request.phaseId}". If a gap belongs to a different phase, SKIP it — that phase is validated on its own run.\n${phaseChecklist}`
         : `\n\nWalk THESE phases in order. For each, verify it honours every phase listed before it, and attribute any gap to THIS phase's id:\n${phaseChecklist}`)
       : "";
+    // On a scoped rerun, show the model what it previously found for THIS phase so
+    // it keeps sourceItem/domain stable (the server derives the finding id from
+    // those — stable wording ⇒ stable id ⇒ clean cross-run dedupe) and does not
+    // re-report a gap the artifacts have since resolved.
+    let priorFindingsBlock = "";
+    if (isPhaseScoped) {
+      const cav = getInnerProgramData(programData).crossArtifactValidation;
+      const priorList = (cav && typeof cav === "object" && Array.isArray((cav as Record<string, unknown>).findings))
+        ? ((cav as Record<string, unknown>).findings as unknown[]).filter(isRecord).filter((f) => f.phaseId === request.phaseId)
+        : [];
+      if (priorList.length) {
+        const lines = priorList.slice(0, 8).map((f) => {
+          const domain = typeof f.domain === "string" ? f.domain : "";
+          const sourceItem = typeof f.sourceItem === "string" ? f.sourceItem : "";
+          const issue = typeof f.issue === "string" ? f.issue : "";
+          return `- [${domain}] ${sourceItem ? `${sourceItem}: ` : ""}${issue}`;
+        }).join("\n");
+        priorFindingsBlock = `\n\nPREVIOUSLY FOUND for this phase (last run). Re-raise ONLY the ones the CURRENT artifacts still leave unaddressed; for those, keep the SAME domain and sourceItem wording so the finding keeps its identity across runs. Do NOT re-report a gap the artifacts now resolve:\n${lines}`;
+      }
+    }
     return {
       system: `You are the ATOS Cross-Artifact Validator — Layer 2 semantic validation.
 
@@ -6219,6 +6262,10 @@ traceability the deterministic layer cannot judge:
 - Milestones / workstreams that do not advance the program objective or phase objectives.
 - Stakeholder change actions or interventions that do not address the stated impact.
 - Scope present in objectives but absent from workstreams.
+
+EXAMPLE of the boundary — DO NOT raise "Risk R3 has no mitigation" (that is a
+Layer-1 structural gap). DO raise "R3's mitigation names a 'failover cluster' the
+Solution Design never specifies" (a semantic link the structural layer cannot see).
 
 CLOSED WORLD. Reason ONLY over what the input context contains. Reference
 artifacts, KPIs, phases, milestones, workstreams, stakeholders and risks strictly
@@ -6251,7 +6298,7 @@ was built on). Emit a finding when a later phase:
 Attribute each such finding to the LATER phase that broke fidelity: set "phaseId"
 to that offending phase (NOT the upstream phase whose commitment was dropped), so
 the gap lands on the phase whose work must change to close it. Name the upstream
-commitment in "sourceItem" and the offending phase's artifact in "targetArtifact".${phaseWalk}
+commitment in "sourceItem" and the offending phase's artifact in "targetArtifact".${phaseWalk}${priorFindingsBlock}
 
 SEVERITY — calibrate, do not guess:
 - critical: blocks a gate, or makes a programme/phase objective unachievable as things stand.
@@ -6264,6 +6311,8 @@ context. Omit any finding you would score below 0.5; prefer silence to speculati
 
 VOLUME — return at most 8 findings, ranked by severity then confidence. Fewer,
 sharper findings beat an exhaustive list. Merge duplicates of the same root cause.
+When the cap forces a cut, prefer covering distinct phases and domains over stacking
+several findings on one phase — one sharp finding per phase beats eight on one.
 
 DOMAIN — pick the one that fits the symptom:
 - requirements-coverage: a requirement/NFR has no design or build that satisfies it.
@@ -6272,7 +6321,9 @@ DOMAIN — pick the one that fits the symptom:
 - benefits-traceability: a benefit/objective is not measured by a sound tracked KPI.
 - stakeholder-readiness: a change impact has no intervention addressing it.
 - scope-coverage: scope in an objective is absent from workstreams/milestones.
-- governance: gate/decision/risk oversight is missing or unsubstantiated.
+- risk-controls: a tracked risk's mitigation/control is absent, or names a control the downstream artifacts never implement.
+- governance: gate/decision oversight is missing or unsubstantiated (use risk-controls for risk-specific gaps).
+Do NOT use artifact-completeness — missing-artifact gaps are Layer 1's job.
 
 SHOW YOUR WORK. Every finding MUST populate "evidence" with what you checked it
 against — make the basis of the check visible, not just the verdict. QUOTE the
@@ -6284,16 +6335,23 @@ actual text, do not paraphrase:
   (e.g. "measured-by: KPI 'Win Rate' has target=null", "delivered-by: Build phase
   produced no artifact for objective", "threatened-by: risk 'Data migration'").
 Where a gap is a mismatch, quote BOTH sides verbatim — the upstream commitment and
-the downstream text that fails it. State at least one reference per finding; cite
-both intent and graph when both apply. This surfaces in the Ontology view, so it
-must read as a concrete "checked X against Y", never a bare restatement of the issue.
+the downstream text that fails it. Keep each quote to ≤15 words; elide the middle of
+longer text with "…". State at least one reference per finding; cite both intent and
+graph when both apply. This surfaces in the Ontology view, so it must read as a
+concrete "checked X against Y", never a bare restatement of the issue.
 
 CLEAN CASE. Whether or not you raise findings, populate "checkedChain" with 2–5
 short lines naming the links you TRACED AND FOUND INTACT (e.g. "Strategy→Design:
 all 4 KPIs carry baseline+target", "Build: 3 artifacts trace to the objective").
 A clean verdict must show what was verified, not be an empty result.
 
-Return ONLY valid JSON. The values below are ILLUSTRATIVE — do not copy them:
+SELF-AUDIT before returning. Re-read each finding and DROP it unless its "evidence"
+quotes text that actually appears in the input context. If you cannot point to the
+exact source text, the finding is speculation — remove it. A short, fully-evidenced
+list is the goal.
+
+Output RAW JSON ONLY — no markdown, no code fences, no prose before or after. The
+values below are ILLUSTRATIVE — do not copy them:
 {
   "findings": [
     {
