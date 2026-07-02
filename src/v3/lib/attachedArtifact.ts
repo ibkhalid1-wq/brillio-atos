@@ -8,7 +8,7 @@
  * the document-intelligence result and persists the returned inner data.
  */
 import type { DocumentIntelligence } from "@/new/lib/documentIntelligenceTypes";
-import { artifactReviewFieldKey } from "@/v3/lib/artifactReview";
+import { artifactReviewFieldKey, discountQualityForDeficiencies } from "@/v3/lib/artifactReview";
 import { FORMAL_ARTIFACT_FIELD_KEYS } from "@/v3/lib/formalArtifacts";
 
 export interface AttachedArtifactReview {
@@ -59,6 +59,14 @@ export interface AttachArtifactParams {
  * (agentDrafted:false, lastEditedBy:"human" → buildArtifactModel reads
  * origin:"uploaded"), clears the generated body mirror, and stores the AI quality
  * review at the per-phase bucket the reader prefers.
+ *
+ * Write-back gate: the persisted ledger `confidence` is the review score eroded by
+ * the reviewer's own actionable improvements (via the shared
+ * discountQualityForDeficiencies), so the *stored* value already reflects the
+ * document's admitted gaps — a direct reader of the ledger can never surface a
+ * high confidence beside them. The review's `score` is stored RAW, because the
+ * display reader (resolveArtifactQualityScore) prefers the review and erodes it
+ * itself; eroding both would double-count. The two stay equal by construction.
  */
 export function buildAttachedArtifactPatch(
   inner: Record<string, unknown>,
@@ -66,6 +74,11 @@ export function buildAttachedArtifactPatch(
 ): Record<string, unknown> {
   const now = params.now ?? new Date().toISOString();
   const next = { ...inner };
+  // Reconcile the persisted confidence against the artifact's own admissions.
+  const persistedConfidence = discountQualityForDeficiencies(
+    params.review.score,
+    params.review.improvements.length,
+  );
 
   const buckets = typeof next.phaseArtifacts === "object" && next.phaseArtifacts !== null && !Array.isArray(next.phaseArtifacts)
     ? { ...(next.phaseArtifacts as Record<string, Record<string, unknown>>) }
@@ -79,7 +92,7 @@ export function buildAttachedArtifactPatch(
   phaseBucket[params.defId] = {
     title: params.label,
     status: "ready",
-    confidence: params.review.score,
+    confidence: persistedConfidence,
     agentDrafted: false,
     lastEditedBy: "human",
     contentSummary: params.summary,

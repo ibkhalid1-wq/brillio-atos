@@ -63,7 +63,14 @@ describe("buildAttachedArtifactPatch", () => {
     expect(entry.agentDrafted).toBe(false);
     expect(entry.lastEditedBy).toBe("human");
     expect(entry.status).toBe("ready");
-    expect(entry.confidence).toBe(82);
+    // Write-back gate: the raw review score is 82, but the one actionable
+    // improvement is a self-reported deficiency, so the PERSISTED confidence is
+    // eroded (82 * 0.92 = 75) — a direct ledger reader can't see the un-reconciled 82.
+    expect(entry.confidence).toBe(75);
+    // The persisted confidence equals what the display reader resolves, by
+    // construction — the score stored in the review stays raw so the reader erodes
+    // it exactly once rather than double-counting.
+    expect(resolveArtifactQualityScore(next, "test-plan", "build")).toBe(entry.confidence);
     expect(entry.attachedFileName).toBe("plan.pdf");
   });
 
