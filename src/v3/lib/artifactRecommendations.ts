@@ -40,11 +40,11 @@ export interface ArtifactRecommendation {
   category: RecommendationCategory;
 }
 
-export interface RecommendationGroup {
+export interface RecommendationGroup<T extends ArtifactRecommendation = ArtifactRecommendation> {
   category: RecommendationCategory;
   /** One-line description of what this discipline covers. */
   description: string;
-  items: ArtifactRecommendation[];
+  items: T[];
 }
 
 const SEVERITY_RANK: Record<RecommendationSeverity, number> = { high: 0, medium: 1, low: 2 };
@@ -147,9 +147,9 @@ export function selfReportedGapRecommendations(
  * group's items by severity (high → low). Empty categories are dropped, so the
  * panel only renders disciplines that actually have something to say.
  */
-export function groupRecommendationsByCategory(
-  recommendations: ArtifactRecommendation[],
-): RecommendationGroup[] {
+export function groupRecommendationsByCategory<T extends ArtifactRecommendation>(
+  recommendations: T[],
+): RecommendationGroup<T>[] {
   return FINDING_CLASS_ORDER.map((category) => ({
     category,
     description: FINDING_CLASS_DESCRIPTION[category],

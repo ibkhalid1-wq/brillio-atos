@@ -135,10 +135,18 @@ interface ArtifactQualityIssue {
    * is Governance; folded-in semantic findings carry Ontology/Change/Governance.
    */
   category: RecommendationCategory;
+  /**
+   * The grounding input this recommendation is about, when it maps to a single
+   * field (e.g. an "Add …" gap). Lets the modal render a jump-to-field chip
+   * INLINE with the guidance, so the specific field to update sits right next to
+   * the advice — not just in the separate field index below.
+   */
+  fieldId?: string;
 }
 
 /** One grounding input the artifact is generated from, with what it must hold. */
 interface ArtifactInputRequirement {
+  id: string;
   label: string;
   requirement: string;
   filled: boolean;
@@ -201,7 +209,7 @@ function deriveArtifactQualityIssues(opts: {
   // Prescriptive, per-field: name the exact input each artifact is grounded on and
   // what it must contain. Empty grounding inputs are the highest-leverage fixes.
   for (const req of missing) {
-    issues.push({ severity: "high", category: "Completeness", title: `Add "${req.label}"`, detail: req.requirement });
+    issues.push({ severity: "high", category: "Completeness", title: `Add "${req.label}"`, detail: req.requirement, fieldId: req.id });
   }
   // Generic depth nudge — only when the model returned no specific suggestions to
   // show below it. When `improvements` exist, they carry the actionable advice and
@@ -1716,7 +1724,7 @@ export default function StageView({
                 const requirement = [fieldDef?.placeholder, fieldDef?.hint]
                   .filter((part): part is string => !!part && part.trim().length > 0)
                   .join(" — ") || `Provide ${fieldDef?.label ?? fieldId}.`;
-                return { label: fieldDef?.label ?? fieldId, requirement, filled: isFlowedFieldSatisfied(fieldId) };
+                return { id: fieldId, label: fieldDef?.label ?? fieldId, requirement, filled: isFlowedFieldSatisfied(fieldId) };
               });
               // The concrete grounding inputs, id + label + filled, so the Improve
               // modal can render them as jump-to-field chips — pointing the user at
@@ -1970,15 +1978,36 @@ export default function StageView({
                     <span className="v3-quality-issue-group-desc">{group.description}</span>
                   </div>
                   <ul className="v3-quality-issue-list">
-                    {group.items.map((issue, index) => (
+                    {group.items.map((issue, index) => {
+                      // The specific field this guidance is about, so we can render
+                      // a jump chip INLINE with the advice — the input to fix sits
+                      // right beside what to fix, not only in the index below.
+                      const issueField = issue.fieldId
+                        ? qualityArtifact.groundingFields.find((field) => field.id === issue.fieldId)
+                        : undefined;
+                      return (
                       <li key={index} className="v3-quality-issue">
                         <span className={`v3-chip v3-chip-tight ${issue.severity === "high" ? "red" : issue.severity === "medium" ? "amber" : "muted"}`}>{issue.severity}</span>
                         <div>
                           <div className="v3-quality-issue-title">{issue.title}</div>
                           {issue.detail ? <div className="v3-quality-issue-detail">{issue.detail}</div> : null}
+                          {!qualityArtifact.readOnly && issue.fieldId ? (
+                            <div className="v3-drilldown-row" style={{ marginTop: 8 }}>
+                              <button
+                                type="button"
+                                className={`v3-drilldown-chip${issueField && !issueField.filled ? " thin" : ""}`}
+                                onClick={() => scrollToInputField(issue.fieldId as string)}
+                                title={`Go to "${issueField?.label ?? issue.fieldId}" to update it`}
+                              >
+                                <span aria-hidden="true">→</span>
+                                {issueField?.label ?? issue.fieldId}
+                              </button>
+                            </div>
+                          ) : null}
                         </div>
                       </li>
-                    ))}
+                      );
+                    })}
                   </ul>
                 </div>
               ))}

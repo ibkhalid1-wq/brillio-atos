@@ -135,4 +135,17 @@ describe("groupRecommendationsByCategory", () => {
   it("returns [] for no recommendations", () => {
     expect(groupRecommendationsByCategory([])).toEqual([]);
   });
+
+  it("preserves caller-specific extra fields on grouped items", () => {
+    // The Improve modal passes recommendations carrying a `fieldId` so it can
+    // render a jump-to-field chip inline with each issue. Grouping must keep that
+    // extra property (and its type) intact, not narrow items back to the base shape.
+    const enriched = [
+      { title: 'Add "Cost assumption"', detail: "d", severity: "high" as const, category: "Completeness" as const, fieldId: "costAssumption" },
+      { title: "trace", detail: "d", severity: "high" as const, category: "Ontology" as const },
+    ];
+    const groups = groupRecommendationsByCategory(enriched);
+    const completeness = groups.find((g) => g.category === "Completeness");
+    expect(completeness?.items[0].fieldId).toBe("costAssumption");
+  });
 });
