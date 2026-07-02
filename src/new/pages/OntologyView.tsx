@@ -66,11 +66,13 @@ function PhaseFidelityCard({
   semanticValidated,
   onRunValidation,
   validationIsRunning = false,
+  validatingPhaseId = null,
 }: {
   phases: PhaseFidelity[];
   semanticValidated: boolean;
-  onRunValidation?: () => void;
+  onRunValidation?: (phaseId?: string) => void;
   validationIsRunning?: boolean;
+  validatingPhaseId?: string | null;
 }) {
   return (
     <AdamCard>
@@ -133,7 +135,29 @@ function PhaseFidelityCard({
                       {p.label}
                     </span>
                   </div>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexShrink: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                    {onRunValidation && p.assessed && (
+                      <button
+                        type="button"
+                        onClick={() => onRunValidation(p.phaseId)}
+                        disabled={validationIsRunning}
+                        title={`Run cross-artifact validation from "${p.label}"`}
+                        style={{
+                          fontSize: 11, fontWeight: 600,
+                          padding: "3px 9px", borderRadius: 6,
+                          border: "1px solid var(--v3-border)",
+                          background: "var(--v3-surface-1)",
+                          color: validatingPhaseId === p.phaseId ? "var(--v3-accent)" : "var(--v3-text-secondary)",
+                          cursor: validationIsRunning ? "default" : "pointer",
+                          // Dim the other rows while one phase validates; keep the
+                          // running row fully lit so its "Validating…" stands out.
+                          opacity: validationIsRunning && validatingPhaseId !== p.phaseId ? 0.5 : 1,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {validatingPhaseId === p.phaseId ? "Validating…" : "Validate"}
+                      </button>
+                    )}
                     <span style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>{statusLabel}</span>
                     <span style={{ fontSize: 18, fontWeight: 700, color: accent, minWidth: 28, textAlign: "right" }}>
                       {scored ? p.score : "–"}
@@ -170,7 +194,7 @@ function PhaseFidelityCard({
             {onRunValidation && (
               <button
                 type="button"
-                onClick={onRunValidation}
+                onClick={() => onRunValidation()}
                 disabled={validationIsRunning}
                 style={{
                   alignSelf: "flex-start",
@@ -183,7 +207,7 @@ function PhaseFidelityCard({
                   opacity: validationIsRunning ? 0.7 : 1,
                 }}
               >
-                {validationIsRunning ? "Validating…" : "Run validation"}
+                {validationIsRunning ? "Validating…" : "Validate all phases"}
               </button>
             )}
           </div>
@@ -202,13 +226,19 @@ export function OntologyView({
   program,
   onRunValidation,
   validationIsRunning = false,
+  validatingPhaseId = null,
 }: {
   program: ProgramSummary | null;
   // User-initiated trigger for the semantic cross-artifact validator. Optional so
   // the view still renders in contexts (tests, previews) with no agent wiring; the
-  // "Run validation" affordance only appears when a handler is threaded in.
-  onRunValidation?: () => void;
+  // validation affordances only appear when a handler is threaded in. The optional
+  // phaseId scopes the run to a phase (the per-row button); omit it to validate the
+  // whole programme (the footnote button).
+  onRunValidation?: (phaseId?: string) => void;
   validationIsRunning?: boolean;
+  // The phase whose validation is currently in flight, so its row button reads
+  // "Validating…" while the others merely disable. Null when none is running.
+  validatingPhaseId?: string | null;
 }) {
   const { assessment, phaseFidelity, semanticValidated } = useMemo(() => {
     if (!program) return { assessment: null, phaseFidelity: [] as PhaseFidelity[], semanticValidated: false };
@@ -272,6 +302,7 @@ export function OntologyView({
           semanticValidated={semanticValidated}
           onRunValidation={onRunValidation}
           validationIsRunning={validationIsRunning}
+          validatingPhaseId={validatingPhaseId}
         />
       )}
     </div>

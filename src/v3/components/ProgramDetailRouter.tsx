@@ -296,8 +296,9 @@ export default function ProgramDetailRouter({
       return (
         <OntologyView
           program={program}
-          onRunValidation={onRunAgent ? () => onRunAgent("cross-artifact-validator", "program") : undefined}
+          onRunValidation={onRunAgent ? (phaseId?: string) => onRunAgent("cross-artifact-validator", phaseId ?? "program") : undefined}
           validationIsRunning={activeRuns.some((r) => r.agent_id === "cross-artifact-validator" && r.status === "running")}
+          validatingPhaseId={activeRuns.find((r) => r.agent_id === "cross-artifact-validator" && r.status === "running")?.phase_id ?? null}
         />
       );
     case "closure":
