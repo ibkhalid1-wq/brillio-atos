@@ -1234,6 +1234,14 @@ baselined. Do NOT list as a gap:
   baselining are governance workflows tracked by gate reviews, NOT content this
   artifact is missing. Exit criteria specifically are system-derived — never list
   their absence or non-approval as a gap.
+When a gap IS legitimate, make it ACTIONABLE: phrase it so it names the specific
+CURRENT-phase input field the user should update to close it, using the exact
+input labels from the "## Phase ownership map" CURRENT-phase list (these are the
+captured inputs that ground this document). E.g. "Add a total budget figure and
+per-line estimates to the Cost assumption input", "Give the Success KPIs a
+baseline and target", "Name the Executive sponsor". A gap the user cannot resolve
+by updating a named current-phase input is either governance/approval state
+(excluded above) or belongs to another phase — do not list it.
 Prefer fewer, phase-appropriate gaps over an exhaustive wish-list of everything a
 fully mature programme would eventually hold. If nothing within this phase's intent
 is genuinely missing, return an empty "gaps" array.`;
