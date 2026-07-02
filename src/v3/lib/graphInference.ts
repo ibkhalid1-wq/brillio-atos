@@ -344,6 +344,85 @@ export function detectContradictions(graph: ProgramGraph, minOverlap = 0.6): Con
   return out;
 }
 
+/* ------------------------------------------------------------------ *
+ * Confidence propagation
+ * ------------------------------------------------------------------ */
+
+/** An artifact's confidence after inheriting the uncertainty of its grounding. */
+export interface PropagatedConfidence {
+  nodeId: string;
+  label: string;
+  /** The node's own confidence (agentConfidence), if it declares one. */
+  ownConfidence?: number;
+  /** The lowest confidence among the facts that ground this node, if any carry one. */
+  groundingConfidence?: number;
+  /** min(own, weakest grounding) — an artifact is no more trustworthy than the
+   *  weakest input it was built on. */
+  effectiveConfidence: number;
+  /** The grounding fact id dragging the effective confidence below the own value. */
+  weakestGroundingId?: string;
+  /** True when grounding lowered the confidence below the node's own value. */
+  dampened: boolean;
+}
+
+/**
+ * Propagate grounding uncertainty into the artifacts built on it. An artifact
+ * that looks polished but rests on a low-confidence fact should not read as
+ * high-confidence: its effective confidence is the minimum of its own value and
+ * the weakest fact that grounds it (the weakest-link rule). Nodes with neither an
+ * own confidence nor any confidence-bearing grounding are omitted — there is
+ * nothing to say about them.
+ *
+ * Pure: reads the graph's `grounds` edges (fact → artifact) and node confidences,
+ * returns plain data in node order.
+ */
+export function propagateConfidence(graph: ProgramGraph): PropagatedConfidence[] {
+  if (!graph || !graph.nodes.length) return [];
+  const byId = new Map(graph.nodes.map((n) => [n.id, n]));
+
+  // artifact id → grounding fact nodes (incoming `grounds` edges).
+  const grounding = new Map<string, ProgramGraphNode[]>();
+  for (const edge of graph.edges) {
+    if (edge.type !== "grounds") continue;
+    const fact = byId.get(edge.from);
+    if (!fact) continue;
+    const list = grounding.get(edge.to) ?? [];
+    list.push(fact);
+    grounding.set(edge.to, list);
+  }
+
+  const out: PropagatedConfidence[] = [];
+  for (const node of graph.nodes) {
+    if (node.type !== "artifact") continue;
+    const ownConfidence = typeof node.confidence === "number" ? node.confidence : undefined;
+
+    // Weakest confidence-bearing grounding fact.
+    let groundingConfidence: number | undefined;
+    let weakestGroundingId: string | undefined;
+    for (const fact of grounding.get(node.id) ?? []) {
+      if (typeof fact.confidence !== "number") continue;
+      if (groundingConfidence === undefined || fact.confidence < groundingConfidence) {
+        groundingConfidence = fact.confidence;
+        weakestGroundingId = fact.id;
+      }
+    }
+
+    if (ownConfidence === undefined && groundingConfidence === undefined) continue;
+
+    const effectiveConfidence = Math.min(ownConfidence ?? 1, groundingConfidence ?? 1);
+    out.push({
+      nodeId: node.id,
+      label: node.label,
+      ownConfidence,
+      groundingConfidence,
+      effectiveConfidence,
+      weakestGroundingId,
+      dampened: ownConfidence !== undefined && effectiveConfidence < ownConfidence,
+    });
+  }
+  return out;
+}
+
 /** Count coverage gaps by kind — a compact health summary for a dashboard. */
 export function summarizeCoverageGaps(gaps: CoverageGap[]): Record<CoverageGap["kind"], number> {
   const out: Record<CoverageGap["kind"], number> = {

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { ProgramSummary } from "@/new/types";
 import { buildProgramGraph } from "@/v3/lib/programGraph";
-import { detectCoverageGaps, summarizeCoverageGaps, impactedBy, dependenciesOf, detectContradictions } from "@/v3/lib/graphInference";
+import { detectCoverageGaps, summarizeCoverageGaps, impactedBy, dependenciesOf, detectContradictions, propagateConfidence } from "@/v3/lib/graphInference";
 
 function program(over: Record<string, unknown>): ProgramSummary {
   return {
@@ -219,5 +219,55 @@ describe("detectContradictions", () => {
 
   it("returns nothing for an empty graph", () => {
     expect(detectContradictions(buildProgramGraph(null))).toEqual([]);
+  });
+});
+
+describe("propagateConfidence", () => {
+  // A low-confidence imported fact (0.4) grounds a high-confidence artifact (0.9).
+  function graphWithGroundingConfidence(factConfidence: number) {
+    const provenance = JSON.stringify({
+      visionStatement: { source: "Deck p.2", documentName: "vision.pdf", confidence: factConfidence, extractionType: "extracted", value: "Reduce onboarding time" },
+    });
+    return buildProgramGraph(program({
+      phases,
+      artifacts: [
+        { id: "charter", phaseId: "strategy", title: "Charter", status: "approved", agentGenerated: true, agentConfidence: 0.9, lastEditedBy: "agent", lastEditedAt: "", contentSummary: "", versionNumber: 1 },
+      ],
+      rawData: {
+        phaseInputs: { strategy: { visionStatement: "Reduce onboarding time", _provenance: provenance } },
+        dynamicSchema: { inputFields: { strategy: [{ id: "visionStatement", label: "Vision", type: "textarea", required: false, usedByArtifacts: ["charter"] }] } },
+      },
+    }));
+  }
+
+  it("dampens an artifact to its weakest grounding fact", () => {
+    const result = propagateConfidence(graphWithGroundingConfidence(0.4));
+    const charter = result.find((r) => r.nodeId === "artifact:charter");
+    expect(charter).toBeDefined();
+    expect(charter!.ownConfidence).toBe(0.9);
+    expect(charter!.groundingConfidence).toBe(0.4);
+    expect(charter!.effectiveConfidence).toBe(0.4);
+    expect(charter!.dampened).toBe(true);
+    expect(charter!.weakestGroundingId).toBeTruthy();
+  });
+
+  it("does not dampen when grounding is stronger than the artifact's own confidence", () => {
+    const charter = propagateConfidence(graphWithGroundingConfidence(0.95)).find((r) => r.nodeId === "artifact:charter");
+    expect(charter!.effectiveConfidence).toBe(0.9);
+    expect(charter!.dampened).toBe(false);
+  });
+
+  it("omits artifacts with neither own confidence nor confidence-bearing grounding", () => {
+    const graph = buildProgramGraph(program({
+      phases,
+      artifacts: [
+        { id: "plan", phaseId: "build", title: "Plan", status: "draft", agentGenerated: true, lastEditedBy: "agent", lastEditedAt: "", contentSummary: "", versionNumber: 1 },
+      ],
+    }));
+    expect(propagateConfidence(graph).find((r) => r.nodeId === "artifact:plan")).toBeUndefined();
+  });
+
+  it("returns nothing for an empty graph", () => {
+    expect(propagateConfidence(buildProgramGraph(null))).toEqual([]);
   });
 });
