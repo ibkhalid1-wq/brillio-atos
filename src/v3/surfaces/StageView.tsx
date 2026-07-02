@@ -21,7 +21,7 @@ import { buildPhaseArtifacts, type ArtifactOrigin } from "@/v3/lib/artifactModel
 import { resolveArtifactReview, resolveArtifactQualityScore } from "@/v3/lib/artifactReview";
 import { getPhaseArtifactDefs, type PhaseArtifactDef } from "@/v3/lib/phaseArtifacts";
 import { getFillableArtifactInputFields, artifactReferenceSatisfied } from "@/v3/lib/phaseFlowEdges";
-import { getPhaseInputSchema, resolveRosterField, resolveStakeholderField, ROSTER_PHASE_ID, type GridColumn } from "@/v3/lib/phaseInputSchema";
+import { getPhaseInputSchema, isFieldRequiredForProgram, resolveRosterField, resolveStakeholderField, ROSTER_PHASE_ID, type GridColumn } from "@/v3/lib/phaseInputSchema";
 import { parseRows, serializeRows, filledRowCount, type GridRow } from "@/v3/components/StructuredGrid";
 import { readRaciMatrix, raciDeliveryRoles, rosterColumnKeys, missingRosterRoles, stakeholderColumnKeys } from "@/v3/lib/rosterRaci";
 import { isFreeTextAssistField } from "@/v3/lib/fieldAssist";
@@ -1627,8 +1627,11 @@ export default function StageView({
               // (e.g. the appetite-level validation approach) still wires the visual
               // flow + staleness, but a blank one must not lock the Generate button —
               // optional means "enriches if present", not "blocks until filled".
+              // Required-ness is resolved per programme so a field the methodology
+              // later marked required (with a `requiredSince` cutoff) never blocks a
+              // programme that predates it.
               const optionalFieldIds = new Set(
-                phaseFieldDefs.filter((field) => field.required === false).map((field) => field.id),
+                phaseFieldDefs.filter((field) => !isFieldRequiredForProgram(field, program?.createdAt)).map((field) => field.id),
               );
               // A flowed input counts as satisfied if it has a value, OR — for an
               // `artifact-reference` input — if the upstream deliverable it names

@@ -224,6 +224,12 @@ function buildProgramSeed(name: string) {
     phases: DEFAULT_PHASE_SEQUENCE.map((id) => ({ id, pct: 0 })),
     phasePct: Object.fromEntries(DEFAULT_PHASE_SEQUENCE.map((id) => [id, 0])),
     _syncedAt: now,
+    // Immutable creation stamp. Powers the required-ness ratchet: a field the
+    // methodology later marks required (with a `requiredSince` cutoff) only gates
+    // programmes created on/after that cutoff, so adding a new required input never
+    // retroactively blocks an in-flight programme. Programmes seeded before this
+    // stamp existed simply lack it and are treated as pre-ratchet (never blocked).
+    _createdAt: now,
   };
 }
 

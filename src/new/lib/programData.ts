@@ -1312,6 +1312,10 @@ export function normalizeProgram(row: ProgramRowLike): ProgramSummary {
     twinGraph,
     rawData: wrapper as Record<string, unknown>,
     updatedAt: row.updated_at ?? "",
+    // Read from the blob, not the row: it survives every load path (cloud, local,
+    // migration) without threading a new column through the data layer. Absent for
+    // pre-ratchet programmes ⇒ "" ⇒ never retroactively required.
+    createdAt: asString(innerData._createdAt, ""),
   };
   return program;
 }

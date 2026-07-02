@@ -96,6 +96,25 @@ export function getPhaseInputSchema(phaseId: string, store?: DynamicSchemaStore)
   return fields === base.fields ? base : { ...base, fields };
 }
 
+/**
+ * Whether a field hard-gates generation for a specific programme, honouring the
+ * required-ness ratchet. An optional field is never required. A required field
+ * with no `requiredSince` cutoff is always required (the common case). A required
+ * field with a cutoff only applies to programmes created on/after that cutoff, so
+ * introducing a new mandatory input never retroactively blocks an in-flight
+ * programme: one created earlier — or with no recorded creation date (pre-ratchet
+ * programmes have an empty `createdAt`) — treats the field as optional.
+ *
+ * ISO-8601 timestamps compare correctly with `>=` (lexicographic order matches
+ * chronological order), so a full `createdAt` timestamp is validly compared to a
+ * date-only `requiredSince`.
+ */
+export function isFieldRequiredForProgram(field: PhaseInputField, programCreatedAtIso?: string): boolean {
+  if (!field.required) return false;
+  if (!field.requiredSince) return true;
+  return typeof programCreatedAtIso === "string" && programCreatedAtIso !== "" && programCreatedAtIso >= field.requiredSince;
+}
+
 // ─── Canonical core-team roster resolution ────────────────────────────────────
 // The team roster's canonical address is the field id "coreTeamRoster". Mobilise
 // now seeds it as a static grid so it is always present (the single source every

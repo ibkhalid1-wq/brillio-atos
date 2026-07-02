@@ -80,6 +80,15 @@ export interface PhaseInputField {
   validationRule?: string;
   /** Example answer to anchor the user. */
   example?: string;
+  /**
+   * Required-ness ratchet (ISO date). When set on a `required` field, the field
+   * only hard-gates programmes created on/after this cutoff — programmes started
+   * earlier (or with no recorded creation date) treat it as optional. This lets a
+   * new mandatory input be introduced without retroactively blocking in-flight
+   * programmes that never had a chance to capture it. Resolved by
+   * `isFieldRequiredForProgram`. No effect on an optional field.
+   */
+  requiredSince?: string;
 }
 
 // Industry options surfaced on the Strategy phase. Lives in the methodology so
@@ -519,6 +528,11 @@ export const ATOS_STANDARD: MethodologyDefinition = {
           label: "Non-functional requirements",
           type: "grid",
           required: true,
+          // Introduced after the NFR grid landed; ratcheted so it only gates
+          // programmes created on/after this date. Existing programmes (which never
+          // had an NFR input) keep generating their solution architecture without a
+          // retroactive block — the grid still flows in and stales when present.
+          requiredSince: "2026-07-01",
           hint: "The quality attributes the solution must meet — one per row, with its type and a measurable target. e.g. Availability · 99.9% uptime.",
           columns: [
             { key: "requirement", label: "Requirement", type: "text", placeholder: "e.g. p95 API latency under load" },

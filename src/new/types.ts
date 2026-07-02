@@ -738,6 +738,13 @@ export interface ProgramSummary {
   };
   rawData: Record<string, unknown>;
   updatedAt: string;
+  /**
+   * Programme creation stamp (ISO), read from the data blob's `_createdAt`. Empty
+   * for programmes seeded before the stamp existed. Drives the required-ness
+   * ratchet (see `isFieldRequiredForProgram`): a field the methodology later marks
+   * required only gates programmes created on/after its `requiredSince` cutoff.
+   */
+  createdAt: string;
 }
 
 export interface AgentCardModel {
