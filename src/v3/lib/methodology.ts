@@ -163,11 +163,11 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       recommendedAgents: ["charter", "business-case", "outcome-framework", "narrative"],
       typicalDurationWeeks: { min: 2, max: 6 },
       inputFields: [
-        { id: "businessObjective", label: "Business objective", type: "textarea", placeholder: "What outcome is this programme trying to achieve?", required: true },
-        { id: "sponsor", label: "Executive sponsor", type: "text", placeholder: "Name and title", required: true },
+        { id: "businessObjective", label: "Business objective", type: "textarea", placeholder: "What outcome is this programme trying to achieve?", required: true, example: "Reduce cost-to-serve by 20% within 18 months by consolidating three regional service desks onto one platform.", validationRule: "A measurable outcome, not an activity — name the change, the magnitude, and the horizon." },
+        { id: "sponsor", label: "Executive sponsor", type: "text", placeholder: "Name and title", required: true, example: "Jane Okafor, Chief Operating Officer", validationRule: "A named individual with their role, not a team or department." },
         { id: "industry", label: "Industry", type: "select", options: INDUSTRY_OPTIONS, required: true },
-        { id: "startDate", label: "Programme start date", type: "date", required: true },
-        { id: "targetEndDate", label: "Target end date", type: "date", required: true },
+        { id: "startDate", label: "Programme start date", type: "date", required: true, validationRule: "The programme kickoff date." },
+        { id: "targetEndDate", label: "Target end date", type: "date", required: true, validationRule: "Must fall after the programme start date." },
         {
           // Cost is captured as a line-item grid rather than free text so the
           // business case is grounded on a structured cost breakdown — each row is
@@ -186,8 +186,8 @@ export const ATOS_STANDARD: MethodologyDefinition = {
             { key: "basis", label: "Basis / assumption", type: "text", placeholder: "What the estimate is based on" },
           ],
         },
-        { id: "constraints", label: "Key constraints", type: "textarea", placeholder: "Budget, timeline, regulatory, or technical constraints", required: true, hint: "e.g. Must go live before Q4 financial year end" },
-        { id: "successMetric", label: "Primary success metric", type: "text", placeholder: "KPI name, e.g. Cost to serve", required: true },
+        { id: "constraints", label: "Key constraints", type: "textarea", placeholder: "Budget, timeline, regulatory, or technical constraints", required: true, hint: "e.g. Must go live before Q4 financial year end", example: "Must go live before Q4 FY-end; no additional headcount; core-banking change freeze in December.", validationRule: "The hard boundaries the solution must respect — budget, timeline, regulatory, or technical." },
+        { id: "successMetric", label: "Primary success metric", type: "text", placeholder: "KPI name, e.g. Cost to serve", required: true, example: "Cost to serve per transaction", validationRule: "A single measurable KPI name — its baseline and target are captured in the Success KPIs grid." },
         {
           // KPIs captured as a structured grid — each with a baseline and target —
           // so the objective's `measured-by` chain has verifiable measures, not a

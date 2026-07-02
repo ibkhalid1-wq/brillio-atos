@@ -881,6 +881,16 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
                     {field.hint ? (
                       <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 2 }}>{field.hint}</div>
                     ) : null}
+                    {field.example ? (
+                      <div style={{ fontSize: 10.5, color: "var(--v3-text-muted)", marginTop: 2 }}>
+                        e.g. <span style={{ fontStyle: "italic" }}>{field.example}</span>
+                      </div>
+                    ) : null}
+                    {field.validationRule ? (
+                      <div style={{ fontSize: 10, color: "var(--v3-text-muted)", marginTop: 2 }}>
+                        Expected: {field.validationRule}
+                      </div>
+                    ) : null}
                     {field.reasonNeeded ? (
                       <div style={{ fontSize: 10.5, color: "var(--v3-text-muted)", marginTop: 2, fontStyle: "italic" }}>
                         Why: {field.reasonNeeded}
