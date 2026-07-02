@@ -94,7 +94,7 @@ export default function DocumentRefinePanel({
           <div style={{ fontSize: 13, fontWeight: 600, color: "var(--v3-text-primary)" }}>Refine with AI</div>
           <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 2 }}>Type an instruction to edit this section</div>
         </div>
-        <button type="button" onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--v3-text-muted)", lineHeight: 1, padding: 2 }}>×</button>
+        <button type="button" onClick={onClose} aria-label="Close refine panel" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--v3-text-muted)", lineHeight: 1, padding: 2 }}>×</button>
       </div>
 
       <div style={{ flex: 1, overflow: "auto", padding: 16 }}>

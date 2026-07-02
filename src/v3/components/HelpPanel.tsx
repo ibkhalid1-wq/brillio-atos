@@ -254,6 +254,7 @@ export default function HelpPanel({ onClose, initialQuery = "" }: HelpPanelProps
           {query && (
             <button
               onClick={() => setQuery("")}
+              aria-label="Clear search"
               style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--v3-text-muted)", fontSize: 16, lineHeight: 1 }}
             >×</button>
           )}

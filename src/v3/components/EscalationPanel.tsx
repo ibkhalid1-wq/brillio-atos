@@ -16,7 +16,7 @@ export default function EscalationPanel({ escalations, onAcknowledge, onResolve,
       <div className="v3-sheet">
         <div className="v3-sheet-header">
           <div className="v3-sheet-title">Escalations</div>
-          <button className="v3-sheet-close" onClick={onClose}>×</button>
+          <button className="v3-sheet-close" onClick={onClose} aria-label="Close escalations">×</button>
         </div>
         <div className="v3-sheet-body">
           {escalations.length === 0 ? (

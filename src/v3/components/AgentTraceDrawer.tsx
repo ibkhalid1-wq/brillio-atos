@@ -110,7 +110,7 @@ export default function AgentTraceDrawer({ runId, onClose }: AgentTraceDrawerPro
               {run ? `${run.agent_id} · ${run.phase_id}` : runId.slice(0, 8)}
             </div>
           </div>
-          <button className="v3-sheet-close" onClick={onClose}>×</button>
+          <button className="v3-sheet-close" onClick={onClose} aria-label="Close agent trace">×</button>
         </div>
 
         <div className="v3-sheet-body">
