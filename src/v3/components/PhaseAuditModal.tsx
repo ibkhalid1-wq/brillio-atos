@@ -87,6 +87,18 @@ function extractFindings(output: unknown): Array<Record<string, unknown>> {
   return raw.filter((entry): entry is Record<string, unknown> => !!entry && typeof entry === "object");
 }
 
+/** The links the validator traced and found intact — its "what I verified" summary. */
+function extractCheckedChain(output: unknown): string[] {
+  if (!output || typeof output !== "object") return [];
+  const container = output as Record<string, unknown>;
+  const raw = Array.isArray(container.checkedChain)
+    ? container.checkedChain
+    : Array.isArray((container.result as Record<string, unknown> | undefined)?.checkedChain)
+      ? ((container.result as Record<string, unknown>).checkedChain as unknown[])
+      : [];
+  return raw.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+}
+
 function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 18 }}>
@@ -161,6 +173,7 @@ export default function PhaseAuditModal({ programId, phaseId, phaseLabel, onClos
   }, [programId, phaseId]);
 
   const findings = useMemo(() => (run ? extractFindings(run.output) : []), [run]);
+  const checkedChain = useMemo(() => (run ? extractCheckedChain(run.output) : []), [run]);
   const fullPrompt = useMemo(() => (run ? extractFullPrompt(run.input_context) : null), [run]);
   const durationSec = run?.started_at && run?.completed_at
     ? ((new Date(run.completed_at).getTime() - new Date(run.started_at).getTime()) / 1000).toFixed(1)
@@ -270,10 +283,30 @@ export default function PhaseAuditModal({ programId, phaseId, phaseLabel, onClos
                       </div>
                     ))}
                   </div>
+                ) : checkedChain.length > 0 ? (
+                  <div style={{ fontSize: 13, color: "var(--v3-text-secondary)" }}>
+                    No gaps — see “Verified intact” below for what was traced.
+                  </div>
                 ) : (
                   <CodeBlock text={formatValue(run.output) || "No response recorded."} />
                 )}
               </Section>
+
+              {checkedChain.length > 0 ? (
+                <Section
+                  title="Verified intact"
+                  subtitle="The links the validator traced and found sound — what a clean (or partial) verdict is actually backed by."
+                >
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {checkedChain.map((line, index) => (
+                      <div key={index} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                        <span style={{ marginTop: 5, flexShrink: 0, width: 6, height: 6, borderRadius: "50%", background: "var(--v3-green, #22c55e)" }} />
+                        <div style={{ fontSize: 12, color: "var(--v3-text-secondary)", lineHeight: 1.5 }}>{line}</div>
+                      </div>
+                    ))}
+                  </div>
+                </Section>
+              ) : null}
 
               {run.reasoning_trace ? (
                 <Section title="Reasoning trace" subtitle="How the validator arrived at its verdict.">

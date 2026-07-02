@@ -5077,7 +5077,7 @@ function applyContradictionResultToProgramData(programData: ProgramState, phaseI
 
 function applyCrossArtifactValidationResultToProgramData(programData: ProgramState, phaseId: string, result: Record<string, unknown>): ProgramState {
   return updateInnerProgramData(programData, (inner) => {
-    const findings = (Array.isArray(result.findings) ? result.findings.filter(isRecord) : [])
+    const incoming = (Array.isArray(result.findings) ? result.findings.filter(isRecord) : [])
       .map((entry) => ({
         findingId: typeof entry.findingId === "string" && entry.findingId ? entry.findingId : crypto.randomUUID(),
         severity: ["critical", "high", "medium", "low"].includes(String(entry.severity)) ? entry.severity : "medium",
@@ -5094,13 +5094,36 @@ function applyCrossArtifactValidationResultToProgramData(programData: ProgramSta
         confidence: clampNumber(entry.confidence, 0, 1, 0.6),
         source: "cross-artifact-validator",
       }));
+
+    // Phase-scoped runs validate ONE phase, so a full replace would wipe the
+    // findings other phases earned on their own runs. Merge instead: retain every
+    // prior finding NOT attributed to the validated phase, then add this run's
+    // findings for it. Program-wide runs (phaseId === "program") fully refresh.
+    const scoped = phaseId !== "program" && phaseId !== "";
+    let mergedFindings: Record<string, unknown>[] = incoming;
+    if (scoped) {
+      const priorBlock = inner.crossArtifactValidation;
+      const prior = (priorBlock && typeof priorBlock === "object" && Array.isArray((priorBlock as Record<string, unknown>).findings))
+        ? ((priorBlock as Record<string, unknown>).findings as unknown[]).filter(isRecord)
+        : [];
+      const retained = prior.filter((f) => f.phaseId !== phaseId);
+      mergedFindings = [...retained, ...incoming];
+    }
+
+    // What the validator verified intact this run — the links it traced and found
+    // sound. Surfaces in the audit so a "clean" verdict is evidenced, not a black box.
+    const checkedChain = Array.isArray(result.checkedChain)
+      ? result.checkedChain.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      : [];
+
     return {
       ...inner,
       crossArtifactValidation: {
-        findings: findings as JsonValue,
+        findings: mergedFindings as JsonValue,
+        checkedChain: checkedChain as JsonValue,
         validatedPhaseId: phaseId,
         validatedAt: new Date().toISOString(),
-        clean: findings.length === 0,
+        clean: mergedFindings.length === 0,
       } as JsonValue,
     };
   });
@@ -6145,13 +6168,27 @@ Return ONLY valid JSON:
     const startedPhases = getProgramPhaseContext(programData).filter(
       (p) => (typeof p.status === "string" ? p.status : "") !== "inactive",
     );
-    const phaseChecklist = startedPhases
+    // Per-phase "Validate" scopes the run to one phase; whole-programme runs send
+    // phaseId "program". When scoped, walk only the target phase and the
+    // predecessors it must honour (backward fidelity needs them visible) — and
+    // tell the model to emit findings only where THIS phase's work must change.
+    const isPhaseScoped = !!request.phaseId && request.phaseId !== "program";
+    const targetIndex = startedPhases.findIndex((p) => String(p.id) === request.phaseId);
+    const targetName = targetIndex >= 0
+      ? (typeof startedPhases[targetIndex].name === "string" && startedPhases[targetIndex].name
+        ? String(startedPhases[targetIndex].name)
+        : String(startedPhases[targetIndex].id))
+      : request.phaseId;
+    const walkPhases = isPhaseScoped && targetIndex >= 0
+      ? startedPhases.slice(0, targetIndex + 1)
+      : startedPhases;
+    const phaseChecklist = walkPhases
       .map((p, i) => {
         const name = typeof p.name === "string" && p.name ? p.name : String(p.id);
         const objective = typeof p.objective === "string" && p.objective.trim()
           ? p.objective.trim()
           : "(no objective recorded)";
-        const predecessors = startedPhases
+        const predecessors = walkPhases
           .slice(0, i)
           .map((q) => (typeof q.name === "string" && q.name ? q.name : String(q.id)));
         const exit = Array.isArray(p.exitCriteria)
@@ -6165,7 +6202,9 @@ Return ONLY valid JSON:
       })
       .join("\n");
     const phaseWalk = phaseChecklist
-      ? `\n\nWalk THESE phases in order. For each, verify it honours every phase listed before it, and attribute any gap to THIS phase's id:\n${phaseChecklist}`
+      ? (isPhaseScoped && targetIndex >= 0
+        ? `\n\nThis run is SCOPED to ONE phase: "${targetName}" (phaseId="${request.phaseId}"). The list below gives that phase last, preceded by the phases it must honour (context only). Emit findings ONLY where the phase whose work must change is "${targetName}": set every finding's "phaseId"="${request.phaseId}". If a gap belongs to a different phase, SKIP it — that phase is validated on its own run.\n${phaseChecklist}`
+        : `\n\nWalk THESE phases in order. For each, verify it honours every phase listed before it, and attribute any gap to THIS phase's id:\n${phaseChecklist}`)
       : "";
     return {
       system: `You are the ATOS Cross-Artifact Validator — Layer 2 semantic validation.
@@ -6180,6 +6219,11 @@ traceability the deterministic layer cannot judge:
 - Milestones / workstreams that do not advance the program objective or phase objectives.
 - Stakeholder change actions or interventions that do not address the stated impact.
 - Scope present in objectives but absent from workstreams.
+
+CLOSED WORLD. Reason ONLY over what the input context contains. Reference
+artifacts, KPIs, phases, milestones, workstreams, stakeholders and risks strictly
+by the id/name they are given here; never assume, infer, or invent one that is not
+listed. If the evidence for a gap is not present in the context, do not raise it.
 
 OBJECTIVE KNOWLEDGE GRAPH — the input context carries an "objectiveGraph": the
 programme objective and its ontology delivery chain — the KPIs that MEASURE it
@@ -6209,38 +6253,64 @@ to that offending phase (NOT the upstream phase whose commitment was dropped), s
 the gap lands on the phase whose work must change to close it. Name the upstream
 commitment in "sourceItem" and the offending phase's artifact in "targetArtifact".${phaseWalk}
 
-Be conservative: only emit a finding when the gap is real and supported by the
-context. Prefer fewer, high-confidence findings over speculation.
+SEVERITY — calibrate, do not guess:
+- critical: blocks a gate, or makes a programme/phase objective unachievable as things stand.
+- high: a material scope item or tracked benefit is at real risk; no viable workaround.
+- medium: a genuine traceability gap that has a workaround or slack to absorb it.
+- low: documentation/consistency gap with no delivery or benefit impact.
+
+CONFIDENCE — a 0.0–1.0 estimate that the gap is BOTH real AND material given the
+context. Omit any finding you would score below 0.5; prefer silence to speculation.
+
+VOLUME — return at most 8 findings, ranked by severity then confidence. Fewer,
+sharper findings beat an exhaustive list. Merge duplicates of the same root cause.
+
+DOMAIN — pick the one that fits the symptom:
+- requirements-coverage: a requirement/NFR has no design or build that satisfies it.
+- architecture-consistency: design/architecture contradicts itself or a stated constraint.
+- delivery-readiness: a started phase lacks the artifact/mitigation needed to proceed.
+- benefits-traceability: a benefit/objective is not measured by a sound tracked KPI.
+- stakeholder-readiness: a change impact has no intervention addressing it.
+- scope-coverage: scope in an objective is absent from workstreams/milestones.
+- governance: gate/decision/risk oversight is missing or unsubstantiated.
 
 SHOW YOUR WORK. Every finding MUST populate "evidence" with what you checked it
-against — make the basis of the check visible, not just the verdict:
+against — make the basis of the check visible, not just the verdict. QUOTE the
+actual text, do not paraphrase:
 - the phase intent element: the phase objective, or a SPECIFIC exit criterion, you
   measured against (e.g. "checked against Design exit criterion: 'Solution
   architecture approved'");
 - the knowledge-graph link you traced: the relation and node from objectiveGraph
   (e.g. "measured-by: KPI 'Win Rate' has target=null", "delivered-by: Build phase
   produced no artifact for objective", "threatened-by: risk 'Data migration'").
-State at least one such reference per finding; cite both intent and graph when both
-apply. This is what surfaces in the Ontology view, so it must read as a concrete
-"checked X against Y", never a bare restatement of the issue.
+Where a gap is a mismatch, quote BOTH sides verbatim — the upstream commitment and
+the downstream text that fails it. State at least one reference per finding; cite
+both intent and graph when both apply. This surfaces in the Ontology view, so it
+must read as a concrete "checked X against Y", never a bare restatement of the issue.
 
-Return ONLY valid JSON:
+CLEAN CASE. Whether or not you raise findings, populate "checkedChain" with 2–5
+short lines naming the links you TRACED AND FOUND INTACT (e.g. "Strategy→Design:
+all 4 KPIs carry baseline+target", "Build: 3 artifacts trace to the objective").
+A clean verdict must show what was verified, not be an empty result.
+
+Return ONLY valid JSON. The values below are ILLUSTRATIVE — do not copy them:
 {
   "findings": [
     {
-      "findingId": "stable-slug-unique-per-issue",
-      "severity": "critical|high|medium|low",
-      "domain": "requirements-coverage|architecture-consistency|delivery-readiness|benefits-traceability|stakeholder-readiness|scope-coverage|governance",
+      "findingId": "deterministic slug: <phaseId>:<domain>:<short-source-slug> (reuse the SAME slug for the same underlying issue across runs)",
+      "severity": "high",
+      "domain": "benefits-traceability",
       "phaseId": "phase id this is attributable to, or omit for program-wide",
       "sourceArtifact": "artifact that should support something",
       "targetArtifact": "artifact it fails to support",
       "sourceItem": "specific item id/name at issue",
       "issue": "one sentence: what is not traceable/supported",
       "recommendation": "one sentence: how to close the gap",
-      "evidence": ["what you checked this against — the phase intent element (objective / a specific exit criterion) and/or the objectiveGraph link (measured-by / delivered-by / threatened-by) you traced"],
-      "confidence": 0.0
+      "evidence": ["checked against <phase intent element> / <objectiveGraph link>, quoting the text on each side"],
+      "confidence": 0.82
     }
   ],
+  "checkedChain": ["short line naming a link traced and found intact"],
   "clean": true
 }`,
       user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
