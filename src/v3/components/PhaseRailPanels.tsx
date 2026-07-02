@@ -257,16 +257,23 @@ export function PhaseRailPanels({
         if (recommendations.length === 0) return null;
         // id + label only, for the prose chip-matching path (recs with no fieldId).
         const fields = groundingFields.map(({ id, label }) => ({ id, label }));
+        // The full grounding-input set (bar artifact-reference selectors), carried
+        // so the render can show a fallback index when no line names a field — an
+        // artifact's inputs must never be fully hidden behind unmatched prose.
+        const inputs = groundingFields
+          .filter((field) => field.type !== "artifact-reference")
+          .map(({ id, label, filled }) => ({ id, label, filled }));
         return {
           id: def.id,
           label: def.label,
           score: review?.score ?? null,
           fields,
+          inputs,
           groups: groupRecommendationsByCategory(recommendations),
         };
       })
       .filter(
-        (item): item is { id: string; label: string; score: number | null; fields: Array<{ id: string; label: string }>; groups: RecommendationGroup<ArtifactRecommendation & { fieldId?: string }>[] } =>
+        (item): item is { id: string; label: string; score: number | null; fields: Array<{ id: string; label: string }>; inputs: Array<{ id: string; label: string; filled: boolean }>; groups: RecommendationGroup<ArtifactRecommendation & { fieldId?: string }>[] } =>
           item !== null,
       );
   }, [program, phaseId]);
@@ -456,7 +463,21 @@ export function PhaseRailPanels({
               <div className="v3-rail-meta">
                 Improvement Recommendations
               </div>
-              {guidanceItems.map((item) => (
+              {guidanceItems.map((item) => {
+                // Whether any recommendation across all groups resolves to at least
+                // one grounding-input chip. If nothing does, the prose named no
+                // field the matcher could find — so we fall back to an index of the
+                // artifact's inputs, keeping them one click away rather than hidden.
+                const anyChip = onNavigateToPhaseInputs && item.groups.some((group) =>
+                  group.items.some((rec) =>
+                    (rec.fieldId
+                      ? item.fields.filter((field) => field.id === rec.fieldId)
+                      : matchGroundingFields(`${rec.title} ${rec.detail ?? ""}`, item.fields)
+                    ).length > 0,
+                  ),
+                );
+                const showInputIndex = onNavigateToPhaseInputs && !anyChip && item.inputs.length > 0;
+                return (
                 <div key={item.id} className="v3-rail-item">
                   <div className="v3-rail-item-head">
                     <span className="v3-rail-item-title">{item.label}</span>
@@ -503,8 +524,29 @@ export function PhaseRailPanels({
                       </ul>
                     </div>
                   ))}
+                  {showInputIndex ? (
+                    <div className="v3-rail-guidance-group">
+                      <div className="v3-rail-guidance-category" title="Grounding inputs this artifact is generated from — open any to strengthen it.">Grounding inputs</div>
+                      <div className="v3-drilldown-row">
+                        {item.inputs.map((field) => (
+                          <button
+                            key={field.id}
+                            type="button"
+                            className={`v3-drilldown-chip${field.filled ? "" : " thin"}`}
+                            data-kind="input"
+                            onClick={() => drillTo(phaseId, `input:${field.id}`)}
+                            title={`Go to "${field.label}" to update it`}
+                          >
+                            <span aria-hidden="true">▸ </span>
+                            {field.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="v3-rail-empty">No artifact reviews yet. Generate and review this phase's artifacts to see improvement guidance.</div>

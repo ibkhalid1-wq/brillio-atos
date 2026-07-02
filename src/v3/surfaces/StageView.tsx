@@ -2019,6 +2019,41 @@ export default function StageView({
                   </ul>
                 </div>
               ))}
+              {(() => {
+                // Fallback grounding-inputs index: if not one issue resolved to a
+                // jump chip, the prose named no field the matcher could find — so
+                // surface the artifact's inputs directly rather than leaving the
+                // user to hunt the field index. Mirrors the Guidance rail.
+                const anyChip = qualityArtifact.issues.some((issue) =>
+                  (issue.fieldId
+                    ? qualityArtifact.groundingFields.filter((field) => field.id === issue.fieldId)
+                    : matchGroundingFields(`${issue.title} ${issue.detail ?? ""}`, qualityArtifact.groundingFields)
+                  ).length > 0,
+                );
+                if (qualityArtifact.readOnly || anyChip || qualityArtifact.groundingFields.length === 0) return null;
+                return (
+                  <div className="v3-quality-issue-group">
+                    <div className="v3-quality-issue-group-header">
+                      <span className="v3-quality-issue-group-title">Grounding inputs</span>
+                      <span className="v3-quality-issue-group-desc">Open any input this artifact is generated from to strengthen it.</span>
+                    </div>
+                    <div className="v3-drilldown-row" style={{ marginTop: 4 }}>
+                      {qualityArtifact.groundingFields.map((field) => (
+                        <button
+                          key={field.id}
+                          type="button"
+                          className={`v3-drilldown-chip${field.filled ? "" : " thin"}`}
+                          onClick={() => scrollToInputField(field.id)}
+                          title={`Go to "${field.label}" to update it`}
+                        >
+                          <span aria-hidden="true">→</span>
+                          {field.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
               {!qualityArtifact.semanticValidated ? (
                 <div className="v3-quality-issue-note">
                   Semantic validation has not run for this program yet — Ontology and Change recommendations appear once the cross-artifact validator runs at the next gate review.
