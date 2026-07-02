@@ -32,7 +32,11 @@ import type {
 } from "@/new/types";
 import { getProgramState } from "@/new/lib/programState";
 import { confidenceLabel } from "@/v3/lib/confidenceScore";
-import { FORMAL_ARTIFACT_FIELD_KEYS, FORMAL_ARTIFACT_PHASES } from "@/v3/lib/formalArtifacts";
+import {
+  FORMAL_ARTIFACT_FIELD_KEYS,
+  FORMAL_ARTIFACT_PHASES,
+  listFormalArtifactGaps,
+} from "@/v3/lib/formalArtifacts";
 
 export type ValidationSeverity = "critical" | "high" | "medium" | "low";
 
@@ -195,24 +199,6 @@ function kpiRowName(row: unknown): string {
     const r = row as Record<string, unknown>;
     const n = r.name ?? r.title ?? r.kpi ?? r.metric;
     if (typeof n === "string") return n.trim();
-  }
-  return "";
-}
-
-/**
- * Extract the readable text of one self-reported gap entry. Formal artifacts
- * usually store `gaps` as plain strings, but the generating agent occasionally
- * emits objects — read the common text keys defensively so a shape change does
- * not silently drop the admission.
- */
-function selfReportedGapText(entry: unknown): string {
-  if (typeof entry === "string") return entry.trim();
-  if (entry && typeof entry === "object") {
-    const e = entry as Record<string, unknown>;
-    for (const k of ["description", "gap", "issue", "text", "title", "detail", "summary"]) {
-      const v = e[k];
-      if (typeof v === "string" && v.trim()) return v.trim();
-    }
   }
   return "";
 }
@@ -590,17 +576,14 @@ const RULES: ValidationRule[] = [
       if (!p.rawData) return [];
       const { inner } = getProgramState(p.rawData);
       const findings: ValidationFinding[] = [];
+      // Branch from listFormalArtifactGaps — the single source the quality reader
+      // also erodes by — so a card's quality can never disagree with the gaps this
+      // rule folds into the objective's confidence.
       for (const [agentId, fieldKey] of Object.entries(FORMAL_ARTIFACT_FIELD_KEYS)) {
-        const doc = inner[fieldKey];
-        if (!doc || typeof doc !== "object" || Array.isArray(doc)) continue;
-        const gaps = (doc as Record<string, unknown>).gaps;
-        if (!Array.isArray(gaps)) continue;
         const phaseId = FORMAL_ARTIFACT_PHASES[agentId];
-        gaps.forEach((entry, i) => {
-          const text = selfReportedGapText(entry);
-          if (!text) return;
+        for (const { index, text } of listFormalArtifactGaps(inner, agentId)) {
           findings.push({
-            findingId: `artifact-gap:${fieldKey}:${i}`,
+            findingId: `artifact-gap:${fieldKey}:${index}`,
             severity: "low",
             domain: "artifact-completeness",
             phaseId,
@@ -612,9 +595,9 @@ const RULES: ValidationRule[] = [
             // generic recommendation would only add a repetitive arrow per gap.
             recommendation: "",
             confidence: 1,
-            evidence: [`${fieldKey}.gaps[${i}] — self-reported by the generating agent`],
+            evidence: [`${fieldKey}.gaps[${index}] — self-reported by the generating agent`],
           });
-        });
+        }
       }
       return findings;
     },

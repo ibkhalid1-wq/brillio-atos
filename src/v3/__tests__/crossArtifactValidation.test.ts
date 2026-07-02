@@ -13,6 +13,8 @@ import {
   type ValidationFinding,
   type ValidationDomain,
 } from "@/v3/lib/crossArtifactValidation";
+import { getFormalArtifactGapCount } from "@/v3/lib/formalArtifacts";
+import { resolveArtifactQualityScore } from "@/v3/lib/artifactReview";
 
 const risk = (over: Partial<NonNullable<ValidatableProgram["raidEntries"]>[number]> = {}) => ({
   id: "R-01",
@@ -367,6 +369,28 @@ describe("runDeterministicValidation — self-reported artifact gaps", () => {
       rawData: { businessCaseDoc: { title: "Business Case", gaps: [] } },
     });
     expect(findings.filter((f) => f.domain === "artifact-completeness")).toHaveLength(0);
+  });
+
+  it("emits exactly one finding per gap the quality reader erodes by (single-source invariant)", () => {
+    // The whole point of listFormalArtifactGaps: Objective Confidence (findings)
+    // and the artifact card (quality erosion) must count the SAME deficiencies, or
+    // a "98%" card renders beside a gap that puts the objective at risk. Prove the
+    // finding set for an artifact matches the count the quality reader uses.
+    const source = {
+      transformationCharter: {
+        confidence: 0.98,
+        gaps: ["Executive sponsor not named", "   ", { description: "Scope exclusions undocumented" }, ""],
+      },
+    };
+    const findings = runDeterministicValidation({ rawData: source });
+    const charterFindings = findings.filter(
+      (f) => f.domain === "artifact-completeness" && f.sourceArtifact === "transformationCharter",
+    );
+    // Two non-empty admissions → two findings, and the reader erodes by the same 2.
+    expect(charterFindings).toHaveLength(2);
+    expect(getFormalArtifactGapCount(source, "charter")).toBe(charterFindings.length);
+    // The card's eroded quality is provably driven by that same count: 98 → 82.
+    expect(resolveArtifactQualityScore(source, "charter", "strategy")).toBe(82);
   });
 
   it("drags a phase off a vacuous clean-100 once its deliverable admits gaps", () => {

@@ -211,9 +211,7 @@ export function getFormalArtifactConfidence(source: Record<string, unknown> | nu
  * Read the text of one self-reported gap entry from a formal-artifact `gaps`
  * array. Entries are usually plain strings, but the generating agent occasionally
  * emits objects — read the common text keys defensively so a shape change does
- * not silently drop the admission. Mirrors `selfReportedGapText` in
- * crossArtifactValidation.ts (duplicated, not imported, because that module
- * already imports from this one — importing back would create a cycle).
+ * not silently drop the admission.
  */
 function gapEntryText(entry: unknown): string {
   if (typeof entry === "string") return entry.trim();
@@ -227,23 +225,55 @@ function gapEntryText(entry: unknown): string {
   return "";
 }
 
+/** One self-reported deficiency, with its position in the raw `gaps` array. */
+export interface FormalArtifactGap {
+  /** Index in the raw `gaps` array — kept so downstream finding ids stay stable. */
+  index: number;
+  /** The readable admission text. */
+  text: string;
+}
+
 /**
- * Count the deficiencies a formal artifact self-reports in the `gaps` array on
- * its top-level mirror. The generating agent lists what its own draft is missing
- * (e.g. "scope exclusions not formally documented") next to a *separate*
- * `confidence` score; the two are produced independently and never reconciled, so
- * a document can claim near-perfect confidence while admitting material gaps.
- * Callers use this count to erode the displayed quality so the score cannot
- * contradict the artifact's own admissions. Blank/empty entries are ignored.
- * Returns 0 when the artifact is not a formal document or reports no gaps.
+ * The single source of a formal artifact's self-reported deficiency set: the
+ * non-empty entries of the `gaps` array on its top-level mirror, each carrying
+ * its original array index.
+ *
+ * The generating agent lists what its own draft is missing (e.g. "scope
+ * exclusions not formally documented") next to a *separate* `confidence` score;
+ * the two are produced independently, so a document can claim near-perfect
+ * confidence while admitting material gaps. Two consumers must agree on this set
+ * or a contradiction renders: the cross-artifact validator turns each entry into
+ * an `artifact-completeness` finding (which folds into Objective Confidence), and
+ * the quality reader erodes the artifact's displayed score by the same count.
+ * Both branch from here, so the card's quality can never disagree with the gaps
+ * that put the objective at risk. Blank/whitespace/unreadable entries are
+ * dropped; original indices are preserved so finding ids stay stable across the
+ * filter. Returns [] when the artifact is not a formal document or has no gaps.
+ */
+export function listFormalArtifactGaps(
+  source: Record<string, unknown> | null,
+  artifactId: string,
+): FormalArtifactGap[] {
+  if (!source) return [];
+  const fieldKey = FORMAL_ARTIFACT_FIELD_KEYS[artifactId];
+  if (!fieldKey) return [];
+  const doc = source[fieldKey];
+  if (!isObject(doc)) return [];
+  const gaps = doc.gaps;
+  if (!Array.isArray(gaps)) return [];
+  const out: FormalArtifactGap[] = [];
+  gaps.forEach((entry, index) => {
+    const text = gapEntryText(entry);
+    if (text) out.push({ index, text });
+  });
+  return out;
+}
+
+/**
+ * Count of a formal artifact's self-reported deficiencies — the length of
+ * {@link listFormalArtifactGaps}. Callers erode the displayed quality by this
+ * count so the score cannot contradict the artifact's own admissions.
  */
 export function getFormalArtifactGapCount(source: Record<string, unknown> | null, artifactId: string): number {
-  if (!source) return 0;
-  const fieldKey = FORMAL_ARTIFACT_FIELD_KEYS[artifactId];
-  if (!fieldKey) return 0;
-  const doc = source[fieldKey];
-  if (!isObject(doc)) return 0;
-  const gaps = doc.gaps;
-  if (!Array.isArray(gaps)) return 0;
-  return gaps.reduce<number>((n, entry) => (gapEntryText(entry) ? n + 1 : n), 0);
+  return listFormalArtifactGaps(source, artifactId).length;
 }
