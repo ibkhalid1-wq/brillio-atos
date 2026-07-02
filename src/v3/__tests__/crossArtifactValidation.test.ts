@@ -7,6 +7,7 @@ import {
   assessPhaseFidelity,
   getSemanticValidationMeta,
   classifyFinding,
+  domainLabel,
   FINDING_CLASS_ORDER,
   type ValidatableProgram,
   type ValidationFinding,
@@ -606,5 +607,25 @@ describe("classifyFinding", () => {
     for (const domain of allDomains) {
       expect(FINDING_CLASS_ORDER).toContain(classifyFinding(domain));
     }
+  });
+});
+
+describe("domainLabel", () => {
+  it("renders human-readable labels for every domain (no raw kebab slug leaks)", () => {
+    const allDomains: ValidationDomain[] = [
+      "risk-controls", "stakeholder-readiness", "benefits-traceability", "delivery-readiness",
+      "governance", "scope-coverage", "requirements-coverage", "architecture-consistency",
+      "artifact-completeness",
+    ];
+    for (const domain of allDomains) {
+      const label = domainLabel(domain);
+      expect(label).not.toContain("-");
+      expect(label[0]).toBe(label[0].toUpperCase());
+    }
+    expect(domainLabel("risk-controls")).toBe("Risk controls");
+  });
+
+  it("falls back to the raw value for an unknown domain", () => {
+    expect(domainLabel("something-new")).toBe("something-new");
   });
 });

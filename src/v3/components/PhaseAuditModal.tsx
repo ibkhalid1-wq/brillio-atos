@@ -3,6 +3,7 @@ import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 import { timeAgo } from "@/v3/utils";
 import {
   classifyFinding,
+  domainLabel,
   FINDING_CLASS_ORDER,
   FINDING_CLASS_DESCRIPTION,
   type FindingClass,
@@ -323,7 +324,7 @@ export default function PhaseAuditModal({ programId, phaseId, phaseLabel, onClos
                                 <span className="v3-chip muted" style={{ fontSize: 10 }}>{f.severity}</span>
                               ) : null}
                               {typeof f.domain === "string" ? (
-                                <span style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>{f.domain}</span>
+                                <span style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>{domainLabel(f.domain)}</span>
                               ) : null}
                             </div>
                             {typeof f.issue === "string" ? (

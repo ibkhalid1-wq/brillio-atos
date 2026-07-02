@@ -76,6 +76,27 @@ export type ValidationDomain =
   // complete. Intra-artifact completeness, not cross-artifact traceability.
   | "artifact-completeness";
 
+/** Human-readable label for a domain — surfaces render this, not the raw slug. */
+const DOMAIN_LABEL: Record<ValidationDomain, string> = {
+  "risk-controls": "Risk controls",
+  "stakeholder-readiness": "Stakeholder readiness",
+  "benefits-traceability": "Benefits traceability",
+  "delivery-readiness": "Delivery readiness",
+  "governance": "Governance",
+  "scope-coverage": "Scope coverage",
+  "requirements-coverage": "Requirements coverage",
+  "architecture-consistency": "Architecture consistency",
+  "artifact-completeness": "Artifact completeness",
+};
+
+/**
+ * Turn a domain slug into its display label. Falls back to the raw value for any
+ * unexpected string, so an out-of-contract domain still renders legibly.
+ */
+export function domainLabel(domain: string): string {
+  return DOMAIN_LABEL[domain as ValidationDomain] ?? domain;
+}
+
 /**
  * Top-level class a finding rolls up to. The nine domains are the fine-grained
  * detection buckets; this is the coarse lens the surfaces group by:
