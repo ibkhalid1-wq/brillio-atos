@@ -157,6 +157,8 @@ const MORE_ROUTE_MAP: Record<string, V3MoreView> = {
   "artifact-map": "artifact-map",
   "program-graph": "program-graph",
   graph: "program-graph",
+  layers: "layers",
+  "layer-stack": "layers",
   accelerators: "accelerators",
   "decision-audit": "decision-audit",
   ontology: "ontology",
@@ -181,6 +183,7 @@ const MORE_VIEW_PATHS: Record<V3MoreView, string> = {
   intelligence: "/intelligence",
   "artifact-map": "/artifact-map",
   "program-graph": "/program-graph",
+  layers: "/layers",
   accelerators: "/accelerators",
   access: "/access",
   "decision-audit": "/decision-audit",
@@ -332,6 +335,7 @@ const MORE_VIEW_LABELS: Partial<Record<string, string>> = {
   documents: "Documents",
   "artifact-map": "Artifact Map",
   "program-graph": "Program Graph",
+  layers: "Layer Stack",
   accelerators: "Accelerators",
   access: "Access & Sharing",
   "decision-audit": "Decision Audit",
@@ -3527,6 +3531,7 @@ export default function AppShellV3() {
                     onSaveBudgetInputs={handleSaveBudgetInputs}
                     onOpenPhase={openPhaseSheet}
                     onNavigate={navigateAppView}
+                    onOpenMoreView={openMoreView}
                     onSaveNarrativeCorrection={handleSaveNarrativeCorrection}
                     onSavePhaseInputs={handleSavePhaseInputs}
                     onSaveAllPhaseInputs={handleSaveAllPhaseInputs}

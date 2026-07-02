@@ -89,6 +89,7 @@ const WORKSPACE_GROUPS: Array<{
       { view: "documents", label: "Documents", description: "Uploaded documents and extracted insights", icon: "⊡", accent: "amber" },
       { view: "artifact-map", label: "Artifact Map", description: "The complete programme tree — every phase with its artifacts, inputs and provenance", icon: "⊞", accent: "blue" },
       { view: "program-graph", label: "Program Graph", description: "The unified knowledge graph — documents, extracted facts, the phases they inform and the artifacts they ground", icon: "⬡", accent: "blue" },
+      { view: "layers", label: "Layer Stack", description: "The ATOS architecture as workspaces — the six knowledge-plane layers that build up as the programme clears its methodology gates", icon: "≡", accent: "purple" },
       // Removed: Programme Narrative, Action Plan (content surfaced on Home)
     ],
   },

@@ -27,6 +27,7 @@ export type V3MoreView =
   | "intelligence"
   | "artifact-map"
   | "program-graph"
+  | "layers"
   | "accelerators"
   | "decision-audit"
   | "ontology"

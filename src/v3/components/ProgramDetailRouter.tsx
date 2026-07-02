@@ -24,6 +24,7 @@ import type { AppView, Milestone, ProgramSummary } from "@/new/types";
 import ProgramAccessPanel from "@/v3/components/ProgramAccessPanel";
 import { ArtifactMapTree } from "@/v3/components/ArtifactMapTree";
 import ProgramGraphPanel from "@/v3/components/ProgramGraphPanel";
+import LayerWorkspacePanel from "@/v3/components/LayerWorkspacePanel";
 import { OntologyView } from "@/new/pages/OntologyView";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { AdamCard, AdamCardBody, AdamCardHeader } from "@/v3/components/ui/AdamCard";
@@ -144,6 +145,7 @@ interface ProgramDetailRouterProps {
   onOpenTrace: (runId: string) => void;
   onOpenPhase: (phaseId: string) => void;
   onNavigate: (view: AppView) => void;
+  onOpenMoreView?: (view: V3MoreView) => void;
   patternsCount: number;
   onExtractPatterns: () => Promise<void>;
   onRunAgent?: (agentId: string, phaseId?: string) => void;
@@ -174,6 +176,7 @@ export default function ProgramDetailRouter({
   onOpenTrace,
   onOpenPhase,
   onNavigate,
+  onOpenMoreView,
   patternsCount,
   onExtractPatterns,
   onSavePhaseInputs,
@@ -286,6 +289,8 @@ export default function ProgramDetailRouter({
       );
     case "program-graph":
       return <ProgramGraphPanel program={program} programId={programId} />;
+    case "layers":
+      return <LayerWorkspacePanel program={program} onOpenMoreView={onOpenMoreView} />;
     case "accelerators":
       return <AcceleratorsView program={program} onNavigate={onNavigate} patternsCount={patternsCount} onExtractPatterns={onExtractPatterns} />;
     case "access":
