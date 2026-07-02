@@ -1455,8 +1455,13 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
             </div>
           ) : (
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center" }}>
-              <span className="v3-autosave-status" aria-live="polite">
-                {saving ? "Saving…" : saved ? "Saved ✓" : isDirty ? "Unsaved changes…" : "All changes saved"}
+              <span
+                className="v3-autosave-status"
+                data-state={saving ? "saving" : saved ? "saved" : isDirty ? "dirty" : "clean"}
+                aria-live="polite"
+              >
+                <span className="v3-autosave-dot" aria-hidden />
+                {saving ? "Saving…" : saved ? "Saved" : isDirty ? "Unsaved changes…" : "All changes saved"}
               </span>
             </div>
           )}
