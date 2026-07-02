@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { ProgramSummary } from "@/new/types";
 import { buildProgramGraph } from "@/v3/lib/programGraph";
-import { detectCoverageGaps, summarizeCoverageGaps, impactedBy, dependenciesOf, detectContradictions, propagateConfidence } from "@/v3/lib/graphInference";
+import { detectCoverageGaps, summarizeCoverageGaps, impactedBy, dependenciesOf, detectContradictions, propagateConfidence, coverageGapsToDirectives, buildCoverageDirectives, type CoverageGap } from "@/v3/lib/graphInference";
 
 function program(over: Record<string, unknown>): ProgramSummary {
   return {
@@ -269,5 +269,74 @@ describe("propagateConfidence", () => {
 
   it("returns nothing for an empty graph", () => {
     expect(propagateConfidence(buildProgramGraph(null))).toEqual([]);
+  });
+});
+
+describe("coverageGapsToDirectives", () => {
+  const gap = (over: Partial<CoverageGap>): CoverageGap =>
+    ({ kind: "untraced-requirement", nodeId: "n", label: "L", detail: "", ...over });
+
+  it("renders an imperative directive per gap kind", () => {
+    const lines = coverageGapsToDirectives([
+      gap({ kind: "untraced-requirement", label: "SSO" }),
+      gap({ kind: "undelivered-scope", label: "Portal" }),
+      gap({ kind: "ungrounded-fact", label: "EOL platform" }),
+    ]);
+    expect(lines[0]).toContain('Address requirement "SSO"');
+    expect(lines[1]).toContain('Assign in-scope item "Portal"');
+    expect(lines[2]).toContain('Ground fact "EOL platform"');
+  });
+});
+
+describe("buildCoverageDirectives", () => {
+  const requirements = JSON.stringify([
+    { id: "REQ-1", requirement: "System must support SSO" },
+    { id: "REQ-2", requirement: "Response under 200ms" },
+  ]);
+  const decisions = JSON.stringify([
+    { id: "D-1", decision: "Adopt Okta", addresses: "System must support SSO" },
+  ]);
+  const prog = () => program({
+    phases,
+    rawData: { phaseInputs: { discover: { requirements }, design: { keyDesignDecisions: decisions } } },
+  });
+
+  it("returns empty for no program or empty phase", () => {
+    expect(buildCoverageDirectives(null, "design")).toBe("");
+    expect(buildCoverageDirectives(prog(), "")).toBe("");
+  });
+
+  it("emits a headered directive block for the phase's untraced requirement", () => {
+    const block = buildCoverageDirectives(prog(), "design");
+    expect(block).toContain("Coverage gaps to close");
+    expect(block).toContain('Address requirement "Response under 200ms"');
+    // The addressed requirement must not be nagged about.
+    expect(block).not.toContain("System must support SSO");
+  });
+
+  it("excludes ungrounded-fact gaps by default (they are data-hygiene, not directives)", () => {
+    const block = buildCoverageDirectives(
+      program({
+        phases,
+        rawData: {
+          phaseInputs: { strategy: { businessContext: "Legacy platform is end-of-life" } },
+          dynamicSchema: { inputFields: { strategy: [{ id: "businessContext", label: "Business context", type: "textarea", required: false }] } },
+        },
+      }),
+      "strategy",
+    );
+    expect(block).toBe("");
+  });
+
+  it("returns empty when the phase has no open coverage gaps", () => {
+    const closed = JSON.stringify([
+      { id: "D-1", decision: "Adopt Okta", addresses: "System must support SSO" },
+      { id: "D-2", decision: "Add caching", addresses: "Response under 200ms" },
+    ]);
+    const block = buildCoverageDirectives(
+      program({ phases, rawData: { phaseInputs: { discover: { requirements }, design: { keyDesignDecisions: closed } } } }),
+      "design",
+    );
+    expect(block).toBe("");
   });
 });

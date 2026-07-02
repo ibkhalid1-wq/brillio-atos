@@ -15,7 +15,14 @@
  * caller already has) and returns plain data — no program state, no I/O — so it
  * is unit-testable in isolation and safe to import anywhere.
  */
-import type { ProgramGraph, ProgramGraphNode, ProgramGraphEdge } from "@/v3/lib/programGraph";
+import type { ProgramSummary } from "@/new/types";
+import {
+  buildProgramGraph,
+  selectGraphForPhase,
+  type ProgramGraph,
+  type ProgramGraphNode,
+  type ProgramGraphEdge,
+} from "@/v3/lib/programGraph";
 
 /** A place where the graph shows work that is declared but not yet connected to
  *  the downstream element that would satisfy it. */
@@ -432,6 +439,79 @@ export function summarizeCoverageGaps(gaps: CoverageGap[]): Record<CoverageGap["
   };
   for (const gap of gaps) out[gap.kind] += 1;
   return out;
+}
+
+/**
+ * Turn coverage gaps into imperative, generation-ready directives — one line per
+ * gap telling the agent what missing connection to establish. Pure over the gap
+ * list; ordering follows the caller's (detectCoverageGaps groups requirement →
+ * scope → fact).
+ */
+export function coverageGapsToDirectives(gaps: CoverageGap[]): string[] {
+  return gaps.map((gap) => {
+    switch (gap.kind) {
+      case "untraced-requirement":
+        return `Address requirement "${gap.label}" with an explicit design decision or rationale.`;
+      case "undelivered-scope":
+        return `Assign in-scope item "${gap.label}" to a delivery increment.`;
+      case "ungrounded-fact":
+        return `Ground fact "${gap.label}" by citing it in the artifact it supports.`;
+    }
+  });
+}
+
+const COVERAGE_DIRECTIVES_HEADER =
+  "Coverage gaps to close in this generation (address each explicitly):";
+
+/**
+ * The gap kinds worth turning into generation directives by default. Ungrounded
+ * facts are a data-hygiene signal (a fact citing nothing) rather than a
+ * generation instruction, so they are excluded here to keep the directive block
+ * actionable and low-noise; pass them in `kinds` to include them.
+ */
+const DEFAULT_DIRECTIVE_KINDS: ReadonlySet<CoverageGap["kind"]> = new Set([
+  "untraced-requirement",
+  "undelivered-scope",
+]);
+
+/**
+ * Build a prompt-ready directive block instructing the generator to close the
+ * coverage gaps present in `targetPhaseId`'s slice of the program graph — the
+ * write-side complement to buildProgramGraphContext's read-side grounding.
+ *
+ * Gaps are computed over the phase-scoped subgraph (current + prior phases) so a
+ * requirement introduced downstream is never flagged before its phase. The block
+ * is capped by directive count and character budget (whole lines only), and is
+ * "" when there is nothing to close — so callers can append it unconditionally.
+ */
+export function buildCoverageDirectives(
+  program: ProgramSummary | null | undefined,
+  targetPhaseId: string,
+  maxChars = 600,
+  opts?: { kinds?: ReadonlySet<CoverageGap["kind"]>; maxDirectives?: number },
+): string {
+  if (!program || !targetPhaseId) return "";
+  const graph = buildProgramGraph(program);
+  if (!graph.nodes.length) return "";
+
+  const selection = selectGraphForPhase(graph, targetPhaseId);
+  const subgraph: ProgramGraph = { nodes: selection.nodes, edges: selection.edges, stats: graph.stats };
+  const kinds = opts?.kinds ?? DEFAULT_DIRECTIVE_KINDS;
+  const gaps = detectCoverageGaps(subgraph).filter((gap) => kinds.has(gap.kind));
+  if (!gaps.length) return "";
+
+  const maxDirectives = opts?.maxDirectives ?? 8;
+  const lines = coverageGapsToDirectives(gaps.slice(0, maxDirectives)).map((line) => `- ${line}`);
+
+  const kept: string[] = [];
+  let used = COVERAGE_DIRECTIVES_HEADER.length;
+  for (const line of lines) {
+    const next = used + 1 + line.length;
+    if (next > maxChars) break;
+    kept.push(line);
+    used = next;
+  }
+  return kept.length ? `${COVERAGE_DIRECTIVES_HEADER}\n${kept.join("\n")}` : "";
 }
 
 /** Re-export for callers that only need the node shape. */

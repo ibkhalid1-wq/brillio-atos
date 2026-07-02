@@ -12,6 +12,7 @@ import { getSupabaseFunctionErrorMessage } from "@/lib/supabaseFunctionError";
 import type { AgentHandoff, AgentRunResponse } from "@/lib/adamSync";
 import { normalizeProgram, type ProgramRowLike } from "@/new/lib/programData";
 import { buildProgramGraphContext } from "@/v3/lib/programGraph";
+import { buildCoverageDirectives } from "@/v3/lib/graphInference";
 
 type RequestMode = {
   mode: string;
@@ -213,12 +214,18 @@ export function buildCrossPhaseContext(programId: string, targetPhaseId: string,
   const used = sections.reduce((sum, section) => sum + section.length + 2, 0);
   const remaining = maxChars - used;
   if (remaining > 120) {
-    const graphContext = buildProgramGraphContext(
-      normalizeProgram({ id: project.id ?? programId, name: "", data: project.data } as ProgramRowLike),
-      targetPhaseId,
-      remaining,
-    );
+    const program = normalizeProgram({ id: project.id ?? programId, name: "", data: project.data } as ProgramRowLike);
+    const graphContext = buildProgramGraphContext(program, targetPhaseId, remaining);
     if (graphContext) sections.push(graphContext);
+
+    // Coverage-gap directives tell the generator what to *close*, not just what
+    // exists — capped to whatever budget the grounding context left behind.
+    const usedAfterGraph = sections.reduce((sum, section) => sum + section.length + 2, 0);
+    const directiveBudget = maxChars - usedAfterGraph;
+    if (directiveBudget > 80) {
+      const directives = buildCoverageDirectives(program, targetPhaseId, directiveBudget);
+      if (directives) sections.push(directives);
+    }
   }
 
   return sections.join("\n\n");
