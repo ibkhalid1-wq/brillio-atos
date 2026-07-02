@@ -977,6 +977,7 @@ export const ATOS_STANDARD: MethodologyDefinition = {
           id: "optimisationBaseline",
           label: "Performance baseline",
           type: "grid",
+          role: "measure",
           required: false,
           usedByArtifacts: ["optimization-backlog"],
           hint: "The current performance metrics the improvement backlog prioritises against — each with where it stands now and the target you're driving toward.",
@@ -984,12 +985,35 @@ export const ATOS_STANDARD: MethodologyDefinition = {
             { key: "metric", label: "Metric", type: "text" },
             { key: "current", label: "Current", type: "text" },
             { key: "target", label: "Target", type: "text" },
+            // Unit makes the current/target numbers comparable and self-describing
+            // (%, hrs, $, count) so the backlog ranks like-for-like rather than
+            // guessing scale. Additive column — never demotes an already-filled row.
+            { key: "unit", label: "Unit", type: "text", width: 100, placeholder: "e.g. %, hrs, $" },
           ],
         },
         { id: "improvementCandidates", label: "Improvement candidates", type: "textarea", required: false, usedByArtifacts: ["optimization-backlog"], placeholder: "Known pain points, inefficiencies, or opportunities to seed the backlog", hint: "The raw opportunities the backlog ranks by value vs effort — captured here so real signals seed it rather than a cold start." },
+        // Structured counterpart to the improvementCandidates prose: the same
+        // opportunities pinned as ranked rows with explicit value and effort, so
+        // "Improvement backlog prioritised" (optimize-2) is a checkable ranking
+        // rather than an inference the agent makes from free text. Optional; the
+        // textarea remains the low-friction way to seed raw signals.
+        {
+          id: "improvementBacklog",
+          label: "Prioritised improvement backlog",
+          type: "grid",
+          required: false,
+          usedByArtifacts: ["optimization-backlog"],
+          hint: "The candidate improvements ranked for delivery: each with its expected business value, the effort to deliver, and a resulting priority. Backs the Optimize exit criterion \"Improvement backlog prioritised\".",
+          columns: [
+            { key: "opportunity", label: "Opportunity", type: "text" },
+            { key: "value", label: "Value", type: "select", width: 120, options: ["Low", "Medium", "High"] },
+            { key: "effort", label: "Effort", type: "select", width: 120, options: ["Low", "Medium", "High"] },
+            { key: "priority", label: "Priority", type: "select", width: 120, options: ["P1", "P2", "P3"] },
+          ],
+        },
       ],
       artifactInputFlow: {
-        "optimization-backlog": ["optimisationBaseline", "improvementCandidates"],
+        "optimization-backlog": ["optimisationBaseline", "improvementCandidates", "improvementBacklog"],
       },
     },
     {

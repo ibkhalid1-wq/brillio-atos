@@ -628,15 +628,15 @@ describe("valuerealize static closure schema", () => {
 // current performance baseline and the captured improvement candidates — the one
 // renderable, fall-through Optimize agent these inputs feed.
 describe("optimize static improvement schema", () => {
-  it("grounds the optimization-backlog on the baseline + candidates without a store", () => {
+  it("grounds the optimization-backlog on the baseline + candidates + ranked backlog without a store", () => {
     expect(new Set(getArtifactInputFields("optimize", "optimization-backlog"))).toEqual(
-      new Set(["optimisationBaseline", "improvementCandidates"]),
+      new Set(["optimisationBaseline", "improvementCandidates", "improvementBacklog"]),
     );
   });
 
-  it("keeps both static inputs fillable (real typed fields)", () => {
+  it("keeps every static input fillable (real typed fields)", () => {
     expect(new Set(getFillableArtifactInputFields("optimize", "optimization-backlog"))).toEqual(
-      new Set(["optimisationBaseline", "improvementCandidates"]),
+      new Set(["optimisationBaseline", "improvementCandidates", "improvementBacklog"]),
     );
   });
 
@@ -646,11 +646,16 @@ describe("optimize static improvement schema", () => {
         optimize: [{ id: "optimization-backlog", label: "Optimization Backlog", description: "" }],
       },
     };
-    const edges = derivePhaseFlowEdges("optimize", ["optimisationBaseline", "improvementCandidates"], store);
+    const edges = derivePhaseFlowEdges(
+      "optimize",
+      ["optimisationBaseline", "improvementCandidates", "improvementBacklog"],
+      store,
+    );
     expect(edges).toEqual(
       expect.arrayContaining([
         { from: "optimisationBaseline", to: "optimization-backlog" },
         { from: "improvementCandidates", to: "optimization-backlog" },
+        { from: "improvementBacklog", to: "optimization-backlog" },
       ]),
     );
   });
