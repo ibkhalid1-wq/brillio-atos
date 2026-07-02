@@ -10,7 +10,7 @@ import {
   type ValidationDomain,
   type ValidationSeverity,
 } from "@/v3/lib/crossArtifactValidation";
-import { severityRank } from "@/v3/ontology/ontologyConfig";
+import { severityRank, severityColor } from "@/v3/ontology/ontologyConfig";
 
 const CLASS_COLOR: Record<FindingClass, string> = {
   Ontology: "#6366f1",
@@ -332,7 +332,16 @@ export default function PhaseAuditModal({ programId, phaseId, phaseLabel, onClos
                           >
                             <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
                               {typeof f.severity === "string" ? (
-                                <span className="v3-chip muted" style={{ fontSize: 10 }}>{f.severity}</span>
+                                <span
+                                  className="v3-chip"
+                                  style={{
+                                    fontSize: 10,
+                                    color: severityColor(f.severity as ValidationSeverity),
+                                    borderColor: severityColor(f.severity as ValidationSeverity),
+                                  }}
+                                >
+                                  {f.severity}
+                                </span>
                               ) : null}
                               {typeof f.domain === "string" ? (
                                 <span style={{ fontSize: 11, color: "var(--v3-text-muted)" }}>{domainLabel(f.domain)}</span>

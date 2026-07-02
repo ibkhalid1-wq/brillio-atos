@@ -5,8 +5,8 @@ import { EmptyState } from "@/v3/components/ui/EmptyState";
 import PhaseAuditModal from "@/v3/components/PhaseAuditModal";
 import {
   assessObjectives,
+  severityColor,
   type ConfidenceBand,
-  type ConfidenceBlocker,
 } from "@/v3/ontology";
 import {
   runDeterministicValidation,
@@ -40,13 +40,6 @@ const BAND_COLOR: Record<ConfidenceBand, string> = {
   "On Track": "#22c55e",
   "At Risk": "#f59e0b",
   Critical: "#ef4444",
-};
-
-const SEVERITY_COLOR: Record<ConfidenceBlocker["severity"], string> = {
-  critical: "#ef4444",
-  high: "#f97316",
-  medium: "#f59e0b",
-  low: "#94a3b8",
 };
 
 // Top-level finding class → accent. Ontology (delivery-chain traceability) is the
@@ -256,7 +249,7 @@ function PhaseFidelityCard({
                             <div key={g.findingId} style={{ display: "flex", gap: 8, alignItems: "flex-start", borderLeft: `2px solid ${CLASS_COLOR[cls]}`, paddingLeft: 8 }}>
                               <span
                                 title={`${g.severity} severity`}
-                                style={{ marginTop: 5, flexShrink: 0, width: 6, height: 6, borderRadius: "50%", background: SEVERITY_COLOR[g.severity] }}
+                                style={{ marginTop: 5, flexShrink: 0, width: 6, height: 6, borderRadius: "50%", background: severityColor(g.severity) }}
                               />
                               <div style={{ minWidth: 0 }}>
                                 <div style={{ fontSize: 12, color: "var(--v3-text-secondary)" }}>{g.issue}</div>

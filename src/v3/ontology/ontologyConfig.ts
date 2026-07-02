@@ -72,6 +72,17 @@ export function severityRank(severity: ValidationSeverity): number {
   return severity === "critical" ? 3 : severity === "high" ? 2 : severity === "medium" ? 1 : 0;
 }
 
+/** Display colour for a severity — the single source surfaces share for dots/chips. */
+const SEVERITY_COLOR: Record<ValidationSeverity, string> = {
+  critical: "#ef4444",
+  high: "#f97316",
+  medium: "#f59e0b",
+  low: "#94a3b8",
+};
+export function severityColor(severity: ValidationSeverity): string {
+  return SEVERITY_COLOR[severity] ?? SEVERITY_COLOR.low;
+}
+
 /** Map an expected point-gain back to a severity, for recommendation triage. */
 export function severityForGain(gain: number): ValidationSeverity {
   if (gain >= 18) return "critical";
