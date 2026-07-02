@@ -209,6 +209,141 @@ export function dependenciesOf(graph: ProgramGraph, startId: string): Reachabili
   return resolve(graph, bfs(reverseAdjacency(dependencyAdjacency(graph.edges)), startId));
 }
 
+/* ------------------------------------------------------------------ *
+ * Cross-phase contradiction detection
+ * ------------------------------------------------------------------ */
+
+/** A detected conflict between two graph nodes. */
+export interface Contradiction {
+  /**
+   * - `conflicting-kpi-target`: two KPI nodes name the same metric but carry
+   *   different baseline/target values.
+   * - `polarity-conflict`: two statements (facts or requirements) share a strong
+   *   subject overlap but differ in negation polarity — one asserts what the other
+   *   denies.
+   */
+  kind: "conflicting-kpi-target" | "polarity-conflict";
+  nodeA: string;
+  nodeB: string;
+  detail: string;
+  /** True when the two nodes originate in different phases — the case the
+   *  cross-phase check most wants to surface. */
+  crossPhase: boolean;
+}
+
+const CONTRADICTION_STOPWORDS = new Set([
+  "the", "a", "an", "of", "for", "and", "or", "to", "in", "on", "at", "by", "is",
+  "are", "be", "been", "must", "should", "shall", "will", "system", "solution",
+  "platform", "it", "its", "this", "that", "with", "as", "we", "they",
+]);
+
+const NEGATION_TOKENS = new Set([
+  "not", "no", "never", "without", "cannot", "cant", "wont", "shouldnt", "dont",
+  "doesnt", "isnt", "arent", "exclude", "excluded", "excludes", "prohibit",
+  "prohibited", "disallow", "disallowed", "neither", "nor", "none",
+]);
+
+/** Content tokens for contradiction matching: lowercase, alphanumeric, minus
+ *  stopwords and negation words (negation is scored separately), lightly stemmed. */
+function subjectTokens(text: string): string[] {
+  return (text ?? "")
+    .toLowerCase()
+    .replace(/n't\b/g, " not ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .split(" ")
+    .filter((t) => t.length > 1 && !CONTRADICTION_STOPWORDS.has(t) && !NEGATION_TOKENS.has(t))
+    .map((t) => (t.length > 3 && t.endsWith("s") ? t.slice(0, -1) : t));
+}
+
+/** Whether a statement carries negation polarity. */
+function hasNegation(text: string): boolean {
+  const normalized = (text ?? "").toLowerCase().replace(/n't\b/g, " not ");
+  const tokens = normalized.replace(/[^a-z0-9]+/g, " ").split(" ");
+  return tokens.some((t) => NEGATION_TOKENS.has(t));
+}
+
+/** Jaccard similarity of two token sets. */
+function jaccard(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 || b.size === 0) return 0;
+  let intersection = 0;
+  for (const token of a) if (b.has(token)) intersection += 1;
+  return intersection / (a.size + b.size - intersection);
+}
+
+/** KPI display label ("Name: baseline → target → unit") reduced to the metric
+ *  name for same-metric grouping. */
+function kpiName(node: ProgramGraphNode): string {
+  return node.label.split(":")[0].trim().toLowerCase();
+}
+
+/**
+ * Every contradiction the graph exposes structurally. Two families:
+ *
+ *  1. Conflicting KPI targets — the same metric declared twice (e.g. in Strategy
+ *     and again downstream) with different baseline or target values, so the
+ *     programme is chasing two numbers for one measure.
+ *  2. Polarity conflicts — two requirement/fact statements about the same subject
+ *     where one is affirmative and the other negated (Jaccard of subject tokens
+ *     ≥ `minOverlap`, differing negation). Catches "must support offline mode"
+ *     upstream vs "must not support offline mode" downstream.
+ *
+ * Pure and deterministic (pairs emitted in node order). `minOverlap` guards
+ * against spurious polarity matches on loosely-related statements.
+ */
+export function detectContradictions(graph: ProgramGraph, minOverlap = 0.6): Contradiction[] {
+  if (!graph || !graph.nodes.length) return [];
+  const out: Contradiction[] = [];
+  const crossPhase = (a: ProgramGraphNode, b: ProgramGraphNode) =>
+    Boolean(a.phaseCreated && b.phaseCreated && a.phaseCreated !== b.phaseCreated);
+
+  // 1. Conflicting KPI targets.
+  const kpis = graph.nodes.filter((n) => n.type === "kpi");
+  for (let i = 0; i < kpis.length; i++) {
+    for (let j = i + 1; j < kpis.length; j++) {
+      const a = kpis[i];
+      const b = kpis[j];
+      if (!kpiName(a) || kpiName(a) !== kpiName(b)) continue;
+      const targetA = String(a.properties?.target ?? "").trim();
+      const targetB = String(b.properties?.target ?? "").trim();
+      const baseA = String(a.properties?.baseline ?? "").trim();
+      const baseB = String(b.properties?.baseline ?? "").trim();
+      const targetConflict = targetA && targetB && targetA !== targetB;
+      const baseConflict = baseA && baseB && baseA !== baseB;
+      if (!targetConflict && !baseConflict) continue;
+      out.push({
+        kind: "conflicting-kpi-target",
+        nodeA: a.id,
+        nodeB: b.id,
+        detail: `KPI "${kpiName(a)}" is declared with conflicting ${targetConflict ? `targets (${targetA} vs ${targetB})` : `baselines (${baseA} vs ${baseB})`}.`,
+        crossPhase: crossPhase(a, b),
+      });
+    }
+  }
+
+  // 2. Polarity conflicts among requirement/fact statements.
+  const statements = graph.nodes
+    .filter((n) => n.type === "requirement" || n.type === "fact")
+    .map((n) => ({ node: n, tokens: new Set(subjectTokens(n.label)), negated: hasNegation(n.label) }))
+    .filter((s) => s.tokens.size >= 2);
+  for (let i = 0; i < statements.length; i++) {
+    for (let j = i + 1; j < statements.length; j++) {
+      const a = statements[i];
+      const b = statements[j];
+      if (a.negated === b.negated) continue; // same polarity — not a contradiction
+      if (jaccard(a.tokens, b.tokens) < minOverlap) continue;
+      out.push({
+        kind: "polarity-conflict",
+        nodeA: a.node.id,
+        nodeB: b.node.id,
+        detail: `"${a.node.label}" contradicts "${b.node.label}" — same subject, opposite polarity.`,
+        crossPhase: crossPhase(a.node, b.node),
+      });
+    }
+  }
+
+  return out;
+}
+
 /** Count coverage gaps by kind — a compact health summary for a dashboard. */
 export function summarizeCoverageGaps(gaps: CoverageGap[]): Record<CoverageGap["kind"], number> {
   const out: Record<CoverageGap["kind"], number> = {

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { ProgramSummary } from "@/new/types";
 import { buildProgramGraph } from "@/v3/lib/programGraph";
-import { detectCoverageGaps, summarizeCoverageGaps, impactedBy, dependenciesOf } from "@/v3/lib/graphInference";
+import { detectCoverageGaps, summarizeCoverageGaps, impactedBy, dependenciesOf, detectContradictions } from "@/v3/lib/graphInference";
 
 function program(over: Record<string, unknown>): ProgramSummary {
   return {
@@ -169,5 +169,55 @@ describe("impact / reachability analysis", () => {
   it("returns empty reachability for an empty graph", () => {
     expect(impactedBy(buildProgramGraph(null), "x").nodeIds).toEqual([]);
     expect(dependenciesOf(buildProgramGraph(null), "x").nodeIds).toEqual([]);
+  });
+});
+
+describe("detectContradictions", () => {
+  it("finds conflicting KPI targets for the same metric across phases", () => {
+    // The same metric is declared in Strategy with two conflicting targets. (Both
+    // rows live on the strategy kpis grid; the conflict is value-level.)
+    const kpis = JSON.stringify([
+      { id: "k1", name: "Cycle time", baseline: "10d", target: "5d", unit: "days" },
+      { id: "k2", name: "Cycle time", baseline: "10d", target: "3d", unit: "days" },
+    ]);
+    const graph = buildProgramGraph(program({ phases, rawData: { phaseInputs: { strategy: { kpis } } } }));
+    const conflicts = detectContradictions(graph).filter((c) => c.kind === "conflicting-kpi-target");
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0].detail).toContain("5d");
+    expect(conflicts[0].detail).toContain("3d");
+  });
+
+  it("finds a polarity conflict between an affirmative and a negated requirement", () => {
+    const discoverReqs = JSON.stringify([{ id: "REQ-1", requirement: "Solution must support offline mode" }]);
+    const designReqs = JSON.stringify([{ id: "NFR-1", requirement: "Solution must not support offline mode" }]);
+    const graph = buildProgramGraph(program({
+      phases,
+      rawData: { phaseInputs: { discover: { requirements: discoverReqs }, design: { nonFunctionalRequirements: designReqs } } },
+    }));
+    const conflicts = detectContradictions(graph).filter((c) => c.kind === "polarity-conflict");
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0].crossPhase).toBe(true);
+  });
+
+  it("does not flag two affirmative requirements about the same subject", () => {
+    const reqs = JSON.stringify([
+      { id: "REQ-1", requirement: "Solution must support offline mode" },
+      { id: "REQ-2", requirement: "Solution must support offline mode fully" },
+    ]);
+    const graph = buildProgramGraph(program({ phases, rawData: { phaseInputs: { discover: { requirements: reqs } } } }));
+    expect(detectContradictions(graph).filter((c) => c.kind === "polarity-conflict")).toHaveLength(0);
+  });
+
+  it("does not flag opposite-polarity statements about unrelated subjects", () => {
+    const reqs = JSON.stringify([
+      { id: "REQ-1", requirement: "Solution must support offline mode" },
+      { id: "REQ-2", requirement: "Reporting should not export to PDF" },
+    ]);
+    const graph = buildProgramGraph(program({ phases, rawData: { phaseInputs: { discover: { requirements: reqs } } } }));
+    expect(detectContradictions(graph).filter((c) => c.kind === "polarity-conflict")).toHaveLength(0);
+  });
+
+  it("returns nothing for an empty graph", () => {
+    expect(detectContradictions(buildProgramGraph(null))).toEqual([]);
   });
 });
