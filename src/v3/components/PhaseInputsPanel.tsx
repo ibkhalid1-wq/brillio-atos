@@ -931,6 +931,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
                 className="v3-input-field v3-input-field-enter"
                 data-filled={verdict.tone === "green" ? "true" : "false"}
                 data-required={field.required ? "true" : "false"}
+                data-fieldtype={field.type}
                 style={{ animationDelay: `${Math.min(index, 12) * 26}ms` }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 8, marginBottom: 4 }}>
@@ -1224,7 +1225,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
             };
             return (
               <>
-                <div style={{ display: "grid", gap: 12, marginBottom: 12 }}>
+                <div className="v3-input-field-grid" style={{ display: "grid", gap: 12, marginBottom: 12 }}>
                   {primaryFields.map(renderField)}
                 </div>
                 {evidenceFields.length > 0 ? (
@@ -1233,7 +1234,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
                     subtitle="Approval references and gate confirmations — capture these once the substance above is agreed."
                     badge={`${filledEvidenceCount}/${evidenceFields.length}`}
                   >
-                    <div style={{ display: "grid", gap: 12 }}>
+                    <div className="v3-input-field-grid" style={{ display: "grid", gap: 12 }}>
                       {evidenceFields.map(renderField)}
                     </div>
                   </ExpandableSection>

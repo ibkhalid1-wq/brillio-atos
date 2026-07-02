@@ -7642,6 +7642,25 @@ button.v3-phase-metric:focus-visible {
      column; scroll them horizontally instead of letting a field overflow its
      column and push the flow-line input anchor past the artifact column. */
   overflow-x: auto;
+  /* Container context (Option H). The panel adapts to its own width, not the
+     viewport, so it lays out two-up inside a wide detail column and stays
+     single-column when docked in a narrow rail — regardless of screen size. */
+  container-type: inline-size;
+  container-name: v3-inputs;
+}
+
+/* At a comfortable panel width, pair short scalar fields two-up while keeping
+   long-form fields (textareas, structured grids) full width so they never get
+   cramped. Below the threshold the fields stay single-column (default grid). */
+@container v3-inputs (min-width: 620px) {
+  .v3-input-field-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 18px;
+  }
+  .v3-input-field-grid > .v3-input-field[data-fieldtype="textarea"],
+  .v3-input-field-grid > .v3-input-field[data-fieldtype="grid"] {
+    grid-column: 1 / -1;
+  }
 }
 
 /* ── Inputs panel premium polish ─────────────────────────────────── */
