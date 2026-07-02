@@ -152,6 +152,27 @@ describe("groupRecommendationsByCategory", () => {
     expect(matched.map((f) => f.id)).toEqual(["costAssumption", "executiveSponsor"]);
   });
 
+  it("matches a field named by its raw id, bare or phase-qualified", () => {
+    const fields = [
+      { id: "costAssumption", label: "Cost assumption", filled: true },
+      { id: "investmentAsk", label: "Investment ask", filled: true },
+      { id: "industry", label: "Industry", filled: true },
+    ];
+    // Reviewers frequently cite the id, not the label — bare and dotted forms.
+    const matched = matchGroundingFields(
+      "Add per-line estimates in the strategy.costAssumption input, and specify the investmentAsk.",
+      fields,
+    );
+    expect(matched.map((f) => f.id)).toEqual(["costAssumption", "investmentAsk"]);
+  });
+
+  it("does not fire an id on a substring (whole-word only)", () => {
+    const fields = [{ id: "kpis", label: "Success KPIs", filled: true }];
+    // "kpistan" contains "kpis" but not as a whole word.
+    expect(matchGroundingFields("Roll out to Kpistan region.", fields)).toEqual([]);
+    expect(matchGroundingFields("Populate the kpis grid.", fields).map((f) => f.id)).toEqual(["kpis"]);
+  });
+
   it("matches a field label as a whole word, not a substring", () => {
     const fields = [{ id: "industry", label: "Industry", filled: true }];
     // "industrialisation" contains "industr…" but not the whole word "industry".

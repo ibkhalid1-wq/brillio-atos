@@ -161,21 +161,26 @@ export function groupRecommendationsByCategory<T extends ArtifactRecommendation>
 
 /**
  * The grounding fields a free-form recommendation is talking about, found by
- * matching each field's label as a whole phrase inside the issue text. A model
- * suggestion like "add per-line estimates to the Cost assumption input" carries
- * no explicit fieldId, but it names the field in prose — so the Improve modal can
- * still surface a jump-to-field chip for exactly the input(s) it mentions rather
- * than leaving the user to hunt the field index. Whole-word matching (with the
- * label regex-escaped) keeps a short label like "Industry" from firing on a
- * substring, and returns fields in their original order so chips read stably.
+ * matching each field's label OR its id as a whole phrase inside the issue text.
+ * A model suggestion carries no explicit fieldId, but it names the field in prose
+ * — and reviewers name it either by its human label ("add per-line estimates to
+ * the Cost assumption input") OR, just as often, by its raw id, bare or phase-
+ * qualified ("specify the costAssumption", "in the strategy.costAssumption
+ * input"). Matching the id too is what lets those lines surface a jump-to-field
+ * chip instead of leaving the user to hunt the field index. Whole-word matching
+ * (each needle regex-escaped) keeps a short label like "Industry" from firing on
+ * a substring, and the phase-qualified form works because "." is a word boundary
+ * so `\bcostAssumption\b` still hits inside "strategy.costAssumption". Fields are
+ * returned in their original order so chips read stably.
  */
-export function matchGroundingFields<T extends { label: string }>(text: string, fields: T[]): T[] {
+export function matchGroundingFields<T extends { id: string; label: string }>(text: string, fields: T[]): T[] {
   const haystack = (text ?? "").toLowerCase();
   if (!haystack.trim()) return [];
-  return fields.filter((field) => {
-    const label = field.label.trim().toLowerCase();
-    if (!label) return false;
-    const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const namesField = (needle: string): boolean => {
+    const n = needle.trim().toLowerCase();
+    if (!n) return false;
+    const escaped = n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     return new RegExp(`\\b${escaped}\\b`).test(haystack);
-  });
+  };
+  return fields.filter((field) => namesField(field.label) || namesField(field.id));
 }
