@@ -98,7 +98,7 @@ const STAKEHOLDER = (id: string) => `stakeholder:${id}`;
 const REQUIREMENT = (id: string) => `requirement:${id}`;
 
 interface KpiRow { id?: string; name?: string; baseline?: string; target?: string; unit?: string; objective?: string }
-interface RequirementRow { id?: string; requirement?: string; category?: string; priority?: string }
+interface RequirementRow { id?: string; requirement?: string; category?: string; priority?: string; target?: string }
 
 function parseGridRows<T>(raw: unknown): T[] {
   if (typeof raw !== "string" || !raw.trim()) return [];
@@ -243,25 +243,34 @@ export function buildProgramGraph(
     }
   });
 
-  // Discovered requirements (structured grid, excluded from the Fact Graph) as
-  // first-class requirement nodes. The objective graph's satisfied-by chain and
-  // the cross-artifact validator attach to these *declared* requirements — with
-  // stable ids carried on the grid rows — rather than only requirements
-  // synthesised from validation findings. The requirements-catalog agent still
-  // reads the grid directly via artifactInputFlow, so excluding them from facts
-  // does not remove them from generation prompts (mirrors the KPI treatment).
-  parseGridRows<RequirementRow>(phaseInputRaw(program, "discover", "requirements")).forEach((row, index) => {
-    const text = (row.requirement || "").trim();
-    if (!text) return;
-    const id = row.id || String(index);
-    addNode({
-      id: REQUIREMENT(id), type: "requirement", label: text, phaseCreated: "discover",
-      properties: { category: row.category, priority: row.priority },
+  // Declared requirements (structured grids, excluded from the Fact Graph) as
+  // first-class requirement nodes: functional requirements from Discover and
+  // non-functional requirements from Design. The objective graph's satisfied-by
+  // chain and the cross-artifact validator attach to these *declared*
+  // requirements — with stable ids carried on the grid rows — rather than only
+  // requirements synthesised from validation findings. The generating agents
+  // still read the grids directly via artifactInputFlow, so excluding them from
+  // facts does not remove them from generation prompts (mirrors the KPI treatment).
+  const requirementSources: Array<{ phaseId: string; fieldId: string; defaultCategory?: string }> = [
+    { phaseId: "discover", fieldId: "requirements" },
+    { phaseId: "design", fieldId: "nonFunctionalRequirements", defaultCategory: "Non-functional" },
+  ];
+  for (const src of requirementSources) {
+    parseGridRows<RequirementRow>(phaseInputRaw(program, src.phaseId, src.fieldId)).forEach((row, index) => {
+      const text = (row.requirement || "").trim();
+      if (!text) return;
+      // Fallback id is field-scoped so a discover row and a design row at the same
+      // index can never collide on `requirement:0`.
+      const id = row.id || `${src.fieldId}-${index}`;
+      addNode({
+        id: REQUIREMENT(id), type: "requirement", label: text, phaseCreated: src.phaseId,
+        properties: { category: row.category || src.defaultCategory, priority: row.priority, target: row.target },
+      });
+      if (phaseIds.has(src.phaseId)) {
+        addEdge({ id: `inphase:req:${id}`, from: REQUIREMENT(id), to: PHASE(src.phaseId), type: "in_phase" });
+      }
     });
-    if (phaseIds.has("discover")) {
-      addEdge({ id: `inphase:req:${id}`, from: REQUIREMENT(id), to: PHASE("discover"), type: "in_phase" });
-    }
-  });
+  }
 
   // Open risks/blockers and open decisions, scoped to their phase.
   (program.raidEntries || [])

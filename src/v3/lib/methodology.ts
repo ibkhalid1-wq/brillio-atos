@@ -497,7 +497,33 @@ export const ATOS_STANDARD: MethodologyDefinition = {
             { key: "rationale", label: "Rationale", type: "text" },
           ],
         },
-        { id: "nonFunctionalRequirements", label: "Non-functional requirements", type: "textarea", required: true, placeholder: "Performance, security, scalability, availability, and compliance targets", hint: "e.g. 99.9% availability, sub-200ms p95 latency, SOC 2 controls" },
+        {
+          // Non-functional requirements as a structured grid so each quality
+          // attribute is a first-class, measurable requirement rather than prose.
+          // Like the Discover requirements grid, the Program Graph mints one
+          // `requirement` node per row (category "Non-functional"), so the
+          // objective graph's satisfied-by chain treats an NFR with no covering
+          // design as a structural gap. Legacy prose migrates non-destructively:
+          // StructuredGrid.parseRows line-splits an existing paragraph into rows
+          // under the lead `requirement` column on first open, then re-serializes
+          // to JSON on save — a self-healing, one-time migration with no data loss,
+          // so every programme that authored NFRs as text keeps them. Required
+          // (unchanged): a migrated paragraph yields ≥1 row, so the Design gate is
+          // satisfied exactly as before. The `requirement` column key matches the
+          // graph's requirement reader; each row also carries the NFR type and its
+          // measurable target. Grid rows flatten into solution-architecture prompts
+          // via the edge's buildGroundingFacts, so generation is unaffected.
+          id: "nonFunctionalRequirements",
+          label: "Non-functional requirements",
+          type: "grid",
+          required: true,
+          hint: "The quality attributes the solution must meet — one per row, with its type and a measurable target. e.g. Availability · 99.9% uptime.",
+          columns: [
+            { key: "requirement", label: "Requirement", type: "text", placeholder: "e.g. p95 API latency under load" },
+            { key: "category", label: "Type", type: "select", width: 170, options: ["Performance", "Security", "Scalability", "Availability", "Compliance", "Usability", "Maintainability"] },
+            { key: "target", label: "Target", type: "text", width: 180, placeholder: "e.g. < 200ms p95, 99.9% uptime" },
+          ],
+        },
         { id: "integrationDataConstraints", label: "Integration & data constraints", type: "textarea", required: false, placeholder: "Systems to integrate, data migration scope, and known dependencies", hint: "Upstream/downstream systems, migration volumes, and sequencing constraints" },
       ],
       artifactInputFlow: {

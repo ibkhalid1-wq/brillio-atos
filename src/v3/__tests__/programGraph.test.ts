@@ -10,6 +10,7 @@ import {
 } from "@/v3/lib/programGraph";
 import type { DocumentIntelligence } from "@/new/lib/documentIntelligenceTypes";
 import { ATOS_STANDARD } from "@/v3/lib/methodology";
+import { parseRows, serializeRows } from "@/v3/components/StructuredGrid";
 
 function doc(over: Partial<DocumentIntelligence>, fileName = "deck.pdf", id = "doc1"): ProgramDocument {
   return {
@@ -201,6 +202,66 @@ describe("buildProgramGraph", () => {
       rawData: { phaseInputs: { discover: { requirements: JSON.stringify([row]) } } },
     }));
     expect(graph.nodes.some((n) => n.type === "requirement" && n.label === "Audit logging")).toBe(true);
+  });
+
+  it("mints requirement nodes from Design NFR rows with a Non-functional default category", () => {
+    const graph = buildProgramGraph(program({
+      phases,
+      rawData: {
+        phaseInputs: {
+          design: {
+            nonFunctionalRequirements: JSON.stringify([
+              { id: "nfr-1", requirement: "p95 API latency under load", category: "Performance", target: "< 200ms" },
+              { id: "nfr-2", requirement: "Platform uptime" },
+            ]),
+          },
+        },
+      },
+    }));
+    expect(graph.stats.byKind.requirement).toBe(2);
+    const perf = graph.nodes.find((n) => n.id === "requirement:nfr-1");
+    expect(perf).toMatchObject({ type: "requirement", label: "p95 API latency under load", phaseCreated: "design" });
+    expect(perf!.properties).toMatchObject({ category: "Performance", target: "< 200ms" });
+    // A row without an explicit category falls back to the Non-functional default.
+    expect(graph.nodes.find((n) => n.id === "requirement:nfr-2")!.properties!.category).toBe("Non-functional");
+  });
+
+  it("mints functional (Discover) and non-functional (Design) requirements without id collision", () => {
+    const graph = buildProgramGraph(program({
+      phases: [...phases, { id: "design", displayName: "Design", pct: 20, status: "active", objective: "" }],
+      rawData: {
+        phaseInputs: {
+          // Both rows lack an explicit id, so the field-scoped fallback id must keep
+          // them distinct rather than both collapsing onto requirement:0.
+          discover: { requirements: JSON.stringify([{ requirement: "SSO across portals" }]) },
+          design: { nonFunctionalRequirements: JSON.stringify([{ requirement: "99.9% uptime" }]) },
+        },
+      },
+    }));
+    expect(graph.stats.byKind.requirement).toBe(2);
+    expect(graph.nodes.some((n) => n.id === "requirement:requirements-0")).toBe(true);
+    expect(graph.nodes.some((n) => n.id === "requirement:nonFunctionalRequirements-0")).toBe(true);
+  });
+
+  it("migrates a legacy prose NFR value into requirement nodes once re-serialized as a grid", () => {
+    // A programme that authored NFRs as a paragraph (the pre-grid format) carries a
+    // non-JSON string. The Program Graph reads structured rows only, so the grid's
+    // parseRows migration (line 1 row per line) is what turns that legacy prose into
+    // rows; once re-serialized to JSON it mints requirement nodes end-to-end.
+    const design = ATOS_STANDARD.phases.find((p) => p.id === "design");
+    const field = design?.inputFields?.find((f) => f.id === "nonFunctionalRequirements");
+    expect(field?.type).toBe("grid");
+    const columnKeys = new Set((field?.columns ?? []).map((c) => c.key));
+    expect(columnKeys.has("requirement")).toBe(true);
+
+    const legacyProse = "99.9% availability\nSub-200ms p95 latency";
+    const migrated = serializeRows(parseRows(legacyProse, field!.columns ?? []), field!.columns ?? []);
+    const graph = buildProgramGraph(program({
+      phases,
+      rawData: { phaseInputs: { design: { nonFunctionalRequirements: migrated } } },
+    }));
+    const labels = graph.nodes.filter((n) => n.type === "requirement").map((n) => n.label).sort();
+    expect(labels).toEqual(["99.9% availability", "Sub-200ms p95 latency"]);
   });
 
   it("includes open risks and decisions but excludes closed ones", () => {
