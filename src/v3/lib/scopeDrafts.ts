@@ -22,11 +22,36 @@
 
 /** A projected scope row, keyed by the scope grids' column keys. */
 export interface ProjectedScopeRow {
+  /**
+   * Deterministic, stable id derived from the scope item text (see `scopeRowId`).
+   * The StructuredGrid preserves a row's id verbatim through parse → serialize, so
+   * projecting a stable id here — rather than letting the grid mint a fresh random
+   * UUID on every adoption — means the same charter scope line always keeps the
+   * same id across re-projections and re-adoptions. That stability is what lets a
+   * downstream delivery increment reference a scope item by id without the link
+   * silently breaking when the draft is re-adopted.
+   */
+  id: string;
   item: string;
   category: string;
   // Index signature mirrors GridRow so a projected row is assignable wherever a
   // generic grid row (Record<string, string>) is expected — e.g. the draft banner.
   [key: string]: string;
+}
+
+/**
+ * A stable, human-readable id for a projected scope row, slugged from the item
+ * text and prefixed by scope side (so the same text on both boundaries can't
+ * collide). Uniqueness within a projection is guaranteed by the caller, which
+ * disambiguates a repeated slug with a numeric suffix.
+ */
+function scopeRowId(prefix: string, item: string): string {
+  const slug = item
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+  return `${prefix}-${slug || "item"}`;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -58,8 +83,10 @@ function projectCharterScope(rawData: unknown, key: "inScope" | "outOfScope"): P
   const items = doc[key];
   if (!Array.isArray(items)) return [];
 
+  const prefix = key === "inScope" ? "scope-in" : "scope-out";
   const rows: ProjectedScopeRow[] = [];
   const seen = new Set<string>();
+  const usedIds = new Set<string>();
   for (const entry of items) {
     const item = asTrimmedString(entry);
     if (!item) continue;
@@ -67,7 +94,16 @@ function projectCharterScope(rawData: unknown, key: "inScope" | "outOfScope"): P
     const dedupeKey = item.toLowerCase();
     if (seen.has(dedupeKey)) continue;
     seen.add(dedupeKey);
-    rows.push({ item, category: "" });
+    // Guarantee id uniqueness within the projection: two distinct items can slug
+    // to the same string (e.g. "A/B" and "A B"), so disambiguate with a suffix.
+    let id = scopeRowId(prefix, item);
+    if (usedIds.has(id)) {
+      let n = 2;
+      while (usedIds.has(`${id}-${n}`)) n += 1;
+      id = `${id}-${n}`;
+    }
+    usedIds.add(id);
+    rows.push({ id, item, category: "" });
   }
   return rows;
 }

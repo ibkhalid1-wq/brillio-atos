@@ -6,20 +6,20 @@ describe("projectCharterInScope / projectCharterOutOfScope", () => {
     outOfScope: ["Payroll", "APAC rollout"],
   };
 
-  it("maps charter inScope onto scopeInclusions grid rows (item + empty category)", () => {
+  it("maps charter inScope onto scopeInclusions grid rows (item + empty category) with stable ids", () => {
     const rows = projectCharterInScope({ data: { transformationCharter: charter } });
     expect(rows).toEqual([
-      { item: "Order-to-cash process", category: "" },
-      { item: "EU & UK geographies", category: "" },
-      { item: "SAP S/4HANA", category: "" },
+      { id: "scope-in-order-to-cash-process", item: "Order-to-cash process", category: "" },
+      { id: "scope-in-eu-uk-geographies", item: "EU & UK geographies", category: "" },
+      { id: "scope-in-sap-s-4hana", item: "SAP S/4HANA", category: "" },
     ]);
   });
 
-  it("maps charter outOfScope onto scopeExclusions grid rows", () => {
+  it("maps charter outOfScope onto scopeExclusions grid rows with side-prefixed ids", () => {
     const rows = projectCharterOutOfScope({ data: { transformationCharter: charter } });
     expect(rows).toEqual([
-      { item: "Payroll", category: "" },
-      { item: "APAC rollout", category: "" },
+      { id: "scope-out-payroll", item: "Payroll", category: "" },
+      { id: "scope-out-apac-rollout", item: "APAC rollout", category: "" },
     ]);
   });
 
@@ -34,8 +34,8 @@ describe("projectCharterInScope / projectCharterOutOfScope", () => {
       data: { transformationCharter: { inScope: ["  Order-to-cash  ", "", "   ", null, 42] } },
     });
     expect(rows).toEqual([
-      { item: "Order-to-cash", category: "" },
-      { item: "42", category: "" },
+      { id: "scope-in-order-to-cash", item: "Order-to-cash", category: "" },
+      { id: "scope-in-42", item: "42", category: "" },
     ]);
   });
 
@@ -44,9 +44,32 @@ describe("projectCharterInScope / projectCharterOutOfScope", () => {
       data: { transformationCharter: { inScope: ["Order-to-cash", "order-to-cash", "Billing"] } },
     });
     expect(rows).toEqual([
-      { item: "Order-to-cash", category: "" },
-      { item: "Billing", category: "" },
+      { id: "scope-in-order-to-cash", item: "Order-to-cash", category: "" },
+      { id: "scope-in-billing", item: "Billing", category: "" },
     ]);
+  });
+
+  it("projects the same id for the same scope line across re-projections (stability)", () => {
+    const data = { data: { transformationCharter: charter } };
+    const first = projectCharterInScope(data);
+    const second = projectCharterInScope(data);
+    expect(first.map((r) => r.id)).toEqual(second.map((r) => r.id));
+  });
+
+  it("disambiguates two distinct items that slug identically with a numeric suffix", () => {
+    // "A/B" and "A B" both slug to "a-b"; the second must not collide with the first.
+    const rows = projectCharterInScope({
+      data: { transformationCharter: { inScope: ["A/B", "A B"] } },
+    });
+    expect(rows.map((r) => r.id)).toEqual(["scope-in-a-b", "scope-in-a-b-2"]);
+    expect(new Set(rows.map((r) => r.id)).size).toBe(rows.length);
+  });
+
+  it("falls back to a placeholder slug when the item has no alphanumerics", () => {
+    const rows = projectCharterInScope({
+      data: { transformationCharter: { inScope: ["!!!", "###"] } },
+    });
+    expect(rows.map((r) => r.id)).toEqual(["scope-in-item", "scope-in-item-2"]);
   });
 
   it("returns [] when the charter has not run or names no scope", () => {
