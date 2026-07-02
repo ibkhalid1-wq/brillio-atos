@@ -815,7 +815,7 @@ const FORMAL_ARTIFACT_AGENTS: Record<string, FormalArtifactSpec> = {
     title: "Transformation Charter",
     system: `You are the ATOS Transformation Charter Agent. Produce the foundational programme mandate that authorises the transformation and sets its boundaries.
 
-Use the provided Strategy inputs (sponsor, business objective, success metric, scope, constraints, kpiBaselines). Do NOT invent a sponsor, budget, or scope that is not supported by the context — where an input is missing, say so explicitly in "gaps".
+Use the provided Strategy inputs (sponsor, business objective, success metric, scope, constraints, kpiBaselines). Do NOT invent a sponsor, budget, or scope that is not supported by the context. Where a Strategy-owned input the charter itself needs is genuinely missing (e.g. no quantified budget, no sponsor), say so in "gaps" — but observe the phase-scoped gap discipline below: never list later-phase detail, content already present here or upstream, or approval/baseline state as a gap.
 
 Return ONLY valid JSON:
 {
@@ -1194,17 +1194,29 @@ owns, and the detail owned by later phases). A gap is legitimate ONLY when the
 current phase is responsible for the missing information AND that information is
 absent from every source above (current inputs, KPI baselines, grounding facts,
 prior-phase artifacts, existing artifacts, document carry-forward). Check those
-sources before listing a gap. Specifically, do NOT list as a gap:
+sources before listing a gap. These exclusions are ABSOLUTE — a gap that matches
+any of them is invalid even if the corresponding artifact is thin, unapproved, or
+not yet baselined. Do NOT list as a gap:
 - Detail the methodology assigns to a LATER phase — delivery/milestone schedules,
   RACI or named-role/ownership matrices, resource/staffing plans, phase exit
   criteria, UAT/go-live/run-operate plans. Those are owned downstream, not missing
   here.
+- The ABSENCE, draft state, or incompleteness of a later-phase artifact, and never
+  name such an artifact as the vehicle a gap should be "captured in" or "baselined
+  in" — e.g. do NOT write "scope not baselined in a scope map or requirements
+  catalog" (Discover), "no comprehensive stakeholder roster / full team list"
+  (Mobilise), "no RACI matrix / adoption plan / test plan". If this artifact itself
+  records the relevant content (e.g. inScope/outOfScope, sponsor, objectives), it is
+  present — do not demand it be re-expressed in a downstream document.
 - Information already established elsewhere in the context — e.g. named roles that
   exist in a RACI matrix or stakeholder list, scope already recorded in the inputs
   or a prior-phase artifact, objectives/KPIs already captured.
-- Approval or sign-off STATE — e.g. "not yet approved", "objectives not formally
-  approved", "plan not signed off". Approval is a governance workflow tracked by
-  gate reviews, not a content gap in this artifact.
+- Approval, sign-off, baseline, or "recorded" STATE — e.g. "not yet approved",
+  "objectives not formally approved", "no formal approval of objectives / exit
+  criteria / delivery plan", "plan not signed off", "not baselined". Approval and
+  baselining are governance workflows tracked by gate reviews, NOT content this
+  artifact is missing. Exit criteria specifically are system-derived — never list
+  their absence or non-approval as a gap.
 Prefer fewer, phase-appropriate gaps over an exhaustive wish-list of everything a
 fully mature programme would eventually hold. If nothing within this phase's intent
 is genuinely missing, return an empty "gaps" array.`;
