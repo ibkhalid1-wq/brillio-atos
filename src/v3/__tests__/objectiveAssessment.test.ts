@@ -162,6 +162,44 @@ describe("buildObjectiveGraph", () => {
     expect(deliveredBy.some((r) => r.to === "artifact:charter")).toBe(true);
   });
 
+  it("attributes a severe risk on the objective's delivery chain but not one upstream of it", () => {
+    // Objective originates in strategy, which here sits *after* discover in the
+    // spine. A severe risk raised in discover (upstream, already cleared) must not
+    // threaten the objective's remaining attainment; one raised in strategy
+    // (on-chain) must. This is the phase-scoped threat model, not a blanket.
+    const prog = program({
+      phases: [
+        { id: "discover", displayName: "Discover", pct: 100, status: "complete", objective: "" },
+        { id: "strategy", displayName: "Strategy", pct: 100, status: "complete", objective: "" },
+      ],
+      artifacts: [businessCaseArtifact(0.9)],
+      raidEntries: [
+        { id: "up", type: "risk", status: "open", severity: "critical", title: "Discovery gap", phase: "discover" },
+        { id: "on", type: "risk", status: "open", severity: "critical", title: "Vendor delay", phase: "strategy" },
+      ],
+      rawData: { phaseInputs: { strategy: { businessObjective: OBJECTIVE } } },
+    });
+    const graph = buildObjectiveGraph(prog);
+    const objId = graph.objectiveIds[0];
+    const threats = graph.relations.filter((r) => r.from === objId && r.kind === "threatened-by").map((r) => r.to);
+    expect(threats).toContain("risk:on");
+    expect(threats).not.toContain("risk:up");
+  });
+
+  it("attributes a phaseless severe risk as a programme-level threat to every objective", () => {
+    const prog = program({
+      phases: [{ id: "strategy", displayName: "Strategy", pct: 100, status: "complete", objective: "" }],
+      artifacts: [businessCaseArtifact(0.9)],
+      // A risk with no resolvable phase is a programme-wide threat.
+      raidEntries: [{ id: "global", type: "risk", status: "open", severity: "high", title: "Funding uncertainty", phase: "" }],
+      rawData: { phaseInputs: { strategy: { businessObjective: OBJECTIVE } } },
+    });
+    const graph = buildObjectiveGraph(prog);
+    const objId = graph.objectiveIds[0];
+    const threats = graph.relations.filter((r) => r.from === objId && r.kind === "threatened-by").map((r) => r.to);
+    expect(threats).toContain("risk:global");
+  });
+
   it("never admits a relation that violates the ontology", () => {
     const graph = buildObjectiveGraph(healthyProgram());
     // Every relation's endpoints must exist as nodes (guard side-effect).

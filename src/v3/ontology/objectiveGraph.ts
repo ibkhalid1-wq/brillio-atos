@@ -172,6 +172,16 @@ export function buildObjectiveGraph(
   }
 
   for (const objective of objectives) {
+    // The objective's delivery chain: its own phase and every phase that follows
+    // it in the methodology sequence. A business objective is realised
+    // progressively downstream, so both its artifacts and the risks that threaten
+    // it are scoped to this chain. Computed once and shared by delivered-by and
+    // threatened-by. When the objective carries no resolvable phase, the chain is
+    // the whole spine (conservative).
+    const startIndex = objective.phaseId ? phaseOrder.indexOf(objective.phaseId) : -1;
+    const chainPhases = startIndex >= 0 ? phaseOrder.slice(startIndex) : phaseOrder;
+    const chainPhaseSet = new Set(chainPhases);
+
     // measured-by: every KPI is a candidate measure for the (typically singular)
     // programme objective. When the programme has multiple objectives this is a
     // conservative many-to-many; per-objective KPI attribution is a later refinement.
@@ -207,8 +217,6 @@ export function buildObjectiveGraph(
     // contribute nothing (no artifacts to attribute), so not-yet-started phases
     // are never unfairly counted.
     if (groundedCount === 0) {
-      const startIndex = objective.phaseId ? phaseOrder.indexOf(objective.phaseId) : -1;
-      const chainPhases = startIndex >= 0 ? phaseOrder.slice(startIndex) : phaseOrder;
       const fallbackArtifacts = [
         ...chainPhases.flatMap((pid) => artifactsByPhase.get(pid) ?? []),
         ...globalArtifacts,
@@ -218,12 +226,18 @@ export function buildObjectiveGraph(
       }
     }
 
-    // threatened-by: open, severe risks threaten objective attainment. Programme-
-    // level threat model (risk→objective is not individually attributed upstream).
+    // threatened-by: open, severe risks threaten objective attainment — but only
+    // those on the objective's delivery chain. A severe risk raised in a phase the
+    // objective already cleared (upstream of its origin phase) no longer bears on
+    // its *remaining* attainment, so it is not attributed. A risk with no phase,
+    // or one scoped to a phase outside the methodology spine, is treated as a
+    // programme-level threat and attributed to every objective (conservative).
     for (const risk of risks) {
-      if (SEVERE.has((risk.properties?.severity as ValidationSeverity) ?? "low")) {
-        addRelation({ id: `threatened-by:${objective.id}->${risk.id}`, from: objective.id, to: risk.id, kind: "threatened-by" });
-      }
+      if (!SEVERE.has((risk.properties?.severity as ValidationSeverity) ?? "low")) continue;
+      const riskPhase = risk.phaseId;
+      const onChain = !riskPhase || !phaseIdSet.has(riskPhase) || chainPhaseSet.has(riskPhase);
+      if (!onChain) continue;
+      addRelation({ id: `threatened-by:${objective.id}->${risk.id}`, from: objective.id, to: risk.id, kind: "threatened-by" });
     }
   }
 
