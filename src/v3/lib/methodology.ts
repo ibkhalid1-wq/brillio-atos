@@ -355,11 +355,21 @@ export const ATOS_STANDARD: MethodologyDefinition = {
           // usedByArtifacts mirrors the artifactInputFlow targets below; the fact
           // graph grounds each roster row into these artifacts via field.usedByArtifacts.
           usedByArtifacts: ["raci-matrix", "governance-model"],
+          // A roster row with no allocation reads as "someone owns this role" but says
+          // nothing about how much of them the programme actually has — a 10%-allocated
+          // lead and a full-time lead are different capacity facts the governance model
+          // and ramp plan depend on. Advisory (like the Strategy cost grid): a blank
+          // Allocation is an ungrounded staffing line, not a hard save-block.
+          validationRule: "Every named individual needs an explicit Allocation % — a blank allocation hides whether the role is full-time or a fractional commitment, which the capacity and ramp plans can't be built from.",
           columns: [
             { key: "role", label: "Core team role", type: "text" },
             { key: "name", label: "Named individual", type: "text" },
             { key: "org", label: "Organisation / team", type: "text" },
             { key: "allocation", label: "Allocation %", type: "text", width: 120 },
+            // Ramp timing: when each member actually joins. Owner resolution keys on
+            // name, so this column is additive grounding for the mobilisation/ramp plan
+            // (a role staffed from week 6 is not the same fact as one staffed at kickoff).
+            { key: "startDate", label: "Start date", type: "date", width: 130 },
           ],
         },
         {

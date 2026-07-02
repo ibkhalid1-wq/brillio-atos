@@ -97,8 +97,8 @@ describe("resolveRosterField", () => {
     };
     const field = resolveRosterField(store)!;
     expect(field.id).toBe("coreTeamRoster");
-    // The static seed wins, so its richer column set (incl. org/allocation) is kept,
-    // not the planner's two-column proposal.
-    expect(field.columns?.map((c) => c.key)).toEqual(["role", "name", "org", "allocation"]);
+    // The static seed wins, so its richer column set (incl. org/allocation/startDate)
+    // is kept, not the planner's two-column proposal.
+    expect(field.columns?.map((c) => c.key)).toEqual(["role", "name", "org", "allocation", "startDate"]);
   });
 });
