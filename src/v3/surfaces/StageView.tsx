@@ -2030,30 +2030,6 @@ export default function StageView({
               ATOS found no outstanding quality issues for this artifact.
             </div>
           )}
-          {!qualityArtifact.readOnly && qualityArtifact.groundingFields.length ? (
-            <div className="v3-quality-fields">
-              <div className="v3-quality-fields-title">Fields to update</div>
-              <div className="v3-quality-fields-hint">
-                These inputs ground this document — jump to one to strengthen it, then regenerate.
-              </div>
-              <div className="v3-drilldown-row">
-                {qualityArtifact.groundingFields.map((field) => (
-                  <button
-                    key={field.id}
-                    type="button"
-                    className={`v3-drilldown-chip${field.filled ? "" : " thin"}`}
-                    onClick={() => scrollToInputField(field.id)}
-                    title={field.filled
-                      ? `Go to "${field.label}" to refine it`
-                      : `"${field.label}" is empty — go there to add it`}
-                  >
-                    <span aria-hidden="true">{field.filled ? "✎" : "＋"}</span>
-                    {field.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
           {applyError ? (
             <div style={{ marginTop: 14, fontSize: 12.5, color: "var(--v3-red, #dc2626)" }}>{applyError}</div>
           ) : null}

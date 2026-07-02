@@ -10,9 +10,12 @@ import {
   selfReportedGapRecommendations,
   selectFindingsForArtifact,
   groupRecommendationsByCategory,
+  matchGroundingFields,
   type RecommendationGroup,
 } from "@/v3/lib/artifactRecommendations";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
+import { getGuidanceInputFields } from "@/v3/lib/phaseFlowEdges";
+import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
 import { AdamCard, AdamCardBody } from "@/v3/components/ui/AdamCard";
 import { ArtifactMapTree } from "@/v3/components/ArtifactMapTree";
 import { DrillDownLinks } from "@/v3/components/DrillDownLinks";
@@ -197,6 +200,7 @@ export function PhaseRailPanels({
     // into each artifact's guidance so the categories reflect real disciplines —
     // reviewer prose is Completeness, but an un-traced requirement is Ontology.
     const findings = selectModelValidationFindings(program);
+    const schema = getPhaseInputSchema(phaseId, store);
     return getPhaseArtifactDefs(phaseId, store)
       .map((def) => {
         const review = resolveArtifactReview(bucket, def.id, phaseId);
@@ -208,15 +212,24 @@ export function PhaseRailPanels({
           ...selfReportedGapRecommendations(bucket, def.id),
         ];
         if (recommendations.length === 0) return null;
+        // The grounding inputs this artifact is generated from (id + label), so a
+        // guidance line that names one in prose can render a jump-to-field chip —
+        // the same "fields to update" signal the Improve modal shows, surfaced
+        // here on the rail without opening a modal.
+        const fields = getGuidanceInputFields(phaseId, def.id, store).map((fieldId) => ({
+          id: fieldId,
+          label: schema.fields.find((field) => field.id === fieldId)?.label ?? fieldId,
+        }));
         return {
           id: def.id,
           label: def.label,
           score: review?.score ?? null,
+          fields,
           groups: groupRecommendationsByCategory(recommendations),
         };
       })
       .filter(
-        (item): item is { id: string; label: string; score: number | null; groups: RecommendationGroup[] } =>
+        (item): item is { id: string; label: string; score: number | null; fields: Array<{ id: string; label: string }>; groups: RecommendationGroup[] } =>
           item !== null,
       );
   }, [program, phaseId]);
@@ -418,9 +431,34 @@ export function PhaseRailPanels({
                     <div key={group.category} className="v3-rail-guidance-group">
                       <div className="v3-rail-guidance-category" title={group.description}>{group.category}</div>
                       <ul className="v3-rail-guidance-list">
-                        {group.items.map((rec, idx) => (
-                          <li key={idx} className="v3-rail-item-sub">{rec.title}{rec.detail ? ` — ${rec.detail}` : ""}</li>
-                        ))}
+                        {group.items.map((rec, idx) => {
+                          // The grounding field(s) this line names in prose, so the
+                          // user can jump straight to the input to update — the same
+                          // "fields to update" signal from the Improve modal.
+                          const recFields = matchGroundingFields(`${rec.title} ${rec.detail ?? ""}`, item.fields);
+                          return (
+                          <li key={idx} className="v3-rail-item-sub">
+                            {rec.title}{rec.detail ? ` — ${rec.detail}` : ""}
+                            {onNavigateToPhaseInputs && recFields.length ? (
+                              <div className="v3-drilldown-row">
+                                {recFields.map((field) => (
+                                  <button
+                                    key={field.id}
+                                    type="button"
+                                    className="v3-drilldown-chip"
+                                    data-kind="input"
+                                    onClick={() => drillTo(phaseId, `input:${field.id}`)}
+                                    title={`Go to "${field.label}" to update it`}
+                                  >
+                                    <span aria-hidden="true">▸ </span>
+                                    {field.label}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null}
+                          </li>
+                          );
+                        })}
                       </ul>
                     </div>
                   ))}
