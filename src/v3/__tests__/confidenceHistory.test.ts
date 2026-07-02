@@ -4,6 +4,9 @@ import {
   getPreviousScore,
   recordConfidenceSnapshot,
   getConfidenceForecast,
+  assessGateRisk,
+  getGateRisk,
+  type ScoreSnapshot,
 } from "@/v3/lib/confidenceHistory";
 
 const DAY = 86_400_000;
@@ -84,5 +87,53 @@ describe("confidenceHistory", () => {
     const forecast = getConfidenceForecast("p6", 64, 80);
     expect(forecast.estimatedDaysToTarget).toBeNull();
     expect(forecast.trend).toBe("stable");
+  });
+});
+
+describe("assessGateRisk", () => {
+  const snap = (scores: number[]): ScoreSnapshot[] =>
+    scores.map((score, i) => ({ ts: i * DAY, score }));
+
+  it("reports no history on a cold start", () => {
+    const risk = assessGateRisk([]);
+    expect(risk.level).toBe("on-track");
+    expect(risk.currentScore).toBeUndefined();
+  });
+
+  it("flags at-risk when the current score is already below the gate", () => {
+    const risk = assessGateRisk(snap([80, 75, 65]), 70);
+    expect(risk.level).toBe("at-risk");
+    expect(risk.direction).toBe("falling");
+  });
+
+  it("flags at-risk when a falling trend projects below the gate within the lookahead", () => {
+    // 88 → 82 → 76: above the 70 gate now, but -6/step projects 76 - 12 = 64 in two steps.
+    const risk = assessGateRisk(snap([88, 82, 76]), 70);
+    expect(risk.level).toBe("at-risk");
+  });
+
+  it("flags watch for a gentle decline that does not yet project failure", () => {
+    // 95 → 93 → 91: falling but projects 91 - 4 = 87, comfortably above 70.
+    const risk = assessGateRisk(snap([95, 93, 91]), 70);
+    expect(risk.level).toBe("watch");
+    expect(risk.direction).toBe("falling");
+  });
+
+  it("counts consecutive declines from the tail", () => {
+    const risk = assessGateRisk(snap([60, 70, 68, 66, 64]), 50);
+    expect(risk.consecutiveDeclines).toBe(3);
+  });
+
+  it("reports on-track for a rising, comfortably-above series", () => {
+    const risk = assessGateRisk(snap([70, 78, 88]), 70);
+    expect(risk.level).toBe("on-track");
+    expect(risk.direction).toBe("rising");
+  });
+
+  it("getGateRisk anchors the live score to the series tail", () => {
+    window.localStorage.clear();
+    seed("g1", [{ ts: Date.now() - 2 * DAY, score: 82 }, { ts: Date.now() - DAY, score: 76 }]);
+    // Live score 68 is below the gate → at-risk, regardless of stored tail.
+    expect(getGateRisk("g1", 68, 70).level).toBe("at-risk");
   });
 });
