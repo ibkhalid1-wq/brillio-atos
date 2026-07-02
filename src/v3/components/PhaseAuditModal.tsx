@@ -8,7 +8,9 @@ import {
   FINDING_CLASS_DESCRIPTION,
   type FindingClass,
   type ValidationDomain,
+  type ValidationSeverity,
 } from "@/v3/lib/crossArtifactValidation";
+import { severityRank } from "@/v3/ontology/ontologyConfig";
 
 const CLASS_COLOR: Record<FindingClass, string> = {
   Ontology: "#6366f1",
@@ -202,6 +204,8 @@ export default function PhaseAuditModal({ programId, phaseId, phaseLabel, onClos
   const fullPrompt = useMemo(() => (run ? extractFullPrompt(run.input_context) : null), [run]);
   // Group findings by top-level class (Ontology / Governance / Change /
   // Completeness) in the shared order, so the audit reads as classified buckets.
+  // The raw run output is in model order; sort each bucket worst-first so the
+  // most severe finding in a class leads (the phase card already sorts its gaps).
   const groupedFindings = useMemo(() => {
     const groups = new Map<FindingClass, Array<Record<string, unknown>>>();
     for (const f of findings) {
@@ -212,7 +216,14 @@ export default function PhaseAuditModal({ programId, phaseId, phaseLabel, onClos
     }
     return FINDING_CLASS_ORDER
       .filter((cls) => groups.has(cls))
-      .map((cls) => ({ cls, items: groups.get(cls)! }));
+      .map((cls) => ({
+        cls,
+        items: [...groups.get(cls)!].sort(
+          (a, b) =>
+            severityRank((typeof b.severity === "string" ? b.severity : "low") as ValidationSeverity) -
+            severityRank((typeof a.severity === "string" ? a.severity : "low") as ValidationSeverity),
+        ),
+      }));
   }, [findings]);
   const durationSec = run?.started_at && run?.completed_at
     ? ((new Date(run.completed_at).getTime() - new Date(run.started_at).getTime()) / 1000).toFixed(1)
