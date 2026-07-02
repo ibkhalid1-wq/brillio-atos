@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { PhaseDefinition } from "@/v3/lib/methodology";
+import { getMethodology, type PhaseDefinition } from "@/v3/lib/methodology";
 import {
   findFlowFieldGaps,
   analyzeExitCriteriaCoverage,
@@ -110,5 +110,27 @@ describe("analyzeMethodologySpine (whole-registry coherence)", () => {
       expect(criterion.covered).toBe(false);
       expect(criterion.backingFieldIds).toEqual([]);
     }
+  });
+});
+
+describe("Strategy governance-evidence fields (Option A)", () => {
+  const strategy = getMethodology("atos-lite").phases.find((p) => p.id === "strategy")!;
+  const field = (id: string) => strategy.inputFields?.find((f) => f.id === id);
+
+  // These two fields give a home to the exact facts the Strategy exit criteria
+  // demand as evidence — "date of sign-off" (strategy-3) and a "reference to the
+  // approved business case" (strategy-1) — which previously no input could hold,
+  // so the artifact reviewer pointed at a non-existent "relevant input".
+  it("declares a sponsor sign-off date field for the sponsor-committed criterion", () => {
+    const f = field("sponsorSignOffDate");
+    expect(f?.type).toBe("date");
+    // Optional so it never retroactively fails an in-flight programme's gate.
+    expect(f?.required).toBe(false);
+  });
+
+  it("declares a business-case approval reference field for the business-case criterion", () => {
+    const f = field("businessCaseApproval");
+    expect(f?.type).toBe("text");
+    expect(f?.required).toBe(false);
   });
 });

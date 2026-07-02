@@ -174,6 +174,14 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       inputFields: [
         { id: "businessObjective", label: "Business objective", type: "textarea", placeholder: "What outcome is this programme trying to achieve?", required: true, example: "Reduce cost-to-serve by 20% within 18 months by consolidating three regional service desks onto one platform.", validationRule: "A measurable outcome, not an activity — name the change, the magnitude, and the horizon." },
         { id: "sponsor", label: "Executive sponsor", type: "text", placeholder: "Name and title", required: true, example: "Jane Okafor, Chief Operating Officer", validationRule: "A named individual with their role, not a team or department." },
+        // Governance evidence for the "Sponsor confirmed and committed" exit
+        // criterion. The `sponsor` field captures WHO; this captures WHEN they
+        // signed off — the criterion's evidencePrompt asks for exactly "date of
+        // sign-off", which no field could hold, so the artifact reviewer used to
+        // point at "the relevant input" that didn't exist. Optional so it never
+        // retroactively gates an in-flight programme's Strategy gate; the edge's
+        // buildGroundingFacts still flows it into the charter prompt.
+        { id: "sponsorSignOffDate", label: "Sponsor sign-off date", type: "date", required: false, hint: "The date the executive sponsor formally signed off the programme mandate. Backs the Strategy exit criterion \"Sponsor confirmed and committed\" (evidence: date of sign-off).", example: "2026-04-20" },
         { id: "industry", label: "Industry", type: "select", options: INDUSTRY_OPTIONS, required: true },
         { id: "startDate", label: "Programme start date", type: "date", required: true, validationRule: "The programme kickoff date." },
         { id: "targetEndDate", label: "Target end date", type: "date", required: true, validationRule: "Must fall after the programme start date." },
@@ -196,6 +204,12 @@ export const ATOS_STANDARD: MethodologyDefinition = {
           ],
         },
         { id: "constraints", label: "Key constraints", type: "textarea", placeholder: "Budget, timeline, regulatory, or technical constraints", required: true, hint: "e.g. Must go live before Q4 financial year end", example: "Must go live before Q4 FY-end; no additional headcount; core-banking change freeze in December.", validationRule: "The hard boundaries the solution must respect — budget, timeline, regulatory, or technical." },
+        // Governance evidence for the "Business case approved" exit criterion.
+        // Its evidencePrompt asks for a "link or reference to the approved business
+        // case document" — a fact the cost grid can't hold — so the reviewer had
+        // nowhere to point. Optional (never retroactively gates); flows into the
+        // business-case prompt via buildGroundingFacts.
+        { id: "businessCaseApproval", label: "Business case approval reference", type: "text", required: false, placeholder: "Link or reference to the approved business case", hint: "A link or document reference showing the business case has been formally approved. Backs the Strategy exit criterion \"Business case approved\".", example: "SteerCo minutes 2026-04-18, item 4" },
         { id: "successMetric", label: "Primary success metric", type: "text", placeholder: "KPI name, e.g. Cost to serve", required: true, example: "Cost to serve per transaction", validationRule: "A single measurable KPI name — its baseline and target are captured in the Success KPIs grid." },
         {
           // KPIs captured as a structured grid — each with a baseline and target —
