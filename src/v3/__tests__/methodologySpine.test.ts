@@ -101,7 +101,6 @@ describe("analyzeMethodologySpine (whole-registry coherence)", () => {
       "discover-2", // Stakeholder interviews completed — proven by the interview-log artifact
       "build-3", // Training material ready — proven by the training-pack artifact
       "operate-3", // KPIs being measured — proven by the KPI tracking artifact
-      "valuerealize-4", // Handover to BAU confirmed — no BAU handover input yet
     ]);
   });
 
@@ -154,5 +153,26 @@ describe("Mobilise governance-evidence fields (Option A)", () => {
     );
     expect(covered?.covered).toBe(true);
     expect(covered?.backingFieldIds).toContain("budgetBaselineApproval");
+  });
+});
+
+describe("Value Realize governance-evidence fields (Option A)", () => {
+  const vr = getMethodology("atos-lite").phases.find((p) => p.id === "valuerealize")!;
+
+  // "Handover to BAU confirmed" (valuerealize-4) asks for a BAU handover
+  // confirmation naming the BAU owner — closureApproval (sponsor sign-off) does
+  // not hold it — so it now has a backing input and drops from the inventory.
+  it("declares an optional BAU handover confirmation field", () => {
+    const f = vr.inputFields?.find((x) => x.id === "bauHandoverConfirmation");
+    expect(f?.type).toBe("text");
+    expect(f?.required).toBe(false);
+  });
+
+  it("makes valuerealize-4 covered in the spine report", () => {
+    const covered = analyzeMethodologySpine("atos-lite").exitCriteriaCoverage.find(
+      (c) => c.criterionId === "valuerealize-4",
+    );
+    expect(covered?.covered).toBe(true);
+    expect(covered?.backingFieldIds).toContain("bauHandoverConfirmation");
   });
 });

@@ -837,6 +837,12 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         },
         { id: "lessonsLearned", label: "Lessons learned", type: "textarea", required: false, usedByArtifacts: ["narrative"], placeholder: "What worked, what didn't, and what to carry into the next programme", hint: "The retrospective that closes the programme — feeds the closure narrative." },
         { id: "closureApproval", label: "Sponsor closure sign-off", type: "select", required: false, usedByArtifacts: ["narrative"], options: ["Yes", "No"], hint: "Has the executive sponsor formally approved programme closure? Mirrors the mandatory closure exit criterion." },
+        // Governance evidence for the "Handover to BAU confirmed" exit criterion.
+        // Its evidencePrompt asks for a "BAU handover confirmation document" naming
+        // the business-as-usual owner — a fact closureApproval (sponsor sign-off)
+        // doesn't hold — so the criterion had no backing input. Optional (never
+        // retroactively gates); flows into the closure narrative via usedByArtifacts.
+        { id: "bauHandoverConfirmation", label: "BAU handover confirmation", type: "text", required: false, usedByArtifacts: ["narrative"], placeholder: "BAU owner and handover confirmation reference", hint: "The business-as-usual owner and a reference confirming programme outputs and ongoing responsibilities were formally handed over. Backs the Value Realize exit criterion \"Handover to BAU confirmed\".", example: "Handed to Ops Lead M. Chen, BAU acceptance ref OPS-204" },
       ],
       artifactInputFlow: {
         "benefits-tracker": ["realisedBenefits"],
