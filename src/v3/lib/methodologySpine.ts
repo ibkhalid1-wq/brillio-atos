@@ -71,7 +71,7 @@ export interface MethodologySpineReport {
 // Generic programme / governance vocabulary that carries no subject identity —
 // stripped before overlap so "Budget baseline confirmed" matches a *budget*
 // field on the noun, not on filler like "confirmed" that appears everywhere.
-const SPINE_STOPWORDS = new Set([
+export const SPINE_STOPWORDS = new Set([
   "the", "and", "for", "with", "has", "have", "been", "are", "not", "all", "any",
   "each", "least", "one", "per", "from", "into", "that", "this", "their", "its",
   "programme", "program", "phase", "gate", "key", "initial", "ongoing", "final",

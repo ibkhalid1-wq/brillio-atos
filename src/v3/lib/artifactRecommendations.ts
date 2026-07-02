@@ -26,6 +26,7 @@ import {
   type ValidationSeverity,
 } from "@/v3/lib/crossArtifactValidation";
 import { FORMAL_ARTIFACT_FIELD_KEYS, listFormalArtifactGaps } from "@/v3/lib/formalArtifacts";
+import { SPINE_STOPWORDS } from "@/v3/lib/methodologySpine";
 
 /** Recommendations are grouped under the same top-level classes as findings. */
 export type RecommendationCategory = FindingClass;
@@ -190,28 +191,77 @@ export function groupRecommendationsByCategory<T extends ArtifactRecommendation>
   })).filter((group) => group.items.length > 0);
 }
 
+/** Split a camelCase id into its words so "costAssumption" → "cost assumption". */
+function splitCamel(id: string): string {
+  return id.replace(/([a-z0-9])([A-Z])/g, "$1 $2");
+}
+
 /**
- * The grounding fields a free-form recommendation is talking about, found by
- * matching each field's label OR its id as a whole phrase inside the issue text.
- * A model suggestion carries no explicit fieldId, but it names the field in prose
- * — and reviewers name it either by its human label ("add per-line estimates to
- * the Cost assumption input") OR, just as often, by its raw id, bare or phase-
- * qualified ("specify the costAssumption", "in the strategy.costAssumption
- * input"). Matching the id too is what lets those lines surface a jump-to-field
- * chip instead of leaving the user to hunt the field index. Whole-word matching
- * (each needle regex-escaped) keeps a short label like "Industry" from firing on
- * a substring, and the phase-qualified form works because "." is a word boundary
- * so `\bcostAssumption\b` still hits inside "strategy.costAssumption". Fields are
- * returned in their original order so chips read stably.
+ * Light singular stem: drop a trailing "s" on longer words so a reviewer's plural
+ * or JSON-key form ("costs", "benefits", "estimates") overlaps the singular noun
+ * in a field label ("Cost assumption", "Realised benefits"). Short words (kpis,
+ * nfrs) are left intact — those resolve by whole-word/id match, and stemming them
+ * only invites false overlaps.
+ */
+function stemToken(token: string): string {
+  return token.length > 4 && token.endsWith("s") ? token.slice(0, -1) : token;
+}
+
+/**
+ * The subject tokens of a piece of text: lowercased words with generic programme/
+ * governance filler (SPINE_STOPWORDS, shared with the methodology-spine analysis)
+ * stripped and each remaining word lightly singular-stemmed. This is what lets a
+ * field match on *meaning* — its distinctive noun — rather than only on an exact
+ * label/id occurrence.
+ */
+function subjectTokens(text: string): Set<string> {
+  return new Set(
+    (text ?? "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .split(" ")
+      .filter((token) => token.length > 2 && !SPINE_STOPWORDS.has(token))
+      .map(stemToken),
+  );
+}
+
+/**
+ * The grounding fields a free-form recommendation is talking about. Resolved by
+ * two complementary passes, so a line surfaces its input chip whether it names the
+ * field explicitly or only by subject:
+ *
+ *   1. Whole-phrase match — the field's human label OR its raw id (bare or phase-
+ *      qualified: "specify the costAssumption", "in the strategy.costAssumption
+ *      input") as a whole word. Regex-escaped so a short label like "Industry"
+ *      never fires on a substring, and "." counts as a boundary so
+ *      `\bcostAssumption\b` still hits inside "strategy.costAssumption".
+ *   2. Subject-token overlap — the field's distinctive noun(s) share a stemmed,
+ *      stopword-stripped token with the text. This is what catches reviewer prose
+ *      that names the field by meaning rather than by its exact label: "trim the
+ *      costs array" → Cost assumption, "raise the realised benefits" → Realised
+ *      benefits. Reuses the methodology-spine stopword vocabulary so both surfaces
+ *      judge "subject" the same way.
+ *
+ * Fields are returned in their original order so chips read stably.
  */
 export function matchGroundingFields<T extends { id: string; label: string }>(text: string, fields: T[]): T[] {
   const haystack = (text ?? "").toLowerCase();
   if (!haystack.trim()) return [];
+  const textTokens = subjectTokens(text);
   const namesField = (needle: string): boolean => {
     const n = needle.trim().toLowerCase();
     if (!n) return false;
     const escaped = n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     return new RegExp(`\\b${escaped}\\b`).test(haystack);
   };
-  return fields.filter((field) => namesField(field.label) || namesField(field.id));
+  const sharesSubject = (field: T): boolean => {
+    if (textTokens.size === 0) return false;
+    for (const token of subjectTokens(`${field.label} ${splitCamel(field.id)}`)) {
+      if (textTokens.has(token)) return true;
+    }
+    return false;
+  };
+  return fields.filter(
+    (field) => namesField(field.label) || namesField(field.id) || sharesSubject(field),
+  );
 }

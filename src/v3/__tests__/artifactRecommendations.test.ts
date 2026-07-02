@@ -198,6 +198,24 @@ describe("groupRecommendationsByCategory", () => {
     expect(matched.map((f) => f.id)).toEqual(["costAssumption", "investmentAsk"]);
   });
 
+  it("surfaces a field on subject-token overlap when the label is not named verbatim", () => {
+    const fields = [
+      { id: "costAssumption", label: "Cost assumption", filled: true },
+      { id: "successMetric", label: "Primary success metric", filled: true },
+      { id: "industry", label: "Industry", filled: true },
+    ];
+    // Reviewer prose cites the artifact-body key "costs", not the label "Cost
+    // assumption" — the plural stems to "cost" and overlaps the field's subject.
+    const matched = matchGroundingFields("Trim the costs array to per-line entries.", fields);
+    expect(matched.map((f) => f.id)).toEqual(["costAssumption"]);
+  });
+
+  it("does not over-match on generic governance filler alone", () => {
+    const fields = [{ id: "costAssumption", label: "Cost assumption", filled: true }];
+    // "review", "approve", "document" are all stopwords → no subject overlap.
+    expect(matchGroundingFields("Review and approve the document.", fields)).toEqual([]);
+  });
+
   it("does not fire an id on a substring (whole-word only)", () => {
     const fields = [{ id: "kpis", label: "Success KPIs", filled: true }];
     // "kpistan" contains "kpis" but not as a whole word.
