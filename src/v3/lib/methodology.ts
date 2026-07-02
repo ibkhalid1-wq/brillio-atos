@@ -924,3 +924,52 @@ export function getPhaseDefinition(
   return getMethodology(variant).phases.find((phase) => phase.id === phaseId)
     ?? ATOS_STANDARD.phases.find((phase) => phase.id === phaseId);
 }
+
+/** The artifacts a phase produces: its required set plus every input-flow target. */
+function phaseOwnedArtifacts(phase: PhaseDefinition): string[] {
+  const owned = new Set<string>(phase.requiredArtifacts);
+  for (const agentId of Object.keys(phase.artifactInputFlow ?? {})) owned.add(agentId);
+  return [...owned];
+}
+
+/**
+ * A compact, authoritative "phase ownership map" for a formal artifact's
+ * generation context. Each phase OWNS a specific set of captured inputs (its
+ * `inputFields`) and artifacts (its `requiredArtifacts` plus every
+ * `artifactInputFlow` target); a self-reported gap belongs to whichever phase
+ * owns the missing item. Feeding this map into the artifact prompt lets the
+ * phase-scoped gap discipline suppress out-of-scope gaps from the registry
+ * itself rather than from hard-coded scope/roster examples — so it generalises
+ * to every phase and artifact and stays correct as the registry evolves.
+ *
+ * Phases are labelled relative to `currentPhaseId`: EARLIER phases hold content
+ * already established upstream (reference it, never re-demand it as a gap), the
+ * CURRENT phase is where gaps may legitimately be raised, and LATER phases own
+ * detail that is out of scope for this artifact. Deterministic + framework-free,
+ * so it unit-tests without a render. Returns "" for an unknown phase id.
+ */
+export function buildPhaseOwnershipContext(
+  currentPhaseId: string,
+  variant: MethodologyVariant = "atos-lite",
+): string {
+  const phases = getMethodology(variant).phases;
+  const currentIndex = phases.findIndex((phase) => phase.id === currentPhaseId);
+  if (currentIndex === -1) return "";
+
+  const lines: string[] = [
+    "## Phase ownership map (authoritative — derived from the methodology registry)",
+    "Each phase OWNS a specific set of captured inputs and artifacts, listed below. A self-reported gap belongs to whichever phase owns the missing item. In THIS artifact, only raise gaps for things the CURRENT phase owns — never demand detail an EARLIER phase already established, nor detail (or a structured input) that a LATER phase owns, even if the corresponding downstream artifact is thin or not yet produced.",
+  ];
+  phases.forEach((phase, index) => {
+    const marker =
+      index < currentIndex ? "EARLIER — already established upstream"
+        : index === currentIndex ? "CURRENT PHASE — gaps may be raised here"
+          : "LATER — out of scope for this artifact";
+    const inputs = (phase.inputFields ?? []).map((field) => field.label);
+    const artifacts = phaseOwnedArtifacts(phase);
+    lines.push(`▸ ${phase.displayName} [${marker}]`);
+    if (inputs.length) lines.push(`   • Inputs: ${inputs.join("; ")}`);
+    if (artifacts.length) lines.push(`   • Artifacts: ${artifacts.join(", ")}`);
+  });
+  return lines.join("\n");
+}

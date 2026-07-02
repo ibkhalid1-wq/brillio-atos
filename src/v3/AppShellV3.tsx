@@ -63,7 +63,8 @@ import { useCriticalEventAlerts } from "@/v3/hooks/useCriticalEventAlerts";
 import { useLocalProgramMigration } from "@/v3/hooks/useLocalProgramMigration";
 import { usePhaseAgentState } from "@/v3/hooks/usePhaseAgentState";
 import { useProgramValidation } from "@/v3/hooks/useProgramValidation";
-import { getPhaseSequence, getPhaseDefinition, ATOS_STANDARD } from "@/v3/lib/methodology";
+import { getPhaseSequence, getPhaseDefinition, buildPhaseOwnershipContext, ATOS_STANDARD } from "@/v3/lib/methodology";
+import { FORMAL_ARTIFACT_FIELD_KEYS } from "@/v3/lib/formalArtifacts";
 import { buildPhaseSchedule } from "@/v3/lib/phaseSchedule";
 import { computePhaseReadiness, getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
 import { confidenceRag, getGateThreshold } from "@/v3/lib/confidenceScore";
@@ -1388,6 +1389,22 @@ export default function AppShellV3() {
           .map((entry) => `- ${getPhaseDefinition(entry.id)?.displayName ?? entry.id}: ${entry.start} → ${entry.end}`)
           .join("\n");
         crossPhaseContext += `${crossPhaseContext ? "\n\n" : ""}## Authoritative phase schedule — use these exact dates\nThe programme window is fixed (${startDate} → ${targetEndDate}). Use these computed per-phase start/end dates verbatim as each phase's start and end. Do NOT mark any of them "TBD":\n${lines}`;
+      }
+    }
+
+    // Phase ownership map for formal (document-style) artifacts. Their self-
+    // reported `gaps[]` surface straight to the user as quality guidance, so a
+    // gap that names later-phase detail (scope atoms owned by Discover, a named
+    // roster owned by Mobilise) or already-established upstream content is noise.
+    // The edge's phase-scoped gap discipline used hard-coded scope/roster
+    // examples to suppress those; feeding the registry's authoritative per-phase
+    // input/artifact ownership here lets the discipline generalise to every phase
+    // and artifact. No deploy needed — the edge folds crossPhaseContext into
+    // prompt.system.
+    if (resolvedAgentId in FORMAL_ARTIFACT_FIELD_KEYS) {
+      const ownershipMap = buildPhaseOwnershipContext(phaseId);
+      if (ownershipMap) {
+        crossPhaseContext += `${crossPhaseContext ? "\n\n" : ""}${ownershipMap}`;
       }
     }
 

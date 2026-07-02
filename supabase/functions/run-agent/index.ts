@@ -1189,14 +1189,21 @@ they conflict with current inputs, ignore memory.
 ### Gap discipline (phase-scoped)
 The "gaps" you list become this artifact's own guidance — they surface directly to
 the user as what to fix. Scope them strictly to THIS artifact's intent within the
-CURRENT phase (see "phaseScope" in the context: its objective, the artifacts it
-owns, and the detail owned by later phases). A gap is legitimate ONLY when the
-current phase is responsible for the missing information AND that information is
-absent from every source above (current inputs, KPI baselines, grounding facts,
-prior-phase artifacts, existing artifacts, document carry-forward). Check those
-sources before listing a gap. These exclusions are ABSOLUTE — a gap that matches
-any of them is invalid even if the corresponding artifact is thin, unapproved, or
-not yet baselined. Do NOT list as a gap:
+CURRENT phase. Two sources tell you what the current phase owns: "phaseScope" in
+the context (its objective, the artifacts it owns, and the detail owned by later
+phases) and, authoritatively, the "## Phase ownership map" folded into the system
+context — a registry-derived list of exactly which captured inputs and artifacts
+each phase owns, with every phase marked EARLIER / CURRENT / LATER relative to
+this one. Consult that map first: a missing item is only a gap when the CURRENT
+phase owns it. If the map assigns the item (an input or an artifact) to a LATER
+phase, or it was already established by an EARLIER phase, it is NOT a gap here —
+regardless of how you phrase it. A gap is legitimate ONLY when the current phase
+is responsible for the missing information AND that information is absent from
+every source above (current inputs, KPI baselines, grounding facts, prior-phase
+artifacts, existing artifacts, document carry-forward). Check those sources before
+listing a gap. These exclusions are ABSOLUTE — a gap that matches any of them is
+invalid even if the corresponding artifact is thin, unapproved, or not yet
+baselined. Do NOT list as a gap:
 - Detail the methodology assigns to a LATER phase — delivery/milestone schedules,
   RACI or named-role/ownership matrices, resource/staffing plans, phase exit
   criteria, UAT/go-live/run-operate plans. Those are owned downstream, not missing
