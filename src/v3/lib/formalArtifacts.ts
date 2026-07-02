@@ -206,3 +206,44 @@ export function getFormalArtifactConfidence(source: Record<string, unknown> | nu
   if (typeof confidence !== "number" || !Number.isFinite(confidence)) return null;
   return Math.round(confidence <= 1 ? confidence * 100 : confidence);
 }
+
+/**
+ * Read the text of one self-reported gap entry from a formal-artifact `gaps`
+ * array. Entries are usually plain strings, but the generating agent occasionally
+ * emits objects — read the common text keys defensively so a shape change does
+ * not silently drop the admission. Mirrors `selfReportedGapText` in
+ * crossArtifactValidation.ts (duplicated, not imported, because that module
+ * already imports from this one — importing back would create a cycle).
+ */
+function gapEntryText(entry: unknown): string {
+  if (typeof entry === "string") return entry.trim();
+  if (entry && typeof entry === "object") {
+    const e = entry as Record<string, unknown>;
+    for (const k of ["description", "gap", "issue", "text", "title", "detail", "summary"]) {
+      const v = e[k];
+      if (typeof v === "string" && v.trim()) return v.trim();
+    }
+  }
+  return "";
+}
+
+/**
+ * Count the deficiencies a formal artifact self-reports in the `gaps` array on
+ * its top-level mirror. The generating agent lists what its own draft is missing
+ * (e.g. "scope exclusions not formally documented") next to a *separate*
+ * `confidence` score; the two are produced independently and never reconciled, so
+ * a document can claim near-perfect confidence while admitting material gaps.
+ * Callers use this count to erode the displayed quality so the score cannot
+ * contradict the artifact's own admissions. Blank/empty entries are ignored.
+ * Returns 0 when the artifact is not a formal document or reports no gaps.
+ */
+export function getFormalArtifactGapCount(source: Record<string, unknown> | null, artifactId: string): number {
+  if (!source) return 0;
+  const fieldKey = FORMAL_ARTIFACT_FIELD_KEYS[artifactId];
+  if (!fieldKey) return 0;
+  const doc = source[fieldKey];
+  if (!isObject(doc)) return 0;
+  const gaps = doc.gaps;
+  if (!Array.isArray(gaps)) return 0;
+  return gaps.reduce<number>((n, entry) => (gapEntryText(entry) ? n + 1 : n), 0);
+}

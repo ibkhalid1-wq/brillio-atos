@@ -93,7 +93,9 @@ describe("buildAttachedArtifactPatch", () => {
     const resolved = resolveArtifactReview(next, "test-plan", "build");
     expect(resolved?.score).toBe(82);
     expect(resolved?.improvements).toEqual(["Add a rollback plan"]);
-    expect(resolveArtifactQualityScore(next, "test-plan", "build")).toBe(82);
+    // The raw review score is 82, but the reviewer's one actionable improvement is
+    // a self-reported deficiency, so the resolved quality is eroded: 82 * 0.92 = 75.
+    expect(resolveArtifactQualityScore(next, "test-plan", "build")).toBe(75);
   });
 
   it("does not mutate the input inner object", () => {
