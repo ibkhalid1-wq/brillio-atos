@@ -7724,6 +7724,48 @@ button.v3-phase-metric:focus-visible {
   opacity: 1;
 }
 
+/* Required-completion progress rail (Option B). A calm, slim bar that fills as
+   required inputs are satisfied — the phase's "distance to runnable" at a
+   glance, without the noise of counting optional fields. */
+.v3-input-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.v3-input-progress-track {
+  position: relative;
+  flex: 1;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--v3-elev-1, rgba(255, 255, 255, 0.06));
+  overflow: hidden;
+}
+.v3-input-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--v3-accent);
+  transition: width var(--v3-dur-slow, 0.28s) var(--v3-ease, cubic-bezier(0.22, 1, 0.36, 1)),
+    background var(--v3-dur-mid, 0.2s) ease;
+}
+.v3-input-progress[data-complete="true"] .v3-input-progress-fill {
+  background: var(--v3-green);
+}
+.v3-input-progress-label {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--v3-text-muted);
+  font-variant-numeric: tabular-nums;
+  transition: color var(--v3-dur-mid, 0.2s) ease;
+}
+.v3-input-progress[data-complete="true"] .v3-input-progress-label {
+  color: var(--v3-green);
+}
+@media (prefers-reduced-motion: reduce) {
+  .v3-input-progress-fill { transition: none; }
+}
+
 .v3-context-drawer-shell {
   position: relative;
   display: flex;

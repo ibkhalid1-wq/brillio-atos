@@ -594,6 +594,16 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
 
   const filledCount = schema.fields.filter((field) => isFieldFilled(field)).length;
 
+  // Required-completion progress rail (Option B). The gate only cares about
+  // required inputs, so the rail tracks required completion — a calmer, more
+  // honest signal of "how close is this phase to runnable" than counting every
+  // optional field.
+  const requiredFields = schema.fields.filter((field) => field.required);
+  const requiredFilledCount = requiredFields.filter((field) => isFieldFilled(field)).length;
+  const requiredPct = requiredFields.length
+    ? Math.round((requiredFilledCount / requiredFields.length) * 100)
+    : 0;
+
   // Has the live buffer diverged from the persisted snapshot? Drives the Cancel
   // (revert) affordance so it only enables when there are unsaved edits.
   const isDirty = useMemo(() => {
@@ -844,6 +854,27 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
           {freshnessLabel((existingInputs as Record<string, unknown>).savedAt) ? (
             <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginBottom: 12 }}>
               {freshnessLabel((existingInputs as Record<string, unknown>).savedAt)}
+            </div>
+          ) : null}
+
+          {requiredFields.length > 0 ? (
+            <div
+              className="v3-input-progress"
+              data-complete={requiredFilledCount >= requiredFields.length ? "true" : "false"}
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={requiredFields.length}
+              aria-valuenow={requiredFilledCount}
+              aria-label={`${requiredFilledCount} of ${requiredFields.length} required inputs complete`}
+            >
+              <div className="v3-input-progress-track">
+                <div className="v3-input-progress-fill" style={{ width: `${requiredPct}%` }} />
+              </div>
+              <span className="v3-input-progress-label">
+                {requiredFilledCount >= requiredFields.length
+                  ? "✓ Required complete"
+                  : `${requiredFilledCount}/${requiredFields.length} required`}
+              </span>
             </div>
           ) : null}
 
