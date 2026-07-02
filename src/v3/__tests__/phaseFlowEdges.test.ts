@@ -459,16 +459,16 @@ describe("mobilise static roster + governance schema", () => {
 describe("build static delivery schema", () => {
   it("declares the delivery inputs grounding test-plan and milestone without a store", () => {
     expect(new Set(getArtifactInputFields("build", "test-plan"))).toEqual(
-      new Set(["testStrategy", "environmentsRelease", "definitionOfDone"]),
+      new Set(["testStrategy", "environmentsRelease", "definitionOfDone", "testResults"]),
     );
     expect(new Set(getArtifactInputFields("build", "milestone"))).toEqual(
-      new Set(["deliveryIncrements", "environmentsRelease"]),
+      new Set(["deliveryIncrements", "environmentsRelease", "goLiveReadiness"]),
     );
   });
 
   it("keeps the static inputs fillable (they are real typed fields, not roster-resolved owners)", () => {
     expect(new Set(getFillableArtifactInputFields("build", "test-plan"))).toEqual(
-      new Set(["testStrategy", "environmentsRelease", "definitionOfDone"]),
+      new Set(["testStrategy", "environmentsRelease", "definitionOfDone", "testResults"]),
     );
   });
 

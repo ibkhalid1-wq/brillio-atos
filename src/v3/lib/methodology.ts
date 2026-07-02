@@ -721,18 +721,58 @@ export const ATOS_STANDARD: MethodologyDefinition = {
           id: "definitionOfDone",
           label: "Definition of done & quality gates",
           type: "textarea",
-          required: false,
+          // Ratcheted required (2026-07-02): the DoD is the bar every increment is
+          // measured against, and a Build with delivery increments but no stated DoD
+          // has nothing to check "delivered and tested" against. Ratchet, not a bare
+          // flag, so no in-flight Build is retroactively gated on an input it lacked.
+          required: true,
+          requiredSince: "2026-07-02",
           usedByArtifacts: ["test-plan"],
           placeholder: "The bar each increment must clear before it counts as delivered",
           hint: "e.g. Code reviewed, tests green, docs updated, product owner accepted, no open P1/P2 defects",
         },
+        // Evidence for the "User acceptance testing passed" exit criterion. The test
+        // STRATEGY states the intended coverage; nothing recorded the RESULT, so the
+        // criterion had no backing input — a strategy is a plan, not proof. Optional
+        // (never retroactively gates an in-flight Build); grounded into test-plan.
+        {
+          id: "testResults",
+          label: "Test results & coverage evidence",
+          type: "grid",
+          role: "measure",
+          required: false,
+          usedByArtifacts: ["test-plan"],
+          hint: "Evidence the test strategy was actually met — each coverage/quality measure with its target and the achieved result. Backs the Build exit criterion \"User acceptance testing passed\".",
+          columns: [
+            { key: "measure", label: "Measure", type: "text", placeholder: "e.g. Unit coverage, UAT pass rate, open P1 defects" },
+            { key: "target", label: "Target", type: "text", width: 160 },
+            { key: "actual", label: "Actual result", type: "text", width: 160 },
+          ],
+        },
+        // Backing for the "Go-live readiness confirmed" exit criterion. The environments
+        // & release textarea describes the PATH to production; this checklist records
+        // whether each cutover gate is actually green — the thin grounding the criterion
+        // was missing. Optional; grounded into milestone (the cutover-forecasting agent).
+        {
+          id: "goLiveReadiness",
+          label: "Go-live readiness checklist",
+          type: "grid",
+          required: false,
+          usedByArtifacts: ["milestone"],
+          hint: "The gates that must be green before cutover — one readiness item per row with its status. Backs the Build exit criterion \"Go-live readiness confirmed\".",
+          columns: [
+            { key: "item", label: "Readiness item", type: "text", placeholder: "e.g. Cutover plan signed off, rollback tested, migration dry-run passed" },
+            { key: "status", label: "Status", type: "select", width: 160, options: ["Not started", "In progress", "Ready", "Blocked"] },
+          ],
+        },
       ],
       artifactInputFlow: {
-        // The test plan maps the test strategy, environments and definition of done
-        // into test types, criteria and cases; milestone forecasting is grounded on
-        // the increment plan bounded by the release approach.
-        "test-plan": ["testStrategy", "environmentsRelease", "definitionOfDone"],
-        "milestone": ["deliveryIncrements", "environmentsRelease"],
+        // The test plan maps the test strategy, environments, definition of done and
+        // recorded results into test types, criteria and cases; milestone forecasting
+        // is grounded on the increment plan bounded by the release approach and the
+        // go-live readiness gates.
+        "test-plan": ["testStrategy", "environmentsRelease", "definitionOfDone", "testResults"],
+        "milestone": ["deliveryIncrements", "environmentsRelease", "goLiveReadiness"],
       },
     },
     {
