@@ -264,6 +264,77 @@ describe("buildProgramGraph", () => {
     expect(labels).toEqual(["99.9% availability", "Sub-200ms p95 latency"]);
   });
 
+  it("mints resolved decision nodes from the Design key-decisions grid and links them to the requirements they address", () => {
+    const graph = buildProgramGraph(program({
+      phases,
+      rawData: {
+        phaseInputs: {
+          discover: {
+            requirements: JSON.stringify([
+              { id: "req-sso", requirement: "Single sign-on across all portals", category: "Functional" },
+            ]),
+          },
+          design: {
+            keyDesignDecisions: JSON.stringify([
+              { id: "dd-1", decision: "Adopt OIDC via central IdP", rationale: "Reuse existing directory", addresses: "Single sign-on across all portals" },
+            ]),
+          },
+        },
+      },
+    }));
+    const decision = graph.nodes.find((n) => n.id === "decision:dd-1");
+    expect(decision).toMatchObject({ type: "decision", label: "Adopt OIDC via central IdP", phaseCreated: "design" });
+    expect(decision!.properties!.status).toBe("resolved");
+    // The design → requirement traceability edge, matched by normalised label.
+    expect(graph.edges.some((e) => e.type === "addresses" && e.from === "decision:dd-1" && e.to === "requirement:req-sso")).toBe(true);
+  });
+
+  it("matches an addresses reference to a requirement tolerant of case and punctuation, and splits multiple refs", () => {
+    const graph = buildProgramGraph(program({
+      phases,
+      rawData: {
+        phaseInputs: {
+          discover: {
+            requirements: JSON.stringify([
+              { id: "req-a", requirement: "Single sign-on across all portals" },
+              { id: "req-b", requirement: "Audit logging" },
+            ]),
+          },
+          design: {
+            keyDesignDecisions: JSON.stringify([
+              { id: "dd-1", decision: "Central IdP", addresses: "single sign on across all portals, AUDIT LOGGING" },
+            ]),
+          },
+        },
+      },
+    }));
+    const addressed = graph.edges.filter((e) => e.type === "addresses" && e.from === "decision:dd-1").map((e) => e.to).sort();
+    expect(addressed).toEqual(["requirement:req-a", "requirement:req-b"]);
+  });
+
+  it("ignores an addresses reference that resolves to no requirement, without emitting a dangling edge", () => {
+    const graph = buildProgramGraph(program({
+      phases,
+      rawData: {
+        phaseInputs: {
+          discover: { requirements: JSON.stringify([{ id: "req-a", requirement: "Single sign-on" }]) },
+          design: { keyDesignDecisions: JSON.stringify([{ id: "dd-1", decision: "Central IdP", addresses: "Something never declared" }]) },
+        },
+      },
+    }));
+    expect(graph.nodes.some((n) => n.id === "decision:dd-1")).toBe(true);
+    expect(graph.edges.some((e) => e.type === "addresses")).toBe(false);
+  });
+
+  it("keeps the keyDesignDecisions grid columns aligned with the graph's decision reader (decision + addresses)", () => {
+    const design = ATOS_STANDARD.phases.find((p) => p.id === "design");
+    const field = design?.inputFields?.find((f) => f.id === "keyDesignDecisions");
+    expect(field?.type).toBe("grid");
+    const columnKeys = new Set((field?.columns ?? []).map((c) => c.key));
+    expect(columnKeys.has("decision")).toBe(true);
+    expect(columnKeys.has("addresses")).toBe(true);
+  });
+
   it("includes open risks and decisions but excludes closed ones", () => {
     const graph = buildProgramGraph(program({
       phases,

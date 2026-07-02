@@ -490,11 +490,12 @@ export const ATOS_STANDARD: MethodologyDefinition = {
           label: "Key design decisions",
           type: "grid",
           required: false,
-          hint: "The Solution Architecture agent drafts these from your approach and target architecture — review, refine, and add any it missed rather than typing the whole log from scratch.",
+          hint: "The Solution Architecture agent drafts these from your approach and target architecture — review, refine, and add any it missed rather than typing the whole log from scratch. Name the requirement(s) each decision addresses so the graph can trace design back to the need it satisfies.",
           columns: [
             { key: "decision", label: "Decision", type: "text" },
             { key: "optionsConsidered", label: "Options considered", type: "text" },
             { key: "rationale", label: "Rationale", type: "text" },
+            { key: "addresses", label: "Addresses requirement(s)", type: "text", placeholder: "Requirement text this decision satisfies, comma-separated" },
           ],
         },
         {

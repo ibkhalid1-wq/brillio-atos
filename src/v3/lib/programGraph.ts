@@ -99,6 +99,25 @@ const REQUIREMENT = (id: string) => `requirement:${id}`;
 
 interface KpiRow { id?: string; name?: string; baseline?: string; target?: string; unit?: string; objective?: string }
 interface RequirementRow { id?: string; requirement?: string; category?: string; priority?: string; target?: string }
+interface DesignDecisionRow { id?: string; decision?: string; optionsConsidered?: string; rationale?: string; addresses?: string }
+
+/** Normalise a requirement reference for label-matching: lowercase, strip
+ *  punctuation, collapse whitespace. Lets a design decision's free-text
+ *  "addresses" cell resolve to a requirement node without the PM knowing the
+ *  requirement's internal id. */
+function normalizeRef(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+/** Split a decision's "addresses" cell (comma/semicolon/newline separated) into
+ *  individual requirement references. */
+function splitRefs(value: unknown): string[] {
+  if (typeof value !== "string") return [];
+  return value
+    .split(/[,;\n]+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length > 0);
+}
 
 function parseGridRows<T>(raw: unknown): T[] {
   if (typeof raw !== "string" || !raw.trim()) return [];
@@ -255,6 +274,9 @@ export function buildProgramGraph(
     { phaseId: "discover", fieldId: "requirements" },
     { phaseId: "design", fieldId: "nonFunctionalRequirements", defaultCategory: "Non-functional" },
   ];
+  // Normalised requirement label → requirement node id, so a design decision's
+  // free-text "addresses" cell can be resolved to real requirement nodes below.
+  const requirementByLabel = new Map<string, string>();
   for (const src of requirementSources) {
     parseGridRows<RequirementRow>(phaseInputRaw(program, src.phaseId, src.fieldId)).forEach((row, index) => {
       const text = (row.requirement || "").trim();
@@ -269,8 +291,37 @@ export function buildProgramGraph(
       if (phaseIds.has(src.phaseId)) {
         addEdge({ id: `inphase:req:${id}`, from: REQUIREMENT(id), to: PHASE(src.phaseId), type: "in_phase" });
       }
+      const key = normalizeRef(text);
+      if (key && !requirementByLabel.has(key)) requirementByLabel.set(key, REQUIREMENT(id));
     });
   }
+
+  // Key design decisions (structured grid on Design) as resolved decision nodes,
+  // each linked to the requirement(s) it names in its "addresses" cell via an
+  // `addresses` edge. This closes the design → requirement traceability chain:
+  // the graph can now show which declared requirements a design decision was made
+  // to satisfy, and (by absence) which requirements no decision references. Refs
+  // are matched to requirement nodes by normalised label, so the PM/agent writes
+  // the requirement text rather than an internal id. Minted before the decision
+  // queue so a design-decision id always wins the idempotent node merge.
+  parseGridRows<DesignDecisionRow>(phaseInputRaw(program, "design", "keyDesignDecisions")).forEach((row, index) => {
+    const text = (row.decision || "").trim();
+    if (!text) return;
+    const id = row.id || `keyDesignDecisions-${index}`;
+    addNode({
+      id: DECISION(id), type: "decision", label: text, phaseCreated: "design",
+      properties: { status: "resolved", optionsConsidered: row.optionsConsidered, rationale: row.rationale },
+    });
+    if (phaseIds.has("design")) {
+      addEdge({ id: `inphase:decision:${id}`, from: DECISION(id), to: PHASE("design"), type: "in_phase" });
+    }
+    for (const ref of splitRefs(row.addresses)) {
+      const reqNodeId = requirementByLabel.get(normalizeRef(ref));
+      if (reqNodeId) {
+        addEdge({ id: `addresses:${id}->${reqNodeId}`, from: DECISION(id), to: reqNodeId, type: "addresses" });
+      }
+    }
+  });
 
   // Open risks/blockers and open decisions, scoped to their phase.
   (program.raidEntries || [])
