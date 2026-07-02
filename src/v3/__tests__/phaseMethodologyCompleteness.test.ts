@@ -56,6 +56,26 @@ describe("derivePhaseMethodologyCompleteness", () => {
     expect(exitGroup.present).toBe(1);           // only "Sponsor confirmed" marked met
   });
 
+  it("honours the required-ness ratchet: a ratcheted input counts only for post-cutoff programmes", () => {
+    // kpis is required since 2026-07-02. A programme created before the cutoff
+    // must NOT show it as a required gap (8 inputs); one created on/after the
+    // cutoff must (9 inputs) — matching the generation gate's ratchet rule.
+    const preCutoff = normalizeProgram({
+      id: "pre", name: "N", client: "C", industry: "Financial Services",
+      updated_at: "2026-06-13T00:00:00.000Z",
+      data: { _createdAt: "2026-06-01T00:00:00.000Z", phases: [{ id: "strategy", pct: 0 }], phaseInputs: { strategy: {} } },
+    });
+    const postCutoff = normalizeProgram({
+      id: "post", name: "N", client: "C", industry: "Financial Services",
+      updated_at: "2026-07-10T00:00:00.000Z",
+      data: { _createdAt: "2026-07-10T00:00:00.000Z", phases: [{ id: "strategy", pct: 0 }], phaseInputs: { strategy: {} } },
+    });
+    const preInputs = derivePhaseMethodologyCompleteness(preCutoff, "strategy")!.groups.find((g) => g.kind === "input")!;
+    const postInputs = derivePhaseMethodologyCompleteness(postCutoff, "strategy")!.groups.find((g) => g.kind === "input")!;
+    expect(preInputs.total).toBe(8);
+    expect(postInputs.total).toBe(9); // + Success KPIs
+  });
+
   it("computes an overall completeness percentage and not-complete flag", () => {
     const result = derivePhaseMethodologyCompleteness(makeProgram(), "strategy")!;
     expect(result.total).toBeGreaterThan(0);

@@ -211,8 +211,8 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         // point at "the relevant input" that didn't exist. Optional so it never
         // retroactively gates an in-flight programme's Strategy gate; the edge's
         // buildGroundingFacts still flows it into the charter prompt.
-        { id: "sponsorSignOffDate", label: "Sponsor sign-off date", type: "date", role: "governance-signoff", required: false, hint: "The date the executive sponsor formally signed off the programme mandate. Backs the Strategy exit criterion \"Sponsor confirmed and committed\" (evidence: date of sign-off).", example: "2026-04-20" },
-        { id: "industry", label: "Industry", type: "select", options: INDUSTRY_OPTIONS, required: true },
+        { id: "sponsorSignOffDate", label: "Sponsor sign-off date", type: "date", role: "governance-signoff", required: false, usedByArtifacts: ["charter"], hint: "The date the executive sponsor formally signed off the programme mandate. Backs the Strategy exit criterion \"Sponsor confirmed and committed\" (evidence: date of sign-off).", example: "2026-04-20" },
+        { id: "industry", label: "Industry", type: "select", options: INDUSTRY_OPTIONS, required: true, hint: "The client's primary sector. Sets the regulatory backdrop, benchmark cost/benefit norms, and sector language the charter and business case are written in." },
         { id: "startDate", label: "Programme start date", type: "date", required: true, validationRule: "The programme kickoff date." },
         { id: "targetEndDate", label: "Target end date", type: "date", required: true, validationRule: "Must fall after the programme start date." },
         {
@@ -228,6 +228,7 @@ export const ATOS_STANDARD: MethodologyDefinition = {
           role: "cost",
           required: true,
           hint: "Break the estimated programme cost into line items — e.g. vendor licences, core team, infrastructure — with the estimate and the basis for each.",
+          validationRule: "Every cost line needs a quantified estimate and the basis for it — a line with a blank Estimate is not a grounded cost assumption and the business case can't be costed from it.",
           columns: [
             { key: "category", label: "Cost line", type: "text", placeholder: "e.g. Vendor licences" },
             { key: "amount", label: "Estimate", type: "text", width: 140, placeholder: "e.g. $1.2M" },
@@ -240,7 +241,7 @@ export const ATOS_STANDARD: MethodologyDefinition = {
         // case document" — a fact the cost grid can't hold — so the reviewer had
         // nowhere to point. Optional (never retroactively gates); flows into the
         // business-case prompt via buildGroundingFacts.
-        { id: "businessCaseApproval", label: "Business case approval reference", type: "text", role: "governance-signoff", required: false, placeholder: "Link or reference to the approved business case", hint: "A link or document reference showing the business case has been formally approved. Backs the Strategy exit criterion \"Business case approved\".", example: "SteerCo minutes 2026-04-18, item 4" },
+        { id: "businessCaseApproval", label: "Business case approval reference", type: "text", role: "governance-signoff", required: false, usedByArtifacts: ["business-case"], placeholder: "Link or reference to the approved business case", hint: "A link or document reference showing the business case has been formally approved. Backs the Strategy exit criterion \"Business case approved\".", example: "SteerCo minutes 2026-04-18, item 4" },
         { id: "successMetric", label: "Primary success metric", type: "text", role: "measure", placeholder: "KPI name, e.g. Cost to serve", required: true, example: "Cost to serve per transaction", validationRule: "A single measurable KPI name — its baseline and target are captured in the Success KPIs grid." },
         {
           // KPIs captured as a structured grid — each with a baseline and target —
@@ -261,7 +262,13 @@ export const ATOS_STANDARD: MethodologyDefinition = {
           label: "Success KPIs",
           type: "grid",
           role: "measure",
-          required: false,
+          // Ratcheted required: a programme's objective must carry at least one
+          // measurable KPI (baseline + target) to prove attainment. requiredSince
+          // scopes this to programmes created on/after the cutoff, so no in-flight
+          // programme (none of which carry kpis yet) is retroactively gated — the
+          // exact problem that kept this optional before the ratchet existed.
+          required: true,
+          requiredSince: "2026-07-02",
           hint: "The measurable KPIs that prove the objective — each with its baseline (where it stands today) and its target. A KPI without both can't verify attainment.",
           usedByArtifacts: ["outcome-framework"],
           columns: [

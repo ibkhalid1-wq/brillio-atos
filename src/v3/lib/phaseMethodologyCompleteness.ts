@@ -14,7 +14,7 @@
  * phase from this surface alone, because every required item is on it.
  */
 import type { ProgramSummary } from "@/new/types";
-import { getPhaseInputSchema, type GridColumn } from "@/v3/lib/phaseInputSchema";
+import { getPhaseInputSchema, isFieldRequiredForProgram, type GridColumn } from "@/v3/lib/phaseInputSchema";
 import { buildPhaseArtifacts } from "@/v3/lib/artifactModel";
 import { getMandatoryCriteria } from "@/v3/lib/exitCriteriaLibrary";
 import { isFieldValueFilled } from "@/v3/components/StructuredGrid";
@@ -100,10 +100,13 @@ export function derivePhaseMethodologyCompleteness(
 ): PhaseMethodologyCompleteness | null {
   if (!program || !phaseId) return null;
 
-  // 1) Required inputs.
+  // 1) Required inputs. Honour the required-ness ratchet: a field made mandatory
+  // with a `requiredSince` cutoff only counts for programmes created on/after it,
+  // so a newly-ratcheted input never retroactively shows as a gap on an in-flight
+  // programme — the same rule the generation gate uses.
   const inputs = readPhaseInputs(program, phaseId);
   const inputItems: MethodologyRequirement[] = getPhaseInputSchema(phaseId).fields
-    .filter((field) => field.required)
+    .filter((field) => isFieldRequiredForProgram(field, program.createdAt))
     .map((field) => ({
       id: `input:${field.id}`,
       kind: "input" as const,
