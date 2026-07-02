@@ -1207,24 +1207,33 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
                   value={values.successMetricUnit ?? ""}
                   onChange={(event) => setValues((current) => ({ ...current, successMetricUnit: event.target.value }))}
                 />
-                {/* Clear the pinned primary metric row. It's a singular field (not an
-                    array entry) so "delete" empties its four values rather than
-                    removing the row; the row itself stays as the always-present
-                    headline slot the PM can re-fill. */}
-                <button
-                  type="button"
-                  className="v3-button ghost"
-                  style={{ fontSize: 11, width: 28 }}
-                  aria-label="Clear primary success metric"
-                  title="Clear primary success metric"
-                  onClick={() => setValues((current) => ({
-                    ...current,
-                    successMetric: "",
-                    successMetricBaseline: "",
-                    successMetricTarget: "",
-                    successMetricUnit: "",
-                  }))}
-                >✕</button>
+                {/* The pinned primary metric is a singular *required* field, not an
+                    array entry — the headline outcome slot always exists, so it can
+                    only be CLEARED (emptied), never removed like the KPI rows below.
+                    We deliberately use a distinct erase glyph (⌫) rather than the ✕
+                    the KPI rows use for removal, and only show it when there is
+                    something to clear: an identical ✕ on an always-present row read
+                    as "delete", so clicking it (which merely cleared the values) felt
+                    like the row "couldn't be deleted". A width-matched spacer keeps
+                    the four columns aligned with the KPI rows when the button hides. */}
+                {(values.successMetric || values.successMetricBaseline || values.successMetricTarget || values.successMetricUnit) ? (
+                  <button
+                    type="button"
+                    className="v3-button ghost"
+                    style={{ fontSize: 12, width: 28 }}
+                    aria-label="Clear primary success metric"
+                    title="Clear the primary metric. This required headline row always stays — only the KPI rows below can be removed."
+                    onClick={() => setValues((current) => ({
+                      ...current,
+                      successMetric: "",
+                      successMetricBaseline: "",
+                      successMetricTarget: "",
+                      successMetricUnit: "",
+                    }))}
+                  >⌫</button>
+                ) : (
+                  <span style={{ width: 28, display: "inline-block" }} aria-hidden="true" />
+                )}
               </div>
               {localKpis.map((kpi, index) => (
                 <div key={kpi.id} style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
