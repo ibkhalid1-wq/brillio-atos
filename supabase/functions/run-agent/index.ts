@@ -1208,6 +1208,16 @@ not yet baselined. Do NOT list as a gap:
   (Mobilise), "no RACI matrix / adoption plan / test plan". If this artifact itself
   records the relevant content (e.g. inScope/outOfScope, sponsor, objectives), it is
   present — do not demand it be re-expressed in a downstream document.
+- The absence of a structured INPUT that a LATER phase owns — the methodology
+  collects atomic scope inclusions/exclusions and detailed requirements in Discover,
+  and the named team roster / enumerated role assignments in Mobilise; they are NOT
+  Strategy inputs. This artifact states scope, roles, and objectives at the HIGH
+  LEVEL its own template calls for (inScope/outOfScope narrative, sponsor, objective).
+  Do NOT report that "an atomic scope list is not in the inputs", "scope inclusions/
+  exclusions are not provided in the structured inputs", "named stakeholder roles are
+  not enumerated in the inputs", or any equivalent — reframing a later-phase artifact
+  gap as a missing-INPUT gap does not make it in-scope. Those inputs are collected
+  downstream, so their absence here is never a gap.
 - Information already established elsewhere in the context — e.g. named roles that
   exist in a RACI matrix or stakeholder list, scope already recorded in the inputs
   or a prior-phase artifact, objectives/KPIs already captured.
