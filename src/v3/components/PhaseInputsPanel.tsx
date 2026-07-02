@@ -1240,6 +1240,10 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
                   <span style={{ width: 28, display: "inline-block" }} aria-hidden="true" />
                 )}
               </div>
+              {/* Anchor the supporting KPI rows so a "Success KPIs" jump-chip lands
+                  here precisely, rather than falling back to the panel top. The
+                  pinned primary metric above owns input:successMetric. */}
+              <div data-io-anchor="input:kpis">
               {localKpis.map((kpi, index) => (
                 <div key={kpi.id} style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
                   <input
@@ -1291,6 +1295,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
               <button type="button" className="v3-button ghost" style={{ fontSize: 11, marginTop: 4 }} onClick={addKpi}>
                 + Add KPI
               </button>
+              </div>
             </div>
             );
           })() : null}

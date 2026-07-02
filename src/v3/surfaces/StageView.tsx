@@ -501,6 +501,10 @@ export default function StageView({
     issues: ArtifactQualityIssue[];
     phaseId: string;
     fields: Array<{ id: string; label: string; hint?: string; currentValue: string; filled: boolean }>;
+    /** Every grounding input the artifact is generated from — the specific fields
+     *  a user can update to lift its quality, rendered as jump-to-field chips so
+     *  the guidance points at exactly where to act, not a generic "add inputs". */
+    groundingFields: Array<{ id: string; label: string; filled: boolean }>;
     improvements: string[];
     /** Attached documents surface recommendations read-only — no in-app apply or add-inputs. */
     readOnly?: boolean;
@@ -509,6 +513,29 @@ export default function StageView({
   } | null>(null);
   const [applyingImprovements, setApplyingImprovements] = React.useState(false);
   const [applyError, setApplyError] = React.useState<string | null>(null);
+
+  // Close the Improve modal and jump the inputs panel to a specific grounding
+  // field, flashing it so the user's eye lands on exactly where to act. Falls
+  // back to the panel top when the field anchor isn't mounted (e.g. a bespoke
+  // editor without a data-io-anchor), so the chip is never a dead end.
+  const scrollToInputField = React.useCallback((fieldId: string) => {
+    setQualityArtifact(null);
+    if (typeof document === "undefined") return;
+    // Defer to the next frame so the modal has unmounted and the inputs panel is
+    // in the layout before we measure and scroll to the target.
+    window.requestAnimationFrame(() => {
+      const el = document.querySelector(`[data-io-anchor="input:${fieldId}"]`) as HTMLElement | null;
+      const target = el ?? document.getElementById("phase-inputs-anchor");
+      if (!target) return;
+      target.scrollIntoView({ behavior: "smooth", block: el ? "center" : "start" });
+      if (el) {
+        el.classList.remove("v3-io-anchor-flash");
+        void el.offsetWidth; // reflow so re-adding the class restarts the animation
+        el.classList.add("v3-io-anchor-flash");
+        window.setTimeout(() => el.classList.remove("v3-io-anchor-flash"), 5000);
+      }
+    });
+  }, []);
 
   // True once the reviewer's suggestions have been folded into the inputs for the
   // currently-open quality modal, so the Apply button can switch to a disabled
@@ -1691,6 +1718,14 @@ export default function StageView({
                   .join(" — ") || `Provide ${fieldDef?.label ?? fieldId}.`;
                 return { label: fieldDef?.label ?? fieldId, requirement, filled: isFlowedFieldSatisfied(fieldId) };
               });
+              // The concrete grounding inputs, id + label + filled, so the Improve
+              // modal can render them as jump-to-field chips — pointing the user at
+              // the exact field to update rather than a generic "add inputs" nudge.
+              const groundingFields = guidanceFieldIds.map((fieldId) => ({
+                id: fieldId,
+                label: phaseFieldDefs.find((field) => field.id === fieldId)?.label ?? fieldId,
+                filled: isFlowedFieldSatisfied(fieldId),
+              }));
               // Same grounding inputs, but carrying the id + current value so the
               // "Improve quality → Apply" action can run an AI enrichment pass over
               // each field and persist the result. Only free-text fields are
@@ -1814,7 +1849,7 @@ export default function StageView({
                 onOpenRoadmap: () => onOpenMoreView("roadmap"),
                 // An attached document's recommendations are read-only: the user acts
                 // on them in the source file, not via in-app input rewrites.
-                onRecommend: () => { setApplyError(null); setImprovementsApplied(false); setQualityArtifact({ label: def.label, defId: def.id, score: displayScore, issues: qualityIssues, phaseId: activePhase.id, fields: qualityFields, improvements: (review?.improvements ?? []).filter((s) => !!s && s.trim()), readOnly: isAttached, semanticValidated }); },
+                onRecommend: () => { setApplyError(null); setImprovementsApplied(false); setQualityArtifact({ label: def.label, defId: def.id, score: displayScore, issues: qualityIssues, phaseId: activePhase.id, fields: qualityFields, groundingFields, improvements: (review?.improvements ?? []).filter((s) => !!s && s.trim()), readOnly: isAttached, semanticValidated }); },
                 onGenerate: () => onRunAgent(generatorAgentId, activePhase.id, regenGuidance),
                 onUnlock: () => { if (artifactId) void onUnapproveArtifact(activePhase.id, artifactId); },
                 onAttach: () => onAttachArtifact?.(activePhase.id, def.id, def.label, generatorAgentId),
@@ -1958,6 +1993,30 @@ export default function StageView({
               ATOS found no outstanding quality issues for this artifact.
             </div>
           )}
+          {!qualityArtifact.readOnly && qualityArtifact.groundingFields.length ? (
+            <div className="v3-quality-fields">
+              <div className="v3-quality-fields-title">Fields to update</div>
+              <div className="v3-quality-fields-hint">
+                These inputs ground this document — jump to one to strengthen it, then regenerate.
+              </div>
+              <div className="v3-drilldown-row">
+                {qualityArtifact.groundingFields.map((field) => (
+                  <button
+                    key={field.id}
+                    type="button"
+                    className={`v3-drilldown-chip${field.filled ? "" : " thin"}`}
+                    onClick={() => scrollToInputField(field.id)}
+                    title={field.filled
+                      ? `Go to "${field.label}" to refine it`
+                      : `"${field.label}" is empty — go there to add it`}
+                  >
+                    <span aria-hidden="true">{field.filled ? "✎" : "＋"}</span>
+                    {field.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
           {applyError ? (
             <div style={{ marginTop: 14, fontSize: 12.5, color: "var(--v3-red, #dc2626)" }}>{applyError}</div>
           ) : null}

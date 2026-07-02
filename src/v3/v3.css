@@ -7462,6 +7462,32 @@ button.v3-phase-metric:focus-visible {
   list-style: none; margin: 0; padding: 0;
   display: flex; flex-direction: column; gap: 10px;
 }
+/* "Fields to update" — the deterministic grounding inputs behind an artifact,
+   rendered as jump-to-field chips so the guidance points at exactly where to
+   act rather than a generic "add inputs". */
+.v3-quality-fields {
+  margin-top: 16px; padding: 12px 14px;
+  border: 1px solid var(--v3-border-soft); border-radius: var(--radius-md);
+  background: var(--v3-surface-2);
+}
+.v3-quality-fields-title {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--v3-text-muted);
+}
+.v3-quality-fields-hint {
+  font-size: 12px; line-height: 1.5; color: var(--v3-text-secondary); margin-top: 3px;
+}
+.v3-quality-fields .v3-drilldown-row { margin-top: 8px; }
+/* A grounding field that is still empty — dashed outline signals it's the most
+   direct lever, distinct from a filled field you'd only refine. */
+.v3-drilldown-chip.thin {
+  border-style: dashed;
+  color: var(--v3-text-muted);
+}
+.v3-drilldown-chip.thin:hover {
+  color: var(--v3-text-primary);
+  border-color: var(--v3-accent, #6366f1);
+}
 .v3-quality-issue {
   display: flex; gap: 10px; align-items: flex-start;
   padding: 12px; border: 1px solid var(--v3-border-soft);
