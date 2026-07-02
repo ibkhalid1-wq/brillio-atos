@@ -2,6 +2,25 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import type { V3CommandMode } from "@/v3/types";
 import { phaseNameById } from "@/v3/utils";
+import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
+import { prioritizePhaseFields } from "@/v3/lib/phaseInputPriority";
+import { prefersReducedMotion } from "@/v3/lib/reducedMotion";
+
+/** Read the persisted input bucket for a phase from the programme's raw data. */
+function readPhaseInputs(program: ProgramSummary | null | undefined, phaseId: string): Record<string, unknown> {
+  const raw = program?.rawData;
+  if (!raw || typeof raw !== "object") return {};
+  const container = raw as Record<string, unknown>;
+  const data = "data" in container && container.data && typeof container.data === "object"
+    ? (container.data as Record<string, unknown>)
+    : container;
+  const bucket = data.phaseInputs;
+  if (!bucket || typeof bucket !== "object" || Array.isArray(bucket)) return {};
+  const inputs = (bucket as Record<string, unknown>)[phaseId];
+  return inputs && typeof inputs === "object" && !Array.isArray(inputs)
+    ? (inputs as Record<string, unknown>)
+    : {};
+}
 
 type CommandPaletteProps = {
   open: boolean;
@@ -80,9 +99,61 @@ export function CommandPalette({
   const [queryPending, setQueryPending] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // The active phase's first outstanding input (required gaps ranked first), so
+  // the palette can offer a one-keystroke jump straight to what's blocking the
+  // gate rather than making the user hunt down the panel and scan for the empty
+  // field. Mirrors the inputs panel's own priority ordering.
+  const firstGap = useMemo(() => {
+    if (!activePhaseId) return null;
+    const schema = getPhaseInputSchema(activePhaseId);
+    if (!schema.fields.length) return null;
+    const inputs = readPhaseInputs(program, activePhaseId);
+    const { firstGapId, requiredGaps } = prioritizePhaseFields(
+      schema.fields,
+      inputs as Record<string, string | undefined>,
+    );
+    if (!firstGapId) return null;
+    const field = schema.fields.find((candidate) => candidate.id === firstGapId);
+    if (!field) return null;
+    return { id: firstGapId, label: field.label, required: requiredGaps > 0 };
+  }, [activePhaseId, program]);
+
   const items = useMemo<PaletteItem[]>(() => {
     const nextItems: PaletteItem[] = [];
     const needle = query.trim().toLowerCase();
+
+    // Jump to next gap — offered first (in both empty and search modes) whenever
+    // the active phase has an outstanding input. Selects the phase if needed,
+    // then scrolls the field into view and focuses it.
+    if (activePhaseId && firstGap) {
+      const gapPhaseId = activePhaseId;
+      const gapFieldId = firstGap.id;
+      nextItems.push({
+        id: "jump-next-gap",
+        section: "Next gap",
+        title: `Jump to next gap: ${firstGap.label}`,
+        subtitle: firstGap.required
+          ? "Required input still empty in this phase"
+          : "Optional input that would add depth",
+        keywords: `next gap missing empty ${firstGap.label} jump fill required`,
+        action: () => {
+          onSelectPhase(gapPhaseId);
+          onClose();
+          window.setTimeout(() => {
+            const anchor = document.querySelector(`[data-io-anchor="input:${gapFieldId}"]`);
+            if (!anchor) return;
+            anchor.scrollIntoView({
+              behavior: prefersReducedMotion() ? "auto" : "smooth",
+              block: "center",
+            });
+            const focusable = anchor.querySelector<HTMLElement>(
+              "input, textarea, select, [contenteditable]",
+            );
+            focusable?.focus();
+          }, 140);
+        },
+      });
+    }
 
     // When query is empty, use context-first ordering
     if (!needle) {
@@ -233,7 +304,7 @@ export function CommandPalette({
     });
 
     return nextItems;
-  }, [activePhaseId, onClose, onModeChange, onRunAgent, onSelectPhase, program, query]);
+  }, [activePhaseId, firstGap, onClose, onModeChange, onRunAgent, onSelectPhase, program, query]);
 
   const filteredItems = useMemo(() => {
     const needle = query.trim().toLowerCase();
