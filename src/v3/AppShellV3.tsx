@@ -52,7 +52,7 @@ import ProgramDetailRouter from "@/v3/components/ProgramDetailRouter";
 import ProgramSetupWizard from "@/v3/components/ProgramSetupWizard";
 import { reportError } from "@/lib/errorReporter";
 import { sanitizeMarkdown } from "@/lib/sanitize";
-import { changedInputFields, relatedArtifactsToStale, fieldsFeedingApprovedArtifacts } from "@/v3/lib/artifactStaleness";
+import { changedInputFields, relatedArtifactsToStale, crossPhaseArtifactsToStale, fieldsFeedingApprovedArtifacts } from "@/v3/lib/artifactStaleness";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
 import { hasSubstantiveProgramData } from "@/v3/lib/programDataGuard";
@@ -2347,6 +2347,25 @@ export default function AppShellV3() {
         }
         artifactBuckets[phaseId] = nextBucket;
       }
+      // Cross-phase cascade: downstream artifacts in LATER phases that reference
+      // the just-staled upstream deliverables are now built on shifted ground too.
+      // Follow the same methodology reference edges (crossPhaseArtifactsToStale)
+      // and stale them, so a Design that cited an approved requirements catalog
+      // doesn't keep pointing at a version we just invalidated. Skips the origin
+      // phase and anything archived/already-stale.
+      const crossStaled = allStaled.length
+        ? crossPhaseArtifactsToStale(phaseId, allStaled, artifactBuckets, flowStore)
+        : [];
+      if (crossStaled.length) {
+        const nowIso = new Date().toISOString();
+        const byPhase = new Map<string, Record<string, Record<string, unknown>>>();
+        for (const { phaseId: targetPhase, artifactId } of crossStaled) {
+          const bucket = byPhase.get(targetPhase) ?? { ...(artifactBuckets[targetPhase] ?? {}) };
+          bucket[artifactId] = { ...(bucket[artifactId] as Record<string, unknown>), status: "stale", staleReason: `Upstream ${phaseId} deliverable changed`, staleAt: nowIso };
+          byPhase.set(targetPhase, bucket);
+        }
+        for (const [targetPhase, bucket] of byPhase) artifactBuckets[targetPhase] = bucket;
+      }
       // When inputs are applied straight from a reviewer's improvement list, the
       // suggestions that drove them are now spent — clear them in the same atomic
       // write so we never leave stale "fix this" guidance pointing at text we just
@@ -2368,10 +2387,10 @@ export default function AppShellV3() {
         }
       }
       const payload = cloned.commit({ ...cloned.inner, phaseInputs: existing, phaseArtifacts: artifactBuckets, ...reviewPatch });
-      return { payload, staled: allStaled };
+      return { payload, staled: allStaled, crossStaled };
     };
 
-    let { payload, staled } = buildPayload(activeProgram);
+    let { payload, staled, crossStaled } = buildPayload(activeProgram);
     try {
       await updateProgramData(activeProgram.id, payload, activeProgram.updatedAt);
     } catch (err) {
@@ -2390,6 +2409,7 @@ export default function AppShellV3() {
       const rebased = buildPayload({ ...activeProgram, rawData: freshRaw, updatedAt: fresh?.updated_at ?? activeProgram.updatedAt });
       payload = rebased.payload;
       staled = rebased.staled;
+      crossStaled = rebased.crossStaled;
       await updateProgramData(activeProgram.id, payload, fresh?.updated_at ?? undefined);
     }
     // Both branches above persist via updateProgramData, which already refreshes
@@ -2401,9 +2421,13 @@ export default function AppShellV3() {
     // Auto-saves persist quietly (the panel shows its own "Saved" tick). The
     // stale-artifact warning is the one thing still worth surfacing even on an
     // auto-save, since it changes what the user must regenerate.
-    if (staled.length) {
+    const totalStaled = staled.length + crossStaled.length;
+    if (totalStaled) {
+      const downstreamNote = crossStaled.length
+        ? ` (${crossStaled.length} downstream in a later phase)`
+        : "";
       pushV3Toast(
-        `Inputs saved. ${staled.length} artifact${staled.length > 1 ? "s" : ""} marked stale — regenerate to apply your changes.`,
+        `Inputs saved. ${totalStaled} artifact${totalStaled > 1 ? "s" : ""} marked stale${downstreamNote} — regenerate to apply your changes.`,
         { tone: "warning", duration: 5000 },
       );
     } else if (!silent) {
