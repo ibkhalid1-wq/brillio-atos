@@ -50,6 +50,7 @@ import HelpPanel from "@/v3/components/HelpPanel";
 import OnboardingCard from "@/v3/components/OnboardingCard";
 import ProgramDetailRouter from "@/v3/components/ProgramDetailRouter";
 import ProgramSetupWizard from "@/v3/components/ProgramSetupWizard";
+import FlowShell from "@/v3/components/flow/FlowShell";
 import { reportError } from "@/lib/errorReporter";
 import { sanitizeMarkdown } from "@/lib/sanitize";
 import { changedInputFields, relatedArtifactsToStale, crossPhaseArtifactsToStale, fieldsFeedingApprovedArtifacts } from "@/v3/lib/artifactStaleness";
@@ -1152,6 +1153,11 @@ export default function AppShellV3() {
   }, []);
 
   const [wizardOpen, setWizardOpen] = useState(false);
+  // "Paper & Flow": ATOS Flow programmes render the reimagined shell. The
+  // classic-workspace escape flips this off for the session; switching
+  // programme re-enters the new shell (reset effect lives below, after
+  // activeProgramId resolves from usePrograms).
+  const [useFlowShell, setUseFlowShell] = useState(true);
   // When the wizard is opened immediately after creating a fresh programme,
   // this holds that draft's id so cancelling can discard it (rather than
   // leaving an empty "New Programme" behind). Cleared once setup is saved.
@@ -1203,6 +1209,8 @@ export default function AppShellV3() {
     userId,
   });
   const { activeRuns, isRunning: agentIsRunning, isUserRunning: agentIsUserRunning, runAgent, channelStatus } = useAgentRun(activeProgramId, authed, refreshPrograms);
+  // Re-enter the Paper & Flow shell whenever the active programme changes.
+  useEffect(() => { setUseFlowShell(true); }, [activeProgramId]);
   const { snapshots: programSnapshots, createSnapshot: createProgramSnapshot, getSnapshotData: getProgramSnapshotData } = useProgramSnapshots(activeProgramId || null, { enabled: authChecked && migrated });
   const aiStatus = useAIStatus(true); // status check works without auth since edge function accepts anon key
   const agentCards = useMemo(() => buildAgentCards(activeProgram, activeRuns), [activeProgram, activeRuns]);
@@ -3288,6 +3296,81 @@ export default function AppShellV3() {
         {helpOpen && (
           <HelpPanel onClose={() => setHelpOpen(false)} />
         )}
+      </div>
+    );
+  }
+
+  // ── "Paper & Flow" shell ────────────────────────────────────────────────
+  // ATOS Flow programmes render the reimagined chrome — none of the classic
+  // shell below appears. Same engine (data, agents, autosave, wizard, Copilot,
+  // toasts), different world. "Open classic workspace" in the programme menu
+  // escapes for anything not yet rebuilt; switching programme re-enters.
+  if (useFlowShell && authed && !authRoute && activeProgram?.methodology === "atos-flow") {
+    return (
+      <div className="v3-shell v3fs-shell">
+        <FlowShell
+          program={activeProgram}
+          programs={programs}
+          runningAgentIds={new Set((activeRuns as Array<{ agentId?: string }>).map((run) => run.agentId).filter((id): id is string => !!id))}
+          onSelectProgram={(id) => setActiveProgramId(id)}
+          onCreateProgram={() => void handleCreateProgram()}
+          onOpenSetup={() => setWizardOpen(true)}
+          onOpenCopilot={() => setAdamCopilotSidebarOpen(true)}
+          onExitShell={() => setUseFlowShell(false)}
+          onRunAgent={handleRunAgent}
+          onSaveInputs={handleSavePhaseInputs}
+        />
+        {wizardOpen && activeProgram ? (
+          <ProgramSetupWizard
+            program={activeProgram}
+            onSave={handleSaveSetup}
+            onClose={() => void handleCancelSetup()}
+            isSaving={wizardSaving}
+          />
+        ) : null}
+        <CoPilotSidebar
+          open={adamCopilotSidebarOpen}
+          onClose={() => setAdamCopilotSidebarOpen(false)}
+          activePhaseId={activePhaseId}
+          programName={activeProgram?.name || "Programme"}
+          confidenceScore={programConfidenceScore}
+          openDecisionCount={actionCenterCount}
+          anyAgentRunning={anyAgentRunning}
+          aiStatus={aiStatus.status}
+          onOpenAISettings={openAISettings}
+          onRunAgent={handleRunAgent}
+          onSendMessage={activeProgramId ? async (msg) => {
+            try {
+              await sendCopilotMessage(msg);
+            } catch (err) {
+              const message = err instanceof Error ? err.message : "Copilot request failed. Please try again.";
+              window.dispatchEvent(new CustomEvent("atlas-v3-toast", { detail: { message, tone: "error" } }));
+            }
+          } : undefined}
+          onNavigate={() => setUseFlowShell(false)}
+        />
+        {toasts.length ? (
+          <div className="v3-toast-stack" aria-live="polite" aria-atomic="true">
+            {toasts.map((toast) => (
+              <div key={toast.id} className={`v3-toast ${toast.tone ? `is-${toast.tone}` : ""}`}>
+                {toast.icon ? <span className="v3-toast-icon">{toast.icon}</span> : null}
+                <span className="v3-toast-message">{toast.message}</span>
+                {toast.action ? (
+                  <button
+                    type="button"
+                    className="v3-toast-action"
+                    onClick={() => {
+                      setToasts((current) => current.filter((t) => t.id !== toast.id));
+                      toast.action!.onClick();
+                    }}
+                  >
+                    {toast.action.label}
+                  </button>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
       </div>
     );
   }
