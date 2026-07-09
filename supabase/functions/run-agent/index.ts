@@ -40,8 +40,20 @@ const ATOS_PHASE_SEQUENCE = [
   "optimize",
   "valuerealize",
 ];
+// ATOS Flow (methodology variant "atos-flow"): the evidence-to-system pipeline's
+// movements. Disjoint ids from the stage-gate spine by design — cross-phase
+// grounding picks whichever sequence contains the target phase.
+const FLOW_MOVEMENT_SEQUENCE = [
+  "frame",
+  "listen",
+  "envision",
+  "show",
+  "ship",
+  "evolve",
+];
 const VALID_AGENT_IDS = new Set([
   ...ATOS_PHASE_SEQUENCE,
+  ...FLOW_MOVEMENT_SEQUENCE,
   "agent_arch",
   "delivery",
   "adoption",
@@ -105,6 +117,16 @@ const VALID_AGENT_IDS = new Set([
   "runbook",
   "support-model",
   "optimization-backlog",
+  // ATOS Flow movement generators (kept in lockstep with FORMAL_ARTIFACT_AGENTS).
+  "discovery-kit",
+  "current-state-atlas",
+  "domain-ontology",
+  "architecture-strategy",
+  "agentic-blueprint",
+  "prototype-pack",
+  "demo-scripts",
+  "hardening-plan",
+  "eval-suite",
 ]);
 
 // Presentation-only agent ids surfaced in the UI that map onto an implemented
@@ -1106,6 +1128,199 @@ Return ONLY valid JSON:
   "themes": ["recurring improvement themes"],
   "gaps": ["areas where improvement data is missing"],
   "summary": "one sentence verdict on improvement pipeline",
+  "confidence": 0.0
+}`,
+  },
+
+  // ─── ATOS Flow movement generators ──────────────────────────────────────────
+  // The evidence-to-system pipeline's transformers. Every one of these derives
+  // its content from recorded conversations and demonstrated behaviour — the
+  // documentCarryForward (uploaded transcripts) and groundingFacts are the
+  // primary sources, and verbatim stakeholder quotes are first-class evidence.
+  // Shared rule: never invent what no stakeholder said; record it as a gap or
+  // an open question instead.
+  "discovery-kit": {
+    phase: "frame",
+    fieldKey: "discoveryKit",
+    title: "Discovery Kit",
+    system: `You are the ATOS Discovery Kit Agent. From the sponsor conversation and the Frame facts, produce the discovery tour: who must be heard, and a role-aware 45-minute agenda for each of them.
+
+Use the stakeholderSeed rows and any stakeholders named in the sponsor conversation (documentCarryForward). Do NOT invent named individuals — where a domain clearly needs a voice but no name is known, emit a role placeholder ("Head of Fulfilment — TBC") and list it under "gaps". Questions must be specific to this objective and industry, not generic discovery boilerplate; each agenda ends by asking what artifacts (screens, reports, exports) the stakeholder can share.
+
+Return ONLY valid JSON:
+{
+  "title": "Discovery Kit — <programme name>",
+  "interviews": [ { "stakeholder": "name or 'Role — TBC'", "role": "string", "domain": "the workflow domain they own", "durationMinutes": 45, "objectives": ["what this conversation must surface"], "agenda": [ { "minutes": 5, "topic": "string", "questions": ["specific questions"] } ], "askForArtifacts": ["systems/screens/reports to bring"] } ],
+  "coverageMap": [ { "domain": "string", "coveredBy": ["stakeholders"], "thin": false } ],
+  "schedulingGuidance": "sequencing and cadence recommendation for the tour",
+  "consentNote": "one-paragraph recording-consent blurb to read out before each conversation",
+  "gaps": ["domains with no voice, facts the sponsor conversation did not surface"],
+  "summary": "one sentence verdict on discovery-tour readiness",
+  "confidence": 0.0
+}`,
+  },
+  "current-state-atlas": {
+    phase: "listen",
+    fieldKey: "currentStateAtlas",
+    title: "Current-State Atlas",
+    system: `You are the ATOS Current-State Atlas Agent. Synthesise EVERY discovery transcript into the current-state picture: the workflows as they actually run, the pain heatmap, and the contradictions between stakeholders.
+
+Ground every workflow step and pain point in what a stakeholder actually said — carry a verbatim quote with attribution wherever possible. Never invent a step or a hand-off; where the transcripts leave one unclear, record it under "openQuestions" instead. Where two stakeholders describe the same process differently, that is a finding — record it under "contradictions" with a suggested follow-up, never silently pick a side.
+
+Return ONLY valid JSON:
+{
+  "title": "Current-State Atlas — <programme name>",
+  "workflows": [ { "name": "string", "owner": "role", "trigger": "what starts it", "steps": [ { "actor": "role", "action": "string", "system": "system used or null", "duration": "stated duration or null", "evidence": "verbatim quote — speaker" } ], "handoffs": ["cross-team hand-offs"], "failureModes": ["where it goes wrong today"] } ],
+  "painHeatmap": [ { "area": "string", "pain": "string", "severity": "high|medium|low", "voicedBy": ["stakeholders"], "quote": "the strongest verbatim expression of it" } ],
+  "systemsInventory": [ { "system": "string", "usedFor": "string", "complaints": ["stakeholder complaints about it"] } ],
+  "contradictions": [ { "statement": "what is disputed", "between": ["stakeholder A", "stakeholder B"], "positions": ["A's version", "B's version"], "suggestedFollowUp": "the question that resolves it" } ],
+  "openQuestions": ["hand-offs or steps the transcripts left unclear"],
+  "coverage": [ { "stakeholder": "string", "heard": true } ],
+  "gaps": ["stakeholders not yet heard, domains with thin evidence"],
+  "summary": "one sentence verdict on current-state understanding",
+  "confidence": 0.0
+}`,
+  },
+  "domain-ontology": {
+    phase: "listen",
+    fieldKey: "domainOntology",
+    title: "Domain Ontology",
+    system: `You are the ATOS Domain Ontology Agent. Build the domain ontology from the discovery conversations: the entities the business actually reasons about, their relationships, the events that move them, and the systems of record.
+
+Use the stakeholders' own nouns — the ontology's names should be their language, not generic data-modelling vocabulary. Every entity carries at least one evidence source. Where different teams use different words for the same thing (or the same word for different things), record it under "ambiguities" — those collisions are exactly what the Blueprint's data contracts must resolve.
+
+Return ONLY valid JSON:
+{
+  "title": "Domain Ontology — <programme name>",
+  "entities": [ { "name": "their noun", "definition": "one sentence in their language", "attributes": ["key attributes mentioned"], "systemOfRecord": "system or null", "aliases": ["what other teams call it"], "evidence": "verbatim quote — speaker" } ],
+  "relations": [ { "from": "entity", "relation": "verb phrase", "to": "entity", "cardinality": "1:1|1:N|N:M|unknown" } ],
+  "events": [ { "name": "business event", "triggers": "what causes it", "produces": "what it changes" } ],
+  "ambiguities": [ { "term": "string", "conflictingMeanings": ["meaning per team"], "resolution": "proposed resolution or 'unresolved'" } ],
+  "gaps": ["entities referenced but never defined, domains not yet mapped"],
+  "summary": "one sentence verdict on ontology completeness",
+  "confidence": 0.0
+}`,
+  },
+  "architecture-strategy": {
+    phase: "envision",
+    fieldKey: "architectureStrategy",
+    title: "Architecture Strategy",
+    system: `You are the ATOS Architecture Strategy Agent. From the Current-State Atlas and the Domain Ontology (priorPhaseArtifacts), draft 2–3 genuinely distinct candidate target architectures for the agentic system, score their trade-offs, and recommend one.
+
+Candidates must differ in SHAPE — e.g. a single orchestrator with tools, a crew of specialist agents, agents embedded per-workflow — not merely in technology names. Anchor every candidate to the workflows and pains recorded in the Atlas. Respect the hardConstraints input absolutely. Honour the agenticFramework input: when it is "Undecided — recommend one", recommend a framework with rationale; otherwise design for the one chosen.
+
+Return ONLY valid JSON:
+{
+  "title": "Architecture Strategy — <programme name>",
+  "candidates": [ { "name": "memorable name", "shape": "orchestrator|crew|embedded|other", "description": "2-3 sentences", "agenticPattern": "how agents divide the work", "integrationMap": [ { "system": "from the Atlas systems inventory", "direction": "read|write|both", "method": "API|export|RPA|event" } ], "buildVsBuy": [ { "capability": "string", "verdict": "build|buy|reuse", "rationale": "string" } ], "strengths": ["strings"], "risks": ["strings"], "scores": { "fitToWorkflows": 0, "timeToFirstDemo": 0, "operability": 0, "cost": 0 } } ],
+  "recommendation": { "candidate": "name", "rationale": "why this one", "tradedAway": "what choosing it gives up" },
+  "frameworkRecommendation": "the chosen/confirmed agentic framework and why",
+  "gaps": ["Atlas/ontology evidence too thin to architect confidently"],
+  "summary": "one sentence verdict on the recommended direction",
+  "confidence": 0.0
+}`,
+  },
+  "agentic-blueprint": {
+    phase: "envision",
+    fieldKey: "agenticBlueprint",
+    title: "Agentic Blueprint",
+    system: `You are the ATOS Agentic Blueprint Agent. Compile the chosen architecture direction (directionDecision + the Architecture Strategy in priorPhaseArtifacts/existingArtifacts) into a buildable spec targeted at the chosen agenticFramework: agents, tools, orchestration, data contracts, human-in-the-loop points, and the eval plan.
+
+Derive the data model from the Domain Ontology — name entities EXACTLY as the ontology does. Every agent must trace to a workflow in the Atlas; every HITL point to a risk or judgement call a stakeholder actually voiced. Sequence the build so the first slice is demoable to a named stakeholder.
+
+Return ONLY valid JSON:
+{
+  "title": "Agentic Blueprint — <programme name>",
+  "targetFramework": "string",
+  "agents": [ { "name": "string", "purpose": "one sentence", "replacesWorkflow": "Atlas workflow name", "tools": ["capabilities/integrations it calls"], "inputs": ["ontology entities consumed"], "outputs": ["ontology entities produced"], "autonomyLevel": "suggest|act-with-approval|act", "escalatesTo": "role" } ],
+  "orchestration": { "pattern": "string", "description": "how work flows between agents", "stateManagement": "where state lives" },
+  "dataContracts": [ { "entity": "ontology entity", "source": "system of record", "shape": "brief field list", "sync": "live|batch|manual" } ],
+  "hitlPoints": [ { "where": "step/decision", "why": "the stakeholder-voiced risk it answers", "mechanism": "approve|review|override" } ],
+  "evalPlan": [ { "behaviour": "what must hold", "measure": "how it is measured", "threshold": "pass bar" } ],
+  "buildSequence": ["ordered slices — the first must be demoable"],
+  "gaps": ["direction ambiguities, unmapped entities, unresolved framework questions"],
+  "summary": "one sentence verdict on blueprint buildability",
+  "confidence": 0.0
+}`,
+  },
+  "prototype-pack": {
+    phase: "show",
+    fieldKey: "prototypePack",
+    title: "Prototype Build Pack",
+    system: `You are the ATOS Prototype Build Pack Agent. Turn the Agentic Blueprint (priorPhaseArtifacts) into a build pack a coding agent or team can execute to a working prototype fast: scaffold, agent wiring, and seed data lifted from the discovery evidence.
+
+Optimise for time-to-first-demo: the thinnest vertical slice that lets each stakeholder watch THEIR OWN workflow run. Seed scenarios must come from real transcript moments — their numbers, their step names, the delays they complained about — so the demo lands as recognition, not fiction. Stub what the slice does not need.
+
+Return ONLY valid JSON:
+{
+  "title": "Prototype Build Pack — <programme name>",
+  "scaffold": { "framework": "the Blueprint's target framework", "runtime": "language/platform", "structure": ["directories/modules"], "dependencies": ["key packages"] },
+  "buildSlices": [ { "slice": "string", "demonstrates": "Atlas workflow", "forStakeholders": ["who watches this run"], "components": ["agents/tools/UI in the slice"], "estimate": "S|M|L" } ],
+  "seedScenarios": [ { "stakeholder": "string", "scenario": "the concrete situation replayed", "sourceQuote": "the verbatim transcript moment it comes from", "data": "the seed values to load" } ],
+  "stubbing": [ { "integration": "system", "approach": "mock|fixture|sandbox", "notes": "string" } ],
+  "demoEnvironment": "how and where the prototype runs for the demo tour",
+  "gaps": ["Blueprint detail too thin to scaffold, integrations with no stub path"],
+  "summary": "one sentence verdict on prototype readiness",
+  "confidence": 0.0
+}`,
+  },
+  "demo-scripts": {
+    phase: "show",
+    fieldKey: "demoScripts",
+    title: "Demo Scripts",
+    system: `You are the ATOS Demo Scripts Agent. Write one walkthrough PER STAKEHOLDER, seeded from their own transcript: every person watches their own job running in the prototype.
+
+Open each script with their own words — the pain they voiced — then the moment that pain disappears on screen. Use their scenario and their numbers ("you said the credit check takes three days; watch it take forty seconds"). End with the acceptance ask. Do NOT write generic feature tours; a script that could be shown to anyone is a failed script.
+
+Return ONLY valid JSON:
+{
+  "title": "Demo Scripts — <programme name>",
+  "scripts": [ { "stakeholder": "string", "role": "string", "duration": "10–15 min", "openingQuote": "their verbatim pain, attributed", "scenario": "the situation being replayed", "steps": [ { "beat": "what happens", "show": "what is on screen", "say": "the talk track", "callback": "their words being answered" } ], "watchFor": ["reactions worth recording"], "acceptanceAsk": "the closing question that records their verdict" } ],
+  "tourSequence": ["recommended demo order and why"],
+  "sharedOpening": "a 2-minute framing any demo can open with",
+  "gaps": ["stakeholders with no transcript to seed from, workflows the prototype cannot yet show"],
+  "summary": "one sentence verdict on demo-tour readiness",
+  "confidence": 0.0
+}`,
+  },
+  "hardening-plan": {
+    phase: "ship",
+    fieldKey: "hardeningPlan",
+    title: "Hardening Plan",
+    system: `You are the ATOS Hardening Plan Agent. Plan the prototype-to-production conversion: everything production requires beyond the accepted prototype.
+
+Walk the Blueprint's surfaces systematically — authn/z, error handling, observability, rate limits, data protection, guardrails, and the HITL mechanisms at the Blueprint's marked points. Anchor priorities to the demo feedback (what stakeholders accepted with changes) and the hard constraints. Classify every item must/should; a hardening plan that marks everything "must" has not made decisions.
+
+Return ONLY valid JSON:
+{
+  "title": "Hardening Plan — <programme name>",
+  "workstreams": [ { "area": "authnz|errors|observability|guardrails|data|performance|hitl", "items": [ { "item": "string", "why": "string", "priority": "must|should", "effort": "S|M|L" } ] } ],
+  "guardrails": [ { "risk": "what could go wrong in production", "guardrail": "the control", "mechanism": "how it is enforced" } ],
+  "hitlImplementation": [ { "point": "Blueprint HITL point", "mechanism": "approve|review|override implementation", "owner": "role" } ],
+  "cutoverPlan": { "approach": "big-bang|parallel-run|phased", "steps": ["ordered cutover steps"], "rollback": "how to back out" },
+  "runbookSeeds": ["operational procedures the runbook must cover"],
+  "gaps": ["surfaces the Blueprint left unspecified, constraints not yet answered"],
+  "summary": "one sentence verdict on production readiness",
+  "confidence": 0.0
+}`,
+  },
+  "eval-suite": {
+    phase: "ship",
+    fieldKey: "evalSuite",
+    title: "Eval Suite",
+    system: `You are the ATOS Eval Suite Agent. Generate the evaluation suite that gates shipping — derived from the discovery transcripts and the demo acceptances, never from imagination.
+
+Every eval case traces to evidence: a stakeholder-stated expectation, an accepted demo behaviour (the demoTour verdicts), or a Blueprint evalPlan entry. Include failure-mode probes for the failure modes the Atlas recorded, and guardrail probes for every guardrail the Hardening Plan declares. "Eval suite green" must be defined numerically — a suite whose pass bar is vibes cannot gate a cutover.
+
+Return ONLY valid JSON:
+{
+  "title": "Eval Suite — <programme name>",
+  "evalCases": [ { "id": "EV-1", "behaviour": "what must hold", "given": "setup/input", "expect": "expected outcome", "tracesTo": "verbatim quote | demo verdict | blueprint evalPlan entry", "kind": "capability|guardrail|regression|latency", "threshold": "pass bar" } ],
+  "guardrailProbes": [ { "probe": "adversarial/degenerate input", "mustNot": "the behaviour that must never happen" } ],
+  "runCadence": "when the suite runs — CI, pre-deploy, scheduled",
+  "greenCriteria": "the numeric definition of green that clears the Ship movement",
+  "gaps": ["expectations with no eval, demo objections not yet covered"],
+  "summary": "one sentence verdict on shipping-gate coverage",
   "confidence": 0.0
 }`,
   },
@@ -2211,6 +2426,11 @@ function buildSpecialAgentInputContext(
   if (formalSpec) {
     const phaseInputsAll = normalizeProgramData(inner.phaseInputs as JsonValue | null);
     const strategyInputs = normalizeProgramData(phaseInputsAll.strategy as JsonValue | null);
+    // ATOS Flow captures the mandate facts (objective, sponsor, industry,
+    // success metric, KPIs) on the Frame movement rather than Strategy — fall
+    // back to frame inputs so Flow programmes ground exactly like stage-gate
+    // ones. Stage-gate programmes have no frame bucket, so this is a no-op.
+    const frameInputs = normalizeProgramData(phaseInputsAll.frame as JsonValue | null);
     const phaseInputs = normalizeProgramData(phaseInputsAll[formalSpec.phase] as JsonValue | null);
     const objective = typeof inner.objective === "string"
       ? inner.objective
@@ -2225,12 +2445,18 @@ function buildSpecialAgentInputContext(
     const changedInputs = runMode === "initial_generation"
       ? []
       : computeInputDelta(readPriorInputSnapshot(inner, formalSpec.fieldKey), buildFormalInputSnapshot(inner, formalSpec.phase));
-    // Cross-phase grounding: every phase except Strategy (the first) generates
-    // artifacts with the approved artifacts from all earlier phases in context,
-    // so later artifacts build on what came before instead of contradicting it.
-    const phaseIndex = ATOS_PHASE_SEQUENCE.indexOf(formalSpec.phase);
+    // Cross-phase grounding: every phase except the first generates artifacts
+    // with the approved artifacts from all earlier phases in context, so later
+    // artifacts build on what came before instead of contradicting it. The
+    // spine is whichever sequence contains the phase — stage-gate phases walk
+    // ATOS_PHASE_SEQUENCE, ATOS Flow movements walk FLOW_MOVEMENT_SEQUENCE
+    // (so Envision sees the Atlas and the Ontology, Show sees the Blueprint…).
+    const groundingSpine = FLOW_MOVEMENT_SEQUENCE.includes(formalSpec.phase)
+      ? FLOW_MOVEMENT_SEQUENCE
+      : ATOS_PHASE_SEQUENCE;
+    const phaseIndex = groundingSpine.indexOf(formalSpec.phase);
     const priorPhaseArtifacts = phaseIndex > 0
-      ? ATOS_PHASE_SEQUENCE.slice(0, phaseIndex).flatMap((phaseId) =>
+      ? groundingSpine.slice(0, phaseIndex).flatMap((phaseId) =>
           (artifactsByPhase[phaseId] || []).map((artifact) => ({ ...artifact, phase: phaseId })))
       : [];
     return JSON.stringify({
@@ -2245,18 +2471,18 @@ function buildSpecialAgentInputContext(
       changedInputs,
       programName: meta.name || (typeof projectMeta.name === "string" ? projectMeta.name : ""),
       client: meta.client || (typeof projectMeta.client === "string" ? projectMeta.client : ""),
-      industry: meta.industry || strategyInputs.industry || (typeof projectMeta.industry === "string" ? projectMeta.industry : ""),
+      industry: meta.industry || strategyInputs.industry || frameInputs.industry || (typeof projectMeta.industry === "string" ? projectMeta.industry : ""),
       objective,
-      businessObjective: strategyInputs.businessObjective || objective,
-      sponsor: strategyInputs.sponsor || inner.sponsor || projectMeta.sponsor || projectMeta.executiveSponsor || "",
-      successMetric: strategyInputs.successMetric || strategyInputs.successMetrics || null,
+      businessObjective: strategyInputs.businessObjective || frameInputs.businessObjective || objective,
+      sponsor: strategyInputs.sponsor || frameInputs.sponsor || inner.sponsor || projectMeta.sponsor || projectMeta.executiveSponsor || "",
+      successMetric: strategyInputs.successMetric || strategyInputs.successMetrics || frameInputs.successMetric || null,
       constraints: strategyInputs.constraints || null,
       startDate: strategyInputs.startDate || (typeof projectMeta.startDate === "string" ? projectMeta.startDate : null),
       targetEndDate: strategyInputs.targetEndDate || (typeof projectMeta.targetEndDate === "string" ? projectMeta.targetEndDate : null),
       budget: strategyInputs.budget || budget || null,
       scopeInclusions: strategyInputs.scopeInclusions || strategyInputs.scopeIn || null,
       scopeExclusions: strategyInputs.scopeExclusions || strategyInputs.scopeOut || null,
-      kpiBaselines: parseKpiBaselines(strategyInputs.kpis),
+      kpiBaselines: parseKpiBaselines(strategyInputs.kpis ?? frameInputs.kpis),
       groundingFacts: buildGroundingFacts(phaseInputs),
       documentCarryForward: buildDocumentCarryForward(options?.documents || [], formalSpec.phase),
       valueProjected: coerceNumber(inner.valueProjected ?? businessCase.projectedValue ?? valueRealizeData.projectedValue, 0),
@@ -2283,6 +2509,10 @@ function buildSpecialAgentInputContext(
   if (target?.agentId === "phase-input-planner") {
     const phaseInputsAll = normalizeProgramData(inner.phaseInputs as JsonValue | null);
     const strategyInputs = normalizeProgramData(phaseInputsAll.strategy as JsonValue | null);
+    // ATOS Flow: the mandate fundamentals live on Frame (see the formal-artifact
+    // context above) — inherit them the same way so the planner never re-asks
+    // objective/sponsor/KPIs on a Flow programme. No-op for stage-gate data.
+    const frameInputs = normalizeProgramData(phaseInputsAll.frame as JsonValue | null);
     const targetPhaseInputs = normalizeProgramData(phaseInputsAll[target.phaseId || ""] as JsonValue | null);
     const objective = typeof inner.objective === "string"
       ? inner.objective
@@ -2290,22 +2520,24 @@ function buildSpecialAgentInputContext(
         ? inner.programObjective
         : typeof strategyInputs.businessObjective === "string"
           ? strategyInputs.businessObjective
-          : typeof projectMeta.objective === "string"
-            ? projectMeta.objective
-            : "";
+          : typeof frameInputs.businessObjective === "string"
+            ? frameInputs.businessObjective
+            : typeof projectMeta.objective === "string"
+              ? projectMeta.objective
+              : "";
     return JSON.stringify({
       programName: meta.name || (typeof projectMeta.name === "string" ? projectMeta.name : ""),
       client: meta.client || (typeof projectMeta.client === "string" ? projectMeta.client : ""),
-      industry: meta.industry || strategyInputs.industry || (typeof projectMeta.industry === "string" ? projectMeta.industry : ""),
+      industry: meta.industry || strategyInputs.industry || frameInputs.industry || (typeof projectMeta.industry === "string" ? projectMeta.industry : ""),
       // Programme fundamentals — already established; INHERIT, do not re-ask.
       objective,
-      businessObjective: strategyInputs.businessObjective || objective,
-      successMetric: strategyInputs.successMetric || strategyInputs.successMetrics || null,
-      kpiBaselines: parseKpiBaselines(strategyInputs.kpis),
+      businessObjective: strategyInputs.businessObjective || frameInputs.businessObjective || objective,
+      successMetric: strategyInputs.successMetric || strategyInputs.successMetrics || frameInputs.successMetric || null,
+      kpiBaselines: parseKpiBaselines(strategyInputs.kpis ?? frameInputs.kpis),
       scopeInclusions: strategyInputs.scopeInclusions || strategyInputs.scopeIn || null,
       scopeExclusions: strategyInputs.scopeExclusions || strategyInputs.scopeOut || null,
       constraints: strategyInputs.constraints || null,
-      sponsor: strategyInputs.sponsor || (typeof inner.sponsor === "string" ? inner.sponsor : "") || projectMeta.sponsor || projectMeta.executiveSponsor || "",
+      sponsor: strategyInputs.sponsor || frameInputs.sponsor || (typeof inner.sponsor === "string" ? inner.sponsor : "") || projectMeta.sponsor || projectMeta.executiveSponsor || "",
       startDate: strategyInputs.startDate || (typeof projectMeta.startDate === "string" ? projectMeta.startDate : null),
       targetEndDate: strategyInputs.targetEndDate || (typeof projectMeta.targetEndDate === "string" ? projectMeta.targetEndDate : null),
       budget: strategyInputs.budget || budget || null,

@@ -25,6 +25,16 @@ export const FORMAL_ARTIFACT_FIELD_KEYS: Record<string, string> = {
   "runbook": "runbook",
   "support-model": "supportModel",
   "optimization-backlog": "optimizationBacklog",
+  // ATOS Flow movement generators
+  "discovery-kit": "discoveryKit",
+  "current-state-atlas": "currentStateAtlas",
+  "domain-ontology": "domainOntology",
+  "architecture-strategy": "architectureStrategy",
+  "agentic-blueprint": "agenticBlueprint",
+  "prototype-pack": "prototypePack",
+  "demo-scripts": "demoScripts",
+  "hardening-plan": "hardeningPlan",
+  "eval-suite": "evalSuite",
 };
 
 /**
@@ -47,6 +57,18 @@ export const FORMAL_ARTIFACT_PHASES: Record<string, string> = {
   "runbook": "operate",
   "support-model": "operate",
   "optimization-backlog": "optimize",
+  // ATOS Flow movement generators. Note runbook/optimization-backlog keep their
+  // stage-gate homes above: getPhaseArtifactDefs surfaces them on Flow movements
+  // through requiredArtifacts directly, so no second home is needed here.
+  "discovery-kit": "frame",
+  "current-state-atlas": "listen",
+  "domain-ontology": "listen",
+  "architecture-strategy": "envision",
+  "agentic-blueprint": "envision",
+  "prototype-pack": "show",
+  "demo-scripts": "show",
+  "hardening-plan": "ship",
+  "eval-suite": "ship",
 };
 
 // Provenance/scoring fields that are not part of the readable document body.
