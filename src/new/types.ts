@@ -714,7 +714,7 @@ export interface ProgramSummary {
   benefitsTracking: BenefitsTrackingSummary | null;
   benchmarkComparison: BenchmarkComparisonSummary | null;
   weeklyDigest: WeeklyDigestSummary | null;
-  methodology?: "atos-standard" | "atos-lite" | "atos-regulated";
+  methodology?: "atos-standard" | "atos-lite" | "atos-regulated" | "atos-flow";
   workstreams?: Workstream[];
   patternExtractGeneratedAt: string | null;
   patternExtractCount: number;

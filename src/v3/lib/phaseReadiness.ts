@@ -412,6 +412,14 @@ export function getCompletedPhaseIds(program: ProgramSummary): Set<string> {
 }
 
 export function getLockedPhaseIds(program: ProgramSummary): Set<string> {
+  // ATOS Flow: the pipeline streams — movements never hard-lock. A late
+  // transcript re-runs everything downstream with visible diffs rather than
+  // being locked out, and readiness signals (coverage, demo acceptances)
+  // advise instead of gate. Completion still reads gateReviews (a movement's
+  // "gate" is its recorded demonstration), so the frontier and completed sets
+  // behave exactly as for stage-gate programmes — only the locking differs.
+  if (program.methodology === "atos-flow") return new Set();
+
   const locked = new Set<string>();
   const phases = program.phases || [];
 
