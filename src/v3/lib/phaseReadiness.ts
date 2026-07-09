@@ -1,7 +1,7 @@
 import type { ProgramSummary } from "@/new/types";
 import { getGateThreshold, computeInputQualityScore } from "@/v3/lib/confidenceScore";
 import { derivePhaseInputQuality } from "@/v3/lib/phaseInputQuality";
-import { ATOS_STANDARD } from "@/v3/lib/methodology";
+import { getPhaseDefinition } from "@/v3/lib/methodology";
 import { getDynamicSchemaStore, dynamicArtifactDefs } from "@/v3/lib/dynamicSchema";
 import { resolveArtifactQualityScore } from "@/v3/lib/artifactReview";
 import { buildPlanGroundingIndex, isGroundedFalsePositiveDecision } from "@/v3/lib/decisionGrounding";
@@ -90,7 +90,9 @@ export function computePhaseReadiness(
   // The phase's required artifact set = the methodology's static requiredArtifacts
   // (Strategy) merged with any ai-derived dynamic artifacts the programme has
   // accrued for this phase. A dynamic-only phase has no static required set.
-  const phaseDef = ATOS_STANDARD.phases.find((p) => p.id === phaseId);
+  // Resolved via getPhaseDefinition so ATOS Flow movements gate on their
+  // declared artifact set exactly like stage-gate phases.
+  const phaseDef = getPhaseDefinition(phaseId);
   const dynamicStore = getDynamicSchemaStore(program.rawData);
   const requiredArtifactIds = [
     ...(phaseDef?.requiredArtifacts ?? []),

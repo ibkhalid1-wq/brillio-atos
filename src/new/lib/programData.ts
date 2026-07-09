@@ -44,7 +44,7 @@ import type {
   WeeklyDigestSummary,
   Workstream,
 } from "@/new/types";
-import { getPhaseSequence } from "@/v3/lib/methodology";
+import { getPhaseSequence, type MethodologyVariant } from "@/v3/lib/methodology";
 import { buildPlanGroundingIndex, isGroundedAbsenceClaim, isGroundedDirective } from "@/v3/lib/decisionGrounding";
 
 type JsonRecord = Record<string, Json | undefined>;
@@ -71,6 +71,13 @@ const PHASE_LABELS: Record<string, string> = {
   delivery: "Delivery",
   adoption: "Drive Adoption",
   titan: "Read the Signals",
+  // ATOS Flow movements
+  frame: "Frame",
+  listen: "Listen",
+  envision: "Envision",
+  show: "Show",
+  ship: "Ship",
+  evolve: "Evolve",
 };
 
 export const PHASE_SEQUENCE = getPhaseSequence("atos-standard") as readonly string[];
@@ -155,6 +162,13 @@ function deriveObjective(phaseId: string): string {
     delivery: "Keep milestones, risks, and commitments on track.",
     adoption: "Build adoption, champions, and confident human usage.",
     titan: "Model outcomes, scenarios, and signal shifts before they land.",
+    // ATOS Flow movements
+    frame: "Turn one sponsor conversation into a confirmed mandate and a booked discovery tour.",
+    listen: "Hear every stakeholder; compile their words into the Current-State Atlas.",
+    envision: "Choose a direction from candidate architectures; compile the Agentic Blueprint.",
+    show: "Put every stakeholder in front of their own workflow, running.",
+    ship: "Harden the accepted prototype into the production system.",
+    evolve: "Keep the loop alive — benefits pulse, drift detection, the next candidates.",
   };
   return map[phaseId] || "Advance the transformation with clear evidence.";
 }
@@ -211,7 +225,11 @@ function derivePhases(data: JsonRecord): PhaseSummary[] {
     });
   });
 
-  return PHASE_SEQUENCE.map((id) => {
+  // The rendered spine follows the programme's OWN methodology variant — a Flow
+  // programme renders its movements (frame…evolve), not the stage-gate phases.
+  // Unknown/absent variants fall back to the standard spine via getMethodology.
+  const variant = (asString(data.methodology) || "atos-standard") as MethodologyVariant;
+  return getPhaseSequence(variant).map((id) => {
     const existing = fromData.get(id);
     if (existing) return existing;
     // When data.phases is empty (e.g. after partial data recovery) the loop above

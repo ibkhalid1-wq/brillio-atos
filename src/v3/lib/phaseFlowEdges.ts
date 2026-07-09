@@ -12,7 +12,7 @@
  * the phase is silently dropped.
  */
 import { getPhaseArtifactIds } from "@/v3/lib/phaseArtifacts";
-import { ATOS_STANDARD } from "@/v3/lib/methodology";
+import { getPhaseDefinition } from "@/v3/lib/methodology";
 import { canonicalArtifactId, dynamicFieldArtifacts, type DynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { getPhaseInputSchema, resolveStakeholderField, STAKEHOLDER_PHASE_ID } from "@/v3/lib/phaseInputSchema";
 import { FORMAL_ARTIFACT_FIELD_KEYS } from "@/v3/lib/formalArtifacts";
@@ -30,7 +30,7 @@ export interface FlowEdge {
  * visual flow automatically, with no parallel hand-maintained edge list.
  */
 function methodologyFieldArtifacts(phaseId: string): Record<string, string[]> {
-  const flow = ATOS_STANDARD.phases.find((phase) => phase.id === phaseId)?.artifactInputFlow ?? {};
+  const flow = getPhaseDefinition(phaseId)?.artifactInputFlow ?? {};
   const inverted: Record<string, string[]> = {};
   for (const [artifactId, fieldIds] of Object.entries(flow)) {
     for (const fieldId of fieldIds) {
@@ -143,7 +143,7 @@ function semanticFieldArtifacts(
  */
 export function getArtifactInputFields(phaseId: string, artifactId: string, store?: DynamicSchemaStore): string[] {
   const fields = new Set<string>();
-  const methodologyFlow = ATOS_STANDARD.phases.find((phase) => phase.id === phaseId)?.artifactInputFlow ?? {};
+  const methodologyFlow = getPhaseDefinition(phaseId)?.artifactInputFlow ?? {};
   for (const fieldId of methodologyFlow[artifactId] ?? []) fields.add(fieldId);
   const fieldMap = PHASE_FIELD_ARTIFACTS[phaseId] ?? {};
   for (const [fieldId, artifacts] of Object.entries(fieldMap)) {

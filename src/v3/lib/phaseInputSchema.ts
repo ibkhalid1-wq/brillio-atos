@@ -1,4 +1,4 @@
-import { ATOS_STANDARD, type GridColumn, type PhaseInputField } from "@/v3/lib/methodology";
+import { getPhaseDefinition, type GridColumn, type PhaseInputField } from "@/v3/lib/methodology";
 import { mergeDynamicInputFields, type DynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 
 // Field/column types are owned by the methodology (single source of truth);
@@ -12,9 +12,13 @@ export interface PhaseInputSchema {
   fields: PhaseInputField[];
 }
 
-/** Reads a phase's input-field definitions from the methodology registry. */
+/**
+ * Reads a phase's input-field definitions from the methodology registry —
+ * resolved via getPhaseDefinition so stage-gate phases and ATOS Flow movements
+ * (frame…evolve) both find their declared fields.
+ */
 function methodologyInputFields(phaseId: string): PhaseInputField[] {
-  return ATOS_STANDARD.phases.find((phase) => phase.id === phaseId)?.inputFields ?? [];
+  return getPhaseDefinition(phaseId)?.inputFields ?? [];
 }
 
 export const PHASE_INPUT_SCHEMAS: Record<string, PhaseInputSchema> = {
@@ -73,6 +77,45 @@ export const PHASE_INPUT_SCHEMAS: Record<string, PhaseInputSchema> = {
     title: "Value Realize inputs",
     description: "Record realised benefits, lessons, and the handover that closes the programme.",
     fields: methodologyInputFields("valuerealize"),
+  },
+  // ── ATOS Flow movements ─────────────────────────────────────────────────────
+  // Flow's panels capture evidence, not paperwork: conversations, coverage,
+  // demo verdicts. Titles/descriptions speak that language.
+  frame: {
+    phaseId: "frame",
+    title: "Frame",
+    description: "One sponsor conversation in — mandate, stakeholder map, and discovery tour out. Confirm, don't author.",
+    fields: methodologyInputFields("frame"),
+  },
+  listen: {
+    phaseId: "listen",
+    title: "Listen",
+    description: "Track the discovery tour and feed every 45-minute transcript in — the Atlas re-synthesises itself.",
+    fields: methodologyInputFields("listen"),
+  },
+  envision: {
+    phaseId: "envision",
+    title: "Envision",
+    description: "Pick the target framework and record the direction the steering conversation chose.",
+    fields: methodologyInputFields("envision"),
+  },
+  show: {
+    phaseId: "show",
+    title: "Show",
+    description: "The demo tour ledger — one row per stakeholder watching their own workflow run. This ledger is the gate.",
+    fields: methodologyInputFields("show"),
+  },
+  ship: {
+    phaseId: "ship",
+    title: "Ship",
+    description: "Production target, eval status, and the recorded go/no-go — the hardening evidence.",
+    fields: methodologyInputFields("ship"),
+  },
+  evolve: {
+    phaseId: "evolve",
+    title: "Evolve",
+    description: "The standing loop: monthly ops conversations, measured benefits, and drift observations.",
+    fields: methodologyInputFields("evolve"),
   },
 };
 
