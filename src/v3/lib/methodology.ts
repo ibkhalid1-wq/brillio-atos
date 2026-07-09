@@ -45,7 +45,7 @@ export interface PhaseInputField {
   id: string;
   label: string;
   /**
-   * Input shape. The first six are the primitive editors. The last four are
+   * Input shape. The first six are the primitive editors. The rest are
    * *semantic reference* types — they still persist as a plain string, but the
    * UI renders a context-aware picker (a datalist sourced from the programme's
    * roster, organisations, uploaded documents or generated artifacts) so the
@@ -54,6 +54,10 @@ export interface PhaseInputField {
    *   • organization        → a named org, vendor or department (client + orgs)
    *   • document            → an uploaded source document
    *   • artifact-reference  → a generated artifact in this programme
+   *   • transcript          → a recorded conversation (ATOS Flow's primary
+   *     evidence): either a document reference OR the pasted transcript text
+   *     itself — pasted text persists as the field value and flows verbatim
+   *     into generation grounding, so evidence needs no upload round-trip.
    */
   type:
     | "text"
@@ -65,7 +69,8 @@ export interface PhaseInputField {
     | "stakeholder"
     | "organization"
     | "document"
-    | "artifact-reference";
+    | "artifact-reference"
+    | "transcript";
   /**
    * The semantic role this field's fact plays (see `FieldRole`). Orthogonal to
    * `type`: it lets the spine match a governance exit criterion to the fields
@@ -1206,7 +1211,7 @@ export const ATOS_FLOW: MethodologyDefinition = {
         { id: "businessObjective", label: "Business objective", type: "textarea", placeholder: "What outcome is this system meant to achieve?", required: true, example: "Cut quote-to-order cycle time by 70% by replacing the manual desk with an agentic workflow.", validationRule: "A measurable outcome, not an activity — name the change, the magnitude, and the horizon." },
         { id: "sponsor", label: "Executive sponsor", type: "text", role: "mandate", placeholder: "Name and title", required: true, example: "Jane Okafor, Chief Operating Officer", validationRule: "A named individual with their role, not a team or department." },
         { id: "industry", label: "Industry", type: "select", options: INDUSTRY_OPTIONS, required: true, hint: "The client's primary sector — sets the domain language the charter, agendas, and architecture strategy are written in." },
-        { id: "sponsorConversation", label: "Sponsor conversation transcript", type: "document", required: false, usedByArtifacts: ["charter", "discovery-kit"], hint: "Upload the recorded sponsor conversation (transcript or notes). The charter and the discovery kit draft themselves from it — you confirm rather than author." },
+        { id: "sponsorConversation", label: "Sponsor conversation transcript", type: "transcript", required: false, usedByArtifacts: ["charter", "discovery-kit"], hint: "Paste the recorded sponsor conversation (or reference the uploaded document). The charter and the discovery kit draft themselves from it — you confirm rather than author." },
         { id: "successMetric", label: "Primary success metric", type: "text", role: "measure", placeholder: "KPI name, e.g. Quote turnaround time", required: true, example: "Quote turnaround time", validationRule: "A single measurable KPI name — baselines are captured from the discovery conversations." },
         {
           // Same field id as the stage-gate spine so KPI consumers (benefits
@@ -1285,7 +1290,7 @@ export const ATOS_FLOW: MethodologyDefinition = {
             { key: "date", label: "Conversation date", type: "date", width: 110 },
           ],
         },
-        { id: "interviewTranscripts", label: "Interview transcripts", type: "document", required: false, usedByArtifacts: ["current-state-atlas", "domain-ontology"], hint: "Upload each 45-minute conversation transcript. ATOS extracts workflows, pain points, metrics, and quotes — and re-synthesises the Atlas on every new transcript." },
+        { id: "interviewTranscripts", label: "Interview transcripts", type: "transcript", required: false, usedByArtifacts: ["current-state-atlas", "domain-ontology"], hint: "Paste each 45-minute conversation (or reference uploaded documents). Open every transcript with a header line — e.g. \"— Maria Chen, Sales Ops, 2026-07-14 —\" — so the Atlas attributes quotes to the right voice. ATOS re-synthesises on every new transcript." },
         {
           id: "contradictionLog",
           label: "Contradiction log",
@@ -1333,7 +1338,7 @@ export const ATOS_FLOW: MethodologyDefinition = {
           hint: "The framework the Blueprint compiles to. Pick \"Undecided\" to have the architecture strategy recommend one with rationale.",
         },
         { id: "directionDecision", label: "Chosen direction", type: "textarea", required: false, placeholder: "Candidate, rationale, and what was traded away", hint: "Which candidate architecture was chosen and why — lifted from the recorded steering conversation." },
-        { id: "steeringConversation", label: "Steering conversation transcript", type: "document", required: false, usedByArtifacts: ["agentic-blueprint"], hint: "The recorded direction-setting conversation. The decision rationale and Blueprint framing generate from it." },
+        { id: "steeringConversation", label: "Steering conversation transcript", type: "transcript", required: false, usedByArtifacts: ["agentic-blueprint"], hint: "The recorded direction-setting conversation — paste it or reference the upload. The decision rationale and Blueprint framing generate from it." },
         { id: "hardConstraints", label: "Hard constraints", type: "textarea", role: "constraint", required: false, placeholder: "Platform mandates, data residency, security posture, integration boundaries", hint: "The boundaries every candidate must respect — lifted from Listen, refined here." },
       ],
       artifactInputFlow: {
@@ -1383,7 +1388,7 @@ export const ATOS_FLOW: MethodologyDefinition = {
           ],
         },
         { id: "prototypeLocation", label: "Prototype location", type: "text", required: false, placeholder: "Repo or environment URL", hint: "Where the running prototype lives — repo, sandbox, or environment." },
-        { id: "demoFeedback", label: "Demo session transcripts", type: "document", required: false, usedByArtifacts: ["demo-scripts"], hint: "Recordings of the demo sessions. Reactions feed Blueprint diffs and the next prototype build." },
+        { id: "demoFeedback", label: "Demo session transcripts", type: "transcript", required: false, usedByArtifacts: ["demo-scripts"], hint: "Recordings of the demo sessions — paste or reference. Reactions feed Blueprint diffs and the next prototype build. Header each session with the stakeholder's name so verdicts attribute." },
       ],
       artifactInputFlow: {
         "prototype-pack": ["prototypeLocation"],
@@ -1441,7 +1446,7 @@ export const ATOS_FLOW: MethodologyDefinition = {
         isLoop: true,
       },
       inputFields: [
-        { id: "opsConversations", label: "Ops conversation transcripts", type: "document", required: false, usedByArtifacts: ["benefits-tracker", "optimization-backlog"], hint: "The monthly recorded ops review. Each one re-runs the benefits pulse and drift detection." },
+        { id: "opsConversations", label: "Ops conversation transcripts", type: "transcript", required: false, usedByArtifacts: ["benefits-tracker", "optimization-backlog"], hint: "The monthly recorded ops review — paste or reference. Each one re-runs the benefits pulse and drift detection." },
         {
           // Same field id as the stage-gate spine's Value Realize grid so the
           // benefits-tracker agent reads Flow programmes unchanged.

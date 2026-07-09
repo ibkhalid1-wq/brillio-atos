@@ -343,6 +343,11 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
   // auto-save could clobber an external write (e.g. a document import that just
   // populated kpis) with an empty array before the resync effect adopted it.
   const [values, setValues] = useState<Record<string, string>>(existingInputs);
+  // Transcript fields (ATOS Flow evidence) render in one of two modes: paste the
+  // conversation text (the value IS the transcript) or reference an uploaded
+  // document. Explicit user toggles live here; untouched fields infer their mode
+  // from the stored value's shape (multiline/long ⇒ pasted).
+  const [transcriptPasteMode, setTranscriptPasteMode] = useState<Record<string, boolean>>({});
   const [localWorkstreams, setLocalWorkstreams] = useState<Workstream[]>(
     () => workstreamsFromBucket(existingInputs as Record<string, unknown>, program.workstreams, phaseId),
   );
@@ -1099,6 +1104,57 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
                     options={field.options ?? []}
                     onChange={(value) => setValues((c) => ({ ...c, [field.id]: value }))}
                   />
+                ) : field.type === "transcript" ? (
+                  // ATOS Flow's evidence type. Paste-first: the pasted
+                  // conversation text persists AS the field value and flows
+                  // verbatim into generation grounding — no upload round-trip.
+                  // The toggle switches to a document reference for transcripts
+                  // that already live as uploads.
+                  (() => {
+                    const value = values[field.id] ?? "";
+                    const looksPasted = value.includes("\n") || value.length > 200;
+                    const pasteMode = transcriptPasteMode[field.id] ?? (value ? looksPasted : true);
+                    const words = value.trim() ? value.trim().split(/\s+/).length : 0;
+                    const toggle = (next: boolean) =>
+                      setTranscriptPasteMode((current) => ({ ...current, [field.id]: next }));
+                    return (
+                      <div>
+                        {pasteMode ? (
+                          <AutoGrowTextarea
+                            className="v3-input v3-textarea"
+                            rows={4}
+                            style={{ overflow: "hidden", resize: "vertical" }}
+                            aria-label={field.label}
+                            placeholder={field.placeholder ?? "Paste the conversation transcript…"}
+                            value={value}
+                            onChange={(event) => setValues((current) => ({ ...current, [field.id]: event.target.value }))}
+                          />
+                        ) : (
+                          <V3Combobox
+                            ariaLabel={field.label}
+                            value={value}
+                            suggestions={referenceSuggestions.document ?? []}
+                            placeholder={field.placeholder ?? "Reference an uploaded transcript…"}
+                            onChange={(next) => setValues((current) => ({ ...current, [field.id]: next }))}
+                          />
+                        )}
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+                          <button
+                            type="button"
+                            className="v3-button ghost v3-button-inline-xs"
+                            onClick={() => toggle(!pasteMode)}
+                          >
+                            {pasteMode ? "Reference an uploaded document instead" : "Paste the transcript text instead"}
+                          </button>
+                          {pasteMode && words > 0 ? (
+                            <span style={{ fontSize: 10, color: "var(--v3-text-muted)" }}>
+                              {words.toLocaleString()} words of evidence
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })()
                 ) : (field.type === "stakeholder" || field.type === "organization" || field.type === "document" || field.type === "artifact-reference") ? (
                   // Semantic reference types. Persist as a plain string but offer
                   // a context-aware suggestion list drawn from the programme (roster

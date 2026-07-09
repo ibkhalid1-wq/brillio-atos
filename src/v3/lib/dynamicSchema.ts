@@ -374,7 +374,8 @@ export function dynamicPlanMeta(phaseId: string, store?: DynamicSchemaStore): Ph
 const ALLOWED_FIELD_TYPES = new Set([
   "text", "textarea", "number", "date", "select", "grid",
   // Semantic reference types — persist as a string, render as a context picker.
-  "stakeholder", "organization", "document", "artifact-reference",
+  // "transcript" additionally accepts pasted conversation text as the value.
+  "stakeholder", "organization", "document", "artifact-reference", "transcript",
 ]);
 
 export interface DynamicPhaseProposal {
