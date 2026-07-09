@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import { supabase } from "@/integrations/supabase/client";
 import { parseDocumentToText } from "@/new/lib/parseDocumentToText";
-import type { MethodologyVariant } from "@/v3/lib/methodology";
+import { PROGRAM_ARCHETYPES, getPhaseSequence, type MethodologyVariant } from "@/v3/lib/methodology";
 
 interface ProgramSetupWizardProps {
   program: ProgramSummary;
@@ -14,7 +14,7 @@ interface ProgramSetupWizardProps {
 export interface ProgramSetupPatch {
   name: string;
   client: string;
-  /** Optional programme archetype. No longer selected in the wizard; methodology defaults to atos-standard. */
+  /** Optional programme archetype selected in the wizard's "What are you building?" step. */
   archetype?: string;
   /** Methodology variant derived from the archetype. Persisted to program data. */
   methodology?: MethodologyVariant;
@@ -70,6 +70,18 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
   const [prefillError, setPrefillError] = useState<string | null>(null);
   const [name, setName] = useState(program.name === "New Program" || program.name === "New Programme" ? "" : program.name || "");
   const [client, setClient] = useState(typeof projectMeta.client === "string" ? projectMeta.client : program.client || "");
+  // Pre-select the programme's stored archetype so re-opening setup neither
+  // loses the choice nor re-seeds the spine (same spine → detail-edit merge).
+  const [archetypeId, setArchetypeId] = useState<string>(
+    typeof projectMeta.archetype === "string" ? projectMeta.archetype : "",
+  );
+  // Agentic System Build (ATOS Flow) leads — it is the flagship delivery model;
+  // the stage-gate archetypes follow.
+  const orderedArchetypes = useMemo(() => {
+    const flow = PROGRAM_ARCHETYPES.filter((a) => a.methodologyVariant === "atos-flow");
+    const rest = PROGRAM_ARCHETYPES.filter((a) => a.methodologyVariant !== "atos-flow");
+    return [...flow, ...rest];
+  }, []);
   // Phases keep their existing progress/target dates; the wizard no longer edits
   // them inline (the phase-progress section was removed), so the setter is unused.
   const [phases] = useState<PhaseForm[]>(
@@ -193,6 +205,45 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
           ) : null}
         </section>
 
+        <section>
+          <div className="v3-wizard-section-label">What are you building?</div>
+          <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginBottom: 10, lineHeight: 1.5 }}>
+            Optional — sets the delivery methodology. <strong>Agentic System Build</strong> runs ATOS Flow:
+            conversations in, systems out; the gate is a demo, not a document.
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            {orderedArchetypes.map((archetype) => {
+              const selected = archetypeId === archetype.id;
+              const isFlow = archetype.methodologyVariant === "atos-flow";
+              return (
+                <button
+                  key={archetype.id}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => setArchetypeId(selected ? "" : archetype.id)}
+                  style={{
+                    textAlign: "left",
+                    padding: "10px 12px",
+                    borderRadius: "var(--v3-radius)",
+                    cursor: "pointer",
+                    background: selected ? "var(--v3-surface-2)" : "var(--v3-surface)",
+                    border: selected ? "1.5px solid var(--v3-accent)" : "1px solid var(--v3-border)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <span aria-hidden="true">{archetype.icon}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "var(--v3-text-primary)" }}>{archetype.label}</span>
+                    {isFlow ? <span className="v3-chip indigo" style={{ fontSize: 9 }}>ATOS Flow</span> : null}
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 4, lineHeight: 1.4 }}>
+                    {archetype.description}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
         <div className="v3-wizard-footer">
           <button type="button" className="v3-button ghost" onClick={onClose}>
             Cancel
@@ -202,11 +253,25 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
             className="v3-button primary"
             disabled={isSaving || !canSave}
             title={!canSave ? "Enter a programme name and client / organisation to continue" : undefined}
-            onClick={() => onSave({
-              name: name.trim(),
-              client: client.trim(),
-              phases: phases.map((phase) => ({ id: phase.id, pct: phase.pct, targetDate: phase.targetDate })),
-            })}
+            onClick={() => {
+              const archetype = PROGRAM_ARCHETYPES.find((entry) => entry.id === archetypeId) ?? null;
+              // An archetype pick seeds the spine of ITS methodology — Flow's
+              // movements for Agentic System Build — carrying over progress and
+              // target dates for any phase ids the spines share. No archetype
+              // keeps the programme's current phases untouched.
+              const phasePatch = archetype
+                ? getPhaseSequence(archetype.methodologyVariant).map((id) => {
+                    const existing = phases.find((phase) => phase.id === id);
+                    return { id, pct: existing?.pct ?? 0, targetDate: existing?.targetDate ?? "" };
+                  })
+                : phases.map((phase) => ({ id: phase.id, pct: phase.pct, targetDate: phase.targetDate }));
+              return onSave({
+                name: name.trim(),
+                client: client.trim(),
+                ...(archetype ? { archetype: archetype.id, methodology: archetype.methodologyVariant } : {}),
+                phases: phasePatch,
+              });
+            }}
           >
             {isSaving ? "Saving…" : "Save & close"}
           </button>

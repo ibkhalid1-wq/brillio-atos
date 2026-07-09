@@ -48,16 +48,31 @@ export function useProgramSetup(
     try {
       const { wrapper, inner, usesNestedData } = getProgramState(rawData);
       const existingMeta = asRecord(inner.projectMeta);
-      const updatedPhases = Array.isArray(inner.phases)
-        ? (inner.phases as unknown[]).map((value) => {
-            const phase = asRecord(value);
+      const existingPhases = Array.isArray(inner.phases)
+        ? (inner.phases as unknown[]).map((value) => asRecord(value))
+        : [];
+      const existingById = new Map(existingPhases.map((phase) => [String(phase.id ?? ""), phase]));
+      // When every patched phase already exists we're editing details — merge the
+      // overrides onto the stored entries (previous behaviour, preserves whatever
+      // else the entries carry). When the patch carries a DIFFERENT spine — an
+      // archetype pick that changes methodology, e.g. ATOS Flow's movements —
+      // rebuild from the patch: same-id entries keep their stored extras, removed
+      // phases drop, new ones seed at their patched values. Without this, movement
+      // ids matched nothing and were silently discarded.
+      const spineUnchanged = existingPhases.length > 0
+        && patch.phases.every((item) => existingById.has(item.id));
+      const updatedPhases = spineUnchanged
+        ? existingPhases.map((phase) => {
             const override = patch.phases.find((item) => item.id === phase.id);
             return override ? { ...phase, pct: override.pct, targetDate: override.targetDate } : phase;
           })
-        : patch.phases.map((phase) => ({ id: phase.id, pct: phase.pct, targetDate: phase.targetDate }));
+        : patch.phases.map((item) => ({ ...(existingById.get(item.id) ?? {}), id: item.id, pct: item.pct, targetDate: item.targetDate }));
       const nextInner = {
         ...inner,
         phases: updatedPhases,
+        // A re-seeded spine also re-keys the phasePct map — stale keys from the
+        // previous spine would otherwise linger beside ids that no longer render.
+        ...(spineUnchanged ? {} : { phasePct: Object.fromEntries(patch.phases.map((item) => [item.id, item.pct])) }),
         // Only override methodology when the user explicitly selected an archetype,
         // so editing details without re-picking a type never clobbers the variant.
         ...(patch.methodology ? { methodology: patch.methodology } : {}),
