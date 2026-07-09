@@ -1222,9 +1222,9 @@ export const ATOS_FLOW: MethodologyDefinition = {
           hint: "The measurable KPIs that prove the objective. Leave thin at Frame — Listen extracts baselines from the discovery conversations and you confirm them here.",
           columns: [
             { key: "name", label: "KPI", type: "text", placeholder: "e.g. Quote turnaround" },
-            { key: "baseline", label: "Baseline", type: "text", width: 140, placeholder: "Where it stands today" },
-            { key: "target", label: "Target", type: "text", width: 140, placeholder: "The goal" },
-            { key: "unit", label: "Unit", type: "text", width: 120, placeholder: "e.g. $, %, days" },
+            { key: "baseline", label: "Baseline", type: "text", width: 90, placeholder: "Today" },
+            { key: "target", label: "Target", type: "text", width: 90, placeholder: "The goal" },
+            { key: "unit", label: "Unit", type: "text", width: 70, placeholder: "$, %, d" },
           ],
         },
         {
@@ -1281,8 +1281,8 @@ export const ATOS_FLOW: MethodologyDefinition = {
           columns: [
             { key: "name", label: "Stakeholder", type: "text" },
             { key: "role", label: "Role / domain", type: "text" },
-            { key: "status", label: "Status", type: "select", width: 140, options: ["To book", "Booked", "Heard", "Waived"] },
-            { key: "date", label: "Conversation date", type: "date", width: 150 },
+            { key: "status", label: "Status", type: "select", width: 110, options: ["To book", "Booked", "Heard", "Waived"] },
+            { key: "date", label: "Conversation date", type: "date", width: 110 },
           ],
         },
         { id: "interviewTranscripts", label: "Interview transcripts", type: "document", required: false, usedByArtifacts: ["current-state-atlas", "domain-ontology"], hint: "Upload each 45-minute conversation transcript. ATOS extracts workflows, pain points, metrics, and quotes — and re-synthesises the Atlas on every new transcript." },
@@ -1294,8 +1294,8 @@ export const ATOS_FLOW: MethodologyDefinition = {
           hint: "Where stakeholders disagree about how things work today. The synthesis surfaces these; resolve them in a follow-up or log the disagreement as a finding.",
           columns: [
             { key: "statement", label: "Contradiction", type: "text" },
-            { key: "between", label: "Between", type: "text", width: 180, placeholder: "e.g. Sales ops vs Finance" },
-            { key: "status", label: "Status", type: "select", width: 130, options: ["Open", "Resolved", "Logged"] },
+            { key: "between", label: "Between", type: "text", width: 140, placeholder: "e.g. Sales ops vs Finance" },
+            { key: "status", label: "Status", type: "select", width: 110, options: ["Open", "Resolved", "Logged"] },
           ],
         },
       ],
@@ -1377,8 +1377,8 @@ export const ATOS_FLOW: MethodologyDefinition = {
           validationRule: "Every stakeholder from the discovery coverage gets a demo row and a verdict.",
           columns: [
             { key: "stakeholder", label: "Stakeholder", type: "text" },
-            { key: "date", label: "Demo date", type: "date", width: 140 },
-            { key: "verdict", label: "Verdict", type: "select", width: 190, options: ["Pending", "Accepted", "Accepted with changes", "Objection"] },
+            { key: "date", label: "Demo date", type: "date", width: 110 },
+            { key: "verdict", label: "Verdict", type: "select", width: 130, options: ["Pending", "Accepted", "Accepted with changes", "Objection"] },
             { key: "reaction", label: "Reaction / change asked", type: "text" },
           ],
         },
@@ -1453,8 +1453,8 @@ export const ATOS_FLOW: MethodologyDefinition = {
           hint: "Measured KPI movements against the baselines captured in Listen — the numbers the loop verifies.",
           columns: [
             { key: "kpi", label: "KPI", type: "text" },
-            { key: "measured", label: "Measured value", type: "text", width: 150 },
-            { key: "date", label: "Measured on", type: "date", width: 150 },
+            { key: "measured", label: "Measured value", type: "text", width: 120 },
+            { key: "date", label: "Measured on", type: "date", width: 115 },
           ],
         },
         { id: "driftNotes", label: "Drift observations", type: "textarea", role: "risk", required: false, placeholder: "Where reality has moved away from the shipped workflows or ontology", hint: "Seeds the optimization backlog with real signals rather than a cold start." },

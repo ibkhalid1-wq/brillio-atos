@@ -663,18 +663,22 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
     return new Map(entries.map((entry) => [entry.fieldId, entry] as const));
   }, [phaseId, schema.fields]);
 
-  // Progressive disclosure (Option A). Governance sign-off fields exist only to
-  // prove a gate — they are never the substance a user reasons about while
-  // shaping the phase. Splitting them into a collapsed "Evidence & sign-offs"
-  // band keeps the required substance front-and-centre and defers the approval
-  // references until they are actually needed. Partitioning by role preserves
-  // methodology order within each group (sign-off fields already sit at the tail
-  // of every phase's field list), so nothing reshuffles.
+  // Progressive disclosure (Option A). OPTIONAL governance sign-off fields exist
+  // only to prove a gate — they are never the substance a user reasons about
+  // while shaping the phase. Splitting them into a collapsed "Evidence &
+  // sign-offs" band keeps the required substance front-and-centre and defers the
+  // approval references until they are actually needed. A REQUIRED sign-off
+  // field is different: it IS the phase's substance (ATOS Flow's demo tour
+  // ledger — the gate itself — is one), so it stays in the primary band; every
+  // stage-gate sign-off field is optional, so their placement is unchanged.
+  // Partitioning preserves methodology order within each group (optional
+  // sign-off fields already sit at the tail of every phase's field list), so
+  // nothing reshuffles.
   const { primaryFields, evidenceFields } = useMemo(() => {
     const primary: PhaseInputField[] = [];
     const evidence: PhaseInputField[] = [];
     for (const field of schema.fields) {
-      (field.role === "governance-signoff" ? evidence : primary).push(field);
+      (field.role === "governance-signoff" && !field.required ? evidence : primary).push(field);
     }
     return { primaryFields: primary, evidenceFields: evidence };
   }, [schema.fields]);
