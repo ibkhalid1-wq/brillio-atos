@@ -7,6 +7,7 @@ import ArtifactEditor from "@/v3/components/ArtifactEditor";
 import ArtifactCard, { type ArtifactCardModel, type ArtifactCardHandlers } from "@/v3/components/ArtifactCard";
 import DiscoveryPackPanel, { type DiscoveryPack } from "@/v3/components/DiscoveryPackPanel";
 import PhaseInputsPanel, { type FieldAssistRequest } from "@/v3/components/PhaseInputsPanel";
+import FlowMovementStrip from "@/v3/components/FlowMovementStrip";
 import PhaseFlowOverlay from "@/v3/components/PhaseFlowOverlay";
 import PhaseStatusRings from "@/v3/components/PhaseStatusRings";
 import { PhaseRail } from "@/v3/components/PhaseRail";
@@ -1523,6 +1524,10 @@ export default function StageView({
       </header>
 
       <div className="v3-phase-body">
+
+      {/* ATOS Flow: the movement's human/machine split — renders only when the
+          phase is a Flow movement (stage-gate phases carry no movement meta). */}
+      <FlowMovementStrip phaseId={activePhase.id} />
 
       <div className="v3-workspace-divider" role="separator" aria-label="Phase workspace">
         <span className="v3-workspace-divider-label">Phase workspace</span>

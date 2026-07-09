@@ -2,6 +2,7 @@ import React from "react";
 import { CheckCircle2, Circle, AlertCircle } from "lucide-react";
 import type { ProgramSummary } from "@/new/types";
 import { phaseName } from "@/v3/utils";
+import { getPhaseDefinition } from "@/v3/lib/methodology";
 
 interface PhaseRailProps {
   phases: ProgramSummary["phases"];
@@ -45,6 +46,10 @@ export function PhaseRail({
           const isLocked = lockedPhaseIds.has(phase.id);
           const gate = gateReviews[phase.id];
           const isDone = gate?.status === "approved" || phase.status === "complete" || phase.pct >= 100;
+          // ATOS Flow movements carry the movement metadata; stage-gate phases
+          // don't. A movement pill hovers its readiness signal (the gate is a
+          // demo, not a document) and the Evolve loop wears its ∞ marker.
+          const movement = getPhaseDefinition(phase.id)?.movement;
 
           return (
             <React.Fragment key={phase.id}>
@@ -53,9 +58,15 @@ export function PhaseRail({
                 ref={isActive ? activeRef : undefined}
                 onClick={() => !isLocked && onPhaseClick(phase.id)}
                 disabled={isLocked}
-                title={isLocked ? `${phaseName(phase)} unlocks once the preceding gate is approved` : undefined}
+                title={
+                  isLocked
+                    ? `${phaseName(phase)} unlocks once the preceding gate is approved`
+                    : movement
+                      ? `Ready when: ${movement.readyWhen}`
+                      : undefined
+                }
                 aria-current={isActive ? "page" : undefined}
-                aria-label={`${phaseName(phase)} phase${isActive ? ", active" : ""}${isDone ? ", completed" : ""}${isLocked ? ", locked" : ""}`}
+                aria-label={`${phaseName(phase)} ${movement ? "movement" : "phase"}${isActive ? ", active" : ""}${isDone ? ", completed" : ""}${isLocked ? ", locked" : ""}`}
                 className={[
                   "v3-phase-rail-pill",
                   isActive ? "is-active" : "",
@@ -70,10 +81,13 @@ export function PhaseRail({
                 ) : (
                   <Circle size={14} strokeWidth={2} aria-hidden="true" className="v3-phase-rail-pill-dot" />
                 )}
-                <span className="v3-phase-rail-pill-label">{phaseName(phase)}</span>
+                <span className="v3-phase-rail-pill-label">
+                  {phaseName(phase)}
+                  {movement?.isLoop ? <span aria-hidden="true" style={{ marginLeft: 4, opacity: 0.7 }}>∞</span> : null}
+                </span>
                 {isActive && (
                   <span style={{ fontSize: 10, color: "var(--v3-accent)", fontWeight: 600, display: "block", marginTop: 1, letterSpacing: "0.02em" }}>
-                    Stage {index + 1}
+                    {movement ? (movement.isLoop ? "The loop" : `Movement ${index + 1}`) : `Stage ${index + 1}`}
                   </span>
                 )}
               </button>
