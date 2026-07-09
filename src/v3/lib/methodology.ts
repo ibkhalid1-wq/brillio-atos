@@ -1,7 +1,7 @@
 import type { ArchetypeDefinition } from "@/v3/types";
 import { getMandatoryCriteria } from "@/v3/lib/exitCriteriaLibrary";
 
-export type MethodologyVariant = "atos-standard" | "atos-lite" | "atos-regulated";
+export type MethodologyVariant = "atos-standard" | "atos-lite" | "atos-regulated" | "atos-flow";
 
 /** One column of a structured `grid` phase-input field. */
 export interface GridColumn {
@@ -144,6 +144,23 @@ export const INDUSTRY_OPTIONS = [
   "Other",
 ];
 
+/**
+ * ATOS Flow movement metadata — the human/machine split of a movement. Where a
+ * stage-gate phase describes work the TEAM performs, a Flow movement describes
+ * the few conversations humans have and the generation ATOS runs between them.
+ * Rendered by the Flow pipeline surfaces; absent on stage-gate phases.
+ */
+export interface FlowMovement {
+  /** The only human acts in the movement — everything between them is generated. */
+  humanMoments: string[];
+  /** What ATOS generates during the movement (the automation surface). */
+  automations: string[];
+  /** Plain-language readiness signal — under Flow the gate is a demonstration, not a document. */
+  readyWhen: string;
+  /** True for the standing loop (Evolve): it never exits, it keeps running. */
+  isLoop?: boolean;
+}
+
 export interface PhaseDefinition {
   id: string;
   displayName: string;
@@ -172,6 +189,12 @@ export interface PhaseDefinition {
    * in the methodology, not in resolvers.
    */
   dynamicSchema?: boolean;
+  /**
+   * ATOS Flow only: the movement's human/machine split and readiness signal.
+   * Stage-gate phases omit it; Flow surfaces render it (human moments, the
+   * automation surface, the "ready when" demonstration, the Evolve loop marker).
+   */
+  movement?: FlowMovement;
 }
 
 export interface MethodologyDefinition {
@@ -1135,6 +1158,324 @@ export const ATOS_LITE: MethodologyDefinition = {
   ),
 };
 
+// ─── ATOS Flow ────────────────────────────────────────────────────────────────
+// The evidence-to-system methodology for agentic builds: conversations in,
+// systems out. Where the stage-gate variants above progress by approving
+// documents, Flow progresses by demonstrating working software. One primitive,
+// repeated at five altitudes and then a standing loop:
+//
+//   conversation → transcript → generation → demonstration → next conversation
+//
+// The gate is a demo, not a document. Governance (decision log, evidence trail)
+// is generated from the recorded conversations as a by-product — never typed
+// into sign-off fields. Movements deliberately reuse the stage-gate field ids
+// where the fact is the same (businessObjective, sponsor, industry,
+// successMetric, kpis, realisedBenefits) so cross-cutting consumers — benefits
+// tracking, KPI parsing, grounding facts — read Flow programmes unchanged.
+export const ATOS_FLOW: MethodologyDefinition = {
+  id: "atos-flow",
+  version: "3.0.0",
+  name: "ATOS Flow",
+  description:
+    "Evidence-to-system delivery for agentic builds: conversations in, systems out. Five movements and a standing loop; the gate is a demo, not a document.",
+  phases: [
+    {
+      id: "frame",
+      displayName: "Frame",
+      description: "Turn one recorded sponsor conversation into a confirmed mandate and a booked discovery tour — days, not weeks.",
+      requiredArtifacts: ["charter", "discovery-kit"],
+      // Documented fallback only — reconciled from EXIT_CRITERIA_LIBRARY (frame-*) at load.
+      mandatoryExitCriteriaTemplates: ["Mandate confirmed by sponsor", "Discovery conversations booked"],
+      entryGuards: ["Programme created"],
+      recommendedAgents: ["charter", "discovery-kit", "stakeholder"],
+      typicalDurationWeeks: { min: 1, max: 1 },
+      movement: {
+        humanMoments: [
+          "One 30-minute recorded sponsor conversation",
+          "Confirm the generated mandate — \"that's what I meant\"",
+        ],
+        automations: [
+          "Charter drafted from the sponsor transcript",
+          "Stakeholder map proposed from the conversation and org context",
+          "A role-aware 45-minute discovery agenda per stakeholder",
+          "Interview schedule and consent kit",
+        ],
+        readyWhen: "The sponsor confirms the mandate and the discovery conversations are booked.",
+      },
+      inputFields: [
+        { id: "businessObjective", label: "Business objective", type: "textarea", placeholder: "What outcome is this system meant to achieve?", required: true, example: "Cut quote-to-order cycle time by 70% by replacing the manual desk with an agentic workflow.", validationRule: "A measurable outcome, not an activity — name the change, the magnitude, and the horizon." },
+        { id: "sponsor", label: "Executive sponsor", type: "text", role: "mandate", placeholder: "Name and title", required: true, example: "Jane Okafor, Chief Operating Officer", validationRule: "A named individual with their role, not a team or department." },
+        { id: "industry", label: "Industry", type: "select", options: INDUSTRY_OPTIONS, required: true, hint: "The client's primary sector — sets the domain language the charter, agendas, and architecture strategy are written in." },
+        { id: "sponsorConversation", label: "Sponsor conversation transcript", type: "document", required: false, usedByArtifacts: ["charter", "discovery-kit"], hint: "Upload the recorded sponsor conversation (transcript or notes). The charter and the discovery kit draft themselves from it — you confirm rather than author." },
+        { id: "successMetric", label: "Primary success metric", type: "text", role: "measure", placeholder: "KPI name, e.g. Quote turnaround time", required: true, example: "Quote turnaround time", validationRule: "A single measurable KPI name — baselines are captured from the discovery conversations." },
+        {
+          // Same field id as the stage-gate spine so KPI consumers (benefits
+          // tracking, the Program Graph's measured-by chain) read Flow programmes
+          // unchanged. Optional here: under Flow, baselines and targets are
+          // EXTRACTED from the discovery conversations and confirmed, not typed
+          // cold on day one.
+          id: "kpis",
+          label: "Success KPIs",
+          type: "grid",
+          role: "measure",
+          required: false,
+          hint: "The measurable KPIs that prove the objective. Leave thin at Frame — Listen extracts baselines from the discovery conversations and you confirm them here.",
+          columns: [
+            { key: "name", label: "KPI", type: "text", placeholder: "e.g. Quote turnaround" },
+            { key: "baseline", label: "Baseline", type: "text", width: 140, placeholder: "Where it stands today" },
+            { key: "target", label: "Target", type: "text", width: 140, placeholder: "The goal" },
+            { key: "unit", label: "Unit", type: "text", width: 120, placeholder: "e.g. $, %, days" },
+          ],
+        },
+        {
+          id: "stakeholderSeed",
+          label: "Stakeholders you already know",
+          type: "grid",
+          required: false,
+          hint: "Anyone who must be heard. The stakeholder map generator extends this from the sponsor conversation — seed it, don't complete it.",
+          columns: [
+            { key: "name", label: "Name", type: "text" },
+            { key: "role", label: "Role / title", type: "text" },
+            { key: "domain", label: "Domain they own", type: "text", placeholder: "e.g. Pricing desk, Fulfilment" },
+          ],
+        },
+        { id: "targetFirstDemoDate", label: "Target first-demo date", type: "date", required: false, hint: "Flow's headline metric is time-to-first-demo — the date every stakeholder first watches their own workflow run. Days-to-demo replaces duration-in-weeks." },
+      ],
+      artifactInputFlow: {
+        "charter": ["businessObjective", "sponsor", "industry", "successMetric"],
+        "discovery-kit": ["businessObjective", "industry", "stakeholderSeed"],
+      },
+    },
+    {
+      id: "listen",
+      displayName: "Listen",
+      description: "Run 45-minute discovery conversations; every transcript compiles into the Current-State Atlas — workflows, ontology, pain heatmap — while coverage climbs.",
+      requiredArtifacts: ["current-state-atlas", "domain-ontology"],
+      mandatoryExitCriteriaTemplates: ["Stakeholder coverage complete", "Contradictions resolved or logged"],
+      entryGuards: ["Discovery kit generated"],
+      recommendedAgents: ["current-state-atlas", "domain-ontology", "stakeholder"],
+      typicalDurationWeeks: { min: 1, max: 3 },
+      movement: {
+        humanMoments: [
+          "Run each 45-minute discovery conversation",
+          "Answer the follow-up questions the synthesis raises",
+        ],
+        automations: [
+          "Transcript ingestion and per-interview extraction — workflows, systems, pain points, metrics, verbatim quotes",
+          "Cross-interview synthesis into current-state workflow maps and the pain heatmap",
+          "Domain ontology built from every conversation — entities, relations, systems, hand-offs",
+          "Contradiction detection between stakeholders, with follow-up questions generated",
+          "Live coverage meter — who has been heard, which domains are thin",
+        ],
+        readyWhen: "Every mapped stakeholder has been heard or explicitly waived, and contradictions are resolved or logged.",
+      },
+      inputFields: [
+        {
+          id: "interviewRoster",
+          label: "Discovery coverage",
+          type: "grid",
+          required: true,
+          minRows: 3,
+          hint: "One row per stakeholder conversation — the coverage ledger the Atlas synthesises from. Waiving someone (with the reason) is a recorded decision, not a gap.",
+          validationRule: "Every stakeholder from the map appears here with a status — heard, booked, or waived with a reason.",
+          columns: [
+            { key: "name", label: "Stakeholder", type: "text" },
+            { key: "role", label: "Role / domain", type: "text" },
+            { key: "status", label: "Status", type: "select", width: 140, options: ["To book", "Booked", "Heard", "Waived"] },
+            { key: "date", label: "Conversation date", type: "date", width: 150 },
+          ],
+        },
+        { id: "interviewTranscripts", label: "Interview transcripts", type: "document", required: false, usedByArtifacts: ["current-state-atlas", "domain-ontology"], hint: "Upload each 45-minute conversation transcript. ATOS extracts workflows, pain points, metrics, and quotes — and re-synthesises the Atlas on every new transcript." },
+        {
+          id: "contradictionLog",
+          label: "Contradiction log",
+          type: "grid",
+          required: false,
+          hint: "Where stakeholders disagree about how things work today. The synthesis surfaces these; resolve them in a follow-up or log the disagreement as a finding.",
+          columns: [
+            { key: "statement", label: "Contradiction", type: "text" },
+            { key: "between", label: "Between", type: "text", width: 180, placeholder: "e.g. Sales ops vs Finance" },
+            { key: "status", label: "Status", type: "select", width: 130, options: ["Open", "Resolved", "Logged"] },
+          ],
+        },
+      ],
+      artifactInputFlow: {
+        "current-state-atlas": ["interviewRoster", "interviewTranscripts", "contradictionLog"],
+        "domain-ontology": ["interviewRoster", "interviewTranscripts"],
+      },
+    },
+    {
+      id: "envision",
+      displayName: "Envision",
+      description: "From the Atlas, candidate target architectures with trade-offs; one steering conversation picks the direction, which compiles into the Agentic Blueprint.",
+      requiredArtifacts: ["architecture-strategy", "agentic-blueprint"],
+      mandatoryExitCriteriaTemplates: ["Architecture direction chosen", "Agentic blueprint accepted"],
+      entryGuards: ["Current-State Atlas synthesised"],
+      recommendedAgents: ["architecture-strategy", "agentic-blueprint"],
+      typicalDurationWeeks: { min: 1, max: 2 },
+      dynamicSchema: true,
+      movement: {
+        humanMoments: ["One steering conversation: pick a direction (recorded)"],
+        automations: [
+          "Two to three candidate architecture strategies from the Atlas — agentic patterns, integration map, build-vs-buy, risk",
+          "The Agentic Blueprint compiled for the chosen direction — agents, tools, orchestration, data contracts, human-in-the-loop points, eval plan",
+          "Ontology-driven data model for the Blueprint",
+        ],
+        readyWhen: "A direction is chosen from the candidates and the Blueprint survives its review conversation.",
+      },
+      inputFields: [
+        {
+          id: "agenticFramework",
+          label: "Target agentic framework",
+          type: "select",
+          required: true,
+          options: ["Claude Agent SDK", "LangGraph", "OpenAI Agents SDK", "CrewAI", "AutoGen", "Semantic Kernel", "Custom / in-house", "Undecided — recommend one"],
+          hint: "The framework the Blueprint compiles to. Pick \"Undecided\" to have the architecture strategy recommend one with rationale.",
+        },
+        { id: "directionDecision", label: "Chosen direction", type: "textarea", required: false, placeholder: "Candidate, rationale, and what was traded away", hint: "Which candidate architecture was chosen and why — lifted from the recorded steering conversation." },
+        { id: "steeringConversation", label: "Steering conversation transcript", type: "document", required: false, usedByArtifacts: ["agentic-blueprint"], hint: "The recorded direction-setting conversation. The decision rationale and Blueprint framing generate from it." },
+        { id: "hardConstraints", label: "Hard constraints", type: "textarea", role: "constraint", required: false, placeholder: "Platform mandates, data residency, security posture, integration boundaries", hint: "The boundaries every candidate must respect — lifted from Listen, refined here." },
+      ],
+      artifactInputFlow: {
+        "architecture-strategy": ["agenticFramework", "hardConstraints"],
+        "agentic-blueprint": ["agenticFramework", "directionDecision"],
+      },
+    },
+    {
+      id: "show",
+      displayName: "Show",
+      description: "The Blueprint compiles into a working prototype; every stakeholder watches their own workflow run, scripted from their own words. The gate is the demo.",
+      requiredArtifacts: ["prototype-pack", "demo-scripts"],
+      mandatoryExitCriteriaTemplates: ["Every stakeholder saw their workflow run", "Demo acceptances recorded"],
+      entryGuards: ["Agentic Blueprint accepted"],
+      recommendedAgents: ["prototype-pack", "demo-scripts"],
+      typicalDurationWeeks: { min: 1, max: 3 },
+      dynamicSchema: true,
+      movement: {
+        humanMoments: [
+          "Each stakeholder watches their own workflow run",
+          "React on the record — demo reactions are ingested as evidence",
+        ],
+        automations: [
+          "Prototype build pack compiled from the Blueprint — scaffold, agent wiring, seed data lifted from the discovery evidence",
+          "A demo script per stakeholder, seeded with scenarios from their own transcript",
+          "Demo feedback ingestion — reactions become Blueprint diffs and a regenerated prototype",
+        ],
+        readyWhen: "Every stakeholder has seen their workflow run and accepted — objections addressed or logged.",
+      },
+      inputFields: [
+        {
+          // The acceptance ledger IS the gate: one row per stakeholder demo.
+          // Tagged governance-signoff because it is Flow's sign-off — a recorded
+          // reaction to working software, not a signature on a pack.
+          id: "demoTour",
+          label: "Demo tour ledger",
+          type: "grid",
+          role: "governance-signoff",
+          required: true,
+          hint: "One row per stakeholder demo — this ledger is the gate. \"You said the credit check takes three days; watch it take forty seconds.\"",
+          validationRule: "Every stakeholder from the discovery coverage gets a demo row and a verdict.",
+          columns: [
+            { key: "stakeholder", label: "Stakeholder", type: "text" },
+            { key: "date", label: "Demo date", type: "date", width: 140 },
+            { key: "verdict", label: "Verdict", type: "select", width: 190, options: ["Pending", "Accepted", "Accepted with changes", "Objection"] },
+            { key: "reaction", label: "Reaction / change asked", type: "text" },
+          ],
+        },
+        { id: "prototypeLocation", label: "Prototype location", type: "text", required: false, placeholder: "Repo or environment URL", hint: "Where the running prototype lives — repo, sandbox, or environment." },
+        { id: "demoFeedback", label: "Demo session transcripts", type: "document", required: false, usedByArtifacts: ["demo-scripts"], hint: "Recordings of the demo sessions. Reactions feed Blueprint diffs and the next prototype build." },
+      ],
+      artifactInputFlow: {
+        "prototype-pack": ["prototypeLocation"],
+      },
+    },
+    {
+      id: "ship",
+      displayName: "Ship",
+      description: "Harden the accepted prototype into the production system — guardrails, an eval suite generated from the evidence trail, runbook, cutover.",
+      requiredArtifacts: ["hardening-plan", "eval-suite", "runbook"],
+      mandatoryExitCriteriaTemplates: ["Eval suite green", "Cutover executed"],
+      entryGuards: ["Demo acceptances recorded"],
+      recommendedAgents: ["hardening-plan", "eval-suite", "runbook"],
+      typicalDurationWeeks: { min: 2, max: 4 },
+      dynamicSchema: true,
+      movement: {
+        humanMoments: ["Go/no-go on the evidence — a conversation, not a committee pack"],
+        automations: [
+          "Prototype-to-production conversion plan — authn/z, error handling, observability, rate limits",
+          "Guardrails and human-in-the-loop insertion at the Blueprint's marked points",
+          "Eval suite generated from the discovery transcripts and demo acceptances",
+          "Runbook and cutover plan",
+        ],
+        readyWhen: "The eval suite is green and cutover has executed.",
+      },
+      inputFields: [
+        { id: "productionEnvironment", label: "Production environment", type: "text", required: false, placeholder: "e.g. Azure subscription / AWS account, region", hint: "Where the system runs in production — the hardening plan and runbook target it." },
+        { id: "goLiveDate", label: "Go-live date", type: "date", required: false, hint: "Planned (or actual) production cutover." },
+        { id: "evalStatus", label: "Eval suite status", type: "select", required: false, options: ["Not run", "Red", "Amber", "Green"], hint: "Latest run of the generated eval suite — green is the shipping signal." },
+        { id: "goDecisionRef", label: "Go/no-go conversation reference", type: "text", role: "governance-signoff", required: false, placeholder: "Link to the recorded go/no-go conversation", hint: "The decision log generates from the recorded conversation — this is its reference, not a signature." },
+      ],
+      artifactInputFlow: {
+        "hardening-plan": ["productionEnvironment"],
+        "runbook": ["productionEnvironment", "goLiveDate"],
+      },
+    },
+    {
+      id: "evolve",
+      displayName: "Evolve",
+      description: "The standing loop, not a phase: telemetry against the baselines captured in Listen, monthly ops conversations feeding the Atlas, drift becoming the next candidates.",
+      requiredArtifacts: ["benefits-tracker", "optimization-backlog"],
+      mandatoryExitCriteriaTemplates: ["Benefits pulse live against baselines"],
+      entryGuards: ["System in production"],
+      recommendedAgents: ["benefits-tracker", "optimization-backlog"],
+      typicalDurationWeeks: { min: 4, max: 12 },
+      movement: {
+        humanMoments: ["A monthly ops conversation, recorded"],
+        automations: [
+          "Telemetry compared to the KPI baselines captured in Frame and Listen",
+          "Ops-review transcripts fed back into the Atlas",
+          "Drift detection — ontology and workflow changes surfaced",
+          "Next improvement candidates ranked by value against the live baselines",
+        ],
+        readyWhen: "Never — Evolve is the loop. Healthy means the benefits pulse is live and drift is being caught.",
+        isLoop: true,
+      },
+      inputFields: [
+        { id: "opsConversations", label: "Ops conversation transcripts", type: "document", required: false, usedByArtifacts: ["benefits-tracker", "optimization-backlog"], hint: "The monthly recorded ops review. Each one re-runs the benefits pulse and drift detection." },
+        {
+          // Same field id as the stage-gate spine's Value Realize grid so the
+          // benefits-tracker agent reads Flow programmes unchanged.
+          id: "realisedBenefits",
+          label: "Realised benefits",
+          type: "grid",
+          role: "measure",
+          required: false,
+          hint: "Measured KPI movements against the baselines captured in Listen — the numbers the loop verifies.",
+          columns: [
+            { key: "kpi", label: "KPI", type: "text" },
+            { key: "measured", label: "Measured value", type: "text", width: 150 },
+            { key: "date", label: "Measured on", type: "date", width: 150 },
+          ],
+        },
+        { id: "driftNotes", label: "Drift observations", type: "textarea", role: "risk", required: false, placeholder: "Where reality has moved away from the shipped workflows or ontology", hint: "Seeds the optimization backlog with real signals rather than a cold start." },
+      ],
+      artifactInputFlow: {
+        "benefits-tracker": ["realisedBenefits"],
+        "optimization-backlog": ["driftNotes"],
+      },
+    },
+  ],
+};
+
+// Same library reconciliation as the stage-gate spine above: Flow's movement
+// criteria live in EXIT_CRITERIA_LIBRARY (frame-1…evolve-1), so the gate
+// machinery evidences movements exactly like phases. The difference is what the
+// criteria SAY — recorded conversations and working demonstrations, not packs.
+for (const phase of ATOS_FLOW.phases) {
+  const derived = getMandatoryCriteria(phase.id).map((c) => c.label);
+  if (derived.length > 0) phase.mandatoryExitCriteriaTemplates = derived;
+}
+
 export const METHODOLOGY_REGISTRY: Record<MethodologyVariant, MethodologyDefinition> = {
   "atos-standard": ATOS_STANDARD,
   "atos-lite": ATOS_LITE,
@@ -1143,6 +1484,7 @@ export const METHODOLOGY_REGISTRY: Record<MethodologyVariant, MethodologyDefinit
     id: "atos-regulated",
     name: "ATOS Regulated",
   },
+  "atos-flow": ATOS_FLOW,
 };
 
 export const PROGRAM_ARCHETYPES: ArchetypeDefinition[] = [
@@ -1182,6 +1524,15 @@ export const PROGRAM_ARCHETYPES: ArchetypeDefinition[] = [
     typicalDurationMonths: { min: 2, max: 6 },
     defaultKPIs: ["Sprint velocity", "Feature delivery rate", "Backlog burndown", "NPS / user satisfaction"],
   },
+  {
+    id: "agentic-system",
+    label: "Agentic System Build",
+    description: "Compile stakeholder conversations into a working agentic system — discovery transcripts to a hardened production deployment.",
+    icon: "✦",
+    methodologyVariant: "atos-flow",
+    typicalDurationMonths: { min: 1, max: 4 },
+    defaultKPIs: ["Time to first demo", "Demo acceptance rate", "Stakeholder coverage", "Eval pass rate"],
+  },
 ];
 
 export function getMethodology(variant: MethodologyVariant = "atos-lite"): MethodologyDefinition {
@@ -1194,15 +1545,18 @@ export function getPhaseSequence(variant: MethodologyVariant = "atos-lite"): str
 
 /**
  * The methodology definition for a single phase id. Falls back to the standard
- * methodology (which declares every known phase) when the variant omits it, so
- * callers always get the phase's exit-criteria spine and recommended agents.
+ * methodology (which declares every stage-gate phase), then to Flow (whose
+ * movement ids — frame…evolve — exist in no other variant), so callers always
+ * get the phase's exit-criteria spine and recommended agents regardless of
+ * which variant the caller happens to hold.
  */
 export function getPhaseDefinition(
   phaseId: string,
   variant: MethodologyVariant = "atos-lite",
 ): PhaseDefinition | undefined {
   return getMethodology(variant).phases.find((phase) => phase.id === phaseId)
-    ?? ATOS_STANDARD.phases.find((phase) => phase.id === phaseId);
+    ?? ATOS_STANDARD.phases.find((phase) => phase.id === phaseId)
+    ?? ATOS_FLOW.phases.find((phase) => phase.id === phaseId);
 }
 
 /** The artifacts a phase produces: its required set plus every input-flow target. */

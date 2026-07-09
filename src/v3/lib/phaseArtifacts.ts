@@ -2,16 +2,18 @@
  * Phase-specific artifact catalogue for the phase screen's artifacts column.
  *
  * The artifacts a phase produces are declared by the methodology
- * (`ATOS_STANDARD.phases[].requiredArtifacts`, as producing-agent ids) — so
- * Mobilise yields Governance Model and RACI Matrix, Design yields Solution
- * Architecture, etc. Nothing is hard-coded here: the catalogue is exactly the
- * methodology's required set plus any ai-derived dynamic artifacts. Labels
- * resolve through the agent catalogue (`getAgentMeta(id).outputArtifact`).
+ * (each phase's `requiredArtifacts`, as producing-agent ids — resolved across
+ * every registry variant via `getPhaseDefinition`, so Flow movements resolve
+ * exactly like stage-gate phases) — Mobilise yields Governance Model and RACI
+ * Matrix, Listen yields the Current-State Atlas, etc. Nothing is hard-coded
+ * here: the catalogue is exactly the methodology's required set plus any
+ * ai-derived dynamic artifacts. Labels resolve through the agent catalogue
+ * (`getAgentMeta(id).outputArtifact`).
  *
  * This is the single source of truth for both the rendered artifact chips and
  * the flow-overlay edge targets, so every connector resolves to a real anchor.
  */
-import { ATOS_STANDARD } from "@/v3/lib/methodology";
+import { getPhaseDefinition } from "@/v3/lib/methodology";
 import { getAgentMeta, AGENT_META, RETIRED_AGENT_IDS, SUPPORT_ARTIFACT_IDS } from "@/v3/lib/agentMeta";
 import { canonicalArtifactId, dynamicArtifactDefs, type DynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { FORMAL_ARTIFACT_PHASES } from "@/v3/lib/formalArtifacts";
@@ -65,7 +67,7 @@ const INTENT_FLOW_PHASES = new Set<string>(["design", "build"]);
 
 function flowTargetDeliverables(phaseId: string, existingIds: Set<string>): PhaseArtifactDef[] {
   if (INTENT_FLOW_PHASES.has(phaseId)) return [];
-  const flow = ATOS_STANDARD.phases.find((p) => p.id === phaseId)?.artifactInputFlow ?? {};
+  const flow = getPhaseDefinition(phaseId)?.artifactInputFlow ?? {};
   const out: PhaseArtifactDef[] = [];
   const seen = new Set(existingIds);
   for (const rawId of Object.keys(flow)) {
@@ -92,7 +94,7 @@ function flowTargetDeliverables(phaseId: string, existingIds: Set<string>): Phas
  * derived), so a phase's declared input→artifact flows resolve without a store.
  */
 export function getPhaseArtifactDefs(phaseId: string, store?: DynamicSchemaStore): PhaseArtifactDef[] {
-  const phase = ATOS_STANDARD.phases.find((p) => p.id === phaseId);
+  const phase = getPhaseDefinition(phaseId);
   const ordered: string[] = [];
   for (const id of phase?.requiredArtifacts ?? []) {
     if (!ordered.includes(id)) ordered.push(id);

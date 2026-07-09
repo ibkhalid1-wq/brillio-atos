@@ -9,7 +9,7 @@ export interface ProgramSetupPatch {
   /** Selected programme archetype, persisted to projectMeta when chosen. */
   archetype?: string;
   /** Methodology variant derived from the archetype, persisted to program data. */
-  methodology?: "atos-standard" | "atos-lite" | "atos-regulated";
+  methodology?: "atos-standard" | "atos-lite" | "atos-regulated" | "atos-flow";
   phases: Array<{ id: string; pct: number; targetDate: string }>;
 }
 

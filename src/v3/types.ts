@@ -34,14 +34,14 @@ export type V3MoreView =
   | "access"
   | "closure";
 
-export type ProgramArchetype = "technology-implementation" | "business-transformation" | "regulatory-programme" | "agile-delivery";
+export type ProgramArchetype = "technology-implementation" | "business-transformation" | "regulatory-programme" | "agile-delivery" | "agentic-system";
 
 export interface ArchetypeDefinition {
   id: ProgramArchetype;
   label: string;
   description: string;
   icon: string;
-  methodologyVariant: "atos-standard" | "atos-lite" | "atos-regulated";
+  methodologyVariant: "atos-standard" | "atos-lite" | "atos-regulated" | "atos-flow";
   typicalDurationMonths: { min: number; max: number };
   defaultKPIs: string[];
 }

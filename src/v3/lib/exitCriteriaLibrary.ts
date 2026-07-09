@@ -46,6 +46,23 @@ export const EXIT_CRITERIA_LIBRARY: ExitCriterion[] = [
   { id: "valuerealize-2", phaseId: "valuerealize", label: "Lessons learned captured", description: "Programme retrospective has been completed and lessons documented across all phases.", mandatory: true, evidencePrompt: "Lessons learned register.", category: "quality" },
   { id: "valuerealize-3", phaseId: "valuerealize", label: "Closure pack approved", description: "Programme closure pack (final narrative, lessons, benefits, recommendations) has been approved by SteerCo.", mandatory: true, evidencePrompt: "Closure pack approval reference.", category: "governance" },
   { id: "valuerealize-4", phaseId: "valuerealize", label: "Handover to BAU confirmed", description: "Programme outputs and ongoing responsibilities have been formally handed to the business-as-usual owner.", mandatory: true, evidencePrompt: "BAU handover confirmation document.", category: "delivery" },
+
+  // ─── ATOS Flow movements ─────────────────────────────────────────────────────
+  // Flow's criteria are demonstration/evidence signals, never document approvals:
+  // under Flow the gate is a demo. They stay mandatory so the same gate machinery
+  // evidences a movement exactly like a phase — the difference is what the
+  // criteria SAY (recorded conversations and working demonstrations, not packs).
+  { id: "frame-1", phaseId: "frame", label: "Mandate confirmed by sponsor", description: "The sponsor has heard the generated mandate played back and confirmed it — \"that's what I meant\".", mandatory: true, evidencePrompt: "Sponsor conversation transcript reference and confirmation date.", category: "stakeholder" },
+  { id: "frame-2", phaseId: "frame", label: "Discovery conversations booked", description: "Every stakeholder on the map has a 45-minute discovery conversation scheduled with a generated agenda.", mandatory: true, evidencePrompt: "Interview schedule with per-stakeholder agendas.", category: "delivery" },
+  { id: "listen-1", phaseId: "listen", label: "Stakeholder coverage complete", description: "Every mapped stakeholder has been heard or explicitly waived with a recorded reason.", mandatory: true, evidencePrompt: "Coverage ledger: heard/waived status per stakeholder.", category: "stakeholder" },
+  { id: "listen-2", phaseId: "listen", label: "Contradictions resolved or logged", description: "Cross-stakeholder contradictions the synthesis surfaced are resolved in follow-ups or logged as findings.", mandatory: true, evidencePrompt: "Contradiction log with statuses.", category: "quality" },
+  { id: "envision-1", phaseId: "envision", label: "Architecture direction chosen", description: "A direction was picked from the candidate architectures in a recorded steering conversation.", mandatory: true, evidencePrompt: "Steering conversation reference and the chosen candidate.", category: "delivery" },
+  { id: "envision-2", phaseId: "envision", label: "Agentic blueprint accepted", description: "The compiled blueprint — agents, tools, orchestration, data contracts, HITL points, eval plan — survived its review conversation.", mandatory: true, evidencePrompt: "Blueprint review conversation reference.", category: "governance" },
+  { id: "show-1", phaseId: "show", label: "Every stakeholder saw their workflow run", description: "Each stakeholder watched their own workflow running in the prototype, scripted from their own transcript.", mandatory: true, evidencePrompt: "Demo tour ledger: one demo per stakeholder.", category: "stakeholder" },
+  { id: "show-2", phaseId: "show", label: "Demo acceptances recorded", description: "Every demo verdict is recorded; objections are addressed or logged as change asks.", mandatory: true, evidencePrompt: "Demo tour ledger verdicts.", category: "governance" },
+  { id: "ship-1", phaseId: "ship", label: "Eval suite green", description: "The eval suite generated from discovery transcripts and demo acceptances passes.", mandatory: true, evidencePrompt: "Latest eval run result.", category: "quality" },
+  { id: "ship-2", phaseId: "ship", label: "Cutover executed", description: "The hardened system is live in production.", mandatory: true, evidencePrompt: "Go-live date and go/no-go conversation reference.", category: "delivery" },
+  { id: "evolve-1", phaseId: "evolve", label: "Benefits pulse live against baselines", description: "Telemetry is being compared to the KPI baselines captured during discovery — the standing loop's health signal.", mandatory: true, evidencePrompt: "Latest benefits pulse against baseline.", category: "financial" },
 ];
 
 export function getMandatoryCriteria(phaseId: string): ExitCriterion[] {

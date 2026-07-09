@@ -222,9 +222,11 @@ const DEFAULT_V3_MODE: V3Mode = "power";
 // ("stays correct as the registry evolves", methodology.ts) depends on both
 // reading the same variant.
 const APP_METHODOLOGY_VARIANT: MethodologyVariant = "atos-lite";
-// Lite is the default methodology for new programmes; standard covers all known phase IDs for URL routing
+// Lite is the default methodology for new programmes. Routing must accept every
+// phase id ANY variant can render, so union the stage-gate spine with ATOS
+// Flow's movements (their ids are disjoint by design).
 const DEFAULT_PHASE_SEQUENCE = getPhaseSequence(APP_METHODOLOGY_VARIANT);
-const ALL_KNOWN_PHASE_IDS = getPhaseSequence("atos-standard");
+const ALL_KNOWN_PHASE_IDS = [...new Set([...getPhaseSequence("atos-standard"), ...getPhaseSequence("atos-flow")])];
 
 
 function buildProgramSeed(name: string) {

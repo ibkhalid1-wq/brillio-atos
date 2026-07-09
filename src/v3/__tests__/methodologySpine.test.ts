@@ -100,7 +100,7 @@ describe("analyzeExitCriteriaCoverage (subject-overlap heuristic)", () => {
 describe("analyzeMethodologySpine (whole-registry coherence)", () => {
   // HARD INVARIANT — a flow entry that references a non-existent input field is
   // always a bug (rename/typo). It must be zero across every shipped variant.
-  it.each(["atos-lite", "atos-standard", "atos-regulated"] as const)(
+  it.each(["atos-lite", "atos-standard", "atos-regulated", "atos-flow"] as const)(
     "has no structural flow-field gaps in %s",
     (variant) => {
       expect(analyzeMethodologySpine(variant).flowFieldGaps).toEqual([]);
