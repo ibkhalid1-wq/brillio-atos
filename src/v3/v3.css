@@ -13413,6 +13413,42 @@ html:not([data-theme="light"]) .v3fs-node{border-top-color:var(--v3-border-top)}
 .v3fs-river-to{position:absolute;inset:0;border-radius:99px;background:linear-gradient(90deg,rgba(0,160,223,.35),rgba(34,197,94,.4))}
 .v3fs-river-mk{position:absolute;top:-3px;left:2%;width:3px;height:13px;background:var(--v3-text-primary);border-radius:3px}
 
+/* Today: the decision inbox, the attestation log, the moments ahead. */
+.v3fs-dock button{position:relative}
+.v3fs-dock-n{position:absolute;top:4px;right:4px;min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:var(--v3-amber);color:#fff;font-size:9.5px;font-weight:800;line-height:16px;text-align:center;font-variant-numeric:tabular-nums}
+.v3fs-today{display:flex;flex-direction:column;gap:22px;margin-top:30px}
+.v3fs-quiet{background:var(--fs-card);border:1px solid var(--fs-line);border-radius:22px;box-shadow:var(--fs-shadow);padding:44px 30px;text-align:center}
+.v3fs-quiet-mark{font-size:26px;color:var(--v3-accent-2);opacity:.55;margin-bottom:12px}
+.v3fs-quiet h2{font-size:24px;font-weight:500;letter-spacing:-.02em;margin:0 0 8px}
+.v3fs-quiet p{font-size:13.5px;line-height:1.65;color:var(--v3-text-muted);max-width:52ch;margin:0 auto 18px}
+.v3fs-inbox{background:var(--fs-card);border:1px solid var(--fs-line);border-radius:22px;box-shadow:var(--fs-shadow);padding:22px 26px;display:flex;flex-direction:column;gap:14px}
+.v3fs-dec{border:1px solid var(--fs-line);border-left:3px solid var(--v3-amber);border-radius:14px;padding:16px 18px;background:var(--v3-surface-2)}
+.v3fs-dec-top{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.v3fs-tier{font-size:9.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;border-radius:6px;padding:3px 8px}
+.v3fs-tier.t2{background:var(--v3-amber-soft);color:var(--v3-amber)}
+.v3fs-tier.t3{background:rgba(220,38,38,.12);color:var(--v3-red,#dc2626)}
+.v3fs-dec.t3{border-left-color:var(--v3-red,#dc2626)}
+.v3fs-dec-mv{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3fs-dec-when{margin-left:auto;font-family:var(--v3-font-mono);font-size:10.5px;color:var(--v3-text-muted)}
+.v3fs-dec-t{font-size:15.5px;font-weight:600;letter-spacing:-.01em;margin:0 0 6px}
+.v3fs-dec-s{font-size:13px;line-height:1.6;color:var(--v3-text-secondary,var(--v3-text-muted));margin:0 0 6px}
+.v3fs-dec-b{font-size:12px;color:var(--v3-amber);margin:0 0 10px;font-weight:500}
+.v3fs-dec-rec{border:1px dashed var(--fs-line);border-radius:10px;padding:10px 12px;margin-bottom:12px;background:var(--fs-card)}
+.v3fs-dec-rec-a{font-size:12.5px;font-weight:600;color:var(--v3-accent-2)}
+.v3fs-dec-rec-r{font-size:12px;line-height:1.55;color:var(--v3-text-muted);margin-top:3px}
+.v3fs-dec-rec-b{font-family:var(--v3-font-mono);font-size:10px;color:var(--v3-text-muted);margin-top:5px;letter-spacing:.03em}
+.v3fs-dec-cta{display:flex;gap:10px}
+.v3fs-btn{font:inherit;font-size:12.5px;font-weight:600;border:1px solid var(--fs-line);background:var(--fs-card);color:var(--v3-text-primary);border-radius:10px;padding:8px 16px;cursor:pointer;transition:filter .12s ease,transform .12s ease}
+.v3fs-btn:hover{filter:brightness(1.04)}
+.v3fs-btn:active{transform:translateY(1px)}
+.v3fs-btn:disabled{opacity:.55;cursor:default}
+.v3fs-btn.pri{background:linear-gradient(135deg,#4f46e5,var(--v3-accent-2));border-color:transparent;color:#fff}
+.v3fs-tdot{width:8px;height:8px;border-radius:99px;flex-shrink:0;background:var(--v3-green)}
+.v3fs-tdot.t2{background:var(--v3-amber)}
+.v3fs-tdot.t3{background:var(--v3-red,#dc2626)}
+.v3fs-feed-ts{font-family:var(--v3-font-mono);font-size:10px;color:var(--v3-text-muted);flex-shrink:0}
+.v3fs-stale-tag{font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-radius:6px;padding:2px 7px;background:var(--v3-amber-soft);color:var(--v3-amber);flex-shrink:0}
+
 /* Mid widths: reserve a lane for the fixed dock so it never overlaps content. */
 @media (max-width:1380px) and (min-width:961px){
   .v3fs-wrap{padding-left:118px}

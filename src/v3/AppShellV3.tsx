@@ -51,6 +51,7 @@ import OnboardingCard from "@/v3/components/OnboardingCard";
 import ProgramDetailRouter from "@/v3/components/ProgramDetailRouter";
 import ProgramSetupWizard from "@/v3/components/ProgramSetupWizard";
 import FlowShell from "@/v3/components/flow/FlowShell";
+import { resolveFlowDecision } from "@/v3/components/flow/flowDecisions";
 import { reportError } from "@/lib/errorReporter";
 import { sanitizeMarkdown } from "@/lib/sanitize";
 import { changedInputFields, relatedArtifactsToStale, crossPhaseArtifactsToStale, fieldsFeedingApprovedArtifacts } from "@/v3/lib/artifactStaleness";
@@ -3364,6 +3365,15 @@ export default function AppShellV3() {
           onExitShell={() => setUseFlowShell(false)}
           onRunAgent={handleRunAgent}
           onSaveInputs={handleSavePhaseInputs}
+          onResolveDecision={async (decisionId, resolution) => {
+            try {
+              const blob = resolveFlowDecision(activeProgram, decisionId, resolution, currentUser?.email || "you");
+              if (blob) await updateProgramData(activeProgram.id, blob, activeProgram.updatedAt);
+            } catch (err) {
+              const message = err instanceof Error ? err.message : "Could not record the decision. Please try again.";
+              window.dispatchEvent(new CustomEvent("atlas-v3-toast", { detail: { message, tone: "error" } }));
+            }
+          }}
         />
         {setupWizardOverlay}
         <CoPilotSidebar

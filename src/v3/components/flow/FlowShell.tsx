@@ -5,6 +5,10 @@ import {
   flowMovements, movementEvidence, movementArtifacts, listenCoverage,
   demoAcceptance, daysToFirstDemo, wordsOfEvidence, frameKpis,
 } from "@/v3/components/flow/flowShellData";
+import {
+  listOpenFlowDecisions, listFlowAttestations, listNextMoments,
+  type FlowDecision,
+} from "@/v3/components/flow/flowDecisions";
 
 interface FlowShellProps {
   program: ProgramSummary;
@@ -17,9 +21,11 @@ interface FlowShellProps {
   onExitShell: () => void;
   onRunAgent: (agentId: string, phaseId?: string) => void;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean }) => Promise<void>;
+  /** Resolve an open decision (confirm applies its prepared payload). */
+  onResolveDecision: (decisionId: string, resolution: "confirmed" | "declined") => Promise<void>;
 }
 
-type FlowView = "flow" | "library" | "pulse";
+type FlowView = "today" | "flow" | "library" | "pulse";
 
 /**
  * "Paper & Flow" — the reimagined shell for ATOS Flow programmes. None of the
@@ -31,9 +37,10 @@ type FlowView = "flow" | "library" | "pulse";
  */
 export default function FlowShell(props: FlowShellProps) {
   const { program } = props;
-  const [view, setView] = useState<FlowView>("flow");
+  const [view, setView] = useState<FlowView>("today");
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const days = daysToFirstDemo(program);
+  const openDecisions = listOpenFlowDecisions(program);
 
   // The switcher dismisses like a menu should: backdrop click or Escape.
   useEffect(() => {
@@ -43,6 +50,14 @@ export default function FlowShell(props: FlowShellProps) {
     return () => window.removeEventListener("keydown", onKey);
   }, [switcherOpen]);
 
+  // Instrumentation: the shell's core promise is decision latency. Stamp when
+  // it opens; the session's first resolution logs open→decided (see FlowToday).
+  useEffect(() => {
+    try {
+      if (!sessionStorage.getItem("v3fs-open-ts")) sessionStorage.setItem("v3fs-open-ts", String(Date.now()));
+    } catch { /* metrics never block the shell */ }
+  }, []);
+
   return (
     <div className="v3fs-app">
       <nav className="v3fs-dock" aria-label="Primary">
@@ -50,8 +65,9 @@ export default function FlowShell(props: FlowShellProps) {
           {(program.name || "F").slice(0, 1).toUpperCase()}
           <span className="v3fs-brand-caret" aria-hidden="true">▾</span>
         </button>
-        {([["flow", "⟶", "Flow"], ["library", "◫", "Library"], ["pulse", "◉", "Pulse"]] as const).map(([id, icon, label]) => (
+        {([["today", "◈", "Today"], ["flow", "⟶", "Flow"], ["library", "◫", "Library"], ["pulse", "◉", "Pulse"]] as const).map(([id, icon, label]) => (
           <button key={id} type="button" className={view === id ? "on" : ""} onClick={() => { setView(id); window.scrollTo({ top: 0 }); }}>
+            {id === "today" && openDecisions.length > 0 ? <span className="v3fs-dock-n">{openDecisions.length}</span> : null}
             <span className="v3fs-ric" aria-hidden="true">{icon}</span><span className="v3fs-rlb">{label}</span>
           </button>
         ))}
@@ -108,13 +124,150 @@ export default function FlowShell(props: FlowShellProps) {
           </div>
         </header>
 
-        {view === "flow" ? (
+        {view === "today" ? (
+          <FlowToday program={program} onResolveDecision={props.onResolveDecision} onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
+        ) : view === "flow" ? (
           <FlowCanvas program={program} runningAgentIds={props.runningAgentIds} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} />
         ) : view === "library" ? (
           <FlowLibrary program={program} />
         ) : (
           <FlowPulse program={program} />
         )}
+      </div>
+    </div>
+  );
+}
+
+/* ── Today: decisions waiting on you, the log, the moments ahead ─────────── */
+
+function timeAgo(iso: string): string {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return "";
+  const s = Math.max(0, (Date.now() - t) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.round(s / 60)}m ago`;
+  if (s < 86400) return `${Math.round(s / 3600)}h ago`;
+  return new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function fmtMomentDate(value: string): string {
+  const t = Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00` : value);
+  if (Number.isNaN(t)) return value;
+  return new Date(t).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+}
+
+function DecisionCard({ decision, movementLabel, busy, onResolve }: {
+  decision: FlowDecision;
+  movementLabel: string;
+  busy: boolean;
+  onResolve: (id: string, resolution: "confirmed" | "declined") => void;
+}) {
+  return (
+    <article className="v3fs-dec">
+      <div className="v3fs-dec-top">
+        <span className={`v3fs-tier t${decision.tier}`}>Tier {decision.tier}</span>
+        {movementLabel ? <span className="v3fs-dec-mv">{movementLabel}</span> : null}
+        {decision.createdAt ? <span className="v3fs-dec-when">{timeAgo(decision.createdAt)}</span> : null}
+      </div>
+      <h3 className="v3fs-dec-t">{decision.title}</h3>
+      {decision.summary ? <p className="v3fs-dec-s">{decision.summary}</p> : null}
+      {decision.blocking ? <p className="v3fs-dec-b">Waiting on this: {decision.blocking}</p> : null}
+      {decision.recommendation ? (
+        <div className="v3fs-dec-rec">
+          <div className="v3fs-dec-rec-a">Recommended — {decision.recommendation.action}</div>
+          {decision.recommendation.rationale ? <div className="v3fs-dec-rec-r">{decision.recommendation.rationale}</div> : null}
+          {decision.recommendation.band ? <div className="v3fs-dec-rec-b">{decision.recommendation.band}</div> : null}
+        </div>
+      ) : null}
+      <div className="v3fs-dec-cta">
+        <button type="button" className="v3fs-btn pri" disabled={busy} onClick={() => onResolve(decision.id, "confirmed")}>
+          {busy ? "Applying…" : decision.recommendation?.action || "Confirm"}
+        </button>
+        <button type="button" className="v3fs-btn" disabled={busy} onClick={() => onResolve(decision.id, "declined")}>
+          Decline
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function FlowToday({ program, onResolveDecision, onGoFlow }: {
+  program: ProgramSummary;
+  onResolveDecision: FlowShellProps["onResolveDecision"];
+  onGoFlow: () => void;
+}) {
+  const movements = useMemo(() => flowMovements(), []);
+  const open = listOpenFlowDecisions(program);
+  const feed = listFlowAttestations(program);
+  const moments = listNextMoments(program);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const label = (id: string) => movements.find((m) => m.id === id)?.displayName ?? id;
+
+  const resolve = async (id: string, resolution: "confirmed" | "declined") => {
+    setBusyId(id);
+    try {
+      await onResolveDecision(id, resolution);
+      try {
+        // Open→first-decision latency, the design target this surface is judged
+        // by. Rolling window of 20 in localStorage; read via console for now.
+        const openedAt = Number(sessionStorage.getItem("v3fs-open-ts") || 0);
+        if (openedAt) {
+          const log = JSON.parse(localStorage.getItem("v3fs-decision-latency") || "[]") as number[];
+          log.push(Math.round((Date.now() - openedAt) / 1000));
+          localStorage.setItem("v3fs-decision-latency", JSON.stringify(log.slice(-20)));
+          sessionStorage.removeItem("v3fs-open-ts");
+        }
+      } catch { /* metrics never block a resolution */ }
+    } finally { setBusyId(null); }
+  };
+
+  return (
+    <div className="v3fs-today">
+      {open.length === 0 ? (
+        <div className="v3fs-quiet">
+          <div className="v3fs-quiet-mark" aria-hidden="true">◈</div>
+          <h2>Nothing needs you right now.</h2>
+          <p>ATOS keeps working between conversations — every run it makes lands in the log below, and anything consequential arrives here as a decision first.</p>
+          <button type="button" className="v3fs-btn" onClick={onGoFlow}>Review the flow</button>
+        </div>
+      ) : (
+        <section className="v3fs-inbox" aria-label="Decisions waiting on you">
+          <div className="v3fs-ph"><h3>Waiting on you</h3><span>{open.length} decision{open.length === 1 ? "" : "s"} — each shows what it unblocks</span></div>
+          {open.map((decision) => (
+            <DecisionCard key={decision.id} decision={decision} movementLabel={label(decision.movementId)}
+              busy={busyId === decision.id} onResolve={resolve} />
+          ))}
+        </section>
+      )}
+
+      <div className="v3fs-grid2">
+        <div className="v3fs-panel">
+          <div className="v3fs-ph"><h3>What ATOS did</h3><span>every run on the record — tier-stamped, newest first</span></div>
+          {feed.length === 0 ? <div className="v3fs-empty">No runs yet. Generate the first artifact in Frame and it will be attested here.</div> : null}
+          {feed.slice(0, 12).map((entry, i) => (
+            <div key={i} className="v3fs-row">
+              <span className={`v3fs-tdot t${entry.tier}`} aria-hidden="true" />
+              <div className="v3fs-row-g">
+                <div className="v3fs-row-n">{entry.action}</div>
+                <div className="v3fs-row-m">{[label(entry.phaseId), entry.detail].filter(Boolean).join(" — ")}</div>
+              </div>
+              <span className="v3fs-feed-ts">{timeAgo(entry.ts)}</span>
+            </div>
+          ))}
+        </div>
+        <div className="v3fs-panel">
+          <div className="v3fs-ph"><h3>Moments ahead</h3><span>the human calendar — sessions, demonstrations, the target</span></div>
+          {moments.length === 0 ? <div className="v3fs-empty">Booked sessions, pending demonstrations and the first-demo target appear here as they are scheduled.</div> : null}
+          {moments.map((moment, i) => (
+            <div key={i} className="v3fs-row">
+              <span className={`v3fs-tag ${moment.kind === "demo" ? "gn" : "ev"}`}>{fmtMomentDate(moment.date)}</span>
+              <div className="v3fs-row-g">
+                <div className="v3fs-row-n">{moment.label}</div>
+                <div className="v3fs-row-m">{moment.kind === "target" ? "set in Frame" : moment.kind === "session" ? "from the interview roster" : "from the demonstration tour"}</div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -162,10 +315,16 @@ function FlowLibrary({ program }: { program: ProgramSummary }) {
         <div className="v3fs-ph"><h3>Artifacts</h3><span>generated documents — versioned, traceable to evidence</span></div>
         {artifacts.map((artifact) => (
           <div key={`${artifact.movementId}:${artifact.id}`} className="v3fs-row">
-            <span className={`v3fs-st ${artifact.present ? "ok" : "none"}`} />
+            <span className={`v3fs-st ${artifact.present ? (artifact.stale ? "stale" : "ok") : "none"}`} />
             <div className="v3fs-row-g">
               <div className="v3fs-row-n">{artifact.title}</div>
-              <div className="v3fs-row-m">{artifact.present ? (artifact.confidence != null ? `generated · ${artifact.confidence}%` : "generated") : "not yet generated"}</div>
+              <div className="v3fs-row-m">
+                {artifact.present
+                  ? artifact.stale
+                    ? "evidence changed since generation — regenerate from Flow"
+                    : artifact.confidence != null ? `generated · ${artifact.confidence}%` : "generated"
+                  : "not yet generated"}
+              </div>
             </div>
             <span className="v3fs-tag gn">{label(artifact.movementId)}</span>
           </div>
