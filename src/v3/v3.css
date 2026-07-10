@@ -13449,6 +13449,38 @@ html:not([data-theme="light"]) .v3fs-node{border-top-color:var(--v3-border-top)}
 .v3fs-feed-ts{font-family:var(--v3-font-mono);font-size:10px;color:var(--v3-text-muted);flex-shrink:0}
 .v3fs-stale-tag{font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-radius:6px;padding:2px 7px;background:var(--v3-amber-soft);color:var(--v3-amber);flex-shrink:0}
 
+/* Tracks: the build as workstreams; acceptance is earned pass by pass. */
+.v3fs-trkgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.v3fs-trk{background:var(--fs-card);border:1px solid var(--fs-line);border-radius:18px;box-shadow:var(--fs-shadow);padding:18px 20px;display:flex;flex-direction:column;gap:10px}
+.v3fs-trk.acc{border-color:color-mix(in srgb,var(--v3-green) 45%,var(--fs-line))}
+.v3fs-trk-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.v3fs-trk-top h3{font-size:15.5px;font-weight:600;letter-spacing:-.01em;margin:0}
+.v3fs-pace{font-size:9.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;border-radius:999px;padding:3px 9px;flex-shrink:0}
+.v3fs-pace.on-pace{background:var(--v3-green-soft);color:var(--v3-green)}
+.v3fs-pace.watch{background:var(--v3-amber-soft);color:var(--v3-amber)}
+.v3fs-pace.stalled{background:rgba(220,38,38,.12);color:var(--v3-red,#dc2626)}
+.v3fs-trk-g{font-size:12.5px;line-height:1.55;color:var(--v3-text-muted);margin:0}
+.v3fs-trk-meta{display:flex;flex-wrap:wrap;gap:6px 14px;font-family:var(--v3-font-mono);font-size:10.5px;color:var(--v3-text-muted)}
+.v3fs-accst{font-weight:700}
+.v3fs-accst.ok{color:var(--v3-green)}
+.v3fs-trk-passes{display:flex;gap:5px}
+.v3fs-pdot{width:9px;height:9px;border-radius:99px;background:var(--v3-green)}
+.v3fs-pdot.rw{background:var(--v3-amber)}
+.v3fs-trk-deps{display:flex;flex-wrap:wrap;gap:6px}
+.v3fs-dep{font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border-radius:6px;padding:3px 8px;background:var(--v3-surface-2);color:var(--v3-text-muted);border:1px dashed var(--fs-line)}
+.v3fs-pass-form{display:flex;flex-direction:column;gap:8px;border:1px dashed var(--fs-line);border-radius:12px;padding:12px;background:var(--v3-surface-2)}
+.v3fs-pass-form input[type="text"],.v3fs-pass-form input:not([type]),.v3fs-pass-form select{font:inherit;font-size:12.5px;border:1px solid var(--fs-line);border-radius:8px;padding:7px 10px;background:var(--fs-card);color:var(--v3-text-primary)}
+.v3fs-pass-stable{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--v3-text-muted)}
+.v3fs-plan-note{display:flex;align-items:center;justify-content:space-between;gap:14px;background:var(--fs-card);border:1px solid var(--fs-line);border-left:3px solid var(--v3-amber);border-radius:14px;padding:14px 18px;font-size:13px}
+.v3fs-addtrk .v3fs-a{font:inherit;font-size:12.5px;font-weight:600;color:var(--v3-accent-2);background:none;border:none;cursor:pointer;padding:0}
+.v3fs-crumb{display:flex;align-items:center;gap:8px;margin-top:26px;font-size:13px}
+.v3fs-crumb button{font:inherit;font-size:13px;font-weight:600;color:var(--v3-accent-2);background:none;border:none;cursor:pointer;padding:0}
+.v3fs-crumb b{font-weight:600}
+.v3fs-crumb-note{font-family:var(--v3-font-mono);font-size:10.5px;color:var(--v3-text-muted)}
+.v3fs-trk-goal{font-size:13px;color:var(--v3-text-muted);margin:8px 0 0}
+.v3fs-trk-slices{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.v3fs-trk-slices span{font-size:11px;border-radius:8px;padding:4px 10px;background:var(--fs-indigo-wash);color:var(--v3-accent-2)}
+
 /* Mid widths: reserve a lane for the fixed dock so it never overlaps content. */
 @media (max-width:1380px) and (min-width:961px){
   .v3fs-wrap{padding-left:118px}

@@ -9,6 +9,10 @@ import {
   listOpenFlowDecisions, listFlowAttestations, listNextMoments,
   type FlowDecision,
 } from "@/v3/components/flow/flowDecisions";
+import {
+  listFlowTracks, trackAcceptance, trackPace, trackBlockers,
+  type FlowShowPass, type FlowTrack,
+} from "@/v3/components/flow/flowTracks";
 
 interface FlowShellProps {
   program: ProgramSummary;
@@ -23,9 +27,13 @@ interface FlowShellProps {
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean }) => Promise<void>;
   /** Resolve an open decision (confirm applies its prepared payload). */
   onResolveDecision: (decisionId: string, resolution: "confirmed" | "declined") => Promise<void>;
+  /** Record a show/refine pass on a track. */
+  onRecordShowPass: (trackId: string, pass: { stakeholder?: string; verdict: FlowShowPass["verdict"]; note?: string; stableDiff?: boolean }) => Promise<void>;
+  /** Add a track by hand (the blueprint is the usual source). */
+  onAddTrack: (input: { name: string; goal?: string }) => Promise<void>;
 }
 
-type FlowView = "today" | "flow" | "library" | "pulse";
+type FlowView = "today" | "flow" | "tracks" | "library" | "pulse";
 
 /**
  * "Paper & Flow" — the reimagined shell for ATOS Flow programmes. None of the
@@ -65,7 +73,7 @@ export default function FlowShell(props: FlowShellProps) {
           {(program.name || "F").slice(0, 1).toUpperCase()}
           <span className="v3fs-brand-caret" aria-hidden="true">▾</span>
         </button>
-        {([["today", "◈", "Today"], ["flow", "⟶", "Flow"], ["library", "◫", "Library"], ["pulse", "◉", "Pulse"]] as const).map(([id, icon, label]) => (
+        {([["today", "◈", "Today"], ["flow", "⟶", "Flow"], ["tracks", "▤", "Tracks"], ["library", "◫", "Library"], ["pulse", "◉", "Pulse"]] as const).map(([id, icon, label]) => (
           <button key={id} type="button" className={view === id ? "on" : ""} onClick={() => { setView(id); window.scrollTo({ top: 0 }); }}>
             {id === "today" && openDecisions.length > 0 ? <span className="v3fs-dock-n">{openDecisions.length}</span> : null}
             <span className="v3fs-ric" aria-hidden="true">{icon}</span><span className="v3fs-rlb">{label}</span>
@@ -128,6 +136,16 @@ export default function FlowShell(props: FlowShellProps) {
           <FlowToday program={program} onResolveDecision={props.onResolveDecision} onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
         ) : view === "flow" ? (
           <FlowCanvas program={program} runningAgentIds={props.runningAgentIds} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} />
+        ) : view === "tracks" ? (
+          <FlowTracks
+            program={program}
+            runningAgentIds={props.runningAgentIds}
+            onRunAgent={props.onRunAgent}
+            onSaveInputs={props.onSaveInputs}
+            onRecordShowPass={props.onRecordShowPass}
+            onAddTrack={props.onAddTrack}
+            onGoToday={() => { setView("today"); window.scrollTo({ top: 0 }); }}
+          />
         ) : view === "library" ? (
           <FlowLibrary program={program} />
         ) : (
@@ -268,6 +286,177 @@ function FlowToday({ program, onResolveDecision, onGoFlow }: {
             </div>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Tracks: the build as demoable workstreams; acceptance is earned ─────── */
+
+function TrackCard({ track, all, busy, onRecord, onOpen }: {
+  track: FlowTrack;
+  all: FlowTrack[];
+  busy: boolean;
+  onRecord: (trackId: string, pass: { stakeholder?: string; verdict: FlowShowPass["verdict"]; stableDiff?: boolean }) => Promise<void>;
+  onOpen: () => void;
+}) {
+  const acceptance = trackAcceptance(track);
+  const pace = trackPace(track, acceptance.accepted);
+  const blockers = trackBlockers(track, all);
+  const [recording, setRecording] = useState(false);
+  const [stakeholder, setStakeholder] = useState(track.leadStakeholder ?? "");
+  const [verdict, setVerdict] = useState<FlowShowPass["verdict"]>("accepted");
+  const [stableDiff, setStableDiff] = useState(false);
+
+  const save = async () => {
+    await onRecord(track.id, {
+      stakeholder: stakeholder.trim() || undefined,
+      verdict,
+      stableDiff: track.showPasses.length > 0 && stableDiff ? true : undefined,
+    });
+    setRecording(false);
+    setStableDiff(false);
+  };
+
+  return (
+    <article className={`v3fs-trk${acceptance.accepted ? " acc" : ""}`}>
+      <div className="v3fs-trk-top">
+        <h3>{track.name}</h3>
+        <span className={`v3fs-pace ${pace.tone}`}>{pace.label}</span>
+      </div>
+      {track.goal ? <p className="v3fs-trk-g">{track.goal}</p> : null}
+      <div className="v3fs-trk-meta">
+        <span className={`v3fs-accst${acceptance.accepted ? " ok" : ""}`}>
+          {acceptance.accepted ? "✓ accepted" : acceptance.label}
+        </span>
+        {track.leadStakeholder ? <span>demos to {track.leadStakeholder}</span> : null}
+        {track.slices.length ? <span>{track.slices.length} slice{track.slices.length === 1 ? "" : "s"}</span> : null}
+      </div>
+      {track.showPasses.length ? (
+        <div className="v3fs-trk-passes" aria-label="Demonstration passes">
+          {track.showPasses.map((pass, i) => (
+            <span key={i} className={`v3fs-pdot ${pass.verdict === "rework" ? "rw" : "ok"}`}
+              title={`${pass.verdict}${pass.stakeholder ? ` — ${pass.stakeholder}` : ""}`} />
+          ))}
+        </div>
+      ) : null}
+      {blockers.length ? (
+        <div className="v3fs-trk-deps">
+          {blockers.map((blocker) => <span key={blocker.id} className="v3fs-dep">waiting on {blocker.name}</span>)}
+        </div>
+      ) : null}
+      {recording ? (
+        <div className="v3fs-pass-form">
+          <input value={stakeholder} onChange={(e) => setStakeholder(e.target.value)} placeholder="Who watched it run?" aria-label="Stakeholder" />
+          <select value={verdict} onChange={(e) => setVerdict(e.target.value as FlowShowPass["verdict"])} aria-label="Verdict">
+            <option value="accepted">Accepted</option>
+            <option value="accepted-with-changes">Accepted with changes</option>
+            <option value="rework">Needs rework</option>
+          </select>
+          {track.showPasses.length > 0 ? (
+            <label className="v3fs-pass-stable">
+              <input type="checkbox" checked={stableDiff} onChange={(e) => setStableDiff(e.target.checked)} />
+              diff since last pass reviewed &amp; stable
+            </label>
+          ) : null}
+          <div className="v3fs-dec-cta">
+            <button type="button" className="v3fs-btn pri" disabled={busy} onClick={() => void save()}>{busy ? "Recording…" : "Record pass"}</button>
+            <button type="button" className="v3fs-btn" disabled={busy} onClick={() => setRecording(false)}>Cancel</button>
+          </div>
+        </div>
+      ) : (
+        <div className="v3fs-dec-cta">
+          <button type="button" className="v3fs-btn" onClick={() => setRecording(true)}>Record a pass</button>
+          <button type="button" className="v3fs-btn" onClick={onOpen}>Open in canvas</button>
+        </div>
+      )}
+    </article>
+  );
+}
+
+function FlowTracks({ program, runningAgentIds, onRunAgent, onSaveInputs, onRecordShowPass, onAddTrack, onGoToday }: {
+  program: ProgramSummary;
+  runningAgentIds: Set<string>;
+  onRunAgent: FlowShellProps["onRunAgent"];
+  onSaveInputs: FlowShellProps["onSaveInputs"];
+  onRecordShowPass: FlowShellProps["onRecordShowPass"];
+  onAddTrack: FlowShellProps["onAddTrack"];
+  onGoToday: () => void;
+}) {
+  const tracks = listFlowTracks(program);
+  const planPending = listOpenFlowDecisions(program).find((d) => Array.isArray(d.payload?.tracks));
+  const [drillId, setDrillId] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addName, setAddName] = useState("");
+  const [addGoal, setAddGoal] = useState("");
+
+  const record = async (trackId: string, pass: { stakeholder?: string; verdict: FlowShowPass["verdict"]; stableDiff?: boolean }) => {
+    setBusyId(trackId);
+    try { await onRecordShowPass(trackId, pass); } finally { setBusyId(null); }
+  };
+
+  const drilled = drillId ? tracks.find((t) => t.id === drillId) : undefined;
+  if (drilled) {
+    return (
+      <div className="v3fs-trkwrap">
+        <nav className="v3fs-crumb" aria-label="Breadcrumb">
+          <button type="button" onClick={() => setDrillId(null)}>Tracks</button>
+          <span aria-hidden="true">▸</span>
+          <b>{drilled.name}</b>
+          <span className="v3fs-crumb-note">{trackAcceptance(drilled).accepted ? "accepted" : trackAcceptance(drilled).label}</span>
+        </nav>
+        {drilled.goal ? <p className="v3fs-trk-goal">{drilled.goal}</p> : null}
+        {drilled.slices.length ? (
+          <div className="v3fs-trk-slices">
+            {drilled.slices.map((slice) => <span key={slice}>{slice}</span>)}
+          </div>
+        ) : null}
+        <FlowCanvas program={program} runningAgentIds={runningAgentIds} onRunAgent={onRunAgent} onSaveInputs={onSaveInputs} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="v3fs-today">
+      {planPending ? (
+        <div className="v3fs-plan-note">
+          <span>A track plan awaits your confirm — “{planPending.title}”.</span>
+          <button type="button" className="v3fs-btn pri" onClick={onGoToday}>Review in Today</button>
+        </div>
+      ) : null}
+
+      {tracks.length === 0 ? (
+        <div className="v3fs-quiet">
+          <div className="v3fs-quiet-mark" aria-hidden="true">▤</div>
+          <h2>The build hasn&rsquo;t been decomposed yet.</h2>
+          <p>Generate the Agentic Blueprint in Envision — its track plan arrives in Today as a decision, and adopting it fills this board with demoable workstreams.</p>
+        </div>
+      ) : (
+        <div className="v3fs-trkgrid">
+          {tracks.map((track) => (
+            <TrackCard key={track.id} track={track} all={tracks} busy={busyId === track.id}
+              onRecord={record} onOpen={() => { setDrillId(track.id); window.scrollTo({ top: 0 }); }} />
+          ))}
+        </div>
+      )}
+
+      <div className="v3fs-addtrk">
+        {addOpen ? (
+          <div className="v3fs-pass-form">
+            <input value={addName} onChange={(e) => setAddName(e.target.value)} placeholder="Track name" aria-label="Track name" />
+            <input value={addGoal} onChange={(e) => setAddGoal(e.target.value)} placeholder="What it demonstrates (one sentence)" aria-label="Track goal" />
+            <div className="v3fs-dec-cta">
+              <button type="button" className="v3fs-btn pri" disabled={!addName.trim()}
+                onClick={async () => { await onAddTrack({ name: addName, goal: addGoal }); setAddName(""); setAddGoal(""); setAddOpen(false); }}>
+                Add track
+              </button>
+              <button type="button" className="v3fs-btn" onClick={() => setAddOpen(false)}>Cancel</button>
+            </div>
+          </div>
+        ) : (
+          <button type="button" className="v3fs-a" onClick={() => setAddOpen(true)}>＋ Add a track by hand</button>
+        )}
       </div>
     </div>
   );

@@ -52,6 +52,7 @@ import ProgramDetailRouter from "@/v3/components/ProgramDetailRouter";
 import ProgramSetupWizard from "@/v3/components/ProgramSetupWizard";
 import FlowShell from "@/v3/components/flow/FlowShell";
 import { resolveFlowDecision } from "@/v3/components/flow/flowDecisions";
+import { recordShowPass, addFlowTrack } from "@/v3/components/flow/flowTracks";
 import { reportError } from "@/lib/errorReporter";
 import { sanitizeMarkdown } from "@/lib/sanitize";
 import { changedInputFields, relatedArtifactsToStale, crossPhaseArtifactsToStale, fieldsFeedingApprovedArtifacts } from "@/v3/lib/artifactStaleness";
@@ -3354,6 +3355,36 @@ export default function AppShellV3() {
     </div>
   ) : null;
 
+  // Shared write path for Flow shell mutations (decision resolutions, track
+  // passes, manual tracks): pure blob transform + optimistic write, re-based
+  // once onto the freshest server copy on a version conflict — Flow rows are
+  // hot (agents write between hydration and the click) and a human action
+  // must never be silently dropped.
+  const persistFlowMutation = async (mutate: (program: NonNullable<typeof activeProgram>) => Record<string, unknown> | null) => {
+    if (!activeProgram) return;
+    try {
+      const blob = mutate(activeProgram);
+      if (!blob) return;
+      try {
+        await updateProgramData(activeProgram.id, blob, activeProgram.updatedAt);
+      } catch (err) {
+        if (!(err instanceof ConflictError) || !isSupabaseConfigured || !supabase) throw err;
+        const { data: fresh } = await supabase
+          .from("adam_programs")
+          .select("data, updated_at")
+          .eq("id", activeProgram.id)
+          .single();
+        const freshRaw = (fresh?.data as Record<string, unknown> | undefined) ?? activeProgram.rawData ?? {};
+        const rebased = mutate({ ...activeProgram, rawData: freshRaw });
+        if (!rebased) return;
+        await updateProgramData(activeProgram.id, rebased, fresh?.updated_at ?? undefined);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not save that action. Please try again.";
+      window.dispatchEvent(new CustomEvent("atlas-v3-toast", { detail: { message, tone: "error" } }));
+    }
+  };
+
   // ── "Paper & Flow" shell ────────────────────────────────────────────────
   // ATOS Flow programmes render the reimagined chrome — none of the classic
   // shell below appears. Same engine (data, agents, autosave, wizard, Copilot,
@@ -3375,31 +3406,13 @@ export default function AppShellV3() {
           onSaveInputs={handleSavePhaseInputs}
           onResolveDecision={async (decisionId, resolution) => {
             const resolvedBy = currentUser?.email || "you";
-            try {
-              const blob = resolveFlowDecision(activeProgram, decisionId, resolution, resolvedBy);
-              if (!blob) return;
-              try {
-                await updateProgramData(activeProgram.id, blob, activeProgram.updatedAt);
-              } catch (err) {
-                if (!(err instanceof ConflictError) || !isSupabaseConfigured || !supabase) throw err;
-                // Flow rows are hot — background agent runs land between
-                // hydration and the click. Never drop a human resolution over
-                // that: re-resolve against the freshest server copy and retry
-                // once (same re-base pattern as the inputs save above).
-                const { data: fresh } = await supabase
-                  .from("adam_programs")
-                  .select("data, updated_at")
-                  .eq("id", activeProgram.id)
-                  .single();
-                const freshRaw = (fresh?.data as Record<string, unknown> | undefined) ?? activeProgram.rawData ?? {};
-                const rebased = resolveFlowDecision({ ...activeProgram, rawData: freshRaw }, decisionId, resolution, resolvedBy);
-                if (!rebased) return;
-                await updateProgramData(activeProgram.id, rebased, fresh?.updated_at ?? undefined);
-              }
-            } catch (err) {
-              const message = err instanceof Error ? err.message : "Could not record the decision. Please try again.";
-              window.dispatchEvent(new CustomEvent("atlas-v3-toast", { detail: { message, tone: "error" } }));
-            }
+            await persistFlowMutation((program) => resolveFlowDecision(program, decisionId, resolution, resolvedBy));
+          }}
+          onRecordShowPass={async (trackId, pass) => {
+            await persistFlowMutation((program) => recordShowPass(program, trackId, pass));
+          }}
+          onAddTrack={async (input) => {
+            await persistFlowMutation((program) => addFlowTrack(program, input));
           }}
         />
         {setupWizardOverlay}
