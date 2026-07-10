@@ -552,6 +552,28 @@ export function FlowDocViewer({ program, artifact, onClose, onRegenerate }: {
         </header>
         <div className="v3fs-docview-b">
           {(() => {
+            // The ontology's adopted standard mappings — the shared language,
+            // shown as chips once a human has confirmed them.
+            if (artifact.id === "domain-ontology") {
+              const raw = (program.rawData ?? {}) as Record<string, unknown>;
+              const inner = typeof raw.data === "object" && raw.data !== null ? raw.data as Record<string, unknown> : raw;
+              const adopted = Array.isArray(inner.ontologyAlignment) ? inner.ontologyAlignment as Array<Record<string, unknown>> : [];
+              if (adopted.length) {
+                return (
+                  <div className="v3fs-maps">
+                    <div className="v3fs-async-cap">Adopted standard mappings <span>confirmed groundings in the industry's shared vocabulary</span></div>
+                    <div className="v3fs-maps-row">
+                      {adopted.map((mapping, index) => (
+                        <a key={index} className="v3fs-map-chip" href={String(mapping.standard ?? "#")} target="_blank" rel="noreferrer"
+                          title={`${mapping.relation} · ${mapping.standard}`}>
+                          {String(mapping.entity)} ⇢ {String(mapping.standard ?? "").split("/").pop()}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                );
+              }
+            }
             const grounding = groundingFor(program, artifact.id, artifact.movementId);
             if (!grounding.length) return null;
             return (

@@ -13550,6 +13550,10 @@ html:not([data-theme="light"]) .v3fs-node{border-top-color:var(--v3-border-top)}
 .v3fs-kit-qs li{font-size:12.5px;line-height:1.55}
 .v3fs-kit-qs li::marker{color:var(--fs-quote);font-weight:700}
 .v3fs-kit-actions{margin-bottom:10px}
+.v3fs-maps{margin-bottom:16px}
+.v3fs-maps-row{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px}
+.v3fs-map-chip{font-size:11px;font-weight:600;border:1px solid var(--fs-line);border-radius:999px;padding:5px 12px;background:var(--fs-indigo-wash);color:var(--v3-accent-2);text-decoration:none}
+.v3fs-map-chip:hover{border-color:var(--v3-accent-2)}
 .v3fs-ground{margin-bottom:14px}
 .v3fs-ground-row{display:flex;align-items:flex-start;gap:10px;padding:5px 0}
 .v3fs-ground-row .v3fs-row-m{word-break:break-all}
