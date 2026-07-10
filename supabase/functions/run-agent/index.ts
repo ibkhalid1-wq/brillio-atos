@@ -1238,6 +1238,7 @@ Return ONLY valid JSON:
   "hitlPoints": [ { "where": "step/decision", "why": "the stakeholder-voiced risk it answers", "mechanism": "approve|review|override" } ],
   "evalPlan": [ { "behaviour": "what must hold", "measure": "how it is measured", "threshold": "pass bar" } ],
   "buildSequence": ["ordered slices — the first must be demoable"],
+  "tracks": [ { "name": "build workstream over the shared data model", "goal": "one-sentence outcome it demonstrates", "slices": ["buildSequence slices that live in this track"], "leadStakeholder": "who watches its demonstrations", "dependsOn": ["track names it waits on"] } ],
   "gaps": ["direction ambiguities, unmapped entities, unresolved framework questions"],
   "summary": "one sentence verdict on blueprint buildability",
   "confidence": 0.0
@@ -5646,6 +5647,11 @@ function appendFlowAttestation(
   });
 }
 
+/** Track id slug — MIRRORED in src/v3/components/flow/flowTracks.ts. */
+function trackSlug(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48) || "track";
+}
+
 /** Queue an open Tier-2/3 decision for a human to resolve in the deck's inbox. */
 function queueFlowDecision(programData: ProgramState, decision: Record<string, JsonValue>): ProgramState {
   return updateInnerProgramData(programData, (inner) => {
@@ -8517,6 +8523,47 @@ Deno.serve(async (req) => {
               : `Ran ${request.agentId}`,
           detail: (outputSummary || "").slice(0, 160),
         });
+
+        // The blueprint's track plan lands as its own Tier-2 decision — the
+        // Tracks board adopts workstreams only through a human confirm, and
+        // the payload is normalised here so the client merge stays dumb.
+        if (request.agentId === "agentic-blueprint" && Array.isArray((result as Record<string, unknown>).tracks)) {
+          const proposedRaw = ((result as Record<string, unknown>).tracks as unknown[]).filter(isRecord).slice(0, 12);
+          const now = new Date().toISOString();
+          const named = proposedRaw.map((entry) => {
+            const name = typeof entry.name === "string" && entry.name.trim() ? entry.name.trim() : "Track";
+            return { entry, name, id: trackSlug(name) };
+          });
+          const idByName = new Map(named.map((t) => [t.name.toLowerCase(), t.id]));
+          const tracks = named.map(({ entry, name, id }) => ({
+            id,
+            name,
+            goal: typeof entry.goal === "string" ? entry.goal : "",
+            slices: Array.isArray(entry.slices) ? entry.slices.map(String).slice(0, 8) : [],
+            leadStakeholder: typeof entry.leadStakeholder === "string" ? entry.leadStakeholder : "",
+            dependsOn: Array.isArray(entry.dependsOn)
+              ? entry.dependsOn.map((n) => idByName.get(String(n).toLowerCase()) ?? "").filter(Boolean)
+              : [],
+            createdAt: now,
+            showPasses: [],
+          }));
+          if (tracks.length) {
+            nextProgramData = queueFlowDecision(nextProgramData, {
+              tier: 2,
+              agentId: request.agentId,
+              movementId: request.phaseId || "envision",
+              title: "Adopt the track plan",
+              summary: `${tracks.length} build track${tracks.length === 1 ? "" : "s"} proposed: ${tracks.map((t) => t.name).slice(0, 4).join(", ")}${tracks.length > 4 ? "…" : ""}.`,
+              blocking: "The Tracks board stays empty until a plan is adopted.",
+              recommendation: {
+                action: "Adopt the track plan",
+                rationale: "Each track is a demoable workstream over the shared data model; acceptance is earned through the show/refine loop, at least two cycles.",
+                band: "proposal — reversible, tracks merge additively",
+              } as JsonValue,
+              payload: { tracks: tracks as unknown as JsonValue } as JsonValue,
+            });
+          }
+        }
       }
 
       if (!autonomy.shouldQueueReview) {
