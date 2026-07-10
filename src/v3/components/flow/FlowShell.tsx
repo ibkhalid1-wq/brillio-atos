@@ -115,7 +115,7 @@ export default function FlowShell(props: FlowShellProps) {
           {(program.name || "F").slice(0, 1).toUpperCase()}
           <span className="v3fs-brand-caret" aria-hidden="true">▾</span>
         </button>
-        {([["today", "◈", "Today"], ["flow", "⟶", "Flow"], ["tracks", "▤", "Tracks"], ["library", "◫", "Library"], ["pulse", "◉", "Pulse"], ["mission", "⌘", "Mission"], ["portfolio", "⊞", "Portfolio"]] as const).map(([id, icon, label]) => (
+        {([["today", "◈", "Inbox"], ["flow", "⟶", "Flow"], ["tracks", "▤", "Tracks"], ["library", "◫", "Library"], ["pulse", "◉", "Pulse"], ["mission", "⌘", "Mission"], ["portfolio", "⊞", "Portfolio"]] as const).map(([id, icon, label]) => (
           <button key={id} type="button" className={view === id ? "on" : ""}
             onClick={() => { setView(id); window.scrollTo({ top: 0 }); if (id === startId) dismissStart(); }}>
             {id === "today" && waitingCount > 0 ? <span className="v3fs-dock-n">{waitingCount}</span> : null}
@@ -567,7 +567,7 @@ function FlowTracks({ program, runningAgentIds, onRunAgent, onSaveInputs, onReco
       {planPending ? (
         <div className="v3fs-plan-note">
           <span>A track plan awaits your confirm — “{planPending.title}”.</span>
-          <button type="button" className="v3fs-btn pri" onClick={onGoToday}>Review in Today</button>
+          <button type="button" className="v3fs-btn pri" onClick={onGoToday}>Review in the Inbox</button>
         </div>
       ) : null}
 
@@ -575,7 +575,7 @@ function FlowTracks({ program, runningAgentIds, onRunAgent, onSaveInputs, onReco
         <div className="v3fs-quiet">
           <div className="v3fs-quiet-mark" aria-hidden="true">▤</div>
           <h2>The build hasn&rsquo;t been decomposed yet.</h2>
-          <p>Generate the Agentic Blueprint in Envision — its track plan arrives in Today as a decision, and adopting it fills this board with demoable workstreams.</p>
+          <p>Generate the Agentic Blueprint in Envision — its track plan arrives in the Inbox as a decision, and adopting it fills this board with demoable workstreams.</p>
         </div>
       ) : (
         <div className="v3fs-trkgrid">

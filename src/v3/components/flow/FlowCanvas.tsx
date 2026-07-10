@@ -430,7 +430,7 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
                 {linkTick ? "Link copied ✓" : "✳ Send as a link"}
               </button>
             ) : null}
-            <span className="v3fs-kit-fu-note">No meeting needed — ATOS asks these itself and the answers arrive in Today.</span>
+            <span className="v3fs-kit-fu-note">No meeting needed — ATOS asks these itself and the answers arrive in the Inbox.</span>
           </div>
         ) : null}
         <div className="v3fs-kit-capture">
@@ -555,7 +555,7 @@ function AsyncInterviews({ program, onMintPacks }: { program: ProgramSummary; on
 
   return (
     <div className="v3fs-async">
-      <div className="v3fs-async-cap">Async interviews <span>no meeting required — send a link, answers arrive in Today</span></div>
+      <div className="v3fs-async-cap">Async interviews <span>no meeting required — send a link, answers arrive in the Inbox</span></div>
       {packs.map((pack) => (
         <div key={pack.id} className="v3fs-async-row">
           <span className={`v3fs-st ${pack.respondedAt ? "ok" : "none"}`} />
@@ -609,7 +609,7 @@ function DemoInvites({ program, onMint }: { program: ProgramSummary; onMint: () 
 
   return (
     <div className="v3fs-async">
-      <div className="v3fs-async-cap">Demo tour links <span>each stakeholder watches their own workflow — verdicts arrive in Today</span></div>
+      <div className="v3fs-async-cap">Demo tour links <span>each stakeholder watches their own workflow — verdicts arrive in the Inbox</span></div>
       {invites.map((invite) => (
         <div key={invite.id} className="v3fs-async-row">
           <span className={`v3fs-st ${invite.respondedAt ? "ok" : "none"}`} />
