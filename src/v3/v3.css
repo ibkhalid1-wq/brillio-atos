@@ -13508,6 +13508,45 @@ html:not([data-theme="light"]) .v3fs-node{border-top-color:var(--v3-border-top)}
 .v3fs-portal-verdict.on{border-color:var(--v3-accent-2);background:var(--fs-indigo-wash);font-weight:600}
 .v3fs-evitem .v3fs-dec-s{font-style:italic}
 
+/* Progressive disclosure: one calm summary line; details one tap away. */
+.v3fs-hero-line{font-size:14px;color:var(--v3-text-muted);margin:12px 0 0}
+.v3fs-hero-line b{font-size:20px;font-weight:600;color:var(--v3-text-primary);font-variant-numeric:tabular-nums}
+.v3fs-disc{background:var(--fs-card);border:1px solid var(--fs-line);border-radius:16px;box-shadow:var(--fs-shadow)}
+.v3fs-disc summary{list-style:none;display:flex;align-items:center;gap:14px;padding:16px 20px;cursor:pointer;user-select:none}
+.v3fs-disc summary::-webkit-details-marker{display:none}
+.v3fs-disc-l{font-size:13px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:8px}
+.v3fs-disc-l em{font-style:normal;font-family:var(--v3-font-mono);font-size:10px;font-weight:500;color:var(--v3-text-muted);background:var(--v3-surface-2);border-radius:99px;padding:2px 8px}
+.v3fs-disc-hint{flex:1;min-width:0;font-size:12px;color:var(--v3-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right}
+.v3fs-disc[open] .v3fs-disc-hint{visibility:hidden}
+.v3fs-disc-c{flex-shrink:0;width:20px;height:20px;border-radius:99px;border:1px solid var(--fs-line);position:relative}
+.v3fs-disc-c::before,.v3fs-disc-c::after{content:"";position:absolute;background:var(--v3-text-muted);top:50%;left:50%}
+.v3fs-disc-c::before{width:8px;height:1.5px;transform:translate(-50%,-50%)}
+.v3fs-disc-c::after{width:1.5px;height:8px;transform:translate(-50%,-50%)}
+.v3fs-disc[open] .v3fs-disc-c::after{display:none}
+.v3fs-disc-b{padding:0 20px 18px;animation:v3fs-disc-in .18s ease}
+@keyframes v3fs-disc-in{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.v3fs-disc-b{animation:none}}
+.v3fs-disc-sm{border-radius:12px;box-shadow:none;background:transparent;margin-top:12px}
+.v3fs-disc-sm summary{padding:10px 12px}
+.v3fs-disc-sm .v3fs-disc-l{font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.v3fs-disc-sm .v3fs-disc-b{padding:0 12px 12px}
+.v3fs-budget-edit-l{font-size:12px;font-weight:600;width:84px;flex-shrink:0;align-self:center}
+.v3fs-row-open{cursor:pointer;border-radius:10px;margin:0 -8px;padding-left:8px;padding-right:8px}
+.v3fs-row-open:hover{background:var(--v3-surface-2)}
+
+.v3fs-doc-open{font:inherit;font-weight:600;color:var(--v3-text-primary);background:none;border:none;padding:0;cursor:pointer;text-align:left}
+.v3fs-doc-open:hover{color:var(--v3-accent-2);text-decoration:underline;text-underline-offset:3px}
+
+/* The reading pane: full-document drill-down for every generated artifact. */
+.v3fs-doc-backdrop{position:fixed;inset:0;background:rgba(15,16,32,.45);backdrop-filter:blur(2px);z-index:80}
+.v3fs-docview{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(720px,92vw);max-height:86vh;display:flex;flex-direction:column;background:var(--fs-card);border:1px solid var(--fs-line);border-radius:20px;box-shadow:0 30px 90px -20px rgba(15,16,32,.5);z-index:81}
+.v3fs-docview-h{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:22px 26px 14px;border-bottom:1px solid var(--fs-line)}
+.v3fs-docview-h h2{font-size:19px;font-weight:600;letter-spacing:-.01em;margin:0}
+.v3fs-docview-m{font-family:var(--v3-font-mono);font-size:10.5px;color:var(--v3-text-muted);display:block;margin-top:4px}
+.v3fs-docview-cta{display:flex;gap:8px;flex-shrink:0}
+.v3fs-docview-b{overflow-y:auto;padding:20px 26px 28px;font-size:13.5px;line-height:1.75;max-width:100%}
+.v3fs-docview-b p{margin:0 0 14px;white-space:pre-wrap;overflow-wrap:break-word}
+
 /* "While you were away" — Today's transport-free digest strip. */
 .v3fs-away{font-size:12.5px;line-height:1.6;border:1px solid var(--fs-line);border-left:3px solid var(--v3-accent-b);border-radius:12px;padding:12px 16px;background:var(--fs-blue-wash);color:var(--v3-text-primary)}
 .v3fs-away b{font-weight:700}
