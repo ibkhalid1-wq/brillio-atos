@@ -44,6 +44,9 @@ interface FlowShellProps {
   onMintPacks: () => Promise<void>;
   /** Mint demo links from the Demo Scripts. */
   onMintDemoInvites: () => Promise<void>;
+  /** Compile the ship plan from the blueprint. */
+  onCompileShipLanes: () => Promise<void>;
+  onToggleShipItem: (laneId: string, itemId: string) => Promise<void>;
   /** Confirm a quarantined portal response into evidence. */
   onIngestPortalItem: (itemId: string) => Promise<void>;
   onDismissPortalItem: (itemId: string) => Promise<void>;
@@ -153,7 +156,7 @@ export default function FlowShell(props: FlowShellProps) {
             onIngestPortalItem={props.onIngestPortalItem} onDismissPortalItem={props.onDismissPortalItem}
             onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
         ) : view === "flow" ? (
-          <FlowCanvas program={program} runningAgentIds={props.runningAgentIds} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} />
+          <FlowCanvas program={program} runningAgentIds={props.runningAgentIds} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} onCompileShipLanes={props.onCompileShipLanes} onToggleShipItem={props.onToggleShipItem} />
         ) : view === "tracks" ? (
           <FlowTracks
             program={program}

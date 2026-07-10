@@ -13508,6 +13508,14 @@ html:not([data-theme="light"]) .v3fs-node{border-top-color:var(--v3-border-top)}
 .v3fs-portal-verdict.on{border-color:var(--v3-accent-2);background:var(--fs-indigo-wash);font-weight:600}
 .v3fs-evitem .v3fs-dec-s{font-style:italic}
 
+/* Ship lanes: the plan as a working board inside the movement. */
+.v3fs-shipboard{display:flex;flex-direction:column;gap:12px}
+.v3fs-shiplane-t{display:flex;justify-content:space-between;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--v3-accent-2);margin-bottom:4px}
+.v3fs-shiplane-t span{font-family:var(--v3-font-mono);font-weight:500;letter-spacing:0;color:var(--v3-text-muted)}
+.v3fs-shipitem{display:flex;align-items:flex-start;gap:8px;font-size:12px;line-height:1.5;padding:3px 0;cursor:pointer}
+.v3fs-shipitem input{margin-top:2px;accent-color:var(--v3-accent-2)}
+.v3fs-shipitem.done span{color:var(--v3-text-muted);text-decoration:line-through;text-decoration-color:color-mix(in srgb,var(--v3-text-muted) 55%,transparent)}
+
 /* Mission Control: fleet, budgets, guardrails, the searchable trail. */
 .v3fs-halt-banner{display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px solid rgba(220,38,38,.35);border-left:3px solid var(--v3-red,#dc2626);border-radius:14px;padding:14px 18px;font-size:13px;font-weight:600;background:rgba(220,38,38,.06)}
 .v3fs-ph-sub{margin-top:14px}

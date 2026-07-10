@@ -11,6 +11,7 @@ import type { ProgramSummary } from "@/new/types";
 import { getMethodology, type PhaseDefinition } from "@/v3/lib/methodology";
 import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
 import { getFormalArtifactContent, getFormalArtifactConfidence } from "@/v3/lib/formalArtifacts";
+import { listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 
 export interface EvidenceEntry {
   movementId: string;
@@ -209,6 +210,16 @@ export function gateSignal(program: ProgramSummary, movement: PhaseDefinition, a
     return accepted < total
       ? { tone: "amber", text: `${accepted}/${total} demos accepted` }
       : { tone: "green", text: `Every stakeholder accepted` };
+  }
+  if (movement.id === "ship") {
+    const lanes = listShipLanes(program);
+    if (lanes.length) {
+      const progress = shipLaneProgress(lanes);
+      if (progress.validationDone && progress.cutoverDone) {
+        return { tone: "green", text: "Eval suite green and cutover executed" };
+      }
+      return { tone: "amber", text: `${progress.done}/${progress.total} ship items done` };
+    }
   }
   const present = artifacts.filter((a) => a.present).length;
   if (present === 0) return { tone: "dim", text: "Nothing generated yet" };

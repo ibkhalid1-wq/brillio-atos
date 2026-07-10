@@ -55,6 +55,7 @@ import { resolveFlowDecision } from "@/v3/components/flow/flowDecisions";
 import { recordShowPass, addFlowTrack } from "@/v3/components/flow/flowTracks";
 import { setHaltAll, toggleAgentHalt, setMovementBudget } from "@/v3/components/flow/flowGovernance";
 import { mintInterviewPacks, mintDemoInvites, ingestPortalResponse, dismissPortalResponse } from "@/v3/components/flow/flowPortal";
+import { compileShipLanes, toggleShipItem } from "@/v3/components/flow/flowShip";
 import FlowRespond from "@/v3/components/flow/FlowRespond";
 import { reportError } from "@/lib/errorReporter";
 import { sanitizeMarkdown } from "@/lib/sanitize";
@@ -3475,6 +3476,14 @@ export default function AppShellV3() {
           onMintDemoInvites={async () => {
             const actor = currentUser?.email || "you";
             await persistFlowMutation((program) => mintDemoInvites(program, actor));
+          }}
+          onCompileShipLanes={async () => {
+            const actor = currentUser?.email || "you";
+            await persistFlowMutation((program) => compileShipLanes(program, actor));
+          }}
+          onToggleShipItem={async (laneId, itemId) => {
+            const actor = currentUser?.email || "you";
+            await persistFlowMutation((program) => toggleShipItem(program, laneId, itemId, actor));
           }}
           onIngestPortalItem={async (itemId) => {
             const actor = currentUser?.email || "you";
