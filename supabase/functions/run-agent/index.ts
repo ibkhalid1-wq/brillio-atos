@@ -8495,7 +8495,16 @@ Deno.serve(async (req) => {
       // them stale when evidence changes. Classic programmes are untouched.
       if (!autonomy.shouldQueueReview && isFlowProgramme(nextProgramData)) {
         if (formalSpecForRun) {
-          nextProgramData = stampFlowArtifactFingerprint(nextProgramData, formalSpecForRun.phase, request.agentId);
+          // Stamp on the MOVEMENT the run was invoked for (request.phaseId),
+          // not the artifact's classic ledger home (formalSpecForRun.phase may
+          // be e.g. "strategy" for the charter): the Flow client reads stubs
+          // from phaseArtifacts[movement] and fingerprints that movement's
+          // inputs, so stamp and comparison must name the same bucket.
+          nextProgramData = stampFlowArtifactFingerprint(
+            nextProgramData,
+            request.phaseId || formalSpecForRun.phase,
+            request.agentId,
+          );
         }
         nextProgramData = appendFlowAttestation(nextProgramData, {
           agentId: request.agentId,
