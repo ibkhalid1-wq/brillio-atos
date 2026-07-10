@@ -326,6 +326,9 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
   const [followDate, setFollowDate] = useState("");
   const [scheduledTick, setScheduledTick] = useState(false);
   const [linkTick, setLinkTick] = useState(false);
+  const [docName, setDocName] = useState("");
+  const [docText, setDocText] = useState("");
+  const [docTick, setDocTick] = useState(false);
 
   if (!kit) {
     return hasEvidence ? null : (
@@ -362,6 +365,30 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
     } finally {
       setBusy(false);
     }
+  };
+
+  // Documents referenced in the conversation are evidence too — ingested
+  // beside the transcript under their own attributed header, so every
+  // generator reads them with the same grounding.
+  const saveDoc = async () => {
+    const name = docName.trim();
+    const text = docText.trim();
+    if (!name || !text) return;
+    setBusy(true);
+    try {
+      const raw = (program.rawData ?? {}) as Record<string, unknown>;
+      const inner = typeof raw.data === "object" && raw.data !== null ? raw.data as Record<string, unknown> : raw;
+      const bucket = typeof inner.phaseInputs === "object" && inner.phaseInputs !== null
+        ? (inner.phaseInputs as Record<string, Record<string, unknown>>)[movementId] ?? {}
+        : {};
+      const existing = typeof bucket[kit.captureField] === "string" ? bucket[kit.captureField] as string : "";
+      const block = `— Document: ${name}, provided by ${kit.who}, ${new Date().toISOString().slice(0, 10)} —\n${text}`;
+      await onSaveInputs(movementId, { [kit.captureField]: [existing.trimEnd(), block].filter(Boolean).join("\n\n") });
+      setDocName("");
+      setDocText("");
+      setDocTick(true);
+      window.setTimeout(() => setDocTick(false), 2200);
+    } finally { setBusy(false); }
   };
 
   const copyScript = async () => {
@@ -409,6 +436,8 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
       </summary>
       <div className="v3fs-kit-b">
         <p className="v3fs-kit-p">{kit.purpose}</p>
+        <div className="v3fs-kit-step"><b>1</b><span>Engage <strong>{kit.who}</strong>{kit.followUp ? " — the loop continues until every element is captured" : ""}</span></div>
+        <div className="v3fs-kit-step"><b>2</b><span>Run the script live — or send it as a link and ATOS asks for you</span></div>
         <ol className="v3fs-kit-qs">
           {kit.questions.map((question, index) => <li key={index}>{question}</li>)}
         </ol>
@@ -416,7 +445,9 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
           <button type="button" className="v3fs-a" onClick={() => void copyScript()}>{copied ? "Copied ✓" : "Copy the script"}</button>
         </div>
         {kit.followUp && (onScheduleFollowUp || onMintFollowUp) ? (
-          <div className="v3fs-kit-fu-row">
+          <>
+            <div className="v3fs-kit-step"><b>4</b><span>Close the loop — iterate until every required element is captured</span></div>
+            <div className="v3fs-kit-fu-row">
             {onScheduleFollowUp ? (
               <>
                 <input type="date" value={followDate} onChange={(event) => setFollowDate(event.target.value)} aria-label="Follow-up date" />
@@ -431,8 +462,10 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
               </button>
             ) : null}
             <span className="v3fs-kit-fu-note">No meeting needed — ATOS asks these itself and the answers arrive in the Inbox.</span>
-          </div>
+            </div>
+          </>
         ) : null}
+        <div className="v3fs-kit-step"><b>3</b><span>Capture what came back — transcript first, then any documents they referenced</span></div>
         <div className="v3fs-kit-capture">
           <textarea
             rows={3}
@@ -444,6 +477,16 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
           <button type="button" className="v3fs-btn pri" disabled={busy || !capture.trim()} onClick={() => void save()}>
             {busy ? "Saving…" : savedTick ? "Captured ✓" : "Capture"}
           </button>
+          <div className="v3fs-kit-docrow">
+            <input value={docName} onChange={(event) => setDocName(event.target.value)}
+              placeholder="Referenced document — name it (e.g. Q2 pricing export)" aria-label="Document name" />
+            <textarea rows={2} value={docText} onChange={(event) => setDocText(event.target.value)}
+              placeholder="Paste the document's content — ATOS ingests it as evidence beside the conversation." aria-label="Document content" />
+            <button type="button" className="v3fs-btn" disabled={busy || !docName.trim() || !docText.trim()}
+              onClick={() => void saveDoc()}>
+              {docTick ? "Ingested ✓" : "Ingest the document"}
+            </button>
+          </div>
         </div>
       </div>
     </details>

@@ -13550,6 +13550,13 @@ html:not([data-theme="light"]) .v3fs-node{border-top-color:var(--v3-border-top)}
 .v3fs-kit-qs li{font-size:12.5px;line-height:1.55}
 .v3fs-kit-qs li::marker{color:var(--fs-quote);font-weight:700}
 .v3fs-kit-actions{margin-bottom:10px}
+.v3fs-kit-step{display:flex;align-items:flex-start;gap:9px;font-size:11.5px;line-height:1.5;color:var(--v3-text-muted);margin:0 0 8px}
+.v3fs-kit-step b{flex-shrink:0;width:18px;height:18px;border-radius:99px;background:var(--fs-indigo-wash);color:var(--v3-accent-2);font-size:10px;display:grid;place-items:center}
+.v3fs-kit-step strong{color:var(--v3-text-primary)}
+.v3fs-kit-docrow{display:flex;flex-direction:column;gap:6px;border-top:1px dashed var(--fs-line);padding-top:10px}
+.v3fs-kit-docrow input{font:inherit;font-size:12px;border:1px solid var(--fs-line);border-radius:8px;padding:7px 10px;background:var(--fs-card);color:var(--v3-text-primary)}
+.v3fs-kit-docrow textarea{font:inherit;font-size:12px;line-height:1.5;border:1px solid var(--fs-line);border-radius:8px;padding:7px 10px;background:var(--fs-card);color:var(--v3-text-primary);resize:vertical}
+.v3fs-kit-docrow .v3fs-btn{align-self:flex-start}
 .v3fs-kit-capture{display:flex;flex-direction:column;gap:8px;border-top:1px dashed var(--fs-line);padding-top:12px}
 .v3fs-kit-capture textarea{font:inherit;font-size:12.5px;line-height:1.55;border:1px solid var(--fs-line);border-radius:10px;padding:9px 11px;background:var(--v3-surface-2);color:var(--v3-text-primary);resize:vertical;min-height:56px}
 .v3fs-kit-capture textarea:focus{outline:2px solid var(--v3-accent-2);outline-offset:1px}
