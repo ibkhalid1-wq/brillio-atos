@@ -49,6 +49,10 @@ interface FlowShellProps {
   onToggleShipItem: (laneId: string, itemId: string) => Promise<void>;
   /** Hydrate every programme's full blob (Portfolio needs all of them). */
   onHydratePrograms: () => Promise<void>;
+  /** Put a gap-closing follow-up on the calendar. */
+  onScheduleFollowUp: (movementId: string, who: string, date: string) => Promise<void>;
+  /** Mint a follow-up link (ATOS asks the gaps itself); resolves to the URL. */
+  onMintFollowUp: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
   /** Confirm a quarantined portal response into evidence. */
   onIngestPortalItem: (itemId: string) => Promise<void>;
   onDismissPortalItem: (itemId: string) => Promise<void>;
@@ -70,6 +74,18 @@ export default function FlowShell(props: FlowShellProps) {
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const days = daysToFirstDemo(program);
   const openDecisions = listOpenFlowDecisions(program);
+  // "Start here" — one prominent pointer at the right entry: Today when
+  // anything waits on the user, the canvas otherwise. Dismissed for the
+  // session the moment they go there.
+  const waitingCount = openDecisions.length + listPortalInbox(program).length;
+  const startId: FlowView = waitingCount > 0 ? "today" : "flow";
+  const [startSeen, setStartSeen] = useState<boolean>(() => {
+    try { return window.sessionStorage.getItem("v3fs-start-seen") === "1"; } catch { return true; }
+  });
+  const dismissStart = () => {
+    setStartSeen(true);
+    try { window.sessionStorage.setItem("v3fs-start-seen", "1"); } catch { /* ignore */ }
+  };
 
   // The switcher dismisses like a menu should: backdrop click or Escape.
   useEffect(() => {
@@ -95,9 +111,16 @@ export default function FlowShell(props: FlowShellProps) {
           <span className="v3fs-brand-caret" aria-hidden="true">▾</span>
         </button>
         {([["today", "◈", "Today"], ["flow", "⟶", "Flow"], ["tracks", "▤", "Tracks"], ["library", "◫", "Library"], ["pulse", "◉", "Pulse"], ["mission", "⌘", "Mission"], ["portfolio", "⊞", "Portfolio"]] as const).map(([id, icon, label]) => (
-          <button key={id} type="button" className={view === id ? "on" : ""} onClick={() => { setView(id); window.scrollTo({ top: 0 }); }}>
-            {id === "today" && openDecisions.length > 0 ? <span className="v3fs-dock-n">{openDecisions.length}</span> : null}
+          <button key={id} type="button" className={view === id ? "on" : ""}
+            onClick={() => { setView(id); window.scrollTo({ top: 0 }); if (id === startId) dismissStart(); }}>
+            {id === "today" && waitingCount > 0 ? <span className="v3fs-dock-n">{waitingCount}</span> : null}
             <span className="v3fs-ric" aria-hidden="true">{icon}</span><span className="v3fs-rlb">{label}</span>
+            {id === startId && !startSeen && view !== startId ? (
+              <span className="v3fs-start" role="status">
+                <span className="v3fs-start-a" aria-hidden="true">◀</span>
+                Start here{startId === "today" ? ` — ${waitingCount} waiting` : ""}
+              </span>
+            ) : null}
           </button>
         ))}
         <div className="v3fs-dock-sep" aria-hidden="true" />
@@ -159,7 +182,7 @@ export default function FlowShell(props: FlowShellProps) {
             onIngestPortalItem={props.onIngestPortalItem} onDismissPortalItem={props.onDismissPortalItem}
             onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
         ) : view === "flow" ? (
-          <FlowCanvas program={program} runningAgentIds={props.runningAgentIds} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} onCompileShipLanes={props.onCompileShipLanes} onToggleShipItem={props.onToggleShipItem} />
+          <FlowCanvas program={program} runningAgentIds={props.runningAgentIds} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} onCompileShipLanes={props.onCompileShipLanes} onToggleShipItem={props.onToggleShipItem} onScheduleFollowUp={props.onScheduleFollowUp} onMintFollowUp={props.onMintFollowUp} />
         ) : view === "tracks" ? (
           <FlowTracks
             program={program}

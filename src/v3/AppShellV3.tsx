@@ -56,6 +56,8 @@ import { recordShowPass, addFlowTrack } from "@/v3/components/flow/flowTracks";
 import { setHaltAll, toggleAgentHalt, setMovementBudget } from "@/v3/components/flow/flowGovernance";
 import { mintInterviewPacks, mintDemoInvites, ingestPortalResponse, dismissPortalResponse } from "@/v3/components/flow/flowPortal";
 import { compileShipLanes, toggleShipItem } from "@/v3/components/flow/flowShip";
+import { scheduleFollowUp } from "@/v3/components/flow/flowMeetings";
+import { mintFollowUpPack } from "@/v3/components/flow/flowPortal";
 import FlowRespond from "@/v3/components/flow/FlowRespond";
 import { reportError } from "@/lib/errorReporter";
 import { sanitizeMarkdown } from "@/lib/sanitize";
@@ -3487,6 +3489,29 @@ export default function AppShellV3() {
           }}
           onHydratePrograms={async () => {
             await hydratePrograms(programs.map((entry) => entry.id));
+          }}
+          onScheduleFollowUp={async (movementId, who, date) => {
+            const actor = currentUser?.email || "you";
+            await persistFlowMutation((program) => scheduleFollowUp(program, movementId, who, date, actor));
+          }}
+          onMintFollowUp={async (input) => {
+            const actor = currentUser?.email || "you";
+            let mintedLink: string | null = null;
+            await persistFlowMutation((program) => {
+              const blob = mintFollowUpPack(program, input, actor);
+              if (blob) {
+                // Lift the fresh token out of the blob being persisted so the
+                // caller can hand the link over immediately.
+                const inner = (typeof blob.data === "object" && blob.data !== null ? blob.data : blob) as Record<string, unknown>;
+                const packs = Array.isArray(inner.flowInterviewPacks) ? inner.flowInterviewPacks : [];
+                const last = packs[packs.length - 1] as Record<string, unknown> | undefined;
+                if (last && typeof last.token === "string") {
+                  mintedLink = `${window.location.origin}${window.location.pathname}?flowRespond=${encodeURIComponent(`${program.id}.${last.token}`)}`;
+                }
+              }
+              return blob;
+            });
+            return mintedLink;
           }}
           onIngestPortalItem={async (itemId) => {
             const actor = currentUser?.email || "you";

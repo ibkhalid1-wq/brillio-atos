@@ -13555,6 +13555,19 @@ html:not([data-theme="light"]) .v3fs-node{border-top-color:var(--v3-border-top)}
 .v3fs-kit-capture textarea:focus{outline:2px solid var(--v3-accent-2);outline-offset:1px}
 .v3fs-kit-capture .v3fs-btn{align-self:flex-start}
 
+/* Follow-ups: the kit turns amber and offers the calendar or the link. */
+.v3fs-kit-fu{border-left-color:var(--v3-amber)}
+.v3fs-kit-fu-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;border-top:1px dashed var(--fs-line);padding-top:12px;margin-bottom:10px}
+.v3fs-kit-fu-row input[type="date"]{font:inherit;font-size:11.5px;border:1px solid var(--fs-line);border-radius:8px;padding:6px 9px;background:var(--fs-card);color:var(--v3-text-primary)}
+.v3fs-kit-fu-note{flex-basis:100%;font-size:10.5px;color:var(--v3-text-muted)}
+
+/* "Start here" — the one arrow that says where to begin. */
+.v3fs-start{position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:6px;white-space:nowrap;background:linear-gradient(135deg,#4f46e5,var(--v3-accent-2));color:#fff;font-size:11.5px;font-weight:700;letter-spacing:.01em;border-radius:999px;padding:7px 14px;box-shadow:0 8px 24px -8px rgba(79,70,229,.55);pointer-events:none;z-index:5}
+.v3fs-start-a{display:inline-block;animation:v3fs-start-nudge 1.1s ease-in-out infinite}
+@keyframes v3fs-start-nudge{0%,100%{transform:translateX(0)}50%{transform:translateX(-4px)}}
+@media (prefers-reduced-motion:reduce){.v3fs-start-a{animation:none}}
+@media (max-width:960px){.v3fs-start{left:50%;top:calc(100% + 8px);transform:translateX(-50%)}}
+
 /* The gate as a checklist — criteria check themselves off as data lands. */
 .v3fs-checks{display:flex;flex-direction:column;gap:2px;margin:10px 0 12px}
 .v3fs-check{font:inherit;display:flex;align-items:flex-start;gap:9px;text-align:left;background:none;border:none;padding:4px 6px;margin:0 -6px;border-radius:8px;cursor:default}

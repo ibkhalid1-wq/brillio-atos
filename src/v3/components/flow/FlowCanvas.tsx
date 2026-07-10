@@ -43,6 +43,10 @@ interface FlowCanvasProps {
   onCompileShipLanes?: () => Promise<void>;
   /** Toggle one ship-lane item. */
   onToggleShipItem?: (laneId: string, itemId: string) => Promise<void>;
+  /** Put a gap-closing follow-up on the calendar. */
+  onScheduleFollowUp?: (movementId: string, who: string, date: string) => Promise<void>;
+  /** Mint a follow-up link (async form of the meeting); resolves to the URL. */
+  onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
 }
 
 /**
@@ -53,7 +57,7 @@ interface FlowCanvasProps {
  * coloured). Nothing locks; editing unfolds in place via the shared inputs
  * panel, so the canvas is the workspace, not a dashboard about one.
  */
-export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem }: FlowCanvasProps) {
+export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onScheduleFollowUp, onMintFollowUp }: FlowCanvasProps) {
   const movements = useMemo(() => flowMovements(), []);
   const frontier = frontierMovementId(program);
   const [open, setOpen] = useState<Set<string>>(() => new Set([frontier]));
@@ -135,6 +139,8 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                     hasEvidence={evidence.length > 0}
                     program={program}
                     onSaveInputs={onSaveInputs}
+                    onScheduleFollowUp={onScheduleFollowUp}
+                    onMintFollowUp={onMintFollowUp}
                   />
                   {evidence.length === 0 ? null : evidence.map((entry, i) => (
                     <div key={`${entry.fieldLabel}-${i}`} className="v3fs-voice">
@@ -286,17 +292,22 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
  * Open by default when the conversation hasn't happened; a quiet one-line
  * summary once it has.
  */
-function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs }: {
+function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, onScheduleFollowUp, onMintFollowUp }: {
   kit: MeetingKit | null;
   movementId: string;
   hasEvidence: boolean;
   program: ProgramSummary;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean }) => Promise<void>;
+  onScheduleFollowUp?: (movementId: string, who: string, date: string) => Promise<void>;
+  onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
 }) {
   const [capture, setCapture] = useState("");
   const [busy, setBusy] = useState(false);
   const [savedTick, setSavedTick] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [followDate, setFollowDate] = useState("");
+  const [scheduledTick, setScheduledTick] = useState(false);
+  const [linkTick, setLinkTick] = useState(false);
 
   if (!kit) {
     return hasEvidence ? null : (
@@ -344,13 +355,37 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs }:
     } catch { window.prompt("Copy the script:", script); }
   };
 
+  const schedule = async () => {
+    if (!onScheduleFollowUp || !followDate) return;
+    setBusy(true);
+    try {
+      await onScheduleFollowUp(movementId, kit.who, followDate);
+      setFollowDate("");
+      setScheduledTick(true);
+      window.setTimeout(() => setScheduledTick(false), 2200);
+    } finally { setBusy(false); }
+  };
+
+  const sendLink = async () => {
+    if (!onMintFollowUp) return;
+    setBusy(true);
+    try {
+      const link = await onMintFollowUp({ movementId, who: kit.who, questions: kit.questions, captureField: kit.captureField });
+      if (link) {
+        try { await navigator.clipboard.writeText(link); } catch { window.prompt("Copy the follow-up link:", link); }
+        setLinkTick(true);
+        window.setTimeout(() => setLinkTick(false), 2200);
+      }
+    } finally { setBusy(false); }
+  };
+
   return (
-    <details className="v3fs-kit" open={!kit.done && !hasEvidence}>
+    <details className={`v3fs-kit${kit.followUp ? " v3fs-kit-fu" : ""}`} open={(!kit.done && !hasEvidence) || kit.followUp}>
       <summary>
-        <span className={`v3fs-st ${kit.done ? "ok" : "none"}`} />
+        <span className={`v3fs-st ${kit.followUp ? "stale" : kit.done ? "ok" : "none"}`} />
         <span className="v3fs-kit-t">
           {kit.title}
-          <span className="v3fs-kit-who">{kit.who}{kit.done ? " · on record" : ""}</span>
+          <span className="v3fs-kit-who">{kit.who}{kit.followUp ? ` · ${kit.gaps.length} gap${kit.gaps.length === 1 ? "" : "s"} to close` : kit.done ? " · on record" : ""}</span>
         </span>
         <span className="v3fs-disc-c" aria-hidden="true" />
       </summary>
@@ -362,6 +397,24 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs }:
         <div className="v3fs-kit-actions">
           <button type="button" className="v3fs-a" onClick={() => void copyScript()}>{copied ? "Copied ✓" : "Copy the script"}</button>
         </div>
+        {kit.followUp && (onScheduleFollowUp || onMintFollowUp) ? (
+          <div className="v3fs-kit-fu-row">
+            {onScheduleFollowUp ? (
+              <>
+                <input type="date" value={followDate} onChange={(event) => setFollowDate(event.target.value)} aria-label="Follow-up date" />
+                <button type="button" className="v3fs-btn" disabled={busy || !followDate} onClick={() => void schedule()}>
+                  {scheduledTick ? "Scheduled ✓" : "Schedule the follow-up"}
+                </button>
+              </>
+            ) : null}
+            {onMintFollowUp ? (
+              <button type="button" className="v3fs-btn" disabled={busy} onClick={() => void sendLink()}>
+                {linkTick ? "Link copied ✓" : "✳ Send as a link"}
+              </button>
+            ) : null}
+            <span className="v3fs-kit-fu-note">No meeting needed — ATOS asks these itself and the answers arrive in Today.</span>
+          </div>
+        ) : null}
         <div className="v3fs-kit-capture">
           <textarea
             rows={3}
