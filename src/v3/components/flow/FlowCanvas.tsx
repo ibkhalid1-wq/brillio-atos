@@ -3,9 +3,10 @@ import type { ProgramSummary } from "@/new/types";
 import PhaseInputsPanel from "@/v3/components/PhaseInputsPanel";
 import {
   flowMovements, frontierMovementId, movementEvidence, movementArtifacts,
-  gateSignal, listenCoverage, movementFacts, demoAcceptance, artifactDocument,
+  gateSignal, gateChecklist, listenCoverage, movementFacts, demoAcceptance, artifactDocument,
   type ArtifactCardModel,
 } from "@/v3/components/flow/flowShellData";
+import { meetingKit, type MeetingKit } from "@/v3/components/flow/flowMeetings";
 import { listInterviewPacks, listDemoInvites, portalLinkFor } from "@/v3/components/flow/flowPortal";
 import { listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 
@@ -128,11 +129,14 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
               <div className="v3fs-ch-b">
                 <div>
                   <div className="v3fs-colh ev">Stakeholder evidence{coverage && coverage.total ? ` — ${coverage.done}/${coverage.total}` : ""}</div>
-                  {evidence.length === 0 ? (
-                    <div className="v3fs-voice-ghost">
-                      No evidence captured for this movement yet. Open the editor below to add it.
-                    </div>
-                  ) : evidence.map((entry, i) => (
+                  <MeetingKitCard
+                    kit={meetingKit(program, movement.id)}
+                    movementId={movement.id}
+                    hasEvidence={evidence.length > 0}
+                    program={program}
+                    onSaveInputs={onSaveInputs}
+                  />
+                  {evidence.length === 0 ? null : evidence.map((entry, i) => (
                     <div key={`${entry.fieldLabel}-${i}`} className="v3fs-voice">
                       {entry.excerpt ? <div className="v3fs-voice-q">“{entry.excerpt}”</div> : null}
                       <div className="v3fs-voice-who">
@@ -203,14 +207,40 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                   <div className={`v3fs-colh gt${isDone ? " done" : ""}`}>{isLoop ? "Steady-state health" : "Gate criteria"}</div>
                   <div className="v3fs-gate">
                     <p className="v3fs-gate-say">{movement.movement?.readyWhen ?? ""}</p>
-                    <div className={`v3fs-sig ${signal.tone}`}>
-                      {signal.tone === "green" ? "✓ " : signal.tone === "amber" ? "⚠ " : ""}{signal.text}
-                    </div>
-                    {!isDone ? (
-                      <button type="button" className="v3fs-cta" onClick={() => openEditor(movement.id, GATE_CTA_FIELD[movement.id])}>
-                        {GATE_CTA[movement.id] ?? "Update inputs & evidence"}
-                      </button>
-                    ) : null}
+                    {(() => {
+                      const checks = gateChecklist(program, movement, artifacts);
+                      const done = checks.filter((item) => item.done).length;
+                      const firstOpen = checks.find((item) => !item.done);
+                      return (
+                        <>
+                          <div className={`v3fs-sig ${signal.tone}`}>
+                            {signal.tone === "green" ? "✓ " : signal.tone === "amber" ? "⚠ " : ""}
+                            {checks.length ? `${done} of ${checks.length} criteria met` : signal.text}
+                          </div>
+                          <div className="v3fs-checks">
+                            {checks.map((item) => (
+                              <button
+                                key={item.id}
+                                type="button"
+                                className={`v3fs-check${item.done ? " done" : ""}`}
+                                disabled={item.done || !item.anchor}
+                                onClick={item.anchor ? () => openEditor(movement.id, item.anchor) : undefined}
+                                title={item.done ? "Met" : item.anchor ? "Open the editor on this item" : "Met by generating / working the movement"}
+                              >
+                                <span className="v3fs-check-box" aria-hidden="true">{item.done ? "✓" : ""}</span>
+                                <span className="v3fs-check-l">{item.label}</span>
+                              </button>
+                            ))}
+                          </div>
+                          {!isDone ? (
+                            <button type="button" className="v3fs-cta"
+                              onClick={() => openEditor(movement.id, firstOpen?.anchor ?? GATE_CTA_FIELD[movement.id])}>
+                              {firstOpen && firstOpen.anchor ? firstOpen.label : GATE_CTA[movement.id] ?? "Update inputs & evidence"}
+                            </button>
+                          ) : null}
+                        </>
+                      );
+                    })()}
                     {movement.movement?.humanMoments?.length ? (
                       <details className="v3fs-disc v3fs-disc-sm">
                         <summary>
@@ -246,6 +276,106 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
         />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * The meeting kit — if the input is a conversation, hand the user the
+ * conversation: who to sit with, the script to run (derived from missing
+ * facts and generated agendas), and capture right where the script is.
+ * Open by default when the conversation hasn't happened; a quiet one-line
+ * summary once it has.
+ */
+function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs }: {
+  kit: MeetingKit | null;
+  movementId: string;
+  hasEvidence: boolean;
+  program: ProgramSummary;
+  onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean }) => Promise<void>;
+}) {
+  const [capture, setCapture] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [savedTick, setSavedTick] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  if (!kit) {
+    return hasEvidence ? null : (
+      <div className="v3fs-kit v3fs-kit-ghost">
+        The script for this movement's conversations arrives with the upstream artifact — generate it and the kit appears here.
+      </div>
+    );
+  }
+
+  const save = async () => {
+    const text = capture.trim();
+    if (!text) return;
+    setBusy(true);
+    try {
+      const existing = (program.rawData && typeof program.rawData === "object"
+        ? (() => {
+            const raw = program.rawData as Record<string, unknown>;
+            const inner = typeof raw.data === "object" && raw.data !== null ? raw.data as Record<string, unknown> : raw;
+            const bucket = typeof inner.phaseInputs === "object" && inner.phaseInputs !== null
+              ? (inner.phaseInputs as Record<string, Record<string, unknown>>)[movementId] ?? {}
+              : {};
+            const value = bucket[kit.captureField];
+            return typeof value === "string" ? value : "";
+          })()
+        : "");
+      const block = kit.header ? `${kit.header}\n${text}` : text;
+      const next = kit.header
+        ? [existing.trimEnd(), block].filter(Boolean).join("\n\n")
+        : text; // single-line refs (go/no-go) replace rather than append
+      await onSaveInputs(movementId, { [kit.captureField]: next });
+      setCapture("");
+      setSavedTick(true);
+      window.setTimeout(() => setSavedTick(false), 2200);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copyScript = async () => {
+    const script = [`${kit.title} — ${kit.who}`, kit.purpose, "", ...kit.questions.map((q, i) => `${i + 1}. ${q}`)].join("\n");
+    try {
+      await navigator.clipboard.writeText(script);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch { window.prompt("Copy the script:", script); }
+  };
+
+  return (
+    <details className="v3fs-kit" open={!kit.done && !hasEvidence}>
+      <summary>
+        <span className={`v3fs-st ${kit.done ? "ok" : "none"}`} />
+        <span className="v3fs-kit-t">
+          {kit.title}
+          <span className="v3fs-kit-who">{kit.who}{kit.done ? " · on record" : ""}</span>
+        </span>
+        <span className="v3fs-disc-c" aria-hidden="true" />
+      </summary>
+      <div className="v3fs-kit-b">
+        <p className="v3fs-kit-p">{kit.purpose}</p>
+        <ol className="v3fs-kit-qs">
+          {kit.questions.map((question, index) => <li key={index}>{question}</li>)}
+        </ol>
+        <div className="v3fs-kit-actions">
+          <button type="button" className="v3fs-a" onClick={() => void copyScript()}>{copied ? "Copied ✓" : "Copy the script"}</button>
+        </div>
+        <div className="v3fs-kit-capture">
+          <textarea
+            rows={3}
+            placeholder={kit.header ? `${kit.captureLabel} — attribution added for you (${kit.header})` : kit.captureLabel}
+            value={capture}
+            onChange={(event) => setCapture(event.target.value)}
+            aria-label={kit.captureLabel}
+          />
+          <button type="button" className="v3fs-btn pri" disabled={busy || !capture.trim()} onClick={() => void save()}>
+            {busy ? "Saving…" : savedTick ? "Captured ✓" : "Capture"}
+          </button>
+        </div>
+      </div>
+    </details>
   );
 }
 

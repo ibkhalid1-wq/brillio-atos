@@ -234,6 +234,92 @@ export function gateSignal(program: ProgramSummary, movement: PhaseDefinition, a
     : { tone: "green", text: `All ${artifacts.length} artifacts generated` };
 }
 
+export interface GateCheckItem {
+  id: string;
+  label: string;
+  done: boolean;
+  /** Editor field to land on when the item is worked (input:<fieldId>). */
+  anchor?: string;
+}
+
+/**
+ * The gate as a CHECKLIST — every criterion a discrete element that checks
+ * itself off as the data lands. Derived, never hand-ticked: the list reads
+ * from the same state the artifacts and ledgers write.
+ */
+export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition, artifacts: ArtifactCardModel[]): GateCheckItem[] {
+  const inputs = readMovementInputs(program, movement.id);
+  const has = (fieldId: string) => typeof inputs[fieldId] === "string" && (inputs[fieldId] as string).trim().length > 0;
+  const inner = dataRoot(program);
+  const items: GateCheckItem[] = [];
+  const artifactItems = () => artifacts.map((artifact) => ({
+    id: `art-${artifact.id}`,
+    label: artifact.stale ? `${artifact.title} regenerated after the latest evidence` : `${artifact.title} generated`,
+    done: artifact.present && !artifact.stale,
+  }));
+
+  if (movement.id === "frame") {
+    items.push(
+      { id: "conv", label: "Sponsor conversation on record", done: has("sponsorConversation"), anchor: "input:sponsorConversation" },
+      { id: "objective", label: "Business objective captured", done: has("businessObjective"), anchor: "input:businessObjective" },
+      { id: "sponsor", label: "Sponsor named", done: has("sponsor"), anchor: "input:sponsor" },
+      { id: "metric", label: "Success measure set", done: has("successMetric"), anchor: "input:successMetric" },
+      { id: "demo-date", label: "First-demonstration date set", done: has("targetFirstDemoDate"), anchor: "input:targetFirstDemoDate" },
+      ...artifactItems(),
+    );
+  } else if (movement.id === "listen") {
+    const coverage = listenCoverage(program);
+    const contradictions = parseGridRows(inputs.contradictionLog);
+    items.push(
+      { id: "mapped", label: "Voices mapped in the coverage ledger", done: coverage.total > 0, anchor: "input:interviewRoster" },
+      { id: "heard", label: coverage.total ? `Every voice heard or waived (${coverage.done}/${coverage.total})` : "Every voice heard or waived", done: coverage.total > 0 && coverage.done >= coverage.total, anchor: "input:interviewRoster" },
+      { id: "contradictions", label: "Contradictions resolved or logged", done: contradictions.every((row) => !/open/i.test(row.status ?? "")), anchor: "input:contradictionLog" },
+      ...artifactItems(),
+    );
+  } else if (movement.id === "envision") {
+    items.push(
+      ...artifactItems(),
+      { id: "direction", label: "Direction chosen on the record", done: has("directionDecision") || has("steeringConversation"), anchor: "input:directionDecision" },
+      { id: "tracks", label: "Track plan adopted", done: Array.isArray(inner.tracks) && (inner.tracks as unknown[]).length > 0 },
+    );
+  } else if (movement.id === "show") {
+    const tour = demoAcceptance(program);
+    items.push(
+      { id: "proto", label: "Prototype running somewhere named", done: has("prototypeLocation"), anchor: "input:prototypeLocation" },
+      ...artifactItems(),
+      { id: "tour", label: "A demo row for every voice", done: tour.total > 0, anchor: "input:demoTour" },
+      { id: "verdicts", label: tour.total ? `Every stakeholder accepted (${tour.accepted}/${tour.total})` : "Every stakeholder accepted", done: tour.total > 0 && tour.accepted >= tour.total, anchor: "input:demoTour" },
+    );
+  } else if (movement.id === "ship") {
+    const lanesDoc = inner.shipLanes;
+    const lanes = lanesDoc && typeof lanesDoc === "object" && Array.isArray((lanesDoc as Record<string, unknown>).lanes)
+      ? ((lanesDoc as Record<string, unknown>).lanes as Array<Record<string, unknown>>)
+      : [];
+    const laneDone = (id: string) => {
+      const lane = lanes.find((entry) => entry?.id === id);
+      const laneItems = lane && Array.isArray(lane.items) ? lane.items as Array<Record<string, unknown>> : [];
+      return laneItems.length > 0 && laneItems.every((entry) => entry.done === true);
+    };
+    items.push(
+      { id: "plan", label: "Ship plan adopted", done: lanes.length > 0 },
+      ...artifactItems(),
+      { id: "evals", label: "Validation & evals lane green", done: laneDone("validation") },
+      { id: "cutover", label: "Cutover executed", done: laneDone("cutover") },
+      { id: "go", label: "Go / no-go conversation recorded", done: has("goDecisionRef"), anchor: "input:goDecisionRef" },
+    );
+  } else if (movement.id === "evolve") {
+    const benefits = parseGridRows(inputs.realisedBenefits);
+    items.push(
+      { id: "ops", label: "An ops review on record", done: has("opsConversations"), anchor: "input:opsConversations" },
+      { id: "benefits", label: "Benefits pulse populated", done: benefits.length > 0, anchor: "input:realisedBenefits" },
+      ...artifactItems(),
+    );
+  } else {
+    items.push(...artifactItems());
+  }
+  return items;
+}
+
 /** Days until the Frame-declared first-demo date; null when unset. */
 export function daysToFirstDemo(program: ProgramSummary): number | null {
   const value = readMovementInputs(program, "frame").targetFirstDemoDate;

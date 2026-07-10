@@ -13537,6 +13537,34 @@ html:not([data-theme="light"]) .v3fs-node{border-top-color:var(--v3-border-top)}
 .v3fs-doc-open{font:inherit;font-weight:600;color:var(--v3-text-primary);background:none;border:none;padding:0;cursor:pointer;text-align:left}
 .v3fs-doc-open:hover{color:var(--v3-accent-2);text-decoration:underline;text-underline-offset:3px}
 
+/* Meeting kit: the conversation, handed to you — script + capture in place. */
+.v3fs-kit{border:1px solid var(--fs-line);border-left:3px solid var(--v3-accent-b);border-radius:14px;background:var(--fs-card);margin-bottom:14px}
+.v3fs-kit-ghost{font-size:12px;line-height:1.6;color:var(--v3-text-muted);border:1px dashed var(--fs-line);border-radius:12px;padding:12px 14px;margin-bottom:14px}
+.v3fs-kit summary{list-style:none;display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;user-select:none}
+.v3fs-kit summary::-webkit-details-marker{display:none}
+.v3fs-kit-t{flex:1;font-size:13px;font-weight:700}
+.v3fs-kit-who{display:block;font-family:var(--v3-font-mono);font-size:10px;font-weight:400;color:var(--v3-text-muted);margin-top:1px}
+.v3fs-kit-b{padding:0 14px 14px;animation:v3fs-disc-in .18s ease}
+.v3fs-kit-p{font-size:12px;line-height:1.6;color:var(--v3-text-muted);margin:0 0 10px}
+.v3fs-kit-qs{margin:0 0 10px;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.v3fs-kit-qs li{font-size:12.5px;line-height:1.55}
+.v3fs-kit-qs li::marker{color:var(--fs-quote);font-weight:700}
+.v3fs-kit-actions{margin-bottom:10px}
+.v3fs-kit-capture{display:flex;flex-direction:column;gap:8px;border-top:1px dashed var(--fs-line);padding-top:12px}
+.v3fs-kit-capture textarea{font:inherit;font-size:12.5px;line-height:1.55;border:1px solid var(--fs-line);border-radius:10px;padding:9px 11px;background:var(--v3-surface-2);color:var(--v3-text-primary);resize:vertical;min-height:56px}
+.v3fs-kit-capture textarea:focus{outline:2px solid var(--v3-accent-2);outline-offset:1px}
+.v3fs-kit-capture .v3fs-btn{align-self:flex-start}
+
+/* The gate as a checklist — criteria check themselves off as data lands. */
+.v3fs-checks{display:flex;flex-direction:column;gap:2px;margin:10px 0 12px}
+.v3fs-check{font:inherit;display:flex;align-items:flex-start;gap:9px;text-align:left;background:none;border:none;padding:4px 6px;margin:0 -6px;border-radius:8px;cursor:default}
+.v3fs-check:not(.done):not(:disabled){cursor:pointer}
+.v3fs-check:not(.done):not(:disabled):hover{background:var(--v3-surface-2)}
+.v3fs-check-box{flex-shrink:0;width:15px;height:15px;margin-top:1px;border-radius:5px;border:1.5px solid var(--fs-line);display:grid;place-items:center;font-size:10px;font-weight:800;color:#fff}
+.v3fs-check.done .v3fs-check-box{background:var(--v3-green);border-color:var(--v3-green)}
+.v3fs-check-l{font-size:11.5px;line-height:1.5;color:var(--v3-text-primary)}
+.v3fs-check.done .v3fs-check-l{color:var(--v3-text-muted)}
+
 /* The reading pane: full-document drill-down for every generated artifact. */
 .v3fs-doc-backdrop{position:fixed;inset:0;background:rgba(15,16,32,.45);backdrop-filter:blur(2px);z-index:80}
 .v3fs-docview{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(720px,92vw);max-height:86vh;display:flex;flex-direction:column;background:var(--fs-card);border:1px solid var(--fs-line);border-radius:20px;box-shadow:0 30px 90px -20px rgba(15,16,32,.5);z-index:81}
