@@ -70,7 +70,12 @@ type FlowView = "today" | "flow" | "tracks" | "library" | "pulse" | "mission" | 
  */
 export default function FlowShell(props: FlowShellProps) {
   const { program } = props;
-  const [view, setView] = useState<FlowView>("today");
+  // Land where the work is: Today only when something waits on the user's
+  // judgment (decisions / quarantined evidence); the canvas otherwise, where
+  // the spine pointer takes over. Today stays one badge-tap away.
+  const [view, setView] = useState<FlowView>(() =>
+    listOpenFlowDecisions(program).length + listPortalInbox(program).length > 0 ? "today" : "flow",
+  );
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const days = daysToFirstDemo(program);
   const openDecisions = listOpenFlowDecisions(program);
