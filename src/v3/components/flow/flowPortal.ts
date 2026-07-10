@@ -1,0 +1,221 @@
+/**
+ * Async interviews — evidence autonomy, client side.
+ *
+ * The Discovery Kit already writes a role-aware question pack per stakeholder;
+ * this module turns those into shareable RESPONSE LINKS. Minting is a pure
+ * transform over inner.discoveryKit (no model call): each pack gets a random
+ * secret, and the public flow-portal edge function serves the pack to whoever
+ * holds the link and quarantines what comes back in inner.flowPortalInbox —
+ * external input NEVER lands directly in evidence. Ingesting an inbox item is
+ * the human confirm: it appends an attributed transcript block (the documented
+ * "— Name, Role, Date —" convention), flips the roster row to Heard, and
+ * attests. Mutators are pure blob transforms; callers persist via
+ * updateProgramData.
+ */
+import type { ProgramSummary } from "@/new/types";
+import { getProgramState, wrapProgramState } from "@/new/lib/programState";
+
+export interface FlowInterviewPack {
+  id: string;
+  stakeholder: string;
+  role: string;
+  intro: string;
+  questions: string[];
+  /** Secret half of the response link (programId.secret). */
+  token: string;
+  createdAt: string;
+  respondedAt?: string;
+}
+
+export interface FlowPortalItem {
+  id: string;
+  kind: "interview";
+  stakeholder: string;
+  role: string;
+  receivedAt: string;
+  text: string;
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+function innerData(program: ProgramSummary): Record<string, unknown> {
+  const raw = (program.rawData ?? {}) as Record<string, unknown>;
+  return typeof raw.data === "object" && raw.data !== null ? (raw.data as Record<string, unknown>) : raw;
+}
+
+export function listInterviewPacks(program: ProgramSummary): FlowInterviewPack[] {
+  const list = innerData(program).flowInterviewPacks;
+  if (!Array.isArray(list)) return [];
+  return list.filter(isRecord).map((entry): FlowInterviewPack => ({
+    id: String(entry.id ?? ""),
+    stakeholder: String(entry.stakeholder ?? ""),
+    role: String(entry.role ?? ""),
+    intro: String(entry.intro ?? ""),
+    questions: Array.isArray(entry.questions) ? entry.questions.map(String).filter(Boolean) : [],
+    token: String(entry.token ?? ""),
+    createdAt: String(entry.createdAt ?? ""),
+    respondedAt: typeof entry.respondedAt === "string" ? entry.respondedAt : undefined,
+  })).filter((pack) => pack.id && pack.token);
+}
+
+export function listPortalInbox(program: ProgramSummary): FlowPortalItem[] {
+  const list = innerData(program).flowPortalInbox;
+  if (!Array.isArray(list)) return [];
+  return list.filter(isRecord).map((entry): FlowPortalItem => ({
+    id: String(entry.id ?? ""),
+    kind: "interview",
+    stakeholder: String(entry.stakeholder ?? "Stakeholder"),
+    role: String(entry.role ?? ""),
+    receivedAt: String(entry.receivedAt ?? ""),
+    text: String(entry.text ?? ""),
+  })).filter((item) => item.id && item.text);
+}
+
+/** The shareable link for a pack. */
+export function portalLinkFor(programId: string, pack: FlowInterviewPack): string {
+  const base = `${window.location.origin}${window.location.pathname}`;
+  return `${base}?flowRespond=${encodeURIComponent(`${programId}.${pack.token}`)}`;
+}
+
+function randomSecret(): string {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * Mint response links for every Discovery Kit interview that doesn't have one
+ * yet. Pure transform over the kit — no model call. Null when the kit is
+ * missing or every interview is already packed.
+ */
+export function mintInterviewPacks(program: ProgramSummary, actor: string): Record<string, unknown> | null {
+  const { wrapper, inner, usesNestedData } = getProgramState((program.rawData ?? {}) as Record<string, unknown>);
+  const kit = isRecord(inner.discoveryKit) ? inner.discoveryKit : null;
+  const interviews = kit && Array.isArray(kit.interviews) ? kit.interviews.filter(isRecord) : [];
+  if (!interviews.length) return null;
+
+  const existing = Array.isArray(inner.flowInterviewPacks) ? (inner.flowInterviewPacks as unknown[]) : [];
+  const packed = new Set(existing.filter(isRecord).map((p) => String(p.stakeholder ?? "").toLowerCase()));
+  const consent = typeof kit?.consentNote === "string" ? kit.consentNote : "";
+  const now = new Date().toISOString();
+
+  const additions = interviews
+    .filter((interview) => !packed.has(String(interview.stakeholder ?? "").toLowerCase()))
+    .map((interview) => {
+      const objectives = Array.isArray(interview.objectives) ? interview.objectives.map(String).filter(Boolean) : [];
+      const agenda = Array.isArray(interview.agenda) ? interview.agenda.filter(isRecord) : [];
+      const questions = agenda
+        .flatMap((slot) => (Array.isArray(slot.questions) ? slot.questions.map(String) : []))
+        .filter(Boolean)
+        .slice(0, 12);
+      return {
+        id: `pack-${randomSecret().slice(0, 10)}`,
+        stakeholder: String(interview.stakeholder ?? "Stakeholder"),
+        role: String(interview.role ?? ""),
+        intro: [
+          objectives.length ? `This conversation is about: ${objectives.join("; ")}.` : "",
+          "Answer in your own words, in as much detail as you like — specifics (numbers, delays, system names, workarounds) are exactly what we need.",
+          consent,
+        ].filter(Boolean).join("\n\n"),
+        questions,
+        token: randomSecret(),
+        createdAt: now,
+      };
+    });
+  if (!additions.length) return null;
+
+  const log = Array.isArray(inner.flowAttestations) ? (inner.flowAttestations as unknown[]) : [];
+  const attestation = {
+    ts: now, agentId: actor, phaseId: "listen", tier: 2,
+    action: `Created async interview links for ${additions.length} stakeholder${additions.length === 1 ? "" : "s"}`,
+    detail: additions.map((p) => p.stakeholder).join(", ").slice(0, 160),
+  };
+  return wrapProgramState(wrapper, {
+    ...inner,
+    flowInterviewPacks: [...existing, ...additions].slice(-30),
+    flowAttestations: [...log, attestation].slice(-200),
+  }, usesNestedData);
+}
+
+/**
+ * Confirm a quarantined response into evidence: attributed transcript block,
+ * roster flip to Heard (or a new Heard row), pack marked responded, item
+ * cleared, the confirm attested. Null when the item is unknown.
+ */
+export function ingestPortalResponse(program: ProgramSummary, itemId: string, actor: string): Record<string, unknown> | null {
+  const { wrapper, inner, usesNestedData } = getProgramState((program.rawData ?? {}) as Record<string, unknown>);
+  const inbox = Array.isArray(inner.flowPortalInbox) ? (inner.flowPortalInbox as unknown[]) : [];
+  const item = inbox.filter(isRecord).find((entry) => entry.id === itemId);
+  if (!item) return null;
+  const stakeholder = String(item.stakeholder ?? "Stakeholder");
+  const role = String(item.role ?? "");
+  const text = String(item.text ?? "").trim();
+  const today = new Date().toISOString().slice(0, 10);
+
+  const phaseInputs = isRecord(inner.phaseInputs) ? { ...(inner.phaseInputs as Record<string, unknown>) } : {};
+  const listen = isRecord(phaseInputs.listen) ? { ...(phaseInputs.listen as Record<string, unknown>) } : {};
+
+  const header = `— ${[stakeholder, role, today].filter(Boolean).join(", ")} —`;
+  const existingTranscripts = typeof listen.interviewTranscripts === "string" ? listen.interviewTranscripts : "";
+  listen.interviewTranscripts = [existingTranscripts.trimEnd(), `${header}\n${text}`].filter(Boolean).join("\n\n");
+
+  // Roster: flip the matching row to Heard, or add one — coverage moves either way.
+  let rosterRows: Array<Record<string, string>> = [];
+  if (typeof listen.interviewRoster === "string" && listen.interviewRoster.trim().startsWith("[")) {
+    try {
+      const parsed = JSON.parse(listen.interviewRoster);
+      if (Array.isArray(parsed)) rosterRows = parsed.filter((r) => r && typeof r === "object");
+    } catch { /* rebuilt below */ }
+  }
+  const match = rosterRows.find((row) => (row.name ?? "").trim().toLowerCase() === stakeholder.trim().toLowerCase());
+  if (match) {
+    match.status = "Heard";
+    if (!match.date) match.date = today;
+  } else {
+    rosterRows.push({ name: stakeholder, role, status: "Heard", date: today });
+  }
+  listen.interviewRoster = JSON.stringify(rosterRows);
+  phaseInputs.listen = listen;
+
+  const packs = Array.isArray(inner.flowInterviewPacks) ? (inner.flowInterviewPacks as unknown[]) : [];
+  const nextPacks = packs.map((pack) =>
+    isRecord(pack) && String(pack.stakeholder ?? "").toLowerCase() === stakeholder.toLowerCase()
+      ? { ...pack, respondedAt: pack.respondedAt ?? new Date().toISOString() }
+      : pack,
+  );
+
+  const words = text ? text.split(/\s+/).length : 0;
+  const log = Array.isArray(inner.flowAttestations) ? (inner.flowAttestations as unknown[]) : [];
+  const attestation = {
+    ts: new Date().toISOString(), agentId: actor, phaseId: "listen", tier: 2,
+    action: `Ingested async response — ${stakeholder}`,
+    detail: `${words.toLocaleString()} words into the interview transcripts; roster marked Heard.`,
+  };
+
+  return wrapProgramState(wrapper, {
+    ...inner,
+    phaseInputs,
+    flowInterviewPacks: nextPacks,
+    flowPortalInbox: inbox.filter((entry) => !(isRecord(entry) && entry.id === itemId)),
+    flowAttestations: [...log, attestation].slice(-200),
+  }, usesNestedData);
+}
+
+/** Dismiss a quarantined response without ingesting it (attested). */
+export function dismissPortalResponse(program: ProgramSummary, itemId: string, actor: string): Record<string, unknown> | null {
+  const { wrapper, inner, usesNestedData } = getProgramState((program.rawData ?? {}) as Record<string, unknown>);
+  const inbox = Array.isArray(inner.flowPortalInbox) ? (inner.flowPortalInbox as unknown[]) : [];
+  const item = inbox.filter(isRecord).find((entry) => entry.id === itemId);
+  if (!item) return null;
+  const log = Array.isArray(inner.flowAttestations) ? (inner.flowAttestations as unknown[]) : [];
+  const attestation = {
+    ts: new Date().toISOString(), agentId: actor, phaseId: "listen", tier: 2,
+    action: `Dismissed an async response — ${String(item.stakeholder ?? "unknown")}`,
+  };
+  return wrapProgramState(wrapper, {
+    ...inner,
+    flowPortalInbox: inbox.filter((entry) => !(isRecord(entry) && entry.id === itemId)),
+    flowAttestations: [...log, attestation].slice(-200),
+  }, usesNestedData);
+}
