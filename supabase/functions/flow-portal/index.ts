@@ -63,10 +63,18 @@ async function loadPack(token: string) {
   const raw = isRecord(row.data) ? row.data as Record<string, unknown> : {};
   const { inner, nested } = innerOf(raw);
   const packs = Array.isArray(inner.flowInterviewPacks) ? inner.flowInterviewPacks.filter(isRecord) : [];
+  const invites = Array.isArray(inner.flowDemoInvites) ? inner.flowDemoInvites.filter(isRecord) : [];
   const pack = packs.find((entry) => entry.token === secret);
-  if (!pack) return null;
-  return { admin, programId, programName: String(row.name ?? "the programme"), raw, inner, nested, pack };
+  const invite = pack ? undefined : invites.find((entry) => entry.token === secret);
+  if (!pack && !invite) return null;
+  const kind: "interview" | "demo" = pack ? "interview" : "demo";
+  return {
+    admin, programId, programName: String(row.name ?? "the programme"),
+    raw, inner, nested, kind, pack: (pack ?? invite) as Record<string, unknown>,
+  };
 }
+
+const DEMO_VERDICTS = new Set(["accepted", "accepted-with-changes", "rework"]);
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -78,7 +86,25 @@ Deno.serve(async (req: Request) => {
       const token = new URL(req.url).searchParams.get("token") || "";
       const hit = await loadPack(token);
       if (!hit) return jsonResponse({ error: "This link is not valid." }, 404);
+      if (hit.kind === "demo") {
+        const showInputs = isRecord(hit.inner.phaseInputs) && isRecord((hit.inner.phaseInputs as Record<string, unknown>).show)
+          ? (hit.inner.phaseInputs as Record<string, Record<string, unknown>>).show
+          : {};
+        return jsonResponse({
+          kind: "demo",
+          programme: hit.programName,
+          stakeholder: String(hit.pack.stakeholder ?? "Stakeholder"),
+          role: String(hit.pack.role ?? ""),
+          openingQuote: String(hit.pack.openingQuote ?? ""),
+          scenario: String(hit.pack.scenario ?? ""),
+          steps: Array.isArray(hit.pack.steps) ? hit.pack.steps.map(String).slice(0, 8) : [],
+          acceptanceAsk: String(hit.pack.acceptanceAsk ?? ""),
+          demoUrl: typeof showInputs.prototypeLocation === "string" ? showInputs.prototypeLocation : "",
+          responded: typeof hit.pack.respondedAt === "string",
+        });
+      }
       return jsonResponse({
+        kind: "interview",
         programme: hit.programName,
         stakeholder: String(hit.pack.stakeholder ?? "Stakeholder"),
         role: String(hit.pack.role ?? ""),
@@ -91,41 +117,66 @@ Deno.serve(async (req: Request) => {
     if (req.method === "POST") {
       const body = await req.json().catch(() => null);
       const token = isRecord(body) && typeof body.token === "string" ? body.token : "";
-      const answersRaw = isRecord(body) && typeof body.answers === "string" ? body.answers : "";
-      const answers = answersRaw.trim().slice(0, MAX_ANSWER_CHARS);
-      if (answers.length < MIN_ANSWER_CHARS) {
-        return jsonResponse({ error: "Please write a little more — a sentence or two at minimum." }, 400);
-      }
       const hit = await loadPack(token);
       if (!hit) return jsonResponse({ error: "This link is not valid." }, 404);
 
       const stakeholder = String(hit.pack.stakeholder ?? "Stakeholder");
       const now = new Date().toISOString();
       const inbox = Array.isArray(hit.inner.flowPortalInbox) ? [...hit.inner.flowPortalInbox] : [];
-      inbox.push({
-        id: crypto.randomUUID(),
-        kind: "interview",
-        stakeholder,
-        role: String(hit.pack.role ?? ""),
-        receivedAt: now,
-        text: answers,
-      });
-      const packs = (hit.inner.flowInterviewPacks as unknown[]).map((entry) =>
-        isRecord(entry) && entry.token === hit.pack.token ? { ...entry, respondedAt: now } : entry,
-      );
       const log = Array.isArray(hit.inner.flowAttestations) ? [...hit.inner.flowAttestations] : [];
-      log.push({
-        ts: now, agentId: "portal", phaseId: "listen", tier: 1,
-        action: `Received an async interview response — ${stakeholder}`,
-        detail: `${answers.split(/\s+/).length.toLocaleString()} words, quarantined in the evidence inbox for your review.`,
-      });
+      const nextInner: Record<string, unknown> = { ...hit.inner };
 
-      const nextInner = {
-        ...hit.inner,
-        flowPortalInbox: inbox.slice(-INBOX_CAP),
-        flowInterviewPacks: packs,
-        flowAttestations: log.slice(-200),
-      };
+      if (hit.kind === "demo") {
+        const verdict = isRecord(body) && typeof body.verdict === "string" ? body.verdict : "";
+        if (!DEMO_VERDICTS.has(verdict)) {
+          return jsonResponse({ error: "Pick a verdict before sending." }, 400);
+        }
+        const comment = isRecord(body) && typeof body.comment === "string"
+          ? body.comment.trim().slice(0, MAX_ANSWER_CHARS)
+          : "";
+        inbox.push({
+          id: crypto.randomUUID(),
+          kind: "demo-verdict",
+          stakeholder,
+          role: String(hit.pack.role ?? ""),
+          receivedAt: now,
+          verdict,
+          text: comment,
+        });
+        nextInner.flowDemoInvites = (hit.inner.flowDemoInvites as unknown[]).map((entry) =>
+          isRecord(entry) && entry.token === hit.pack.token ? { ...entry, respondedAt: now } : entry,
+        );
+        log.push({
+          ts: now, agentId: "portal", phaseId: "show", tier: 1,
+          action: `Received a demo verdict — ${stakeholder}: ${verdict.replace(/-/g, " ")}`,
+          detail: comment ? `"${comment.slice(0, 120)}" — quarantined for your review.` : "Quarantined for your review.",
+        });
+      } else {
+        const answersRaw = isRecord(body) && typeof body.answers === "string" ? body.answers : "";
+        const answers = answersRaw.trim().slice(0, MAX_ANSWER_CHARS);
+        if (answers.length < MIN_ANSWER_CHARS) {
+          return jsonResponse({ error: "Please write a little more — a sentence or two at minimum." }, 400);
+        }
+        inbox.push({
+          id: crypto.randomUUID(),
+          kind: "interview",
+          stakeholder,
+          role: String(hit.pack.role ?? ""),
+          receivedAt: now,
+          text: answers,
+        });
+        nextInner.flowInterviewPacks = (hit.inner.flowInterviewPacks as unknown[]).map((entry) =>
+          isRecord(entry) && entry.token === hit.pack.token ? { ...entry, respondedAt: now } : entry,
+        );
+        log.push({
+          ts: now, agentId: "portal", phaseId: "listen", tier: 1,
+          action: `Received an async interview response — ${stakeholder}`,
+          detail: `${answers.split(/\s+/).length.toLocaleString()} words, quarantined in the evidence inbox for your review.`,
+        });
+      }
+
+      nextInner.flowPortalInbox = inbox.slice(-INBOX_CAP);
+      nextInner.flowAttestations = log.slice(-200);
       const nextRaw = hit.nested ? { ...hit.raw, data: nextInner } : nextInner;
       const { error } = await hit.admin
         .from("adam_programs")
