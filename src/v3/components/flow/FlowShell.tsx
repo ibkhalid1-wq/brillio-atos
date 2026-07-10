@@ -13,6 +13,7 @@ import {
   listFlowTracks, trackAcceptance, trackPace, trackBlockers,
   type FlowShowPass, type FlowTrack,
 } from "@/v3/components/flow/flowTracks";
+import { readFlowGovernance, flowAgentTier } from "@/v3/components/flow/flowGovernance";
 
 interface FlowShellProps {
   program: ProgramSummary;
@@ -31,9 +32,16 @@ interface FlowShellProps {
   onRecordShowPass: (trackId: string, pass: { stakeholder?: string; verdict: FlowShowPass["verdict"]; note?: string; stableDiff?: boolean }) => Promise<void>;
   /** Add a track by hand (the blueprint is the usual source). */
   onAddTrack: (input: { name: string; goal?: string }) => Promise<void>;
+  /** In-flight runs for the Mission fleet board. */
+  fleet: Array<{ agentId: string; phaseId?: string; status: string }>;
+  /** Token spend per movement, from the runs ledger. */
+  loadMovementSpend: () => Promise<Record<string, number>>;
+  onSetHaltAll: (halted: boolean) => Promise<void>;
+  onToggleAgentHalt: (agentId: string, halted: boolean) => Promise<void>;
+  onSetMovementBudget: (movementId: string, tokens: number) => Promise<void>;
 }
 
-type FlowView = "today" | "flow" | "tracks" | "library" | "pulse";
+type FlowView = "today" | "flow" | "tracks" | "library" | "pulse" | "mission";
 
 /**
  * "Paper & Flow" — the reimagined shell for ATOS Flow programmes. None of the
@@ -73,7 +81,7 @@ export default function FlowShell(props: FlowShellProps) {
           {(program.name || "F").slice(0, 1).toUpperCase()}
           <span className="v3fs-brand-caret" aria-hidden="true">▾</span>
         </button>
-        {([["today", "◈", "Today"], ["flow", "⟶", "Flow"], ["tracks", "▤", "Tracks"], ["library", "◫", "Library"], ["pulse", "◉", "Pulse"]] as const).map(([id, icon, label]) => (
+        {([["today", "◈", "Today"], ["flow", "⟶", "Flow"], ["tracks", "▤", "Tracks"], ["library", "◫", "Library"], ["pulse", "◉", "Pulse"], ["mission", "⌘", "Mission"]] as const).map(([id, icon, label]) => (
           <button key={id} type="button" className={view === id ? "on" : ""} onClick={() => { setView(id); window.scrollTo({ top: 0 }); }}>
             {id === "today" && openDecisions.length > 0 ? <span className="v3fs-dock-n">{openDecisions.length}</span> : null}
             <span className="v3fs-ric" aria-hidden="true">{icon}</span><span className="v3fs-rlb">{label}</span>
@@ -148,6 +156,15 @@ export default function FlowShell(props: FlowShellProps) {
           />
         ) : view === "library" ? (
           <FlowLibrary program={program} />
+        ) : view === "mission" ? (
+          <FlowMission
+            program={program}
+            fleet={props.fleet}
+            loadMovementSpend={props.loadMovementSpend}
+            onSetHaltAll={props.onSetHaltAll}
+            onToggleAgentHalt={props.onToggleAgentHalt}
+            onSetMovementBudget={props.onSetMovementBudget}
+          />
         ) : (
           <FlowPulse program={program} />
         )}
@@ -457,6 +474,177 @@ function FlowTracks({ program, runningAgentIds, onRunAgent, onSaveInputs, onReco
         ) : (
           <button type="button" className="v3fs-a" onClick={() => setAddOpen(true)}>＋ Add a track by hand</button>
         )}
+      </div>
+    </div>
+  );
+}
+
+/* ── Mission Control: the fleet, the budgets, the levers, the trail ──────── */
+
+function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggleAgentHalt, onSetMovementBudget }: {
+  program: ProgramSummary;
+  fleet: FlowShellProps["fleet"];
+  loadMovementSpend: FlowShellProps["loadMovementSpend"];
+  onSetHaltAll: FlowShellProps["onSetHaltAll"];
+  onToggleAgentHalt: FlowShellProps["onToggleAgentHalt"];
+  onSetMovementBudget: FlowShellProps["onSetMovementBudget"];
+}) {
+  const movements = useMemo(() => flowMovements(), []);
+  const governance = readFlowGovernance(program);
+  const trail = listFlowAttestations(program);
+  const [spend, setSpend] = useState<Record<string, number> | null>(null);
+  const [query, setQuery] = useState("");
+  const [capDrafts, setCapDrafts] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+
+  // The spend ledger comes from the runs table, not the blob — load on mount
+  // and after every governance change (the levers alter what runs next).
+  useEffect(() => {
+    let alive = true;
+    void loadMovementSpend().then((result) => { if (alive) setSpend(result); }).catch(() => { if (alive) setSpend({}); });
+    return () => { alive = false; };
+  }, [loadMovementSpend, program]);
+
+  // Every agent the programme can run — the artifact generators plus the
+  // planner. Governance levers name agents from this list.
+  const agentIds = useMemo(() => {
+    const ids = new Set<string>(["phase-input-planner"]);
+    for (const movement of movements) {
+      for (const artifact of movementArtifacts(program, movement)) ids.add(artifact.id);
+    }
+    return [...ids];
+  }, [program, movements]);
+
+  const act = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    try { await fn(); } finally { setBusy(false); }
+  };
+
+  const q = query.trim().toLowerCase();
+  const visibleTrail = q
+    ? trail.filter((entry) => `${entry.agentId} ${entry.action} ${entry.detail ?? ""} ${entry.phaseId}`.toLowerCase().includes(q))
+    : trail;
+
+  return (
+    <div className="v3fs-today">
+      {governance.haltAll ? (
+        <div className="v3fs-halt-banner">
+          <span>The programme is halted — every agent run blocks until you resume.</span>
+          <button type="button" className="v3fs-btn pri" disabled={busy} onClick={() => void act(() => onSetHaltAll(false))}>Resume the programme</button>
+        </div>
+      ) : null}
+
+      <div className="v3fs-grid2">
+        <div className="v3fs-panel">
+          <div className="v3fs-ph"><h3>Fleet</h3><span>what is running right now, and what is held</span></div>
+          {fleet.length === 0 ? <div className="v3fs-empty">The fleet is idle. Runs appear here the moment one starts.</div> : null}
+          {fleet.map((run, i) => (
+            <div key={`${run.agentId}-${i}`} className="v3fs-row">
+              <span className="v3fs-gdot" aria-hidden="true" />
+              <div className="v3fs-row-g">
+                <div className="v3fs-row-n">{run.agentId}</div>
+                <div className="v3fs-row-m">{[run.status, run.phaseId].filter(Boolean).join(" · ")}</div>
+              </div>
+              <span className="v3fs-tag gn">tier {flowAgentTier(run.agentId)}</span>
+            </div>
+          ))}
+          {governance.haltedAgents.length ? (
+            <>
+              <div className="v3fs-ph v3fs-ph-sub"><h3>Held</h3><span>halted agents — resume to allow runs</span></div>
+              {governance.haltedAgents.map((agentId) => (
+                <div key={agentId} className="v3fs-row">
+                  <span className="v3fs-tdot t2" aria-hidden="true" />
+                  <div className="v3fs-row-g"><div className="v3fs-row-n">{agentId}</div></div>
+                  <button type="button" className="v3fs-btn" disabled={busy} onClick={() => void act(() => onToggleAgentHalt(agentId, false))}>Resume</button>
+                </div>
+              ))}
+            </>
+          ) : null}
+        </div>
+
+        <div className="v3fs-panel">
+          <div className="v3fs-ph"><h3>Budgets</h3><span>token spend per movement — caps make spend a deliberate call</span></div>
+          {movements.map((movement) => {
+            const spent = spend?.[movement.id] ?? null;
+            const cap = governance.movementBudgets[movement.id];
+            const pct = cap && spent != null ? Math.min(100, Math.round((spent / cap) * 100)) : null;
+            return (
+              <div key={movement.id} className="v3fs-budget">
+                <div className="v3fs-budget-t">
+                  <b>{movement.displayName}</b>
+                  <span>
+                    {spend === null ? "…" : `${(spent ?? 0).toLocaleString()} tokens`}
+                    {cap ? ` / ${cap.toLocaleString()}` : " · no cap"}
+                  </span>
+                </div>
+                {cap ? (
+                  <div className="v3fs-budget-bar"><div className={`v3fs-budget-fill${(pct ?? 0) >= 90 ? " hot" : ""}`} style={{ width: `${pct ?? 0}%` }} /></div>
+                ) : null}
+                <div className="v3fs-budget-edit">
+                  <input
+                    inputMode="numeric"
+                    placeholder="cap in tokens · 0 removes"
+                    value={capDrafts[movement.id] ?? ""}
+                    onChange={(e) => setCapDrafts((d) => ({ ...d, [movement.id]: e.target.value.replace(/[^0-9]/g, "") }))}
+                    aria-label={`${movement.displayName} budget cap`}
+                  />
+                  <button type="button" className="v3fs-btn" disabled={busy || capDrafts[movement.id] == null || capDrafts[movement.id] === ""}
+                    onClick={() => void act(async () => {
+                      await onSetMovementBudget(movement.id, Number(capDrafts[movement.id] || 0));
+                      setCapDrafts((d) => ({ ...d, [movement.id]: "" }));
+                    })}>
+                    Set
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="v3fs-panel">
+        <div className="v3fs-ph"><h3>Guardrails</h3><span>the standing rules — every change lands on the trail below</span></div>
+        <div className="v3fs-guard-row">
+          <div className="v3fs-row-g">
+            <div className="v3fs-row-n">Halt everything</div>
+            <div className="v3fs-row-m">blocks every agent run on this programme until resumed</div>
+          </div>
+          <button type="button" className={`v3fs-btn${governance.haltAll ? "" : " danger"}`} disabled={busy}
+            onClick={() => void act(() => onSetHaltAll(!governance.haltAll))}>
+            {governance.haltAll ? "Resume" : "Halt"}
+          </button>
+        </div>
+        <div className="v3fs-guard-agents">
+          {agentIds.map((agentId) => {
+            const halted = governance.haltedAgents.includes(agentId);
+            return (
+              <button key={agentId} type="button" className={`v3fs-guard-chip${halted ? " off" : ""}`} disabled={busy}
+                title={halted ? "Resume this agent" : "Halt this agent"}
+                onClick={() => void act(() => onToggleAgentHalt(agentId, !halted))}>
+                {halted ? "⏸ " : ""}{agentId}
+              </button>
+            );
+          })}
+        </div>
+        <div className="v3fs-guard-note">Tier 1 acts and attests · Tier 2 proposes and waits for your confirm · budget caps block runs and queue the raise as a decision.</div>
+      </div>
+
+      <div className="v3fs-panel">
+        <div className="v3fs-ph"><h3>Trail</h3><span>every action on the record — agents and humans alike</span></div>
+        <input className="v3fs-search" placeholder="Search the trail — an agent, a movement, a phrase…"
+          value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search attestations" />
+        {visibleTrail.length === 0 ? <div className="v3fs-empty">{q ? "Nothing matches that search." : "No actions recorded yet."}</div> : null}
+        {visibleTrail.slice(0, 40).map((entry, i) => (
+          <div key={i} className="v3fs-row">
+            <span className={`v3fs-tdot t${entry.tier}`} aria-hidden="true" />
+            <div className="v3fs-row-g">
+              <div className="v3fs-row-n">{entry.action}</div>
+              <div className="v3fs-row-m">{[entry.agentId, entry.phaseId, entry.detail].filter(Boolean).join(" — ")}</div>
+            </div>
+            <span className="v3fs-feed-ts">{timeAgo(entry.ts)}</span>
+          </div>
+        ))}
+        {visibleTrail.length > 40 ? <div className="v3fs-empty">+ {visibleTrail.length - 40} older entries</div> : null}
       </div>
     </div>
   );

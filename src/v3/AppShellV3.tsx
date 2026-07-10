@@ -53,6 +53,7 @@ import ProgramSetupWizard from "@/v3/components/ProgramSetupWizard";
 import FlowShell from "@/v3/components/flow/FlowShell";
 import { resolveFlowDecision } from "@/v3/components/flow/flowDecisions";
 import { recordShowPass, addFlowTrack } from "@/v3/components/flow/flowTracks";
+import { setHaltAll, toggleAgentHalt, setMovementBudget } from "@/v3/components/flow/flowGovernance";
 import { reportError } from "@/lib/errorReporter";
 import { sanitizeMarkdown } from "@/lib/sanitize";
 import { changedInputFields, relatedArtifactsToStale, crossPhaseArtifactsToStale, fieldsFeedingApprovedArtifacts } from "@/v3/lib/artifactStaleness";
@@ -1222,6 +1223,33 @@ export default function AppShellV3() {
     ),
     [activeRuns],
   );
+  // Mission Control's fleet board — the same in-flight runs, with movement.
+  const flowFleet = useMemo(
+    () => activeRuns
+      .filter((run) => run.status === "queued" || run.status === "running" || run.status === "paused")
+      .map((run) => ({
+        agentId: run.agent_id,
+        phaseId: typeof (run as { phase_id?: unknown }).phase_id === "string" ? (run as { phase_id?: string }).phase_id : undefined,
+        status: run.status,
+      })),
+    [activeRuns],
+  );
+  // Token spend per movement for Mission Control's budget bars — summed from
+  // the runs ledger (adam_agent_runs.tokens_used), not the data blob.
+  const loadFlowMovementSpend = useCallback(async (): Promise<Record<string, number>> => {
+    if (!supabase || !activeProgramId) return {};
+    const { data } = await supabase
+      .from("adam_agent_runs")
+      .select("phase_id, tokens_used")
+      .eq("program_id", activeProgramId);
+    const spend: Record<string, number> = {};
+    for (const row of data ?? []) {
+      const phase = typeof row.phase_id === "string" ? row.phase_id : "";
+      if (!phase) continue;
+      spend[phase] = (spend[phase] ?? 0) + Number(row.tokens_used || 0);
+    }
+    return spend;
+  }, [activeProgramId]);
   // Re-enter the Paper & Flow shell whenever the active programme changes.
   useEffect(() => { setUseFlowShell(true); }, [activeProgramId]);
   const { snapshots: programSnapshots, createSnapshot: createProgramSnapshot, getSnapshotData: getProgramSnapshotData } = useProgramSnapshots(activeProgramId || null, { enabled: authChecked && migrated });
@@ -3413,6 +3441,20 @@ export default function AppShellV3() {
           }}
           onAddTrack={async (input) => {
             await persistFlowMutation((program) => addFlowTrack(program, input));
+          }}
+          fleet={flowFleet}
+          loadMovementSpend={loadFlowMovementSpend}
+          onSetHaltAll={async (halted) => {
+            const actor = currentUser?.email || "you";
+            await persistFlowMutation((program) => setHaltAll(program, halted, actor));
+          }}
+          onToggleAgentHalt={async (agentId, halted) => {
+            const actor = currentUser?.email || "you";
+            await persistFlowMutation((program) => toggleAgentHalt(program, agentId, halted, actor));
+          }}
+          onSetMovementBudget={async (movementId, tokens) => {
+            const actor = currentUser?.email || "you";
+            await persistFlowMutation((program) => setMovementBudget(program, movementId, tokens, actor));
           }}
         />
         {setupWizardOverlay}
