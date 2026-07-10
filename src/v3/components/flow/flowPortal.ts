@@ -234,6 +234,15 @@ export function mintFollowUpPack(
   if (!input.who.trim() || !input.questions.length) return null;
   const { wrapper, inner, usesNestedData } = getProgramState((program.rawData ?? {}) as Record<string, unknown>);
   const existing = Array.isArray(inner.flowInterviewPacks) ? (inner.flowInterviewPacks as unknown[]) : [];
+  // Idempotent: re-sending the same gaps reuses the SAME link — the latest
+  // matching pack stands, no new secret is minted.
+  const wanted = input.questions.slice(0, 8).join("");
+  const duplicate = [...existing].reverse().filter(isRecord).find((pack) =>
+    String(pack.stakeholder ?? "").trim().toLowerCase() === input.who.trim().toLowerCase()
+    && String(pack.movementId ?? "") === input.movementId
+    && (Array.isArray(pack.questions) ? pack.questions.map(String).join("") : "") === wanted,
+  );
+  if (duplicate) return null;
   const now = new Date().toISOString();
   const pack = {
     id: `pack-${randomSecret().slice(0, 10)}`,

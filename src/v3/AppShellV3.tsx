@@ -57,7 +57,7 @@ import { setHaltAll, toggleAgentHalt, setMovementBudget } from "@/v3/components/
 import { mintInterviewPacks, mintDemoInvites, ingestPortalResponse, dismissPortalResponse } from "@/v3/components/flow/flowPortal";
 import { compileShipLanes, toggleShipItem } from "@/v3/components/flow/flowShip";
 import { scheduleFollowUp } from "@/v3/components/flow/flowMeetings";
-import { mintFollowUpPack } from "@/v3/components/flow/flowPortal";
+import { mintFollowUpPack, latestPackFor, portalLinkFor } from "@/v3/components/flow/flowPortal";
 import FlowRespond from "@/v3/components/flow/FlowRespond";
 import { reportError } from "@/lib/errorReporter";
 import { sanitizeMarkdown } from "@/lib/sanitize";
@@ -3511,6 +3511,12 @@ export default function AppShellV3() {
               }
               return blob;
             });
+            if (!mintedLink && activeProgram) {
+              // Minting was a no-op because the identical pack already exists —
+              // hand back the standing link instead of a fresh secret.
+              const existing = latestPackFor(activeProgram, input.who);
+              if (existing) mintedLink = portalLinkFor(activeProgram.id, existing);
+            }
             return mintedLink;
           }}
           onIngestPortalItem={async (itemId) => {
