@@ -80,12 +80,21 @@ export default function FlowShell(props: FlowShellProps) {
     return () => document.removeEventListener("paste", onPaste);
   }, [view, fileEvidence]);
 
-  // Open the current movement's editor — the destination for adding evidence
-  // by hand (paste/upload). Used by the hero evidence control.
-  const openFrontierEditor = useCallback(() => {
+  // Open a movement's editor, optionally landing on one field. Switches to the
+  // Flow view first, then defers the dispatch so FlowCanvas (which owns the
+  // editor and the listener) is mounted when we just came from Library/Pulse.
+  const openMovementEditor = useCallback((movement: string, field?: string) => {
     setView("flow");
-    window.dispatchEvent(new CustomEvent("v3fs-open-editor", { detail: { movement: frontierMovementId(program) } }));
-  }, [program]);
+    setTimeout(() => window.dispatchEvent(new CustomEvent("v3fs-open-editor", { detail: { movement, field } })), 0);
+  }, []);
+
+  // The hero evidence control opens the current movement on its transcript
+  // field, so a pasted or uploaded conversation lands where it belongs.
+  const openFrontierEditor = useCallback(() => {
+    const frontier = frontierMovementId(program);
+    const transcript = flowMovements().find((m) => m.id === frontier)?.inputFields?.find((f) => f.type === "transcript");
+    openMovementEditor(frontier, transcript ? `input:${transcript.id}` : undefined);
+  }, [program, openMovementEditor]);
 
   // The switcher dismisses like a menu should: backdrop click or Escape.
   useEffect(() => {
@@ -151,10 +160,7 @@ export default function FlowShell(props: FlowShellProps) {
                 <button
                   type="button"
                   className="v3fs-date-chip"
-                  onClick={() => {
-                    setView("flow");
-                    window.dispatchEvent(new CustomEvent("v3fs-open-editor", { detail: { movement: "frame" } }));
-                  }}
+                  onClick={() => openMovementEditor("frame", "input:targetFirstDemoDate")}
                 >
                   Set the first-demonstration date →
                 </button>

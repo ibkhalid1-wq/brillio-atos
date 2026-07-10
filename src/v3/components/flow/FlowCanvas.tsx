@@ -16,6 +16,16 @@ const GATE_CTA: Record<string, string> = {
   evolve: "Log this month's ops review",
 };
 
+/** The field each gate CTA should land the editor on, when it exists. */
+const GATE_CTA_FIELD: Record<string, string> = {
+  frame: "input:sponsorConversation",
+  listen: "input:interviewRoster",
+  envision: "input:directionDecision",
+  show: "input:demoTour",
+  ship: "input:goDecisionRef",
+  evolve: "input:opsConversations",
+};
+
 interface FlowCanvasProps {
   program: ProgramSummary;
   runningAgentIds: Set<string>;
@@ -44,17 +54,29 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
       return next;
     });
 
-  const openEditor = (id: string) => {
+  const openEditor = (id: string, fieldAnchor?: string) => {
     setOpen((current) => new Set(current).add(id));
     setEditing((current) => new Set(current).add(id));
+    // The editor mounts below the fold, so opening it silently looks like
+    // nothing happened. After it commits, scroll it into view and focus the
+    // field the caller pointed at (the date field, the transcript field, …).
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const editor = document.querySelector(`.v3fs-editor[data-movement="${id}"]`);
+      if (!editor) return;
+      const target = fieldAnchor ? editor.querySelector(`[data-io-anchor="${fieldAnchor}"]`) : null;
+      (target ?? editor).scrollIntoView({ behavior: "smooth", block: fieldAnchor ? "center" : "start" });
+      const focusable = target?.querySelector("textarea, input, select, button");
+      if (focusable instanceof HTMLElement) focusable.focus({ preventScroll: true });
+    }));
   };
 
-  // The hero's "Set first-demo date" chip (and anything else outside the
-  // canvas) can ask for a movement's editor via this event.
+  // The hero's evidence box, the "Set first-demo date" chip, and anything else
+  // outside the canvas can open a movement's editor — optionally landing on a
+  // specific field — via this event.
   React.useEffect(() => {
     const onOpen = (event: Event) => {
-      const id = (event as CustomEvent<{ movement?: string }>).detail?.movement;
-      if (id) openEditor(id);
+      const detail = (event as CustomEvent<{ movement?: string; field?: string }>).detail;
+      if (detail?.movement) openEditor(detail.movement, detail.field);
     };
     window.addEventListener("v3fs-open-editor", onOpen);
     return () => window.removeEventListener("v3fs-open-editor", onOpen);
@@ -174,7 +196,7 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                       {signal.tone === "green" ? "✓ " : signal.tone === "amber" ? "⚠ " : ""}{signal.text}
                     </div>
                     {!isDone ? (
-                      <button type="button" className="v3fs-cta" onClick={() => openEditor(movement.id)}>
+                      <button type="button" className="v3fs-cta" onClick={() => openEditor(movement.id, GATE_CTA_FIELD[movement.id])}>
                         {GATE_CTA[movement.id] ?? "Update inputs & evidence"}
                       </button>
                     ) : null}
@@ -190,7 +212,7 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                 </div>
 
                 {editing.has(movement.id) ? (
-                  <div className="v3fs-editor">
+                  <div className="v3fs-editor" data-movement={movement.id}>
                     <PhaseInputsPanel program={program} phaseId={movement.id} onSave={onSaveInputs} locked={isDone} />
                   </div>
                 ) : null}
