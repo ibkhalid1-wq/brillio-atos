@@ -146,6 +146,15 @@ export function resolveFlowDecision(
     if (additions.length) nextInner = { ...nextInner, tracks: [...current, ...additions].slice(-24) };
   }
 
+  // Standard-vocabulary mappings merge additively by entity — re-adopting
+  // never erases a previously confirmed alignment.
+  if (resolution === "confirmed" && payload && Array.isArray(payload.ontologyAlignment)) {
+    const current = Array.isArray(nextInner.ontologyAlignment) ? (nextInner.ontologyAlignment as unknown[]) : [];
+    const known = new Set(current.filter(isRecord).map((m) => String(m.entity ?? "").toLowerCase()));
+    const additions = payload.ontologyAlignment.filter(isRecord).filter((m) => m.entity && !known.has(String(m.entity).toLowerCase()));
+    if (additions.length) nextInner = { ...nextInner, ontologyAlignment: [...current, ...additions].slice(-60) };
+  }
+
   // Governance payloads (e.g. the cap-raise the budget gate queues) merge
   // shallowly, with movement budgets folded per movement.
   if (resolution === "confirmed" && payload && isRecord(payload.flowGovernance)) {
