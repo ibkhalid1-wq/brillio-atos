@@ -9,6 +9,7 @@ import {
 import { meetingKit, type MeetingKit } from "@/v3/components/flow/flowMeetings";
 import { listInterviewPacks, listDemoInvites, portalLinkFor } from "@/v3/components/flow/flowPortal";
 import { listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
+import { groundingFor, citationGraph, resourceUri, artifactFabioType, SEMANTIC_CONTEXT } from "@/v3/components/flow/flowSemantics";
 
 /** The gate column's one primary action per movement — opens its editor. */
 const GATE_CTA: Record<string, string> = {
@@ -550,6 +551,44 @@ export function FlowDocViewer({ program, artifact, onClose, onRegenerate }: {
           </div>
         </header>
         <div className="v3fs-docview-b">
+          {(() => {
+            const grounding = groundingFor(program, artifact.id, artifact.movementId);
+            if (!grounding.length) return null;
+            return (
+              <details className="v3fs-disc v3fs-disc-sm v3fs-ground">
+                <summary>
+                  <span className="v3fs-disc-l">Grounded in<em>{grounding.length}</em></span>
+                  <span className="v3fs-disc-hint">
+                    {grounding.filter((g) => g.kind === "conversation").length} conversation(s) · {grounding.filter((g) => g.kind === "document").length} document(s)
+                  </span>
+                  <span className="v3fs-disc-c" aria-hidden="true" />
+                </summary>
+                <div className="v3fs-disc-b">
+                  {grounding.map((entry) => (
+                    <div key={entry.uri} className="v3fs-ground-row">
+                      <span className={`v3fs-tag ${entry.kind === "document" ? "gn" : "ev"}`}>{entry.kind}</span>
+                      <div className="v3fs-row-g">
+                        <div className="v3fs-row-n">{entry.label}</div>
+                        <div className="v3fs-row-m">{entry.relation} · {entry.uri}</div>
+                      </div>
+                    </div>
+                  ))}
+                  <button type="button" className="v3fs-a" onClick={() => {
+                    const node = {
+                      "@context": SEMANTIC_CONTEXT,
+                      "@id": resourceUri(program.id, "artifact", artifact.id),
+                      "@type": artifactFabioType(artifact.id),
+                      "dcterms:title": artifact.title,
+                      citations: citationGraph(program),
+                    };
+                    try { void navigator.clipboard.writeText(JSON.stringify(node, null, 2)); } catch { /* ignore */ }
+                  }}>
+                    Copy as JSON-LD
+                  </button>
+                </div>
+              </details>
+            );
+          })()}
           {blocks.length === 0 ? <p className="v3fs-empty">No document body yet — generate it first.</p> : null}
           {blocks.map((lines, blockIndex) => (
             <div key={blockIndex} className="v3fs-docview-blk">
