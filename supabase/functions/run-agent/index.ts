@@ -5652,6 +5652,17 @@ function trackSlug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48) || "track";
 }
 
+/**
+ * Governance tier for a flow agent action: 1 acts and attests, 2 proposes and
+ * waits for a confirm, 3 (reserved) gates on formal approval. The planner is
+ * the only tier-2 RUN today — generators act at tier 1 and any consequential
+ * part of their output (e.g. the blueprint's track plan) is carved into its
+ * own tier-2 decision rather than escalating the whole run.
+ */
+function flowAgentTier(agentId: string): 1 | 2 | 3 {
+  return agentId === "phase-input-planner" ? 2 : 1;
+}
+
 /** Queue an open Tier-2/3 decision for a human to resolve in the deck's inbox. */
 function queueFlowDecision(programData: ProgramState, decision: Record<string, JsonValue>): ProgramState {
   return updateInnerProgramData(programData, (inner) => {
@@ -8048,6 +8059,86 @@ Deno.serve(async (req) => {
       },
     });
 
+    // ── ATOS Flow governance gate ────────────────────────────────────────
+    // Two guardrails before any model call on Flow programmes: halt flags
+    // (the whole programme or named agents) and per-movement token budgets.
+    // A blocked run fails VISIBLY — run row marked, attestation on the trail
+    // — and a cap breach queues the Tier-2 decision that unblocks it, so
+    // governance never becomes a silent stall.
+    if (isFlowProgramme(contextProgramData)) {
+      const governanceRaw = getInnerProgramData(contextProgramData).flowGovernance;
+      const governance = isRecord(governanceRaw) ? governanceRaw : {};
+      const haltedAgents = Array.isArray(governance.haltedAgents) ? governance.haltedAgents.map(String) : [];
+      const haltAll = governance.haltAll === true;
+      if (haltAll || haltedAgents.includes(request.agentId)) {
+        const reason = haltAll
+          ? "The programme is halted — resume it from Mission Control."
+          : `${request.agentId} is halted — resume it from Mission Control.`;
+        const blocked = appendFlowAttestation(contextProgramData, {
+          agentId: request.agentId,
+          phaseId: request.phaseId,
+          tier: flowAgentTier(request.agentId),
+          action: `Blocked ${request.agentId} — governance halt`,
+          detail: reason,
+        });
+        await persistProgramData(auth.admin, request.programId, blocked, persistConcurrency);
+        await auth.admin
+          .from("adam_agent_runs")
+          .update({ status: "failed", completed_at: new Date().toISOString(), error_message: reason })
+          .eq("id", runId);
+        return new Response(JSON.stringify({ error: reason, governance: "halted" }), { status: 423, headers: JSON_HEADERS });
+      }
+
+      const budgets = isRecord(governance.movementBudgets) ? governance.movementBudgets as Record<string, JsonValue> : {};
+      const movementCap = Number(budgets[request.phaseId] ?? 0);
+      if (movementCap > 0) {
+        const { data: movementRuns } = await auth.admin
+          .from("adam_agent_runs")
+          .select("tokens_used")
+          .eq("program_id", request.programId)
+          .eq("phase_id", request.phaseId);
+        const movementSpent = (movementRuns || []).reduce((sum, row) => sum + Number(row.tokens_used || 0), 0);
+        if (movementSpent >= movementCap) {
+          const reason = `The ${request.phaseId} movement has spent ${movementSpent.toLocaleString()} of its ${movementCap.toLocaleString()}-token budget.`;
+          const raisedCap = Math.ceil((movementCap * 1.5) / 1000) * 1000;
+          let blocked = appendFlowAttestation(contextProgramData, {
+            agentId: request.agentId,
+            phaseId: request.phaseId,
+            tier: 2,
+            action: `Blocked ${request.agentId} — movement budget reached`,
+            detail: reason,
+          });
+          // One open budget decision per movement — a burst of blocked runs
+          // must not flood the inbox with duplicates.
+          const openBudgetDecision = (getInnerProgramData(blocked).flowDecisions as JsonValue[] | undefined ?? [])
+            .filter(isRecord)
+            .some((entry) => entry.status === "open" && entry.agentId === "governance" && entry.movementId === request.phaseId);
+          if (!openBudgetDecision) {
+            blocked = queueFlowDecision(blocked, {
+              tier: 2,
+              agentId: "governance",
+              movementId: request.phaseId,
+              title: `Raise the ${request.phaseId} budget`,
+              summary: reason,
+              blocking: `Every ${request.phaseId} generation stays blocked until the cap moves.`,
+              recommendation: {
+                action: `Raise to ${raisedCap.toLocaleString()} tokens`,
+                rationale: "The cap exists to make continued spend a deliberate call, not to stop the work — raising it by half keeps the movement moving under a fresh ceiling.",
+                band: "governance — raises this movement's cap by half",
+              } as JsonValue,
+              payload: { flowGovernance: { movementBudgets: { [request.phaseId]: raisedCap } } } as JsonValue,
+            });
+          }
+          await persistProgramData(auth.admin, request.programId, blocked, persistConcurrency);
+          await auth.admin
+            .from("adam_agent_runs")
+            .update({ status: "failed", completed_at: new Date().toISOString(), error_message: reason })
+            .eq("id", runId);
+          return new Response(JSON.stringify({ error: reason, governance: "budget", spent: movementSpent, cap: movementCap }), { status: 429, headers: JSON_HEADERS });
+        }
+      }
+    }
+
     const maxDailyTokens = typeof contextProgramData.adamAutonomySettings === "object" && contextProgramData.adamAutonomySettings !== null
       ? Number((contextProgramData.adamAutonomySettings as Record<string, JsonValue>).maxDailyTokens || 0)
       : 0;
@@ -8515,7 +8606,7 @@ Deno.serve(async (req) => {
         nextProgramData = appendFlowAttestation(nextProgramData, {
           agentId: request.agentId,
           phaseId: request.phaseId,
-          tier: request.agentId === "phase-input-planner" ? 2 : 1,
+          tier: flowAgentTier(request.agentId),
           action: formalSpecForRun
             ? `Generated ${formalSpecForRun.title}`
             : request.agentId === "phase-input-planner"
