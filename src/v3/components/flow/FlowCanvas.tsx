@@ -6,6 +6,16 @@ import {
   gateSignal, listenCoverage, type ArtifactCardModel,
 } from "@/v3/components/flow/flowShellData";
 
+/** The gate column's one primary action per movement — opens its editor. */
+const GATE_CTA: Record<string, string> = {
+  frame: "Add the sponsor conversation",
+  listen: "Update the coverage ledger",
+  envision: "Record the direction",
+  show: "Record demo verdicts",
+  ship: "Record the go/no-go",
+  evolve: "Log this month's ops review",
+};
+
 interface FlowCanvasProps {
   program: ProgramSummary;
   runningAgentIds: Set<string>;
@@ -33,6 +43,22 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
+
+  const openEditor = (id: string) => {
+    setOpen((current) => new Set(current).add(id));
+    setEditing((current) => new Set(current).add(id));
+  };
+
+  // The hero's "Set first-demo date" chip (and anything else outside the
+  // canvas) can ask for a movement's editor via this event.
+  React.useEffect(() => {
+    const onOpen = (event: Event) => {
+      const id = (event as CustomEvent<{ movement?: string }>).detail?.movement;
+      if (id) openEditor(id);
+    };
+    window.addEventListener("v3fs-open-editor", onOpen);
+    return () => window.removeEventListener("v3fs-open-editor", onOpen);
+  }, []);
 
   return (
     <div className="v3fs-flow">
@@ -109,6 +135,11 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                     <div className={`v3fs-sig ${signal.tone}`}>
                       {signal.tone === "green" ? "✓ " : signal.tone === "amber" ? "⚠ " : ""}{signal.text}
                     </div>
+                    {!isDone ? (
+                      <button type="button" className="v3fs-cta" onClick={() => openEditor(movement.id)}>
+                        {GATE_CTA[movement.id] ?? "Update inputs & evidence"}
+                      </button>
+                    ) : null}
                     {movement.movement?.humanMoments?.length ? (
                       <div className="v3fs-moments">
                         <div className="v3fs-moments-l">Your actions</div>

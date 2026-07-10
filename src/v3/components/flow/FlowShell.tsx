@@ -1,9 +1,10 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import FlowCanvas from "@/v3/components/flow/FlowCanvas";
 import {
   flowMovements, movementEvidence, movementArtifacts, listenCoverage,
   demoAcceptance, daysToFirstDemo, wordsOfEvidence, frameKpis,
+  frontierMovementId, readMovementInputs,
 } from "@/v3/components/flow/flowShellData";
 
 interface FlowShellProps {
@@ -35,6 +36,46 @@ export default function FlowShell(props: FlowShellProps) {
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const days = daysToFirstDemo(program);
 
+  // The hero's promise, kept: pasting conversation text anywhere on the Flow
+  // view (outside a field) files it as evidence on the frontier movement's
+  // transcript field — appended, never overwriting — and says where it went.
+  const { onSaveInputs } = props;
+  useEffect(() => {
+    if (view !== "flow") return undefined;
+    const onPaste = (event: ClipboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && target.closest("input, textarea, select, [contenteditable]")) return;
+      const text = event.clipboardData?.getData("text/plain") ?? "";
+      if (text.trim().length < 80) return; // too short to be a conversation
+      const movements = flowMovements();
+      const frontier = frontierMovementId(program);
+      const movement = [movements.find((m) => m.id === frontier), ...movements]
+        .filter((m): m is NonNullable<typeof m> => !!m)
+        .find((m) => (m.inputFields ?? []).some((f) => f.type === "transcript"));
+      const field = movement?.inputFields?.find((f) => f.type === "transcript");
+      if (!movement || !field) return;
+      event.preventDefault();
+      const existing = readMovementInputs(program, movement.id)[field.id];
+      const next = typeof existing === "string" && existing.trim()
+        ? `${existing}\n\n${text.trim()}`
+        : text.trim();
+      void onSaveInputs(movement.id, { [field.id]: next });
+      window.dispatchEvent(new CustomEvent("atlas-v3-toast", {
+        detail: { message: `Evidence filed to ${movement.displayName} — regenerate its artifacts when ready.`, tone: "success", icon: "⤓" },
+      }));
+    };
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, [view, program, onSaveInputs]);
+
+  // The switcher dismisses like a menu should: backdrop click or Escape.
+  useEffect(() => {
+    if (!switcherOpen) return undefined;
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setSwitcherOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [switcherOpen]);
+
   return (
     <div className="v3fs-app">
       <nav className="v3fs-dock" aria-label="Primary">
@@ -52,6 +93,9 @@ export default function FlowShell(props: FlowShellProps) {
         </button>
       </nav>
 
+      {switcherOpen ? (
+        <div className="v3fs-switcher-backdrop" onClick={() => setSwitcherOpen(false)} aria-hidden="true" />
+      ) : null}
       {switcherOpen ? (
         <div className="v3fs-switcher" role="menu">
           <div className="v3fs-switcher-l">Programmes</div>
