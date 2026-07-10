@@ -13508,6 +13508,10 @@ html:not([data-theme="light"]) .v3fs-node{border-top-color:var(--v3-border-top)}
 .v3fs-portal-verdict.on{border-color:var(--v3-accent-2);background:var(--fs-indigo-wash);font-weight:600}
 .v3fs-evitem .v3fs-dec-s{font-style:italic}
 
+/* "While you were away" — Today's transport-free digest strip. */
+.v3fs-away{font-size:12.5px;line-height:1.6;border:1px solid var(--fs-line);border-left:3px solid var(--v3-accent-b);border-radius:12px;padding:12px 16px;background:var(--fs-blue-wash);color:var(--v3-text-primary)}
+.v3fs-away b{font-weight:700}
+
 /* Ship lanes: the plan as a working board inside the movement. */
 .v3fs-shipboard{display:flex;flex-direction:column;gap:12px}
 .v3fs-shiplane-t{display:flex;justify-content:space-between;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--v3-accent-2);margin-bottom:4px}

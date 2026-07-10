@@ -3485,6 +3485,9 @@ export default function AppShellV3() {
             const actor = currentUser?.email || "you";
             await persistFlowMutation((program) => toggleShipItem(program, laneId, itemId, actor));
           }}
+          onHydratePrograms={async () => {
+            await hydratePrograms(programs.map((entry) => entry.id));
+          }}
           onIngestPortalItem={async (itemId) => {
             const actor = currentUser?.email || "you";
             await persistFlowMutation((program) => ingestPortalResponse(program, itemId, actor));

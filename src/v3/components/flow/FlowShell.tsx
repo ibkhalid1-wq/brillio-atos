@@ -47,12 +47,14 @@ interface FlowShellProps {
   /** Compile the ship plan from the blueprint. */
   onCompileShipLanes: () => Promise<void>;
   onToggleShipItem: (laneId: string, itemId: string) => Promise<void>;
+  /** Hydrate every programme's full blob (Portfolio needs all of them). */
+  onHydratePrograms: () => Promise<void>;
   /** Confirm a quarantined portal response into evidence. */
   onIngestPortalItem: (itemId: string) => Promise<void>;
   onDismissPortalItem: (itemId: string) => Promise<void>;
 }
 
-type FlowView = "today" | "flow" | "tracks" | "library" | "pulse" | "mission";
+type FlowView = "today" | "flow" | "tracks" | "library" | "pulse" | "mission" | "portfolio";
 
 /**
  * "Paper & Flow" — the reimagined shell for ATOS Flow programmes. None of the
@@ -92,7 +94,7 @@ export default function FlowShell(props: FlowShellProps) {
           {(program.name || "F").slice(0, 1).toUpperCase()}
           <span className="v3fs-brand-caret" aria-hidden="true">▾</span>
         </button>
-        {([["today", "◈", "Today"], ["flow", "⟶", "Flow"], ["tracks", "▤", "Tracks"], ["library", "◫", "Library"], ["pulse", "◉", "Pulse"], ["mission", "⌘", "Mission"]] as const).map(([id, icon, label]) => (
+        {([["today", "◈", "Today"], ["flow", "⟶", "Flow"], ["tracks", "▤", "Tracks"], ["library", "◫", "Library"], ["pulse", "◉", "Pulse"], ["mission", "⌘", "Mission"], ["portfolio", "⊞", "Portfolio"]] as const).map(([id, icon, label]) => (
           <button key={id} type="button" className={view === id ? "on" : ""} onClick={() => { setView(id); window.scrollTo({ top: 0 }); }}>
             {id === "today" && openDecisions.length > 0 ? <span className="v3fs-dock-n">{openDecisions.length}</span> : null}
             <span className="v3fs-ric" aria-hidden="true">{icon}</span><span className="v3fs-rlb">{label}</span>
@@ -178,6 +180,13 @@ export default function FlowShell(props: FlowShellProps) {
             onToggleAgentHalt={props.onToggleAgentHalt}
             onSetMovementBudget={props.onSetMovementBudget}
           />
+        ) : view === "portfolio" ? (
+          <FlowPortfolio
+            programs={props.programs}
+            activeId={program.id}
+            onSelectProgram={props.onSelectProgram}
+            onHydratePrograms={props.onHydratePrograms}
+          />
         ) : (
           <FlowPulse program={program} />
         )}
@@ -259,6 +268,25 @@ function FlowToday({ program, onResolveDecision, onIngestPortalItem, onDismissPo
     try { await fn(itemId); } finally { setBusyId(null); }
   };
 
+  // "While you were away" — the channels story without a transport: the last
+  // seen stamp is read ONCE per mount, then refreshed, so the strip shows
+  // what landed in the gap (only when the gap is long enough to matter).
+  const [awaySince] = useState<number>(() => {
+    try { return Number(window.localStorage.getItem(`v3fs-seen-${program.id}`) || 0); } catch { return 0; }
+  });
+  useEffect(() => {
+    const stamp = () => {
+      try { window.localStorage.setItem(`v3fs-seen-${program.id}`, String(Date.now())); } catch { /* ignore */ }
+    };
+    stamp();
+    window.addEventListener("beforeunload", stamp);
+    return () => { window.removeEventListener("beforeunload", stamp); stamp(); };
+  }, [program.id]);
+  const AWAY_GAP_MS = 30 * 60 * 1000;
+  const awayItems = awaySince > 0 && Date.now() - awaySince > AWAY_GAP_MS
+    ? feed.filter((entry) => Date.parse(entry.ts) > awaySince)
+    : [];
+
   const resolve = async (id: string, resolution: "confirmed" | "declined") => {
     setBusyId(id);
     try {
@@ -279,6 +307,12 @@ function FlowToday({ program, onResolveDecision, onIngestPortalItem, onDismissPo
 
   return (
     <div className="v3fs-today">
+      {awayItems.length ? (
+        <div className="v3fs-away">
+          <b>While you were away</b> — {awayItems.length} action{awayItems.length === 1 ? "" : "s"} landed:
+          {" "}{awayItems.slice(0, 3).map((entry) => entry.action).join(" · ")}{awayItems.length > 3 ? " · …" : ""}
+        </div>
+      ) : null}
       {inbox.length ? (
         <section className="v3fs-inbox" aria-label="Evidence inbox">
           <div className="v3fs-ph"><h3>Evidence inbox</h3><span>async responses in quarantine — nothing enters the record until you say so</span></div>
@@ -702,6 +736,70 @@ function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggle
         ))}
         {visibleTrail.length > 40 ? <div className="v3fs-empty">+ {visibleTrail.length - 40} older entries</div> : null}
       </div>
+    </div>
+  );
+}
+
+/* ── Portfolio: every Flow programme, the numbers that matter ────────────── */
+
+function FlowPortfolio({ programs, activeId, onSelectProgram, onHydratePrograms }: {
+  programs: ProgramSummary[];
+  activeId: string;
+  onSelectProgram: (id: string) => void;
+  onHydratePrograms: () => Promise<void>;
+}) {
+  // Non-active programmes arrive metadata-only; the numbers need blobs.
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void onHydratePrograms().then(() => { if (alive) setHydrated(true); }).catch(() => { if (alive) setHydrated(true); });
+    return () => { alive = false; };
+  }, [onHydratePrograms]);
+
+  const flowProgrammes = programs.filter((entry) => entry.methodology === "atos-flow");
+  const classicCount = programs.length - flowProgrammes.length;
+
+  return (
+    <div className="v3fs-today">
+      {!hydrated ? <div className="v3fs-empty">Loading every programme&rsquo;s record…</div> : null}
+      <div className="v3fs-trkgrid">
+        {flowProgrammes.map((entry) => {
+          const days = daysToFirstDemo(entry);
+          const decisions = listOpenFlowDecisions(entry).length;
+          const inbox = listPortalInbox(entry).length;
+          const tracks = listFlowTracks(entry);
+          const stalled = tracks.filter((track) => trackPace(track, trackAcceptance(track).accepted).tone === "stalled").length;
+          const coverage = listenCoverage(entry);
+          const needsYou = decisions + inbox;
+          return (
+            <article key={entry.id} className={`v3fs-trk${entry.id === activeId ? " acc" : ""}`}>
+              <div className="v3fs-trk-top">
+                <h3>{entry.name}</h3>
+                {needsYou > 0 ? <span className="v3fs-pace watch">{needsYou} waiting</span> : <span className="v3fs-pace on-pace">clear</span>}
+              </div>
+              {entry.client ? <p className="v3fs-trk-g">{entry.client}</p> : null}
+              <div className="v3fs-trk-meta">
+                <span>{days != null ? `${days}d to first demo` : "no demo date"}</span>
+                <span>{decisions} decision{decisions === 1 ? "" : "s"}</span>
+                <span>{inbox} in evidence inbox</span>
+                {tracks.length ? <span>{stalled ? `${stalled} stalled` : "tracks on pace"}</span> : null}
+                {coverage.total ? <span>{coverage.done}/{coverage.total} heard</span> : null}
+              </div>
+              <div className="v3fs-dec-cta">
+                <button type="button" className="v3fs-btn" disabled={entry.id === activeId}
+                  onClick={() => onSelectProgram(entry.id)}>
+                  {entry.id === activeId ? "You are here" : "Open"}
+                </button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+      {classicCount > 0 ? (
+        <div className="v3fs-empty">
+          + {classicCount} classic programme{classicCount === 1 ? "" : "s"} — switch to one from the programme menu to work it in the classic workspace.
+        </div>
+      ) : null}
     </div>
   );
 }
