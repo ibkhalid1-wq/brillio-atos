@@ -54,6 +54,8 @@ import FlowShell from "@/v3/components/flow/FlowShell";
 import { resolveFlowDecision } from "@/v3/components/flow/flowDecisions";
 import { recordShowPass, addFlowTrack } from "@/v3/components/flow/flowTracks";
 import { setHaltAll, toggleAgentHalt, setMovementBudget } from "@/v3/components/flow/flowGovernance";
+import { mintInterviewPacks, ingestPortalResponse, dismissPortalResponse } from "@/v3/components/flow/flowPortal";
+import FlowRespond from "@/v3/components/flow/FlowRespond";
 import { reportError } from "@/lib/errorReporter";
 import { sanitizeMarkdown } from "@/lib/sanitize";
 import { changedInputFields, relatedArtifactsToStale, crossPhaseArtifactsToStale, fieldsFeedingApprovedArtifacts } from "@/v3/lib/artifactStaleness";
@@ -3247,6 +3249,16 @@ export default function AppShellV3() {
     return <div className="v3-splash">Loading…</div>;
   }
 
+  // Public async-interview page: a stakeholder holding a response link needs
+  // no account — the token IS the access (validated by the flow-portal edge
+  // function) and everything they send is quarantined for operator review.
+  {
+    const respondToken = new URLSearchParams(window.location.search).get("flowRespond");
+    if (respondToken) {
+      return <FlowRespond token={respondToken} />;
+    }
+  }
+
   // Gate: always require sign-in when Supabase is configured.
   // If Supabase is not configured (no .env) we fall through so local dev still works.
   if (authRoute || (isSupabaseConfigured && !authed)) {
@@ -3455,6 +3467,18 @@ export default function AppShellV3() {
           onSetMovementBudget={async (movementId, tokens) => {
             const actor = currentUser?.email || "you";
             await persistFlowMutation((program) => setMovementBudget(program, movementId, tokens, actor));
+          }}
+          onMintPacks={async () => {
+            const actor = currentUser?.email || "you";
+            await persistFlowMutation((program) => mintInterviewPacks(program, actor));
+          }}
+          onIngestPortalItem={async (itemId) => {
+            const actor = currentUser?.email || "you";
+            await persistFlowMutation((program) => ingestPortalResponse(program, itemId, actor));
+          }}
+          onDismissPortalItem={async (itemId) => {
+            const actor = currentUser?.email || "you";
+            await persistFlowMutation((program) => dismissPortalResponse(program, itemId, actor));
           }}
         />
         {setupWizardOverlay}

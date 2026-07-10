@@ -5,6 +5,7 @@ import {
   flowMovements, frontierMovementId, movementEvidence, movementArtifacts,
   gateSignal, listenCoverage, movementFacts, demoAcceptance, type ArtifactCardModel,
 } from "@/v3/components/flow/flowShellData";
+import { listInterviewPacks, portalLinkFor } from "@/v3/components/flow/flowPortal";
 
 /** The gate column's one primary action per movement — opens its editor. */
 const GATE_CTA: Record<string, string> = {
@@ -31,6 +32,8 @@ interface FlowCanvasProps {
   runningAgentIds: Set<string>;
   onRunAgent: (agentId: string, phaseId?: string) => void;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean }) => Promise<void>;
+  /** Mint async-interview response links from the Discovery Kit (Listen). */
+  onMintPacks?: () => Promise<void>;
 }
 
 /**
@@ -41,7 +44,7 @@ interface FlowCanvasProps {
  * coloured). Nothing locks; editing unfolds in place via the shared inputs
  * panel, so the canvas is the workspace, not a dashboard about one.
  */
-export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSaveInputs }: FlowCanvasProps) {
+export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSaveInputs, onMintPacks }: FlowCanvasProps) {
   const movements = useMemo(() => flowMovements(), []);
   const frontier = frontierMovementId(program);
   const [open, setOpen] = useState<Set<string>>(() => new Set([frontier]));
@@ -145,6 +148,9 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                       <div className="v3fs-coverage-bar"><div className="v3fs-coverage-fill" style={{ width: `${Math.round((coverage.done / coverage.total) * 100)}%` }} /></div>
                     </div>
                   ) : null}
+                  {movement.id === "listen" && onMintPacks ? (
+                    <AsyncInterviews program={program} onMintPacks={onMintPacks} />
+                  ) : null}
                   <button type="button" className="v3fs-edit-toggle" onClick={() => toggle(setEditing, movement.id)}>
                     {editing.has(movement.id) ? "Close editor" : "✎ Edit inputs & evidence"}
                   </button>
@@ -210,6 +216,60 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
           </article>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * Async interviews — the Listen column's "no meeting required" lane. Links
+ * mint from the Discovery Kit's per-stakeholder packs; what comes back waits
+ * in Today's evidence inbox until ingested.
+ */
+function AsyncInterviews({ program, onMintPacks }: { program: ProgramSummary; onMintPacks: () => Promise<void> }) {
+  const packs = listInterviewPacks(program);
+  const hasKit = (() => {
+    const raw = (program.rawData ?? {}) as Record<string, unknown>;
+    const inner = typeof raw.data === "object" && raw.data !== null ? (raw.data as Record<string, unknown>) : raw;
+    const kit = inner.discoveryKit;
+    return !!kit && typeof kit === "object" && Array.isArray((kit as Record<string, unknown>).interviews);
+  })();
+  const [busy, setBusy] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  if (!hasKit && packs.length === 0) return null;
+
+  const mint = async () => {
+    setBusy(true);
+    try { await onMintPacks(); } finally { setBusy(false); }
+  };
+  const copy = async (packId: string, link: string) => {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopiedId(packId);
+      window.setTimeout(() => setCopiedId((current) => (current === packId ? null : current)), 1600);
+    } catch { window.prompt("Copy the response link:", link); }
+  };
+
+  return (
+    <div className="v3fs-async">
+      <div className="v3fs-async-cap">Async interviews <span>no meeting required — send a link, answers arrive in Today</span></div>
+      {packs.map((pack) => (
+        <div key={pack.id} className="v3fs-async-row">
+          <span className={`v3fs-st ${pack.respondedAt ? "ok" : "none"}`} />
+          <div className="v3fs-async-who">
+            {pack.stakeholder}
+            <span>{pack.respondedAt ? "responded" : `${pack.questions.length} questions · waiting`}</span>
+          </div>
+          <button type="button" className="v3fs-a" onClick={() => void copy(pack.id, portalLinkFor(program.id, pack))}>
+            {copiedId === pack.id ? "Copied ✓" : "Copy link"}
+          </button>
+        </div>
+      ))}
+      {hasKit ? (
+        <button type="button" className="v3fs-a" disabled={busy} onClick={() => void mint()}>
+          {busy ? "Creating…" : packs.length ? "↺ Create links for new stakeholders" : "✳ Create response links from the Discovery Kit"}
+        </button>
+      ) : null}
     </div>
   );
 }

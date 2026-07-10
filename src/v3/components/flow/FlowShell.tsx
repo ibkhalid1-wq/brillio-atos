@@ -14,6 +14,7 @@ import {
   type FlowShowPass, type FlowTrack,
 } from "@/v3/components/flow/flowTracks";
 import { readFlowGovernance, flowAgentTier } from "@/v3/components/flow/flowGovernance";
+import { listPortalInbox } from "@/v3/components/flow/flowPortal";
 
 interface FlowShellProps {
   program: ProgramSummary;
@@ -39,6 +40,11 @@ interface FlowShellProps {
   onSetHaltAll: (halted: boolean) => Promise<void>;
   onToggleAgentHalt: (agentId: string, halted: boolean) => Promise<void>;
   onSetMovementBudget: (movementId: string, tokens: number) => Promise<void>;
+  /** Mint async-interview response links from the Discovery Kit. */
+  onMintPacks: () => Promise<void>;
+  /** Confirm a quarantined portal response into evidence. */
+  onIngestPortalItem: (itemId: string) => Promise<void>;
+  onDismissPortalItem: (itemId: string) => Promise<void>;
 }
 
 type FlowView = "today" | "flow" | "tracks" | "library" | "pulse" | "mission";
@@ -141,9 +147,11 @@ export default function FlowShell(props: FlowShellProps) {
         </header>
 
         {view === "today" ? (
-          <FlowToday program={program} onResolveDecision={props.onResolveDecision} onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
+          <FlowToday program={program} onResolveDecision={props.onResolveDecision}
+            onIngestPortalItem={props.onIngestPortalItem} onDismissPortalItem={props.onDismissPortalItem}
+            onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
         ) : view === "flow" ? (
-          <FlowCanvas program={program} runningAgentIds={props.runningAgentIds} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} />
+          <FlowCanvas program={program} runningAgentIds={props.runningAgentIds} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} />
         ) : view === "tracks" ? (
           <FlowTracks
             program={program}
@@ -226,17 +234,25 @@ function DecisionCard({ decision, movementLabel, busy, onResolve }: {
   );
 }
 
-function FlowToday({ program, onResolveDecision, onGoFlow }: {
+function FlowToday({ program, onResolveDecision, onIngestPortalItem, onDismissPortalItem, onGoFlow }: {
   program: ProgramSummary;
   onResolveDecision: FlowShellProps["onResolveDecision"];
+  onIngestPortalItem: FlowShellProps["onIngestPortalItem"];
+  onDismissPortalItem: FlowShellProps["onDismissPortalItem"];
   onGoFlow: () => void;
 }) {
   const movements = useMemo(() => flowMovements(), []);
   const open = listOpenFlowDecisions(program);
   const feed = listFlowAttestations(program);
   const moments = listNextMoments(program);
+  const inbox = listPortalInbox(program);
   const [busyId, setBusyId] = useState<string | null>(null);
   const label = (id: string) => movements.find((m) => m.id === id)?.displayName ?? id;
+
+  const actOnItem = async (itemId: string, fn: (id: string) => Promise<void>) => {
+    setBusyId(itemId);
+    try { await fn(itemId); } finally { setBusyId(null); }
+  };
 
   const resolve = async (id: string, resolution: "confirmed" | "declined") => {
     setBusyId(id);
@@ -258,6 +274,33 @@ function FlowToday({ program, onResolveDecision, onGoFlow }: {
 
   return (
     <div className="v3fs-today">
+      {inbox.length ? (
+        <section className="v3fs-inbox" aria-label="Evidence inbox">
+          <div className="v3fs-ph"><h3>Evidence inbox</h3><span>async responses in quarantine — nothing enters the record until you say so</span></div>
+          {inbox.map((item) => (
+            <article key={item.id} className="v3fs-dec v3fs-evitem">
+              <div className="v3fs-dec-top">
+                <span className="v3fs-tag ev">async response</span>
+                <span className="v3fs-dec-mv">{item.stakeholder}{item.role ? ` · ${item.role}` : ""}</span>
+                {item.receivedAt ? <span className="v3fs-dec-when">{timeAgo(item.receivedAt)}</span> : null}
+              </div>
+              <p className="v3fs-dec-s">“{item.text.slice(0, 220)}{item.text.length > 220 ? "…" : ""}”</p>
+              <div className="v3fs-dec-rec-b">{item.text.split(/\s+/).length.toLocaleString()} words</div>
+              <div className="v3fs-dec-cta">
+                <button type="button" className="v3fs-btn pri" disabled={busyId === item.id}
+                  onClick={() => void actOnItem(item.id, onIngestPortalItem)}>
+                  {busyId === item.id ? "Ingesting…" : "Ingest as evidence"}
+                </button>
+                <button type="button" className="v3fs-btn" disabled={busyId === item.id}
+                  onClick={() => void actOnItem(item.id, onDismissPortalItem)}>
+                  Dismiss
+                </button>
+              </div>
+            </article>
+          ))}
+        </section>
+      ) : null}
+
       {open.length === 0 ? (
         <div className="v3fs-quiet">
           <div className="v3fs-quiet-mark" aria-hidden="true">◈</div>
