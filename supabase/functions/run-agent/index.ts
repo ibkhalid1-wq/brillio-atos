@@ -5588,6 +5588,76 @@ function toCamelCaseId(id: string): string {
   return id.replace(/-([a-z])/g, (_, ch: string) => ch.toUpperCase());
 }
 
+// ─── ATOS Flow: decisions, attestations, staleness ───────────────────────────
+// Flow programmes run propose-then-confirm: consequential agent results become
+// Tier-2 DECISIONS a human resolves instead of silent writes, every applied run
+// leaves an ATTESTATION entry, and artifact stubs carry an inputs FINGERPRINT
+// so the client can mark them stale the moment the movement's evidence moves.
+// All three live in the programme's data blob (rawData), like every other
+// structure in this app — no new tables.
+
+function isFlowProgramme(programData: ProgramState): boolean {
+  return getInnerProgramData(programData).methodology === "atos-flow";
+}
+
+/**
+ * Stable fingerprint of a movement's input bucket at generation time. djb2 over
+ * a key-sorted JSON of the bucket (private `_`-keys excluded). MIRRORED in
+ * src/v3/components/flow/flowShellData.ts — keep the two implementations
+ * byte-compatible or staleness will false-positive everywhere.
+ */
+function movementInputsFingerprint(programData: ProgramState, phaseId: string): string {
+  const inner = getInnerProgramData(programData);
+  const buckets = isRecord(inner.phaseInputs) ? inner.phaseInputs as Record<string, unknown> : {};
+  const bucket = isRecord(buckets[phaseId]) ? buckets[phaseId] as Record<string, unknown> : {};
+  const keys = Object.keys(bucket).filter((key) => !key.startsWith("_")).sort();
+  const text = JSON.stringify(keys.map((key) => [key, bucket[key]]));
+  let hash = 5381;
+  for (let index = 0; index < text.length; index += 1) {
+    hash = ((hash * 33) ^ text.charCodeAt(index)) >>> 0;
+  }
+  return hash.toString(16);
+}
+
+/** Stamp the movement-inputs fingerprint on an artifact's ledger stub. */
+function stampFlowArtifactFingerprint(programData: ProgramState, phaseId: string, artifactId: string): ProgramState {
+  const fingerprint = movementInputsFingerprint(programData, phaseId);
+  return updateInnerProgramData(programData, (inner) => {
+    const phaseArtifacts = isRecord(inner.phaseArtifacts) ? { ...(inner.phaseArtifacts as Record<string, JsonValue>) } : {};
+    const bucket = isRecord(phaseArtifacts[phaseId]) ? { ...(phaseArtifacts[phaseId] as Record<string, JsonValue>) } : {};
+    const stub = isRecord(bucket[artifactId]) ? { ...(bucket[artifactId] as Record<string, JsonValue>) } : {};
+    bucket[artifactId] = { ...stub, inputsFingerprint: fingerprint } as JsonValue;
+    phaseArtifacts[phaseId] = bucket as JsonValue;
+    return { ...inner, phaseArtifacts: phaseArtifacts as JsonValue };
+  });
+}
+
+/** Append an attestation entry (capped) — every applied agent action, on the record. */
+function appendFlowAttestation(
+  programData: ProgramState,
+  entry: { agentId: string; phaseId: string; tier: 1 | 2 | 3; action: string; detail?: string },
+): ProgramState {
+  return updateInnerProgramData(programData, (inner) => {
+    const log = Array.isArray(inner.flowAttestations) ? inner.flowAttestations as JsonValue[] : [];
+    return {
+      ...inner,
+      flowAttestations: [...log, { ts: new Date().toISOString(), ...entry } as JsonValue].slice(-200),
+    };
+  });
+}
+
+/** Queue an open Tier-2/3 decision for a human to resolve in the deck's inbox. */
+function queueFlowDecision(programData: ProgramState, decision: Record<string, JsonValue>): ProgramState {
+  return updateInnerProgramData(programData, (inner) => {
+    const list = Array.isArray(inner.flowDecisions) ? inner.flowDecisions as JsonValue[] : [];
+    const id = `dec-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+    return {
+      ...inner,
+      flowDecisions: [...list, { id, status: "open", createdAt: new Date().toISOString(), ...decision } as JsonValue].slice(-60),
+    };
+  });
+}
+
 function applyArtifactQuality(programData: ProgramState, fieldKey: string, review: Record<string, unknown>, confidenceFieldKey?: string): ProgramState {
   return updateInnerProgramData(programData, (inner) => ({
     ...inner,
@@ -8188,7 +8258,41 @@ Deno.serve(async (req) => {
       } else if (request.agentId === "cross-artifact-validator") {
         nextProgramData = applyCrossArtifactValidationResultToProgramData(contextProgramData, request.phaseId, result);
       } else if (request.agentId === "phase-input-planner") {
-        nextProgramData = applyPhaseInputPlannerResultToProgramData(contextProgramData, request.phaseId, result);
+        if (isFlowProgramme(contextProgramData)) {
+          // ATOS Flow: propose, don't apply. The planner's plan is computed in
+          // full (same sanitisation path as classic) but lands as a Tier-2
+          // decision carrying the ready-to-merge dynamicSchema — a human
+          // confirms it in the deck's inbox before it takes effect.
+          const applied = applyPhaseInputPlannerResultToProgramData(contextProgramData, request.phaseId, result);
+          const appliedSchema = getInnerProgramData(applied).dynamicSchema;
+          const schema = isRecord(appliedSchema) ? appliedSchema as Record<string, JsonValue> : {};
+          const fieldsByPhase = isRecord(schema.inputFields) ? schema.inputFields as Record<string, JsonValue> : {};
+          const artifactsByPhaseDyn = isRecord(schema.artifacts) ? schema.artifacts as Record<string, JsonValue> : {};
+          const fieldCount = Array.isArray(fieldsByPhase[request.phaseId]) ? (fieldsByPhase[request.phaseId] as JsonValue[]).length : 0;
+          const artifactCount = Array.isArray(artifactsByPhaseDyn[request.phaseId]) ? (artifactsByPhaseDyn[request.phaseId] as JsonValue[]).length : 0;
+          const planMetaAll = isRecord(schema.planMeta) ? schema.planMeta as Record<string, unknown> : {};
+          const planMetaRaw = planMetaAll[request.phaseId];
+          const planMetaEntry = Array.isArray(planMetaRaw) ? planMetaRaw[0] : planMetaRaw;
+          const rationale = isRecord(planMetaEntry) && typeof planMetaEntry.rationale === "string"
+            ? planMetaEntry.rationale
+            : "Derived from the prior movement's approved artifacts.";
+          nextProgramData = queueFlowDecision(contextProgramData, {
+            tier: 2,
+            agentId: "phase-input-planner",
+            movementId: request.phaseId,
+            title: `Adopt the proposed plan for ${request.phaseId}`,
+            summary: `${fieldCount} programme-specific input${fieldCount === 1 ? "" : "s"} and ${artifactCount} artifact${artifactCount === 1 ? "" : "s"} proposed for this movement.`,
+            blocking: `The ${request.phaseId} movement keeps its static inputs until this is adopted.`,
+            recommendation: {
+              action: "Adopt the plan",
+              rationale,
+              band: "proposal — reversible, additive to the static inputs",
+            } as JsonValue,
+            payload: { dynamicSchema: schema as JsonValue } as JsonValue,
+          });
+        } else {
+          nextProgramData = applyPhaseInputPlannerResultToProgramData(contextProgramData, request.phaseId, result);
+        }
       } else if (request.agentId === "dependency-check") {
         nextProgramData = applyDependencyCheckResultToProgramData(contextProgramData, request.phaseId, result);
       } else if (request.agentId === "benefits-tracker") {
@@ -8383,6 +8487,27 @@ Deno.serve(async (req) => {
           summary: outputSummary || "",
           confidence: toLedgerConfidence(confidence),
         }]);
+      }
+
+      // ── ATOS Flow: attest + fingerprint ───────────────────────────────────
+      // Every applied run leaves an attestation entry; formal artifacts get the
+      // movement-inputs fingerprint stamped on their stub so the client marks
+      // them stale when evidence changes. Classic programmes are untouched.
+      if (!autonomy.shouldQueueReview && isFlowProgramme(nextProgramData)) {
+        if (formalSpecForRun) {
+          nextProgramData = stampFlowArtifactFingerprint(nextProgramData, formalSpecForRun.phase, request.agentId);
+        }
+        nextProgramData = appendFlowAttestation(nextProgramData, {
+          agentId: request.agentId,
+          phaseId: request.phaseId,
+          tier: request.agentId === "phase-input-planner" ? 2 : 1,
+          action: formalSpecForRun
+            ? `Generated ${formalSpecForRun.title}`
+            : request.agentId === "phase-input-planner"
+              ? "Proposed the movement plan — awaiting your confirm"
+              : `Ran ${request.agentId}`,
+          detail: (outputSummary || "").slice(0, 160),
+        });
       }
 
       if (!autonomy.shouldQueueReview) {
