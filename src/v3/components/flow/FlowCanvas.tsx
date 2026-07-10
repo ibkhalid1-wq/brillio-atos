@@ -60,13 +60,22 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
     return () => window.removeEventListener("v3fs-open-editor", onOpen);
   }, []);
 
+  // The readers parse grids and transcripts — compute once per programme
+  // snapshot, not once per render per chapter.
+  const rows = useMemo(
+    () => movements.map((movement) => ({
+      movement,
+      artifacts: movementArtifacts(program, movement),
+      evidence: movementEvidence(program, movement),
+    })),
+    [program, movements],
+  );
+
   return (
     <div className="v3fs-flow">
-      {movements.map((movement, index) => {
+      {rows.map(({ movement, artifacts, evidence }, index) => {
         const isOpen = open.has(movement.id);
         const isDone = program.gateReviews?.[movement.id]?.status === "approved";
-        const artifacts = movementArtifacts(program, movement);
-        const evidence = movementEvidence(program, movement);
         const generating = artifacts.some((a) => runningAgentIds.has(a.id));
         const isLive = movement.id === frontier && !isDone;
         const signal = gateSignal(program, movement, artifacts);

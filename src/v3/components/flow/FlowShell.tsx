@@ -81,6 +81,7 @@ export default function FlowShell(props: FlowShellProps) {
       <nav className="v3fs-dock" aria-label="Primary">
         <button type="button" className="v3fs-brand" onClick={() => setSwitcherOpen((v) => !v)} aria-label="Programme menu" aria-expanded={switcherOpen}>
           {(program.name || "F").slice(0, 1).toUpperCase()}
+          <span className="v3fs-brand-caret" aria-hidden="true">▾</span>
         </button>
         {([["flow", "⟶", "Flow"], ["library", "◫", "Library"], ["pulse", "◉", "Pulse"]] as const).map(([id, icon, label]) => (
           <button key={id} type="button" className={view === id ? "on" : ""} onClick={() => { setView(id); window.scrollTo({ top: 0 }); }}>
@@ -118,14 +119,25 @@ export default function FlowShell(props: FlowShellProps) {
           <h1>From conversations to working systems.</h1>
           <div className="v3fs-hero-row">
             <div className="v3fs-count">
-              <div className="v3fs-count-n">
-                {days != null ? <><b>{days}</b> day{Math.abs(days) === 1 ? "" : "s"}</> : <b>—</b>}
-              </div>
-              <div className="v3fs-count-l">
-                {days != null
-                  ? (days >= 0 ? "until the first stakeholder demonstration" : "past the planned first demonstration — update the target in Frame")
-                  : "No first-demonstration date set. Add one in Frame to track delivery pace."}
-              </div>
+              {days != null ? (
+                <>
+                  <div className="v3fs-count-n"><b>{days}</b> day{Math.abs(days) === 1 ? "" : "s"}</div>
+                  <div className="v3fs-count-l">
+                    {days >= 0 ? "until the first stakeholder demonstration" : "past the planned first demonstration — update the target in Frame"}
+                  </div>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="v3fs-date-chip"
+                  onClick={() => {
+                    setView("flow");
+                    window.dispatchEvent(new CustomEvent("v3fs-open-editor", { detail: { movement: "frame" } }));
+                  }}
+                >
+                  Set the first-demonstration date →
+                </button>
+              )}
             </div>
             <div className="v3fs-paste">⤓ <span><b>Add evidence to any movement.</b> ATOS incorporates it and updates every dependent artifact.</span></div>
           </div>
@@ -152,15 +164,30 @@ export default function FlowShell(props: FlowShellProps) {
 
 function FlowLibrary({ program }: { program: ProgramSummary }) {
   const movements = useMemo(() => flowMovements(), []);
-  const evidence = movements.flatMap((m) => movementEvidence(program, m));
-  const artifacts = movements.flatMap((m) => movementArtifacts(program, m));
+  const [query, setQuery] = useState("");
+  const all = useMemo(() => ({
+    evidence: movements.flatMap((m) => movementEvidence(program, m)),
+    artifacts: movements.flatMap((m) => movementArtifacts(program, m)),
+  }), [program, movements]);
+  const q = query.trim().toLowerCase();
+  const evidence = q ? all.evidence.filter((e) => `${e.who} ${e.fieldLabel} ${e.excerpt}`.toLowerCase().includes(q)) : all.evidence;
+  const artifacts = q ? all.artifacts.filter((a) => `${a.title} ${a.excerpt ?? ""}`.toLowerCase().includes(q)) : all.artifacts;
   const label = (id: string) => movements.find((m) => m.id === id)?.displayName ?? id;
 
   return (
     <div className="v3fs-grid2">
+      <div className="v3fs-search-row">
+        <input
+          className="v3fs-search"
+          placeholder="Search everything the programme knows — a name, a number, a phrase…"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          aria-label="Search evidence and artifacts"
+        />
+      </div>
       <div className="v3fs-panel">
         <div className="v3fs-ph"><h3>Evidence</h3><span>all conversations and source material on record</span></div>
-        {evidence.length === 0 ? <div className="v3fs-empty">No evidence captured yet. Add the first conversation in Frame or Listen.</div> : null}
+        {evidence.length === 0 ? <div className="v3fs-empty">{q ? "Nothing matches that search." : "No evidence captured yet. Add the first conversation in Frame or Listen."}</div> : null}
         {evidence.map((entry, i) => (
           <div key={i} className="v3fs-row">
             <span className="v3fs-tag ev">{label(entry.movementId)}</span>
