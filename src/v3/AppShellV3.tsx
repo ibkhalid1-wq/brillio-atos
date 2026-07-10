@@ -1606,8 +1606,16 @@ export default function AppShellV3() {
     copilotMemoryContext,
   );
 
+  // Proactive triggers exist for the classic surfaces. Flow programmes run on
+  // their own decision loop, and every trigger is a full-blob edge write that
+  // can collide with a human confirm on the same hot row — so triggers stay
+  // off until the hydrated blob says the programme is classic. (A metadata-only
+  // beat can't tell us the methodology, and its null generatedAt fields would
+  // read as "stale everything" and fire spuriously.)
+  const proactiveTriggersEligible =
+    Object.keys(rawData).length > 0 && activeProgram?.methodology !== "atos-flow";
   const triggers = useAgentTriggers({
-    programId: activeProgramId,
+    programId: proactiveTriggersEligible ? activeProgramId : "",
     authed,
     activePhaseId,
     rawData,
