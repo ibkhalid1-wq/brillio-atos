@@ -1130,13 +1130,23 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
                             onChange={(event) => setValues((current) => ({ ...current, [field.id]: event.target.value }))}
                           />
                         ) : (
-                          <V3Combobox
-                            ariaLabel={field.label}
-                            value={value}
-                            suggestions={referenceSuggestions.document ?? []}
-                            placeholder={field.placeholder ?? "Reference an uploaded transcript…"}
-                            onChange={(next) => setValues((current) => ({ ...current, [field.id]: next }))}
-                          />
+                          <>
+                            {/* A long pasted transcript must not appear as the
+                                picker's text — show an empty picker; the pasted
+                                text survives until a reference is chosen. */}
+                            <V3Combobox
+                              ariaLabel={field.label}
+                              value={looksPasted ? "" : value}
+                              suggestions={referenceSuggestions.document ?? []}
+                              placeholder={field.placeholder ?? "Reference an uploaded transcript…"}
+                              onChange={(next) => setValues((current) => ({ ...current, [field.id]: next }))}
+                            />
+                            {looksPasted ? (
+                              <div style={{ fontSize: 10.5, color: "var(--v3-text-muted)", marginTop: 4 }}>
+                                Your pasted transcript is kept until you choose a document — picking one replaces it.
+                              </div>
+                            ) : null}
+                          </>
                         )}
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
                           <button

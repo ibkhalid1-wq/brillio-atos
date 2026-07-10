@@ -13231,7 +13231,11 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 /* The classic shell is a fixed-height flex column that scrolls in inner panes;
    Paper & Flow scrolls as a page. Override the shell box for the flow root. */
 .v3-shell.v3fs-shell{display:block;height:100dvh;overflow-y:auto;overflow-x:hidden}
-.v3fs-app button{font-family:var(--v3-font);cursor:pointer;border:none;background:none;color:inherit}
+/* Reset ONLY the Flow shell's own controls. A blanket `.v3fs-app button` reset
+   also stripped every classic control inside the embedded inputs editor
+   (v3-button ghost/primary lost their borders and backgrounds and read as
+   dead text) — scope it to the shell's own classed controls instead. */
+.v3fs-dock button,.v3fs-switcher button,.v3fs-ch-h,.v3fs-edit-toggle,.v3fs-a,.v3fs-cta{font-family:var(--v3-font);cursor:pointer;border:none;background:none;color:inherit}
 .v3fs-wrap{max-width:1200px;margin:0 auto;padding:0 32px 110px}
 
 /* floating dock */
