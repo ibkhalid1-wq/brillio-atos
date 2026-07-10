@@ -1195,6 +1195,7 @@ Return ONLY valid JSON:
   "entities": [ { "name": "their noun", "definition": "one sentence in their language", "attributes": ["key attributes mentioned"], "systemOfRecord": "system or null", "aliases": ["what other teams call it"], "evidence": "verbatim quote — speaker" } ],
   "relations": [ { "from": "entity", "relation": "verb phrase", "to": "entity", "cardinality": "1:1|1:N|N:M|unknown" } ],
   "events": [ { "name": "business event", "triggers": "what causes it", "produces": "what it changes" } ],
+  "standardAlignment": [ { "entity": "ontology entity name", "standard": "full URI, e.g. https://schema.org/Order", "vocabulary": "schema.org|FIBO|GS1|FHIR", "relation": "skos:closeMatch|skos:exactMatch", "confidence": 0.0 } ],
   "ambiguities": [ { "term": "string", "conflictingMeanings": ["meaning per team"], "resolution": "proposed resolution or 'unresolved'" } ],
   "gaps": ["entities referenced but never defined, domains not yet mapped"],
   "summary": "one sentence verdict on ontology completeness",
@@ -8629,6 +8630,39 @@ Deno.serve(async (req) => {
               : `Ran ${request.agentId}`,
           detail: (outputSummary || "").slice(0, 160),
         });
+
+        // Standard-vocabulary mappings ground the ontology in the industry's
+        // shared language — adopted only through a human confirm, like every
+        // consequential proposal.
+        if (request.agentId === "domain-ontology" && Array.isArray((result as Record<string, unknown>).standardAlignment)) {
+          const mappings = ((result as Record<string, unknown>).standardAlignment as unknown[])
+            .filter(isRecord)
+            .filter((entry) => typeof entry.entity === "string" && typeof entry.standard === "string" && String(entry.standard).startsWith("http"))
+            .slice(0, 20)
+            .map((entry) => ({
+              entity: String(entry.entity),
+              standard: String(entry.standard),
+              vocabulary: String(entry.vocabulary ?? ""),
+              relation: entry.relation === "skos:exactMatch" ? "skos:exactMatch" : "skos:closeMatch",
+              confidence: typeof entry.confidence === "number" ? Math.max(0, Math.min(1, entry.confidence)) : null,
+            }));
+          if (mappings.length) {
+            nextProgramData = queueFlowDecision(nextProgramData, {
+              tier: 2,
+              agentId: "domain-ontology",
+              movementId: request.phaseId || "listen",
+              title: `Adopt ${mappings.length} standard mapping${mappings.length === 1 ? "" : "s"}`,
+              summary: `Ontology entities aligned to industry vocabularies: ${mappings.slice(0, 3).map((m) => `${m.entity} → ${m.standard.split("/").pop()}`).join(", ")}${mappings.length > 3 ? "…" : ""}.`,
+              blocking: "The ontology stays in the client's private language until the mappings are adopted.",
+              recommendation: {
+                action: "Adopt the mappings",
+                rationale: "Grounding entities in the industry's shared vocabulary (SKOS mappings to standard URIs) makes every downstream contract and export interoperable.",
+                band: "proposal — reversible, mappings merge additively",
+              } as JsonValue,
+              payload: { ontologyAlignment: mappings as unknown as JsonValue } as JsonValue,
+            });
+          }
+        }
 
         // The blueprint's track plan lands as its own Tier-2 decision — the
         // Tracks board adopts workstreams only through a human confirm, and
