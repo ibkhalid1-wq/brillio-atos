@@ -5663,6 +5663,21 @@ function flowAgentTier(agentId: string): 1 | 2 | 3 {
   return agentId === "phase-input-planner" ? 2 : 1;
 }
 
+/**
+ * Tokens to record on the run row: the provider's reported usage when it
+ * surfaces one, else a chars/4 estimate over prompt+output — the movement
+ * budget ledger controls order-of-magnitude spend and must never accumulate
+ * silent zeros just because a provider's stream hides its usage frames.
+ */
+function tokensUsedForRun(
+  usage: { inputTokens: number; outputTokens: number },
+  promptChars: number,
+  outputChars: number,
+): number {
+  const reported = usage.inputTokens + usage.outputTokens;
+  return reported > 0 ? reported : Math.ceil((promptChars + outputChars) / 4);
+}
+
 /** Queue an open Tier-2/3 decision for a human to resolve in the deck's inbox. */
 function queueFlowDecision(programData: ProgramState, decision: Record<string, JsonValue>): ProgramState {
   return updateInnerProgramData(programData, (inner) => {
@@ -8730,7 +8745,7 @@ Deno.serve(async (req) => {
           handoff: null,
           reasoning_trace: null,
           confidence,
-          tokens_used: claudeResult.inputTokens + claudeResult.outputTokens,
+          tokens_used: tokensUsedForRun(claudeResult, prompt.system.length + prompt.user.length, claudeResult.text.length),
           completed_at: new Date().toISOString(),
           awaiting_decision_id: null,
         })
@@ -8828,7 +8843,7 @@ Deno.serve(async (req) => {
           status: "paused",
           output: { partialContent: pauseMarker.contentBeforePause || "" } as JsonValue,
           awaiting_decision_id: decisionId,
-          tokens_used: claudeResult.inputTokens + claudeResult.outputTokens,
+          tokens_used: tokensUsedForRun(claudeResult, prompt.system.length + prompt.user.length, claudeResult.text.length),
           confidence: null,
         })
         .eq("id", runId);
@@ -8990,7 +9005,7 @@ Deno.serve(async (req) => {
         handoff: (handoff || null) as JsonValue | null,
         reasoning_trace: parsed.reasoningTrace,
         confidence: parsed.confidence,
-        tokens_used: claudeResult.inputTokens + claudeResult.outputTokens,
+        tokens_used: tokensUsedForRun(claudeResult, prompt.system.length + prompt.user.length, claudeResult.text.length),
         completed_at: new Date().toISOString(),
         awaiting_decision_id: null,
       })
