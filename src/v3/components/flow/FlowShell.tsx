@@ -115,8 +115,10 @@ export default function FlowShell(props: FlowShellProps) {
 
       <div className="v3fs-wrap">
         <header className="v3fs-hero">
-          <div className="v3fs-eyebrow">ATOS Flow <span>· {program.name} · {program.client || "—"}</span></div>
-          <h1>From conversations to working systems.</h1>
+          <h1 className="v3fs-hero-title">
+            <span className="v3fs-hero-brand">ATOS Flow</span> · {program.name}
+            {program.client ? <span className="v3fs-hero-client"> · {program.client}</span> : null}
+          </h1>
           <div className="v3fs-hero-row">
             <div className="v3fs-count">
               {days != null ? (

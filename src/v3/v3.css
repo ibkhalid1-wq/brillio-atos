@@ -13261,9 +13261,9 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 
 /* hero */
 .v3fs-hero{padding:56px 0 20px}
-.v3fs-eyebrow{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--v3-accent-2)}
-.v3fs-eyebrow span{color:var(--v3-text-muted);font-weight:500;letter-spacing:.04em;text-transform:none;font-size:12px}
-.v3fs-hero h1{font-size:clamp(28px,4vw,42px);font-weight:600;letter-spacing:-.025em;margin-top:8px;text-wrap:balance}
+.v3fs-hero-title{font-size:clamp(24px,3.2vw,36px);font-weight:600;letter-spacing:-.02em;color:var(--v3-text-primary);text-wrap:balance;line-height:1.15}
+.v3fs-hero-brand{color:var(--v3-accent-2)}
+.v3fs-hero-client{color:var(--v3-text-muted);font-weight:500}
 .v3fs-hero-row{display:flex;align-items:flex-end;gap:40px;flex-wrap:wrap;margin-top:16px}
 .v3fs-count-n{font-size:clamp(52px,7vw,80px);font-weight:275;letter-spacing:-.04em;line-height:.95;font-variant-numeric:tabular-nums}
 .v3fs-date-chip{display:inline-block;border:1.5px dashed var(--v3-accent-2);color:var(--v3-accent-2);border-radius:14px;padding:14px 20px;font-size:14px;font-weight:600;background:var(--fs-indigo-wash)}
