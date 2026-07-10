@@ -86,6 +86,11 @@ export default function FlowShell(props: FlowShellProps) {
             <span className="v3fs-hero-brand">ATOS Flow</span> · {program.name}
             {program.client ? <span className="v3fs-hero-client"> · {program.client}</span> : null}
           </h1>
+          <p className="v3fs-how">
+            Work each movement in turn: add the recorded conversations and facts it needs, review the
+            artifacts ATOS drafts from them, and advance once the gate&rsquo;s demonstration is accepted.
+            Add new evidence any time — everything downstream re-generates to match.
+          </p>
           {days != null ? (
             <div className="v3fs-hero-row">
               <div className="v3fs-count">
