@@ -559,16 +559,26 @@ export function FlowDocViewer({ program, artifact, onClose, onRegenerate }: {
               const inner = typeof raw.data === "object" && raw.data !== null ? raw.data as Record<string, unknown> : raw;
               const adopted = Array.isArray(inner.ontologyAlignment) ? inner.ontologyAlignment as Array<Record<string, unknown>> : [];
               if (adopted.length) {
+                // A mapping confirmed against an OLDER ontology than the one
+                // on screen may no longer fit — chain it to the version it
+                // was adopted against and flag the drift.
+                const doc = typeof inner.domainOntology === "object" && inner.domainOntology !== null
+                  ? inner.domainOntology as Record<string, unknown> : {};
+                const generatedAt = typeof doc.generatedAt === "string" ? Date.parse(doc.generatedAt) : NaN;
                 return (
                   <div className="v3fs-maps">
                     <div className="v3fs-async-cap">Adopted standard mappings <span>confirmed groundings in the industry's shared vocabulary</span></div>
                     <div className="v3fs-maps-row">
-                      {adopted.map((mapping, index) => (
-                        <a key={index} className="v3fs-map-chip" href={String(mapping.standard ?? "#")} target="_blank" rel="noreferrer"
-                          title={`${mapping.relation} · ${mapping.standard}`}>
-                          {String(mapping.entity)} ⇢ {String(mapping.standard ?? "").split("/").pop()}
-                        </a>
-                      ))}
+                      {adopted.map((mapping, index) => {
+                        const adoptedAt = typeof mapping.adoptedAt === "string" ? Date.parse(String(mapping.adoptedAt)) : NaN;
+                        const drifted = Number.isFinite(generatedAt) && Number.isFinite(adoptedAt) && generatedAt > adoptedAt;
+                        return (
+                          <a key={index} className={`v3fs-map-chip${drifted ? " drift" : ""}`} href={String(mapping.standard ?? "#")} target="_blank" rel="noreferrer"
+                            title={`${mapping.relation} · ${mapping.standard}${drifted ? " · ontology regenerated since adoption — reconfirm" : ""}`}>
+                            {String(mapping.entity)} ⇢ {String(mapping.standard ?? "").split("/").pop()}{drifted ? " ⚠" : ""}
+                          </a>
+                        );
+                      })}
                     </div>
                   </div>
                 );

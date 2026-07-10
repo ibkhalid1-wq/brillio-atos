@@ -151,7 +151,9 @@ export function resolveFlowDecision(
   if (resolution === "confirmed" && payload && Array.isArray(payload.ontologyAlignment)) {
     const current = Array.isArray(nextInner.ontologyAlignment) ? (nextInner.ontologyAlignment as unknown[]) : [];
     const known = new Set(current.filter(isRecord).map((m) => String(m.entity ?? "").toLowerCase()));
-    const additions = payload.ontologyAlignment.filter(isRecord).filter((m) => m.entity && !known.has(String(m.entity).toLowerCase()));
+    const additions = payload.ontologyAlignment.filter(isRecord)
+      .filter((m) => m.entity && !known.has(String(m.entity).toLowerCase()))
+      .map((m) => ({ ...m, adoptedAt: now }));
     if (additions.length) nextInner = { ...nextInner, ontologyAlignment: [...current, ...additions].slice(-60) };
   }
 
