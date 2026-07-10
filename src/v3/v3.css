@@ -13568,7 +13568,13 @@ html:not([data-theme="light"]) .v3fs-node{border-top-color:var(--v3-border-top)}
 .v3fs-here.calm{background:var(--fs-card);color:var(--v3-accent-2);border:1px solid var(--fs-line);box-shadow:var(--fs-shadow);cursor:default}
 .v3fs-here.calm .v3fs-here-a{animation:none}
 @media (prefers-reduced-motion:reduce){.v3fs-here-a{animation:none}}
-@media (max-width:1380px){.v3fs-here{display:none}}
+@keyframes v3fs-here-nudge-y{0%,100%{transform:rotate(90deg) translateX(0)}50%{transform:rotate(90deg) translateX(4px)}}
+@media (max-width:1380px){
+  /* No corridor left of the spine here — the pill perches above the node,
+     arrow rotated to point down at it. */
+  .v3fs-here{right:auto;left:0;top:-26px;padding:5px 11px;font-size:10.5px}
+  .v3fs-here .v3fs-here-a{animation-name:v3fs-here-nudge-y;transform:rotate(90deg)}
+}
 
 /* "Start here" — the one arrow that says where to begin. */
 .v3fs-start{position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:6px;white-space:nowrap;background:linear-gradient(135deg,#4f46e5,var(--v3-accent-2));color:#fff;font-size:11.5px;font-weight:700;letter-spacing:.01em;border-radius:999px;padding:7px 14px;box-shadow:0 8px 24px -8px rgba(79,70,229,.55);pointer-events:none;z-index:5}
