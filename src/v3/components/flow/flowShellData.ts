@@ -90,8 +90,13 @@ function parseTranscript(movementId: string, fieldLabel: string, text: string): 
   const headerRe = /^[—–-]{1,2}\s*(.{3,90}?)\s*[—–-]{1,2}\s*$/gm;
   const entries: EvidenceEntry[] = [];
   const matches = [...text.matchAll(headerRe)];
-  const firstLine = (body: string) =>
-    (body.split("\n").map((l) => l.trim()).find((l) => l.length > 10) ?? "").slice(0, 110);
+  // The pull-quote: prefer the most QUOTABLE line — numbers, money, time, or
+  // pain language land better than whatever happened to be said first.
+  const quotable = /\d|%|\$|€|£|day|hour|week|month|lose|lost|manual|wait|delay|slow|only|never|every time/i;
+  const firstLine = (body: string) => {
+    const lines = body.split("\n").map((l) => l.trim()).filter((l) => l.length > 10);
+    return (lines.find((l) => quotable.test(l)) ?? lines[0] ?? "").slice(0, 110);
+  };
   if (matches.length === 0) {
     return [{
       movementId, fieldLabel, kind: "transcript",
@@ -206,6 +211,23 @@ export function wordsOfEvidence(program: ProgramSummary): number {
     (sum, movement) => sum + movementEvidence(program, movement).reduce((s, e) => s + e.words, 0),
     0,
   );
+}
+
+/**
+ * A movement's captured scalar facts (objective, sponsor, chosen framework…) —
+ * the inputs that aren't conversations but still tell the chapter's story.
+ */
+export function movementFacts(program: ProgramSummary, movement: PhaseDefinition): Array<{ label: string; value: string }> {
+  const inputs = readMovementInputs(program, movement.id);
+  const out: Array<{ label: string; value: string }> = [];
+  for (const field of movement.inputFields ?? []) {
+    if (field.type === "transcript" || field.type === "document" || field.type === "grid") continue;
+    const value = inputs[field.id];
+    if (typeof value !== "string" || !value.trim()) continue;
+    out.push({ label: field.label, value: value.trim().replace(/\s+/g, " ").slice(0, 72) });
+    if (out.length >= 3) break;
+  }
+  return out;
 }
 
 /** Frame's Success KPIs grid, for the Pulse outcome rivers. */

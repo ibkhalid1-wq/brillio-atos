@@ -13307,6 +13307,16 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 .v3fs-coverage-bar{height:6px;border-radius:99px;background:var(--v3-surface-2);overflow:hidden}
 .v3fs-coverage-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--v3-accent-b),#4dc3ee)}
 .v3fs-edit-toggle{margin-top:14px;font-size:12px;font-weight:600;color:var(--v3-accent-2);padding:0}
+.v3fs-meta{font-size:11px;color:var(--v3-text-muted);font-variant-numeric:tabular-nums}
+.v3fs-facts{margin-top:6px;display:flex;flex-direction:column;gap:4px}
+.v3fs-fact{font-size:12px;color:var(--v3-text-secondary);display:flex;gap:8px;min-width:0}
+.v3fs-fact b{font-weight:600;color:var(--v3-text-muted);font-size:10.5px;letter-spacing:.03em;text-transform:uppercase;flex-shrink:0;padding-top:1px}
+.v3fs-fact span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.v3fs-tour{padding-top:8px;padding-bottom:8px}
+.v3fs-verd{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--fs-line);font-size:12.5px}
+.v3fs-verd:last-of-type{border-bottom:none}
+.v3fs-verd-w{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--v3-text-secondary)}
+.v3fs-verd-more{font-size:11px;color:var(--v3-text-muted);padding-top:6px}
 .v3fs-edit-toggle:hover{text-decoration:underline}
 
 /* generated — paper documents */
