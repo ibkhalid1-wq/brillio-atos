@@ -267,11 +267,21 @@ export function FlowDocViewer({ program, artifact, onClose, onRegenerate }: {
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const paragraphs = (body ?? "")
+  // Light markdown: heading lines become headings, bullet lines keep their
+  // hang, everything else reads as prose. No parser — the docs are trusted
+  // generator output rendered as text.
+  const blocks = useMemo(() => (body ?? "")
     .replace(/\*\*/g, "")
     .split(/\n{2,}/)
     .map((block) => block.trimEnd())
-    .filter(Boolean);
+    .filter(Boolean)
+    .map((block) => block.split("\n").map((line) => {
+      const heading = line.match(/^#{1,4}\s+(.*)$/);
+      if (heading) return { kind: "h" as const, text: heading[1] };
+      const bullet = line.match(/^\s*[-•]\s+(.*)$/);
+      if (bullet) return { kind: "li" as const, text: bullet[1] };
+      return { kind: "p" as const, text: line };
+    })), [body]);
 
   return (
     <>
@@ -296,8 +306,16 @@ export function FlowDocViewer({ program, artifact, onClose, onRegenerate }: {
           </div>
         </header>
         <div className="v3fs-docview-b">
-          {paragraphs.length === 0 ? <p className="v3fs-empty">No document body yet — generate it first.</p> : null}
-          {paragraphs.map((block, index) => <p key={index}>{block}</p>)}
+          {blocks.length === 0 ? <p className="v3fs-empty">No document body yet — generate it first.</p> : null}
+          {blocks.map((lines, blockIndex) => (
+            <div key={blockIndex} className="v3fs-docview-blk">
+              {lines.map((line, lineIndex) =>
+                line.kind === "h" ? <h3 key={lineIndex}>{line.text}</h3>
+                  : line.kind === "li" ? <div key={lineIndex} className="v3fs-docview-li">{line.text}</div>
+                    : <p key={lineIndex}>{line.text}</p>,
+              )}
+            </div>
+          ))}
         </div>
       </div>
     </>
