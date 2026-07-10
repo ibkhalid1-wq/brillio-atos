@@ -54,7 +54,8 @@ export default function FlowRespond({ token }: { token: string }) {
 
   const composed = useMemo(() => {
     if (state.phase !== "ready") return "";
-    const blocks = state.pack.questions
+    // Demo packs carry no questions — this memo only serves the interview view.
+    const blocks = (state.pack.questions ?? [])
       .map((question, index) => {
         const answer = (answers[index] ?? "").trim();
         return answer ? `Q: ${question}\nA: ${answer}` : "";
