@@ -195,6 +195,12 @@ export function useAgentRun(programId: string, enabled = true, onRunComplete?: (
           started_at: statusPayload.updatedAt,
         } as Partial<AgentRun>));
       })
+      // Out-of-band programme writes (e.g. the public flow-portal quarantining
+      // an async response) announce themselves here so the blob refreshes now
+      // instead of on the next poll cycle.
+      .on("broadcast", { event: "program_data_changed" }, () => {
+        onRunComplete?.();
+      })
       .subscribe((status: string) => {
         updateChannelStatus("broadcast", status);
       });

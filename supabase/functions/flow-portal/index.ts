@@ -56,7 +56,7 @@ async function loadPack(token: string) {
   });
   const { data: row } = await admin
     .from("adam_programs")
-    .select("id, name, data")
+    .select("id, name, data, updated_at")
     .eq("id", programId)
     .maybeSingle();
   if (!row) return null;
@@ -71,6 +71,7 @@ async function loadPack(token: string) {
   return {
     admin, programId, programName: String(row.name ?? "the programme"),
     raw, inner, nested, kind, pack: (pack ?? invite) as Record<string, unknown>,
+    updatedAt: typeof row.updated_at === "string" ? row.updated_at : null,
   };
 }
 
@@ -117,73 +118,94 @@ Deno.serve(async (req: Request) => {
     if (req.method === "POST") {
       const body = await req.json().catch(() => null);
       const token = isRecord(body) && typeof body.token === "string" ? body.token : "";
-      const hit = await loadPack(token);
-      if (!hit) return jsonResponse({ error: "This link is not valid." }, 404);
 
-      const stakeholder = String(hit.pack.stakeholder ?? "Stakeholder");
-      const now = new Date().toISOString();
-      const inbox = Array.isArray(hit.inner.flowPortalInbox) ? [...hit.inner.flowPortalInbox] : [];
-      const log = Array.isArray(hit.inner.flowAttestations) ? [...hit.inner.flowAttestations] : [];
-      const nextInner: Record<string, unknown> = { ...hit.inner };
+      // Compare-and-set with reload-and-retry: a run finishing between our
+      // read and write must never be clobbered by a portal submission (and
+      // vice versa). Same discipline as the run-agent persist path.
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const hit = await loadPack(token);
+        if (!hit) return jsonResponse({ error: "This link is not valid." }, 404);
 
-      if (hit.kind === "demo") {
-        const verdict = isRecord(body) && typeof body.verdict === "string" ? body.verdict : "";
-        if (!DEMO_VERDICTS.has(verdict)) {
-          return jsonResponse({ error: "Pick a verdict before sending." }, 400);
+        const stakeholder = String(hit.pack.stakeholder ?? "Stakeholder");
+        const now = new Date().toISOString();
+        const inbox = Array.isArray(hit.inner.flowPortalInbox) ? [...hit.inner.flowPortalInbox] : [];
+        const log = Array.isArray(hit.inner.flowAttestations) ? [...hit.inner.flowAttestations] : [];
+        const nextInner: Record<string, unknown> = { ...hit.inner };
+
+        if (hit.kind === "demo") {
+          const verdict = isRecord(body) && typeof body.verdict === "string" ? body.verdict : "";
+          if (!DEMO_VERDICTS.has(verdict)) {
+            return jsonResponse({ error: "Pick a verdict before sending." }, 400);
+          }
+          const comment = isRecord(body) && typeof body.comment === "string"
+            ? body.comment.trim().slice(0, MAX_ANSWER_CHARS)
+            : "";
+          inbox.push({
+            id: crypto.randomUUID(),
+            kind: "demo-verdict",
+            stakeholder,
+            role: String(hit.pack.role ?? ""),
+            receivedAt: now,
+            verdict,
+            text: comment,
+          });
+          nextInner.flowDemoInvites = (hit.inner.flowDemoInvites as unknown[]).map((entry) =>
+            isRecord(entry) && entry.token === hit.pack.token ? { ...entry, respondedAt: now } : entry,
+          );
+          log.push({
+            ts: now, agentId: "portal", phaseId: "show", tier: 1,
+            action: `Received a demo verdict — ${stakeholder}: ${verdict.replace(/-/g, " ")}`,
+            detail: comment ? `"${comment.slice(0, 120)}" — quarantined for your review.` : "Quarantined for your review.",
+          });
+        } else {
+          const answersRaw = isRecord(body) && typeof body.answers === "string" ? body.answers : "";
+          const answers = answersRaw.trim().slice(0, MAX_ANSWER_CHARS);
+          if (answers.length < MIN_ANSWER_CHARS) {
+            return jsonResponse({ error: "Please write a little more — a sentence or two at minimum." }, 400);
+          }
+          inbox.push({
+            id: crypto.randomUUID(),
+            kind: "interview",
+            stakeholder,
+            role: String(hit.pack.role ?? ""),
+            receivedAt: now,
+            text: answers,
+          });
+          nextInner.flowInterviewPacks = (hit.inner.flowInterviewPacks as unknown[]).map((entry) =>
+            isRecord(entry) && entry.token === hit.pack.token ? { ...entry, respondedAt: now } : entry,
+          );
+          log.push({
+            ts: now, agentId: "portal", phaseId: "listen", tier: 1,
+            action: `Received an async interview response — ${stakeholder}`,
+            detail: `${answers.split(/\s+/).length.toLocaleString()} words, quarantined in the evidence inbox for your review.`,
+          });
         }
-        const comment = isRecord(body) && typeof body.comment === "string"
-          ? body.comment.trim().slice(0, MAX_ANSWER_CHARS)
-          : "";
-        inbox.push({
-          id: crypto.randomUUID(),
-          kind: "demo-verdict",
-          stakeholder,
-          role: String(hit.pack.role ?? ""),
-          receivedAt: now,
-          verdict,
-          text: comment,
-        });
-        nextInner.flowDemoInvites = (hit.inner.flowDemoInvites as unknown[]).map((entry) =>
-          isRecord(entry) && entry.token === hit.pack.token ? { ...entry, respondedAt: now } : entry,
-        );
-        log.push({
-          ts: now, agentId: "portal", phaseId: "show", tier: 1,
-          action: `Received a demo verdict — ${stakeholder}: ${verdict.replace(/-/g, " ")}`,
-          detail: comment ? `"${comment.slice(0, 120)}" — quarantined for your review.` : "Quarantined for your review.",
-        });
-      } else {
-        const answersRaw = isRecord(body) && typeof body.answers === "string" ? body.answers : "";
-        const answers = answersRaw.trim().slice(0, MAX_ANSWER_CHARS);
-        if (answers.length < MIN_ANSWER_CHARS) {
-          return jsonResponse({ error: "Please write a little more — a sentence or two at minimum." }, 400);
+
+        nextInner.flowPortalInbox = inbox.slice(-INBOX_CAP);
+        nextInner.flowAttestations = log.slice(-200);
+        const nextRaw = hit.nested ? { ...hit.raw, data: nextInner } : nextInner;
+        let update = hit.admin
+          .from("adam_programs")
+          .update({ data: nextRaw, updated_at: now })
+          .eq("id", hit.programId);
+        update = hit.updatedAt ? update.eq("updated_at", hit.updatedAt) : update.is("updated_at", null);
+        const { data: updatedRows, error } = await update.select("id");
+        if (error) return jsonResponse({ error: "Could not record the response. Please try again." }, 500);
+        if (updatedRows && updatedRows.length > 0) {
+          // Freshness push: the app listens on this channel and refreshes the
+          // blob immediately instead of waiting for its poll cycle.
+          try {
+            await hit.admin.channel(`program-${hit.programId}-agents`).send({
+              type: "broadcast",
+              event: "program_data_changed",
+              payload: { source: "flow-portal", kind: hit.kind, at: now },
+            });
+          } catch { /* best effort — the poll still catches it */ }
+          return jsonResponse({ ok: true });
         }
-        inbox.push({
-          id: crypto.randomUUID(),
-          kind: "interview",
-          stakeholder,
-          role: String(hit.pack.role ?? ""),
-          receivedAt: now,
-          text: answers,
-        });
-        nextInner.flowInterviewPacks = (hit.inner.flowInterviewPacks as unknown[]).map((entry) =>
-          isRecord(entry) && entry.token === hit.pack.token ? { ...entry, respondedAt: now } : entry,
-        );
-        log.push({
-          ts: now, agentId: "portal", phaseId: "listen", tier: 1,
-          action: `Received an async interview response — ${stakeholder}`,
-          detail: `${answers.split(/\s+/).length.toLocaleString()} words, quarantined in the evidence inbox for your review.`,
-        });
+        // CAS miss — another writer landed in between; reload and retry.
       }
-
-      nextInner.flowPortalInbox = inbox.slice(-INBOX_CAP);
-      nextInner.flowAttestations = log.slice(-200);
-      const nextRaw = hit.nested ? { ...hit.raw, data: nextInner } : nextInner;
-      const { error } = await hit.admin
-        .from("adam_programs")
-        .update({ data: nextRaw, updated_at: now })
-        .eq("id", hit.programId);
-      if (error) return jsonResponse({ error: "Could not record the response. Please try again." }, 500);
-      return jsonResponse({ ok: true });
+      return jsonResponse({ error: "The programme is busy right now — please try again." }, 409);
     }
 
     return jsonResponse({ error: "Method not allowed." }, 405);
