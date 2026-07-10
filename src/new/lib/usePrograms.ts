@@ -162,6 +162,10 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
   const [hasResolvedPrograms, setHasResolvedPrograms] = useState(false);
   const localKnownUpdatedAt = useRef<Record<string, string>>({});
   const normalizationCache = useRef<Map<string, ProgramSummary>>(new Map());
+  // Last authoritative (blob-hydrated) methodology per programme id. Lets a
+  // blob-less metadata refresh carry the real methodology instead of reverting
+  // to its default — see buildCloudSummary.
+  const methodologyByIdRef = useRef<Record<string, ProgramSummary["methodology"]>>({});
   // Metadata-only list path. The list query no longer pulls every programme's
   // heavy `data` JSON blob (the dominant cost behind slow refresh/unlock); it
   // selects metadata columns only. Full blobs are fetched lazily per-id (active
@@ -190,24 +194,39 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
     const hydrated = hydratedDataById.current.get(row.id);
     const data = hydrated && hydrated.updatedAt === row.updated_at ? hydrated.data : undefined;
     const cacheKey = `${row.id}:${row.updated_at}:${data != null ? "full" : "meta"}`;
-    const cached = normalizationCache.current.get(cacheKey);
-    if (cached) return cached;
-    const nextValue = normalizeProgram({
-      id: row.id,
-      name: row.name,
-      client: row.client,
-      industry: row.industry,
-      updated_at: row.updated_at,
-      data,
-    });
-    normalizationCache.current.set(cacheKey, nextValue);
-    // Keep a generous cache so multiple programmes (each in meta + full variants)
-    // survive a recompose without thrashing; lightweight re-normalisation is cheap.
-    if (normalizationCache.current.size > 64) {
-      const firstKey = normalizationCache.current.keys().next().value;
-      if (firstKey) normalizationCache.current.delete(firstKey);
+    let base = normalizationCache.current.get(cacheKey);
+    if (!base) {
+      base = normalizeProgram({
+        id: row.id,
+        name: row.name,
+        client: row.client,
+        industry: row.industry,
+        updated_at: row.updated_at,
+        data,
+      });
+      normalizationCache.current.set(cacheKey, base);
+      // Keep a generous cache so multiple programmes (each in meta + full variants)
+      // survive a recompose without thrashing; lightweight re-normalisation is cheap.
+      if (normalizationCache.current.size > 64) {
+        const firstKey = normalizationCache.current.keys().next().value;
+        if (firstKey) normalizationCache.current.delete(firstKey);
+      }
     }
-    return nextValue;
+    // `methodology` lives in the data blob, which streams in a beat after the
+    // metadata list on every refresh. During that beat `data` is undefined and
+    // methodology falls back to its "atos-standard" default — so a programme
+    // whose real methodology is another variant (e.g. atos-flow) would flip on
+    // every refresh, which surfaces as a shell/UI flash for any consumer that
+    // renders on methodology. A programme's methodology is immutable within a
+    // session (the setup wizard re-saves the blob, and the next hydrated read
+    // updates this map), so remember the last authoritative value and carry it
+    // across the blob-less window rather than reverting to the default.
+    if (data != null) {
+      methodologyByIdRef.current[row.id] = base.methodology;
+      return base;
+    }
+    const known = methodologyByIdRef.current[row.id];
+    return known && known !== base.methodology ? { ...base, methodology: known } : base;
   }, []);
 
   // Recompose the effective programmes list from the cached source rows + the blob
