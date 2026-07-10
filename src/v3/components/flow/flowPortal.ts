@@ -29,11 +29,26 @@ export interface FlowInterviewPack {
 
 export interface FlowPortalItem {
   id: string;
-  kind: "interview";
+  kind: "interview" | "demo-verdict";
   stakeholder: string;
   role: string;
   receivedAt: string;
   text: string;
+  /** Demo verdicts only. */
+  verdict?: "accepted" | "accepted-with-changes" | "rework";
+}
+
+export interface FlowDemoInvite {
+  id: string;
+  stakeholder: string;
+  role: string;
+  openingQuote: string;
+  scenario: string;
+  steps: string[];
+  acceptanceAsk: string;
+  token: string;
+  createdAt: string;
+  respondedAt?: string;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -64,18 +79,38 @@ export function listPortalInbox(program: ProgramSummary): FlowPortalItem[] {
   if (!Array.isArray(list)) return [];
   return list.filter(isRecord).map((entry): FlowPortalItem => ({
     id: String(entry.id ?? ""),
-    kind: "interview",
+    kind: entry.kind === "demo-verdict" ? "demo-verdict" : "interview",
     stakeholder: String(entry.stakeholder ?? "Stakeholder"),
     role: String(entry.role ?? ""),
     receivedAt: String(entry.receivedAt ?? ""),
     text: String(entry.text ?? ""),
-  })).filter((item) => item.id && item.text);
+    verdict: entry.verdict === "accepted" || entry.verdict === "accepted-with-changes" || entry.verdict === "rework"
+      ? entry.verdict
+      : undefined,
+  })).filter((item) => item.id && (item.text || item.verdict));
 }
 
-/** The shareable link for a pack. */
-export function portalLinkFor(programId: string, pack: FlowInterviewPack): string {
+export function listDemoInvites(program: ProgramSummary): FlowDemoInvite[] {
+  const list = innerData(program).flowDemoInvites;
+  if (!Array.isArray(list)) return [];
+  return list.filter(isRecord).map((entry): FlowDemoInvite => ({
+    id: String(entry.id ?? ""),
+    stakeholder: String(entry.stakeholder ?? ""),
+    role: String(entry.role ?? ""),
+    openingQuote: String(entry.openingQuote ?? ""),
+    scenario: String(entry.scenario ?? ""),
+    steps: Array.isArray(entry.steps) ? entry.steps.map(String).filter(Boolean) : [],
+    acceptanceAsk: String(entry.acceptanceAsk ?? ""),
+    token: String(entry.token ?? ""),
+    createdAt: String(entry.createdAt ?? ""),
+    respondedAt: typeof entry.respondedAt === "string" ? entry.respondedAt : undefined,
+  })).filter((invite) => invite.id && invite.token);
+}
+
+/** The shareable link for a pack or demo invite. */
+export function portalLinkFor(programId: string, holder: { token: string }): string {
   const base = `${window.location.origin}${window.location.pathname}`;
-  return `${base}?flowRespond=${encodeURIComponent(`${programId}.${pack.token}`)}`;
+  return `${base}?flowRespond=${encodeURIComponent(`${programId}.${holder.token}`)}`;
 }
 
 function randomSecret(): string {
@@ -139,11 +174,69 @@ export function mintInterviewPacks(program: ProgramSummary, actor: string): Reco
 }
 
 /**
- * Confirm a quarantined response into evidence: attributed transcript block,
- * roster flip to Heard (or a new Heard row), pack marked responded, item
- * cleared, the confirm attested. Null when the item is unknown.
+ * Mint demo links for every Demo Script that doesn't have one yet — the tour
+ * goes out as links, verdicts come back through the same quarantine. Pure
+ * transform over inner.demoScripts. Null when scripts are missing or every
+ * stakeholder already has an invite.
+ */
+export function mintDemoInvites(program: ProgramSummary, actor: string): Record<string, unknown> | null {
+  const { wrapper, inner, usesNestedData } = getProgramState((program.rawData ?? {}) as Record<string, unknown>);
+  const doc = isRecord(inner.demoScripts) ? inner.demoScripts : null;
+  const scripts = doc && Array.isArray(doc.scripts) ? doc.scripts.filter(isRecord) : [];
+  if (!scripts.length) return null;
+
+  const existing = Array.isArray(inner.flowDemoInvites) ? (inner.flowDemoInvites as unknown[]) : [];
+  const invited = new Set(existing.filter(isRecord).map((entry) => String(entry.stakeholder ?? "").toLowerCase()));
+  const now = new Date().toISOString();
+
+  const additions = scripts
+    .filter((script) => !invited.has(String(script.stakeholder ?? "").toLowerCase()))
+    .map((script) => {
+      const steps = Array.isArray(script.steps) ? script.steps.filter(isRecord) : [];
+      return {
+        id: `demo-${randomSecret().slice(0, 10)}`,
+        stakeholder: String(script.stakeholder ?? "Stakeholder"),
+        role: String(script.role ?? ""),
+        openingQuote: String(script.openingQuote ?? ""),
+        scenario: String(script.scenario ?? ""),
+        steps: steps.map((step) => [step.beat, step.show].filter(Boolean).map(String).join(" — ")).filter(Boolean).slice(0, 8),
+        acceptanceAsk: String(script.acceptanceAsk ?? "Does this run your workflow the way you need it to?"),
+        token: randomSecret(),
+        createdAt: now,
+      };
+    });
+  if (!additions.length) return null;
+
+  const log = Array.isArray(inner.flowAttestations) ? (inner.flowAttestations as unknown[]) : [];
+  const attestation = {
+    ts: now, agentId: actor, phaseId: "show", tier: 2,
+    action: `Created demo links for ${additions.length} stakeholder${additions.length === 1 ? "" : "s"}`,
+    detail: additions.map((invite) => invite.stakeholder).join(", ").slice(0, 160),
+  };
+  return wrapProgramState(wrapper, {
+    ...inner,
+    flowDemoInvites: [...existing, ...additions].slice(-30),
+    flowAttestations: [...log, attestation].slice(-200),
+  }, usesNestedData);
+}
+
+/**
+ * Confirm a quarantined item. Interviews land as attributed transcript +
+ * roster flip; demo verdicts land in the tour ledger, the demo-feedback
+ * transcript, AND as a show pass on the track that demos to that stakeholder.
+ * Null when the item is unknown.
  */
 export function ingestPortalResponse(program: ProgramSummary, itemId: string, actor: string): Record<string, unknown> | null {
+  const { inner } = getProgramState((program.rawData ?? {}) as Record<string, unknown>);
+  const inbox = Array.isArray(inner.flowPortalInbox) ? (inner.flowPortalInbox as unknown[]) : [];
+  const found = inbox.filter(isRecord).find((entry) => entry.id === itemId);
+  if (!found) return null;
+  return found.kind === "demo-verdict"
+    ? ingestDemoVerdict(program, itemId, actor)
+    : ingestInterviewResponse(program, itemId, actor);
+}
+
+function ingestInterviewResponse(program: ProgramSummary, itemId: string, actor: string): Record<string, unknown> | null {
   const { wrapper, inner, usesNestedData } = getProgramState((program.rawData ?? {}) as Record<string, unknown>);
   const inbox = Array.isArray(inner.flowPortalInbox) ? (inner.flowPortalInbox as unknown[]) : [];
   const item = inbox.filter(isRecord).find((entry) => entry.id === itemId);
@@ -197,6 +290,94 @@ export function ingestPortalResponse(program: ProgramSummary, itemId: string, ac
     ...inner,
     phaseInputs,
     flowInterviewPacks: nextPacks,
+    flowPortalInbox: inbox.filter((entry) => !(isRecord(entry) && entry.id === itemId)),
+    flowAttestations: [...log, attestation].slice(-200),
+  }, usesNestedData);
+}
+
+const TOUR_VERDICT_LABEL: Record<string, string> = {
+  "accepted": "Accepted",
+  "accepted-with-changes": "Accepted with changes",
+  "rework": "Objection",
+};
+
+function ingestDemoVerdict(program: ProgramSummary, itemId: string, actor: string): Record<string, unknown> | null {
+  const { wrapper, inner, usesNestedData } = getProgramState((program.rawData ?? {}) as Record<string, unknown>);
+  const inbox = Array.isArray(inner.flowPortalInbox) ? (inner.flowPortalInbox as unknown[]) : [];
+  const item = inbox.filter(isRecord).find((entry) => entry.id === itemId);
+  if (!item) return null;
+  const stakeholder = String(item.stakeholder ?? "Stakeholder");
+  const role = String(item.role ?? "");
+  const verdict = String(item.verdict ?? "accepted");
+  const tourLabel = TOUR_VERDICT_LABEL[verdict] ?? "Accepted";
+  const comment = String(item.text ?? "").trim();
+  const today = new Date().toISOString().slice(0, 10);
+
+  const phaseInputs = isRecord(inner.phaseInputs) ? { ...(inner.phaseInputs as Record<string, unknown>) } : {};
+  const show = isRecord(phaseInputs.show) ? { ...(phaseInputs.show as Record<string, unknown>) } : {};
+
+  // The tour ledger IS the gate — the verdict lands there first.
+  let tourRows: Array<Record<string, string>> = [];
+  if (typeof show.demoTour === "string" && show.demoTour.trim().startsWith("[")) {
+    try {
+      const parsed = JSON.parse(show.demoTour);
+      if (Array.isArray(parsed)) tourRows = parsed.filter((row) => row && typeof row === "object");
+    } catch { /* rebuilt below */ }
+  }
+  const row = tourRows.find((entry) => (entry.stakeholder ?? "").trim().toLowerCase() === stakeholder.trim().toLowerCase());
+  if (row) {
+    row.verdict = tourLabel;
+    row.date = row.date || today;
+    if (comment) row.reaction = comment.slice(0, 160);
+  } else {
+    tourRows.push({ stakeholder, date: today, verdict: tourLabel, reaction: comment.slice(0, 160) });
+  }
+  show.demoTour = JSON.stringify(tourRows);
+
+  // The reaction is evidence too — demo feedback feeds Blueprint diffs.
+  if (comment) {
+    const header = `— ${[stakeholder, role, today].filter(Boolean).join(", ")} —`;
+    const existingFeedback = typeof show.demoFeedback === "string" ? show.demoFeedback : "";
+    show.demoFeedback = [existingFeedback.trimEnd(), `${header}\nVerdict: ${tourLabel}\n${comment}`].filter(Boolean).join("\n\n");
+  }
+  phaseInputs.show = show;
+
+  // Automation ladder: the same verdict is a show pass on the track that
+  // demos to this stakeholder — one confirm moves ledger AND acceptance loop.
+  let passRecordedOn: string | null = null;
+  const tracks = Array.isArray(inner.tracks) ? (inner.tracks as unknown[]) : [];
+  const nextTracks = tracks.map((track) => {
+    if (!isRecord(track) || passRecordedOn) return track;
+    const lead = String(track.leadStakeholder ?? "").trim().toLowerCase();
+    if (!lead || lead !== stakeholder.trim().toLowerCase()) return track;
+    passRecordedOn = String(track.name ?? track.id ?? "track");
+    const passes = Array.isArray(track.showPasses) ? track.showPasses : [];
+    const pass: Record<string, unknown> = { ts: new Date().toISOString(), stakeholder, verdict };
+    if (comment) pass.note = comment.slice(0, 160);
+    return { ...track, showPasses: [...passes, pass].slice(-20) };
+  });
+
+  const invites = Array.isArray(inner.flowDemoInvites) ? (inner.flowDemoInvites as unknown[]) : [];
+  const nextInvites = invites.map((invite) =>
+    isRecord(invite) && String(invite.stakeholder ?? "").toLowerCase() === stakeholder.toLowerCase()
+      ? { ...invite, respondedAt: invite.respondedAt ?? new Date().toISOString() }
+      : invite,
+  );
+
+  const log = Array.isArray(inner.flowAttestations) ? (inner.flowAttestations as unknown[]) : [];
+  const attestation = {
+    ts: new Date().toISOString(), agentId: actor, phaseId: "show", tier: 2,
+    action: `Ingested demo verdict — ${stakeholder}: ${tourLabel}`,
+    detail: passRecordedOn
+      ? `Tour ledger updated; show pass recorded on "${passRecordedOn}".`
+      : "Tour ledger updated; no track demos to this stakeholder, so no pass recorded.",
+  };
+
+  return wrapProgramState(wrapper, {
+    ...inner,
+    phaseInputs,
+    tracks: nextTracks,
+    flowDemoInvites: nextInvites,
     flowPortalInbox: inbox.filter((entry) => !(isRecord(entry) && entry.id === itemId)),
     flowAttestations: [...log, attestation].slice(-200),
   }, usesNestedData);
