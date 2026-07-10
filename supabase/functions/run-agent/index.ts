@@ -8636,9 +8636,22 @@ Deno.serve(async (req) => {
         // shared language — adopted only through a human confirm, like every
         // consequential proposal.
         if (request.agentId === "domain-ontology" && Array.isArray((result as Record<string, unknown>).standardAlignment)) {
+          // Vocabulary manifest: a proposed URI must live under a KNOWN
+          // namespace or it never reaches the inbox — models fabricate
+          // plausible deep links in the long vocabularies.
+          const VOCAB_PREFIXES = [
+            "https://schema.org/",
+            "http://schema.org/",
+            "https://spec.edmcouncil.org/fibo/ontology/",
+            "https://gs1.org/voc/",
+            "https://www.gs1.org/voc/",
+            "http://hl7.org/fhir/",
+            "https://hl7.org/fhir/",
+          ];
           const mappings = ((result as Record<string, unknown>).standardAlignment as unknown[])
             .filter(isRecord)
-            .filter((entry) => typeof entry.entity === "string" && typeof entry.standard === "string" && String(entry.standard).startsWith("http"))
+            .filter((entry) => typeof entry.entity === "string" && typeof entry.standard === "string"
+              && VOCAB_PREFIXES.some((prefix) => String(entry.standard).startsWith(prefix)))
             .slice(0, 20)
             .map((entry) => ({
               entity: String(entry.entity),
@@ -8663,6 +8676,27 @@ Deno.serve(async (req) => {
               payload: { ontologyAlignment: mappings as unknown as JsonValue } as JsonValue,
             });
           }
+        }
+
+        // The built system inherits the shared language: every blueprint data
+        // contract whose entity has an ADOPTED mapping carries its standard
+        // URI. Deterministic — no model in the loop, so it cannot drift.
+        if (request.agentId === "agentic-blueprint") {
+          nextProgramData = updateInnerProgramData(nextProgramData, (inner) => {
+            const adopted = Array.isArray(inner.ontologyAlignment) ? (inner.ontologyAlignment as JsonValue[]).filter(isRecord) : [];
+            const blueprint = isRecord(inner.agenticBlueprint) ? inner.agenticBlueprint as Record<string, JsonValue> : null;
+            if (!adopted.length || !blueprint || !Array.isArray(blueprint.dataContracts)) return inner;
+            const uriFor = (name: string) => {
+              const hit = adopted.find((m) => String(m.entity ?? "").trim().toLowerCase() === name.trim().toLowerCase());
+              return hit ? String(hit.standard) : null;
+            };
+            const dataContracts = (blueprint.dataContracts as JsonValue[]).map((contract) =>
+              isRecord(contract) && typeof contract.entity === "string" && uriFor(contract.entity)
+                ? { ...contract, standardUri: uriFor(contract.entity) } as JsonValue
+                : contract,
+            );
+            return { ...inner, agenticBlueprint: { ...blueprint, dataContracts } as JsonValue };
+          });
         }
 
         // The blueprint's track plan lands as its own Tier-2 decision — the
