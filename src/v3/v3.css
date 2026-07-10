@@ -13266,15 +13266,8 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 .v3fs-hero-client{color:var(--v3-text-muted);font-weight:500}
 .v3fs-hero-row{display:flex;align-items:flex-end;gap:40px;flex-wrap:wrap;margin-top:16px}
 .v3fs-count-n{font-size:clamp(52px,7vw,80px);font-weight:275;letter-spacing:-.04em;line-height:.95;font-variant-numeric:tabular-nums}
-.v3fs-date-chip{display:inline-block;border:1.5px dashed var(--v3-accent-2);color:var(--v3-accent-2);border-radius:14px;padding:14px 20px;font-size:14px;font-weight:600;background:var(--fs-indigo-wash)}
-.v3fs-date-chip:hover{background:var(--v3-accent);color:#fff;border-style:solid}
 .v3fs-count-n b{font-weight:600;color:var(--v3-accent-2)}
 .v3fs-count-l{font-size:12px;color:var(--v3-text-muted);margin-top:6px;max-width:52ch}
-.v3fs-paste{margin-left:auto;display:flex;align-items:center;gap:11px;border:1.5px dashed rgba(0,160,223,.5);background:var(--fs-blue-wash);color:var(--fs-quote);border-radius:14px;padding:12px 17px;font-size:12.5px;max-width:340px;cursor:pointer;font-family:var(--v3-font);text-align:left;line-height:1.45;transition:background .15s,border-color .15s,transform .15s}
-.v3fs-paste:hover{background:rgba(0,160,223,.16);border-color:var(--v3-accent-b)}
-.v3fs-paste:active{transform:translateY(1px)}
-.v3fs-paste.drop-active{border-style:solid;border-color:var(--v3-accent-b);background:rgba(0,160,223,.22)}
-.v3fs-paste-ic{font-size:16px;flex-shrink:0}
 .v3fs-grammar{display:flex;gap:22px;margin-top:24px;flex-wrap:wrap}
 .v3fs-grammar span{display:inline-flex;align-items:center;gap:8px;font-size:10.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--v3-text-muted)}
 .v3fs-grammar i{width:22px;height:4px;border-radius:99px;display:inline-block}
@@ -13302,7 +13295,7 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
   @keyframes v3fs-chin{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:none}}
 }
 /* Keyboard focus is visible on every shell control. */
-.v3fs-dock button:focus-visible,.v3fs-switcher button:focus-visible,.v3fs-ch-h:focus-visible,.v3fs-edit-toggle:focus-visible,.v3fs-a:focus-visible,.v3fs-cta:focus-visible,.v3fs-date-chip:focus-visible,.v3fs-search:focus-visible,.v3fs-paste:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:2px;border-radius:10px}
+.v3fs-dock button:focus-visible,.v3fs-switcher button:focus-visible,.v3fs-ch-h:focus-visible,.v3fs-edit-toggle:focus-visible,.v3fs-a:focus-visible,.v3fs-cta:focus-visible,.v3fs-search:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:2px;border-radius:10px}
 .v3fs-brand-caret{font-size:8px;display:block;line-height:1;opacity:.75;margin-top:1px}
 /* Library search spans the grid above both panels. */
 .v3fs-search-row{grid-column:1 / -1}

@@ -54,12 +54,13 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
       return next;
     });
 
+  // Open a movement's editor and land on a specific field (the gate CTAs point
+  // at their key field). The editor mounts below the fold, so after it commits
+  // we scroll it — or that field — into view and focus its control; opening it
+  // silently would look like nothing happened.
   const openEditor = (id: string, fieldAnchor?: string) => {
     setOpen((current) => new Set(current).add(id));
     setEditing((current) => new Set(current).add(id));
-    // The editor mounts below the fold, so opening it silently looks like
-    // nothing happened. After it commits, scroll it into view and focus the
-    // field the caller pointed at (the date field, the transcript field, …).
     requestAnimationFrame(() => requestAnimationFrame(() => {
       const editor = document.querySelector(`.v3fs-editor[data-movement="${id}"]`);
       if (!editor) return;
@@ -69,18 +70,6 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
       if (focusable instanceof HTMLElement) focusable.focus({ preventScroll: true });
     }));
   };
-
-  // The hero's evidence box, the "Set first-demo date" chip, and anything else
-  // outside the canvas can open a movement's editor — optionally landing on a
-  // specific field — via this event.
-  React.useEffect(() => {
-    const onOpen = (event: Event) => {
-      const detail = (event as CustomEvent<{ movement?: string; field?: string }>).detail;
-      if (detail?.movement) openEditor(detail.movement, detail.field);
-    };
-    window.addEventListener("v3fs-open-editor", onOpen);
-    return () => window.removeEventListener("v3fs-open-editor", onOpen);
-  }, []);
 
   // The readers parse grids and transcripts — compute once per programme
   // snapshot, not once per render per chapter.
