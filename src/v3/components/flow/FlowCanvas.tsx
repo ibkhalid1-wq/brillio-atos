@@ -96,6 +96,7 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                       key={artifact.id}
                       artifact={artifact}
                       running={runningAgentIds.has(artifact.id)}
+                      evidenceNames={evidence.map((entry) => entry.who)}
                       onGenerate={() => onRunAgent(artifact.id, movement.id)}
                     />
                   ))}
@@ -133,15 +134,26 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
   );
 }
 
-function ArtifactDoc({ artifact, running, onGenerate }: {
+function ArtifactDoc({ artifact, running, evidenceNames, onGenerate }: {
   artifact: ArtifactCardModel;
   running: boolean;
+  evidenceNames: string[];
   onGenerate: () => void;
 }) {
   if (running) {
+    // Generation theater: show what ATOS is reading while it drafts, so the
+    // evidence → artifact transformation is visible, not a spinner.
     return (
       <div className="v3fs-doc gen">
         <div className="v3fs-gen-line"><span className="v3fs-gdot" /> {artifact.title} — in progress</div>
+        {evidenceNames.length ? (
+          <>
+            <div className="v3fs-reading">Reading evidence</div>
+            <div className="v3fs-srcs">
+              {evidenceNames.slice(0, 6).map((name) => <span key={name}>{name.split(",")[0]} ✓</span>)}
+            </div>
+          </>
+        ) : null}
         <div className="v3fs-doc-x">Reviewing the evidence and drafting the document…</div>
       </div>
     );
