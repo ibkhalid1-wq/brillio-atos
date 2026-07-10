@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import FlowCanvas from "@/v3/components/flow/FlowCanvas";
 import {
@@ -40,33 +40,52 @@ export default function FlowShell(props: FlowShellProps) {
   // view (outside a field) files it as evidence on the frontier movement's
   // transcript field — appended, never overwriting — and says where it went.
   const { onSaveInputs } = props;
+  const [dropActive, setDropActive] = useState(false);
+
+  // File conversation text as evidence on the frontier movement's transcript
+  // field (appended, never overwriting), and confirm where it went. Shared by
+  // the hero drop-zone, its click-through, and the paste-anywhere handler.
+  // Returns true when it actually filed something.
+  const fileEvidence = useCallback((text: string): boolean => {
+    if (text.trim().length < 80) return false; // too short to be a conversation
+    const movements = flowMovements();
+    const frontier = frontierMovementId(program);
+    const movement = [movements.find((m) => m.id === frontier), ...movements]
+      .filter((m): m is NonNullable<typeof m> => !!m)
+      .find((m) => (m.inputFields ?? []).some((f) => f.type === "transcript"));
+    const field = movement?.inputFields?.find((f) => f.type === "transcript");
+    if (!movement || !field) return false;
+    const existing = readMovementInputs(program, movement.id)[field.id];
+    const next = typeof existing === "string" && existing.trim()
+      ? `${existing}\n\n${text.trim()}`
+      : text.trim();
+    void onSaveInputs(movement.id, { [field.id]: next });
+    window.dispatchEvent(new CustomEvent("atlas-v3-toast", {
+      detail: { message: `Evidence filed to ${movement.displayName} — regenerate its artifacts when ready.`, tone: "success", icon: "⤓" },
+    }));
+    return true;
+  }, [program, onSaveInputs]);
+
+  // Paste a conversation anywhere on the Flow view (outside a field) and it
+  // files itself as evidence.
   useEffect(() => {
     if (view !== "flow") return undefined;
     const onPaste = (event: ClipboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (target && target.closest("input, textarea, select, [contenteditable]")) return;
       const text = event.clipboardData?.getData("text/plain") ?? "";
-      if (text.trim().length < 80) return; // too short to be a conversation
-      const movements = flowMovements();
-      const frontier = frontierMovementId(program);
-      const movement = [movements.find((m) => m.id === frontier), ...movements]
-        .filter((m): m is NonNullable<typeof m> => !!m)
-        .find((m) => (m.inputFields ?? []).some((f) => f.type === "transcript"));
-      const field = movement?.inputFields?.find((f) => f.type === "transcript");
-      if (!movement || !field) return;
-      event.preventDefault();
-      const existing = readMovementInputs(program, movement.id)[field.id];
-      const next = typeof existing === "string" && existing.trim()
-        ? `${existing}\n\n${text.trim()}`
-        : text.trim();
-      void onSaveInputs(movement.id, { [field.id]: next });
-      window.dispatchEvent(new CustomEvent("atlas-v3-toast", {
-        detail: { message: `Evidence filed to ${movement.displayName} — regenerate its artifacts when ready.`, tone: "success", icon: "⤓" },
-      }));
+      if (fileEvidence(text)) event.preventDefault();
     };
     document.addEventListener("paste", onPaste);
     return () => document.removeEventListener("paste", onPaste);
-  }, [view, program, onSaveInputs]);
+  }, [view, fileEvidence]);
+
+  // Open the current movement's editor — the destination for adding evidence
+  // by hand (paste/upload). Used by the hero evidence control.
+  const openFrontierEditor = useCallback(() => {
+    setView("flow");
+    window.dispatchEvent(new CustomEvent("v3fs-open-editor", { detail: { movement: frontierMovementId(program) } }));
+  }, [program]);
 
   // The switcher dismisses like a menu should: backdrop click or Escape.
   useEffect(() => {
@@ -141,7 +160,26 @@ export default function FlowShell(props: FlowShellProps) {
                 </button>
               )}
             </div>
-            <div className="v3fs-paste">⤓ <span><b>Add evidence to any movement.</b> ATOS incorporates it and updates every dependent artifact.</span></div>
+            <button
+              type="button"
+              className={`v3fs-paste${dropActive ? " drop-active" : ""}`}
+              onClick={openFrontierEditor}
+              onDragOver={(event) => { event.preventDefault(); setDropActive(true); }}
+              onDragLeave={() => setDropActive(false)}
+              onDrop={(event) => {
+                event.preventDefault();
+                setDropActive(false);
+                const text = event.dataTransfer.getData("text/plain");
+                if (text && fileEvidence(text)) return;
+                const file = event.dataTransfer.files?.[0];
+                if (file && /\.(txt|md|csv|json|vtt|srt)$/i.test(file.name)) {
+                  void file.text().then((contents) => fileEvidence(contents));
+                }
+              }}
+            >
+              <span className="v3fs-paste-ic" aria-hidden="true">⤓</span>
+              <span><b>Add evidence.</b> Drop a conversation here, or open the current movement to paste or upload it.</span>
+            </button>
           </div>
           <div className="v3fs-grammar">
             <span><i style={{ background: "var(--v3-accent-b)" }} /> Stakeholder evidence</span>
