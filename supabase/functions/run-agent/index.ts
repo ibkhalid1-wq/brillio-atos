@@ -1196,6 +1196,7 @@ Return ONLY valid JSON:
   "relations": [ { "from": "entity", "relation": "verb phrase", "to": "entity", "cardinality": "1:1|1:N|N:M|unknown" } ],
   "events": [ { "name": "business event", "triggers": "what causes it", "produces": "what it changes" } ],
   "standardAlignment": [ { "entity": "ontology entity name", "standard": "full URI, e.g. https://schema.org/Order", "vocabulary": "schema.org|FIBO|GS1|FHIR", "relation": "skos:closeMatch|skos:exactMatch", "confidence": 0.0 } ],
+  // Pick the vocabulary by the programme's industry: financial services → FIBO (https://spec.edmcouncil.org/fibo/ontology/...), retail/CPG/supply chain → GS1 Web Vocabulary (https://gs1.org/voc/...), healthcare → HL7 FHIR (http://hl7.org/fhir/...), anything else → schema.org. Only propose mappings you are confident in; omit rather than force.
   "ambiguities": [ { "term": "string", "conflictingMeanings": ["meaning per team"], "resolution": "proposed resolution or 'unresolved'" } ],
   "gaps": ["entities referenced but never defined, domains not yet mapped"],
   "summary": "one sentence verdict on ontology completeness",
