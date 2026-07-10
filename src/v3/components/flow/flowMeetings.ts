@@ -7,7 +7,9 @@
  * no model call.
  */
 import type { ProgramSummary } from "@/new/types";
-import { readMovementInputs, parseGridRows } from "@/v3/components/flow/flowShellData";
+import { getProgramState, wrapProgramState } from "@/new/lib/programState";
+import { flowMovements, movementArtifacts, gateChecklist, readMovementInputs, parseGridRows } from "@/v3/components/flow/flowShellData";
+import { FORMAL_ARTIFACT_FIELD_KEYS, FORMAL_ARTIFACT_PHASES } from "@/v3/lib/formalArtifacts";
 
 export interface MeetingKit {
   /** e.g. "The sponsor conversation" */
@@ -23,6 +25,18 @@ export interface MeetingKit {
   header: string;
   /** The conversation this kit prepares is already on record. */
   done: boolean;
+  /** This kit closes gaps a previous conversation left open. */
+  followUp: boolean;
+  gaps: string[];
+}
+
+export interface FlowFollowUp {
+  id: string;
+  movementId: string;
+  who: string;
+  date: string;
+  gaps: string[];
+  createdAt: string;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -36,7 +50,7 @@ function innerData(program: ProgramSummary): Record<string, unknown> {
 const filled = (value: unknown): boolean => typeof value === "string" && value.trim().length > 0;
 const today = () => new Date().toISOString().slice(0, 10);
 
-export function meetingKit(program: ProgramSummary, movementId: string): MeetingKit | null {
+function baseMeetingKit(program: ProgramSummary, movementId: string): Omit<MeetingKit, "followUp" | "gaps"> | null {
   const inputs = readMovementInputs(program, movementId);
   const inner = innerData(program);
 
@@ -195,4 +209,98 @@ export function meetingKit(program: ProgramSummary, movementId: string): Meeting
   }
 
   return null;
+}
+
+/**
+ * What the conversations on record FAILED to surface: unmet fact criteria
+ * from the gate checklist plus the gaps every generator writes into its own
+ * document ("the charter cannot be considered ready because…"). These are the
+ * follow-up's agenda.
+ */
+export function kitGaps(program: ProgramSummary, movementId: string): string[] {
+  const movement = flowMovements().find((entry) => entry.id === movementId);
+  if (!movement) return [];
+  const gaps: string[] = [];
+  for (const item of gateChecklist(program, movement, movementArtifacts(program, movement))) {
+    if (!item.done && item.anchor) gaps.push(item.label);
+  }
+  const inner = innerData(program);
+  for (const [agentId, phase] of Object.entries(FORMAL_ARTIFACT_PHASES)) {
+    if (phase !== movementId) continue;
+    const doc = inner[FORMAL_ARTIFACT_FIELD_KEYS[agentId]];
+    if (isRecord(doc) && Array.isArray(doc.gaps)) {
+      gaps.push(...doc.gaps.map(String).filter(Boolean).slice(0, 4));
+    }
+  }
+  return [...new Set(gaps)].slice(0, 8);
+}
+
+/**
+ * The kit, made practical: once a conversation is on record, any gaps it
+ * left turn the kit into a FOLLOW-UP — a script targeting exactly what's
+ * missing, schedulable onto the calendar or sendable as an async link.
+ */
+export function meetingKit(program: ProgramSummary, movementId: string): MeetingKit | null {
+  const base = baseMeetingKit(program, movementId);
+  if (!base) return null;
+  if (!base.done) return { ...base, followUp: false, gaps: [] };
+  const gaps = kitGaps(program, movementId);
+  if (!gaps.length) return { ...base, followUp: false, gaps: [] };
+  return {
+    ...base,
+    followUp: true,
+    gaps,
+    title: "Follow-up — close the gaps",
+    purpose: `The last conversation left ${gaps.length} point${gaps.length === 1 ? "" : "s"} open. This script asks for exactly what's missing — nothing else.`,
+    questions: gaps,
+  };
+}
+
+/** Schedule a follow-up: it lands on Today's calendar with its gap agenda. */
+export function scheduleFollowUp(
+  program: ProgramSummary,
+  movementId: string,
+  who: string,
+  date: string,
+  actor: string,
+): Record<string, unknown> | null {
+  if (!who.trim() || !date) return null;
+  const { wrapper, inner, usesNestedData } = getProgramState((program.rawData ?? {}) as Record<string, unknown>);
+  const list = Array.isArray(inner.flowFollowUps) ? (inner.flowFollowUps as unknown[]) : [];
+  const entry = {
+    id: `fu-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    movementId,
+    who: who.trim(),
+    date,
+    gaps: kitGaps(program, movementId).slice(0, 6),
+    createdAt: new Date().toISOString(),
+  };
+  const log = Array.isArray(inner.flowAttestations) ? (inner.flowAttestations as unknown[]) : [];
+  const attestation = {
+    ts: new Date().toISOString(), agentId: actor, phaseId: movementId, tier: 2,
+    action: `Scheduled a follow-up — ${entry.who}, ${date}`,
+    detail: entry.gaps.slice(0, 3).join("; ").slice(0, 160),
+  };
+  return wrapProgramState(wrapper, {
+    ...inner,
+    flowFollowUps: [...list, entry].slice(-30),
+    flowAttestations: [...log, attestation].slice(-200),
+  }, usesNestedData);
+}
+
+/** Scheduled follow-ups that still matter: dated today+ AND with open gaps. */
+export function listFollowUps(program: ProgramSummary): FlowFollowUp[] {
+  const list = innerData(program).flowFollowUps;
+  if (!Array.isArray(list)) return [];
+  const cutoff = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  return list.filter(isRecord).map((entry): FlowFollowUp => ({
+    id: String(entry.id ?? ""),
+    movementId: String(entry.movementId ?? ""),
+    who: String(entry.who ?? ""),
+    date: String(entry.date ?? ""),
+    gaps: Array.isArray(entry.gaps) ? entry.gaps.map(String) : [],
+    createdAt: String(entry.createdAt ?? ""),
+  })).filter((entry) =>
+    entry.id && entry.date >= cutoff && kitGaps(program, entry.movementId).length > 0,
+  );
 }

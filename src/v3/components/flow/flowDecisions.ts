@@ -11,6 +11,7 @@
 import type { ProgramSummary } from "@/new/types";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { readMovementInputs, parseGridRows } from "@/v3/components/flow/flowShellData";
+import { listFollowUps } from "@/v3/components/flow/flowMeetings";
 
 export interface FlowDecision {
   id: string;
@@ -186,6 +187,9 @@ export function listNextMoments(program: ProgramSummary): NextMoment[] {
     if (/pending/i.test(row.verdict ?? "Pending") && row.date) {
       moments.push({ date: row.date, label: `${row.stakeholder || "Stakeholder"} — demonstration`, kind: "demo" });
     }
+  }
+  for (const followUp of listFollowUps(program)) {
+    moments.push({ date: followUp.date, label: `${followUp.who} — follow-up (${followUp.movementId})`, kind: "session" });
   }
   return moments.sort((a, b) => a.date.localeCompare(b.date)).slice(0, 5);
 }

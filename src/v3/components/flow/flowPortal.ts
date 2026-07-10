@@ -221,6 +221,53 @@ export function mintDemoInvites(program: ProgramSummary, actor: string): Record<
 }
 
 /**
+ * Mint one follow-up link — the async form of "run the follow-up meeting":
+ * ATOS asks exactly the gap questions, the answers come back through the
+ * quarantine, and ingest routes them to the right movement's transcript.
+ * Today's practical step toward ATOS conducting meetings autonomously.
+ */
+export function mintFollowUpPack(
+  program: ProgramSummary,
+  input: { movementId: string; who: string; questions: string[]; captureField: string },
+  actor: string,
+): Record<string, unknown> | null {
+  if (!input.who.trim() || !input.questions.length) return null;
+  const { wrapper, inner, usesNestedData } = getProgramState((program.rawData ?? {}) as Record<string, unknown>);
+  const existing = Array.isArray(inner.flowInterviewPacks) ? (inner.flowInterviewPacks as unknown[]) : [];
+  const now = new Date().toISOString();
+  const pack = {
+    id: `pack-${randomSecret().slice(0, 10)}`,
+    stakeholder: input.who.trim(),
+    role: "Follow-up",
+    intro: "A few points from our last conversation still need your detail — this takes minutes, in your own words.",
+    questions: input.questions.slice(0, 8),
+    token: randomSecret(),
+    createdAt: now,
+    movementId: input.movementId,
+    captureField: input.captureField,
+  };
+  const log = Array.isArray(inner.flowAttestations) ? (inner.flowAttestations as unknown[]) : [];
+  const attestation = {
+    ts: now, agentId: actor, phaseId: input.movementId, tier: 2,
+    action: `Created a follow-up link — ${pack.stakeholder}`,
+    detail: pack.questions.slice(0, 3).join("; ").slice(0, 160),
+  };
+  return wrapProgramState(wrapper, {
+    ...inner,
+    flowInterviewPacks: [...existing, pack].slice(-30),
+    flowAttestations: [...log, attestation].slice(-200),
+  }, usesNestedData);
+}
+
+/** Newest pack for a stakeholder — the link to copy right after minting. */
+export function latestPackFor(program: ProgramSummary, who: string): FlowInterviewPack | null {
+  const packs = listInterviewPacks(program).filter(
+    (pack) => pack.stakeholder.trim().toLowerCase() === who.trim().toLowerCase(),
+  );
+  return packs.length ? packs[packs.length - 1] : null;
+}
+
+/**
  * Confirm a quarantined item. Interviews land as attributed transcript +
  * roster flip; demo verdicts land in the tour ledger, the demo-feedback
  * transcript, AND as a show pass on the track that demos to that stakeholder.
@@ -246,30 +293,41 @@ function ingestInterviewResponse(program: ProgramSummary, itemId: string, actor:
   const text = String(item.text ?? "").trim();
   const today = new Date().toISOString().slice(0, 10);
 
+  // Follow-up packs carry their own destination — a Frame follow-up's answers
+  // belong in the sponsor conversation, not the interview transcripts.
+  const allPacks = Array.isArray(inner.flowInterviewPacks) ? (inner.flowInterviewPacks as unknown[]).filter(isRecord) : [];
+  const sourcePack = [...allPacks].reverse().find(
+    (pack) => String(pack.stakeholder ?? "").trim().toLowerCase() === stakeholder.trim().toLowerCase(),
+  );
+  const targetMovement = sourcePack && typeof sourcePack.movementId === "string" && sourcePack.movementId ? sourcePack.movementId : "listen";
+  const targetField = sourcePack && typeof sourcePack.captureField === "string" && sourcePack.captureField ? sourcePack.captureField : "interviewTranscripts";
+
   const phaseInputs = isRecord(inner.phaseInputs) ? { ...(inner.phaseInputs as Record<string, unknown>) } : {};
-  const listen = isRecord(phaseInputs.listen) ? { ...(phaseInputs.listen as Record<string, unknown>) } : {};
+  const bucket = isRecord(phaseInputs[targetMovement]) ? { ...(phaseInputs[targetMovement] as Record<string, unknown>) } : {};
 
   const header = `— ${[stakeholder, role, today].filter(Boolean).join(", ")} —`;
-  const existingTranscripts = typeof listen.interviewTranscripts === "string" ? listen.interviewTranscripts : "";
-  listen.interviewTranscripts = [existingTranscripts.trimEnd(), `${header}\n${text}`].filter(Boolean).join("\n\n");
+  const existingTranscripts = typeof bucket[targetField] === "string" ? bucket[targetField] as string : "";
+  bucket[targetField] = [existingTranscripts.trimEnd(), `${header}\n${text}`].filter(Boolean).join("\n\n");
 
-  // Roster: flip the matching row to Heard, or add one — coverage moves either way.
-  let rosterRows: Array<Record<string, string>> = [];
-  if (typeof listen.interviewRoster === "string" && listen.interviewRoster.trim().startsWith("[")) {
-    try {
-      const parsed = JSON.parse(listen.interviewRoster);
-      if (Array.isArray(parsed)) rosterRows = parsed.filter((r) => r && typeof r === "object");
-    } catch { /* rebuilt below */ }
+  // Roster only tracks Listen coverage — flip the matching row to Heard there.
+  if (targetMovement === "listen") {
+    let rosterRows: Array<Record<string, string>> = [];
+    if (typeof bucket.interviewRoster === "string" && bucket.interviewRoster.trim().startsWith("[")) {
+      try {
+        const parsed = JSON.parse(bucket.interviewRoster);
+        if (Array.isArray(parsed)) rosterRows = parsed.filter((r) => r && typeof r === "object");
+      } catch { /* rebuilt below */ }
+    }
+    const match = rosterRows.find((row) => (row.name ?? "").trim().toLowerCase() === stakeholder.trim().toLowerCase());
+    if (match) {
+      match.status = "Heard";
+      if (!match.date) match.date = today;
+    } else {
+      rosterRows.push({ name: stakeholder, role, status: "Heard", date: today });
+    }
+    bucket.interviewRoster = JSON.stringify(rosterRows);
   }
-  const match = rosterRows.find((row) => (row.name ?? "").trim().toLowerCase() === stakeholder.trim().toLowerCase());
-  if (match) {
-    match.status = "Heard";
-    if (!match.date) match.date = today;
-  } else {
-    rosterRows.push({ name: stakeholder, role, status: "Heard", date: today });
-  }
-  listen.interviewRoster = JSON.stringify(rosterRows);
-  phaseInputs.listen = listen;
+  phaseInputs[targetMovement] = bucket;
 
   const packs = Array.isArray(inner.flowInterviewPacks) ? (inner.flowInterviewPacks as unknown[]) : [];
   const nextPacks = packs.map((pack) =>
@@ -281,9 +339,11 @@ function ingestInterviewResponse(program: ProgramSummary, itemId: string, actor:
   const words = text ? text.split(/\s+/).length : 0;
   const log = Array.isArray(inner.flowAttestations) ? (inner.flowAttestations as unknown[]) : [];
   const attestation = {
-    ts: new Date().toISOString(), agentId: actor, phaseId: "listen", tier: 2,
+    ts: new Date().toISOString(), agentId: actor, phaseId: targetMovement, tier: 2,
     action: `Ingested async response — ${stakeholder}`,
-    detail: `${words.toLocaleString()} words into the interview transcripts; roster marked Heard.`,
+    detail: targetMovement === "listen"
+      ? `${words.toLocaleString()} words into the interview transcripts; roster marked Heard.`
+      : `${words.toLocaleString()} words into ${targetMovement}'s conversation record.`,
   };
 
   return wrapProgramState(wrapper, {
