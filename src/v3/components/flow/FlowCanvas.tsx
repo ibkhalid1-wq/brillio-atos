@@ -638,7 +638,7 @@ function ArtifactDoc({ artifact, running, evidenceNames, onGenerate, onOpen }: {
           <>
             <div className="v3fs-reading">Reading evidence</div>
             <div className="v3fs-srcs">
-              {evidenceNames.slice(0, 6).map((name) => <span key={name}>{name.split(",")[0]} ✓</span>)}
+              {evidenceNames.slice(0, 6).map((name, index) => <span key={`${index}-${name}`}>{name.split(",")[0]} ✓</span>)}
             </div>
           </>
         ) : null}
