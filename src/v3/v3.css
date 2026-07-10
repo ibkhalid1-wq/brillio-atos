@@ -13571,8 +13571,10 @@ html:not([data-theme="light"]) .v3fs-node{border-top-color:var(--v3-border-top)}
 /* The gate as a checklist — criteria check themselves off as data lands. */
 .v3fs-checks{display:flex;flex-direction:column;gap:2px;margin:10px 0 12px}
 .v3fs-check{font:inherit;display:flex;align-items:flex-start;gap:9px;text-align:left;background:none;border:none;padding:4px 6px;margin:0 -6px;border-radius:8px;cursor:default}
-.v3fs-check:not(.done):not(:disabled){cursor:pointer}
-.v3fs-check:not(.done):not(:disabled):hover{background:var(--v3-surface-2)}
+.v3fs-check:not(:disabled){cursor:pointer}
+.v3fs-check:not(:disabled):hover{background:var(--v3-surface-2)}
+.v3fs-edit-toggle.quiet{font-size:11px;font-weight:500;color:var(--v3-text-muted);background:none;border:none;padding:2px 0;text-decoration:underline;text-underline-offset:3px;text-decoration-color:color-mix(in srgb,var(--v3-text-muted) 40%,transparent)}
+.v3fs-edit-toggle.quiet:hover{color:var(--v3-accent-2)}
 .v3fs-check-box{flex-shrink:0;width:15px;height:15px;margin-top:1px;border-radius:5px;border:1.5px solid var(--fs-line);display:grid;place-items:center;font-size:10px;font-weight:800;color:#fff}
 .v3fs-check.done .v3fs-check-box{background:var(--v3-green);border-color:var(--v3-green)}
 .v3fs-check-l{font-size:11.5px;line-height:1.5;color:var(--v3-text-primary)}

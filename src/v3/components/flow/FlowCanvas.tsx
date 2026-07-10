@@ -173,8 +173,10 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                   {movement.id === "show" && onMintDemoInvites ? (
                     <DemoInvites program={program} onMint={onMintDemoInvites} />
                   ) : null}
-                  <button type="button" className="v3fs-edit-toggle" onClick={() => toggle(setEditing, movement.id)}>
-                    {editing.has(movement.id) ? "Close editor" : "✎ Edit inputs & evidence"}
+                  {/* Quiet escape hatch only — the checklist and gate CTA are
+                      the purposeful doors into the editor now. */}
+                  <button type="button" className="v3fs-edit-toggle quiet" onClick={() => toggle(setEditing, movement.id)}>
+                    {editing.has(movement.id) ? "Close the editor" : "Adjust details"}
                   </button>
                 </div>
 
@@ -229,9 +231,11 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                                 key={item.id}
                                 type="button"
                                 className={`v3fs-check${item.done ? " done" : ""}`}
-                                disabled={item.done || !item.anchor}
+                                disabled={!item.anchor}
                                 onClick={item.anchor ? () => openEditor(movement.id, item.anchor) : undefined}
-                                title={item.done ? "Met" : item.anchor ? "Open the editor on this item" : "Met by generating / working the movement"}
+                                title={item.anchor
+                                  ? item.done ? "Met — open to review or correct" : "Open the editor on this item"
+                                  : "Met by generating / working the movement"}
                               >
                                 <span className="v3fs-check-box" aria-hidden="true">{item.done ? "✓" : ""}</span>
                                 <span className="v3fs-check-l">{item.label}</span>
