@@ -241,14 +241,15 @@ function ArtifactDoc({ artifact, running, evidenceNames, onGenerate }: {
   return (
     <div className={`v3fs-doc${artifact.present ? "" : " ghost"}`}>
       <div className="v3fs-doc-t">
-        <span className={`v3fs-st ${artifact.present ? "ok" : "none"}`} />
+        <span className={`v3fs-st ${artifact.present ? (artifact.stale ? "stale" : "ok") : "none"}`} />
         <b>{artifact.title}</b>
+        {artifact.stale ? <span className="v3fs-stale-tag">evidence changed</span> : null}
         {artifact.confidence != null ? <span className="v3fs-conf">{artifact.confidence}%</span> : null}
       </div>
       <div className="v3fs-doc-x">{artifact.excerpt ?? artifact.description}</div>
       <div className="v3fs-doc-foot">
         <button type="button" className="v3fs-a" onClick={onGenerate}>
-          {artifact.present ? "Regenerate" : "✦ Generate"}
+          {artifact.present ? (artifact.stale ? "Regenerate — evidence changed" : "Regenerate") : "✦ Generate"}
         </button>
       </div>
     </div>

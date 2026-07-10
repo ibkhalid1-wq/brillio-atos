@@ -31,6 +31,8 @@ export interface ArtifactCardModel {
   excerpt: string | null;
   confidence: number | null;
   present: boolean;
+  /** Generated from inputs that have since changed — offer a regenerate. */
+  stale: boolean;
 }
 
 export interface GateSignal {
@@ -57,6 +59,22 @@ export function readMovementInputs(program: ProgramSummary, movementId: string):
 
 export function flowMovements(): PhaseDefinition[] {
   return getMethodology("atos-flow").phases;
+}
+
+/**
+ * Fingerprint of a movement's input bucket — djb2 over the key-sorted JSON,
+ * `_`-prefixed keys excluded. The run-agent edge stamps this on artifact stubs
+ * at generation time (`inputsFingerprint`); a mismatch here means the evidence
+ * moved after the artifact was written. MIRRORS the edge implementation in
+ * supabase/functions/run-agent/index.ts — keep byte-compatible.
+ */
+export function movementInputsFingerprint(program: ProgramSummary, movementId: string): string {
+  const bucket = readMovementInputs(program, movementId);
+  const keys = Object.keys(bucket).filter((key) => !key.startsWith("_")).sort();
+  const text = JSON.stringify(keys.map((key) => [key, bucket[key]]));
+  let hash = 5381;
+  for (let index = 0; index < text.length; index += 1) hash = ((hash * 33) ^ text.charCodeAt(index)) >>> 0;
+  return hash.toString(16);
 }
 
 /** First movement whose gate is not yet approved — the live frontier. */
@@ -142,16 +160,19 @@ export function movementEvidence(program: ProgramSummary, movement: PhaseDefinit
 /** Artifact cards for one movement — presence, confidence, readable excerpt. */
 export function movementArtifacts(program: ProgramSummary, movement: PhaseDefinition): ArtifactCardModel[] {
   const root = dataRoot(program);
-  const stubs = (root.phaseArtifacts as Record<string, Record<string, { confidence?: number }>> | undefined)?.[movement.id] ?? {};
+  const stubs = (root.phaseArtifacts as Record<string, Record<string, { confidence?: number; inputsFingerprint?: string }>> | undefined)?.[movement.id] ?? {};
+  const currentFingerprint = movementInputsFingerprint(program, movement.id);
   return getPhaseArtifactDefs(movement.id).map((def) => {
     const content = getFormalArtifactContent(root, def.id);
     const stub = stubs[def.id];
     const excerpt = content ? content.replace(/[#*`>\n-]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 150) : null;
     const confidence = getFormalArtifactConfidence(root, def.id)
       ?? (typeof stub?.confidence === "number" ? Math.round(stub.confidence) : null);
+    const present = !!content || !!stub;
     return {
       id: def.id, movementId: movement.id, title: def.label, description: def.description,
-      excerpt, confidence, present: !!content || !!stub,
+      excerpt, confidence, present,
+      stale: present && typeof stub?.inputsFingerprint === "string" && stub.inputsFingerprint !== currentFingerprint,
     };
   });
 }
