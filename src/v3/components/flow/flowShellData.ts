@@ -38,8 +38,8 @@ export interface GateSignal {
   text: string;
 }
 
-/** The inner data root, tolerating both persisted rawData shapes. */
-export function dataRoot(program: ProgramSummary): Record<string, unknown> {
+/** The inner data root, tolerating both persisted rawData shapes. Internal. */
+function dataRoot(program: ProgramSummary): Record<string, unknown> {
   const raw = (program.rawData ?? {}) as Record<string, unknown>;
   return typeof raw.data === "object" && raw.data !== null
     ? (raw.data as Record<string, unknown>)

@@ -1209,6 +1209,17 @@ export default function AppShellV3() {
     userId,
   });
   const { activeRuns, isRunning: agentIsRunning, isUserRunning: agentIsUserRunning, runAgent, channelStatus } = useAgentRun(activeProgramId, authed, refreshPrograms);
+  // Agent ids with an in-flight run — powers the Flow shell's generation
+  // theater (which artifact card is drafting right now). AgentRun rows carry
+  // `agent_id`; only queued/running/paused runs are actually in flight.
+  const runningAgentIds = useMemo(
+    () => new Set(
+      activeRuns
+        .filter((run) => run.status === "queued" || run.status === "running" || run.status === "paused")
+        .map((run) => run.agent_id),
+    ),
+    [activeRuns],
+  );
   // Re-enter the Paper & Flow shell whenever the active programme changes.
   useEffect(() => { setUseFlowShell(true); }, [activeProgramId]);
   const { snapshots: programSnapshots, createSnapshot: createProgramSnapshot, getSnapshotData: getProgramSnapshotData } = useProgramSnapshots(activeProgramId || null, { enabled: authChecked && migrated });
@@ -3300,6 +3311,40 @@ export default function AppShellV3() {
     );
   }
 
+  // Overlays that are identical under both the classic and the Paper & Flow
+  // shell — defined once so the two copies can't drift. (The Copilot sidebar
+  // differs per shell in its onNavigate, so it stays inline in each branch.)
+  const setupWizardOverlay = wizardOpen && activeProgram ? (
+    <ProgramSetupWizard
+      program={activeProgram}
+      onSave={handleSaveSetup}
+      onClose={() => void handleCancelSetup()}
+      isSaving={wizardSaving}
+    />
+  ) : null;
+  const toastStackOverlay = toasts.length ? (
+    <div className="v3-toast-stack" aria-live="polite" aria-atomic="true">
+      {toasts.map((toast) => (
+        <div key={toast.id} className={`v3-toast ${toast.tone ? `is-${toast.tone}` : ""}`}>
+          {toast.icon ? <span className="v3-toast-icon">{toast.icon}</span> : null}
+          <span className="v3-toast-message">{toast.message}</span>
+          {toast.action ? (
+            <button
+              type="button"
+              className="v3-toast-action"
+              onClick={() => {
+                setToasts((current) => current.filter((t) => t.id !== toast.id));
+                toast.action!.onClick();
+              }}
+            >
+              {toast.action.label}
+            </button>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  ) : null;
+
   // ── "Paper & Flow" shell ────────────────────────────────────────────────
   // ATOS Flow programmes render the reimagined chrome — none of the classic
   // shell below appears. Same engine (data, agents, autosave, wizard, Copilot,
@@ -3311,7 +3356,7 @@ export default function AppShellV3() {
         <FlowShell
           program={activeProgram}
           programs={programs}
-          runningAgentIds={new Set((activeRuns as Array<{ agentId?: string }>).map((run) => run.agentId).filter((id): id is string => !!id))}
+          runningAgentIds={runningAgentIds}
           onSelectProgram={(id) => setActiveProgramId(id)}
           onCreateProgram={() => void handleCreateProgram()}
           onOpenSetup={() => setWizardOpen(true)}
@@ -3320,14 +3365,7 @@ export default function AppShellV3() {
           onRunAgent={handleRunAgent}
           onSaveInputs={handleSavePhaseInputs}
         />
-        {wizardOpen && activeProgram ? (
-          <ProgramSetupWizard
-            program={activeProgram}
-            onSave={handleSaveSetup}
-            onClose={() => void handleCancelSetup()}
-            isSaving={wizardSaving}
-          />
-        ) : null}
+        {setupWizardOverlay}
         <CoPilotSidebar
           open={adamCopilotSidebarOpen}
           onClose={() => setAdamCopilotSidebarOpen(false)}
@@ -3349,28 +3387,7 @@ export default function AppShellV3() {
           } : undefined}
           onNavigate={() => setUseFlowShell(false)}
         />
-        {toasts.length ? (
-          <div className="v3-toast-stack" aria-live="polite" aria-atomic="true">
-            {toasts.map((toast) => (
-              <div key={toast.id} className={`v3-toast ${toast.tone ? `is-${toast.tone}` : ""}`}>
-                {toast.icon ? <span className="v3-toast-icon">{toast.icon}</span> : null}
-                <span className="v3-toast-message">{toast.message}</span>
-                {toast.action ? (
-                  <button
-                    type="button"
-                    className="v3-toast-action"
-                    onClick={() => {
-                      setToasts((current) => current.filter((t) => t.id !== toast.id));
-                      toast.action!.onClick();
-                    }}
-                  >
-                    {toast.action.label}
-                  </button>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        ) : null}
+        {toastStackOverlay}
       </div>
     );
   }
@@ -3793,14 +3810,7 @@ export default function AppShellV3() {
       </div>
       </div>
 
-      {wizardOpen && activeProgram ? (
-        <ProgramSetupWizard
-          program={activeProgram}
-          onSave={handleSaveSetup}
-          onClose={() => void handleCancelSetup()}
-          isSaving={wizardSaving}
-        />
-      ) : null}
+      {setupWizardOverlay}
 
       {activeProgramId ? (
         <CopilotPanel
@@ -3944,28 +3954,7 @@ export default function AppShellV3() {
         }}
       />
 
-      {toasts.length ? (
-        <div className="v3-toast-stack" aria-live="polite" aria-atomic="true">
-          {toasts.map((toast) => (
-            <div key={toast.id} className={`v3-toast ${toast.tone ? `is-${toast.tone}` : ""}`}>
-              {toast.icon ? <span className="v3-toast-icon">{toast.icon}</span> : null}
-              <span className="v3-toast-message">{toast.message}</span>
-              {toast.action ? (
-                <button
-                  type="button"
-                  className="v3-toast-action"
-                  onClick={() => {
-                    setToasts((current) => current.filter((t) => t.id !== toast.id));
-                    toast.action!.onClick();
-                  }}
-                >
-                  {toast.action.label}
-                </button>
-              ) : null}
-            </div>
-          ))}
-        </div>
-      ) : null}
+      {toastStackOverlay}
     </div>
   );
 }
