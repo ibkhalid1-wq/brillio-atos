@@ -145,6 +145,18 @@ export function resolveFlowDecision(
     if (additions.length) nextInner = { ...nextInner, tracks: [...current, ...additions].slice(-24) };
   }
 
+  // Governance payloads (e.g. the cap-raise the budget gate queues) merge
+  // shallowly, with movement budgets folded per movement.
+  if (resolution === "confirmed" && payload && isRecord(payload.flowGovernance)) {
+    const incoming = payload.flowGovernance as Record<string, unknown>;
+    const current = isRecord(nextInner.flowGovernance) ? (nextInner.flowGovernance as Record<string, unknown>) : {};
+    const budgets = {
+      ...(isRecord(current.movementBudgets) ? current.movementBudgets : {}),
+      ...(isRecord(incoming.movementBudgets) ? incoming.movementBudgets : {}),
+    };
+    nextInner = { ...nextInner, flowGovernance: { ...current, ...incoming, movementBudgets: budgets } };
+  }
+
   const attestation = {
     ts: now,
     agentId: resolvedBy,
