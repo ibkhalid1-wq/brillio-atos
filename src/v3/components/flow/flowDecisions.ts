@@ -136,6 +136,15 @@ export function resolveFlowDecision(
     nextInner.dynamicSchema = merged;
   }
 
+  // Track plans merge by id: new tracks append, existing ones keep their
+  // show/refine record (a re-adopted plan must never erase demonstrations).
+  if (resolution === "confirmed" && payload && Array.isArray(payload.tracks)) {
+    const current = Array.isArray(nextInner.tracks) ? (nextInner.tracks as unknown[]) : [];
+    const currentIds = new Set(current.filter(isRecord).map((t) => String(t.id ?? "")));
+    const additions = payload.tracks.filter(isRecord).filter((t) => t.id && !currentIds.has(String(t.id)));
+    if (additions.length) nextInner = { ...nextInner, tracks: [...current, ...additions].slice(-24) };
+  }
+
   const attestation = {
     ts: now,
     agentId: resolvedBy,
