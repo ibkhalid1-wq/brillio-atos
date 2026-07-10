@@ -107,6 +107,8 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
         const generating = artifacts.some((a) => runningAgentIds.has(a.id));
         const isLive = movement.id === frontier && !isDone;
         const signal = gateSignal(program, movement, artifacts);
+        const checks = gateChecklist(program, movement, artifacts);
+        const openChecks = checks.filter((item) => !item.done).length;
         const isLoop = !!movement.movement?.isLoop;
         const coverage = movement.id === "listen" ? listenCoverage(program) : null;
 
@@ -116,6 +118,19 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
             className={["v3fs-ch", isOpen ? "open" : "", isDone ? "done" : "", isLive ? "live" : ""].filter(Boolean).join(" ")}
           >
             <div className="v3fs-node" aria-hidden="true">{isDone ? "✓" : isLoop ? "∞" : index + 1}</div>
+            {isLive ? (
+              // The rail's pointer: pulsing at the movement that needs the
+              // user when its chapter is closed; a calm marker once inside.
+              <button
+                type="button"
+                className={`v3fs-here${isOpen ? " calm" : ""}`}
+                onClick={() => { if (!isOpen) toggle(setOpen, movement.id); }}
+                aria-label={isOpen ? "You are here" : `Open ${movement.displayName} — it needs your attention`}
+              >
+                {isOpen ? "You are here" : `Needs you${openChecks ? ` · ${openChecks}` : ""}`}
+                <span className="v3fs-here-a" aria-hidden="true">▶</span>
+              </button>
+            ) : null}
             <button type="button" className="v3fs-ch-h" onClick={() => toggle(setOpen, movement.id)} aria-expanded={isOpen}>
               <h2>{movement.displayName}</h2>
               <span className={`v3fs-state ${generating ? "gen" : isDone ? "done" : isLive ? "live" : isLoop ? "loop" : "wait"}`}>
@@ -216,7 +231,6 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                   <div className="v3fs-gate">
                     <p className="v3fs-gate-say">{movement.movement?.readyWhen ?? ""}</p>
                     {(() => {
-                      const checks = gateChecklist(program, movement, artifacts);
                       const done = checks.filter((item) => item.done).length;
                       const firstOpen = checks.find((item) => !item.done);
                       return (

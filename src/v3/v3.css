@@ -13561,6 +13561,15 @@ html:not([data-theme="light"]) .v3fs-node{border-top-color:var(--v3-border-top)}
 .v3fs-kit-fu-row input[type="date"]{font:inherit;font-size:11.5px;border:1px solid var(--fs-line);border-radius:8px;padding:6px 9px;background:var(--fs-card);color:var(--v3-text-primary)}
 .v3fs-kit-fu-note{flex-basis:100%;font-size:10.5px;color:var(--v3-text-muted)}
 
+/* The spine's pointer: which movement needs the user, right on the rail. */
+.v3fs-here{position:absolute;right:calc(100% + 14px);top:14px;display:flex;align-items:center;gap:6px;white-space:nowrap;font:inherit;font-size:11.5px;font-weight:700;letter-spacing:.01em;border:none;cursor:pointer;border-radius:999px;padding:7px 13px;background:linear-gradient(135deg,#4f46e5,var(--v3-accent-2));color:#fff;box-shadow:0 8px 24px -8px rgba(79,70,229,.55);z-index:4}
+.v3fs-here-a{display:inline-block;animation:v3fs-here-nudge 1.1s ease-in-out infinite}
+@keyframes v3fs-here-nudge{0%,100%{transform:translateX(0)}50%{transform:translateX(4px)}}
+.v3fs-here.calm{background:var(--fs-card);color:var(--v3-accent-2);border:1px solid var(--fs-line);box-shadow:var(--fs-shadow);cursor:default}
+.v3fs-here.calm .v3fs-here-a{animation:none}
+@media (prefers-reduced-motion:reduce){.v3fs-here-a{animation:none}}
+@media (max-width:1380px){.v3fs-here{display:none}}
+
 /* "Start here" — the one arrow that says where to begin. */
 .v3fs-start{position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:6px;white-space:nowrap;background:linear-gradient(135deg,#4f46e5,var(--v3-accent-2));color:#fff;font-size:11.5px;font-weight:700;letter-spacing:.01em;border-radius:999px;padding:7px 14px;box-shadow:0 8px 24px -8px rgba(79,70,229,.55);pointer-events:none;z-index:5}
 .v3fs-start-a{display:inline-block;animation:v3fs-start-nudge 1.1s ease-in-out infinite}
