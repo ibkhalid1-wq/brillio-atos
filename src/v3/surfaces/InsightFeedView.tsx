@@ -296,8 +296,18 @@ export default function InsightFeedView({
   // phase has advanced since the last landed briefing — a briefing that still
   // describes a superseded phase is worse than none, so a phase change invalidates
   // the cache. No pre-run stamp: the record effect above stamps only on success.
+  // A metadata-only summary (blob not yet hydrated) can't tell us the real
+  // methodology OR whether a briefing already landed — never fire on one.
+  const briefingBlobReady = !!program?.rawData && Object.keys(program.rawData).length > 0;
   useEffect(() => {
-    if (!program || anyAgentRunning || typeof window === "undefined") return;
+    if (!program || !briefingBlobReady || anyAgentRunning || typeof window === "undefined") return;
+    // Flow programmes never show this surface — the Flow shell replaces the
+    // classic chrome. During the metadata-first hydration window this view
+    // still mounts for a beat, and firing a briefing here would queue an edge
+    // run (a full-blob write) against a programme the user is actively
+    // confirming decisions on. The stamp also never lands (the briefing output
+    // is never seen), so every reload would fire another run.
+    if (program.methodology === "atos-flow") return;
     const stampKey = `adam-daily-briefing-${program.id ?? "program"}`;
     const phaseKey = `${stampKey}-phase`;
     const lastPhase = window.localStorage.getItem(phaseKey);
@@ -307,7 +317,7 @@ export default function InsightFeedView({
     const phaseUnchanged = !resolvedActiveId || lastPhase === resolvedActiveId;
     if (fresh && phaseUnchanged) return;
     onRunAgent("daily-briefing");
-  }, [program?.id, resolvedActiveId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [program?.id, resolvedActiveId, briefingBlobReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const lastUpdated = getRelativeTime((program as (ProgramSummary & { updatedAt?: string }) | null)?.updatedAt);
 

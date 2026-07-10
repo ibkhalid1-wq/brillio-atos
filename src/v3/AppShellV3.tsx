@@ -3366,9 +3366,28 @@ export default function AppShellV3() {
           onRunAgent={handleRunAgent}
           onSaveInputs={handleSavePhaseInputs}
           onResolveDecision={async (decisionId, resolution) => {
+            const resolvedBy = currentUser?.email || "you";
             try {
-              const blob = resolveFlowDecision(activeProgram, decisionId, resolution, currentUser?.email || "you");
-              if (blob) await updateProgramData(activeProgram.id, blob, activeProgram.updatedAt);
+              const blob = resolveFlowDecision(activeProgram, decisionId, resolution, resolvedBy);
+              if (!blob) return;
+              try {
+                await updateProgramData(activeProgram.id, blob, activeProgram.updatedAt);
+              } catch (err) {
+                if (!(err instanceof ConflictError) || !isSupabaseConfigured || !supabase) throw err;
+                // Flow rows are hot — background agent runs land between
+                // hydration and the click. Never drop a human resolution over
+                // that: re-resolve against the freshest server copy and retry
+                // once (same re-base pattern as the inputs save above).
+                const { data: fresh } = await supabase
+                  .from("adam_programs")
+                  .select("data, updated_at")
+                  .eq("id", activeProgram.id)
+                  .single();
+                const freshRaw = (fresh?.data as Record<string, unknown> | undefined) ?? activeProgram.rawData ?? {};
+                const rebased = resolveFlowDecision({ ...activeProgram, rawData: freshRaw }, decisionId, resolution, resolvedBy);
+                if (!rebased) return;
+                await updateProgramData(activeProgram.id, rebased, fresh?.updated_at ?? undefined);
+              }
             } catch (err) {
               const message = err instanceof Error ? err.message : "Could not record the decision. Please try again.";
               window.dispatchEvent(new CustomEvent("atlas-v3-toast", { detail: { message, tone: "error" } }));
