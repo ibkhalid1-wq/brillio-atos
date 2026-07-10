@@ -444,27 +444,6 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
         <div className="v3fs-kit-actions">
           <button type="button" className="v3fs-a" onClick={() => void copyScript()}>{copied ? "Copied ✓" : "Copy the script"}</button>
         </div>
-        {kit.followUp && (onScheduleFollowUp || onMintFollowUp) ? (
-          <>
-            <div className="v3fs-kit-step"><b>4</b><span>Close the loop — iterate until every required element is captured</span></div>
-            <div className="v3fs-kit-fu-row">
-            {onScheduleFollowUp ? (
-              <>
-                <input type="date" value={followDate} onChange={(event) => setFollowDate(event.target.value)} aria-label="Follow-up date" />
-                <button type="button" className="v3fs-btn" disabled={busy || !followDate} onClick={() => void schedule()}>
-                  {scheduledTick ? "Scheduled ✓" : "Schedule the follow-up"}
-                </button>
-              </>
-            ) : null}
-            {onMintFollowUp ? (
-              <button type="button" className="v3fs-btn" disabled={busy} onClick={() => void sendLink()}>
-                {linkTick ? "Link copied ✓" : "✳ Send as a link"}
-              </button>
-            ) : null}
-            <span className="v3fs-kit-fu-note">No meeting needed — ATOS asks these itself and the answers arrive in the Inbox.</span>
-            </div>
-          </>
-        ) : null}
         <div className="v3fs-kit-step"><b>3</b><span>Capture what came back — transcript first, then any documents they referenced</span></div>
         <div className="v3fs-kit-capture">
           <textarea
@@ -488,6 +467,27 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
             </button>
           </div>
         </div>
+        {kit.followUp && (onScheduleFollowUp || onMintFollowUp) ? (
+          <>
+            <div className="v3fs-kit-step"><b>4</b><span>Close the loop — iterate until every required element is captured</span></div>
+            <div className="v3fs-kit-fu-row">
+            {onScheduleFollowUp ? (
+              <>
+                <input type="date" value={followDate} onChange={(event) => setFollowDate(event.target.value)} aria-label="Follow-up date" />
+                <button type="button" className="v3fs-btn" disabled={busy || !followDate} onClick={() => void schedule()}>
+                  {scheduledTick ? "Scheduled ✓" : "Schedule the follow-up"}
+                </button>
+              </>
+            ) : null}
+            {onMintFollowUp ? (
+              <button type="button" className="v3fs-btn" disabled={busy} onClick={() => void sendLink()}>
+                {linkTick ? "Link copied ✓" : "✳ Send as a link"}
+              </button>
+            ) : null}
+            <span className="v3fs-kit-fu-note">No meeting needed — ATOS asks these itself and the answers arrive in the Inbox.</span>
+            </div>
+          </>
+        ) : null}
       </div>
     </details>
   );
