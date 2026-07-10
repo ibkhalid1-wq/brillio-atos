@@ -178,6 +178,12 @@ export function movementArtifacts(program: ProgramSummary, movement: PhaseDefini
   });
 }
 
+/** The full readable body of a generated artifact — the drill-down target. */
+export function artifactDocument(program: ProgramSummary, artifactId: string): string | null {
+  const content = getFormalArtifactContent(dataRoot(program), artifactId);
+  return content && content.trim() ? content : null;
+}
+
 /** Listen's coverage ledger: heard-or-waived over total mapped voices. */
 export function listenCoverage(program: ProgramSummary): { done: number; total: number } {
   const rows = parseGridRows(readMovementInputs(program, "listen").interviewRoster);
