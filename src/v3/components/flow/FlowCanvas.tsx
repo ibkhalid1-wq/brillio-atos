@@ -5,7 +5,7 @@ import {
   flowMovements, frontierMovementId, movementEvidence, movementArtifacts,
   gateSignal, listenCoverage, movementFacts, demoAcceptance, type ArtifactCardModel,
 } from "@/v3/components/flow/flowShellData";
-import { listInterviewPacks, portalLinkFor } from "@/v3/components/flow/flowPortal";
+import { listInterviewPacks, listDemoInvites, portalLinkFor } from "@/v3/components/flow/flowPortal";
 
 /** The gate column's one primary action per movement — opens its editor. */
 const GATE_CTA: Record<string, string> = {
@@ -34,6 +34,8 @@ interface FlowCanvasProps {
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean }) => Promise<void>;
   /** Mint async-interview response links from the Discovery Kit (Listen). */
   onMintPacks?: () => Promise<void>;
+  /** Mint demo links from the Demo Scripts (Show). */
+  onMintDemoInvites?: () => Promise<void>;
 }
 
 /**
@@ -44,7 +46,7 @@ interface FlowCanvasProps {
  * coloured). Nothing locks; editing unfolds in place via the shared inputs
  * panel, so the canvas is the workspace, not a dashboard about one.
  */
-export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSaveInputs, onMintPacks }: FlowCanvasProps) {
+export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites }: FlowCanvasProps) {
   const movements = useMemo(() => flowMovements(), []);
   const frontier = frontierMovementId(program);
   const [open, setOpen] = useState<Set<string>>(() => new Set([frontier]));
@@ -150,6 +152,9 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                   ) : null}
                   {movement.id === "listen" && onMintPacks ? (
                     <AsyncInterviews program={program} onMintPacks={onMintPacks} />
+                  ) : null}
+                  {movement.id === "show" && onMintDemoInvites ? (
+                    <DemoInvites program={program} onMint={onMintDemoInvites} />
                   ) : null}
                   <button type="button" className="v3fs-edit-toggle" onClick={() => toggle(setEditing, movement.id)}>
                     {editing.has(movement.id) ? "Close editor" : "✎ Edit inputs & evidence"}
@@ -268,6 +273,60 @@ function AsyncInterviews({ program, onMintPacks }: { program: ProgramSummary; on
       {hasKit ? (
         <button type="button" className="v3fs-a" disabled={busy} onClick={() => void mint()}>
           {busy ? "Creating…" : packs.length ? "↺ Create links for new stakeholders" : "✳ Create response links from the Discovery Kit"}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Demo tour links — the Show column's automation ladder. Invites mint from
+ * the Demo Scripts (each stakeholder gets THEIR walkthrough); verdicts come
+ * back through the quarantine and land in the tour ledger + track passes.
+ */
+function DemoInvites({ program, onMint }: { program: ProgramSummary; onMint: () => Promise<void> }) {
+  const invites = listDemoInvites(program);
+  const hasScripts = (() => {
+    const raw = (program.rawData ?? {}) as Record<string, unknown>;
+    const inner = typeof raw.data === "object" && raw.data !== null ? (raw.data as Record<string, unknown>) : raw;
+    const doc = inner.demoScripts;
+    return !!doc && typeof doc === "object" && Array.isArray((doc as Record<string, unknown>).scripts);
+  })();
+  const [busy, setBusy] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  if (!hasScripts && invites.length === 0) return null;
+
+  const mint = async () => {
+    setBusy(true);
+    try { await onMint(); } finally { setBusy(false); }
+  };
+  const copy = async (inviteId: string, link: string) => {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopiedId(inviteId);
+      window.setTimeout(() => setCopiedId((current) => (current === inviteId ? null : current)), 1600);
+    } catch { window.prompt("Copy the demo link:", link); }
+  };
+
+  return (
+    <div className="v3fs-async">
+      <div className="v3fs-async-cap">Demo tour links <span>each stakeholder watches their own workflow — verdicts arrive in Today</span></div>
+      {invites.map((invite) => (
+        <div key={invite.id} className="v3fs-async-row">
+          <span className={`v3fs-st ${invite.respondedAt ? "ok" : "none"}`} />
+          <div className="v3fs-async-who">
+            {invite.stakeholder}
+            <span>{invite.respondedAt ? "verdict received" : "waiting for their verdict"}</span>
+          </div>
+          <button type="button" className="v3fs-a" onClick={() => void copy(invite.id, portalLinkFor(program.id, invite))}>
+            {copiedId === invite.id ? "Copied ✓" : "Copy link"}
+          </button>
+        </div>
+      ))}
+      {hasScripts ? (
+        <button type="button" className="v3fs-a" disabled={busy} onClick={() => void mint()}>
+          {busy ? "Creating…" : invites.length ? "↺ Create links for new stakeholders" : "✳ Create demo links from the Demo Scripts"}
         </button>
       ) : null}
     </div>

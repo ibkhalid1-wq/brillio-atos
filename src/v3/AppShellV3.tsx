@@ -54,7 +54,7 @@ import FlowShell from "@/v3/components/flow/FlowShell";
 import { resolveFlowDecision } from "@/v3/components/flow/flowDecisions";
 import { recordShowPass, addFlowTrack } from "@/v3/components/flow/flowTracks";
 import { setHaltAll, toggleAgentHalt, setMovementBudget } from "@/v3/components/flow/flowGovernance";
-import { mintInterviewPacks, ingestPortalResponse, dismissPortalResponse } from "@/v3/components/flow/flowPortal";
+import { mintInterviewPacks, mintDemoInvites, ingestPortalResponse, dismissPortalResponse } from "@/v3/components/flow/flowPortal";
 import FlowRespond from "@/v3/components/flow/FlowRespond";
 import { reportError } from "@/lib/errorReporter";
 import { sanitizeMarkdown } from "@/lib/sanitize";
@@ -3471,6 +3471,10 @@ export default function AppShellV3() {
           onMintPacks={async () => {
             const actor = currentUser?.email || "you";
             await persistFlowMutation((program) => mintInterviewPacks(program, actor));
+          }}
+          onMintDemoInvites={async () => {
+            const actor = currentUser?.email || "you";
+            await persistFlowMutation((program) => mintDemoInvites(program, actor));
           }}
           onIngestPortalItem={async (itemId) => {
             const actor = currentUser?.email || "you";

@@ -42,6 +42,8 @@ interface FlowShellProps {
   onSetMovementBudget: (movementId: string, tokens: number) => Promise<void>;
   /** Mint async-interview response links from the Discovery Kit. */
   onMintPacks: () => Promise<void>;
+  /** Mint demo links from the Demo Scripts. */
+  onMintDemoInvites: () => Promise<void>;
   /** Confirm a quarantined portal response into evidence. */
   onIngestPortalItem: (itemId: string) => Promise<void>;
   onDismissPortalItem: (itemId: string) => Promise<void>;
@@ -151,7 +153,7 @@ export default function FlowShell(props: FlowShellProps) {
             onIngestPortalItem={props.onIngestPortalItem} onDismissPortalItem={props.onDismissPortalItem}
             onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
         ) : view === "flow" ? (
-          <FlowCanvas program={program} runningAgentIds={props.runningAgentIds} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} />
+          <FlowCanvas program={program} runningAgentIds={props.runningAgentIds} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} />
         ) : view === "tracks" ? (
           <FlowTracks
             program={program}
@@ -280,16 +282,24 @@ function FlowToday({ program, onResolveDecision, onIngestPortalItem, onDismissPo
           {inbox.map((item) => (
             <article key={item.id} className="v3fs-dec v3fs-evitem">
               <div className="v3fs-dec-top">
-                <span className="v3fs-tag ev">async response</span>
+                {item.kind === "demo-verdict" ? (
+                  <span className={`v3fs-vc ${item.verdict === "rework" ? "pen" : "acc"}`}>{(item.verdict ?? "verdict").replace(/-/g, " ")}</span>
+                ) : (
+                  <span className="v3fs-tag ev">async response</span>
+                )}
                 <span className="v3fs-dec-mv">{item.stakeholder}{item.role ? ` · ${item.role}` : ""}</span>
                 {item.receivedAt ? <span className="v3fs-dec-when">{timeAgo(item.receivedAt)}</span> : null}
               </div>
-              <p className="v3fs-dec-s">“{item.text.slice(0, 220)}{item.text.length > 220 ? "…" : ""}”</p>
-              <div className="v3fs-dec-rec-b">{item.text.split(/\s+/).length.toLocaleString()} words</div>
+              {item.text ? <p className="v3fs-dec-s">“{item.text.slice(0, 220)}{item.text.length > 220 ? "…" : ""}”</p> : null}
+              <div className="v3fs-dec-rec-b">
+                {item.kind === "demo-verdict"
+                  ? "confirming updates the tour ledger and the track's show record"
+                  : `${item.text.split(/\s+/).length.toLocaleString()} words`}
+              </div>
               <div className="v3fs-dec-cta">
                 <button type="button" className="v3fs-btn pri" disabled={busyId === item.id}
                   onClick={() => void actOnItem(item.id, onIngestPortalItem)}>
-                  {busyId === item.id ? "Ingesting…" : "Ingest as evidence"}
+                  {busyId === item.id ? "Ingesting…" : item.kind === "demo-verdict" ? "Record the verdict" : "Ingest as evidence"}
                 </button>
                 <button type="button" className="v3fs-btn" disabled={busyId === item.id}
                   onClick={() => void actOnItem(item.id, onDismissPortalItem)}>
