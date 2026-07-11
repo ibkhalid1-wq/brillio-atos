@@ -37,6 +37,8 @@ interface FlowShellProps {
   onReopenGate?: (movementId: string, reason: string) => Promise<void>;
   /** Restore the programme blob to a local snapshot's state. */
   onRestoreSnapshot?: (data: Record<string, unknown>) => Promise<void>;
+  /** Awaitable agent run for the spine runner. */
+  onRunAgentAndWait?: (agentId: string, phaseId: string) => Promise<void>;
   /** Record a show/refine pass on a track. */
   onRecordShowPass: (trackId: string, pass: { stakeholder?: string; verdict: FlowShowPass["verdict"]; note?: string; stableDiff?: boolean }) => Promise<void>;
   /** Add a track by hand (the blueprint is the usual source). */
@@ -195,7 +197,7 @@ export default function FlowShell(props: FlowShellProps) {
             onIngestPortalItem={props.onIngestPortalItem} onDismissPortalItem={props.onDismissPortalItem}
             onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
         ) : view === "flow" ? (
-          <FlowCanvas program={program} runningAgentIds={props.runningAgentIds} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} onCompileShipLanes={props.onCompileShipLanes} onToggleShipItem={props.onToggleShipItem} onScheduleFollowUp={props.onScheduleFollowUp} onMintFollowUp={props.onMintFollowUp} onSaveArtifactDoc={props.onSaveArtifactDoc} onRecordGate={props.onRecordGate} onReopenGate={props.onReopenGate} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} />
+          <FlowCanvas program={program} runningAgentIds={props.runningAgentIds} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} onCompileShipLanes={props.onCompileShipLanes} onToggleShipItem={props.onToggleShipItem} onScheduleFollowUp={props.onScheduleFollowUp} onMintFollowUp={props.onMintFollowUp} onSaveArtifactDoc={props.onSaveArtifactDoc} onRecordGate={props.onRecordGate} onReopenGate={props.onReopenGate} onRunAgentAndWait={props.onRunAgentAndWait} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} />
         ) : view === "tracks" ? (
           <FlowTracks
             program={program}

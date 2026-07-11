@@ -4634,6 +4634,10 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-gate-rec {font:inherit;font-size:11.5px;font-weight:650;margin:6px 0 2px 22px;align-self:flex-start;border:1px solid currentColor;border-radius:99px;padding:6px 14px;background:transparent;color:inherit;cursor:pointer;transition:background .15s ease}
 .v3fs-gate-rec:hover {background:color-mix(in srgb, currentColor 10%, transparent)}
 .v3fs-gate-rec.armed {background:var(--v3-green);border-color:var(--v3-green);color:#fff}
+.v3fs-spine {display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;border:1px solid var(--v3-amber);border-radius:14px;padding:13px 17px;margin:0 0 26px;background:var(--v3-amber-soft)}
+.v3fs-spine-t {flex:1 1 260px;font-size:12.5px;font-weight:600;color:var(--v3-amber);line-height:1.5}
+.v3fs-spine-bar {flex:1 1 160px;height:6px;border-radius:99px;background:color-mix(in srgb, var(--v3-amber) 20%, transparent);overflow:hidden}
+.v3fs-spine-fill {height:100%;border-radius:99px;background:var(--v3-amber);transition:width .4s ease}
 .v3fs-gate-rec.quiet {font-weight:550;opacity:.8;border-style:dashed}
 .v3fs-gate-rec.quiet.armed {background:var(--v3-amber);border-color:var(--v3-amber);border-style:solid;color:#fff;opacity:1}
 .v3fs-kit-flag {display:flex;align-items:flex-start;gap:8px;font-size:11px;color:var(--v3-text-secondary);line-height:1.5;margin:2px 0 4px;cursor:pointer}

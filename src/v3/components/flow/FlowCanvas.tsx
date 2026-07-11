@@ -5,6 +5,7 @@ import FlowArtifactStudio, { type ArtifactEditInput } from "@/v3/components/flow
 import {
   flowMovements, frontierMovementId, movementEvidence, movementArtifacts,
   gateReadiness, gateChecklist, listenCoverage, movementFacts, demoAcceptance,
+  spineRegenerationPlan,
   type ArtifactCardModel,
 } from "@/v3/components/flow/flowShellData";
 import { meetingKit, type MeetingKit } from "@/v3/components/flow/flowMeetings";
@@ -36,6 +37,8 @@ interface FlowCanvasProps {
   onRecordGate?: (movementId: string) => Promise<void>;
   /** Reopen a demonstrated gate — evidence changed. Unlocks its inputs. */
   onReopenGate?: (movementId: string, reason: string) => Promise<void>;
+  /** Awaitable agent run — the spine runner sequences regenerations with it. */
+  onRunAgentAndWait?: (agentId: string, phaseId: string) => Promise<void>;
 }
 
 /**
@@ -46,7 +49,7 @@ interface FlowCanvasProps {
  * coloured). Nothing locks; editing unfolds in place via the shared inputs
  * panel, so the canvas is the workspace, not a dashboard about one.
  */
-export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onScheduleFollowUp, onMintFollowUp, onSaveArtifactDoc, onOpenInbox, onRecordGate, onReopenGate }: FlowCanvasProps) {
+export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onScheduleFollowUp, onMintFollowUp, onSaveArtifactDoc, onOpenInbox, onRecordGate, onReopenGate, onRunAgentAndWait }: FlowCanvasProps) {
   const movements = useMemo(() => flowMovements(), []);
   const frontier = frontierMovementId(program);
   const [open, setOpen] = useState<Set<string>>(() => new Set([frontier]));
@@ -88,8 +91,13 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
     [program, movements],
   );
 
+  const spine = useMemo(() => spineRegenerationPlan(program), [program]);
+
   return (
     <div className="v3fs-flow">
+      {spine.length >= 2 && onRunAgentAndWait ? (
+        <SpineRunner plan={spine} runningAgentIds={runningAgentIds} onRun={onRunAgentAndWait} />
+      ) : null}
       {rows.map(({ movement, artifacts, evidence }, index) => {
         const isOpen = open.has(movement.id);
         const isDone = program.gateReviews?.[movement.id]?.status === "approved";
@@ -335,6 +343,59 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
           onSaveDoc={onSaveArtifactDoc}
           onOpenInbox={onOpenInbox}
         />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Regenerate down the spine — the staged runner. The app knows the document
+ * dependency order (movement order); when several documents trail the
+ * evidence this runs them one at a time, upstream first, so each generation
+ * reads its refreshed upstream context. Hand-edited documents keep their
+ * guard: those runs land as proposals in the Inbox, never overwrites.
+ */
+function SpineRunner({ plan, runningAgentIds, onRun }: {
+  plan: Array<{ artifactId: string; movementId: string; title: string }>;
+  runningAgentIds: Set<string>;
+  onRun: (agentId: string, phaseId: string) => Promise<void>;
+}) {
+  const [progress, setProgress] = useState<{ index: number; total: number; title: string } | null>(null);
+  const [doneCount, setDoneCount] = useState<number | null>(null);
+  const busyElsewhere = runningAgentIds.size > 0 && !progress;
+  const run = async () => {
+    setDoneCount(null);
+    const steps = [...plan];
+    let completed = 0;
+    try {
+      for (const [index, step] of steps.entries()) {
+        setProgress({ index: index + 1, total: steps.length, title: step.title });
+        await onRun(step.artifactId, step.movementId);
+        completed += 1;
+      }
+    } finally {
+      setProgress(null);
+      setDoneCount(completed);
+    }
+  };
+  return (
+    <div className="v3fs-spine" role="status">
+      <div className="v3fs-spine-t">
+        {progress
+          ? `Regenerating ${progress.index} of ${progress.total} — ${progress.title}…`
+          : doneCount != null
+            ? `Record refreshed — ${doneCount} document${doneCount === 1 ? "" : "s"} regenerated. Hand-edited ones propose in the Inbox.`
+            : `The record trails the evidence — ${plan.length} documents to regenerate, upstream first.`}
+      </div>
+      {!progress && doneCount == null ? (
+        <button type="button" className="v3fs-btn pri" disabled={busyElsewhere} onClick={() => void run()}>
+          {busyElsewhere ? "An agent is running…" : "Regenerate down the spine"}
+        </button>
+      ) : null}
+      {progress ? (
+        <div className="v3fs-spine-bar" aria-hidden="true">
+          <div className="v3fs-spine-fill" style={{ width: `${Math.round(((progress.index - 1) / progress.total) * 100)}%` }} />
+        </div>
       ) : null}
     </div>
   );

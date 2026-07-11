@@ -452,6 +452,32 @@ export function gateReadiness(
   };
 }
 
+/** One step of the spine plan: a stale document, in movement order. */
+export interface SpineStep {
+  artifactId: string;
+  movementId: string;
+  title: string;
+}
+
+/**
+ * The regeneration plan the dependency spine implies: every PRESENT document
+ * whose evidence moved after it was written, upstream movements first — the
+ * order that lets each regeneration read its refreshed upstream context.
+ * (Gap-only documents are excluded: regenerating over unchanged inputs
+ * reproduces the same gaps; gaps close through capture, not re-runs.)
+ */
+export function spineRegenerationPlan(program: ProgramSummary): SpineStep[] {
+  const steps: SpineStep[] = [];
+  for (const movement of flowMovements()) {
+    for (const artifact of movementArtifacts(program, movement)) {
+      if (artifact.present && artifact.stale) {
+        steps.push({ artifactId: artifact.id, movementId: movement.id, title: artifact.title });
+      }
+    }
+  }
+  return steps;
+}
+
 /** Days until the Frame-declared first-demo date; null when unset. */
 export function daysToFirstDemo(program: ProgramSummary): number | null {
   const value = readMovementInputs(program, "frame").targetFirstDemoDate;

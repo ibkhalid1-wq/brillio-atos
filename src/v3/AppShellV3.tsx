@@ -2019,6 +2019,9 @@ export default function AppShellV3() {
             await reopenGate(movementId, reason);
             pushV3Toast("Gate reopened — inputs unlocked; capture the new evidence and the record re-derives.", { duration: 4500 });
           }}
+          onRunAgentAndWait={async (agentId, phaseId) => {
+            await runProgramAgent({ agentId, phaseId, triggeredBy: "user" });
+          }}
           onRestoreSnapshot={async (data) => {
             if (!activeProgram) return;
             // Restoring is a write like any other: it attests into the restored
