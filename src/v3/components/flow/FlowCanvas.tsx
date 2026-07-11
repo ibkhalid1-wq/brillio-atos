@@ -115,17 +115,23 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
             className={["v3fs-ch", isOpen ? "open" : "", isDone ? "done" : "", isLive ? "live" : ""].filter(Boolean).join(" ")}
           >
             <div className="v3fs-node" aria-hidden="true">{isDone ? "✓" : isLoop ? "∞" : index + 1}</div>
-            {isLive ? (
-              // The rail's pointer: pulsing at the movement that needs the
-              // user when its chapter is closed; a calm marker once inside.
+            {isLive && !isOpen ? (
+              // The pointer: one red arrow aimed at the movement to open next.
+              // The label lives in the tooltip and the accessible name; the
+              // arrow disappears once you're inside — the open chapter is the
+              // marker then.
               <button
                 type="button"
-                className={`v3fs-here${isOpen ? " calm" : ""}`}
-                onClick={() => { if (!isOpen) toggle(setOpen, movement.id); }}
-                aria-label={isOpen ? "You are here" : `Open ${movement.displayName} — it needs your attention`}
+                className="v3fs-go"
+                onClick={() => toggle(setOpen, movement.id)}
+                data-tip={`Needs you${openChecks ? ` · ${openChecks}` : ""} — open ${movement.displayName}`}
+                aria-label={`Open ${movement.displayName} — needs you${openChecks ? `, ${openChecks} open` : ""}`}
               >
-                {isOpen ? "You are here" : `Needs you${openChecks ? ` · ${openChecks}` : ""}`}
-                <span className="v3fs-here-a" aria-hidden="true">◀</span>
+                <svg viewBox="0 0 28 20" width="26" height="19" fill="none" stroke="currentColor"
+                  strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M2 10h16" />
+                  <path d="M13 3l7 7-7 7" />
+                </svg>
               </button>
             ) : null}
             <button type="button" className="v3fs-ch-h" onClick={() => toggle(setOpen, movement.id)} aria-expanded={isOpen}>
