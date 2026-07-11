@@ -184,7 +184,7 @@ export default function OntologyStudio({ doc, onChange }: StudioProps) {
       <aside className="v3fs-onto-panel">
         {selectedEntity ? (
           <>
-            <div className="v3fs-stu-sec-h"><h3>Entity</h3><span>their noun, in their language</span></div>
+            <div className="v3fs-stu-sec-h"><h3>Entity</h3><span>name, definition, evidence</span></div>
             <TextField label="Name" value={asText(selectedEntity.name)}
               onChange={(next) => renameEntity(selectedEntityIndex, next)} />
             <TextArea label="Definition" rows={3} value={asText(selectedEntity.definition)}

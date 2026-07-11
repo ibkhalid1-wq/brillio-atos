@@ -345,7 +345,7 @@ function FlowToday({ program, onResolveDecision, onIngestPortalItem, onDismissPo
         <div className="v3fs-quiet">
           <div className="v3fs-quiet-mark" aria-hidden="true">◈</div>
           <h2>Nothing needs you right now.</h2>
-          <p>ATOS keeps working between conversations — anything that needs your judgment lands here first.</p>
+          <p>Decisions and quarantined evidence appear here when they need you.</p>
           <button type="button" className="v3fs-btn" onClick={onGoFlow}>Review the flow</button>
         </div>
       ) : (
@@ -564,8 +564,8 @@ function FlowTracks({ program, runningAgentIds, onRunAgent, onSaveInputs, onReco
       {tracks.length === 0 ? (
         <div className="v3fs-quiet">
           <div className="v3fs-quiet-mark" aria-hidden="true">▤</div>
-          <h2>The build hasn&rsquo;t been decomposed yet.</h2>
-          <p>Generate the Agentic Blueprint in Envision — its track plan arrives in the Inbox as a decision, and adopting it fills this board with demoable workstreams.</p>
+          <h2>No tracks yet.</h2>
+          <p>Generate the Agentic Blueprint in Envision — adopting its track plan in the Inbox fills this board.</p>
         </div>
       ) : (
         <div className="v3fs-trkgrid">
@@ -768,7 +768,7 @@ function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggle
       </div>
 
       <div className="v3fs-panel">
-        <div className="v3fs-ph"><h3>Trail</h3><span>agents and humans, on the record</span></div>
+        <div className="v3fs-ph"><h3>Trail</h3><span>every recorded action, searchable</span></div>
         <input className="v3fs-search" placeholder="Search the trail — an agent, a movement, a phrase…"
           value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search attestations" />
         {visibleTrail.length === 0 ? <div className="v3fs-empty">{q ? "Nothing matches that search." : "No actions recorded yet."}</div> : null}

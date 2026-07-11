@@ -142,9 +142,6 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
         <div className="v3-wizard-head">
           <span className="v3-wizard-eyebrow">ATOS Flow · {isNew ? "New programme" : "Programme setup"}</span>
           <h2 className="v3-wizard-title">{isNew ? "Set up the engagement" : "Programme setup"}</h2>
-          <p className="v3-wizard-subtitle">
-            Sixty seconds of baseline, then the loop starts with a conversation.
-          </p>
         </div>
 
         <section>
@@ -168,7 +165,7 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
         </section>
 
         <section>
-          <div className="v3-wizard-section-label">Baseline — grounds the first generations</div>
+          <div className="v3-wizard-section-label">Baseline</div>
           <div className="v3-wizard-grid">
             <label>
               <div className="v3-field-label">Industry / sector <em aria-hidden="true">*</em></div>

@@ -147,7 +147,7 @@ export default function FlowRespond({ token }: { token: string }) {
                 <label className="v3fs-portal-q">
                   <span>{verdict === "accepted" ? "Anything worth noting? (optional)" : "What should change?"}</span>
                   <textarea value={comment} onChange={(event) => setComment(event.target.value)} rows={3}
-                    placeholder="Your words go straight to the build team." />
+                    placeholder="Add your comment…" />
                 </label>
                 {error ? <div className="v3fs-portal-err">{error}</div> : null}
                 <button type="button" className="v3fs-btn pri v3fs-portal-send"

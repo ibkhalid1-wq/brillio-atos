@@ -1838,7 +1838,7 @@ export default function AppShellV3() {
               <div className="v3-welcome-hero-glyph" aria-hidden="true">✦</div>
               <h1 className="v3-welcome-hero-title">Welcome to Brillio ATOS</h1>
               <p className="v3-welcome-hero-sub">
-                Conversations in, systems out. Spin up a programme and ATOS turns recorded stakeholder conversations into a current-state atlas, an agentic blueprint, and a working system — demonstrated to every stakeholder, movement by movement.
+                Create a programme and ATOS turns recorded stakeholder conversations into a current-state atlas, an agentic blueprint, and a working system.
               </p>
               <button
                 type="button"
@@ -1870,9 +1870,9 @@ export default function AppShellV3() {
             {/* Capability tiles */}
             <div className="v3-welcome-tiles">
               {[
-                { icon: "◇", title: "Evidence, not status", body: "Transcripts and documents are first-class inputs. Gates tick themselves as evidence lands — nothing is hand-marked done." },
-                { icon: "✦", title: "Agents draft, you judge", body: "ATOS generates the atlas, blueprint and demo scripts from what people said; consequential changes wait in your Inbox as decisions." },
-                { icon: "⬡", title: "The gate is a demo", body: "Each stakeholder watches their own workflow run — seeded from their own words — and acceptance is recorded pass by pass." },
+                { icon: "◇", title: "Derived gates", body: "Transcripts and documents are first-class inputs. Gates tick themselves as evidence lands — nothing is hand-marked done." },
+                { icon: "✦", title: "Propose, then confirm", body: "ATOS generates the atlas, blueprint and demo scripts from what people said; consequential changes wait in your Inbox as decisions." },
+                { icon: "⬡", title: "Demonstration gates", body: "Each stakeholder watches their own workflow run — seeded from their own words — and acceptance is recorded pass by pass." },
                 { icon: "◫", title: "Governed autonomy", body: "Every action lands on an attested trail; budgets, halts and tiers keep agent work a deliberate, auditable call." },
               ].map((tile) => (
                 <div key={tile.title} className="v3-welcome-tile">

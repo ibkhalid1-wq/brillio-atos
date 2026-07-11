@@ -169,7 +169,7 @@ function AtlasStudio({ doc, onChange }: StudioProps) {
   const pains = useListOps(doc, onChange, "painHeatmap");
   return (
     <>
-      <Section label="Pain heatmap" hint="hottest first — colour is severity">
+      <Section label="Pain heatmap" hint="colour = severity">
         <div className="v3fs-stu-heat">
           {pains.items.map((pain, index) => (
             <div key={index} className={`v3fs-stu-heat-row sev-${asText(pain.severity) || "medium"}`}>
@@ -444,7 +444,7 @@ function PrototypePackStudio({ doc, onChange }: StudioProps) {
           addLabel="Add slice"
         />
       </Section>
-      <Section label="Seed scenarios" hint="stakeholders' own moments, replayed">
+      <Section label="Seed scenarios" hint="seeded from stakeholder transcripts">
         <TableEditor
           columns={[
             { key: "stakeholder", label: "Stakeholder" },
@@ -598,7 +598,7 @@ function EvalSuiteStudio({ doc, onChange }: StudioProps) {
   const patch = patchOf(doc, onChange);
   return (
     <>
-      <Section label="Eval cases" hint="every expectation on the record, with a pass bar">
+      <Section label="Eval cases" hint="behaviour, inputs, pass bar">
         <TableEditor
           columns={[
             { key: "id", label: "ID", grow: 0.5 },
