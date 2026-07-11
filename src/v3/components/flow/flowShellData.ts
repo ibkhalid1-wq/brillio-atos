@@ -290,7 +290,6 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
       { id: "industry", label: "Industry set — grounds the ontology's shared vocabulary", done: has("industry"), anchor: "input:industry", why: whyFromValue(inputs.industry) },
       { id: "metric", label: "Success measure set", done: has("successMetric"), anchor: "input:successMetric", why: whyFromValue(inputs.successMetric) },
       { id: "demo-date", label: "First-demonstration date set", done: has("targetFirstDemoDate"), anchor: "input:targetFirstDemoDate", why: whyFromValue(inputs.targetFirstDemoDate) },
-      ...artifactItems(),
     );
   } else if (movement.id === "listen") {
     const coverage = listenCoverage(program);
@@ -299,11 +298,9 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
       { id: "mapped", label: "Voices mapped in the coverage ledger", done: coverage.total > 0, anchor: "input:interviewRoster" },
       { id: "heard", label: coverage.total ? `Every voice heard or waived (${coverage.done}/${coverage.total})` : "Every voice heard or waived", done: coverage.total > 0 && coverage.done >= coverage.total, anchor: "input:interviewRoster" },
       { id: "contradictions", label: "Contradictions resolved or logged", done: contradictions.every((row) => !/open/i.test(row.status ?? "")), anchor: "input:contradictionLog", why: contradictions.length ? `${contradictions.length} logged, none open` : undefined },
-      ...artifactItems(),
     );
   } else if (movement.id === "envision") {
     items.push(
-      ...artifactItems(),
       { id: "direction", label: "Direction chosen on the record", done: has("directionDecision") || has("steeringConversation"), anchor: "input:directionDecision", why: whyFromValue(inputs.directionDecision) ?? whyFromTranscript(inputs.steeringConversation) },
       { id: "tracks", label: "Track plan adopted", done: Array.isArray(inner.tracks) && (inner.tracks as unknown[]).length > 0, why: Array.isArray(inner.tracks) && (inner.tracks as unknown[]).length ? `${(inner.tracks as unknown[]).length} tracks, confirmed by you` : undefined },
     );
@@ -311,7 +308,6 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
     const tour = demoAcceptance(program);
     items.push(
       { id: "proto", label: "Prototype running somewhere named", done: has("prototypeLocation"), anchor: "input:prototypeLocation", why: whyFromValue(inputs.prototypeLocation) },
-      ...artifactItems(),
       { id: "tour", label: "A demo row for every voice", done: tour.total > 0, anchor: "input:demoTour" },
       { id: "verdicts", label: tour.total ? `Every stakeholder accepted (${tour.accepted}/${tour.total})` : "Every stakeholder accepted", done: tour.total > 0 && tour.accepted >= tour.total, anchor: "input:demoTour" },
     );
@@ -327,7 +323,6 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
     };
     items.push(
       { id: "plan", label: "Ship plan adopted", done: lanes.length > 0, why: lanes.length ? `${lanes.length} lanes, ${lanes.reduce((s, lane) => s + (Array.isArray(lane.items) ? lane.items.length : 0), 0)} items — compiled from the Blueprint` : undefined },
-      ...artifactItems(),
       { id: "evals", label: "Validation & evals lane green", done: laneDone("validation") },
       { id: "cutover", label: "Cutover executed", done: laneDone("cutover") },
       { id: "go", label: "Go / no-go conversation recorded", done: has("goDecisionRef"), anchor: "input:goDecisionRef", why: whyFromValue(inputs.goDecisionRef) },
@@ -337,7 +332,6 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
     items.push(
       { id: "ops", label: "An ops review on record", done: has("opsConversations"), anchor: "input:opsConversations", why: whyFromTranscript(inputs.opsConversations) },
       { id: "benefits", label: "Benefits pulse populated", done: benefits.length > 0, anchor: "input:realisedBenefits" },
-      ...artifactItems(),
     );
   } else {
     items.push(...artifactItems());

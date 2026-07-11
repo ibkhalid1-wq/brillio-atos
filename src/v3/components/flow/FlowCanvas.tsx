@@ -216,10 +216,15 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                     <p className="v3fs-gate-say">{movement.movement?.readyWhen ?? ""}</p>
                     {(() => {
                       const done = checks.filter((item) => item.done).length;
+                      // The pill's tone follows the human criteria — document
+                      // freshness lives on the artifact cards, not the gate.
+                      const tone = checks.length
+                        ? (done === checks.length ? "green" : done > 0 ? "amber" : "dim")
+                        : signal.tone;
                       return (
                         <>
-                          <div className={`v3fs-sig ${signal.tone}`}>
-                            {signal.tone === "green" ? "✓ " : signal.tone === "amber" ? "⚠ " : ""}
+                          <div className={`v3fs-sig ${tone}`}>
+                            {tone === "green" ? "✓ " : tone === "amber" ? "⚠ " : ""}
                             {checks.length ? `${done} of ${checks.length} criteria met` : signal.text}
                           </div>
                           <div className="v3fs-checks">
