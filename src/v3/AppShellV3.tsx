@@ -53,7 +53,8 @@ import { buildPhaseSchedule } from "@/v3/lib/phaseSchedule";
 import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
 import { getPreviousScore, recordConfidenceSnapshot } from "@/v3/lib/confidenceHistory";
 import { artifactReviewFieldKey } from "@/v3/lib/artifactReview";
-import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
+import { listOpenFlowDecisions } from "@/v3/components/flow/flowDecisions";
+import { listPortalInbox } from "@/v3/components/flow/flowPortal";
 import { mergePhaseInputBucket } from "@/v3/lib/phaseInputMerge";
 import type { V3CommandMode, V3MoreView, V3ReportId, V3Surface } from "@/v3/types";
 import { isDecisionOpen, pushV3Toast } from "@/v3/utils";
@@ -1252,12 +1253,14 @@ export default function AppShellV3() {
   // in the same order runProgramAgent enforces them, so the ledger names the exact blocker.
   const anyAgentRunning = agentIsRunning || triggers.escalationIsRunning;
   const openDecisions = useMemo(() => (activeProgram?.decisionQueue || []).filter(isDecisionOpen), [activeProgram?.decisionQueue]);
-  // Rail badge count for the Action Center. Mirrors the surface's own derivation
-  // (synthesised recommended actions for the delivery-lead persona it renders
-  // with) so "N awaiting you" matches what the user sees when they open it —
-  // distinct from openDecisions, which counts persisted decisions for the
-  // confidence model and must stay untouched.
-  const actionCenterCount = useMemo(() => deriveOpenRecommendedActions(activeProgram, "delivery_lead").length, [activeProgram]);
+  // Copilot's "awaiting review" nudge counts the SAME queue the Inbox shows —
+  // open Flow decisions plus quarantined portal responses — so the two surfaces
+  // can never disagree. (openDecisions above counts persisted stage-gate
+  // decisions for the confidence model and must stay untouched.)
+  const actionCenterCount = useMemo(
+    () => (activeProgram ? listOpenFlowDecisions(activeProgram).length + listPortalInbox(activeProgram).length : 0),
+    [activeProgram],
+  );
   // ── Unified confidence score (Priority 1) ────────────────────────────────────
   // Replaces the old inline weighted average with the full multi-signal model
   // from confidenceScore.ts. This is the single authoritative score used for
@@ -1988,6 +1991,10 @@ export default function AppShellV3() {
           onResolveDecision={async (decisionId, resolution) => {
             const resolvedBy = currentUser?.email || "you";
             await persistFlowMutation((program) => resolveFlowDecision(program, decisionId, resolution, resolvedBy));
+          }}
+          onRecordGate={async (movementId) => {
+            await approveGate(movementId);
+            pushV3Toast("Gate recorded — the movement is demonstrated and its inputs are locked.", { tone: "success", duration: 4000 });
           }}
           onRecordShowPass={async (trackId, pass) => {
             await persistFlowMutation((program) => recordShowPass(program, trackId, pass));

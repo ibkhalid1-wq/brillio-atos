@@ -276,8 +276,17 @@ export function useGateReview(
           ),
         }
       : phaseArtifacts;
+    // The gate decision is a Flow moment too — attest it so the Inbox's
+    // activity stream records who demonstrated the movement, and when.
+    const attestLog = Array.isArray((inner as Record<string, unknown>).flowAttestations)
+      ? ((inner as Record<string, unknown>).flowAttestations as unknown[])
+      : [];
     const nextInner = closePhaseBlockersInner({
       ...inner,
+      flowAttestations: [...attestLog, {
+        ts: new Date().toISOString(), agentId: approvedBy, phaseId, tier: 2,
+        action: `Gate recorded — ${phaseId} demonstrated`,
+      }].slice(-200),
       gateReviews: nextReviews,
       phaseArtifacts: nextPhaseArtifacts,
       decisionQueue: decisionQueue.filter((decision) => !(

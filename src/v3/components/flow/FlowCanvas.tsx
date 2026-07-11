@@ -32,6 +32,8 @@ interface FlowCanvasProps {
   onSaveArtifactDoc?: (input: ArtifactEditInput) => Promise<void>;
   /** Jump to the Inbox (regeneration-pending band in the studio). */
   onOpenInbox?: () => void;
+  /** Record a movement's gate — demonstrated. Locks the movement's inputs. */
+  onRecordGate?: (movementId: string) => Promise<void>;
 }
 
 /**
@@ -42,7 +44,7 @@ interface FlowCanvasProps {
  * coloured). Nothing locks; editing unfolds in place via the shared inputs
  * panel, so the canvas is the workspace, not a dashboard about one.
  */
-export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onScheduleFollowUp, onMintFollowUp, onSaveArtifactDoc, onOpenInbox }: FlowCanvasProps) {
+export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onScheduleFollowUp, onMintFollowUp, onSaveArtifactDoc, onOpenInbox, onRecordGate }: FlowCanvasProps) {
   const movements = useMemo(() => flowMovements(), []);
   const frontier = frontierMovementId(program);
   const [open, setOpen] = useState<Set<string>>(() => new Set([frontier]));
@@ -234,6 +236,9 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                         {readiness.headline}
                       </div>
                       {readiness.detail ? <div className="v3fs-gstate-d">{readiness.detail}</div> : null}
+                      {readiness.kind === "ready" && !isDone && onRecordGate ? (
+                        <RecordGateButton movementId={movement.id} onRecordGate={onRecordGate} />
+                      ) : null}
                     </div>
                     <div className="v3fs-checks">
                       {checks.map((item, itemIndex) => {
@@ -316,6 +321,37 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
         />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * The one action the gate column owns: recording the gate itself. Two-step —
+ * the first press arms, the second records — because approval hard-locks the
+ * movement's inputs. Renders only in the READY state.
+ */
+function RecordGateButton({ movementId, onRecordGate }: {
+  movementId: string;
+  onRecordGate: (movementId: string) => Promise<void>;
+}) {
+  const [armed, setArmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const timer = window.setTimeout(() => setArmed(false), 4000);
+    return () => window.clearTimeout(timer);
+  }, [armed]);
+  const press = async () => {
+    if (!armed) {
+      setArmed(true);
+      return;
+    }
+    setBusy(true);
+    try { await onRecordGate(movementId); } finally { setBusy(false); setArmed(false); }
+  };
+  return (
+    <button type="button" className={`v3fs-gate-rec${armed ? " armed" : ""}`} disabled={busy} onClick={() => void press()}>
+      {busy ? "Recording…" : armed ? "Confirm — records the gate and locks inputs" : "Record the gate — demonstrated"}
+    </button>
   );
 }
 
