@@ -252,7 +252,10 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                                   : "Met by generating / working the movement"}
                               >
                                 <span className="v3fs-check-box" aria-hidden="true">{item.done ? "✓" : ""}</span>
-                                <span className="v3fs-check-l">{item.label}</span>
+                                <span className="v3fs-check-l">
+                                  {item.label}
+                                  {item.done && item.why ? <span className="v3fs-check-why">{item.why}</span> : null}
+                                </span>
                               </button>
                             ))}
                           </div>

@@ -79,10 +79,11 @@ export default function FlowShell(props: FlowShellProps) {
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const days = daysToFirstDemo(program);
   const openDecisions = listOpenFlowDecisions(program);
+  const portalInbox = listPortalInbox(program);
   // "Start here" — one prominent pointer at the right entry: Today when
   // anything waits on the user, the canvas otherwise. Dismissed for the
   // session the moment they go there.
-  const waitingCount = openDecisions.length + listPortalInbox(program).length;
+  const waitingCount = openDecisions.length + portalInbox.length;
   const startId: FlowView = waitingCount > 0 ? "today" : "flow";
   const [startSeen, setStartSeen] = useState<boolean>(() => {
     try { return window.sessionStorage.getItem("v3fs-start-seen") === "1"; } catch { return true; }
@@ -166,6 +167,19 @@ export default function FlowShell(props: FlowShellProps) {
           ) : null}
         </header>
 
+        {view !== "today" && waitingCount > 0 ? (
+          // Judgment stays visible from every view: one line naming the first
+          // waiting item, one tap to the Inbox. The queue itself lives there.
+          <button type="button" className="v3fs-wait" onClick={() => { setView("today"); window.scrollTo({ top: 0 }); dismissStart(); }}>
+            <span className="v3fs-wait-n">{waitingCount}</span>
+            <span className="v3fs-wait-t">
+              Waiting on you — {openDecisions[0]?.title ?? `${portalInbox[0]?.stakeholder ?? "a stakeholder"}'s response`}
+              {waitingCount > 1 ? ` · ${waitingCount - 1} more` : ""}
+            </span>
+            <span className="v3fs-wait-go">Review →</span>
+          </button>
+        ) : null}
+
         {view === "today" ? (
           <FlowToday program={program} onResolveDecision={props.onResolveDecision}
             onIngestPortalItem={props.onIngestPortalItem} onDismissPortalItem={props.onDismissPortalItem}
@@ -180,7 +194,6 @@ export default function FlowShell(props: FlowShellProps) {
             onSaveInputs={props.onSaveInputs}
             onRecordShowPass={props.onRecordShowPass}
             onAddTrack={props.onAddTrack}
-            onGoToday={() => { setView("today"); window.scrollTo({ top: 0 }); }}
           />
         ) : view === "library" ? (
           <FlowLibrary program={program} />
@@ -503,17 +516,15 @@ function TrackCard({ track, all, busy, onRecord, onOpen }: {
   );
 }
 
-function FlowTracks({ program, runningAgentIds, onRunAgent, onSaveInputs, onRecordShowPass, onAddTrack, onGoToday }: {
+function FlowTracks({ program, runningAgentIds, onRunAgent, onSaveInputs, onRecordShowPass, onAddTrack }: {
   program: ProgramSummary;
   runningAgentIds: Set<string>;
   onRunAgent: FlowShellProps["onRunAgent"];
   onSaveInputs: FlowShellProps["onSaveInputs"];
   onRecordShowPass: FlowShellProps["onRecordShowPass"];
   onAddTrack: FlowShellProps["onAddTrack"];
-  onGoToday: () => void;
 }) {
   const tracks = listFlowTracks(program);
-  const planPending = listOpenFlowDecisions(program).find((d) => Array.isArray(d.payload?.tracks));
   const [drillId, setDrillId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
@@ -548,13 +559,6 @@ function FlowTracks({ program, runningAgentIds, onRunAgent, onSaveInputs, onReco
 
   return (
     <div className="v3fs-today">
-      {planPending ? (
-        <div className="v3fs-plan-note">
-          <span>A track plan awaits your confirm — “{planPending.title}”.</span>
-          <button type="button" className="v3fs-btn pri" onClick={onGoToday}>Review in the Inbox</button>
-        </div>
-      ) : null}
-
       {tracks.length === 0 ? (
         <div className="v3fs-quiet">
           <div className="v3fs-quiet-mark" aria-hidden="true">▤</div>

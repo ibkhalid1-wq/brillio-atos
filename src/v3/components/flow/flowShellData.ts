@@ -240,6 +240,24 @@ export interface GateCheckItem {
   done: boolean;
   /** Editor field to land on when the item is worked (input:<fieldId>). */
   anchor?: string;
+  /** Provenance for a met criterion — what on the record satisfies it. */
+  why?: string;
+}
+
+/** One terse provenance line for a captured value. */
+function whyFromValue(value: unknown): string | undefined {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  const flat = value.trim().replace(/\s+/g, " ");
+  return flat.length > 56 ? `${flat.slice(0, 56)}…` : flat;
+}
+
+/** Provenance for a transcript field: last attributed voice + size. */
+function whyFromTranscript(value: unknown): string | undefined {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  const words = value.trim().split(/\s+/).length;
+  const headers = [...value.matchAll(/—\s*(?:Document:\s*)?([^,—\n]+)[^—\n]*—/g)];
+  const who = headers.length ? headers[headers.length - 1][1].trim() : null;
+  return who ? `${who} · ${words.toLocaleString()} words` : `${words.toLocaleString()} words`;
 }
 
 /**
@@ -256,15 +274,18 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
     id: `art-${artifact.id}`,
     label: artifact.stale ? `${artifact.title} regenerated after the latest evidence` : `${artifact.title} generated`,
     done: artifact.present && !artifact.stale,
+    why: artifact.present && !artifact.stale && artifact.confidence != null
+      ? `confidence ${artifact.confidence}%`
+      : undefined,
   }));
 
   if (movement.id === "frame") {
     items.push(
-      { id: "conv", label: "Sponsor conversation on record", done: has("sponsorConversation"), anchor: "input:sponsorConversation" },
-      { id: "objective", label: "Business objective captured", done: has("businessObjective"), anchor: "input:businessObjective" },
-      { id: "sponsor", label: "Sponsor named", done: has("sponsor"), anchor: "input:sponsor" },
-      { id: "metric", label: "Success measure set", done: has("successMetric"), anchor: "input:successMetric" },
-      { id: "demo-date", label: "First-demonstration date set", done: has("targetFirstDemoDate"), anchor: "input:targetFirstDemoDate" },
+      { id: "conv", label: "Sponsor conversation on record", done: has("sponsorConversation"), anchor: "input:sponsorConversation", why: whyFromTranscript(inputs.sponsorConversation) },
+      { id: "objective", label: "Business objective captured", done: has("businessObjective"), anchor: "input:businessObjective", why: whyFromValue(inputs.businessObjective) },
+      { id: "sponsor", label: "Sponsor named", done: has("sponsor"), anchor: "input:sponsor", why: whyFromValue(inputs.sponsor) },
+      { id: "metric", label: "Success measure set", done: has("successMetric"), anchor: "input:successMetric", why: whyFromValue(inputs.successMetric) },
+      { id: "demo-date", label: "First-demonstration date set", done: has("targetFirstDemoDate"), anchor: "input:targetFirstDemoDate", why: whyFromValue(inputs.targetFirstDemoDate) },
       ...artifactItems(),
     );
   } else if (movement.id === "listen") {
@@ -273,19 +294,19 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
     items.push(
       { id: "mapped", label: "Voices mapped in the coverage ledger", done: coverage.total > 0, anchor: "input:interviewRoster" },
       { id: "heard", label: coverage.total ? `Every voice heard or waived (${coverage.done}/${coverage.total})` : "Every voice heard or waived", done: coverage.total > 0 && coverage.done >= coverage.total, anchor: "input:interviewRoster" },
-      { id: "contradictions", label: "Contradictions resolved or logged", done: contradictions.every((row) => !/open/i.test(row.status ?? "")), anchor: "input:contradictionLog" },
+      { id: "contradictions", label: "Contradictions resolved or logged", done: contradictions.every((row) => !/open/i.test(row.status ?? "")), anchor: "input:contradictionLog", why: contradictions.length ? `${contradictions.length} logged, none open` : undefined },
       ...artifactItems(),
     );
   } else if (movement.id === "envision") {
     items.push(
       ...artifactItems(),
-      { id: "direction", label: "Direction chosen on the record", done: has("directionDecision") || has("steeringConversation"), anchor: "input:directionDecision" },
-      { id: "tracks", label: "Track plan adopted", done: Array.isArray(inner.tracks) && (inner.tracks as unknown[]).length > 0 },
+      { id: "direction", label: "Direction chosen on the record", done: has("directionDecision") || has("steeringConversation"), anchor: "input:directionDecision", why: whyFromValue(inputs.directionDecision) ?? whyFromTranscript(inputs.steeringConversation) },
+      { id: "tracks", label: "Track plan adopted", done: Array.isArray(inner.tracks) && (inner.tracks as unknown[]).length > 0, why: Array.isArray(inner.tracks) && (inner.tracks as unknown[]).length ? `${(inner.tracks as unknown[]).length} tracks, confirmed by you` : undefined },
     );
   } else if (movement.id === "show") {
     const tour = demoAcceptance(program);
     items.push(
-      { id: "proto", label: "Prototype running somewhere named", done: has("prototypeLocation"), anchor: "input:prototypeLocation" },
+      { id: "proto", label: "Prototype running somewhere named", done: has("prototypeLocation"), anchor: "input:prototypeLocation", why: whyFromValue(inputs.prototypeLocation) },
       ...artifactItems(),
       { id: "tour", label: "A demo row for every voice", done: tour.total > 0, anchor: "input:demoTour" },
       { id: "verdicts", label: tour.total ? `Every stakeholder accepted (${tour.accepted}/${tour.total})` : "Every stakeholder accepted", done: tour.total > 0 && tour.accepted >= tour.total, anchor: "input:demoTour" },
@@ -301,16 +322,16 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
       return laneItems.length > 0 && laneItems.every((entry) => entry.done === true);
     };
     items.push(
-      { id: "plan", label: "Ship plan adopted", done: lanes.length > 0 },
+      { id: "plan", label: "Ship plan adopted", done: lanes.length > 0, why: lanes.length ? `${lanes.length} lanes, ${lanes.reduce((s, lane) => s + (Array.isArray(lane.items) ? lane.items.length : 0), 0)} items — compiled from the Blueprint` : undefined },
       ...artifactItems(),
       { id: "evals", label: "Validation & evals lane green", done: laneDone("validation") },
       { id: "cutover", label: "Cutover executed", done: laneDone("cutover") },
-      { id: "go", label: "Go / no-go conversation recorded", done: has("goDecisionRef"), anchor: "input:goDecisionRef" },
+      { id: "go", label: "Go / no-go conversation recorded", done: has("goDecisionRef"), anchor: "input:goDecisionRef", why: whyFromValue(inputs.goDecisionRef) },
     );
   } else if (movement.id === "evolve") {
     const benefits = parseGridRows(inputs.realisedBenefits);
     items.push(
-      { id: "ops", label: "An ops review on record", done: has("opsConversations"), anchor: "input:opsConversations" },
+      { id: "ops", label: "An ops review on record", done: has("opsConversations"), anchor: "input:opsConversations", why: whyFromTranscript(inputs.opsConversations) },
       { id: "benefits", label: "Benefits pulse populated", done: benefits.length > 0, anchor: "input:realisedBenefits" },
       ...artifactItems(),
     );

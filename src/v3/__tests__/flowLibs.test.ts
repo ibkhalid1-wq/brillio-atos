@@ -9,6 +9,7 @@ import { resolveFlowDecision, listOpenFlowDecisions } from "@/v3/components/flow
 import { trackAcceptance, trackBlockers, recordShowPass, listFlowTracks, type FlowTrack } from "@/v3/components/flow/flowTracks";
 import { toggleShipItem, listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 import { ingestPortalResponse, listPortalInbox } from "@/v3/components/flow/flowPortal";
+import { gateChecklist, flowMovements } from "@/v3/components/flow/flowShellData";
 
 const programme = (inner: Record<string, unknown>): ProgramSummary =>
   ({ id: "p1", name: "Test", rawData: inner } as unknown as ProgramSummary);
@@ -113,5 +114,40 @@ describe("flowPortal ingest routing", () => {
     const listen = (blob.phaseInputs as Record<string, Record<string, string>>).listen;
     expect(listen.interviewTranscripts).toContain("Words here");
     expect(JSON.parse(listen.interviewRoster)[0].status).toBe("Heard");
+  });
+});
+
+describe("gateChecklist provenance", () => {
+  const movement = (id: string) => flowMovements().find((m) => m.id === id)!;
+
+  it("a captured conversation carries its attributed voice and size", () => {
+    const p = programme({ phaseInputs: { frame: {
+      sponsorConversation: "— Marcus Webb, Head of Data, 2026-07-10 —\nWe reconcile CPQ and the ledger by hand every week.",
+    } } });
+    const item = gateChecklist(p, movement("frame"), []).find((c) => c.id === "conv")!;
+    expect(item.done).toBe(true);
+    expect(item.why).toContain("Marcus Webb");
+    expect(item.why).toMatch(/\d+ words$/);
+  });
+
+  it("a scalar fact excerpts its value and truncates long ones", () => {
+    const p = programme({ phaseInputs: { frame: { businessObjective: "cut ".repeat(40) } } });
+    const item = gateChecklist(p, movement("frame"), []).find((c) => c.id === "objective")!;
+    expect(item.done).toBe(true);
+    expect(item.why!.endsWith("…")).toBe(true);
+    expect(item.why!.length).toBeLessThanOrEqual(57);
+  });
+
+  it("an adopted track plan states the count and the human confirm", () => {
+    const p = programme({ tracks: [{ id: "a" }, { id: "b" }, { id: "c" }] });
+    const item = gateChecklist(p, movement("envision"), []).find((c) => c.id === "tracks")!;
+    expect(item.done).toBe(true);
+    expect(item.why).toBe("3 tracks, confirmed by you");
+  });
+
+  it("an unmet criterion carries no provenance", () => {
+    const item = gateChecklist(programme({}), movement("frame"), []).find((c) => c.id === "conv")!;
+    expect(item.done).toBe(false);
+    expect(item.why).toBeUndefined();
   });
 });
