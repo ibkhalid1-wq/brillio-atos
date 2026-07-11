@@ -180,23 +180,18 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
                 Selects the ontology&apos;s standards vocabulary — FIBO, FHIR, GS1, IEC CIM, EBUCore, W3C ORG or schema.org.
               </div>
             </label>
-            <label>
+            {/* The slot is always reserved so the grid never reflows; it only
+                becomes visible for the sectors whose grounding forks. */}
+            <label style={{ visibility: segmentOptions ? "visible" : "hidden" }} aria-hidden={!segmentOptions}>
               <div className="v3-field-label">Value-chain segment</div>
               <select className="v3-input" aria-label="Value-chain segment" disabled={!segmentOptions}
+                tabIndex={segmentOptions ? undefined : -1}
                 value={segmentOptions?.includes(segment) ? segment : ""}
                 onChange={(event) => setSegment(event.target.value)}>
-                {segmentOptions ? (
-                  <>
-                    <option value="">Not sure yet — infer from evidence</option>
-                    {segmentOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-                  </>
-                ) : (
-                  <option value="">Not applicable for this sector</option>
-                )}
+                <option value="">Not sure yet — infer from evidence</option>
+                {(segmentOptions ?? []).map((option) => <option key={option} value={option}>{option}</option>)}
               </select>
-              <div className="v3-field-hint">
-                {segmentOptions ? "Sharpens the vocabulary and discovery scope." : "Applies to sectors whose grounding forks."}
-              </div>
+              <div className="v3-field-hint">Sharpens the vocabulary and discovery scope.</div>
             </label>
             <label>
               <div className="v3-field-label">Executive sponsor</div>
