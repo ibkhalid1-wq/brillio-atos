@@ -9,6 +9,8 @@ import React from "react";
 import OntologyStudio from "./OntologyStudio";
 import WorkflowStudio from "./WorkflowStudio";
 import JourneyGrid from "./JourneyGrid";
+import BlueprintGraph from "./BlueprintGraph";
+import StrategyBoard from "./StrategyBoard";
 import {
   Section, TextField, TextArea, SelectField, ChipsField, StringListEditor, TableEditor,
   asArray, asRecord, asText, asStrings, type StudioProps,
@@ -220,6 +222,9 @@ function StrategyStudio({ doc, onChange }: StudioProps) {
   const recommendation = asRecord(doc.recommendation);
   return (
     <>
+      <Section label="The decision — candidates side by side" hint="scores, strengths, risks; crown the recommendation">
+        <StrategyBoard doc={doc} onChange={onChange} />
+      </Section>
       <Section label="Candidates" hint="2–3 shapes the system could take">
         <CardList
           items={candidates.items}
@@ -279,6 +284,9 @@ function BlueprintStudio({ doc, onChange }: StudioProps) {
   const orchestration = asRecord(doc.orchestration);
   return (
     <>
+      <Section label="The orchestration — agents and what flows between them" hint="edges are derived: outputs feeding inputs; drag to arrange">
+        <BlueprintGraph doc={doc} />
+      </Section>
       <Section label="Journeys — the orchestrated experience" hint="stages across, lanes down: customer · user · agent · systems">
         <JourneyGrid doc={doc} onChange={onChange} />
       </Section>

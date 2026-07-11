@@ -8,9 +8,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ReactFlow, Background, Controls, MarkerType, useNodesState,
-  BaseEdge, EdgeLabelRenderer, getSmoothStepPath, useInternalNode, Position,
-  type Node, type Edge, type Connection, type EdgeProps, type InternalNode,
+  type Node, type Edge, type Connection,
 } from "@xyflow/react";
+import { FLOATING_EDGE_TYPES, layeredPositions } from "./graphKit";
 import "@xyflow/react/dist/style.css";
 import {
   Section, TextField, TextArea, SelectField, ChipsField, StringListEditor, TableEditor,
@@ -19,61 +19,7 @@ import {
 
 type Selection = { kind: "entity"; id: string } | { kind: "relation"; index: number } | null;
 
-/**
- * Floating angled edge: instead of fixed top/bottom handles, each connector
- * attaches to whichever SIDES of the two nodes face each other — recomputed
- * live as nodes move, so dragging an entity re-aligns its connectors to the
- * cleanest route instead of wrapping around the node.
- */
-function sidePoint(node: InternalNode, side: Position): { x: number; y: number } {
-  const { x, y } = node.internals.positionAbsolute;
-  const width = node.measured?.width ?? 160;
-  const height = node.measured?.height ?? 44;
-  switch (side) {
-    case Position.Left: return { x, y: y + height / 2 };
-    case Position.Right: return { x: x + width, y: y + height / 2 };
-    case Position.Top: return { x: x + width / 2, y };
-    default: return { x: x + width / 2, y: y + height };
-  }
-}
 
-function FloatingStepEdge({ id, source, target, markerEnd, label, selected }: EdgeProps) {
-  const sourceNode = useInternalNode(source);
-  const targetNode = useInternalNode(target);
-  if (!sourceNode || !targetNode) return null;
-  const sc = sidePoint(sourceNode, Position.Bottom);
-  const tc = sidePoint(targetNode, Position.Top);
-  const sw = sourceNode.measured?.width ?? 160, sh = sourceNode.measured?.height ?? 44;
-  const tw = targetNode.measured?.width ?? 160, th = targetNode.measured?.height ?? 44;
-  const dx = (targetNode.internals.positionAbsolute.x + tw / 2) - (sourceNode.internals.positionAbsolute.x + sw / 2);
-  const dy = (targetNode.internals.positionAbsolute.y + th / 2) - (sourceNode.internals.positionAbsolute.y + sh / 2);
-  const horizontal = Math.abs(dx) > Math.abs(dy);
-  const sourcePosition = horizontal ? (dx > 0 ? Position.Right : Position.Left) : (dy > 0 ? Position.Bottom : Position.Top);
-  const targetPosition = horizontal ? (dx > 0 ? Position.Left : Position.Right) : (dy > 0 ? Position.Top : Position.Bottom);
-  const start = sidePoint(sourceNode, sourcePosition);
-  const end = sidePoint(targetNode, targetPosition);
-  const [path, labelX, labelY] = getSmoothStepPath({
-    sourceX: start.x, sourceY: start.y, sourcePosition,
-    targetX: end.x, targetY: end.y, targetPosition,
-    borderRadius: 6,
-  });
-  return (
-    <>
-      <BaseEdge id={id} path={path} markerEnd={markerEnd}
-        style={selected ? { stroke: "var(--v3-accent-2)", strokeWidth: 2 } : undefined} />
-      {label ? (
-        <EdgeLabelRenderer>
-          <div className={`v3fs-onto-elabel${selected ? " on" : ""}`}
-            style={{ transform: `translate(-50%,-50%) translate(${labelX}px,${labelY}px)` }}>
-            {label}
-          </div>
-        </EdgeLabelRenderer>
-      ) : null}
-    </>
-  );
-}
-
-const EDGE_TYPES = { floating: FloatingStepEdge };
 
 const CARDINALITIES = ["1:1", "1:N", "N:M", "unknown"];
 
@@ -82,65 +28,8 @@ function entityId(entity: Record<string, unknown>, index: number): string {
   return name || `entity-${index}`;
 }
 
-/**
- * Deterministic layered layout that keeps connectors short and mostly
- * parallel: BFS from the best-connected entity assigns layers (rows), then
- * one barycenter pass orders each layer by the average position of its
- * neighbours above — the classic crossing-minimisation move. Disconnected
- * entities settle into the final row.
- */
 function seedPositions(ids: string[], relations: Array<Record<string, unknown>>): Record<string, { x: number; y: number }> {
-  const neighbours = new Map<string, string[]>(ids.map((id) => [id, []]));
-  for (const relation of relations) {
-    const from = String(relation.from ?? "");
-    const to = String(relation.to ?? "");
-    if (neighbours.has(from) && neighbours.has(to)) {
-      neighbours.get(from)!.push(to);
-      neighbours.get(to)!.push(from);
-    }
-  }
-  const layers: string[][] = [];
-  const layerOf = new Map<string, number>();
-  const unvisited = new Set(ids);
-  while (unvisited.size) {
-    const root = [...unvisited].sort((a, b) => (neighbours.get(b)!.length - neighbours.get(a)!.length))[0];
-    let frontier = [root];
-    unvisited.delete(root);
-    let depth = layers.length ? layers.length : 0;
-    while (frontier.length) {
-      (layers[depth] ??= []).push(...frontier);
-      frontier.forEach((id) => layerOf.set(id, depth));
-      const next: string[] = [];
-      for (const id of frontier) {
-        for (const other of neighbours.get(id)!) {
-          if (unvisited.has(other)) {
-            unvisited.delete(other);
-            next.push(other);
-          }
-        }
-      }
-      frontier = next;
-      depth += 1;
-    }
-  }
-  // Barycenter pass: order each layer by the mean index of neighbours above.
-  for (let depth = 1; depth < layers.length; depth += 1) {
-    const above = new Map(layers[depth - 1].map((id, index) => [id, index]));
-    layers[depth].sort((a, b) => {
-      const mean = (id: string) => {
-        const ups = neighbours.get(id)!.map((other) => above.get(other)).filter((v): v is number => v !== undefined);
-        return ups.length ? ups.reduce((sum, v) => sum + v, 0) / ups.length : Number.MAX_SAFE_INTEGER;
-      };
-      return mean(a) - mean(b);
-    });
-  }
-  const out: Record<string, { x: number; y: number }> = {};
-  layers.forEach((layer, depth) => {
-    layer.forEach((id, index) => {
-      out[id] = { x: Math.round((index - (layer.length - 1) / 2) * 240), y: depth * 150 };
-    });
-  });
-  return out;
+  return layeredPositions(ids, relations.map((relation) => ({ from: String(relation.from ?? ""), to: String(relation.to ?? "") })));
 }
 
 export default function OntologyStudio({ doc, onChange }: StudioProps) {
@@ -279,7 +168,7 @@ export default function OntologyStudio({ doc, onChange }: StudioProps) {
         <ReactFlow
           nodes={nodes}
           edges={edges}
-          edgeTypes={EDGE_TYPES}
+          edgeTypes={FLOATING_EDGE_TYPES}
           onNodesChange={onNodesChange}
           onConnect={onConnect}
           onNodeClick={(_, node) => setSelected({ kind: "entity", id: node.id })}

@@ -52,7 +52,8 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
   // The graph-first documents open straight into their studio — the diagram
   // IS the document there, so the graphical view leads. Prose-first
   // documents keep the typeset reading view as the default.
-  const [editing, setEditing] = useState(() => artifact.id === "domain-ontology" || artifact.id === "current-state-atlas");
+  const GRAPH_FIRST = ["domain-ontology", "current-state-atlas", "architecture-strategy", "agentic-blueprint"];
+  const [editing, setEditing] = useState(() => GRAPH_FIRST.includes(artifact.id));
 
   // A regenerate or portal write can refresh the programme under the open
   // studio — follow the store while the user hasn't started editing.
