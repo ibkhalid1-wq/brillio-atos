@@ -432,9 +432,17 @@ function ingestDemoVerdict(program: ProgramSummary, itemId: string, actor: strin
   }
   show.demoTour = JSON.stringify(tourRows);
 
+  // Which track demos to this stakeholder — named in the evidence header AND
+  // receiving the show pass, so the reaction stays attributed to its track.
+  const tracks = Array.isArray(inner.tracks) ? (inner.tracks as unknown[]) : [];
+  const matchedTrack = tracks.filter(isRecord).find((track) =>
+    String(track.leadStakeholder ?? "").trim().toLowerCase() === stakeholder.trim().toLowerCase());
+  const matchedName = matchedTrack ? String(matchedTrack.name ?? "") : "";
+
   // The reaction is evidence too — demo feedback feeds Blueprint diffs.
   if (comment) {
-    const header = `— ${[stakeholder, role, today].filter(Boolean).join(", ")} —`;
+    const session = matchedName ? `Demo session (${matchedName})` : "Demo session";
+    const header = `— ${[stakeholder, role, session, today].filter(Boolean).join(", ")} —`;
     const existingFeedback = typeof show.demoFeedback === "string" ? show.demoFeedback : "";
     show.demoFeedback = [existingFeedback.trimEnd(), `${header}\nVerdict: ${tourLabel}\n${comment}`].filter(Boolean).join("\n\n");
   }
@@ -443,7 +451,6 @@ function ingestDemoVerdict(program: ProgramSummary, itemId: string, actor: strin
   // Automation ladder: the same verdict is a show pass on the track that
   // demos to this stakeholder — one confirm moves ledger AND acceptance loop.
   let passRecordedOn: string | null = null;
-  const tracks = Array.isArray(inner.tracks) ? (inner.tracks as unknown[]) : [];
   const nextTracks = tracks.map((track) => {
     if (!isRecord(track) || passRecordedOn) return track;
     const lead = String(track.leadStakeholder ?? "").trim().toLowerCase();

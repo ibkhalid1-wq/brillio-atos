@@ -572,12 +572,22 @@ function FlowToday({ program, onResolveDecision, onIngestPortalItem, onDismissPo
 
 /* ── Tracks: the build as demoable workstreams; acceptance is earned ─────── */
 
-function TrackCard({ track, all, busy, onRecord, onOpen }: {
+/** A track's own quotes across Show/Ship/Evolve — attribution-tagged. */
+function trackEvidence(program: ProgramSummary, trackName: string) {
+  const wanted = trackName.toLowerCase();
+  return flowMovements()
+    .filter((movement) => ["show", "ship", "evolve"].includes(movement.id))
+    .flatMap((movement) => movementEvidence(program, movement))
+    .filter((entry) => (entry.track ?? "").toLowerCase() === wanted);
+}
+
+function TrackCard({ track, all, busy, onRecord, onOpen, quotes }: {
   track: FlowTrack;
   all: FlowTrack[];
   busy: boolean;
   onRecord: (trackId: string, pass: { stakeholder?: string; verdict: FlowShowPass["verdict"]; stableDiff?: boolean }) => Promise<void>;
   onOpen?: () => void;
+  quotes?: Array<{ who: string; excerpt: string }>;
 }) {
   const acceptance = trackAcceptance(track);
   const pace = trackPace(track, acceptance.accepted);
@@ -611,6 +621,13 @@ function TrackCard({ track, all, busy, onRecord, onOpen }: {
         {track.leadStakeholder ? <span>demos to {track.leadStakeholder}</span> : null}
         {track.slices.length ? <span>{track.slices.length} slice{track.slices.length === 1 ? "" : "s"}</span> : null}
       </div>
+      {quotes?.length ? (
+        <div className="v3fs-trk-quotes">
+          {quotes.slice(0, 2).map((quote, i) => (
+            <div key={i} className="v3fs-trk-quote">“{quote.excerpt}”<span>{quote.who.split(",")[0]}</span></div>
+          ))}
+        </div>
+      ) : null}
       {track.showPasses.length ? (
         <div className="v3fs-trk-passes" aria-label="Demonstration passes">
           {track.showPasses.map((pass, i) => (
@@ -691,6 +708,12 @@ function FlowTracks({ program, runningAgentIds, onRunAgent, onSaveInputs, onReco
             {drilled.slices.map((slice) => <span key={slice}>{slice}</span>)}
           </div>
         ) : null}
+        {trackEvidence(program, drilled.name).map((entry, i) => (
+          <div key={i} className="v3fs-voice">
+            {entry.excerpt ? <div className="v3fs-voice-q">“{entry.excerpt}”</div> : null}
+            <div className="v3fs-voice-who">{entry.who}<span>{entry.meta}</span></div>
+          </div>
+        ))}
         <FlowCanvas program={program} runningAgentIds={runningAgentIds} onRunAgent={onRunAgent} onSaveInputs={onSaveInputs} />
       </div>
     );
@@ -709,6 +732,7 @@ function FlowTracks({ program, runningAgentIds, onRunAgent, onSaveInputs, onReco
         <div className="v3fs-trkgrid">
           {tracks.map((track) => (
             <TrackCard key={track.id} track={track} all={tracks} busy={busyId === track.id}
+              quotes={trackEvidence(program, track.name)}
               onRecord={record} onOpen={embedded ? undefined : () => { setDrillId(track.id); window.scrollTo({ top: 0 }); }} />
           ))}
         </div>

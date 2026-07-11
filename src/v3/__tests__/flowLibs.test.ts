@@ -13,7 +13,7 @@ import { mintFollowUpPack, listInterviewPacks, visibleLinks } from "@/v3/compone
 import { trackAcceptance, trackBlockers, recordShowPass, listFlowTracks, type FlowTrack } from "@/v3/components/flow/flowTracks";
 import { toggleShipItem, listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 import { ingestPortalResponse, listPortalInbox } from "@/v3/components/flow/flowPortal";
-import { gateChecklist, gateReadiness, flowMovements } from "@/v3/components/flow/flowShellData";
+import { gateChecklist, gateReadiness, flowMovements, movementEvidence } from "@/v3/components/flow/flowShellData";
 
 const programme = (inner: Record<string, unknown>): ProgramSummary =>
   ({ id: "p1", name: "Test", rawData: inner } as unknown as ProgramSummary);
@@ -460,6 +460,29 @@ describe("gateChecklist — record and judgment rows close the loop", () => {
     expect(item.done).toBe(false);
     expect(item.label).toBe("1 decision waiting in the Inbox");
     expect(gateChecklist(programme({}), movement, []).find((c) => c.id === "inbox")!.done).toBe(true);
+  });
+});
+
+describe("track attribution — evidence carries its track", () => {
+  const movement = (id: string) => flowMovements().find((m) => m.id === id)!;
+
+  it("a header naming a track in parentheses parses onto the entry", () => {
+    const p = programme({ phaseInputs: { show: {
+      demoFeedback: "— Dan Reyes, RevOps Lead, Demo session (Quote Automation), 2026-07-24 —\nCleared in under an hour.\n\n— Sarah Okafor, COO, 2026-07-25 —\nProof, not promises.",
+    } } });
+    const entries = movementEvidence(p, movement("show"));
+    expect(entries[0].track).toBe("Quote Automation");
+    expect(entries[1].track).toBeUndefined();
+  });
+
+  it("a demo verdict ingest names the matched track in the evidence header", () => {
+    const p = programme({
+      tracks: [{ id: "t1", name: "Quote Automation", leadStakeholder: "Dan Reyes", showPasses: [] }],
+      flowPortalInbox: [{ id: "i1", kind: "demo-verdict", stakeholder: "Dan Reyes", role: "RevOps", verdict: "accepted", text: "Ship it", receivedAt: "x" }],
+    });
+    const blob = ingestPortalResponse(p, "i1", "you")!;
+    const show = (blob.phaseInputs as Record<string, Record<string, string>>).show;
+    expect(show.demoFeedback).toContain("Demo session (Quote Automation)");
   });
 });
 

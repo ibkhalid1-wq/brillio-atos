@@ -11,6 +11,7 @@ import {
 import { meetingKit, type MeetingKit } from "@/v3/components/flow/flowMeetings";
 import { listInterviewPacks, listDemoInvites, portalLinkFor, visibleLinks } from "@/v3/components/flow/flowPortal";
 import { listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
+import { listFlowTracks } from "@/v3/components/flow/flowTracks";
 
 interface FlowCanvasProps {
   program: ProgramSummary;
@@ -156,15 +157,47 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                   {/* The column leads with the evidence itself — voices, then
                       facts, then coverage. The kit is the action and follows,
                       collapsed to one line once a conversation is on record. */}
-                  {evidence.length === 0 ? null : evidence.map((entry, i) => (
-                    <div key={`${entry.fieldLabel}-${i}`} className="v3fs-voice">
-                      {entry.excerpt ? <div className="v3fs-voice-q">“{entry.excerpt}”</div> : null}
-                      <div className="v3fs-voice-who">
-                        {entry.who}
-                        <span>{entry.kind === "reference" ? `referenced · ${entry.meta}` : entry.meta}</span>
+                  {(() => {
+                    if (!evidence.length) return null;
+                    const voice = (entry: typeof evidence[number], i: number) => (
+                      <div key={`${entry.fieldLabel}-${i}`} className="v3fs-voice">
+                        {entry.excerpt ? <div className="v3fs-voice-q">“{entry.excerpt}”</div> : null}
+                        <div className="v3fs-voice-who">
+                          {entry.who}
+                          <span>{entry.kind === "reference" ? `referenced · ${entry.meta}` : entry.meta}</span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                    // From Show onward the work is per track — group quotes
+                    // under their track, untagged ones under Programme-wide.
+                    const trackable = ["show", "ship", "evolve"].includes(movement.id);
+                    const tracks = trackable ? listFlowTracks(program) : [];
+                    const grouped = tracks
+                      .map((track) => ({
+                        name: track.name,
+                        entries: evidence.filter((entry) => (entry.track ?? "").toLowerCase() === track.name.toLowerCase()),
+                      }))
+                      .filter((group) => group.entries.length);
+                    if (!grouped.length) return evidence.map(voice);
+                    const tagged = new Set(grouped.flatMap((group) => group.entries));
+                    const rest = evidence.filter((entry) => !tagged.has(entry));
+                    return (
+                      <>
+                        {grouped.map((group) => (
+                          <Fragment key={group.name}>
+                            <div className="v3fs-ev-grp">{group.name}</div>
+                            {group.entries.map(voice)}
+                          </Fragment>
+                        ))}
+                        {rest.length ? (
+                          <>
+                            <div className="v3fs-ev-grp dim">Programme-wide</div>
+                            {rest.map(voice)}
+                          </>
+                        ) : null}
+                      </>
+                    );
+                  })()}
                   {(() => {
                     const facts = movementFacts(program, movement);
                     return facts.length ? (
@@ -479,6 +512,16 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
   const [docTick, setDocTick] = useState(false);
   const [docOpen, setDocOpen] = useState(false);
   const [fileContradiction, setFileContradiction] = useState(false);
+  // Show captures attribute their track: default to the track that demos to
+  // this stakeholder; "programme-wide" stays available for cross-track sessions.
+  const trackNames = useMemo(
+    () => (movementId === "show" ? listFlowTracks(program).map((track) => ({ name: track.name, lead: (track.leadStakeholder ?? "").toLowerCase() })) : []),
+    [movementId, program],
+  );
+  const [trackSel, setTrackSel] = useState<string>(() => {
+    const who = (kit?.who ?? "").toLowerCase();
+    return trackNames.find((track) => track.lead && who.includes(track.lead))?.name ?? "";
+  });
   const [resolveIdx, setResolveIdx] = useState<Set<number>>(() => new Set());
   // Listen's open contradictions — offered as "this answer settles it"
   // checkboxes beside the capture, resolved in the SAME atomic save.
@@ -530,7 +573,10 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
             return typeof value === "string" ? value : "";
           })()
         : "");
-      const block = kit.header ? `${kit.header}\n${text}` : text;
+      const taggedHeader = movementId === "show" && trackSel
+        ? kit.header.replace("Demo session", `Demo session (${trackSel})`)
+        : kit.header;
+      const block = taggedHeader ? `${taggedHeader}\n${text}` : text;
       const next = kit.header
         ? [existing.trimEnd(), block].filter(Boolean).join("\n\n")
         : text; // single-line refs (go/no-go) replace rather than append
@@ -754,6 +800,15 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
             onChange={(event) => setCapture(event.target.value)}
             aria-label={kit.captureLabel}
           />
+          {movementId === "show" && trackNames.length ? (
+            <label className="v3fs-kit-track">
+              <span>Track</span>
+              <select value={trackSel} onChange={(event) => setTrackSel(event.target.value)} aria-label="Which track was demonstrated">
+                <option value="">Programme-wide</option>
+                {trackNames.map((track) => <option key={track.name} value={track.name}>{track.name}</option>)}
+              </select>
+            </label>
+          ) : null}
           {openContradictions.length ? (
             <div className="v3fs-kit-resolves">
               {openContradictions.map(({ index, statement }) => (

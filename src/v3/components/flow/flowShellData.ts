@@ -22,6 +22,8 @@ export interface EvidenceEntry {
   words: number;
   excerpt: string;
   kind: "transcript" | "reference";
+  /** Track named in the attribution — "(Quote Automation)" in the header. */
+  track?: string;
   /** The full attributed block — the drill-down's reading target. */
   text: string;
 }
@@ -131,9 +133,11 @@ function parseTranscript(movementId: string, fieldLabel: string, text: string): 
     const start = (match.index ?? 0) + match[0].length;
     const end = index + 1 < matches.length ? matches[index + 1].index ?? text.length : text.length;
     const body = text.slice(start, end);
+    const trackTag = match[1].match(/\(([^)]{2,60})\)/);
     entries.push({
       movementId, fieldLabel, kind: "transcript",
       who: match[1],
+      track: trackTag ? trackTag[1].trim() : undefined,
       meta: `${wordCount(body).toLocaleString()} words`,
       words: wordCount(body),
       excerpt: firstLine(body),

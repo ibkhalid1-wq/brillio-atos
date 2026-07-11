@@ -188,7 +188,7 @@ function baseMeetingKit(program: ProgramSummary, movementId: string): Omit<Meeti
       questions,
       captureField: "demoFeedback",
       captureLabel: "Paste the session — reactions and change asks",
-      header: `— ${who || "Stakeholder"}, ${today()} —`,
+      header: `— ${who || "Stakeholder"}, Demo session, ${today()} —`,
       done,
     };
   }
