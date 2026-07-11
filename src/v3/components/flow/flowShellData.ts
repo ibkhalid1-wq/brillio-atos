@@ -12,6 +12,7 @@ import { getMethodology, type PhaseDefinition } from "@/v3/lib/methodology";
 import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
 import { getFormalArtifactContent, getFormalArtifactConfidence, FORMAL_ARTIFACT_FIELD_KEYS } from "@/v3/lib/formalArtifacts";
 import { listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
+import { listFlowTracks, trackAcceptance } from "@/v3/components/flow/flowTracks";
 
 export interface EvidenceEntry {
   movementId: string;
@@ -344,11 +345,41 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
     );
   } else if (movement.id === "show") {
     const tour = demoAcceptance(program);
+    // Approval is BY STAKEHOLDER and BY TRACK, and both close the loop back
+    // to Listen: every voice heard must watch their workflow run, and every
+    // track must converge to acceptance.
+    const heard = parseGridRows(readMovementInputs(program, "listen").interviewRoster)
+      .filter((row) => /heard/i.test(row.status ?? ""))
+      .map((row) => String(row.name ?? "").trim())
+      .filter(Boolean);
+    const toured = new Set(tour.rows.map((row) => (row.stakeholder ?? "").trim().toLowerCase()));
+    const missingVoices = heard.filter((name) => !toured.has(name.toLowerCase()));
+    const tracks = listFlowTracks(program);
+    const acceptedTracks = tracks.filter((track) => trackAcceptance(track).accepted);
+    const pendingTracks = tracks.filter((track) => !trackAcceptance(track).accepted);
     items.push(
       { id: "proto", label: "Prototype running somewhere named", done: has("prototypeLocation"), anchor: "input:prototypeLocation", why: whyFromValue(inputs.prototypeLocation) },
-      { id: "tour", label: "A demo row for every voice", done: tour.total > 0, anchor: "input:demoTour" },
+      {
+        id: "tour",
+        label: heard.length
+          ? `A demo row for every voice heard (${heard.length - missingVoices.length}/${heard.length})`
+          : "A demo row for every voice",
+        done: heard.length ? missingVoices.length === 0 : tour.total > 0,
+        anchor: "input:demoTour",
+        why: missingVoices.length ? `still to see it: ${missingVoices.slice(0, 2).join(", ")}${missingVoices.length > 2 ? "…" : ""}` : undefined,
+      },
       { id: "verdicts", label: tour.total ? `Every stakeholder accepted (${tour.accepted}/${tour.total})` : "Every stakeholder accepted", done: tour.total > 0 && tour.accepted >= tour.total, anchor: "input:demoTour" },
     );
+    if (tracks.length) {
+      items.push({
+        id: "tracks-accepted",
+        label: `Every track accepted (${acceptedTracks.length}/${tracks.length})`,
+        done: pendingTracks.length === 0,
+        why: pendingTracks.length
+          ? `still converging: ${pendingTracks.slice(0, 2).map((track) => track.name).join(", ")}${pendingTracks.length > 2 ? "…" : ""}`
+          : `all ${tracks.length} converged — two accepted passes or accepted-over-stable`,
+      });
+    }
   } else if (movement.id === "ship") {
     const lanesDoc = inner.shipLanes;
     const lanes = lanesDoc && typeof lanesDoc === "object" && Array.isArray((lanesDoc as Record<string, unknown>).lanes)

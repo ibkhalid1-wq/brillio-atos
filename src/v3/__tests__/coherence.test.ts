@@ -90,6 +90,41 @@ describe("kit ↔ gate", () => {
   });
 });
 
+describe("Listen → Show approval chain", () => {
+  const show = () => flowMovements().find((m) => m.id === "show")!;
+
+  it("every heard voice must hold a demo row — coverage counts against the roster", () => {
+    const p = programme({ phaseInputs: {
+      listen: { interviewRoster: JSON.stringify([
+        { name: "Dan Reyes", status: "Heard" }, { name: "Priya Nair", status: "Heard" }, { name: "Alex", status: "Waived" },
+      ]) },
+      show: { demoTour: JSON.stringify([{ stakeholder: "Dan Reyes", verdict: "Accepted" }]) },
+    } });
+    const row = gateChecklist(p, show(), []).find((c) => c.id === "tour")!;
+    expect(row.label).toBe("A demo row for every voice heard (1/2)");
+    expect(row.done).toBe(false);
+    expect(row.why).toContain("Priya Nair");
+  });
+
+  it("the Show gate counts track convergence when tracks exist", () => {
+    const p = programme({
+      tracks: [
+        { id: "t1", name: "Quote Automation", showPasses: [{ ts: "a", verdict: "accepted" }, { ts: "b", verdict: "accepted" }], createdAt: "x" },
+        { id: "t2", name: "Contract Drafting", showPasses: [{ ts: "a", verdict: "rework" }], createdAt: "x" },
+      ],
+      phaseInputs: { show: { demoTour: JSON.stringify([]) } },
+    });
+    const row = gateChecklist(p, show(), []).find((c) => c.id === "tracks-accepted")!;
+    expect(row.label).toBe("Every track accepted (1/2)");
+    expect(row.done).toBe(false);
+    expect(row.why).toContain("Contract Drafting");
+  });
+
+  it("no tracks → no track criterion (nothing phantom to satisfy)", () => {
+    expect(gateChecklist(programme({}), show(), []).some((c) => c.id === "tracks-accepted")).toBe(false);
+  });
+});
+
 describe("spine ↔ cards", () => {
   it("the spine plan is exactly the stale-and-present cards, in movement order", () => {
     const p = programme(FULL_FRAME);
