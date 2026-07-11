@@ -11,26 +11,6 @@ import { meetingKit, type MeetingKit } from "@/v3/components/flow/flowMeetings";
 import { listInterviewPacks, listDemoInvites, portalLinkFor } from "@/v3/components/flow/flowPortal";
 import { listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 
-/** The gate column's one primary action per movement — opens its editor. */
-const GATE_CTA: Record<string, string> = {
-  frame: "Add the sponsor conversation",
-  listen: "Update the coverage ledger",
-  envision: "Record the direction",
-  show: "Record demo verdicts",
-  ship: "Record the go/no-go",
-  evolve: "Log this month's ops review",
-};
-
-/** The field each gate CTA should land the editor on, when it exists. */
-const GATE_CTA_FIELD: Record<string, string> = {
-  frame: "input:sponsorConversation",
-  listen: "input:interviewRoster",
-  envision: "input:directionDecision",
-  show: "input:demoTour",
-  ship: "input:goDecisionRef",
-  evolve: "input:opsConversations",
-};
-
 interface FlowCanvasProps {
   program: ProgramSummary;
   runningAgentIds: Set<string>;
@@ -236,7 +216,6 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                     <p className="v3fs-gate-say">{movement.movement?.readyWhen ?? ""}</p>
                     {(() => {
                       const done = checks.filter((item) => item.done).length;
-                      const firstOpen = checks.find((item) => !item.done);
                       return (
                         <>
                           <div className={`v3fs-sig ${signal.tone}`}>
@@ -263,19 +242,6 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                               </button>
                             ))}
                           </div>
-                          {!isDone && firstOpen && !firstOpen.anchor && firstOpen.id.startsWith("art-") ? (
-                            // The gap is a generated document (missing or stale) —
-                            // the honest action is a run, not the movement editor.
-                            <button type="button" className="v3fs-cta"
-                              onClick={() => onRunAgent(firstOpen.id.slice(4), movement.id)}>
-                              {firstOpen.label}
-                            </button>
-                          ) : !isDone ? (
-                            <button type="button" className="v3fs-cta"
-                              onClick={() => openEditor(movement.id, firstOpen?.anchor ?? GATE_CTA_FIELD[movement.id])}>
-                              {firstOpen && firstOpen.anchor ? firstOpen.label : GATE_CTA[movement.id] ?? "Update inputs & evidence"}
-                            </button>
-                          ) : null}
                         </>
                       );
                     })()}
