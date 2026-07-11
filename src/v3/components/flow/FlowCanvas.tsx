@@ -123,7 +123,7 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
               </span>
               {!isOpen && (evidence.length > 0 || artifacts.some((a) => a.present)) ? (
                 <span className="v3fs-meta">
-                  {evidence.length} evidence · {artifacts.filter((a) => a.present).length}/{artifacts.length} artifacts
+                  {evidence.length} evidence · {artifacts.filter((a) => a.present && !a.stale).length}/{artifacts.length} documents current
                 </span>
               ) : null}
             </button>
@@ -132,15 +132,9 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
               <div className="v3fs-ch-b">
                 <div>
                   <div className="v3fs-colh ev">Stakeholder evidence{coverage && coverage.total ? ` — ${coverage.done}/${coverage.total}` : ""}</div>
-                  <MeetingKitCard
-                    kit={meetingKit(program, movement.id)}
-                    movementId={movement.id}
-                    hasEvidence={evidence.length > 0}
-                    program={program}
-                    onSaveInputs={onSaveInputs}
-                    onScheduleFollowUp={onScheduleFollowUp}
-                    onMintFollowUp={onMintFollowUp}
-                  />
+                  {/* The column leads with the evidence itself — voices, then
+                      facts, then coverage. The kit is the action and follows,
+                      collapsed to one line once a conversation is on record. */}
                   {evidence.length === 0 ? null : evidence.map((entry, i) => (
                     <div key={`${entry.fieldLabel}-${i}`} className="v3fs-voice">
                       {entry.excerpt ? <div className="v3fs-voice-q">“{entry.excerpt}”</div> : null}
@@ -166,6 +160,15 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                       <div className="v3fs-coverage-bar"><div className="v3fs-coverage-fill" style={{ width: `${Math.round((coverage.done / coverage.total) * 100)}%` }} /></div>
                     </div>
                   ) : null}
+                  <MeetingKitCard
+                    kit={meetingKit(program, movement.id)}
+                    movementId={movement.id}
+                    hasEvidence={evidence.length > 0}
+                    program={program}
+                    onSaveInputs={onSaveInputs}
+                    onScheduleFollowUp={onScheduleFollowUp}
+                    onMintFollowUp={onMintFollowUp}
+                  />
                   {movement.id === "listen" && onMintPacks ? (
                     <AsyncInterviews program={program} onMintPacks={onMintPacks} />
                   ) : null}
@@ -244,21 +247,30 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                             : item.inbox
                               ? item.done ? "Nothing waiting" : "Open the Inbox"
                               : "Met by generating / working the movement";
+                        const stale = group === "record" && !item.done && !!artifact?.present;
                         return (
                           <Fragment key={item.id}>
-                            {grouped && group !== prevGroup ? (
-                              <div className="v3fs-check-grp">
-                                {group === "evidence" ? "Evidence" : group === "record" ? "Record" : "Inbox"}
-                              </div>
-                            ) : null}
+                            {grouped && group !== prevGroup ? (() => {
+                              const members = checks.filter((c) => (c.group ?? "evidence") === group);
+                              const met = members.filter((c) => c.done).length;
+                              const name = group === "evidence" ? "Evidence" : group === "record" ? "Record" : "Inbox";
+                              const count = group === "judgment"
+                                ? (met === members.length ? "clear" : "waiting")
+                                : `${met} of ${members.length}`;
+                              return (
+                                <div className={`v3fs-check-grp${met === members.length ? " met" : ""}`}>
+                                  {name}<span>{count}</span>
+                                </div>
+                              );
+                            })() : null}
                             <button
                               type="button"
-                              className={`v3fs-check${item.done ? " done" : ""}`}
+                              className={`v3fs-check${item.done ? " done" : ""}${stale ? " stale" : ""}`}
                               disabled={!onClick}
                               onClick={onClick}
                               title={title}
                             >
-                              <span className="v3fs-check-box" aria-hidden="true">{item.done ? "✓" : ""}</span>
+                              <span className="v3fs-check-box" aria-hidden="true">{item.done ? "✓" : stale ? "⟳" : ""}</span>
                               <span className="v3fs-check-l">
                                 {item.label}
                                 {item.done && item.why ? <span className="v3fs-check-why">{item.why}</span> : null}
@@ -418,7 +430,7 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
   };
 
   return (
-    <details className={`v3fs-kit${kit.followUp ? " v3fs-kit-fu" : ""}`} open={(!kit.done && !hasEvidence) || kit.followUp}>
+    <details className={`v3fs-kit${kit.followUp ? " v3fs-kit-fu" : ""}`} open={!kit.done && !hasEvidence}>
       <summary>
         <span className={`v3fs-st ${kit.followUp ? "stale" : kit.done ? "ok" : "none"}`} />
         <span className="v3fs-kit-t">
@@ -429,15 +441,19 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
       </summary>
       <div className="v3fs-kit-b">
         <p className="v3fs-kit-p">{kit.purpose}</p>
-        <div className="v3fs-kit-step"><b>1</b><span>Engage <strong>{kit.who}</strong></span></div>
-        <div className="v3fs-kit-step"><b>2</b><span>Run the script live — or send it as a link and ATOS asks for you</span></div>
+        <div className="v3fs-kit-cap">The script — {kit.who}</div>
         <ol className="v3fs-kit-qs">
           {kit.questions.map((question, index) => <li key={index}>{question}</li>)}
         </ol>
         <div className="v3fs-kit-actions">
           <button type="button" className="v3fs-a" onClick={() => void copyScript()}>{copied ? "Copied ✓" : "Copy the script"}</button>
+          {kit.followUp && onMintFollowUp ? (
+            <button type="button" className="v3fs-a" disabled={busy} onClick={() => void sendLink()}>
+              {linkTick ? "Link copied ✓" : "✳ Send as a link — ATOS asks, answers land in the Inbox"}
+            </button>
+          ) : null}
         </div>
-        <div className="v3fs-kit-step"><b>3</b><span>Capture what came back</span></div>
+        <div className="v3fs-kit-cap">What came back</div>
         <div className="v3fs-kit-capture">
           <textarea
             rows={3}
@@ -463,24 +479,14 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
             </div>
           </details>
         </div>
-        {kit.followUp && (onScheduleFollowUp || onMintFollowUp) ? (
+        {kit.followUp && onScheduleFollowUp ? (
           <>
-            <div className="v3fs-kit-step"><b>4</b><span>Close the remaining gaps</span></div>
+            <div className="v3fs-kit-cap">Book the follow-up</div>
             <div className="v3fs-kit-fu-row">
-            {onScheduleFollowUp ? (
-              <>
-                <input type="date" value={followDate} onChange={(event) => setFollowDate(event.target.value)} aria-label="Follow-up date" />
-                <button type="button" className="v3fs-btn" disabled={busy || !followDate} onClick={() => void schedule()}>
-                  {scheduledTick ? "Scheduled ✓" : "Schedule the follow-up"}
-                </button>
-              </>
-            ) : null}
-            {onMintFollowUp ? (
-              <button type="button" className="v3fs-btn" disabled={busy} onClick={() => void sendLink()}>
-                {linkTick ? "Link copied ✓" : "✳ Send as a link"}
+              <input type="date" value={followDate} onChange={(event) => setFollowDate(event.target.value)} aria-label="Follow-up date" />
+              <button type="button" className="v3fs-btn" disabled={busy || !followDate} onClick={() => void schedule()}>
+                {scheduledTick ? "Scheduled ✓" : "Schedule the follow-up"}
               </button>
-            ) : null}
-            <span className="v3fs-kit-fu-note">ATOS asks these through the link — answers arrive in the Inbox.</span>
             </div>
           </>
         ) : null}

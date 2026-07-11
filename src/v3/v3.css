@@ -4631,8 +4631,10 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-gstate-h {display:flex;gap:8px;align-items:baseline;font-size:12px;font-weight:650;line-height:1.45}
 .v3fs-gstate-g {flex:none;width:14px;text-align:center}
 .v3fs-gstate-d {font-size:11.5px;font-weight:500;opacity:.82;padding-left:22px}
-.v3fs-check-grp {font-size:10px;font-weight:650;letter-spacing:.09em;text-transform:uppercase;color:var(--v3-text-muted);margin:10px 0 3px;padding:0 6px}
+.v3fs-check-grp {display:flex;justify-content:space-between;align-items:baseline;font-size:10px;font-weight:650;letter-spacing:.09em;text-transform:uppercase;color:var(--v3-text-muted);margin:12px 0 4px;padding:2px 6px 4px;border-bottom:1px solid var(--v3-border-soft)}
 .v3fs-check-grp:first-child {margin-top:2px}
+.v3fs-check-grp span {letter-spacing:.02em}
+.v3fs-check-grp:not(.met) span {color:var(--v3-amber)}
 .v3fs-cta {display:block;width:100%;margin-top:13px;border-radius:10px;padding:11px 14px;font-size:12.5px;font-weight:600;background:var(--v3-accent);color:#fff;text-align:center;box-shadow:0 6px 16px -10px color-mix(in srgb,var(--v3-accent) 60%,transparent);transition:background .15s ease}
 .v3fs-cta:hover {background:color-mix(in srgb,var(--v3-accent) 85%,#fff)}
 .v3fs-switcher-backdrop {position:fixed;inset:0;z-index:60;background:transparent}
@@ -4698,6 +4700,14 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-dec-s {font-size:13px;line-height:1.6;color:var(--v3-text-secondary,var(--v3-text-muted));margin:0 0 6px}
 .v3fs-dec-b {font-size:12px;color:var(--v3-amber);margin:0 0 10px;font-weight:500}
 .v3fs-dec-rec {border:1px dashed var(--fs-line);border-radius:10px;padding:10px 12px;margin-bottom:12px;background:var(--fs-card)}
+.v3fs-dec-diff {border:1px solid var(--v3-border-soft);border-radius:10px;padding:11px 13px;margin-bottom:12px;background:var(--v3-surface-2)}
+.v3fs-dec-diff-cap {font-size:10px;font-weight:650;letter-spacing:.09em;text-transform:uppercase;color:var(--v3-text-muted);margin-bottom:8px}
+.v3fs-dec-diff-item + .v3fs-dec-diff-item {margin-top:10px;padding-top:9px;border-top:1px solid var(--v3-border-soft)}
+.v3fs-dec-diff-t {font-size:12px;font-weight:600;color:var(--v3-text-primary);display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline}
+.v3fs-dec-diff-t span {font-size:11px;font-weight:500;color:var(--v3-text-secondary)}
+.v3fs-dec-diff-rows {list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:3px}
+.v3fs-dec-diff-rows li {font-family:var(--v3-font-mono);font-size:10.5px;color:var(--v3-text-secondary);padding-left:14px;position:relative}
+.v3fs-dec-diff-rows li::before {content:"+";position:absolute;left:0;color:var(--v3-green);font-weight:700}
 .v3fs-dec-rec-a {font-size:12.5px;font-weight:600;color:var(--v3-accent-2)}
 .v3fs-dec-rec-r {font-size:12px;line-height:1.55;color:var(--v3-text-muted);margin-top:3px}
 .v3fs-dec-rec-b {font-family:var(--v3-font-mono);font-size:10px;color:var(--v3-text-muted);margin-top:5px;letter-spacing:.03em}
@@ -4831,9 +4841,6 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-ground {margin-bottom:14px}
 .v3fs-ground-row {display:flex;align-items:flex-start;gap:10px;padding:5px 0}
 .v3fs-ground-row .v3fs-row-m {word-break:break-all}
-.v3fs-kit-step {display:flex;align-items:flex-start;gap:9px;font-size:11.5px;line-height:1.5;color:var(--v3-text-muted);margin:0 0 8px}
-.v3fs-kit-step b {flex-shrink:0;width:18px;height:18px;border-radius:99px;background:var(--fs-indigo-wash);color:var(--v3-accent-2);font-size:10px;display:grid;place-items:center}
-.v3fs-kit-step strong {color:var(--v3-text-primary)}
 .v3fs-kit-doc {border-top:1px dashed var(--fs-line);padding-top:8px}
 .v3fs-kit-doc summary {list-style:none;cursor:pointer;font-size:11.5px;font-weight:600;color:var(--v3-text-muted);padding:2px 0;user-select:none}
 .v3fs-kit-doc summary::-webkit-details-marker {display:none}
@@ -4850,9 +4857,10 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 
 /* Follow-ups: the kit turns amber and offers the calendar or the link. */
 .v3fs-kit-fu {border-left-color:var(--v3-amber)}
+.v3fs-kit-cap {font-size:10px;font-weight:650;letter-spacing:.09em;text-transform:uppercase;color:var(--v3-text-muted);margin:14px 0 7px;padding-bottom:4px;border-bottom:1px solid var(--v3-border-soft)}
+.v3fs-kit-cap:first-of-type {margin-top:10px}
 .v3fs-kit-fu-row {display:flex;flex-wrap:wrap;align-items:center;gap:8px;border-top:1px dashed var(--fs-line);padding-top:12px;margin-bottom:10px}
 .v3fs-kit-fu-row input[type="date"] {font:inherit;font-size:11.5px;border:1px solid var(--fs-line);border-radius:8px;padding:6px 9px;background:var(--fs-card);color:var(--v3-text-primary)}
-.v3fs-kit-fu-note {flex-basis:100%;font-size:10.5px;color:var(--v3-text-muted)}
 
 /* The spine's pointer: which movement needs the user, right on the rail. */
 .v3fs-here {position:absolute;right:calc(100% + 14px);top:14px;display:flex;align-items:center;gap:6px;white-space:nowrap;font:inherit;font-size:11.5px;font-weight:700;letter-spacing:.01em;border:none;cursor:pointer;border-radius:999px;padding:7px 13px;background:var(--v3-accent);color:#fff;box-shadow:0 8px 22px -10px color-mix(in srgb,var(--v3-accent) 60%,transparent);z-index:4}
@@ -4884,6 +4892,9 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-edit-toggle.quiet {font-size:11px;font-weight:500;color:var(--v3-text-muted);background:none;border:none;padding:2px 0;text-decoration:underline;text-underline-offset:3px;text-decoration-color:color-mix(in srgb,var(--v3-text-muted) 40%,transparent)}
 .v3fs-edit-toggle.quiet:hover {color:var(--v3-accent-2)}
 .v3fs-check-box {flex-shrink:0;width:15px;height:15px;margin-top:1px;border-radius:5px;border:1.5px solid var(--fs-line);display:grid;place-items:center;font-size:10px;font-weight:800;color:#fff}
+.v3fs-check:not(.done) .v3fs-check-box {border-color:color-mix(in srgb, var(--v3-text-secondary) 55%, transparent);background:var(--fs-card)}
+.v3fs-check.stale .v3fs-check-box {border-color:var(--v3-amber);color:var(--v3-amber);font-weight:700}
+.v3fs-check.stale .v3fs-check-l {color:var(--v3-amber)}
 .v3fs-check.done .v3fs-check-box {background:var(--v3-green);border-color:var(--v3-green)}
 .v3fs-check-l {font-size:11.5px;line-height:1.5;color:var(--v3-text-primary)}
 .v3fs-check.done .v3fs-check-l {color:var(--v3-text-muted)}

@@ -8,7 +8,7 @@ import {
   demoAcceptance, daysToFirstDemo, wordsOfEvidence, frameKpis,
 } from "@/v3/components/flow/flowShellData";
 import {
-  listOpenFlowDecisions, listFlowAttestations, listNextMoments,
+  listOpenFlowDecisions, listFlowAttestations, listNextMoments, describeDecisionChanges,
   type FlowDecision,
 } from "@/v3/components/flow/flowDecisions";
 import {
@@ -241,12 +241,14 @@ function fmtMomentDate(value: string): string {
   return new Date(t).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
 }
 
-function DecisionCard({ decision, movementLabel, busy, onResolve }: {
+function DecisionCard({ program, decision, movementLabel, busy, onResolve }: {
+  program: ProgramSummary;
   decision: FlowDecision;
   movementLabel: string;
   busy: boolean;
   onResolve: (id: string, resolution: "confirmed" | "declined") => void;
 }) {
+  const changes = describeDecisionChanges(program, decision);
   return (
     <article className="v3fs-dec">
       <div className="v3fs-dec-top">
@@ -262,6 +264,21 @@ function DecisionCard({ decision, movementLabel, busy, onResolve }: {
           <div className="v3fs-dec-rec-a">Recommended — {decision.recommendation.action}</div>
           {decision.recommendation.rationale ? <div className="v3fs-dec-rec-r">{decision.recommendation.rationale}</div> : null}
           {decision.recommendation.band ? <div className="v3fs-dec-rec-b">{decision.recommendation.band}</div> : null}
+        </div>
+      ) : null}
+      {changes.length ? (
+        <div className="v3fs-dec-diff">
+          <div className="v3fs-dec-diff-cap">What changes on confirm</div>
+          {changes.map((change) => (
+            <div key={change.target} className="v3fs-dec-diff-item">
+              <div className="v3fs-dec-diff-t">{change.target}<span>{change.effect}</span></div>
+              {change.rows.length ? (
+                <ul className="v3fs-dec-diff-rows">
+                  {change.rows.map((row) => <li key={row}>{row}</li>)}
+                </ul>
+              ) : null}
+            </div>
+          ))}
         </div>
       ) : null}
       <div className="v3fs-dec-cta">
@@ -355,7 +372,7 @@ function FlowToday({ program, onResolveDecision, onIngestPortalItem, onDismissPo
             <span>{open.length + inbox.length} item{open.length + inbox.length === 1 ? "" : "s"}</span>
           </div>
           {open.map((decision) => (
-            <DecisionCard key={decision.id} decision={decision} movementLabel={label(decision.movementId)}
+            <DecisionCard key={decision.id} program={program} decision={decision} movementLabel={label(decision.movementId)}
               busy={busyId === decision.id} onResolve={resolve} />
           ))}
           {inbox.map((item) => (

@@ -206,6 +206,122 @@ export function resolveFlowDecision(
   return wrapProgramState(wrapper, nextInner, usesNestedData);
 }
 
+/** One concrete effect a confirm applies — target, effect, entries. */
+export interface DecisionChange {
+  target: string;
+  effect: string;
+  rows: string[];
+}
+
+const CHANGE_META_KEYS = new Set(["generatedAt", "inputsFingerprint", "confidence", "editedAt", "editedBy", "summary"]);
+
+function humanizeKey(key: string): string {
+  return key.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, (c) => c.toUpperCase());
+}
+
+function shortUri(value: unknown): string {
+  const uri = String(value ?? "");
+  return uri.replace(/^https?:\/\/(www\.)?/, "");
+}
+
+/**
+ * What a confirm ACTUALLY changes — derived from the payload with the same
+ * semantics resolveFlowDecision applies (additive merges skip what's already
+ * adopted; document payloads replace the mirror). Keep the two in lockstep:
+ * this is the preview of that function, shown before the user judges.
+ */
+export function describeDecisionChanges(program: ProgramSummary, decision: FlowDecision): DecisionChange[] {
+  const payload = decision.payload;
+  if (!payload) return [];
+  const inner = innerData(program);
+  const changes: DecisionChange[] = [];
+
+  if (Array.isArray(payload.ontologyAlignment)) {
+    const current = Array.isArray(inner.ontologyAlignment) ? (inner.ontologyAlignment as unknown[]) : [];
+    const known = new Set(current.filter(isRecord).map((m) => String(m.entity ?? "").toLowerCase()));
+    const incoming = payload.ontologyAlignment.filter(isRecord);
+    const additions = incoming.filter((m) => m.entity && !known.has(String(m.entity).toLowerCase()));
+    const skipped = incoming.length - additions.length;
+    changes.push({
+      target: "Domain Ontology — standard mappings",
+      effect: additions.length
+        ? `${additions.length} mapping${additions.length === 1 ? " merges" : "s merge"} additively${skipped ? ` · ${skipped} already adopted, untouched` : ""}`
+        : "every mapping is already adopted — nothing changes",
+      rows: additions.slice(0, 8).map((m) => {
+        const pct = typeof m.confidence === "number" ? ` · ${Math.round(m.confidence * 100)}%` : "";
+        return `${String(m.entity)} → ${shortUri(m.standard)} (${String(m.relation ?? "").replace(/^skos:/, "")}${pct})`;
+      }),
+    });
+  }
+
+  if (isRecord(payload.artifactDocs)) {
+    for (const [fieldKey, doc] of Object.entries(payload.artifactDocs as Record<string, unknown>)) {
+      if (!isRecord(doc)) continue;
+      const existing = isRecord(inner[fieldKey]) ? (inner[fieldKey] as Record<string, unknown>) : null;
+      const sections = (record: Record<string, unknown>) => Object.keys(record).filter((k) => !CHANGE_META_KEYS.has(k));
+      if (!existing) {
+        changes.push({ target: humanizeKey(fieldKey), effect: "lands as a new document", rows: [] });
+        continue;
+      }
+      const nextKeys = sections(doc);
+      const prevKeys = sections(existing);
+      const rows: string[] = [];
+      for (const key of nextKeys) {
+        if (!prevKeys.includes(key)) rows.push(`${humanizeKey(key)} — added`);
+        else if (JSON.stringify(existing[key]) !== JSON.stringify(doc[key])) rows.push(`${humanizeKey(key)} — rewritten`);
+      }
+      for (const key of prevKeys) {
+        if (!nextKeys.includes(key)) rows.push(`${humanizeKey(key)} — removed (the current section, hand edits included, goes)`);
+      }
+      changes.push({
+        target: humanizeKey(fieldKey),
+        effect: rows.length
+          ? `replaces the current document — ${rows.length} section${rows.length === 1 ? "" : "s"} differ`
+          : "replaces the current document — sections identical, provenance re-stamped",
+        rows: rows.slice(0, 8),
+      });
+    }
+  }
+
+  if (isRecord(payload.dynamicSchema)) {
+    const incoming = payload.dynamicSchema as Record<string, unknown>;
+    changes.push({
+      target: "Working schema",
+      effect: "sections merge — existing fields keep their values",
+      rows: Object.entries(incoming).slice(0, 8).map(([section, value]) =>
+        `${humanizeKey(section)} — ${isRecord(value) ? `${Object.keys(value).length} field${Object.keys(value).length === 1 ? "" : "s"} merge` : "replaced"}`),
+    });
+  }
+
+  if (Array.isArray(payload.tracks)) {
+    const current = Array.isArray(inner.tracks) ? (inner.tracks as unknown[]) : [];
+    const currentIds = new Set(current.filter(isRecord).map((t) => String(t.id ?? "")));
+    const additions = payload.tracks.filter(isRecord).filter((t) => t.id && !currentIds.has(String(t.id)));
+    changes.push({
+      target: "Track plan",
+      effect: additions.length
+        ? `${additions.length} track${additions.length === 1 ? "" : "s"} append — adopted tracks keep their record`
+        : "every track already adopted — nothing changes",
+      rows: additions.slice(0, 8).map((t) => String(t.name ?? t.title ?? t.id)),
+    });
+  }
+
+  if (isRecord(payload.flowGovernance)) {
+    const incoming = payload.flowGovernance as Record<string, unknown>;
+    const budgets = isRecord(incoming.movementBudgets) ? (incoming.movementBudgets as Record<string, unknown>) : {};
+    changes.push({
+      target: "Governance",
+      effect: "settings merge",
+      rows: [
+        ...Object.entries(incoming).filter(([k]) => k !== "movementBudgets").map(([k, v]) => `${humanizeKey(k)} → ${String(v)}`),
+        ...Object.entries(budgets).map(([movement, v]) => `${humanizeKey(movement)} budget → ${String(v)}`),
+      ].slice(0, 8),
+    });
+  }
+
+  return changes;
+}
+
 /** The human moments ahead: booked sessions, pending demos, the demo target. */
 export function listNextMoments(program: ProgramSummary): NextMoment[] {
   const moments: NextMoment[] = [];

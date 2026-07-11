@@ -5,7 +5,7 @@
  */
 import { describe, it, expect } from "vitest";
 import type { ProgramSummary } from "@/new/types";
-import { resolveFlowDecision, listOpenFlowDecisions } from "@/v3/components/flow/flowDecisions";
+import { resolveFlowDecision, listOpenFlowDecisions, describeDecisionChanges } from "@/v3/components/flow/flowDecisions";
 import { trackAcceptance, trackBlockers, recordShowPass, listFlowTracks, type FlowTrack } from "@/v3/components/flow/flowTracks";
 import { toggleShipItem, listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 import { ingestPortalResponse, listPortalInbox } from "@/v3/components/flow/flowPortal";
@@ -114,6 +114,42 @@ describe("flowPortal ingest routing", () => {
     const listen = (blob.phaseInputs as Record<string, Record<string, string>>).listen;
     expect(listen.interviewTranscripts).toContain("Words here");
     expect(JSON.parse(listen.interviewRoster)[0].status).toBe("Heard");
+  });
+});
+
+describe("describeDecisionChanges — the confirm preview mirrors the resolver", () => {
+  const decision = (payload: Record<string, unknown>) => ({
+    id: "d1", tier: 2 as const, status: "open" as const, agentId: "a", movementId: "listen",
+    title: "t", summary: "", blocking: "", recommendation: null, payload, createdAt: "2026-07-11",
+  });
+
+  it("ontology mappings: additive rows, already-adopted entities skipped", () => {
+    const p = programme({ ontologyAlignment: [{ entity: "Quote", standard: "https://schema.org/Quotation" }] });
+    const [change] = describeDecisionChanges(p, decision({ ontologyAlignment: [
+      { entity: "Quote", relation: "skos:closeMatch", standard: "https://schema.org/Quotation", confidence: 0.95 },
+      { entity: "Approval", relation: "skos:closeMatch", standard: "https://schema.org/Action", confidence: 0.8 },
+    ] }));
+    expect(change.effect).toBe("1 mapping merges additively · 1 already adopted, untouched");
+    expect(change.rows).toEqual(["Approval → schema.org/Action (closeMatch · 80%)"]);
+  });
+
+  it("document payloads: per-section diff against the current mirror, meta ignored", () => {
+    const p = programme({ discoveryKit: { scope: "old", interviews: ["a"], confidence: 20, generatedAt: "x" } });
+    const [change] = describeDecisionChanges(p, decision({ artifactDocs: {
+      discoveryKit: { scope: "new", interviews: ["a"], coverageMap: {}, confidence: 90, generatedAt: "y" },
+    } }));
+    expect(change.target).toBe("Discovery Kit");
+    expect(change.rows).toEqual(["Scope — rewritten", "Coverage Map — added"]);
+  });
+
+  it("a removed section warns that hand edits go with it", () => {
+    const p = programme({ discoveryKit: { scope: "old", notes: "hand-written" } });
+    const [change] = describeDecisionChanges(p, decision({ artifactDocs: { discoveryKit: { scope: "old" } } }));
+    expect(change.rows).toEqual(["Notes — removed (the current section, hand edits included, goes)"]);
+  });
+
+  it("no payload → no preview", () => {
+    expect(describeDecisionChanges(programme({}), { ...decision({}), payload: null })).toEqual([]);
   });
 });
 
