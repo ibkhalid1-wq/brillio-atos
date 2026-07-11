@@ -4624,7 +4624,7 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-gate {background:var(--v3-surface-2);border-radius:16px;padding:17px 19px}
 .v3fs-gate-say {font-size:13px;color:var(--v3-text-secondary);line-height:1.55;margin:0}
 .v3fs-gate-say.foot {font-size:11.5px;color:var(--v3-text-muted);margin-top:12px;padding-top:11px;border-top:1px solid var(--v3-border-soft)}
-.v3fs-gstate {display:flex;flex-direction:column;gap:7px;border-radius:12px;padding:11px 13px;margin-bottom:12px}
+.v3fs-gstate {display:flex;flex-direction:column;gap:7px;border-radius:12px;padding:11px 13px;margin-bottom:12px;transition:background-color .3s ease,color .3s ease}
 .v3fs-gstate.green {background:var(--v3-green-soft);color:var(--v3-green)}
 .v3fs-gstate.amber {background:var(--v3-amber-soft);color:var(--v3-amber)}
 .v3fs-gstate.dim {background:var(--fs-card);color:var(--v3-text-muted)}
@@ -4909,7 +4909,7 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-check:not(:disabled):hover {background:var(--v3-surface-2)}
 .v3fs-edit-toggle.quiet {font-size:11px;font-weight:500;color:var(--v3-text-muted);background:none;border:none;padding:2px 0;text-decoration:underline;text-underline-offset:3px;text-decoration-color:color-mix(in srgb,var(--v3-text-muted) 40%,transparent)}
 .v3fs-edit-toggle.quiet:hover {color:var(--v3-accent-2)}
-.v3fs-check-box {flex-shrink:0;width:15px;height:15px;margin-top:1px;border-radius:5px;border:1.5px solid var(--fs-line);display:grid;place-items:center;font-size:10px;font-weight:800;color:#fff}
+.v3fs-check-box {flex-shrink:0;width:15px;height:15px;margin-top:1px;border-radius:5px;border:1.5px solid var(--fs-line);display:grid;place-items:center;font-size:10px;font-weight:800;color:#fff;transition:background-color .2s ease,border-color .2s ease}
 .v3fs-check:not(.done) .v3fs-check-box {border-color:color-mix(in srgb, var(--v3-text-secondary) 55%, transparent);background:var(--fs-card)}
 .v3fs-check.stale .v3fs-check-box {border-color:var(--v3-amber);color:var(--v3-amber);font-weight:700}
 .v3fs-check.stale .v3fs-check-l {color:var(--v3-amber)}
@@ -5212,3 +5212,13 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 /* Wizard sections separate on hairlines; disabled selects read as quiet state. */
 .v3-wizard--setup section + section{border-top:1px solid var(--fs-line);padding-top:20px}
 .v3-wizard--setup .v3-input:disabled{opacity:.55;cursor:default;background:transparent}
+
+/* Motion lands only where state changes meaning: a chapter unfolding, a gate
+   flipping tone, a criterion ticking. Everything else stays still. */
+.v3fs-ch-b {animation:v3fs-unfold .28s ease}
+@keyframes v3fs-unfold {from {opacity:0;transform:translateY(6px)} to {opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce) {
+  .v3fs-ch-b {animation:none}
+  .v3fs-gstate, .v3fs-check-box, .v3fs-spine-fill {transition:none}
+  .v3fs-mic.on {animation:none}
+}

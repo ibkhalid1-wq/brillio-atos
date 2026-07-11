@@ -4,13 +4,16 @@
  * the artifact studio so a claim can be checked against its source without
  * losing your place in the document.
  */
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
+import { useFocusTrap } from "@/v3/lib/useFocusTrap";
 import { flowMovements, type EvidenceEntry } from "@/v3/components/flow/flowShellData";
 
 export default function EvidenceReader({ entry, onClose }: {
   entry: EvidenceEntry;
   onClose: () => void;
 }) {
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  useFocusTrap(dialogRef);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -35,7 +38,7 @@ export default function EvidenceReader({ entry, onClose }: {
   return (
     <>
       <div className="v3fs-doc-backdrop v3fs-evread-layer" onClick={onClose} aria-hidden="true" />
-      <div className="v3fs-docview v3fs-evread" role="dialog" aria-modal="true" aria-label={entry.who}>
+      <div ref={dialogRef} tabIndex={-1} className="v3fs-docview v3fs-evread" role="dialog" aria-modal="true" aria-label={entry.who}>
         <header className="v3fs-docview-h">
           <div>
             <h2 className="v3fs-evread-who">{entry.who}</h2>

@@ -7,6 +7,7 @@
  * away, and artifacts with no stored structure fall back to it.
  */
 import React, { useEffect, useMemo, useState } from "react";
+import { useFocusTrap } from "@/v3/lib/useFocusTrap";
 import type { ProgramSummary } from "@/new/types";
 import { artifactDocument, flowMovements, movementEvidence, type ArtifactCardModel, type EvidenceEntry } from "@/v3/components/flow/flowShellData";
 import { groundingFor, citationGraph, resourceUri, artifactFabioType, SEMANTIC_CONTEXT } from "@/v3/components/flow/flowSemantics";
@@ -38,6 +39,8 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
     [program, entry],
   );
 
+  const dialogRef = React.useRef<HTMLDivElement | null>(null);
+  useFocusTrap(dialogRef);
   const [draft, setDraft] = useState<Record<string, unknown> | null>(storedDoc);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -174,7 +177,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
   return (
     <>
       <div className="v3fs-doc-backdrop" onClick={onClose} aria-hidden="true" />
-      <div className={`v3fs-docview${studioActive ? " v3fs-studio" : ""}`} role="dialog" aria-modal="true" aria-label={artifact.title}>
+      <div ref={dialogRef} tabIndex={-1} className={`v3fs-docview${studioActive ? " v3fs-studio" : ""}`} role="dialog" aria-modal="true" aria-label={artifact.title}>
         <header className="v3fs-docview-h">
           <div>
             <div className="v3fs-dv-eyebrow">{movementName} · generated document</div>
