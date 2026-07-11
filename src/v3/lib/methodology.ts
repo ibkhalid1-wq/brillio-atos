@@ -1270,7 +1270,7 @@ export const ATOS_FLOW: MethodologyDefinition = {
       id: "listen",
       displayName: "Listen",
       description: "Run 45-minute discovery conversations; every transcript compiles into the Current-State Atlas — workflows, ontology, pain heatmap — while coverage climbs.",
-      requiredArtifacts: ["current-state-atlas", "domain-ontology"],
+      requiredArtifacts: ["domain-ontology", "current-state-atlas"],
       mandatoryExitCriteriaTemplates: ["Stakeholder coverage complete", "Contradictions resolved or logged"],
       entryGuards: ["Discovery kit generated"],
       recommendedAgents: ["current-state-atlas", "domain-ontology", "stakeholder"],
