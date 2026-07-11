@@ -1196,7 +1196,7 @@ Return ONLY valid JSON:
   "relations": [ { "from": "entity", "relation": "verb phrase", "to": "entity", "cardinality": "1:1|1:N|N:M|unknown" } ],
   "events": [ { "name": "business event", "triggers": "what causes it", "produces": "what it changes" } ],
   "standardAlignment": [ { "entity": "ontology entity name", "standard": "full URI, e.g. https://schema.org/Order", "vocabulary": "schema.org|FIBO|GS1|FHIR", "relation": "skos:closeMatch|skos:exactMatch", "confidence": 0.0 } ],
-  // Pick the vocabulary by the programme's industry: financial services → FIBO (https://spec.edmcouncil.org/fibo/ontology/...), retail/CPG/supply chain → GS1 Web Vocabulary (https://gs1.org/voc/...), healthcare → HL7 FHIR (http://hl7.org/fhir/...), anything else → schema.org. Only propose mappings you are confident in; omit rather than force.
+  // Propose mappings ONLY from the vocabularies named in the input context's vocabularySteering — it is derived deterministically from the programme's industry; any other namespace is rejected before review. Only propose mappings you are confident in; omit rather than force.
   "ambiguities": [ { "term": "string", "conflictingMeanings": ["meaning per team"], "resolution": "proposed resolution or 'unresolved'" } ],
   "gaps": ["entities referenced but never defined, domains not yet mapped"],
   "summary": "one sentence verdict on ontology completeness",
@@ -2465,6 +2465,9 @@ function buildSpecialAgentInputContext(
     return JSON.stringify({
       artifact: formalSpec.title,
       phase: formalSpec.phase,
+      ...(target?.agentId === "domain-ontology"
+        ? { vocabularySteering: ontologyVocabularySteering(meta.industry || strategyInputs.industry || frameInputs.industry || projectMeta.industry) }
+        : {}),
       // The current phase's intent boundary: its objective, the artifacts it owns,
       // and the detail owned by LATER phases that must not be demanded here. This
       // scopes the artifact's self-reported "gaps" to what this phase is actually
@@ -5591,6 +5594,69 @@ function toCamelCaseId(id: string): string {
   return id.replace(/-([a-z])/g, (_, ch: string) => ch.toUpperCase());
 }
 
+
+// ─── Ontology vocabulary steering ────────────────────────────────────────────
+// Deterministic mapping from the setup wizard's industry options to the
+// standards vocabulary the ontology should align to. Prose-only steering left
+// the choice to model judgment; this table decides it. Only vocabularies with
+// REAL public URI namespaces are named — ONTOLOGY_VOCAB_PREFIXES below rejects
+// everything else, so a fabricated deep link never reaches the inbox. Sectors
+// whose standards have no public linked-data namespace (TM Forum SID, ACORD)
+// steer to the nearest real vocabulary instead of a fake URI.
+
+const VOCAB_FIBO = "FIBO (URIs under https://spec.edmcouncil.org/fibo/ontology/)";
+const VOCAB_FHIR = "HL7 FHIR (URIs under http://hl7.org/fhir/)";
+const VOCAB_GS1 = "GS1 Web Vocabulary (URIs under https://gs1.org/voc/)";
+const VOCAB_CIM = "IEC CIM (URIs under http://iec.ch/TC57/)";
+const VOCAB_EBU = "EBUCore (URIs under http://www.ebu.ch/metadata/ontologies/ebucore)";
+const VOCAB_ORG = "W3C Organization Ontology (URIs under http://www.w3.org/ns/org#)";
+const VOCAB_SCHEMA = "schema.org (URIs under https://schema.org/)";
+
+const INDUSTRY_VOCABULARY_STEERING: Record<string, string> = {
+  "financial services": `Primary: ${VOCAB_FIBO}. Fall back to ${VOCAB_SCHEMA} for generic commerce entities.`,
+  "banking": `Primary: ${VOCAB_FIBO}. Fall back to ${VOCAB_SCHEMA} for generic commerce entities.`,
+  "insurance": `Primary: ${VOCAB_FIBO} — it covers insurance contracts and parties; ACORD has no public URI namespace, so align ACORD concepts by name in definitions only. Fall back to ${VOCAB_SCHEMA}.`,
+  "healthcare": `Primary: ${VOCAB_FHIR}. Fall back to ${VOCAB_SCHEMA}.`,
+  "life sciences & pharma": `Primary: ${VOCAB_FHIR} for clinical entities; use ${VOCAB_GS1} for product/serialisation/supply-chain entities. Fall back to ${VOCAB_SCHEMA}.`,
+  "retail & consumer goods": `Primary: ${VOCAB_GS1}. Fall back to ${VOCAB_SCHEMA}.`,
+  "manufacturing": `Primary: ${VOCAB_GS1} for product/logistics entities. Fall back to ${VOCAB_SCHEMA}.`,
+  "automotive": `Primary: ${VOCAB_GS1} for product/logistics entities; ${VOCAB_SCHEMA} carries the automotive types (Vehicle, Car…).`,
+  "energy & utilities": `Primary: ${VOCAB_CIM} for grid/asset/measurement entities. Fall back to ${VOCAB_SCHEMA}.`,
+  "telecommunications": `Use ${VOCAB_SCHEMA} — TM Forum SID has no public URI namespace; align SID concepts by name in definitions only.`,
+  "media & entertainment": `Primary: ${VOCAB_EBU} for content/asset/rights entities. Fall back to ${VOCAB_SCHEMA}.`,
+  "technology & software": `Use ${VOCAB_SCHEMA} (SoftwareApplication, Order, Invoice, Quotation…).`,
+  "transportation & logistics": `Primary: ${VOCAB_GS1} (incl. EPCIS concepts). Fall back to ${VOCAB_SCHEMA}.`,
+  "public sector & government": `Primary: ${VOCAB_ORG} for organisational structures; ${VOCAB_SCHEMA} for services and generic entities (GovernmentOrganization, GovernmentService…).`,
+  "education": `Use ${VOCAB_SCHEMA} (Course, EducationalOrganization, LearningResource…).`,
+  "travel & hospitality": `Use ${VOCAB_SCHEMA} (Flight, LodgingBusiness, Reservation…).`,
+  "professional services": `Use ${VOCAB_SCHEMA} (Service, ProfessionalService, Invoice…).`,
+  "other": `Use ${VOCAB_SCHEMA}.`,
+};
+
+function ontologyVocabularySteering(industry: unknown): string {
+  const key = typeof industry === "string" ? industry.trim().toLowerCase() : "";
+  return INDUSTRY_VOCABULARY_STEERING[key]
+    ?? `Use ${VOCAB_SCHEMA}. (Industry "${typeof industry === "string" ? industry : ""}" has no dedicated public vocabulary in the manifest.)`;
+}
+
+// Namespaces the alignment validator accepts — MUST cover every vocabulary the
+// steering table can name.
+const ONTOLOGY_VOCAB_PREFIXES = [
+  "https://schema.org/",
+  "http://schema.org/",
+  "https://spec.edmcouncil.org/fibo/ontology/",
+  "https://gs1.org/voc/",
+  "https://www.gs1.org/voc/",
+  "http://hl7.org/fhir/",
+  "https://hl7.org/fhir/",
+  "http://iec.ch/TC57/",
+  "https://iec.ch/TC57/",
+  "http://www.w3.org/ns/org#",
+  "https://www.w3.org/ns/org#",
+  "http://www.ebu.ch/metadata/ontologies/ebucore",
+  "https://www.ebu.ch/metadata/ontologies/ebucore",
+];
+
 // ─── ATOS Flow: decisions, attestations, staleness ───────────────────────────
 // Flow programmes run propose-then-confirm: consequential agent results become
 // Tier-2 DECISIONS a human resolves instead of silent writes, every applied run
@@ -8700,15 +8766,7 @@ Deno.serve(async (req) => {
           // Vocabulary manifest: a proposed URI must live under a KNOWN
           // namespace or it never reaches the inbox — models fabricate
           // plausible deep links in the long vocabularies.
-          const VOCAB_PREFIXES = [
-            "https://schema.org/",
-            "http://schema.org/",
-            "https://spec.edmcouncil.org/fibo/ontology/",
-            "https://gs1.org/voc/",
-            "https://www.gs1.org/voc/",
-            "http://hl7.org/fhir/",
-            "https://hl7.org/fhir/",
-          ];
+          const VOCAB_PREFIXES = ONTOLOGY_VOCAB_PREFIXES;
           const mappings = ((result as Record<string, unknown>).standardAlignment as unknown[])
             .filter(isRecord)
             .filter((entry) => typeof entry.entity === "string" && typeof entry.standard === "string"

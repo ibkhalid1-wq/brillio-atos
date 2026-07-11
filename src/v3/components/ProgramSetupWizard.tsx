@@ -175,7 +175,7 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
                 {INDUSTRY_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
               </select>
               <div className="v3-field-hint">
-                Steers the ontology&apos;s shared vocabulary — FIBO, GS1, FHIR, or schema.org.
+                Selects the ontology&apos;s standards vocabulary — FIBO, FHIR, GS1, IEC CIM, EBUCore, W3C ORG or schema.org.
               </div>
             </label>
             <label>
