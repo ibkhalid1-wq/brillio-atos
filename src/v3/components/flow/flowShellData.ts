@@ -171,7 +171,17 @@ export function movementArtifacts(program: ProgramSummary, movement: PhaseDefini
   return getPhaseArtifactDefs(movement.id).map((def) => {
     const content = getFormalArtifactContent(root, def.id);
     const stub = stubs[def.id];
-    const excerpt = content ? content.replace(/[#*`>\n-]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 150) : null;
+    // The card's excerpt leads with the document's own summary when it has
+    // one — the flattened fallback alphabetizes keys, which put "gaps" first
+    // and made every gapped card shout its gap instead of its content.
+    const mirrorDoc = root[FORMAL_ARTIFACT_FIELD_KEYS[def.id]];
+    const summaryText = mirrorDoc && typeof mirrorDoc === "object" && !Array.isArray(mirrorDoc)
+      && typeof (mirrorDoc as Record<string, unknown>).summary === "string"
+      ? ((mirrorDoc as Record<string, unknown>).summary as string).trim()
+      : "";
+    const excerpt = summaryText
+      ? summaryText.replace(/\s+/g, " ").slice(0, 150)
+      : content ? content.replace(/[#*`>\n-]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 150) : null;
     const confidence = getFormalArtifactConfidence(root, def.id)
       ?? (typeof stub?.confidence === "number" ? Math.round(stub.confidence) : null);
     const present = !!content || !!stub;

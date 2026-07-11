@@ -1,0 +1,124 @@
+/**
+ * Cross-surface coherence — the invariants that keep the app telling ONE
+ * story. Every surface derives from the same readers; these tests pin the
+ * relationships BETWEEN surfaces (gate ↔ cards ↔ kit ↔ verdict ↔ meta), so a
+ * change that makes two surfaces disagree fails here instead of waiting for
+ * someone to notice on screen.
+ */
+import { describe, expect, it } from "vitest";
+import type { ProgramSummary } from "@/new/types";
+import {
+  flowMovements, movementArtifacts, gateChecklist, gateReadiness,
+  spineRegenerationPlan, type ArtifactCardModel,
+} from "@/v3/components/flow/flowShellData";
+import { meetingKit } from "@/v3/components/flow/flowMeetings";
+import { describeDecisionChanges, type FlowDecision } from "@/v3/components/flow/flowDecisions";
+
+const programme = (inner: Record<string, unknown>): ProgramSummary => ({
+  id: "p1", name: "Coherence", client: "", methodology: "atos-flow",
+  rawData: { data: inner }, updatedAt: "2026-07-11",
+} as unknown as ProgramSummary);
+
+const art = (over: Partial<ArtifactCardModel>): ArtifactCardModel => ({
+  id: "discovery-kit", movementId: "frame", title: "Discovery Kit", description: "",
+  excerpt: null, confidence: 80, present: true, stale: false, gaps: 0, ...over,
+});
+
+const FULL_FRAME = {
+  phaseInputs: { frame: {
+    sponsorConversation: "— Sarah Okafor, COO —\ntext on record",
+    businessObjective: "obj", sponsor: "Sarah", industry: "Banking",
+    successMetric: "cycle time", targetFirstDemoDate: "2026-07-25",
+  } },
+};
+
+const frame = () => flowMovements().find((m) => m.id === "frame")!;
+
+describe("gate ↔ cards", () => {
+  it("the Documents group has exactly one row per artifact card", () => {
+    const artifacts = [art({}), art({ id: "charter", title: "Charter" })];
+    const rows = gateChecklist(programme(FULL_FRAME), frame(), artifacts).filter((c) => c.group === "record");
+    expect(rows.map((r) => r.artifactId)).toEqual(artifacts.map((a) => a.id));
+  });
+
+  it("a card showing gaps can never coexist with a green gate", () => {
+    const artifacts = [art({ gaps: 1 })];
+    const readiness = gateReadiness(programme(FULL_FRAME), frame(), artifacts, gateChecklist(programme(FULL_FRAME), frame(), artifacts));
+    expect(readiness.tone).not.toBe("green");
+  });
+
+  it("a stale card and its gate row speak the same phrase", () => {
+    const artifacts = [art({ stale: true })];
+    const row = gateChecklist(programme(FULL_FRAME), frame(), artifacts).find((c) => c.artifactId === "discovery-kit")!;
+    expect(row.label).toContain("evidence changed");
+  });
+
+  it("the verdict count always equals the checklist's own arithmetic", () => {
+    for (const artifacts of [[art({})], [art({ stale: true })], [art({ gaps: 2 })], []]) {
+      const checks = gateChecklist(programme(FULL_FRAME), frame(), artifacts);
+      const readiness = gateReadiness(programme(FULL_FRAME), frame(), artifacts, checks);
+      const done = checks.filter((c) => c.done).length;
+      if (readiness.kind !== "demonstrated" && readiness.kind !== "signal") {
+        expect(readiness.kind === "ready" ? readiness.detail : readiness.headline).toContain(`${done}`);
+      }
+    }
+  });
+
+  it("the collapsed meta's 'documents current' predicate matches the Documents group", () => {
+    const artifacts = [art({}), art({ stale: true, id: "a2", title: "A2" }), art({ gaps: 1, id: "a3", title: "A3" })];
+    const metaCount = artifacts.filter((a) => a.present && !a.stale && a.gaps === 0).length;
+    const groupMet = gateChecklist(programme(FULL_FRAME), frame(), artifacts)
+      .filter((c) => c.group === "record" && c.done).length;
+    expect(metaCount).toBe(groupMet);
+  });
+});
+
+describe("kit ↔ gate", () => {
+  it("follow-up scripts never carry operator plumbing, whatever the gaps say", () => {
+    const p = programme({
+      ...FULL_FRAME,
+      discoveryKit: { gaps: [
+        "Add a clear objective to the Objective input.",
+        "Regenerate the artifact after the ledger updates.",
+        "Which regions does the discount flow cover today?",
+      ] },
+    });
+    const kit = meetingKit(p, "frame")!;
+    for (const question of kit.questions) {
+      expect(question).not.toMatch(/\binputs?\b|\bledger\b|\bartifacts?\b|\bregenerat/i);
+    }
+  });
+});
+
+describe("spine ↔ cards", () => {
+  it("the spine plan is exactly the stale-and-present cards, in movement order", () => {
+    const p = programme(FULL_FRAME);
+    const plan = spineRegenerationPlan(p);
+    const staleIds = flowMovements().flatMap((m) =>
+      movementArtifacts(p, m).filter((a) => a.present && a.stale).map((a) => a.id));
+    expect(plan.map((s) => s.artifactId)).toEqual(staleIds);
+  });
+});
+
+describe("Inbox previews ↔ resolver families (no silent confirms)", () => {
+  const decision = (payload: Record<string, unknown>): FlowDecision => ({
+    id: "d", tier: 2, status: "open", agentId: "a", movementId: "listen",
+    title: "t", summary: "", blocking: "", recommendation: null, payload, createdAt: "2026-07-11",
+  });
+
+  it("every payload family the resolver applies has a what-changes preview", () => {
+    const samples: Array<Record<string, unknown>> = [
+      { ontologyAlignment: [{ entity: "Quote", standard: "https://schema.org/Quotation" }] },
+      { artifactDocs: { discoveryKit: { scope: "x" } } },
+      { dynamicSchema: { inputFields: {} } },
+      { tracks: [{ id: "t1", name: "Track" }] },
+      { flowGovernance: { haltAll: false } },
+      { rosterAdditions: [{ name: "Alex Kim", role: "CFO" }] },
+      { contradictionEntries: [{ statement: "s", between: "a vs b", positions: "p" }] },
+    ];
+    for (const payload of samples) {
+      const changes = describeDecisionChanges(programme({}), decision(payload));
+      expect(changes.length, `no preview for ${Object.keys(payload)[0]}`).toBeGreaterThan(0);
+    }
+  });
+});

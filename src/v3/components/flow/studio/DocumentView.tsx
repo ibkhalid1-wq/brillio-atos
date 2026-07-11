@@ -322,6 +322,22 @@ export default function DocumentView({ doc, order, onPatch, onOpenFullEditor }: 
       ) : null}
       <div className="v3fs-dv" ref={rootRef}>
         {summary ? <p className="v3fs-dv-lead">{summary}</p> : null}
+        {/* Gaps lead the document: they are the most actionable thing on the
+            page — the reason it can't yet be trusted whole. */}
+        {gaps.length || editingKey === "gaps" ? (
+          <aside className={`v3fs-dv-gaps v3fs-dv-secwrap${editingKey === "gaps" ? " editing" : ""}`}>
+            {pencil("gaps")}
+            <h3 className="v3fs-dv-h">Open gaps</h3>
+            {editingKey === "gaps" ? (
+              <StringListEditor values={gaps} onChange={(next) => onPatch?.("gaps", next)} addLabel="Add gap" />
+            ) : (
+              <>
+                <ul className="v3fs-dv-list">{gaps.map((g, i) => <li key={i}>{g}</li>)}</ul>
+                <p className="v3fs-dv-gaps-hint">Flagged at the last generation — close them in the movement's inputs, then regenerate and they re-check.</p>
+              </>
+            )}
+          </aside>
+        ) : null}
         {factRun.length ? (
           <div className={`v3fs-dv-secwrap${editingKey === "__facts" ? " editing" : ""}`}>
             {editingKey === "__facts" ? (
@@ -347,17 +363,6 @@ export default function DocumentView({ doc, order, onPatch, onOpenFullEditor }: 
           </div>
         ) : null}
         {bodyEntries.map(([k, v]) => section(k, v))}
-        {gaps.length || editingKey === "gaps" ? (
-          <aside className={`v3fs-dv-gaps v3fs-dv-secwrap${editingKey === "gaps" ? " editing" : ""}`}>
-            {pencil("gaps")}
-            <h3 className="v3fs-dv-h">Open gaps</h3>
-            {editingKey === "gaps" ? (
-              <StringListEditor values={gaps} onChange={(next) => onPatch?.("gaps", next)} addLabel="Add gap" />
-            ) : (
-              <ul className="v3fs-dv-list">{gaps.map((g, i) => <li key={i}>{g}</li>)}</ul>
-            )}
-          </aside>
-        ) : null}
       </div>
     </div>
   );
