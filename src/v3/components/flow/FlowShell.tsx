@@ -75,6 +75,35 @@ interface FlowShellProps {
 
 type FlowView = "today" | "flow" | "tracks" | "library" | "pulse" | "mission" | "portfolio";
 
+/** The rail's three zones: the work, the system, then Copilot at the foot.
+ * ("mission" keeps its internal id; the person-facing name is Control.) */
+const DOCK_ZONES: Array<Array<[FlowView, string]>> = [
+  [["today", "Inbox"], ["flow", "Flow"], ["tracks", "Tracks"], ["library", "Library"], ["pulse", "Pulse"]],
+  [["mission", "Control"], ["portfolio", "Portfolio"]],
+];
+const DOCK_ORDER: FlowView[] = DOCK_ZONES.flat().map(([id]) => id);
+
+/** One stroke weight, currentColor — the rail's icons stop being a font-glyph grab bag. */
+const DOCK_PATHS: Record<string, React.ReactNode> = {
+  today: <><path d="M4 6h16v12H4z" /><path d="M4 13h5l2 2.5h2L15 13h5" /></>,
+  flow: <><path d="M4 12h13" /><path d="M13 7l5 5-5 5" /></>,
+  tracks: <><path d="M4 7h16" /><path d="M4 12h11" /><path d="M4 17h7" /></>,
+  library: <><path d="M6 4v16" /><path d="M11 4v16" /><path d="M14.5 5.5L19 19.5" /></>,
+  pulse: <path d="M3 12h4l2.5-6 4 12 2.5-6H21" />,
+  mission: <><path d="M5 8h14" /><path d="M5 16h14" /><circle cx="10" cy="8" r="2.1" /><circle cx="15" cy="16" r="2.1" /></>,
+  portfolio: <><path d="M5 5h6v6H5z" /><path d="M13 5h6v6h-6z" /><path d="M5 13h6v6H5z" /><path d="M13 13h6v6h-6z" /></>,
+  copilot: <path d="M12 4l1.9 5.6L19.5 12l-5.6 2.4L12 20l-1.9-5.6L4.5 12l5.6-2.4z" />,
+};
+
+function DockIcon({ id }: { id: string }) {
+  return (
+    <svg className="v3fs-ric" viewBox="0 0 24 24" width="17" height="17" fill="none"
+      stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {DOCK_PATHS[id]}
+    </svg>
+  );
+}
+
 /**
  * "Paper & Flow" — the reimagined shell for ATOS Flow programmes. None of the
  * classic chrome renders here: a floating dock (Flow · Library · Pulse ·
@@ -116,6 +145,23 @@ export default function FlowShell(props: FlowShellProps) {
     return () => window.removeEventListener("keydown", onKey);
   }, [switcherOpen]);
 
+  // Shortcuts 1–7 jump between views — never while typing.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable)) return;
+      const index = Number.parseInt(event.key, 10) - 1;
+      const id = DOCK_ORDER[index];
+      if (!Number.isNaN(index) && id) {
+        setView(id);
+        window.scrollTo({ top: 0 });
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   // Instrumentation: the shell's core promise is decision latency. Stamp when
   // it opens; the session's first resolution logs open→decided (see FlowToday).
   useEffect(() => {
@@ -127,26 +173,36 @@ export default function FlowShell(props: FlowShellProps) {
   return (
     <div className="v3fs-app">
       <nav className="v3fs-dock" aria-label="Primary">
-        <button type="button" className="v3fs-brand" onClick={() => setSwitcherOpen((v) => !v)} aria-label="Programme menu" aria-expanded={switcherOpen}>
+        <button type="button" className="v3fs-brand" data-tip="Switch programme" onClick={() => setSwitcherOpen((v) => !v)} aria-label="Switch programme" aria-expanded={switcherOpen}>
           {(program.name || "F").slice(0, 1).toUpperCase()}
           <span className="v3fs-brand-caret" aria-hidden="true">▾</span>
         </button>
-        {([["today", "◈", "Inbox"], ["flow", "⟶", "Flow"], ["tracks", "▤", "Tracks"], ["library", "◫", "Library"], ["pulse", "◉", "Pulse"], ["mission", "⌘", "Mission"], ["portfolio", "⊞", "Portfolio"]] as const).map(([id, icon, label]) => (
-          <button key={id} type="button" className={view === id ? "on" : ""}
-            onClick={() => { setView(id); window.scrollTo({ top: 0 }); if (id === startId) dismissStart(); }}>
-            {id === "today" && waitingCount > 0 ? <span className="v3fs-dock-n">{waitingCount}</span> : null}
-            <span className="v3fs-ric" aria-hidden="true">{icon}</span><span className="v3fs-rlb">{label}</span>
-            {id === startId && !startSeen && view !== startId ? (
-              <span className="v3fs-start" role="status">
-                <span className="v3fs-start-a" aria-hidden="true">◀</span>
-                Start here{startId === "today" ? ` — ${waitingCount} waiting` : ""}
-              </span>
-            ) : null}
-          </button>
+        {DOCK_ZONES.map((zone, zoneIndex) => (
+          <React.Fragment key={zoneIndex}>
+            <div className="v3fs-dock-sep" aria-hidden="true" />
+            {zone.map(([id, label]) => {
+              const shortcut = DOCK_ORDER.indexOf(id) + 1;
+              return (
+                <button key={id} type="button" className={view === id ? "on" : ""}
+                  data-tip={`${label} — ${shortcut}`}
+                  aria-label={`${label} (shortcut ${shortcut})`}
+                  onClick={() => { setView(id); window.scrollTo({ top: 0 }); if (id === startId) dismissStart(); }}>
+                  {id === "today" && waitingCount > 0 ? <span className="v3fs-dock-n">{waitingCount}</span> : null}
+                  <DockIcon id={id} /><span className="v3fs-rlb">{label}</span>
+                  {id === startId && !startSeen && view !== startId ? (
+                    <span className="v3fs-start" role="status">
+                      <span className="v3fs-start-a" aria-hidden="true">◀</span>
+                      Start here{startId === "today" ? ` — ${waitingCount} waiting` : ""}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </React.Fragment>
         ))}
         <div className="v3fs-dock-sep" aria-hidden="true" />
-        <button type="button" className="v3fs-cp" onClick={props.onOpenCopilot}>
-          <span className="v3fs-ric" aria-hidden="true">✦</span><span className="v3fs-rlb">Copilot</span>
+        <button type="button" className="v3fs-cp" data-tip="Copilot" onClick={props.onOpenCopilot}>
+          <DockIcon id="copilot" /><span className="v3fs-rlb">Copilot</span>
         </button>
       </nav>
 

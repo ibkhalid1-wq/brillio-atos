@@ -4509,9 +4509,15 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 .v3fs-dock > button:not(.v3fs-brand) {width:44px;padding:9px 0 7px;border-radius:12px;color:var(--v3-text-muted);display:flex;flex-direction:column;align-items:center;gap:3px;transition:background .15s ease,color .15s ease}
 .v3fs-dock > button.on {background:var(--v3-accent);color:#fff}
 .v3fs-dock > button:not(.v3fs-brand):not(.on):hover {background:var(--fs-indigo-wash);color:var(--v3-accent-2)}
-.v3fs-ric {font-size:16px;line-height:1}
+.v3fs-ric {font-size:16px;line-height:1;display:block}
+svg.v3fs-ric {margin:0 auto}
 .v3fs-rlb {font-size:8.5px;letter-spacing:.06em;font-weight:600}
 .v3fs-dock-sep {height:1px;background:var(--fs-line);margin:6px 4px}
+/* Active bar: a 2px accent along the active item's left edge. */
+.v3fs-dock button.on::before {content:"";position:absolute;left:-6px;top:22%;bottom:22%;width:2.5px;border-radius:2px;background:var(--v3-accent-2)}
+/* Tooltips: name + shortcut, riding the rail's right edge. */
+.v3fs-dock button[data-tip]:hover::after,
+.v3fs-dock button[data-tip]:focus-visible::after {content:attr(data-tip);position:absolute;left:calc(100% + 12px);top:50%;transform:translateY(-50%);white-space:nowrap;font-size:10.5px;font-weight:600;letter-spacing:.02em;padding:5px 10px;border-radius:8px;background:var(--v3-text-primary);color:var(--fs-card);box-shadow:0 8px 20px -8px rgba(15,16,32,.4);z-index:70;pointer-events:none}
 .v3fs-cp {color:var(--v3-accent-2) !important}
 
 /* programme switcher */
@@ -4983,6 +4989,8 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
   .v3fs-dock {position:static;transform:none;flex-direction:row;margin:14px auto 0;width:max-content}
   .v3fs-brand {margin:0 8px 0 0}
   .v3fs-dock-sep {width:1px;height:auto;margin:4px 6px}
+  .v3fs-dock button.on::before {left:22%;right:22%;top:auto;bottom:-4px;width:auto;height:2.5px}
+  .v3fs-dock button[data-tip]:hover::after, .v3fs-dock button[data-tip]:focus-visible::after {display:none}
   .v3fs-switcher {left:50%;top:120px;transform:translateX(-50%)}
   .v3fs-ch-b,.v3fs-grid2 {grid-template-columns:1fr}
   .v3fs-stats {grid-template-columns:repeat(2,1fr)}
