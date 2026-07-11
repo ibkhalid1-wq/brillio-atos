@@ -5167,3 +5167,7 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 /* Flat brand colour on the wizard's primary — outranks the legacy gradient rule. */
 .v3-wizard-overlay .v3-wizard--setup .v3-button.primary{background:var(--v3-accent);background-image:none;border-color:transparent;color:#fff}
 .v3-wizard-overlay .v3-wizard--setup .v3-button.primary:hover{background:color-mix(in srgb,var(--v3-accent) 85%,#fff);background-image:none}
+
+/* Wizard sections separate on hairlines; disabled selects read as quiet state. */
+.v3-wizard--setup section + section{border-top:1px solid var(--fs-line);padding-top:20px}
+.v3-wizard--setup .v3-input:disabled{opacity:.55;cursor:default;background:transparent}

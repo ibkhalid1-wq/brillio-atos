@@ -153,7 +153,7 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
               <div className="v3-field-label">Programme name <em aria-hidden="true">*</em></div>
               <input className={`v3-input${prefillMark("name")}`} required aria-required="true"
                 title={prefilledFields.has("name") ? "Extracted from the uploaded document — verify before saving" : undefined}
-                aria-label="Programme name" type="text" placeholder="e.g. Commercial Ops Copilot"
+                aria-label="Programme name" type="text" placeholder="e.g. Commercial Ops Copilot" autoFocus={isNew}
                 value={name} onChange={(event) => setName(event.target.value)} />
             </label>
             <label>
@@ -181,6 +181,24 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
               </div>
             </label>
             <label>
+              <div className="v3-field-label">Value-chain segment</div>
+              <select className="v3-input" aria-label="Value-chain segment" disabled={!segmentOptions}
+                value={segmentOptions?.includes(segment) ? segment : ""}
+                onChange={(event) => setSegment(event.target.value)}>
+                {segmentOptions ? (
+                  <>
+                    <option value="">Not sure yet — infer from evidence</option>
+                    {segmentOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                  </>
+                ) : (
+                  <option value="">Not applicable for this sector</option>
+                )}
+              </select>
+              <div className="v3-field-hint">
+                {segmentOptions ? "Sharpens the vocabulary and discovery scope." : "Applies to sectors whose grounding forks."}
+              </div>
+            </label>
+            <label>
               <div className="v3-field-label">Executive sponsor</div>
               <input className="v3-input" aria-label="Executive sponsor" type="text" placeholder="Name and title"
                 value={sponsor} onChange={(event) => setSponsor(event.target.value)} />
@@ -193,19 +211,6 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
                 The headline metric — days to the first stakeholder demonstration.
               </div>
             </label>
-            {segmentOptions ? (
-              <label>
-                <div className="v3-field-label">Value-chain segment</div>
-                <select className="v3-input" aria-label="Value-chain segment" value={segmentOptions.includes(segment) ? segment : ""}
-                  onChange={(event) => setSegment(event.target.value)}>
-                  <option value="">Not sure yet — infer from evidence</option>
-                  {segmentOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-                </select>
-                <div className="v3-field-hint">
-                  Sharpens the vocabulary and discovery scope for this sector.
-                </div>
-              </label>
-            ) : null}
           </div>
         </section>
 
