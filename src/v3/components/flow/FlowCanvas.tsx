@@ -137,12 +137,11 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
               <span className={`v3fs-state ${generating ? "gen" : isDone ? "done" : isLive ? "live" : isLoop ? "loop" : "wait"}`}>
                 {generating ? "Generating" : isDone ? "Demonstrated" : isLive ? "In progress" : isLoop ? "Continuous" : "Upcoming"}
               </span>
-              {!isOpen ? (
+              {!isOpen && (evidence.length > 0 || artifacts.some((a) => a.present)) ? (
                 <span className="v3fs-meta">
                   {evidence.length} evidence · {artifacts.filter((a) => a.present).length}/{artifacts.length} artifacts
                 </span>
               ) : null}
-              <span className="v3fs-ready">{movement.movement?.readyWhen ?? movement.description}</span>
             </button>
 
             {isOpen ? (
@@ -266,19 +265,6 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                         </>
                       );
                     })()}
-                    {movement.movement?.humanMoments?.length ? (
-                      <details className="v3fs-disc v3fs-disc-sm">
-                        <summary>
-                          <span className="v3fs-disc-l">Your actions<em>{movement.movement.humanMoments.length}</em></span>
-                          <span className="v3fs-disc-c" aria-hidden="true" />
-                        </summary>
-                        <div className="v3fs-disc-b">
-                          {movement.movement.humanMoments.map((moment) => (
-                            <div key={moment} className="v3fs-moment">▸ {moment}</div>
-                          ))}
-                        </div>
-                      </details>
-                    ) : null}
                   </div>
                 </div>
 
@@ -437,7 +423,7 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
       </summary>
       <div className="v3fs-kit-b">
         <p className="v3fs-kit-p">{kit.purpose}</p>
-        <div className="v3fs-kit-step"><b>1</b><span>Engage <strong>{kit.who}</strong>{kit.followUp ? " — the loop continues until every element is captured" : ""}</span></div>
+        <div className="v3fs-kit-step"><b>1</b><span>Engage <strong>{kit.who}</strong></span></div>
         <div className="v3fs-kit-step"><b>2</b><span>Run the script live — or send it as a link and ATOS asks for you</span></div>
         <ol className="v3fs-kit-qs">
           {kit.questions.map((question, index) => <li key={index}>{question}</li>)}
@@ -445,7 +431,7 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
         <div className="v3fs-kit-actions">
           <button type="button" className="v3fs-a" onClick={() => void copyScript()}>{copied ? "Copied ✓" : "Copy the script"}</button>
         </div>
-        <div className="v3fs-kit-step"><b>3</b><span>Capture what came back — transcript first, then any documents they referenced</span></div>
+        <div className="v3fs-kit-step"><b>3</b><span>Capture what came back</span></div>
         <div className="v3fs-kit-capture">
           <textarea
             rows={3}
@@ -457,20 +443,23 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
           <button type="button" className="v3fs-btn pri" disabled={busy || !capture.trim()} onClick={() => void save()}>
             {busy ? "Saving…" : savedTick ? "Captured ✓" : "Capture"}
           </button>
-          <div className="v3fs-kit-docrow">
-            <input value={docName} onChange={(event) => setDocName(event.target.value)}
-              placeholder="Referenced document — name it (e.g. Q2 pricing export)" aria-label="Document name" />
-            <textarea rows={2} value={docText} onChange={(event) => setDocText(event.target.value)}
-              placeholder="Paste the document's content — ATOS ingests it as evidence beside the conversation." aria-label="Document content" />
-            <button type="button" className="v3fs-btn" disabled={busy || !docName.trim() || !docText.trim()}
-              onClick={() => void saveDoc()}>
-              {docTick ? "Ingested ✓" : "Ingest the document"}
-            </button>
-          </div>
+          <details className="v3fs-kit-doc">
+            <summary>＋ Ingest a referenced document</summary>
+            <div className="v3fs-kit-docrow">
+              <input value={docName} onChange={(event) => setDocName(event.target.value)}
+                placeholder="Document name (e.g. Q2 pricing export)" aria-label="Document name" />
+              <textarea rows={2} value={docText} onChange={(event) => setDocText(event.target.value)}
+                placeholder="Paste its content — it becomes evidence beside the conversation." aria-label="Document content" />
+              <button type="button" className="v3fs-btn" disabled={busy || !docName.trim() || !docText.trim()}
+                onClick={() => void saveDoc()}>
+                {docTick ? "Ingested ✓" : "Ingest the document"}
+              </button>
+            </div>
+          </details>
         </div>
         {kit.followUp && (onScheduleFollowUp || onMintFollowUp) ? (
           <>
-            <div className="v3fs-kit-step"><b>4</b><span>Close the loop — iterate until every required element is captured</span></div>
+            <div className="v3fs-kit-step"><b>4</b><span>Close the remaining gaps</span></div>
             <div className="v3fs-kit-fu-row">
             {onScheduleFollowUp ? (
               <>
@@ -591,7 +580,14 @@ export function FlowDocViewer({ program, artifact, onClose, onRegenerate }: {
                 <summary>
                   <span className="v3fs-disc-l">Grounded in<em>{grounding.length}</em></span>
                   <span className="v3fs-disc-hint">
-                    {grounding.filter((g) => g.kind === "conversation").length} conversation(s) · {grounding.filter((g) => g.kind === "document").length} document(s)
+                    {(() => {
+                      const convs = grounding.filter((g) => g.kind === "conversation").length;
+                      const docs = grounding.filter((g) => g.kind === "document").length;
+                      return [
+                        convs ? `${convs} conversation${convs === 1 ? "" : "s"}` : null,
+                        docs ? `${docs} document${docs === 1 ? "" : "s"}` : null,
+                      ].filter(Boolean).join(" · ");
+                    })()}
                   </span>
                   <span className="v3fs-disc-c" aria-hidden="true" />
                 </summary>
@@ -767,8 +763,8 @@ function ShipLanesBoard({ program, onCompile, onToggle }: {
       <div className="v3fs-doc ghost">
         <div className="v3fs-doc-t"><span className="v3fs-st none" /><b>Ship plan</b></div>
         <div className="v3fs-doc-x">
-          Six lanes — build, data, validation &amp; evals, hardening, enablement, cutover — compiled from the
-          Blueprint, the hardening plan and the roster. The gate goes green when validation is done and cutover has executed.
+          Compiles from the Blueprint, the hardening plan and the roster.
+          The gate goes green when validation is done and cutover has executed.
         </div>
         <div className="v3fs-doc-foot">
           <button type="button" className="v3fs-a" disabled={busy} onClick={() => void act(onCompile)}>

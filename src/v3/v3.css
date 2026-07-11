@@ -13217,7 +13217,8 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 .v3fs-app{
   --fs-quote:#7fd0f2; --fs-blue-wash:rgba(0,160,223,.10); --fs-indigo-wash:rgba(99,102,241,.14);
   --fs-line:var(--v3-border-soft); --fs-card:var(--v3-surface);
-  --fs-shadow:0 1px 2px rgba(0,0,0,.25), 0 14px 44px -20px rgba(99,102,241,.28);
+  --fs-shadow:0 1px 2px rgba(0,0,0,.22);
+  --fs-pop:0 1px 2px rgba(0,0,0,.28), 0 16px 44px -18px rgba(99,102,241,.32);
   --fs-dock:rgba(26,29,39,.86);
   min-height:100vh; background:var(--v3-bg); color:var(--v3-text-primary);
   font-family:var(--v3-font); font-size:14px; line-height:1.55;
@@ -13225,7 +13226,8 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 [data-theme="light"] .v3fs-app{
   --fs-quote:#075d80; --fs-blue-wash:rgba(0,144,201,.09); --fs-indigo-wash:rgba(79,70,229,.09);
   --fs-line:#e5e7f0; --fs-card:#ffffff;
-  --fs-shadow:0 1px 2px rgba(21,23,43,.05), 0 12px 40px -18px rgba(49,48,122,.18);
+  --fs-shadow:0 1px 2px rgba(21,23,43,.05);
+  --fs-pop:0 1px 2px rgba(21,23,43,.06), 0 14px 40px -16px rgba(49,48,122,.22);
   --fs-dock:rgba(255,255,255,.85);
 }
 /* The classic shell is a fixed-height flex column that scrolls in inner panes;
@@ -13240,7 +13242,7 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 
 /* floating dock */
 .v3fs-dock{position:fixed;left:22px;top:50%;transform:translateY(-50%);z-index:60;display:flex;flex-direction:column;gap:4px;
-  background:var(--fs-dock);backdrop-filter:blur(14px);border:1px solid var(--fs-line);border-radius:18px;padding:10px 8px;box-shadow:var(--fs-shadow)}
+  background:var(--fs-dock);backdrop-filter:blur(14px);border:1px solid var(--fs-line);border-radius:18px;padding:10px 8px;box-shadow:var(--fs-pop)}
 .v3fs-brand{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#4f46e5,var(--v3-accent-2));color:#fff !important;display:grid;place-items:center;font-weight:700;font-size:16px;margin-bottom:8px}
 .v3fs-dock > button:not(.v3fs-brand){width:44px;padding:9px 0 7px;border-radius:12px;color:var(--v3-text-muted);display:flex;flex-direction:column;align-items:center;gap:3px}
 .v3fs-dock > button.on{background:var(--fs-indigo-wash);color:var(--v3-accent-2)}
@@ -13252,7 +13254,7 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 
 /* programme switcher */
 .v3fs-switcher{position:fixed;left:84px;top:50%;transform:translateY(-50%);z-index:61;min-width:240px;
-  background:var(--fs-card);border:1px solid var(--fs-line);border-radius:14px;box-shadow:var(--fs-shadow);padding:8px}
+  background:var(--fs-card);border:1px solid var(--fs-line);border-radius:14px;box-shadow:var(--fs-pop);padding:8px}
 .v3fs-switcher-l{font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--v3-text-muted);padding:6px 10px}
 .v3fs-switcher button{display:block;width:100%;text-align:left;font-size:12.5px;padding:8px 10px;border-radius:8px;color:var(--v3-text-secondary)}
 .v3fs-switcher button:hover{background:var(--fs-indigo-wash);color:var(--v3-text-primary)}
@@ -13260,18 +13262,11 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 .v3fs-switcher-sep{height:1px;background:var(--fs-line);margin:6px 4px}
 
 /* hero */
-.v3fs-hero{padding:56px 0 20px}
+.v3fs-hero{padding:52px 0 8px}
+.v3fs-hero-eyebrow{font-size:10.5px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--v3-accent-2);margin-bottom:10px}
+.v3fs-hero-eyebrow span{color:var(--v3-text-muted);font-weight:600}
 .v3fs-hero-title{font-size:clamp(24px,3.2vw,36px);font-weight:600;letter-spacing:-.02em;color:var(--v3-text-primary);text-wrap:balance;line-height:1.15}
-.v3fs-hero-brand{color:var(--v3-accent-2)}
-.v3fs-hero-client{color:var(--v3-text-muted);font-weight:500}
 .v3fs-how{margin-top:14px;max-width:64ch;font-size:14px;line-height:1.6;color:var(--v3-text-secondary)}
-.v3fs-hero-row{display:flex;align-items:flex-end;gap:40px;flex-wrap:wrap;margin-top:16px}
-.v3fs-count-n{font-size:clamp(52px,7vw,80px);font-weight:275;letter-spacing:-.04em;line-height:.95;font-variant-numeric:tabular-nums}
-.v3fs-count-n b{font-weight:600;color:var(--v3-accent-2)}
-.v3fs-count-l{font-size:12px;color:var(--v3-text-muted);margin-top:6px;max-width:52ch}
-.v3fs-grammar{display:flex;gap:22px;margin-top:24px;flex-wrap:wrap}
-.v3fs-grammar span{display:inline-flex;align-items:center;gap:8px;font-size:10.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--v3-text-muted)}
-.v3fs-grammar i{width:22px;height:4px;border-radius:99px;display:inline-block}
 
 /* the flow spine + chapters */
 .v3fs-flow{position:relative;margin-top:30px}
@@ -13287,9 +13282,8 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 .v3fs-state{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;border-radius:999px;padding:4px 12px}
 .v3fs-state.done{background:var(--v3-green-soft);color:var(--v3-green)}
 .v3fs-state.live,.v3fs-state.gen{background:var(--fs-indigo-wash);color:var(--v3-accent-2)}
-.v3fs-state.wait{background:var(--v3-surface-2);color:var(--v3-text-muted)}
+.v3fs-state.wait{background:transparent;border:1px solid var(--fs-line);color:var(--v3-text-muted)}
 .v3fs-state.loop{background:var(--fs-blue-wash);color:var(--fs-quote)}
-.v3fs-ready{flex-basis:100%;font-size:14px;color:var(--v3-text-muted);max-width:78ch}
 .v3fs-ch-b{display:grid;grid-template-columns:1.05fr 1.25fr .8fr;gap:26px;margin-top:20px}
 @media (prefers-reduced-motion: no-preference){
   .v3fs-ch-b{animation:v3fs-chin .24s ease}
@@ -13318,7 +13312,6 @@ html:not([data-theme="light"]) .v3fs-node{border-top-color:var(--v3-border-top)}
 .v3fs-voice-q{font-size:15.5px;line-height:1.45;color:var(--fs-quote);font-weight:500;letter-spacing:-.01em;max-width:40ch}
 .v3fs-voice-who{font-size:12px;color:var(--v3-text-secondary);font-weight:600;margin-top:6px}
 .v3fs-voice-who span{color:var(--v3-text-muted);font-weight:400;font-family:var(--v3-font-mono);font-size:10.5px;margin-left:8px}
-.v3fs-voice-ghost{border-left:3px dashed var(--fs-line);padding:8px 0 8px 16px;color:var(--v3-text-muted);font-size:12.5px;margin-bottom:6px}
 .v3fs-coverage{margin-top:12px;max-width:340px}
 .v3fs-coverage-cap{display:flex;justify-content:space-between;font-size:11px;color:var(--v3-text-muted);margin-bottom:6px;font-weight:600}
 .v3fs-coverage-bar{height:6px;border-radius:99px;background:var(--v3-surface-2);overflow:hidden}
@@ -13373,9 +13366,6 @@ html:not([data-theme="light"]) .v3fs-node{border-top-color:var(--v3-border-top)}
    own card chrome; the v3fs-editor wrapper provides the surface. */
 .v3fs-editor{background:var(--fs-card);border:1px solid var(--fs-line);border-radius:16px;padding:6px 10px;box-shadow:var(--fs-shadow)}
 .v3fs-editor .v3-phase-inputs{background:transparent;border:none;box-shadow:none}
-.v3fs-moments{margin-top:14px}
-.v3fs-moments-l{font-size:9.5px;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:var(--v3-text-muted);margin-bottom:6px}
-.v3fs-moment{font-size:12px;color:var(--v3-text-secondary);line-height:1.5;padding:2px 0}
 .v3fs-editor{grid-column:1 / -1;margin-top:6px}
 
 /* library / pulse */
@@ -13561,7 +13551,12 @@ html:not([data-theme="light"]) .v3fs-node{border-top-color:var(--v3-border-top)}
 .v3fs-kit-step{display:flex;align-items:flex-start;gap:9px;font-size:11.5px;line-height:1.5;color:var(--v3-text-muted);margin:0 0 8px}
 .v3fs-kit-step b{flex-shrink:0;width:18px;height:18px;border-radius:99px;background:var(--fs-indigo-wash);color:var(--v3-accent-2);font-size:10px;display:grid;place-items:center}
 .v3fs-kit-step strong{color:var(--v3-text-primary)}
-.v3fs-kit-docrow{display:flex;flex-direction:column;gap:6px;border-top:1px dashed var(--fs-line);padding-top:10px}
+.v3fs-kit-doc{border-top:1px dashed var(--fs-line);padding-top:8px}
+.v3fs-kit-doc summary{list-style:none;cursor:pointer;font-size:11.5px;font-weight:600;color:var(--v3-text-muted);padding:2px 0;user-select:none}
+.v3fs-kit-doc summary::-webkit-details-marker{display:none}
+.v3fs-kit-doc summary:hover{color:var(--v3-accent-2)}
+.v3fs-kit-doc[open] summary{color:var(--v3-text-secondary);margin-bottom:8px}
+.v3fs-kit-docrow{display:flex;flex-direction:column;gap:6px}
 .v3fs-kit-docrow input{font:inherit;font-size:12px;border:1px solid var(--fs-line);border-radius:8px;padding:7px 10px;background:var(--fs-card);color:var(--v3-text-primary)}
 .v3fs-kit-docrow textarea{font:inherit;font-size:12px;line-height:1.5;border:1px solid var(--fs-line);border-radius:8px;padding:7px 10px;background:var(--fs-card);color:var(--v3-text-primary);resize:vertical}
 .v3fs-kit-docrow .v3fs-btn{align-self:flex-start}
