@@ -117,58 +117,94 @@ describe("flowPortal ingest routing", () => {
   });
 });
 
-describe("gateReadiness — one composed verdict over evidence and record", () => {
+describe("gateReadiness — one composed verdict over the closed loop", () => {
   const movement = (id: string) => flowMovements().find((m) => m.id === id)!;
   const art = (over: Record<string, unknown> = {}) => ({
     id: "discovery-kit", movementId: "frame", title: "Discovery Kit", description: "",
     excerpt: null, confidence: 80, present: true, stale: false, ...over,
   });
-  const metFrame = programme({ phaseInputs: { frame: {
+  const metFrame = (extra: Record<string, unknown> = {}) => programme({ ...extra, phaseInputs: { frame: {
     sponsorConversation: "— Sarah Okafor, COO —\ntext", businessObjective: "obj", sponsor: "Sarah",
     industry: "Banking", successMetric: "cycle time", targetFirstDemoDate: "2026-07-25",
   } } });
+  const verdict = (p: ReturnType<typeof programme>, artifacts: ReturnType<typeof art>[]) => {
+    const m = movement("frame");
+    return gateReadiness(p, m, artifacts, gateChecklist(p, m, artifacts));
+  };
 
   it("criteria open → the open count, never green", () => {
-    const m = movement("frame");
-    const checks = gateChecklist(programme({}), m, []);
-    const r = gateReadiness(programme({}), m, [art()], checks);
+    const r = verdict(programme({}), [art()]);
     expect(r.kind).toBe("open");
     expect(r.tone).toBe("dim");
-    expect(r.headline).toBe("0 of 6 criteria met");
+    expect(r.headline).toBe("2 of 8 criteria met");
   });
 
-  it("criteria met but a document stale → amber, the record trails, blocker named", () => {
-    const m = movement("frame");
-    const artifacts = [art({ stale: true }), art({ id: "charter", title: "Transformation Charter" })];
-    const r = gateReadiness(metFrame, m, artifacts, gateChecklist(metFrame, m, artifacts));
+  it("criteria met but a document stale → amber, the record trails", () => {
+    const r = verdict(metFrame(), [art({ stale: true }), art({ id: "charter", title: "Transformation Charter" })]);
     expect(r.kind).toBe("trails");
     expect(r.tone).toBe("amber");
-    expect(r.blockers).toEqual([{ id: "discovery-kit", title: "Discovery Kit", state: "stale" }]);
+    expect(r.detail).toBe("8 of 9 criteria met");
   });
 
-  it("criteria met but a document never generated → blocked as missing", () => {
-    const m = movement("frame");
-    const artifacts = [art({ present: false })];
-    const r = gateReadiness(metFrame, m, artifacts, gateChecklist(metFrame, m, artifacts));
-    expect(r.kind).toBe("trails");
-    expect(r.blockers[0].state).toBe("missing");
+  it("criteria met but a document never generated → the record trails", () => {
+    expect(verdict(metFrame(), [art({ present: false })]).kind).toBe("trails");
   });
 
-  it("criteria met and record current → ready, green", () => {
-    const m = movement("frame");
-    const artifacts = [art()];
-    const r = gateReadiness(metFrame, m, artifacts, gateChecklist(metFrame, m, artifacts));
+  it("record current but a decision parked in the Inbox → judgment waits", () => {
+    const p = metFrame({ flowDecisions: [{ id: "d1", movementId: "frame", status: "open" }] });
+    const r = verdict(p, [art()]);
+    expect(r.kind).toBe("judgment");
+    expect(r.tone).toBe("amber");
+    expect(r.headline).toBe("A judgment waits in the Inbox");
+  });
+
+  it("evidence, record and Inbox all clear → ready, green", () => {
+    const r = verdict(metFrame(), [art()]);
     expect(r.kind).toBe("ready");
     expect(r.tone).toBe("green");
-    expect(r.detail).toBe("6 criteria met · record current");
+    expect(r.detail).toBe("8 criteria met · record current · Inbox clear");
   });
 
   it("an approved gate outranks everything", () => {
-    const m = movement("frame");
     const p = { ...programme({}), gateReviews: { frame: { status: "approved" } } } as never;
-    const r = gateReadiness(p, m, [art({ stale: true })], []);
+    const r = gateReadiness(p, movement("frame"), [art({ stale: true })], []);
     expect(r.kind).toBe("demonstrated");
     expect(r.tone).toBe("green");
+  });
+});
+
+describe("gateChecklist — record and judgment rows close the loop", () => {
+  const movement = flowMovements().find((m) => m.id === "frame")!;
+  const art = {
+    id: "discovery-kit", movementId: "frame", title: "Discovery Kit", description: "",
+    excerpt: null, confidence: 80, present: true, stale: false,
+  };
+
+  it("a current document is a met record row with its confidence", () => {
+    const item = gateChecklist(programme({}), movement, [art]).find((c) => c.id === "art-discovery-kit")!;
+    expect(item.group).toBe("record");
+    expect(item.artifactId).toBe("discovery-kit");
+    expect(item.done).toBe(true);
+    expect(item.why).toBe("confidence 80%");
+  });
+
+  it("a stale document is an unmet record row in the card's vocabulary", () => {
+    const item = gateChecklist(programme({}), movement, [{ ...art, stale: true }]).find((c) => c.id === "art-discovery-kit")!;
+    expect(item.done).toBe(false);
+    expect(item.label).toBe("Discovery Kit — evidence changed since generation");
+  });
+
+  it("the judgment row counts open decisions for this movement only", () => {
+    const p = programme({ flowDecisions: [
+      { id: "d1", movementId: "frame", status: "open" },
+      { id: "d2", movementId: "listen", status: "open" },
+      { id: "d3", movementId: "frame", status: "confirmed" },
+    ] });
+    const item = gateChecklist(p, movement, []).find((c) => c.id === "inbox")!;
+    expect(item.group).toBe("judgment");
+    expect(item.done).toBe(false);
+    expect(item.label).toBe("1 judgment waiting in the Inbox");
+    expect(gateChecklist(programme({}), movement, []).find((c) => c.id === "inbox")!.done).toBe(true);
   });
 });
 

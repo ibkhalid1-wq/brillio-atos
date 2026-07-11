@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { Fragment, useEffect, useMemo, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import PhaseInputsPanel from "@/v3/components/PhaseInputsPanel";
 import FlowArtifactStudio, { type ArtifactEditInput } from "@/v3/components/flow/studio/FlowArtifactStudio";
@@ -213,8 +213,8 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                 <div>
                   <div className={`v3fs-colh gt${isDone ? " done" : ""}`}>{isLoop ? "Steady-state health" : "Gate"}</div>
                   <div className="v3fs-gate">
-                    {/* Verdict first: one composed state over both facets —
-                        evidence (criteria) and record (documents current). */}
+                    {/* Verdict first: one composed state over the whole loop —
+                        evidence criteria, record current, Inbox clear. */}
                     <div className={`v3fs-gstate ${readiness.tone}`}>
                       <div className="v3fs-gstate-h">
                         <span className="v3fs-gstate-g" aria-hidden="true">
@@ -223,47 +223,50 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                         {readiness.headline}
                       </div>
                       {readiness.detail ? <div className="v3fs-gstate-d">{readiness.detail}</div> : null}
-                      {readiness.blockers.length ? (
-                        <div className="v3fs-gstate-bl">
-                          {readiness.blockers.map((blocker) => {
-                            const artifact = artifacts.find((a) => a.id === blocker.id);
-                            const openable = !!artifact?.present;
-                            return (
-                              <button
-                                key={blocker.id}
-                                type="button"
-                                className="v3fs-gstate-b"
-                                disabled={!openable}
-                                onClick={openable && artifact ? () => setDocFor(artifact) : undefined}
-                                title={openable ? "Open the document" : "Generate from the card"}
-                              >
-                                <span className="v3fs-gstate-b-dot" aria-hidden="true" />
-                                {blocker.title} — {blocker.state === "stale" ? "evidence changed" : "not yet generated"}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      ) : null}
                     </div>
                     <div className="v3fs-checks">
-                      {checks.map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          className={`v3fs-check${item.done ? " done" : ""}`}
-                          disabled={!item.anchor}
-                          onClick={item.anchor ? () => openEditor(movement.id, item.anchor) : undefined}
-                          title={item.anchor
-                            ? item.done ? "Met — open to review or correct" : "Open the editor on this item"
-                            : "Met by generating / working the movement"}
-                        >
-                          <span className="v3fs-check-box" aria-hidden="true">{item.done ? "✓" : ""}</span>
-                          <span className="v3fs-check-l">
-                            {item.label}
-                            {item.done && item.why ? <span className="v3fs-check-why">{item.why}</span> : null}
-                          </span>
-                        </button>
-                      ))}
+                      {checks.map((item, itemIndex) => {
+                        const group = item.group ?? "evidence";
+                        const prevGroup = itemIndex ? (checks[itemIndex - 1].group ?? "evidence") : null;
+                        const grouped = checks.some((c) => (c.group ?? "evidence") !== "evidence");
+                        const artifact = item.artifactId ? artifacts.find((a) => a.id === item.artifactId) : undefined;
+                        const onClick = item.anchor
+                          ? () => openEditor(movement.id, item.anchor)
+                          : artifact?.present
+                            ? () => setDocFor(artifact)
+                            : item.inbox && !item.done && onOpenInbox
+                              ? () => onOpenInbox()
+                              : undefined;
+                        const title = item.anchor
+                          ? item.done ? "Met — open to review or correct" : "Open the editor on this item"
+                          : item.artifactId
+                            ? artifact?.present ? "Open the document" : "Generate from the card"
+                            : item.inbox
+                              ? item.done ? "Nothing waiting" : "Open the Inbox"
+                              : "Met by generating / working the movement";
+                        return (
+                          <Fragment key={item.id}>
+                            {grouped && group !== prevGroup ? (
+                              <div className="v3fs-check-grp">
+                                {group === "evidence" ? "Evidence" : group === "record" ? "Record" : "Inbox"}
+                              </div>
+                            ) : null}
+                            <button
+                              type="button"
+                              className={`v3fs-check${item.done ? " done" : ""}`}
+                              disabled={!onClick}
+                              onClick={onClick}
+                              title={title}
+                            >
+                              <span className="v3fs-check-box" aria-hidden="true">{item.done ? "✓" : ""}</span>
+                              <span className="v3fs-check-l">
+                                {item.label}
+                                {item.done && item.why ? <span className="v3fs-check-why">{item.why}</span> : null}
+                              </span>
+                            </button>
+                          </Fragment>
+                        );
+                      })}
                     </div>
                     <p className="v3fs-gate-say foot">{movement.movement?.readyWhen ?? ""}</p>
                   </div>

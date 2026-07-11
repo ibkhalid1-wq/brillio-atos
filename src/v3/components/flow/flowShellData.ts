@@ -241,8 +241,14 @@ export interface GateCheckItem {
   id: string;
   label: string;
   done: boolean;
+  /** Which facet of readiness the row belongs to; evidence when absent. */
+  group?: "evidence" | "record" | "judgment";
   /** Editor field to land on when the item is worked (input:<fieldId>). */
   anchor?: string;
+  /** Record rows: the artifact the row reads — click opens the document. */
+  artifactId?: string;
+  /** Judgment rows: the row is worked in the Inbox. */
+  inbox?: boolean;
   /** Provenance for a met criterion — what on the record satisfies it. */
   why?: string;
 }
@@ -336,30 +342,66 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
   } else {
     items.push(...artifactItems());
   }
+  // Flow movements close the loop: after the evidence criteria come the
+  // record (every document current) and the judgment facet (Inbox clear) —
+  // one consistent checklist over everything readiness reads.
+  if (FLOW_MOVEMENT_IDS.has(movement.id)) {
+    items.push(
+      ...artifacts.map((artifact): GateCheckItem => ({
+        id: `art-${artifact.id}`,
+        group: "record",
+        artifactId: artifact.id,
+        label: artifact.present && artifact.stale
+          ? `${artifact.title} — evidence changed since generation`
+          : `${artifact.title} generated`,
+        done: artifact.present && !artifact.stale,
+        why: artifact.present && !artifact.stale && artifact.confidence != null
+          ? `confidence ${artifact.confidence}%`
+          : undefined,
+      })),
+      (() => {
+        const waiting = openDecisionCount(program, movement.id);
+        return {
+          id: "inbox",
+          group: "judgment" as const,
+          inbox: true,
+          label: waiting
+            ? `${waiting} judgment${waiting > 1 ? "s" : ""} waiting in the Inbox`
+            : "Inbox clear — no judgments waiting",
+          done: waiting === 0,
+        };
+      })(),
+    );
+  }
   return items;
 }
 
-/** A document holding the gate back: stale or never generated. */
-export interface GateBlocker {
-  id: string;
-  title: string;
-  state: "stale" | "missing";
+const FLOW_MOVEMENT_IDS = new Set(["frame", "listen", "envision", "show", "ship", "evolve"]);
+
+/** Open Tier-2/3 decisions parked in the Inbox for a movement. */
+function openDecisionCount(program: ProgramSummary, movementId: string): number {
+  const list = dataRoot(program).flowDecisions;
+  if (!Array.isArray(list)) return 0;
+  return list.filter((entry) => {
+    if (typeof entry !== "object" || entry === null) return false;
+    const decision = entry as Record<string, unknown>;
+    const status = decision.status === "confirmed" || decision.status === "declined" ? decision.status : "open";
+    return decision.movementId === movementId && status === "open";
+  }).length;
 }
 
 export interface GateReadiness {
   tone: "green" | "amber" | "dim";
   /** Which state the gate is in — drives glyph and styling. */
-  kind: "demonstrated" | "open" | "trails" | "ready" | "signal";
+  kind: "demonstrated" | "open" | "trails" | "judgment" | "ready" | "signal";
   headline: string;
   detail?: string;
-  blockers: GateBlocker[];
 }
 
 /**
- * The gate verdict as ONE composed state. Readiness has two facets — the
- * evidence (human criteria) and the record (documents current) — and the
- * verdict only reads green when both hold. The record facet surfaces as
- * exceptions only: trailing documents are named, current ones stay quiet.
+ * The gate verdict as ONE composed state over the whole checklist — the
+ * evidence criteria, the record (documents current) and the judgment facet
+ * (Inbox clear). Green only when the loop is closed on all three.
  */
 export function gateReadiness(
   program: ProgramSummary,
@@ -368,42 +410,33 @@ export function gateReadiness(
   checks: GateCheckItem[],
 ): GateReadiness {
   if (program.gateReviews?.[movement.id]?.status === "approved") {
-    return { tone: "green", kind: "demonstrated", headline: "Demonstrated — gate recorded", blockers: [] };
+    return { tone: "green", kind: "demonstrated", headline: "Demonstrated — gate recorded" };
   }
   if (!checks.length) {
     const signal = gateSignal(program, movement, artifacts);
-    return { tone: signal.tone, kind: "signal", headline: signal.text, blockers: [] };
+    return { tone: signal.tone, kind: "signal", headline: signal.text };
   }
   const done = checks.filter((item) => item.done).length;
-  if (done < checks.length) {
-    return {
-      tone: done > 0 ? "amber" : "dim",
-      kind: "open",
-      headline: `${done} of ${checks.length} criteria met`,
-      blockers: [],
-    };
+  const counts = `${done} of ${checks.length} criteria met`;
+  const openIn = (group: GateCheckItem["group"]) =>
+    checks.some((item) => !item.done && (item.group ?? "evidence") === group);
+  if (openIn("evidence")) {
+    // Momentum reads off the evidence facet — trivially-met record/judgment
+    // rows must not light a movement nobody has started.
+    const evidenceDone = checks.some((item) => item.done && (item.group ?? "evidence") === "evidence");
+    return { tone: evidenceDone ? "amber" : "dim", kind: "open", headline: counts };
   }
-  const blockers: GateBlocker[] = artifacts
-    .filter((artifact) => !artifact.present || artifact.stale)
-    .map((artifact) => ({
-      id: artifact.id,
-      title: artifact.title,
-      state: artifact.present ? "stale" as const : "missing" as const,
-    }));
-  if (blockers.length) {
-    return {
-      tone: "amber",
-      kind: "trails",
-      headline: "Criteria met — the record trails the evidence",
-      blockers,
-    };
+  if (openIn("record")) {
+    return { tone: "amber", kind: "trails", headline: "The record trails the evidence", detail: counts };
+  }
+  if (openIn("judgment")) {
+    return { tone: "amber", kind: "judgment", headline: "A judgment waits in the Inbox", detail: counts };
   }
   return {
     tone: "green",
     kind: "ready",
     headline: movement.movement?.isLoop ? "Loop healthy" : "Ready for the gate",
-    detail: `${checks.length} criteria met · record current`,
-    blockers: [],
+    detail: `${checks.length} criteria met · record current · Inbox clear`,
   };
 }
 
