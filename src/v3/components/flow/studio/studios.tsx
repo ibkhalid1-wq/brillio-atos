@@ -233,18 +233,6 @@ function AtlasStudio({ doc, onChange, onOpenArtifact }: StudioProps) {
           emptyHint="No systems captured."
         />
       </Section>
-      <Section label="Contradictions" hint="what stakeholders dispute">
-        <TableEditor
-          columns={[
-            { key: "statement", label: "Disputed statement", grow: 2 },
-            { key: "suggestedFollowUp", label: "Question that resolves it", grow: 2 },
-          ]}
-          rows={asArray(doc.contradictions).map(asRecord)}
-          onChange={(next) => patch({ contradictions: next })}
-          addLabel="Add contradiction"
-          emptyHint="No contradictions logged."
-        />
-      </Section>
       <Section label="Open questions">
         <StringListEditor values={asStrings(doc.openQuestions)} onChange={(next) => patch({ openQuestions: next })} addLabel="Add question" />
       </Section>
@@ -795,7 +783,7 @@ const flowFieldKey = (artifactId: string): string => FORMAL_ARTIFACT_FIELD_KEYS[
 export const STUDIO_REGISTRY: Record<string, StudioEntry> = {
   "charter": { fieldKey: flowFieldKey("charter"), docOrder: ["mandate", "sponsor", "businessObjective", "objectives", "inScope", "outOfScope", "successCriteria", "keyRisks", "governanceSummary"], Component: CharterStudio },
   "discovery-kit": { fieldKey: flowFieldKey("discovery-kit"), docOrder: ["interviews", "coverageMap"], Component: DiscoveryKitStudio },
-  "current-state-atlas": { fieldKey: flowFieldKey("current-state-atlas"), docOrder: ["workflows", "painHeatmap", "systemsInventory", "contradictions", "openQuestions", "coverage"], Component: AtlasStudio },
+  "current-state-atlas": { fieldKey: flowFieldKey("current-state-atlas"), docOrder: ["workflows", "painHeatmap", "systemsInventory", "openQuestions", "coverage"], Component: AtlasStudio },
   "domain-ontology": { fieldKey: flowFieldKey("domain-ontology"), docOrder: ["entities", "relations", "events", "standardAlignment", "ambiguities"], Component: OntologyStudio },
   "architecture-strategy": { fieldKey: flowFieldKey("architecture-strategy"), docOrder: ["candidates", "recommendation"], Component: StrategyStudio },
   "agentic-blueprint": { fieldKey: flowFieldKey("agentic-blueprint"), docOrder: ["agents", "journeys", "orchestration", "dataContracts", "hitlPoints", "evalPlan", "buildSequence", "tracks"], Component: BlueprintStudio },

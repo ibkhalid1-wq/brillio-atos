@@ -1171,9 +1171,11 @@ Return ONLY valid JSON:
 {
   "title": "Current-State Atlas — <programme name>",
   "workflows": [ { "name": "string", "owner": "role", "trigger": "what starts it", "steps": [ { "actor": "role", "action": "string", "system": "system used or null", "duration": "stated duration or null", "evidence": "verbatim quote — speaker", "entities": ["domain entities this step touches — use the ontology's names"] } ], "handoffs": ["cross-team hand-offs"], "failureModes": ["where it goes wrong today"] } ],
+  // Division of record: the Atlas owns ACTIVITIES and field findings. Reference domain entities by the Ontology's names in steps[].entities — never define or describe entities here; definitions, attributes and systems-of-record belong to the Domain Ontology. systemsInventory records usage and complaints, not which entities live where.
   "painHeatmap": [ { "area": "string", "pain": "string", "severity": "high|medium|low", "voicedBy": ["stakeholders"], "quote": "the strongest verbatim expression of it" } ],
   "systemsInventory": [ { "system": "string", "usedFor": "string", "complaints": ["stakeholder complaints about it"] } ],
-  "contradictions": [ { "statement": "what is disputed", "between": ["stakeholder A", "stakeholder B"], "positions": ["A's version", "B's version"], "suggestedFollowUp": "the question that resolves it" } ],
+  "contradictions": [ { "statement": "what is disputed", "between": ["stakeholder A", "stakeholder B"], "positions": ["A's version", "B's version"] } ],
+  // contradictions are ROUTED to the programme's contradiction log for the sponsor to arbitrate — they are not stored in this document. Report only genuine factual disputes between people; terminology collisions belong to the Ontology's ambiguities.
   "openQuestions": ["hand-offs or steps the transcripts left unclear"],
   "coverage": [ { "stakeholder": "string", "heard": true } ],
   "gaps": ["stakeholders not yet heard, domains with thin evidence"],
@@ -1195,6 +1197,7 @@ Return ONLY valid JSON:
   "entities": [ { "name": "their noun", "definition": "one sentence in their language", "attributes": ["key attributes mentioned"], "systemOfRecord": "system or null", "aliases": ["what other teams call it"], "evidence": "verbatim quote — speaker" } ],
   "relations": [ { "from": "entity", "relation": "verb phrase", "to": "entity", "cardinality": "1:1|1:N|N:M|unknown" } ],
   "events": [ { "name": "business event", "triggers": "what causes it", "produces": "what it changes" } ],
+  // Division of record: the Ontology owns NOUNS and state changes. Events are facts that occur (QuoteAmended), never sequences — actors, step order, durations and systems-in-use belong to the Current-State Atlas's workflows. Ambiguities are terminology collisions (same word, different meanings); factual disputes between people are contradictions and belong to the programme's contradiction log, not here.
   "standardAlignment": [ { "entity": "ontology entity name", "standard": "full URI, e.g. https://schema.org/Order", "vocabulary": "schema.org|FIBO|GS1|FHIR", "relation": "skos:closeMatch|skos:exactMatch", "confidence": 0.0 } ],
   // Propose mappings ONLY from the vocabularies named in the input context's vocabularySteering — it is derived deterministically from the programme's industry; any other namespace is rejected before review. Only propose mappings you are confident in; omit rather than force.
   "ambiguities": [ { "term": "string", "conflictingMeanings": ["meaning per team"], "resolution": "proposed resolution or 'unresolved'" } ],
@@ -8761,6 +8764,22 @@ Deno.serve(async (req) => {
             formalResult.milestones = prevRoadmap.milestones;
           }
         }
+        // Division of record: the Atlas SURFACES contradictions, but the
+        // contradiction log is their single home (the gate reads it, the
+        // sponsor resolves through it). Strip them from the stored document;
+        // on Flow they arrive as a Tier-2 "file to the log" decision — the
+        // same family the contradiction watcher uses.
+        let atlasContradictions: Array<Record<string, string>> = [];
+        if (request.agentId === "current-state-atlas" && Array.isArray((formalResult as Record<string, unknown>).contradictions)) {
+          formalResult = { ...formalResult };
+          const rows = (formalResult.contradictions as unknown[]).filter(isRecord);
+          delete (formalResult as Record<string, unknown>).contradictions;
+          atlasContradictions = rows.map((row) => ({
+            statement: String(row.statement ?? "").slice(0, 140),
+            between: (Array.isArray(row.between) ? row.between.map(String).join(" vs ") : String(row.between ?? "")).slice(0, 90),
+            positions: (Array.isArray(row.positions) ? row.positions.map(String).join(" · ") : String(row.positions ?? "")).slice(0, 160),
+          })).filter((entry) => entry.statement);
+        }
         // ── Regeneration guard ─────────────────────────────────────────────
         // Documents are data; the studio lets humans edit that data. A doc
         // whose editedAt postdates its generatedAt carries human work — a
@@ -8816,6 +8835,28 @@ Deno.serve(async (req) => {
           });
         } else {
           nextProgramData = applyProgramSupportArtifact(contextProgramData, spec.phase, request.agentId, spec.fieldKey, formalResult, spec.title, generationMetadata, confidence);
+        }
+        if (atlasContradictions.length && isFlowProgramme(nextProgramData)) {
+          const existingDecisions = getInnerProgramData(nextProgramData).flowDecisions;
+          const alreadyWaiting = Array.isArray(existingDecisions) && existingDecisions.some((entry) =>
+            isRecord(entry) && (entry.status ?? "open") === "open"
+            && isRecord(entry.payload) && Array.isArray((entry.payload as Record<string, unknown>).contradictionEntries));
+          if (!alreadyWaiting) {
+            nextProgramData = queueFlowDecision(nextProgramData, {
+              tier: 2,
+              agentId: "current-state-atlas",
+              movementId: "listen",
+              title: `File ${atlasContradictions.length} contradiction${atlasContradictions.length === 1 ? "" : "s"} to the log`,
+              summary: atlasContradictions.map((entry) => entry.statement).join(" · ").slice(0, 220),
+              blocking: "The Atlas found accounts that disagree; until they're logged, Listen still shows everything as resolved.",
+              recommendation: {
+                action: "File to the contradiction log",
+                rationale: "Logging routes each dispute to the sponsor's follow-up script, and the documents rebuild once it's settled.",
+                band: "proposal — additive, log rows only",
+              } as JsonValue,
+              payload: { contradictionEntries: atlasContradictions as unknown as JsonValue } as JsonValue,
+            });
+          }
         }
         // Keep the top-level plan freshness/confidence mirrors in step with a
         // newly produced folded delivery plan (consumers read these as overrides).
