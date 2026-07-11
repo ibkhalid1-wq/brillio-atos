@@ -67,6 +67,10 @@ async function loadPack(token: string) {
   const pack = packs.find((entry) => entry.token === secret);
   const invite = pack ? undefined : invites.find((entry) => entry.token === secret);
   if (!pack && !invite) return null;
+  // Tokens expire: a link forwarded months later must not still open the
+  // programme. 30 days covers any realistic response window.
+  const created = Date.parse(String((pack ?? invite)?.createdAt ?? ""));
+  if (Number.isFinite(created) && Date.now() - created > 30 * 86_400_000) return null;
   const kind: "interview" | "demo" = pack ? "interview" : "demo";
   return {
     admin, programId, programName: String(row.name ?? "the programme"),
