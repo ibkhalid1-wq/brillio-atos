@@ -8,7 +8,7 @@
 import { describe, expect, it } from "vitest";
 import type { ProgramSummary } from "@/new/types";
 import {
-  flowMovements, movementArtifacts, gateChecklist, gateReadiness,
+  flowMovements, movementArtifacts, movementOpenIssues, gateChecklist, gateReadiness,
   spineRegenerationPlan, type ArtifactCardModel,
 } from "@/v3/components/flow/flowShellData";
 import { meetingKit } from "@/v3/components/flow/flowMeetings";
@@ -37,7 +37,7 @@ const frame = () => flowMovements().find((m) => m.id === "frame")!;
 describe("gate ↔ cards", () => {
   it("the Documents group has exactly one row per artifact card", () => {
     const artifacts = [art({}), art({ id: "charter", title: "Charter" })];
-    const rows = gateChecklist(programme(FULL_FRAME), frame(), artifacts).filter((c) => c.group === "record");
+    const rows = gateChecklist(programme(FULL_FRAME), frame(), artifacts).filter((c) => c.group === "record" && c.artifactId);
     expect(rows.map((r) => r.artifactId)).toEqual(artifacts.map((a) => a.id));
   });
 
@@ -68,7 +68,7 @@ describe("gate ↔ cards", () => {
     const artifacts = [art({}), art({ stale: true, id: "a2", title: "A2" }), art({ gaps: 1, id: "a3", title: "A3" })];
     const metaCount = artifacts.filter((a) => a.present && !a.stale && a.gaps === 0).length;
     const groupMet = gateChecklist(programme(FULL_FRAME), frame(), artifacts)
-      .filter((c) => c.group === "record" && c.done).length;
+      .filter((c) => c.group === "record" && c.artifactId && c.done).length;
     expect(metaCount).toBe(groupMet);
   });
 });
@@ -122,6 +122,55 @@ describe("Listen → Show approval chain", () => {
 
   it("no tracks → no track criterion (nothing phantom to satisfy)", () => {
     expect(gateChecklist(programme({}), show(), []).some((c) => c.id === "tracks-accepted")).toBe(false);
+  });
+});
+
+describe("the record's questions hold the gate and reach the script", () => {
+  const listenP = () => programme({
+    discoveryKit: { interviews: [{ stakeholder: "Dan Reyes", role: "RevOps", agenda: [] }] },
+    domainOntology: {
+      entities: [{ name: "Quote" }],
+      ambiguities: [
+        { term: "Order", conflictingMeanings: ["sales order", "purchase order"], resolution: "unresolved" },
+        { term: "Account", conflictingMeanings: ["billing", "CRM"], resolution: "CRM account adopted" },
+      ],
+    },
+    currentStateAtlas: { openQuestions: ["Who owns credit-memo approval?"] },
+    phaseInputs: { listen: {
+      interviewRoster: JSON.stringify([{ name: "Dan Reyes", status: "Heard" }]),
+      interviewTranscripts: "— Dan Reyes, RevOps —\nplenty of words here on the record",
+      contradictionLog: JSON.stringify([]),
+    } },
+  });
+  const listen = () => flowMovements().find((m) => m.id === "listen")!;
+
+  it("unresolved ambiguities and open questions are counted; resolved ones are not", () => {
+    const issues = movementOpenIssues(listenP(), listen());
+    expect(issues).toHaveLength(2);
+    expect(issues.map((i) => i.kind).sort()).toEqual(["ambiguity", "open-question"]);
+    expect(issues[0].text).toContain("Order");
+  });
+
+  it("the gate holds — and names the first question — until the record stops asking", () => {
+    const row = gateChecklist(listenP(), listen(), [art({ id: "domain-ontology", title: "Domain Ontology" })])
+      .find((c) => c.id === "issues")!;
+    expect(row.done).toBe(false);
+    expect(row.label).toBe("Open questions & ambiguities — 2 to resolve");
+    expect(row.why).toContain("Order");
+    const readiness = gateReadiness(listenP(), listen(), [art({ id: "domain-ontology", title: "Domain Ontology" })],
+      gateChecklist(listenP(), listen(), [art({ id: "domain-ontology", title: "Domain Ontology" })]));
+    expect(readiness.tone).not.toBe("green");
+  });
+
+  it("the same questions land on the follow-up script for stakeholders", () => {
+    const kit = meetingKit(listenP(), "listen")!;
+    expect(kit.followUp).toBe(true);
+    expect(kit.questions.some((q) => q.includes("Order") && /which meaning/i.test(q))).toBe(true);
+    expect(kit.questions).toContain("Who owns credit-memo approval?");
+  });
+
+  it("no artifacts generated → no phantom issues criterion", () => {
+    expect(gateChecklist(programme({}), listen(), []).some((c) => c.id === "issues")).toBe(false);
   });
 });
 

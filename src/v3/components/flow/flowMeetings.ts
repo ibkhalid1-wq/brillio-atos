@@ -8,7 +8,7 @@
  */
 import type { ProgramSummary } from "@/new/types";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
-import { flowMovements, movementArtifacts, gateChecklist, readMovementInputs, parseGridRows } from "@/v3/components/flow/flowShellData";
+import { flowMovements, movementArtifacts, movementOpenIssues, gateChecklist, readMovementInputs, parseGridRows } from "@/v3/components/flow/flowShellData";
 import { FORMAL_ARTIFACT_FIELD_KEYS, FORMAL_ARTIFACT_PHASES } from "@/v3/lib/formalArtifacts";
 
 export interface MeetingKit {
@@ -245,6 +245,12 @@ export function kitGaps(program: ProgramSummary, movementId: string): string[] {
   const movement = flowMovements().find((entry) => entry.id === movementId);
   if (!movement) return [];
   const gaps: string[] = [];
+  // Whatever the movement's documents still ASK — unresolved ambiguities,
+  // open questions — is conversation work: it lands on the follow-up script
+  // (the askable filter strips anything operator-phrased downstream).
+  for (const issue of movementOpenIssues(program, movement)) {
+    gaps.push(issue.text);
+  }
   // Open contradictions route to the SPONSOR: two accounts disagree and
   // someone with authority arbitrates. Each open row becomes an ask on the
   // sponsor's follow-up script (and its async link) automatically.

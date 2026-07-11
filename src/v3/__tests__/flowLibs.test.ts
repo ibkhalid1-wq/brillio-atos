@@ -443,14 +443,14 @@ describe("gateReadiness — one composed verdict over the closed loop", () => {
     const r = verdict(programme({}), [art()]);
     expect(r.kind).toBe("open");
     expect(r.tone).toBe("dim");
-    expect(r.headline).toBe("2 of 8 criteria met");
+    expect(r.headline).toBe("3 of 9 criteria met");
   });
 
   it("criteria met but a document stale → amber, the record trails", () => {
     const r = verdict(metFrame(), [art({ stale: true }), art({ id: "charter", title: "Transformation Charter" })]);
     expect(r.kind).toBe("trails");
     expect(r.tone).toBe("amber");
-    expect(r.headline).toBe("8 of 9 criteria met");
+    expect(r.headline).toBe("9 of 10 criteria met");
     expect(r.detail).toBe("Documents are out of date — evidence changed");
   });
 
@@ -458,7 +458,7 @@ describe("gateReadiness — one composed verdict over the closed loop", () => {
     const r = verdict(metFrame(), [art({ gaps: 2 })]);
     expect(r.kind).toBe("gaps");
     expect(r.tone).toBe("amber");
-    expect(r.headline).toBe("7 of 8 criteria met");
+    expect(r.headline).toBe("8 of 9 criteria met");
     expect(r.detail).toBe("A document still lists open gaps");
   });
 
@@ -475,7 +475,7 @@ describe("gateReadiness — one composed verdict over the closed loop", () => {
     const r = verdict(p, [art()]);
     expect(r.kind).toBe("judgment");
     expect(r.tone).toBe("amber");
-    expect(r.headline).toBe("7 of 8 criteria met");
+    expect(r.headline).toBe("8 of 9 criteria met");
     expect(r.detail).toBe("A decision is waiting in the Inbox");
   });
 
@@ -483,7 +483,7 @@ describe("gateReadiness — one composed verdict over the closed loop", () => {
     const r = verdict(metFrame(), [art()]);
     expect(r.kind).toBe("ready");
     expect(r.tone).toBe("green");
-    expect(r.detail).toBe("8 criteria met · documents current · Inbox clear");
+    expect(r.detail).toBe("9 criteria met · documents current · Inbox clear");
   });
 
   it("an approved gate outranks everything", () => {

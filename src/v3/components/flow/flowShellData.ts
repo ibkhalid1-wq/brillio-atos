@@ -409,6 +409,7 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
   // record (every document current) and the judgment facet (Inbox clear) —
   // one consistent checklist over everything readiness reads.
   if (FLOW_MOVEMENT_IDS.has(movement.id)) {
+    const openIssues = movementOpenIssues(program, movement);
     items.push(
       ...artifacts.map((artifact): GateCheckItem => ({
         id: `art-${artifact.id}`,
@@ -424,6 +425,17 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
           ? `confidence ${artifact.confidence}%`
           : undefined,
       })),
+      ...(artifacts.some((artifact) => artifact.present) ? [{
+        id: "issues",
+        group: "record" as const,
+        label: openIssues.length
+          ? `Open questions & ambiguities — ${openIssues.length} to resolve`
+          : "No open questions or ambiguities",
+        done: openIssues.length === 0,
+        why: openIssues.length
+          ? `${openIssues[0].text.slice(0, 70)}${openIssues.length > 1 ? ` · +${openIssues.length - 1} more` : ""} — asked in the follow-up; regenerate after capturing`
+          : undefined,
+      }] : []),
       (() => {
         const waiting = openDecisionCount(program, movement.id);
         return {
@@ -493,9 +505,12 @@ export function gateReadiness(
   }
   if (openIn("record")) {
     const trailing = artifacts.some((artifact) => !artifact.present || artifact.stale);
+    const asking = checks.some((item) => !item.done && item.id === "issues");
     return trailing
       ? { tone: "amber", kind: "trails", headline: counts, detail: "Documents are out of date — evidence changed" }
-      : { tone: "amber", kind: "gaps", headline: counts, detail: "A document still lists open gaps" };
+      : asking
+        ? { tone: "amber", kind: "gaps", headline: counts, detail: "The documents still have open questions" }
+        : { tone: "amber", kind: "gaps", headline: counts, detail: "A document still lists open gaps" };
   }
   if (openIn("judgment")) {
     return { tone: "amber", kind: "judgment", headline: counts, detail: "A decision is waiting in the Inbox" };
@@ -532,6 +547,52 @@ export function spineRegenerationPlan(program: ProgramSummary): SpineStep[] {
     }
   }
   return steps;
+}
+
+/** One unresolved question the record is carrying. */
+export interface OpenIssue {
+  artifactId: string;
+  artifactTitle: string;
+  kind: "ambiguity" | "open-question";
+  text: string;
+}
+
+/**
+ * Everything a movement's documents still ASK: unresolved ambiguities
+ * (terminology collisions with no adopted meaning) and open questions. These
+ * resolve through evidence — they flow into the follow-up scripts, and the
+ * gate holds until the record stops asking.
+ */
+export function movementOpenIssues(program: ProgramSummary, movement: PhaseDefinition): OpenIssue[] {
+  const root = dataRoot(program);
+  const issues: OpenIssue[] = [];
+  for (const def of getPhaseArtifactDefs(movement.id)) {
+    const mirror = root[FORMAL_ARTIFACT_FIELD_KEYS[def.id]];
+    if (!mirror || typeof mirror !== "object" || Array.isArray(mirror)) continue;
+    const doc = mirror as Record<string, unknown>;
+    if (Array.isArray(doc.ambiguities)) {
+      for (const row of doc.ambiguities) {
+        if (!row || typeof row !== "object") continue;
+        const entry = row as Record<string, unknown>;
+        const resolution = String(entry.resolution ?? "").trim();
+        if (resolution && !/unresolved/i.test(resolution)) continue;
+        const meanings = Array.isArray(entry.conflictingMeanings) ? entry.conflictingMeanings.map(String).join(" vs ") : "";
+        issues.push({
+          artifactId: def.id,
+          artifactTitle: def.label,
+          kind: "ambiguity",
+          text: `Two teams use “${String(entry.term ?? "")}” differently${meanings ? ` (${meanings})` : ""} — which meaning should the record adopt?`,
+        });
+      }
+    }
+    if (Array.isArray(doc.openQuestions)) {
+      for (const question of doc.openQuestions) {
+        const text = String(question ?? "").trim();
+        if (text) issues.push({ artifactId: def.id, artifactTitle: def.label, kind: "open-question", text });
+      }
+    }
+  }
+  return issues;
 }
 
 /** Days until the Frame-declared first-demo date; null when unset. */
