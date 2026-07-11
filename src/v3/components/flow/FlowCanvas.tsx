@@ -39,6 +39,9 @@ interface FlowCanvasProps {
   onReopenGate?: (movementId: string, reason: string) => Promise<void>;
   /** Awaitable agent run — the spine runner sequences regenerations with it. */
   onRunAgentAndWait?: (agentId: string, phaseId: string) => Promise<void>;
+  /** Rendered after Envision — the tracks its blueprint created, running in
+   * parallel through Show, Ship and Evolve. */
+  tracksBand?: React.ReactNode;
 }
 
 /**
@@ -49,7 +52,7 @@ interface FlowCanvasProps {
  * coloured). Nothing locks; editing unfolds in place via the shared inputs
  * panel, so the canvas is the workspace, not a dashboard about one.
  */
-export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onScheduleFollowUp, onMintFollowUp, onSaveArtifactDoc, onOpenInbox, onRecordGate, onReopenGate, onRunAgentAndWait }: FlowCanvasProps) {
+export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onScheduleFollowUp, onMintFollowUp, onSaveArtifactDoc, onOpenInbox, onRecordGate, onReopenGate, onRunAgentAndWait, tracksBand }: FlowCanvasProps) {
   const movements = useMemo(() => flowMovements(), []);
   const frontier = frontierMovementId(program);
   const [open, setOpen] = useState<Set<string>>(() => new Set([frontier]));
@@ -110,8 +113,8 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
         const coverage = movement.id === "listen" ? listenCoverage(program) : null;
 
         return (
+          <Fragment key={movement.id}>
           <article
-            key={movement.id}
             className={["v3fs-ch", isOpen ? "open" : "", isDone ? "done" : "", isLive ? "live" : ""].filter(Boolean).join(" ")}
           >
             <div className="v3fs-node" aria-hidden="true">{isDone ? "✓" : isLoop ? "∞" : index + 1}</div>
@@ -339,6 +342,8 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
               </div>
             ) : null}
           </article>
+          {movement.id === "envision" ? tracksBand : null}
+          </Fragment>
         );
       })}
       {docFor ? (
