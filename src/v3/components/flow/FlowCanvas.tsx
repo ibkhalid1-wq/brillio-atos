@@ -263,7 +263,14 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                               </button>
                             ))}
                           </div>
-                          {!isDone ? (
+                          {!isDone && firstOpen && !firstOpen.anchor && firstOpen.id.startsWith("art-") ? (
+                            // The gap is a generated document (missing or stale) —
+                            // the honest action is a run, not the movement editor.
+                            <button type="button" className="v3fs-cta"
+                              onClick={() => onRunAgent(firstOpen.id.slice(4), movement.id)}>
+                              {firstOpen.label}
+                            </button>
+                          ) : !isDone ? (
                             <button type="button" className="v3fs-cta"
                               onClick={() => openEditor(movement.id, firstOpen?.anchor ?? GATE_CTA_FIELD[movement.id])}>
                               {firstOpen && firstOpen.anchor ? firstOpen.label : GATE_CTA[movement.id] ?? "Update inputs & evidence"}
