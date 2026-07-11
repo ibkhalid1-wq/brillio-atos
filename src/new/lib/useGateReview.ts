@@ -398,7 +398,18 @@ export function useGateReview(
     // closed before AI review existed). reopenPhaseInner synthesises a default
     // rather than failing the reopen.
     const reopenedBy = await getCurrentUserDisplayName().catch(() => "Program owner");
-    await persistState(reopenPhaseInner(inner, phaseId, reason, reopenedBy));
+    const reopened = reopenPhaseInner(inner, phaseId, reason, reopenedBy);
+    // Reopening is a Flow moment like recording was — attest it.
+    const attestLog = Array.isArray((reopened as Record<string, unknown>).flowAttestations)
+      ? ((reopened as Record<string, unknown>).flowAttestations as unknown[])
+      : [];
+    await persistState({
+      ...reopened,
+      flowAttestations: [...attestLog, {
+        ts: new Date().toISOString(), agentId: reopenedBy, phaseId, tier: 2,
+        action: `Gate reopened — ${phaseId}`, detail: reason,
+      }].slice(-200),
+    });
   }, [getGateReviewState, persistState]);
 
   const resetPhase = useCallback(async (phaseId: string) => {

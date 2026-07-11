@@ -1996,6 +1996,10 @@ export default function AppShellV3() {
             await approveGate(movementId);
             pushV3Toast("Gate recorded — the movement is demonstrated and its inputs are locked.", { tone: "success", duration: 4000 });
           }}
+          onReopenGate={async (movementId, reason) => {
+            await reopenGate(movementId, reason);
+            pushV3Toast("Gate reopened — inputs unlocked; capture the new evidence and the record re-derives.", { duration: 4500 });
+          }}
           onRecordShowPass={async (trackId, pass) => {
             await persistFlowMutation((program) => recordShowPass(program, trackId, pass));
           }}

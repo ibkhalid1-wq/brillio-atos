@@ -34,6 +34,8 @@ interface FlowCanvasProps {
   onOpenInbox?: () => void;
   /** Record a movement's gate — demonstrated. Locks the movement's inputs. */
   onRecordGate?: (movementId: string) => Promise<void>;
+  /** Reopen a demonstrated gate — evidence changed. Unlocks its inputs. */
+  onReopenGate?: (movementId: string, reason: string) => Promise<void>;
 }
 
 /**
@@ -44,7 +46,7 @@ interface FlowCanvasProps {
  * coloured). Nothing locks; editing unfolds in place via the shared inputs
  * panel, so the canvas is the workspace, not a dashboard about one.
  */
-export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onScheduleFollowUp, onMintFollowUp, onSaveArtifactDoc, onOpenInbox, onRecordGate }: FlowCanvasProps) {
+export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onScheduleFollowUp, onMintFollowUp, onSaveArtifactDoc, onOpenInbox, onRecordGate, onReopenGate }: FlowCanvasProps) {
   const movements = useMemo(() => flowMovements(), []);
   const frontier = frontierMovementId(program);
   const [open, setOpen] = useState<Set<string>>(() => new Set([frontier]));
@@ -237,7 +239,21 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                       </div>
                       {readiness.detail ? <div className="v3fs-gstate-d">{readiness.detail}</div> : null}
                       {readiness.kind === "ready" && !isDone && onRecordGate ? (
-                        <RecordGateButton movementId={movement.id} onRecordGate={onRecordGate} />
+                        <GateActionButton
+                          idle="Record the gate — demonstrated"
+                          armedLabel="Confirm — records the gate and locks inputs"
+                          busyLabel="Recording…"
+                          onAct={() => onRecordGate(movement.id)}
+                        />
+                      ) : null}
+                      {readiness.kind === "demonstrated" && onReopenGate ? (
+                        <GateActionButton
+                          idle="Reopen — evidence changed"
+                          armedLabel="Confirm — reopens the gate and unlocks inputs"
+                          busyLabel="Reopening…"
+                          quiet
+                          onAct={() => onReopenGate(movement.id, "Evidence changed after the demonstration")}
+                        />
                       ) : null}
                     </div>
                     <div className="v3fs-checks">
@@ -325,13 +341,16 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
 }
 
 /**
- * The one action the gate column owns: recording the gate itself. Two-step —
- * the first press arms, the second records — because approval hard-locks the
- * movement's inputs. Renders only in the READY state.
+ * The gate column's own actions: recording the gate (READY state) and
+ * reopening it (DEMONSTRATED state). Two-step — the first press arms, the
+ * second acts — because both flip the movement's input lock.
  */
-function RecordGateButton({ movementId, onRecordGate }: {
-  movementId: string;
-  onRecordGate: (movementId: string) => Promise<void>;
+function GateActionButton({ idle, armedLabel, busyLabel, quiet, onAct }: {
+  idle: string;
+  armedLabel: string;
+  busyLabel: string;
+  quiet?: boolean;
+  onAct: () => Promise<void>;
 }) {
   const [armed, setArmed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -346,11 +365,11 @@ function RecordGateButton({ movementId, onRecordGate }: {
       return;
     }
     setBusy(true);
-    try { await onRecordGate(movementId); } finally { setBusy(false); setArmed(false); }
+    try { await onAct(); } finally { setBusy(false); setArmed(false); }
   };
   return (
-    <button type="button" className={`v3fs-gate-rec${armed ? " armed" : ""}`} disabled={busy} onClick={() => void press()}>
-      {busy ? "Recording…" : armed ? "Confirm — records the gate and locks inputs" : "Record the gate — demonstrated"}
+    <button type="button" className={`v3fs-gate-rec${armed ? " armed" : ""}${quiet ? " quiet" : ""}`} disabled={busy} onClick={() => void press()}>
+      {busy ? busyLabel : armed ? armedLabel : idle}
     </button>
   );
 }
@@ -384,6 +403,7 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
   const [docText, setDocText] = useState("");
   const [docTick, setDocTick] = useState(false);
   const [docOpen, setDocOpen] = useState(false);
+  const [fileContradiction, setFileContradiction] = useState(false);
 
   // "Attach" on a referenced document: land in the ingest form with the
   // name prefilled — the capture area is where evidence arrives.
@@ -423,6 +443,32 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
       await onSaveInputs(movementId, { [kit.captureField]: next }, {
         attest: { action: `Evidence captured — ${kit.who}`, detail: text.replace(/\s+/g, " ").slice(0, 140) },
       });
+      // Demo feedback that disputes the record routes UPSTREAM too: an open
+      // contradiction lands in Listen's log, so Listen's gate re-asks the
+      // question and its documents re-derive from the corrected record.
+      if (fileContradiction && movementId === "show") {
+        const raw = (program.rawData ?? {}) as Record<string, unknown>;
+        const inner = typeof raw.data === "object" && raw.data !== null ? (raw.data as Record<string, unknown>) : raw;
+        const listenBucket = typeof inner.phaseInputs === "object" && inner.phaseInputs !== null
+          ? ((inner.phaseInputs as Record<string, Record<string, unknown>>).listen ?? {})
+          : {};
+        let rows: Array<Record<string, string>> = [];
+        try {
+          const parsed = JSON.parse(typeof listenBucket.contradictionLog === "string" ? listenBucket.contradictionLog : "[]");
+          if (Array.isArray(parsed)) rows = parsed.filter((row) => row && typeof row === "object");
+        } catch { rows = []; }
+        const statement = text.replace(/\s+/g, " ").slice(0, 110);
+        rows.push({
+          statement,
+          between: `${kit.who} (demo session) vs the record`,
+          positions: "Filed from Show feedback — see the demo session transcript",
+          status: `Open — filed ${new Date().toISOString().slice(0, 10)}`,
+        });
+        await onSaveInputs("listen", { contradictionLog: JSON.stringify(rows) }, {
+          attest: { action: `Contradiction filed to Listen — from ${kit.who}'s demo feedback`, detail: statement },
+        });
+        setFileContradiction(false);
+      }
       setCapture("");
       setSavedTick(true);
       window.setTimeout(() => setSavedTick(false), 2200);
@@ -563,6 +609,16 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
             onChange={(event) => setCapture(event.target.value)}
             aria-label={kit.captureLabel}
           />
+          {movementId === "show" ? (
+            <label className="v3fs-kit-flag">
+              <input
+                type="checkbox"
+                checked={fileContradiction}
+                onChange={(event) => setFileContradiction(event.target.checked)}
+              />
+              <span>Disputes something on record — also file an open contradiction to Listen</span>
+            </label>
+          ) : null}
           <button type="button" className="v3fs-btn pri" disabled={busy || !capture.trim()} onClick={() => void save()}>
             {busy ? "Saving…" : savedTick ? "Captured ✓" : "Capture"}
           </button>

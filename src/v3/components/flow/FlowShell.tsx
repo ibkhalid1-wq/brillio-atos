@@ -32,6 +32,8 @@ interface FlowShellProps {
   onResolveDecision: (decisionId: string, resolution: "confirmed" | "declined") => Promise<void>;
   /** Record a movement's gate — demonstrated. Locks the movement's inputs. */
   onRecordGate?: (movementId: string) => Promise<void>;
+  /** Reopen a demonstrated gate — evidence changed. Unlocks its inputs. */
+  onReopenGate?: (movementId: string, reason: string) => Promise<void>;
   /** Record a show/refine pass on a track. */
   onRecordShowPass: (trackId: string, pass: { stakeholder?: string; verdict: FlowShowPass["verdict"]; note?: string; stableDiff?: boolean }) => Promise<void>;
   /** Add a track by hand (the blueprint is the usual source). */
@@ -189,7 +191,7 @@ export default function FlowShell(props: FlowShellProps) {
             onIngestPortalItem={props.onIngestPortalItem} onDismissPortalItem={props.onDismissPortalItem}
             onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
         ) : view === "flow" ? (
-          <FlowCanvas program={program} runningAgentIds={props.runningAgentIds} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} onCompileShipLanes={props.onCompileShipLanes} onToggleShipItem={props.onToggleShipItem} onScheduleFollowUp={props.onScheduleFollowUp} onMintFollowUp={props.onMintFollowUp} onSaveArtifactDoc={props.onSaveArtifactDoc} onRecordGate={props.onRecordGate} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} />
+          <FlowCanvas program={program} runningAgentIds={props.runningAgentIds} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} onCompileShipLanes={props.onCompileShipLanes} onToggleShipItem={props.onToggleShipItem} onScheduleFollowUp={props.onScheduleFollowUp} onMintFollowUp={props.onMintFollowUp} onSaveArtifactDoc={props.onSaveArtifactDoc} onRecordGate={props.onRecordGate} onReopenGate={props.onReopenGate} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} />
         ) : view === "tracks" ? (
           <FlowTracks
             program={program}
