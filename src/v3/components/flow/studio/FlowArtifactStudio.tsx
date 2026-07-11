@@ -8,11 +8,12 @@
  */
 import React, { useEffect, useMemo, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
-import { artifactDocument, type ArtifactCardModel } from "@/v3/components/flow/flowShellData";
+import { artifactDocument, flowMovements, movementEvidence, type ArtifactCardModel, type EvidenceEntry } from "@/v3/components/flow/flowShellData";
 import { groundingFor, citationGraph, resourceUri, artifactFabioType, SEMANTIC_CONTEXT } from "@/v3/components/flow/flowSemantics";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 import { STUDIO_REGISTRY } from "./studios";
 import DocumentView from "./DocumentView";
+import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 
 export interface ArtifactEditInput {
   fieldKey: string;
@@ -93,6 +94,12 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
     })), [body]);
 
   const grounding = useMemo(() => groundingFor(program, artifact.id, artifact.movementId), [program, artifact]);
+  // groundingFor builds 1:1 over movementEvidence — row index IS the entry.
+  const movementEvidenceList = useMemo(() => {
+    const movement = flowMovements().find((m) => m.id === artifact.movementId);
+    return movement ? movementEvidence(program, movement) : [];
+  }, [program, artifact.movementId]);
+  const [evidenceOpen, setEvidenceOpen] = useState<EvidenceEntry | null>(null);
   const edited = draft && typeof draft.editedAt === "string" ? String(draft.editedAt).slice(0, 10) : null;
 
   // Grounding lives in the colophon with the rest of the provenance.
@@ -113,8 +120,10 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
             <span className="v3fs-disc-c" aria-hidden="true" />
           </summary>
           <div className="v3fs-disc-b">
-            {grounding.map((entry_) => (
-              <div key={entry_.uri} className="v3fs-ground-row">
+            {grounding.map((entry_, groundingIndex) => (
+              <div key={entry_.uri} className="v3fs-ground-row v3fs-row-open" role="button" tabIndex={0}
+                onClick={() => setEvidenceOpen(movementEvidenceList[groundingIndex] ?? null)}
+                onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setEvidenceOpen(movementEvidenceList[groundingIndex] ?? null); }}>
             <span className={`v3fs-tag ${entry_.kind === "document" ? "gn" : "ev"}`}>{entry_.kind}</span>
             <div className="v3fs-row-g">
               <div className="v3fs-row-n">{entry_.label}</div>
@@ -216,6 +225,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
           )}
         </div>
 
+        {evidenceOpen ? <EvidenceReader entry={evidenceOpen} onClose={() => setEvidenceOpen(null)} /> : null}
         {studioActive && dirty ? (
           <footer className="v3fs-stu-savebar">
             <span>You've edited this document.</span>

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import FlowCanvas from "@/v3/components/flow/FlowCanvas";
 import FlowArtifactStudio, { type ArtifactEditInput } from "@/v3/components/flow/studio/FlowArtifactStudio";
+import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 import {
   flowMovements, movementEvidence, movementArtifacts, listenCoverage,
   demoAcceptance, daysToFirstDemo, wordsOfEvidence, frameKpis,
@@ -861,8 +862,9 @@ function FlowLibrary({ program, onSaveArtifactDoc }: { program: ProgramSummary; 
     evidence: movements.flatMap((m) => movementEvidence(program, m)),
     artifacts: movements.flatMap((m) => movementArtifacts(program, m)),
   }), [program, movements]);
+  const [evFor, setEvFor] = useState<import("@/v3/components/flow/flowShellData").EvidenceEntry | null>(null);
   const q = query.trim().toLowerCase();
-  const evidence = q ? all.evidence.filter((e) => `${e.who} ${e.fieldLabel} ${e.excerpt}`.toLowerCase().includes(q)) : all.evidence;
+  const evidence = q ? all.evidence.filter((e) => `${e.who} ${e.fieldLabel} ${e.excerpt} ${e.text}`.toLowerCase().includes(q)) : all.evidence;
   const artifacts = q ? all.artifacts.filter((a) => `${a.title} ${a.excerpt ?? ""}`.toLowerCase().includes(q)) : all.artifacts;
   const label = (id: string) => movements.find((m) => m.id === id)?.displayName ?? id;
 
@@ -881,7 +883,9 @@ function FlowLibrary({ program, onSaveArtifactDoc }: { program: ProgramSummary; 
         <div className="v3fs-ph"><h3>Evidence</h3><span>conversations and source material</span></div>
         {evidence.length === 0 ? <div className="v3fs-empty">{q ? "Nothing matches that search." : "No evidence captured yet. Add the first conversation in Frame or Listen."}</div> : null}
         {evidence.map((entry, i) => (
-          <div key={i} className="v3fs-row">
+          <div key={i} className="v3fs-row v3fs-row-open" role="button" tabIndex={0}
+            onClick={() => setEvFor(entry)}
+            onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setEvFor(entry); }}>
             <span className="v3fs-tag ev">{label(entry.movementId)}</span>
             <div className="v3fs-row-g">
               <div className="v3fs-row-n">{entry.who}</div>
@@ -915,6 +919,7 @@ function FlowLibrary({ program, onSaveArtifactDoc }: { program: ProgramSummary; 
         ))}
       </div>
       {docFor ? <FlowArtifactStudio program={program} artifact={docFor} onClose={() => setDocFor(null)} onSaveDoc={onSaveArtifactDoc} /> : null}
+      {evFor ? <EvidenceReader entry={evFor} onClose={() => setEvFor(null)} /> : null}
     </div>
   );
 }

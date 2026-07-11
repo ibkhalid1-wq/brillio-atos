@@ -22,6 +22,8 @@ export interface EvidenceEntry {
   words: number;
   excerpt: string;
   kind: "transcript" | "reference";
+  /** The full attributed block — the drill-down's reading target. */
+  text: string;
 }
 
 export interface ArtifactCardModel {
@@ -120,7 +122,7 @@ function parseTranscript(movementId: string, fieldLabel: string, text: string): 
     return [{
       movementId, fieldLabel, kind: "transcript",
       who: fieldLabel, meta: `${wordCount(text).toLocaleString()} words`,
-      words: wordCount(text), excerpt: firstLine(text),
+      words: wordCount(text), excerpt: firstLine(text), text: text.trim(),
     }];
   }
   matches.forEach((match, index) => {
@@ -133,6 +135,7 @@ function parseTranscript(movementId: string, fieldLabel: string, text: string): 
       meta: `${wordCount(body).toLocaleString()} words`,
       words: wordCount(body),
       excerpt: firstLine(body),
+      text: body.trim(),
     });
   });
   return entries;
@@ -151,7 +154,7 @@ export function movementEvidence(program: ProgramSummary, movement: PhaseDefinit
     } else {
       out.push({
         movementId: movement.id, fieldLabel: field.label, kind: "reference",
-        who: value.trim(), meta: field.label, words: 0, excerpt: "",
+        who: value.trim(), meta: field.label, words: 0, excerpt: "", text: "",
       });
     }
   }

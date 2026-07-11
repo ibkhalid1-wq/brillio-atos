@@ -5060,3 +5060,10 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-dv-colophon .v3fs-dv-h{color:var(--v3-text-muted)}
 .v3fs-dv-colophon .v3fs-dv-fv{font-family:var(--v3-font-mono);font-size:11.5px;color:var(--v3-text-secondary)}
 .v3fs-dv-colophon .v3fs-ground{margin-top:12px}
+
+/* Evidence reader — stacks above the studio so claims check against source. */
+.v3fs-doc-backdrop.v3fs-evread-layer{z-index:90}
+.v3fs-docview.v3fs-evread{z-index:91;width:min(680px,90vw);border-left:4px solid var(--v3-accent-b)}
+.v3fs-evread-who{color:var(--fs-quote)}
+.v3fs-evread-b{font-size:14px;line-height:1.8}
+.v3fs-evread-p{margin:0 0 14px;white-space:pre-wrap;max-width:62ch}
