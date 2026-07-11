@@ -4859,8 +4859,12 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-kit-fu {border-left-color:var(--v3-amber)}
 .v3fs-kit-cap {font-size:10px;font-weight:650;letter-spacing:.09em;text-transform:uppercase;color:var(--v3-text-muted);margin:14px 0 7px;padding-bottom:4px;border-bottom:1px solid var(--v3-border-soft)}
 .v3fs-kit-cap:first-of-type {margin-top:10px}
-.v3fs-kit-fu-row {display:flex;flex-wrap:wrap;align-items:center;gap:8px;border-top:1px dashed var(--fs-line);padding-top:12px;margin-bottom:10px}
-.v3fs-kit-fu-row input[type="date"] {font:inherit;font-size:11.5px;border:1px solid var(--fs-line);border-radius:8px;padding:6px 9px;background:var(--fs-card);color:var(--v3-text-primary)}
+.v3fs-kit-ch {display:flex;flex-direction:column;gap:8px}
+.v3fs-kit-chan {border:1px solid var(--v3-border-soft);border-radius:10px;padding:10px 12px;background:var(--fs-card);display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px}
+.v3fs-kit-chan-t {font-size:11.5px;font-weight:650;color:var(--v3-text-primary);display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 160px}
+.v3fs-kit-chan-t span {font-size:10.5px;font-weight:500;color:var(--v3-text-muted);line-height:1.45}
+.v3fs-kit-chan-a {display:flex;flex-wrap:wrap;align-items:center;gap:7px}
+.v3fs-kit-chan-a input[type="date"] {font:inherit;font-size:11.5px;border:1px solid var(--fs-line);border-radius:8px;padding:6px 9px;background:var(--fs-card);color:var(--v3-text-primary)}
 
 /* The spine's pointer: which movement needs the user, right on the rail. */
 .v3fs-here {position:absolute;right:calc(100% + 14px);top:14px;display:flex;align-items:center;gap:6px;white-space:nowrap;font:inherit;font-size:11.5px;font-weight:700;letter-spacing:.01em;border:none;cursor:pointer;border-radius:999px;padding:7px 13px;background:var(--v3-accent);color:#fff;box-shadow:0 8px 22px -10px color-mix(in srgb,var(--v3-accent) 60%,transparent);z-index:4}

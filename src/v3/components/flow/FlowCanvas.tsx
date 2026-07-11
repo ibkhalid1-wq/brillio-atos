@@ -444,18 +444,41 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
       </summary>
       <div className="v3fs-kit-b">
         <p className="v3fs-kit-p">{kit.purpose}</p>
-        <div className="v3fs-kit-cap">The script — {kit.who}</div>
+        <div className="v3fs-kit-cap">Interview script — {kit.who}</div>
         <ol className="v3fs-kit-qs">
           {kit.questions.map((question, index) => <li key={index}>{question}</li>)}
         </ol>
         <div className="v3fs-kit-actions">
           <button type="button" className="v3fs-a" onClick={() => void copyScript()}>{copied ? "Copied ✓" : "Copy the script"}</button>
-          {kit.followUp && onMintFollowUp ? (
-            <button type="button" className="v3fs-a" disabled={busy} onClick={() => void sendLink()}>
-              {linkTick ? "Link copied ✓" : "✳ Send as a link — ATOS asks, answers land in the Inbox"}
-            </button>
-          ) : null}
         </div>
+        {kit.followUp && (onScheduleFollowUp || onMintFollowUp) ? (
+          <>
+            <div className="v3fs-kit-cap">Channels</div>
+            <div className="v3fs-kit-ch">
+              {onScheduleFollowUp ? (
+                <div className="v3fs-kit-chan">
+                  <div className="v3fs-kit-chan-t">Meeting<span>Book it — run the script in the room, capture below</span></div>
+                  <div className="v3fs-kit-chan-a">
+                    <input type="date" value={followDate} onChange={(event) => setFollowDate(event.target.value)} aria-label="Follow-up date" />
+                    <button type="button" className="v3fs-btn" disabled={busy || !followDate} onClick={() => void schedule()}>
+                      {scheduledTick ? "Scheduled ✓" : "Schedule"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+              {onMintFollowUp ? (
+                <div className="v3fs-kit-chan">
+                  <div className="v3fs-kit-chan-t">Link<span>ATOS asks for you — answers land in the Inbox, attributed</span></div>
+                  <div className="v3fs-kit-chan-a">
+                    <button type="button" className="v3fs-btn" disabled={busy} onClick={() => void sendLink()}>
+                      {linkTick ? "Link copied ✓" : "✳ Mint the link"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </>
+        ) : null}
         <div className="v3fs-kit-cap">What came back</div>
         <div className="v3fs-kit-capture">
           <textarea
@@ -482,17 +505,6 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
             </div>
           </details>
         </div>
-        {kit.followUp && onScheduleFollowUp ? (
-          <>
-            <div className="v3fs-kit-cap">Book the follow-up</div>
-            <div className="v3fs-kit-fu-row">
-              <input type="date" value={followDate} onChange={(event) => setFollowDate(event.target.value)} aria-label="Follow-up date" />
-              <button type="button" className="v3fs-btn" disabled={busy || !followDate} onClick={() => void schedule()}>
-                {scheduledTick ? "Scheduled ✓" : "Schedule the follow-up"}
-              </button>
-            </div>
-          </>
-        ) : null}
       </div>
     </details>
   );
