@@ -11,6 +11,7 @@ import type { ProgramSummary } from "@/new/types";
 import { artifactDocument, flowMovements, movementEvidence, type ArtifactCardModel, type EvidenceEntry } from "@/v3/components/flow/flowShellData";
 import { groundingFor, citationGraph, resourceUri, artifactFabioType, SEMANTIC_CONTEXT } from "@/v3/components/flow/flowSemantics";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
+import { listOpenFlowDecisions } from "@/v3/components/flow/flowDecisions";
 import { STUDIO_REGISTRY } from "./studios";
 import DocumentView from "./DocumentView";
 import EvidenceReader from "@/v3/components/flow/EvidenceReader";
@@ -22,12 +23,14 @@ export interface ArtifactEditInput {
   doc: Record<string, unknown>;
 }
 
-export default function FlowArtifactStudio({ program, artifact, onClose, onRegenerate, onSaveDoc }: {
+export default function FlowArtifactStudio({ program, artifact, onClose, onRegenerate, onSaveDoc, onOpenInbox }: {
   program: ProgramSummary;
   artifact: ArtifactCardModel;
   onClose: () => void;
   onRegenerate?: () => void;
   onSaveDoc?: (input: ArtifactEditInput) => Promise<void>;
+  /** Jump to the Inbox (used when a regenerated version awaits a confirm). */
+  onOpenInbox?: () => void;
 }) {
   const entry = STUDIO_REGISTRY[artifact.id];
   const storedDoc = useMemo(
@@ -94,6 +97,32 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
     })), [body]);
 
   const grounding = useMemo(() => groundingFor(program, artifact.id, artifact.movementId), [program, artifact]);
+  const movementName = useMemo(
+    () => flowMovements().find((m) => m.id === artifact.movementId)?.displayName ?? artifact.movementId,
+    [artifact.movementId],
+  );
+  // The regeneration guard queues fresh versions of hand-edited docs as
+  // decisions — surface that state on the document itself.
+  const regenPending = useMemo(() => {
+    if (!entry) return false;
+    return listOpenFlowDecisions(program).some((decision) => {
+      const payload = decision.payload;
+      const docs = payload && typeof payload === "object" ? (payload as Record<string, unknown>).artifactDocs : null;
+      return !!docs && typeof docs === "object" && entry.fieldKey in (docs as Record<string, unknown>);
+    });
+  }, [program, entry]);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const copyJsonLd = () => {
+    const node = {
+      "@context": SEMANTIC_CONTEXT,
+      "@id": resourceUri(program.id, "artifact", artifact.id),
+      "@type": artifactFabioType(artifact.id),
+      "dcterms:title": artifact.title,
+      citations: citationGraph(program),
+    };
+    try { void navigator.clipboard.writeText(JSON.stringify(node, null, 2)); } catch { /* ignore */ }
+    setMenuOpen(false);
+  };
   // groundingFor builds 1:1 over movementEvidence — row index IS the entry.
   const movementEvidenceList = useMemo(() => {
     const movement = flowMovements().find((m) => m.id === artifact.movementId);
@@ -132,18 +161,6 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
                 <span className="v3fs-ground-go" aria-hidden="true">›</span>
               </div>
             ))}
-            <button type="button" className="v3fs-a" onClick={() => {
-              const node = {
-            "@context": SEMANTIC_CONTEXT,
-            "@id": resourceUri(program.id, "artifact", artifact.id),
-            "@type": artifactFabioType(artifact.id),
-            "dcterms:title": artifact.title,
-            citations: citationGraph(program),
-              };
-              try { void navigator.clipboard.writeText(JSON.stringify(node, null, 2)); } catch { /* ignore */ }
-            }}>
-              Copy as JSON-LD
-            </button>
           </div>
         </details>
       ) : null;
@@ -154,10 +171,8 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
       <div className={`v3fs-docview${studioActive ? " v3fs-studio" : ""}`} role="dialog" aria-modal="true" aria-label={artifact.title}>
         <header className="v3fs-docview-h">
           <div>
+            <div className="v3fs-dv-eyebrow">{movementName} · generated document</div>
             <h2>{artifact.title}</h2>
-            {artifact.stale ? (
-              <span className="v3fs-docview-m v3fs-dv-stale">⚠ evidence changed since generation</span>
-            ) : null}
           </div>
           <div className="v3fs-docview-cta">
             {canEdit && !editing ? (
@@ -166,14 +181,48 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
             {editing && !dirty ? (
               <button type="button" className="v3fs-btn" onClick={() => setEditing(false)}>View document</button>
             ) : null}
-            {!editing && onRegenerate ? (
-              <button type="button" className="v3fs-btn" onClick={() => { onRegenerate(); onClose(); }}>
-                {artifact.stale ? "Regenerate — evidence changed" : "Regenerate"}
-              </button>
+            {!editing ? (
+              <div className="v3fs-dv-menuwrap">
+                <button type="button" className="v3fs-btn" aria-label="More actions" aria-expanded={menuOpen}
+                  onClick={() => setMenuOpen((open) => !open)}>⋯</button>
+                {menuOpen ? (
+                  <>
+                    <div className="v3fs-dv-menu-backdrop" onClick={() => setMenuOpen(false)} aria-hidden="true" />
+                    <div className="v3fs-dv-menu" role="menu">
+                      {onRegenerate && !artifact.stale ? (
+                        <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); onRegenerate(); onClose(); }}>
+                          Regenerate
+                        </button>
+                      ) : null}
+                      <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); window.print(); }}>
+                        Export · print or PDF
+                      </button>
+                      <button type="button" role="menuitem" onClick={copyJsonLd}>Copy as JSON-LD</button>
+                    </div>
+                  </>
+                ) : null}
+              </div>
             ) : null}
             <button type="button" className="v3fs-btn" onClick={onClose} aria-label="Close">Close</button>
           </div>
         </header>
+
+        {!editing && artifact.stale ? (
+          <div className="v3fs-dv-band amber">
+            <span>Evidence changed since this document was generated.</span>
+            {onRegenerate ? (
+              <button type="button" className="v3fs-btn" onClick={() => { onRegenerate(); onClose(); }}>Regenerate</button>
+            ) : null}
+          </div>
+        ) : null}
+        {!editing && regenPending ? (
+          <div className="v3fs-dv-band indigo">
+            <span>A regenerated version awaits your confirm in the Inbox — your hand edits are protected until then.</span>
+            {onOpenInbox ? (
+              <button type="button" className="v3fs-btn" onClick={() => { onClose(); onOpenInbox(); }}>Review in the Inbox</button>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="v3fs-docview-b">
 

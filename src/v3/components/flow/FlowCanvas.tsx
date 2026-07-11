@@ -50,6 +50,8 @@ interface FlowCanvasProps {
   onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
   /** Persist a studio edit to an artifact document (attested). */
   onSaveArtifactDoc?: (input: ArtifactEditInput) => Promise<void>;
+  /** Jump to the Inbox (regeneration-pending band in the studio). */
+  onOpenInbox?: () => void;
 }
 
 /**
@@ -60,7 +62,7 @@ interface FlowCanvasProps {
  * coloured). Nothing locks; editing unfolds in place via the shared inputs
  * panel, so the canvas is the workspace, not a dashboard about one.
  */
-export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onScheduleFollowUp, onMintFollowUp, onSaveArtifactDoc }: FlowCanvasProps) {
+export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onScheduleFollowUp, onMintFollowUp, onSaveArtifactDoc, onOpenInbox }: FlowCanvasProps) {
   const movements = useMemo(() => flowMovements(), []);
   const frontier = frontierMovementId(program);
   const [open, setOpen] = useState<Set<string>>(() => new Set([frontier]));
@@ -290,6 +292,7 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
           onClose={() => setDocFor(null)}
           onRegenerate={() => onRunAgent(docFor.id, docFor.movementId)}
           onSaveDoc={onSaveArtifactDoc}
+          onOpenInbox={onOpenInbox}
         />
       ) : null}
     </div>

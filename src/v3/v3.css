@@ -4886,12 +4886,18 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 
 /* The reading pane: full-document drill-down for every generated artifact. */
 .v3fs-doc-backdrop {position:fixed;inset:0;background:rgba(15,16,32,.5);backdrop-filter:blur(8px);z-index:80}
-.v3fs-docview {position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(720px,92vw);max-height:86vh;display:flex;flex-direction:column;background:var(--fs-card);border:1px solid var(--fs-line);border-radius:20px;box-shadow:0 30px 90px -20px rgba(15,16,32,.5);z-index:81}
-.v3fs-docview-h {display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:22px 26px 14px;border-bottom:1px solid var(--fs-line)}
-.v3fs-docview-h h2 {font-size:19px;font-weight:600;letter-spacing:-.01em;margin:0}
+.v3fs-docview {position:fixed;top:0;right:0;bottom:0;width:min(780px,94vw);display:flex;flex-direction:column;background:var(--fs-card);border-left:1px solid var(--fs-line);border-radius:0;box-shadow:-24px 0 80px -24px rgba(15,16,32,.45);z-index:81}
+@media (prefers-reduced-motion: no-preference){
+  .v3fs-docview{animation:v3fs-dv-in .22s cubic-bezier(.2,.8,.3,1)}
+  .v3fs-doc-backdrop{animation:v3fs-dv-fade .22s ease}
+  @keyframes v3fs-dv-in{from{opacity:0;transform:translateX(36px)}to{opacity:1;transform:none}}
+  @keyframes v3fs-dv-fade{from{opacity:0}to{opacity:1}}
+}
+.v3fs-docview-h {display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:26px 36px 16px;border-bottom:1px solid var(--fs-line)}
+.v3fs-docview-h h2 {font-size:23px;font-weight:650;letter-spacing:-.02em;margin:0;text-wrap:balance}
 .v3fs-docview-m {font-family:var(--v3-font-mono);font-size:10.5px;color:var(--v3-text-muted);display:block;margin-top:4px}
 .v3fs-docview-cta {display:flex;gap:8px;flex-shrink:0}
-.v3fs-docview-b {overflow-y:auto;padding:20px 26px 28px;font-size:13.5px;line-height:1.75;max-width:100%}
+.v3fs-docview-b {overflow-y:auto;padding:22px 36px 40px;font-size:15px;line-height:1.75;max-width:100%}
 .v3fs-docview-blk {margin:0 0 16px}
 .v3fs-docview-b p {margin:0 0 6px;white-space:pre-wrap;overflow-wrap:break-word}
 .v3fs-docview-b h3 {font-size:11px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--v3-accent-2);margin:6px 0 8px}
@@ -4947,7 +4953,7 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 }
 
 /* ── The artifact studio: per-type WYSIWYG editors over generated docs ──── */
-.v3fs-docview.v3fs-studio{width:min(1120px,95vw);max-height:92vh}
+.v3fs-docview.v3fs-studio{width:min(1120px,96vw)}
 .v3fs-stu-sec{margin:0 0 22px}
 .v3fs-stu-sec-h{display:flex;align-items:baseline;gap:10px;margin-bottom:10px}
 .v3fs-stu-sec-h h3{font-size:11px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--v3-accent-2);margin:0}
@@ -4994,8 +5000,7 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-stu-heat-row.sev-medium{border-left-color:var(--v3-amber)}
 .v3fs-stu-heat-row.sev-low{border-left-color:var(--v3-green)}
 .v3fs-stu-savebar{display:flex;align-items:center;justify-content:space-between;gap:14px;
-  padding:12px 26px;border-top:1px solid var(--fs-line);background:var(--v3-surface-2);
-  border-radius:0 0 20px 20px;font-size:13px;font-weight:600}
+  padding:12px 36px;border-top:1px solid var(--fs-line);background:var(--v3-surface-2);font-size:13px;font-weight:600}
 
 /* Ontology studio: the graph, the side panel, the tables below. */
 .v3fs-onto{display:grid;grid-template-columns:1fr 280px;gap:16px}
@@ -5025,13 +5030,13 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 }
 
 /* ── The typeset document: readable projection of a structured artifact ── */
-.v3fs-dv{max-width:62ch}
-.v3fs-dv-lead{font-size:15px;line-height:1.7;color:var(--v3-text-primary);margin:0 0 20px;font-weight:500}
+.v3fs-dv{max-width:66ch}
+.v3fs-dv-lead{font-size:16.5px;line-height:1.7;color:var(--v3-text-primary);margin:0 0 22px;font-weight:500;letter-spacing:-.01em}
 .v3fs-dv-h{font-size:11px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--v3-accent-2);margin:0 0 10px}
 .v3fs-dv-sec{margin:0 0 24px}
-.v3fs-dv-p{margin:0;font-size:13.5px;line-height:1.75;white-space:pre-wrap}
+.v3fs-dv-p{margin:0;font-size:15px;line-height:1.78;white-space:pre-wrap}
 .v3fs-dv-list{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
-.v3fs-dv-list li{position:relative;padding-left:18px;font-size:13.5px;line-height:1.6}
+.v3fs-dv-list li{position:relative;padding-left:18px;font-size:14.5px;line-height:1.65}
 .v3fs-dv-list li::before{content:"—";position:absolute;left:0;color:var(--v3-text-muted)}
 .v3fs-dv-facts{display:flex;flex-direction:column;gap:7px}
 .v3fs-dv-factsheet{margin:0 0 26px;border:1px solid var(--fs-line);border-radius:12px;padding:14px 16px;background:var(--v3-surface-2)}
@@ -5063,7 +5068,7 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 
 /* Evidence reader — stacks above the studio so claims check against source. */
 .v3fs-doc-backdrop.v3fs-evread-layer{z-index:90}
-.v3fs-docview.v3fs-evread{z-index:91;width:min(680px,90vw);border-left:4px solid var(--v3-accent-b)}
+.v3fs-docview.v3fs-evread{z-index:91;width:min(640px,88vw);border-left:4px solid var(--v3-accent-b)}
 .v3fs-evread-who{color:var(--fs-quote)}
 .v3fs-evread-b{font-size:14px;line-height:1.8}
 .v3fs-evread-p{margin:0 0 14px;white-space:pre-wrap;max-width:62ch}
@@ -5077,3 +5082,26 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-ground-row .v3fs-row-m{word-break:normal;font-family:var(--v3-font);font-size:11px}
 .v3fs-ground-go{flex-shrink:0;color:var(--v3-text-muted);font-size:16px;line-height:1;padding:0 4px}
 .v3fs-ground-row.v3fs-row-open:hover .v3fs-ground-go{color:var(--v3-accent-2)}
+
+/* Studio header eyebrow, lifecycle bands, actions menu. */
+.v3fs-dv-eyebrow{font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--v3-text-muted);margin-bottom:5px}
+.v3fs-dv-band{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 36px;font-size:12.5px;font-weight:600;border-bottom:1px solid var(--fs-line)}
+.v3fs-dv-band.amber{background:var(--v3-amber-soft);color:var(--v3-amber)}
+.v3fs-dv-band.indigo{background:var(--fs-indigo-wash);color:var(--v3-accent-2)}
+.v3fs-dv-band .v3fs-btn{flex-shrink:0}
+.v3fs-dv-menuwrap{position:relative}
+.v3fs-dv-menu-backdrop{position:fixed;inset:0;z-index:85}
+.v3fs-dv-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:86;min-width:200px;background:var(--fs-card);border:1px solid var(--fs-line);border-radius:12px;box-shadow:var(--fs-pop);padding:6px;display:flex;flex-direction:column}
+.v3fs-dv-menu button{font:inherit;font-size:13px;text-align:left;padding:9px 12px;border:none;background:none;color:var(--v3-text-primary);border-radius:8px;cursor:pointer}
+.v3fs-dv-menu button:hover{background:var(--v3-surface-2)}
+
+/* Export: the document prints as the deliverable — nothing else. */
+@media print{
+  body *{visibility:hidden}
+  .v3fs-docview,.v3fs-docview *{visibility:visible}
+  .v3fs-docview{position:absolute;inset:0;width:100% !important;height:auto;border:none;box-shadow:none;animation:none}
+  .v3fs-docview-b{overflow:visible;max-height:none}
+  .v3fs-docview-cta,.v3fs-doc-backdrop,.v3fs-dv-band .v3fs-btn,.v3fs-stu-savebar,.v3fs-ground-go,.v3fs-disc-c{display:none !important}
+  .v3fs-dv-colophon,.v3fs-docview-b .v3fs-ground{display:block}
+  .v3fs-dv-colophon[open] summary,.v3fs-ground[open] summary{display:block}
+}

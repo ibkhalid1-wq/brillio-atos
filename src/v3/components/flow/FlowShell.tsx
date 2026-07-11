@@ -187,7 +187,7 @@ export default function FlowShell(props: FlowShellProps) {
             onIngestPortalItem={props.onIngestPortalItem} onDismissPortalItem={props.onDismissPortalItem}
             onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
         ) : view === "flow" ? (
-          <FlowCanvas program={program} runningAgentIds={props.runningAgentIds} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} onCompileShipLanes={props.onCompileShipLanes} onToggleShipItem={props.onToggleShipItem} onScheduleFollowUp={props.onScheduleFollowUp} onMintFollowUp={props.onMintFollowUp} onSaveArtifactDoc={props.onSaveArtifactDoc} />
+          <FlowCanvas program={program} runningAgentIds={props.runningAgentIds} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} onCompileShipLanes={props.onCompileShipLanes} onToggleShipItem={props.onToggleShipItem} onScheduleFollowUp={props.onScheduleFollowUp} onMintFollowUp={props.onMintFollowUp} onSaveArtifactDoc={props.onSaveArtifactDoc} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} />
         ) : view === "tracks" ? (
           <FlowTracks
             program={program}
@@ -198,7 +198,7 @@ export default function FlowShell(props: FlowShellProps) {
             onAddTrack={props.onAddTrack}
           />
         ) : view === "library" ? (
-          <FlowLibrary program={program} onSaveArtifactDoc={props.onSaveArtifactDoc} />
+          <FlowLibrary program={program} onSaveArtifactDoc={props.onSaveArtifactDoc} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} />
         ) : view === "mission" ? (
           <FlowMission
             program={program}
@@ -854,7 +854,7 @@ function FlowPortfolio({ programs, activeId, onSelectProgram, onHydratePrograms 
 
 /* ── Library: everything the programme knows ─────────────────────────────── */
 
-function FlowLibrary({ program, onSaveArtifactDoc }: { program: ProgramSummary; onSaveArtifactDoc: FlowShellProps["onSaveArtifactDoc"] }) {
+function FlowLibrary({ program, onSaveArtifactDoc, onOpenInbox }: { program: ProgramSummary; onSaveArtifactDoc: FlowShellProps["onSaveArtifactDoc"]; onOpenInbox?: () => void }) {
   const movements = useMemo(() => flowMovements(), []);
   const [query, setQuery] = useState("");
   const [docFor, setDocFor] = useState<import("@/v3/components/flow/flowShellData").ArtifactCardModel | null>(null);
@@ -918,7 +918,7 @@ function FlowLibrary({ program, onSaveArtifactDoc }: { program: ProgramSummary; 
           </div>
         ))}
       </div>
-      {docFor ? <FlowArtifactStudio program={program} artifact={docFor} onClose={() => setDocFor(null)} onSaveDoc={onSaveArtifactDoc} /> : null}
+      {docFor ? <FlowArtifactStudio program={program} artifact={docFor} onClose={() => setDocFor(null)} onSaveDoc={onSaveArtifactDoc} onOpenInbox={onOpenInbox} /> : null}
       {evFor ? <EvidenceReader entry={evFor} onClose={() => setEvFor(null)} /> : null}
     </div>
   );
