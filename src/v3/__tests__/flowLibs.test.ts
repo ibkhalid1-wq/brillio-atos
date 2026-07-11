@@ -9,7 +9,7 @@ import { resolveFlowDecision, listOpenFlowDecisions } from "@/v3/components/flow
 import { trackAcceptance, trackBlockers, recordShowPass, listFlowTracks, type FlowTrack } from "@/v3/components/flow/flowTracks";
 import { toggleShipItem, listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 import { ingestPortalResponse, listPortalInbox } from "@/v3/components/flow/flowPortal";
-import { gateChecklist, flowMovements } from "@/v3/components/flow/flowShellData";
+import { gateChecklist, gateReadiness, flowMovements } from "@/v3/components/flow/flowShellData";
 
 const programme = (inner: Record<string, unknown>): ProgramSummary =>
   ({ id: "p1", name: "Test", rawData: inner } as unknown as ProgramSummary);
@@ -114,6 +114,61 @@ describe("flowPortal ingest routing", () => {
     const listen = (blob.phaseInputs as Record<string, Record<string, string>>).listen;
     expect(listen.interviewTranscripts).toContain("Words here");
     expect(JSON.parse(listen.interviewRoster)[0].status).toBe("Heard");
+  });
+});
+
+describe("gateReadiness — one composed verdict over evidence and record", () => {
+  const movement = (id: string) => flowMovements().find((m) => m.id === id)!;
+  const art = (over: Record<string, unknown> = {}) => ({
+    id: "discovery-kit", movementId: "frame", title: "Discovery Kit", description: "",
+    excerpt: null, confidence: 80, present: true, stale: false, ...over,
+  });
+  const metFrame = programme({ phaseInputs: { frame: {
+    sponsorConversation: "— Sarah Okafor, COO —\ntext", businessObjective: "obj", sponsor: "Sarah",
+    industry: "Banking", successMetric: "cycle time", targetFirstDemoDate: "2026-07-25",
+  } } });
+
+  it("criteria open → the open count, never green", () => {
+    const m = movement("frame");
+    const checks = gateChecklist(programme({}), m, []);
+    const r = gateReadiness(programme({}), m, [art()], checks);
+    expect(r.kind).toBe("open");
+    expect(r.tone).toBe("dim");
+    expect(r.headline).toBe("0 of 6 criteria met");
+  });
+
+  it("criteria met but a document stale → amber, the record trails, blocker named", () => {
+    const m = movement("frame");
+    const artifacts = [art({ stale: true }), art({ id: "charter", title: "Transformation Charter" })];
+    const r = gateReadiness(metFrame, m, artifacts, gateChecklist(metFrame, m, artifacts));
+    expect(r.kind).toBe("trails");
+    expect(r.tone).toBe("amber");
+    expect(r.blockers).toEqual([{ id: "discovery-kit", title: "Discovery Kit", state: "stale" }]);
+  });
+
+  it("criteria met but a document never generated → blocked as missing", () => {
+    const m = movement("frame");
+    const artifacts = [art({ present: false })];
+    const r = gateReadiness(metFrame, m, artifacts, gateChecklist(metFrame, m, artifacts));
+    expect(r.kind).toBe("trails");
+    expect(r.blockers[0].state).toBe("missing");
+  });
+
+  it("criteria met and record current → ready, green", () => {
+    const m = movement("frame");
+    const artifacts = [art()];
+    const r = gateReadiness(metFrame, m, artifacts, gateChecklist(metFrame, m, artifacts));
+    expect(r.kind).toBe("ready");
+    expect(r.tone).toBe("green");
+    expect(r.detail).toBe("6 criteria met · record current");
+  });
+
+  it("an approved gate outranks everything", () => {
+    const m = movement("frame");
+    const p = { ...programme({}), gateReviews: { frame: { status: "approved" } } } as never;
+    const r = gateReadiness(p, m, [art({ stale: true })], []);
+    expect(r.kind).toBe("demonstrated");
+    expect(r.tone).toBe("green");
   });
 });
 

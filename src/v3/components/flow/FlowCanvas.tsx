@@ -4,7 +4,7 @@ import PhaseInputsPanel from "@/v3/components/PhaseInputsPanel";
 import FlowArtifactStudio, { type ArtifactEditInput } from "@/v3/components/flow/studio/FlowArtifactStudio";
 import {
   flowMovements, frontierMovementId, movementEvidence, movementArtifacts,
-  gateSignal, gateChecklist, listenCoverage, movementFacts, demoAcceptance,
+  gateReadiness, gateChecklist, listenCoverage, movementFacts, demoAcceptance,
   type ArtifactCardModel,
 } from "@/v3/components/flow/flowShellData";
 import { meetingKit, type MeetingKit } from "@/v3/components/flow/flowMeetings";
@@ -91,8 +91,8 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
         const isDone = program.gateReviews?.[movement.id]?.status === "approved";
         const generating = artifacts.some((a) => runningAgentIds.has(a.id));
         const isLive = movement.id === frontier && !isDone;
-        const signal = gateSignal(program, movement, artifacts);
         const checks = gateChecklist(program, movement, artifacts);
+        const readiness = gateReadiness(program, movement, artifacts, checks);
         const openChecks = checks.filter((item) => !item.done).length;
         const isLoop = !!movement.movement?.isLoop;
         const coverage = movement.id === "listen" ? listenCoverage(program) : null;
@@ -211,45 +211,61 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                 </div>
 
                 <div>
-                  <div className={`v3fs-colh gt${isDone ? " done" : ""}`}>{isLoop ? "Steady-state health" : "Gate criteria"}</div>
+                  <div className={`v3fs-colh gt${isDone ? " done" : ""}`}>{isLoop ? "Steady-state health" : "Gate"}</div>
                   <div className="v3fs-gate">
-                    <p className="v3fs-gate-say">{movement.movement?.readyWhen ?? ""}</p>
-                    {(() => {
-                      const done = checks.filter((item) => item.done).length;
-                      // The pill's tone follows the human criteria — document
-                      // freshness lives on the artifact cards, not the gate.
-                      const tone = checks.length
-                        ? (done === checks.length ? "green" : done > 0 ? "amber" : "dim")
-                        : signal.tone;
-                      return (
-                        <>
-                          <div className={`v3fs-sig ${tone}`}>
-                            {tone === "green" ? "✓ " : tone === "amber" ? "⚠ " : ""}
-                            {checks.length ? `${done} of ${checks.length} criteria met` : signal.text}
-                          </div>
-                          <div className="v3fs-checks">
-                            {checks.map((item) => (
+                    {/* Verdict first: one composed state over both facets —
+                        evidence (criteria) and record (documents current). */}
+                    <div className={`v3fs-gstate ${readiness.tone}`}>
+                      <div className="v3fs-gstate-h">
+                        <span className="v3fs-gstate-g" aria-hidden="true">
+                          {readiness.kind === "trails" ? "⟳" : readiness.tone === "green" ? "✓" : readiness.tone === "amber" ? "⚠" : "○"}
+                        </span>
+                        {readiness.headline}
+                      </div>
+                      {readiness.detail ? <div className="v3fs-gstate-d">{readiness.detail}</div> : null}
+                      {readiness.blockers.length ? (
+                        <div className="v3fs-gstate-bl">
+                          {readiness.blockers.map((blocker) => {
+                            const artifact = artifacts.find((a) => a.id === blocker.id);
+                            const openable = !!artifact?.present;
+                            return (
                               <button
-                                key={item.id}
+                                key={blocker.id}
                                 type="button"
-                                className={`v3fs-check${item.done ? " done" : ""}`}
-                                disabled={!item.anchor}
-                                onClick={item.anchor ? () => openEditor(movement.id, item.anchor) : undefined}
-                                title={item.anchor
-                                  ? item.done ? "Met — open to review or correct" : "Open the editor on this item"
-                                  : "Met by generating / working the movement"}
+                                className="v3fs-gstate-b"
+                                disabled={!openable}
+                                onClick={openable && artifact ? () => setDocFor(artifact) : undefined}
+                                title={openable ? "Open the document" : "Generate from the card"}
                               >
-                                <span className="v3fs-check-box" aria-hidden="true">{item.done ? "✓" : ""}</span>
-                                <span className="v3fs-check-l">
-                                  {item.label}
-                                  {item.done && item.why ? <span className="v3fs-check-why">{item.why}</span> : null}
-                                </span>
+                                <span className="v3fs-gstate-b-dot" aria-hidden="true" />
+                                {blocker.title} — {blocker.state === "stale" ? "evidence changed" : "not yet generated"}
                               </button>
-                            ))}
-                          </div>
-                        </>
-                      );
-                    })()}
+                            );
+                          })}
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="v3fs-checks">
+                      {checks.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className={`v3fs-check${item.done ? " done" : ""}`}
+                          disabled={!item.anchor}
+                          onClick={item.anchor ? () => openEditor(movement.id, item.anchor) : undefined}
+                          title={item.anchor
+                            ? item.done ? "Met — open to review or correct" : "Open the editor on this item"
+                            : "Met by generating / working the movement"}
+                        >
+                          <span className="v3fs-check-box" aria-hidden="true">{item.done ? "✓" : ""}</span>
+                          <span className="v3fs-check-l">
+                            {item.label}
+                            {item.done && item.why ? <span className="v3fs-check-why">{item.why}</span> : null}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                    <p className="v3fs-gate-say foot">{movement.movement?.readyWhen ?? ""}</p>
                   </div>
                 </div>
 

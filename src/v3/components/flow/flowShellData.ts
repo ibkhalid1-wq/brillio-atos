@@ -339,6 +339,74 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
   return items;
 }
 
+/** A document holding the gate back: stale or never generated. */
+export interface GateBlocker {
+  id: string;
+  title: string;
+  state: "stale" | "missing";
+}
+
+export interface GateReadiness {
+  tone: "green" | "amber" | "dim";
+  /** Which state the gate is in — drives glyph and styling. */
+  kind: "demonstrated" | "open" | "trails" | "ready" | "signal";
+  headline: string;
+  detail?: string;
+  blockers: GateBlocker[];
+}
+
+/**
+ * The gate verdict as ONE composed state. Readiness has two facets — the
+ * evidence (human criteria) and the record (documents current) — and the
+ * verdict only reads green when both hold. The record facet surfaces as
+ * exceptions only: trailing documents are named, current ones stay quiet.
+ */
+export function gateReadiness(
+  program: ProgramSummary,
+  movement: PhaseDefinition,
+  artifacts: ArtifactCardModel[],
+  checks: GateCheckItem[],
+): GateReadiness {
+  if (program.gateReviews?.[movement.id]?.status === "approved") {
+    return { tone: "green", kind: "demonstrated", headline: "Demonstrated — gate recorded", blockers: [] };
+  }
+  if (!checks.length) {
+    const signal = gateSignal(program, movement, artifacts);
+    return { tone: signal.tone, kind: "signal", headline: signal.text, blockers: [] };
+  }
+  const done = checks.filter((item) => item.done).length;
+  if (done < checks.length) {
+    return {
+      tone: done > 0 ? "amber" : "dim",
+      kind: "open",
+      headline: `${done} of ${checks.length} criteria met`,
+      blockers: [],
+    };
+  }
+  const blockers: GateBlocker[] = artifacts
+    .filter((artifact) => !artifact.present || artifact.stale)
+    .map((artifact) => ({
+      id: artifact.id,
+      title: artifact.title,
+      state: artifact.present ? "stale" as const : "missing" as const,
+    }));
+  if (blockers.length) {
+    return {
+      tone: "amber",
+      kind: "trails",
+      headline: "Criteria met — the record trails the evidence",
+      blockers,
+    };
+  }
+  return {
+    tone: "green",
+    kind: "ready",
+    headline: movement.movement?.isLoop ? "Loop healthy" : "Ready for the gate",
+    detail: `${checks.length} criteria met · record current`,
+    blockers: [],
+  };
+}
+
 /** Days until the Frame-declared first-demo date; null when unset. */
 export function daysToFirstDemo(program: ProgramSummary): number | null {
   const value = readMovementInputs(program, "frame").targetFirstDemoDate;
