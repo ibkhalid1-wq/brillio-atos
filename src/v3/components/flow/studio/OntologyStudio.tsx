@@ -8,7 +8,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ReactFlow, Background, Controls, MarkerType, useNodesState,
-  type Node, type Edge, type Connection,
+  BaseEdge, EdgeLabelRenderer, getSmoothStepPath, useInternalNode, Position,
+  type Node, type Edge, type Connection, type EdgeProps, type InternalNode,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import {
@@ -17,6 +18,62 @@ import {
 } from "./StudioKit";
 
 type Selection = { kind: "entity"; id: string } | { kind: "relation"; index: number } | null;
+
+/**
+ * Floating angled edge: instead of fixed top/bottom handles, each connector
+ * attaches to whichever SIDES of the two nodes face each other — recomputed
+ * live as nodes move, so dragging an entity re-aligns its connectors to the
+ * cleanest route instead of wrapping around the node.
+ */
+function sidePoint(node: InternalNode, side: Position): { x: number; y: number } {
+  const { x, y } = node.internals.positionAbsolute;
+  const width = node.measured?.width ?? 160;
+  const height = node.measured?.height ?? 44;
+  switch (side) {
+    case Position.Left: return { x, y: y + height / 2 };
+    case Position.Right: return { x: x + width, y: y + height / 2 };
+    case Position.Top: return { x: x + width / 2, y };
+    default: return { x: x + width / 2, y: y + height };
+  }
+}
+
+function FloatingStepEdge({ id, source, target, markerEnd, label, selected }: EdgeProps) {
+  const sourceNode = useInternalNode(source);
+  const targetNode = useInternalNode(target);
+  if (!sourceNode || !targetNode) return null;
+  const sc = sidePoint(sourceNode, Position.Bottom);
+  const tc = sidePoint(targetNode, Position.Top);
+  const sw = sourceNode.measured?.width ?? 160, sh = sourceNode.measured?.height ?? 44;
+  const tw = targetNode.measured?.width ?? 160, th = targetNode.measured?.height ?? 44;
+  const dx = (targetNode.internals.positionAbsolute.x + tw / 2) - (sourceNode.internals.positionAbsolute.x + sw / 2);
+  const dy = (targetNode.internals.positionAbsolute.y + th / 2) - (sourceNode.internals.positionAbsolute.y + sh / 2);
+  const horizontal = Math.abs(dx) > Math.abs(dy);
+  const sourcePosition = horizontal ? (dx > 0 ? Position.Right : Position.Left) : (dy > 0 ? Position.Bottom : Position.Top);
+  const targetPosition = horizontal ? (dx > 0 ? Position.Left : Position.Right) : (dy > 0 ? Position.Top : Position.Bottom);
+  const start = sidePoint(sourceNode, sourcePosition);
+  const end = sidePoint(targetNode, targetPosition);
+  const [path, labelX, labelY] = getSmoothStepPath({
+    sourceX: start.x, sourceY: start.y, sourcePosition,
+    targetX: end.x, targetY: end.y, targetPosition,
+    borderRadius: 6,
+  });
+  return (
+    <>
+      <BaseEdge id={id} path={path} markerEnd={markerEnd}
+        style={selected ? { stroke: "var(--v3-accent-2)", strokeWidth: 2 } : undefined} />
+      {label ? (
+        <EdgeLabelRenderer>
+          <div className={`v3fs-onto-elabel${selected ? " on" : ""}`}
+            style={{ transform: `translate(-50%,-50%) translate(${labelX}px,${labelY}px)` }}>
+            {label}
+          </div>
+        </EdgeLabelRenderer>
+      ) : null}
+    </>
+  );
+}
+
+const EDGE_TYPES = { floating: FloatingStepEdge };
 
 const CARDINALITIES = ["1:1", "1:N", "N:M", "unknown"];
 
@@ -147,8 +204,8 @@ export default function OntologyStudio({ doc, onChange }: StudioProps) {
     const cardinality = asText(relation.cardinality);
     return {
       id: `rel-${index}`,
-      type: "smoothstep",
-      pathOptions: { borderRadius: 6 },
+      type: "floating",
+      selected: selected?.kind === "relation" && selected.index === index,
       source: asText(relation.from),
       target: asText(relation.to),
       label: `${asText(relation.relation) || "relates to"}${cardinality && cardinality !== "unknown" ? ` · ${cardinality}` : ""}`,
@@ -222,6 +279,7 @@ export default function OntologyStudio({ doc, onChange }: StudioProps) {
         <ReactFlow
           nodes={nodes}
           edges={edges}
+          edgeTypes={EDGE_TYPES}
           onNodesChange={onNodesChange}
           onConnect={onConnect}
           onNodeClick={(_, node) => setSelected({ kind: "entity", id: node.id })}

@@ -5355,3 +5355,6 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 /* Workflow details strip under the swimlane. */
 .v3fs-wf-details {display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--v3-border-soft);padding-top:14px;margin-top:4px}
 .v3fs-wf-details .v3fs-btn.danger {align-self:flex-start}
+/* Floating edge labels: quiet pills that ride the connector's midpoint. */
+.v3fs-onto-elabel {position:absolute;pointer-events:none;font-family:var(--v3-font);font-size:10px;font-weight:600;color:var(--v3-text-secondary);background:var(--v3-bg);border:1px solid var(--v3-border-soft);border-radius:99px;padding:1px 8px;white-space:nowrap}
+.v3fs-onto-elabel.on {color:var(--v3-accent-2);border-color:var(--v3-accent-2)}
