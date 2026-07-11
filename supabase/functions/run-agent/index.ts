@@ -1339,6 +1339,10 @@ Return ONLY valid JSON:
 const FORMAL_ARTIFACT_DISCIPLINE = `
 ## ATOS generation discipline
 
+When the input context carries a non-null valueChainSegment, scope the output to
+that value-chain segment — its workflows, entities, stakeholders and agendas —
+rather than the industry at large.
+
 Structured inputs are the system of record. This document is a generated VIEW of
 the program's structured data, never an independently authored source.
 
@@ -2466,8 +2470,12 @@ function buildSpecialAgentInputContext(
       artifact: formalSpec.title,
       phase: formalSpec.phase,
       ...(target?.agentId === "domain-ontology"
-        ? { vocabularySteering: ontologyVocabularySteering(meta.industry || strategyInputs.industry || frameInputs.industry || projectMeta.industry) }
+        ? { vocabularySteering: ontologyVocabularySteering(
+            meta.industry || strategyInputs.industry || frameInputs.industry || projectMeta.industry,
+            frameInputs.segment || strategyInputs.segment,
+          ) }
         : {}),
+      valueChainSegment: frameInputs.segment || strategyInputs.segment || null,
       // The current phase's intent boundary: its objective, the artifacts it owns,
       // and the detail owned by LATER phases that must not be demanded here. This
       // scopes the artifact's self-reported "gaps" to what this phase is actually
@@ -5633,9 +5641,46 @@ const INDUSTRY_VOCABULARY_STEERING: Record<string, string> = {
   "other": `Use ${VOCAB_SCHEMA}.`,
 };
 
-function ontologyVocabularySteering(industry: unknown): string {
-  const key = typeof industry === "string" ? industry.trim().toLowerCase() : "";
-  return INDUSTRY_VOCABULARY_STEERING[key]
+// Segment-level sharpening for the industries whose grounding forks. Keys are
+// lowercased (industry, segment) — MIRRORS INDUSTRY_SEGMENTS in
+// src/v3/lib/methodology.ts; keep the two in lockstep.
+const INDUSTRY_SEGMENT_STEERING: Record<string, Record<string, string>> = {
+  "life sciences & pharma": {
+    "clinical": `Primary: ${VOCAB_FHIR}. Fall back to ${VOCAB_SCHEMA}.`,
+    "manufacturing & supply": `Primary: ${VOCAB_GS1} (serialisation, lots, EPCIS events). Fall back to ${VOCAB_SCHEMA}.`,
+    "commercial": `Use ${VOCAB_SCHEMA} (accounts, contracts, orders); ${VOCAB_GS1} only for product identifiers.`,
+  },
+  "banking": {
+    "retail banking": `Primary: ${VOCAB_FIBO} — loans, deposits, accounts modules. Fall back to ${VOCAB_SCHEMA}.`,
+    "capital markets": `Primary: ${VOCAB_FIBO} — securities, derivatives, market data modules. Fall back to ${VOCAB_SCHEMA}.`,
+    "payments": `Primary: ${VOCAB_FIBO} — payments and settlement concepts; ${VOCAB_SCHEMA} for PaymentMethod/Invoice style commerce entities.`,
+  },
+  "energy & utilities": {
+    "grid operations": `Primary: ${VOCAB_CIM} — network, asset and measurement classes. Fall back to ${VOCAB_SCHEMA}.`,
+    "generation": `Primary: ${VOCAB_CIM} — generation and asset classes. Fall back to ${VOCAB_SCHEMA}.`,
+    "energy retail": `Use ${VOCAB_SCHEMA} for the commerce entities (Order, Invoice, Customer); ${VOCAB_CIM} for meters, assets and readings.`,
+  },
+  "public sector & government": {
+    "citizen services": `Primary: ${VOCAB_SCHEMA} (GovernmentService, GovernmentOrganization); ${VOCAB_ORG} for organisational structures.`,
+    "organisation & governance": `Primary: ${VOCAB_ORG}. Fall back to ${VOCAB_SCHEMA}.`,
+  },
+  "automotive": {
+    "product & supply chain": `Primary: ${VOCAB_GS1}. Fall back to ${VOCAB_SCHEMA}.`,
+    "dealer & commerce": `Use ${VOCAB_SCHEMA} (Vehicle, Car, Offer, Order).`,
+  },
+};
+
+function ontologyVocabularySteering(industry: unknown, segment?: unknown): string {
+  const industryKey = typeof industry === "string" ? industry.trim().toLowerCase() : "";
+  const segmentKey = typeof segment === "string" ? segment.trim().toLowerCase() : "";
+  const forked = INDUSTRY_SEGMENT_STEERING[industryKey];
+  if (forked) {
+    if (segmentKey && forked[segmentKey]) return forked[segmentKey];
+    const base = INDUSTRY_VOCABULARY_STEERING[industryKey] ?? `Use ${VOCAB_SCHEMA}.`;
+    const segments = Object.keys(forked).join(" | ");
+    return `${base} This industry's grounding forks by value-chain segment (${segments}) and none was set: infer the segment from the evidence, state the inference in the summary, and steer accordingly.`;
+  }
+  return INDUSTRY_VOCABULARY_STEERING[industryKey]
     ?? `Use ${VOCAB_SCHEMA}. (Industry "${typeof industry === "string" ? industry : ""}" has no dedicated public vocabulary in the manifest.)`;
 }
 

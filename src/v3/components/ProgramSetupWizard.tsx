@@ -9,7 +9,7 @@ import React, { useMemo, useRef, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import { supabase } from "@/integrations/supabase/client";
 import { parseDocumentToText } from "@/new/lib/parseDocumentToText";
-import { getPhaseSequence, INDUSTRY_OPTIONS, type MethodologyVariant } from "@/v3/lib/methodology";
+import { getPhaseSequence, INDUSTRY_OPTIONS, INDUSTRY_SEGMENTS, type MethodologyVariant } from "@/v3/lib/methodology";
 
 interface ProgramSetupWizardProps {
   program: ProgramSummary;
@@ -25,7 +25,7 @@ export interface ProgramSetupPatch {
   methodology?: MethodologyVariant;
   /** Baseline mandate facts, written into Frame's inputs — early evidence,
    * captured at setup, so the first generator runs are grounded. */
-  frameBaseline?: { industry?: string; sponsor?: string; targetFirstDemoDate?: string };
+  frameBaseline?: { industry?: string; segment?: string; sponsor?: string; targetFirstDemoDate?: string };
   phases: Array<{
     id: string;
     pct: number;
@@ -84,6 +84,8 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
     return buckets.frame ?? {};
   }, [program]);
   const [industry, setIndustry] = useState<string>(typeof frameInputs.industry === "string" ? frameInputs.industry : "");
+  const [segment, setSegment] = useState<string>(typeof frameInputs.segment === "string" ? frameInputs.segment : "");
+  const segmentOptions = INDUSTRY_SEGMENTS[industry] ?? null;
   const [sponsor, setSponsor] = useState<string>(typeof frameInputs.sponsor === "string" ? frameInputs.sponsor : "");
   const [firstDemoDate, setFirstDemoDate] = useState<string>(typeof frameInputs.targetFirstDemoDate === "string" ? frameInputs.targetFirstDemoDate : "");
 
@@ -178,6 +180,19 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
                 Selects the ontology&apos;s standards vocabulary — FIBO, FHIR, GS1, IEC CIM, EBUCore, W3C ORG or schema.org.
               </div>
             </label>
+            {segmentOptions ? (
+              <label>
+                <div className="v3-field-label">Value-chain segment</div>
+                <select className="v3-input" aria-label="Value-chain segment" value={segmentOptions.includes(segment) ? segment : ""}
+                  onChange={(event) => setSegment(event.target.value)}>
+                  <option value="">Not sure yet — infer from evidence</option>
+                  {segmentOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                </select>
+                <div className="v3-field-hint">
+                  Sharpens the vocabulary and discovery scope for this sector.
+                </div>
+              </label>
+            ) : null}
             <label>
               <div className="v3-field-label">Executive sponsor</div>
               <input className="v3-input" aria-label="Executive sponsor" type="text" placeholder="Name and title"
@@ -240,6 +255,8 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
               });
               const baseline: Record<string, string> = {};
               if (industry.trim()) baseline.industry = industry.trim();
+              const validSegment = (INDUSTRY_SEGMENTS[industry.trim()] ?? []).includes(segment) ? segment : "";
+              if (validSegment) baseline.segment = validSegment;
               if (sponsor.trim()) baseline.sponsor = sponsor.trim();
               if (firstDemoDate) baseline.targetFirstDemoDate = firstDemoDate;
               return onSave({

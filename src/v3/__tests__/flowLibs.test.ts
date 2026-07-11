@@ -236,3 +236,13 @@ describe("frame baseline", () => {
     expect(gateChecklist(programme({}), movement, []).find((c) => c.id === "industry")!.done).toBe(false);
   });
 });
+
+describe("industry segments", () => {
+  it("every forked industry is a real dropdown option with 2+ segments", async () => {
+    const { INDUSTRY_OPTIONS, INDUSTRY_SEGMENTS } = await import("@/v3/lib/methodology");
+    for (const [industry, segments] of Object.entries(INDUSTRY_SEGMENTS)) {
+      expect(INDUSTRY_OPTIONS, `${industry} not in dropdown`).toContain(industry);
+      expect(segments.length).toBeGreaterThanOrEqual(2);
+    }
+  });
+});
