@@ -49,7 +49,10 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
   // Read first, everywhere: every artifact opens as the typeset document;
   // Edit flips to its form (or graph), and both Save and Discard land you
   // back on the document. One flow, no mode maze.
-  const [editing, setEditing] = useState(false);
+  // The graph-first documents open straight into their studio — the diagram
+  // IS the document there, so the graphical view leads. Prose-first
+  // documents keep the typeset reading view as the default.
+  const [editing, setEditing] = useState(() => artifact.id === "domain-ontology" || artifact.id === "current-state-atlas");
 
   // A regenerate or portal write can refresh the programme under the open
   // studio — follow the store while the user hasn't started editing.
