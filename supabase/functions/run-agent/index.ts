@@ -1346,6 +1346,19 @@ rather than the industry at large.
 Structured inputs are the system of record. This document is a generated VIEW of
 the program's structured data, never an independently authored source.
 
+### Gap phrasing — who closes it decides how it reads
+When you list a gap, decide who must CLOSE it:
+- Missing information a STAKEHOLDER must supply (objectives, success measures,
+  magnitudes, deadlines, names, priorities, domain facts): phrase the gap as the
+  QUESTION to ask that person, naming them when known — e.g. "Ask the sponsor:
+  what magnitude and deadline should the objective carry?" Never phrase it as an
+  instruction to edit an input field.
+- Genuine operator work (generate an upstream document, regenerate after
+  evidence changes, connect a system): phrase it as that instruction.
+Stakeholder-phrased gaps flow into the follow-up interview script automatically;
+operator-phrased gaps stay on the document and the gate. Misphrasing a
+stakeholder fact as input-editing strands it where no conversation will ask it.
+
 ### Source priority order
 When information conflicts, always trust the higher-priority source and never let
 a lower one override it:

@@ -333,7 +333,7 @@ export default function DocumentView({ doc, order, onPatch, onOpenFullEditor }: 
             ) : (
               <>
                 <ul className="v3fs-dv-list">{gaps.map((g, i) => <li key={i}>{g}</li>)}</ul>
-                <p className="v3fs-dv-gaps-hint">Flagged at the last generation — close them in the movement's inputs, then regenerate and they re-check.</p>
+                <p className="v3fs-dv-gaps-hint">Flagged at the last generation. Questions for a stakeholder flow into the follow-up script automatically; operator items are closed in the inputs — regenerate and they re-check.</p>
               </>
             )}
           </aside>
