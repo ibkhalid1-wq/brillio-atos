@@ -275,7 +275,7 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
   const items: GateCheckItem[] = [];
   const artifactItems = () => artifacts.map((artifact) => ({
     id: `art-${artifact.id}`,
-    label: artifact.stale ? `${artifact.title} regenerated after the latest evidence` : `${artifact.title} generated`,
+    label: artifact.stale ? `${artifact.title} — evidence changed since generation` : `${artifact.title} generated`,
     done: artifact.present && !artifact.stale,
     why: artifact.present && !artifact.stale && artifact.confidence != null
       ? `confidence ${artifact.confidence}%`
