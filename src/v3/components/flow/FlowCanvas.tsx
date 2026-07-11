@@ -247,7 +247,10 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                             : item.inbox
                               ? item.done ? "Nothing waiting" : "Open the Inbox"
                               : "Met by generating / working the movement";
-                        const stale = group === "record" && !item.done && !!artifact?.present;
+                        // Amber emphasis for any present-but-open record row;
+                        // the box glyph says why: ⟳ evidence moved, ! gaps declared.
+                        const attention = group === "record" && !item.done && !!artifact?.present;
+                        const boxGlyph = item.done ? "✓" : attention ? (artifact?.stale ? "⟳" : "!") : "";
                         return (
                           <Fragment key={item.id}>
                             {grouped && group !== prevGroup ? (() => {
@@ -265,12 +268,12 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                             })() : null}
                             <button
                               type="button"
-                              className={`v3fs-check${item.done ? " done" : ""}${stale ? " stale" : ""}`}
+                              className={`v3fs-check${item.done ? " done" : ""}${attention ? " stale" : ""}`}
                               disabled={!onClick}
                               onClick={onClick}
                               title={title}
                             >
-                              <span className="v3fs-check-box" aria-hidden="true">{item.done ? "✓" : stale ? "⟳" : ""}</span>
+                              <span className="v3fs-check-box" aria-hidden="true">{boxGlyph}</span>
                               <span className="v3fs-check-l">
                                 {item.label}
                                 {item.done && item.why ? <span className="v3fs-check-why">{item.why}</span> : null}

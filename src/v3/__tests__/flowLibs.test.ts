@@ -157,7 +157,7 @@ describe("gateReadiness — one composed verdict over the closed loop", () => {
   const movement = (id: string) => flowMovements().find((m) => m.id === id)!;
   const art = (over: Record<string, unknown> = {}) => ({
     id: "discovery-kit", movementId: "frame", title: "Discovery Kit", description: "",
-    excerpt: null, confidence: 80, present: true, stale: false, ...over,
+    excerpt: null, confidence: 80, present: true, stale: false, gaps: 0, ...over,
   });
   const metFrame = (extra: Record<string, unknown> = {}) => programme({ ...extra, phaseInputs: { frame: {
     sponsorConversation: "— Sarah Okafor, COO —\ntext", businessObjective: "obj", sponsor: "Sarah",
@@ -180,6 +180,17 @@ describe("gateReadiness — one composed verdict over the closed loop", () => {
     expect(r.kind).toBe("trails");
     expect(r.tone).toBe("amber");
     expect(r.detail).toBe("8 of 9 criteria met");
+  });
+
+  it("criteria met, record current, but a document declares gaps → open gaps verdict", () => {
+    const r = verdict(metFrame(), [art({ gaps: 2 })]);
+    expect(r.kind).toBe("gaps");
+    expect(r.tone).toBe("amber");
+    expect(r.headline).toBe("The record declares open gaps");
+  });
+
+  it("staleness outranks gaps in the verdict cause", () => {
+    expect(verdict(metFrame(), [art({ gaps: 2 }), art({ id: "charter", title: "Charter", stale: true })]).kind).toBe("trails");
   });
 
   it("criteria met but a document never generated → the record trails", () => {
@@ -213,7 +224,7 @@ describe("gateChecklist — record and judgment rows close the loop", () => {
   const movement = flowMovements().find((m) => m.id === "frame")!;
   const art = {
     id: "discovery-kit", movementId: "frame", title: "Discovery Kit", description: "",
-    excerpt: null, confidence: 80, present: true, stale: false,
+    excerpt: null, confidence: 80, present: true, stale: false, gaps: 0,
   };
 
   it("a current document is a met record row with its confidence", () => {
@@ -222,6 +233,13 @@ describe("gateChecklist — record and judgment rows close the loop", () => {
     expect(item.artifactId).toBe("discovery-kit");
     expect(item.done).toBe(true);
     expect(item.why).toBe("confidence 80%");
+  });
+
+  it("a document with declared gaps is an unmet record row naming the count", () => {
+    const item = gateChecklist(programme({}), movement, [{ ...art, gaps: 2 }]).find((c) => c.id === "art-discovery-kit")!;
+    expect(item.done).toBe(false);
+    expect(item.label).toBe("Discovery Kit — declares 2 open gaps");
+    expect(item.why).toBeUndefined();
   });
 
   it("a stale document is an unmet record row in the card's vocabulary", () => {

@@ -10,7 +10,7 @@
 import type { ProgramSummary } from "@/new/types";
 import { getMethodology, type PhaseDefinition } from "@/v3/lib/methodology";
 import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
-import { getFormalArtifactContent, getFormalArtifactConfidence } from "@/v3/lib/formalArtifacts";
+import { getFormalArtifactContent, getFormalArtifactConfidence, FORMAL_ARTIFACT_FIELD_KEYS } from "@/v3/lib/formalArtifacts";
 import { listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 
 export interface EvidenceEntry {
@@ -36,6 +36,8 @@ export interface ArtifactCardModel {
   present: boolean;
   /** Generated from inputs that have since changed — offer a regenerate. */
   stale: boolean;
+  /** Open gaps the generator declared inside the document itself. */
+  gaps: number;
 }
 
 export interface GateSignal {
@@ -173,9 +175,14 @@ export function movementArtifacts(program: ProgramSummary, movement: PhaseDefini
     const confidence = getFormalArtifactConfidence(root, def.id)
       ?? (typeof stub?.confidence === "number" ? Math.round(stub.confidence) : null);
     const present = !!content || !!stub;
+    const mirror = root[FORMAL_ARTIFACT_FIELD_KEYS[def.id]];
+    const gaps = present && mirror && typeof mirror === "object" && !Array.isArray(mirror)
+      && Array.isArray((mirror as Record<string, unknown>).gaps)
+      ? ((mirror as Record<string, unknown>).gaps as unknown[]).filter(Boolean).length
+      : 0;
     return {
       id: def.id, movementId: movement.id, title: def.label, description: def.description,
-      excerpt, confidence, present,
+      excerpt, confidence, present, gaps,
       stale: present && typeof stub?.inputsFingerprint === "string" && stub.inputsFingerprint !== currentFingerprint,
     };
   });
@@ -353,9 +360,11 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
         artifactId: artifact.id,
         label: artifact.present && artifact.stale
           ? `${artifact.title} — evidence changed since generation`
-          : `${artifact.title} generated`,
-        done: artifact.present && !artifact.stale,
-        why: artifact.present && !artifact.stale && artifact.confidence != null
+          : artifact.present && artifact.gaps
+            ? `${artifact.title} — declares ${artifact.gaps} open gap${artifact.gaps === 1 ? "" : "s"}`
+            : `${artifact.title} generated`,
+        done: artifact.present && !artifact.stale && artifact.gaps === 0,
+        why: artifact.present && !artifact.stale && artifact.gaps === 0 && artifact.confidence != null
           ? `confidence ${artifact.confidence}%`
           : undefined,
       })),
@@ -393,7 +402,7 @@ function openDecisionCount(program: ProgramSummary, movementId: string): number 
 export interface GateReadiness {
   tone: "green" | "amber" | "dim";
   /** Which state the gate is in — drives glyph and styling. */
-  kind: "demonstrated" | "open" | "trails" | "judgment" | "ready" | "signal";
+  kind: "demonstrated" | "open" | "trails" | "gaps" | "judgment" | "ready" | "signal";
   headline: string;
   detail?: string;
 }
@@ -427,7 +436,10 @@ export function gateReadiness(
     return { tone: evidenceDone ? "amber" : "dim", kind: "open", headline: counts };
   }
   if (openIn("record")) {
-    return { tone: "amber", kind: "trails", headline: "The record trails the evidence", detail: counts };
+    const trailing = artifacts.some((artifact) => !artifact.present || artifact.stale);
+    return trailing
+      ? { tone: "amber", kind: "trails", headline: "The record trails the evidence", detail: counts }
+      : { tone: "amber", kind: "gaps", headline: "The record declares open gaps", detail: counts };
   }
   if (openIn("judgment")) {
     return { tone: "amber", kind: "judgment", headline: "A judgment waits in the Inbox", detail: counts };
