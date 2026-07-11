@@ -8,7 +8,7 @@ import type { ProgramSummary } from "@/new/types";
 import { resolveFlowDecision, listOpenFlowDecisions, describeDecisionChanges } from "@/v3/components/flow/flowDecisions";
 import { scriptDocumentRefs, meetingKit } from "@/v3/components/flow/flowMeetings";
 import { validateProgramBlob, migrateProgramBlob, BLOB_VERSION } from "@/v3/lib/blobGuard";
-import { unrosteredVoicesProposal, queueWatcherProposal } from "@/v3/components/flow/flowWatchers";
+import { unrosteredVoicesProposal, reDemoProposal, queueWatcherProposal } from "@/v3/components/flow/flowWatchers";
 import { mintFollowUpPack, listInterviewPacks, visibleLinks } from "@/v3/components/flow/flowPortal";
 import { trackAcceptance, trackBlockers, recordShowPass, listFlowTracks, type FlowTrack } from "@/v3/components/flow/flowTracks";
 import { toggleShipItem, listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
@@ -161,6 +161,52 @@ describe("voice watcher — unrostered voices become a Tier-2 proposal", () => {
   });
 });
 
+describe("re-demo loop — rework verdicts get a road back to the room", () => {
+  const scripts = { scripts: [
+    { stakeholder: "Dan Reyes", role: "RevOps", scenario: "Quote flow", steps: [], acceptanceAsk: "Good?" },
+  ] };
+  const base = (over: Record<string, unknown> = {}) => programme({
+    demoScripts: scripts,
+    phaseInputs: { show: { demoTour: JSON.stringify([
+      { stakeholder: "Dan Reyes", verdict: "Not yet — it needs rework" },
+      { stakeholder: "Priya Nair", verdict: "Accepted" },
+    ]) } },
+    ...over,
+  });
+
+  it("a rework verdict with no live link proposes fresh invites", () => {
+    const proposal = reDemoProposal(base())!;
+    expect(proposal.agentId).toBe("redemo-watcher");
+    expect(proposal.payload.reDemoStakeholders).toEqual(["Dan Reyes"]);
+  });
+
+  it("no proposal while an unanswered link already waits on them", () => {
+    expect(reDemoProposal(base({
+      flowDemoInvites: [{ id: "d1", stakeholder: "Dan Reyes", token: "t" }],
+    }))).toBeNull();
+  });
+
+  it("confirming retires the old unanswered link and mints a fresh one", () => {
+    const p = base({
+      flowDemoInvites: [
+        { id: "old", stakeholder: "Dan Reyes", token: "t-old", createdAt: "2026-07-01" },
+        { id: "done", stakeholder: "Priya Nair", token: "t-done", respondedAt: "2026-07-05" },
+      ],
+      flowDecisions: [{
+        id: "rd1", tier: 2, status: "open", agentId: "redemo-watcher", movementId: "show",
+        title: "Invite 1 stakeholder to re-demonstrate", payload: { reDemoStakeholders: ["Dan Reyes"] },
+      }],
+    });
+    const blob = resolveFlowDecision(p, "rd1", "confirmed", "you")!;
+    const invites = blob.flowDemoInvites as Array<Record<string, string>>;
+    expect(invites.some((invite) => invite.id === "old")).toBe(false);
+    expect(invites.some((invite) => invite.id === "done")).toBe(true);
+    const fresh = invites.find((invite) => invite.stakeholder === "Dan Reyes");
+    expect(fresh).toBeTruthy();
+    expect(fresh!.token).not.toBe("t-old");
+  });
+});
+
 describe("contradictionEntries — watcher findings file as open log rows", () => {
   const withDecision = (log?: Array<Record<string, string>>) => programme({
     phaseInputs: { listen: log ? { contradictionLog: JSON.stringify(log) } : {} },
@@ -275,19 +321,24 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
     expect(kit.questions.some((q) => /input/i.test(q))).toBe(false);
   });
 
-  it("an open contradiction becomes a stakeholder ask in Listen's follow-up", () => {
+  it("an open contradiction routes to the SPONSOR — Frame's follow-up asks it", () => {
     const p = programme({
-      discoveryKit: { interviews: [{ stakeholder: "Dan Reyes", role: "RevOps", agenda: [] }] },
-      phaseInputs: { listen: {
-        interviewRoster: JSON.stringify([{ name: "Dan Reyes", status: "Heard" }]),
-        interviewTranscripts: "— Dan Reyes, RevOps —\nplenty on record",
-        contradictionLog: JSON.stringify([
-          { statement: "Quote table is the sole record", between: "Dan vs Marcus", status: "Open — filed 2026-07-11" },
-          { statement: "Old dispute", status: "Resolved 2026-07-01" },
-        ]),
-      } },
+      phaseInputs: {
+        frame: {
+          sponsorConversation: "— Sarah Okafor, COO —\nplenty of words on record here",
+          businessObjective: "obj", sponsor: "Sarah Okafor", industry: "Banking",
+          successMetric: "cycle time", targetFirstDemoDate: "2026-07-25",
+          stakeholderSeed: JSON.stringify([{ name: "Dan" }]),
+        },
+        listen: {
+          contradictionLog: JSON.stringify([
+            { statement: "Quote table is the sole record", between: "Dan vs Marcus", status: "Open — filed 2026-07-11" },
+            { statement: "Old dispute", status: "Resolved 2026-07-01" },
+          ]),
+        },
+      },
     });
-    const kit = meetingKit(p, "listen")!;
+    const kit = meetingKit(p, "frame")!;
     expect(kit.followUp).toBe(true);
     expect(kit.questions.some((q) => q.includes("Quote table is the sole record") && /which is right/i.test(q))).toBe(true);
     expect(kit.questions.some((q) => q.includes("Old dispute"))).toBe(false);

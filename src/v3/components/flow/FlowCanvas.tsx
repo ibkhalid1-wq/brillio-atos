@@ -523,10 +523,10 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
     return trackNames.find((track) => track.lead && who.includes(track.lead))?.name ?? "";
   });
   const [resolveIdx, setResolveIdx] = useState<Set<number>>(() => new Set());
-  // Listen's open contradictions — offered as "this answer settles it"
-  // checkboxes beside the capture, resolved in the SAME atomic save.
+  // Open contradictions — offered as "this answer settles it" checkboxes on
+  // the SPONSOR's capture (Frame): the sponsor arbitrates, the row resolves.
   const openContradictions = useMemo(() => {
-    if (movementId !== "listen") return [] as Array<{ index: number; statement: string }>;
+    if (movementId !== "frame") return [] as Array<{ index: number; statement: string }>;
     const raw = (program.rawData ?? {}) as Record<string, unknown>;
     const inner = typeof raw.data === "object" && raw.data !== null ? (raw.data as Record<string, unknown>) : raw;
     const bucket = typeof inner.phaseInputs === "object" && inner.phaseInputs !== null
@@ -580,11 +580,12 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
       const next = kit.header
         ? [existing.trimEnd(), block].filter(Boolean).join("\n\n")
         : text; // single-line refs (go/no-go) replace rather than append
-      // Contradictions this answer settles flip to Resolved in the SAME save,
-      // pointing at the transcript that settled them.
-      const fields: Record<string, string> = { [kit.captureField]: next };
+      // Contradictions the sponsor's answer settles flip to Resolved in
+      // Listen's log — a second write (conflict-rebase absorbs it), each row
+      // naming the arbiter and pointing at the transcript.
+      let resolvedRows: string | null = null;
       let resolvedCount = 0;
-      if (resolveIdx.size && movementId === "listen") {
+      if (resolveIdx.size && movementId === "frame") {
         const raw2 = (program.rawData ?? {}) as Record<string, unknown>;
         const inner2 = typeof raw2.data === "object" && raw2.data !== null ? (raw2.data as Record<string, unknown>) : raw2;
         const bucket2 = typeof inner2.phaseInputs === "object" && inner2.phaseInputs !== null
@@ -599,16 +600,21 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
                 resolvedCount += 1;
               }
             }
-            if (resolvedCount) fields.contradictionLog = JSON.stringify(rows);
+            if (resolvedCount) resolvedRows = JSON.stringify(rows);
           }
         } catch { /* malformed log — leave it untouched */ }
       }
-      await onSaveInputs(movementId, fields, {
+      await onSaveInputs(movementId, { [kit.captureField]: next }, {
         attest: {
-          action: `Evidence captured — ${kit.who}${resolvedCount ? ` · ${resolvedCount} contradiction${resolvedCount === 1 ? "" : "s"} resolved` : ""}`,
+          action: `Evidence captured — ${kit.who}${resolvedCount ? ` · ${resolvedCount} contradiction${resolvedCount === 1 ? "" : "s"} settled` : ""}`,
           detail: text.replace(/\s+/g, " ").slice(0, 140),
         },
       });
+      if (resolvedRows) {
+        await onSaveInputs("listen", { contradictionLog: resolvedRows }, {
+          attest: { action: `Contradictions resolved — arbitrated by ${kit.who}`, detail: `${resolvedCount} row${resolvedCount === 1 ? "" : "s"} settled` },
+        });
+      }
       setResolveIdx(new Set());
       // Demo feedback that disputes the record routes UPSTREAM too: an open
       // contradiction lands in Listen's log, so Listen's gate re-asks the

@@ -197,6 +197,23 @@ export function mintInterviewPacks(program: ProgramSummary, actor: string): Reco
  * transform over inner.demoScripts. Null when scripts are missing or every
  * stakeholder already has an invite.
  */
+/** One demo invite from one script — shared by first-wave minting and the
+ * re-demo resolver, so both waves carry identical shape. */
+export function buildDemoInviteFromScript(script: Record<string, unknown>, now: string): Record<string, unknown> {
+  const steps = Array.isArray(script.steps) ? (script.steps as unknown[]).filter(isRecord) : [];
+  return {
+    id: `demo-${randomSecret().slice(0, 10)}`,
+    stakeholder: String(script.stakeholder ?? "Stakeholder"),
+    role: String(script.role ?? ""),
+    openingQuote: String(script.openingQuote ?? ""),
+    scenario: String(script.scenario ?? ""),
+    steps: steps.map((step) => [step.beat, step.show].filter(Boolean).map(String).join(" — ")).filter(Boolean).slice(0, 8),
+    acceptanceAsk: String(script.acceptanceAsk ?? "Does this run your workflow the way you need it to?"),
+    token: randomSecret(),
+    createdAt: now,
+  };
+}
+
 export function mintDemoInvites(program: ProgramSummary, actor: string): Record<string, unknown> | null {
   const { wrapper, inner, usesNestedData } = getProgramState((program.rawData ?? {}) as Record<string, unknown>);
   const doc = isRecord(inner.demoScripts) ? inner.demoScripts : null;
@@ -209,20 +226,7 @@ export function mintDemoInvites(program: ProgramSummary, actor: string): Record<
 
   const additions = scripts
     .filter((script) => !invited.has(String(script.stakeholder ?? "").toLowerCase()))
-    .map((script) => {
-      const steps = Array.isArray(script.steps) ? script.steps.filter(isRecord) : [];
-      return {
-        id: `demo-${randomSecret().slice(0, 10)}`,
-        stakeholder: String(script.stakeholder ?? "Stakeholder"),
-        role: String(script.role ?? ""),
-        openingQuote: String(script.openingQuote ?? ""),
-        scenario: String(script.scenario ?? ""),
-        steps: steps.map((step) => [step.beat, step.show].filter(Boolean).map(String).join(" — ")).filter(Boolean).slice(0, 8),
-        acceptanceAsk: String(script.acceptanceAsk ?? "Does this run your workflow the way you need it to?"),
-        token: randomSecret(),
-        createdAt: now,
-      };
-    });
+    .map((script) => buildDemoInviteFromScript(script, now));
   if (!additions.length) return null;
 
   const log = Array.isArray(inner.flowAttestations) ? (inner.flowAttestations as unknown[]) : [];

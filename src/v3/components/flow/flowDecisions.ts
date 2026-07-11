@@ -12,6 +12,7 @@ import type { ProgramSummary } from "@/new/types";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { readMovementInputs, parseGridRows } from "@/v3/components/flow/flowShellData";
 import { listFollowUps } from "@/v3/components/flow/flowMeetings";
+import { buildDemoInviteFromScript } from "@/v3/components/flow/flowPortal";
 
 export interface FlowDecision {
   id: string;
@@ -199,6 +200,29 @@ export function resolveFlowDecision(
     }
   }
 
+  // Re-demo invites: iterate-until-approval's engine. For each named
+  // stakeholder, retire their unanswered invite (the old link dies) and mint
+  // a fresh one from their current demo script — so a rework verdict always
+  // has a road back to the room.
+  if (resolution === "confirmed" && payload && Array.isArray(payload.reDemoStakeholders)) {
+    const doc = isRecord(nextInner.demoScripts) ? nextInner.demoScripts : null;
+    const scripts = doc && Array.isArray((doc as Record<string, unknown>).scripts)
+      ? ((doc as Record<string, unknown>).scripts as unknown[]).filter(isRecord)
+      : [];
+    const names = payload.reDemoStakeholders.map((name) => String(name).trim().toLowerCase()).filter(Boolean);
+    if (scripts.length && names.length) {
+      const invites = Array.isArray(nextInner.flowDemoInvites) ? (nextInner.flowDemoInvites as unknown[]) : [];
+      const kept = invites.filter((invite) => !(isRecord(invite)
+        && names.includes(String(invite.stakeholder ?? "").trim().toLowerCase())
+        && typeof invite.respondedAt !== "string"));
+      const fresh = names
+        .map((name) => scripts.find((script) => String(script.stakeholder ?? "").trim().toLowerCase() === name))
+        .filter((script): script is Record<string, unknown> => !!script)
+        .map((script) => buildDemoInviteFromScript(script, now));
+      if (fresh.length) nextInner = { ...nextInner, flowDemoInvites: [...kept, ...fresh].slice(-30) };
+    }
+  }
+
   // Contradiction entries file as OPEN rows in Listen's log — the gate
   // re-asks the question; the disputed documents re-derive on regeneration.
   if (resolution === "confirmed" && payload && Array.isArray(payload.contradictionEntries)) {
@@ -357,6 +381,15 @@ export function describeDecisionChanges(program: ProgramSummary, decision: FlowD
         ? `${additions.length} voice${additions.length === 1 ? "" : "s"} join as Heard${skipped ? ` · ${skipped} already mapped, untouched` : ""}`
         : "every voice is already mapped — nothing changes",
       rows: additions.slice(0, 8).map((entry) => [String(entry.name), String(entry.role ?? "")].filter(Boolean).join(" — ")),
+    });
+  }
+
+  if (Array.isArray(payload.reDemoStakeholders)) {
+    const names = payload.reDemoStakeholders.map(String).filter(Boolean);
+    changes.push({
+      target: "Demo links",
+      effect: `${names.length} fresh link${names.length === 1 ? "" : "s"} mint from the current scripts — old unanswered links stop working`,
+      rows: names.slice(0, 8),
     });
   }
 

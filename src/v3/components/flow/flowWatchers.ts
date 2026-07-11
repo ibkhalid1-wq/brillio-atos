@@ -90,6 +90,59 @@ export function unrosteredVoicesProposal(program: ProgramSummary): WatcherPropos
 }
 
 /**
+ * Rework verdicts with no live re-invite: the iterate-until-approval engine.
+ * When a stakeholder said "needs rework", their change asks are on the
+ * record and no unanswered demo link is waiting on them, propose fresh
+ * links — one confirm re-opens the loop until they accept.
+ */
+export function reDemoProposal(program: ProgramSummary): WatcherProposal | null {
+  const inner = ((program.rawData ?? {}) as Record<string, unknown>);
+  const root = typeof inner.data === "object" && inner.data !== null ? (inner.data as Record<string, unknown>) : inner;
+  const doc = root.demoScripts;
+  const scripts = doc && typeof doc === "object" && !Array.isArray(doc) && Array.isArray((doc as Record<string, unknown>).scripts)
+    ? ((doc as Record<string, unknown>).scripts as unknown[]).filter((entry): entry is Record<string, unknown> => typeof entry === "object" && entry !== null)
+    : [];
+  if (!scripts.length) return null;
+  const scripted = new Set(scripts.map((script) => String(script.stakeholder ?? "").trim().toLowerCase()));
+
+  const tour = parseGridRows(readMovementInputs(program, "show").demoTour);
+  const invites = Array.isArray(root.flowDemoInvites) ? (root.flowDemoInvites as unknown[]) : [];
+  const waitingOn = new Set(invites
+    .filter((invite): invite is Record<string, unknown> => typeof invite === "object" && invite !== null)
+    .filter((invite) => typeof invite.respondedAt !== "string")
+    .map((invite) => String(invite.stakeholder ?? "").trim().toLowerCase()));
+
+  const names = [...new Set(tour
+    .filter((row) => /rework|not yet/i.test(row.verdict ?? ""))
+    .map((row) => String(row.stakeholder ?? "").trim())
+    .filter((name) => name
+      && scripted.has(name.toLowerCase())
+      && !waitingOn.has(name.toLowerCase())))];
+  if (!names.length) return null;
+
+  const id = `watch-redemo-${djb2(names.map((name) => name.toLowerCase()).sort().join("|"))}`;
+  if (listFlowDecisions(program).some((decision) => decision.id === id)) return null;
+
+  return {
+    id,
+    tier: 2,
+    status: "open",
+    agentId: "redemo-watcher",
+    movementId: "show",
+    title: `Invite ${names.length} stakeholder${names.length === 1 ? "" : "s"} to re-demonstrate`,
+    summary: `${names.join(", ")} said "needs rework" and no new demo link is waiting on them.`,
+    blocking: "Show cannot reach every-stakeholder-accepted while a rework verdict has no road back to the room.",
+    recommendation: {
+      action: "Send fresh demo links",
+      rationale: "Their change asks are on the record — a fresh link against the current build lets them re-judge it.",
+      band: "proposal — old unanswered links retire, fresh ones mint",
+    },
+    payload: { reDemoStakeholders: names },
+    createdAt: new Date().toISOString(),
+  };
+}
+
+/**
  * Queue a watcher proposal into flowDecisions (idempotent on id), with the
  * attestation the trail expects. Returns the next raw blob, or null when the
  * proposal already exists — the caller's persist skips a no-op.

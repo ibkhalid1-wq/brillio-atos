@@ -245,10 +245,10 @@ export function kitGaps(program: ProgramSummary, movementId: string): string[] {
   const movement = flowMovements().find((entry) => entry.id === movementId);
   if (!movement) return [];
   const gaps: string[] = [];
-  // Open contradictions are stakeholder work by nature: the conversation is
-  // where two accounts get reconciled. Each open row becomes an ask, so it
-  // flows into the follow-up script and the async links automatically.
-  if (movementId === "listen") {
+  // Open contradictions route to the SPONSOR: two accounts disagree and
+  // someone with authority arbitrates. Each open row becomes an ask on the
+  // sponsor's follow-up script (and its async link) automatically.
+  if (movementId === "frame") {
     for (const row of parseGridRows(readMovementInputs(program, "listen").contradictionLog)) {
       if (/open/i.test(row.status ?? "")) {
         const between = (row.between ?? "").trim();

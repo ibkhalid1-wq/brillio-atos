@@ -56,7 +56,7 @@ import { artifactReviewFieldKey } from "@/v3/lib/artifactReview";
 import { listOpenFlowDecisions } from "@/v3/components/flow/flowDecisions";
 import { listPortalInbox } from "@/v3/components/flow/flowPortal";
 import { validateProgramBlob } from "@/v3/lib/blobGuard";
-import { unrosteredVoicesProposal, queueWatcherProposal } from "@/v3/components/flow/flowWatchers";
+import { unrosteredVoicesProposal, reDemoProposal, queueWatcherProposal } from "@/v3/components/flow/flowWatchers";
 import { mergePhaseInputBucket } from "@/v3/lib/phaseInputMerge";
 import type { V3CommandMode, V3MoreView, V3ReportId, V3Surface } from "@/v3/types";
 import { isDecisionOpen, pushV3Toast } from "@/v3/utils";
@@ -1311,7 +1311,7 @@ export default function AppShellV3() {
   // it); a version conflict just skips — the next change re-fires the check.
   useEffect(() => {
     if (!activeProgram) return;
-    const proposal = unrosteredVoicesProposal(activeProgram);
+    const proposal = unrosteredVoicesProposal(activeProgram) ?? reDemoProposal(activeProgram);
     if (!proposal) return;
     const blob = queueWatcherProposal(activeProgram, proposal);
     if (!blob) return;
