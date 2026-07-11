@@ -4883,9 +4883,11 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-kit-chan-a input[type="date"] {font:inherit;font-size:11.5px;border:1px solid var(--fs-line);border-radius:8px;padding:6px 9px;background:var(--fs-card);color:var(--v3-text-primary)}
 
 /* The spine's pointer: which movement needs the user, right on the rail. */
-.v3fs-here {position:absolute;right:calc(100% + 14px);top:14px;display:flex;align-items:center;gap:6px;white-space:nowrap;font:inherit;font-size:11.5px;font-weight:700;letter-spacing:.01em;border:none;cursor:pointer;border-radius:999px;padding:7px 13px;background:var(--v3-accent);color:#fff;box-shadow:0 8px 22px -10px color-mix(in srgb,var(--v3-accent) 60%,transparent);z-index:4}
+/* The pointer lives ABOVE the live movement's heading — anchored to the
+   content column, so it can never slide under the fixed dock at any width. */
+.v3fs-here {position:absolute;left:64px;top:-22px;display:flex;align-items:center;gap:6px;white-space:nowrap;font:inherit;font-size:11px;font-weight:700;letter-spacing:.01em;border:none;cursor:pointer;border-radius:999px;padding:6px 12px;background:var(--v3-accent);color:#fff;box-shadow:0 8px 22px -10px color-mix(in srgb,var(--v3-accent) 60%,transparent);z-index:4}
 .v3fs-here-a {display:inline-block;animation:v3fs-here-nudge 1.1s ease-in-out infinite}
-@keyframes v3fs-here-nudge {0%,100%{transform:translateX(0)}50%{transform:translateX(4px)}}
+@keyframes v3fs-here-nudge {0%,100%{transform:translateY(0)}50%{transform:translateY(3px)}}
 .v3fs-here.calm {background:var(--fs-card);color:var(--v3-accent-2);border:1px solid var(--fs-line);box-shadow:var(--fs-shadow);cursor:default}
 .v3fs-here.calm .v3fs-here-a {animation:none}
 @media (prefers-reduced-motion:reduce) {.v3fs-here-a {animation:none}}

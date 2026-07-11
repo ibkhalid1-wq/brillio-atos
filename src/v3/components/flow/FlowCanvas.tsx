@@ -125,7 +125,7 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                 aria-label={isOpen ? "You are here" : `Open ${movement.displayName} — it needs your attention`}
               >
                 {isOpen ? "You are here" : `Needs you${openChecks ? ` · ${openChecks}` : ""}`}
-                <span className="v3fs-here-a" aria-hidden="true">▶</span>
+                <span className="v3fs-here-a" aria-hidden="true">▾</span>
               </button>
             ) : null}
             <button type="button" className="v3fs-ch-h" onClick={() => toggle(setOpen, movement.id)} aria-expanded={isOpen}>
