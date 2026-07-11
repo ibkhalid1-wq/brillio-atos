@@ -262,7 +262,23 @@ export default function FlowShell(props: FlowShellProps) {
             onIngestPortalItem={props.onIngestPortalItem} onDismissPortalItem={props.onDismissPortalItem}
             onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
         ) : view === "flow" ? (
-          <FlowCanvas program={program} runningAgentIds={props.runningAgentIds} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} onCompileShipLanes={props.onCompileShipLanes} onToggleShipItem={props.onToggleShipItem} onScheduleFollowUp={props.onScheduleFollowUp} onMintFollowUp={props.onMintFollowUp} onSaveArtifactDoc={props.onSaveArtifactDoc} onRecordGate={props.onRecordGate} onReopenGate={props.onReopenGate} onRunAgentAndWait={props.onRunAgentAndWait} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} />
+          <>
+            <FlowCanvas program={program} runningAgentIds={props.runningAgentIds} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} onCompileShipLanes={props.onCompileShipLanes} onToggleShipItem={props.onToggleShipItem} onScheduleFollowUp={props.onScheduleFollowUp} onMintFollowUp={props.onMintFollowUp} onSaveArtifactDoc={props.onSaveArtifactDoc} onRecordGate={props.onRecordGate} onReopenGate={props.onReopenGate} onRunAgentAndWait={props.onRunAgentAndWait} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} />
+            {listFlowTracks(program).length ? (
+              <section className="v3fs-canvas-tracks" aria-label="Tracks">
+                <div className="v3fs-colh tk">The tracks — the build, in parallel</div>
+                <FlowTracks
+                  embedded
+                  program={program}
+                  runningAgentIds={props.runningAgentIds}
+                  onRunAgent={props.onRunAgent}
+                  onSaveInputs={props.onSaveInputs}
+                  onRecordShowPass={props.onRecordShowPass}
+                  onAddTrack={props.onAddTrack}
+                />
+              </section>
+            ) : null}
+          </>
         ) : view === "tracks" ? (
           <FlowTracks
             program={program}
@@ -562,7 +578,7 @@ function TrackCard({ track, all, busy, onRecord, onOpen }: {
   all: FlowTrack[];
   busy: boolean;
   onRecord: (trackId: string, pass: { stakeholder?: string; verdict: FlowShowPass["verdict"]; stableDiff?: boolean }) => Promise<void>;
-  onOpen: () => void;
+  onOpen?: () => void;
 }) {
   const acceptance = trackAcceptance(track);
   const pace = trackPace(track, acceptance.accepted);
@@ -631,20 +647,22 @@ function TrackCard({ track, all, busy, onRecord, onOpen }: {
       ) : (
         <div className="v3fs-dec-cta">
           <button type="button" className="v3fs-btn" onClick={() => setRecording(true)}>Record a pass</button>
-          <button type="button" className="v3fs-btn" onClick={onOpen}>Open in canvas</button>
+          {onOpen ? <button type="button" className="v3fs-btn" onClick={onOpen}>Open in canvas</button> : null}
         </div>
       )}
     </article>
   );
 }
 
-function FlowTracks({ program, runningAgentIds, onRunAgent, onSaveInputs, onRecordShowPass, onAddTrack }: {
+function FlowTracks({ program, runningAgentIds, onRunAgent, onSaveInputs, onRecordShowPass, onAddTrack, embedded }: {
   program: ProgramSummary;
   runningAgentIds: Set<string>;
   onRunAgent: FlowShellProps["onRunAgent"];
   onSaveInputs: FlowShellProps["onSaveInputs"];
   onRecordShowPass: FlowShellProps["onRecordShowPass"];
   onAddTrack: FlowShellProps["onAddTrack"];
+  /** Rendered under the canvas movements — no empty state, no drill. */
+  embedded?: boolean;
 }) {
   const tracks = listFlowTracks(program);
   const [drillId, setDrillId] = useState<string | null>(null);
@@ -679,8 +697,9 @@ function FlowTracks({ program, runningAgentIds, onRunAgent, onSaveInputs, onReco
     );
   }
 
+  if (embedded && tracks.length === 0) return null;
   return (
-    <div className="v3fs-today">
+    <div className={embedded ? "v3fs-tracks-embed" : "v3fs-today"}>
       {tracks.length === 0 ? (
         <div className="v3fs-quiet">
           <div className="v3fs-quiet-mark" aria-hidden="true">▤</div>
@@ -691,7 +710,7 @@ function FlowTracks({ program, runningAgentIds, onRunAgent, onSaveInputs, onReco
         <div className="v3fs-trkgrid">
           {tracks.map((track) => (
             <TrackCard key={track.id} track={track} all={tracks} busy={busyId === track.id}
-              onRecord={record} onOpen={() => { setDrillId(track.id); window.scrollTo({ top: 0 }); }} />
+              onRecord={record} onOpen={embedded ? undefined : () => { setDrillId(track.id); window.scrollTo({ top: 0 }); }} />
           ))}
         </div>
       )}

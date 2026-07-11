@@ -5278,3 +5278,7 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-presence-dot {width:7px;height:7px;border-radius:50%;background:var(--v3-green);animation:v3fs-presence-pulse 2.4s ease-in-out infinite}
 @keyframes v3fs-presence-pulse {0%,100% {opacity:1} 50% {opacity:.45}}
 @media (prefers-reduced-motion: reduce) {.v3fs-presence-dot {animation:none}}
+/* Tracks under the movements: the build running beneath the engagement. */
+.v3fs-canvas-tracks {margin-top:10px;padding-top:26px;border-top:1px solid var(--v3-border-soft)}
+.v3fs-canvas-tracks .v3fs-colh.tk {margin-bottom:16px}
+.v3fs-tracks-embed .v3fs-trkgrid {margin-bottom:0}
