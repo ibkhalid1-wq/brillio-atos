@@ -199,6 +199,27 @@ export function resolveFlowDecision(
     }
   }
 
+  // Contradiction entries file as OPEN rows in Listen's log — the gate
+  // re-asks the question; the disputed documents re-derive on regeneration.
+  if (resolution === "confirmed" && payload && Array.isArray(payload.contradictionEntries)) {
+    const phaseInputs = isRecord(nextInner.phaseInputs) ? { ...(nextInner.phaseInputs as Record<string, unknown>) } : {};
+    const bucket = isRecord(phaseInputs.listen) ? { ...(phaseInputs.listen as Record<string, unknown>) } : {};
+    const rows = parseGridRows(bucket.contradictionLog);
+    const additions = payload.contradictionEntries.filter(isRecord)
+      .filter((entry) => entry.statement)
+      .map((entry) => ({
+        statement: String(entry.statement),
+        between: String(entry.between ?? ""),
+        positions: String(entry.positions ?? ""),
+        status: `Open — filed ${now.slice(0, 10)}`,
+      }));
+    if (additions.length) {
+      bucket.contradictionLog = JSON.stringify([...rows, ...additions]);
+      phaseInputs.listen = bucket;
+      nextInner = { ...nextInner, phaseInputs };
+    }
+  }
+
   // Governance payloads (e.g. the cap-raise the budget gate queues) merge
   // shallowly, with movement budgets folded per movement.
   if (resolution === "confirmed" && payload && isRecord(payload.flowGovernance)) {
@@ -336,6 +357,15 @@ export function describeDecisionChanges(program: ProgramSummary, decision: FlowD
         ? `${additions.length} voice${additions.length === 1 ? "" : "s"} join as Heard${skipped ? ` · ${skipped} already mapped, untouched` : ""}`
         : "every voice is already mapped — nothing changes",
       rows: additions.slice(0, 8).map((entry) => [String(entry.name), String(entry.role ?? "")].filter(Boolean).join(" — ")),
+    });
+  }
+
+  if (Array.isArray(payload.contradictionEntries)) {
+    const entries = payload.contradictionEntries.filter(isRecord).filter((entry) => entry.statement);
+    changes.push({
+      target: "Contradiction log (Listen)",
+      effect: `${entries.length} open row${entries.length === 1 ? "" : "s"} file — Listen's gate re-asks until resolved`,
+      rows: entries.slice(0, 6).map((entry) => `${String(entry.statement)}${entry.between ? ` (${String(entry.between)})` : ""}`.slice(0, 110)),
     });
   }
 

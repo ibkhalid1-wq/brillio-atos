@@ -160,6 +160,41 @@ describe("voice watcher — unrostered voices become a Tier-2 proposal", () => {
   });
 });
 
+describe("contradictionEntries — watcher findings file as open log rows", () => {
+  const withDecision = (log?: Array<Record<string, string>>) => programme({
+    phaseInputs: { listen: log ? { contradictionLog: JSON.stringify(log) } : {} },
+    flowDecisions: [{
+      id: "cw1", tier: 2, status: "open", agentId: "contradiction-watcher", movementId: "listen",
+      title: "File 1 contradiction to the log",
+      payload: { contradictionEntries: [{ statement: "Quote table is the sole record", between: "Dan (demo) vs Marcus", positions: "demo showed CRM notes carrying amendments" }] },
+    }],
+  });
+
+  it("confirming appends an Open row to Listen's contradiction log", () => {
+    const blob = resolveFlowDecision(withDecision([{ statement: "Existing", status: "Resolved" }]), "cw1", "confirmed", "you")!;
+    const listen = (blob.phaseInputs as Record<string, Record<string, string>>).listen;
+    const rows = JSON.parse(listen.contradictionLog);
+    expect(rows).toHaveLength(2);
+    expect(rows[1].statement).toBe("Quote table is the sole record");
+    expect(rows[1].status).toMatch(/^Open — filed /);
+  });
+
+  it("the Inbox preview names the rows and the gate consequence", () => {
+    const p = withDecision();
+    const decision = listOpenFlowDecisions(p)[0];
+    const [change] = describeDecisionChanges(p, decision);
+    expect(change.target).toBe("Contradiction log (Listen)");
+    expect(change.effect).toContain("1 open row");
+    expect(change.rows[0]).toContain("Quote table is the sole record");
+  });
+
+  it("declining files nothing", () => {
+    const blob = resolveFlowDecision(withDecision(), "cw1", "declined", "you")!;
+    const listen = (blob.phaseInputs as Record<string, Record<string, string>> | undefined)?.listen;
+    expect(listen?.contradictionLog).toBeUndefined();
+  });
+});
+
 describe("blobGuard — validation and migration at the blob boundary", () => {
   it("a well-formed blob raises no issues", () => {
     expect(validateProgramBlob({

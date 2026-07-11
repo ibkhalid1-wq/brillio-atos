@@ -190,6 +190,7 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                           onScheduleFollowUp={onScheduleFollowUp}
                           onMintFollowUp={onMintFollowUp}
                           channels={channelCards}
+                          onCaptured={movement.id === "show" ? () => onRunAgent("contradiction-detector", "show") : undefined}
                         />
                         {!kit ? channelCards : null}
                       </>
@@ -442,12 +443,14 @@ function GateActionButton({ idle, armedLabel, busyLabel, quiet, onAct }: {
  * Open by default when the conversation hasn't happened; a quiet one-line
  * summary once it has.
  */
-function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, onScheduleFollowUp, onMintFollowUp, channels }: {
+function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, onScheduleFollowUp, onMintFollowUp, channels, onCaptured }: {
   kit: MeetingKit | null;
   movementId: string;
   hasEvidence: boolean;
   /** Extra channel cards (async links, demo links) rendered under Channels. */
   channels?: React.ReactNode;
+  /** Fired after a capture lands — Show wires the contradiction watcher here. */
+  onCaptured?: () => void;
   program: ProgramSummary;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
   onScheduleFollowUp?: (movementId: string, who: string, date: string) => Promise<void>;
@@ -530,6 +533,8 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
         });
         setFileContradiction(false);
       }
+      // The system reads what just arrived: fire-and-forget watcher pass.
+      onCaptured?.();
       setCapture("");
       setSavedTick(true);
       window.setTimeout(() => setSavedTick(false), 2200);

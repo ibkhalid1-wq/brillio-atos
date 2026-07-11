@@ -6684,6 +6684,29 @@ Return ONLY valid JSON:
     };
   }
 
+  if (request.agentId === "contradiction-detector" && isFlowProgramme(programData)) {
+    return {
+      system: `You are the ATOS Flow Contradiction Watcher. Compare the NEWEST evidence in the input context — the latest demonstration feedback and most recent transcript blocks — against the EARLIER record: prior transcripts, the direction decision, hard constraints, and claims the generated documents assert.
+
+Identify only genuine DISPUTES: the new evidence says something the record asserts is otherwise. Different emphasis, added detail, or new information that extends the record is NOT a contradiction.
+
+Return ONLY valid JSON:
+{
+  "contradictions": [
+    {
+      "statement": "<the disputed claim, one plain line>",
+      "between": "<who or what vs who or what — e.g. 'Dan Reyes (demo) vs quote-table assumption'>",
+      "positions": "<each side's position in one line>"
+    }
+  ],
+  "clean": true
+}
+
+Empty contradictions with "clean": true when nothing genuinely disputes the record. Never invent disputes.`,
+      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+    };
+  }
+
   if (request.agentId === "contradiction-detector") {
     return {
       system: `You are the ATOS Contradiction Detector. Scan the provided program artifacts and identify logical contradictions.
@@ -8483,7 +8506,41 @@ Deno.serve(async (req) => {
       } else if (request.agentId === "decision-advisor" && request.decisionId) {
         nextProgramData = applyDecisionAdvisorResultToProgramData(contextProgramData, request.decisionId, result);
       } else if (request.agentId === "contradiction-detector") {
-        nextProgramData = applyContradictionResultToProgramData(contextProgramData, request.phaseId, result);
+        if (isFlowProgramme(contextProgramData)) {
+          // ATOS Flow: the watcher PROPOSES — an open Tier-2 decision carrying
+          // ready-to-file contradiction rows; the human judges in the Inbox.
+          // One open proposal at a time: skip while a previous one waits.
+          const parsed = isRecord(result) ? result as Record<string, unknown> : {};
+          const rows = Array.isArray(parsed.contradictions) ? parsed.contradictions.filter(isRecord) : [];
+          const entries = rows.map((row) => ({
+            statement: String((row as Record<string, unknown>).statement ?? (row as Record<string, unknown>).description ?? "").slice(0, 140),
+            between: String((row as Record<string, unknown>).between ?? "").slice(0, 90),
+            positions: String((row as Record<string, unknown>).positions ?? (row as Record<string, unknown>).recommendation ?? "").slice(0, 160),
+          })).filter((entry) => entry.statement);
+          const existing = getInnerProgramData(contextProgramData).flowDecisions;
+          const hasOpenWatcher = Array.isArray(existing) && existing.some((entry) =>
+            isRecord(entry) && entry.agentId === "contradiction-watcher" && (entry.status ?? "open") === "open");
+          if (entries.length && !hasOpenWatcher) {
+            nextProgramData = queueFlowDecision(contextProgramData, {
+              tier: 2,
+              agentId: "contradiction-watcher",
+              movementId: "listen",
+              title: `File ${entries.length} contradiction${entries.length === 1 ? "" : "s"} to the log`,
+              summary: entries.map((entry) => entry.statement).join(" · ").slice(0, 220),
+              blocking: "The newest evidence disputes the record; unfiled, Listen's gate keeps reading resolved.",
+              recommendation: {
+                action: "File to the contradiction log",
+                rationale: "An open row makes Listen re-ask the question, and the documents built on the disputed claim re-derive.",
+                band: "proposal — additive, log rows only",
+              } as JsonValue,
+              payload: { contradictionEntries: entries as unknown as JsonValue } as JsonValue,
+            });
+          } else {
+            nextProgramData = contextProgramData;
+          }
+        } else {
+          nextProgramData = applyContradictionResultToProgramData(contextProgramData, request.phaseId, result);
+        }
       } else if (request.agentId === "cross-artifact-validator") {
         nextProgramData = applyCrossArtifactValidationResultToProgramData(contextProgramData, request.phaseId, result);
       } else if (request.agentId === "phase-input-planner") {
