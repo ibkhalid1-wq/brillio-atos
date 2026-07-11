@@ -94,7 +94,7 @@ describe("normalizeProgram", () => {
     // so the resolution stamp must survive normalization.
     const program = normalizeProgram({
       ...baseRow,
-      data: { methodology: "atos-standard",
+      data: {
         ...baseRow.data,
         decisionQueue: [
           {

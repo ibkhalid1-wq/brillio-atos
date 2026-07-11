@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
-import FlowCanvas, { FlowDocViewer } from "@/v3/components/flow/FlowCanvas";
+import FlowCanvas from "@/v3/components/flow/FlowCanvas";
+import FlowArtifactStudio, { type ArtifactEditInput } from "@/v3/components/flow/studio/FlowArtifactStudio";
 import {
   flowMovements, movementEvidence, movementArtifacts, listenCoverage,
   demoAcceptance, daysToFirstDemo, wordsOfEvidence, frameKpis,
@@ -52,6 +53,8 @@ interface FlowShellProps {
   onScheduleFollowUp: (movementId: string, who: string, date: string) => Promise<void>;
   /** Mint a follow-up link (ATOS asks the gaps itself); resolves to the URL. */
   onMintFollowUp: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
+  /** Persist a studio edit to an artifact document (attested). */
+  onSaveArtifactDoc: (input: ArtifactEditInput) => Promise<void>;
   /** Confirm a quarantined portal response into evidence. */
   onIngestPortalItem: (itemId: string) => Promise<void>;
   onDismissPortalItem: (itemId: string) => Promise<void>;
@@ -183,7 +186,7 @@ export default function FlowShell(props: FlowShellProps) {
             onIngestPortalItem={props.onIngestPortalItem} onDismissPortalItem={props.onDismissPortalItem}
             onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
         ) : view === "flow" ? (
-          <FlowCanvas program={program} runningAgentIds={props.runningAgentIds} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} onCompileShipLanes={props.onCompileShipLanes} onToggleShipItem={props.onToggleShipItem} onScheduleFollowUp={props.onScheduleFollowUp} onMintFollowUp={props.onMintFollowUp} />
+          <FlowCanvas program={program} runningAgentIds={props.runningAgentIds} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} onCompileShipLanes={props.onCompileShipLanes} onToggleShipItem={props.onToggleShipItem} onScheduleFollowUp={props.onScheduleFollowUp} onMintFollowUp={props.onMintFollowUp} onSaveArtifactDoc={props.onSaveArtifactDoc} />
         ) : view === "tracks" ? (
           <FlowTracks
             program={program}
@@ -194,7 +197,7 @@ export default function FlowShell(props: FlowShellProps) {
             onAddTrack={props.onAddTrack}
           />
         ) : view === "library" ? (
-          <FlowLibrary program={program} />
+          <FlowLibrary program={program} onSaveArtifactDoc={props.onSaveArtifactDoc} />
         ) : view === "mission" ? (
           <FlowMission
             program={program}
@@ -850,7 +853,7 @@ function FlowPortfolio({ programs, activeId, onSelectProgram, onHydratePrograms 
 
 /* ── Library: everything the programme knows ─────────────────────────────── */
 
-function FlowLibrary({ program }: { program: ProgramSummary }) {
+function FlowLibrary({ program, onSaveArtifactDoc }: { program: ProgramSummary; onSaveArtifactDoc: FlowShellProps["onSaveArtifactDoc"] }) {
   const movements = useMemo(() => flowMovements(), []);
   const [query, setQuery] = useState("");
   const [docFor, setDocFor] = useState<import("@/v3/components/flow/flowShellData").ArtifactCardModel | null>(null);
@@ -911,7 +914,7 @@ function FlowLibrary({ program }: { program: ProgramSummary }) {
           </div>
         ))}
       </div>
-      {docFor ? <FlowDocViewer program={program} artifact={docFor} onClose={() => setDocFor(null)} /> : null}
+      {docFor ? <FlowArtifactStudio program={program} artifact={docFor} onClose={() => setDocFor(null)} onSaveDoc={onSaveArtifactDoc} /> : null}
     </div>
   );
 }

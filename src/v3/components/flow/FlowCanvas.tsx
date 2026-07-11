@@ -1,15 +1,15 @@
 import React, { useEffect, useMemo, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import PhaseInputsPanel from "@/v3/components/PhaseInputsPanel";
+import FlowArtifactStudio, { type ArtifactEditInput } from "@/v3/components/flow/studio/FlowArtifactStudio";
 import {
   flowMovements, frontierMovementId, movementEvidence, movementArtifacts,
-  gateSignal, gateChecklist, listenCoverage, movementFacts, demoAcceptance, artifactDocument,
+  gateSignal, gateChecklist, listenCoverage, movementFacts, demoAcceptance,
   type ArtifactCardModel,
 } from "@/v3/components/flow/flowShellData";
 import { meetingKit, type MeetingKit } from "@/v3/components/flow/flowMeetings";
 import { listInterviewPacks, listDemoInvites, portalLinkFor } from "@/v3/components/flow/flowPortal";
 import { listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
-import { groundingFor, citationGraph, resourceUri, artifactFabioType, SEMANTIC_CONTEXT } from "@/v3/components/flow/flowSemantics";
 
 /** The gate column's one primary action per movement — opens its editor. */
 const GATE_CTA: Record<string, string> = {
@@ -48,6 +48,8 @@ interface FlowCanvasProps {
   onScheduleFollowUp?: (movementId: string, who: string, date: string) => Promise<void>;
   /** Mint a follow-up link (async form of the meeting); resolves to the URL. */
   onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
+  /** Persist a studio edit to an artifact document (attested). */
+  onSaveArtifactDoc?: (input: ArtifactEditInput) => Promise<void>;
 }
 
 /**
@@ -58,7 +60,7 @@ interface FlowCanvasProps {
  * coloured). Nothing locks; editing unfolds in place via the shared inputs
  * panel, so the canvas is the workspace, not a dashboard about one.
  */
-export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onScheduleFollowUp, onMintFollowUp }: FlowCanvasProps) {
+export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onScheduleFollowUp, onMintFollowUp, onSaveArtifactDoc }: FlowCanvasProps) {
   const movements = useMemo(() => flowMovements(), []);
   const frontier = frontierMovementId(program);
   const [open, setOpen] = useState<Set<string>>(() => new Set([frontier]));
@@ -282,11 +284,12 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
         );
       })}
       {docFor ? (
-        <FlowDocViewer
+        <FlowArtifactStudio
           program={program}
           artifact={docFor}
           onClose={() => setDocFor(null)}
           onRegenerate={() => onRunAgent(docFor.id, docFor.movementId)}
+          onSaveDoc={onSaveArtifactDoc}
         />
       ) : null}
     </div>
@@ -486,155 +489,6 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
   );
 }
 
-/**
- * The drill-down for every generated artifact: a reading pane over the full
- * document, opened from any card or Library row. One overlay, everywhere —
- * cards stay excerpts, details are always one tap away.
- */
-export function FlowDocViewer({ program, artifact, onClose, onRegenerate }: {
-  program: ProgramSummary;
-  artifact: ArtifactCardModel;
-  onClose: () => void;
-  onRegenerate?: () => void;
-}) {
-  const body = artifactDocument(program, artifact.id);
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  // Light markdown: heading lines become headings, bullet lines keep their
-  // hang, everything else reads as prose. No parser — the docs are trusted
-  // generator output rendered as text.
-  const blocks = useMemo(() => (body ?? "")
-    .replace(/\*\*/g, "")
-    .split(/\n{2,}/)
-    .map((block) => block.trimEnd())
-    .filter(Boolean)
-    .map((block) => block.split("\n").map((line) => {
-      const heading = line.match(/^#{1,4}\s+(.*)$/);
-      if (heading) return { kind: "h" as const, text: heading[1] };
-      const bullet = line.match(/^\s*[-•]\s+(.*)$/);
-      if (bullet) return { kind: "li" as const, text: bullet[1] };
-      return { kind: "p" as const, text: line };
-    })), [body]);
-
-  return (
-    <>
-      <div className="v3fs-doc-backdrop" onClick={onClose} aria-hidden="true" />
-      <div className="v3fs-docview" role="dialog" aria-modal="true" aria-label={artifact.title}>
-        <header className="v3fs-docview-h">
-          <div>
-            <h2>{artifact.title}</h2>
-            <span className="v3fs-docview-m">
-              {[artifact.confidence != null ? `confidence ${artifact.confidence}%` : null,
-                artifact.stale ? "evidence changed since generation" : null]
-                .filter(Boolean).join(" · ") || "generated by ATOS"}
-            </span>
-          </div>
-          <div className="v3fs-docview-cta">
-            {onRegenerate ? (
-              <button type="button" className="v3fs-btn" onClick={() => { onRegenerate(); onClose(); }}>
-                {artifact.stale ? "Regenerate — evidence changed" : "Regenerate"}
-              </button>
-            ) : null}
-            <button type="button" className="v3fs-btn" onClick={onClose} aria-label="Close">Close</button>
-          </div>
-        </header>
-        <div className="v3fs-docview-b">
-          {(() => {
-            // The ontology's adopted standard mappings — the shared language,
-            // shown as chips once a human has confirmed them.
-            if (artifact.id === "domain-ontology") {
-              const raw = (program.rawData ?? {}) as Record<string, unknown>;
-              const inner = typeof raw.data === "object" && raw.data !== null ? raw.data as Record<string, unknown> : raw;
-              const adopted = Array.isArray(inner.ontologyAlignment) ? inner.ontologyAlignment as Array<Record<string, unknown>> : [];
-              if (adopted.length) {
-                // A mapping confirmed against an OLDER ontology than the one
-                // on screen may no longer fit — chain it to the version it
-                // was adopted against and flag the drift.
-                const doc = typeof inner.domainOntology === "object" && inner.domainOntology !== null
-                  ? inner.domainOntology as Record<string, unknown> : {};
-                const generatedAt = typeof doc.generatedAt === "string" ? Date.parse(doc.generatedAt) : NaN;
-                return (
-                  <div className="v3fs-maps">
-                    <div className="v3fs-async-cap">Adopted standard mappings <span>confirmed groundings in the industry's shared vocabulary</span></div>
-                    <div className="v3fs-maps-row">
-                      {adopted.map((mapping, index) => {
-                        const adoptedAt = typeof mapping.adoptedAt === "string" ? Date.parse(String(mapping.adoptedAt)) : NaN;
-                        const drifted = Number.isFinite(generatedAt) && Number.isFinite(adoptedAt) && generatedAt > adoptedAt;
-                        return (
-                          <a key={index} className={`v3fs-map-chip${drifted ? " drift" : ""}`} href={String(mapping.standard ?? "#")} target="_blank" rel="noreferrer"
-                            title={`${mapping.relation} · ${mapping.standard}${drifted ? " · ontology regenerated since adoption — reconfirm" : ""}`}>
-                            {String(mapping.entity)} ⇢ {String(mapping.standard ?? "").split("/").pop()}{drifted ? " ⚠" : ""}
-                          </a>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              }
-            }
-            const grounding = groundingFor(program, artifact.id, artifact.movementId);
-            if (!grounding.length) return null;
-            return (
-              <details className="v3fs-disc v3fs-disc-sm v3fs-ground">
-                <summary>
-                  <span className="v3fs-disc-l">Grounded in<em>{grounding.length}</em></span>
-                  <span className="v3fs-disc-hint">
-                    {(() => {
-                      const convs = grounding.filter((g) => g.kind === "conversation").length;
-                      const docs = grounding.filter((g) => g.kind === "document").length;
-                      return [
-                        convs ? `${convs} conversation${convs === 1 ? "" : "s"}` : null,
-                        docs ? `${docs} document${docs === 1 ? "" : "s"}` : null,
-                      ].filter(Boolean).join(" · ");
-                    })()}
-                  </span>
-                  <span className="v3fs-disc-c" aria-hidden="true" />
-                </summary>
-                <div className="v3fs-disc-b">
-                  {grounding.map((entry) => (
-                    <div key={entry.uri} className="v3fs-ground-row">
-                      <span className={`v3fs-tag ${entry.kind === "document" ? "gn" : "ev"}`}>{entry.kind}</span>
-                      <div className="v3fs-row-g">
-                        <div className="v3fs-row-n">{entry.label}</div>
-                        <div className="v3fs-row-m">{entry.relation} · {entry.uri}</div>
-                      </div>
-                    </div>
-                  ))}
-                  <button type="button" className="v3fs-a" onClick={() => {
-                    const node = {
-                      "@context": SEMANTIC_CONTEXT,
-                      "@id": resourceUri(program.id, "artifact", artifact.id),
-                      "@type": artifactFabioType(artifact.id),
-                      "dcterms:title": artifact.title,
-                      citations: citationGraph(program),
-                    };
-                    try { void navigator.clipboard.writeText(JSON.stringify(node, null, 2)); } catch { /* ignore */ }
-                  }}>
-                    Copy as JSON-LD
-                  </button>
-                </div>
-              </details>
-            );
-          })()}
-          {blocks.length === 0 ? <p className="v3fs-empty">No document body yet — generate it first.</p> : null}
-          {blocks.map((lines, blockIndex) => (
-            <div key={blockIndex} className="v3fs-docview-blk">
-              {lines.map((line, lineIndex) =>
-                line.kind === "h" ? <h3 key={lineIndex}>{line.text}</h3>
-                  : line.kind === "li" ? <div key={lineIndex} className="v3fs-docview-li">{line.text}</div>
-                    : <p key={lineIndex}>{line.text}</p>,
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-    </>
-  );
-}
 
 /**
  * Async interviews — the Listen column's "no meeting required" lane. Links

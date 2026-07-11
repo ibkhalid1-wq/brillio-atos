@@ -31,6 +31,7 @@ import { resolveFlowDecision } from "@/v3/components/flow/flowDecisions";
 import { recordShowPass, addFlowTrack } from "@/v3/components/flow/flowTracks";
 import { setHaltAll, toggleAgentHalt, setMovementBudget } from "@/v3/components/flow/flowGovernance";
 import { mintInterviewPacks, mintDemoInvites, ingestPortalResponse, dismissPortalResponse } from "@/v3/components/flow/flowPortal";
+import { applyArtifactEdit } from "@/v3/components/flow/flowArtifactEdit";
 import { compileShipLanes, toggleShipItem } from "@/v3/components/flow/flowShip";
 import { scheduleFollowUp } from "@/v3/components/flow/flowMeetings";
 import { mintFollowUpPack, latestPackFor, portalLinkFor } from "@/v3/components/flow/flowPortal";
@@ -2044,6 +2045,10 @@ export default function AppShellV3() {
               if (existing) mintedLink = portalLinkFor(activeProgram.id, existing);
             }
             return mintedLink;
+          }}
+          onSaveArtifactDoc={async (input) => {
+            const actor = currentUser?.email || "you";
+            await persistFlowMutation((program) => applyArtifactEdit(program, input, actor));
           }}
           onIngestPortalItem={async (itemId) => {
             const actor = currentUser?.email || "you";

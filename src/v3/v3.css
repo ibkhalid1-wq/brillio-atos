@@ -4945,3 +4945,81 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
   .v3fs-ch {padding-left:0}
   .v3fs-node {position:static;margin-bottom:10px}
 }
+
+/* ── The artifact studio: per-type WYSIWYG editors over generated docs ──── */
+.v3fs-docview.v3fs-studio{width:min(1120px,95vw);max-height:92vh}
+.v3fs-stu-sec{margin:0 0 22px}
+.v3fs-stu-sec-h{display:flex;align-items:baseline;gap:10px;margin-bottom:10px}
+.v3fs-stu-sec-h h3{font-size:11px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--v3-accent-2);margin:0}
+.v3fs-stu-sec-h span{font-size:11.5px;color:var(--v3-text-muted)}
+.v3fs-stu-field{display:flex;flex-direction:column;gap:4px;margin:0 0 10px;min-width:0}
+.v3fs-stu-fl{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3fs-stu-field input,.v3fs-stu-field select,.v3fs-stu-field textarea,
+.v3fs-stu-list-row input,.v3fs-stu-tr input,.v3fs-stu-tr select,.v3fs-stu-tr textarea,
+.v3fs-stu-heat-row input,.v3fs-stu-heat-row select,.v3fs-stu-scores input{
+  font:inherit;font-size:13px;line-height:1.5;border:1px solid var(--fs-line);border-radius:8px;
+  padding:7px 10px;background:var(--fs-card);color:var(--v3-text-primary);min-width:0}
+.v3fs-stu-field textarea,.v3fs-stu-tr textarea{resize:vertical}
+.v3fs-stu-field input:focus-visible,.v3fs-stu-field select:focus-visible,.v3fs-stu-field textarea:focus-visible,
+.v3fs-stu-list-row input:focus-visible,.v3fs-stu-tr input:focus-visible,.v3fs-stu-tr select:focus-visible,
+.v3fs-stu-tr textarea:focus-visible,.v3fs-stu-heat-row input:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:1px}
+.v3fs-stu-list{display:flex;flex-direction:column;gap:6px;margin:0 0 10px}
+.v3fs-stu-list-row{display:flex;gap:6px;align-items:center}
+.v3fs-stu-list-row input{flex:1}
+.v3fs-stu-x{flex-shrink:0;width:24px;height:24px;border-radius:7px;border:1px solid var(--fs-line);background:var(--fs-card);
+  color:var(--v3-text-muted);font-size:14px;line-height:1;cursor:pointer;display:grid;place-items:center}
+.v3fs-stu-x:hover{color:var(--v3-red,#dc2626);border-color:currentColor}
+.v3fs-stu-table{display:flex;flex-direction:column;gap:6px;margin:0 0 10px}
+.v3fs-stu-tr{display:flex;gap:6px;align-items:flex-start}
+.v3fs-stu-th{font-size:9.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--v3-text-muted);padding:0 2px}
+.v3fs-stu-th span{padding:0 4px}
+.v3fs-stu-xcol{width:24px;flex-shrink:0}
+.v3fs-stu-grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+.v3fs-stu-grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 14px;align-items:end}
+.v3fs-stu-empty{font-size:12.5px;color:var(--v3-text-muted);padding:8px 0}
+.v3fs-stu-cards{display:flex;flex-direction:column;gap:10px}
+.v3fs-stu-card{border:1px solid var(--fs-line);border-radius:12px;background:var(--v3-surface-2)}
+.v3fs-stu-card summary{list-style:none;display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;user-select:none}
+.v3fs-stu-card summary::-webkit-details-marker{display:none}
+.v3fs-stu-card-t{flex:1;font-size:13px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v3fs-stu-card-b{padding:2px 12px 12px}
+.v3fs-stu-sub{border-left:2px solid var(--fs-line);padding-left:12px;margin:0 0 10px}
+.v3fs-stu-scores{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 10px}
+.v3fs-stu-scores label{display:flex;flex-direction:column;gap:3px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3fs-stu-scores input{width:88px;font-variant-numeric:tabular-nums}
+.v3fs-stu-heat{display:flex;flex-direction:column;gap:6px}
+.v3fs-stu-heat-row{display:flex;gap:6px;align-items:center;border-left:4px solid var(--fs-line);border-radius:6px;padding-left:8px}
+.v3fs-stu-heat-row input{flex:1}
+.v3fs-stu-heat-row.sev-high{border-left-color:var(--v3-red,#dc2626)}
+.v3fs-stu-heat-row.sev-medium{border-left-color:var(--v3-amber)}
+.v3fs-stu-heat-row.sev-low{border-left-color:var(--v3-green)}
+.v3fs-stu-savebar{display:flex;align-items:center;justify-content:space-between;gap:14px;
+  padding:12px 26px;border-top:1px solid var(--fs-line);background:var(--v3-surface-2);
+  border-radius:0 0 20px 20px;font-size:13px;font-weight:600}
+
+/* Ontology studio: the graph, the side panel, the tables below. */
+.v3fs-onto{display:grid;grid-template-columns:1fr 280px;gap:16px}
+.v3fs-onto-canvas{position:relative;height:460px;border:1px solid var(--fs-line);border-radius:14px;overflow:hidden;background:var(--v3-bg)}
+.v3fs-onto-add{position:absolute;left:12px;top:12px;z-index:5}
+.v3fs-onto-panel{border:1px solid var(--fs-line);border-radius:14px;padding:14px;background:var(--fs-card);overflow-y:auto;max-height:460px}
+.v3fs-onto-below{grid-column:1 / -1;margin-top:6px}
+.v3fs-onto-node{cursor:pointer}
+.v3fs-onto-node .react-flow__node-default,
+.react-flow__node.v3fs-onto-node{background:var(--fs-card);border:1.5px solid var(--fs-line);border-radius:10px;
+  padding:8px 12px;width:auto;max-width:200px;box-shadow:var(--fs-shadow);font-family:var(--v3-font)}
+.react-flow__node.v3fs-onto-node.selected,.react-flow__node.v3fs-onto-node:focus{border-color:var(--v3-accent-2);box-shadow:var(--fs-lift)}
+.v3fs-onto-nl{display:flex;flex-direction:column;gap:2px;text-align:left}
+.v3fs-onto-nl b{font-size:12.5px;font-weight:700;color:var(--v3-text-primary)}
+.v3fs-onto-sor{font-family:var(--v3-font-mono);font-size:9px;color:var(--v3-text-muted)}
+.v3fs-onto-std{font-size:9.5px;font-weight:600;color:var(--v3-accent-2)}
+.react-flow__edge.v3fs-onto-edge.selected .react-flow__edge-path{stroke:var(--v3-accent-2);stroke-width:2}
+.react-flow__edge-textbg{fill:var(--v3-bg)}
+.react-flow__edge-text{fill:var(--v3-text-secondary);font-size:10px;font-family:var(--v3-font)}
+.react-flow__controls{box-shadow:var(--fs-shadow);border-radius:8px;overflow:hidden}
+.react-flow__controls-button{background:var(--fs-card);border-bottom:1px solid var(--fs-line);color:var(--v3-text-primary)}
+.react-flow__attribution{display:none}
+@media (max-width:960px){
+  .v3fs-onto{grid-template-columns:1fr}
+  .v3fs-onto-panel{max-height:none}
+  .v3fs-stu-grid2,.v3fs-stu-grid3{grid-template-columns:1fr}
+}

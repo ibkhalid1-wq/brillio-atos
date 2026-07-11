@@ -151,3 +151,45 @@ describe("gateChecklist provenance", () => {
     expect(item.why).toBeUndefined();
   });
 });
+
+describe("flowArtifactEdit.applyArtifactEdit", () => {
+  it("merges the edit over the stored doc, stamps it, and attests tier 1", async () => {
+    const { applyArtifactEdit, readArtifactDoc } = await import("@/v3/components/flow/flowArtifactEdit");
+    const p = programme({
+      domainOntology: { entities: [{ name: "Quote" }], confidence: 0.8, generatedAt: "2026-07-01" },
+    });
+    const blob = applyArtifactEdit(p, {
+      fieldKey: "domainOntology", movementId: "listen", title: "Domain Ontology",
+      doc: { entities: [{ name: "Quote" }, { name: "Order" }] },
+    }, "user@x")!;
+    const doc = (blob as Record<string, Record<string, unknown>>).domainOntology;
+    expect((doc.entities as unknown[])).toHaveLength(2);
+    expect(doc.confidence).toBe(0.8);            // untouched generator metadata survives
+    expect(doc.generatedAt).toBe("2026-07-01");
+    expect(doc.editedBy).toBe("user@x");
+    expect(typeof doc.editedAt).toBe("string");
+    const trail = (blob as Record<string, unknown[]>).flowAttestations as Array<Record<string, unknown>>;
+    expect(trail[trail.length - 1]).toMatchObject({ tier: 1, agentId: "user@x", phaseId: "listen", action: "Edited: Domain Ontology" });
+    expect(readArtifactDoc(programme(blob as Record<string, unknown>), "domainOntology")!.editedBy).toBe("user@x");
+  });
+
+  it("returns null for a malformed edit", async () => {
+    const { applyArtifactEdit } = await import("@/v3/components/flow/flowArtifactEdit");
+    expect(applyArtifactEdit(programme({}), { fieldKey: "", movementId: "listen", title: "x", doc: {} }, "u")).toBeNull();
+  });
+});
+
+describe("artifact studio registry", () => {
+  it("covers every atos-flow required artifact with a resolvable field key", async () => {
+    const { STUDIO_REGISTRY } = await import("@/v3/components/flow/studio/studios");
+    const { getPhaseSequence, getPhaseDefinition } = await import("@/v3/lib/methodology");
+    const required = getPhaseSequence("atos-flow")
+      .flatMap((phaseId) => getPhaseDefinition(phaseId, "atos-flow")?.requiredArtifacts ?? []);
+    expect(required.length).toBeGreaterThanOrEqual(13);
+    for (const artifactId of required) {
+      const entry = STUDIO_REGISTRY[artifactId];
+      expect(entry, `no studio for ${artifactId}`).toBeTruthy();
+      expect(entry.fieldKey, `no field key for ${artifactId}`).toBeTruthy();
+    }
+  });
+});
