@@ -24,7 +24,7 @@ export interface ArtifactEditInput {
   doc: Record<string, unknown>;
 }
 
-export default function FlowArtifactStudio({ program, artifact, onClose, onRegenerate, onSaveDoc, onOpenInbox }: {
+export default function FlowArtifactStudio({ program, artifact, onClose, onRegenerate, onSaveDoc, onOpenInbox, onOpenArtifact }: {
   program: ProgramSummary;
   artifact: ArtifactCardModel;
   onClose: () => void;
@@ -32,6 +32,8 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
   onSaveDoc?: (input: ArtifactEditInput) => Promise<void>;
   /** Jump to the Inbox (used when a regenerated version awaits a confirm). */
   onOpenInbox?: () => void;
+  /** Open a different artifact's document (chips in studios drill through). */
+  onOpenArtifact?: (artifactId: string) => void;
 }) {
   const entry = STUDIO_REGISTRY[artifact.id];
   const storedDoc = useMemo(
@@ -236,7 +238,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
         <div className="v3fs-docview-b">
 
           {studioActive && entry && draft ? (
-            <entry.Component doc={draft} onChange={(next) => { setDraft(next); setDirty(true); }} />
+            <entry.Component doc={draft} onChange={(next) => { setDraft(next); setDirty(true); }} onOpenArtifact={onOpenArtifact} />
           ) : (
             <>
               {groundingDisclosure}

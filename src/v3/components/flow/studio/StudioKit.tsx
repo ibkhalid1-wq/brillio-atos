@@ -157,4 +157,6 @@ export function ChipsField({ label, values, onChange, placeholder }: {
 export interface StudioProps {
   doc: Record<string, unknown>;
   onChange: (next: Record<string, unknown>) => void;
+  /** Open another artifact's document (e.g. an entity chip → the ontology). */
+  onOpenArtifact?: (artifactId: string) => void;
 }

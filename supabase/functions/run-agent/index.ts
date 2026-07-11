@@ -1170,7 +1170,7 @@ Ground every workflow step and pain point in what a stakeholder actually said �
 Return ONLY valid JSON:
 {
   "title": "Current-State Atlas — <programme name>",
-  "workflows": [ { "name": "string", "owner": "role", "trigger": "what starts it", "steps": [ { "actor": "role", "action": "string", "system": "system used or null", "duration": "stated duration or null", "evidence": "verbatim quote — speaker" } ], "handoffs": ["cross-team hand-offs"], "failureModes": ["where it goes wrong today"] } ],
+  "workflows": [ { "name": "string", "owner": "role", "trigger": "what starts it", "steps": [ { "actor": "role", "action": "string", "system": "system used or null", "duration": "stated duration or null", "evidence": "verbatim quote — speaker", "entities": ["domain entities this step touches — use the ontology's names"] } ], "handoffs": ["cross-team hand-offs"], "failureModes": ["where it goes wrong today"] } ],
   "painHeatmap": [ { "area": "string", "pain": "string", "severity": "high|medium|low", "voicedBy": ["stakeholders"], "quote": "the strongest verbatim expression of it" } ],
   "systemsInventory": [ { "system": "string", "usedFor": "string", "complaints": ["stakeholder complaints about it"] } ],
   "contradictions": [ { "statement": "what is disputed", "between": ["stakeholder A", "stakeholder B"], "positions": ["A's version", "B's version"], "suggestedFollowUp": "the question that resolves it" } ],
@@ -1235,6 +1235,7 @@ Return ONLY valid JSON:
   "title": "Agentic Blueprint — <programme name>",
   "targetFramework": "string",
   "agents": [ { "name": "string", "purpose": "one sentence", "replacesWorkflow": "Atlas workflow name", "tools": ["capabilities/integrations it calls"], "inputs": ["ontology entities consumed"], "outputs": ["ontology entities produced"], "autonomyLevel": "suggest|act-with-approval|act", "escalatesTo": "role" } ],
+  "journeys": [ { "name": "journey name", "persona": "customer|user", "stages": [ { "name": "stage", "customer": "what the customer does/experiences, or null", "user": "what staff do, or null", "agent": "what an agent does — name it from agents[], or null", "systems": "systems touched, or null" } ] } ],
   "orchestration": { "pattern": "string", "description": "how work flows between agents", "stateManagement": "where state lives" },
   "dataContracts": [ { "entity": "ontology entity", "source": "system of record", "shape": "brief field list", "sync": "live|batch|manual" } ],
   "hitlPoints": [ { "where": "step/decision", "why": "the stakeholder-voiced risk it answers", "mechanism": "approve|review|override" } ],

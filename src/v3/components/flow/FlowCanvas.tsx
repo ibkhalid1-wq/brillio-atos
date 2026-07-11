@@ -464,6 +464,12 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
         <FlowArtifactStudio
           program={program}
           artifact={docFor}
+          onOpenArtifact={(artifactId) => {
+            for (const m of flowMovements()) {
+              const hit = movementArtifacts(program, m).find((a) => a.id === artifactId && a.present);
+              if (hit) { setDocFor(hit); return; }
+            }
+          }}
           onClose={() => setDocFor(null)}
           onRegenerate={() => onRunAgent(docFor.id, docFor.movementId)}
           onSaveDoc={onSaveArtifactDoc}

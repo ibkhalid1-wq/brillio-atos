@@ -7,6 +7,8 @@
  */
 import React from "react";
 import OntologyStudio from "./OntologyStudio";
+import WorkflowStudio from "./WorkflowStudio";
+import JourneyGrid from "./JourneyGrid";
 import {
   Section, TextField, TextArea, SelectField, ChipsField, StringListEditor, TableEditor,
   asArray, asRecord, asText, asStrings, type StudioProps,
@@ -163,12 +165,15 @@ function DiscoveryKitStudio({ doc, onChange }: StudioProps) {
 
 const SEVERITIES = ["high", "medium", "low"];
 
-function AtlasStudio({ doc, onChange }: StudioProps) {
+function AtlasStudio({ doc, onChange, onOpenArtifact }: StudioProps) {
   const patch = patchOf(doc, onChange);
   const workflows = useListOps(doc, onChange, "workflows");
   const pains = useListOps(doc, onChange, "painHeatmap");
   return (
     <>
+      <Section label="Workflows — the diagram" hint="each step: who does what, in which system; entity chips open the ontology">
+        <WorkflowStudio doc={doc} onChange={onChange} onOpenArtifact={onOpenArtifact} />
+      </Section>
       <Section label="Pain heatmap" hint="colour = severity">
         <div className="v3fs-stu-heat">
           {pains.items.map((pain, index) => (
@@ -319,6 +324,9 @@ function BlueprintStudio({ doc, onChange }: StudioProps) {
   const orchestration = asRecord(doc.orchestration);
   return (
     <>
+      <Section label="Journeys — the orchestrated experience" hint="stages across, lanes down: customer · user · agent · systems">
+        <JourneyGrid doc={doc} onChange={onChange} />
+      </Section>
       <Section label="Agents" hint="each replaces an Atlas workflow">
         <CardList
           items={agents.items}
@@ -790,7 +798,7 @@ export const STUDIO_REGISTRY: Record<string, StudioEntry> = {
   "current-state-atlas": { fieldKey: flowFieldKey("current-state-atlas"), docOrder: ["workflows", "painHeatmap", "systemsInventory", "contradictions", "openQuestions", "coverage"], Component: AtlasStudio },
   "domain-ontology": { fieldKey: flowFieldKey("domain-ontology"), docOrder: ["entities", "relations", "events", "standardAlignment", "ambiguities"], Component: OntologyStudio },
   "architecture-strategy": { fieldKey: flowFieldKey("architecture-strategy"), docOrder: ["candidates", "recommendation"], Component: StrategyStudio },
-  "agentic-blueprint": { fieldKey: flowFieldKey("agentic-blueprint"), docOrder: ["agents", "orchestration", "dataContracts", "hitlPoints", "evalPlan", "buildSequence", "tracks"], Component: BlueprintStudio },
+  "agentic-blueprint": { fieldKey: flowFieldKey("agentic-blueprint"), docOrder: ["agents", "journeys", "orchestration", "dataContracts", "hitlPoints", "evalPlan", "buildSequence", "tracks"], Component: BlueprintStudio },
   "prototype-pack": { fieldKey: flowFieldKey("prototype-pack"), docOrder: ["scaffold", "buildSlices", "seedScenarios", "stubbing"], Component: PrototypePackStudio },
   "demo-scripts": { fieldKey: flowFieldKey("demo-scripts"), docOrder: ["scripts", "tourSequence"], Component: DemoScriptsStudio },
   "hardening-plan": { fieldKey: flowFieldKey("hardening-plan"), docOrder: ["workstreams", "guardrails", "hitlImplementation", "cutoverPlan", "runbookSeeds"], Component: HardeningStudio },

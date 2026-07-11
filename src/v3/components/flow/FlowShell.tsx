@@ -1124,7 +1124,13 @@ function FlowLibrary({ program, onSaveArtifactDoc, onOpenInbox }: { program: Pro
           </div>
         ))}
       </div>
-      {docFor ? <FlowArtifactStudio program={program} artifact={docFor} onClose={() => setDocFor(null)} onSaveDoc={onSaveArtifactDoc} onOpenInbox={onOpenInbox} /> : null}
+      {docFor ? <FlowArtifactStudio program={program} artifact={docFor} onClose={() => setDocFor(null)} onSaveDoc={onSaveArtifactDoc} onOpenInbox={onOpenInbox}
+        onOpenArtifact={(artifactId) => {
+          for (const m of flowMovements()) {
+            const hit = movementArtifacts(program, m).find((a) => a.id === artifactId && a.present);
+            if (hit) { setDocFor(hit); return; }
+          }
+        }} /> : null}
       {evFor ? <EvidenceReader entry={evFor} onClose={() => setEvFor(null)} /> : null}
     </div>
   );
