@@ -114,12 +114,6 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact }: Studio
         <div className="v3fs-stu-empty">No workflows on record yet — add one, or regenerate the Atlas once transcripts are in.</div>
       ) : (
         <>
-          <div className="v3fs-wf-head">
-            <TextField label="Name" value={asText(workflow.name)} onChange={(next) => patchWorkflow({ name: next })} />
-            <TextField label="Trigger" value={asText(workflow.trigger)} onChange={(next) => patchWorkflow({ trigger: next })} />
-            <TextField label="Owner" value={asText(workflow.owner)} onChange={(next) => patchWorkflow({ owner: next })} />
-          </div>
-
           {steps.length === 0 ? (
             <div className="v3fs-stu-empty">No steps yet — add the first one below.</div>
           ) : (
@@ -191,6 +185,23 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact }: Studio
                 onChange={(next) => patchStep(selected, { entities: next })} />
             </div>
           ) : null}
+
+          <div className="v3fs-wf-details">
+            <div className="v3fs-wf-head">
+              <TextField label="Name" value={asText(workflow.name)} onChange={(next) => patchWorkflow({ name: next })} />
+              <TextField label="Trigger" value={asText(workflow.trigger)} onChange={(next) => patchWorkflow({ trigger: next })} />
+              <TextField label="Owner" value={asText(workflow.owner)} onChange={(next) => patchWorkflow({ owner: next })} />
+            </div>
+            <div className="v3fs-wf-head">
+              <ChipsField label="Hand-offs" values={asStrings(workflow.handoffs)} onChange={(next) => patchWorkflow({ handoffs: next })} />
+              <ChipsField label="Failure modes" values={asStrings(workflow.failureModes)} onChange={(next) => patchWorkflow({ failureModes: next })} />
+            </div>
+            <button type="button" className="v3fs-btn danger" onClick={() => {
+              writeWorkflows(workflows.filter((_, index) => index !== active));
+              setActive(Math.max(0, active - 1));
+              setSelected(null);
+            }}>Remove this workflow</button>
+          </div>
         </>
       )}
     </div>

@@ -167,7 +167,6 @@ const SEVERITIES = ["high", "medium", "low"];
 
 function AtlasStudio({ doc, onChange, onOpenArtifact }: StudioProps) {
   const patch = patchOf(doc, onChange);
-  const workflows = useListOps(doc, onChange, "workflows");
   const pains = useListOps(doc, onChange, "painHeatmap");
   return (
     <>
@@ -191,38 +190,6 @@ function AtlasStudio({ doc, onChange, onOpenArtifact }: StudioProps) {
           ))}
           <button type="button" className="v3fs-a" onClick={() => pains.add({ area: "", pain: "", severity: "medium", voicedBy: [] })}>＋ Add pain</button>
         </div>
-      </Section>
-      <Section label="Workflows" hint="how work moves today, step by step">
-        <CardList
-          items={workflows.items}
-          itemLabel={(w) => asText(w.name) || "Workflow"}
-          onAdd={() => workflows.add({ name: "", owner: "", trigger: "", steps: [], handoffs: [], failureModes: [] })}
-          onRemove={workflows.remove}
-          addLabel="Add workflow"
-          render={(workflow, index) => (
-            <>
-              <div className="v3fs-stu-grid3">
-                <TextField label="Name" value={asText(workflow.name)} onChange={(next) => workflows.set(index, { name: next })} />
-                <TextField label="Owner" value={asText(workflow.owner)} onChange={(next) => workflows.set(index, { owner: next })} />
-                <TextField label="Trigger" value={asText(workflow.trigger)} onChange={(next) => workflows.set(index, { trigger: next })} />
-              </div>
-              <TableEditor
-                columns={[
-                  { key: "actor", label: "Actor" },
-                  { key: "action", label: "Action", grow: 2.2 },
-                  { key: "system", label: "System" },
-                  { key: "duration", label: "Duration" },
-                ]}
-                rows={asArray(workflow.steps).map(asRecord)}
-                onChange={(next) => workflows.set(index, { steps: next })}
-                addLabel="Add step"
-                emptyHint="No steps yet."
-              />
-              <ChipsField label="Hand-offs" values={asStrings(workflow.handoffs)} onChange={(next) => workflows.set(index, { handoffs: next })} />
-              <ChipsField label="Failure modes" values={asStrings(workflow.failureModes)} onChange={(next) => workflows.set(index, { failureModes: next })} />
-            </>
-          )}
-        />
       </Section>
       <Section label="Systems inventory">
         <TableEditor

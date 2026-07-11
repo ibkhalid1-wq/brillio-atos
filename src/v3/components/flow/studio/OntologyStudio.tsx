@@ -25,13 +25,63 @@ function entityId(entity: Record<string, unknown>, index: number): string {
   return name || `entity-${index}`;
 }
 
-/** Deterministic first layout: a circle sized to the entity count. */
-function seedPositions(ids: string[]): Record<string, { x: number; y: number }> {
-  const radius = Math.max(180, ids.length * 34);
+/**
+ * Deterministic layered layout that keeps connectors short and mostly
+ * parallel: BFS from the best-connected entity assigns layers (rows), then
+ * one barycenter pass orders each layer by the average position of its
+ * neighbours above — the classic crossing-minimisation move. Disconnected
+ * entities settle into the final row.
+ */
+function seedPositions(ids: string[], relations: Array<Record<string, unknown>>): Record<string, { x: number; y: number }> {
+  const neighbours = new Map<string, string[]>(ids.map((id) => [id, []]));
+  for (const relation of relations) {
+    const from = String(relation.from ?? "");
+    const to = String(relation.to ?? "");
+    if (neighbours.has(from) && neighbours.has(to)) {
+      neighbours.get(from)!.push(to);
+      neighbours.get(to)!.push(from);
+    }
+  }
+  const layers: string[][] = [];
+  const layerOf = new Map<string, number>();
+  const unvisited = new Set(ids);
+  while (unvisited.size) {
+    const root = [...unvisited].sort((a, b) => (neighbours.get(b)!.length - neighbours.get(a)!.length))[0];
+    let frontier = [root];
+    unvisited.delete(root);
+    let depth = layers.length ? layers.length : 0;
+    while (frontier.length) {
+      (layers[depth] ??= []).push(...frontier);
+      frontier.forEach((id) => layerOf.set(id, depth));
+      const next: string[] = [];
+      for (const id of frontier) {
+        for (const other of neighbours.get(id)!) {
+          if (unvisited.has(other)) {
+            unvisited.delete(other);
+            next.push(other);
+          }
+        }
+      }
+      frontier = next;
+      depth += 1;
+    }
+  }
+  // Barycenter pass: order each layer by the mean index of neighbours above.
+  for (let depth = 1; depth < layers.length; depth += 1) {
+    const above = new Map(layers[depth - 1].map((id, index) => [id, index]));
+    layers[depth].sort((a, b) => {
+      const mean = (id: string) => {
+        const ups = neighbours.get(id)!.map((other) => above.get(other)).filter((v): v is number => v !== undefined);
+        return ups.length ? ups.reduce((sum, v) => sum + v, 0) / ups.length : Number.MAX_SAFE_INTEGER;
+      };
+      return mean(a) - mean(b);
+    });
+  }
   const out: Record<string, { x: number; y: number }> = {};
-  ids.forEach((id, i) => {
-    const angle = (2 * Math.PI * i) / Math.max(1, ids.length) - Math.PI / 2;
-    out[id] = { x: Math.round(radius * Math.cos(angle)), y: Math.round(radius * 0.72 * Math.sin(angle)) };
+  layers.forEach((layer, depth) => {
+    layer.forEach((id, index) => {
+      out[id] = { x: Math.round((index - (layer.length - 1) / 2) * 240), y: depth * 150 };
+    });
   });
   return out;
 }
@@ -61,10 +111,15 @@ export default function OntologyStudio({ doc, onChange }: StudioProps) {
   // Structure follows the document; geometry follows the user. Rebuild nodes
   // whenever entities/selection change, carrying prior position + measured
   // size by id so the graph never snaps back or loses its edges.
+  const rearrange = useCallback(() => {
+    const positions = seedPositions(ids, relations);
+    setNodes((current) => current.map((node) => ({ ...node, position: positions[node.id] ?? node.position })));
+  }, [ids, relations, setNodes]);
+
   useEffect(() => {
     setNodes((previous) => {
       const prevById = new Map(previous.map((node) => [node.id, node]));
-      const seeded = seedPositions(ids);
+      const seeded = seedPositions(ids, relations);
       return entities.map((entity, index) => {
         const id = entityId(entity, index);
         const prev = prevById.get(id);
@@ -86,12 +141,14 @@ export default function OntologyStudio({ doc, onChange }: StudioProps) {
         } as Node;
       });
     });
-  }, [entities, ids, adopted, selected, setNodes]);
+  }, [entities, ids, relations, adopted, selected, setNodes]);
 
   const edges: Edge[] = useMemo(() => relations.map((relation, index) => {
     const cardinality = asText(relation.cardinality);
     return {
       id: `rel-${index}`,
+      type: "smoothstep",
+      pathOptions: { borderRadius: 6 },
       source: asText(relation.from),
       target: asText(relation.to),
       label: `${asText(relation.relation) || "relates to"}${cardinality && cardinality !== "unknown" ? ` · ${cardinality}` : ""}`,
@@ -178,7 +235,10 @@ export default function OntologyStudio({ doc, onChange }: StudioProps) {
           <Background gap={22} size={1} />
           <Controls showInteractive={false} />
         </ReactFlow>
-        <button type="button" className="v3fs-btn v3fs-onto-add" onClick={addEntity}>＋ Add entity</button>
+        <div className="v3fs-onto-toolbar">
+          <button type="button" className="v3fs-btn" onClick={addEntity}>＋ Add entity</button>
+          <button type="button" className="v3fs-btn" onClick={rearrange} title="Re-apply the layered layout — shortest connectors, fewest crossings">⌗ Arrange</button>
+        </div>
       </div>
 
       <aside className="v3fs-onto-panel">
@@ -243,6 +303,20 @@ export default function OntologyStudio({ doc, onChange }: StudioProps) {
             onChange={(next) => patch({ ambiguities: next })}
             addLabel="Add ambiguity"
             emptyHint="No ambiguities logged."
+          />
+        </Section>
+        <Section label="Standards alignment" hint="entities mapped to public vocabularies — adopted via the Inbox">
+          <TableEditor
+            columns={[
+              { key: "entity", label: "Entity" },
+              { key: "standard", label: "Standard URI", grow: 2 },
+              { key: "vocabulary", label: "Vocabulary" },
+              { key: "relation", label: "Relation" },
+            ]}
+            rows={asArray(doc.standardAlignment).map(asRecord)}
+            onChange={(next) => patch({ standardAlignment: next })}
+            addLabel="Add mapping"
+            emptyHint="No standard mappings adopted yet."
           />
         </Section>
         <Section label="Gaps" hint="entities referenced but never defined">

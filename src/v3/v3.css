@@ -5048,15 +5048,20 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
   padding:12px 36px;border-top:1px solid var(--fs-line);background:var(--v3-surface-2);font-size:13px;font-weight:600}
 
 /* Ontology studio: the graph, the side panel, the tables below. */
-.v3fs-onto{display:grid;grid-template-columns:1fr 280px;gap:16px}
-.v3fs-onto-canvas{position:relative;height:460px;border:1px solid var(--fs-line);border-radius:14px;overflow:hidden;background:var(--v3-bg)}
-.v3fs-onto-add{position:absolute;left:12px;top:12px;z-index:5}
-.v3fs-onto-panel{border:1px solid var(--fs-line);border-radius:14px;padding:14px;background:var(--fs-card);overflow-y:auto;max-height:460px}
-.v3fs-onto-below{grid-column:1 / -1;margin-top:6px}
+/* Graphic on top, details below: the graph owns the full width; the
+   inspector is a strip beneath it; the element tables follow. */
+.v3fs-onto{display:flex;flex-direction:column;gap:14px}
+.v3fs-onto-canvas{position:relative;height:440px;border:1px solid var(--fs-line);border-radius:14px;overflow:hidden;background:var(--v3-bg)}
+.v3fs-onto-toolbar{position:absolute;left:12px;top:12px;z-index:5;display:flex;gap:7px}
+.v3fs-onto-panel{border:1px solid var(--v3-border-soft);border-radius:12px;padding:13px 15px;background:var(--v3-surface-2);display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px 14px;align-items:start}
+.v3fs-onto-panel .v3fs-stu-sec-h{grid-column:1 / -1}
+.v3fs-onto-panel .v3fs-stu-empty{grid-column:1 / -1}
+.v3fs-onto-panel .v3fs-btn.danger{justify-self:start}
+.v3fs-onto-below{margin-top:2px}
 .v3fs-onto-node{cursor:pointer}
 .v3fs-onto-node .react-flow__node-default,
-.react-flow__node.v3fs-onto-node{background:var(--fs-card);border:1.5px solid var(--fs-line);border-radius:10px;
-  padding:8px 12px;width:auto;max-width:200px;box-shadow:var(--fs-shadow);font-family:var(--v3-font)}
+.react-flow__node.v3fs-onto-node{background:var(--fs-card);border:1.5px solid var(--fs-line);border-left:3.5px solid var(--v3-accent-2);border-radius:11px;
+  padding:8px 12px 9px;width:auto;max-width:200px;box-shadow:var(--fs-shadow);font-family:var(--v3-font);transition:border-color .15s ease, box-shadow .15s ease}
 .react-flow__node.v3fs-onto-node.selected,.react-flow__node.v3fs-onto-node:focus{border-color:var(--v3-accent-2);box-shadow:var(--fs-lift)}
 .v3fs-onto-nl{display:flex;flex-direction:column;gap:2px;text-align:left}
 .v3fs-onto-nl b{font-size:12.5px;font-weight:700;color:var(--v3-text-primary)}
@@ -5069,8 +5074,6 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .react-flow__controls-button{background:var(--fs-card);border-bottom:1px solid var(--fs-line);color:var(--v3-text-primary)}
 .react-flow__attribution{display:none}
 @media (max-width:960px){
-  .v3fs-onto{grid-template-columns:1fr}
-  .v3fs-onto-panel{max-height:none}
   .v3fs-stu-grid2,.v3fs-stu-grid3{grid-template-columns:1fr}
 }
 
@@ -5349,3 +5352,6 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-jny-agent .v3fs-jny-lane {color:var(--v3-accent-2)}
 .v3fs-jny-agent textarea {color:var(--v3-accent-2)}
 .v3fs-jny-add {min-width:70px !important;border-style:dashed !important}
+/* Workflow details strip under the swimlane. */
+.v3fs-wf-details {display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--v3-border-soft);padding-top:14px;margin-top:4px}
+.v3fs-wf-details .v3fs-btn.danger {align-self:flex-start}
