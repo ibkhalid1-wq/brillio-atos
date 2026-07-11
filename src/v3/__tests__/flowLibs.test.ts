@@ -161,6 +161,28 @@ describe("voice watcher — unrostered voices become a Tier-2 proposal", () => {
   });
 });
 
+describe("track re-adoption — metadata refreshes, demonstrations never erased", () => {
+  it("an incoming same-id track updates lead/goal but keeps show passes", () => {
+    const p = programme({
+      tracks: [{ id: "t1", name: "Quote Automation", goal: "old goal", leadStakeholder: "Sales Lead", showPasses: [{ ts: "x", verdict: "accepted" }], createdAt: "2026-07-01" }],
+      flowDecisions: [{
+        id: "d1", tier: 2, status: "open", agentId: "agentic-blueprint", movementId: "envision", title: "Adopt",
+        payload: { tracks: [
+          { id: "t1", name: "Quote Automation", goal: "new goal", leadStakeholder: "Dan Reyes" },
+          { id: "t2", name: "New Track", goal: "g", leadStakeholder: "Priya Nair" },
+        ] },
+      }],
+    });
+    const blob = resolveFlowDecision(p, "d1", "confirmed", "you")!;
+    const tracks = blob.tracks as Array<Record<string, unknown>>;
+    const t1 = tracks.find((t) => t.id === "t1")!;
+    expect(t1.leadStakeholder).toBe("Dan Reyes");
+    expect(t1.goal).toBe("new goal");
+    expect((t1.showPasses as unknown[]).length).toBe(1);
+    expect(tracks.some((t) => t.id === "t2")).toBe(true);
+  });
+});
+
 describe("re-demo loop — rework verdicts get a road back to the room", () => {
   const scripts = { scripts: [
     { stakeholder: "Dan Reyes", role: "RevOps", scenario: "Quote flow", steps: [], acceptanceAsk: "Good?" },

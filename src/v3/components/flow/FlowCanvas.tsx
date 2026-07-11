@@ -40,9 +40,6 @@ interface FlowCanvasProps {
   onReopenGate?: (movementId: string, reason: string) => Promise<void>;
   /** Awaitable agent run — the spine runner sequences regenerations with it. */
   onRunAgentAndWait?: (agentId: string, phaseId: string) => Promise<void>;
-  /** Rendered after Envision — the tracks its blueprint created, running in
-   * parallel through Show, Ship and Evolve. */
-  tracksBand?: React.ReactNode;
 }
 
 /**
@@ -53,7 +50,7 @@ interface FlowCanvasProps {
  * coloured). Nothing locks; editing unfolds in place via the shared inputs
  * panel, so the canvas is the workspace, not a dashboard about one.
  */
-export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onScheduleFollowUp, onMintFollowUp, onSaveArtifactDoc, onOpenInbox, onRecordGate, onReopenGate, onRunAgentAndWait, tracksBand }: FlowCanvasProps) {
+export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onScheduleFollowUp, onMintFollowUp, onSaveArtifactDoc, onOpenInbox, onRecordGate, onReopenGate, onRunAgentAndWait }: FlowCanvasProps) {
   const movements = useMemo(() => flowMovements(), []);
   const frontier = frontierMovementId(program);
   const [open, setOpen] = useState<Set<string>>(() => new Set([frontier]));
@@ -202,9 +199,75 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                                   </span>
                                 ) : null}
                               </div>
+                              {movement.id === "show" ? (() => {
+                                const lead = (track.leadStakeholder ?? "").trim().toLowerCase();
+                                if (!lead) return null;
+                                const raw = (program.rawData ?? {}) as Record<string, unknown>;
+                                const inner = typeof raw.data === "object" && raw.data !== null ? (raw.data as Record<string, unknown>) : raw;
+                                const doc = inner.demoScripts;
+                                const scripts = doc && typeof doc === "object" && !Array.isArray(doc) && Array.isArray((doc as Record<string, unknown>).scripts)
+                                  ? ((doc as Record<string, unknown>).scripts as unknown[]).filter((entry): entry is Record<string, unknown> => typeof entry === "object" && entry !== null)
+                                  : [];
+                                // Tracks name leads by ROLE ("Sales Lead"); scripts and
+                                // verdicts name PEOPLE. The script's role field bridges:
+                                // match either, then use the person for the rest.
+                                const script = scripts.find((entry) =>
+                                  [entry.stakeholder, entry.role].some((value) => String(value ?? "").trim().toLowerCase() === lead));
+                                const person = (script ? String(script.stakeholder ?? "") : track.leadStakeholder ?? "").trim();
+                                const personKey = person.toLowerCase();
+                                const invite = [...listDemoInvites(program)].reverse().find((entry) =>
+                                  [entry.stakeholder, entry.role].some((value) => (value ?? "").trim().toLowerCase() === personKey || (value ?? "").trim().toLowerCase() === lead));
+                                const verdictRow = demoAcceptance(program).rows.find((row) =>
+                                  (row.stakeholder ?? "").trim().toLowerCase() === personKey || (row.stakeholder ?? "").trim().toLowerCase() === lead);
+                                const steps = script && Array.isArray(script.steps)
+                                  ? (script.steps as unknown[]).filter((step): step is Record<string, unknown> => typeof step === "object" && step !== null)
+                                  : [];
+                                return (
+                                  <div className="v3fs-ev-track-panel">
+                                    <div className="v3fs-ev-track-lead">
+                                      {person && personKey !== lead ? `${person} — ${track.leadStakeholder}` : track.leadStakeholder}
+                                      {verdictRow?.verdict
+                                        ? <span className={`v3fs-vc ${/accepted/i.test(verdictRow.verdict) ? "acc" : "pen"}`}>{verdictRow.verdict}</span>
+                                        : <span className="v3fs-vc pen">No verdict yet</span>}
+                                    </div>
+                                    {script ? (
+                                      <details className="v3fs-ev-script">
+                                        <summary>Demo script — their workflow, their words</summary>
+                                        {typeof script.openingQuote === "string" && script.openingQuote ? <blockquote>“{script.openingQuote}”</blockquote> : null}
+                                        {steps.length ? (
+                                          <ol>
+                                            {steps.slice(0, 6).map((step, i) => (
+                                              <li key={i}>{[step.beat, step.say ?? step.show].filter(Boolean).map(String).join(" — ")}</li>
+                                            ))}
+                                          </ol>
+                                        ) : null}
+                                        {typeof script.acceptanceAsk === "string" && script.acceptanceAsk ? <p className="v3fs-ev-script-ask">{script.acceptanceAsk}</p> : null}
+                                      </details>
+                                    ) : scripts.length ? (
+                                      <div className="v3fs-ev-track-none">“{track.leadStakeholder}” isn't a person on the record — re-adopt the Blueprint's plan and this track binds to a real stakeholder.</div>
+                                    ) : (
+                                      <div className="v3fs-ev-track-none">No demo script yet — generate Demo Scripts and it appears here.</div>
+                                    )}
+                                    {invite ? (
+                                      <div className="v3fs-async-row">
+                                        <span className={`v3fs-st ${invite.respondedAt ? "ok" : "none"}`} />
+                                        <div className="v3fs-async-who">
+                                          demo link
+                                          <span>{invite.respondedAt ? "verdict received" : "waiting"}</span>
+                                        </div>
+                                        <button type="button" className="v3fs-a" onClick={() => {
+                                          void navigator.clipboard.writeText(portalLinkFor(program.id, invite)).catch(() => window.prompt("Copy the link:", portalLinkFor(program.id, invite)));
+                                        }}>Copy link</button>
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                );
+                              })() : null}
                               {entries.length
                                 ? entries.map(voice)
-                                : <div className="v3fs-ev-track-none">No attributed feedback yet — tag the track when capturing.</div>}
+                                : movement.id !== "show"
+                                  ? <div className="v3fs-ev-track-none">No attributed feedback yet — tag the track when capturing.</div>
+                                  : null}
                             </Fragment>
                           );
                         })}
@@ -394,7 +457,6 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
               </div>
             ) : null}
           </article>
-          {movement.id === "envision" ? tracksBand : null}
           </Fragment>
         );
       })}

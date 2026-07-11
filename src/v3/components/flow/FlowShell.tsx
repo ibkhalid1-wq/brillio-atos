@@ -263,20 +263,6 @@ export default function FlowShell(props: FlowShellProps) {
             onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
         ) : view === "flow" ? (
           <FlowCanvas program={program} runningAgentIds={props.runningAgentIds} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} onCompileShipLanes={props.onCompileShipLanes} onToggleShipItem={props.onToggleShipItem} onScheduleFollowUp={props.onScheduleFollowUp} onMintFollowUp={props.onMintFollowUp} onSaveArtifactDoc={props.onSaveArtifactDoc} onRecordGate={props.onRecordGate} onReopenGate={props.onReopenGate} onRunAgentAndWait={props.onRunAgentAndWait} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }}
-            tracksBand={listFlowTracks(program).length ? (
-              <section className="v3fs-canvas-tracks" aria-label="Tracks">
-                <div className="v3fs-colh tk">The tracks — born here, running beside Show, Ship and Evolve</div>
-                <FlowTracks
-                  embedded
-                  program={program}
-                  runningAgentIds={props.runningAgentIds}
-                  onRunAgent={props.onRunAgent}
-                  onSaveInputs={props.onSaveInputs}
-                  onRecordShowPass={props.onRecordShowPass}
-                  onAddTrack={props.onAddTrack}
-                />
-              </section>
-            ) : undefined}
           />
         ) : view === "tracks" ? (
           <FlowTracks

@@ -138,13 +138,31 @@ export function resolveFlowDecision(
     nextInner.dynamicSchema = merged;
   }
 
-  // Track plans merge by id: new tracks append, existing ones keep their
-  // show/refine record (a re-adopted plan must never erase demonstrations).
+  // Track plans merge by id: new tracks append; existing ones REFRESH their
+  // metadata (name, goal, slices, lead) from the incoming plan while keeping
+  // their show/refine record — a re-adopted plan must never erase
+  // demonstrations, but it should correct what a better generation knows.
   if (resolution === "confirmed" && payload && Array.isArray(payload.tracks)) {
     const current = Array.isArray(nextInner.tracks) ? (nextInner.tracks as unknown[]) : [];
-    const currentIds = new Set(current.filter(isRecord).map((t) => String(t.id ?? "")));
-    const additions = payload.tracks.filter(isRecord).filter((t) => t.id && !currentIds.has(String(t.id)));
-    if (additions.length) nextInner = { ...nextInner, tracks: [...current, ...additions].slice(-24) };
+    const incomingById = new Map(payload.tracks.filter(isRecord).filter((t) => t.id).map((t) => [String(t.id), t]));
+    const refreshed = current.map((track) => {
+      if (!isRecord(track)) return track;
+      const incoming = incomingById.get(String(track.id ?? ""));
+      if (!incoming) return track;
+      incomingById.delete(String(track.id ?? ""));
+      return {
+        ...track,
+        name: incoming.name ?? track.name,
+        goal: incoming.goal ?? track.goal,
+        slices: Array.isArray(incoming.slices) ? incoming.slices : track.slices,
+        dependsOn: Array.isArray(incoming.dependsOn) ? incoming.dependsOn : track.dependsOn,
+        leadStakeholder: incoming.leadStakeholder ?? track.leadStakeholder,
+      };
+    });
+    const additions = [...incomingById.values()];
+    if (additions.length || payload.tracks.length) {
+      nextInner = { ...nextInner, tracks: [...refreshed, ...additions].slice(-24) };
+    }
   }
 
   // Standard-vocabulary mappings merge additively by entity — re-adopting

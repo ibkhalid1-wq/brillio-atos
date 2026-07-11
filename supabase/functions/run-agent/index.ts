@@ -1240,7 +1240,7 @@ Return ONLY valid JSON:
   "hitlPoints": [ { "where": "step/decision", "why": "the stakeholder-voiced risk it answers", "mechanism": "approve|review|override" } ],
   "evalPlan": [ { "behaviour": "what must hold", "measure": "how it is measured", "threshold": "pass bar" } ],
   "buildSequence": ["ordered slices — the first must be demoable"],
-  "tracks": [ { "name": "build workstream over the shared data model", "goal": "one-sentence outcome it demonstrates", "slices": ["buildSequence slices that live in this track"], "leadStakeholder": "who watches its demonstrations", "dependsOn": ["track names it waits on"] } ],
+  "tracks": [ { "name": "build workstream over the shared data model", "goal": "one-sentence outcome it demonstrates", "slices": ["buildSequence slices that live in this track"], "leadStakeholder": "the REAL person who watches its demonstrations — a full name exactly as attributed in the transcripts or roster (e.g. \"Dan Reyes\"), NEVER an invented role title", "dependsOn": ["track names it waits on"] } ],
   "gaps": ["direction ambiguities, unmapped entities, unresolved framework questions"],
   "summary": "one sentence verdict on blueprint buildability",
   "confidence": 0.0
