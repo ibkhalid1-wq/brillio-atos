@@ -127,10 +127,10 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                 data-tip={`Needs you${openChecks ? ` · ${openChecks}` : ""} — open ${movement.displayName}`}
                 aria-label={`Open ${movement.displayName} — needs you${openChecks ? `, ${openChecks} open` : ""}`}
               >
-                <svg viewBox="0 0 20 28" width="19" height="26" fill="none" stroke="currentColor"
+                <svg viewBox="0 0 28 20" width="24" height="17" fill="none" stroke="currentColor"
                   strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M10 2v16" />
-                  <path d="M3 13l7 7 7-7" />
+                  <path d="M2 10h16" />
+                  <path d="M13 3l7 7-7 7" />
                 </svg>
               </button>
             ) : null}
