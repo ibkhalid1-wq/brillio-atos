@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import FlowCanvas from "@/v3/components/flow/FlowCanvas";
 import FlowArtifactStudio, { type ArtifactEditInput } from "@/v3/components/flow/studio/FlowArtifactStudio";
+import FlowBoardPack from "@/v3/components/flow/FlowBoardPack";
 import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 import {
   flowMovements, movementEvidence, movementArtifacts, listenCoverage,
@@ -1045,9 +1046,16 @@ function FlowPulse({ program }: { program: ProgramSummary }) {
   const demos = demoAcceptance(program);
   const words = wordsOfEvidence(program);
   const kpis = frameKpis(program);
+  const [packOpen, setPackOpen] = useState(false);
 
   return (
     <div className="v3fs-pulse">
+      <div className="v3fs-pulse-bar">
+        <button type="button" className="v3fs-btn" onClick={() => setPackOpen(true)}>
+          ⎙ Board pack — print or save as PDF
+        </button>
+      </div>
+      {packOpen ? <FlowBoardPack program={program} onClose={() => setPackOpen(false)} /> : null}
       <div className="v3fs-stats">
         <div className="v3fs-stat hero">
           <div className="v3fs-stat-n">{days != null ? <b>{days}</b> : <b>—</b>}{days != null ? <small> days</small> : null}</div>
