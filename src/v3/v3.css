@@ -5056,10 +5056,10 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-dv-gaps{margin:28px 0 0;border:1px solid #E4CFA4;border-radius:12px;padding:14px 16px;background:var(--v3-amber-soft)}
 .v3fs-dv-gaps .v3fs-dv-h{color:var(--v3-amber)}
 .v3fs-dv-stale{color:var(--v3-amber) !important}
-.v3fs-dv-colophon{margin-top:36px;padding-top:18px;border-top:1px solid var(--fs-line)}
-.v3fs-dv-colophon .v3fs-dv-h{color:var(--v3-text-muted)}
+.v3fs-dv-colophon{border:none;background:transparent;border-radius:0;box-shadow:none;margin-top:32px;border-top:1px solid var(--fs-line)}
+.v3fs-dv-colophon summary{padding:12px 0 8px}
+.v3fs-dv-colophon > .v3fs-disc-b{padding:0 0 10px}
 .v3fs-dv-colophon .v3fs-dv-fv{font-family:var(--v3-font-mono);font-size:11.5px;color:var(--v3-text-secondary)}
-.v3fs-dv-colophon .v3fs-ground{margin-top:12px}
 
 /* Evidence reader — stacks above the studio so claims check against source. */
 .v3fs-doc-backdrop.v3fs-evread-layer{z-index:90}
@@ -5070,9 +5070,9 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 
 /* Grounded-in, at home in the colophon: no card frame, flush rows, a quiet
    drill-in affordance — the reader is one tap away. */
-.v3fs-dv-colophon .v3fs-ground{border:none;background:transparent;border-radius:0;margin-top:6px}
-.v3fs-dv-colophon .v3fs-ground summary{padding:8px 0}
-.v3fs-dv-colophon .v3fs-ground .v3fs-disc-b{padding:0 0 6px}
+.v3fs-docview-b .v3fs-ground{border:none;background:transparent;border-radius:0;margin:0 0 18px;border-bottom:1px solid var(--fs-line)}
+.v3fs-docview-b .v3fs-ground summary{padding:2px 0 10px}
+.v3fs-docview-b .v3fs-ground .v3fs-disc-b{padding:0 0 10px}
 .v3fs-ground-row.v3fs-row-open{margin:0;padding:7px 8px 7px 0;border-radius:8px;align-items:center}
 .v3fs-ground-row .v3fs-row-m{word-break:normal;font-family:var(--v3-font);font-size:11px}
 .v3fs-ground-go{flex-shrink:0;color:var(--v3-text-muted);font-size:16px;line-height:1;padding:0 4px}
