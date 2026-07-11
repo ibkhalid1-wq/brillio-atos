@@ -13,8 +13,7 @@
     "validate": "npm run typecheck && npm run lint && npm run build && npm run test",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:ui": "vitest --ui",
-    "evals": "tsx src/lib/evals/adamEvalCLI.ts --all"
+    "test:ui": "vitest --ui"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.1",
