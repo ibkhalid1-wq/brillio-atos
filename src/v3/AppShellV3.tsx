@@ -1255,8 +1255,16 @@ export default function AppShellV3() {
     }
     return spend;
   }, [activeProgramId]);
-  // Re-enter the Paper & Flow shell whenever the active programme changes.
-  useEffect(() => { setUseFlowShell(true); }, [activeProgramId]);
+  // Re-enter the Paper & Flow shell whenever the active programme changes —
+  // and hydrate the newly active programme's blob. The Flow-vs-classic shell
+  // decision reads `methodology`, which lives in the blob: a programme
+  // selected mid-session may still be metadata-only, which stranded Flow
+  // programmes in the classic workspace until a manual reload. hydratePrograms
+  // is a cheap no-op when the cached blob is already fresh.
+  useEffect(() => {
+    setUseFlowShell(true);
+    if (activeProgramId) void hydratePrograms([activeProgramId]);
+  }, [activeProgramId, hydratePrograms]);
   const { snapshots: programSnapshots, createSnapshot: createProgramSnapshot, getSnapshotData: getProgramSnapshotData } = useProgramSnapshots(activeProgramId || null, { enabled: authChecked && migrated });
   const aiStatus = useAIStatus(true); // status check works without auth since edge function accepts anon key
   const agentCards = useMemo(() => buildAgentCards(activeProgram, activeRuns), [activeProgram, activeRuns]);
