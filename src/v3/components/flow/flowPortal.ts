@@ -109,6 +109,22 @@ export function listDemoInvites(program: ProgramSummary): FlowDemoInvite[] {
   })).filter((invite) => invite.id && invite.token);
 }
 
+/**
+ * The links a surface should SHOW: per person, the newest waiting link (the
+ * one live ask) and the newest answered one (the record that they replied).
+ * Older duplicates — minted before superseding existed, or answered several
+ * times — stay in the blob but not on screen.
+ */
+export function visibleLinks(packs: FlowInterviewPack[]): FlowInterviewPack[] {
+  const byKey = new Map<string, FlowInterviewPack>();
+  for (const pack of packs) {
+    const key = `${pack.stakeholder.trim().toLowerCase()}|${pack.respondedAt ? "answered" : "waiting"}`;
+    const held = byKey.get(key);
+    if (!held || pack.createdAt > held.createdAt) byKey.set(key, pack);
+  }
+  return packs.filter((pack) => byKey.get(`${pack.stakeholder.trim().toLowerCase()}|${pack.respondedAt ? "answered" : "waiting"}`) === pack);
+}
+
 /** The shareable link for a pack or demo invite. */
 export function portalLinkFor(programId: string, holder: { token: string }): string {
   const base = `${window.location.origin}${window.location.pathname}`;

@@ -9,7 +9,7 @@ import { resolveFlowDecision, listOpenFlowDecisions, describeDecisionChanges } f
 import { scriptDocumentRefs, meetingKit } from "@/v3/components/flow/flowMeetings";
 import { validateProgramBlob, migrateProgramBlob, BLOB_VERSION } from "@/v3/lib/blobGuard";
 import { unrosteredVoicesProposal, queueWatcherProposal } from "@/v3/components/flow/flowWatchers";
-import { mintFollowUpPack, listInterviewPacks } from "@/v3/components/flow/flowPortal";
+import { mintFollowUpPack, listInterviewPacks, visibleLinks } from "@/v3/components/flow/flowPortal";
 import { trackAcceptance, trackBlockers, recordShowPass, listFlowTracks, type FlowTrack } from "@/v3/components/flow/flowTracks";
 import { toggleShipItem, listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 import { ingestPortalResponse, listPortalInbox } from "@/v3/components/flow/flowPortal";
@@ -209,6 +209,15 @@ describe("follow-up packs — one live ask per person per movement", () => {
     expect(ids).toContain("old-answered");
     expect(ids).toContain("discovery");
     expect(ids).toHaveLength(3); // answered + discovery + the new pack
+  });
+
+  it("surfaces show one link per person per state — newest wins", () => {
+    const packs = listInterviewPacks(programme({ flowInterviewPacks: [
+      { id: "old", role: "Follow-up", stakeholder: "Sarah", movementId: "frame", questions: ["a"], token: "t1", createdAt: "2026-07-01" },
+      { id: "new", role: "Follow-up", stakeholder: "Sarah", movementId: "frame", questions: ["b"], token: "t2", createdAt: "2026-07-05" },
+      { id: "done", role: "Follow-up", stakeholder: "Sarah", movementId: "frame", questions: ["c"], token: "t3", createdAt: "2026-07-02", respondedAt: "2026-07-03" },
+    ] }));
+    expect(visibleLinks(packs).map((pack) => pack.id).sort()).toEqual(["done", "new"]);
   });
 
   it("packs expose their movement so channels can scope to their own", () => {

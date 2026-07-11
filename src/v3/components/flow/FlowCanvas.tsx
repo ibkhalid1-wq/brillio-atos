@@ -9,7 +9,7 @@ import {
   type ArtifactCardModel,
 } from "@/v3/components/flow/flowShellData";
 import { meetingKit, type MeetingKit } from "@/v3/components/flow/flowMeetings";
-import { listInterviewPacks, listDemoInvites, portalLinkFor } from "@/v3/components/flow/flowPortal";
+import { listInterviewPacks, listDemoInvites, portalLinkFor, visibleLinks } from "@/v3/components/flow/flowPortal";
 import { listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 
 interface FlowCanvasProps {
@@ -638,7 +638,7 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
           </div>
         ) : null}
         {(() => {
-          const movementLinks = listInterviewPacks(program).filter((pack) => pack.movementId === movementId);
+          const movementLinks = visibleLinks(listInterviewPacks(program).filter((pack) => pack.movementId === movementId));
           if (!((kit.followUp && (onScheduleFollowUp || onMintFollowUp)) || channels || movementLinks.length)) return null;
           return (
           <>
@@ -738,7 +738,7 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
 function AsyncInterviews({ program, onMintPacks }: { program: ProgramSummary; onMintPacks: () => Promise<void> }) {
   // This is Listen's channel: discovery packs (no movementId) and Listen
   // follow-ups belong here; follow-up links minted for OTHER movements do not.
-  const packs = listInterviewPacks(program).filter((pack) => !pack.movementId || pack.movementId === "listen");
+  const packs = visibleLinks(listInterviewPacks(program).filter((pack) => !pack.movementId || pack.movementId === "listen"));
   const hasKit = (() => {
     const raw = (program.rawData ?? {}) as Record<string, unknown>;
     const inner = typeof raw.data === "object" && raw.data !== null ? (raw.data as Record<string, unknown>) : raw;
