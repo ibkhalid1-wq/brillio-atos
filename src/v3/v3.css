@@ -4503,7 +4503,7 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 .v3fs-wrap {max-width:1200px;margin:0 auto;padding:0 32px 110px}
 
 /* floating dock */
-.v3fs-dock {position:fixed;left:22px;top:50%;transform:translateY(-50%);z-index:60;display:flex;flex-direction:column;gap:4px;
+.v3fs-dock {position:fixed;left:22px;top:50%;transform:translateY(-50%);z-index:95;display:flex;flex-direction:column;gap:4px;
   background:var(--fs-dock);backdrop-filter:blur(14px);border:1px solid var(--fs-line);border-radius:18px;padding:10px 8px;box-shadow:var(--fs-pop)}
 .v3fs-dock .v3fs-brand {width:40px;height:40px;border-radius:13px;background:var(--v3-accent);color:#fff !important;display:grid;place-items:center;font-weight:700;font-size:16px;margin-bottom:8px}
 .v3fs-dock > button:not(.v3fs-brand) {width:44px;padding:9px 0 7px;border-radius:12px;color:var(--v3-text-muted);display:flex;flex-direction:column;align-items:center;gap:3px;transition:background .15s ease,color .15s ease}
@@ -4928,7 +4928,7 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 
 /* The reading pane: full-document drill-down for every generated artifact. */
 .v3fs-doc-backdrop {position:fixed;inset:0;background:rgba(15,16,32,.5);backdrop-filter:blur(8px);z-index:80}
-.v3fs-docview {position:fixed;top:0;right:0;bottom:0;width:min(780px,94vw);display:flex;flex-direction:column;background:var(--fs-card);border-left:1px solid var(--fs-line);border-radius:0;box-shadow:-24px 0 80px -24px rgba(15,16,32,.45);z-index:81}
+.v3fs-docview {position:fixed;top:0;right:0;bottom:0;width:min(780px,calc(100vw - 100px));display:flex;flex-direction:column;background:var(--fs-card);border-left:1px solid var(--fs-line);border-radius:0;box-shadow:-24px 0 80px -24px rgba(15,16,32,.45);z-index:81}
 @media (prefers-reduced-motion: no-preference){
   .v3fs-docview{animation:v3fs-dv-in .22s cubic-bezier(.2,.8,.3,1)}
   .v3fs-doc-backdrop{animation:v3fs-dv-fade .22s ease}
@@ -4998,7 +4998,7 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 }
 
 /* ── The artifact studio: per-type WYSIWYG editors over generated docs ──── */
-.v3fs-docview.v3fs-studio{width:min(1120px,96vw)}
+.v3fs-docview.v3fs-studio{width:min(1120px,calc(100vw - 100px))}
 .v3fs-stu-sec{margin:0 0 22px}
 .v3fs-stu-sec-h{display:flex;align-items:baseline;gap:10px;margin-bottom:10px}
 .v3fs-stu-sec-h h3{font-size:11px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--v3-accent-2);margin:0}
