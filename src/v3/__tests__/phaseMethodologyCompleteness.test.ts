@@ -14,7 +14,7 @@ function makeProgram() {
     client: "Acme",
     industry: "Financial Services",
     updated_at: "2026-06-13T00:00:00.000Z",
-    data: {
+    data: { methodology: "atos-standard",
       objective: "Modernize finance operations",
       phases: [{ id: "strategy", pct: 30 }],
       phaseInputs: {
@@ -63,12 +63,12 @@ describe("derivePhaseMethodologyCompleteness", () => {
     const preCutoff = normalizeProgram({
       id: "pre", name: "N", client: "C", industry: "Financial Services",
       updated_at: "2026-06-13T00:00:00.000Z",
-      data: { _createdAt: "2026-06-01T00:00:00.000Z", phases: [{ id: "strategy", pct: 0 }], phaseInputs: { strategy: {} } },
+      data: { methodology: "atos-standard", _createdAt: "2026-06-01T00:00:00.000Z", phases: [{ id: "strategy", pct: 0 }], phaseInputs: { strategy: {} } },
     });
     const postCutoff = normalizeProgram({
       id: "post", name: "N", client: "C", industry: "Financial Services",
       updated_at: "2026-07-10T00:00:00.000Z",
-      data: { _createdAt: "2026-07-10T00:00:00.000Z", phases: [{ id: "strategy", pct: 0 }], phaseInputs: { strategy: {} } },
+      data: { methodology: "atos-standard", _createdAt: "2026-07-10T00:00:00.000Z", phases: [{ id: "strategy", pct: 0 }], phaseInputs: { strategy: {} } },
     });
     const preInputs = derivePhaseMethodologyCompleteness(preCutoff, "strategy")!.groups.find((g) => g.kind === "input")!;
     const postInputs = derivePhaseMethodologyCompleteness(postCutoff, "strategy")!.groups.find((g) => g.kind === "input")!;

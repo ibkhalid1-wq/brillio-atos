@@ -93,7 +93,7 @@ function buildProgram(gateStatuses: Record<string, "ready" | "approved">) {
     client: "Acme",
     industry: "Manufacturing",
     updated_at: new Date().toISOString(),
-    data: {
+    data: { methodology: "atos-standard",
       phases: PHASES.map((id) => ({ id, pct: 100 })),
       phaseInputs,
       phaseArtifacts,

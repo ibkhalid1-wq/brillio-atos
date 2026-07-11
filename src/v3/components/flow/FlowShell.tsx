@@ -24,7 +24,6 @@ interface FlowShellProps {
   onCreateProgram: () => void;
   onOpenSetup: () => void;
   onOpenCopilot: () => void;
-  onExitShell: () => void;
   onRunAgent: (agentId: string, phaseId?: string) => void;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean }) => Promise<void>;
   /** Resolve an open decision (confirm applies its prepared payload). */
@@ -150,7 +149,6 @@ export default function FlowShell(props: FlowShellProps) {
           <div className="v3fs-switcher-sep" />
           <button type="button" role="menuitem" onClick={() => { setSwitcherOpen(false); props.onCreateProgram(); }}>＋ New programme</button>
           <button type="button" role="menuitem" onClick={() => { setSwitcherOpen(false); props.onOpenSetup(); }}>Programme setup</button>
-          <button type="button" role="menuitem" onClick={() => { setSwitcherOpen(false); props.onExitShell(); }}>Open classic workspace</button>
         </div>
       ) : null}
 

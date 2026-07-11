@@ -19,7 +19,7 @@ function makeProgram() {
     client: "Acme",
     industry: "Financial Services",
     updated_at: "2026-06-13T00:00:00.000Z",
-    data: {
+    data: { methodology: "atos-standard",
       objective: "Modernize finance operations",
       phases: [
         { id: "strategy", pct: 100 },
@@ -90,7 +90,7 @@ describe("RAID de-duplication", () => {
       id: "program-dup",
       name: "Dups",
       updated_at: "2026-06-13T00:00:00.000Z",
-      data: {
+      data: { methodology: "atos-standard",
         objective: "x",
         gateReviews: { strategy: { status: "approved" } },
         raidLog: {
@@ -119,7 +119,7 @@ describe("RAID de-duplication", () => {
       id: "program-cap",
       name: "Capacity",
       updated_at: "2026-06-13T00:00:00.000Z",
-      data: {
+      data: { methodology: "atos-standard",
         objective: "x",
         gateReviews: { strategy: { status: "approved" } },
         raidLog: {
@@ -153,7 +153,7 @@ describe("locked-phase actionability filter", () => {
       id: "program-2",
       name: "Locked phases",
       updated_at: "2026-06-13T00:00:00.000Z",
-      data: {
+      data: { methodology: "atos-standard",
         objective: "x",
         phases: [
           { id: "strategy", pct: 40 },
@@ -197,7 +197,7 @@ describe("stale capacity-gap retirement on completed phases", () => {
       id: "program-cap-complete",
       name: "Completed phases",
       updated_at: "2026-06-13T00:00:00.000Z",
-      data: {
+      data: { methodology: "atos-standard",
         objective: "x",
         phases: [
           { id: "mobilise", pct: 100 },

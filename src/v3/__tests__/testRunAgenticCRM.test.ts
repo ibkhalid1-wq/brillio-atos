@@ -114,7 +114,7 @@ function buildCrm(opts: CrmOpts = {}) {
     client: "Brillio",
     industry: "Software",
     updated_at: new Date().toISOString(),
-    data: {
+    data: { methodology: "atos-standard",
       objective: "Ship an agentic CRM with autonomous pipeline, enrichment and outreach agents",
       phases: PHASES.map((id) => ({ id, pct: skipProvision.includes(id) ? 0 : 100 })),
       phaseInputs,
@@ -345,7 +345,7 @@ describe("Test Run — approved gate score reflects real artifacts, not a stale 
     const program = normalizeProgram({
       id: "p-stale-gate",
       name: "Stale gate",
-      data: {
+      data: { methodology: "atos-standard",
         phases: [{ id: "strategy", pct: 100 }],
         phaseArtifacts: { strategy: bucket },
         // Gate approved, but the agent stored a low 0.35 readiness fraction — the
@@ -366,7 +366,7 @@ describe("Test Run — approved gate score reflects real artifacts, not a stale 
     const program = normalizeProgram({
       id: "p-no-artifacts",
       name: "No artifacts",
-      data: {
+      data: { methodology: "atos-standard",
         phases: [{ id: "strategy", pct: 100 }],
         gateReviews: { strategy: { status: "approved", phaseId: "strategy", readinessScore: 0.82 } },
       },

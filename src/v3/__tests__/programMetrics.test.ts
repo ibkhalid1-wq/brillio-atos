@@ -17,7 +17,7 @@ function makeProgram() {
     client: "Acme",
     industry: "Financial Services",
     updated_at: "2026-06-13T00:00:00.000Z",
-    data: {
+    data: { methodology: "atos-standard",
       objective: "Modernize finance operations",
       activePhaseId: "mobilise",
       phases: [

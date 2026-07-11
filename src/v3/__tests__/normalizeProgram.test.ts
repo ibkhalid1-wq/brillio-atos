@@ -7,7 +7,7 @@ describe("normalizeProgram", () => {
     client: "Acme",
     industry: "Financial Services",
     updated_at: "2026-06-13T00:00:00.000Z",
-    data: {
+    data: { methodology: "atos-standard",
       projectMeta: { name: "ERP Transformation" },
       objective: "Modernize finance operations",
       phases: [
@@ -41,7 +41,7 @@ describe("normalizeProgram", () => {
   it("handles empty phases without throwing", () => {
     const program = normalizeProgram({
       ...baseRow,
-      data: { objective: "", phases: [] },
+      data: { methodology: "atos-standard", objective: "", phases: [] },
     });
     expect(program.phases.length).toBeGreaterThan(0);
     expect(program.activePhaseId).toBeTruthy();
@@ -52,7 +52,7 @@ describe("normalizeProgram", () => {
     // phasePct estimate survived. Completion must come through, not default to 0.
     const program = normalizeProgram({
       ...baseRow,
-      data: {
+      data: { methodology: "atos-standard",
         objective: "Recovered program",
         narrative: "Grounded narrative so agent output is detected",
         phases: [],
@@ -73,7 +73,7 @@ describe("normalizeProgram", () => {
     // init noise, so completion stays 0 (guards the fresh-program case).
     const program = normalizeProgram({
       ...baseRow,
-      data: {
+      data: { methodology: "atos-standard",
         objective: "Fresh program",
         phases: [],
         phasePct: { strategy: 80 },
@@ -94,7 +94,7 @@ describe("normalizeProgram", () => {
     // so the resolution stamp must survive normalization.
     const program = normalizeProgram({
       ...baseRow,
-      data: {
+      data: { methodology: "atos-standard",
         ...baseRow.data,
         decisionQueue: [
           {

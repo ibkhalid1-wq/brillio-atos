@@ -82,7 +82,7 @@ describe("phaseStatusRings — end to end via computePhaseReadiness", () => {
     const program = normalizeProgram({
       id: "p1",
       name: "ERP",
-      data: { phases: [{ id: "mobilise", pct: 10 }] },
+      data: { methodology: "atos-standard", phases: [{ id: "mobilise", pct: 10 }] },
     });
     const r = derivePhaseStatusRings(program, "mobilise");
     expect(r.hasGate).toBe(true);
@@ -98,7 +98,7 @@ describe("phaseStatusRings — end to end via computePhaseReadiness", () => {
     const program = normalizeProgram({
       id: "p1",
       name: "ERP",
-      data: {
+      data: { methodology: "atos-standard",
         phases: [{ id: "mobilise", pct: 100 }],
         gateReviews: {
           strategy: { status: "approved", readinessScore: 90 },
@@ -122,7 +122,7 @@ describe("phaseStatusRings — end to end via computePhaseReadiness", () => {
     const program = normalizeProgram({
       id: "p1",
       name: "ERP",
-      data: {
+      data: { methodology: "atos-standard",
         phases: [{ id: "mobilise", pct: 100 }],
         gateReviews: {
           strategy: { status: "remediation-requested", readinessScore: 90, reopenedAt: "2026-06-17T00:00:00Z" },
@@ -146,7 +146,7 @@ describe("phaseStatusRings — end to end via computePhaseReadiness", () => {
     const program = normalizeProgram({
       id: "p1",
       name: "ERP",
-      data: {
+      data: { methodology: "atos-standard",
         phaseArtifacts: {
           operate: {
             adoption: { title: "Adoption Plan", status: "draft", agentDrafted: true, agentConfidence: 97 },

@@ -225,10 +225,10 @@ function derivePhases(data: JsonRecord): PhaseSummary[] {
     });
   });
 
-  // The rendered spine follows the programme's OWN methodology variant — a Flow
-  // programme renders its movements (frame…evolve), not the stage-gate phases.
-  // Unknown/absent variants fall back to the standard spine via getMethodology.
-  const variant = (asString(data.methodology) || "atos-standard") as MethodologyVariant;
+  // The rendered spine follows the programme's OWN methodology variant.
+  // ATOS Flow is the only delivery model (classic retired 2026-07), so an
+  // absent variant — e.g. a metadata-only summary beat — resolves to Flow.
+  const variant = (asString(data.methodology) || "atos-flow") as MethodologyVariant;
   return getPhaseSequence(variant).map((id) => {
     const existing = fromData.get(id);
     if (existing) return existing;
@@ -1308,7 +1308,7 @@ export function normalizeProgram(row: ProgramRowLike): ProgramSummary {
     benefitsTracking,
     benchmarkComparison,
     weeklyDigest,
-    methodology: (asString(innerData.methodology) || "atos-standard") as ProgramSummary["methodology"],
+    methodology: (asString(innerData.methodology) || "atos-flow") as ProgramSummary["methodology"],
     workstreams,
     patternExtractGeneratedAt: asString(innerData.patternExtractGeneratedAt) || null,
     patternExtractCount: typeof innerData.patternExtractCount === "number" ? innerData.patternExtractCount : 0,

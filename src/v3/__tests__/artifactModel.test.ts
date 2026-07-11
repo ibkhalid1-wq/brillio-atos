@@ -12,7 +12,7 @@ import { buildPhaseArtifacts, buildArtifactModel } from "@/v3/lib/artifactModel"
  */
 
 function charterNode(data: Record<string, unknown>) {
-  const program = normalizeProgram({ id: "p1", name: "CRM", data });
+  const program = normalizeProgram({ id: "p1", name: "CRM", data: { methodology: "atos-standard", ...data } });
   const strategy = buildPhaseArtifacts(program, "strategy")!;
   return strategy.artifacts.find((n) => n.key === "charter")!;
 }
@@ -75,7 +75,7 @@ describe("buildArtifactModel — phase avgQuality scoping", () => {
     const program = normalizeProgram({
       id: "p1",
       name: "CRM",
-      data: {
+      data: { methodology: "atos-standard",
         phases: [{ id: "strategy", pct: 50 }],
         phaseArtifacts: {
           strategy: {

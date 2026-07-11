@@ -3,21 +3,14 @@ import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { useAgentRun } from "@/hooks/useAgentRun";
 import { deleteProgramFromSupabase } from "@/lib/adamSync";
-import { evaluateProactiveNudges } from "@/lib/adamCopilotProactive";
 import { buildMemoryContext, saveAgentMemory } from "@/lib/adamAgentMemory";
-import { runWalkthrough } from "@/lib/adamWalkthroughRunner";
-import { WALKTHROUGH_PROGRAM } from "@/lib/adamWalkthroughScript";
-import { buildAgentActivityMap, buildAgentCards } from "@/new/lib/programData";
 import { ConflictError } from "@/new/lib/conflicts";
 import { useAgentTriggers } from "@/new/lib/useAgentTriggers";
 import { useBudgetTracking } from "@/new/lib/useBudgetTracking";
 import { useClosure } from "@/new/lib/useClosure";
 import { useDecisionQueue } from "@/new/lib/useDecisionQueue";
-import { useRaidLog } from "@/new/lib/useRaidLog";
-import { useEscalations } from "@/new/lib/useEscalations";
 import { useGateReview } from "@/new/lib/useGateReview";
 import { useMilestones } from "@/new/lib/useMilestones";
-import { usePatternLibrary } from "@/new/lib/usePatternLibrary";
 import { usePhaseProgress } from "@/new/lib/usePhaseProgress";
 import { useProgramNotes } from "@/new/lib/useProgramNotes";
 import { type ProgramSetupPatch, useProgramSetup } from "@/new/lib/useProgramSetup";
@@ -25,30 +18,13 @@ import { usePrograms } from "@/new/lib/usePrograms";
 import { useProgramSnapshots } from "@/new/lib/useProgramSnapshots";
 import { useCopilotThread } from "@/hooks/useCopilotThread";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
-import { CopilotPanel } from "@/new/components/shell/CopilotPanel";
-import type { AppView, DecisionSummary, Milestone, Persona, ProgramSummary } from "@/new/types";
-import type { PhaseAgentTask } from "@/lib/adamPhaseAgentTypes";
-import { buildCrossPhaseContext, recordAgentFeedback } from "@/lib/adamOrchestrator";
-// Surfaces are code-split: only one renders at a time, so lazy-loading keeps
-// them out of the initial shell chunk (see Suspense boundary around the layout).
-const InsightFeedView = React.lazy(() => import("@/v3/surfaces/InsightFeedView"));
-const ExecutiveView = React.lazy(() => import("@/v3/surfaces/ExecutiveView"));
-const ProgrammeHealthView = React.lazy(() => import("@/v3/surfaces/ProgrammeHealthView"));
+import type {   ProgramSummary } from "@/new/types";
+import { buildCrossPhaseContext } from "@/lib/adamOrchestrator";
 import CoPilotSidebar from "@/v3/components/CoPilotSidebar";
-import AgentTraceDrawer from "@/v3/components/AgentTraceDrawer";
-import { AIStatusBanner } from "@/v3/components/AIStatusBanner";
+import { IntelligenceView } from "@/new/pages/IntelligenceView";
 import { useAIStatus } from "@/v3/hooks/useAIStatus";
-import { AdamErrorBoundary } from "@/v3/components/AdamErrorBoundary";
-import { AgentSweepBar } from "@/v3/components/ui/AgentSweepBar";
-import { CommandRail } from "@/v3/components/CommandRail";
-import { CommandPalette } from "@/v3/components/CommandPalette";
-import { ContextDrawer } from "@/v3/components/ContextDrawer";
-import { EmptyState } from "@/v3/components/ui/EmptyState";
 import { SkeletonShimmer } from "@/v3/components/ui/Skeleton";
-import EscalationPanel from "@/v3/components/EscalationPanel";
 import HelpPanel from "@/v3/components/HelpPanel";
-import OnboardingCard from "@/v3/components/OnboardingCard";
-import ProgramDetailRouter from "@/v3/components/ProgramDetailRouter";
 import ProgramSetupWizard from "@/v3/components/ProgramSetupWizard";
 import FlowShell from "@/v3/components/flow/FlowShell";
 import { resolveFlowDecision } from "@/v3/components/flow/flowDecisions";
@@ -60,10 +36,8 @@ import { scheduleFollowUp } from "@/v3/components/flow/flowMeetings";
 import { mintFollowUpPack, latestPackFor, portalLinkFor } from "@/v3/components/flow/flowPortal";
 import FlowRespond from "@/v3/components/flow/FlowRespond";
 import { reportError } from "@/lib/errorReporter";
-import { sanitizeMarkdown } from "@/lib/sanitize";
-import { changedInputFields, relatedArtifactsToStale, crossPhaseArtifactsToStale, fieldsFeedingApprovedArtifacts } from "@/v3/lib/artifactStaleness";
+import { changedInputFields, relatedArtifactsToStale, crossPhaseArtifactsToStale } from "@/v3/lib/artifactStaleness";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
-import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
 import { hasSubstantiveProgramData } from "@/v3/lib/programDataGuard";
 import { AGENT_ID_ALIASES, RETIRED_AGENT_IDS } from "@/v3/lib/agentMeta";
 import { useRelativeTimeTick } from "@/lib/useRelativeTimeTick";
@@ -71,171 +45,33 @@ import { useAgentCascadeToasts } from "@/v3/hooks/useAgentCascadeToasts";
 import { useCriticalEventAlerts } from "@/v3/hooks/useCriticalEventAlerts";
 import { useLocalProgramMigration } from "@/v3/hooks/useLocalProgramMigration";
 import { usePhaseAgentState } from "@/v3/hooks/usePhaseAgentState";
-import { useProgramValidation } from "@/v3/hooks/useProgramValidation";
-import { getPhaseSequence, getPhaseDefinition, buildPhaseOwnershipContext, ATOS_STANDARD } from "@/v3/lib/methodology";
+import { getPhaseSequence, getPhaseDefinition, buildPhaseOwnershipContext } from "@/v3/lib/methodology";
 import type { MethodologyVariant } from "@/v3/lib/methodology";
 import { FORMAL_ARTIFACT_FIELD_KEYS } from "@/v3/lib/formalArtifacts";
 import { buildPhaseSchedule } from "@/v3/lib/phaseSchedule";
-import { computePhaseReadiness, getLockedPhaseIds } from "@/v3/lib/phaseReadiness";
-import { confidenceRag, getGateThreshold } from "@/v3/lib/confidenceScore";
 import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
-import { getPreviousScore, recordConfidenceSnapshot, getConfidenceForecast } from "@/v3/lib/confidenceHistory";
+import { getPreviousScore, recordConfidenceSnapshot } from "@/v3/lib/confidenceHistory";
 import { artifactReviewFieldKey } from "@/v3/lib/artifactReview";
-import { deriveAttachedArtifactReview, buildAttachedArtifactPatch } from "@/v3/lib/attachedArtifact";
-import type { DocumentIntelligence } from "@/new/lib/documentIntelligenceTypes";
 import { deriveOpenRecommendedActions } from "@/v3/lib/recommendedActions";
-import { selectOpenEscalations } from "@/v3/lib/programRaid";
-import { buildFieldAssistPrompt, sanitiseFieldReply } from "@/v3/lib/fieldAssist";
-import { PROVENANCE_KEY, parseProvenance } from "@/new/lib/fieldProvenance";
 import { mergePhaseInputBucket } from "@/v3/lib/phaseInputMerge";
-import type { FieldAssistRequest } from "@/v3/components/PhaseInputsPanel";
-const DecideView = React.lazy(() => import("@/v3/surfaces/DecideView"));
-import GateReopenModal from "@/v3/components/GateReopenModal";
-import RemediationNoteModal from "@/v3/components/RemediationNoteModal";
-import { getChangeRequests, makeImportChangeRequest } from "@/v3/lib/changeControl";
-const MoreView = React.lazy(() => import("@/v3/surfaces/MoreView"));
-const PipelineView = React.lazy(() => import("@/v3/surfaces/PipelineView"));
-const PortfolioView = React.lazy(() => import("@/v3/surfaces/PortfolioView"));
-const ProgramView = React.lazy(() => import("@/v3/surfaces/ProgramView"));
-const StageView = React.lazy(() => import("@/v3/surfaces/StageView"));
-import type { V3CommandMode, V3Mode, V3MoreView, V3ReportId, V3Surface } from "@/v3/types";
-import { isDecisionOpen, phaseNameById, pushV3Toast } from "@/v3/utils";
+import type { V3CommandMode, V3MoreView, V3ReportId, V3Surface } from "@/v3/types";
+import { isDecisionOpen, pushV3Toast } from "@/v3/utils";
 import "@/new/styles.css";
 import "./v3.css";
 
 const LOCAL_PROGRAM_STORAGE_KEY = "brillio-adam-projects";
-const CONTEXT_DRAWER_STORAGE_KEY = "adam_context_drawer";
 const V3_THEME_STORAGE_KEY = "atlas-v3-theme";
-const V3_COMMAND_RAIL_PINNED_KEY = "atlas-v3-command-rail-pinned";
-const V3_COMMAND_RAIL_COLLAPSED_KEY = "atlas-v3-rail-collapsed";
 const AUTH_RECOVERY_INTENT_STORAGE_KEY = "atlas-auth-recovery-intent";
-const PROACTIVE_FIRED_STORAGE_KEY = "atlas-v3-proactive-fired";
 
-// Persistent dedup for proactive (background) agent triggers. In-memory refs reset on
-// every reload, which let the proactive onboarding/gate-coach agents re-fire on each
-// page load — a major source of background AI volume that starves user generations.
-// Persisting the "already fired" keys makes each proactive trigger fire at most once
-// per (program, phase) ever, instead of once per browser session.
-function hasProactiveFired(key: string): boolean {
-  try {
-    const raw = window.localStorage.getItem(PROACTIVE_FIRED_STORAGE_KEY);
-    if (!raw) return false;
-    const fired = JSON.parse(raw) as unknown;
-    return Array.isArray(fired) && fired.includes(key);
-  } catch {
-    return false;
-  }
-}
 
-function markProactiveFired(key: string): void {
-  try {
-    const raw = window.localStorage.getItem(PROACTIVE_FIRED_STORAGE_KEY);
-    const fired = raw ? (JSON.parse(raw) as unknown) : [];
-    const list = Array.isArray(fired) ? (fired as string[]) : [];
-    if (!list.includes(key)) {
-      list.push(key);
-      // Cap the list so it can't grow unbounded across many programs/phases.
-      window.localStorage.setItem(PROACTIVE_FIRED_STORAGE_KEY, JSON.stringify(list.slice(-300)));
-    }
-  } catch {
-    /* storage unavailable — fall back to in-session behaviour */
-  }
-}
 
-const MORE_ROUTE_MAP: Record<string, V3MoreView> = {
-  documents: "documents",
-  narrative: "narrative",
-  roadmap: "roadmap",
-  plan: "plan",
-  milestones: "milestones",
-  milestone: "milestones",
-  risks: "risks",
-  budget: "budget",
-  twin: "twin",
-  "digital-twin": "twin",
-  "change-impact": "change-impact",
-  changeimpact: "change-impact",
-  stakeholders: "stakeholders",
-  stakeholder: "stakeholders",
-  roster: "roster",
-  raci: "roster",
-  team: "roster",
-  health: "health",
-  "health-heatmap": "health",
-  "scope-pcr": "scope-pcr",
-  intelligence: "intelligence",
-  "ai-settings": "intelligence",
-  "artifact-map": "artifact-map",
-  "program-graph": "program-graph",
-  graph: "program-graph",
-  layers: "layers",
-  "layer-stack": "layers",
-  accelerators: "accelerators",
-  "decision-audit": "decision-audit",
-  ontology: "ontology",
-  access: "access",
-  "closure-workspace": "closure",
-};
 
-const MORE_VIEW_PATHS: Record<V3MoreView, string> = {
-  documents: "/documents",
-  narrative: "/narrative",
-  roadmap: "/roadmap",
-  plan: "/plan",
-  milestones: "/milestones",
-  risks: "/risks",
-  budget: "/budget",
-  twin: "/twin",
-  "change-impact": "/change-impact",
-  stakeholders: "/stakeholders",
-  roster: "/roster",
-  health: "/health-heatmap",
-  "scope-pcr": "/scope-pcr",
-  intelligence: "/intelligence",
-  "artifact-map": "/artifact-map",
-  "program-graph": "/program-graph",
-  layers: "/layers",
-  accelerators: "/accelerators",
-  access: "/access",
-  "decision-audit": "/decision-audit",
-  ontology: "/ontology",
-  closure: "/closure-workspace",
-};
 
-const REPORT_PATHS: Record<V3ReportId, string> = {
-  narrative: "/reports",
-  deck: "/deck",
-  status: "/program",
-  closure: "/closure",
-};
-
-const APP_VIEW_TO_MORE_VIEW: Partial<Record<AppView, V3MoreView>> = {
-  narrative: "narrative",
-  plan: "plan",
-  milestones: "milestones",
-  risks: "risks",
-  budget: "budget",
-  "change-impact": "change-impact",
-  stakeholders: "stakeholders",
-  "health-heatmap": "health",
-  "scope-pcr": "scope-pcr",
-  intelligence: "intelligence",
-  accelerators: "accelerators",
-  "decision-audit": "decision-audit",
-};
-
-const DEFAULT_V3_MODE: V3Mode = "power";
-// The methodology variant this app operates in. Single source of truth so the
-// phase sequence programmes are seeded with and the phase-ownership map fed into
-// formal-artifact gap discipline can never drift apart — the map's design intent
-// ("stays correct as the registry evolves", methodology.ts) depends on both
-// reading the same variant.
-const APP_METHODOLOGY_VARIANT: MethodologyVariant = "atos-lite";
-// Lite is the default methodology for new programmes. Routing must accept every
-// phase id ANY variant can render, so union the stage-gate spine with ATOS
-// Flow's movements (their ids are disjoint by design).
+// ATOS Flow is the only delivery model — the classic stage-gate workspace was
+// retired (2026-07). Every programme seeds with, and renders, the Flow spine.
+const APP_METHODOLOGY_VARIANT: MethodologyVariant = "atos-flow";
 const DEFAULT_PHASE_SEQUENCE = getPhaseSequence(APP_METHODOLOGY_VARIANT);
-const ALL_KNOWN_PHASE_IDS = [...new Set([...getPhaseSequence("atos-standard"), ...getPhaseSequence("atos-flow")])];
+const ALL_KNOWN_PHASE_IDS = [...new Set(DEFAULT_PHASE_SEQUENCE)];
 
 
 function buildProgramSeed(name: string) {
@@ -243,6 +79,7 @@ function buildProgramSeed(name: string) {
   return {
     projectMeta: { name },
     objective: "",
+    methodology: APP_METHODOLOGY_VARIANT,
     phases: DEFAULT_PHASE_SEQUENCE.map((id) => ({ id, pct: 0 })),
     phasePct: Object.fromEntries(DEFAULT_PHASE_SEQUENCE.map((id) => [id, 0])),
     _syncedAt: now,
@@ -298,160 +135,11 @@ type ShellToast = {
 };
 
 const MAX_VISIBLE_TOASTS = 3;
-function parseLocation(): { surface: V3Surface; moreView: V3MoreView | null; activePhaseId: string | null; reportId: V3ReportId | null } {
-  const path = typeof window !== "undefined" ? window.location.pathname.replace(/^\/+/, "") : "";
-  if (path === "auth") return { surface: "stage", moreView: null, activePhaseId: null, reportId: null };
-  if (!path || path === "home" || path === "today") return { surface: "insight-feed", moreView: null, activePhaseId: null, reportId: null };
-  if (path === "stage") return { surface: "stage", moreView: null, activePhaseId: null, reportId: null };
-  if (path === "pipeline" || path === "journey" || path === "work") return { surface: "pipeline", moreView: null, activePhaseId: null, reportId: null };
-  if (path === "decide" || path === "decisions") return { surface: "decide", moreView: null, activePhaseId: null, reportId: null };
-  if (path === "program") return { surface: "program", moreView: null, activePhaseId: null, reportId: "status" };
-  if (path === "portfolio") return { surface: "portfolio", moreView: null, activePhaseId: null, reportId: null };
-  if (path === "insight-feed" || path === "home" || path === "today") return { surface: "insight-feed", moreView: null, activePhaseId: null, reportId: null };
-  if (path === "executive") return { surface: "executive", moreView: null, activePhaseId: null, reportId: null };
-  if (path === "programme-health" || path === "health-programme") return { surface: "programme-health", moreView: null, activePhaseId: null, reportId: null };
-  if (path === "oversight-v2") return { surface: "executive", moreView: null, activePhaseId: null, reportId: null };
-  if (path === "governance-v2") return { surface: "programme-health", moreView: null, activePhaseId: null, reportId: null };
-  if (path === "cockpit") return { surface: "stage", moreView: null, activePhaseId: null, reportId: null };
-  if (path === "reports") return { surface: "program", moreView: null, activePhaseId: null, reportId: "narrative" };
-  if (path === "deck") return { surface: "program", moreView: null, activePhaseId: null, reportId: "deck" };
-  if (path === "closure") return { surface: "program", moreView: null, activePhaseId: null, reportId: "closure" };
-  if (MORE_ROUTE_MAP[path]) return { surface: "program", moreView: MORE_ROUTE_MAP[path], activePhaseId: null, reportId: null };
-  if ((ALL_KNOWN_PHASE_IDS as readonly string[]).includes(path)) return { surface: "stage", moreView: null, activePhaseId: path, reportId: null };
-  return { surface: "insight-feed", moreView: null, activePhaseId: null, reportId: null };
-}
 
-function pathForState(surface: V3Surface, moreView: V3MoreView | null, activePhaseId: string | null, reportId: V3ReportId | null): string {
-  if (surface === "program" && moreView) return MORE_VIEW_PATHS[moreView];
-  if (surface === "program" && reportId && reportId !== "status") return REPORT_PATHS[reportId];
-  if (surface === "stage" && activePhaseId) return `/${activePhaseId}`;
-  if (surface === "pipeline") return "/pipeline";
-  if (surface === "decide") return "/decide";
-  if (surface === "program") return "/program";
-  if (surface === "portfolio") return "/portfolio";
-  if (surface === "insight-feed") return "/home";
-  if (surface === "executive") return "/executive";
-  if (surface === "programme-health") return "/programme-health";
-  return "/";
-}
 
-// ─── Topbar Breadcrumb ────────────────────────────────────────────────────────
 
-type BreadcrumbCrumb = { label: string; surface?: V3Surface };
 
-const MORE_VIEW_LABELS: Partial<Record<string, string>> = {
-  risks: "Risk & Issues",
-  budget: "Budget",
-  twin: "Digital Twin",
-  milestones: "Milestones",
-  stakeholders: "Stakeholders",
-  "change-impact": "Change Impact",
-  health: "Health Dashboard",
-  "scope-pcr": "Scope Changes",
-  narrative: "Programme Narrative",
-  roadmap: "Strategic Roadmap",
-  plan: "Action Plan",
-  documents: "Documents",
-  "artifact-map": "Artifact Map",
-  "program-graph": "Program Graph",
-  layers: "Layer Stack",
-  accelerators: "Accelerators",
-  access: "Access & Sharing",
-  "decision-audit": "Decision Audit",
-  ontology: "Objective Confidence",
-  intelligence: "AI Settings",
-};
 
-// Report screens are reached by drill-down from the Workspaces grid but are
-// tracked via reportId (not moreView), so they need their own crumb labels.
-// `status` is the default /program landing (the overview itself), so it has no
-// drill-down crumb — only the deeper reports do.
-const REPORT_CRUMB_LABELS: Partial<Record<V3ReportId, string>> = {
-  narrative: "Narrative",
-  deck: "Status Deck",
-  closure: "Closure",
-};
-
-function TopbarBreadcrumb({
-  surface,
-  activePhaseLabel,
-  moreView,
-  reportId,
-  onNavigate,
-  onClearMoreView,
-}: {
-  surface: V3Surface;
-  activePhaseLabel: string | null;
-  moreView: string | null;
-  reportId: V3ReportId | null;
-  onNavigate: (s: V3Surface) => void;
-  onClearMoreView: () => void;
-}) {
-  // Surface labels for context chip
-  const surfaceLabel: Partial<Record<V3Surface, string>> = {
-    "insight-feed": "Today",
-    pipeline: "Delivery",
-    portfolio: "Portfolio",
-    "programme-health": "Programme Health",
-    decide: "Action Center",
-    executive: "Executive",
-    stage: activePhaseLabel || "Phase",
-    program: "Programme Overview",
-  };
-
-  const label = surfaceLabel[surface];
-
-  // Single context chip — no deep breadcrumb chains
-  if (surface === "insight-feed" || surface === "pipeline") return null;
-
-  // Programme drill-down: "Programme › Risk & Issues" (moreView) or
-  // "Programme › Narrative" (report). The root crumb navigates back to the
-  // Programme overview (the "status" report — the canonical /program screen),
-  // NOT the workspace browser (moreView null + reportId null), so "Programme"
-  // lands where its label promises.
-  if (surface === "program" && (moreView || (reportId && REPORT_CRUMB_LABELS[reportId]))) {
-    const drilldownLabel = moreView
-      ? MORE_VIEW_LABELS[moreView] || moreView
-      : REPORT_CRUMB_LABELS[reportId as V3ReportId];
-    return (
-      <nav className="v3-topbar-breadcrumb" aria-label="Breadcrumb">
-        <button type="button" className="v3-topbar-breadcrumb-link" onClick={onClearMoreView}>
-          Programme
-        </button>
-        <span className="v3-topbar-breadcrumb-sep" aria-hidden="true">›</span>
-        <span className="v3-topbar-breadcrumb-current" aria-current="page">{drilldownLabel}</span>
-      </nav>
-    );
-  }
-
-  if (!label) return null;
-
-  return (
-    <nav className="v3-topbar-breadcrumb" aria-label="Breadcrumb">
-      <span className="v3-topbar-breadcrumb-current" aria-current="page">{label}</span>
-    </nav>
-  );
-}
-
-function surfaceToCommandMode(surface: V3Surface): V3CommandMode {
-  if (surface === "decide" || surface === "programme-health") return "governance";
-  if (surface === "program" || surface === "executive") return "oversight";
-  if (surface === "portfolio") return "portfolio";
-  if (surface === "insight-feed") return "delivery";
-  return "delivery";
-}
-
-function commandModeToSurface(mode: V3CommandMode, currentSurface: V3Surface): V3Surface {
-  if (mode === "governance") return "programme-health";
-  if (mode === "oversight") return "executive";
-  if (mode === "portfolio") return "portfolio";
-  if (mode === "delivery") {
-    if (currentSurface === "pipeline" || currentSurface === "stage") return currentSurface;
-    return "insight-feed";
-  }
-  if (currentSurface === "pipeline") return currentSurface;
-  return "stage";
-}
 
 function BrandLogo() {
   return <img src="/brillio-logo.png" alt="Brillio" className="v3-topbar-logo" />;
@@ -1096,33 +784,14 @@ function AuthScreen({
 
 export default function AppShellV3() {
   useRelativeTimeTick();
-  const initialRoute = useMemo(() => parseLocation(), []);
   const authRoute = isAuthPath();
-  const [surface, setSurface] = useState<V3Surface>(initialRoute.surface);
-  const [activeMode, setActiveMode] = useState<V3CommandMode>(surfaceToCommandMode(initialRoute.surface));
-  const [moreView, setMoreView] = useState<V3MoreView | null>(initialRoute.moreView);
-  // Artifact slot a pending document attach targets (set by the per-artifact
-  // Attach action, consumed by the hidden file input's change handler).
-  const attachTargetRef = useRef<{ phaseId: string; defId: string; label: string; agentId: string } | null>(null);
-  const attachFileInputRef = useRef<HTMLInputElement>(null);
-  const [decideIntent, setDecideIntent] = useState<{ tab: "blockers" | "risks" | "actions"; nonce: number; openAdd?: boolean } | null>(null);
-  const [reportId, setReportId] = useState<V3ReportId | null>(initialRoute.reportId);
-  const [activePhaseId, setActivePhaseId] = useState<string | null>(initialRoute.activePhaseId);
-  const mode: V3Mode = DEFAULT_V3_MODE;
-  const [theme, setTheme] = useState<"dark" | "light">(() => {
+  const [activePhaseId, setActivePhaseId] = useState<string | null>(null);
+  const [theme] = useState<"dark" | "light">(() => {
     if (typeof window === "undefined") return "dark";
     const stored = window.localStorage.getItem(V3_THEME_STORAGE_KEY);
     if (stored === "light" || stored === "dark") return stored;
     // Respect OS preference if no explicit choice stored
     return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
-  });
-  const [intelligenceInitialTab, setIntelligenceInitialTab] = useState<string | undefined>(() => {
-    if (typeof window === "undefined") return undefined;
-    return window.location.pathname.replace(/^\/+/, "") === "ai-settings" ? "Setup" : undefined;
-  });
-  const [commandRailPinned, setCommandRailPinned] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return window.localStorage.getItem(V3_COMMAND_RAIL_PINNED_KEY) === "true";
   });
 
   // Apply theme to <html> and persist
@@ -1131,56 +800,17 @@ export default function AppShellV3() {
     window.localStorage.setItem(V3_THEME_STORAGE_KEY, theme);
   }, [theme]);
 
-  const toggleTheme = useCallback(() => {
-    setTheme((t) => (t === "dark" ? "light" : "dark"));
-  }, []);
 
-  const toggleCommandRailPinned = useCallback(() => {
-    setCommandRailPinned((current) => {
-      const next = !current;
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(V3_COMMAND_RAIL_PINNED_KEY, String(next));
-      }
-      return next;
-    });
-  }, []);
 
-  const [railCollapsed, setRailCollapsed] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return window.localStorage.getItem(V3_COMMAND_RAIL_COLLAPSED_KEY) === "true";
-  });
 
-  const toggleRailCollapsed = useCallback(() => {
-    setRailCollapsed((c) => {
-      const next = !c;
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(V3_COMMAND_RAIL_COLLAPSED_KEY, String(next));
-      }
-      return next;
-    });
-  }, []);
 
   const [wizardOpen, setWizardOpen] = useState(false);
-  // "Paper & Flow": ATOS Flow programmes render the reimagined shell. The
-  // classic-workspace escape flips this off for the session; switching
-  // programme re-enters the new shell (reset effect lives below, after
-  // activeProgramId resolves from usePrograms).
-  const [useFlowShell, setUseFlowShell] = useState(true);
   // When the wizard is opened immediately after creating a fresh programme,
   // this holds that draft's id so cancelling can discard it (rather than
   // leaving an empty "New Programme" behind). Cleared once setup is saved.
   const [draftProgramId, setDraftProgramId] = useState<string | null>(null);
-  const [copilotOpen, setCopilotOpen] = useState(false);
   const [adamCopilotSidebarOpen, setAdamCopilotSidebarOpen] = useState(false);
-  const [gateReopenPhase, setGateReopenPhase] = useState<string | null>(null);
-  // When closing a phase whose next phase already holds data, the planner step
-  // waits on this prompt: the resolver is fulfilled with the user's choice
-  // (overwrite & recreate vs. keep existing) before any regeneration runs.
-  const [remediationPhase, setRemediationPhase] = useState<string | null>(null);
-  const [traceRunId, setTraceRunId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ShellToast[]>([]);
-  const [programDropdownOpen, setProgramDropdownOpen] = useState(false);
-  const [backendPanelOpen, setBackendPanelOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<{ id: string; email?: string } | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   // True once we've resolved the signed-in user's id from the session (or
@@ -1191,32 +821,15 @@ export default function AppShellV3() {
   const [authChecked, setAuthChecked] = useState(false);
   const [authed, setAuthed] = useState(false);
   const [lastAuthEvent, setLastAuthEvent] = useState<string | null>(() => isRecoveryReturn() ? "PASSWORD_RECOVERY" : null);
-  const [escalationPanelOpen, setEscalationPanelOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
-  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
-  const [taskStateVersion, setTaskStateVersion] = useState(0);
-  const [contextDrawerOpen, setContextDrawerOpen] = useState(() => {
-    if (typeof window === "undefined") return true;
-    return window.localStorage.getItem(CONTEXT_DRAWER_STORAGE_KEY) !== "false";
-  });
-  // Pending request to focus a specific right-rail tab (e.g. the StageView
-  // quality tiles opening Guidance). Nonce-keyed so repeat taps re-fire.
-  const [railIntent, setRailIntent] = useState<{ tab: "actions" | "guidance" | "intelligence"; nonce: number } | null>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const backendPanelRef = useRef<HTMLDivElement>(null);
 
-  const backendStatus: "connected" | "local" | "config-missing" = !isSupabaseConfigured
-    ? "config-missing"
-    : authed
-      ? "connected"
-      : "local";
 
   const migrated = useLocalProgramMigration(userId);
-  const { programs, activeProgram, activeProgramId, setActiveProgramId, refreshPrograms, hydratePrograms, updateProgramData, resolveDecision, isLoading: programsLoading, hasResolvedPrograms, activeProgramRole, canEditActiveProgram, isActiveProgramAdmin } = usePrograms({
+  const { programs, activeProgram, activeProgramId, setActiveProgramId, refreshPrograms, hydratePrograms, updateProgramData, isLoading: programsLoading, hasResolvedPrograms, canEditActiveProgram } = usePrograms({
     enabled: authChecked && migrated,
     userId,
   });
-  const { activeRuns, isRunning: agentIsRunning, isUserRunning: agentIsUserRunning, runAgent, channelStatus } = useAgentRun(activeProgramId, authed, refreshPrograms);
+  const { activeRuns, isRunning: agentIsRunning, runAgent } = useAgentRun(activeProgramId, authed, refreshPrograms);
   // Agent ids with an in-flight run — powers the Flow shell's generation
   // theater (which artifact card is drafting right now). AgentRun rows carry
   // `agent_id`; only queued/running/paused runs are actually in flight.
@@ -1255,48 +868,26 @@ export default function AppShellV3() {
     }
     return spend;
   }, [activeProgramId]);
-  // Re-enter the Paper & Flow shell whenever the active programme changes —
-  // and hydrate the newly active programme's blob. The Flow-vs-classic shell
-  // decision reads `methodology`, which lives in the blob: a programme
-  // selected mid-session may still be metadata-only, which stranded Flow
-  // programmes in the classic workspace until a manual reload. hydratePrograms
-  // is a cheap no-op when the cached blob is already fresh.
+  // Hydrate the newly active programme's blob — a programme selected
+  // mid-session may still be metadata-only. Cheap no-op when already fresh.
   useEffect(() => {
-    setUseFlowShell(true);
     if (activeProgramId) void hydratePrograms([activeProgramId]);
   }, [activeProgramId, hydratePrograms]);
-  const { snapshots: programSnapshots, createSnapshot: createProgramSnapshot, getSnapshotData: getProgramSnapshotData } = useProgramSnapshots(activeProgramId || null, { enabled: authChecked && migrated });
+  const { createSnapshot: createProgramSnapshot } = useProgramSnapshots(activeProgramId || null, { enabled: authChecked && migrated });
   const aiStatus = useAIStatus(true); // status check works without auth since edge function accepts anon key
-  const agentCards = useMemo(() => buildAgentCards(activeProgram, activeRuns), [activeProgram, activeRuns]);
-  const agentActivityMap = useMemo(() => buildAgentActivityMap(activeRuns), [activeRuns]);
   const rawData = useMemo(() => activeProgram?.rawData || {}, [activeProgram?.rawData]);
-
-  // Portfolio shows rich per-programme data (phase dots, RAG, open actions) for the
-  // WHOLE list, so it needs every programme's full blob — the only surface that
-  // does. The metadata-only list path leaves non-active programmes unhydrated, so
-  // hydrate them on demand when Portfolio opens. hydratePrograms is a no-op once
-  // all are fresh, so the repeat caused by `programs` changing identity is cheap.
-  useEffect(() => {
-    if (surface !== "portfolio" || programs.length === 0) return;
-    void hydratePrograms(programs.map((p) => p.id));
-  }, [surface, programs, hydratePrograms]);
 
   const handleSignOut = useCallback(async () => {
     if (!supabase) return;
     try {
       const { error } = await supabase.auth.signOut({ scope: "local" });
       if (error) throw error;
-      setBackendPanelOpen(false);
-      setProgramDropdownOpen(false);
       setCurrentUser(null);
       setUserId(null);
       setAuthed(false);
       // Clear programme context so the next user doesn't inherit stale state
       setActiveProgramId(null);
       setActivePhaseId(null);
-      setMoreView(null);
-      setSurface("insight-feed");
-      setReportId(null);
       setLastAuthEvent("SIGNED_OUT");
       pushV3Toast("Signed out successfully.", { tone: "success", duration: 3000 });
       if (typeof window !== "undefined" && window.location.pathname !== "/auth") {
@@ -1314,33 +905,7 @@ export default function AppShellV3() {
     document.title = name ? `${name} — ATOS` : "Brillio ATOS — Agentic Transformation OS";
   }, [activeProgram?.name]);
 
-  const nudges = useMemo(() => {
-    if (!activeProgram) return [];
-    return evaluateProactiveNudges(activeProgram);
-  }, [activeProgram]);
-  const firstNudge = useMemo(() => {
-    const nudge = nudges[0];
-    if (!nudge) return null;
-    return {
-      id: nudge.id || "nudge-0",
-      type: nudge.type,
-      priority: nudge.priority,
-      message: nudge.message,
-      actionLabel: nudge.actionLabel || "View →",
-      actionView: (nudge.actionViewId as AppView | undefined) || undefined,
-    };
-  }, [nudges]);
-  const persona = useMemo((): Persona => {
-    if (surface === "decide") return "lead";
-    if (surface === "program") return "executive";
-    return "fde";
-  }, [surface]);
-  const copilotWorkspaceId = useMemo((): string => {
-    if (surface === "decide") return "decisions";
-    if (surface === "program") return moreView || "home";
-    if (surface === "pipeline") return "work";
-    return "home";
-  }, [surface, moreView]);
+  const copilotWorkspaceId = "home";
 
   const resolveAgentId = useCallback((agentId: string) => {
     const aliases: Record<string, string> = {
@@ -1620,20 +1185,10 @@ export default function AppShellV3() {
   const { saveBudgetInputs, isSaving: budgetSavePending } = useBudgetTracking(activeProgramId || "", activeProgram?.rawData || {}, refreshPrograms);
   useClosure(activeProgramId || "", activeProgram?.rawData || {}, refreshPrograms);
   const { approveGate, requestRemediation, reopenGate, raiseChangeRequest, resolveChangeRequest } = useGateReview(activeProgramId || "", rawData, refreshPrograms);
-  const { acknowledgeEscalation, resolveEscalation } = useEscalations(activeProgramId || "", rawData, refreshPrograms);
   const { addNote: addProgramNote } = useProgramNotes(activeProgramId || "", rawData, refreshPrograms);
   const { addDecision } = useDecisionQueue(activeProgramId || "", rawData, refreshPrograms);
-  const { addEntry: addRaidEntry, closeEntry: closeRaidEntry } = useRaidLog(activeProgramId || "", rawData, refreshPrograms);
   const { updatePct: updatePhasePct } = usePhaseProgress(activeProgramId || "", rawData, refreshPrograms);
   const { save: saveSetup, isSaving: wizardSaving } = useProgramSetup(activeProgramId || "", rawData, refreshPrograms);
-  const industry = useMemo(() => {
-    const meta = typeof rawData === "object" && rawData !== null && typeof rawData.projectMeta === "object" && rawData.projectMeta !== null
-      ? rawData.projectMeta as Record<string, unknown>
-      : {};
-    return typeof meta.industry === "string" ? meta.industry : null;
-  }, [rawData]);
-  const { patterns, refresh: refreshPatterns } = usePatternLibrary(activeProgramId || "", industry);
-  const { sanity, validation, hasBlockers, warningCount } = useProgramValidation(activeProgram);
   const copilotMemoryContext = useMemo(() => {
     if (!activeProgramId) return "";
     return ["narrative", "strategic-roadmap", "risk"]
@@ -1695,20 +1250,6 @@ export default function AppShellV3() {
   // Why agents can / cannot generate artifacts — the three preconditions, checked
   // in the same order runProgramAgent enforces them, so the ledger names the exact blocker.
   const anyAgentRunning = agentIsRunning || triggers.escalationIsRunning;
-  // Three-state rail indicator: running (working) → idle (at rest, ready) →
-  // stopped (a recent run ended abnormally — failed/cancelled — within the
-  // hook's terminal-run retention window, so it surfaces as needing attention).
-  const agentStatus: "running" | "idle" | "stopped" = anyAgentRunning
-    ? "running"
-    : activeRuns.some((run) => run.status === "failed" || run.status === "cancelled")
-    ? "stopped"
-    : "idle";
-  // For agent-run buttons (ExecutiveView etc.): only block when the *user* triggered a run,
-  // not when a background / proactive agent is sitting in the DB in "queued"/"running" state.
-  // agentIsUserRunning === isLoading, which is true only during the runAgent() HTTP call itself
-  // and resets in the finally block — never gets stuck regardless of DB run state.
-  const anyUserAgentRunning = agentIsUserRunning;
-  const showConnectionStatus = !authRoute && authed && !!activeProgramId && channelStatus !== "connected";
   const openDecisions = useMemo(() => (activeProgram?.decisionQueue || []).filter(isDecisionOpen), [activeProgram?.decisionQueue]);
   // Rail badge count for the Action Center. Mirrors the surface's own derivation
   // (synthesised recommended actions for the delivery-lead persona it renders
@@ -1748,62 +1289,7 @@ export default function AppShellV3() {
     }
   }, [activeProgram?.id, programConfidenceScore]);
 
-  const programConfidenceForecast = useMemo(
-    () =>
-      activeProgram?.id && programConfidenceScore != null
-        ? getConfidenceForecast(activeProgram.id, programConfidenceScore)
-        : null,
-    [activeProgram?.id, programConfidenceScore],
-  );
-  const programHealth = useMemo(() => {
-    const score = programConfidenceScore;
-    // null → "amber" preserves the rail badge's long-standing neutral-pending
-    // tone; a scored program routes through the canonical confidence→RAG band.
-    const programmeRag = score == null ? "amber" : confidenceRag(score);
-    // The rail dot only renders green/amber/red; collapse the "muted" band onto
-    // the neutral-pending amber tone (same intent as the score==null branch).
-    const programme = programmeRag === "muted" ? "amber" : programmeRag;
-    const ai = aiStatus.status === "connected" ? "green" : aiStatus.status === "checking" ? "amber" : "red";
-    // Intelligence-layer status: red when the AI layer isn't running (not
-    // configured / offline), amber when something errored (the AI check failed or
-    // an agent run failed/cancelled), green when it's running cleanly. Open
-    // decisions/escalations are "needs attention" surfaced elsewhere — not an
-    // intelligence-layer fault — so they no longer drive this dot.
-    const aiDown = aiStatus.status === "not-configured" || aiStatus.status === "offline";
-    const hasAgentErrors = activeRuns.some((run) => run.status === "failed" || run.status === "cancelled");
-    const agents = aiDown ? "red"
-      : aiStatus.status === "error" || hasAgentErrors ? "amber"
-      : "green";
-    return { programme, ai, agents } as const;
-  }, [programConfidenceScore, aiStatus.status, activeRuns]);
 
-  const lockedPhaseIds = useMemo(
-    () => activeProgram ? getLockedPhaseIds(activeProgram) : new Set<string>(),
-    [activeProgram],
-  );
-  // Change-control state: the audit log of requests plus the set of locked stages
-  // a new request can target. Both derive from the active programme's state.
-  const changeRequests = useMemo(
-    () => getChangeRequests(getProgramState(rawData).inner),
-    [rawData],
-  );
-  const lockedPhaseOptions = useMemo(
-    () => (activeProgram?.phases ?? [])
-      .filter((phase) => lockedPhaseIds.has(phase.id))
-      .map((phase) => ({ id: phase.id, name: phase.displayName ?? phase.id })),
-    [activeProgram, lockedPhaseIds],
-  );
-  const isProgramEmpty = useMemo(() => {
-    if (!activeProgram) return false;
-    return (
-      !activeProgram.objective &&
-      (!activeProgram.name || activeProgram.name === "New Program" || activeProgram.name === "New Programme") &&
-      activeProgram.phases.every((phase) => (phase.pct ?? 0) === 0)
-    );
-  }, [activeProgram]);
-  const openEscalations = useMemo(() => selectOpenEscalations(activeProgram), [activeProgram]);
-  const narrativeIsRunning = activeRuns.some((run) => run.agent_id === "narrative" && run.status === "running");
-  const healthHeatmapIsRunning = activeRuns.some((run) => run.agent_id === "health-heatmap" && run.status === "running") || triggers.healthHeatmapIsRunning;
   const { tasks: currentPhaseTasks, updateTask: updatePhaseTask, refresh: refreshPhaseTasks } = usePhaseAgentState(activeProgramId, activePhaseId);
 
   useAgentCascadeToasts(activeRuns);
@@ -1901,12 +1387,6 @@ export default function AppShellV3() {
     if (lastAuthEvent === "PASSWORD_RECOVERY") return;
     if (window.location.pathname === "/auth") {
       window.history.replaceState({}, "", "/");
-      const next = parseLocation();
-      setSurface(next.surface);
-      setActiveMode(surfaceToCommandMode(next.surface));
-      setMoreView(next.moreView);
-      setActivePhaseId(next.activePhaseId);
-      setReportId(next.reportId);
     }
   }, [authChecked, authed, lastAuthEvent]);
 
@@ -1921,16 +1401,6 @@ export default function AppShellV3() {
       setToasts((current) => current.filter((toast) => !toast.message.startsWith("Agent failed:")));
     }
   }, [authChecked, authed, authRoute]);
-
-  const handleDrawerToggle = useCallback(() => {
-    setContextDrawerOpen((current) => {
-      const next = !current;
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(CONTEXT_DRAWER_STORAGE_KEY, String(next));
-      }
-      return next;
-    });
-  }, []);
 
   const lastLandedProgramIdRef = useRef<string | null>(null);
   // True once the user has explicitly opened a specific phase (clicked a phase
@@ -1977,234 +1447,25 @@ export default function AppShellV3() {
     if (isEmpty) setWizardOpen(true);
   }, [activeProgram?.id]);
 
-  const commitNavigation = useCallback((next: {
-    surface: V3Surface;
-    moreView?: V3MoreView | null;
-    activePhaseId?: string | null;
-    reportId?: V3ReportId | null;
-    replace?: boolean;
-  }) => {
-    const nextMoreView = next.moreView ?? null;
-    const nextActivePhaseId = next.activePhaseId ?? activePhaseId;
-    const nextReportId = next.reportId ?? null;
-    setSurface(next.surface);
-    setActiveMode(surfaceToCommandMode(next.surface));
-    setMoreView(nextMoreView);
-    setActivePhaseId(nextActivePhaseId);
-    setReportId(nextReportId);
-    if (typeof window !== "undefined") {
-      const nextPath = pathForState(next.surface, nextMoreView, nextActivePhaseId, nextReportId);
-      const method = next.replace ? "replaceState" : "pushState";
-      window.history[method]({}, "", nextPath);
-    }
-  }, [activePhaseId]);
 
-  useEffect(() => {
-    const handlePopstate = () => {
-      const next = parseLocation();
-      setSurface(next.surface);
-      setActiveMode(surfaceToCommandMode(next.surface));
-      setMoreView(next.moreView);
-      setActivePhaseId(next.activePhaseId);
-      setReportId(next.reportId);
-    };
-    window.addEventListener("popstate", handlePopstate);
-    return () => window.removeEventListener("popstate", handlePopstate);
-  }, []);
 
-  useEffect(() => {
-    function handleOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) setProgramDropdownOpen(false);
-      if (backendPanelRef.current && !backendPanelRef.current.contains(event.target as Node)) setBackendPanelOpen(false);
-    }
-    document.addEventListener("mousedown", handleOutside);
-    return () => document.removeEventListener("mousedown", handleOutside);
-  }, []);
 
-  useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        setCommandPaletteOpen((current) => !current);
-        return;
-      }
-      if ((event.metaKey || event.ctrlKey) && event.key === ".") {
-        event.preventDefault();
-        handleDrawerToggle();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [handleDrawerToggle]);
 
-  useEffect(() => {
-    const openDrawer = () => {
-      setContextDrawerOpen(true);
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(CONTEXT_DRAWER_STORAGE_KEY, "true");
-      }
-    };
-    window.addEventListener("atlas-v3-open-drawer", openDrawer);
-    return () => window.removeEventListener("atlas-v3-open-drawer", openDrawer);
-  }, []);
 
-  // The phase the programme is currently working through. We prefer the
-  // programme's canonical activePhaseId — the phase every other surface labels
-  // "Active phase" — so navigating to the cockpit or Action Center always lands
-  // on the same phase the user thinks of as current. Only when no valid active
-  // phase is set do we fall back to the pct-based frontier (first in-progress,
-  // else first incomplete, else first phase).
-  const resolveCurrentPhaseId = useCallback((): string | null => {
-    const phases = activeProgram?.phases ?? [];
-    if (!phases.length) return null;
-    // A phase is finished when its gate is approved (status "complete") or its
-    // progress is full. A completed phase can still read pct 0 (e.g. approved on
-    // imported inputs), so status must be checked too — otherwise a pct-only test
-    // treats a finished phase as the frontier.
-    const isComplete = (phase: (typeof phases)[number]) =>
-      phase.status === "complete" || (phase.pct ?? 0) >= 100;
-    const canonical = activeProgram?.activePhaseId ?? null;
-    const canonicalPhase = canonical ? phases.find((phase) => phase.id === canonical) : null;
-    // Honour the canonical active phase only while it is still open. Once it is
-    // complete, the phase to land on is the next unfinished one — so the cockpit
-    // never reopens on a phase the user has already closed out.
-    if (canonicalPhase && !isComplete(canonicalPhase)) return canonical;
-    const inProgress = phases.find((phase) => (phase.pct ?? 0) > 0 && !isComplete(phase));
-    const firstIncomplete = phases.find((phase) => !isComplete(phase));
-    return inProgress?.id || firstIncomplete?.id || phases[0]?.id || null;
-  }, [activeProgram]);
 
-  const handleCommandModeChange = useCallback((nextMode: V3CommandMode) => {
-    if (nextMode === ("executive" as any)) {
-      commitNavigation({ surface: "executive", moreView: null, activePhaseId, reportId: null });
-      return;
-    }
-    setActiveMode(nextMode);
-    const nextSurface = commandModeToSurface(nextMode, surface);
-    // Entering the phase cockpit from another surface lands on the current phase
-    // (where the work is), not whatever phase was last viewed. Staying within the
-    // stage surface keeps the user's explicit phase pick.
-    const nextActivePhaseId = nextSurface === "stage" && surface !== "stage"
-      ? (resolveCurrentPhaseId() ?? activePhaseId)
-      : activePhaseId;
-    commitNavigation({
-      surface: nextSurface,
-      moreView: nextSurface === "program" ? moreView : null,
-      activePhaseId: nextActivePhaseId,
-      reportId: nextSurface === "program" ? reportId || "status" : null,
-    });
-  }, [activePhaseId, commitNavigation, moreView, reportId, surface, resolveCurrentPhaseId]);
 
-  const navigateSurface = useCallback((nextSurface: V3Surface) => {
-    // The programme (phase cockpit) screen always opens on the current phase, so
-    // landing there from the nav lands on where the work is, not a stale pick.
-    const nextActivePhaseId = nextSurface === "stage" ? (resolveCurrentPhaseId() ?? activePhaseId) : activePhaseId;
-    commitNavigation({
-      surface: nextSurface,
-      moreView: null,
-      activePhaseId: nextActivePhaseId,
-      reportId: nextSurface === "program" ? reportId || "status" : null,
-    });
-  }, [activePhaseId, commitNavigation, reportId, resolveCurrentPhaseId]);
-
-  const handleSelectPhase = useCallback((id: string) => {
-    if (lockedPhaseIds.has(id)) {
-      pushV3Toast("Approve the previous phase gate to unlock this phase.", { tone: "warning", duration: 3000 });
-      return;
-    }
-    // Clicking a phase pill is an explicit choice — record it so auto-landing
-    // never yanks the user off the phase they picked (even a completed one).
-    explicitPhasePickRef.current = true;
-    // Navigate directly via commitNavigation so the new phaseId is committed atomically.
-    // Calling setActivePhaseId() then navigateSurface() doesn't work because navigateSurface
-    // closes over the stale activePhaseId and overwrites the new value inside commitNavigation.
-    commitNavigation({ surface: "stage", moreView: null, activePhaseId: id, reportId: null });
-  }, [lockedPhaseIds, commitNavigation]);
-
-  const openMoreView = useCallback((view: V3MoreView | null) => {
-    commitNavigation({ surface: "program", moreView: view, activePhaseId, reportId: null });
-  }, [activePhaseId, commitNavigation]);
-
+  // AI provider status & setup — hosted as an overlay in the Flow shell (the
+  // classic "intelligence" surface it used to navigate to is retired).
+  const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
+  const [intelligenceInitialTab, setIntelligenceInitialTab] = useState<"Status" | "Setup">("Setup");
   const openAISettings = useCallback((tab?: string) => {
-    setIntelligenceInitialTab(tab || "Setup");
-    setSurface("program");
-    setActiveMode(surfaceToCommandMode("program"));
-    setMoreView("intelligence");
-    setActivePhaseId(activePhaseId);
-    setReportId(null);
-    if (typeof window !== "undefined") {
-      window.history.pushState({}, "", "/ai-settings");
-    }
-  }, [activePhaseId]);
+    setIntelligenceInitialTab(tab === "Status" ? "Status" : "Setup");
+    setAiSettingsOpen(true);
+  }, []);
 
-  const openPhaseSheet = useCallback((phaseId: string) => {
-    if (!phaseId) return;
-    // Opening a specific phase sheet is an explicit choice — preserve it against
-    // auto-landing (see explicitPhasePickRef in the landing effect).
-    explicitPhasePickRef.current = true;
-    setActivePhaseId(phaseId);
-    commitNavigation({ surface: "stage", moreView: null, activePhaseId: phaseId, reportId: null });
-  }, [commitNavigation]);
 
-  // Open a phase screen AND scroll to its inputs section. Used by the Action
-  // Center: resolving an action / blocker / risk takes the user to where they
-  // actually fix it — the phase's input fields. The anchor only exists once the
-  // StageView has mounted, so poll briefly for it after navigation.
-  //
-  // When a drill-down `anchor` is supplied (e.g. `artifact:charter` or
-  // `input:successMetric`) the view scrolls to that specific element and briefly
-  // flashes it, so a risk/blocker/action lands the user on the exact artifact or
-  // input it was derived from rather than the generic inputs section.
-  const navigateToPhaseInputs = useCallback((phaseId: string, anchor?: string) => {
-    if (!phaseId) return;
-    openPhaseSheet(phaseId);
-    if (typeof window === "undefined") return;
-    let attempts = 0;
-    const flash = (el: HTMLElement) => {
-      // Restart the animation even if the class is already present (re-drilling the
-      // same field should visibly flash again).
-      el.classList.remove("v3-io-anchor-flash");
-      void el.offsetWidth;
-      el.classList.add("v3-io-anchor-flash");
-      window.setTimeout(() => el.classList.remove("v3-io-anchor-flash"), 5000);
-    };
-    const tryScroll = () => {
-      const el = anchor
-        ? (document.querySelector(`[data-io-anchor="${anchor}"]`) as HTMLElement | null)
-        : document.getElementById("phase-inputs-anchor");
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: anchor ? "center" : "start" });
-        // Only flash a precise target — the specific field or artifact drilled into.
-        // A generic inputs jump (no anchor) just scrolls; flashing the whole inputs
-        // card would be visually heavy and wouldn't point at anything in particular.
-        if (anchor) flash(el);
-        return;
-      }
-      if (attempts++ < 20) {
-        window.setTimeout(tryScroll, 100);
-        return;
-      }
-      // The specific anchor never resolved (e.g. the source field id no longer maps
-      // to a rendered input). Scroll to the inputs section so the user still lands
-      // on the editable area — without flashing the entire card.
-      if (anchor) {
-        document.getElementById("phase-inputs-anchor")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-    };
-    window.setTimeout(tryScroll, 150);
-  }, [openPhaseSheet]);
 
-  const openReport = useCallback((nextReportId: V3ReportId) => {
-    commitNavigation({ surface: "program", moreView: null, activePhaseId, reportId: nextReportId });
-  }, [activePhaseId, commitNavigation]);
 
-  const navigateAppView = useCallback((view: AppView) => {
-    if (view === "home") return navigateSurface("insight-feed");
-    if (view === "work") return navigateSurface("pipeline");
-    if (view === "decisions") return navigateSurface("decide");
-    const deepView = APP_VIEW_TO_MORE_VIEW[view];
-    if (deepView) openMoreView(deepView);
-  }, [navigateSurface, openMoreView]);
 
   const handleCreateProgram = useCallback(async () => {
     const name = "New Programme";
@@ -2257,96 +1518,10 @@ export default function AppShellV3() {
     }
   }, [refreshPrograms, setActiveProgramId, userId, aiStatus.status, openAISettings]);
 
-  const handleDeleteProgram = useCallback(async (programId: string) => {
-    const ok = await deleteProgramFromSupabase(programId);
-    if (!ok) {
-      pushV3Toast("Could not delete programme.", { tone: "error", duration: 4000 });
-      return;
-    }
-    // If deleting the active programme, reset to first remaining one
-    if (programId === activeProgramId) {
-      const remaining = programs.filter((p) => p.id !== programId);
-      setActiveProgramId(remaining[0]?.id ?? null);
-    }
-    await refreshPrograms();
-    pushV3Toast("Programme deleted.", { tone: "success", duration: 3000 });
-  }, [activeProgramId, programs, refreshPrograms, setActiveProgramId]);
 
-  const handleResolveDecision = useCallback(async (
-    decisionId: string,
-    resolution: "approved" | "deferred" | "rejected" | "modified",
-    modifiedContent?: string,
-    decisionPayload?: DecisionSummary,
-  ) => {
-    if (!activeProgram) return;
-    const source = getProgramState(activeProgram.rawData || {}).inner;
-    const queue = Array.isArray(source?.decisionQueue) ? source.decisionQueue as Record<string, unknown>[] : [];
-    const decision = queue.find((entry) => entry.id === decisionId);
-    const isPCR = decision?.type === "pcr-review" || decision?.source === "scope-pcr";
 
-    try {
-      await resolveDecision(activeProgram.id, decisionId, resolution, currentUser?.email, modifiedContent, undefined, decisionPayload);
-      if (isPCR && resolution === "approved") {
-        const cloned = cloneRawProgram(activeProgram);
-        const nextInner = { ...cloned.inner };
-        nextInner.programVersion = (typeof nextInner.programVersion === "number" ? nextInner.programVersion : 0) + 1;
-        nextInner.lastPCRAt = new Date().toISOString();
-        nextInner.lastPCRDecisionId = decisionId;
-        nextInner.staleArtifacts = ["narrative", "strategicRoadmap", "raidEntries", "criticalPath", "changeImpact", "healthHeatmap"];
-        nextInner.artifactsStaleReason = `PCR approved: ${String(decision?.title || decision?.question || "scope change")}`;
-        await updateProgramData(activeProgram.id, cloned.commit(nextInner), activeProgram.updatedAt);
-        for (const agentId of ["narrative", "risk", "critical-path"]) {
-          await runProgramAgent({ agentId, phaseId: activePhaseId || "program", triggeredBy: "trigger" });
-        }
-        // The delivery plan rides with the Strategic Roadmap (strategy phase),
-        // so regenerate the roadmap to refresh the plan after a scope change.
-        await runProgramAgent({ agentId: "strategic-roadmap", phaseId: "strategy", triggeredBy: "trigger" });
-      }
-      await refreshPrograms();
-      pushV3Toast(isPCR && resolution === "approved" ? "PCR approved. Affected artifacts have been flagged for refresh." : "Decision resolved.", { tone: "success", duration: 3000 });
-    } catch (error) {
-      if (error instanceof ConflictError) {
-        const overwrite = window.confirm("This programme was updated by another session since you last loaded it.\n\nClick OK to reload the latest version (your current changes will be lost), or Cancel to keep your changes and try saving again.");
-        if (overwrite) await refreshPrograms();
-        return;
-      }
-      reportError(error instanceof Error ? error : new Error(String(error)), { action: "resolve_decision", decisionId });
-      pushV3Toast("Could not resolve decision. Please try again.", { tone: "error", duration: 4000 });
-    }
-  }, [activePhaseId, activeProgram, currentUser?.email, refreshPrograms, resolveDecision, runProgramAgent, updateProgramData]);
 
-  const handleAddMilestone = useCallback(async (milestone: Omit<Milestone, "id" | "source" | "lastUpdatedAt">) => {
-    try {
-      await addMilestone(milestone);
-    } catch (error) {
-      reportError(error instanceof Error ? error : new Error(String(error)), { action: "add_milestone" });
-      pushV3Toast("Could not save milestone.", { tone: "error", duration: 4000 });
-    }
-  }, [addMilestone]);
 
-  const handleCompleteMilestone = useCallback(async (milestoneId: string) => {
-    try {
-      await completeMilestone(milestoneId);
-    } catch (error) {
-      reportError(error instanceof Error ? error : new Error(String(error)), { action: "complete_milestone", milestoneId });
-      pushV3Toast("Could not mark milestone complete.", { tone: "error", duration: 4000 });
-    }
-  }, [completeMilestone]);
-
-  const handleSaveBudgetInputs = useCallback(async (patch: {
-    projectedCost: number | null;
-    actualSpend: number | null;
-    projectedBenefits: number | null;
-    realisedBenefits: number | null;
-    phaseActuals?: Record<string, number>;
-  }) => {
-    try {
-      await saveBudgetInputs(patch);
-    } catch (error) {
-      reportError(error instanceof Error ? error : new Error(String(error)), { action: "save_budget_inputs" });
-      pushV3Toast("Budget save failed. Check your connection and try again.", { tone: "error", duration: 4000 });
-    }
-  }, [saveBudgetInputs]);
 
   const handleSaveSetup = useCallback(async (patch: ProgramSetupPatch) => {
     try {
@@ -2376,21 +1551,8 @@ export default function AppShellV3() {
     if (ok) await refreshPrograms();
   }, [draftProgramId, activeProgramId, programs, refreshPrograms, setActiveProgramId]);
 
-  const handleUpdatePhasePct = useCallback(async (phaseId: string, pct: number) => {
-    await updatePhasePct(phaseId, pct);
-  }, [updatePhasePct]);
 
-  const handleAddDecision = useCallback(async (decision: Omit<DecisionSummary, "id" | "status" | "createdAt">) => {
-    // Adding a decision is a deterministic write — no automatic LLM call. The
-    // decision-advisor is now on-demand (run from the decision card) rather than
-    // firing on every add, so capturing a decision never costs a model call.
-    await addDecision(decision);
-    await refreshPrograms();
-  }, [addDecision, refreshPrograms]);
 
-  const handleSaveNarrativeCorrection = useCallback(async (note: string) => {
-    await addProgramNote(note, "narrative-correction");
-  }, [addProgramNote]);
 
   const handleSavePhaseInputs = useCallback(async (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; clearReviewDefId?: string; staleDefId?: string }) => {
     if (!activeProgram) return;
@@ -2535,106 +1697,6 @@ export default function AppShellV3() {
     }
   }, [activeProgram, refreshPrograms, updateProgramData]);
 
-  // Atomic multi-phase save — used by document import to avoid stale-closure overwrites
-  const handleSaveAllPhaseInputs = useCallback(async (allInputs: Record<string, Record<string, string>>, firstPhaseId?: string) => {
-    if (!activeProgram) return;
-    const cloned = cloneRawProgram(activeProgram);
-    const existing = typeof cloned.inner.phaseInputs === "object" && cloned.inner.phaseInputs !== null
-      ? { ...(cloned.inner.phaseInputs as Record<string, unknown>) }
-      : {};
-    // Pass the dynamic schema store so flow edges + field labels for
-    // planner-generated/custom artifacts resolve too (their field→artifact map
-    // lives in artifactInputFlow, not the static methodology).
-    const flowStore = getDynamicSchemaStore(cloned.inner);
-    // A phase whose gate is already approved is COMPLETED — its inputs are frozen.
-    // An import that targets one is not written directly; it is auto-managed as a
-    // governed change request. Approving that request (Scope & PCR / executive
-    // change log) reopens the gate chain and applies these inputs, so completed
-    // work is never silently overwritten by a re-import.
-    const lockedPhases = Object.keys(allInputs).filter(
-      (phaseId) => activeProgram.gateReviews?.[phaseId]?.status === "approved",
-    );
-    const writableInputs = Object.fromEntries(
-      Object.entries(allInputs).filter(([phaseId]) => !lockedPhases.includes(phaseId)),
-    );
-    const importChangeRequests = lockedPhases
-      .map((phaseId) => {
-        const inputs = allInputs[phaseId] ?? {};
-        // Only real field values count as a change — the _provenance metadata
-        // bucket rides along in proposedInputs but is not a field the user edited.
-        const fieldIds = Object.keys(inputs).filter((key) => !key.startsWith("_"));
-        if (fieldIds.length === 0) return null;
-        const labelOf = new Map(getPhaseInputSchema(phaseId, flowStore).fields.map((f) => [f.id, f.label]));
-        const fieldLabels = fieldIds.map((id) => labelOf.get(id) ?? id);
-        const phaseLabel = activeProgram.phases?.find((p) => p.id === phaseId)?.displayName ?? phaseId;
-        // Name the source document from any field's recorded provenance.
-        const documentName = Object.values(parseProvenance(inputs[PROVENANCE_KEY])).find((p) => p.documentName)?.documentName;
-        return makeImportChangeRequest({ phaseId, phaseLabel, fieldLabels, proposedInputs: inputs, documentName });
-      })
-      .filter((cr): cr is NonNullable<typeof cr> => cr !== null);
-
-    if (Object.keys(writableInputs).length === 0 && importChangeRequests.length === 0) {
-      pushV3Toast("Nothing to import — all targeted fields were empty.", { tone: "warning", duration: 4000 });
-      return;
-    }
-    // Reimport guard: an approved artifact's inputs must not be silently overwritten
-    // by a re-scan. For each phase, drop any incoming field that feeds an already-
-    // approved artifact (flow edges are methodology-derived, so this isn't hard-coded).
-    // First imports approve nothing, so nothing is dropped then; only re-imports of a
-    // phase with approved artifacts preserve those inputs.
-    const artifactBuckets = typeof cloned.inner.phaseArtifacts === "object" && cloned.inner.phaseArtifacts !== null
-      ? (cloned.inner.phaseArtifacts as Record<string, Record<string, Record<string, unknown>>>)
-      : {};
-    let skippedFieldCount = 0;
-    for (const [phaseId, inputs] of Object.entries(writableInputs)) {
-      // Pass the phase's currently-persisted inputs so the guard only preserves
-      // fields that ACTUALLY hold content: an empty field feeding an approved
-      // artifact has no PM work to protect, so the import must be allowed to
-      // populate it rather than being silently dropped (leaving the field blank).
-      const priorBucket = (existing[phaseId] && typeof existing[phaseId] === "object")
-        ? existing[phaseId] as Record<string, unknown>
-        : undefined;
-      const blocked = fieldsFeedingApprovedArtifacts(phaseId, Object.keys(inputs), artifactBuckets[phaseId], flowStore, priorBucket);
-      const writableFields = blocked.size
-        ? Object.fromEntries(Object.entries(inputs).filter(([fieldId]) => !blocked.has(fieldId)))
-        : inputs;
-      skippedFieldCount += Object.keys(inputs).length - Object.keys(writableFields).length;
-      if (Object.keys(writableFields).length === 0) continue;
-      existing[phaseId] = mergePhaseInputBucket(existing[phaseId], writableFields);
-    }
-    const nextInner: Record<string, unknown> = { ...cloned.inner, phaseInputs: existing };
-    if (importChangeRequests.length > 0) {
-      nextInner.changeRequests = [...getChangeRequests(cloned.inner), ...importChangeRequests];
-    }
-    const payload = cloned.commit(nextInner);
-    // updateProgramData already refreshes on success — no second refetch needed.
-    await updateProgramData(activeProgram.id, payload, activeProgram.updatedAt);
-    // Navigate to the first writable phase that received inputs and open the drawer.
-    // A CR-only import (all targets completed) has no writable phase — stay put.
-    const targetPhase = (firstPhaseId && !lockedPhases.includes(firstPhaseId) ? firstPhaseId : null) ?? Object.keys(writableInputs)[0];
-    if (targetPhase) {
-      setActivePhaseId(targetPhase);
-      commitNavigation({ surface: "stage", moreView: null, activePhaseId: targetPhase, reportId: null });
-      setContextDrawerOpen(true);
-      window.localStorage.setItem(CONTEXT_DRAWER_STORAGE_KEY, "true");
-    }
-    const phaseCount = Object.keys(writableInputs).length;
-    const totalIncoming = Object.values(writableInputs).reduce((sum, fields) => sum + Object.keys(fields).length, 0);
-    const fieldCount = totalIncoming - skippedFieldCount;
-    const crCount = importChangeRequests.length;
-    const crNote = crCount
-      ? ` ${crCount} change request${crCount > 1 ? "s" : ""} raised for completed phase${crCount > 1 ? "s" : ""} — approve in Scope & PCR to apply.`
-      : "";
-    const protectedNote = skippedFieldCount
-      ? ` ${skippedFieldCount} field${skippedFieldCount > 1 ? "s" : ""} feeding approved artifacts preserved.`
-      : "";
-    if (phaseCount === 0) {
-      // Only completed phases were targeted — everything became a change request.
-      pushV3Toast(crNote.trim(), { tone: "info", duration: 5000 });
-    } else {
-      pushV3Toast(`${fieldCount} field${fieldCount !== 1 ? "s" : ""} saved across ${phaseCount} phase${phaseCount !== 1 ? "s" : ""}. Ready to run agents.${crNote}${protectedNote}`, { tone: "success", duration: 4000 });
-    }
-  }, [activeProgram, commitNavigation, refreshPrograms, updateProgramData]);
 
   // ── Program save snapshots ──────────────────────────────────────────────────
   // Point-in-time backups the user can restore. Each snapshot is a full copy of
@@ -2658,45 +1720,6 @@ export default function AppShellV3() {
     }
   }, [activeProgram, createProgramSnapshot]);
 
-  const handleRevertProgramSnapshot = useCallback(async (snapshotId: string) => {
-    if (!activeProgram) return;
-    const restoredInner = await getProgramSnapshotData(snapshotId);
-    if (!restoredInner) {
-      pushV3Toast("Snapshot not found.", { tone: "error", duration: 3000 });
-      return;
-    }
-    const cloned = cloneRawProgram(activeProgram);
-    // The snapshot holds the inner programme state; strip any legacy snapshot key
-    // so a restored copy never reintroduces an in-data history.
-    delete restoredInner.programSnapshots;
-    // A restored snapshot carries the RAID log, decision queue and escalations
-    // that were true for THAT point in time. Against the just-restored state they
-    // are stale intelligence, so strip them (and the decision-queue provenance)
-    // before persisting, then regenerate RAID + the decision queue fresh below.
-    // Escalations re-derive on their normal cadence once RAID/decisions exist.
-    delete restoredInner.raidLog;
-    delete restoredInner.raidEntries;
-    delete restoredInner.decisionQueue;
-    delete restoredInner.decisions;
-    delete restoredInner.escalations;
-    delete restoredInner.escalationsLastCheckedAt;
-    delete restoredInner.scopePcrGeneratedAt;
-    const payload = cloned.commit(restoredInner);
-    // updateProgramData already refreshes on success — no second refetch needed.
-    await updateProgramData(activeProgram.id, payload, activeProgram.updatedAt);
-    const label = programSnapshots.find((s) => s.id === snapshotId)?.label ?? "snapshot";
-    pushV3Toast(`Reverted to “${label}” — regenerating RAID and decisions…`, { tone: "success", duration: 3500 });
-    // Regenerate intelligence against the restored state. skipPreSync is
-    // essential here: runProgramAgent's pre-run upsert reads activeProgram.rawData
-    // from THIS callback's closure, which is still the PRE-restore value (React
-    // state hasn't updated within the same callback) — syncing it would clobber
-    // the restore we just persisted. updateProgramData already wrote the restored
-    // copy to cloud, so the edge functions read the fresh restored blob.
-    if (isSupabaseConfigured) {
-      void runProgramAgent({ agentId: "risk", phaseId: "program", triggeredBy: "trigger", skipPreSync: true });
-      void runProgramAgent({ agentId: "scope-pcr", phaseId: "program", triggeredBy: "trigger", skipPreSync: true });
-    }
-  }, [activeProgram, getProgramSnapshotData, programSnapshots, refreshPrograms, updateProgramData, runProgramAgent]);
 
   // Auto-snapshot when a phase gate transitions to approved (a "lock"). Detected
   // from the persisted gateReviews so it runs off the refreshed programme — no
@@ -2724,529 +1747,26 @@ export default function AppShellV3() {
     void handleSaveProgramSnapshot(`${name} locked`, "lock");
   }, [activeProgram, handleSaveProgramSnapshot]);
 
-  const handleUploadDocument = useCallback(() => {
-    openMoreView("documents");
-  }, [openMoreView]);
 
-  // Attach a real document to a specific artifact slot, in place of generating it.
-  // Records the target slot, then opens the native file picker; the file-change
-  // handler runs the AI-validate + write pipeline. The document becomes the slot's
-  // source of truth (origin "uploaded"), replacing any generated body.
-  const handleAttachArtifact = useCallback((phaseId: string, defId: string, label: string, agentId: string) => {
-    if (!isSupabaseConfigured || !supabase) {
-      pushV3Toast("Attaching a document needs a connected workspace.", { tone: "warning", duration: 3500 });
-      return;
-    }
-    attachTargetRef.current = { phaseId, defId, label, agentId };
-    attachFileInputRef.current?.click();
-  }, []);
 
-  // File-change handler for the per-artifact attach: AI-validate the picked file
-  // via document-intelligence, snapshot for reversibility, then clear-on-attach and
-  // write the uploaded document + its quality review into the slot.
-  const handleAttachFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const input = event.target;
-    const file = input.files?.[0];
-    const target = attachTargetRef.current;
-    // Always reset the input so re-picking the same file fires change again.
-    input.value = "";
-    if (!file || !target || !activeProgram || !supabase) return;
-    pushV3Toast(`Attaching “${file.name}” to ${target.label} — validating…`, { tone: "info", duration: 3000 });
-    try {
-      const AI_NATIVE = new Set(["application/pdf", "image/png", "image/jpeg", "image/webp", "image/gif"]);
-      let fileAttachment: { base64: string; mimeType: string; name: string } | undefined;
-      let text = "";
-      if (AI_NATIVE.has(file.type)) {
-        const buffer = await file.arrayBuffer();
-        const bytes = new Uint8Array(buffer);
-        let binary = "";
-        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-        fileAttachment = { base64: btoa(binary), mimeType: file.type, name: file.name };
-      } else {
-        text = await file.text();
-      }
-      // Forward every activated phase's registry-resolved input schema (static
-      // methodology fields + ai-derived dynamic fields) so the extractor maps
-      // document data onto the SAME fields the UI surfaces — not just the
-      // Strategy fallback the edge uses when no schema is supplied. Without this
-      // a Design/Discover/etc. document (e.g. a functional workflow catalogue)
-      // has no declared target and silently can't be mapped.
-      const dynamicStore = getDynamicSchemaStore(activeProgram.rawData);
-      const phaseSchemas = activeProgram.phases.map((phase) => {
-        const resolved = getPhaseInputSchema(phase.id, dynamicStore);
-        return { phaseId: resolved.phaseId, title: resolved.title, fields: resolved.fields };
-      });
-      const invoked = await supabase.functions.invoke("document-intelligence", {
-        body: {
-          programId: activeProgram.id,
-          text: text || undefined,
-          fileName: file.name,
-          fileAttachment,
-          phaseHint: target.phaseId,
-          phaseSchemas,
-        },
-      });
-      if (invoked.error) throw new Error(invoked.error.message || "Validation failed.");
-      const response = invoked.data as { ok?: boolean; intelligence?: DocumentIntelligence; error?: string };
-      if (!response?.ok || !response.intelligence) throw new Error(response?.error || "The document could not be read.");
-      const intel = response.intelligence;
 
-      // Snapshot first so the attach (which clears the generated body) is reversible.
-      await handleSaveProgramSnapshot(`Before attaching to ${target.defId}`, "manual");
 
-      const review = deriveAttachedArtifactReview(intel);
-      const cloned = cloneRawProgram(activeProgram);
-      const nextInner = buildAttachedArtifactPatch(cloned.inner, {
-        phaseId: target.phaseId,
-        defId: target.defId,
-        label: target.label,
-        agentId: target.agentId,
-        fileName: file.name,
-        review,
-        summary: intel.summary ?? "",
-        content: text || intel.summary || "",
-      });
-      await updateProgramData(activeProgram.id, cloned.commit(nextInner), activeProgram.updatedAt);
-      await refreshPrograms();
-      pushV3Toast(`Attached “${file.name}” to ${target.label} — quality ${review.score}%. Snapshot saved.`, { tone: "success", duration: 4500 });
-    } catch (err) {
-      pushV3Toast(err instanceof Error ? err.message : "Failed to attach the document.", { tone: "error", duration: 5000 });
-    } finally {
-      attachTargetRef.current = null;
-    }
-  }, [activeProgram, handleSaveProgramSnapshot, refreshPrograms, updateProgramData]);
 
-  // Remove an attached document from an artifact slot. Soft-archive first (a
-  // restorable snapshot), then atomically clear the artifact ledger entry and its
-  // AI quality review so the slot returns to "new" (Generate · Attach).
-  const handleDeleteArtifact = useCallback(async (phaseId: string, artifactId: string, defId: string) => {
-    if (!activeProgram) return;
-    const label = activeProgram.phases.find((p) => p.id === phaseId)?.displayName ?? phaseId;
-    await handleSaveProgramSnapshot(`Before removing ${defId} (${label})`, "manual");
-    const cloned = cloneRawProgram(activeProgram);
-    const nextInner = { ...cloned.inner };
-    const buckets = typeof nextInner.phaseArtifacts === "object" && nextInner.phaseArtifacts !== null
-      ? { ...(nextInner.phaseArtifacts as Record<string, Record<string, unknown>>) }
-      : {};
-    const phaseBucket = buckets[phaseId];
-    if (phaseBucket && typeof phaseBucket === "object") {
-      const nextBucket = { ...(phaseBucket as Record<string, unknown>) };
-      delete nextBucket[artifactId];
-      delete nextBucket[defId];
-      buckets[phaseId] = nextBucket;
-    }
-    nextInner.phaseArtifacts = buckets;
-    const reviewKey = artifactReviewFieldKey(defId);
-    delete nextInner[reviewKey];
-    await updateProgramData(activeProgram.id, cloned.commit(nextInner), activeProgram.updatedAt);
-    pushV3Toast(`Removed the attached document for ${defId}. Snapshot saved — restore it from Saves if needed.`, { tone: "success", duration: 4000 });
-  }, [activeProgram, handleSaveProgramSnapshot, updateProgramData]);
 
-  // Per-field AI assist for phase inputs — reuses the copilot-chat endpoint
-  // (non-streaming) with a focused, field-scoped prompt. Returns clean text the
-  // panel writes straight into the field; throws a friendly message on failure
-  // so the inline error state can surface it.
-  const handleAssistField = useCallback(async (phaseId: string, request: FieldAssistRequest): Promise<string> => {
-    if (!isSupabaseConfigured || !supabase) {
-      throw new Error("AI assist needs a connected workspace.");
-    }
-    if (!activeProgram) {
-      throw new Error("No active programme.");
-    }
-    const phaseLabel = activeProgram.phases.find((p) => p.id === phaseId)?.displayName ?? phaseId;
-    const message = buildFieldAssistPrompt(request.mode, {
-      programName: activeProgram.name,
-      client: activeProgram.client,
-      industry: activeProgram.industry,
-      objective: activeProgram.objective,
-      phaseLabel,
-      fieldLabel: request.fieldLabel,
-      fieldHint: request.fieldHint,
-      currentValue: request.currentValue,
-      incomingValue: request.incomingValue,
-      guidance: request.guidance,
-    });
-    // A FunctionsFetchError ("Failed to send a request to the Edge Function") means
-    // the request never reached the function — a transient network drop or edge
-    // cold-start reset, not a real rejection. Retry once before surfacing it so a
-    // single blip mid-apply doesn't fail the whole pass.
-    let data: unknown;
-    let error: { message?: string; name?: string; context?: Response } | null = null;
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      ({ data, error } = await supabase.functions.invoke("copilot-chat", {
-        body: { programId: activeProgram.id, workspaceId: `phase-input:${phaseId}`, message, stream: false },
-      }));
-      if (!error || error.name !== "FunctionsFetchError") break;
-      if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 600));
-    }
-    if (error) {
-      // A fetch-level failure that survived the retry: the edge never answered.
-      // Surface an actionable message instead of the raw "Failed to send a request".
-      if (error.name === "FunctionsFetchError") {
-        throw new Error("Couldn't reach the AI service — check your connection and try again.");
-      }
-      // supabase-js collapses any non-2xx into the opaque "Edge Function returned
-      // a non-2xx status code". The real reason (provider key, program not synced,
-      // invalid id, AI error) lives in the Response body it stashes on `.context`.
-      let detail = error.message || "AI assist request failed.";
-      const ctx = error.context;
-      if (ctx && typeof ctx.json === "function") {
-        try {
-          const body = await ctx.clone().json() as { error?: string };
-          if (body?.error) detail = body.error;
-        } catch {
-          try {
-            const text = await ctx.text();
-            if (text) detail = text;
-          } catch { /* body unreadable — keep generic message */ }
-        }
-      }
-      throw new Error(detail);
-    }
-    const content = (data as { message?: { content?: unknown } } | null)?.message?.content;
-    if (typeof content !== "string" || !content.trim()) {
-      throw new Error("AI assist returned no suggestion.");
-    }
-    return sanitiseFieldReply(content);
-  }, [activeProgram]);
 
-  // Merge-and-refine for document import: when an imported field collides with a
-  // value the PM already entered, synthesise both into one coherent value via the
-  // field-assist endpoint instead of overwriting. Throws on failure so the import
-  // can fall back to a deterministic local merge.
-  const handleRefineImportField = useCallback(
-    (phaseId: string, fieldId: string, fieldLabel: string, existingValue: string, incomingValue: string) =>
-      handleAssistField(phaseId, { fieldId, fieldLabel, mode: "merge", currentValue: existingValue, incomingValue }),
-    [handleAssistField],
-  );
 
-  const handleApproveGate = useCallback(async (phaseId: string): Promise<boolean> => {
-    if (!activeProgram) return false;
 
-    // Authoritative hard gate: closing a phase is deterministic and governed by
-    // artifact completeness and quality — the same two conditions the Close
-    // phase button enables on (every required artifact approved AND quality
-    // above 85%). No LLM gate-review and no mandatory exit-criteria gating. This
-    // is the single chokepoint every surface (StageView, ProgrammeHealthView)
-    // routes through, so a stale-enabled button can never close a phase whose
-    // artifacts are incomplete or under-quality.
-    const approvalReadiness = computePhaseReadiness(activeProgram, phaseId);
-    if (approvalReadiness.artifactsComplete < 100) {
-      pushV3Toast(
-        `Artifacts are ${Math.round(approvalReadiness.artifactsComplete)}% complete — every required artifact must be approved before this phase can close.`,
-        { tone: "error", duration: 5000 },
-      );
-      return false;
-    }
-    if (!(approvalReadiness.artifactScore > 85)) {
-      pushV3Toast(
-        `Artifact quality ${Math.round(approvalReadiness.artifactScore)}% is below the 85% required to close this phase.`,
-        { tone: "error", duration: 5000 },
-      );
-      return false;
-    }
 
-    // Closing is deterministic: the only conditions are artifact completeness
-    // and quality, checked above. We deliberately do NOT run the cross-phase
-    // dependency-check or any other LLM verdict as a blocker here — those gate
-    // on exit criteria / handoff quality the user has chosen not to enforce for
-    // closing a phase. The single LLM call closing makes is the next-phase input
-    // planner below, which generates rather than blocks.
-    try {
-      await approveGate(phaseId);
-      pushV3Toast("Gate approved.", { tone: "success", duration: 2500 });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Gate approval failed. Please try again.";
-      pushV3Toast(message, { tone: "error", duration: 4000 });
-      return false;
-    }
 
-    // Dynamic schema: once a phase clears its gate, ask the planner agent to read
-    // the just-approved phase's artifacts and propose tailored additional input
-    // fields/artifacts for the *next* phase. Best-effort and fully guarded — if
-    // the agent is unavailable the gate approval still stands. The proposal is
-    // sanitised before it is persisted under rawData.dynamicSchema, where every
-    // resolver merges it on top of the static methodology for this programme.
-    const phaseOrder = activeProgram.phases?.map((p) => p.id) ?? [];
-    const nextPhaseId = phaseOrder[phaseOrder.indexOf(phaseId) + 1];
-    // Closing a phase advances the workspace to the next phase's cockpit so the
-    // user lands on where the work continues. The gate just cleared, so the next
-    // phase is now unlocked — navigate from here rather than from the caller,
-    // whose lock guard / phase ids are still the pre-approval set in its closure.
-    if (nextPhaseId) {
-      commitNavigation({ surface: "stage", moreView: null, activePhaseId: nextPhaseId, reportId: null });
-    }
-    if (supabase && nextPhaseId) {
-      // Always let the planner regenerate the next phase — but it only rewrites
-      // the *dynamic* schema (AI-proposed extra input fields / artifacts) for
-      // that phase. The static methodology inputs and artifacts, captured input
-      // values, and user-entered grid rows are all left untouched (the edge
-      // unions grid rows and never clears phaseInputs/phaseArtifacts). So there
-      // is no prompt: regeneration is safe because static data is skipped.
-      try {
-        // The edge can't import the methodology, so pass the next phase's spine
-        // (mandatory exit criteria + recommended agents) for the planner to
-        // ground a complete inventory on — persisted phases often carry no
-        // exitCriteria yet, which otherwise leaves the planner under-generating.
-        const nextPhaseDef = getPhaseDefinition(nextPhaseId);
-        const response = await supabase.functions.invoke("run-agent", {
-          body: {
-            programId: activeProgram.id,
-            agentId: "phase-input-planner",
-            phaseId: nextPhaseId,
-            triggeredBy: "trigger",
-            phaseSpec: nextPhaseDef
-              ? {
-                  name: nextPhaseDef.displayName,
-                  description: nextPhaseDef.description,
-                  exitCriteria: nextPhaseDef.mandatoryExitCriteriaTemplates,
-                  recommendedAgents: nextPhaseDef.recommendedAgents,
-                }
-              : undefined,
-          },
-        });
-        if (response.error) throw response.error;
-        // The edge persists the planner proposal into dynamicSchema itself (it
-        // is the single writer — relying on this HTTP response to carry the
-        // proposal back for the client to persist silently dropped good output
-        // when the round-trip was flaky). Re-read the freshest row so the UI and
-        // the toast reflect what was actually written.
-        await refreshPrograms();
-        const { data: fresh } = await supabase
-          .from("adam_programs")
-          .select("data")
-          .eq("id", activeProgram.id)
-          .single();
-        const freshRaw = (fresh?.data as Record<string, unknown> | undefined) ?? activeProgram.rawData ?? {};
-        const cloned = cloneRawProgram({ ...activeProgram, rawData: freshRaw });
-        const store = getDynamicSchemaStore(cloned.inner);
-        const nInputs = store.inputFields?.[nextPhaseId]?.length ?? 0;
-        const nArtifacts = store.artifacts?.[nextPhaseId]?.length ?? 0;
-        if (nInputs + nArtifacts > 0) {
-          pushV3Toast(
-            `Planner tailored ${nextPhaseId}: ${nInputs} input${nInputs === 1 ? "" : "s"} and ${nArtifacts} artifact${nArtifacts === 1 ? "" : "s"} generated.`,
-            { tone: "info", duration: 5000 },
-          );
-        } else {
-          pushV3Toast(
-            `Phase closed, but the planner did not generate inputs/artifacts for ${nextPhaseId}. Re-run from the next phase if needed.`,
-            { tone: "warning", duration: 6000 },
-          );
-        }
-      } catch {
-        pushV3Toast(
-          `Phase closed, but the planner could not be reached to generate ${nextPhaseId} inputs/artifacts.`,
-          { tone: "warning", duration: 6000 },
-        );
-      }
-    }
-    return true;
-  }, [activeProgram, approveGate, refreshPrograms, updateProgramData, commitNavigation]);
 
-  const handleReopenGate = useCallback(async (phaseId: string) => {
-    setGateReopenPhase(phaseId);
-  }, []);
 
-  const handleConfirmGateReopen = useCallback(async (reason: string) => {
-    if (!gateReopenPhase) return;
-    const phaseId = gateReopenPhase;
-    // Keep the modal mounted (it shows a pending state) until the async reopen settles,
-    // so a slow Supabase write can't be double-submitted by an impatient second click.
-    try {
-      await reopenGate(phaseId, reason);
-      pushV3Toast("Gate reopened. Next phase is locked pending re-approval.", { tone: "warning", duration: 4000 });
-    } catch (err) {
-      const detail = err instanceof Error ? err.message : "";
-      pushV3Toast(detail ? `Could not reopen gate: ${detail}` : "Could not reopen gate.", { tone: "error", duration: 4000 });
-    } finally {
-      setGateReopenPhase(null);
-    }
-  }, [gateReopenPhase, reopenGate]);
 
-  const handleRaiseChangeRequest = useCallback(async (phaseId: string, title: string, reason: string) => {
-    try {
-      await raiseChangeRequest(phaseId, title, reason);
-      pushV3Toast("Change request logged for review.", { tone: "success", duration: 3000 });
-    } catch (err) {
-      const detail = err instanceof Error ? err.message : "";
-      pushV3Toast(detail ? `Could not log change request: ${detail}` : "Could not log change request.", { tone: "error", duration: 4000 });
-    }
-  }, [raiseChangeRequest]);
 
-  const handleResolveChangeRequest = useCallback(async (id: string, decision: "approved" | "rejected", note?: string) => {
-    try {
-      const orderedPhaseIds = (activeProgram?.phases ?? []).map((phase) => phase.id);
-      await resolveChangeRequest(id, decision, note, orderedPhaseIds);
-      pushV3Toast(
-        decision === "approved"
-          ? "Change request approved — the target stage and every prior locked stage reopened for editing."
-          : "Change request rejected.",
-        { tone: decision === "approved" ? "success" : "info", duration: 3500 },
-      );
-    } catch (err) {
-      const detail = err instanceof Error ? err.message : "";
-      pushV3Toast(detail ? `Could not update change request: ${detail}` : "Could not update change request.", { tone: "error", duration: 4000 });
-    }
-  }, [resolveChangeRequest, activeProgram]);
 
-  const handleAnswerAgentQuestion = useCallback(async (taskId: string, answer: string) => {
-    if (!activeProgram || !activePhaseId || !activeProgramId) return;
-    await updatePhaseTask(taskId, { status: "done", result: answer, completedAt: Date.now() } as Partial<PhaseAgentTask>);
 
-    const cloned = cloneRawProgram(activeProgram);
-    const existing = Array.isArray(cloned.inner.humanNotes) ? [...cloned.inner.humanNotes as Record<string, unknown>[]] : [];
-    const payload = cloned.commit({
-      ...cloned.inner,
-      humanNotes: [...existing, {
-        text: `Agent question answered: ${answer}`,
-        savedAt: new Date().toISOString(),
-        type: "stage-note",
-        phaseId: activePhaseId,
-        taskId,
-      }],
-    });
-    // updateProgramData already refreshes programmes — only the phase tasks still
-    // need a separate refetch here.
-    await updateProgramData(activeProgram.id, payload, activeProgram.updatedAt);
-    await refreshPhaseTasks();
-    pushV3Toast("Answer saved. ATOS will continue from here.", { tone: "success", duration: 2500 });
-  }, [activePhaseId, activeProgram, activeProgramId, refreshPhaseTasks, refreshPrograms, updatePhaseTask, updateProgramData]);
 
-  const handleAcknowledgeTask = useCallback((taskId: string) => {
-    if (!activeProgramId || !activePhaseId || !activeProgram) return;
-    void updatePhaseTask(taskId, { status: "skipped" } as Partial<PhaseAgentTask>);
-  }, [activeProgramId, activePhaseId, updatePhaseTask]);
 
-  const handleSaveArtifact = useCallback(async (artifactId: "narrative" | "deck", content: string) => {
-    if (!activeProgram) return;
-    const cloned = cloneRawProgram(activeProgram);
-    const nextInner = { ...cloned.inner };
-    if (artifactId === "narrative") {
-      nextInner.narrative = sanitizeMarkdown(content);
-      const notes = Array.isArray(nextInner.humanNotes) ? [...nextInner.humanNotes as Record<string, unknown>[]] : [];
-      nextInner.humanNotes = [...notes, {
-        text: sanitizeMarkdown(content),
-        savedAt: new Date().toISOString(),
-        type: "narrative-correction",
-        phaseId: activePhaseId,
-      }];
-    } else {
-      const existing = typeof nextInner.deck === "object" && nextInner.deck !== null ? { ...(nextInner.deck as Record<string, unknown>) } : {};
-      existing.programHealthSummary = sanitizeMarkdown(content);
-      nextInner.deck = existing;
-    }
-    await updateProgramData(activeProgram.id, cloned.commit(nextInner), activeProgram.updatedAt);
-    await refreshPrograms();
-    pushV3Toast("Artifact saved. Your version will be used on the next agent run.", { tone: "success", duration: 3000 });
-  }, [activePhaseId, activeProgram, refreshPrograms, updateProgramData]);
 
-  const handleApproveArtifact = useCallback(async (phaseId: string, artifactId: string, agentId: string) => {
-    if (!activeProgram) return;
-    const cloned = cloneRawProgram(activeProgram);
-    const nextInner = { ...cloned.inner };
-    const buckets = { ...(nextInner.phaseArtifacts as Record<string, Record<string, Record<string, unknown>>> | undefined ?? {}) };
-    const phaseBucket = { ...(buckets[phaseId] ?? {}) };
-    const entry = phaseBucket[artifactId];
-    if (!entry) return;
-    phaseBucket[artifactId] = { ...entry, status: "approved", updatedAt: new Date().toISOString() };
-    buckets[phaseId] = phaseBucket;
-    nextInner.phaseArtifacts = buckets;
-    await updateProgramData(activeProgram.id, cloned.commit(nextInner), activeProgram.updatedAt);
-    await refreshPrograms();
-
-    // Feed the human approval into the producing agent's memory so its next run
-    // sees the artifact was accepted (buildMemoryContext surfaces it on dispatch).
-    recordAgentFeedback(agentId, phaseId, activeProgram.id, artifactId, "accepted");
-
-    pushV3Toast("Document approved.", { tone: "success", duration: 2500 });
-  }, [activeProgram, refreshPrograms, updateProgramData]);
-
-  // Approve every produced artifact in a phase in a single write. Approving one
-  // at a time means a network round-trip (and gate re-check) per document; once
-  // all artifacts are generated the user approves the whole set at once. Skips
-  // anything already approved or archived, and records human feedback per agent.
-  const handleApproveAllArtifacts = useCallback(async (phaseId: string) => {
-    if (!activeProgram) return;
-    const cloned = cloneRawProgram(activeProgram);
-    const nextInner = { ...cloned.inner };
-    const buckets = { ...(nextInner.phaseArtifacts as Record<string, Record<string, Record<string, unknown>>> | undefined ?? {}) };
-    const phaseBucket = { ...(buckets[phaseId] ?? {}) };
-    const nowIso = new Date().toISOString();
-    const approved: Array<{ artifactId: string; agentId: string }> = [];
-    for (const [artifactId, entry] of Object.entries(phaseBucket)) {
-      if (!entry || typeof entry !== "object") continue;
-      const status = (entry as { status?: unknown }).status;
-      if (status === "approved" || status === "archived") continue;
-      phaseBucket[artifactId] = { ...(entry as Record<string, unknown>), status: "approved", updatedAt: nowIso };
-      const agentId = typeof (entry as { agentId?: unknown }).agentId === "string" ? (entry as { agentId: string }).agentId : artifactId;
-      approved.push({ artifactId, agentId });
-    }
-    if (!approved.length) return;
-    buckets[phaseId] = phaseBucket;
-    nextInner.phaseArtifacts = buckets;
-    await updateProgramData(activeProgram.id, cloned.commit(nextInner), activeProgram.updatedAt);
-    await refreshPrograms();
-    for (const { artifactId, agentId } of approved) {
-      recordAgentFeedback(agentId, phaseId, activeProgram.id, artifactId, "accepted");
-    }
-    pushV3Toast(`${approved.length} document${approved.length > 1 ? "s" : ""} approved.`, { tone: "success", duration: 2500 });
-  }, [activeProgram, refreshPrograms, updateProgramData]);
-
-  // Reverse an artifact approval back to a working state so the user can edit,
-  // regenerate, or re-review it. Only reachable while the phase gate is unlocked
-  // (StageView hides Unlock once the gate is locked), so it never silently
-  // unwinds a locked gate.
-  const handleUnapproveArtifact = useCallback(async (phaseId: string, artifactId: string) => {
-    if (!activeProgram) return;
-    const cloned = cloneRawProgram(activeProgram);
-    const nextInner = { ...cloned.inner };
-    const buckets = { ...(nextInner.phaseArtifacts as Record<string, Record<string, Record<string, unknown>>> | undefined ?? {}) };
-    const phaseBucket = { ...(buckets[phaseId] ?? {}) };
-    const entry = phaseBucket[artifactId];
-    if (!entry) return;
-    phaseBucket[artifactId] = { ...entry, status: "ready", updatedAt: new Date().toISOString() };
-    buckets[phaseId] = phaseBucket;
-    nextInner.phaseArtifacts = buckets;
-    await updateProgramData(activeProgram.id, cloned.commit(nextInner), activeProgram.updatedAt);
-    await refreshPrograms();
-    pushV3Toast("Document unlocked for editing.", { tone: "info", duration: 2500 });
-  }, [activeProgram, refreshPrograms, updateProgramData]);
-
-  // Persist a user's manual roadmap-date edits. Stored as a top-level override map
-  // (phaseId → {start,end}) — deliberately separate from the locked phaseInputs so
-  // adjusting the delivery timeline never re-stales the roadmap artifact or trips
-  // the gate-lock freeze; the deterministic schedule remains the default fallback.
-  const handleSaveRoadmapSchedule = useCallback(async (schedule: Record<string, { start: string; end: string }>) => {
-    if (!activeProgram || !canEditActiveProgram) return;
-    const cloned = cloneRawProgram(activeProgram);
-    const payload = cloned.commit({ ...cloned.inner, roadmapSchedule: schedule });
-    await updateProgramData(activeProgram.id, payload, activeProgram.updatedAt);
-    await refreshPrograms();
-  }, [activeProgram, canEditActiveProgram, refreshPrograms, updateProgramData]);
-
-  const handleDecideDecision = useCallback(async (id: string, decision: string) => {
-    await handleResolveDecision(id, "approved", decision);
-  }, [handleResolveDecision]);
-
-  const handleDeferDecision = useCallback(async (id: string) => {
-    await handleResolveDecision(id, "deferred");
-  }, [handleResolveDecision]);
-
-  const handleRunDemo = useCallback(async () => {
-    if (!activeProgramId) return;
-    try {
-      const walkthrough = runWalkthrough();
-      await updateProgramData(activeProgramId, {
-        ...walkthrough.programState,
-        name: WALKTHROUGH_PROGRAM.name,
-        objective: WALKTHROUGH_PROGRAM.strategy?.desiredOutcome || "",
-      });
-      await refreshPrograms();
-      pushV3Toast("Demo programme loaded — ATOS is ready to explore.", { tone: "success", duration: 3000 });
-    } catch {
-      pushV3Toast("Could not load demo programme.", { tone: "error", duration: 4000 });
-    }
-  }, [activeProgramId, refreshPrograms, updateProgramData]);
 
   if (
     !authChecked
@@ -3317,7 +1837,7 @@ export default function AppShellV3() {
               <div className="v3-welcome-hero-glyph" aria-hidden="true">✦</div>
               <h1 className="v3-welcome-hero-title">Welcome to Brillio ATOS</h1>
               <p className="v3-welcome-hero-sub">
-                Brillio's Agentic Transformation OS. Spin up a programme and ATOS plans every phase, drafts your artefacts from confirmed facts, and tracks gate readiness from strategy through to value realisation.
+                Conversations in, systems out. Spin up a programme and ATOS turns recorded stakeholder conversations into a current-state atlas, an agentic blueprint, and a working system — demonstrated to every stakeholder, movement by movement.
               </p>
               <button
                 type="button"
@@ -3328,17 +1848,17 @@ export default function AppShellV3() {
               </button>
             </div>
 
-            {/* Phase journey — the methodology backbone, sourced from the registry */}
+            {/* The engagement loop — the Flow spine, sourced from the registry */}
             <div className="v3-welcome-journey">
-              <div className="v3-welcome-journey-label">The ATOS transformation lifecycle</div>
+              <div className="v3-welcome-journey-label">The engagement loop</div>
               <div className="v3-welcome-journey-track">
-                {ATOS_STANDARD.phases.map((phase, index) => (
-                  <React.Fragment key={phase.id}>
-                    <div className="v3-welcome-journey-phase" title={phase.description}>
+                {getPhaseSequence("atos-flow").map((phaseId, index, all) => (
+                  <React.Fragment key={phaseId}>
+                    <div className="v3-welcome-journey-phase" title={getPhaseDefinition(phaseId, "atos-flow")?.description}>
                       <span className="v3-welcome-journey-dot">{index + 1}</span>
-                      <span className="v3-welcome-journey-name">{phase.displayName}</span>
+                      <span className="v3-welcome-journey-name">{getPhaseDefinition(phaseId, "atos-flow")?.displayName ?? phaseId}</span>
                     </div>
-                    {index < ATOS_STANDARD.phases.length - 1 ? (
+                    {index < all.length - 1 ? (
                       <span className="v3-welcome-journey-arrow" aria-hidden="true">→</span>
                     ) : null}
                   </React.Fragment>
@@ -3349,10 +1869,10 @@ export default function AppShellV3() {
             {/* Capability tiles */}
             <div className="v3-welcome-tiles">
               {[
-                { icon: "◇", title: "Methodology-driven phases", body: "Nine governed phases, each with its required artefacts, exit criteria, and a formal gate review before you advance." },
-                { icon: "✦", title: "Specialised AI agents", body: "Phase agents draft your Charter, Business Case, Outcome Framework, and roadmaps — then keep them current as inputs change." },
-                { icon: "⬡", title: "Fact-grounded traceability", body: "Every artefact is built from confirmed, citable facts, so each output traces back to its source instead of invented detail." },
-                { icon: "◫", title: "Delivery & executive intelligence", body: "Live action plans, risk and decision surfacing, gate-readiness scoring, and one-click SteerCo packs from real programme data." },
+                { icon: "◇", title: "Evidence, not status", body: "Transcripts and documents are first-class inputs. Gates tick themselves as evidence lands — nothing is hand-marked done." },
+                { icon: "✦", title: "Agents draft, you judge", body: "ATOS generates the atlas, blueprint and demo scripts from what people said; consequential changes wait in your Inbox as decisions." },
+                { icon: "⬡", title: "The gate is a demo", body: "Each stakeholder watches their own workflow run — seeded from their own words — and acceptance is recorded pass by pass." },
+                { icon: "◫", title: "Governed autonomy", body: "Every action lands on an attested trail; budgets, halts and tiers keep agent work a deliberate, auditable call." },
               ].map((tile) => (
                 <div key={tile.title} className="v3-welcome-tile">
                   <span className="v3-welcome-tile-icon">{tile.icon}</span>
@@ -3436,12 +1956,11 @@ export default function AppShellV3() {
     }
   };
 
-  // ── "Paper & Flow" shell ────────────────────────────────────────────────
-  // ATOS Flow programmes render the reimagined chrome — none of the classic
-  // shell below appears. Same engine (data, agents, autosave, wizard, Copilot,
-  // toasts), different world. "Open classic workspace" in the programme menu
-  // escapes for anything not yet rebuilt; switching programme re-enters.
-  if (useFlowShell && authed && !authRoute && activeProgram?.methodology === "atos-flow") {
+  // ── The Flow workspace — the only workspace ────────────────────────────
+  // The classic stage-gate shell was retired (2026-07); every programme
+  // renders the Flow chrome. Auth, splash and the no-programme welcome all
+  // returned above, so reaching here with an active programme means Flow.
+  if (activeProgram) {
     return (
       <div className="v3-shell v3fs-shell">
         <FlowShell
@@ -3452,7 +1971,6 @@ export default function AppShellV3() {
           onCreateProgram={() => void handleCreateProgram()}
           onOpenSetup={() => setWizardOpen(true)}
           onOpenCopilot={() => setAdamCopilotSidebarOpen(true)}
-          onExitShell={() => setUseFlowShell(false)}
           onRunAgent={handleRunAgent}
           onSaveInputs={handleSavePhaseInputs}
           onResolveDecision={async (decisionId, resolution) => {
@@ -3537,6 +2055,25 @@ export default function AppShellV3() {
           }}
         />
         {setupWizardOverlay}
+        {aiSettingsOpen ? (
+          <>
+            <div className="v3fs-doc-backdrop" onClick={() => setAiSettingsOpen(false)} aria-hidden="true" />
+            <div className="v3fs-docview" role="dialog" aria-modal="true" aria-label="AI intelligence settings">
+              <header className="v3fs-docview-h">
+                <div>
+                  <h2>Intelligence</h2>
+                  <span className="v3fs-docview-m">AI provider status &amp; setup</span>
+                </div>
+                <div className="v3fs-docview-cta">
+                  <button type="button" className="v3fs-btn" onClick={() => setAiSettingsOpen(false)}>Close</button>
+                </div>
+              </header>
+              <div className="v3fs-docview-b">
+                <IntelligenceView program={activeProgram} onRefreshProgram={refreshPrograms} initialTab={intelligenceInitialTab} onRunAgent={handleRunAgent} />
+              </div>
+            </div>
+          </>
+        ) : null}
         <CoPilotSidebar
           open={adamCopilotSidebarOpen}
           onClose={() => setAdamCopilotSidebarOpen(false)}
@@ -3556,576 +2093,14 @@ export default function AppShellV3() {
               window.dispatchEvent(new CustomEvent("atlas-v3-toast", { detail: { message, tone: "error" } }));
             }
           } : undefined}
-          onNavigate={() => setUseFlowShell(false)}
         />
         {toastStackOverlay}
       </div>
     );
   }
 
-  return (
-    <div className="v3-shell v3-shell--command">
-      <input
-        ref={attachFileInputRef}
-        type="file"
-        accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.txt,.md,.csv,.json,.docx"
-        style={{ display: "none" }}
-        onChange={handleAttachFileChange}
-      />
-      <CommandRail
-        activeSurface={surface}
-        moreView={moreView}
-        onNavigate={navigateSurface}
-        programs={programs.map((p) => ({ id: p.id, name: p.name }))}
-        activeProgramId={activeProgramId}
-        onSelectProgram={(id) => {
-          setActiveProgramId(id);
-          commitNavigation({ surface: "insight-feed", moreView: null, activePhaseId: null, reportId: null });
-        }}
-        programName={activeProgram?.name || "Programme"}
-        confidenceScore={programConfidenceScore}
-        anyAgentRunning={anyAgentRunning}
-        agentStatus={agentStatus}
-        userInitial={currentUser?.email?.[0]?.toUpperCase() || null}
-        userEmail={currentUser?.email || null}
-        onOpenHelp={() => setHelpOpen(true)}
-        onOpenCommandPalette={() => setCommandPaletteOpen(true)}
-        onOpenCopilot={() => setAdamCopilotSidebarOpen(true)}
-        onOpenAISettings={openAISettings}
-        onOpenWorkspaces={() => openMoreView(null)}
-        onSignOut={handleSignOut}
-        theme={theme}
-        onToggleTheme={toggleTheme}
-        pinned={commandRailPinned}
-        onTogglePinned={toggleCommandRailPinned}
-        collapsed={railCollapsed}
-        onToggleCollapse={toggleRailCollapsed}
-        onCreateProgram={() => void handleCreateProgram()}
-        onDeleteProgram={activeProgramId ? () => handleDeleteProgram(activeProgramId) : undefined}
-        programHealth={activeProgram ? programHealth : undefined}
-        openDecisionCount={actionCenterCount}
-      />
-
-      <div className="v3-main-frame">
-      <div className="v3-topbar">
-        <div className="v3-topbar-brand-group">
-          <TopbarBreadcrumb
-            surface={surface}
-            activePhaseLabel={activePhaseId ? phaseNameById(activeProgram, activePhaseId) : null}
-            moreView={moreView}
-            reportId={reportId}
-            onNavigate={navigateSurface}
-            onClearMoreView={() => commitNavigation({ surface: "program", moreView: null, reportId: "status" })}
-          />
-        </div>
-
-        <div className="v3-topbar-actions">
-          {/* Escalations — only surface when action is needed */}
-          {openEscalations.length > 0 ? (
-            <button className="v3-topbar-status-pill is-alert" onClick={() => setEscalationPanelOpen(true)}>
-              <div className="v3-escalation-dot" />
-              <span>{openEscalations.length} escalation{openEscalations.length > 1 ? "s" : ""}</span>
-            </button>
-          ) : null}
-
-          {/* Connection warning — only when degraded */}
-          {showConnectionStatus ? (
-            <div className="v3-topbar-status-pill is-warning">
-              <div className="v3-thinking-dot" />
-              <span>{channelStatus === "reconnecting" ? "Reconnecting…" : "Connection lost"}</span>
-            </div>
-          ) : null}
-
-          {/* Edit program */}
-          <button
-            className="v3-topbar-icon-btn"
-            onClick={() => setWizardOpen(true)}
-            title="Edit programme setup"
-            aria-label="Edit programme setup"
-          >
-            ✎
-          </button>
-
-          {/* Help */}
-          <button
-            className="v3-topbar-icon-btn"
-            onClick={() => setHelpOpen(true)}
-            title="Help & guide"
-            aria-label="Help"
-          >
-            ?
-          </button>
-
-          {/* Copilot */}
-          <button
-            className="v3-topbar-ask-adam-btn"
-            onClick={() => setAdamCopilotSidebarOpen(true)}
-            title="Copilot — AI assistant"
-            aria-label="Copilot"
-          >
-            <span className="v3-topbar-ask-adam-icon">✦</span>
-            <span>Copilot</span>
-          </button>
-        </div>
-      </div>
-
-      {!userId && programs.length > 0 ? (
-        <div className="v3-banner warning" style={{ margin: "8px 16px" }}>
-          ⚠ Session user unknown — data isolation not guaranteed. Refresh to re-authenticate.
-        </div>
-      ) : null}
-      <AIStatusBanner aiStatus={aiStatus.status} onOpenAISettings={openAISettings} />
-
-      <div className="v3-surface-layout" style={{ position: "relative" }}>
-      {anyAgentRunning && (
-        <div role="status" aria-label="Analysing programme data" style={{ position: "absolute", top: 0, left: 0, right: 0, height: 0, overflow: "hidden" }}>
-          Analysing
-        </div>
-      )}
-      <AgentSweepBar active={anyAgentRunning} />
-      <div key={`${surface}:${moreView || "base"}:${reportId || "none"}`} className="v3-scroll v3-surface-enter">
-        <React.Suspense fallback={<div style={{ padding: 24 }}><SkeletonShimmer /></div>}>
-        {surface === "stage" ? (
-          <AdamErrorBoundary context={{ surface: "stage", programId: activeProgramId, activePhaseId }}>
-            {isProgramEmpty ? (
-              <OnboardingCard
-                programName={activeProgram?.name || ""}
-                onSetup={() => setWizardOpen(true)}
-                onUploadDoc={() => openMoreView("documents")}
-                onRunDemo={() => void handleRunDemo()}
-              />
-            ) : (
-              <StageView
-                program={activeProgram}
-                activeRuns={activeRuns}
-                activePhaseId={activePhaseId}
-                lockedPhaseIds={lockedPhaseIds}
-                mode={mode}
-                generatedAt={activeProgram?.planGeneratedAt || activeProgram?.narrativeGeneratedAt || null}
-                agentsAvailable={authed && isSupabaseConfigured}
-                triggers={triggers}
-                onOpenMoreView={(view) => openMoreView(view)}
-                onSelectPhase={handleSelectPhase}
-                onResolveDecision={handleResolveDecision}
-                onOpenDecide={() => navigateSurface("decide")}
-                onOpenDecideTab={(tab) => { setDecideIntent({ tab, nonce: Date.now(), openAdd: false }); navigateSurface("decide"); }}
-                onOpenGuidance={() => { setContextDrawerOpen(true); setRailIntent({ tab: "guidance", nonce: Date.now() }); }}
-                onAddItem={(tab) => { setDecideIntent({ tab, nonce: Date.now() }); navigateSurface("decide"); }}
-                onOpenReport={openReport}
-                onReopenGate={handleReopenGate}
-                onRaiseChangeRequest={handleRaiseChangeRequest}
-                onApproveGate={handleApproveGate}
-                onRunAgent={handleRunAgent}
-                onSaveArtifact={handleSaveArtifact}
-                onApproveArtifact={handleApproveArtifact}
-                onApproveAllArtifacts={handleApproveAllArtifacts}
-                onUnapproveArtifact={handleUnapproveArtifact}
-                onSaveInputs={handleSavePhaseInputs}
-                onSaveProgram={handleSaveProgramSnapshot}
-                onRevertProgram={handleRevertProgramSnapshot}
-                programSnapshots={programSnapshots}
-                onUploadDocument={handleUploadDocument}
-                onAttachArtifact={handleAttachArtifact}
-                onDeleteArtifact={handleDeleteArtifact}
-                onAssistField={handleAssistField}
-                artifactPreviews={{
-                  narrative: activeProgram?.narrative || null,
-                  plan: activeProgram?.plan?.nextThreeActions || null,
-                  deck: activeProgram?.deck?.programHealthSummary || activeProgram?.deck?.slides?.[0]?.speakerNotes || null,
-                }}
-              />
-            )}
-          </AdamErrorBoundary>
-        ) : null}
-
-        {surface === "pipeline" ? (
-          <AdamErrorBoundary context={{ surface: "pipeline", programId: activeProgramId, activePhaseId }}>
-            <PipelineView
-              program={activeProgram}
-              activePhaseId={activePhaseId}
-              onSelectPhase={handleSelectPhase}
-              onOpenPhase={openPhaseSheet}
-              onUpdatePhasePct={handleUpdatePhasePct}
-              lockedPhaseIds={lockedPhaseIds}
-            />
-          </AdamErrorBoundary>
-        ) : null}
-
-        {surface === "decide" ? (
-          <AdamErrorBoundary context={{ surface: "decide", programId: activeProgramId, activePhaseId }}>
-            <DecideView
-              program={activeProgram}
-              activePhaseId={activePhaseId}
-              mode={mode}
-              onResolveDecision={handleResolveDecision}
-              onAddDecision={handleAddDecision}
-              onRequestRemediation={requestRemediation}
-              onAddRaid={addRaidEntry}
-              onCloseRaid={closeRaidEntry}
-              onNavigateToPhaseInputs={navigateToPhaseInputs}
-              persona={persona}
-              initialIntent={decideIntent}
-            />
-          </AdamErrorBoundary>
-        ) : null}
-
-        {surface === "program" ? (
-          <AdamErrorBoundary context={{ surface: "program", programId: activeProgramId, activePhaseId }}>
-            {activeProgram && activeProgramRole === "viewer" ? (
-              <div
-                role="status"
-                style={{
-                  margin: "0 0 12px",
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  background: "var(--v3-surface-2, rgba(255,255,255,0.04))",
-                  border: "1px solid var(--v3-border, rgba(255,255,255,0.12))",
-                  fontSize: 12,
-                  color: "var(--v3-text-secondary)",
-                }}
-              >
-                You have <strong>read-only</strong> access to this program. Editing and running agents are disabled. Ask a program admin for editor access.
-              </div>
-            ) : null}
-            {/* Workspace browser — shows when no specific workspace is selected */}
-            {!moreView && !reportId ? (
-              <MoreView
-                currentView={null}
-                onSelectView={(view) => view ? openMoreView(view) : openMoreView(null)}
-                renderView={() => null}
-                activePhaseId={activePhaseId}
-                activePhaseName={activePhaseId ? phaseNameById(activeProgram, activePhaseId) : null}
-                onNavigateToSurface={navigateSurface}
-              />
-            ) : (
-              <ProgramView
-                program={activeProgram}
-                mode={mode}
-                focusedReportId={reportId}
-                currentView={moreView}
-                sanity={sanity}
-                validation={validation}
-                hasBlockers={hasBlockers}
-                warningCount={warningCount}
-                narrativeIsRunning={narrativeIsRunning}
-                renderView={() => (
-                  <ProgramDetailRouter
-                    view={moreView}
-                    reportId={reportId}
-                    program={activeProgram}
-                    programId={activeProgramId}
-                    activeRuns={activeRuns}
-                    triggers={{ ...triggers, runTwinSync: () => void runProgramAgent({ agentId: "twin-sync", phaseId: "program", triggeredBy: "user" }) }}
-                    agentCards={agentCards}
-                    agentActivityMap={agentActivityMap}
-                    narrativeIsRunning={narrativeIsRunning}
-                    healthHeatmapIsRunning={healthHeatmapIsRunning}
-                    milestoneSavePending={milestoneSavePending}
-                    budgetSavePending={budgetSavePending}
-                    onRefresh={refreshPrograms}
-                    onAddMilestone={handleAddMilestone}
-                    onCompleteMilestone={handleCompleteMilestone}
-                    onSaveBudgetInputs={handleSaveBudgetInputs}
-                    onOpenPhase={openPhaseSheet}
-                    onNavigate={navigateAppView}
-                    onOpenMoreView={openMoreView}
-                    onSaveNarrativeCorrection={handleSaveNarrativeCorrection}
-                    onSavePhaseInputs={handleSavePhaseInputs}
-                    onSaveAllPhaseInputs={handleSaveAllPhaseInputs}
-                    onRefineImportField={handleRefineImportField}
-                    onOpenIntelligence={() => { setIntelligenceInitialTab(undefined); openMoreView("intelligence"); }}
-                    intelligenceInitialTab={intelligenceInitialTab}
-                    onOpenTrace={(id) => setTraceRunId(id)}
-                    patternsCount={patterns.length}
-                    onExtractPatterns={async () => {
-                      await runProgramAgent({ agentId: "pattern-extract", phaseId: "program", triggeredBy: "user" });
-                      await refreshPatterns();
-                    }}
-                    onRunAgent={handleRunAgent}
-                    onSaveRoadmapSchedule={handleSaveRoadmapSchedule}
-                    currentUserId={userId}
-                  />
-                )}
-                onOpenMoreView={openMoreView}
-                onOpenReport={openReport}
-                onNavigateToPipeline={() => navigateSurface("pipeline")}
-                onNavigateToProgrammeHealth={() => navigateSurface("programme-health")}
-                onNavigateToStage={openPhaseSheet}
-              />
-            )}
-          </AdamErrorBoundary>
-        ) : null}
-
-        {surface === "portfolio" ? (
-          <AdamErrorBoundary context={{ surface: "portfolio", programId: activeProgramId }}>
-            <PortfolioView
-              programs={programs}
-              activeProgramId={activeProgramId}
-              onSelectProgram={(id) => {
-                setActiveProgramId(id);
-                commitNavigation({ surface: "insight-feed", moreView: null, activePhaseId: null, reportId: null });
-              }}
-              onManageAccess={(id) => {
-                setActiveProgramId(id);
-                commitNavigation({ surface: "program", moreView: "access", activePhaseId: null, reportId: null });
-              }}
-              onDeleteProgram={handleDeleteProgram}
-              loading={programsLoading || false}
-              onCreateProgram={() => setWizardOpen(true)}
-              anyAgentRunning={anyAgentRunning}
-              onRunAgent={handleRunAgent}
-            />
-          </AdamErrorBoundary>
-        ) : null}
-
-        {surface === "insight-feed" ? (
-          <AdamErrorBoundary context={{ surface: "insight-feed", programId: activeProgramId }}>
-            <InsightFeedView
-              program={activeProgram}
-              programs={programs}
-              activePhaseId={activePhaseId}
-              confidenceScore={programConfidenceScore}
-              confidenceResult={programConfidenceResult ?? undefined}
-              openDecisionCount={actionCenterCount}
-              anyAgentRunning={anyUserAgentRunning}
-              agentsAvailable={authed && isSupabaseConfigured}
-              onNavigateToDecide={() => navigateSurface("decide")}
-              onNavigateToGates={() => navigateSurface("programme-health")}
-              onNavigateToPipeline={() => navigateSurface("pipeline")}
-              onNavigateToPhase={openPhaseSheet}
-              onOpenPhase={openPhaseSheet}
-              onRunAgent={handleRunAgent}
-              onNavigateToPortfolio={() => navigateSurface("portfolio")}
-              onNavigateToExecutive={() => navigateSurface("executive")}
-              onOpenMoreView={(view) => openMoreView(view)}
-            />
-          </AdamErrorBoundary>
-        ) : null}
-
-        {surface === "executive" ? (
-          <AdamErrorBoundary context={{ surface: "executive", programId: activeProgramId }}>
-            <ExecutiveView
-              program={activeProgram}
-              programs={programs}
-              confidenceScore={programConfidenceScore}
-              confidenceResult={programConfidenceResult ?? undefined}
-              confidenceForecast={programConfidenceForecast ?? undefined}
-              onApproveGate={handleApproveGate}
-              onRunAgent={handleRunAgent}
-              anyAgentRunning={anyUserAgentRunning}
-              narrativeRunning={narrativeIsRunning}
-              onNavigateToDecide={() => navigateSurface("decide")}
-              onNavigateToGates={() => navigateSurface("programme-health")}
-              onNavigateToPipeline={() => navigateSurface("pipeline")}
-              onNavigateToPhase={openPhaseSheet}
-              onNavigateToRisks={() => openMoreView("risks")}
-              changeRequests={changeRequests}
-              lockedPhases={lockedPhaseOptions}
-              onRaiseChangeRequest={handleRaiseChangeRequest}
-              onResolveChangeRequest={handleResolveChangeRequest}
-            />
-          </AdamErrorBoundary>
-        ) : null}
-
-        {surface === "programme-health" ? (
-          <AdamErrorBoundary context={{ surface: "programme-health", programId: activeProgramId }}>
-            <ProgrammeHealthView
-              programId={activeProgramId ?? ""}
-              program={activeProgram}
-              rawData={rawData}
-              processedPhases={activeProgram?.phases}
-              activePhaseId={activePhaseId}
-              onSetPhase={handleSelectPhase}
-              onApproveGate={handleApproveGate}
-              onRequestRemediation={requestRemediation}
-              onDecideDecision={handleDecideDecision}
-              onDeferDecision={handleDeferDecision}
-              onRunAgent={handleRunAgent}
-              anyAgentRunning={anyAgentRunning}
-              confidenceScore={programConfidenceScore}
-              confidenceResult={programConfidenceResult}
-              confidenceForecast={programConfidenceForecast ?? undefined}
-              onNavigateToPhase={openPhaseSheet}
-            />
-          </AdamErrorBoundary>
-        ) : null}
-        </React.Suspense>
-
-
-      </div>
-      {/* Context drawer — only show in phase work areas */}
-      {(surface === "stage" || surface === "pipeline") ? (
-        <ContextDrawer
-          open={contextDrawerOpen}
-          onToggle={handleDrawerToggle}
-          program={activeProgram}
-          phaseId={activePhaseId}
-          tasks={currentPhaseTasks}
-          pendingTaskCount={currentPhaseTasks.filter((task) => task.status === "pending" || task.status === "running").length}
-          decisions={deriveOpenRecommendedActions(activeProgram, "delivery_lead").filter(
-            (decision) => !decision.phaseId || decision.phaseId === activePhaseId,
-          )}
-          agentsAvailable={authed && isSupabaseConfigured}
-          onAnswerQuestion={handleAnswerAgentQuestion}
-          onAcknowledgeTask={handleAcknowledgeTask}
-          onRunAgent={handleRunAgent}
-          onAddDecision={handleAddDecision}
-          onAddRaid={addRaidEntry}
-          onCloseRaid={closeRaidEntry}
-          onOpenMoreView={(view) => openMoreView(view)}
-          onOpenDecide={() => navigateSurface("decide")}
-          onNavigateToPhaseInputs={navigateToPhaseInputs}
-          railIntent={railIntent}
-        />
-      ) : null}
-      </div>
-      </div>
-
-      {setupWizardOverlay}
-
-      {activeProgramId ? (
-        <CopilotPanel
-          programId={activeProgramId}
-          workspaceId={copilotWorkspaceId}
-          persona={persona}
-          nudge={firstNudge}
-          memoryContext={copilotMemoryContext}
-          onNavigate={navigateAppView}
-          open={copilotOpen}
-          onClose={() => setCopilotOpen(false)}
-        />
-      ) : null}
-
-      <CoPilotSidebar
-        open={adamCopilotSidebarOpen}
-        onClose={() => setAdamCopilotSidebarOpen(false)}
-        activePhaseId={activePhaseId}
-        programName={activeProgram?.name || "Programme"}
-        confidenceScore={programConfidenceScore}
-        openDecisionCount={actionCenterCount}
-        anyAgentRunning={anyAgentRunning}
-        aiStatus={aiStatus.status}
-        onOpenAISettings={openAISettings}
-        onRunAgent={handleRunAgent}
-        onSendMessage={activeProgramId ? async (msg) => {
-          try {
-            await sendCopilotMessage(msg);
-          } catch (err) {
-            const message = err instanceof Error ? err.message : "Copilot request failed. Please try again.";
-            window.dispatchEvent(new CustomEvent("atlas-v3-toast", { detail: { message, tone: "error" } }));
-          }
-        } : undefined}
-        onNavigate={(view) => {
-          if (view === "decide") navigateSurface("decide");
-          else if (view === "programme-health") navigateSurface("programme-health");
-          else if (view === "executive") navigateSurface("executive");
-          else if (view === "stage") navigateSurface("stage");
-        }}
-      />
-
-      {traceRunId ? <AgentTraceDrawer runId={traceRunId} onClose={() => setTraceRunId(null)} /> : null}
-      <CommandPalette
-        open={commandPaletteOpen}
-        onClose={() => setCommandPaletteOpen(false)}
-        program={activeProgram}
-        activeMode={activeMode}
-        activePhaseId={activePhaseId}
-        onModeChange={handleCommandModeChange}
-        onRunAgent={handleRunAgent}
-        onSelectPhase={handleSelectPhase}
-        onQuery={async (query: string): Promise<string> => {
-          // Attempt real AI via Supabase Edge Function
-          if (activeProgramId && supabase && isSupabaseConfigured) {
-            try {
-              const { data, error } = await supabase.functions.invoke("run-agent", {
-                body: {
-                  programId: activeProgramId,
-                  agentId: "chat",
-                  phaseId: activePhaseId || "program",
-                  triggeredBy: "user",
-                  chatQuery: query,
-                  context: {
-                    programName: activeProgram?.name,
-                    confidenceScore: programConfidenceScore,
-                    avgCompletion: activeProgram?.phases?.length
-                      ? Math.round(activeProgram.phases.reduce((s, p) => s + (p.pct || 0), 0) / activeProgram.phases.length)
-                      : 0,
-                    openDecisions: actionCenterCount,
-                    activePhaseId,
-                  },
-                },
-              });
-              if (!error && typeof (data as any)?.output?.response === "string") {
-                return (data as any).output.response as string;
-              }
-            } catch {
-              // fall through to keyword matching
-            }
-          }
-          // Fallback keyword matching
-          const lower = query.toLowerCase();
-          const phases = activeProgram?.phases ?? [];
-          const avgPct = phases.length > 0 ? Math.round(phases.reduce((s, p) => s + (p.pct || 0), 0) / phases.length) : 0;
-          const openD = actionCenterCount;
-          const score = programConfidenceScore;
-          if (lower.includes("risk")) {
-            const raidCount = (activeProgram?.raidEntries || []).length;
-            return `There are ${raidCount} risks recorded. Programme confidence is ${score ?? "unknown"}%. Run the Risk agent for a full assessment.`;
-          }
-          if (lower.includes("track") || lower.includes("status") || lower.includes("health")) {
-            return `Programme is ${avgPct}% complete overall. Confidence: ${score ?? "calculating"}%. ${openD} action${openD !== 1 ? "s" : ""} are open. ${activePhaseId ? `Currently active in phase: ${activePhaseId}.` : ""}`;
-          }
-          if (lower.includes("gate") || lower.includes("ready")) {
-            const gateCount = Object.keys(activeProgram?.gateReviews ?? {}).length;
-            const approvedCount = Object.values(activeProgram?.gateReviews ?? {}).filter((g: any) => g?.status === "approved").length;
-            const gateThreshold = getGateThreshold(activePhaseId ?? "");
-            return `${approvedCount} of ${gateCount} gates approved. ${score && score < gateThreshold ? `Gate readiness is below ${gateThreshold}% — run an AI Gate Check to identify blockers.` : "Gate readiness looks healthy."}`;
-          }
-          if (lower.includes("decision") || lower.includes("action")) {
-            return `${openD} action${openD !== 1 ? "s" : ""} currently open. ${openD > 0 ? "Navigate to the Action Center to review and resolve them." : "No pending actions."}`;
-          }
-          if (lower.includes("phase") || lower.includes("stage")) {
-            const phaseList = phases.map(p => `${p.displayName ?? p.id} (${p.pct}%)`).join(", ");
-            return `Phases: ${phaseList || "No phases configured"}.`;
-          }
-          return `Programme: ${activeProgram?.name ?? "Unknown"}. Confidence: ${score ?? "N/A"}%. Completion: ${avgPct}%. Open actions: ${openD}. Use specific queries like "status", "risks", "gate readiness", or "actions" for more detail.`;
-        }}
-      />
-      {escalationPanelOpen ? (
-        <EscalationPanel
-          escalations={openEscalations}
-          onAcknowledge={async (id) => {
-            await acknowledgeEscalation(id);
-            pushV3Toast("Acknowledged.", { tone: "success", duration: 2500 });
-          }}
-          onResolve={async (id) => {
-            await resolveEscalation(id);
-            pushV3Toast("Escalation resolved.", { tone: "success", duration: 2500 });
-          }}
-          onClose={() => setEscalationPanelOpen(false)}
-        />
-      ) : null}
-      {helpOpen ? <HelpPanel onClose={() => setHelpOpen(false)} /> : null}
-
-      <GateReopenModal
-        open={!!gateReopenPhase}
-        phaseName={gateReopenPhase ? (phaseNameById(activeProgram, gateReopenPhase) ?? gateReopenPhase) : ""}
-        onClose={() => setGateReopenPhase(null)}
-        onConfirm={handleConfirmGateReopen}
-      />
-      <RemediationNoteModal
-        open={!!remediationPhase}
-        phaseName={remediationPhase ? (phaseNameById(activeProgram, remediationPhase) ?? remediationPhase) : ""}
-        onClose={() => setRemediationPhase(null)}
-        onConfirm={async (note) => {
-          if (!remediationPhase) return;
-          await requestRemediation(remediationPhase, note);
-          setRemediationPhase(null);
-          pushV3Toast("Issues flagged. Gate on hold until the fixes are made.", { tone: "warning", duration: 4000 });
-        }}
-      />
-
-      {toastStackOverlay}
-    </div>
-  );
+  // No active programme resolved yet (stale id or list still composing) —
+  // a quiet splash; the effects above will land on a programme or the
+  // welcome screen momentarily.
+  return <div className="v3-splash">Loading…</div>;
 }
