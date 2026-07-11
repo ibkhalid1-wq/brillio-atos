@@ -11,7 +11,7 @@ import {
 import { meetingKit, type MeetingKit } from "@/v3/components/flow/flowMeetings";
 import { listInterviewPacks, listDemoInvites, portalLinkFor, visibleLinks } from "@/v3/components/flow/flowPortal";
 import { listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
-import { listFlowTracks } from "@/v3/components/flow/flowTracks";
+import { listFlowTracks, trackAcceptance } from "@/v3/components/flow/flowTracks";
 
 interface FlowCanvasProps {
   program: ProgramSummary;
@@ -168,27 +168,46 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                         </div>
                       </div>
                     );
-                    // From Show onward the work is per track — group quotes
-                    // under their track, untagged ones under Programme-wide.
+                    // From Show onward the tracks LIVE in this column: each
+                    // is a header carrying its live state (acceptance, pass
+                    // dots), with its attributed quotes beneath. Show lists
+                    // every track; Ship/Evolve only those with evidence.
                     const trackable = ["show", "ship", "evolve"].includes(movement.id);
                     const tracks = trackable ? listFlowTracks(program) : [];
                     const grouped = tracks
                       .map((track) => ({
-                        name: track.name,
+                        track,
                         entries: evidence.filter((entry) => (entry.track ?? "").toLowerCase() === track.name.toLowerCase()),
                       }))
-                      .filter((group) => group.entries.length);
+                      .filter((group) => group.entries.length || movement.id === "show");
                     if (!grouped.length) return evidence.map(voice);
                     const tagged = new Set(grouped.flatMap((group) => group.entries));
                     const rest = evidence.filter((entry) => !tagged.has(entry));
                     return (
                       <>
-                        {grouped.map((group) => (
-                          <Fragment key={group.name}>
-                            <div className="v3fs-ev-grp">{group.name}</div>
-                            {group.entries.map(voice)}
-                          </Fragment>
-                        ))}
+                        {grouped.map(({ track, entries }) => {
+                          const acceptance = trackAcceptance(track);
+                          return (
+                            <Fragment key={track.id}>
+                              <div className="v3fs-ev-track">
+                                <span className="v3fs-ev-track-n">{track.name}</span>
+                                <span className={`v3fs-vc ${acceptance.accepted ? "acc" : "pen"}`}>
+                                  {acceptance.accepted ? "Accepted" : acceptance.passes ? `${acceptance.acceptedPasses}/${acceptance.passes} passes` : "no demos yet"}
+                                </span>
+                                {track.showPasses.length ? (
+                                  <span className="v3fs-ev-track-dots" aria-hidden="true">
+                                    {track.showPasses.slice(-6).map((pass, i) => (
+                                      <span key={i} className={`v3fs-pdot ${pass.verdict === "rework" ? "rw" : "ok"}`} />
+                                    ))}
+                                  </span>
+                                ) : null}
+                              </div>
+                              {entries.length
+                                ? entries.map(voice)
+                                : <div className="v3fs-ev-track-none">No attributed feedback yet — tag the track when capturing.</div>}
+                            </Fragment>
+                          );
+                        })}
                         {rest.length ? (
                           <>
                             <div className="v3fs-ev-grp dim">Programme-wide</div>
