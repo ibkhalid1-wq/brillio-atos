@@ -5067,3 +5067,13 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-evread-who{color:var(--fs-quote)}
 .v3fs-evread-b{font-size:14px;line-height:1.8}
 .v3fs-evread-p{margin:0 0 14px;white-space:pre-wrap;max-width:62ch}
+
+/* Grounded-in, at home in the colophon: no card frame, flush rows, a quiet
+   drill-in affordance — the reader is one tap away. */
+.v3fs-dv-colophon .v3fs-ground{border:none;background:transparent;border-radius:0;margin-top:6px}
+.v3fs-dv-colophon .v3fs-ground summary{padding:8px 0}
+.v3fs-dv-colophon .v3fs-ground .v3fs-disc-b{padding:0 0 6px}
+.v3fs-ground-row.v3fs-row-open{margin:0;padding:7px 8px 7px 0;border-radius:8px;align-items:center}
+.v3fs-ground-row .v3fs-row-m{word-break:normal;font-family:var(--v3-font);font-size:11px}
+.v3fs-ground-go{flex-shrink:0;color:var(--v3-text-muted);font-size:16px;line-height:1;padding:0 4px}
+.v3fs-ground-row.v3fs-row-open:hover .v3fs-ground-go{color:var(--v3-accent-2)}

@@ -124,11 +124,12 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
               <div key={entry_.uri} className="v3fs-ground-row v3fs-row-open" role="button" tabIndex={0}
                 onClick={() => setEvidenceOpen(movementEvidenceList[groundingIndex] ?? null)}
                 onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setEvidenceOpen(movementEvidenceList[groundingIndex] ?? null); }}>
-            <span className={`v3fs-tag ${entry_.kind === "document" ? "gn" : "ev"}`}>{entry_.kind}</span>
-            <div className="v3fs-row-g">
-              <div className="v3fs-row-n">{entry_.label}</div>
-              <div className="v3fs-row-m">{entry_.relation} · {entry_.uri}</div>
-            </div>
+                <span className={`v3fs-tag ${entry_.kind === "document" ? "gn" : "ev"}`}>{entry_.kind}</span>
+                <div className="v3fs-row-g" title={`${entry_.relation} · ${entry_.uri}`}>
+                  <div className="v3fs-row-n">{entry_.label}</div>
+                  <div className="v3fs-row-m">{entry_.relation === "cito:citesAsEvidence" ? "cited as evidence" : "background source"}</div>
+                </div>
+                <span className="v3fs-ground-go" aria-hidden="true">›</span>
               </div>
             ))}
             <button type="button" className="v3fs-a" onClick={() => {
