@@ -285,20 +285,30 @@ export function scriptDocumentRefs(questions: string[]): string[] {
   return [...out.values()].slice(0, 4);
 }
 
+/**
+ * A gap is ASKABLE when a conversation can supply it. Gaps phrased against
+ * the app's plumbing — inputs, ledgers, artifacts, regeneration — are the
+ * operator's work; they live on the cards and the gate, never in a script
+ * put in front of a stakeholder.
+ */
+function askableGap(gap: string): boolean {
+  return !/\binputs?\b|\bledger\b|\bartifacts?\b|\bregenerat|\bevidence changed\b/i.test(gap);
+}
+
 export function meetingKit(program: ProgramSummary, movementId: string): MeetingKit | null {
   const base = baseMeetingKit(program, movementId);
   if (!base) return null;
   if (!base.done) return { ...base, followUp: false, gaps: [], documents: scriptDocumentRefs(base.questions) };
-  const gaps = kitGaps(program, movementId);
-  if (!gaps.length) return { ...base, followUp: false, gaps: [], documents: scriptDocumentRefs(base.questions) };
+  const asks = kitGaps(program, movementId).filter(askableGap);
+  if (!asks.length) return { ...base, followUp: false, gaps: [], documents: scriptDocumentRefs(base.questions) };
   return {
     ...base,
     followUp: true,
-    gaps,
-    documents: scriptDocumentRefs(gaps),
+    gaps: asks,
+    documents: scriptDocumentRefs(asks),
     title: "Follow-up — close the gaps",
-    purpose: `The last conversation left ${gaps.length} point${gaps.length === 1 ? "" : "s"} open. This script asks for exactly what's missing — nothing else.`,
-    questions: gaps,
+    purpose: `The last conversation left ${asks.length} point${asks.length === 1 ? "" : "s"} open. This script asks for exactly what's missing — nothing else.`,
+    questions: asks,
   };
 }
 

@@ -6,7 +6,7 @@
 import { describe, it, expect } from "vitest";
 import type { ProgramSummary } from "@/new/types";
 import { resolveFlowDecision, listOpenFlowDecisions, describeDecisionChanges } from "@/v3/components/flow/flowDecisions";
-import { scriptDocumentRefs } from "@/v3/components/flow/flowMeetings";
+import { scriptDocumentRefs, meetingKit } from "@/v3/components/flow/flowMeetings";
 import { trackAcceptance, trackBlockers, recordShowPass, listFlowTracks, type FlowTrack } from "@/v3/components/flow/flowTracks";
 import { toggleShipItem, listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 import { ingestPortalResponse, listPortalInbox } from "@/v3/components/flow/flowPortal";
@@ -115,6 +115,31 @@ describe("flowPortal ingest routing", () => {
     const listen = (blob.phaseInputs as Record<string, Record<string, string>>).listen;
     expect(listen.interviewTranscripts).toContain("Words here");
     expect(JSON.parse(listen.interviewRoster)[0].status).toBe("Heard");
+  });
+});
+
+describe("meetingKit follow-up — only askable gaps become script questions", () => {
+  const framed = (gaps: string[]) => programme({
+    phaseInputs: { frame: {
+      sponsorConversation: "— Sarah Okafor, COO —\nplenty of words on record here",
+      businessObjective: "obj", sponsor: "Sarah Okafor", industry: "Banking",
+      successMetric: "cycle time", targetFirstDemoDate: "2026-07-25",
+      stakeholderSeed: JSON.stringify([{ name: "Dan" }]),
+    } },
+    discoveryKit: { gaps },
+  });
+
+  it("operator gaps (input/artifact/regenerate plumbing) never reach a stakeholder script", () => {
+    const kit = meetingKit(framed(["Add a clear objective to the Objective input to resolve the blocker."]), "frame")!;
+    expect(kit.followUp).toBe(false);
+    expect(kit.questions.some((q) => /input/i.test(q))).toBe(false);
+  });
+
+  it("askable gaps become the follow-up's questions", () => {
+    const ask = "Which regions does the discount approval flow cover today?";
+    const kit = meetingKit(framed([ask]), "frame")!;
+    expect(kit.followUp).toBe(true);
+    expect(kit.questions).toEqual([ask]);
   });
 });
 
