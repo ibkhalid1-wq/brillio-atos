@@ -5105,3 +5105,28 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
   .v3fs-dv-colophon,.v3fs-docview-b .v3fs-ground{display:block}
   .v3fs-dv-colophon[open] summary,.v3fs-ground[open] summary{display:block}
 }
+
+/* Outline navigation + edit-in-place affordances for the document view. */
+.v3fs-dv-layout{display:flex;gap:30px;align-items:flex-start}
+.v3fs-dv-outline{position:sticky;top:0;flex:0 0 150px;display:flex;flex-direction:column;gap:2px;padding:2px 0}
+.v3fs-dv-outline button{font:inherit;font-size:11px;font-weight:600;text-align:left;color:var(--v3-text-muted);background:none;border:none;border-left:2px solid var(--fs-line);padding:5px 0 5px 10px;cursor:pointer;line-height:1.4}
+.v3fs-dv-outline button:hover{color:var(--v3-text-primary)}
+.v3fs-dv-outline button.on{color:var(--v3-accent-2);border-left-color:var(--v3-accent-2)}
+.v3fs-dv-layout.with-outline .v3fs-dv{flex:1;min-width:0}
+.v3fs-dv-secwrap{position:relative}
+.v3fs-dv-pencil{position:absolute;right:0;top:-2px;font:inherit;font-size:11.5px;font-weight:600;color:var(--v3-text-muted);background:var(--fs-card);border:1px solid var(--fs-line);border-radius:7px;padding:3px 9px;cursor:pointer;opacity:0;transition:opacity .12s ease,color .12s ease;z-index:2}
+.v3fs-dv-secwrap:hover .v3fs-dv-pencil,.v3fs-dv-pencil:focus-visible,.v3fs-dv-secwrap.editing .v3fs-dv-pencil{opacity:1}
+.v3fs-dv-pencil:hover{color:var(--v3-accent-2);border-color:var(--v3-accent-2)}
+.v3fs-dv-secwrap.editing{background:var(--v3-surface-2);border-radius:12px;padding:14px 16px;margin:0 -16px 24px}
+.v3fs-dv-secwrap.editing .v3fs-dv-pencil{position:static;order:2}
+.v3fs-dv-sec-edit-h{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.v3fs-dv-gaps.v3fs-dv-secwrap.editing{margin:28px 0 0}
+
+/* Per-document history in the colophon. */
+.v3fs-dv-history{display:flex;gap:14px;align-items:baseline;margin-top:10px}
+.v3fs-dv-history .v3fs-dv-fl{flex:0 0 148px}
+.v3fs-dv-history-list{flex:1;display:flex;flex-direction:column;gap:5px}
+.v3fs-dv-history-row{display:flex;align-items:center;gap:8px;font-size:12px;line-height:1.5}
+.v3fs-dv-history-a{flex:1;min-width:0;color:var(--v3-text-secondary)}
+.v3fs-dv-history-t{font-family:var(--v3-font-mono);font-size:10px;color:var(--v3-text-muted);flex-shrink:0}
+@media (max-width:900px){.v3fs-dv-outline{display:none}}

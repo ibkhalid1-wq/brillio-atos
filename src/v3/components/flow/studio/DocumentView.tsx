@@ -7,7 +7,8 @@
  * the model's open gaps as a closing callout. Provenance never appears here
  * — it lives in the studio's colophon.
  */
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { TextArea, TextField, StringListEditor, TableEditor, ChipsField, asArray, asRecord, asStrings } from "./StudioKit";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -112,6 +113,68 @@ function Card({ item, depth }: { item: Record<string, unknown>; depth: number })
   );
 }
 
+/**
+ * Shape-driven inline editor for ONE top-level section. Strings, string
+ * lists, flat collections and shallow objects edit in place; deep
+ * collections hand off to the full studio, where the bespoke editors live.
+ */
+function SectionEditor({ k, value, onChange, onOpenFullEditor }: {
+  k: string;
+  value: unknown;
+  onChange: (next: unknown) => void;
+  onOpenFullEditor?: () => void;
+}) {
+  if (typeof value === "string") {
+    return <TextArea value={value} rows={Math.min(8, Math.max(2, Math.ceil(value.length / 90)))} onChange={onChange} />;
+  }
+  if (Array.isArray(value) && value.every((v) => typeof v !== "object")) {
+    return <StringListEditor values={value.map(text)} onChange={onChange} addLabel="Add" />;
+  }
+  if (Array.isArray(value)) {
+    const rows = value.filter(isRecord);
+    const columns = scalarColumns(rows);
+    const deep = rows.some((row) => Object.values(row).some((v) => Array.isArray(v) && v.length)) || columns.length > 5;
+    if (!deep) {
+      return (
+        <TableEditor
+          columns={columns.map((key) => ({ key, label: humanize(key) }))}
+          rows={rows}
+          onChange={onChange}
+          addLabel="Add row"
+        />
+      );
+    }
+    return (
+      <div className="v3fs-stu-empty">
+        This section's structure is richer than the inline editor —{" "}
+        {onOpenFullEditor ? (
+          <button type="button" className="v3fs-a" onClick={onOpenFullEditor}>open the full editor</button>
+        ) : "use the full editor"}.
+      </div>
+    );
+  }
+  if (isRecord(value)) {
+    return (
+      <>
+        {Object.entries(value)
+          .filter(([kk]) => !HIDDEN_KEYS.has(kk.toLowerCase()) && !kk.startsWith("_"))
+          .map(([kk, v]) => {
+            if (typeof v === "string") {
+              return <TextField key={kk} label={humanize(kk)} value={v}
+                onChange={(next) => onChange({ ...value, [kk]: next })} />;
+            }
+            if (Array.isArray(v) && v.every((x) => typeof x !== "object")) {
+              return <ChipsField key={kk} label={humanize(kk)} values={asStrings(v)}
+                onChange={(next) => onChange({ ...value, [kk]: next })} />;
+            }
+            return null;
+          })}
+      </>
+    );
+  }
+  return null;
+}
+
 function ValueBlock({ k, value, depth, nested }: { k: string; value: unknown; depth: number; nested?: boolean }) {
   const label = nested
     ? <span className="v3fs-dv-fl">{humanize(k)}</span>
@@ -169,7 +232,14 @@ function ValueBlock({ k, value, depth, nested }: { k: string; value: unknown; de
   return <section className="v3fs-dv-sec">{label}<p className="v3fs-dv-p">{s}</p></section>;
 }
 
-export default function DocumentView({ doc, order }: { doc: Record<string, unknown>; order?: string[] }) {
+export default function DocumentView({ doc, order, onPatch, onOpenFullEditor }: {
+  doc: Record<string, unknown>;
+  order?: string[];
+  /** Present when the document is editable in place — patches one key. */
+  onPatch?: (key: string, value: unknown) => void;
+  /** Hand-off for sections too rich for the inline editor. */
+  onOpenFullEditor?: () => void;
+}) {
   // Postgres jsonb alphabetises keys on storage, destroying the generator's
   // narrative order — the registry supplies each type's canonical sequence;
   // unknown keys keep their stored relative order, after the known ones.
@@ -190,26 +260,105 @@ export default function DocumentView({ doc, order }: { doc: Record<string, unkno
   const summary = typeof doc.summary === "string" && doc.summary.trim() ? doc.summary.trim() : null;
   const gaps = Array.isArray(doc.gaps) ? doc.gaps.map(text).filter(Boolean) : [];
 
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState<string | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // Outline navigation earns its column only on long documents.
+  const outline = bodyEntries.map(([k]) => k);
+  const showOutline = outline.length >= 4;
+
+  useEffect(() => {
+    if (!showOutline || !rootRef.current) return;
+    const sections = [...rootRef.current.querySelectorAll("[data-dv-sec]")];
+    const observer = new IntersectionObserver((observed) => {
+      const visible = observed.filter((e) => e.isIntersecting)
+        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+      if (visible) setActiveSection(visible.target.getAttribute("data-dv-sec"));
+    }, { root: rootRef.current.closest(".v3fs-docview-b"), rootMargin: "0px 0px -70% 0px" });
+    sections.forEach((section) => observer.observe(section));
+    return () => observer.disconnect();
+  }, [showOutline, outline.join("|")]);
+
+  const jumpTo = (key: string) => {
+    rootRef.current?.querySelector(`[data-dv-sec="${key}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const pencil = (key: string) => onPatch ? (
+    <button type="button" className="v3fs-dv-pencil" aria-label={`Edit ${humanize(key)}`}
+      onClick={() => setEditingKey(editingKey === key ? null : key)}>
+      {editingKey === key ? "Done" : "✎"}
+    </button>
+  ) : null;
+
+  const section = (key: string, value: unknown) => (
+    <div key={key} data-dv-sec={key} className={`v3fs-dv-secwrap${editingKey === key ? " editing" : ""}`}>
+      {editingKey === key ? (
+        <section className="v3fs-dv-sec">
+          <div className="v3fs-dv-sec-edit-h"><h3 className="v3fs-dv-h">{humanize(key)}</h3>{pencil(key)}</div>
+          <SectionEditor k={key} value={value}
+            onChange={(next) => onPatch?.(key, next)}
+            onOpenFullEditor={onOpenFullEditor} />
+        </section>
+      ) : (
+        <>
+          {pencil(key)}
+          <ValueBlock k={key} value={value} depth={0} />
+        </>
+      )}
+    </div>
+  );
+
   return (
-    <div className="v3fs-dv">
-      {summary ? <p className="v3fs-dv-lead">{summary}</p> : null}
-      {factRun.length ? (
-        <div className="v3fs-dv-facts v3fs-dv-factsheet">
-          {factRun.map(([k, v]) => (
-            <div key={k} className="v3fs-dv-fact">
-              <span className="v3fs-dv-fl">{humanize(k)}</span>
-              <span className="v3fs-dv-fv">{v}</span>
-            </div>
+    <div className={`v3fs-dv-layout${showOutline ? " with-outline" : ""}`}>
+      {showOutline ? (
+        <nav className="v3fs-dv-outline" aria-label="Document outline">
+          {outline.map((key) => (
+            <button key={key} type="button" className={activeSection === key ? "on" : ""} onClick={() => jumpTo(key)}>
+              {humanize(key)}
+            </button>
           ))}
-        </div>
+        </nav>
       ) : null}
-      {bodyEntries.map(([k, v]) => <ValueBlock key={k} k={k} value={v} depth={0} />)}
-      {gaps.length ? (
-        <aside className="v3fs-dv-gaps">
-          <h3 className="v3fs-dv-h">Open gaps</h3>
-          <ul className="v3fs-dv-list">{gaps.map((g, i) => <li key={i}>{g}</li>)}</ul>
-        </aside>
-      ) : null}
+      <div className="v3fs-dv" ref={rootRef}>
+        {summary ? <p className="v3fs-dv-lead">{summary}</p> : null}
+        {factRun.length ? (
+          <div className={`v3fs-dv-secwrap${editingKey === "__facts" ? " editing" : ""}`}>
+            {editingKey === "__facts" ? (
+              <section className="v3fs-dv-sec">
+                <div className="v3fs-dv-sec-edit-h"><h3 className="v3fs-dv-h">Key facts</h3>{pencil("__facts")}</div>
+                {factRun.map(([k, v]) => (
+                  <TextField key={k} label={humanize(k)} value={v} onChange={(next) => onPatch?.(k, next)} />
+                ))}
+              </section>
+            ) : (
+              <>
+                {pencil("__facts")}
+                <div className="v3fs-dv-facts v3fs-dv-factsheet">
+                  {factRun.map(([k, v]) => (
+                    <div key={k} className="v3fs-dv-fact">
+                      <span className="v3fs-dv-fl">{humanize(k)}</span>
+                      <span className="v3fs-dv-fv">{v}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        ) : null}
+        {bodyEntries.map(([k, v]) => section(k, v))}
+        {gaps.length || editingKey === "gaps" ? (
+          <aside className={`v3fs-dv-gaps v3fs-dv-secwrap${editingKey === "gaps" ? " editing" : ""}`}>
+            {pencil("gaps")}
+            <h3 className="v3fs-dv-h">Open gaps</h3>
+            {editingKey === "gaps" ? (
+              <StringListEditor values={gaps} onChange={(next) => onPatch?.("gaps", next)} addLabel="Add gap" />
+            ) : (
+              <ul className="v3fs-dv-list">{gaps.map((g, i) => <li key={i}>{g}</li>)}</ul>
+            )}
+          </aside>
+        ) : null}
+      </div>
     </div>
   );
 }

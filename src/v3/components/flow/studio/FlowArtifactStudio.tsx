@@ -11,7 +11,7 @@ import type { ProgramSummary } from "@/new/types";
 import { artifactDocument, flowMovements, movementEvidence, type ArtifactCardModel, type EvidenceEntry } from "@/v3/components/flow/flowShellData";
 import { groundingFor, citationGraph, resourceUri, artifactFabioType, SEMANTIC_CONTEXT } from "@/v3/components/flow/flowSemantics";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
-import { listOpenFlowDecisions } from "@/v3/components/flow/flowDecisions";
+import { listOpenFlowDecisions, listFlowAttestations } from "@/v3/components/flow/flowDecisions";
 import { STUDIO_REGISTRY } from "./studios";
 import DocumentView from "./DocumentView";
 import EvidenceReader from "@/v3/components/flow/EvidenceReader";
@@ -112,6 +112,12 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
     });
   }, [program, entry]);
   const [menuOpen, setMenuOpen] = useState(false);
+  // This document's history, filtered from the programme-wide trail: its
+  // generations (agentId = artifact id), studio edits, and the guard's
+  // propose/confirm cycle — all mention the title.
+  const history = useMemo(() => listFlowAttestations(program).filter((attestation) =>
+    attestation.agentId === artifact.id || (attestation.action ?? "").includes(artifact.title),
+  ).slice(0, 8), [program, artifact.id, artifact.title]);
   const copyJsonLd = () => {
     const node = {
       "@context": SEMANTIC_CONTEXT,
@@ -232,7 +238,9 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
             <>
               {groundingDisclosure}
               {draft ? (
-                <DocumentView doc={draft} order={entry?.docOrder} />
+                <DocumentView key={typeof draft.editedAt === "string" ? String(draft.editedAt) : "unedited"} doc={draft} order={entry?.docOrder}
+                  onPatch={canEdit ? (key, value) => { setDraft({ ...draft, [key]: value }); setDirty(true); } : undefined}
+                  onOpenFullEditor={canEdit ? () => setEditing(true) : undefined} />
               ) : (
                 <>
                   {blocks.length === 0 ? <p className="v3fs-empty">No document body yet — generate it first.</p> : null}
@@ -279,6 +287,20 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
                         <span className="v3fs-dv-fv">{artifact.movementId.replace(/^./, (c) => c.toUpperCase())}</span>
                       </div>
                     </div>
+                    {history.length ? (
+                      <div className="v3fs-dv-history">
+                        <span className="v3fs-dv-fl">History</span>
+                        <div className="v3fs-dv-history-list">
+                          {history.map((attestation, index) => (
+                            <div key={index} className="v3fs-dv-history-row">
+                              <span className={`v3fs-tdot t${attestation.tier}`} aria-hidden="true" />
+                              <span className="v3fs-dv-history-a">{attestation.action}</span>
+                              <span className="v3fs-dv-history-t">{String(attestation.ts).slice(0, 10)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 </details>
               ) : null}
@@ -287,7 +309,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
         </div>
 
         {evidenceOpen ? <EvidenceReader entry={evidenceOpen} onClose={() => setEvidenceOpen(null)} /> : null}
-        {studioActive && dirty ? (
+        {dirty && canEdit ? (
           <footer className="v3fs-stu-savebar">
             <span>You've edited this document.</span>
             <div className="v3fs-dec-cta">
