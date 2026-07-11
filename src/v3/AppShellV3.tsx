@@ -1277,6 +1277,34 @@ export default function AppShellV3() {
     }
   }, [activeProgram?.id, activeProgram?.updatedAt, activeProgram?.rawData, activeProgram]);
 
+  // Realtime: one channel per programme. Postgres changes from OTHER
+  // writers (a colleague, another device, an edge run) refresh the local
+  // copy; presence puts the people currently in this programme on the hero.
+  const [presentOthers, setPresentOthers] = useState<string[]>([]);
+  const lastKnownUpdatedAt = useRef<string | undefined>(undefined);
+  useEffect(() => { lastKnownUpdatedAt.current = activeProgram?.updatedAt; }, [activeProgram?.updatedAt]);
+  useEffect(() => {
+    if (!supabase || !activeProgramId) return;
+    const me = currentUser?.email || "operator";
+    const channel = supabase.channel(`flow-${activeProgramId}`, { config: { presence: { key: me } } });
+    channel
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "adam_programs", filter: `id=eq.${activeProgramId}` }, (payload: { new?: { updated_at?: string } | null }) => {
+        const at = payload.new?.updated_at;
+        if (at && at !== lastKnownUpdatedAt.current) void refreshPrograms();
+      })
+      .on("presence", { event: "sync" }, () => {
+        const state = channel.presenceState();
+        setPresentOthers(Object.keys(state).filter((key) => key !== me));
+      })
+      .subscribe((status: string) => {
+        if (status === "SUBSCRIBED") void channel.track({ at: new Date().toISOString() });
+      });
+    return () => {
+      setPresentOthers([]);
+      void supabase.removeChannel(channel);
+    };
+  }, [activeProgramId, currentUser?.email, refreshPrograms]);
+
   // Watchers: after every blob change the system looks for correctable
   // conditions and PROPOSES — a Tier-2 decision in the Inbox, never a silent
   // apply. Content-derived ids make each finding one-shot (a decline retires
@@ -2034,6 +2062,7 @@ export default function AppShellV3() {
             await reopenGate(movementId, reason);
             pushV3Toast("Gate reopened — inputs unlocked; capture the new evidence and the record re-derives.", { duration: 4500 });
           }}
+          presence={presentOthers}
           onRunAgentAndWait={async (agentId, phaseId) => {
             await runProgramAgent({ agentId, phaseId, triggeredBy: "user" });
           }}

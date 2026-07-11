@@ -40,6 +40,8 @@ interface FlowShellProps {
   onRestoreSnapshot?: (data: Record<string, unknown>) => Promise<void>;
   /** Awaitable agent run for the spine runner. */
   onRunAgentAndWait?: (agentId: string, phaseId: string) => Promise<void>;
+  /** Presence keys (emails) of others in this programme right now. */
+  presence?: string[];
   /** Record a show/refine pass on a track. */
   onRecordShowPass: (trackId: string, pass: { stakeholder?: string; verdict: FlowShowPass["verdict"]; note?: string; stableDiff?: boolean }) => Promise<void>;
   /** Add a track by hand (the blueprint is the usual source). */
@@ -176,6 +178,12 @@ export default function FlowShell(props: FlowShellProps) {
             <p className="v3fs-hero-line">
               <b>{days}</b> day{Math.abs(days) === 1 ? "" : "s"} {days >= 0 ? "to first demo" : "past the first-demo target"}
             </p>
+          ) : null}
+          {props.presence?.length ? (
+            <span className="v3fs-presence" title={props.presence.join(", ")}>
+              <span className="v3fs-presence-dot" aria-hidden="true" />
+              {props.presence.length === 1 ? `${props.presence[0].split("@")[0]} is here too` : `${props.presence.length} others are here`}
+            </span>
           ) : null}
         </header>
 

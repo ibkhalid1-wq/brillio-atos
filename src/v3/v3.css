@@ -5263,3 +5263,7 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
   .v3fs-pack-bar {display:none !important}
   .v3fs-pack-page {overflow:visible;padding:0}
 }
+.v3fs-presence {display:inline-flex;align-items:center;gap:7px;margin-top:10px;font-size:11.5px;font-weight:600;color:var(--v3-text-secondary);border:1px solid var(--v3-border-soft);border-radius:99px;padding:5px 12px;background:var(--fs-card)}
+.v3fs-presence-dot {width:7px;height:7px;border-radius:50%;background:var(--v3-green);animation:v3fs-presence-pulse 2.4s ease-in-out infinite}
+@keyframes v3fs-presence-pulse {0%,100% {opacity:1} 50% {opacity:.45}}
+@media (prefers-reduced-motion: reduce) {.v3fs-presence-dot {animation:none}}
