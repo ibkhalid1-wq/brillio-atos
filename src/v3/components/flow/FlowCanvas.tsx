@@ -294,7 +294,7 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                             {grouped && group !== prevGroup ? (() => {
                               const members = checks.filter((c) => (c.group ?? "evidence") === group);
                               const met = members.filter((c) => c.done).length;
-                              const name = group === "evidence" ? "Evidence" : group === "record" ? "Record" : "Inbox";
+                              const name = group === "evidence" ? "Evidence" : group === "record" ? "Documents" : "Inbox";
                               const count = group === "judgment"
                                 ? (met === members.length ? "clear" : "waiting")
                                 : `${met} of ${members.length}`;
@@ -385,8 +385,8 @@ function SpineRunner({ plan, runningAgentIds, onRun }: {
         {progress
           ? `Regenerating ${progress.index} of ${progress.total} — ${progress.title}…`
           : doneCount != null
-            ? `Record refreshed — ${doneCount} document${doneCount === 1 ? "" : "s"} regenerated. Hand-edited ones propose in the Inbox.`
-            : `The record trails the evidence — ${plan.length} documents to regenerate, upstream first.`}
+            ? `Done — ${doneCount} document${doneCount === 1 ? "" : "s"} regenerated. Any you edited by hand ask first, in the Inbox.`
+            : `Evidence changed — ${plan.length} documents need regenerating, in order.`}
       </div>
       {!progress && doneCount == null ? (
         <button type="button" className="v3fs-btn pri" disabled={busyElsewhere} onClick={() => void run()}>
@@ -479,7 +479,7 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
   if (!kit) {
     return hasEvidence ? null : (
       <div className="v3fs-kit v3fs-kit-ghost">
-        The script for this movement's conversations arrives with the upstream artifact — generate it and the kit appears here.
+        Generate the previous step's document first — this conversation's script is built from it.
       </div>
     );
   }
@@ -560,7 +560,7 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
       const existing = typeof bucket[kit.captureField] === "string" ? bucket[kit.captureField] as string : "";
       const block = `— Document: ${name}, provided by ${kit.who}, ${new Date().toISOString().slice(0, 10)} —\n${text}`;
       await onSaveInputs(movementId, { [kit.captureField]: [existing.trimEnd(), block].filter(Boolean).join("\n\n") }, {
-        attest: { action: `Document ingested — ${name}`, detail: `provided by ${kit.who}` },
+        attest: { action: `Document added — ${name}`, detail: `provided by ${kit.who}` },
       });
       setDocName("");
       setDocText("");
@@ -634,7 +634,7 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
                 </button>
               </div>
             ))}
-            <p className="v3fs-script-docs-note">Attaching lands it as evidence beside the transcript, attributed.</p>
+            <p className="v3fs-script-docs-note">Attach it and it becomes evidence beside the conversation, with its source noted.</p>
           </div>
         ) : null}
         {(kit.followUp && (onScheduleFollowUp || onMintFollowUp)) || channels ? (
@@ -682,14 +682,14 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
                 checked={fileContradiction}
                 onChange={(event) => setFileContradiction(event.target.checked)}
               />
-              <span>Disputes something on record — also file an open contradiction to Listen</span>
+              <span>This contradicts earlier evidence — also log it as an open contradiction in Listen</span>
             </label>
           ) : null}
           <button type="button" className="v3fs-btn pri" disabled={busy || !capture.trim()} onClick={() => void save()}>
             {busy ? "Saving…" : savedTick ? "Captured ✓" : "Capture"}
           </button>
           <details className="v3fs-kit-doc" open={docOpen} onToggle={(event) => setDocOpen(event.currentTarget.open)}>
-            <summary>＋ Ingest a referenced document</summary>
+            <summary>＋ Add a referenced document</summary>
             <div className="v3fs-kit-docrow">
               <input value={docName} onChange={(event) => setDocName(event.target.value)}
                 placeholder="Document name (e.g. Q2 pricing export)" aria-label="Document name" />
@@ -697,7 +697,7 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
                 placeholder="Paste its content — it becomes evidence beside the conversation." aria-label="Document content" />
               <button type="button" className="v3fs-btn" disabled={busy || !docName.trim() || !docText.trim()}
                 onClick={() => void saveDoc()}>
-                {docTick ? "Ingested ✓" : "Ingest the document"}
+                {docTick ? "Added ✓" : "Add the document"}
               </button>
             </div>
           </details>
@@ -740,7 +740,7 @@ function AsyncInterviews({ program, onMintPacks }: { program: ProgramSummary; on
 
   return (
     <div className="v3fs-kit-chan v3fs-async">
-      <div className="v3fs-kit-chan-t">Async interviews<span>one link per voice — answers land in the Inbox, attributed</span></div>
+      <div className="v3fs-kit-chan-t">Async interviews<span>one link per person — answers arrive in the Inbox with their name on them</span></div>
       {packs.map((pack) => (
         <div key={pack.id} className="v3fs-async-row">
           <span className={`v3fs-st ${pack.respondedAt ? "ok" : "none"}`} />

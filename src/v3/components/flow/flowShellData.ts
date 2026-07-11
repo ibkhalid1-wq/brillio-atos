@@ -361,7 +361,7 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
         label: artifact.present && artifact.stale
           ? `${artifact.title} — evidence changed since generation`
           : artifact.present && artifact.gaps
-            ? `${artifact.title} — declares ${artifact.gaps} open gap${artifact.gaps === 1 ? "" : "s"}`
+            ? `${artifact.title} — ${artifact.gaps} open gap${artifact.gaps === 1 ? "" : "s"}`
             : `${artifact.title} generated`,
         done: artifact.present && !artifact.stale && artifact.gaps === 0,
         why: artifact.present && !artifact.stale && artifact.gaps === 0 && artifact.confidence != null
@@ -375,8 +375,8 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
           group: "judgment" as const,
           inbox: true,
           label: waiting
-            ? `${waiting} judgment${waiting > 1 ? "s" : ""} waiting in the Inbox`
-            : "Inbox clear — no judgments waiting",
+            ? `${waiting} decision${waiting > 1 ? "s" : ""} waiting in the Inbox`
+            : "Inbox clear — nothing waiting",
           done: waiting === 0,
         };
       })(),
@@ -438,17 +438,17 @@ export function gateReadiness(
   if (openIn("record")) {
     const trailing = artifacts.some((artifact) => !artifact.present || artifact.stale);
     return trailing
-      ? { tone: "amber", kind: "trails", headline: counts, detail: "The record trails the evidence" }
-      : { tone: "amber", kind: "gaps", headline: counts, detail: "The record declares open gaps" };
+      ? { tone: "amber", kind: "trails", headline: counts, detail: "Documents are out of date — evidence changed" }
+      : { tone: "amber", kind: "gaps", headline: counts, detail: "A document still lists open gaps" };
   }
   if (openIn("judgment")) {
-    return { tone: "amber", kind: "judgment", headline: counts, detail: "A judgment waits in the Inbox" };
+    return { tone: "amber", kind: "judgment", headline: counts, detail: "A decision is waiting in the Inbox" };
   }
   return {
     tone: "green",
     kind: "ready",
-    headline: movement.movement?.isLoop ? "Loop healthy" : "Ready for the gate",
-    detail: `${checks.length} criteria met · record current · Inbox clear`,
+    headline: movement.movement?.isLoop ? "Running steady" : "Ready for the gate",
+    detail: `${checks.length} criteria met · documents current · Inbox clear`,
   };
 }
 

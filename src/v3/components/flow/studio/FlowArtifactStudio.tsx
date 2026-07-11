@@ -72,7 +72,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
       setDirty(false);
       setEditing(false);
       window.dispatchEvent(new CustomEvent("atlas-v3-toast", {
-        detail: { message: `${artifact.title} saved — attested to the trail.`, tone: "success", duration: 3000 },
+        detail: { message: `${artifact.title} saved — the change is on the trail.`, tone: "success", duration: 3000 },
       }));
     } finally {
       setSaving(false);

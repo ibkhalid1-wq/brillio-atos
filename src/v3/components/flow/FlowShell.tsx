@@ -261,8 +261,8 @@ class ViewBoundary extends React.Component<{ view: string; children: React.React
     if (this.state.failed) {
       return (
         <div className="v3fs-panel v3fs-view-fail" role="alert">
-          <div className="v3fs-ph"><h3>This view hit an error</h3><span>the rest of the app is unaffected</span></div>
-          <div className="v3fs-empty">The record is intact — this surface failed to render it. The console has the details; switching views or reloading recovers.</div>
+          <div className="v3fs-ph"><h3>This screen hit an error</h3><span>everything else still works</span></div>
+          <div className="v3fs-empty">Your data is intact — this screen just failed to display it. Switching views or reloading usually fixes it; the console has the details.</div>
         </div>
       );
     }
@@ -851,7 +851,7 @@ function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggle
       </div>
 
       <div className="v3fs-panel">
-        <div className="v3fs-ph"><h3>Safety</h3><span>the record before each recent write — restore is itself recorded</span></div>
+        <div className="v3fs-ph"><h3>Safety</h3><span>how things looked before each recent change — restoring is recorded too</span></div>
         <SnapshotSafety program={program} onRestoreSnapshot={onRestoreSnapshot} />
       </div>
     </div>
@@ -881,7 +881,7 @@ function SnapshotSafety({ program, onRestoreSnapshot }: {
     return () => window.clearTimeout(timer);
   }, [armedId]);
   if (!snapshots.length) {
-    return <div className="v3fs-empty">No snapshots yet — one is kept before every change, in this browser.</div>;
+    return <div className="v3fs-empty">No snapshots yet — one is saved before every change, in this browser.</div>;
   }
   const restore = async (snapshot: BlobSnapshot) => {
     if (armedId !== snapshot.id) { setArmedId(snapshot.id); return; }

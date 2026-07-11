@@ -8527,10 +8527,10 @@ Deno.serve(async (req) => {
               movementId: "listen",
               title: `File ${entries.length} contradiction${entries.length === 1 ? "" : "s"} to the log`,
               summary: entries.map((entry) => entry.statement).join(" · ").slice(0, 220),
-              blocking: "The newest evidence disputes the record; unfiled, Listen's gate keeps reading resolved.",
+              blocking: "New evidence disagrees with earlier findings; until it's logged, Listen still shows everything as resolved.",
               recommendation: {
                 action: "File to the contradiction log",
-                rationale: "An open row makes Listen re-ask the question, and the documents built on the disputed claim re-derive.",
+                rationale: "Logging it makes Listen re-ask the question, and the documents built on the disputed claim get rebuilt.",
                 band: "proposal — additive, log rows only",
               } as JsonValue,
               payload: { contradictionEntries: entries as unknown as JsonValue } as JsonValue,

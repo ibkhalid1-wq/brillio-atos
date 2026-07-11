@@ -53,7 +53,7 @@ export default function FlowBoardPack({ program, onClose }: {
       <div className="v3fs-doc-backdrop v3fs-pack-layer" onClick={onClose} aria-hidden="true" />
       <div ref={dialogRef} tabIndex={-1} className="v3fs-pack" role="dialog" aria-modal="true" aria-label="Board pack">
         <header className="v3fs-pack-bar">
-          <span>Board pack — derived from the record, {new Date().toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}</span>
+          <span>Board pack — built from live data, {new Date().toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}</span>
           <span className="v3fs-pack-bar-a">
             <button type="button" className="v3fs-btn pri" onClick={() => window.print()}>Print / save as PDF</button>
             <button type="button" className="v3fs-btn" onClick={onClose}>Close</button>
@@ -81,7 +81,7 @@ export default function FlowBoardPack({ program, onClose }: {
               <div><b>{coverage.done}/{coverage.total || "—"}</b><span>voices heard</span></div>
               <div><b>{demos.accepted}/{demos.total || "—"}</b><span>demos accepted</span></div>
               <div><b>{words.toLocaleString()}</b><span>words of evidence</span></div>
-              <div><b>{waiting}</b><span>judgments waiting</span></div>
+              <div><b>{waiting}</b><span>decisions waiting</span></div>
             </div>
           </section>
 
@@ -150,7 +150,7 @@ export default function FlowBoardPack({ program, onClose }: {
           </section>
 
           <footer className="v3fs-pack-foot">
-            Derived live from the programme record — evidence, documents and judgments carry their provenance in ATOS Flow.
+            Built live from the programme's data — every number here traces back to evidence, documents and decisions in ATOS Flow.
           </footer>
         </div>
       </div>

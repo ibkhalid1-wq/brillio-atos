@@ -324,7 +324,7 @@ describe("gateReadiness — one composed verdict over the closed loop", () => {
     expect(r.kind).toBe("trails");
     expect(r.tone).toBe("amber");
     expect(r.headline).toBe("8 of 9 criteria met");
-    expect(r.detail).toBe("The record trails the evidence");
+    expect(r.detail).toBe("Documents are out of date — evidence changed");
   });
 
   it("criteria met, record current, but a document declares gaps → open gaps verdict", () => {
@@ -332,7 +332,7 @@ describe("gateReadiness — one composed verdict over the closed loop", () => {
     expect(r.kind).toBe("gaps");
     expect(r.tone).toBe("amber");
     expect(r.headline).toBe("7 of 8 criteria met");
-    expect(r.detail).toBe("The record declares open gaps");
+    expect(r.detail).toBe("A document still lists open gaps");
   });
 
   it("staleness outranks gaps in the verdict cause", () => {
@@ -349,14 +349,14 @@ describe("gateReadiness — one composed verdict over the closed loop", () => {
     expect(r.kind).toBe("judgment");
     expect(r.tone).toBe("amber");
     expect(r.headline).toBe("7 of 8 criteria met");
-    expect(r.detail).toBe("A judgment waits in the Inbox");
+    expect(r.detail).toBe("A decision is waiting in the Inbox");
   });
 
   it("evidence, record and Inbox all clear → ready, green", () => {
     const r = verdict(metFrame(), [art()]);
     expect(r.kind).toBe("ready");
     expect(r.tone).toBe("green");
-    expect(r.detail).toBe("8 criteria met · record current · Inbox clear");
+    expect(r.detail).toBe("8 criteria met · documents current · Inbox clear");
   });
 
   it("an approved gate outranks everything", () => {
@@ -385,7 +385,7 @@ describe("gateChecklist — record and judgment rows close the loop", () => {
   it("a document with declared gaps is an unmet record row naming the count", () => {
     const item = gateChecklist(programme({}), movement, [{ ...art, gaps: 2 }]).find((c) => c.id === "art-discovery-kit")!;
     expect(item.done).toBe(false);
-    expect(item.label).toBe("Discovery Kit — declares 2 open gaps");
+    expect(item.label).toBe("Discovery Kit — 2 open gaps");
     expect(item.why).toBeUndefined();
   });
 
@@ -404,7 +404,7 @@ describe("gateChecklist — record and judgment rows close the loop", () => {
     const item = gateChecklist(p, movement, []).find((c) => c.id === "inbox")!;
     expect(item.group).toBe("judgment");
     expect(item.done).toBe(false);
-    expect(item.label).toBe("1 judgment waiting in the Inbox");
+    expect(item.label).toBe("1 decision waiting in the Inbox");
     expect(gateChecklist(programme({}), movement, []).find((c) => c.id === "inbox")!.done).toBe(true);
   });
 });

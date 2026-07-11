@@ -1273,7 +1273,7 @@ export default function AppShellV3() {
     console.warn("[blobGuard]", activeProgram.id, issues);
     if (!blobWarned.current.has(activeProgram.id)) {
       blobWarned.current.add(activeProgram.id);
-      pushV3Toast(`Record check: ${issues.length} key${issues.length === 1 ? "" : "s"} malformed (${issues.map((i) => i.key).join(", ")}) — surfaces stay up on defensive reads; see the console.`, { tone: "warning", duration: 7000 });
+      pushV3Toast(`Data check: ${issues.length} item${issues.length === 1 ? " looks" : "s look"} malformed (${issues.map((i) => i.key).join(", ")}). The app keeps working around it — details are in the console.`, { tone: "warning", duration: 7000 });
     }
   }, [activeProgram?.id, activeProgram?.updatedAt, activeProgram?.rawData, activeProgram]);
 
@@ -2056,11 +2056,11 @@ export default function AppShellV3() {
           }}
           onRecordGate={async (movementId) => {
             await approveGate(movementId);
-            pushV3Toast("Gate recorded — the movement is demonstrated and its inputs are locked.", { tone: "success", duration: 4000 });
+            pushV3Toast("Gate recorded — this movement is demonstrated and its inputs are now locked.", { tone: "success", duration: 4000 });
           }}
           onReopenGate={async (movementId, reason) => {
             await reopenGate(movementId, reason);
-            pushV3Toast("Gate reopened — inputs unlocked; capture the new evidence and the record re-derives.", { duration: 4500 });
+            pushV3Toast("Gate reopened — inputs are unlocked. Capture the new evidence and the documents will update from it.", { duration: 4500 });
           }}
           presence={presentOthers}
           onRunAgentAndWait={async (agentId, phaseId) => {
@@ -2077,7 +2077,7 @@ export default function AppShellV3() {
               action: "Record restored from a local snapshot",
             }].slice(-200);
             await updateProgramData(activeProgram.id, data, activeProgram.updatedAt);
-            pushV3Toast("Record restored — the replaced state was itself snapshotted.", { duration: 4500 });
+            pushV3Toast("Restored — and the state it replaced was saved as a snapshot too.", { duration: 4500 });
           }}
           onRecordShowPass={async (trackId, pass) => {
             await persistFlowMutation((program) => recordShowPass(program, trackId, pass));
