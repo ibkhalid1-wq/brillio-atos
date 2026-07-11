@@ -193,3 +193,35 @@ describe("artifact studio registry", () => {
     }
   });
 });
+
+describe("regeneration guard — artifactDocs decision payload", () => {
+  const base = {
+    domainOntology: { entities: [{ name: "Quote" }], editedAt: "2026-07-11", editedBy: "user@x" },
+    phaseArtifacts: { listen: { "domain-ontology": { title: "Domain Ontology", status: "draft", inputsFingerprint: "old" } } },
+    flowDecisions: [{
+      id: "d-regen", status: "open", tier: 2, movementId: "listen",
+      title: "Accept the regenerated Domain Ontology",
+      payload: {
+        artifactDocs: { domainOntology: { entities: [{ name: "Quote" }, { name: "Order" }], generatedAt: "2026-07-12" } },
+        artifactStubs: [{ phaseId: "listen", artifactId: "domain-ontology", record: { status: "draft", agentDraftedAt: "2026-07-12", inputsFingerprint: "fresh" } }],
+      },
+    }],
+  };
+
+  it("confirm replaces the mirror and lands the fresh ledger stub", () => {
+    const blob = resolveFlowDecision(programme(structuredClone(base)), "d-regen", "confirmed", "user@x")!;
+    const doc = blob.domainOntology as Record<string, unknown>;
+    expect((doc.entities as unknown[])).toHaveLength(2);
+    expect(doc.editedAt).toBeUndefined();          // accepting the regeneration supersedes the hand edit
+    const stub = (blob.phaseArtifacts as Record<string, Record<string, Record<string, unknown>>>).listen["domain-ontology"];
+    expect(stub.inputsFingerprint).toBe("fresh");
+    expect(stub.title).toBe("Domain Ontology");    // untouched stub fields survive the merge
+  });
+
+  it("decline keeps the hand-edited mirror and the old stub", () => {
+    const blob = resolveFlowDecision(programme(structuredClone(base)), "d-regen", "declined", "user@x")!;
+    expect((blob.domainOntology as Record<string, unknown>).editedAt).toBe("2026-07-11");
+    const stub = (blob.phaseArtifacts as Record<string, Record<string, Record<string, unknown>>>).listen["domain-ontology"];
+    expect(stub.inputsFingerprint).toBe("old");
+  });
+});

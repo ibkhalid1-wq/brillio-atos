@@ -7736,6 +7736,10 @@ Deno.serve(async (req) => {
     const formalRunMode = formalSpecForRun
       ? deriveFormalRunMode(request, getInnerProgramData(contextProgramData), formalSpecForRun.fieldKey)
       : undefined;
+    // Set when the regeneration guard turns this run's document into a Tier-2
+    // decision instead of a write — the post-run stamp/attest block must not
+    // record it as generated.
+    let formalRegenGuarded = false;
     // Cross-phase document carry-forward: only formal-artifact agents inject the
     // stored document intelligence, so the extra read is skipped for every other
     // agent. Keep only rows whose extracted_data is a DocumentIntelligence (a
@@ -8575,7 +8579,62 @@ Deno.serve(async (req) => {
             formalResult.milestones = prevRoadmap.milestones;
           }
         }
-        nextProgramData = applyProgramSupportArtifact(contextProgramData, spec.phase, request.agentId, spec.fieldKey, formalResult, spec.title, generationMetadata, confidence);
+        // ── Regeneration guard ─────────────────────────────────────────────
+        // Documents are data; the studio lets humans edit that data. A doc
+        // whose editedAt postdates its generatedAt carries human work — a
+        // regeneration must not silently destroy it. On Flow programmes the
+        // fresh draft becomes a Tier-2 decision (propose-then-confirm, like
+        // every consequential agent result); confirm applies doc + ledger
+        // stub via the client resolver, decline keeps the hand-edited version.
+        const priorMirror = getInnerProgramData(contextProgramData)[spec.fieldKey];
+        const handEdited = isFlowProgramme(contextProgramData)
+          && isRecord(priorMirror)
+          && typeof priorMirror.editedAt === "string"
+          && Date.parse(priorMirror.editedAt) > (typeof priorMirror.generatedAt === "string" ? Date.parse(priorMirror.generatedAt) : 0);
+        if (handEdited) {
+          const proposedAt = new Date().toISOString();
+          const proposedDoc = {
+            ...formalResult,
+            generatedAt: proposedAt,
+            _generationMetadata: generationMetadata as JsonValue,
+          } as Record<string, JsonValue>;
+          const movementId = request.phaseId || spec.phase;
+          const ledgerConfidence = toLedgerConfidence(confidence);
+          formalRegenGuarded = true;
+          nextProgramData = queueFlowDecision(contextProgramData, {
+            tier: 2,
+            movementId,
+            title: `Accept the regenerated ${spec.title}`,
+            summary: `You hand-edited this document on ${String(priorMirror.editedAt).slice(0, 10)}. Confirming replaces your edits with the fresh generation; declining keeps your version on the record.`,
+            payload: {
+              artifactDocs: { [spec.fieldKey]: proposedDoc } as JsonValue,
+              artifactStubs: [{
+                phaseId: movementId,
+                artifactId: request.agentId,
+                record: {
+                  title: spec.title,
+                  content: proposedDoc,
+                  status: "draft",
+                  agentDrafted: true,
+                  agentDraftedAt: proposedAt,
+                  ...(typeof ledgerConfidence === "number"
+                    ? { confidence: ledgerConfidence / 100, agentConfidence: ledgerConfidence }
+                    : {}),
+                  inputsFingerprint: movementInputsFingerprint(contextProgramData, movementId),
+                } as JsonValue,
+              }] as JsonValue,
+            } as JsonValue,
+          });
+          nextProgramData = appendFlowAttestation(nextProgramData, {
+            agentId: request.agentId,
+            phaseId: movementId,
+            tier: 2,
+            action: `Proposed regenerated ${spec.title} — your hand edits are protected, awaiting your confirm`,
+            detail: (outputSummary || "").slice(0, 160),
+          });
+        } else {
+          nextProgramData = applyProgramSupportArtifact(contextProgramData, spec.phase, request.agentId, spec.fieldKey, formalResult, spec.title, generationMetadata, confidence);
+        }
         // Keep the top-level plan freshness/confidence mirrors in step with a
         // newly produced folded delivery plan (consumers read these as overrides).
         if (deliveryPlanProduced) {
@@ -8606,8 +8665,10 @@ Deno.serve(async (req) => {
       // ── ATOS Flow: attest + fingerprint ───────────────────────────────────
       // Every applied run leaves an attestation entry; formal artifacts get the
       // movement-inputs fingerprint stamped on their stub so the client marks
-      // them stale when evidence changes. Classic programmes are untouched.
-      if (!autonomy.shouldQueueReview && isFlowProgramme(nextProgramData)) {
+      // them stale when evidence changes. Skipped entirely when the regen
+      // guard queued the document as a decision — nothing was applied, and the
+      // guard already attested the proposal.
+      if (!autonomy.shouldQueueReview && isFlowProgramme(nextProgramData) && !formalRegenGuarded) {
         if (formalSpecForRun) {
           // Stamp on the MOVEMENT the run was invoked for (request.phaseId),
           // not the artifact's classic ledger home (formalSpecForRun.phase may

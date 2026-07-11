@@ -13,6 +13,9 @@ import { groundingFor, citationGraph, resourceUri, artifactFabioType, SEMANTIC_C
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 import { STUDIO_REGISTRY } from "./studios";
 
+/** Artifacts consumed linearly by stakeholders — the document IS the deliverable. */
+const DOC_FIRST = new Set(["charter", "runbook"]);
+
 export interface ArtifactEditInput {
   fieldKey: string;
   movementId: string;
@@ -37,7 +40,9 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedTick, setSavedTick] = useState(false);
-  const [asDocument, setAsDocument] = useState(false);
+  // Read-and-share artifacts open as the typeset document — the deliverable
+  // form — with the studio one tap away; operated artifacts open editing.
+  const [asDocument, setAsDocument] = useState(() => DOC_FIRST.has(artifact.id));
 
   // A regenerate or portal write can refresh the programme under the open
   // studio — follow the store while the user hasn't started editing.

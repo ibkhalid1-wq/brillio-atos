@@ -157,6 +157,30 @@ export function resolveFlowDecision(
     if (additions.length) nextInner = { ...nextInner, ontologyAlignment: [...current, ...additions].slice(-60) };
   }
 
+  // Regenerated documents the guard held back (the mirror was hand-edited):
+  // confirming REPLACES the mirror with the fresh generation — that is the
+  // decision being made — and lands the matching ledger stub so presence,
+  // confidence and the staleness fingerprint read as if it had been written
+  // at generation time.
+  if (resolution === "confirmed" && payload && isRecord(payload.artifactDocs)) {
+    for (const [fieldKey, doc] of Object.entries(payload.artifactDocs as Record<string, unknown>)) {
+      if (fieldKey && isRecord(doc)) nextInner = { ...nextInner, [fieldKey]: doc };
+    }
+  }
+  if (resolution === "confirmed" && payload && Array.isArray(payload.artifactStubs)) {
+    for (const stub of payload.artifactStubs.filter(isRecord)) {
+      const phaseId = String(stub.phaseId ?? "");
+      const artifactId = String(stub.artifactId ?? "");
+      if (!phaseId || !artifactId || !isRecord(stub.record)) continue;
+      const buckets = isRecord(nextInner.phaseArtifacts) ? { ...(nextInner.phaseArtifacts as Record<string, unknown>) } : {};
+      const bucket = isRecord(buckets[phaseId]) ? { ...(buckets[phaseId] as Record<string, unknown>) } : {};
+      const existing = isRecord(bucket[artifactId]) ? (bucket[artifactId] as Record<string, unknown>) : {};
+      bucket[artifactId] = { ...existing, ...stub.record };
+      buckets[phaseId] = bucket;
+      nextInner = { ...nextInner, phaseArtifacts: buckets };
+    }
+  }
+
   // Governance payloads (e.g. the cap-raise the budget gate queues) merge
   // shallowly, with movement budgets folded per movement.
   if (resolution === "confirmed" && payload && isRecord(payload.flowGovernance)) {
