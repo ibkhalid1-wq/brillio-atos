@@ -181,6 +181,24 @@ export function resolveFlowDecision(
     }
   }
 
+  // Watcher roster additions: voices the record quotes join the coverage
+  // ledger as Heard — their words are already on the record. Additive and
+  // deduped by name; existing rows are never touched.
+  if (resolution === "confirmed" && payload && Array.isArray(payload.rosterAdditions)) {
+    const phaseInputs = isRecord(nextInner.phaseInputs) ? { ...(nextInner.phaseInputs as Record<string, unknown>) } : {};
+    const bucket = isRecord(phaseInputs.listen) ? { ...(phaseInputs.listen as Record<string, unknown>) } : {};
+    const rows = parseGridRows(bucket.interviewRoster);
+    const known = new Set(rows.map((row) => String(row.name ?? "").trim().toLowerCase()));
+    const additions = payload.rosterAdditions.filter(isRecord)
+      .filter((entry) => entry.name && !known.has(String(entry.name).trim().toLowerCase()))
+      .map((entry) => ({ name: String(entry.name), role: String(entry.role ?? ""), status: "Heard" }));
+    if (additions.length) {
+      bucket.interviewRoster = JSON.stringify([...rows, ...additions]);
+      phaseInputs.listen = bucket;
+      nextInner = { ...nextInner, phaseInputs };
+    }
+  }
+
   // Governance payloads (e.g. the cap-raise the budget gate queues) merge
   // shallowly, with movement budgets folded per movement.
   if (resolution === "confirmed" && payload && isRecord(payload.flowGovernance)) {
@@ -303,6 +321,21 @@ export function describeDecisionChanges(program: ProgramSummary, decision: FlowD
         ? `${additions.length} track${additions.length === 1 ? "" : "s"} append — adopted tracks keep their record`
         : "every track already adopted — nothing changes",
       rows: additions.slice(0, 8).map((t) => String(t.name ?? t.title ?? t.id)),
+    });
+  }
+
+  if (Array.isArray(payload.rosterAdditions)) {
+    const rows = parseGridRows(readMovementInputs(program, "listen").interviewRoster);
+    const known = new Set(rows.map((row) => String(row.name ?? "").trim().toLowerCase()));
+    const incoming = payload.rosterAdditions.filter(isRecord);
+    const additions = incoming.filter((entry) => entry.name && !known.has(String(entry.name).trim().toLowerCase()));
+    const skipped = incoming.length - additions.length;
+    changes.push({
+      target: "Coverage ledger",
+      effect: additions.length
+        ? `${additions.length} voice${additions.length === 1 ? "" : "s"} join as Heard${skipped ? ` · ${skipped} already mapped, untouched` : ""}`
+        : "every voice is already mapped — nothing changes",
+      rows: additions.slice(0, 8).map((entry) => [String(entry.name), String(entry.role ?? "")].filter(Boolean).join(" — ")),
     });
   }
 

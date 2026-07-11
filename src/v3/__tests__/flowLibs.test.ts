@@ -8,6 +8,7 @@ import type { ProgramSummary } from "@/new/types";
 import { resolveFlowDecision, listOpenFlowDecisions, describeDecisionChanges } from "@/v3/components/flow/flowDecisions";
 import { scriptDocumentRefs, meetingKit } from "@/v3/components/flow/flowMeetings";
 import { validateProgramBlob, migrateProgramBlob, BLOB_VERSION } from "@/v3/lib/blobGuard";
+import { unrosteredVoicesProposal, queueWatcherProposal } from "@/v3/components/flow/flowWatchers";
 import { trackAcceptance, trackBlockers, recordShowPass, listFlowTracks, type FlowTrack } from "@/v3/components/flow/flowTracks";
 import { toggleShipItem, listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 import { ingestPortalResponse, listPortalInbox } from "@/v3/components/flow/flowPortal";
@@ -116,6 +117,46 @@ describe("flowPortal ingest routing", () => {
     const listen = (blob.phaseInputs as Record<string, Record<string, string>>).listen;
     expect(listen.interviewTranscripts).toContain("Words here");
     expect(JSON.parse(listen.interviewRoster)[0].status).toBe("Heard");
+  });
+});
+
+describe("voice watcher — unrostered voices become a Tier-2 proposal", () => {
+  const withVoices = (roster: Array<Record<string, string>>, extra: Record<string, unknown> = {}) => programme({
+    ...extra,
+    phaseInputs: { listen: {
+      interviewRoster: JSON.stringify(roster),
+      interviewTranscripts: "— Alex Kim, CFO, 2026-07-01 —\nBudget approval takes three weeks because finance re-checks every quote by hand.",
+    } },
+  });
+
+  it("an attributed voice missing from the roster yields a proposal with the payload", () => {
+    const proposal = unrosteredVoicesProposal(withVoices([{ name: "Dan Reyes", status: "Heard" }]))!;
+    expect(proposal.tier).toBe(2);
+    expect(proposal.agentId).toBe("voice-watcher");
+    expect(proposal.payload.rosterAdditions).toEqual([{ name: "Alex Kim", role: "CFO" }]);
+  });
+
+  it("the same finding is never proposed twice — declined included", () => {
+    const first = unrosteredVoicesProposal(withVoices([]))!;
+    const again = unrosteredVoicesProposal(withVoices([], { flowDecisions: [{ ...first, status: "declined" }] }));
+    expect(again).toBeNull();
+  });
+
+  it("rostered voices propose nothing", () => {
+    expect(unrosteredVoicesProposal(withVoices([{ name: "Alex Kim", status: "Heard" }]))).toBeNull();
+  });
+
+  it("confirming merges the voices into the roster as Heard, deduped", () => {
+    const p = withVoices([{ name: "Dan Reyes", status: "Heard" }]);
+    const proposal = unrosteredVoicesProposal(p)!;
+    const queued = programme({ ...JSON.parse(JSON.stringify((queueWatcherProposal(p, proposal) as Record<string, unknown>))) });
+    const blob = resolveFlowDecision(queued, proposal.id, "confirmed", "you")!;
+    const listen = (blob.phaseInputs as Record<string, Record<string, string>>).listen;
+    const roster = JSON.parse(listen.interviewRoster);
+    expect(roster).toEqual([
+      { name: "Dan Reyes", status: "Heard" },
+      { name: "Alex Kim", role: "CFO", status: "Heard" },
+    ]);
   });
 });
 

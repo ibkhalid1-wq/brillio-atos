@@ -56,6 +56,7 @@ import { artifactReviewFieldKey } from "@/v3/lib/artifactReview";
 import { listOpenFlowDecisions } from "@/v3/components/flow/flowDecisions";
 import { listPortalInbox } from "@/v3/components/flow/flowPortal";
 import { validateProgramBlob } from "@/v3/lib/blobGuard";
+import { unrosteredVoicesProposal, queueWatcherProposal } from "@/v3/components/flow/flowWatchers";
 import { mergePhaseInputBucket } from "@/v3/lib/phaseInputMerge";
 import type { V3CommandMode, V3MoreView, V3ReportId, V3Surface } from "@/v3/types";
 import { isDecisionOpen, pushV3Toast } from "@/v3/utils";
@@ -1275,6 +1276,20 @@ export default function AppShellV3() {
       pushV3Toast(`Record check: ${issues.length} key${issues.length === 1 ? "" : "s"} malformed (${issues.map((i) => i.key).join(", ")}) — surfaces stay up on defensive reads; see the console.`, { tone: "warning", duration: 7000 });
     }
   }, [activeProgram?.id, activeProgram?.updatedAt, activeProgram?.rawData, activeProgram]);
+
+  // Watchers: after every blob change the system looks for correctable
+  // conditions and PROPOSES — a Tier-2 decision in the Inbox, never a silent
+  // apply. Content-derived ids make each finding one-shot (a decline retires
+  // it); a version conflict just skips — the next change re-fires the check.
+  useEffect(() => {
+    if (!activeProgram) return;
+    const proposal = unrosteredVoicesProposal(activeProgram);
+    if (!proposal) return;
+    const blob = queueWatcherProposal(activeProgram, proposal);
+    if (!blob) return;
+    void updateProgramData(activeProgram.id, blob, activeProgram.updatedAt)
+      .catch((err) => console.warn("[watcher] proposal skipped:", err));
+  }, [activeProgram, updateProgramData]);
 
   const actionCenterCount = useMemo(
     () => (activeProgram ? listOpenFlowDecisions(activeProgram).length + listPortalInbox(activeProgram).length : 0),
