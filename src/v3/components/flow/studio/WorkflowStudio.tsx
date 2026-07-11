@@ -1,53 +1,63 @@
 /**
- * The Current-State Atlas's workflows as a living diagram. Each workflow is
- * a left-to-right chain of step cards — actor, action, system, duration —
- * with the ontology's entities as chips on the steps that touch them. The
- * diagram IS the document: selection edits in the inspector, add/remove/
- * reorder rewrite the same steps array the generator emits, and dragging
- * only arranges (geometry lives in `_`-prefixed keys the readers ignore).
+ * The Current-State Atlas's workflows as a swimlane diagram: PERSONAS are
+ * rows, the workflow overlays them left-to-right — each step tile sits in
+ * the lane of the actor who performs it, at its position in the sequence.
+ * Tiles carry the step's system, duration, the ontology's entity chips, and
+ * the pain heatmap overlaid as a severity edge with the strongest voiced
+ * complaint. The diagram IS the document: selection edits in the inspector;
+ * add/reorder/remove rewrite the same steps array the generator emits.
  */
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ReactFlow, Background, Controls, MarkerType, useNodesState, type Node, type Edge } from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   TextField, ChipsField, asArray, asRecord, asText, asStrings, type StudioProps,
 } from "./StudioKit";
 
-function seedPosition(index: number): { x: number; y: number } {
-  return { x: index * 240, y: (index % 2) * 26 };
+interface PainHit {
+  severity: string;
+  pain: string;
+  quote: string;
 }
 
-function StepNode({ data }: { data: { actor: string; action: string; system: string; duration: string; entities: string[]; onEntity?: () => void } }) {
-  return (
-    <div className="v3fs-wf-node">
-      {data.actor ? <div className="v3fs-wf-actor">{data.actor}</div> : null}
-      <div className="v3fs-wf-action">{data.action || "—"}</div>
-      <div className="v3fs-wf-meta">
-        {data.system ? <span className="v3fs-wf-system">{data.system}</span> : null}
-        {data.duration ? <span className="v3fs-wf-dur">{data.duration}</span> : null}
-      </div>
-      {data.entities.length ? (
-        <div className="v3fs-wf-ents">
-          {data.entities.slice(0, 4).map((entity) => (
-            <button key={entity} type="button" className="v3fs-wf-ent" title="Defined in the Domain Ontology — open it"
-              onClick={(event) => { event.stopPropagation(); data.onEntity?.(); }}>
-              {entity}
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
+/** Deterministic pain↔step match: a heatmap entry lands on a step when a
+ * significant word of its area appears in the step's action/system, or the
+ * step's system appears in the entry. Highest severity wins. */
+function painForStep(step: Record<string, unknown>, pains: Array<Record<string, unknown>>): PainHit | null {
+  const hay = `${asText(step.action)} ${asText(step.system)}`.toLowerCase();
+  const system = asText(step.system).toLowerCase();
+  const rank = (severity: string) => (severity === "high" ? 3 : severity === "medium" ? 2 : 1);
+  let best: PainHit | null = null;
+  for (const entry of pains) {
+    const area = asText(entry.area).toLowerCase();
+    const painText = asText(entry.pain).toLowerCase();
+    const words = area.split(/[^a-z0-9]+/).filter((word) => word.length >= 4);
+    const hits = words.some((word) => hay.includes(word))
+      || (system.length >= 3 && (area.includes(system) || painText.includes(system)));
+    if (!hits) continue;
+    const severity = asText(entry.severity) || "medium";
+    if (!best || rank(severity) > rank(best.severity)) {
+      best = { severity, pain: asText(entry.pain) || asText(entry.area), quote: asText(entry.quote) };
+    }
+  }
+  return best;
 }
-
-const NODE_TYPES = { wfstep: StepNode };
 
 export default function WorkflowStudio({ doc, onChange, onOpenArtifact }: StudioProps) {
   const workflows = useMemo(() => asArray(doc.workflows).map(asRecord), [doc.workflows]);
+  const pains = useMemo(() => asArray(doc.painHeatmap).map(asRecord), [doc.painHeatmap]);
   const [active, setActive] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const workflow = workflows[Math.min(active, Math.max(0, workflows.length - 1))];
   const steps = useMemo(() => (workflow ? asArray(workflow.steps).map(asRecord) : []), [workflow]);
+
+  // Personas: rows in order of first appearance; blank actors pool at the foot.
+  const lanes = useMemo(() => {
+    const seen: string[] = [];
+    for (const step of steps) {
+      const actor = asText(step.actor).trim() || "Unassigned";
+      if (!seen.includes(actor)) seen.push(actor);
+    }
+    return seen;
+  }, [steps]);
 
   const writeWorkflows = useCallback((next: Array<Record<string, unknown>>) => {
     onChange({ ...doc, workflows: next });
@@ -59,48 +69,10 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact }: Studio
     patchWorkflow({ steps: steps.map((step, i) => (i === index ? { ...step, ...patch } : step)) });
   }, [steps, patchWorkflow]);
 
-  // Structure follows the doc; geometry follows the user (stored on the step
-  // under a `_pos` key every reader ignores).
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
-  useEffect(() => {
-    setNodes((current) => steps.map((step, index) => {
-      const id = `step-${index}`;
-      const held = current.find((node) => node.id === id);
-      const pos = asRecord(step._pos);
-      return {
-        id,
-        type: "wfstep",
-        position: held?.position
-          ?? (typeof pos.x === "number" && typeof pos.y === "number" ? { x: pos.x, y: pos.y } : seedPosition(index)),
-        selected: selected === index,
-        data: {
-          actor: asText(step.actor),
-          action: asText(step.action),
-          system: asText(step.system),
-          duration: asText(step.duration),
-          entities: asStrings(step.entities),
-          onEntity: onOpenArtifact ? () => onOpenArtifact("domain-ontology") : undefined,
-        },
-      };
-    }));
-  }, [steps, selected, setNodes, onOpenArtifact]);
-
-  const edges: Edge[] = useMemo(() => steps.slice(1).map((_, index) => ({
-    id: `seq-${index}`,
-    source: `step-${index}`,
-    target: `step-${index + 1}`,
-    markerEnd: { type: MarkerType.ArrowClosed },
-  })), [steps]);
-
-  const persistPosition = useCallback((node: Node) => {
-    const index = Number(node.id.replace("step-", ""));
-    if (!Number.isNaN(index) && steps[index]) patchStep(index, { _pos: { x: Math.round(node.position.x), y: Math.round(node.position.y) } });
-  }, [steps, patchStep]);
-
   const addStep = () => {
     const at = selected != null ? selected + 1 : steps.length;
     const next = [...steps];
-    next.splice(at, 0, { actor: "", action: "New step", system: "", duration: "" });
+    next.splice(at, 0, { actor: selected != null ? asText(steps[selected].actor) : "", action: "New step", system: "", duration: "" });
     patchWorkflow({ steps: next });
     setSelected(at);
   };
@@ -147,22 +119,58 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact }: Studio
             <TextField label="Trigger" value={asText(workflow.trigger)} onChange={(next) => patchWorkflow({ trigger: next })} />
             <TextField label="Owner" value={asText(workflow.owner)} onChange={(next) => patchWorkflow({ owner: next })} />
           </div>
-          <div className="v3fs-wf-canvas">
-            <ReactFlow
-              nodes={nodes}
-              edges={edges}
-              nodeTypes={NODE_TYPES}
-              onNodesChange={onNodesChange}
-              onNodeDragStop={(_, node) => persistPosition(node)}
-              onNodeClick={(_, node) => setSelected(Number(node.id.replace("step-", "")))}
-              onPaneClick={() => setSelected(null)}
-              fitView
-              proOptions={{ hideAttribution: true }}
-            >
-              <Background gap={22} size={1} />
-              <Controls showInteractive={false} />
-            </ReactFlow>
-          </div>
+
+          {steps.length === 0 ? (
+            <div className="v3fs-stu-empty">No steps yet — add the first one below.</div>
+          ) : (
+            <div className="v3fs-swim-scroll">
+              <div className="v3fs-swim" style={{ gridTemplateColumns: `130px repeat(${steps.length}, minmax(178px, 1fr))` }}>
+                {lanes.map((lane) => (
+                  <React.Fragment key={lane}>
+                    <div className="v3fs-swim-lane">{lane}</div>
+                    {steps.map((step, index) => {
+                      const actor = asText(step.actor).trim() || "Unassigned";
+                      if (actor !== lane) return <div key={index} className="v3fs-swim-cell" aria-hidden="true" />;
+                      const pain = painForStep(step, pains);
+                      const entities = asStrings(step.entities);
+                      return (
+                        <div key={index} className="v3fs-swim-cell has">
+                          <button
+                            type="button"
+                            className={`v3fs-swim-tile${selected === index ? " on" : ""}${pain ? ` pain-${pain.severity}` : ""}`}
+                            onClick={() => setSelected(selected === index ? null : index)}
+                            title={pain ? `${pain.pain}${pain.quote ? ` — “${pain.quote}”` : ""}` : undefined}
+                          >
+                            <span className="v3fs-swim-n" aria-hidden="true">{index + 1}</span>
+                            <span className="v3fs-swim-action">{asText(step.action) || "—"}</span>
+                            <span className="v3fs-swim-meta">
+                              {asText(step.system) ? <span className="v3fs-wf-system">{asText(step.system)}</span> : null}
+                              {asText(step.duration) ? <span className="v3fs-wf-dur">{asText(step.duration)}</span> : null}
+                            </span>
+                            {pain ? <span className="v3fs-swim-pain">{pain.pain.slice(0, 46)}</span> : null}
+                            {entities.length ? (
+                              <span className="v3fs-wf-ents">
+                                {entities.slice(0, 3).map((entity) => (
+                                  <span key={entity} role="link" tabIndex={0} className="v3fs-wf-ent"
+                                    title="Defined in the Domain Ontology — open it"
+                                    onClick={(event) => { event.stopPropagation(); onOpenArtifact?.("domain-ontology"); }}
+                                    onKeyDown={(event) => { if (event.key === "Enter") { event.stopPropagation(); onOpenArtifact?.("domain-ontology"); } }}>
+                                    {entity}
+                                  </span>
+                                ))}
+                              </span>
+                            ) : null}
+                          </button>
+                          {index < steps.length - 1 ? <span className="v3fs-swim-arrow" aria-hidden="true">→</span> : null}
+                        </div>
+                      );
+                    })}
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="v3fs-wf-bar">
             <button type="button" className="v3fs-btn" onClick={addStep}>＋ Step{selected != null ? " after selected" : ""}</button>
             {selected != null ? (
@@ -175,7 +183,7 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact }: Studio
           </div>
           {selected != null && steps[selected] ? (
             <div className="v3fs-wf-inspector">
-              <TextField label="Actor" value={asText(steps[selected].actor)} onChange={(next) => patchStep(selected, { actor: next })} />
+              <TextField label="Persona (lane)" value={asText(steps[selected].actor)} onChange={(next) => patchStep(selected, { actor: next })} />
               <TextField label="Action" value={asText(steps[selected].action)} onChange={(next) => patchStep(selected, { action: next })} />
               <TextField label="System" value={asText(steps[selected].system)} onChange={(next) => patchStep(selected, { system: next })} />
               <TextField label="Duration" value={asText(steps[selected].duration)} onChange={(next) => patchStep(selected, { duration: next })} />

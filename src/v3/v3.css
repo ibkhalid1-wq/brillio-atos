@@ -5310,15 +5310,28 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-wf-tabs button[role="tab"].on {background:var(--v3-accent);border-color:var(--v3-accent);color:#fff}
 .v3fs-wf-tabs button[role="tab"] em {font-style:normal;font-size:9.5px;opacity:.75;margin-left:6px;text-transform:uppercase;letter-spacing:.05em}
 .v3fs-wf-head {display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:10px}
-.v3fs-wf-canvas {height:300px;border:1px solid var(--fs-line);border-radius:12px;overflow:hidden;background:var(--fs-card)}
-.v3fs-wf-node {min-width:170px;max-width:210px;border:1.5px solid var(--fs-line);border-radius:11px;background:var(--fs-card);padding:9px 12px;box-shadow:var(--fs-shadow);font-size:12px}
-.react-flow__node.selected .v3fs-wf-node {border-color:var(--v3-accent-2)}
-.v3fs-wf-actor {font-size:9.5px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;color:var(--v3-text-muted);margin-bottom:2px}
-.v3fs-wf-action {font-weight:650;color:var(--v3-text-primary);line-height:1.4}
-.v3fs-wf-meta {display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}
 .v3fs-wf-system {font-family:var(--v3-font-mono);font-size:9.5px;border:1px solid var(--v3-border-soft);border-radius:6px;padding:1px 6px;color:var(--v3-text-secondary)}
 .v3fs-wf-dur {font-size:9.5px;color:var(--v3-amber);font-weight:600}
-.v3fs-wf-ents {display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+/* Swimlanes: personas as rows, the workflow overlaid left-to-right. */
+.v3fs-swim-scroll {overflow-x:auto;border:1px solid var(--fs-line);border-radius:12px;background:var(--fs-card)}
+.v3fs-swim {display:grid;gap:0;min-width:max-content}
+.v3fs-swim-lane {position:sticky;left:0;z-index:2;display:flex;align-items:center;padding:10px 12px;font-size:10px;font-weight:650;letter-spacing:.07em;text-transform:uppercase;color:var(--v3-text-muted);background:var(--v3-surface-2);border-bottom:1px solid var(--v3-border-soft);border-right:1px solid var(--fs-line)}
+.v3fs-swim-cell {position:relative;border-bottom:1px solid var(--v3-border-soft);padding:9px 16px 9px 8px;background:
+  repeating-linear-gradient(to bottom, transparent, transparent)}
+.v3fs-swim-cell:not(.has)::after {content:"";position:absolute;left:0;right:0;top:50%;border-top:1px dashed color-mix(in srgb, var(--fs-line) 70%, transparent)}
+.v3fs-swim-tile {position:relative;display:flex;flex-direction:column;gap:4px;width:100%;text-align:left;font:inherit;font-size:12px;border:1.5px solid var(--fs-line);border-left-width:3.5px;border-radius:11px;background:var(--fs-card);padding:8px 11px 9px 13px;box-shadow:var(--fs-shadow);cursor:pointer;transition:border-color .15s ease, box-shadow .15s ease}
+.v3fs-swim-tile:hover {border-color:var(--v3-accent-2)}
+.v3fs-swim-tile.on {border-color:var(--v3-accent-2);box-shadow:0 10px 26px -12px color-mix(in srgb, var(--v3-accent-2) 45%, transparent)}
+.v3fs-swim-tile.pain-high {border-left-color:var(--v3-red)}
+.v3fs-swim-tile.pain-medium {border-left-color:var(--v3-amber)}
+.v3fs-swim-tile.pain-low {border-left-color:var(--v3-text-muted)}
+.v3fs-swim-n {position:absolute;top:-8px;left:-8px;width:18px;height:18px;border-radius:50%;background:var(--v3-accent);color:#fff;font-size:9.5px;font-weight:700;display:grid;place-items:center;box-shadow:var(--fs-shadow)}
+.v3fs-swim-action {font-weight:650;color:var(--v3-text-primary);line-height:1.4}
+.v3fs-swim-meta {display:flex;flex-wrap:wrap;gap:5px}
+.v3fs-swim-pain {font-size:10px;line-height:1.4;color:var(--v3-amber);font-weight:600}
+.v3fs-swim-tile.pain-high .v3fs-swim-pain {color:var(--v3-red)}
+.v3fs-swim-arrow {position:absolute;right:-2px;top:50%;transform:translateY(-50%);color:var(--v3-text-muted);font-size:12px;z-index:1}
+.v3fs-wf-ents {display:flex;flex-wrap:wrap;gap:4px;margin-top:2px}
 .v3fs-wf-ent {font:inherit;font-size:9.5px;font-weight:600;border:none;border-radius:99px;padding:2px 8px;background:var(--fs-indigo-wash, var(--v3-surface-2));color:var(--v3-accent-2);cursor:pointer}
 .v3fs-wf-ent:hover {text-decoration:underline}
 .v3fs-wf-bar {display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin:10px 0}
