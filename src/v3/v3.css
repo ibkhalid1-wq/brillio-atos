@@ -4765,9 +4765,8 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-trk-slices span {font-size:11px;border-radius:8px;padding:4px 10px;background:var(--fs-indigo-wash);color:var(--v3-accent-2)}
 
 /* Async interviews: link lane in Listen + the public respond page. */
-.v3fs-async {border:1px dashed var(--fs-line);border-radius:12px;padding:12px 14px;margin:12px 0;display:flex;flex-direction:column;gap:8px}
-.v3fs-async-cap {font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--fs-quote)}
-.v3fs-async-cap span {display:block;font-weight:500;letter-spacing:0;text-transform:none;font-size:11px;color:var(--v3-text-muted);margin-top:2px}
+.v3fs-kit-chan.v3fs-async {flex-direction:column;align-items:stretch}
+.v3fs-kit-chan.v3fs-async .v3fs-a {align-self:flex-start}
 .v3fs-async-row {display:flex;align-items:center;gap:10px}
 .v3fs-async-who {flex:1;font-size:12.5px;font-weight:600}
 .v3fs-async-who span {display:block;font-family:var(--v3-font-mono);font-size:10px;font-weight:400;color:var(--v3-text-muted)}

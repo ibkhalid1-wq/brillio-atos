@@ -15,7 +15,7 @@ interface FlowCanvasProps {
   program: ProgramSummary;
   runningAgentIds: Set<string>;
   onRunAgent: (agentId: string, phaseId?: string) => void;
-  onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean }) => Promise<void>;
+  onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
   /** Mint async-interview response links from the Discovery Kit (Listen). */
   onMintPacks?: () => Promise<void>;
   /** Mint demo links from the Demo Scripts (Show). */
@@ -160,21 +160,29 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                       <div className="v3fs-coverage-bar"><div className="v3fs-coverage-fill" style={{ width: `${Math.round((coverage.done / coverage.total) * 100)}%` }} /></div>
                     </div>
                   ) : null}
-                  <MeetingKitCard
-                    kit={meetingKit(program, movement.id)}
-                    movementId={movement.id}
-                    hasEvidence={evidence.length > 0}
-                    program={program}
-                    onSaveInputs={onSaveInputs}
-                    onScheduleFollowUp={onScheduleFollowUp}
-                    onMintFollowUp={onMintFollowUp}
-                  />
-                  {movement.id === "listen" && onMintPacks ? (
-                    <AsyncInterviews program={program} onMintPacks={onMintPacks} />
-                  ) : null}
-                  {movement.id === "show" && onMintDemoInvites ? (
-                    <DemoInvites program={program} onMint={onMintDemoInvites} />
-                  ) : null}
+                  {(() => {
+                    const kit = meetingKit(program, movement.id);
+                    const channelCards = movement.id === "listen" && onMintPacks
+                      ? <AsyncInterviews program={program} onMintPacks={onMintPacks} />
+                      : movement.id === "show" && onMintDemoInvites
+                        ? <DemoInvites program={program} onMint={onMintDemoInvites} />
+                        : undefined;
+                    return (
+                      <>
+                        <MeetingKitCard
+                          kit={kit}
+                          movementId={movement.id}
+                          hasEvidence={evidence.length > 0}
+                          program={program}
+                          onSaveInputs={onSaveInputs}
+                          onScheduleFollowUp={onScheduleFollowUp}
+                          onMintFollowUp={onMintFollowUp}
+                          channels={channelCards}
+                        />
+                        {!kit ? channelCards : null}
+                      </>
+                    );
+                  })()}
                   {/* Quiet escape hatch only — the checklist and gate CTA are
                       the purposeful doors into the editor now. */}
                   <button type="button" className="v3fs-edit-toggle quiet" onClick={() => toggle(setEditing, movement.id)}>
@@ -318,12 +326,14 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
  * Open by default when the conversation hasn't happened; a quiet one-line
  * summary once it has.
  */
-function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, onScheduleFollowUp, onMintFollowUp }: {
+function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, onScheduleFollowUp, onMintFollowUp, channels }: {
   kit: MeetingKit | null;
   movementId: string;
   hasEvidence: boolean;
+  /** Extra channel cards (async links, demo links) rendered under Channels. */
+  channels?: React.ReactNode;
   program: ProgramSummary;
-  onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean }) => Promise<void>;
+  onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
   onScheduleFollowUp?: (movementId: string, who: string, date: string) => Promise<void>;
   onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
 }) {
@@ -388,7 +398,9 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
       const next = kit.header
         ? [existing.trimEnd(), block].filter(Boolean).join("\n\n")
         : text; // single-line refs (go/no-go) replace rather than append
-      await onSaveInputs(movementId, { [kit.captureField]: next });
+      await onSaveInputs(movementId, { [kit.captureField]: next }, {
+        attest: { action: `Evidence captured — ${kit.who}`, detail: text.replace(/\s+/g, " ").slice(0, 140) },
+      });
       setCapture("");
       setSavedTick(true);
       window.setTimeout(() => setSavedTick(false), 2200);
@@ -413,7 +425,9 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
         : {};
       const existing = typeof bucket[kit.captureField] === "string" ? bucket[kit.captureField] as string : "";
       const block = `— Document: ${name}, provided by ${kit.who}, ${new Date().toISOString().slice(0, 10)} —\n${text}`;
-      await onSaveInputs(movementId, { [kit.captureField]: [existing.trimEnd(), block].filter(Boolean).join("\n\n") });
+      await onSaveInputs(movementId, { [kit.captureField]: [existing.trimEnd(), block].filter(Boolean).join("\n\n") }, {
+        attest: { action: `Document ingested — ${name}`, detail: `provided by ${kit.who}` },
+      });
       setDocName("");
       setDocText("");
       setDocTick(true);
@@ -515,11 +529,11 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
             </div>
           </>
         ) : null}
-        {kit.followUp && (onScheduleFollowUp || onMintFollowUp) ? (
+        {(kit.followUp && (onScheduleFollowUp || onMintFollowUp)) || channels ? (
           <>
             <div className="v3fs-kit-cap">Channels</div>
             <div className="v3fs-kit-ch">
-              {onScheduleFollowUp ? (
+              {kit.followUp && onScheduleFollowUp ? (
                 <div className="v3fs-kit-chan">
                   <div className="v3fs-kit-chan-t">Meeting<span>Book it — run the script in the room, capture below</span></div>
                   <div className="v3fs-kit-chan-a">
@@ -530,7 +544,7 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
                   </div>
                 </div>
               ) : null}
-              {onMintFollowUp ? (
+              {kit.followUp && onMintFollowUp ? (
                 <div className="v3fs-kit-chan">
                   <div className="v3fs-kit-chan-t">Link<span>ATOS asks for you — answers land in the Inbox, attributed</span></div>
                   <div className="v3fs-kit-chan-a">
@@ -540,6 +554,7 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
                   </div>
                 </div>
               ) : null}
+              {channels}
             </div>
           </>
         ) : null}
@@ -606,8 +621,8 @@ function AsyncInterviews({ program, onMintPacks }: { program: ProgramSummary; on
   };
 
   return (
-    <div className="v3fs-async">
-      <div className="v3fs-async-cap">Async interviews <span>send a link — answers arrive in the Inbox</span></div>
+    <div className="v3fs-kit-chan v3fs-async">
+      <div className="v3fs-kit-chan-t">Async interviews<span>one link per voice — answers land in the Inbox, attributed</span></div>
       {packs.map((pack) => (
         <div key={pack.id} className="v3fs-async-row">
           <span className={`v3fs-st ${pack.respondedAt ? "ok" : "none"}`} />
@@ -660,8 +675,8 @@ function DemoInvites({ program, onMint }: { program: ProgramSummary; onMint: () 
   };
 
   return (
-    <div className="v3fs-async">
-      <div className="v3fs-async-cap">Demo tour links <span>per-stakeholder demo links — verdicts arrive in the Inbox</span></div>
+    <div className="v3fs-kit-chan v3fs-async">
+      <div className="v3fs-kit-chan-t">Demo links<span>one per stakeholder — verdicts arrive in the Inbox</span></div>
       {invites.map((invite) => (
         <div key={invite.id} className="v3fs-async-row">
           <span className={`v3fs-st ${invite.respondedAt ? "ok" : "none"}`} />

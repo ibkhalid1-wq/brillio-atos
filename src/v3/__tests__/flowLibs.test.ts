@@ -194,14 +194,16 @@ describe("gateReadiness — one composed verdict over the closed loop", () => {
     const r = verdict(metFrame(), [art({ stale: true }), art({ id: "charter", title: "Transformation Charter" })]);
     expect(r.kind).toBe("trails");
     expect(r.tone).toBe("amber");
-    expect(r.detail).toBe("8 of 9 criteria met");
+    expect(r.headline).toBe("8 of 9 criteria met");
+    expect(r.detail).toBe("The record trails the evidence");
   });
 
   it("criteria met, record current, but a document declares gaps → open gaps verdict", () => {
     const r = verdict(metFrame(), [art({ gaps: 2 })]);
     expect(r.kind).toBe("gaps");
     expect(r.tone).toBe("amber");
-    expect(r.headline).toBe("The record declares open gaps");
+    expect(r.headline).toBe("7 of 8 criteria met");
+    expect(r.detail).toBe("The record declares open gaps");
   });
 
   it("staleness outranks gaps in the verdict cause", () => {
@@ -217,7 +219,8 @@ describe("gateReadiness — one composed verdict over the closed loop", () => {
     const r = verdict(p, [art()]);
     expect(r.kind).toBe("judgment");
     expect(r.tone).toBe("amber");
-    expect(r.headline).toBe("A judgment waits in the Inbox");
+    expect(r.headline).toBe("7 of 8 criteria met");
+    expect(r.detail).toBe("A judgment waits in the Inbox");
   });
 
   it("evidence, record and Inbox all clear → ready, green", () => {

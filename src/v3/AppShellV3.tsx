@@ -1555,7 +1555,7 @@ export default function AppShellV3() {
 
 
 
-  const handleSavePhaseInputs = useCallback(async (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; clearReviewDefId?: string; staleDefId?: string }) => {
+  const handleSavePhaseInputs = useCallback(async (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; clearReviewDefId?: string; staleDefId?: string; attest?: { action: string; detail?: string } }) => {
     if (!activeProgram) return;
     const silent = opts?.silent === true;
     // Hard freeze: once a phase clears its stage gate its inputs are locked, so no
@@ -1649,7 +1649,18 @@ export default function AppShellV3() {
           reviewPatch[key] = nextRec;
         }
       }
-      const payload = cloned.commit({ ...cloned.inner, phaseInputs: existing, phaseArtifacts: artifactBuckets, ...reviewPatch });
+      // Evidence received flows into the record's stream: an attest opt appends
+      // a tier-1 attestation in the same atomic write, so captures and ingests
+      // surface in the Inbox's activity feed like every other applied change.
+      const attestPatch: Record<string, unknown> = {};
+      if (opts?.attest) {
+        const log = Array.isArray(cloned.inner.flowAttestations) ? (cloned.inner.flowAttestations as unknown[]) : [];
+        attestPatch.flowAttestations = [...log, {
+          ts: new Date().toISOString(), agentId: "you", phaseId, tier: 1,
+          action: opts.attest.action, ...(opts.attest.detail ? { detail: opts.attest.detail } : {}),
+        }].slice(-200);
+      }
+      const payload = cloned.commit({ ...cloned.inner, phaseInputs: existing, phaseArtifacts: artifactBuckets, ...reviewPatch, ...attestPatch });
       return { payload, staled: allStaled, crossStaled };
     };
 

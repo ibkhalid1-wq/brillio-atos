@@ -438,11 +438,11 @@ export function gateReadiness(
   if (openIn("record")) {
     const trailing = artifacts.some((artifact) => !artifact.present || artifact.stale);
     return trailing
-      ? { tone: "amber", kind: "trails", headline: "The record trails the evidence", detail: counts }
-      : { tone: "amber", kind: "gaps", headline: "The record declares open gaps", detail: counts };
+      ? { tone: "amber", kind: "trails", headline: counts, detail: "The record trails the evidence" }
+      : { tone: "amber", kind: "gaps", headline: counts, detail: "The record declares open gaps" };
   }
   if (openIn("judgment")) {
-    return { tone: "amber", kind: "judgment", headline: "A judgment waits in the Inbox", detail: counts };
+    return { tone: "amber", kind: "judgment", headline: counts, detail: "A judgment waits in the Inbox" };
   }
   return {
     tone: "green",

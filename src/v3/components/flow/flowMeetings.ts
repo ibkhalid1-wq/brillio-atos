@@ -143,7 +143,29 @@ function baseMeetingKit(program: ProgramSummary, movementId: string): Omit<Meeti
   if (movementId === "show") {
     const doc = isRecord(inner.demoScripts) ? inner.demoScripts : null;
     const scripts = doc && Array.isArray(doc.scripts) ? doc.scripts.filter(isRecord) : [];
-    if (!scripts.length) return null;
+    if (!scripts.length) {
+      // No scripted tour yet — the session still produces evidence. Capture
+      // reactions and change asks into demoFeedback all the same.
+      const tour = parseGridRows(inputs.demoTour);
+      if (!tour.length && !filled(inputs.prototypeLocation)) return null;
+      const pending = tour.find((row) => !/accepted/i.test(row.verdict ?? ""));
+      const who = String(pending?.stakeholder ?? "The room");
+      const done = filled(inputs.demoFeedback);
+      return {
+        title: "The demo session",
+        who,
+        purpose: "Every session is evidence — capture reactions and change asks while they are fresh; verdicts land in the tour ledger.",
+        questions: [
+          "What did you just watch run — in your words?",
+          "Where does it not match how the work actually happens?",
+          "What must change before you accept it?",
+        ],
+        captureField: "demoFeedback",
+        captureLabel: "Paste the session — reactions and change asks",
+        header: `— ${who}, Demo session, ${today()} —`,
+        done,
+      };
+    }
     const tour = parseGridRows(inputs.demoTour);
     const verdictFor = (name: string) =>
       tour.find((row) => (row.stakeholder ?? "").trim().toLowerCase() === name.trim().toLowerCase())?.verdict ?? "";
