@@ -28,6 +28,8 @@ export interface MeetingKit {
   /** This kit closes gaps a previous conversation left open. */
   followUp: boolean;
   gaps: string[];
+  /** Documents the script's questions reference — offer to attach them. */
+  documents: string[];
 }
 
 export interface FlowFollowUp {
@@ -50,7 +52,7 @@ function innerData(program: ProgramSummary): Record<string, unknown> {
 const filled = (value: unknown): boolean => typeof value === "string" && value.trim().length > 0;
 const today = () => new Date().toISOString().slice(0, 10);
 
-function baseMeetingKit(program: ProgramSummary, movementId: string): Omit<MeetingKit, "followUp" | "gaps"> | null {
+function baseMeetingKit(program: ProgramSummary, movementId: string): Omit<MeetingKit, "followUp" | "gaps" | "documents"> | null {
   const inputs = readMovementInputs(program, movementId);
   const inner = innerData(program);
 
@@ -240,16 +242,38 @@ export function kitGaps(program: ProgramSummary, movementId: string): string[] {
  * left turn the kit into a FOLLOW-UP — a script targeting exactly what's
  * missing, schedulable onto the calendar or sendable as an async link.
  */
+/**
+ * Document names a script's questions reference — quoted names plus
+ * "the <name> <document-word>" phrases. Deterministic, so the kit can offer
+ * to attach exactly what the conversation will ask for.
+ */
+const DOC_WORD = "(?:document|export|report|spreadsheet|sheet|policy|log|register|deck|diagram|contract|sow|runbook|extract|file)";
+export function scriptDocumentRefs(questions: string[]): string[] {
+  const out = new Map<string, string>(); // lowercased key → first-seen casing
+  const add = (name: string) => {
+    const key = name.trim().toLowerCase();
+    if (key && !out.has(key)) out.set(key, name.trim());
+  };
+  for (const question of questions) {
+    for (const match of question.matchAll(/["“”]([^"“”]{3,60})["“”]/g)) add(match[1]);
+    for (const match of question.matchAll(new RegExp(`\\b(?:the|a|an|your|their|its|current|latest)\\s+([A-Za-z0-9][\\w&/-]*(?:\\s+[\\w&/-]+){0,5}?\\s${DOC_WORD})\\b`, "gi"))) {
+      add(match[1]);
+    }
+  }
+  return [...out.values()].slice(0, 4);
+}
+
 export function meetingKit(program: ProgramSummary, movementId: string): MeetingKit | null {
   const base = baseMeetingKit(program, movementId);
   if (!base) return null;
-  if (!base.done) return { ...base, followUp: false, gaps: [] };
+  if (!base.done) return { ...base, followUp: false, gaps: [], documents: scriptDocumentRefs(base.questions) };
   const gaps = kitGaps(program, movementId);
-  if (!gaps.length) return { ...base, followUp: false, gaps: [] };
+  if (!gaps.length) return { ...base, followUp: false, gaps: [], documents: scriptDocumentRefs(base.questions) };
   return {
     ...base,
     followUp: true,
     gaps,
+    documents: scriptDocumentRefs(gaps),
     title: "Follow-up — close the gaps",
     purpose: `The last conversation left ${gaps.length} point${gaps.length === 1 ? "" : "s"} open. This script asks for exactly what's missing — nothing else.`,
     questions: gaps,

@@ -5101,6 +5101,12 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-script-qs li {font-size:14px;line-height:1.65;color:var(--v3-text-primary)}
 .v3fs-script-qs li::marker {color:var(--v3-accent-2);font-weight:650}
 .v3fs-script-f {display:flex;justify-content:flex-end;gap:8px;padding:14px 26px 20px;border-top:1px solid var(--fs-line);margin-top:14px}
+.v3fs-script-docs {margin:16px 0 4px;border:1px solid var(--v3-border-soft);border-radius:10px;padding:11px 13px;background:var(--v3-surface-2)}
+.v3fs-script-docs-cap {font-size:10px;font-weight:650;letter-spacing:.09em;text-transform:uppercase;color:var(--v3-text-muted);margin-bottom:7px}
+.v3fs-script-doc {display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 0}
+.v3fs-script-doc + .v3fs-script-doc {border-top:1px solid var(--v3-border-soft)}
+.v3fs-script-doc-n {font-size:12.5px;font-weight:600;color:var(--v3-text-primary);min-width:0;overflow-wrap:anywhere}
+.v3fs-script-docs-note {font-size:10.5px;color:var(--v3-text-muted);margin:7px 0 0}
 .v3fs-docview.v3fs-evread{z-index:91;width:min(640px,88vw);border-left:4px solid var(--v3-accent-b)}
 .v3fs-evread-who{color:var(--fs-quote)}
 .v3fs-evread-b{font-size:14px;line-height:1.8}

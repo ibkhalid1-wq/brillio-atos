@@ -350,6 +350,15 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
   const [docName, setDocName] = useState("");
   const [docText, setDocText] = useState("");
   const [docTick, setDocTick] = useState(false);
+  const [docOpen, setDocOpen] = useState(false);
+
+  // "Attach" on a referenced document: land in the ingest form with the
+  // name prefilled — the capture area is where evidence arrives.
+  const attachDocument = (name: string) => {
+    setDocName(name);
+    setDocOpen(true);
+    setScriptOpen(false);
+  };
 
   if (!kit) {
     return hasEvidence ? null : (
@@ -483,6 +492,20 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
                 <ol className="v3fs-script-qs">
                   {kit.questions.map((question, index) => <li key={index}>{question}</li>)}
                 </ol>
+                {kit.documents.length ? (
+                  <div className="v3fs-script-docs">
+                    <div className="v3fs-script-docs-cap">Referenced documents</div>
+                    {kit.documents.map((name) => (
+                      <div key={name} className="v3fs-script-doc">
+                        <span className="v3fs-script-doc-n">{name}</span>
+                        <button type="button" className="v3fs-btn" onClick={() => attachDocument(name)}>
+                          Attach
+                        </button>
+                      </div>
+                    ))}
+                    <p className="v3fs-script-docs-note">Attaching lands it as evidence beside the transcript, attributed.</p>
+                  </div>
+                ) : null}
               </div>
               <footer className="v3fs-script-f">
                 <button type="button" className="v3fs-btn pri" onClick={() => void copyScript()}>
@@ -532,7 +555,7 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
           <button type="button" className="v3fs-btn pri" disabled={busy || !capture.trim()} onClick={() => void save()}>
             {busy ? "Saving…" : savedTick ? "Captured ✓" : "Capture"}
           </button>
-          <details className="v3fs-kit-doc">
+          <details className="v3fs-kit-doc" open={docOpen} onToggle={(event) => setDocOpen(event.currentTarget.open)}>
             <summary>＋ Ingest a referenced document</summary>
             <div className="v3fs-kit-docrow">
               <input value={docName} onChange={(event) => setDocName(event.target.value)}

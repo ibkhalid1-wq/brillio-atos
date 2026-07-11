@@ -6,6 +6,7 @@
 import { describe, it, expect } from "vitest";
 import type { ProgramSummary } from "@/new/types";
 import { resolveFlowDecision, listOpenFlowDecisions, describeDecisionChanges } from "@/v3/components/flow/flowDecisions";
+import { scriptDocumentRefs } from "@/v3/components/flow/flowMeetings";
 import { trackAcceptance, trackBlockers, recordShowPass, listFlowTracks, type FlowTrack } from "@/v3/components/flow/flowTracks";
 import { toggleShipItem, listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 import { ingestPortalResponse, listPortalInbox } from "@/v3/components/flow/flowPortal";
@@ -114,6 +115,20 @@ describe("flowPortal ingest routing", () => {
     const listen = (blob.phaseInputs as Record<string, Record<string, string>>).listen;
     expect(listen.interviewTranscripts).toContain("Words here");
     expect(JSON.parse(listen.interviewRoster)[0].status).toBe("Heard");
+  });
+});
+
+describe("scriptDocumentRefs — documents the script asks for", () => {
+  it("extracts quoted names and document-word phrases, deduped", () => {
+    expect(scriptDocumentRefs([
+      'Bring the "Q2 pricing export" to the session.',
+      "Walk us through the discount approval policy and who signs it.",
+      'Confirm the "Q2 pricing export" covers EMEA.',
+    ])).toEqual(["Q2 pricing export", "discount approval policy"]);
+  });
+
+  it("returns nothing when no document is referenced", () => {
+    expect(scriptDocumentRefs(["What outcome should this system achieve?"])).toEqual([]);
   });
 });
 
