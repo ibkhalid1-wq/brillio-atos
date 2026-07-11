@@ -596,7 +596,13 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
           if (Array.isArray(rows)) {
             for (const index of resolveIdx) {
               if (rows[index] && typeof rows[index] === "object") {
-                rows[index].status = `Resolved ${new Date().toISOString().slice(0, 10)} — settled by ${kit.who}; see the transcript`;
+                // The complete resolution: what was decided (the answer, in
+                // the arbiter's words), who settled it, and when — the row
+                // becomes the record, not a pointer to one.
+                rows[index].status = "Resolved";
+                rows[index].resolution = text.replace(/\s+/g, " ").slice(0, 200);
+                rows[index].resolvedBy = kit.who;
+                rows[index].resolvedAt = new Date().toISOString().slice(0, 10);
                 resolvedCount += 1;
               }
             }

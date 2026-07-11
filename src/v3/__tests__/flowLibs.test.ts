@@ -565,6 +565,17 @@ describe("gateChecklist provenance", () => {
     expect(item.why).toBe("3 tracks, confirmed by you");
   });
 
+  it("a resolved contradiction's provenance names the ruling, arbiter and date", () => {
+    const p = programme({ phaseInputs: { listen: { contradictionLog: JSON.stringify([
+      { statement: "Where amendments live", status: "Resolved", resolution: "Quote table confirmed as the system of record", resolvedBy: "Sarah Okafor, COO", resolvedAt: "2026-07-11" },
+    ]) } } });
+    const item = gateChecklist(p, flowMovements().find((m) => m.id === "listen")!, []).find((c) => c.id === "contradictions")!;
+    expect(item.done).toBe(true);
+    expect(item.why).toContain("Quote table confirmed as the system of record");
+    expect(item.why).toContain("Sarah Okafor, COO");
+    expect(item.why).toContain("2026-07-11");
+  });
+
   it("an unmet criterion carries no provenance", () => {
     const item = gateChecklist(programme({}), movement("frame"), []).find((c) => c.id === "conv")!;
     expect(item.done).toBe(false);

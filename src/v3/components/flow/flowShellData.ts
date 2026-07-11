@@ -324,7 +324,18 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
     items.push(
       { id: "mapped", label: "Voices mapped in the coverage ledger", done: coverage.total > 0, anchor: "input:interviewRoster" },
       { id: "heard", label: coverage.total ? `Every voice heard or waived (${coverage.done}/${coverage.total})` : "Every voice heard or waived", done: coverage.total > 0 && coverage.done >= coverage.total, anchor: "input:interviewRoster" },
-      { id: "contradictions", label: "Contradictions resolved or logged", done: contradictions.every((row) => !/open/i.test(row.status ?? "")), anchor: "input:contradictionLog", why: contradictions.length ? `${contradictions.length} logged, none open` : undefined },
+      (() => {
+        const latest = [...contradictions].reverse().find((row) => row.resolution);
+        return {
+          id: "contradictions",
+          label: "Contradictions resolved or logged",
+          done: contradictions.every((row) => !/open/i.test(row.status ?? "")),
+          anchor: "input:contradictionLog",
+          why: contradictions.length
+            ? `${contradictions.length} logged, none open${latest ? ` — latest ruling: “${String(latest.resolution).slice(0, 70)}” (${[latest.resolvedBy, latest.resolvedAt].filter(Boolean).join(", ")})` : ""}`
+            : undefined,
+        };
+      })(),
     );
   } else if (movement.id === "envision") {
     items.push(
