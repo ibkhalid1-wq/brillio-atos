@@ -7,6 +7,7 @@ import { describe, it, expect } from "vitest";
 import type { ProgramSummary } from "@/new/types";
 import { resolveFlowDecision, listOpenFlowDecisions, describeDecisionChanges } from "@/v3/components/flow/flowDecisions";
 import { scriptDocumentRefs, meetingKit } from "@/v3/components/flow/flowMeetings";
+import { validateProgramBlob, migrateProgramBlob, BLOB_VERSION } from "@/v3/lib/blobGuard";
 import { trackAcceptance, trackBlockers, recordShowPass, listFlowTracks, type FlowTrack } from "@/v3/components/flow/flowTracks";
 import { toggleShipItem, listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 import { ingestPortalResponse, listPortalInbox } from "@/v3/components/flow/flowPortal";
@@ -115,6 +116,33 @@ describe("flowPortal ingest routing", () => {
     const listen = (blob.phaseInputs as Record<string, Record<string, string>>).listen;
     expect(listen.interviewTranscripts).toContain("Words here");
     expect(JSON.parse(listen.interviewRoster)[0].status).toBe("Heard");
+  });
+});
+
+describe("blobGuard — validation and migration at the blob boundary", () => {
+  it("a well-formed blob raises no issues", () => {
+    expect(validateProgramBlob({
+      phaseInputs: { frame: { sponsor: "Sarah" } },
+      flowDecisions: [{ id: "d1", status: "open" }],
+      flowAttestations: [{ ts: "t", agentId: "a", phaseId: "frame", tier: 1, action: "x" }],
+      unknownKeyIsFine: { anything: true },
+    })).toEqual([]);
+  });
+
+  it("a malformed known key is reported, named, and left in place", () => {
+    const inner = { flowDecisions: { not: "an array" } };
+    const issues = validateProgramBlob(inner);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].key).toBe("flowDecisions");
+    expect(inner.flowDecisions).toEqual({ not: "an array" });
+  });
+
+  it("migration stamps the version once and is idempotent", () => {
+    const first = migrateProgramBlob({ phaseInputs: {} });
+    expect(first.migrated).toBe(true);
+    expect(first.inner._blobVersion).toBe(BLOB_VERSION);
+    const second = migrateProgramBlob(first.inner);
+    expect(second.migrated).toBe(false);
   });
 });
 

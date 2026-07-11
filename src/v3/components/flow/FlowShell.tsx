@@ -17,6 +17,7 @@ import {
 } from "@/v3/components/flow/flowTracks";
 import { readFlowGovernance, flowAgentTier } from "@/v3/components/flow/flowGovernance";
 import { listPortalInbox } from "@/v3/components/flow/flowPortal";
+import { listSnapshots, type BlobSnapshot } from "@/v3/lib/blobSnapshots";
 
 interface FlowShellProps {
   program: ProgramSummary;
@@ -34,6 +35,8 @@ interface FlowShellProps {
   onRecordGate?: (movementId: string) => Promise<void>;
   /** Reopen a demonstrated gate — evidence changed. Unlocks its inputs. */
   onReopenGate?: (movementId: string, reason: string) => Promise<void>;
+  /** Restore the programme blob to a local snapshot's state. */
+  onRestoreSnapshot?: (data: Record<string, unknown>) => Promise<void>;
   /** Record a show/refine pass on a track. */
   onRecordShowPass: (trackId: string, pass: { stakeholder?: string; verdict: FlowShowPass["verdict"]; note?: string; stableDiff?: boolean }) => Promise<void>;
   /** Add a track by hand (the blueprint is the usual source). */
@@ -186,6 +189,7 @@ export default function FlowShell(props: FlowShellProps) {
           </button>
         ) : null}
 
+        <ViewBoundary view={view}>
         {view === "today" ? (
           <FlowToday program={program} onResolveDecision={props.onResolveDecision}
             onIngestPortalItem={props.onIngestPortalItem} onDismissPortalItem={props.onDismissPortalItem}
@@ -211,6 +215,7 @@ export default function FlowShell(props: FlowShellProps) {
             onSetHaltAll={props.onSetHaltAll}
             onToggleAgentHalt={props.onToggleAgentHalt}
             onSetMovementBudget={props.onSetMovementBudget}
+            onRestoreSnapshot={props.onRestoreSnapshot}
           />
         ) : view === "portfolio" ? (
           <FlowPortfolio
@@ -222,9 +227,36 @@ export default function FlowShell(props: FlowShellProps) {
         ) : (
           <FlowPulse program={program} />
         )}
+        </ViewBoundary>
       </div>
     </div>
   );
+}
+
+/**
+ * One malformed movement or ledger must not blank the shell: each view
+ * renders inside a boundary that fails to a quiet card naming the view,
+ * while the dock keeps every other surface reachable. Remounts on view
+ * change so a crash in one view never poisons the next.
+ */
+class ViewBoundary extends React.Component<{ view: string; children: React.ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidUpdate(prev: { view: string }) {
+    if (prev.view !== this.props.view && this.state.failed) this.setState({ failed: false });
+  }
+  componentDidCatch(error: unknown) { console.error("[flow-view]", this.props.view, error); }
+  render() {
+    if (this.state.failed) {
+      return (
+        <div className="v3fs-panel v3fs-view-fail" role="alert">
+          <div className="v3fs-ph"><h3>This view hit an error</h3><span>the rest of the app is unaffected</span></div>
+          <div className="v3fs-empty">The record is intact — this surface failed to render it. The console has the details; switching views or reloading recovers.</div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 /* ── Today: decisions waiting on you, the log, the moments ahead ─────────── */
@@ -620,13 +652,14 @@ function FlowTracks({ program, runningAgentIds, onRunAgent, onSaveInputs, onReco
 
 /* ── Mission Control: the fleet, the budgets, the levers, the trail ──────── */
 
-function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggleAgentHalt, onSetMovementBudget }: {
+function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggleAgentHalt, onSetMovementBudget, onRestoreSnapshot }: {
   program: ProgramSummary;
   fleet: FlowShellProps["fleet"];
   loadMovementSpend: FlowShellProps["loadMovementSpend"];
   onSetHaltAll: FlowShellProps["onSetHaltAll"];
   onToggleAgentHalt: FlowShellProps["onToggleAgentHalt"];
   onSetMovementBudget: FlowShellProps["onSetMovementBudget"];
+  onRestoreSnapshot?: (data: Record<string, unknown>) => Promise<void>;
 }) {
   const movements = useMemo(() => flowMovements(), []);
   const governance = readFlowGovernance(program);
@@ -805,7 +838,64 @@ function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggle
         ))}
         {visibleTrail.length > 40 ? <div className="v3fs-empty">+ {visibleTrail.length - 40} older entries</div> : null}
       </div>
+
+      <div className="v3fs-panel">
+        <div className="v3fs-ph"><h3>Safety</h3><span>the record before each recent write — restore is itself recorded</span></div>
+        <SnapshotSafety program={program} onRestoreSnapshot={onRestoreSnapshot} />
+      </div>
     </div>
+  );
+}
+
+/**
+ * The snapshot ring, made visible: what the record looked like before each
+ * recent write, with a two-step restore. Local to this browser by design —
+ * reversibility for the operator's own actions.
+ */
+function SnapshotSafety({ program, onRestoreSnapshot }: {
+  program: ProgramSummary;
+  onRestoreSnapshot?: (data: Record<string, unknown>) => Promise<void>;
+}) {
+  const [snapshots, setSnapshots] = useState<BlobSnapshot[]>([]);
+  const [armedId, setArmedId] = useState<number | null>(null);
+  const [busyId, setBusyId] = useState<number | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void listSnapshots(program.id).then((rows) => { if (alive) setSnapshots(rows); });
+    return () => { alive = false; };
+  }, [program.id, program.updatedAt]);
+  useEffect(() => {
+    if (armedId == null) return;
+    const timer = window.setTimeout(() => setArmedId(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [armedId]);
+  if (!snapshots.length) {
+    return <div className="v3fs-empty">No snapshots yet — one is kept before every change, in this browser.</div>;
+  }
+  const restore = async (snapshot: BlobSnapshot) => {
+    if (armedId !== snapshot.id) { setArmedId(snapshot.id); return; }
+    if (!onRestoreSnapshot) return;
+    setBusyId(snapshot.id);
+    try { await onRestoreSnapshot(snapshot.data); } finally { setBusyId(null); setArmedId(null); }
+  };
+  return (
+    <>
+      {snapshots.slice(0, 10).map((snapshot) => (
+        <div key={snapshot.id} className="v3fs-row">
+          <span className="v3fs-tdot t1" aria-hidden="true" />
+          <div className="v3fs-row-g">
+            <div className="v3fs-row-n">{new Date(snapshot.ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</div>
+            <div className="v3fs-row-m">{Math.max(1, Math.round(snapshot.bytes / 1024))} KB</div>
+          </div>
+          {onRestoreSnapshot ? (
+            <button type="button" className={`v3fs-btn${armedId === snapshot.id ? " pri" : ""}`}
+              disabled={busyId != null} onClick={() => void restore(snapshot)}>
+              {busyId === snapshot.id ? "Restoring…" : armedId === snapshot.id ? "Confirm restore" : "Restore"}
+            </button>
+          ) : null}
+        </div>
+      ))}
+    </>
   );
 }
 

@@ -55,6 +55,7 @@ import { getPreviousScore, recordConfidenceSnapshot } from "@/v3/lib/confidenceH
 import { artifactReviewFieldKey } from "@/v3/lib/artifactReview";
 import { listOpenFlowDecisions } from "@/v3/components/flow/flowDecisions";
 import { listPortalInbox } from "@/v3/components/flow/flowPortal";
+import { validateProgramBlob } from "@/v3/lib/blobGuard";
 import { mergePhaseInputBucket } from "@/v3/lib/phaseInputMerge";
 import type { V3CommandMode, V3MoreView, V3ReportId, V3Surface } from "@/v3/types";
 import { isDecisionOpen, pushV3Toast } from "@/v3/utils";
@@ -1257,6 +1258,24 @@ export default function AppShellV3() {
   // open Flow decisions plus quarantined portal responses — so the two surfaces
   // can never disagree. (openDecisions above counts persisted stage-gate
   // decisions for the confidence model and must stay untouched.)
+  // Blob guard: validate the known keys whenever the active programme's blob
+  // changes. Advisory — issues are reported (console + one toast per
+  // programme per session), never auto-repaired; the defensive readers keep
+  // the app standing while the operator decides.
+  const blobWarned = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!activeProgram?.rawData) return;
+    const raw = activeProgram.rawData as Record<string, unknown>;
+    const inner = typeof raw.data === "object" && raw.data !== null ? (raw.data as Record<string, unknown>) : raw;
+    const issues = validateProgramBlob(inner);
+    if (!issues.length) return;
+    console.warn("[blobGuard]", activeProgram.id, issues);
+    if (!blobWarned.current.has(activeProgram.id)) {
+      blobWarned.current.add(activeProgram.id);
+      pushV3Toast(`Record check: ${issues.length} key${issues.length === 1 ? "" : "s"} malformed (${issues.map((i) => i.key).join(", ")}) — surfaces stay up on defensive reads; see the console.`, { tone: "warning", duration: 7000 });
+    }
+  }, [activeProgram?.id, activeProgram?.updatedAt, activeProgram?.rawData, activeProgram]);
+
   const actionCenterCount = useMemo(
     () => (activeProgram ? listOpenFlowDecisions(activeProgram).length + listPortalInbox(activeProgram).length : 0),
     [activeProgram],
@@ -1999,6 +2018,19 @@ export default function AppShellV3() {
           onReopenGate={async (movementId, reason) => {
             await reopenGate(movementId, reason);
             pushV3Toast("Gate reopened — inputs unlocked; capture the new evidence and the record re-derives.", { duration: 4500 });
+          }}
+          onRestoreSnapshot={async (data) => {
+            if (!activeProgram) return;
+            // Restoring is a write like any other: it attests into the restored
+            // record and snapshots the state it replaces (the chokepoint does).
+            const inner = typeof data.data === "object" && data.data !== null ? (data.data as Record<string, unknown>) : data;
+            const log = Array.isArray(inner.flowAttestations) ? (inner.flowAttestations as unknown[]) : [];
+            inner.flowAttestations = [...log, {
+              ts: new Date().toISOString(), agentId: currentUser?.email || "you", phaseId: "programme", tier: 2,
+              action: "Record restored from a local snapshot",
+            }].slice(-200);
+            await updateProgramData(activeProgram.id, data, activeProgram.updatedAt);
+            pushV3Toast("Record restored — the replaced state was itself snapshotted.", { duration: 4500 });
           }}
           onRecordShowPass={async (trackId, pass) => {
             await persistFlowMutation((program) => recordShowPass(program, trackId, pass));

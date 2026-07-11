@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { captureSnapshot } from "@/v3/lib/blobSnapshots";
 import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 import type { Database, Json } from "@/integrations/supabase/types";
 import { normalizeProgram, updateDecisionInProgram } from "@/new/lib/programData";
@@ -554,6 +555,10 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
     if (!program) {
       throw new Error("Program not found.");
     }
+    // Reversibility: stash the blob's PRIOR state in the local snapshot ring
+    // before this write replaces it. Fire-and-forget — history-keeping must
+    // never delay or fail a save.
+    void captureSnapshot(programId, (program.rawData ?? null) as Record<string, unknown> | null);
     const payload: Record<string, unknown> = {
       ...nextData,
       _syncedAt: new Date().toISOString(),
