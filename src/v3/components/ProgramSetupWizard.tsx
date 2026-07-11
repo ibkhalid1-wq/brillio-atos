@@ -180,19 +180,6 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
                 Selects the ontology&apos;s standards vocabulary — FIBO, FHIR, GS1, IEC CIM, EBUCore, W3C ORG or schema.org.
               </div>
             </label>
-            {segmentOptions ? (
-              <label>
-                <div className="v3-field-label">Value-chain segment</div>
-                <select className="v3-input" aria-label="Value-chain segment" value={segmentOptions.includes(segment) ? segment : ""}
-                  onChange={(event) => setSegment(event.target.value)}>
-                  <option value="">Not sure yet — infer from evidence</option>
-                  {segmentOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-                </select>
-                <div className="v3-field-hint">
-                  Sharpens the vocabulary and discovery scope for this sector.
-                </div>
-              </label>
-            ) : null}
             <label>
               <div className="v3-field-label">Executive sponsor</div>
               <input className="v3-input" aria-label="Executive sponsor" type="text" placeholder="Name and title"
@@ -206,6 +193,19 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
                 The headline metric — days to the first stakeholder demonstration.
               </div>
             </label>
+            {segmentOptions ? (
+              <label>
+                <div className="v3-field-label">Value-chain segment</div>
+                <select className="v3-input" aria-label="Value-chain segment" value={segmentOptions.includes(segment) ? segment : ""}
+                  onChange={(event) => setSegment(event.target.value)}>
+                  <option value="">Not sure yet — infer from evidence</option>
+                  {segmentOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                </select>
+                <div className="v3-field-hint">
+                  Sharpens the vocabulary and discovery scope for this sector.
+                </div>
+              </label>
+            ) : null}
           </div>
         </section>
 
