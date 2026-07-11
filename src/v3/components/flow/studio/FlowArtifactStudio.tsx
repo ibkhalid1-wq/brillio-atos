@@ -13,9 +13,6 @@ import { groundingFor, citationGraph, resourceUri, artifactFabioType, SEMANTIC_C
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 import { STUDIO_REGISTRY } from "./studios";
 
-/** Artifacts consumed linearly by stakeholders — the document IS the deliverable. */
-const DOC_FIRST = new Set(["charter", "runbook"]);
-
 export interface ArtifactEditInput {
   fieldKey: string;
   movementId: string;
@@ -39,10 +36,10 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
   const [draft, setDraft] = useState<Record<string, unknown> | null>(storedDoc);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [savedTick, setSavedTick] = useState(false);
-  // Read-and-share artifacts open as the typeset document — the deliverable
-  // form — with the studio one tap away; operated artifacts open editing.
-  const [asDocument, setAsDocument] = useState(() => DOC_FIRST.has(artifact.id));
+  // Read first, everywhere: every artifact opens as the typeset document;
+  // Edit flips to its form (or graph), and both Save and Discard land you
+  // back on the document. One flow, no mode maze.
+  const [editing, setEditing] = useState(false);
 
   // A regenerate or portal write can refresh the programme under the open
   // studio — follow the store while the user hasn't started editing.
@@ -57,7 +54,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
   }, [onClose]);
 
   const canEdit = !!entry && !!draft && !!onSaveDoc;
-  const studioActive = canEdit && !asDocument;
+  const studioActive = canEdit && editing;
 
   const save = async () => {
     if (!entry || !draft || !onSaveDoc) return;
@@ -65,11 +62,19 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
     try {
       await onSaveDoc({ fieldKey: entry.fieldKey, movementId: artifact.movementId, title: artifact.title, doc: draft });
       setDirty(false);
-      setSavedTick(true);
-      window.setTimeout(() => setSavedTick(false), 2200);
+      setEditing(false);
+      window.dispatchEvent(new CustomEvent("atlas-v3-toast", {
+        detail: { message: `${artifact.title} saved — attested to the trail.`, tone: "success", duration: 3000 },
+      }));
     } finally {
       setSaving(false);
     }
+  };
+
+  const discard = () => {
+    setDraft(storedDoc);
+    setDirty(false);
+    setEditing(false);
   };
 
   const body = artifactDocument(program, artifact.id);
@@ -104,12 +109,13 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
             </span>
           </div>
           <div className="v3fs-docview-cta">
-            {canEdit ? (
-              <button type="button" className="v3fs-btn" onClick={() => setAsDocument((v) => !v)}>
-                {asDocument ? "Open the studio" : "View as document"}
-              </button>
+            {canEdit && !editing ? (
+              <button type="button" className="v3fs-btn pri" onClick={() => setEditing(true)}>✎ Edit</button>
             ) : null}
-            {onRegenerate ? (
+            {editing && !dirty ? (
+              <button type="button" className="v3fs-btn" onClick={() => setEditing(false)}>View document</button>
+            ) : null}
+            {!editing && onRegenerate ? (
               <button type="button" className="v3fs-btn" onClick={() => { onRegenerate(); onClose(); }}>
                 {artifact.stale ? "Regenerate — evidence changed" : "Regenerate"}
               </button>
@@ -179,20 +185,17 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
           )}
         </div>
 
-        {studioActive && (dirty || savedTick) ? (
+        {studioActive && dirty ? (
           <footer className="v3fs-stu-savebar">
-            <span>{savedTick && !dirty ? "Saved — attested to the trail ✓" : "You've edited this document."}</span>
-            {dirty ? (
-              <div className="v3fs-dec-cta">
-                <button type="button" className="v3fs-btn pri" disabled={saving} onClick={() => void save()}>
-                  {saving ? "Saving…" : "Save & attest"}
-                </button>
-                <button type="button" className="v3fs-btn" disabled={saving}
-                  onClick={() => { setDraft(storedDoc); setDirty(false); }}>
-                  Discard edits
-                </button>
-              </div>
-            ) : null}
+            <span>You've edited this document.</span>
+            <div className="v3fs-dec-cta">
+              <button type="button" className="v3fs-btn pri" disabled={saving} onClick={() => void save()}>
+                {saving ? "Saving…" : "Save & attest"}
+              </button>
+              <button type="button" className="v3fs-btn" disabled={saving} onClick={discard}>
+                Discard edits
+              </button>
+            </div>
           </footer>
         ) : null}
       </div>
