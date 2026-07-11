@@ -777,23 +777,26 @@ function GenericStudio({ doc, onChange }: StudioProps) {
 export interface StudioEntry {
   fieldKey: string;
   Component: React.ComponentType<StudioProps>;
+  /** Canonical section order for the document view — jsonb storage
+   * alphabetises keys, so the generator's narrative order lives here. */
+  docOrder?: string[];
 }
 
 const flowFieldKey = (artifactId: string): string => FORMAL_ARTIFACT_FIELD_KEYS[artifactId] ?? "";
 
 export const STUDIO_REGISTRY: Record<string, StudioEntry> = {
-  "charter": { fieldKey: flowFieldKey("charter"), Component: CharterStudio },
-  "discovery-kit": { fieldKey: flowFieldKey("discovery-kit"), Component: DiscoveryKitStudio },
-  "current-state-atlas": { fieldKey: flowFieldKey("current-state-atlas"), Component: AtlasStudio },
-  "domain-ontology": { fieldKey: flowFieldKey("domain-ontology"), Component: OntologyStudio },
-  "architecture-strategy": { fieldKey: flowFieldKey("architecture-strategy"), Component: StrategyStudio },
-  "agentic-blueprint": { fieldKey: flowFieldKey("agentic-blueprint"), Component: BlueprintStudio },
-  "prototype-pack": { fieldKey: flowFieldKey("prototype-pack"), Component: PrototypePackStudio },
-  "demo-scripts": { fieldKey: flowFieldKey("demo-scripts"), Component: DemoScriptsStudio },
-  "hardening-plan": { fieldKey: flowFieldKey("hardening-plan"), Component: HardeningStudio },
-  "eval-suite": { fieldKey: flowFieldKey("eval-suite"), Component: EvalSuiteStudio },
-  "runbook": { fieldKey: flowFieldKey("runbook"), Component: RunbookStudio },
-  "optimization-backlog": { fieldKey: flowFieldKey("optimization-backlog"), Component: BacklogStudio },
+  "charter": { fieldKey: flowFieldKey("charter"), docOrder: ["mandate", "sponsor", "businessObjective", "objectives", "inScope", "outOfScope", "successCriteria", "keyRisks", "governanceSummary"], Component: CharterStudio },
+  "discovery-kit": { fieldKey: flowFieldKey("discovery-kit"), docOrder: ["interviews", "coverageMap"], Component: DiscoveryKitStudio },
+  "current-state-atlas": { fieldKey: flowFieldKey("current-state-atlas"), docOrder: ["workflows", "painHeatmap", "systemsInventory", "contradictions", "openQuestions", "coverage"], Component: AtlasStudio },
+  "domain-ontology": { fieldKey: flowFieldKey("domain-ontology"), docOrder: ["entities", "relations", "events", "standardAlignment", "ambiguities"], Component: OntologyStudio },
+  "architecture-strategy": { fieldKey: flowFieldKey("architecture-strategy"), docOrder: ["candidates", "recommendation"], Component: StrategyStudio },
+  "agentic-blueprint": { fieldKey: flowFieldKey("agentic-blueprint"), docOrder: ["agents", "orchestration", "dataContracts", "hitlPoints", "evalPlan", "buildSequence", "tracks"], Component: BlueprintStudio },
+  "prototype-pack": { fieldKey: flowFieldKey("prototype-pack"), docOrder: ["scaffold", "buildSlices", "seedScenarios", "stubbing"], Component: PrototypePackStudio },
+  "demo-scripts": { fieldKey: flowFieldKey("demo-scripts"), docOrder: ["scripts", "tourSequence"], Component: DemoScriptsStudio },
+  "hardening-plan": { fieldKey: flowFieldKey("hardening-plan"), docOrder: ["workstreams", "guardrails", "hitlImplementation", "cutoverPlan", "runbookSeeds"], Component: HardeningStudio },
+  "eval-suite": { fieldKey: flowFieldKey("eval-suite"), docOrder: ["evalCases", "guardrailProbes"], Component: EvalSuiteStudio },
+  "runbook": { fieldKey: flowFieldKey("runbook"), docOrder: ["routineOperations", "monitoring", "incidentResponse"], Component: RunbookStudio },
+  "optimization-backlog": { fieldKey: flowFieldKey("optimization-backlog"), docOrder: ["items", "themes"], Component: BacklogStudio },
   // The benefits pulse is written by an analysis agent, not a doc generator.
   "benefits-tracker": { fieldKey: "benefitsTracking", Component: GenericStudio },
 };
