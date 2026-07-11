@@ -637,7 +637,10 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
             <p className="v3fs-script-docs-note">Attach it and it becomes evidence beside the conversation, with its source noted.</p>
           </div>
         ) : null}
-        {(kit.followUp && (onScheduleFollowUp || onMintFollowUp)) || channels ? (
+        {(() => {
+          const movementLinks = listInterviewPacks(program).filter((pack) => pack.movementId === movementId);
+          if (!((kit.followUp && (onScheduleFollowUp || onMintFollowUp)) || channels || movementLinks.length)) return null;
+          return (
           <>
             <div className="v3fs-kit-cap">Channels</div>
             <div className="v3fs-kit-ch">
@@ -652,20 +655,39 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
                   </div>
                 </div>
               ) : null}
-              {kit.followUp && onMintFollowUp ? (
+              {(kit.followUp && onMintFollowUp) || movementLinks.length ? (
                 <div className="v3fs-kit-chan">
                   <div className="v3fs-kit-chan-t">Link<span>ATOS asks for you — answers land in the Inbox, attributed</span></div>
-                  <div className="v3fs-kit-chan-a">
-                    <button type="button" className="v3fs-btn" disabled={busy} onClick={() => void sendLink()}>
-                      {linkTick ? "Link copied ✓" : "✳ Mint the link"}
-                    </button>
-                  </div>
+                  {movementLinks.length ? (
+                    <div className="v3fs-kit-links">
+                      {movementLinks.map((pack) => (
+                        <div key={pack.id} className="v3fs-async-row">
+                          <span className={`v3fs-st ${pack.respondedAt ? "ok" : "none"}`} />
+                          <div className="v3fs-async-who">
+                            {pack.stakeholder}
+                            <span>{pack.respondedAt ? "responded" : "waiting"}</span>
+                          </div>
+                          <button type="button" className="v3fs-a" onClick={() => {
+                            void navigator.clipboard.writeText(portalLinkFor(program.id, pack)).catch(() => window.prompt("Copy the link:", portalLinkFor(program.id, pack)));
+                          }}>Copy link</button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  {kit.followUp && onMintFollowUp ? (
+                    <div className="v3fs-kit-chan-a">
+                      <button type="button" className="v3fs-btn" disabled={busy} onClick={() => void sendLink()}>
+                        {linkTick ? "Link copied ✓" : "✳ Mint the link"}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
               {channels}
             </div>
           </>
-        ) : null}
+          );
+        })()}
         <div className="v3fs-kit-cap">What came back</div>
         <div className="v3fs-kit-capture">
           <textarea
@@ -714,7 +736,9 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
  * in Today's evidence inbox until ingested.
  */
 function AsyncInterviews({ program, onMintPacks }: { program: ProgramSummary; onMintPacks: () => Promise<void> }) {
-  const packs = listInterviewPacks(program);
+  // This is Listen's channel: discovery packs (no movementId) and Listen
+  // follow-ups belong here; follow-up links minted for OTHER movements do not.
+  const packs = listInterviewPacks(program).filter((pack) => !pack.movementId || pack.movementId === "listen");
   const hasKit = (() => {
     const raw = (program.rawData ?? {}) as Record<string, unknown>;
     const inner = typeof raw.data === "object" && raw.data !== null ? (raw.data as Record<string, unknown>) : raw;
@@ -746,7 +770,10 @@ function AsyncInterviews({ program, onMintPacks }: { program: ProgramSummary; on
           <span className={`v3fs-st ${pack.respondedAt ? "ok" : "none"}`} />
           <div className="v3fs-async-who">
             {pack.stakeholder}
-            <span>{pack.respondedAt ? "responded" : `${pack.questions.length} questions · waiting`}</span>
+            <span>
+              {pack.role === "Follow-up" ? "follow-up · " : ""}
+              {pack.respondedAt ? "responded" : `${pack.questions.length} question${pack.questions.length === 1 ? "" : "s"} · waiting`}
+            </span>
           </div>
           <button type="button" className="v3fs-a" onClick={() => void copy(pack.id, portalLinkFor(program.id, pack))}>
             {copiedId === pack.id ? "Copied ✓" : "Copy link"}

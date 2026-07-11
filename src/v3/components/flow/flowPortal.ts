@@ -24,7 +24,8 @@ export interface FlowInterviewPack {
   /** Secret half of the response link (programId.secret). */
   token: string;
   createdAt: string;
-  respondedAt?: string;
+  respondedAt?: string;  /** Set on follow-up packs — the movement whose gaps it asks. */
+  movementId?: string;
 }
 
 export interface FlowPortalItem {
@@ -71,6 +72,7 @@ export function listInterviewPacks(program: ProgramSummary): FlowInterviewPack[]
     token: String(entry.token ?? ""),
     createdAt: String(entry.createdAt ?? ""),
     respondedAt: typeof entry.respondedAt === "string" ? entry.respondedAt : undefined,
+    movementId: typeof entry.movementId === "string" ? entry.movementId : undefined,
   })).filter((pack) => pack.id && pack.token);
 }
 
@@ -243,6 +245,17 @@ export function mintFollowUpPack(
     && (Array.isArray(pack.questions) ? pack.questions.map(String).join("") : "") === wanted,
   );
   if (duplicate) return null;
+  // A NEW ask supersedes the old one: unanswered follow-up links for the
+  // same person and movement are retired (their links stop working), so the
+  // person only ever holds one live follow-up ask at a time. Answered packs
+  // stay — they are part of the record.
+  const kept = existing.filter((pack) => {
+    if (!isRecord(pack)) return true;
+    const sameTarget = String(pack.stakeholder ?? "").trim().toLowerCase() === input.who.trim().toLowerCase()
+      && String(pack.movementId ?? "") === input.movementId;
+    const unanswered = typeof pack.respondedAt !== "string";
+    return !(sameTarget && unanswered && String(pack.role ?? "") === "Follow-up");
+  });
   const now = new Date().toISOString();
   const pack = {
     id: `pack-${randomSecret().slice(0, 10)}`,
@@ -263,7 +276,7 @@ export function mintFollowUpPack(
   };
   return wrapProgramState(wrapper, {
     ...inner,
-    flowInterviewPacks: [...existing, pack].slice(-30),
+    flowInterviewPacks: [...kept, pack].slice(-30),
     flowAttestations: [...log, attestation].slice(-200),
   }, usesNestedData);
 }

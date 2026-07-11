@@ -9,6 +9,7 @@ import { resolveFlowDecision, listOpenFlowDecisions, describeDecisionChanges } f
 import { scriptDocumentRefs, meetingKit } from "@/v3/components/flow/flowMeetings";
 import { validateProgramBlob, migrateProgramBlob, BLOB_VERSION } from "@/v3/lib/blobGuard";
 import { unrosteredVoicesProposal, queueWatcherProposal } from "@/v3/components/flow/flowWatchers";
+import { mintFollowUpPack, listInterviewPacks } from "@/v3/components/flow/flowPortal";
 import { trackAcceptance, trackBlockers, recordShowPass, listFlowTracks, type FlowTrack } from "@/v3/components/flow/flowTracks";
 import { toggleShipItem, listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 import { ingestPortalResponse, listPortalInbox } from "@/v3/components/flow/flowPortal";
@@ -192,6 +193,32 @@ describe("contradictionEntries — watcher findings file as open log rows", () =
     const blob = resolveFlowDecision(withDecision(), "cw1", "declined", "you")!;
     const listen = (blob.phaseInputs as Record<string, Record<string, string>> | undefined)?.listen;
     expect(listen?.contradictionLog).toBeUndefined();
+  });
+});
+
+describe("follow-up packs — one live ask per person per movement", () => {
+  it("a new follow-up retires the old unanswered one; answered packs stay", () => {
+    const p = programme({ flowInterviewPacks: [
+      { id: "old-unanswered", role: "Follow-up", stakeholder: "Sarah Okafor, COO", movementId: "frame", questions: ["Old q"], token: "t1", createdAt: "2026-07-01" },
+      { id: "old-answered", role: "Follow-up", stakeholder: "Sarah Okafor, COO", movementId: "frame", questions: ["Answered q"], token: "t2", createdAt: "2026-07-02", respondedAt: "2026-07-03" },
+      { id: "discovery", stakeholder: "Sarah Okafor, COO", questions: ["Discovery q"], token: "t3", createdAt: "2026-07-01" },
+    ] });
+    const blob = mintFollowUpPack(p, { movementId: "frame", who: "Sarah Okafor, COO", questions: ["New q"], captureField: "sponsorConversation" }, "you")!;
+    const ids = (blob.flowInterviewPacks as Array<{ id: string }>).map((pack) => pack.id);
+    expect(ids).not.toContain("old-unanswered");
+    expect(ids).toContain("old-answered");
+    expect(ids).toContain("discovery");
+    expect(ids).toHaveLength(3); // answered + discovery + the new pack
+  });
+
+  it("packs expose their movement so channels can scope to their own", () => {
+    const p = programme({ flowInterviewPacks: [
+      { id: "f", role: "Follow-up", stakeholder: "S", movementId: "frame", questions: ["q"], token: "t" },
+      { id: "d", stakeholder: "S", questions: ["q"], token: "t2" },
+    ] });
+    const packs = listInterviewPacks(p);
+    expect(packs.find((pack) => pack.id === "f")?.movementId).toBe("frame");
+    expect(packs.find((pack) => pack.id === "d")?.movementId).toBeUndefined();
   });
 });
 
