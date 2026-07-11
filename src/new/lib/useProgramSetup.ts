@@ -10,6 +10,8 @@ export interface ProgramSetupPatch {
   archetype?: string;
   /** Methodology variant derived from the archetype, persisted to program data. */
   methodology?: "atos-standard" | "atos-lite" | "atos-regulated" | "atos-flow";
+  /** Baseline mandate facts written into Frame's inputs at setup. */
+  frameBaseline?: { industry?: string; sponsor?: string; targetFirstDemoDate?: string };
   phases: Array<{ id: string; pct: number; targetDate: string }>;
 }
 
@@ -76,8 +78,19 @@ export function useProgramSetup(
         // Only override methodology when the user explicitly selected an archetype,
         // so editing details without re-picking a type never clobbers the variant.
         ...(patch.methodology ? { methodology: patch.methodology } : {}),
-        // Industry, dates, and objective now live on the Strategy phase inputs
-        // (phaseInputs.strategy), so setup only owns name/client/archetype here.
+        // Baseline facts land in Frame's input bucket — early evidence with a
+        // setup provenance, so gate criteria tick and generator grounding is
+        // in place before the first conversation is even booked.
+        ...(patch.frameBaseline && Object.keys(patch.frameBaseline).length
+          ? (() => {
+              const buckets = asRecord(inner.phaseInputs);
+              const frame = asRecord(buckets.frame);
+              const cleaned = Object.fromEntries(
+                Object.entries(patch.frameBaseline).filter(([, value]) => typeof value === "string" && value.trim()),
+              );
+              return { phaseInputs: { ...buckets, frame: { ...frame, ...cleaned, savedAt: new Date().toISOString() } } };
+            })()
+          : {}),
         projectMeta: {
           ...existingMeta,
           name: patch.name,

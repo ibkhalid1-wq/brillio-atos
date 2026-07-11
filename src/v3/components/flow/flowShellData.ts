@@ -287,6 +287,7 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
       { id: "conv", label: "Sponsor conversation on record", done: has("sponsorConversation"), anchor: "input:sponsorConversation", why: whyFromTranscript(inputs.sponsorConversation) },
       { id: "objective", label: "Business objective captured", done: has("businessObjective"), anchor: "input:businessObjective", why: whyFromValue(inputs.businessObjective) },
       { id: "sponsor", label: "Sponsor named", done: has("sponsor"), anchor: "input:sponsor", why: whyFromValue(inputs.sponsor) },
+      { id: "industry", label: "Industry set — grounds the ontology's shared vocabulary", done: has("industry"), anchor: "input:industry", why: whyFromValue(inputs.industry) },
       { id: "metric", label: "Success measure set", done: has("successMetric"), anchor: "input:successMetric", why: whyFromValue(inputs.successMetric) },
       { id: "demo-date", label: "First-demonstration date set", done: has("targetFirstDemoDate"), anchor: "input:targetFirstDemoDate", why: whyFromValue(inputs.targetFirstDemoDate) },
       ...artifactItems(),

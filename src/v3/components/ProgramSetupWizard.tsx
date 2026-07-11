@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import { supabase } from "@/integrations/supabase/client";
 import { parseDocumentToText } from "@/new/lib/parseDocumentToText";
-import { PROGRAM_ARCHETYPES, getPhaseSequence, type MethodologyVariant } from "@/v3/lib/methodology";
+import { PROGRAM_ARCHETYPES, getPhaseSequence, INDUSTRY_OPTIONS, type MethodologyVariant } from "@/v3/lib/methodology";
 
 interface ProgramSetupWizardProps {
   program: ProgramSummary;
@@ -18,6 +18,9 @@ export interface ProgramSetupPatch {
   archetype?: string;
   /** Methodology variant derived from the archetype. Persisted to program data. */
   methodology?: MethodologyVariant;
+  /** Baseline mandate facts, written into Frame's inputs — early evidence,
+   * captured at setup, so the first generator runs are grounded. */
+  frameBaseline?: { industry?: string; sponsor?: string; targetFirstDemoDate?: string };
   phases: Array<{
     id: string;
     pct: number;
@@ -70,18 +73,25 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
   const [prefillError, setPrefillError] = useState<string | null>(null);
   const [name, setName] = useState(program.name === "New Program" || program.name === "New Programme" ? "" : program.name || "");
   const [client, setClient] = useState(typeof projectMeta.client === "string" ? projectMeta.client : program.client || "");
-  // Pre-select the programme's stored archetype so re-opening setup neither
-  // loses the choice nor re-seeds the spine (same spine → detail-edit merge).
-  const [archetypeId, setArchetypeId] = useState<string>(
-    typeof projectMeta.archetype === "string" ? projectMeta.archetype : "",
+  // ATOS Flow is the only delivery model — every programme is an Agentic
+  // System Build. The card states the identity; there is nothing to pick.
+  const flowArchetype = useMemo(
+    () => PROGRAM_ARCHETYPES.find((a) => a.methodologyVariant === "atos-flow") ?? null,
+    [],
   );
-  // Agentic System Build (ATOS Flow) leads — it is the flagship delivery model;
-  // the stage-gate archetypes follow.
-  const orderedArchetypes = useMemo(() => {
-    const flow = PROGRAM_ARCHETYPES.filter((a) => a.methodologyVariant === "atos-flow");
-    const rest = PROGRAM_ARCHETYPES.filter((a) => a.methodologyVariant !== "atos-flow");
-    return [...flow, ...rest];
-  }, []);
+  // Baseline mandate facts — identity the consultant knows before any
+  // conversation. Written into Frame's inputs so gates tick from minute one
+  // and the ontology's vocabulary steering never falls back silently.
+  const frameInputs = useMemo(() => {
+    const raw = (program.rawData ?? {}) as Record<string, unknown>;
+    const inner = typeof raw.data === "object" && raw.data !== null ? raw.data as Record<string, unknown> : raw;
+    const buckets = typeof inner.phaseInputs === "object" && inner.phaseInputs !== null
+      ? inner.phaseInputs as Record<string, Record<string, unknown>> : {};
+    return buckets.frame ?? {};
+  }, [program]);
+  const [industry, setIndustry] = useState<string>(typeof frameInputs.industry === "string" ? frameInputs.industry : "");
+  const [sponsor, setSponsor] = useState<string>(typeof frameInputs.sponsor === "string" ? frameInputs.sponsor : "");
+  const [firstDemoDate, setFirstDemoDate] = useState<string>(typeof frameInputs.targetFirstDemoDate === "string" ? frameInputs.targetFirstDemoDate : "");
   // Phases keep their existing progress/target dates; the wizard no longer edits
   // them inline (the phase-progress section was removed), so the setter is unused.
   const [phases] = useState<PhaseForm[]>(
@@ -136,7 +146,7 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
 
   // Programme name and client are mandatory in the new-programme flow: the user
   // must provide both before the setup can be saved.
-  const canSave = name.trim().length > 0 && client.trim().length > 0;
+  const canSave = name.trim().length > 0 && client.trim().length > 0 && industry.trim().length > 0;
 
   return (
     <div className="v3-wizard-overlay" role="dialog" aria-modal="true" aria-label="Programme setup">
@@ -200,48 +210,60 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
           </div>
           {!canSave ? (
             <div style={{ fontSize: 11, color: "var(--v3-amber)", marginTop: 8 }}>
-              Programme name and client / organisation are required.
+              Programme name, client / organisation and industry are required.
             </div>
           ) : null}
         </section>
 
         <section>
+          <div className="v3-wizard-section-label">Baseline — grounds the first generations</div>
+          <div className="v3-wizard-grid">
+            <label>
+              <div className="v3-field-label">Industry / sector <span style={{ color: "var(--v3-accent)" }} aria-hidden="true">*</span></div>
+              <select className="v3-input" required aria-required="true" aria-label="Industry" value={industry}
+                onChange={(event) => setIndustry(event.target.value)}>
+                <option value="">Select…</option>
+                {INDUSTRY_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
+              <div style={{ fontSize: 10.5, color: "var(--v3-text-muted)", marginTop: 4, lineHeight: 1.4 }}>
+                Steers the ontology&apos;s shared vocabulary — FIBO, GS1, FHIR, or schema.org.
+              </div>
+            </label>
+            <label>
+              <div className="v3-field-label">Executive sponsor</div>
+              <input className="v3-input" aria-label="Executive sponsor" type="text" placeholder="Name and title"
+                value={sponsor} onChange={(event) => setSponsor(event.target.value)} />
+            </label>
+            <label>
+              <div className="v3-field-label">Target first-demo date</div>
+              <input className="v3-input" aria-label="Target first-demo date" type="date"
+                value={firstDemoDate} onChange={(event) => setFirstDemoDate(event.target.value)} />
+              <div style={{ fontSize: 10.5, color: "var(--v3-text-muted)", marginTop: 4, lineHeight: 1.4 }}>
+                Flow&apos;s headline metric — days to the first stakeholder demonstration.
+              </div>
+            </label>
+          </div>
+        </section>
+
+        <section>
           <div className="v3-wizard-section-label">What are you building?</div>
-          <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginBottom: 10, lineHeight: 1.5 }}>
-            Optional — sets the delivery methodology. <strong>Agentic System Build</strong> runs ATOS Flow:
-            conversations in, systems out; the gate is a demo, not a document.
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            {orderedArchetypes.map((archetype) => {
-              const selected = archetypeId === archetype.id;
-              const isFlow = archetype.methodologyVariant === "atos-flow";
-              return (
-                <button
-                  key={archetype.id}
-                  type="button"
-                  aria-pressed={selected}
-                  onClick={() => setArchetypeId(selected ? "" : archetype.id)}
-                  style={{
-                    textAlign: "left",
-                    padding: "10px 12px",
-                    borderRadius: "var(--v3-radius)",
-                    cursor: "pointer",
-                    background: selected ? "var(--v3-surface-2)" : "var(--v3-surface)",
-                    border: selected ? "1.5px solid var(--v3-accent)" : "1px solid var(--v3-border)",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    <span aria-hidden="true">{archetype.icon}</span>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: "var(--v3-text-primary)" }}>{archetype.label}</span>
-                    {isFlow ? <span className="v3-chip indigo" style={{ fontSize: 9 }}>ATOS Flow</span> : null}
-                  </div>
-                  <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 4, lineHeight: 1.4 }}>
-                    {archetype.description}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+          {flowArchetype ? (
+            <div
+              style={{
+                textAlign: "left", padding: "12px 14px", borderRadius: "var(--v3-radius)",
+                background: "var(--v3-surface-2)", border: "1.5px solid var(--v3-accent)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <span aria-hidden="true">{flowArchetype.icon}</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--v3-text-primary)" }}>{flowArchetype.label}</span>
+                <span className="v3-chip indigo" style={{ fontSize: 9 }}>ATOS Flow</span>
+              </div>
+              <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 4, lineHeight: 1.4 }}>
+                Conversations in, systems out — the gate is a demonstration, not a document. Every programme runs the engagement loop: Frame → Listen → Envision → Show → Ship → Evolve.
+              </div>
+            </div>
+          ) : null}
         </section>
 
         <div className="v3-wizard-footer">
@@ -252,24 +274,25 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
             type="button"
             className="v3-button primary"
             disabled={isSaving || !canSave}
-            title={!canSave ? "Enter a programme name and client / organisation to continue" : undefined}
+            title={!canSave ? "Enter a programme name, client and industry to continue" : undefined}
             onClick={() => {
-              const archetype = PROGRAM_ARCHETYPES.find((entry) => entry.id === archetypeId) ?? null;
-              // An archetype pick seeds the spine of ITS methodology — Flow's
-              // movements for Agentic System Build — carrying over progress and
-              // target dates for any phase ids the spines share. No archetype
-              // keeps the programme's current phases untouched.
-              const phasePatch = archetype
-                ? getPhaseSequence(archetype.methodologyVariant).map((id) => {
-                    const existing = phases.find((phase) => phase.id === id);
-                    return { id, pct: existing?.pct ?? 0, targetDate: existing?.targetDate ?? "" };
-                  })
-                : phases.map((phase) => ({ id: phase.id, pct: phase.pct, targetDate: phase.targetDate }));
+              // Every programme is an Agentic System Build: seed the Flow spine,
+              // carrying over progress and target dates for shared phase ids.
+              const phasePatch = getPhaseSequence("atos-flow").map((id) => {
+                const existing = phases.find((phase) => phase.id === id);
+                return { id, pct: existing?.pct ?? 0, targetDate: existing?.targetDate ?? "" };
+              });
+              const baseline: Record<string, string> = {};
+              if (industry.trim()) baseline.industry = industry.trim();
+              if (sponsor.trim()) baseline.sponsor = sponsor.trim();
+              if (firstDemoDate) baseline.targetFirstDemoDate = firstDemoDate;
               return onSave({
                 name: name.trim(),
                 client: client.trim(),
-                ...(archetype ? { archetype: archetype.id, methodology: archetype.methodologyVariant } : {}),
+                ...(flowArchetype ? { archetype: flowArchetype.id } : {}),
+                methodology: "atos-flow",
                 phases: phasePatch,
+                ...(Object.keys(baseline).length ? { frameBaseline: baseline } : {}),
               });
             }}
           >

@@ -225,3 +225,14 @@ describe("regeneration guard — artifactDocs decision payload", () => {
     expect(stub.inputsFingerprint).toBe("old");
   });
 });
+
+describe("frame baseline", () => {
+  it("industry is a frame gate criterion with provenance", () => {
+    const movement = flowMovements().find((m) => m.id === "frame")!;
+    const p = programme({ phaseInputs: { frame: { industry: "Financial Services" } } });
+    const item = gateChecklist(p, movement, []).find((c) => c.id === "industry")!;
+    expect(item.done).toBe(true);
+    expect(item.why).toBe("Financial Services");
+    expect(gateChecklist(programme({}), movement, []).find((c) => c.id === "industry")!.done).toBe(false);
+  });
+});
