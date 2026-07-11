@@ -245,6 +245,17 @@ export function kitGaps(program: ProgramSummary, movementId: string): string[] {
   const movement = flowMovements().find((entry) => entry.id === movementId);
   if (!movement) return [];
   const gaps: string[] = [];
+  // Open contradictions are stakeholder work by nature: the conversation is
+  // where two accounts get reconciled. Each open row becomes an ask, so it
+  // flows into the follow-up script and the async links automatically.
+  if (movementId === "listen") {
+    for (const row of parseGridRows(readMovementInputs(program, "listen").contradictionLog)) {
+      if (/open/i.test(row.status ?? "")) {
+        const between = (row.between ?? "").trim();
+        gaps.push(`Two accounts disagree${between ? ` (${between})` : ""}: "${(row.statement ?? "").trim()}" — which is right, and what settles it?`);
+      }
+    }
+  }
   for (const item of gateChecklist(program, movement, movementArtifacts(program, movement))) {
     if (!item.done && item.anchor) gaps.push(item.label);
   }

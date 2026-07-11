@@ -275,6 +275,24 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
     expect(kit.questions.some((q) => /input/i.test(q))).toBe(false);
   });
 
+  it("an open contradiction becomes a stakeholder ask in Listen's follow-up", () => {
+    const p = programme({
+      discoveryKit: { interviews: [{ stakeholder: "Dan Reyes", role: "RevOps", agenda: [] }] },
+      phaseInputs: { listen: {
+        interviewRoster: JSON.stringify([{ name: "Dan Reyes", status: "Heard" }]),
+        interviewTranscripts: "— Dan Reyes, RevOps —\nplenty on record",
+        contradictionLog: JSON.stringify([
+          { statement: "Quote table is the sole record", between: "Dan vs Marcus", status: "Open — filed 2026-07-11" },
+          { statement: "Old dispute", status: "Resolved 2026-07-01" },
+        ]),
+      } },
+    });
+    const kit = meetingKit(p, "listen")!;
+    expect(kit.followUp).toBe(true);
+    expect(kit.questions.some((q) => q.includes("Quote table is the sole record") && /which is right/i.test(q))).toBe(true);
+    expect(kit.questions.some((q) => q.includes("Old dispute"))).toBe(false);
+  });
+
   it("askable gaps become the follow-up's questions", () => {
     const ask = "Which regions does the discount approval flow cover today?";
     const kit = meetingKit(framed([ask]), "frame")!;

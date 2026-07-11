@@ -125,7 +125,7 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                 aria-label={isOpen ? "You are here" : `Open ${movement.displayName} — it needs your attention`}
               >
                 {isOpen ? "You are here" : `Needs you${openChecks ? ` · ${openChecks}` : ""}`}
-                <span className="v3fs-here-a" aria-hidden="true">▾</span>
+                <span className="v3fs-here-a" aria-hidden="true">◀</span>
               </button>
             ) : null}
             <button type="button" className="v3fs-ch-h" onClick={() => toggle(setOpen, movement.id)} aria-expanded={isOpen}>
@@ -468,6 +468,25 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
   const [docTick, setDocTick] = useState(false);
   const [docOpen, setDocOpen] = useState(false);
   const [fileContradiction, setFileContradiction] = useState(false);
+  const [resolveIdx, setResolveIdx] = useState<Set<number>>(() => new Set());
+  // Listen's open contradictions — offered as "this answer settles it"
+  // checkboxes beside the capture, resolved in the SAME atomic save.
+  const openContradictions = useMemo(() => {
+    if (movementId !== "listen") return [] as Array<{ index: number; statement: string }>;
+    const raw = (program.rawData ?? {}) as Record<string, unknown>;
+    const inner = typeof raw.data === "object" && raw.data !== null ? (raw.data as Record<string, unknown>) : raw;
+    const bucket = typeof inner.phaseInputs === "object" && inner.phaseInputs !== null
+      ? ((inner.phaseInputs as Record<string, Record<string, unknown>>).listen ?? {})
+      : {};
+    let rows: Array<Record<string, string>> = [];
+    try {
+      const parsed = JSON.parse(typeof bucket.contradictionLog === "string" ? bucket.contradictionLog : "[]");
+      if (Array.isArray(parsed)) rows = parsed.filter((row) => row && typeof row === "object");
+    } catch { rows = []; }
+    return rows.map((row, index) => ({ index, statement: String(row.statement ?? ""), open: /open/i.test(String(row.status ?? "")) }))
+      .filter((row) => row.open && row.statement)
+      .map(({ index, statement }) => ({ index, statement }));
+  }, [movementId, program.rawData]);
 
   // "Attach" on a referenced document: land in the ingest form with the
   // name prefilled — the capture area is where evidence arrives.
@@ -504,9 +523,36 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
       const next = kit.header
         ? [existing.trimEnd(), block].filter(Boolean).join("\n\n")
         : text; // single-line refs (go/no-go) replace rather than append
-      await onSaveInputs(movementId, { [kit.captureField]: next }, {
-        attest: { action: `Evidence captured — ${kit.who}`, detail: text.replace(/\s+/g, " ").slice(0, 140) },
+      // Contradictions this answer settles flip to Resolved in the SAME save,
+      // pointing at the transcript that settled them.
+      const fields: Record<string, string> = { [kit.captureField]: next };
+      let resolvedCount = 0;
+      if (resolveIdx.size && movementId === "listen") {
+        const raw2 = (program.rawData ?? {}) as Record<string, unknown>;
+        const inner2 = typeof raw2.data === "object" && raw2.data !== null ? (raw2.data as Record<string, unknown>) : raw2;
+        const bucket2 = typeof inner2.phaseInputs === "object" && inner2.phaseInputs !== null
+          ? ((inner2.phaseInputs as Record<string, Record<string, unknown>>).listen ?? {})
+          : {};
+        try {
+          const rows = JSON.parse(typeof bucket2.contradictionLog === "string" ? bucket2.contradictionLog : "[]");
+          if (Array.isArray(rows)) {
+            for (const index of resolveIdx) {
+              if (rows[index] && typeof rows[index] === "object") {
+                rows[index].status = `Resolved ${new Date().toISOString().slice(0, 10)} — settled by ${kit.who}; see the transcript`;
+                resolvedCount += 1;
+              }
+            }
+            if (resolvedCount) fields.contradictionLog = JSON.stringify(rows);
+          }
+        } catch { /* malformed log — leave it untouched */ }
+      }
+      await onSaveInputs(movementId, fields, {
+        attest: {
+          action: `Evidence captured — ${kit.who}${resolvedCount ? ` · ${resolvedCount} contradiction${resolvedCount === 1 ? "" : "s"} resolved` : ""}`,
+          detail: text.replace(/\s+/g, " ").slice(0, 140),
+        },
       });
+      setResolveIdx(new Set());
       // Demo feedback that disputes the record routes UPSTREAM too: an open
       // contradiction lands in Listen's log, so Listen's gate re-asks the
       // question and its documents re-derive from the corrected record.
@@ -697,6 +743,24 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
             onChange={(event) => setCapture(event.target.value)}
             aria-label={kit.captureLabel}
           />
+          {openContradictions.length ? (
+            <div className="v3fs-kit-resolves">
+              {openContradictions.map(({ index, statement }) => (
+                <label key={index} className="v3fs-kit-flag">
+                  <input
+                    type="checkbox"
+                    checked={resolveIdx.has(index)}
+                    onChange={(event) => setResolveIdx((current) => {
+                      const next = new Set(current);
+                      if (event.target.checked) next.add(index); else next.delete(index);
+                      return next;
+                    })}
+                  />
+                  <span>This answer settles: “{statement.slice(0, 90)}”</span>
+                </label>
+              ))}
+            </div>
+          ) : null}
           {movementId === "show" ? (
             <label className="v3fs-kit-flag">
               <input
