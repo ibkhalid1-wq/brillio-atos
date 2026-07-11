@@ -1,8 +1,15 @@
+/**
+ * Programme setup — a moment, not a movement. Sixty seconds of identity
+ * (name, client) and baseline (industry, sponsor, first-demo date), then the
+ * loop starts with a conversation. Every programme is an agentic system
+ * build on ATOS Flow, so there is nothing to pick — the wizard captures
+ * facts, and the baseline lands in Frame's inputs as early evidence.
+ */
 import React, { useMemo, useRef, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import { supabase } from "@/integrations/supabase/client";
 import { parseDocumentToText } from "@/new/lib/parseDocumentToText";
-import { PROGRAM_ARCHETYPES, getPhaseSequence, INDUSTRY_OPTIONS, type MethodologyVariant } from "@/v3/lib/methodology";
+import { getPhaseSequence, INDUSTRY_OPTIONS, type MethodologyVariant } from "@/v3/lib/methodology";
 
 interface ProgramSetupWizardProps {
   program: ProgramSummary;
@@ -14,9 +21,7 @@ interface ProgramSetupWizardProps {
 export interface ProgramSetupPatch {
   name: string;
   client: string;
-  /** Optional programme archetype selected in the wizard's "What are you building?" step. */
-  archetype?: string;
-  /** Methodology variant derived from the archetype. Persisted to program data. */
+  /** Methodology variant. Always "atos-flow" — kept in the shape for the save path. */
   methodology?: MethodologyVariant;
   /** Baseline mandate facts, written into Frame's inputs — early evidence,
    * captured at setup, so the first generator runs are grounded. */
@@ -27,13 +32,6 @@ export interface ProgramSetupPatch {
     targetDate: string;
   }>;
 }
-
-type PhaseForm = {
-  id: string;
-  pct: number;
-  targetDate: string;
-  label: string;
-};
 
 function readProjectMeta(program: ProgramSummary): Record<string, unknown> {
   const raw = program.rawData || {};
@@ -71,14 +69,10 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
   const [prefilling, setPrefilling] = useState(false);
   const [prefilledFields, setPrefilledFields] = useState<Set<string>>(new Set());
   const [prefillError, setPrefillError] = useState<string | null>(null);
-  const [name, setName] = useState(program.name === "New Program" || program.name === "New Programme" ? "" : program.name || "");
+  const isNew = program.name === "New Program" || program.name === "New Programme" || !program.name;
+  const [name, setName] = useState(isNew ? "" : program.name || "");
   const [client, setClient] = useState(typeof projectMeta.client === "string" ? projectMeta.client : program.client || "");
-  // ATOS Flow is the only delivery model — every programme is an Agentic
-  // System Build. The card states the identity; there is nothing to pick.
-  const flowArchetype = useMemo(
-    () => PROGRAM_ARCHETYPES.find((a) => a.methodologyVariant === "atos-flow") ?? null,
-    [],
-  );
+
   // Baseline mandate facts — identity the consultant knows before any
   // conversation. Written into Frame's inputs so gates tick from minute one
   // and the ontology's vocabulary steering never falls back silently.
@@ -92,16 +86,12 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
   const [industry, setIndustry] = useState<string>(typeof frameInputs.industry === "string" ? frameInputs.industry : "");
   const [sponsor, setSponsor] = useState<string>(typeof frameInputs.sponsor === "string" ? frameInputs.sponsor : "");
   const [firstDemoDate, setFirstDemoDate] = useState<string>(typeof frameInputs.targetFirstDemoDate === "string" ? frameInputs.targetFirstDemoDate : "");
-  // Phases keep their existing progress/target dates; the wizard no longer edits
-  // them inline (the phase-progress section was removed), so the setter is unused.
-  const [phases] = useState<PhaseForm[]>(
-    program.phases.map((phase) => ({
-      id: phase.id,
-      pct: Math.max(0, Math.min(100, Math.round(phase.pct ?? 0))),
-      targetDate: targetDates[phase.id] || "",
-      label: phase.displayName,
-    })),
-  );
+
+  const phases = useMemo(() => program.phases.map((phase) => ({
+    id: phase.id,
+    pct: Math.max(0, Math.min(100, Math.round(phase.pct ?? 0))),
+    targetDate: targetDates[phase.id] || "",
+  })), [program.phases, targetDates]);
 
   async function handleDocumentUpload(file: File) {
     if (!supabase || !program.id) return;
@@ -135,35 +125,79 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
       if (!nextPrefilled.size) {
         setPrefillError("Couldn't extract fields automatically. Please fill them in manually.");
       }
-    } catch (error: any) {
-      setPrefillError(error?.message || "Couldn't extract fields automatically. Please fill them in manually.");
+    } catch (error: unknown) {
+      setPrefillError(error instanceof Error ? error.message : "Couldn't extract fields automatically. Please fill them in manually.");
     } finally {
       setPrefilling(false);
     }
   }
 
-  const prefillClass = (field: string) => prefilling || !prefilledFields.has(field) ? "v3-input" : "v3-input ring-1 ring-amber-400";
+  const prefillMark = (field: string) => (prefilledFields.has(field) && !prefilling ? " is-prefilled" : "");
 
-  // Programme name and client are mandatory in the new-programme flow: the user
-  // must provide both before the setup can be saved.
   const canSave = name.trim().length > 0 && client.trim().length > 0 && industry.trim().length > 0;
 
   return (
     <div className="v3-wizard-overlay" role="dialog" aria-modal="true" aria-label="Programme setup">
       <div className="v3-wizard v3-wizard--setup">
         <div className="v3-wizard-head">
-          <span className="v3-wizard-eyebrow" aria-hidden="true">
-            <span className="v3-wizard-eyebrow-glyph">✦</span>
-            New programme
-          </span>
-          <h2 className="v3-wizard-title">Name the programme</h2>
+          <span className="v3-wizard-eyebrow">ATOS Flow · {isNew ? "New programme" : "Programme setup"}</span>
+          <h2 className="v3-wizard-title">{isNew ? "Set up the engagement" : "Programme setup"}</h2>
           <p className="v3-wizard-subtitle">
-            Give your transformation a name and client. ATOS plans every phase from there.
+            Sixty seconds of baseline, then the loop starts with a conversation.
           </p>
         </div>
 
         <section>
-          <div className="v3-wizard-section-label">Pre-fill from a document</div>
+          <div className="v3-wizard-section-label">Programme</div>
+          <div className="v3-wizard-grid">
+            <label>
+              <div className="v3-field-label">Programme name <em aria-hidden="true">*</em></div>
+              <input className={`v3-input${prefillMark("name")}`} required aria-required="true"
+                title={prefilledFields.has("name") ? "Extracted from the uploaded document — verify before saving" : undefined}
+                aria-label="Programme name" type="text" placeholder="e.g. Commercial Ops Copilot"
+                value={name} onChange={(event) => setName(event.target.value)} />
+            </label>
+            <label>
+              <div className="v3-field-label">Client / organisation <em aria-hidden="true">*</em></div>
+              <input className={`v3-input${prefillMark("client")}`} required aria-required="true"
+                title={prefilledFields.has("client") ? "Extracted from the uploaded document — verify before saving" : undefined}
+                aria-label="Client or organisation" type="text" placeholder="e.g. Acme Corp"
+                value={client} onChange={(event) => setClient(event.target.value)} />
+            </label>
+          </div>
+        </section>
+
+        <section>
+          <div className="v3-wizard-section-label">Baseline — grounds the first generations</div>
+          <div className="v3-wizard-grid">
+            <label>
+              <div className="v3-field-label">Industry / sector <em aria-hidden="true">*</em></div>
+              <select className="v3-input" required aria-required="true" aria-label="Industry" value={industry}
+                onChange={(event) => setIndustry(event.target.value)}>
+                <option value="">Select…</option>
+                {INDUSTRY_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
+              <div className="v3-field-hint">
+                Steers the ontology&apos;s shared vocabulary — FIBO, GS1, FHIR, or schema.org.
+              </div>
+            </label>
+            <label>
+              <div className="v3-field-label">Executive sponsor</div>
+              <input className="v3-input" aria-label="Executive sponsor" type="text" placeholder="Name and title"
+                value={sponsor} onChange={(event) => setSponsor(event.target.value)} />
+            </label>
+            <label>
+              <div className="v3-field-label">Target first-demo date</div>
+              <input className="v3-input" aria-label="Target first-demo date" type="date"
+                value={firstDemoDate} onChange={(event) => setFirstDemoDate(event.target.value)} />
+              <div className="v3-field-hint">
+                The headline metric — days to the first stakeholder demonstration.
+              </div>
+            </label>
+          </div>
+        </section>
+
+        <section>
           <input
             ref={fileInputRef}
             type="file"
@@ -177,94 +211,19 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
           />
           <button
             type="button"
-            className={`v3-wizard-dropzone${prefilling ? " is-busy" : ""}`}
+            className={`v3-wizard-prefill${prefilling ? " is-busy" : ""}`}
             onClick={() => fileInputRef.current?.click()}
             disabled={prefilling}
           >
-            <span className="v3-wizard-dropzone-icon" aria-hidden="true">{prefilling ? "◌" : "↑"}</span>
-            <span className="v3-wizard-dropzone-text">
-              <span className="v3-wizard-dropzone-title">
-                {prefilling ? "Extracting details…" : "Upload and pre-fill"}
-              </span>
-              <span className="v3-wizard-dropzone-sub">
-                Project charter, SOW, or briefing — we&apos;ll fill what we can.
-              </span>
-            </span>
+            <span aria-hidden="true">{prefilling ? "◌" : "↑"}</span>
+            {prefilling ? "Extracting details…" : "Or upload a charter / SOW and ATOS pre-fills what it can"}
           </button>
-          {prefillError ? (
-            <div style={{ fontSize: 11, color: "var(--v3-amber)", marginTop: 8 }}>{prefillError}</div>
-          ) : null}
+          {prefillError ? <div className="v3-wizard-note is-warn">{prefillError}</div> : null}
         </section>
 
-        <section>
-          <div className="v3-wizard-section-label">Programme details</div>
-          <div className="v3-wizard-grid">
-            <label>
-              <div className="v3-field-label">Programme name <span style={{ color: "var(--v3-accent)" }} aria-hidden="true">*</span></div>
-              <input className={prefillClass("name")} required aria-required="true" title={prefilledFields.has("name") ? "Extracted from uploaded document — verify before saving" : undefined} aria-label="Programme name" type="text" placeholder="e.g. ERP Transformation" value={name} onChange={(event) => setName(event.target.value)} />
-            </label>
-            <label>
-              <div className="v3-field-label">Client / organisation <span style={{ color: "var(--v3-accent)" }} aria-hidden="true">*</span></div>
-              <input className={prefillClass("client")} required aria-required="true" title={prefilledFields.has("client") ? "Extracted from uploaded document — verify before saving" : undefined} aria-label="Client or organisation" type="text" placeholder="e.g. Acme Corp" value={client} onChange={(event) => setClient(event.target.value)} />
-            </label>
-          </div>
-          {!canSave ? (
-            <div style={{ fontSize: 11, color: "var(--v3-amber)", marginTop: 8 }}>
-              Programme name, client / organisation and industry are required.
-            </div>
-          ) : null}
-        </section>
-
-        <section>
-          <div className="v3-wizard-section-label">Baseline — grounds the first generations</div>
-          <div className="v3-wizard-grid">
-            <label>
-              <div className="v3-field-label">Industry / sector <span style={{ color: "var(--v3-accent)" }} aria-hidden="true">*</span></div>
-              <select className="v3-input" required aria-required="true" aria-label="Industry" value={industry}
-                onChange={(event) => setIndustry(event.target.value)}>
-                <option value="">Select…</option>
-                {INDUSTRY_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
-              </select>
-              <div style={{ fontSize: 10.5, color: "var(--v3-text-muted)", marginTop: 4, lineHeight: 1.4 }}>
-                Steers the ontology&apos;s shared vocabulary — FIBO, GS1, FHIR, or schema.org.
-              </div>
-            </label>
-            <label>
-              <div className="v3-field-label">Executive sponsor</div>
-              <input className="v3-input" aria-label="Executive sponsor" type="text" placeholder="Name and title"
-                value={sponsor} onChange={(event) => setSponsor(event.target.value)} />
-            </label>
-            <label>
-              <div className="v3-field-label">Target first-demo date</div>
-              <input className="v3-input" aria-label="Target first-demo date" type="date"
-                value={firstDemoDate} onChange={(event) => setFirstDemoDate(event.target.value)} />
-              <div style={{ fontSize: 10.5, color: "var(--v3-text-muted)", marginTop: 4, lineHeight: 1.4 }}>
-                Flow&apos;s headline metric — days to the first stakeholder demonstration.
-              </div>
-            </label>
-          </div>
-        </section>
-
-        <section>
-          <div className="v3-wizard-section-label">What are you building?</div>
-          {flowArchetype ? (
-            <div
-              style={{
-                textAlign: "left", padding: "12px 14px", borderRadius: "var(--v3-radius)",
-                background: "var(--v3-surface-2)", border: "1.5px solid var(--v3-accent)",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                <span aria-hidden="true">{flowArchetype.icon}</span>
-                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--v3-text-primary)" }}>{flowArchetype.label}</span>
-                <span className="v3-chip indigo" style={{ fontSize: 9 }}>ATOS Flow</span>
-              </div>
-              <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginTop: 4, lineHeight: 1.4 }}>
-                Conversations in, systems out — the gate is a demonstration, not a document. Every programme runs the engagement loop: Frame → Listen → Envision → Show → Ship → Evolve.
-              </div>
-            </div>
-          ) : null}
-        </section>
+        {!canSave ? (
+          <div className="v3-wizard-note">Programme name, client and industry are required.</div>
+        ) : null}
 
         <div className="v3-wizard-footer">
           <button type="button" className="v3-button ghost" onClick={onClose}>
@@ -276,7 +235,7 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
             disabled={isSaving || !canSave}
             title={!canSave ? "Enter a programme name, client and industry to continue" : undefined}
             onClick={() => {
-              // Every programme is an Agentic System Build: seed the Flow spine,
+              // Every programme is an agentic system build: seed the Flow spine,
               // carrying over progress and target dates for shared phase ids.
               const phasePatch = getPhaseSequence("atos-flow").map((id) => {
                 const existing = phases.find((phase) => phase.id === id);
@@ -289,14 +248,13 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
               return onSave({
                 name: name.trim(),
                 client: client.trim(),
-                ...(flowArchetype ? { archetype: flowArchetype.id } : {}),
                 methodology: "atos-flow",
                 phases: phasePatch,
                 ...(Object.keys(baseline).length ? { frameBaseline: baseline } : {}),
               });
             }}
           >
-            {isSaving ? "Saving…" : "Save & close"}
+            {isSaving ? "Saving…" : isNew ? "Begin the engagement" : "Save changes"}
           </button>
         </div>
       </div>

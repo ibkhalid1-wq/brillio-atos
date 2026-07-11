@@ -4466,7 +4466,7 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
    blue = what people said · indigo = what ATOS made · green = demonstrated.
    Builds on the --v3-* tokens so [data-theme="light"] flips it automatically;
    the --fs-* locals below carry the few treatment-specific values per theme. */
-.v3fs-app {
+.v3fs-app, .v3-wizard-overlay {
   --fs-quote:#7fd0f2; --fs-blue-wash:rgba(0,160,223,.10); --fs-indigo-wash:rgba(99,102,241,.14);
   --fs-line:var(--v3-border-soft); --fs-card:var(--v3-surface);
   --fs-shadow:0 1px 2px rgba(0,0,0,.22);
@@ -4484,7 +4484,7 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
     radial-gradient(56% 64% at 16% -12%, color-mix(in srgb, var(--v3-accent-2) 10%, transparent), transparent 72%),
     radial-gradient(46% 54% at 86% -14%, color-mix(in srgb, var(--v3-accent-b) 7%, transparent), transparent 70%)}
 .v3fs-app > * {position:relative}
-[data-theme="light"] .v3fs-app {
+[data-theme="light"] .v3fs-app, [data-theme="light"] .v3-wizard-overlay {
   --fs-quote:#075d80; --fs-blue-wash:rgba(0,144,201,.09); --fs-indigo-wash:rgba(79,70,229,.09);
   --fs-line:#e5e7f0; --fs-card:#ffffff;
   --fs-shadow:0 1px 2px rgba(21,23,43,.05);
@@ -5130,3 +5130,40 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-dv-history-a{flex:1;min-width:0;color:var(--v3-text-secondary)}
 .v3fs-dv-history-t{font-family:var(--v3-font-mono);font-size:10px;color:var(--v3-text-muted);flex-shrink:0}
 @media (max-width:900px){.v3fs-dv-outline{display:none}}
+
+/* ── Programme setup, in the Flow language: one calm card, sixty seconds ── */
+.v3-wizard-overlay{position:fixed;inset:0;z-index:100;display:grid;place-items:center;background:rgba(15,16,32,.5);backdrop-filter:blur(8px);padding:24px}
+.v3-wizard.v3-wizard--setup{width:min(600px,94vw);max-height:92vh;overflow-y:auto;background:var(--fs-card);border:1px solid var(--fs-line);border-radius:18px;box-shadow:var(--fs-pop);padding:30px 34px 24px;display:flex;flex-direction:column;gap:22px;font-family:var(--v3-font)}
+@media (prefers-reduced-motion: no-preference){
+  .v3-wizard.v3-wizard--setup{animation:v3fs-dv-in .22s cubic-bezier(.2,.8,.3,1)}
+}
+.v3-wizard--setup .v3-wizard-head{display:flex;flex-direction:column;gap:6px}
+.v3-wizard--setup .v3-wizard-eyebrow{font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--v3-accent-2)}
+.v3-wizard--setup .v3-wizard-eyebrow-glyph{display:none}
+.v3-wizard--setup .v3-wizard-title{font-size:24px;font-weight:650;letter-spacing:-.02em;margin:0;color:var(--v3-text-primary);text-wrap:balance}
+.v3-wizard--setup .v3-wizard-subtitle{font-size:13.5px;line-height:1.6;color:var(--v3-text-muted);margin:0;max-width:52ch}
+.v3-wizard--setup .v3-wizard-section-label{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--v3-text-muted);margin-bottom:10px}
+.v3-wizard--setup .v3-wizard-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.v3-wizard--setup .v3-wizard-grid label{display:flex;flex-direction:column;min-width:0}
+.v3-wizard--setup .v3-field-label{font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--v3-text-secondary);margin-bottom:5px}
+.v3-wizard--setup .v3-field-label em{font-style:normal;color:var(--v3-accent-2)}
+.v3-wizard--setup .v3-input{font:inherit;font-size:13.5px;line-height:1.5;border:1px solid var(--fs-line);border-radius:9px;padding:9px 12px;background:var(--v3-surface-2);color:var(--v3-text-primary);width:100%;min-width:0;transition:border-color .12s ease}
+.v3-wizard--setup .v3-input:hover{border-color:color-mix(in srgb,var(--v3-accent-2) 30%,var(--fs-line))}
+.v3-wizard--setup .v3-input:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:1px}
+.v3-wizard--setup .v3-input.is-prefilled{border-color:var(--v3-amber)}
+.v3-wizard--setup .v3-field-hint{font-size:10.5px;line-height:1.5;color:var(--v3-text-muted);margin-top:5px}
+.v3-wizard-prefill{display:flex;align-items:center;gap:10px;width:100%;font:inherit;font-size:12px;font-weight:600;color:var(--v3-text-muted);background:transparent;border:1px dashed var(--fs-line);border-radius:10px;padding:10px 14px;cursor:pointer;transition:color .12s ease,border-color .12s ease}
+.v3-wizard-prefill:hover{color:var(--v3-accent-2);border-color:var(--v3-accent-2)}
+.v3-wizard-prefill.is-busy{opacity:.7;cursor:progress}
+.v3-wizard-note{font-size:11.5px;color:var(--v3-text-muted)}
+.v3-wizard-note.is-warn{color:var(--v3-amber);margin-top:8px}
+.v3-wizard--setup .v3-wizard-footer{display:flex;justify-content:flex-end;gap:10px;padding-top:18px;border-top:1px solid var(--fs-line)}
+.v3-wizard--setup .v3-button{font:inherit;font-size:13px;font-weight:600;border-radius:10px;padding:9px 18px;cursor:pointer;border:1px solid var(--fs-line);background:var(--fs-card);color:var(--v3-text-primary);transition:background .15s ease}
+.v3-wizard--setup .v3-button.ghost:hover{background:var(--v3-surface-2)}
+.v3-wizard--setup .v3-button.primary{background:var(--v3-accent);border-color:transparent;color:#fff}
+.v3-wizard--setup .v3-button.primary:hover{background:color-mix(in srgb,var(--v3-accent) 85%,#fff)}
+.v3-wizard--setup .v3-button.primary:disabled{opacity:.5;cursor:default}
+@media (max-width:640px){.v3-wizard--setup .v3-wizard-grid{grid-template-columns:1fr}}
+/* Flat brand colour on the wizard's primary — outranks the legacy gradient rule. */
+.v3-wizard-overlay .v3-wizard--setup .v3-button.primary{background:var(--v3-accent);background-image:none;border-color:transparent;color:#fff}
+.v3-wizard-overlay .v3-wizard--setup .v3-button.primary:hover{background:color-mix(in srgb,var(--v3-accent) 85%,#fff);background-image:none}
