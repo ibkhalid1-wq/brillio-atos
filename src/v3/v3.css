@@ -5089,6 +5089,18 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 
 /* Evidence reader — stacks above the studio so claims check against source. */
 .v3fs-doc-backdrop.v3fs-evread-layer{z-index:90}
+.v3fs-doc-backdrop.v3fs-script-layer {z-index:90}
+.v3fs-script {position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(560px,92vw);max-height:min(680px,88vh);display:flex;flex-direction:column;background:var(--fs-card);border:1px solid var(--fs-line);border-radius:18px;box-shadow:0 32px 90px -20px rgba(15,16,32,.5);z-index:91}
+.v3fs-script-h {display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:22px 26px 15px;border-bottom:1px solid var(--fs-line)}
+.v3fs-script-eyebrow {font-size:10px;font-weight:650;letter-spacing:.09em;text-transform:uppercase;color:var(--v3-text-muted);margin-bottom:5px}
+.v3fs-script-t {font-size:17px;font-weight:700;color:var(--v3-text-primary);margin:0 0 3px;letter-spacing:-.01em}
+.v3fs-script-who {font-size:12px;color:var(--v3-text-secondary)}
+.v3fs-script-b {overflow-y:auto;padding:18px 26px 6px}
+.v3fs-script-p {font-size:13px;line-height:1.6;color:var(--v3-text-secondary);margin:0 0 14px}
+.v3fs-script-qs {margin:0;padding:0 0 0 22px;display:flex;flex-direction:column;gap:10px}
+.v3fs-script-qs li {font-size:14px;line-height:1.65;color:var(--v3-text-primary)}
+.v3fs-script-qs li::marker {color:var(--v3-accent-2);font-weight:650}
+.v3fs-script-f {display:flex;justify-content:flex-end;gap:8px;padding:14px 26px 20px;border-top:1px solid var(--fs-line);margin-top:14px}
 .v3fs-docview.v3fs-evread{z-index:91;width:min(640px,88vw);border-left:4px solid var(--v3-accent-b)}
 .v3fs-evread-who{color:var(--fs-quote)}
 .v3fs-evread-b{font-size:14px;line-height:1.8}

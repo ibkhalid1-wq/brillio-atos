@@ -331,6 +331,19 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
   const [busy, setBusy] = useState(false);
   const [savedTick, setSavedTick] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [scriptOpen, setScriptOpen] = useState(false);
+  useEffect(() => {
+    if (!scriptOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        setScriptOpen(false);
+      }
+    };
+    // Capture phase so Escape closes THIS layer, not surfaces beneath it.
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [scriptOpen]);
   const [followDate, setFollowDate] = useState("");
   const [scheduledTick, setScheduledTick] = useState(false);
   const [linkTick, setLinkTick] = useState(false);
@@ -449,8 +462,36 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
           {kit.questions.map((question, index) => <li key={index}>{question}</li>)}
         </ol>
         <div className="v3fs-kit-actions">
-          <button type="button" className="v3fs-a" onClick={() => void copyScript()}>{copied ? "Copied ✓" : "Copy the script"}</button>
+          <button type="button" className="v3fs-btn pri" onClick={() => setScriptOpen(true)}>
+            Script — {kit.questions.length} question{kit.questions.length === 1 ? "" : "s"}
+          </button>
         </div>
+        {scriptOpen ? (
+          <>
+            <div className="v3fs-doc-backdrop v3fs-script-layer" onClick={() => setScriptOpen(false)} aria-hidden="true" />
+            <div className="v3fs-script" role="dialog" aria-modal="true" aria-label={`Interview script — ${kit.who}`}>
+              <header className="v3fs-script-h">
+                <div>
+                  <div className="v3fs-script-eyebrow">Interview script</div>
+                  <h3 className="v3fs-script-t">{kit.title}</h3>
+                  <div className="v3fs-script-who">{kit.who}</div>
+                </div>
+                <button type="button" className="v3fs-btn" onClick={() => setScriptOpen(false)} aria-label="Close">Close</button>
+              </header>
+              <div className="v3fs-script-b">
+                <p className="v3fs-script-p">{kit.purpose}</p>
+                <ol className="v3fs-script-qs">
+                  {kit.questions.map((question, index) => <li key={index}>{question}</li>)}
+                </ol>
+              </div>
+              <footer className="v3fs-script-f">
+                <button type="button" className="v3fs-btn pri" onClick={() => void copyScript()}>
+                  {copied ? "Copied ✓" : "Copy the script"}
+                </button>
+              </footer>
+            </div>
+          </>
+        ) : null}
         {kit.followUp && (onScheduleFollowUp || onMintFollowUp) ? (
           <>
             <div className="v3fs-kit-cap">Channels</div>
