@@ -2174,6 +2174,8 @@ export default function AppShellV3() {
           onRunAgentAndWait={async (agentId, phaseId) => {
             await runProgramAgent({ agentId, phaseId, triggeredBy: "user" });
           }}
+          aiStatus={aiStatus.status}
+          onOpenAISettings={openAISettings}
           onRestoreSnapshot={async (data) => {
             if (!activeProgram) return;
             // Restoring is a write like any other: it attests into the restored

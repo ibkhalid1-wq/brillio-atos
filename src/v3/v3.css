@@ -5450,3 +5450,11 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3-transcript-modal header span {font-size:11.5px;color:var(--v3-text-muted)}
 .v3-transcript-modal textarea {flex:1;font:inherit;font-size:13px;line-height:1.7;padding:18px 22px;border:none;outline:none;resize:none;background:var(--fs-card);color:var(--v3-text-primary)}
 .v3fs-portal-att-hint {font-size:11px;color:var(--v3-green);align-self:center}
+/* Control AI-status chip — provider connection, always one click. */
+.v3fs-aichip {display:inline-flex;align-items:center;gap:9px;margin-bottom:16px;padding:8px 14px;border:1px solid var(--fs-line);border-radius:99px;background:var(--fs-card);font:inherit;font-size:12.5px;font-weight:600;color:var(--v3-text-primary);cursor:pointer;transition:border-color .15s ease,background .15s ease}
+.v3fs-aichip:hover {border-color:var(--v3-accent-2);background:var(--fs-indigo-wash)}
+.v3fs-aichip-dot {width:8px;height:8px;border-radius:99px;flex-shrink:0}
+.v3fs-aichip.ok .v3fs-aichip-dot {background:var(--v3-green);box-shadow:0 0 0 3px color-mix(in srgb, var(--v3-green) 22%, transparent)}
+.v3fs-aichip.warn .v3fs-aichip-dot {background:var(--v3-amber)}
+.v3fs-aichip.off .v3fs-aichip-dot {background:var(--v3-red, #dc2626)}
+.v3fs-aichip-cta {color:var(--v3-accent-2);font-weight:700}

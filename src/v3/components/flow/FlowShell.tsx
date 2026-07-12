@@ -40,6 +40,10 @@ interface FlowShellProps {
   onReopenGate?: (movementId: string, reason: string) => Promise<void>;
   /** Restore the programme blob to a local snapshot's state. */
   onRestoreSnapshot?: (data: Record<string, unknown>) => Promise<void>;
+  /** AI provider connection status — powers the Control chip. */
+  aiStatus?: string;
+  /** Open the AI provider settings. */
+  onOpenAISettings?: () => void;
   /** Awaitable agent run for the spine runner. */
   onRunAgentAndWait?: (agentId: string, phaseId: string) => Promise<void>;
   /** Presence keys (emails) of others in this programme right now. */
@@ -273,6 +277,8 @@ export default function FlowShell(props: FlowShellProps) {
           <FlowLibrary program={program} onSaveArtifactDoc={props.onSaveArtifactDoc} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} />
         ) : view === "mission" ? (
           <FlowMission
+            aiStatus={props.aiStatus}
+            onOpenAISettings={props.onOpenAISettings}
             program={program}
             fleet={props.fleet}
             loadMovementSpend={props.loadMovementSpend}
@@ -540,7 +546,7 @@ function FlowToday({ program, onResolveDecision, onIngestPortalItem, onDismissPo
 
 /* ── Mission Control: the fleet, the budgets, the levers, the trail ──────── */
 
-function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggleAgentHalt, onSetMovementBudget, onRestoreSnapshot }: {
+function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggleAgentHalt, onSetMovementBudget, onRestoreSnapshot, aiStatus, onOpenAISettings }: {
   program: ProgramSummary;
   fleet: FlowShellProps["fleet"];
   loadMovementSpend: FlowShellProps["loadMovementSpend"];
@@ -548,6 +554,8 @@ function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggle
   onToggleAgentHalt: FlowShellProps["onToggleAgentHalt"];
   onSetMovementBudget: FlowShellProps["onSetMovementBudget"];
   onRestoreSnapshot?: (data: Record<string, unknown>) => Promise<void>;
+  aiStatus?: string;
+  onOpenAISettings?: () => void;
 }) {
   const movements = useMemo(() => flowMovements(), []);
   const governance = readFlowGovernance(program);
@@ -593,6 +601,21 @@ function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggle
           <button type="button" className="v3fs-btn pri" disabled={busy} onClick={() => void act(() => onSetHaltAll(false))}>Resume the programme</button>
         </div>
       ) : null}
+
+      {(() => {
+        const connected = aiStatus === "connected" || aiStatus === "ready" || aiStatus === "online";
+        const checking = aiStatus === "checking" || aiStatus === undefined;
+        const tone = connected ? "ok" : checking ? "warn" : "off";
+        const label = connected ? "AI provider connected" : checking ? "Checking AI provider…" : "AI provider not connected";
+        return (
+          <button type="button" className={`v3fs-aichip ${tone}`} onClick={() => onOpenAISettings?.()}
+            title="AI runs every generator — open provider settings">
+            <span className="v3fs-aichip-dot" aria-hidden="true" />
+            <span className="v3fs-aichip-l">{label}</span>
+            <span className="v3fs-aichip-cta">{connected ? "Check →" : "Connect →"}</span>
+          </button>
+        );
+      })()}
 
       <div className="v3fs-grid2">
         <div className="v3fs-panel">
