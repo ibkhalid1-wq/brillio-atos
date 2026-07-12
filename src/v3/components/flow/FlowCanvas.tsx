@@ -305,6 +305,15 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                       <div className="v3fs-coverage-bar"><div className="v3fs-coverage-fill" style={{ width: `${Math.round((coverage.done / coverage.total) * 100)}%` }} /></div>
                     </div>
                   ) : null}
+                  {movement.id === "listen" && (() => {
+                    const raw = (program.rawData ?? {}) as Record<string, unknown>;
+                    const dataRoot = typeof raw.data === "object" && raw.data !== null ? raw.data as Record<string, unknown> : raw;
+                    const kitDoc = dataRoot.discoveryKit;
+                    return Boolean(kitDoc && typeof kitDoc === "object" && Array.isArray((kitDoc as Record<string, unknown>).interviews) && ((kitDoc as Record<string, unknown>).interviews as unknown[]).length);
+                  })() ? (
+                    <IntervieweeDiscovery program={program} onSaveInputs={onSaveInputs} onMintPacks={onMintPacks}
+                      onCaptured={() => onRunAgent("contradiction-detector", movement.id)} />
+                  ) : (
                   <MeetingKitCard
                     kit={meetingKit(program, movement.id)}
                     movementId={movement.id}
@@ -323,6 +332,7 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                     onMintDemoInvites={onMintDemoInvites}
                     onCaptured={() => onRunAgent("contradiction-detector", movement.id)}
                   />
+                  )}
                   {/* Quiet escape hatch only — the checklist and gate CTA are
                       the purposeful doors into the editor now. */}
                   <button type="button" className="v3fs-edit-toggle quiet" onClick={() => toggle(setEditing, movement.id)}>
@@ -608,6 +618,153 @@ function GateActionButton({ idle, armedLabel, busyLabel, quiet, onAct }: {
  * Open by default when the conversation hasn't happened; a quiet one-line
  * summary once it has.
  */
+/** Listen's discovery, organized by interviewee. One card per person from the
+ * Discovery Kit: their script, their link, their captured evidence, and a
+ * capture box — followed until they're heard. */
+function IntervieweeDiscovery({ program, onSaveInputs, onMintPacks, onCaptured }: {
+  program: ProgramSummary;
+  onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
+  onMintPacks?: () => Promise<void>;
+  onCaptured?: () => void;
+}) {
+  const raw = (program.rawData ?? {}) as Record<string, unknown>;
+  const inner = typeof raw.data === "object" && raw.data !== null ? raw.data as Record<string, unknown> : raw;
+  const kit = inner.discoveryKit;
+  const interviews = kit && typeof kit === "object" && !Array.isArray(kit) && Array.isArray((kit as Record<string, unknown>).interviews)
+    ? ((kit as Record<string, unknown>).interviews as unknown[]).filter((entry): entry is Record<string, unknown> => typeof entry === "object" && entry !== null)
+    : [];
+  const listen = flowMovements().find((m) => m.id === "listen");
+  const evidence = listen ? movementEvidence(program, listen) : [];
+  const packs = listInterviewPacks(program);
+  const [mintBusy, setMintBusy] = useState(false);
+  if (!interviews.length) return null;
+  const heardCount = interviews.filter((iv) => {
+    const name = String(iv.stakeholder ?? "").trim().toLowerCase();
+    return evidence.some((e) => e.who.toLowerCase().includes(name) && name.length > 2)
+      || packs.some((p) => String(p.stakeholder ?? "").trim().toLowerCase() === name && p.respondedAt);
+  }).length;
+  return (
+    <div className="v3fs-ivd">
+      <div className="v3fs-ivd-h">
+        <span className="v3fs-ivd-t">Discovery — {heardCount} of {interviews.length} heard</span>
+        {onMintPacks ? (
+          <button type="button" className="v3fs-a" disabled={mintBusy}
+            onClick={async () => { setMintBusy(true); try { await onMintPacks(); } finally { setMintBusy(false); } }}>
+            {packs.length ? "↺ Refresh & add links" : "✳ Create everyone's link"}
+          </button>
+        ) : null}
+      </div>
+      {interviews.map((interview, index) => (
+        <IntervieweeCard key={index} program={program} interview={interview} packs={packs} evidence={evidence}
+          onSaveInputs={onSaveInputs} onCaptured={onCaptured} />
+      ))}
+    </div>
+  );
+}
+
+function IntervieweeCard({ program, interview, packs, evidence, onSaveInputs, onCaptured }: {
+  program: ProgramSummary;
+  interview: Record<string, unknown>;
+  packs: ReturnType<typeof listInterviewPacks>;
+  evidence: ReturnType<typeof movementEvidence>;
+  onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
+  onCaptured?: () => void;
+}) {
+  const name = String(interview.stakeholder ?? "").trim();
+  const role = String(interview.role ?? "");
+  const first = name.split(" ")[0] || "they";
+  const email = stakeholderEmail(program, name);
+  const questions = (Array.isArray(interview.agenda) ? interview.agenda : [])
+    .flatMap((slot) => (slot && typeof slot === "object" && Array.isArray((slot as Record<string, unknown>).questions) ? ((slot as Record<string, unknown>).questions as unknown[]).map(String) : []))
+    .filter(Boolean);
+  const key = name.toLowerCase();
+  const pack = [...packs].reverse().find((p) => String(p.stakeholder ?? "").trim().toLowerCase() === key);
+  const mine = key.length > 2 ? evidence.filter((e) => e.who.toLowerCase().includes(key) || key.includes(e.who.split(",")[0].trim().toLowerCase())) : [];
+  const heard = mine.length > 0 || Boolean(pack?.respondedAt);
+  const status = heard ? "heard" : pack ? "waiting" : "toreach";
+  const statusLabel = heard ? "✓ Heard" : pack ? "Link sent · waiting" : "To reach";
+  const link = pack ? portalLinkFor(program.id, pack) : null;
+  const [capture, setCapture] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [date, setDate] = useState("");
+
+  const save = async () => {
+    const text = capture.trim();
+    if (!text) return;
+    setBusy(true);
+    try {
+      const raw = (program.rawData ?? {}) as Record<string, unknown>;
+      const inner = typeof raw.data === "object" && raw.data !== null ? raw.data as Record<string, unknown> : raw;
+      const bucket = (inner.phaseInputs && typeof inner.phaseInputs === "object" ? (inner.phaseInputs as Record<string, Record<string, unknown>>).listen : undefined) ?? {};
+      const existing = typeof bucket.interviewTranscripts === "string" ? bucket.interviewTranscripts as string : "";
+      const header = `— ${[name, role, new Date().toISOString().slice(0, 10)].filter(Boolean).join(", ")} —`;
+      await onSaveInputs("listen", { interviewTranscripts: [existing.trimEnd(), `${header}\n${text}`].filter(Boolean).join("\n\n") },
+        { attest: { action: `Captured — ${name}` } });
+      setCapture("");
+      onCaptured?.();
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <details className={`v3fs-ivc ${status}`} open={!heard}>
+      <summary>
+        <span className="v3fs-ivc-who">{name || "Interviewee"}{role ? <span>{role}</span> : null}</span>
+        <span className={`v3fs-ivc-st ${status}`}>{statusLabel}</span>
+      </summary>
+      <div className="v3fs-ivc-b">
+        {questions.length ? (
+          <details className="v3fs-ivc-script">
+            <summary>Their script — {questions.length} question{questions.length === 1 ? "" : "s"}</summary>
+            <ol>{questions.map((q, i) => <li key={i}>{q}</li>)}</ol>
+          </details>
+        ) : null}
+        {mine.length ? (
+          <div className="v3fs-ivc-ev">
+            {mine.slice(0, 3).map((e, i) => (
+              <div key={i} className="v3fs-voice">
+                {e.excerpt ? <div className="v3fs-voice-q">“{e.excerpt}”</div> : null}
+                <div className="v3fs-voice-who">{e.who}<span>{e.meta}</span></div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        {!heard ? (
+          <div className="v3fs-ivc-ch">
+            {link ? (
+              <>
+                <button type="button" className={`v3fs-btn${email ? "" : " pri"}`}
+                  onClick={() => { void navigator.clipboard.writeText(link).catch(() => window.prompt("Copy the link:", link)); }}>Copy link</button>
+                {email ? (
+                  <button type="button" className="v3fs-btn pri" title={`Opens a draft to ${email}`}
+                    onClick={() => { window.location.href = mailtoLink(email, { stakeholder: name, programmeName: program.name, link }); }}>✉ Send link</button>
+                ) : null}
+              </>
+            ) : <span className="v3fs-wf-hint">Create everyone&rsquo;s link above to send one</span>}
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label={`Meeting date for ${name}`} />
+            <button type="button" className="v3fs-btn" disabled={!date}
+              onClick={() => {
+                const ics = buildMeetingIcs({ who: name, email, date, programmeName: program.name, intro: "", questions });
+                const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
+                const anchor = document.createElement("a");
+                anchor.href = url;
+                anchor.download = `discovery-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.ics`;
+                anchor.click();
+                URL.revokeObjectURL(url);
+              }}>⤓ Invite</button>
+          </div>
+        ) : null}
+        <div className="v3fs-ivc-cap">
+          <textarea rows={2} value={capture} onChange={(e) => setCapture(e.target.value)}
+            placeholder={`What ${first} said — attribution added for you`} aria-label={`Capture ${name}'s conversation`} />
+          <button type="button" className="v3fs-btn pri" disabled={busy || !capture.trim()} onClick={() => void save()}>
+            {busy ? "Saving…" : "Capture"}
+          </button>
+        </div>
+      </div>
+    </details>
+  );
+}
+
 /** An in-room demonstration, recorded where the track lives. Demo links are
  * the usual path; this covers the demo that happened live, in the room —
  * verdict lands as a show pass on the track, same as a link verdict. */
