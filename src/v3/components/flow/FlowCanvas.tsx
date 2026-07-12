@@ -1096,7 +1096,7 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, docsStale, onRe
           const rows = [...inviteRows, ...packRows];
           const canMintPacks = movementId === "listen" && onMintPacks;
           const canMintInvites = movementId === "show" && onMintDemoInvites;
-          if (!(onScheduleFollowUp || (kit.followUp && onMintFollowUp) || canMintPacks || canMintInvites || rows.length)) return null;
+          if (!(onScheduleFollowUp || onMintFollowUp || canMintPacks || canMintInvites || rows.length)) return null;
           return (
           <>
             <div className="v3fs-kit-cap">Channels</div>
@@ -1170,7 +1170,7 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, docsStale, onRe
                         {inviteRows.length ? "↺ Demo links for new stakeholders" : "✳ Create demo links"}
                       </button>
                     ) : null}
-                    {kit.followUp && onMintFollowUp && !docsStale && !rows.some((row) => !row.responded && row.who.trim().toLowerCase() === kit.who.trim().toLowerCase()) ? (
+                    {onMintFollowUp && kit.questions.length > 0 && (!kit.followUp || !docsStale) && !rows.some((row) => !row.responded && row.who.trim().toLowerCase() === kit.who.trim().toLowerCase()) ? (
                       <>
                         <button type="button" className={`v3fs-btn${stakeholderEmail(program, kit.who) ? "" : " pri"}`} disabled={busy} onClick={() => void copyMintedLink()}>
                           {linkTick ? "Link copied ✓" : "Copy link"}
