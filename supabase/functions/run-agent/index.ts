@@ -1145,7 +1145,7 @@ Return ONLY valid JSON:
     title: "Discovery Kit",
     system: `You are the ATOS Discovery Kit Agent. From the sponsor conversation and the Frame facts, produce the discovery tour: who must be heard, and a role-aware 45-minute agenda for each of them.
 
-Use the stakeholderSeed rows and any stakeholders named in the sponsor conversation (documentCarryForward). Do NOT invent named individuals — where a domain clearly needs a voice but no name is known, emit a role placeholder ("Head of Fulfilment — TBC") and list it under "gaps". Questions must be specific to this objective and industry, not generic discovery boilerplate; each agenda ends by asking what artifacts (screens, reports, exports) the stakeholder can share.
+Use the stakeholderSeed rows, any already-identified people carried in groundingFacts as "knownStakeholder" lines (a roster the operator has captured — a Team Roster, an org chart), and any stakeholders named in the sponsor conversation (documentCarryForward). Every named person on that roster MUST get an interview entry. Do NOT invent named individuals — where a domain clearly needs a voice but no name is known, emit a role placeholder ("Head of Fulfilment — TBC") and list it under "gaps". Questions must be specific to this objective and industry, not generic discovery boilerplate; each agenda ends by asking what artifacts (screens, reports, exports) the stakeholder can share.
 
 Stakeholders are the voices you interview; PERSONAS are every role that takes part in the workflow — internal (reps, approvers, ops) AND external (customers, partners, vendors). They are not the same list: interviewees may or may not be personas, and external personas usually cannot be interviewed at all. Inventory every persona the objective's workflow touches, and for each name which interviewees can SPEAK FOR it — themselves, their manager, or whoever faces them (support faces the customer). When the evidence NAMES who speaks for a persona (e.g. an answer like "use <name>" to a who-can-speak-for question), record that name in spokenForBy, set unrepresented to false, and add an interview entry for them if they are not already rostered — an answered question must NEVER be re-asked. Only a persona nobody is named or able to speak for is a discovery risk: mark it unrepresented and list it under "gaps".
 
@@ -2461,6 +2461,22 @@ function buildSpecialAgentInputContext(
     // ones. Stage-gate programmes have no frame bucket, so this is a no-op.
     const frameInputs = normalizeProgramData(phaseInputsAll.frame as JsonValue | null);
     const phaseInputs = normalizeProgramData(phaseInputsAll[formalSpec.phase] as JsonValue | null);
+    // The Discovery Kit plans WHO to interview. Beyond frame.stakeholderSeed,
+    // fold in every named person already on Listen's coverage roster — a Team
+    // Roster the operator captured must seed the kit, wherever it landed.
+    const kitRosterSeed: string[] = [];
+    if (formalSpec.fieldKey === "discoveryKit") {
+      const listenInputs = normalizeProgramData(phaseInputsAll.listen as JsonValue | null);
+      const rosterRaw = typeof listenInputs.interviewRoster === "string" ? listenInputs.interviewRoster : "";
+      const rosterRows = rosterRaw.trim().startsWith("[") ? safeJsonParse<unknown[]>(rosterRaw, []) : [];
+      for (const row of rosterRows) {
+        if (!isRecord(row)) continue;
+        const cells = [row.name, row.role, row.domain]
+          .map((cell) => (typeof cell === "string" ? cell.trim() : ""))
+          .filter(Boolean);
+        if (cells.length) kitRosterSeed.push(`knownStakeholder — ${cells.join(" · ")}`);
+      }
+    }
     const objective = typeof inner.objective === "string"
       ? inner.objective
       : typeof inner.programObjective === "string"
@@ -2519,7 +2535,7 @@ function buildSpecialAgentInputContext(
       scopeInclusions: strategyInputs.scopeInclusions || strategyInputs.scopeIn || null,
       scopeExclusions: strategyInputs.scopeExclusions || strategyInputs.scopeOut || null,
       kpiBaselines: parseKpiBaselines(strategyInputs.kpis ?? frameInputs.kpis),
-      groundingFacts: buildGroundingFacts(phaseInputs),
+      groundingFacts: [...buildGroundingFacts(phaseInputs), ...kitRosterSeed],
       documentCarryForward: buildDocumentCarryForward(options?.documents || [], formalSpec.phase),
       valueProjected: coerceNumber(inner.valueProjected ?? businessCase.projectedValue ?? valueRealizeData.projectedValue, 0),
       narrative,
@@ -8798,6 +8814,46 @@ Deno.serve(async (req) => {
             between: (Array.isArray(row.between) ? row.between.map(String).join(" vs ") : String(row.between ?? "")).slice(0, 90),
             positions: (Array.isArray(row.positions) ? row.positions.map(String).join(" · ") : String(row.positions ?? "")).slice(0, 160),
           })).filter((entry) => entry.statement);
+        }
+        // Discovery Kit: GUARANTEE roster coverage. The model is asked to
+        // interview every rostered person, but it compresses generic roles and
+        // occasionally invents names — a prompt promise is not a guarantee.
+        // Deterministically union the coverage roster into interviews: every
+        // rostered name that the model omitted gets a stub entry, so no known
+        // stakeholder is ever silently dropped from the kit.
+        if (request.agentId === "discovery-kit" && Array.isArray((formalResult as Record<string, unknown>).interviews)) {
+          const allInputs = getInnerProgramData(contextProgramData).phaseInputs;
+          const listenInputs = isRecord(allInputs) ? normalizeProgramData((allInputs as Record<string, unknown>).listen as JsonValue) : {};
+          const rosterRaw = typeof listenInputs.interviewRoster === "string" ? listenInputs.interviewRoster : "";
+          const rosterRows = rosterRaw.trim().startsWith("[") ? safeJsonParse<unknown[]>(rosterRaw, []) : [];
+          const interviews = ((formalResult.interviews as unknown[]) || []).filter(isRecord);
+          const norm = (value: unknown) => String(value ?? "").trim().toLowerCase();
+          const present = new Set(interviews.map((iv) => norm(iv.stakeholder)));
+          const added: Record<string, unknown>[] = [];
+          for (const row of rosterRows) {
+            if (!isRecord(row)) continue;
+            const name = String(row.name ?? "").trim();
+            if (!name || present.has(norm(name))) continue;
+            present.add(norm(name));
+            const role = String(row.role ?? "").trim();
+            added.push({
+              stakeholder: name,
+              role,
+              email: null,
+              domain: String(row.domain ?? "").trim(),
+              durationMinutes: 45,
+              objectives: [`Hear ${name}'s first-hand account of their workflow, the pains in it, and what "good" looks like.`],
+              agenda: [{ minutes: 45, topic: "Their workflow today", questions: [
+                "Walk me through your process, end to end — the systems and the hand-offs.",
+                "Where does it break down, and how often? Give me the last real example.",
+                "What must be true for the new way to be better, not just different?",
+              ] }],
+              askForArtifacts: ["Any screens, reports or exports they work from"],
+            });
+          }
+          if (added.length) {
+            formalResult = { ...formalResult, interviews: [...interviews, ...added] };
+          }
         }
         // ── Regeneration guard ─────────────────────────────────────────────
         // Documents are data; the studio lets humans edit that data. A doc

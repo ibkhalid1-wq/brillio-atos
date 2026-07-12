@@ -102,3 +102,19 @@ describe("studio document order matches the edge output contracts", () => {
     },
   );
 });
+
+describe("the Discovery Kit guarantees coverage-roster inclusion", () => {
+  it("unions every rostered person into the kit's interviews, deterministically", () => {
+    // A prompt promise is not a guarantee — the edge must fold the coverage
+    // roster into interviews after generation so no known stakeholder is dropped.
+    const block = EDGE.slice(EDGE.indexOf('request.agentId === "discovery-kit"'));
+    expect(block.slice(0, 2400)).toContain("interviewRoster");
+    expect(block.slice(0, 2400)).toContain("present.has(norm(name))");
+    expect(block.slice(0, 2400)).toContain("interviews: [...interviews, ...added]");
+  });
+
+  it("the kit prompt names the roster as a seed source", () => {
+    expect(EDGE).toContain('knownStakeholder');
+    expect(EDGE).toMatch(/Every named person on that roster MUST get an interview/);
+  });
+});
