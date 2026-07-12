@@ -872,6 +872,16 @@ describe("meeting invites and emailed links ride the kit's roster", () => {
     expect(stakeholderEmail(program, "Nobody")).toBeNull();
   });
 
+  it("the sponsor's address comes from Frame's setup inputs when the roster has none", () => {
+    const p = {
+      id: "p2", name: "P",
+      rawData: { data: { phaseInputs: { frame: { sponsor: "Sarah Okafor, COO", sponsorEmail: "sarah@acme.com" } } } },
+    } as never;
+    expect(stakeholderEmail(p, "Sarah Okafor, COO")).toBe("sarah@acme.com");
+    expect(stakeholderEmail(p, "Sarah Okafor")).toBe("sarah@acme.com");
+    expect(stakeholderEmail(p, "Dan Reyes")).toBeNull();
+  });
+
   it("the .ics carries the script as its agenda and the attendee when known", () => {
     const ics = buildMeetingIcs({
       who: "Dan Reyes", email: "dan@acme.com", date: "2026-07-20",

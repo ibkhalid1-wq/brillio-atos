@@ -25,7 +25,7 @@ export interface ProgramSetupPatch {
   methodology?: MethodologyVariant;
   /** Baseline mandate facts, written into Frame's inputs — early evidence,
    * captured at setup, so the first generator runs are grounded. */
-  frameBaseline?: { industry?: string; segment?: string; sponsor?: string; targetFirstDemoDate?: string };
+  frameBaseline?: { industry?: string; segment?: string; sponsor?: string; sponsorEmail?: string; targetFirstDemoDate?: string };
   phases: Array<{
     id: string;
     pct: number;
@@ -87,6 +87,7 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
   const [segment, setSegment] = useState<string>(typeof frameInputs.segment === "string" ? frameInputs.segment : "");
   const segmentOptions = INDUSTRY_SEGMENTS[industry] ?? null;
   const [sponsor, setSponsor] = useState<string>(typeof frameInputs.sponsor === "string" ? frameInputs.sponsor : "");
+  const [sponsorEmail, setSponsorEmail] = useState<string>(typeof frameInputs.sponsorEmail === "string" ? frameInputs.sponsorEmail : "");
   const [firstDemoDate, setFirstDemoDate] = useState<string>(typeof frameInputs.targetFirstDemoDate === "string" ? frameInputs.targetFirstDemoDate : "");
 
   const phases = useMemo(() => program.phases.map((phase) => ({
@@ -197,6 +198,9 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
               <div className="v3-field-label">Executive sponsor</div>
               <input className="v3-input" aria-label="Executive sponsor" type="text" placeholder="Name and title"
                 value={sponsor} onChange={(event) => setSponsor(event.target.value)} />
+              <div className="v3-field-label">Sponsor email</div>
+              <input className="v3-input" aria-label="Sponsor email" type="email" placeholder="name@company.com"
+                value={sponsorEmail} onChange={(event) => setSponsorEmail(event.target.value)} />
             </label>
             <label>
               <div className="v3-field-label">Target first-demo date</div>
@@ -258,6 +262,7 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
               const validSegment = (INDUSTRY_SEGMENTS[industry.trim()] ?? []).includes(segment) ? segment : "";
               if (validSegment) baseline.segment = validSegment;
               if (sponsor.trim()) baseline.sponsor = sponsor.trim();
+              if (sponsorEmail.trim()) baseline.sponsorEmail = sponsorEmail.trim();
               if (firstDemoDate) baseline.targetFirstDemoDate = firstDemoDate;
               return onSave({
                 name: name.trim(),

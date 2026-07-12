@@ -383,8 +383,7 @@ export function stakeholderEmail(program: ProgramSummary, name: string): string 
   const raw = (program.rawData ?? {}) as Record<string, unknown>;
   const inner = typeof raw.data === "object" && raw.data !== null ? (raw.data as Record<string, unknown>) : raw;
   const kit = inner.discoveryKit;
-  if (!kit || typeof kit !== "object" || Array.isArray(kit)) return null;
-  const interviews = Array.isArray((kit as Record<string, unknown>).interviews)
+  const interviews = kit && typeof kit === "object" && !Array.isArray(kit) && Array.isArray((kit as Record<string, unknown>).interviews)
     ? ((kit as Record<string, unknown>).interviews as unknown[]).filter((entry): entry is Record<string, unknown> => typeof entry === "object" && entry !== null)
     : [];
   const wanted = name.trim().toLowerCase();
@@ -393,7 +392,19 @@ export function stakeholderEmail(program: ProgramSummary, name: string): string 
     return who === wanted || (who.length > 3 && wanted.includes(who)) || (wanted.length > 3 && who.includes(wanted));
   });
   const email = String(hit?.email ?? "").trim();
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : null;
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return email;
+  // The sponsor's address lives in Frame's inputs (captured at setup), not
+  // the kit roster — fall through so the sponsor conversation gets it too.
+  const frame = typeof inner.phaseInputs === "object" && inner.phaseInputs !== null
+    ? ((inner.phaseInputs as Record<string, Record<string, unknown>>).frame ?? {})
+    : {};
+  const sponsor = String(frame.sponsor ?? "").trim().toLowerCase();
+  const sponsorEmail = String(frame.sponsorEmail ?? "").trim();
+  if (sponsor && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(sponsorEmail)
+    && (sponsor === wanted || sponsor.includes(wanted) || wanted.includes(sponsor.split(",")[0].trim()))) {
+    return sponsorEmail;
+  }
+  return null;
 }
 
 const escapeIcs = (value: string): string =>

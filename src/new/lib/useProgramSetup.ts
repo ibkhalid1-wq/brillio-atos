@@ -11,7 +11,7 @@ export interface ProgramSetupPatch {
   /** Methodology variant derived from the archetype, persisted to program data. */
   methodology?: "atos-standard" | "atos-lite" | "atos-regulated" | "atos-flow";
   /** Baseline mandate facts written into Frame's inputs at setup. */
-  frameBaseline?: { industry?: string; segment?: string; sponsor?: string; targetFirstDemoDate?: string };
+  frameBaseline?: { industry?: string; segment?: string; sponsor?: string; sponsorEmail?: string; targetFirstDemoDate?: string };
   phases: Array<{ id: string; pct: number; targetDate: string }>;
 }
 

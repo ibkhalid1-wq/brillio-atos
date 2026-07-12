@@ -305,30 +305,18 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                       <div className="v3fs-coverage-bar"><div className="v3fs-coverage-fill" style={{ width: `${Math.round((coverage.done / coverage.total) * 100)}%` }} /></div>
                     </div>
                   ) : null}
-                  {(() => {
-                    const kit = meetingKit(program, movement.id);
-                    const channelCards = movement.id === "listen" && onMintPacks
-                      ? <AsyncInterviews program={program} onMintPacks={onMintPacks} />
-                      : movement.id === "show" && onMintDemoInvites
-                        ? <DemoInvites program={program} onMint={onMintDemoInvites} />
-                        : undefined;
-                    return (
-                      <>
-                        <MeetingKitCard
-                          kit={kit}
-                          movementId={movement.id}
-                          hasEvidence={evidence.length > 0}
-                          program={program}
-                          onSaveInputs={onSaveInputs}
-                          onScheduleFollowUp={onScheduleFollowUp}
-                          onMintFollowUp={onMintFollowUp}
-                          channels={channelCards}
-                          onCaptured={movement.id === "show" ? () => onRunAgent("contradiction-detector", "show") : undefined}
-                        />
-                        {!kit ? channelCards : null}
-                      </>
-                    );
-                  })()}
+                  <MeetingKitCard
+                    kit={meetingKit(program, movement.id)}
+                    movementId={movement.id}
+                    hasEvidence={evidence.length > 0}
+                    program={program}
+                    onSaveInputs={onSaveInputs}
+                    onScheduleFollowUp={onScheduleFollowUp}
+                    onMintFollowUp={onMintFollowUp}
+                    onMintPacks={onMintPacks}
+                    onMintDemoInvites={onMintDemoInvites}
+                    onCaptured={movement.id === "show" ? () => onRunAgent("contradiction-detector", "show") : undefined}
+                  />
                   {/* Quiet escape hatch only — the checklist and gate CTA are
                       the purposeful doors into the editor now. */}
                   <button type="button" className="v3fs-edit-toggle quiet" onClick={() => toggle(setEditing, movement.id)}>
@@ -779,12 +767,14 @@ function TranscribeButton({ onText }: { onText: (transcript: string) => void }) 
   );
 }
 
-function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, onScheduleFollowUp, onMintFollowUp, channels, onCaptured }: {
+function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, onScheduleFollowUp, onMintFollowUp, onMintPacks, onMintDemoInvites, onCaptured }: {
   kit: MeetingKit | null;
   movementId: string;
   hasEvidence: boolean;
-  /** Extra channel cards (async links, demo links) rendered under Channels. */
-  channels?: React.ReactNode;
+  /** Mint Listen's response links from the Discovery Kit. */
+  onMintPacks?: () => Promise<void>;
+  /** Mint Show's demo links from the Demo Scripts. */
+  onMintDemoInvites?: () => Promise<void>;
   /** Fired after a capture lands — Show wires the contradiction watcher here. */
   onCaptured?: () => void;
   program: ProgramSummary;
@@ -1045,8 +1035,26 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
           </div>
         ) : null}
         {(() => {
-          const movementLinks = visibleLinks(listInterviewPacks(program).filter((pack) => pack.movementId === movementId));
-          if (!(onScheduleFollowUp || (kit.followUp && onMintFollowUp) || channels || movementLinks.length)) return null;
+          // ONE list of links per movement: Listen owns the discovery packs,
+          // Show adds its demo invites, every movement carries its own
+          // follow-ups. Each row offers exactly one send action — email when
+          // the address is on file, copy otherwise.
+          const packRows = visibleLinks(listInterviewPacks(program).filter((pack) =>
+            movementId === "listen" ? (!pack.movementId || pack.movementId === "listen") : pack.movementId === movementId,
+          )).map((pack) => ({
+            id: pack.id, who: pack.stakeholder, responded: Boolean(pack.respondedAt),
+            meta: pack.respondedAt ? "responded" : `${pack.role === "Follow-up" ? "follow-up · " : ""}${pack.questions.length} question${pack.questions.length === 1 ? "" : "s"} · waiting`,
+            link: portalLinkFor(program.id, pack),
+          }));
+          const inviteRows = movementId === "show" ? listDemoInvites(program).map((invite) => ({
+            id: invite.id, who: invite.stakeholder, responded: Boolean(invite.respondedAt),
+            meta: invite.respondedAt ? "verdict received" : "demo · waiting for their verdict",
+            link: portalLinkFor(program.id, invite),
+          })) : [];
+          const rows = [...inviteRows, ...packRows];
+          const canMintPacks = movementId === "listen" && onMintPacks;
+          const canMintInvites = movementId === "show" && onMintDemoInvites;
+          if (!(onScheduleFollowUp || (kit.followUp && onMintFollowUp) || canMintPacks || canMintInvites || rows.length)) return null;
           return (
           <>
             <div className="v3fs-kit-cap">Channels</div>
@@ -1076,40 +1084,53 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
                   </div>
                 </div>
               ) : null}
-              {(kit.followUp && onMintFollowUp) || movementLinks.length ? (
+              {(kit.followUp && onMintFollowUp) || canMintPacks || canMintInvites || rows.length ? (
                 <div className="v3fs-kit-chan">
-                  <div className="v3fs-kit-chan-t">Link<span>ATOS asks for you — answers land in the Inbox, attributed</span></div>
-                  {movementLinks.length ? (
+                  <div className="v3fs-kit-chan-t">Links<span>ATOS asks for you — answers arrive in the Inbox, attributed</span></div>
+                  {rows.length ? (
                     <div className="v3fs-kit-links">
-                      {movementLinks.map((pack) => (
-                        <div key={pack.id} className="v3fs-async-row">
-                          <span className={`v3fs-st ${pack.respondedAt ? "ok" : "none"}`} />
-                          <div className="v3fs-async-who">
-                            {pack.stakeholder}
-                            <span>{pack.respondedAt ? "responded" : "waiting"}</span>
+                      {rows.map((row) => {
+                        const email = row.responded ? null : stakeholderEmail(program, row.who);
+                        return (
+                          <div key={row.id} className="v3fs-async-row">
+                            <span className={`v3fs-st ${row.responded ? "ok" : "none"}`} />
+                            <div className="v3fs-async-who">
+                              {row.who}
+                              <span>{row.meta}</span>
+                            </div>
+                            {row.responded ? null : email ? (
+                              <a className="v3fs-a" href={mailtoLink(email, { stakeholder: row.who, programmeName: program.name, link: row.link })}
+                                title={`Opens a draft to ${email} with the link inside`}>✉ Email it</a>
+                            ) : (
+                              <button type="button" className="v3fs-a" title="No email on file — add it in the Discovery Kit to send directly"
+                                onClick={() => { void navigator.clipboard.writeText(row.link).catch(() => window.prompt("Copy the link:", row.link)); }}>
+                                Copy link
+                              </button>
+                            )}
                           </div>
-                          <button type="button" className="v3fs-a" onClick={() => {
-                            void navigator.clipboard.writeText(portalLinkFor(program.id, pack)).catch(() => window.prompt("Copy the link:", portalLinkFor(program.id, pack)));
-                          }}>Copy link</button>
-                          {!pack.respondedAt && stakeholderEmail(program, pack.stakeholder) ? (
-                            <a className="v3fs-a" href={mailtoLink(stakeholderEmail(program, pack.stakeholder)!, {
-                              stakeholder: pack.stakeholder, programmeName: program.name, link: portalLinkFor(program.id, pack),
-                            })}>✉ Email it</a>
-                          ) : null}
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : null}
-                  {kit.followUp && onMintFollowUp ? (
-                    <div className="v3fs-kit-chan-a">
-                      <button type="button" className="v3fs-btn" disabled={busy} onClick={() => void sendLink()}>
-                        {linkTick ? "Link copied ✓" : "✳ Mint the link"}
+                  <div className="v3fs-kit-chan-a">
+                    {canMintPacks ? (
+                      <button type="button" className="v3fs-btn" disabled={busy} onClick={async () => { setBusy(true); try { await onMintPacks!(); } finally { setBusy(false); } }}>
+                        {rows.length ? "↺ Links for new stakeholders" : "✳ Create response links"}
                       </button>
-                    </div>
-                  ) : null}
+                    ) : null}
+                    {canMintInvites ? (
+                      <button type="button" className="v3fs-btn" disabled={busy} onClick={async () => { setBusy(true); try { await onMintDemoInvites!(); } finally { setBusy(false); } }}>
+                        {inviteRows.length ? "↺ Demo links for new stakeholders" : "✳ Create demo links"}
+                      </button>
+                    ) : null}
+                    {kit.followUp && onMintFollowUp ? (
+                      <button type="button" className="v3fs-btn" disabled={busy} onClick={() => void sendLink()}>
+                        {linkTick ? "Link copied ✓" : "✳ Mint the follow-up link"}
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               ) : null}
-              {channels}
             </div>
           </>
           );
@@ -1192,124 +1213,6 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
  * Async interviews — the Listen column's "no meeting required" lane. Links
  * mint from the Discovery Kit's per-stakeholder packs; what comes back waits
  * in Today's evidence inbox until ingested.
- */
-function AsyncInterviews({ program, onMintPacks }: { program: ProgramSummary; onMintPacks: () => Promise<void> }) {
-  // This is Listen's channel: discovery packs (no movementId) and Listen
-  // follow-ups belong here; follow-up links minted for OTHER movements do not.
-  const packs = visibleLinks(listInterviewPacks(program).filter((pack) => !pack.movementId || pack.movementId === "listen"));
-  const hasKit = (() => {
-    const raw = (program.rawData ?? {}) as Record<string, unknown>;
-    const inner = typeof raw.data === "object" && raw.data !== null ? (raw.data as Record<string, unknown>) : raw;
-    const kit = inner.discoveryKit;
-    return !!kit && typeof kit === "object" && Array.isArray((kit as Record<string, unknown>).interviews);
-  })();
-  const [busy, setBusy] = useState(false);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-
-  if (!hasKit && packs.length === 0) return null;
-
-  const mint = async () => {
-    setBusy(true);
-    try { await onMintPacks(); } finally { setBusy(false); }
-  };
-  const copy = async (packId: string, link: string) => {
-    try {
-      await navigator.clipboard.writeText(link);
-      setCopiedId(packId);
-      window.setTimeout(() => setCopiedId((current) => (current === packId ? null : current)), 1600);
-    } catch { window.prompt("Copy the response link:", link); }
-  };
-
-  return (
-    <div className="v3fs-kit-chan v3fs-async">
-      <div className="v3fs-kit-chan-t">Async interviews<span>one link per person — answers arrive in the Inbox with their name on them</span></div>
-      {packs.map((pack) => (
-        <div key={pack.id} className="v3fs-async-row">
-          <span className={`v3fs-st ${pack.respondedAt ? "ok" : "none"}`} />
-          <div className="v3fs-async-who">
-            {pack.stakeholder}
-            <span>
-              {pack.role === "Follow-up" ? "follow-up · " : ""}
-              {pack.respondedAt ? "responded" : `${pack.questions.length} question${pack.questions.length === 1 ? "" : "s"} · waiting`}
-            </span>
-          </div>
-          <button type="button" className="v3fs-a" onClick={() => void copy(pack.id, portalLinkFor(program.id, pack))}>
-            {copiedId === pack.id ? "Copied ✓" : "Copy link"}
-          </button>
-          {!pack.respondedAt && stakeholderEmail(program, pack.stakeholder) ? (
-            <a className="v3fs-a" href={mailtoLink(stakeholderEmail(program, pack.stakeholder)!, {
-              stakeholder: pack.stakeholder, programmeName: program.name, link: portalLinkFor(program.id, pack),
-            })}>✉ Email it</a>
-          ) : null}
-        </div>
-      ))}
-      {hasKit ? (
-        <button type="button" className="v3fs-a" disabled={busy} onClick={() => void mint()}>
-          {busy ? "Creating…" : packs.length ? "↺ Create links for new stakeholders" : "✳ Create response links from the Discovery Kit"}
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-/**
- * Demo tour links — the Show column's automation ladder. Invites mint from
- * the Demo Scripts (each stakeholder gets THEIR walkthrough); verdicts come
- * back through the quarantine and land in the tour ledger + track passes.
- */
-function DemoInvites({ program, onMint }: { program: ProgramSummary; onMint: () => Promise<void> }) {
-  const invites = listDemoInvites(program);
-  const hasScripts = (() => {
-    const raw = (program.rawData ?? {}) as Record<string, unknown>;
-    const inner = typeof raw.data === "object" && raw.data !== null ? (raw.data as Record<string, unknown>) : raw;
-    const doc = inner.demoScripts;
-    return !!doc && typeof doc === "object" && Array.isArray((doc as Record<string, unknown>).scripts);
-  })();
-  const [busy, setBusy] = useState(false);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-
-  if (!hasScripts && invites.length === 0) return null;
-
-  const mint = async () => {
-    setBusy(true);
-    try { await onMint(); } finally { setBusy(false); }
-  };
-  const copy = async (inviteId: string, link: string) => {
-    try {
-      await navigator.clipboard.writeText(link);
-      setCopiedId(inviteId);
-      window.setTimeout(() => setCopiedId((current) => (current === inviteId ? null : current)), 1600);
-    } catch { window.prompt("Copy the demo link:", link); }
-  };
-
-  return (
-    <div className="v3fs-kit-chan v3fs-async">
-      <div className="v3fs-kit-chan-t">Demo links<span>one per stakeholder — verdicts arrive in the Inbox</span></div>
-      {invites.map((invite) => (
-        <div key={invite.id} className="v3fs-async-row">
-          <span className={`v3fs-st ${invite.respondedAt ? "ok" : "none"}`} />
-          <div className="v3fs-async-who">
-            {invite.stakeholder}
-            <span>{invite.respondedAt ? "verdict received" : "waiting for their verdict"}</span>
-          </div>
-          <button type="button" className="v3fs-a" onClick={() => void copy(invite.id, portalLinkFor(program.id, invite))}>
-            {copiedId === invite.id ? "Copied ✓" : "Copy link"}
-          </button>
-        </div>
-      ))}
-      {hasScripts ? (
-        <button type="button" className="v3fs-a" disabled={busy} onClick={() => void mint()}>
-          {busy ? "Creating…" : invites.length ? "↺ Create links for new stakeholders" : "✳ Create demo links from the Demo Scripts"}
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-/**
- * Ship lanes — the plan compiles from the Blueprint (build sequence, data
- * contracts, eval plan), the hardening plan, and the roster. The gate reads
- * from this board: validation lane done + cutover executed → green.
  */
 function ShipLanesBoard({ program, onCompile, onToggle, onSetLane }: {
   program: ProgramSummary;
