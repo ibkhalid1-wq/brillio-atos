@@ -5496,3 +5496,6 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-ivc-cap textarea {font:inherit;font-size:12.5px;line-height:1.5;border:1px solid var(--fs-line);border-radius:10px;padding:8px 11px;background:var(--fs-bg);color:var(--v3-text-primary);resize:vertical;min-height:52px}
 .v3fs-ivc-cap textarea:focus {outline:none;border-color:var(--v3-accent-2)}
 .v3fs-ivc-cap .v3fs-btn {align-self:flex-start}
+/* Discovery Kit editor — labeled sub-sections per interviewee. */
+.v3fs-stu-group {border:1px solid var(--fs-line);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:var(--fs-bg);display:flex;flex-direction:column;gap:10px}
+.v3fs-stu-group-h {font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--v3-accent-2);margin-bottom:-2px}

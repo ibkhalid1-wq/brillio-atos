@@ -145,14 +145,22 @@ function DiscoveryKitStudio({ doc, onChange }: StudioProps) {
           addLabel="Add interview"
           render={(interview, index) => (
             <>
-              <div className="v3fs-stu-grid3">
-                <TextField label="Stakeholder" value={asText(interview.stakeholder)} onChange={(next) => interviews.set(index, { stakeholder: next })} />
-                <TextField label="Role" value={asText(interview.role)} onChange={(next) => interviews.set(index, { role: next })} />
-                <TextField label="Email — response links go here" value={asText(interview.email)} onChange={(next) => interviews.set(index, { email: next })} />
-                <TextField label="Domain" value={asText(interview.domain)} onChange={(next) => interviews.set(index, { domain: next })} />
+              <div className="v3fs-stu-group">
+                <div className="v3fs-stu-group-h">Contact details</div>
+                <div className="v3fs-stu-grid3">
+                  <TextField label="Name" value={asText(interview.stakeholder)} onChange={(next) => interviews.set(index, { stakeholder: next })} />
+                  <TextField label="Role" value={asText(interview.role)} onChange={(next) => interviews.set(index, { role: next })} />
+                  <TextField label="Email — response links go here" value={asText(interview.email)} onChange={(next) => interviews.set(index, { email: next })} />
+                </div>
               </div>
-              <StringListEditor label="Objectives" values={asStrings(interview.objectives)}
-                onChange={(next) => interviews.set(index, { objectives: next })} addLabel="Add objective" />
+              <div className="v3fs-stu-group">
+                <div className="v3fs-stu-group-h">Domain / coverage</div>
+                <TextField label="Domain they own" value={asText(interview.domain)} onChange={(next) => interviews.set(index, { domain: next })} />
+                <StringListEditor label="Objectives — what this conversation must surface" values={asStrings(interview.objectives)}
+                  onChange={(next) => interviews.set(index, { objectives: next })} addLabel="Add objective" />
+              </div>
+              <div className="v3fs-stu-group">
+                <div className="v3fs-stu-group-h">Workflow / coverage</div>
               {asArray(interview.agenda).map(asRecord).map((block, blockIndex) => (
                 <div key={blockIndex} className="v3fs-stu-sub">
                   <div className="v3fs-stu-grid3">
@@ -180,6 +188,7 @@ function DiscoveryKitStudio({ doc, onChange }: StudioProps) {
               </button>
               <ChipsField label="Ask them to bring" values={asStrings(interview.askForArtifacts)}
                 onChange={(next) => interviews.set(index, { askForArtifacts: next })} />
+              </div>
             </>
           )}
         />

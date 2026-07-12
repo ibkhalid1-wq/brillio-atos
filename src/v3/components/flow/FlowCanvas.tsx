@@ -11,6 +11,7 @@ import {
 import { buildMeetingIcs, mailtoLink, meetingKit, stakeholderEmail, type MeetingKit } from "@/v3/components/flow/flowMeetings";
 import { supabase } from "@/integrations/supabase/client";
 import { listInterviewPacks, listDemoInvites, portalLinkFor, visibleLinks } from "@/v3/components/flow/flowPortal";
+import { resolveMovementStakeholders, type MovementStakeholder } from "@/v3/components/flow/flowStakeholders";
 import { listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 import { listFlowTracks, trackAcceptance } from "@/v3/components/flow/flowTracks";
 
@@ -305,13 +306,11 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                       <div className="v3fs-coverage-bar"><div className="v3fs-coverage-fill" style={{ width: `${Math.round((coverage.done / coverage.total) * 100)}%` }} /></div>
                     </div>
                   ) : null}
-                  {movement.id === "listen" && (() => {
-                    const raw = (program.rawData ?? {}) as Record<string, unknown>;
-                    const dataRoot = typeof raw.data === "object" && raw.data !== null ? raw.data as Record<string, unknown> : raw;
-                    const kitDoc = dataRoot.discoveryKit;
-                    return Boolean(kitDoc && typeof kitDoc === "object" && Array.isArray((kitDoc as Record<string, unknown>).interviews) && ((kitDoc as Record<string, unknown>).interviews as unknown[]).length);
-                  })() ? (
-                    <IntervieweeDiscovery program={program} onSaveInputs={onSaveInputs} onMintPacks={onMintPacks}
+                  {resolveMovementStakeholders(program, movement.id).length > 0 ? (
+                    <IntervieweeDiscovery program={program} movementId={movement.id}
+                      captureField={meetingKit(program, movement.id)?.captureField ?? "interviewTranscripts"}
+                      onSaveInputs={onSaveInputs} onMintFollowUp={onMintFollowUp}
+                      onMintPacks={movement.id === "listen" ? onMintPacks : undefined}
                       onCaptured={() => onRunAgent("contradiction-detector", movement.id)} />
                   ) : (
                   <MeetingKitCard
@@ -618,75 +617,90 @@ function GateActionButton({ idle, armedLabel, busyLabel, quiet, onAct }: {
  * Open by default when the conversation hasn't happened; a quiet one-line
  * summary once it has.
  */
-/** Listen's discovery, organized by interviewee. One card per person from the
- * Discovery Kit: their script, their link, their captured evidence, and a
- * capture box — followed until they're heard. */
-function IntervieweeDiscovery({ program, onSaveInputs, onMintPacks, onCaptured }: {
+/** A movement's discovery, organized by stakeholder. One card per person or
+ * role: their script, their link/meeting channels, their captured evidence, a
+ * capture box — followed until they've been heard. Driven by
+ * resolveMovementStakeholders, so it serves every movement. */
+function IntervieweeDiscovery({ program, movementId, captureField, onSaveInputs, onMintFollowUp, onMintPacks, onCaptured }: {
   program: ProgramSummary;
+  movementId: string;
+  captureField: string;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
+  onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
   onMintPacks?: () => Promise<void>;
   onCaptured?: () => void;
 }) {
-  const raw = (program.rawData ?? {}) as Record<string, unknown>;
-  const inner = typeof raw.data === "object" && raw.data !== null ? raw.data as Record<string, unknown> : raw;
-  const kit = inner.discoveryKit;
-  const interviews = kit && typeof kit === "object" && !Array.isArray(kit) && Array.isArray((kit as Record<string, unknown>).interviews)
-    ? ((kit as Record<string, unknown>).interviews as unknown[]).filter((entry): entry is Record<string, unknown> => typeof entry === "object" && entry !== null)
-    : [];
-  const listen = flowMovements().find((m) => m.id === "listen");
-  const evidence = listen ? movementEvidence(program, listen) : [];
+  const stakeholders = resolveMovementStakeholders(program, movementId);
+  const movement = flowMovements().find((m) => m.id === movementId);
+  const evidence = movement ? movementEvidence(program, movement) : [];
   const packs = listInterviewPacks(program);
   const [mintBusy, setMintBusy] = useState(false);
-  if (!interviews.length) return null;
-  const heardCount = interviews.filter((iv) => {
-    const name = String(iv.stakeholder ?? "").trim().toLowerCase();
-    return evidence.some((e) => e.who.toLowerCase().includes(name) && name.length > 2)
-      || packs.some((p) => String(p.stakeholder ?? "").trim().toLowerCase() === name && p.respondedAt);
+  if (!stakeholders.length) return null;
+  const heardCount = stakeholders.filter((entry) => {
+    const key = entry.name.toLowerCase();
+    return key.length > 2 && (evidence.some((e) => e.who.toLowerCase().includes(key))
+      || packs.some((p) => String(p.stakeholder ?? "").trim().toLowerCase() === key && p.respondedAt));
   }).length;
+  const word = movementId === "show" ? "reviewed" : movementId === "listen" ? "heard" : "consulted";
   return (
     <div className="v3fs-ivd">
       <div className="v3fs-ivd-h">
-        <span className="v3fs-ivd-t">Discovery — {heardCount} of {interviews.length} heard</span>
-        {onMintPacks ? (
+        <span className="v3fs-ivd-t">{stakeholders.length} stakeholder{stakeholders.length === 1 ? "" : "s"} — {heardCount} {word}</span>
+        {movementId === "listen" && onMintPacks ? (
           <button type="button" className="v3fs-a" disabled={mintBusy}
             onClick={async () => { setMintBusy(true); try { await onMintPacks(); } finally { setMintBusy(false); } }}>
             {packs.length ? "↺ Refresh & add links" : "✳ Create everyone's link"}
           </button>
         ) : null}
       </div>
-      {interviews.map((interview, index) => (
-        <IntervieweeCard key={index} program={program} interview={interview} packs={packs} evidence={evidence}
-          onSaveInputs={onSaveInputs} onCaptured={onCaptured} />
+      {stakeholders.map((entry) => (
+        <IntervieweeCard key={entry.id} program={program} movementId={movementId} stakeholder={entry} captureField={captureField}
+          packs={packs} evidence={evidence} onSaveInputs={onSaveInputs} onMintFollowUp={onMintFollowUp} onCaptured={onCaptured} />
       ))}
     </div>
   );
 }
 
-function IntervieweeCard({ program, interview, packs, evidence, onSaveInputs, onCaptured }: {
+function IntervieweeCard({ program, movementId, stakeholder, captureField, packs, evidence, onSaveInputs, onMintFollowUp, onCaptured }: {
   program: ProgramSummary;
-  interview: Record<string, unknown>;
+  movementId: string;
+  stakeholder: MovementStakeholder;
+  captureField: string;
   packs: ReturnType<typeof listInterviewPacks>;
   evidence: ReturnType<typeof movementEvidence>;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
+  onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
   onCaptured?: () => void;
 }) {
-  const name = String(interview.stakeholder ?? "").trim();
-  const role = String(interview.role ?? "");
+  const { name, role, questions } = stakeholder;
   const first = name.split(" ")[0] || "they";
   const email = stakeholderEmail(program, name);
-  const questions = (Array.isArray(interview.agenda) ? interview.agenda : [])
-    .flatMap((slot) => (slot && typeof slot === "object" && Array.isArray((slot as Record<string, unknown>).questions) ? ((slot as Record<string, unknown>).questions as unknown[]).map(String) : []))
-    .filter(Boolean);
   const key = name.toLowerCase();
-  const pack = [...packs].reverse().find((p) => String(p.stakeholder ?? "").trim().toLowerCase() === key);
+  const pack = [...packs].reverse().find((p) => String(p.stakeholder ?? "").trim().toLowerCase() === key
+    && (movementId === "listen" ? (!p.movementId || p.movementId === "listen") : p.movementId === movementId));
   const mine = key.length > 2 ? evidence.filter((e) => e.who.toLowerCase().includes(key) || key.includes(e.who.split(",")[0].trim().toLowerCase())) : [];
   const heard = mine.length > 0 || Boolean(pack?.respondedAt);
   const status = heard ? "heard" : pack ? "waiting" : "toreach";
   const statusLabel = heard ? "✓ Heard" : pack ? "Link sent · waiting" : "To reach";
-  const link = pack ? portalLinkFor(program.id, pack) : null;
   const [capture, setCapture] = useState("");
   const [busy, setBusy] = useState(false);
   const [date, setDate] = useState("");
+  const [mintedLink, setMintedLink] = useState<string | null>(null);
+  const [linkBusy, setLinkBusy] = useState(false);
+  const effectiveLink = (pack ? portalLinkFor(program.id, pack) : null) ?? mintedLink;
+
+  const ensureLink = async (): Promise<string | null> => {
+    if (effectiveLink) return effectiveLink;
+    if (!onMintFollowUp || !questions.length) return null;
+    setLinkBusy(true);
+    try {
+      const link = await onMintFollowUp({ movementId, who: name, questions, captureField });
+      if (link) setMintedLink(link);
+      return link;
+    } finally { setLinkBusy(false); }
+  };
+  const copyLink = async () => { const link = await ensureLink(); if (link) { try { await navigator.clipboard.writeText(link); } catch { window.prompt("Copy the link:", link); } } };
+  const sendLink = async () => { if (!email) return; const link = await ensureLink(); if (link) window.location.href = mailtoLink(email, { stakeholder: name, programmeName: program.name, link }); };
 
   const save = async () => {
     const text = capture.trim();
@@ -695,10 +709,13 @@ function IntervieweeCard({ program, interview, packs, evidence, onSaveInputs, on
     try {
       const raw = (program.rawData ?? {}) as Record<string, unknown>;
       const inner = typeof raw.data === "object" && raw.data !== null ? raw.data as Record<string, unknown> : raw;
-      const bucket = (inner.phaseInputs && typeof inner.phaseInputs === "object" ? (inner.phaseInputs as Record<string, Record<string, unknown>>).listen : undefined) ?? {};
-      const existing = typeof bucket.interviewTranscripts === "string" ? bucket.interviewTranscripts as string : "";
+      const phase = flowMovements().find((m) => m.id === movementId);
+      const phaseId = movementId;
+      void phase;
+      const bucket = (inner.phaseInputs && typeof inner.phaseInputs === "object" ? (inner.phaseInputs as Record<string, Record<string, unknown>>)[movementId] : undefined) ?? {};
+      const existing = typeof bucket[captureField] === "string" ? bucket[captureField] as string : "";
       const header = `— ${[name, role, new Date().toISOString().slice(0, 10)].filter(Boolean).join(", ")} —`;
-      await onSaveInputs("listen", { interviewTranscripts: [existing.trimEnd(), `${header}\n${text}`].filter(Boolean).join("\n\n") },
+      await onSaveInputs(phaseId, { [captureField]: [existing.trimEnd(), `${header}\n${text}`].filter(Boolean).join("\n\n") },
         { attest: { action: `Captured — ${name}` } });
       setCapture("");
       onCaptured?.();
@@ -708,7 +725,7 @@ function IntervieweeCard({ program, interview, packs, evidence, onSaveInputs, on
   return (
     <details className={`v3fs-ivc ${status}`} open={!heard}>
       <summary>
-        <span className="v3fs-ivc-who">{name || "Interviewee"}{role ? <span>{role}</span> : null}</span>
+        <span className="v3fs-ivc-who">{name || "Stakeholder"}{role && role !== name ? <span>{role}</span> : null}</span>
         <span className={`v3fs-ivc-st ${status}`}>{statusLabel}</span>
       </summary>
       <div className="v3fs-ivc-b">
@@ -730,16 +747,12 @@ function IntervieweeCard({ program, interview, packs, evidence, onSaveInputs, on
         ) : null}
         {!heard ? (
           <div className="v3fs-ivc-ch">
-            {link ? (
-              <>
-                <button type="button" className={`v3fs-btn${email ? "" : " pri"}`}
-                  onClick={() => { void navigator.clipboard.writeText(link).catch(() => window.prompt("Copy the link:", link)); }}>Copy link</button>
-                {email ? (
-                  <button type="button" className="v3fs-btn pri" title={`Opens a draft to ${email}`}
-                    onClick={() => { window.location.href = mailtoLink(email, { stakeholder: name, programmeName: program.name, link }); }}>✉ Send link</button>
-                ) : null}
-              </>
-            ) : <span className="v3fs-wf-hint">Create everyone&rsquo;s link above to send one</span>}
+            <button type="button" className={`v3fs-btn${email ? "" : " pri"}`} disabled={linkBusy} onClick={() => void copyLink()}>
+              {linkBusy && !email ? "…" : effectiveLink ? "Copy link" : "Create & copy link"}
+            </button>
+            {email ? (
+              <button type="button" className="v3fs-btn pri" disabled={linkBusy} title={`Opens a draft to ${email}`} onClick={() => void sendLink()}>✉ Send link</button>
+            ) : null}
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label={`Meeting date for ${name}`} />
             <button type="button" className="v3fs-btn" disabled={!date}
               onClick={() => {
@@ -747,7 +760,7 @@ function IntervieweeCard({ program, interview, packs, evidence, onSaveInputs, on
                 const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
                 const anchor = document.createElement("a");
                 anchor.href = url;
-                anchor.download = `discovery-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.ics`;
+                anchor.download = `${movementId}-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.ics`;
                 anchor.click();
                 URL.revokeObjectURL(url);
               }}>⤓ Invite</button>
@@ -755,7 +768,7 @@ function IntervieweeCard({ program, interview, packs, evidence, onSaveInputs, on
         ) : null}
         <div className="v3fs-ivc-cap">
           <textarea rows={2} value={capture} onChange={(e) => setCapture(e.target.value)}
-            placeholder={`What ${first} said — attribution added for you`} aria-label={`Capture ${name}'s conversation`} />
+            placeholder={`What ${first} said — attribution added for you`} aria-label={`Capture ${name}'s input`} />
           <button type="button" className="v3fs-btn pri" disabled={busy || !capture.trim()} onClick={() => void save()}>
             {busy ? "Saving…" : "Capture"}
           </button>
