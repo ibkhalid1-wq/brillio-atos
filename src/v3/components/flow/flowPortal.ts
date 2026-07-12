@@ -325,6 +325,21 @@ export function latestPackFor(program: ProgramSummary, who: string): FlowIntervi
  * transcript, AND as a show pass on the track that demos to that stakeholder.
  * Null when the item is unknown.
  */
+/** Where an inbox item's evidence will land — the same source-pack lookup
+ * ingestion uses, exposed so callers can aim follow-on agents (the
+ * contradiction detector) at the right movement. */
+export function portalItemTargetMovement(program: ProgramSummary, itemId: string): string {
+  const { inner } = getProgramState((program.rawData ?? {}) as Record<string, unknown>);
+  const inbox = Array.isArray(inner.flowPortalInbox) ? (inner.flowPortalInbox as unknown[]).filter(isRecord) : [];
+  const item = inbox.find((entry) => entry.id === itemId);
+  if (!item) return "listen";
+  if (item.kind === "demo-verdict") return "show";
+  const stakeholder = String(item.stakeholder ?? "").trim().toLowerCase();
+  const allPacks = Array.isArray(inner.flowInterviewPacks) ? (inner.flowInterviewPacks as unknown[]).filter(isRecord) : [];
+  const sourcePack = [...allPacks].reverse().find((pack) => String(pack.stakeholder ?? "").trim().toLowerCase() === stakeholder);
+  return sourcePack && typeof sourcePack.movementId === "string" && sourcePack.movementId ? sourcePack.movementId : "listen";
+}
+
 export function ingestPortalResponse(program: ProgramSummary, itemId: string, actor: string): Record<string, unknown> | null {
   const { inner } = getProgramState((program.rawData ?? {}) as Record<string, unknown>);
   const inbox = Array.isArray(inner.flowPortalInbox) ? (inner.flowPortalInbox as unknown[]) : [];

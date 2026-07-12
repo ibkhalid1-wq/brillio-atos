@@ -30,7 +30,7 @@ import ProgramSetupWizard from "@/v3/components/ProgramSetupWizard";
 import FlowShell from "@/v3/components/flow/FlowShell";
 import { resolveFlowDecision } from "@/v3/components/flow/flowDecisions";
 import { setHaltAll, toggleAgentHalt, setMovementBudget } from "@/v3/components/flow/flowGovernance";
-import { mintInterviewPacks, mintDemoInvites, ingestPortalResponse, dismissPortalResponse } from "@/v3/components/flow/flowPortal";
+import { mintInterviewPacks, mintDemoInvites, ingestPortalResponse, dismissPortalResponse, portalItemTargetMovement } from "@/v3/components/flow/flowPortal";
 import { recordShowPass } from "@/v3/components/flow/flowTracks";
 import { applyArtifactEdit } from "@/v3/components/flow/flowArtifactEdit";
 import { compileShipLanes, setShipLane, toggleShipItem } from "@/v3/components/flow/flowShip";
@@ -2247,7 +2247,14 @@ export default function AppShellV3() {
           }}
           onIngestPortalItem={async (itemId) => {
             const actor = currentUser?.email || "you";
+            // Read the destination BEFORE ingesting — the item leaves the
+            // inbox on ingest. Merged evidence (answers and document
+            // extracts) can contradict what is already on record, so the
+            // detector sweeps immediately; conflicts land back in this
+            // Inbox as sponsor decisions.
+            const target = activeProgram ? portalItemTargetMovement(activeProgram, itemId) : "listen";
             await persistFlowMutation((program) => ingestPortalResponse(program, itemId, actor));
+            void runProgramAgent({ agentId: "contradiction-detector", phaseId: target, triggeredBy: "trigger" });
           }}
           onDismissPortalItem={async (itemId) => {
             const actor = currentUser?.email || "you";

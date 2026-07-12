@@ -315,7 +315,7 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                     onMintFollowUp={onMintFollowUp}
                     onMintPacks={onMintPacks}
                     onMintDemoInvites={onMintDemoInvites}
-                    onCaptured={movement.id === "show" ? () => onRunAgent("contradiction-detector", "show") : undefined}
+                    onCaptured={() => onRunAgent("contradiction-detector", movement.id)}
                   />
                   {/* Quiet escape hatch only — the checklist and gate CTA are
                       the purposeful doors into the editor now. */}
@@ -965,6 +965,7 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
       setDocText("");
       setDocSourceKey(null);
       setDocTick(true);
+      onCaptured?.();
       window.setTimeout(() => setDocTick(false), 2200);
     } finally { setBusy(false); }
   };
