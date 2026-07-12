@@ -58,7 +58,7 @@ export interface EvidenceEntry {
   meta: string;
   words: number;
   excerpt: string;
-  kind: "transcript" | "reference";
+  kind: "transcript" | "reference" | "document";
   /** Track named in the attribution — "(Quote Automation)" in the header. */
   track?: string;
   /** The full attributed block — the drill-down's reading target. */
@@ -149,9 +149,13 @@ export function parseGridRows(value: unknown): Array<Record<string, string>> {
  * Text with no headers becomes one entry attributed to the field itself.
  */
 function parseTranscript(movementId: string, fieldLabel: string, text: string): EvidenceEntry[] {
-  const headerRe = /^[—–-]{1,2}\s*(.{3,90}?)\s*[—–-]{1,2}\s*$/gm;
+  const headerRe = /^[—–-]{1,2}\s*(.{3,200}?)\s*[—–-]{1,2}\s*$/gm;
   const entries: EvidenceEntry[] = [];
-  const matches = [...text.matchAll(headerRe)];
+  // Only attribution-shaped headers split the text: "Name, Role, Date" (has a
+  // comma) or a "Document: …" block. Dash-wrapped lines INSIDE pasted document
+  // content ("— INPUT SIGNALS —") must never mint a phantom voice.
+  const matches = [...text.matchAll(headerRe)].filter((match) =>
+    match[1].includes(",") || /^Document:/i.test(match[1].trim()));
   // The pull-quote: prefer the most QUOTABLE line — numbers, money, time, or
   // pain language land better than whatever happened to be said first.
   const quotable = /\d|%|\$|€|£|day|hour|week|month|lose|lost|manual|wait|delay|slow|only|never|every time/i;
@@ -171,6 +175,20 @@ function parseTranscript(movementId: string, fieldLabel: string, text: string): 
     const end = index + 1 < matches.length ? matches[index + 1].index ?? text.length : text.length;
     const body = text.slice(start, end);
     const trackTag = match[1].match(/\(([^)]{2,60})\)/);
+    // "— Document: Q2 pricing export, provided by Dan Reyes, 2026-07-12 —"
+    // is a DOCUMENT on the record, named by its title — not a voice.
+    const doc = match[1].match(/^Document:\s*(.+?),\s*provided by\s+(.+?)(?:,\s*(\d{4}-\d{2}-\d{2}))?$/i);
+    if (doc) {
+      entries.push({
+        movementId, fieldLabel, kind: "document",
+        who: doc[1].trim(),
+        meta: `document · ${doc[2].trim()}${doc[3] ? ` · ${doc[3]}` : ""} · ${wordCount(body).toLocaleString()} words`,
+        words: wordCount(body),
+        excerpt: firstLine(body),
+        text: body.trim(),
+      });
+      return;
+    }
     entries.push({
       movementId, fieldLabel, kind: "transcript",
       who: match[1],

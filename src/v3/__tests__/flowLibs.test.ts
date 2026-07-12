@@ -957,3 +957,32 @@ describe("personas ≠ stakeholders — every workflow role needs a voice, then 
     expect(gateChecklist(bare, listenMovement, []).find((c) => c.id === "personas-act")).toBeUndefined();
   });
 });
+
+describe("uploaded documents are evidence — named, not shredded", () => {
+  const prog = {
+    id: "p", name: "P",
+    rawData: { data: { phaseInputs: { frame: { sponsorConversation: [
+      "— Sarah Okafor, COO, 2026-07-11 —",
+      "We need the cycle down to two days.",
+      "— Document: Team Roster — SME responsibilities and long-title padding for realism, provided by the programme team, 2026-07-12 —",
+      "Line one of the document.",
+      "— INPUT SIGNALS —",
+      "Interior dash-wrapped heading that must NOT become a voice.",
+      "More document content here.",
+    ].join("\n") } } } },
+  } as never;
+
+  it("a Document block is kind=document, named by its title, body intact", () => {
+    const frame = flowMovements().find((m) => m.id === "frame")!;
+    const entries = movementEvidence(prog, frame);
+    expect(entries.map((entry) => [entry.kind, entry.who])).toEqual([
+      ["transcript", "Sarah Okafor, COO, 2026-07-11"],
+      ["document", "Team Roster — SME responsibilities and long-title padding for realism"],
+    ]);
+    const doc = entries[1];
+    expect(doc.meta).toContain("document · the programme team · 2026-07-12");
+    // the interior heading stayed INSIDE the document body
+    expect(doc.text).toContain("INPUT SIGNALS");
+    expect(doc.text).toContain("More document content here.");
+  });
+});

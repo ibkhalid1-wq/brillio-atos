@@ -57,7 +57,7 @@ export function groundingFor(program: ProgramSummary, artifactId: string, moveme
   const movement = flowMovements().find((entry) => entry.id === movementId);
   if (!movement) return [];
   return movementEvidence(program, movement).map((entry, index) => {
-    const isDoc = entry.who.startsWith("Document:") || entry.kind === "reference";
+    const isDoc = entry.kind === "document" || entry.who.startsWith("Document:") || entry.kind === "reference";
     return {
       uri: resourceUri(program.id, isDoc ? "doc" : "evidence", `${movementId}-${index}-${entry.who}`),
       label: entry.who,
