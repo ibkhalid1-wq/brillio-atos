@@ -77,12 +77,12 @@ interface FlowShellProps {
   onDismissPortalItem: (itemId: string) => Promise<void>;
 }
 
-type FlowView = "today" | "flow" | "tracks" | "library" | "pulse" | "mission" | "portfolio";
+type FlowView = "today" | "flow" | "library" | "pulse" | "mission" | "portfolio";
 
 /** The rail's three zones: the work, the system, then Copilot at the foot.
  * ("mission" keeps its internal id; the person-facing name is Control.) */
 const DOCK_ZONES: Array<Array<[FlowView, string]>> = [
-  [["today", "Inbox"], ["flow", "Flow"], ["tracks", "Tracks"], ["library", "Library"], ["pulse", "Pulse"]],
+  [["today", "Inbox"], ["flow", "Flow"], ["library", "Library"], ["pulse", "Pulse"]],
   [["mission", "Control"], ["portfolio", "Portfolio"]],
 ];
 const DOCK_ORDER: FlowView[] = DOCK_ZONES.flat().map(([id]) => id);
@@ -91,7 +91,6 @@ const DOCK_ORDER: FlowView[] = DOCK_ZONES.flat().map(([id]) => id);
 const DOCK_PATHS: Record<string, React.ReactNode> = {
   today: <><path d="M4 6h16v12H4z" /><path d="M4 13h5l2 2.5h2L15 13h5" /></>,
   flow: <><path d="M4 12h13" /><path d="M13 7l5 5-5 5" /></>,
-  tracks: <><path d="M4 7h16" /><path d="M4 12h11" /><path d="M4 17h7" /></>,
   library: <><path d="M6 4v16" /><path d="M11 4v16" /><path d="M14.5 5.5L19 19.5" /></>,
   pulse: <path d="M3 12h4l2.5-6 4 12 2.5-6H21" />,
   mission: <><path d="M5 8h14" /><path d="M5 16h14" /><circle cx="10" cy="8" r="2.1" /><circle cx="15" cy="16" r="2.1" /></>,
@@ -267,17 +266,19 @@ export default function FlowShell(props: FlowShellProps) {
             onIngestPortalItem={props.onIngestPortalItem} onDismissPortalItem={props.onDismissPortalItem}
             onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
         ) : view === "flow" ? (
+          <>
           <FlowCanvas program={program} runningAgentIds={props.runningAgentIds} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} onCompileShipLanes={props.onCompileShipLanes} onToggleShipItem={props.onToggleShipItem} onScheduleFollowUp={props.onScheduleFollowUp} onMintFollowUp={props.onMintFollowUp} onSaveArtifactDoc={props.onSaveArtifactDoc} onRecordGate={props.onRecordGate} onReopenGate={props.onReopenGate} onRunAgentAndWait={props.onRunAgentAndWait} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }}
           />
-        ) : view === "tracks" ? (
-          <FlowTracks
-            program={program}
-            runningAgentIds={props.runningAgentIds}
-            onRunAgent={props.onRunAgent}
-            onSaveInputs={props.onSaveInputs}
-            onRecordShowPass={props.onRecordShowPass}
-            onAddTrack={props.onAddTrack}
-          />
+            <FlowTracks
+              program={program}
+              runningAgentIds={props.runningAgentIds}
+              onRunAgent={props.onRunAgent}
+              onSaveInputs={props.onSaveInputs}
+              onRecordShowPass={props.onRecordShowPass}
+              onAddTrack={props.onAddTrack}
+              embedded
+            />
+          </>
         ) : view === "library" ? (
           <FlowLibrary program={program} onSaveArtifactDoc={props.onSaveArtifactDoc} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} />
         ) : view === "mission" ? (
@@ -711,8 +712,15 @@ function FlowTracks({ program, runningAgentIds, onRunAgent, onSaveInputs, onReco
   }
 
   if (embedded && tracks.length === 0) return null;
+  const accepted = tracks.filter((track) => trackAcceptance(track).accepted).length;
   return (
     <div className={embedded ? "v3fs-tracks-embed" : "v3fs-today"}>
+      {embedded ? (
+        <div className="v3fs-tracks-embed-h">
+          <h2>Tracks</h2>
+          <span>{accepted}/{tracks.length} accepted — each demonstrates to its named stakeholder; Show's gate waits for all of them</span>
+        </div>
+      ) : null}
       {tracks.length === 0 ? (
         <div className="v3fs-quiet">
           <div className="v3fs-quiet-mark" aria-hidden="true">▤</div>
