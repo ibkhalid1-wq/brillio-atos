@@ -468,7 +468,7 @@ function FlowToday({ program, onResolveDecision, onIngestPortalItem, onDismissPo
           <div className="v3fs-quiet-mark" aria-hidden="true">◈</div>
           {attention.length ? (
             <>
-              <h2>The Inbox is clear — the record isn't.</h2>
+              <h2>The Inbox is clear — the record isn’t.</h2>
               <div className="v3fs-quiet-work">
                 {attention.slice(0, 4).map((item) => (
                   <div key={item.movement} className="v3fs-quiet-row">

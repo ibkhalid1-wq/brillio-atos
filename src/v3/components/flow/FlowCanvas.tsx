@@ -247,7 +247,7 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                                         {typeof script.acceptanceAsk === "string" && script.acceptanceAsk ? <p className="v3fs-ev-script-ask">{script.acceptanceAsk}</p> : null}
                                       </details>
                                     ) : scripts.length ? (
-                                      <div className="v3fs-ev-track-none">“{track.leadStakeholder}” isn't a person on the record — re-adopt the Blueprint's plan and this track binds to a real stakeholder.</div>
+                                      <div className="v3fs-ev-track-none">“{track.leadStakeholder}” isn’t a person on the record — re-adopt the Blueprint’s plan and this track binds to a real stakeholder.</div>
                                     ) : (
                                       <div className="v3fs-ev-track-none">No demo script yet — generate Demo Scripts and it appears here.</div>
                                     )}
@@ -786,7 +786,7 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
   if (!kit) {
     return hasEvidence ? null : (
       <div className="v3fs-kit v3fs-kit-ghost">
-        Generate the previous step's document first — this conversation's script is built from it.
+        Generate the previous step’s document first — this conversation’s script is built from it.
       </div>
     );
   }

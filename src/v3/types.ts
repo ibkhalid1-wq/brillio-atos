@@ -1,4 +1,3 @@
-import type { AppView } from "@/new/types";
 
 // Legacy surfaces `cockpit` / `governance-v2` / `oversight-v2` were retired in
 // Cycle 7. Their old deep-link paths still redirect to live surfaces in

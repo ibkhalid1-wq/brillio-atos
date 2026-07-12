@@ -307,6 +307,7 @@ export function useAgentTriggers({
     setRetroRunningPhases(new Set());
     setEscalationIsRunning(false);
     previousRunStatuses.current = new Map(activeRuns.map((run) => [run.id, run.status]));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-per-programme watcher; activeRuns is polled inside, not captured
   }, [programId]);
 
   useEffect(() => {
@@ -433,6 +434,7 @@ export function useAgentTriggers({
     void runAgentSafely({ agentId: "scope-pcr", phaseId: "program", triggeredBy: "trigger" }, () => {
       scopePcrRunning.current = false;
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- isAgentStale reads current props at fire time by design
   }, [canRunAgents, phases, programId, runAgentSafely, scopePcrGeneratedAt]);
 
   // Auto-generate the Discover discovery pack once the Discover phase is reached
@@ -834,6 +836,7 @@ export function useAgentTriggers({
         closureRunning.current = false;
       });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- retroRunningPhases intentionally read live, not captured
   }, [
     budgetGeneratedAt,
     canRunAgents,
@@ -936,6 +939,7 @@ export function useAgentTriggers({
         return next;
       });
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- retroRunningPhases is a ref-backed set read at call time; adding it would re-create the trigger loop
   }, [runAgentSafely]);
 
   const triggerDeck = useCallback(() => {

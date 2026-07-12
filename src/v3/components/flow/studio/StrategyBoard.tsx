@@ -5,7 +5,7 @@
  * recommendation object the generator emits; the candidate cards below
  * remain the full editor.
  */
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import { asArray, asRecord, asText, asStrings, type StudioProps } from "./StudioKit";
 
 const SCORE_DIMS: Array<{ key: string; label: string }> = [

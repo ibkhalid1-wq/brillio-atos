@@ -5,7 +5,7 @@
  * change rewrites the same entities/relations shape the generator emits,
  * so grounding, standards alignment and the blueprint keep reading it.
  */
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ReactFlow, Background, Controls, MarkerType, useNodesState,
   type Node, type Edge, type Connection,
@@ -221,7 +221,7 @@ export default function OntologyStudio({ doc, onChange }: StudioProps) {
           </>
         ) : (
           <div className="v3fs-stu-empty">
-            Click an entity or relation to edit it. Drag from one node's edge to another to draw a new relation.
+            Click an entity or relation to edit it. Drag from one node’s edge to another to draw a new relation.
           </div>
         )}
       </aside>

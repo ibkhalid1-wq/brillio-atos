@@ -4,7 +4,7 @@
  * the artifact studio so a claim can be checked against its source without
  * losing your place in the document.
  */
-import React, { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useFocusTrap } from "@/v3/lib/useFocusTrap";
 import { flowMovements, locateQuote, type EvidenceEntry } from "@/v3/components/flow/flowShellData";
 

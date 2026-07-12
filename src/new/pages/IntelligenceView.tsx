@@ -480,7 +480,7 @@ interface IntelligenceViewProps {
   onRunAgent?: (agentId: string, phaseId?: string) => void;
 }
 
-export function IntelligenceView({ program, onRefreshProgram, initialTab, onRunAgent }: IntelligenceViewProps) {
+export function IntelligenceView({ program, initialTab, onRunAgent }: IntelligenceViewProps) {
   const [tab, setTab] = useState<AISettingsTab>("Status");
   // Sync to initialTab whenever it changes (e.g. Agents nav → "Status", AI nav → "Setup")
   useEffect(() => { if (initialTab) setTab(initialTab); }, [initialTab]);
@@ -496,7 +496,7 @@ export function IntelligenceView({ program, onRefreshProgram, initialTab, onRunA
     openai:    { configured: false, active: false, model: null, updatedAt: null },
     google:    { configured: false, active: false, model: null, updatedAt: null },
   });
-  const [providerUpdatedAt, setProviderUpdatedAt] = useState<string | null>(null);
+  const [, setProviderUpdatedAt] = useState<string | null>(null);
   const [providerLoading, setProviderLoading] = useState(false);
   const [providerSaving, setProviderSaving] = useState(false);
   const [providerMessage, setProviderMessage] = useState<string | null>(null);

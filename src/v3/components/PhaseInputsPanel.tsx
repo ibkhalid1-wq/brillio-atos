@@ -279,7 +279,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
       if (bucket[key] === "[]") (normalized ??= { ...bucket })[key] = "";
     }
     return normalized ?? bucket;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [program.rawData, phaseId]);
 
   // Per-field source provenance recorded by the document importer. Keyed by
@@ -803,7 +803,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
       selfSaveSigRef.current = managedInputSignature(pending.snapshot, pending.fields);
       void onSaveRef.current(pending.phaseId, pending.snapshot, { silent: true });
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [phaseId]);
 
   function addKpi() {

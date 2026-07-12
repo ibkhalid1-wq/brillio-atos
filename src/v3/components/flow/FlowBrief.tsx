@@ -5,7 +5,7 @@
  * It deliberately reuses the board pack's print typography: the sponsor sees
  * the same page the operator printed.
  */
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 const FUNCTIONS_BASE = `${import.meta.env.VITE_SUPABASE_URL || ""}/functions/v1`;
 

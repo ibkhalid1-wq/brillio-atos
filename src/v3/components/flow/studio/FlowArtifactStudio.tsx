@@ -390,7 +390,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
         ) : null}
         {dirty && canEdit ? (
           <footer className="v3fs-stu-savebar">
-            <span>You've edited this document.</span>
+            <span>You’ve edited this document.</span>
             <div className="v3fs-dec-cta">
               <button type="button" className="v3fs-btn pri" disabled={saving} onClick={() => void save()}>
                 {saving ? "Saving…" : "Save & attest"}

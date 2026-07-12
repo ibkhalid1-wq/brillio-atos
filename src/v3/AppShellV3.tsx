@@ -61,7 +61,6 @@ import { listPortalInbox } from "@/v3/components/flow/flowPortal";
 import { validateProgramBlob } from "@/v3/lib/blobGuard";
 import { unrosteredVoicesProposal, reDemoProposal, queueWatcherProposal } from "@/v3/components/flow/flowWatchers";
 import { mergePhaseInputBucket } from "@/v3/lib/phaseInputMerge";
-import type { V3CommandMode, V3MoreView, V3ReportId, V3Surface } from "@/v3/types";
 import { isDecisionOpen, pushV3Toast } from "@/v3/utils";
 import "@/new/styles.css";
 import "./v3.css";
@@ -78,7 +77,6 @@ const AUTH_RECOVERY_INTENT_STORAGE_KEY = "atlas-auth-recovery-intent";
 // retired (2026-07). Every programme seeds with, and renders, the Flow spine.
 const APP_METHODOLOGY_VARIANT: MethodologyVariant = "atos-flow";
 const DEFAULT_PHASE_SEQUENCE = getPhaseSequence(APP_METHODOLOGY_VARIANT);
-const ALL_KNOWN_PHASE_IDS = [...new Set(DEFAULT_PHASE_SEQUENCE)];
 
 
 function buildProgramSeed(name: string) {
@@ -904,6 +902,7 @@ export default function AppShellV3() {
       const message = error instanceof Error ? error.message : "Could not sign out.";
       pushV3Toast(message, { tone: "error", duration: 5000 });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-once: reads storage a single time
   }, []);
 
   // Update document title to reflect active programme
@@ -1177,6 +1176,7 @@ export default function AppShellV3() {
     } finally {
       await refreshPrograms();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- cooldown constant and setup helpers are stable; capturing aiStatus would go stale mid-run by design
   }, [activeProgramId, activeProgram, userId, canEditActiveProgram, refreshPrograms, resolveAgentId, runAgent]);
 
   // Single shared run-agent handler for every surface (Cycle 7 dedup). Surfaces
@@ -1188,13 +1188,14 @@ export default function AppShellV3() {
     [runProgramAgent, activePhaseId],
   );
 
-  const { addMilestone, completeMilestone, isSaving: milestoneSavePending } = useMilestones(activeProgramId || "", activeProgram?.rawData || {}, refreshPrograms);
-  const { saveBudgetInputs, isSaving: budgetSavePending } = useBudgetTracking(activeProgramId || "", activeProgram?.rawData || {}, refreshPrograms);
+  // Classic-era hooks: called for their sync side-effects; Flow surfaces none of their actions.
+  useMilestones(activeProgramId || "", activeProgram?.rawData || {}, refreshPrograms);
+  useBudgetTracking(activeProgramId || "", activeProgram?.rawData || {}, refreshPrograms);
   useClosure(activeProgramId || "", activeProgram?.rawData || {}, refreshPrograms);
-  const { approveGate, requestRemediation, reopenGate, raiseChangeRequest, resolveChangeRequest } = useGateReview(activeProgramId || "", rawData, refreshPrograms);
-  const { addNote: addProgramNote } = useProgramNotes(activeProgramId || "", rawData, refreshPrograms);
-  const { addDecision } = useDecisionQueue(activeProgramId || "", rawData, refreshPrograms);
-  const { updatePct: updatePhasePct } = usePhaseProgress(activeProgramId || "", rawData, refreshPrograms);
+  const { approveGate, reopenGate } = useGateReview(activeProgramId || "", rawData, refreshPrograms);
+  useProgramNotes(activeProgramId || "", rawData, refreshPrograms);
+  useDecisionQueue(activeProgramId || "", rawData, refreshPrograms);
+  usePhaseProgress(activeProgramId || "", rawData, refreshPrograms);
   const { save: saveSetup, isSaving: wizardSaving } = useProgramSetup(activeProgramId || "", rawData, refreshPrograms);
   const copilotMemoryContext = useMemo(() => {
     if (!activeProgramId) return "";
@@ -1202,6 +1203,7 @@ export default function AppShellV3() {
       .map((agentId) => buildMemoryContext(agentId, activeProgramId))
       .filter(Boolean)
       .join("\n");
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- activeRuns is a recompute trigger for run-derived state
   }, [activeProgramId, activeRuns]);
 
   const { sendMessage: sendCopilotMessage } = useCopilotThread(
@@ -1344,6 +1346,7 @@ export default function AppShellV3() {
     // previousScore (prior-day snapshot from local history) turns the model's
     // up/down trend from a permanent "stable" placeholder into a real signal.
     return deriveProgramConfidence(activeProgram, undefined, getPreviousScore(activeProgram.id));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- rawData/openDecisions are recompute TRIGGERS: the memo re-derives when the blob or queue moves
   }, [activeProgram, rawData, openDecisions]);
 
   const programConfidenceScore = programConfidenceResult?.score ?? null;
@@ -1359,7 +1362,7 @@ export default function AppShellV3() {
   }, [activeProgram?.id, programConfidenceScore]);
 
 
-  const { tasks: currentPhaseTasks, updateTask: updatePhaseTask, refresh: refreshPhaseTasks } = usePhaseAgentState(activeProgramId, activePhaseId);
+  usePhaseAgentState(activeProgramId, activePhaseId);
 
   useAgentCascadeToasts(activeRuns);
   useCriticalEventAlerts(activeProgram);
@@ -1514,6 +1517,7 @@ export default function AppShellV3() {
       !activeProgram.objective &&
       activeProgram.phases.every((phase) => (phase.pct ?? 0) === 0);
     if (isEmpty) setWizardOpen(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the id alone: rerunning per blob write would loop the baseline effect
   }, [activeProgram?.id]);
 
 
@@ -1835,6 +1839,7 @@ export default function AppShellV3() {
     } else if (!silent) {
       pushV3Toast("Inputs saved. Ready to run agents.", { tone: "success", duration: 2500 });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- refreshPrograms listed deliberately: a programme refresh must rebuild this mutator
   }, [activeProgram, refreshPrograms, updateProgramData]);
 
 

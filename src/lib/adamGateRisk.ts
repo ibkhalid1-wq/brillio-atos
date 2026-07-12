@@ -41,7 +41,7 @@ export function recordGateRiskSnapshot(phaseId: string, risk: PredictedRisk, pro
   };
   try {
     window.localStorage.setItem(key, JSON.stringify(payload));
-  } catch {}
+  } catch { /* best effort */ }
 }
 
 export function getRiskTrend(phaseId: string, programId: string): RiskTrend {

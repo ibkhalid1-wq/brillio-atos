@@ -5,7 +5,7 @@
  * Human-in-the-loop points ride the agents that own them. Layered layout,
  * floating angled connectors; the agent cards below remain the full editor.
  */
-import React, { useEffect, useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { ReactFlow, Background, Controls, MarkerType, useNodesState, type Node, type Edge } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { FLOATING_EDGE_TYPES, layeredPositions } from "./graphKit";

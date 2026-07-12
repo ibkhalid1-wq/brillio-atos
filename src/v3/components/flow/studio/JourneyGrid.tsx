@@ -6,7 +6,7 @@
  * (agenticBlueprint.journeys); the generator emits it, edits guard like
  * every mirror.
  */
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { TextField, SelectField, asArray, asRecord, asText, type StudioProps } from "./StudioKit";
 
 const JOURNEY_LANES: Array<{ key: string; label: string }> = [
@@ -44,7 +44,7 @@ export default function JourneyGrid({ doc, onChange }: StudioProps) {
         </button>
       </div>
       {!journey ? (
-        <div className="v3fs-stu-empty">No journeys yet — add one, or regenerate the Blueprint and they arrive grounded in the Atlas's workflows.</div>
+        <div className="v3fs-stu-empty">No journeys yet — add one, or regenerate the Blueprint and they arrive grounded in the Atlas’s workflows.</div>
       ) : (
         <>
           <div className="v3fs-wf-head">

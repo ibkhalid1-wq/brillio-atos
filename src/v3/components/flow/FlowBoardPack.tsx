@@ -5,7 +5,7 @@
  * realised benefits, and the trail's tail. Opened as an overlay; the print
  * stylesheet strips the app and keeps the paper.
  */
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import {
   flowMovements, movementArtifacts, gateChecklist, gateReadiness,
@@ -167,7 +167,7 @@ export default function FlowBoardPack({ program, onMintBrief, onClose }: {
           </section>
 
           <footer className="v3fs-pack-foot">
-            Built live from the programme's data — every number here traces back to evidence, documents and decisions in ATOS Flow.
+            Built live from the programme’s data — every number here traces back to evidence, documents and decisions in ATOS Flow.
           </footer>
         </div>
       </div>

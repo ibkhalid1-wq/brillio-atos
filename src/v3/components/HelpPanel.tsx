@@ -202,12 +202,6 @@ export default function HelpPanel({ onClose, initialQuery = "" }: HelpPanelProps
 
   const categoryList = Object.keys(categories);
 
-  const displayArticles = isSearching
-    ? results
-    : activeCategory
-    ? categories[activeCategory] ?? []
-    : null; // null = show category grid
-
   return (
     <>
       <div className="v3-sheet-overlay" onClick={onClose} />
@@ -308,7 +302,7 @@ export default function HelpPanel({ onClose, initialQuery = "" }: HelpPanelProps
             <div className="v3-help-results">
               {results.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--v3-text-muted)", fontSize: 13 }}>
-                  No articles match "<strong>{query}</strong>"
+                  No articles match “<strong>{query}</strong>”
                 </div>
               ) : (
                 <>

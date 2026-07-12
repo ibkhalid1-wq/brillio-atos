@@ -124,7 +124,7 @@ export function useAIStatus(enabled = true): AIStatus {
       if (intervalRef.current) clearInterval(intervalRef.current);
       window.removeEventListener(AI_SETTINGS_SAVED_EVENT, onAISaved);
     };
-  }, [enabled, check]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [enabled, check]);  
 
   return { status, provider, model, checkedAt, recheck };
 }

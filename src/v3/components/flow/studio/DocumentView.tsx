@@ -7,8 +7,8 @@
  * the model's open gaps as a closing callout. Provenance never appears here
  * — it lives in the studio's colophon.
  */
-import React, { useEffect, useRef, useState } from "react";
-import { TextArea, TextField, StringListEditor, TableEditor, ChipsField, asArray, asRecord, asStrings } from "./StudioKit";
+import { useEffect, useRef, useState } from "react";
+import { TextArea, TextField, StringListEditor, TableEditor, ChipsField, asStrings } from "./StudioKit";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -118,7 +118,7 @@ function Card({ item, depth }: { item: Record<string, unknown>; depth: number })
  * lists, flat collections and shallow objects edit in place; deep
  * collections hand off to the full studio, where the bespoke editors live.
  */
-function SectionEditor({ k, value, onChange, onOpenFullEditor }: {
+function SectionEditor({ value, onChange, onOpenFullEditor }: {
   k: string;
   value: unknown;
   onChange: (next: unknown) => void;
@@ -146,7 +146,7 @@ function SectionEditor({ k, value, onChange, onOpenFullEditor }: {
     }
     return (
       <div className="v3fs-stu-empty">
-        This section's structure is richer than the inline editor —{" "}
+        This section’s structure is richer than the inline editor —{" "}
         {onOpenFullEditor ? (
           <button type="button" className="v3fs-a" onClick={onOpenFullEditor}>open the full editor</button>
         ) : "use the full editor"}.
@@ -267,6 +267,7 @@ export default function DocumentView({ doc, order, onPatch, onOpenFullEditor }: 
   // Outline navigation earns its column only on long documents.
   const outline = bodyEntries.map(([k]) => k);
   const showOutline = outline.length >= 4;
+  const outlineKey = outline.join("|");
 
   useEffect(() => {
     if (!showOutline || !rootRef.current) return;
@@ -278,7 +279,7 @@ export default function DocumentView({ doc, order, onPatch, onOpenFullEditor }: 
     }, { root: rootRef.current.closest(".v3fs-docview-b"), rootMargin: "0px 0px -70% 0px" });
     sections.forEach((section) => observer.observe(section));
     return () => observer.disconnect();
-  }, [showOutline, outline.join("|")]);
+  }, [showOutline, outlineKey]);
 
   const jumpTo = (key: string) => {
     rootRef.current?.querySelector(`[data-dv-sec="${key}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });

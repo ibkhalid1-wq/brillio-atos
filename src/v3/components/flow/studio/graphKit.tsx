@@ -4,7 +4,6 @@
  * move) and the layered crossing-minimising layout (BFS rows from the
  * best-connected node, one barycenter ordering pass per row).
  */
-import React from "react";
 import {
   BaseEdge, EdgeLabelRenderer, getSmoothStepPath, useInternalNode, Position,
   type EdgeProps, type InternalNode,

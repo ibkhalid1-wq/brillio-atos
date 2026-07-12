@@ -5,7 +5,7 @@
  * build on ATOS Flow, so there is nothing to pick — the wizard captures
  * facts, and the baseline lands in Frame's inputs as early evidence.
  */
-import React, { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import { supabase } from "@/integrations/supabase/client";
 import { parseDocumentToText } from "@/new/lib/parseDocumentToText";

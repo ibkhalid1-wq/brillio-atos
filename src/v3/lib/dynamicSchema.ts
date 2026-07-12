@@ -178,9 +178,6 @@ export function getDynamicSchemaStore(rawData: unknown): DynamicSchemaStore {
 }
 
 /** Static methodology input fields for a phase. */
-function staticInputFields(phaseId: string): PhaseInputField[] {
-  return ATOS_STANDARD.phases.find((p) => p.id === phaseId)?.inputFields ?? [];
-}
 
 /**
  * A persisted dynamic `grid` field with no usable columns cannot render: every

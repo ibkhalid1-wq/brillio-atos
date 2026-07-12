@@ -1,4 +1,3 @@
-import React from "react";
 import { AlertIcon } from "@/new/components/ui/Icons";
 
 export interface EmptyStateProps {

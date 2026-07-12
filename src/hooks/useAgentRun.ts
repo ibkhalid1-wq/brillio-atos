@@ -210,6 +210,7 @@ export function useAgentRun(programId: string, enabled = true, onRunComplete?: (
       void supabase.removeChannel(postgresChannel);
       void supabase.removeChannel(broadcastChannel);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- callback identity is the caller's concern; re-subscribing per render would drop live runs
   }, [enabled, programId]);
 
   useEffect(() => {
