@@ -1048,6 +1048,28 @@ export default function AppShellV3() {
       if (ownershipMap) {
         crossPhaseContext += `${crossPhaseContext ? "\n\n" : ""}${ownershipMap}`;
       }
+      // Round-trip hand-edits into the record. When the operator has
+      // hand-corrected THIS artifact, feed their edits into the regeneration
+      // as authoritative context, so a fresh generation preserves their
+      // corrections rather than reverting to a generic evidence-derived draft.
+      // The edit becomes durable, influential input to the pipeline — not a
+      // fragile mirror-only override the guard can protect only by declining.
+      const editFieldKey = FORMAL_ARTIFACT_FIELD_KEYS[resolvedAgentId as keyof typeof FORMAL_ARTIFACT_FIELD_KEYS];
+      const mirror = getProgramState(activeProgram?.rawData || {}).inner[editFieldKey];
+      if (mirror && typeof mirror === "object" && !Array.isArray(mirror)) {
+        const m = mirror as Record<string, unknown>;
+        const editedAt = typeof m.editedAt === "string" ? Date.parse(m.editedAt) : 0;
+        const generatedAt = typeof m.generatedAt === "string" ? Date.parse(m.generatedAt) : 0;
+        if (editedAt > generatedAt) {
+          const editedDoc: Record<string, unknown> = {};
+          for (const [key, value] of Object.entries(m)) {
+            if (!key.startsWith("_") && key !== "editedAt" && key !== "editedBy" && key !== "generatedAt" && key !== "confidence") {
+              editedDoc[key] = value;
+            }
+          }
+          crossPhaseContext += `${crossPhaseContext ? "\n\n" : ""}## Operator hand-corrections to PRESERVE\nThe operator hand-edited this artifact on ${String(m.editedAt).slice(0, 10)}. Their corrections are authoritative: keep their content verbatim in the sections they changed; only revise where the underlying evidence has genuinely moved since. Do NOT revert their wording to a generic draft. Their current hand-corrected document:\n${JSON.stringify(editedDoc).slice(0, 8000)}`;
+        }
+      }
     }
 
     try {
