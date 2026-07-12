@@ -160,13 +160,11 @@ export function mintInterviewPacks(program: ProgramSummary, actor: string): Reco
 
   const existing = Array.isArray(inner.flowInterviewPacks) ? (inner.flowInterviewPacks as unknown[]) : [];
   const packed = new Set(existing.filter(isRecord).map((p) => String(p.stakeholder ?? "").toLowerCase()));
-  const consent = typeof kit?.consentNote === "string" ? kit.consentNote : "";
   const now = new Date().toISOString();
 
   const additions = interviews
     .filter((interview) => !packed.has(String(interview.stakeholder ?? "").toLowerCase()))
     .map((interview) => {
-      const objectives = Array.isArray(interview.objectives) ? interview.objectives.map(String).filter(Boolean) : [];
       const agenda = Array.isArray(interview.agenda) ? interview.agenda.filter(isRecord) : [];
       const questions = agenda
         .flatMap((slot) => (Array.isArray(slot.questions) ? slot.questions.map(String) : []))
@@ -176,11 +174,10 @@ export function mintInterviewPacks(program: ProgramSummary, actor: string): Reco
         id: `pack-${randomSecret().slice(0, 10)}`,
         stakeholder: String(interview.stakeholder ?? "Stakeholder"),
         role: String(interview.role ?? ""),
-        intro: [
-          objectives.length ? `This conversation is about: ${objectives.join("; ")}.` : "",
-          "Answer in your own words, in as much detail as you like — specifics (numbers, delays, system names, workarounds) are exactly what we need.",
-          consent,
-        ].filter(Boolean).join("\n\n"),
+        // Async links carry ONE line of guidance. Objectives are meeting
+        // theatre here (the questions ARE the agenda) and recording consent
+        // belongs to conversations, not forms.
+        intro: "Specifics (numbers, delays, system names, workarounds) are exactly what we need.",
         questions,
         token: randomSecret(),
         createdAt: now,

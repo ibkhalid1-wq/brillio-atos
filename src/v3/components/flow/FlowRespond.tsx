@@ -273,7 +273,6 @@ export default function FlowRespond({ token }: { token: string }) {
                 <p className="v3fs-portal-sub">
                   These questions replace a scheduled discovery call. Answer in your own words, whenever suits you — skip anything that doesn&rsquo;t apply.
                 </p>
-                {state.pack.intro ? <p className="v3fs-portal-intro">{state.pack.intro}</p> : null}
                 <div className="v3fs-portal-meta">
                   <span>✎ {state.pack.questions.length} questions — answer any</span>
                   <span>⏱ ~{Math.max(5, Math.round(state.pack.questions.length * 1.5))} minutes</span>

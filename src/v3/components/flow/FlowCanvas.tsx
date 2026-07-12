@@ -309,6 +309,7 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                     kit={meetingKit(program, movement.id)}
                     movementId={movement.id}
                     hasEvidence={evidence.length > 0}
+                    docsStale={artifacts.some((artifact) => artifact.present && artifact.stale)}
                     program={program}
                     onSaveInputs={onSaveInputs}
                     onScheduleFollowUp={onScheduleFollowUp}
@@ -768,7 +769,7 @@ function TranscribeButton({ onText }: { onText: (transcript: string) => void }) 
   );
 }
 
-function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, onScheduleFollowUp, onMintFollowUp, onMintPacks, onMintDemoInvites, onCaptured }: {
+function MeetingKitCard({ kit, movementId, hasEvidence, program, docsStale, onSaveInputs, onScheduleFollowUp, onMintFollowUp, onMintPacks, onMintDemoInvites, onCaptured }: {
   kit: MeetingKit | null;
   movementId: string;
   hasEvidence: boolean;
@@ -778,6 +779,9 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
   onMintDemoInvites?: () => Promise<void>;
   /** Fired after a capture lands — Show wires the contradiction watcher here. */
   onCaptured?: () => void;
+  /** A movement document trails the evidence — answered gaps fall off this
+   * script only when the documents regenerate. */
+  docsStale?: boolean;
   program: ProgramSummary;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
   onScheduleFollowUp?: (movementId: string, who: string, date: string) => Promise<void>;
@@ -1024,6 +1028,12 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
       <div className="v3fs-kit-b">
         <p className="v3fs-kit-p">{kit.purpose}</p>
         <div className="v3fs-kit-cap">Interview script — {kit.who}</div>
+        {kit.followUp && docsStale ? (
+          <p className="v3fs-kit-stalenote">
+            New answers are on the record but the documents haven&rsquo;t caught up — this script re-asks
+            what THEY still list as open. Regenerate the documents and answered gaps fall off it.
+          </p>
+        ) : null}
         <ol className="v3fs-kit-qs">
           {kit.questions.map((question, index) => <li key={index}>{question}</li>)}
         </ol>
