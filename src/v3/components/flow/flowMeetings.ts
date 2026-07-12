@@ -63,7 +63,7 @@ function baseMeetingKit(program: ProgramSummary, movementId: string): Omit<Meeti
     if (!filled(inputs.businessObjective)) questions.push("What outcome should this system achieve — the change, the magnitude, and by when?");
     if (!filled(inputs.sponsor)) questions.push("Who owns this transformation end to end — name and role?");
     if (!filled(inputs.successMetric)) questions.push("Which single measure proves it worked? What is it today, and what should it become?");
-    if (parseGridRows(inputs.stakeholderSeed).length === 0) questions.push("Whose working day changes? Name the people we must hear from.");
+    if (parseGridRows(readMovementInputs(program, "listen").interviewRoster).length === 0) questions.push("Whose working day changes? Name the people we must hear from.");
     if (!filled(inputs.targetFirstDemoDate)) questions.push("When should the first stakeholder watch their own workflow run — pick a date.");
     questions.push("What must NOT change — hard boundaries, systems that stay, lines we don't cross?");
     if (done && questions.length <= 1) {

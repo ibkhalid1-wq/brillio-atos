@@ -16,7 +16,7 @@
 import { z } from "zod";
 
 /** Bump when a migration in MIGRATIONS changes the blob's shape. */
-export const BLOB_VERSION = 1;
+export const BLOB_VERSION = 2;
 
 const record = z.record(z.string(), z.unknown());
 
@@ -106,6 +106,44 @@ export function validateProgramBlob(inner: Record<string, unknown>): BlobIssue[]
 const MIGRATIONS: Array<(inner: Record<string, unknown>) => Record<string, unknown>> = [
   // v0 → v1: baseline stamp; shapes already match.
   (inner) => inner,
+  // v1 → v2: the Frame "stakeholders you already know" seed and the Listen
+  // coverage roster were one concept split across two grids. Fold the seed
+  // into the roster (the single People list) — deduped by name, existing
+  // roster rows and their statuses preserved — then drop the seed.
+  (inner) => {
+    const phaseInputs = inner.phaseInputs;
+    if (typeof phaseInputs !== "object" || phaseInputs === null) return inner;
+    const pi = phaseInputs as Record<string, unknown>;
+    const frame = typeof pi.frame === "object" && pi.frame !== null ? { ...(pi.frame as Record<string, unknown>) } : null;
+    if (!frame || typeof frame.stakeholderSeed !== "string") return inner;
+    const parseGrid = (value: unknown): Array<Record<string, unknown>> => {
+      if (typeof value !== "string" || !value.trim().startsWith("[")) return [];
+      try {
+        const rows = JSON.parse(value);
+        return Array.isArray(rows) ? rows.filter((r) => r && typeof r === "object") : [];
+      } catch { return []; }
+    };
+    const seedRows = parseGrid(frame.stakeholderSeed);
+    const listen = typeof pi.listen === "object" && pi.listen !== null ? { ...(pi.listen as Record<string, unknown>) } : {};
+    const rosterRows = parseGrid((listen as Record<string, unknown>).interviewRoster);
+    const seen = new Set(rosterRows.map((r) => String((r as Record<string, unknown>).name ?? "").trim().toLowerCase()).filter(Boolean));
+    const additions = seedRows
+      .map((row) => row as Record<string, unknown>)
+      .filter((row) => {
+        const name = String(row.name ?? "").trim();
+        return name && !seen.has(name.toLowerCase());
+      })
+      .map((row) => ({
+        name: String(row.name ?? "").trim(),
+        role: String(row.role ?? row.domain ?? "").trim(),
+        status: "To book",
+      }));
+    delete frame.stakeholderSeed;
+    const nextListen = additions.length || rosterRows.length
+      ? { ...(listen as Record<string, unknown>), interviewRoster: JSON.stringify([...rosterRows, ...additions]) }
+      : listen;
+    return { ...inner, phaseInputs: { ...pi, frame, listen: nextListen } };
+  },
 ];
 
 /** Migrate an inner root to the current version. Pure — returns a new object

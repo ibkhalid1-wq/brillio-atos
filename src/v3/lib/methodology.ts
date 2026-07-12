@@ -1251,23 +1251,11 @@ export const ATOS_FLOW: MethodologyDefinition = {
             { key: "unit", label: "Unit", type: "text", width: 70, placeholder: "$, %, d" },
           ],
         },
-        {
-          id: "stakeholderSeed",
-          label: "Stakeholders you already know",
-          type: "grid",
-          required: false,
-          hint: "Anyone who must be heard. The stakeholder map generator extends this from the sponsor conversation — seed it, don't complete it.",
-          columns: [
-            { key: "name", label: "Name", type: "text" },
-            { key: "role", label: "Role / title", type: "text" },
-            { key: "domain", label: "Domain they own", type: "text", placeholder: "e.g. Pricing desk, Fulfilment" },
-          ],
-        },
         { id: "targetFirstDemoDate", label: "Target first-demo date", type: "date", required: false, hint: "Flow's headline metric is time-to-first-demo — the date every stakeholder first watches their own workflow run. Days-to-demo replaces duration-in-weeks." },
       ],
       artifactInputFlow: {
         "charter": ["businessObjective", "sponsor", "industry", "successMetric"],
-        "discovery-kit": ["businessObjective", "industry", "stakeholderSeed"],
+        "discovery-kit": ["businessObjective", "industry"],
       },
     },
     {
@@ -1296,12 +1284,12 @@ export const ATOS_FLOW: MethodologyDefinition = {
       inputFields: [
         {
           id: "interviewRoster",
-          label: "Discovery coverage",
+          label: "People — the programme's stakeholders",
           type: "grid",
           required: true,
           minRows: 3,
-          hint: "One row per stakeholder conversation — the coverage ledger the Atlas synthesises from. Waiving someone (with the reason) is a recorded decision, not a gap.",
-          validationRule: "Every stakeholder from the map appears here with a status — heard, booked, or waived with a reason.",
+          hint: "Everyone who must be heard: those you know upfront and those who surface in the evidence (added for you when they're quoted). One row per person, with a status — the Discovery Kit plans interviews for them and the Atlas synthesises what they said. Waiving someone (with the reason) is a recorded decision, not a gap.",
+          validationRule: "Every stakeholder appears here with a status — heard, booked, or waived with a reason.",
           columns: [
             { key: "name", label: "Stakeholder", type: "text" },
             { key: "role", label: "Role / domain", type: "text" },

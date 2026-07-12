@@ -58,7 +58,7 @@ import { getPreviousScore, recordConfidenceSnapshot } from "@/v3/lib/confidenceH
 import { artifactReviewFieldKey } from "@/v3/lib/artifactReview";
 import { listOpenFlowDecisions } from "@/v3/components/flow/flowDecisions";
 import { listPortalInbox } from "@/v3/components/flow/flowPortal";
-import { validateProgramBlob } from "@/v3/lib/blobGuard";
+import { validateProgramBlob, migrateProgramBlob } from "@/v3/lib/blobGuard";
 import { unrosteredVoicesProposal, reDemoProposal, queueWatcherProposal } from "@/v3/components/flow/flowWatchers";
 import { mergePhaseInputBucket } from "@/v3/lib/phaseInputMerge";
 import { isDecisionOpen, pushV3Toast } from "@/v3/utils";
@@ -1290,6 +1290,24 @@ export default function AppShellV3() {
       pushV3Toast(`Data check: ${issues.length} item${issues.length === 1 ? " looks" : "s look"} malformed (${issues.map((i) => i.key).join(", ")}). The app keeps working around it — details are in the console.`, { tone: "warning", duration: 7000 });
     }
   }, [activeProgram?.id, activeProgram?.updatedAt, activeProgram?.rawData, activeProgram]);
+
+  // One-time blob migration on load: bring an older-stamped programme up to
+  // the current shape (e.g. folding the Frame stakeholder seed into the single
+  // People roster), then persist the upgraded blob so it lands once. The
+  // snapshot ring captures the pre-migration state at the write chokepoint.
+  const migratedPrograms = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!activeProgram?.rawData || !activeProgramId || !canEditActiveProgram) return;
+    if (migratedPrograms.current.has(activeProgramId)) return;
+    const raw = activeProgram.rawData as Record<string, unknown>;
+    const nested = typeof raw.data === "object" && raw.data !== null;
+    const inner = nested ? (raw.data as Record<string, unknown>) : raw;
+    const { inner: upgraded, migrated: didMigrate } = migrateProgramBlob(inner);
+    if (!didMigrate) return;
+    migratedPrograms.current.add(activeProgramId);
+    const nextBlob = nested ? { ...raw, data: upgraded } : upgraded;
+    void updateProgramData(activeProgramId, nextBlob, activeProgram.updatedAt);
+  }, [activeProgram?.id, activeProgram?.updatedAt, activeProgram?.rawData, activeProgramId, canEditActiveProgram, activeProgram, updateProgramData]);
 
   // Realtime: one channel per programme. Postgres changes from OTHER
   // writers (a colleague, another device, an edge run) refresh the local

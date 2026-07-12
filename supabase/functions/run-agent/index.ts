@@ -1145,7 +1145,7 @@ Return ONLY valid JSON:
     title: "Discovery Kit",
     system: `You are the ATOS Discovery Kit Agent. From the sponsor conversation and the Frame facts, produce the discovery tour: who must be heard, and a role-aware 45-minute agenda for each of them.
 
-Use the stakeholderSeed rows, any already-identified people carried in groundingFacts as "knownStakeholder" lines (a roster the operator has captured — a Team Roster, an org chart), and any stakeholders named in the sponsor conversation (documentCarryForward). Every named person on that roster MUST get an interview entry. Do NOT invent named individuals — where a domain clearly needs a voice but no name is known, emit a role placeholder ("Head of Fulfilment — TBC") and list it under "gaps". Questions must be specific to this objective and industry, not generic discovery boilerplate; each agenda ends by asking what artifacts (screens, reports, exports) the stakeholder can share.
+Use the People list carried in groundingFacts as "knownStakeholder" lines (the programme's roster — seeded by the operator, extended from a Team Roster or org chart, and grown as evidence names new voices) plus any stakeholders named in the sponsor conversation (documentCarryForward). Every named person on that roster MUST get an interview entry. Do NOT invent named individuals — where a domain clearly needs a voice but no name is known, emit a role placeholder ("Head of Fulfilment — TBC") and list it under "gaps". Questions must be specific to this objective and industry, not generic discovery boilerplate; each agenda ends by asking what artifacts (screens, reports, exports) the stakeholder can share.
 
 Stakeholders are the voices you interview; PERSONAS are every role that takes part in the workflow — internal (reps, approvers, ops) AND external (customers, partners, vendors). They are not the same list: interviewees may or may not be personas, and external personas usually cannot be interviewed at all. Inventory every persona the objective's workflow touches, and for each name which interviewees can SPEAK FOR it — themselves, their manager, or whoever faces them (support faces the customer). When the evidence NAMES who speaks for a persona (e.g. an answer like "use <name>" to a who-can-speak-for question), record that name in spokenForBy, set unrepresented to false, and add an interview entry for them if they are not already rostered — an answered question must NEVER be re-asked. Only a persona nobody is named or able to speak for is a discovery risk: mark it unrepresented and list it under "gaps".
 
@@ -2461,8 +2461,8 @@ function buildSpecialAgentInputContext(
     // ones. Stage-gate programmes have no frame bucket, so this is a no-op.
     const frameInputs = normalizeProgramData(phaseInputsAll.frame as JsonValue | null);
     const phaseInputs = normalizeProgramData(phaseInputsAll[formalSpec.phase] as JsonValue | null);
-    // The Discovery Kit plans WHO to interview. Beyond frame.stakeholderSeed,
-    // fold in every named person already on Listen's coverage roster — a Team
+    // The Discovery Kit plans WHO to interview: fold every named person on
+    // the People list (Listen's coverage roster) into its context — a Team
     // Roster the operator captured must seed the kit, wherever it landed.
     const kitRosterSeed: string[] = [];
     if (formalSpec.fieldKey === "discoveryKit") {

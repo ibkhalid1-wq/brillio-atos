@@ -335,8 +335,7 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
       sponsorConversation: "— Sarah Okafor, COO —\nplenty of words on record here",
       businessObjective: "obj", sponsor: "Sarah Okafor", industry: "Banking",
       successMetric: "cycle time", targetFirstDemoDate: "2026-07-25",
-      stakeholderSeed: JSON.stringify([{ name: "Dan" }]),
-    } },
+    }, listen: { interviewRoster: JSON.stringify([{ name: "Dan", status: "To book" }]) } },
     discoveryKit: { gaps },
   });
 
@@ -353,9 +352,9 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
           sponsorConversation: "— Sarah Okafor, COO —\nplenty of words on record here",
           businessObjective: "obj", sponsor: "Sarah Okafor", industry: "Banking",
           successMetric: "cycle time", targetFirstDemoDate: "2026-07-25",
-          stakeholderSeed: JSON.stringify([{ name: "Dan" }]),
         },
         listen: {
+          interviewRoster: JSON.stringify([{ name: "Dan", status: "To book" }]),
           contradictionLog: JSON.stringify([
             { statement: "Quote table is the sole record", between: "Dan vs Marcus", status: "Open — filed 2026-07-11" },
             { statement: "Old dispute", status: "Resolved 2026-07-01" },
@@ -1069,5 +1068,28 @@ describe("source documents carry their original-file pointer", () => {
     expect(doc.text).not.toContain("[source:");
     expect(doc.text).toContain("Slide one content.");
     expect(doc.words).toBe(3);
+  });
+});
+
+describe("blob migration v2 — seed folds into the People roster", () => {
+  it("moves frame.stakeholderSeed rows into listen.interviewRoster, deduped, then drops the seed", () => {
+    const inner = {
+      _blobVersion: 1,
+      phaseInputs: {
+        frame: { stakeholderSeed: JSON.stringify([{ name: "Dan Reyes", role: "RevOps" }, { name: "Priya", domain: "Sales Enablement" }]) },
+        listen: { interviewRoster: JSON.stringify([{ name: "Dan Reyes", role: "RevOps Lead", status: "Heard" }]) },
+      },
+    };
+    const { inner: out, migrated } = migrateProgramBlob(inner);
+    expect(migrated).toBe(true);
+    const frame = (out.phaseInputs as Record<string, Record<string, unknown>>).frame;
+    expect(frame.stakeholderSeed).toBeUndefined();
+    const roster = JSON.parse((out.phaseInputs as Record<string, Record<string, string>>).listen.interviewRoster);
+    // Dan already on the roster (Heard) stays untouched; Priya folds in as "To book"
+    expect(roster).toHaveLength(2);
+    expect(roster.find((r: Record<string, unknown>) => r.name === "Dan Reyes").status).toBe("Heard");
+    const priya = roster.find((r: Record<string, unknown>) => r.name === "Priya");
+    expect(priya.role).toBe("Sales Enablement");
+    expect(priya.status).toBe("To book");
   });
 });
