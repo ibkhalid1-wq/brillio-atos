@@ -29,7 +29,6 @@ import HelpPanel from "@/v3/components/HelpPanel";
 import ProgramSetupWizard from "@/v3/components/ProgramSetupWizard";
 import FlowShell from "@/v3/components/flow/FlowShell";
 import { resolveFlowDecision } from "@/v3/components/flow/flowDecisions";
-import { recordShowPass, addFlowTrack } from "@/v3/components/flow/flowTracks";
 import { setHaltAll, toggleAgentHalt, setMovementBudget } from "@/v3/components/flow/flowGovernance";
 import { mintInterviewPacks, mintDemoInvites, ingestPortalResponse, dismissPortalResponse } from "@/v3/components/flow/flowPortal";
 import { applyArtifactEdit } from "@/v3/components/flow/flowArtifactEdit";
@@ -2149,12 +2148,6 @@ export default function AppShellV3() {
             }].slice(-200);
             await updateProgramData(activeProgram.id, data, activeProgram.updatedAt);
             pushV3Toast("Restored — and the state it replaced was saved as a snapshot too.", { duration: 4500 });
-          }}
-          onRecordShowPass={async (trackId, pass) => {
-            await persistFlowMutation((program) => recordShowPass(program, trackId, pass));
-          }}
-          onAddTrack={async (input) => {
-            await persistFlowMutation((program) => addFlowTrack(program, input));
           }}
           fleet={flowFleet}
           loadMovementSpend={loadFlowMovementSpend}

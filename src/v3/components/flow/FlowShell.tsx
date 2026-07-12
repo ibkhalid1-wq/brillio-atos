@@ -13,8 +13,7 @@ import {
   type FlowDecision,
 } from "@/v3/components/flow/flowDecisions";
 import {
-  listFlowTracks, trackAcceptance, trackPace, trackBlockers,
-  type FlowShowPass, type FlowTrack,
+  listFlowTracks, trackAcceptance, trackPace,
 } from "@/v3/components/flow/flowTracks";
 import { readFlowGovernance, flowAgentTier } from "@/v3/components/flow/flowGovernance";
 import { listPortalInbox } from "@/v3/components/flow/flowPortal";
@@ -45,9 +44,6 @@ interface FlowShellProps {
   /** Presence keys (emails) of others in this programme right now. */
   presence?: string[];
   /** Record a show/refine pass on a track. */
-  onRecordShowPass: (trackId: string, pass: { stakeholder?: string; verdict: FlowShowPass["verdict"]; note?: string; stableDiff?: boolean }) => Promise<void>;
-  /** Add a track by hand (the blueprint is the usual source). */
-  onAddTrack: (input: { name: string; goal?: string }) => Promise<void>;
   /** In-flight runs for the Mission fleet board. */
   fleet: Array<{ agentId: string; phaseId?: string; status: string }>;
   /** Token spend per movement, from the runs ledger. */
@@ -266,19 +262,8 @@ export default function FlowShell(props: FlowShellProps) {
             onIngestPortalItem={props.onIngestPortalItem} onDismissPortalItem={props.onDismissPortalItem}
             onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
         ) : view === "flow" ? (
-          <>
           <FlowCanvas program={program} runningAgentIds={props.runningAgentIds} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} onCompileShipLanes={props.onCompileShipLanes} onToggleShipItem={props.onToggleShipItem} onScheduleFollowUp={props.onScheduleFollowUp} onMintFollowUp={props.onMintFollowUp} onSaveArtifactDoc={props.onSaveArtifactDoc} onRecordGate={props.onRecordGate} onReopenGate={props.onReopenGate} onRunAgentAndWait={props.onRunAgentAndWait} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }}
           />
-            <FlowTracks
-              program={program}
-              runningAgentIds={props.runningAgentIds}
-              onRunAgent={props.onRunAgent}
-              onSaveInputs={props.onSaveInputs}
-              onRecordShowPass={props.onRecordShowPass}
-              onAddTrack={props.onAddTrack}
-              embedded
-            />
-          </>
         ) : view === "library" ? (
           <FlowLibrary program={program} onSaveArtifactDoc={props.onSaveArtifactDoc} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} />
         ) : view === "mission" ? (
@@ -563,200 +548,6 @@ function FlowToday({ program, onResolveDecision, onIngestPortalItem, onDismissPo
 }
 
 /* ── Tracks: the build as demoable workstreams; acceptance is earned ─────── */
-
-/** A track's own quotes across Show/Ship/Evolve — attribution-tagged. */
-function trackEvidence(program: ProgramSummary, trackName: string) {
-  const wanted = trackName.toLowerCase();
-  return flowMovements()
-    .filter((movement) => ["show", "ship", "evolve"].includes(movement.id))
-    .flatMap((movement) => movementEvidence(program, movement))
-    .filter((entry) => (entry.track ?? "").toLowerCase() === wanted);
-}
-
-function TrackCard({ track, all, busy, onRecord, onOpen, quotes }: {
-  track: FlowTrack;
-  all: FlowTrack[];
-  busy: boolean;
-  onRecord: (trackId: string, pass: { stakeholder?: string; verdict: FlowShowPass["verdict"]; stableDiff?: boolean }) => Promise<void>;
-  onOpen?: () => void;
-  quotes?: Array<{ who: string; excerpt: string }>;
-}) {
-  const acceptance = trackAcceptance(track);
-  const pace = trackPace(track, acceptance.accepted);
-  const blockers = trackBlockers(track, all);
-  const [recording, setRecording] = useState(false);
-  const [stakeholder, setStakeholder] = useState(track.leadStakeholder ?? "");
-  const [verdict, setVerdict] = useState<FlowShowPass["verdict"]>("accepted");
-  const [stableDiff, setStableDiff] = useState(false);
-
-  const save = async () => {
-    await onRecord(track.id, {
-      stakeholder: stakeholder.trim() || undefined,
-      verdict,
-      stableDiff: track.showPasses.length > 0 && stableDiff ? true : undefined,
-    });
-    setRecording(false);
-    setStableDiff(false);
-  };
-
-  return (
-    <article className={`v3fs-trk${acceptance.accepted ? " acc" : ""}`}>
-      <div className="v3fs-trk-top">
-        <h3>{track.name}</h3>
-        <span className={`v3fs-pace ${pace.tone}`}>{pace.label}</span>
-      </div>
-      {track.goal ? <p className="v3fs-trk-g">{track.goal}</p> : null}
-      <div className="v3fs-trk-meta">
-        <span className={`v3fs-accst${acceptance.accepted ? " ok" : ""}`}>
-          {acceptance.accepted ? "✓ accepted" : acceptance.label}
-        </span>
-        {track.leadStakeholder ? <span>demos to {track.leadStakeholder}</span> : null}
-        {track.slices.length ? <span>{track.slices.length} slice{track.slices.length === 1 ? "" : "s"}</span> : null}
-      </div>
-      {quotes?.length ? (
-        <div className="v3fs-trk-quotes">
-          {quotes.slice(0, 2).map((quote, i) => (
-            <div key={i} className="v3fs-trk-quote">“{quote.excerpt}”<span>{quote.who.split(",")[0]}</span></div>
-          ))}
-        </div>
-      ) : null}
-      {track.showPasses.length ? (
-        <div className="v3fs-trk-passes" aria-label="Demonstration passes">
-          {track.showPasses.map((pass, i) => (
-            <span key={i} className={`v3fs-pdot ${pass.verdict === "rework" ? "rw" : "ok"}`}
-              title={`${pass.verdict}${pass.stakeholder ? ` — ${pass.stakeholder}` : ""}`} />
-          ))}
-        </div>
-      ) : null}
-      {blockers.length ? (
-        <div className="v3fs-trk-deps">
-          {blockers.map((blocker) => <span key={blocker.id} className="v3fs-dep">waiting on {blocker.name}</span>)}
-        </div>
-      ) : null}
-      {recording ? (
-        <div className="v3fs-pass-form">
-          <input value={stakeholder} onChange={(e) => setStakeholder(e.target.value)} placeholder="Who watched it run?" aria-label="Stakeholder" />
-          <select value={verdict} onChange={(e) => setVerdict(e.target.value as FlowShowPass["verdict"])} aria-label="Verdict">
-            <option value="accepted">Accepted</option>
-            <option value="accepted-with-changes">Accepted with changes</option>
-            <option value="rework">Needs rework</option>
-          </select>
-          {track.showPasses.length > 0 ? (
-            <label className="v3fs-pass-stable">
-              <input type="checkbox" checked={stableDiff} onChange={(e) => setStableDiff(e.target.checked)} />
-              diff since last pass reviewed &amp; stable
-            </label>
-          ) : null}
-          <div className="v3fs-dec-cta">
-            <button type="button" className="v3fs-btn pri" disabled={busy} onClick={() => void save()}>{busy ? "Recording…" : "Record pass"}</button>
-            <button type="button" className="v3fs-btn" disabled={busy} onClick={() => setRecording(false)}>Cancel</button>
-          </div>
-        </div>
-      ) : (
-        <div className="v3fs-dec-cta">
-          <button type="button" className="v3fs-btn" onClick={() => setRecording(true)}>Record a pass</button>
-          {onOpen ? <button type="button" className="v3fs-btn" onClick={onOpen}>Open in canvas</button> : null}
-        </div>
-      )}
-    </article>
-  );
-}
-
-function FlowTracks({ program, runningAgentIds, onRunAgent, onSaveInputs, onRecordShowPass, onAddTrack, embedded }: {
-  program: ProgramSummary;
-  runningAgentIds: Set<string>;
-  onRunAgent: FlowShellProps["onRunAgent"];
-  onSaveInputs: FlowShellProps["onSaveInputs"];
-  onRecordShowPass: FlowShellProps["onRecordShowPass"];
-  onAddTrack: FlowShellProps["onAddTrack"];
-  /** Rendered under the canvas movements — no empty state, no drill. */
-  embedded?: boolean;
-}) {
-  const tracks = listFlowTracks(program);
-  const [drillId, setDrillId] = useState<string | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [addOpen, setAddOpen] = useState(false);
-  const [addName, setAddName] = useState("");
-  const [addGoal, setAddGoal] = useState("");
-
-  const record = async (trackId: string, pass: { stakeholder?: string; verdict: FlowShowPass["verdict"]; stableDiff?: boolean }) => {
-    setBusyId(trackId);
-    try { await onRecordShowPass(trackId, pass); } finally { setBusyId(null); }
-  };
-
-  const drilled = drillId ? tracks.find((t) => t.id === drillId) : undefined;
-  if (drilled) {
-    return (
-      <div className="v3fs-trkwrap">
-        <nav className="v3fs-crumb" aria-label="Breadcrumb">
-          <button type="button" onClick={() => setDrillId(null)}>Tracks</button>
-          <span aria-hidden="true">▸</span>
-          <b>{drilled.name}</b>
-          <span className="v3fs-crumb-note">{trackAcceptance(drilled).accepted ? "accepted" : trackAcceptance(drilled).label}</span>
-        </nav>
-        {drilled.goal ? <p className="v3fs-trk-goal">{drilled.goal}</p> : null}
-        {drilled.slices.length ? (
-          <div className="v3fs-trk-slices">
-            {drilled.slices.map((slice) => <span key={slice}>{slice}</span>)}
-          </div>
-        ) : null}
-        {trackEvidence(program, drilled.name).map((entry, i) => (
-          <div key={i} className="v3fs-voice">
-            {entry.excerpt ? <div className="v3fs-voice-q">“{entry.excerpt}”</div> : null}
-            <div className="v3fs-voice-who">{entry.who}<span>{entry.meta}</span></div>
-          </div>
-        ))}
-        <FlowCanvas program={program} runningAgentIds={runningAgentIds} onRunAgent={onRunAgent} onSaveInputs={onSaveInputs} />
-      </div>
-    );
-  }
-
-  if (embedded && tracks.length === 0) return null;
-  const accepted = tracks.filter((track) => trackAcceptance(track).accepted).length;
-  return (
-    <div className={embedded ? "v3fs-tracks-embed" : "v3fs-today"}>
-      {embedded ? (
-        <div className="v3fs-tracks-embed-h">
-          <h2>Tracks</h2>
-          <span>{accepted}/{tracks.length} accepted — each demonstrates to its named stakeholder; Show's gate waits for all of them</span>
-        </div>
-      ) : null}
-      {tracks.length === 0 ? (
-        <div className="v3fs-quiet">
-          <div className="v3fs-quiet-mark" aria-hidden="true">▤</div>
-          <h2>No tracks yet.</h2>
-          <p>Generate the Agentic Blueprint in Envision — adopting its track plan in the Inbox fills this board.</p>
-        </div>
-      ) : (
-        <div className="v3fs-trkgrid">
-          {tracks.map((track) => (
-            <TrackCard key={track.id} track={track} all={tracks} busy={busyId === track.id}
-              quotes={trackEvidence(program, track.name)}
-              onRecord={record} onOpen={embedded ? undefined : () => { setDrillId(track.id); window.scrollTo({ top: 0 }); }} />
-          ))}
-        </div>
-      )}
-
-      <div className="v3fs-addtrk">
-        {addOpen ? (
-          <div className="v3fs-pass-form">
-            <input value={addName} onChange={(e) => setAddName(e.target.value)} placeholder="Track name" aria-label="Track name" />
-            <input value={addGoal} onChange={(e) => setAddGoal(e.target.value)} placeholder="What it demonstrates (one sentence)" aria-label="Track goal" />
-            <div className="v3fs-dec-cta">
-              <button type="button" className="v3fs-btn pri" disabled={!addName.trim()}
-                onClick={async () => { await onAddTrack({ name: addName, goal: addGoal }); setAddName(""); setAddGoal(""); setAddOpen(false); }}>
-                Add track
-              </button>
-              <button type="button" className="v3fs-btn" onClick={() => setAddOpen(false)}>Cancel</button>
-            </div>
-          </div>
-        ) : (
-          <button type="button" className="v3fs-a" onClick={() => setAddOpen(true)}>＋ Add a track by hand</button>
-        )}
-      </div>
-    </div>
-  );
-}
 
 /* ── Mission Control: the fleet, the budgets, the levers, the trail ──────── */
 
