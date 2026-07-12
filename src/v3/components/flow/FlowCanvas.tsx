@@ -9,6 +9,7 @@ import {
   type ArtifactCardModel,
 } from "@/v3/components/flow/flowShellData";
 import { meetingKit, type MeetingKit } from "@/v3/components/flow/flowMeetings";
+import { supabase } from "@/integrations/supabase/client";
 import { listInterviewPacks, listDemoInvites, portalLinkFor, visibleLinks } from "@/v3/components/flow/flowPortal";
 import { listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 import { listFlowTracks, trackAcceptance } from "@/v3/components/flow/flowTracks";
@@ -574,6 +575,62 @@ function GateActionButton({ idle, armedLabel, busyLabel, quiet, onAct }: {
  * Open by default when the conversation hasn't happened; a quiet one-line
  * summary once it has.
  */
+/** Recording → reviewable text. The audio is transcribed server-side and the
+ * transcript lands in the capture box for the operator to READ before it
+ * becomes evidence — the recording itself is never stored. Hidden after a
+ * 501 (transcription not configured on the project). */
+function TranscribeButton({ onText }: { onText: (transcript: string) => void }) {
+  const [state, setState] = useState<"idle" | "busy" | "unavailable">("idle");
+  const [note, setNote] = useState<string | null>(null);
+  const inputRef = React.useRef<HTMLInputElement | null>(null);
+  if (state === "unavailable") return null;
+
+  const ingest = async (file: File) => {
+    setState("busy");
+    setNote(null);
+    try {
+      const buffer = new Uint8Array(await file.arrayBuffer());
+      let binary = "";
+      const CHUNK = 0x8000;
+      for (let i = 0; i < buffer.length; i += CHUNK) {
+        binary += String.fromCharCode(...buffer.subarray(i, i + CHUNK));
+      }
+      const { data, error } = await supabase.functions.invoke("flow-transcribe", {
+        body: { audio: btoa(binary), mime: file.type || "audio/webm", filename: file.name },
+      });
+      if (error) {
+        const status = (error as { context?: { status?: number } }).context?.status;
+        if (status === 501) { setState("unavailable"); return; }
+        const detail = await (error as { context?: Response }).context?.json?.().catch(() => null);
+        setNote((detail as { error?: string } | null)?.error ?? "Transcription failed — paste the notes instead.");
+        setState("idle");
+        return;
+      }
+      const text = typeof (data as { text?: string } | null)?.text === "string" ? (data as { text: string }).text : "";
+      if (text) onText(text); else setNote("The recording produced no speech to transcribe.");
+      setState("idle");
+    } catch {
+      setNote("Could not read that file — paste the notes instead.");
+      setState("idle");
+    }
+  };
+
+  return (
+    <div className="v3fs-kit-rec">
+      <input ref={inputRef} type="file" accept="audio/*,video/webm,video/mp4" hidden
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) void ingest(file);
+        }} />
+      <button type="button" className="v3fs-a" disabled={state === "busy"} onClick={() => inputRef.current?.click()}>
+        {state === "busy" ? "Transcribing\u2026" : "\u2b06 Transcribe a recording"}
+      </button>
+      {note ? <span className="v3fs-kit-rec-note">{note}</span> : null}
+    </div>
+  );
+}
+
 function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, onScheduleFollowUp, onMintFollowUp, channels, onCaptured }: {
   kit: MeetingKit | null;
   movementId: string;
@@ -899,6 +956,7 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
             onChange={(event) => setCapture(event.target.value)}
             aria-label={kit.captureLabel}
           />
+          <TranscribeButton onText={(transcript) => setCapture((current) => (current.trim() ? `${current.trim()}\n\n${transcript}` : transcript))} />
           {movementId === "show" && trackNames.length ? (
             <label className="v3fs-kit-track">
               <span>Track</span>
