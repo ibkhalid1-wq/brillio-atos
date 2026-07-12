@@ -166,6 +166,33 @@ export function compileShipLanes(program: ProgramSummary, actor: string): Record
  * Toggle one lane item. Completing a whole lane is worth the trail — item
  * ticks alone are not. Null when the item is unknown.
  */
+/** Set EVERY item in a lane at once — checking off a lane that was executed
+ * offline, or resetting one checked in error. Attested either way. */
+export function setShipLane(program: ProgramSummary, laneId: string, done: boolean, actor: string): Record<string, unknown> | null {
+  const { wrapper, inner, usesNestedData } = getProgramState((program.rawData ?? {}) as Record<string, unknown>);
+  const doc = isRecord(inner.shipLanes) ? { ...(inner.shipLanes as Record<string, unknown>) } : null;
+  if (!doc || !Array.isArray(doc.lanes)) return null;
+  let laneName: string | null = null;
+  let changed = false;
+  const lanes = (doc.lanes as unknown[]).map((lane) => {
+    if (!isRecord(lane) || lane.id !== laneId || !Array.isArray(lane.items)) return lane;
+    laneName = String(lane.name ?? laneId);
+    const items = (lane.items as unknown[]).map((entry) => {
+      if (!isRecord(entry)) return entry;
+      if ((entry.done === true) !== done) changed = true;
+      return { ...entry, done };
+    });
+    return { ...lane, items };
+  });
+  if (!laneName || !changed) return null;
+  const log = Array.isArray(inner.flowAttestations) ? (inner.flowAttestations as unknown[]) : [];
+  const attestation = {
+    ts: new Date().toISOString(), agentId: actor, phaseId: "ship", tier: 1,
+    action: done ? `Ship lane checked off — ${laneName}` : `Ship lane reset — ${laneName}`,
+  };
+  return wrapProgramState(wrapper, { ...inner, shipLanes: { ...doc, lanes }, flowAttestations: [...log, attestation].slice(-200) }, usesNestedData);
+}
+
 export function toggleShipItem(program: ProgramSummary, laneId: string, itemId: string, actor: string): Record<string, unknown> | null {
   const { wrapper, inner, usesNestedData } = getProgramState((program.rawData ?? {}) as Record<string, unknown>);
   const doc = isRecord(inner.shipLanes) ? { ...(inner.shipLanes as Record<string, unknown>) } : null;

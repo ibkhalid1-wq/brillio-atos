@@ -33,7 +33,7 @@ import { setHaltAll, toggleAgentHalt, setMovementBudget } from "@/v3/components/
 import { mintInterviewPacks, mintDemoInvites, ingestPortalResponse, dismissPortalResponse } from "@/v3/components/flow/flowPortal";
 import { recordShowPass } from "@/v3/components/flow/flowTracks";
 import { applyArtifactEdit } from "@/v3/components/flow/flowArtifactEdit";
-import { compileShipLanes, toggleShipItem } from "@/v3/components/flow/flowShip";
+import { compileShipLanes, setShipLane, toggleShipItem } from "@/v3/components/flow/flowShip";
 import { scheduleFollowUp } from "@/v3/components/flow/flowMeetings";
 import { mintFollowUpPack, latestPackFor, portalLinkFor } from "@/v3/components/flow/flowPortal";
 import { mintBrief, briefLinkFor } from "@/v3/components/flow/flowBriefs";
@@ -2184,6 +2184,10 @@ export default function AppShellV3() {
           onToggleShipItem={async (laneId, itemId) => {
             const actor = currentUser?.email || "you";
             await persistFlowMutation((program) => toggleShipItem(program, laneId, itemId, actor));
+          }}
+          onSetShipLane={async (laneId, done) => {
+            const actor = currentUser?.email || "you";
+            await persistFlowMutation((program) => setShipLane(program, laneId, done, actor));
           }}
           onHydratePrograms={async () => {
             await hydratePrograms(programs.map((entry) => entry.id));

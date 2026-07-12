@@ -14,7 +14,7 @@ import { validateProgramBlob, migrateProgramBlob, BLOB_VERSION } from "@/v3/lib/
 import { unrosteredVoicesProposal, reDemoProposal, queueWatcherProposal } from "@/v3/components/flow/flowWatchers";
 import { mintFollowUpPack, listInterviewPacks, visibleLinks } from "@/v3/components/flow/flowPortal";
 import { trackAcceptance, trackBlockers, recordShowPass, listFlowTracks, type FlowTrack } from "@/v3/components/flow/flowTracks";
-import { toggleShipItem, listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
+import { setShipLane, toggleShipItem, listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 import { ingestPortalResponse, listPortalInbox } from "@/v3/components/flow/flowPortal";
 import { gateChecklist, gateReadiness, flowMovements, movementEvidence } from "@/v3/components/flow/flowShellData";
 
@@ -794,5 +794,34 @@ describe("buildPrototypePrompt — the pack compiled into a coding-agent brief",
 
   it("returns null when no pack exists", () => {
     expect(buildPrototypePrompt({ id: "x", name: "y", rawData: {} } as never)).toBeNull();
+  });
+});
+
+describe("setShipLane — the whole lane at once", () => {
+  const program = () => ({
+    id: "p1", name: "P",
+    rawData: { data: { shipLanes: { lanes: [
+      { id: "l1", name: "Validation & evals", items: [
+        { id: "a", label: "run evals", done: false },
+        { id: "b", label: "review guardrails", done: true },
+      ] },
+    ] } } },
+  }) as never;
+
+  it("checks every item and attests the lane", () => {
+    const blob = setShipLane(program(), "l1", true, "op@x.com")!;
+    const inner = (blob as { data: Record<string, unknown> }).data;
+    const lane = (inner.shipLanes as { lanes: Array<{ items: Array<{ done: boolean }> }> }).lanes[0];
+    expect(lane.items.every((entry) => entry.done)).toBe(true);
+    const log = inner.flowAttestations as Array<{ action: string }>;
+    expect(log.some((entry) => entry.action === "Ship lane checked off — Validation & evals")).toBe(true);
+  });
+
+  it("reset unchecks everything; a no-op change returns null", () => {
+    const checked = setShipLane(program(), "l1", true, "op@x.com")!;
+    const reset = setShipLane({ id: "p1", name: "P", rawData: checked } as never, "l1", false, "op@x.com")!;
+    const lane = ((reset as { data: Record<string, unknown> }).data.shipLanes as { lanes: Array<{ items: Array<{ done: boolean }> }> }).lanes[0];
+    expect(lane.items.some((entry) => entry.done)).toBe(false);
+    expect(setShipLane({ id: "p1", name: "P", rawData: reset } as never, "l1", false, "op@x.com")).toBeNull();
   });
 });
