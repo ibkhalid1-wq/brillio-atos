@@ -35,6 +35,8 @@ interface FlowCanvasProps {
   onSaveArtifactDoc?: (input: ArtifactEditInput) => Promise<void>;
   /** Jump to the Inbox (regeneration-pending band in the studio). */
   onOpenInbox?: () => void;
+  /** Record an in-room demonstration pass against a track (Show). */
+  onRecordShowPass?: (trackId: string, pass: { stakeholder?: string; verdict: "accepted" | "accepted-with-changes" | "rework"; stableDiff?: boolean }) => Promise<void>;
   /** Record a movement's gate — demonstrated. Locks the movement's inputs. */
   onRecordGate?: (movementId: string) => Promise<void>;
   /** Reopen a demonstrated gate — evidence changed. Unlocks its inputs. */
@@ -51,7 +53,7 @@ interface FlowCanvasProps {
  * coloured). Nothing locks; editing unfolds in place via the shared inputs
  * panel, so the canvas is the workspace, not a dashboard about one.
  */
-export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onScheduleFollowUp, onMintFollowUp, onSaveArtifactDoc, onOpenInbox, onRecordGate, onReopenGate, onRunAgentAndWait }: FlowCanvasProps) {
+export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onScheduleFollowUp, onMintFollowUp, onSaveArtifactDoc, onOpenInbox, onRecordShowPass, onRecordGate, onReopenGate, onRunAgentAndWait }: FlowCanvasProps) {
   const movements = useMemo(() => flowMovements(), []);
   const frontier = frontierMovementId(program);
   const [open, setOpen] = useState<Set<string>>(() => new Set([frontier]));
@@ -260,6 +262,10 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                                           void navigator.clipboard.writeText(portalLinkFor(program.id, invite)).catch(() => window.prompt("Copy the link:", portalLinkFor(program.id, invite)));
                                         }}>Copy link</button>
                                       </div>
+                                    ) : null}
+                                    {onRecordShowPass ? (
+                                      <TrackPassRecorder trackId={track.id} person={person}
+                                        onRecord={(trackId, pass) => onRecordShowPass(trackId, pass)} />
                                     ) : null}
                                   </div>
                                 );
@@ -606,6 +612,42 @@ function GateActionButton({ idle, armedLabel, busyLabel, quiet, onAct }: {
  * Open by default when the conversation hasn't happened; a quiet one-line
  * summary once it has.
  */
+/** An in-room demonstration, recorded where the track lives. Demo links are
+ * the usual path; this covers the demo that happened live, in the room —
+ * verdict lands as a show pass on the track, same as a link verdict. */
+function TrackPassRecorder({ trackId, person, onRecord }: {
+  trackId: string;
+  person: string;
+  onRecord: (trackId: string, pass: { stakeholder?: string; verdict: "accepted" | "accepted-with-changes" | "rework" }) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [who, setWho] = useState(person);
+  const [verdict, setVerdict] = useState<"accepted" | "accepted-with-changes" | "rework">("accepted");
+  const [busy, setBusy] = useState(false);
+  if (!open) {
+    return (
+      <button type="button" className="v3fs-a v3fs-ev-passbtn" onClick={() => { setWho(person); setOpen(true); }}>
+        ＋ Record an in-room pass
+      </button>
+    );
+  }
+  return (
+    <div className="v3fs-ev-pass">
+      <input value={who} onChange={(event) => setWho(event.target.value)} placeholder="Who watched it run?" aria-label="Who watched the demonstration" />
+      <select value={verdict} onChange={(event) => setVerdict(event.target.value as typeof verdict)} aria-label="Verdict">
+        <option value="accepted">Accepted</option>
+        <option value="accepted-with-changes">Accepted with changes</option>
+        <option value="rework">Needs rework</option>
+      </select>
+      <button type="button" className="v3fs-btn pri" disabled={busy} onClick={async () => {
+        setBusy(true);
+        try { await onRecord(trackId, { stakeholder: who.trim() || undefined, verdict }); setOpen(false); } finally { setBusy(false); }
+      }}>{busy ? "Recording…" : "Record"}</button>
+      <button type="button" className="v3fs-btn" disabled={busy} onClick={() => setOpen(false)}>Cancel</button>
+    </div>
+  );
+}
+
 /** Recording → reviewable text. The audio is transcribed server-side and the
  * transcript lands in the capture box for the operator to READ before it
  * becomes evidence — the recording itself is never stored. Hidden after a
