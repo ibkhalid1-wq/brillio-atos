@@ -207,7 +207,7 @@ function baseMeetingKit(program: ProgramSummary, movementId: string): Omit<Meeti
         "Is the operating team ready to own it from day one?",
         "Go or no-go — who says it, and when do we cut over?",
       ],
-      captureField: "goDecisionRef",
+      captureField: "shipConversations",
       captureLabel: "Record the decision — reference or summary",
       header: "",
       done,

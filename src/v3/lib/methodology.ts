@@ -1436,6 +1436,7 @@ export const ATOS_FLOW: MethodologyDefinition = {
         { id: "goLiveDate", label: "Go-live date", type: "date", required: false, hint: "Planned (or actual) production cutover." },
         { id: "evalStatus", label: "Eval suite status", type: "select", required: false, options: ["Not run", "Red", "Amber", "Green"], hint: "Latest run of the generated eval suite — green is the shipping signal." },
         { id: "goDecisionRef", label: "Go/no-go conversation reference", type: "text", role: "governance-signoff", required: false, placeholder: "Link to the recorded go/no-go conversation", hint: "The decision log generates from the recorded conversation — this is its reference, not a signature." },
+        { id: "shipConversations", label: "Ship-readiness conversations", type: "transcript", required: false, usedByArtifacts: ["hardening-plan", "eval-suite", "runbook"], hint: "Captured per stakeholder — the hardening, eval and runbook owners' input, plus the sponsor's go/no-go. The hardening plan, eval suite and runbook draft from it." },
       ],
       artifactInputFlow: {
         "hardening-plan": ["productionEnvironment"],

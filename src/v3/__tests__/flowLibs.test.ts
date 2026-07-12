@@ -1093,3 +1093,31 @@ describe("blob migration v2 — seed folds into the People roster", () => {
     expect(priya.status).toBe("To book");
   });
 });
+
+describe("evidence-collection flow — every movement captures into a real evidence field", () => {
+  // A stakeholder card captures into meetingKit(movement).captureField. If that
+  // field is not a transcript/document input on the movement, the capture never
+  // renders as attributed evidence and the card's status never flips. Pin it.
+  it("each movement's captureField is a transcript field on that movement", () => {
+    const program = { id: "p", name: "P", rawData: { data: { phaseInputs: {} } } } as never;
+    for (const movement of flowMovements()) {
+      const kit = meetingKit(program, movement.id);
+      if (!kit) continue;
+      const field = (movement.inputFields ?? []).find((f) => f.id === kit.captureField);
+      expect(field, `${movement.id}: captureField "${kit.captureField}" must be a real input field`).toBeTruthy();
+      expect(["transcript", "document"], `${movement.id}: captureField "${kit.captureField}" is ${field?.type}, not evidence`).toContain(field?.type);
+    }
+  });
+
+  it("a capture into the movement's field renders as attributed evidence", () => {
+    const ship = flowMovements().find((m) => m.id === "ship")!;
+    const captureField = "shipConversations";
+    const program = {
+      id: "p", name: "P",
+      rawData: { data: { phaseInputs: { ship: { [captureField]: "— Hardening / SRE Owner, 2026-07-12 —\nRollback is a blue-green swap; failure modes are covered." } } } },
+    } as never;
+    const evidence = movementEvidence(program, ship);
+    expect(evidence.length).toBeGreaterThan(0);
+    expect(evidence[0].who).toContain("Hardening / SRE Owner");
+  });
+});
