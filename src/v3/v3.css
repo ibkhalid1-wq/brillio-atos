@@ -5542,3 +5542,20 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 @media (prefers-reduced-motion: reduce) {
   .v3fs-gring-fill, .v3fs-checks-chev, .v3fs-check, .v3fs-check.done .v3fs-check-box {transition:none}
 }
+/* ── One interactive-card language across every family ─────────────────── */
+/* Cards that open, select, or act share a single tactile response: a soft
+   lift and a warmer border on hover — consistency reads as craft. */
+.v3fs-doc:not(.ghost), .v3fs-ivc, .v3fs-trk, .v3fs-portal-card, .v3fs-strat-col, .v3fs-kit {
+  transition:transform .18s cubic-bezier(.22,1,.36,1), box-shadow .18s ease, border-color .18s ease;
+}
+.v3fs-doc.v3fs-row-open:hover, .v3fs-ivc:hover, .v3fs-trk:hover {
+  transform:translateY(-1px);
+  box-shadow:0 6px 20px -10px rgba(15,16,32,.22);
+  border-color:color-mix(in srgb, var(--v3-accent-2) 22%, var(--fs-line));
+}
+@media (prefers-reduced-motion: reduce) {
+  .v3fs-doc, .v3fs-ivc, .v3fs-trk, .v3fs-portal-card, .v3fs-strat-col, .v3fs-kit {transition:none}
+  .v3fs-doc.v3fs-row-open:hover, .v3fs-ivc:hover, .v3fs-trk:hover {transform:none}
+}
+/* A touch more air between the movement's three columns and its neighbours. */
+.v3fs-ch-b {gap:clamp(20px, 3vw, 40px)}
