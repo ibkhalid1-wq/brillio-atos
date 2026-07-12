@@ -1027,7 +1027,7 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
           {kit.questions.map((question, index) => <li key={index}>{question}</li>)}
         </ol>
         <div className="v3fs-kit-actions">
-          <button type="button" className="v3fs-btn" onClick={() => void copyScript()}>
+          <button type="button" className="v3fs-btn pri" onClick={() => void copyScript()}>
             {copied ? "Copied ✓" : "Copy the script"}
           </button>
         </div>
@@ -1075,7 +1075,7 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
                   <div className="v3fs-kit-chan-t">Meeting<span>Book it — the invite carries the script as its agenda</span></div>
                   <div className="v3fs-kit-chan-a">
                     <input type="date" value={followDate} onChange={(event) => setFollowDate(event.target.value)} aria-label="Follow-up date" />
-                    <button type="button" className="v3fs-btn" disabled={busy || !followDate} onClick={() => void schedule()}>
+                    <button type="button" className="v3fs-btn pri" disabled={busy || !followDate} onClick={() => void schedule()}>
                       {scheduledTick ? "Scheduled ✓" : "Schedule"}
                     </button>
                     <button type="button" className="v3fs-btn" disabled={!followDate}
@@ -1111,12 +1111,12 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
                             </div>
                             {row.responded ? null : (
                               <span className="v3fs-async-cta">
-                                <button type="button" className="v3fs-btn"
+                                <button type="button" className={`v3fs-btn${email ? "" : " pri"}`}
                                   onClick={() => { void navigator.clipboard.writeText(row.link).catch(() => window.prompt("Copy the link:", row.link)); }}>
                                   Copy link
                                 </button>
                                 {email ? (
-                                  <button type="button" className="v3fs-btn" title={`Opens a draft to ${email} with the link inside`}
+                                  <button type="button" className="v3fs-btn pri" title={`Opens a draft to ${email} with the link inside`}
                                     onClick={() => { window.location.href = mailtoLink(email, { stakeholder: row.who, programmeName: program.name, link: row.link }); }}>
                                     ✉ Send link
                                   </button>
@@ -1141,11 +1141,11 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
                     ) : null}
                     {kit.followUp && onMintFollowUp && !rows.some((row) => !row.responded && row.who.trim().toLowerCase() === kit.who.trim().toLowerCase()) ? (
                       <>
-                        <button type="button" className="v3fs-btn" disabled={busy} onClick={() => void copyMintedLink()}>
+                        <button type="button" className={`v3fs-btn${stakeholderEmail(program, kit.who) ? "" : " pri"}`} disabled={busy} onClick={() => void copyMintedLink()}>
                           {linkTick ? "Link copied ✓" : "Copy link"}
                         </button>
                         {stakeholderEmail(program, kit.who) ? (
-                          <button type="button" className="v3fs-btn" disabled={busy}
+                          <button type="button" className="v3fs-btn pri" disabled={busy}
                             title={`Opens a draft to ${stakeholderEmail(program, kit.who)} with the link inside`}
                             onClick={() => void sendMintedLink(stakeholderEmail(program, kit.who)!)}>
                             ✉ Send link
