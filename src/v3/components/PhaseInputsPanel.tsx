@@ -1102,6 +1102,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
                     ariaLabel={field.label}
                     value={values[field.id] ?? ""}
                     options={field.options ?? []}
+                    disabled={Boolean(field.lockOnceSet && String(existingInputs[field.id] ?? "").trim())}
                     onChange={(value) => setValues((c) => ({ ...c, [field.id]: value }))}
                   />
                 ) : field.type === "transcript" ? (

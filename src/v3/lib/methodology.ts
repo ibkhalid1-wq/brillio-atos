@@ -44,6 +44,9 @@ export type FieldRole =
 export interface PhaseInputField {
   id: string;
   label: string;
+  /** Once a saved value exists, the field can never be edited again — for
+   * facts the whole record is grounded on (e.g. industry → vocabulary). */
+  lockOnceSet?: boolean;
   /**
    * Input shape. The first six are the primitive editors. The rest are
    * *semantic reference* types — they still persist as a plain string, but the
@@ -1225,7 +1228,7 @@ export const ATOS_FLOW: MethodologyDefinition = {
         { id: "businessObjective", label: "Business objective", type: "textarea", placeholder: "What outcome is this system meant to achieve?", required: true, example: "Cut quote-to-order cycle time by 70% by replacing the manual desk with an agentic workflow.", validationRule: "A measurable outcome, not an activity — name the change, the magnitude, and the horizon." },
         { id: "sponsor", label: "Executive sponsor", type: "text", role: "mandate", placeholder: "Name and title", required: true, example: "Jane Okafor, Chief Operating Officer", validationRule: "A named individual with their role, not a team or department." },
         { id: "sponsorEmail", label: "Sponsor email", type: "text", role: "mandate", placeholder: "name@company.com", required: false, hint: "Powers the sponsor's calendar invites and emailed links — captured in programme setup." },
-        { id: "industry", label: "Industry", type: "select", options: INDUSTRY_OPTIONS, required: true, hint: "The client's primary sector — sets the domain language the charter, agendas, and architecture strategy are written in." },
+        { id: "industry", label: "Industry", type: "select", lockOnceSet: true, options: INDUSTRY_OPTIONS, required: true, hint: "The client's primary sector — sets the domain language the charter, agendas, and architecture strategy are written in." },
         { id: "segment", label: "Value-chain segment", type: "text", required: false, placeholder: "e.g. Clinical · Manufacturing & Supply · Commercial", hint: "Optional — sharpens vocabulary steering and discovery scope for forked sectors; inferred from evidence when empty." },
         { id: "sponsorConversation", label: "Sponsor conversation transcript", type: "transcript", required: false, usedByArtifacts: ["charter", "discovery-kit"], hint: "Paste the recorded sponsor conversation (or reference the uploaded document). The charter and the discovery kit draft themselves from it — you confirm rather than author." },
         { id: "successMetric", label: "Primary success metric", type: "text", role: "measure", placeholder: "KPI name, e.g. Quote turnaround time", required: true, example: "Quote turnaround time", validationRule: "A single measurable KPI name — baselines are captured from the discovery conversations." },

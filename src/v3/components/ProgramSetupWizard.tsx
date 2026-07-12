@@ -84,6 +84,10 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
     return buckets.frame ?? {};
   }, [program]);
   const [industry, setIndustry] = useState<string>(typeof frameInputs.industry === "string" ? frameInputs.industry : "");
+  // Industry grounds the ontology's standards vocabulary and every generated
+  // document's steering: once the programme exists with an industry, changing
+  // it would silently invalidate the record. Locked after first save.
+  const industryLocked = typeof frameInputs.industry === "string" && frameInputs.industry.trim().length > 0;
   const [segment, setSegment] = useState<string>(typeof frameInputs.segment === "string" ? frameInputs.segment : "");
   const segmentOptions = INDUSTRY_SEGMENTS[industry] ?? null;
   const [sponsor, setSponsor] = useState<string>(typeof frameInputs.sponsor === "string" ? frameInputs.sponsor : "");
@@ -173,12 +177,16 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
             <label>
               <div className="v3-field-label">Industry / sector <em aria-hidden="true">*</em></div>
               <select className="v3-input" required aria-required="true" aria-label="Industry" value={industry}
+                disabled={industryLocked}
+                title={industryLocked ? "Locked — the industry grounds the ontology's vocabulary and every generated document. Start a new programme to work in a different sector." : undefined}
                 onChange={(event) => setIndustry(event.target.value)}>
                 <option value="">Select…</option>
                 {INDUSTRY_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
               </select>
               <div className="v3-field-hint">
-                Selects the ontology&apos;s standards vocabulary — FIBO, FHIR, GS1, IEC CIM, EBUCore, W3C ORG or schema.org.
+                {industryLocked
+                  ? "Set at creation and locked — it grounds the ontology's vocabulary and the generated record. Start a new programme for a different sector."
+                  : "Selects the ontology's standards vocabulary — FIBO, FHIR, GS1, IEC CIM, EBUCore, W3C ORG or schema.org."}
               </div>
             </label>
             {/* The slot is always reserved so the grid never reflows; it only
@@ -258,7 +266,7 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
                 return { id, pct: existing?.pct ?? 0, targetDate: existing?.targetDate ?? "" };
               });
               const baseline: Record<string, string> = {};
-              if (industry.trim()) baseline.industry = industry.trim();
+              if (!industryLocked && industry.trim()) baseline.industry = industry.trim();
               const validSegment = (INDUSTRY_SEGMENTS[industry.trim()] ?? []).includes(segment) ? segment : "";
               if (validSegment) baseline.segment = validSegment;
               if (sponsor.trim()) baseline.sponsor = sponsor.trim();
