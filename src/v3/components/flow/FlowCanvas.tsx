@@ -8,7 +8,7 @@ import {
   spineRegenerationPlan,
   type ArtifactCardModel,
 } from "@/v3/components/flow/flowShellData";
-import { meetingKit, type MeetingKit } from "@/v3/components/flow/flowMeetings";
+import { buildMeetingIcs, mailtoLink, meetingKit, stakeholderEmail, type MeetingKit } from "@/v3/components/flow/flowMeetings";
 import { supabase } from "@/integrations/supabase/client";
 import { listInterviewPacks, listDemoInvites, portalLinkFor, visibleLinks } from "@/v3/components/flow/flowPortal";
 import { listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
@@ -1046,19 +1046,33 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
         ) : null}
         {(() => {
           const movementLinks = visibleLinks(listInterviewPacks(program).filter((pack) => pack.movementId === movementId));
-          if (!((kit.followUp && (onScheduleFollowUp || onMintFollowUp)) || channels || movementLinks.length)) return null;
+          if (!(onScheduleFollowUp || (kit.followUp && onMintFollowUp) || channels || movementLinks.length)) return null;
           return (
           <>
             <div className="v3fs-kit-cap">Channels</div>
             <div className="v3fs-kit-ch">
-              {kit.followUp && onScheduleFollowUp ? (
+              {onScheduleFollowUp ? (
                 <div className="v3fs-kit-chan">
-                  <div className="v3fs-kit-chan-t">Meeting<span>Book it — run the script in the room, capture below</span></div>
+                  <div className="v3fs-kit-chan-t">Meeting<span>Book it — the invite carries the script as its agenda</span></div>
                   <div className="v3fs-kit-chan-a">
                     <input type="date" value={followDate} onChange={(event) => setFollowDate(event.target.value)} aria-label="Follow-up date" />
                     <button type="button" className="v3fs-btn" disabled={busy || !followDate} onClick={() => void schedule()}>
                       {scheduledTick ? "Scheduled ✓" : "Schedule"}
                     </button>
+                    <button type="button" className="v3fs-btn" disabled={!followDate}
+                      title={stakeholderEmail(program, kit.who) ? `Attendee: ${stakeholderEmail(program, kit.who)}` : "No email on file — the invite downloads without an attendee"}
+                      onClick={() => {
+                        const ics = buildMeetingIcs({
+                          who: kit.who, email: stakeholderEmail(program, kit.who), date: followDate,
+                          programmeName: program.name, intro: kit.purpose, questions: kit.questions,
+                        });
+                        const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
+                        const anchor = document.createElement("a");
+                        anchor.href = url;
+                        anchor.download = `discovery-${kit.who.split(",")[0].trim().toLowerCase().replace(/[^a-z0-9]+/g, "-")}.ics`;
+                        anchor.click();
+                        URL.revokeObjectURL(url);
+                      }}>⤓ Invite (.ics)</button>
                   </div>
                 </div>
               ) : null}
@@ -1077,6 +1091,11 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
                           <button type="button" className="v3fs-a" onClick={() => {
                             void navigator.clipboard.writeText(portalLinkFor(program.id, pack)).catch(() => window.prompt("Copy the link:", portalLinkFor(program.id, pack)));
                           }}>Copy link</button>
+                          {!pack.respondedAt && stakeholderEmail(program, pack.stakeholder) ? (
+                            <a className="v3fs-a" href={mailtoLink(stakeholderEmail(program, pack.stakeholder)!, {
+                              stakeholder: pack.stakeholder, programmeName: program.name, link: portalLinkFor(program.id, pack),
+                            })}>✉ Email it</a>
+                          ) : null}
                         </div>
                       ))}
                     </div>
@@ -1217,6 +1236,11 @@ function AsyncInterviews({ program, onMintPacks }: { program: ProgramSummary; on
           <button type="button" className="v3fs-a" onClick={() => void copy(pack.id, portalLinkFor(program.id, pack))}>
             {copiedId === pack.id ? "Copied ✓" : "Copy link"}
           </button>
+          {!pack.respondedAt && stakeholderEmail(program, pack.stakeholder) ? (
+            <a className="v3fs-a" href={mailtoLink(stakeholderEmail(program, pack.stakeholder)!, {
+              stakeholder: pack.stakeholder, programmeName: program.name, link: portalLinkFor(program.id, pack),
+            })}>✉ Email it</a>
+          ) : null}
         </div>
       ))}
       {hasKit ? (

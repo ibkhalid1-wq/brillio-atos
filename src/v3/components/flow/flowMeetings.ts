@@ -377,3 +377,80 @@ export function listFollowUps(program: ProgramSummary): FlowFollowUp[] {
     entry.id && entry.date >= cutoff && kitGaps(program, entry.movementId).length > 0,
   );
 }
+
+/** The address on file for a stakeholder — from the Discovery Kit roster. */
+export function stakeholderEmail(program: ProgramSummary, name: string): string | null {
+  const raw = (program.rawData ?? {}) as Record<string, unknown>;
+  const inner = typeof raw.data === "object" && raw.data !== null ? (raw.data as Record<string, unknown>) : raw;
+  const kit = inner.discoveryKit;
+  if (!kit || typeof kit !== "object" || Array.isArray(kit)) return null;
+  const interviews = Array.isArray((kit as Record<string, unknown>).interviews)
+    ? ((kit as Record<string, unknown>).interviews as unknown[]).filter((entry): entry is Record<string, unknown> => typeof entry === "object" && entry !== null)
+    : [];
+  const wanted = name.trim().toLowerCase();
+  const hit = interviews.find((entry) => {
+    const who = String(entry.stakeholder ?? "").trim().toLowerCase();
+    return who === wanted || (who.length > 3 && wanted.includes(who)) || (wanted.length > 3 && who.includes(wanted));
+  });
+  const email = String(hit?.email ?? "").trim();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : null;
+}
+
+const escapeIcs = (value: string): string =>
+  value.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+
+/** An .ics calendar invite whose DESCRIPTION is the interview script — open
+ * it and the meeting lands on the calendar with the agenda attached. Floating
+ * local time (no TZID): 10:00 wherever the operator is. */
+export function buildMeetingIcs(input: {
+  who: string;
+  email?: string | null;
+  date: string;
+  durationMinutes?: number;
+  programmeName: string;
+  intro?: string;
+  questions: string[];
+}): string {
+  const day = input.date.replace(/-/g, "");
+  const minutes = input.durationMinutes && input.durationMinutes > 0 ? input.durationMinutes : 45;
+  const endHour = 10 + Math.floor(minutes / 60);
+  const endMin = minutes % 60;
+  const description = [
+    input.intro ?? "",
+    "",
+    "Agenda:",
+    ...input.questions.map((question, index) => `${index + 1}. ${question}`),
+  ].filter((line, index) => index !== 0 || line).join("\n");
+  return [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//ATOS Flow//EN",
+    "METHOD:PUBLISH",
+    "BEGIN:VEVENT",
+    `UID:atos-${day}-${input.who.toLowerCase().replace(/[^a-z0-9]+/g, "-")}@atos-flow`,
+    `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, "").slice(0, 15)}Z`,
+    `DTSTART:${day}T100000`,
+    `DTEND:${day}T${String(endHour).padStart(2, "0")}${String(endMin).padStart(2, "0")}00`,
+    `SUMMARY:${escapeIcs(`${input.programmeName} — discovery with ${input.who}`)}`,
+    ...(input.email ? [`ATTENDEE;CN=${escapeIcs(input.who)}:mailto:${input.email}`] : []),
+    `DESCRIPTION:${escapeIcs(description)}`,
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].join("\r\n");
+}
+
+/** mailto: URL carrying a response link, ready to send. */
+export function mailtoLink(email: string, input: { stakeholder: string; programmeName: string; link: string }): string {
+  const subject = `${input.programmeName} — a few questions, in your own words`;
+  const body = [
+    `Hi ${input.stakeholder.split(" ")[0]},`,
+    "",
+    "Your perspective shapes what we build next. This link takes a few minutes,",
+    "typed or dictated, whenever suits you:",
+    "",
+    input.link,
+    "",
+    "Everything you write arrives attributed to you and goes on the record.",
+  ].join("\n");
+  return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}

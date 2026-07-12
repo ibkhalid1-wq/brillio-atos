@@ -6,7 +6,7 @@
 import { describe, it, expect } from "vitest";
 import type { ProgramSummary } from "@/new/types";
 import { resolveFlowDecision, listOpenFlowDecisions, describeDecisionChanges } from "@/v3/components/flow/flowDecisions";
-import { scriptDocumentRefs, meetingKit } from "@/v3/components/flow/flowMeetings";
+import { scriptDocumentRefs, meetingKit, stakeholderEmail, buildMeetingIcs, mailtoLink } from "@/v3/components/flow/flowMeetings";
 import { locateQuote } from "@/v3/components/flow/flowShellData";
 import { mintBrief, buildBriefSnapshot } from "@/v3/components/flow/flowBriefs";
 import { buildPrototypePrompt } from "@/v3/components/flow/flowBuildPrompt";
@@ -853,5 +853,42 @@ describe("discovery kit requires stakeholder emails", () => {
     expect(checks.find((c) => c.id === "kit-emails")!.done).toBe(true);
     const bare = gateChecklist({ id: "p2", name: "P", rawData: {} } as never, frameMovement, []);
     expect(bare.find((c) => c.id === "kit-emails")).toBeUndefined();
+  });
+});
+
+describe("meeting invites and emailed links ride the kit's roster", () => {
+  const program = {
+    id: "p1", name: "Flow Pilot",
+    rawData: { data: { discoveryKit: { interviews: [
+      { stakeholder: "Dan Reyes", email: "dan@acme.com" },
+      { stakeholder: "Priya Nair", email: "not-valid" },
+    ] } } },
+  } as never;
+
+  it("stakeholderEmail matches the roster and rejects invalid shapes", () => {
+    expect(stakeholderEmail(program, "Dan Reyes")).toBe("dan@acme.com");
+    expect(stakeholderEmail(program, "dan reyes, RevOps Lead")).toBe("dan@acme.com");
+    expect(stakeholderEmail(program, "Priya Nair")).toBeNull();
+    expect(stakeholderEmail(program, "Nobody")).toBeNull();
+  });
+
+  it("the .ics carries the script as its agenda and the attendee when known", () => {
+    const ics = buildMeetingIcs({
+      who: "Dan Reyes", email: "dan@acme.com", date: "2026-07-20",
+      programmeName: "Flow Pilot", intro: "Walk his workflow.", questions: ["Where does the queue stall?", "Who owns exceptions?"],
+    });
+    expect(ics).toContain("BEGIN:VCALENDAR");
+    expect(ics).toContain("DTSTART:20260720T100000");
+    expect(ics).toContain("ATTENDEE;CN=Dan Reyes:mailto:dan@acme.com");
+    expect(ics).toContain("SUMMARY:Flow Pilot — discovery with Dan Reyes");
+    expect(ics).toContain("1. Where does the queue stall?");
+    expect(buildMeetingIcs({ who: "X", email: null, date: "2026-07-20", programmeName: "P", questions: [] })).not.toContain("ATTENDEE");
+  });
+
+  it("mailtoLink addresses the person and carries the response link", () => {
+    const href = mailtoLink("dan@acme.com", { stakeholder: "Dan Reyes", programmeName: "Flow Pilot", link: "https://x/y?flowRespond=t" });
+    expect(href.startsWith("mailto:dan@acme.com?subject=")).toBe(true);
+    expect(decodeURIComponent(href)).toContain("Hi Dan,");
+    expect(decodeURIComponent(href)).toContain("https://x/y?flowRespond=t");
   });
 });
