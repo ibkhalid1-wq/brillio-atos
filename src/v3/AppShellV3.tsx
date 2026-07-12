@@ -1302,6 +1302,11 @@ export default function AppShellV3() {
     const raw = activeProgram.rawData as Record<string, unknown>;
     const nested = typeof raw.data === "object" && raw.data !== null;
     const inner = nested ? (raw.data as Record<string, unknown>) : raw;
+    // DATA-LOSS GUARD. The programme list hydrates the blob lazily, so
+    // rawData is briefly light/empty after opening. Migrating+persisting that
+    // window would bump the version on an empty blob and clobber the real
+    // cloud row. Only ever migrate a substantively-populated blob.
+    if (!hasSubstantiveProgramData(inner)) return;
     const { inner: upgraded, migrated: didMigrate } = migrateProgramBlob(inner);
     if (!didMigrate) return;
     migratedPrograms.current.add(activeProgramId);
