@@ -1184,7 +1184,16 @@ export default function AppShellV3() {
   // then the "program"-level bucket.
   const handleRunAgent = useCallback(
     (agentId: string, phaseId?: string, guidance?: string) =>
-      void runProgramAgent({ agentId, phaseId: phaseId || activePhaseId || "program", triggeredBy: "user", regenGuidance: guidance }),
+      void runProgramAgent({
+        agentId,
+        phaseId: phaseId || activePhaseId || "program",
+        triggeredBy: "user",
+        regenGuidance: guidance,
+        // Sweep agents fire immediately AFTER a persist; the pre-sync upsert
+        // would clobber that fresh write with the stale closure snapshot
+        // (resurrecting ingested inbox items). The edge reads the row itself.
+        skipPreSync: agentId === "contradiction-detector",
+      }),
     [runProgramAgent, activePhaseId],
   );
 
@@ -2254,7 +2263,7 @@ export default function AppShellV3() {
             // Inbox as sponsor decisions.
             const target = activeProgram ? portalItemTargetMovement(activeProgram, itemId) : "listen";
             await persistFlowMutation((program) => ingestPortalResponse(program, itemId, actor));
-            void runProgramAgent({ agentId: "contradiction-detector", phaseId: target, triggeredBy: "trigger" });
+            void runProgramAgent({ agentId: "contradiction-detector", phaseId: target, triggeredBy: "trigger", skipPreSync: true });
           }}
           onDismissPortalItem={async (itemId) => {
             const actor = currentUser?.email || "you";
