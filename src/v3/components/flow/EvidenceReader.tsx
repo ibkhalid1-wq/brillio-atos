@@ -6,10 +6,12 @@
  */
 import React, { useEffect, useMemo, useRef } from "react";
 import { useFocusTrap } from "@/v3/lib/useFocusTrap";
-import { flowMovements, type EvidenceEntry } from "@/v3/components/flow/flowShellData";
+import { flowMovements, locateQuote, type EvidenceEntry } from "@/v3/components/flow/flowShellData";
 
-export default function EvidenceReader({ entry, onClose }: {
+export default function EvidenceReader({ entry, highlight, onClose }: {
   entry: EvidenceEntry;
+  /** A quoted claim to locate and mark inside the source text. */
+  highlight?: string;
   onClose: () => void;
 }) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
@@ -57,7 +59,20 @@ export default function EvidenceReader({ entry, onClose }: {
               A referenced source — its content lives outside the captured record. Reference: {entry.who}.
             </p>
           ) : (
-            paragraphs.map((paragraph, index) => <p key={index} className="v3fs-evread-p">{paragraph}</p>)
+            paragraphs.map((paragraph, index) => {
+              const hit = highlight ? locateQuote(paragraph, highlight) : null;
+              if (!hit) return <p key={index} className="v3fs-evread-p">{paragraph}</p>;
+              return (
+                <p key={index} className="v3fs-evread-p">
+                  {paragraph.slice(0, hit.start)}
+                  <mark
+                    className="v3fs-evread-mark"
+                    ref={(node) => { node?.scrollIntoView({ block: "center" }); }}
+                  >{paragraph.slice(hit.start, hit.end)}</mark>
+                  {paragraph.slice(hit.end)}
+                </p>
+              );
+            })
           )}
         </div>
       </div>

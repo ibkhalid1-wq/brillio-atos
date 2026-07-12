@@ -6,13 +6,14 @@
  * and land on the attestation trail. A typeset document view stays one tap
  * away, and artifacts with no stored structure fall back to it.
  */
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useFocusTrap } from "@/v3/lib/useFocusTrap";
 import type { ProgramSummary } from "@/new/types";
-import { artifactDocument, flowMovements, movementEvidence, type ArtifactCardModel, type EvidenceEntry } from "@/v3/components/flow/flowShellData";
+import { artifactDocument, flowMovements, locateQuote, movementEvidence, type ArtifactCardModel, type EvidenceEntry } from "@/v3/components/flow/flowShellData";
 import { groundingFor, citationGraph, resourceUri, artifactFabioType, SEMANTIC_CONTEXT } from "@/v3/components/flow/flowSemantics";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
-import { listOpenFlowDecisions, listFlowAttestations } from "@/v3/components/flow/flowDecisions";
+import { listOpenFlowDecisions, listFlowAttestations, docSectionDiff } from "@/v3/components/flow/flowDecisions";
+import { listSnapshots } from "@/v3/lib/blobSnapshots";
 import { STUDIO_REGISTRY } from "./studios";
 import DocumentView from "./DocumentView";
 import EvidenceReader from "@/v3/components/flow/EvidenceReader";
@@ -112,6 +113,37 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
   );
   // The regeneration guard queues fresh versions of hand-edited docs as
   // decisions — surface that state on the document itself.
+  // "What changed" — compare the current document against the most recent
+  // snapshot that held a DIFFERENT version, section by section. The snapshot
+  // ring captures every write, so the last regeneration's footprint is the
+  // first differing copy walking backwards.
+  const [lastChange, setLastChange] = useState<{ ts: string; rows: string[] } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const entry = STUDIO_REGISTRY[artifact.id];
+    if (!entry) return;
+    void listSnapshots(program.id).then((snapshots) => {
+      if (!alive) return;
+      const raw = (program.rawData ?? {}) as Record<string, unknown>;
+      const inner = typeof raw.data === "object" && raw.data !== null ? (raw.data as Record<string, unknown>) : raw;
+      const current = inner[entry.fieldKey];
+      if (!current || typeof current !== "object" || Array.isArray(current)) { setLastChange(null); return; }
+      for (const snapshot of snapshots) {
+        const snapInner = typeof snapshot.data.data === "object" && snapshot.data.data !== null
+          ? (snapshot.data.data as Record<string, unknown>)
+          : snapshot.data;
+        const prior = snapInner[entry.fieldKey];
+        if (!prior || typeof prior !== "object" || Array.isArray(prior)) continue;
+        if (JSON.stringify(prior) === JSON.stringify(current)) continue;
+        const rows = docSectionDiff(prior as Record<string, unknown>, current as Record<string, unknown>);
+        setLastChange(rows.length ? { ts: snapshot.ts, rows } : null);
+        return;
+      }
+      setLastChange(null);
+    });
+    return () => { alive = false; };
+  }, [artifact.id, program.id, program.rawData]);
+
   const regenPending = useMemo(() => {
     if (!entry) return false;
     return listOpenFlowDecisions(program).some((decision) => {
@@ -144,6 +176,33 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
     return movement ? movementEvidence(program, movement) : [];
   }, [program, artifact.movementId]);
   const [evidenceOpen, setEvidenceOpen] = useState<EvidenceEntry | null>(null);
+  const [evidenceHighlight, setEvidenceHighlight] = useState<string | null>(null);
+  // Span grounding: every pull-quote in the document is checked against the
+  // FULL evidence pool (quotes in Envision documents cite Listen voices), and
+  // ones that trace click through to the source with the passage marked.
+  const allEvidence = useMemo(
+    () => flowMovements().flatMap((m) => movementEvidence(program, m)).filter((e) => e.kind !== "reference" && e.text.length > 40),
+    [program],
+  );
+  const evidenceForQuote = useMemo(() => (quote: string): EvidenceEntry | null =>
+    allEvidence.find((e) => locateQuote(e.text, quote)) ?? null, [allEvidence]);
+  const docBodyRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const root = docBodyRef.current;
+    if (!root || editing) return;
+    for (const el of root.querySelectorAll(".v3fs-dv-quote")) {
+      const source = evidenceForQuote(el.textContent ?? "");
+      el.classList.toggle("traceable", Boolean(source));
+      if (source) el.setAttribute("title", `Said by ${source.who} — click to read it in the source`);
+    }
+  }, [draft, editing, evidenceForQuote]);
+  const traceQuote = (event: React.MouseEvent) => {
+    const quoteEl = (event.target as HTMLElement).closest?.(".v3fs-dv-quote");
+    if (!quoteEl) return;
+    const quote = quoteEl.textContent ?? "";
+    const source = evidenceForQuote(quote);
+    if (source) { setEvidenceHighlight(quote); setEvidenceOpen(source); }
+  };
   const edited = draft && typeof draft.editedAt === "string" ? String(draft.editedAt).slice(0, 10) : null;
 
   // Grounding lives in the colophon with the rest of the provenance.
@@ -230,6 +289,14 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
             ) : null}
           </div>
         ) : null}
+        {!editing && lastChange ? (
+          <details className="v3fs-dv-changed">
+            <summary>
+              What changed — {lastChange.rows.length} section{lastChange.rows.length === 1 ? "" : "s"} since {new Date(lastChange.ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+            </summary>
+            <ul>{lastChange.rows.slice(0, 8).map((row) => <li key={row}>{row}</li>)}</ul>
+          </details>
+        ) : null}
         {!editing && regenPending ? (
           <div className="v3fs-dv-band indigo">
             <span>A regenerated version awaits your confirm in the Inbox — your hand edits are protected until then.</span>
@@ -239,7 +306,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
           </div>
         ) : null}
 
-        <div className="v3fs-docview-b">
+        <div className="v3fs-docview-b" ref={docBodyRef} onClick={traceQuote}>
 
           {studioActive && entry && draft ? (
             <entry.Component doc={draft} onChange={(next) => { setDraft(next); setDirty(true); }} onOpenArtifact={onOpenArtifact} />
@@ -317,7 +384,10 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
           )}
         </div>
 
-        {evidenceOpen ? <EvidenceReader entry={evidenceOpen} onClose={() => setEvidenceOpen(null)} /> : null}
+        {evidenceOpen ? (
+          <EvidenceReader entry={evidenceOpen} highlight={evidenceHighlight ?? undefined}
+            onClose={() => { setEvidenceOpen(null); setEvidenceHighlight(null); }} />
+        ) : null}
         {dirty && canEdit ? (
           <footer className="v3fs-stu-savebar">
             <span>You've edited this document.</span>

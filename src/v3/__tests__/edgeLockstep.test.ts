@@ -75,3 +75,30 @@ describe("conflicts route to the Inbox (propose-then-confirm)", () => {
     expect(block.slice(0, 2500)).toContain("contradictionEntries");
   });
 });
+
+describe("studio document order matches the edge output contracts", () => {
+  // Both sides parsed from source: the studio registry names the sections it
+  // renders (docOrder); each edge agent's system prompt embeds the JSON
+  // template it must emit. Every rendered section must exist in the contract,
+  // or the studio typesets keys the generator never produces.
+  const STUDIOS = readFileSync(resolve(__dirname, "../components/flow/studio/studios.tsx"), "utf8");
+  const entries = [...STUDIOS.matchAll(/"([a-z-]+)": \{ fieldKey: flowFieldKey\("[a-z-]+"\), docOrder: \[([^\]]+)\]/g)]
+    .map((match) => [match[1], [...match[2].matchAll(/"([^"]+)"/g)].map((m) => m[1])] as const);
+
+  it("the registry parse found every studio with a document order", () => {
+    expect(entries.length).toBeGreaterThanOrEqual(12);
+  });
+
+  it.each(entries.map(([id, keys]) => ({ id, keys })))(
+    "the $id contract emits every section its studio renders",
+    ({ id, keys }) => {
+      const start = EDGE.search(new RegExp(`\\n {2}"${id}": \\{\\n {4}phase:`));
+      expect(start, `edge agent block for ${id}`).toBeGreaterThan(-1);
+      const rest = EDGE.slice(start + 4);
+      const next = rest.search(/\n {2}"[a-z-]+": \{\n {4}phase:/);
+      const block = next > -1 ? rest.slice(0, next) : rest.slice(0, 12000);
+      const missing = keys.filter((key) => !block.includes(`"${key}"`));
+      expect(missing).toEqual([]);
+    },
+  );
+});

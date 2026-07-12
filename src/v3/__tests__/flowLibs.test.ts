@@ -7,6 +7,7 @@ import { describe, it, expect } from "vitest";
 import type { ProgramSummary } from "@/new/types";
 import { resolveFlowDecision, listOpenFlowDecisions, describeDecisionChanges } from "@/v3/components/flow/flowDecisions";
 import { scriptDocumentRefs, meetingKit } from "@/v3/components/flow/flowMeetings";
+import { locateQuote } from "@/v3/components/flow/flowShellData";
 import { validateProgramBlob, migrateProgramBlob, BLOB_VERSION } from "@/v3/lib/blobGuard";
 import { unrosteredVoicesProposal, reDemoProposal, queueWatcherProposal } from "@/v3/components/flow/flowWatchers";
 import { mintFollowUpPack, listInterviewPacks, visibleLinks } from "@/v3/components/flow/flowPortal";
@@ -697,5 +698,30 @@ describe("industry segments", () => {
       expect(INDUSTRY_OPTIONS, `${industry} not in dropdown`).toContain(industry);
       expect(segments.length).toBeGreaterThanOrEqual(2);
     }
+  });
+});
+
+describe("locateQuote — span grounding's fuzzy match", () => {
+  const transcript = "We looked at the numbers together. The team said \u201cquote-to-cash takes nine days,   sometimes more\u201d and nobody disputed it. Then we moved on.";
+
+  it("finds a straight-quoted claim inside curly-quoted, respaced source text", () => {
+    const hit = locateQuote(transcript, '"quote-to-cash takes nine days, sometimes more"');
+    expect(hit).not.toBeNull();
+    expect(transcript.slice(hit!.start, hit!.end)).toContain("quote-to-cash takes nine days");
+  });
+
+  it("strips a trailing em-dash attribution before matching", () => {
+    const hit = locateQuote(transcript, "quote-to-cash takes nine days, sometimes more \u2014 Dan Reyes");
+    expect(hit).not.toBeNull();
+  });
+
+  it("falls back to a shrinking prefix when the tail was paraphrased", () => {
+    const hit = locateQuote(transcript, "quote-to-cash takes nine days, sometimes more or less depending on the quarter and the rep");
+    expect(hit).not.toBeNull();
+  });
+
+  it("refuses to match short fragments or absent claims", () => {
+    expect(locateQuote(transcript, "nine days")).toBeNull();
+    expect(locateQuote(transcript, "the invoice reconciliation backlog is cleared nightly")).toBeNull();
   });
 });

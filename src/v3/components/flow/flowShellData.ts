@@ -14,6 +14,42 @@ import { getFormalArtifactContent, getFormalArtifactConfidence, FORMAL_ARTIFACT_
 import { listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 import { listFlowTracks, trackAcceptance } from "@/v3/components/flow/flowTracks";
 
+/**
+ * Find a quoted claim inside a source transcript, tolerantly: curly quotes
+ * flatten to straight, whitespace runs collapse, trailing "— Speaker"
+ * attributions are dropped, and shrinking prefixes retry when the tail was
+ * paraphrased. Returns raw-string offsets so callers can highlight in place.
+ */
+export function locateQuote(haystack: string, quote: string): { start: number; end: number } | null {
+  const canon = (ch: string) =>
+    ch === "\u2018" || ch === "\u2019" ? "'" : ch === "\u201c" || ch === "\u201d" ? '"' : ch.toLowerCase();
+  const normalize = (raw: string): { norm: string; map: number[] } => {
+    let norm = "";
+    const map: number[] = [];
+    let pendingSpace = false;
+    for (let i = 0; i < raw.length; i += 1) {
+      if (/\s/.test(raw[i])) { pendingSpace = norm.length > 0; continue; }
+      if (pendingSpace) { norm += " "; map.push(i); pendingSpace = false; }
+      norm += canon(raw[i]);
+      map.push(i);
+    }
+    return { norm, map };
+  };
+  const hay = normalize(haystack);
+  const needle = normalize(
+    quote.replace(/\s*[\u2014\u2013-]\s*[A-Z][\w .,'\u2019-]{2,60}$/, "").replace(/^["'\u201c\u2018\s]+|["'\u201d\u2019.\s]+$/g, ""),
+  ).norm;
+  if (needle.length < 12) return null;
+  for (const len of [needle.length, 90, 60, 36]) {
+    if (len > needle.length) continue;
+    const probe = needle.slice(0, len).trim();
+    if (probe.length < 16 && len !== needle.length) break;
+    const at = hay.norm.indexOf(probe);
+    if (at >= 0) return { start: hay.map[at], end: hay.map[at + probe.length - 1] + 1 };
+  }
+  return null;
+}
+
 export interface EvidenceEntry {
   movementId: string;
   fieldLabel: string;

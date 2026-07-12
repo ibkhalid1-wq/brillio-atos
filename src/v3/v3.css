@@ -5382,3 +5382,14 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-strat-list.minus li::before {content:"–";position:absolute;left:0;color:var(--v3-amber);font-weight:700}
 .v3fs-strat-why {margin:12px 2px 0;font-size:12.5px;line-height:1.6;color:var(--v3-text-secondary);font-style:italic}
 .v3fs-strat .v3fs-btn {align-self:flex-start;margin-top:auto}
+/* What-changed band: the last regeneration's footprint, section by section. */
+.v3fs-dv-changed {margin:0 36px;border:1px solid var(--v3-border-soft);border-radius:10px;padding:9px 14px;background:var(--v3-surface-2);font-size:12px}
+.v3fs-dv-changed summary {cursor:pointer;font-weight:600;color:var(--v3-text-secondary)}
+.v3fs-dv-changed ul {list-style:none;margin:8px 0 2px;padding:0;display:flex;flex-direction:column;gap:3px}
+.v3fs-dv-changed li {font-family:var(--v3-font-mono);font-size:10.5px;color:var(--v3-text-secondary);padding-left:14px;position:relative}
+.v3fs-dv-changed li::before {content:"Δ";position:absolute;left:0;color:var(--v3-accent-2);font-weight:700}
+/* Span grounding: traceable pull-quotes click through to their source. */
+.v3fs-dv-quote.traceable {cursor:pointer;transition:border-color .15s ease,background .15s ease}
+.v3fs-dv-quote.traceable:hover {border-left-color:var(--v3-accent-2);background:var(--v3-surface-2)}
+.v3fs-dv-quote.traceable:hover::after {content:"trace to source \203A";display:block;margin-top:5px;font-size:10px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--v3-accent-2);font-style:normal}
+.v3fs-evread-mark {background:color-mix(in srgb, var(--v3-accent-2) 22%, transparent);color:inherit;border-radius:3px;padding:0 2px;box-shadow:0 0 0 1px color-mix(in srgb, var(--v3-accent-2) 30%, transparent)}

@@ -287,6 +287,26 @@ export function resolveFlowDecision(
   return wrapProgramState(wrapper, nextInner, usesNestedData);
 }
 
+/**
+ * Per-section difference between two versions of a structured document —
+ * the same rows the Inbox previews and the studio's what-changed band show.
+ */
+export function docSectionDiff(prev: Record<string, unknown> | null, next: Record<string, unknown>): string[] {
+  const sections = (record: Record<string, unknown>) => Object.keys(record).filter((k) => !CHANGE_META_KEYS.has(k) && !k.startsWith("_"));
+  if (!prev) return ["New document"];
+  const nextKeys = sections(next);
+  const prevKeys = sections(prev);
+  const rows: string[] = [];
+  for (const key of nextKeys) {
+    if (!prevKeys.includes(key)) rows.push(`${humanizeKey(key)} — added`);
+    else if (JSON.stringify(prev[key]) !== JSON.stringify(next[key])) rows.push(`${humanizeKey(key)} — rewritten`);
+  }
+  for (const key of prevKeys) {
+    if (!nextKeys.includes(key)) rows.push(`${humanizeKey(key)} — removed`);
+  }
+  return rows;
+}
+
 /** One concrete effect a confirm applies — target, effect, entries. */
 export interface DecisionChange {
   target: string;
