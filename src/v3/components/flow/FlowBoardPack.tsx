@@ -5,7 +5,7 @@
  * realised benefits, and the trail's tail. Opened as an overlay; the print
  * stylesheet strips the app and keeps the paper.
  */
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import {
   flowMovements, movementArtifacts, gateChecklist, gateReadiness,
@@ -15,10 +15,22 @@ import {
 import { listFlowAttestations, listOpenFlowDecisions } from "@/v3/components/flow/flowDecisions";
 import { useFocusTrap } from "@/v3/lib/useFocusTrap";
 
-export default function FlowBoardPack({ program, onClose }: {
+export default function FlowBoardPack({ program, onMintBrief, onClose }: {
   program: ProgramSummary;
+  /** Mint a dated, token-gated snapshot of this pack; resolves to the URL. */
+  onMintBrief?: () => Promise<string | null>;
   onClose: () => void;
 }) {
+  const [shareState, setShareState] = useState<"idle" | "busy" | "copied" | "failed">("idle");
+  const share = async () => {
+    if (!onMintBrief) return;
+    setShareState("busy");
+    const link = await onMintBrief();
+    if (!link) { setShareState("failed"); return; }
+    try { await navigator.clipboard.writeText(link); } catch { /* the attest trail still holds the mint */ }
+    setShareState("copied");
+    window.setTimeout(() => setShareState("idle"), 2500);
+  };
   const dialogRef = useRef<HTMLDivElement | null>(null);
   useFocusTrap(dialogRef);
   useEffect(() => {
@@ -55,6 +67,11 @@ export default function FlowBoardPack({ program, onClose }: {
         <header className="v3fs-pack-bar">
           <span>Board pack — built from live data, {new Date().toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}</span>
           <span className="v3fs-pack-bar-a">
+            {onMintBrief ? (
+              <button type="button" className="v3fs-btn" disabled={shareState === "busy"} onClick={() => void share()}>
+                {shareState === "busy" ? "Minting\u2026" : shareState === "copied" ? "Link copied \u2713" : shareState === "failed" ? "Could not mint" : "Share a sponsor link"}
+              </button>
+            ) : null}
             <button type="button" className="v3fs-btn pri" onClick={() => window.print()}>Print / save as PDF</button>
             <button type="button" className="v3fs-btn" onClick={onClose}>Close</button>
           </span>

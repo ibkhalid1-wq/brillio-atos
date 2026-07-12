@@ -69,6 +69,7 @@ const KNOWN_KEYS: Record<string, z.ZodTypeAny> = {
   shipLanes: z.object({ lanes: z.array(record) }).loose(),
   dynamicSchema: record,
   gateReviews: z.record(z.string(), record),
+  flowBriefs: z.array(z.object({ id: z.string(), token: z.string(), snapshot: record }).loose()),
 };
 
 export interface BlobIssue {

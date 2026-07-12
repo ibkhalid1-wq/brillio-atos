@@ -8,6 +8,7 @@ import type { ProgramSummary } from "@/new/types";
 import { resolveFlowDecision, listOpenFlowDecisions, describeDecisionChanges } from "@/v3/components/flow/flowDecisions";
 import { scriptDocumentRefs, meetingKit } from "@/v3/components/flow/flowMeetings";
 import { locateQuote } from "@/v3/components/flow/flowShellData";
+import { mintBrief, buildBriefSnapshot } from "@/v3/components/flow/flowBriefs";
 import { validateProgramBlob, migrateProgramBlob, BLOB_VERSION } from "@/v3/lib/blobGuard";
 import { unrosteredVoicesProposal, reDemoProposal, queueWatcherProposal } from "@/v3/components/flow/flowWatchers";
 import { mintFollowUpPack, listInterviewPacks, visibleLinks } from "@/v3/components/flow/flowPortal";
@@ -723,5 +724,33 @@ describe("locateQuote — span grounding's fuzzy match", () => {
   it("refuses to match short fragments or absent claims", () => {
     expect(locateQuote(transcript, "nine days")).toBeNull();
     expect(locateQuote(transcript, "the invoice reconciliation backlog is cleared nightly")).toBeNull();
+  });
+});
+
+describe("sponsor briefs — dated, token-gated board-pack snapshots", () => {
+  const program = {
+    id: "prog-1", name: "Flow Pilot", client: "Acme",
+    rawData: { data: { phaseInputs: { frame: { businessObjective: "Cut quote-to-cash from nine days to two", sponsor: "Sarah Chen" } } } },
+  } as never;
+
+  it("the snapshot freezes the derived numbers and gate states", () => {
+    const snapshot = buildBriefSnapshot(program);
+    expect(snapshot.objective).toContain("quote-to-cash");
+    expect(snapshot.sponsor).toBe("Sarah Chen");
+    expect(Array.isArray(snapshot.gates)).toBe(true);
+    expect((snapshot.gates as unknown[]).length).toBeGreaterThan(0);
+    expect(snapshot.numbers).toMatchObject({ waiting: 0 });
+  });
+
+  it("minting appends a tokened brief and attests the share", () => {
+    const blob = mintBrief(program, "operator@brillio.com");
+    expect(blob).not.toBeNull();
+    const inner = (blob as { data: Record<string, unknown> }).data;
+    const briefs = inner.flowBriefs as Array<Record<string, unknown>>;
+    expect(briefs).toHaveLength(1);
+    expect(String(briefs[0].token)).toMatch(/^[0-9a-f]{36}$/);
+    expect((briefs[0].snapshot as Record<string, unknown>).sponsor).toBe("Sarah Chen");
+    const log = inner.flowAttestations as Array<Record<string, unknown>>;
+    expect(log.some((entry) => String(entry.action).includes("sponsor brief"))).toBe(true);
   });
 });

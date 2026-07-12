@@ -66,6 +66,8 @@ interface FlowShellProps {
   onScheduleFollowUp: (movementId: string, who: string, date: string) => Promise<void>;
   /** Mint a follow-up link (ATOS asks the gaps itself); resolves to the URL. */
   onMintFollowUp: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
+  /** Mint a shareable sponsor brief (dated board-pack snapshot); resolves to the URL. */
+  onMintBrief: () => Promise<string | null>;
   /** Persist a studio edit to an artifact document (attested). */
   onSaveArtifactDoc: (input: ArtifactEditInput) => Promise<void>;
   /** Confirm a quarantined portal response into evidence. */
@@ -293,7 +295,7 @@ export default function FlowShell(props: FlowShellProps) {
             onHydratePrograms={props.onHydratePrograms}
           />
         ) : (
-          <FlowPulse program={program} />
+          <FlowPulse program={program} onMintBrief={props.onMintBrief} />
         )}
         </ViewBoundary>
       </div>
@@ -1138,7 +1140,7 @@ function FlowLibrary({ program, onSaveArtifactDoc, onOpenInbox }: { program: Pro
 
 /* ── Pulse: the steering-meeting screen ──────────────────────────────────── */
 
-function FlowPulse({ program }: { program: ProgramSummary }) {
+function FlowPulse({ program, onMintBrief }: { program: ProgramSummary; onMintBrief: () => Promise<string | null> }) {
   const days = daysToFirstDemo(program);
   const coverage = listenCoverage(program);
   const demos = demoAcceptance(program);
@@ -1153,7 +1155,7 @@ function FlowPulse({ program }: { program: ProgramSummary }) {
           ⎙ Board pack — print or save as PDF
         </button>
       </div>
-      {packOpen ? <FlowBoardPack program={program} onClose={() => setPackOpen(false)} /> : null}
+      {packOpen ? <FlowBoardPack program={program} onMintBrief={onMintBrief} onClose={() => setPackOpen(false)} /> : null}
       <div className="v3fs-stats">
         <div className="v3fs-stat hero">
           <div className="v3fs-stat-n">{days != null ? <b>{days}</b> : <b>—</b>}{days != null ? <small> days</small> : null}</div>

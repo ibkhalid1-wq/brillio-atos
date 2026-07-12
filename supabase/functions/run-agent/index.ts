@@ -5809,7 +5809,21 @@ function tokensUsedForRun(
 }
 
 /** Queue an open Tier-2/3 decision for a human to resolve in the deck's inbox. */
+// Optional heads-up ping (Slack-compatible webhook). Fire-and-forget: a
+// missing SLACK_WEBHOOK_URL or a failed post never blocks a run.
+const SLACK_WEBHOOK_URL = Deno.env.get("SLACK_WEBHOOK_URL") || "";
+function notifyDecisionQueued(decision: Record<string, JsonValue>): void {
+  if (!SLACK_WEBHOOK_URL) return;
+  const title = typeof decision.title === "string" ? decision.title : "A proposal";
+  fetch(SLACK_WEBHOOK_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text: `ATOS Flow — waiting on you in the Inbox: ${title}` }),
+  }).catch(() => { /* best effort */ });
+}
+
 function queueFlowDecision(programData: ProgramState, decision: Record<string, JsonValue>): ProgramState {
+  notifyDecisionQueued(decision);
   return updateInnerProgramData(programData, (inner) => {
     const list = Array.isArray(inner.flowDecisions) ? inner.flowDecisions as JsonValue[] : [];
     const id = `dec-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;

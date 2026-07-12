@@ -37,6 +37,18 @@ function jsonResponse(body: unknown, status = 200): Response {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+/** Optional heads-up ping (Slack-compatible webhook). Fire-and-forget:
+ * a missing SLACK_WEBHOOK_URL or a failed post never blocks the loop. */
+const SLACK_WEBHOOK_URL = Deno.env.get("SLACK_WEBHOOK_URL") || "";
+function notifyWebhook(text: string): void {
+  if (!SLACK_WEBHOOK_URL) return;
+  fetch(SLACK_WEBHOOK_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  }).catch(() => { /* best effort */ });
+}
+
 /** Both persisted rawData shapes: {data: inner} or inner at the root. */
 function innerOf(raw: Record<string, unknown>): { inner: Record<string, unknown>; nested: boolean } {
   return isRecord(raw.data)
@@ -88,6 +100,32 @@ Deno.serve(async (req: Request) => {
 
   try {
     if (req.method === "GET") {
+      // Sponsor briefs: a dated, read-only snapshot of the board pack. The
+      // token gates it exactly like response links; nothing else leaves.
+      const briefToken = new URL(req.url).searchParams.get("brief") || "";
+      if (briefToken) {
+        const dot = briefToken.indexOf(".");
+        const programId = dot > 0 ? briefToken.slice(0, dot) : "";
+        const secret = dot > 0 ? briefToken.slice(dot + 1) : "";
+        if (!programId || !secret) return jsonResponse({ error: "This link is not valid." }, 404);
+        const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+        const { data: row } = await admin
+          .from("adam_programs")
+          .select("id, name, data")
+          .eq("id", programId)
+          .maybeSingle();
+        if (!row) return jsonResponse({ error: "This link is not valid." }, 404);
+        const { inner } = innerOf(isRecord(row.data) ? row.data as Record<string, unknown> : {});
+        const briefs = Array.isArray(inner.flowBriefs) ? inner.flowBriefs.filter(isRecord) : [];
+        const brief = briefs.find((entry) => entry.token === secret);
+        if (!brief || !isRecord(brief.snapshot)) return jsonResponse({ error: "This link is not valid." }, 404);
+        // Briefs age out like response links — a quarter is plenty.
+        const created = Date.parse(String(brief.createdAt ?? ""));
+        if (Number.isFinite(created) && Date.now() - created > 90 * 86_400_000) {
+          return jsonResponse({ error: "This link is not valid." }, 404);
+        }
+        return jsonResponse({ kind: "brief", programme: String(row.name ?? ""), createdAt: String(brief.createdAt ?? ""), snapshot: brief.snapshot });
+      }
       const token = new URL(req.url).searchParams.get("token") || "";
       const hit = await loadPack(token);
       if (!hit) return jsonResponse({ error: "This link is not valid." }, 404);
@@ -205,6 +243,9 @@ Deno.serve(async (req: Request) => {
               payload: { source: "flow-portal", kind: hit.kind, at: now },
             });
           } catch { /* best effort — the poll still catches it */ }
+          notifyWebhook(hit.kind === "demo"
+            ? `ATOS Flow — ${hit.programName}: ${stakeholder} returned a demo verdict. It is waiting in the evidence inbox.`
+            : `ATOS Flow — ${hit.programName}: ${stakeholder} answered an async interview. It is waiting in the evidence inbox.`);
           return jsonResponse({ ok: true });
         }
         // CAS miss — another writer landed in between; reload and retry.

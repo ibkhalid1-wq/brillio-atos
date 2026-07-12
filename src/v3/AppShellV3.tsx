@@ -35,7 +35,9 @@ import { applyArtifactEdit } from "@/v3/components/flow/flowArtifactEdit";
 import { compileShipLanes, toggleShipItem } from "@/v3/components/flow/flowShip";
 import { scheduleFollowUp } from "@/v3/components/flow/flowMeetings";
 import { mintFollowUpPack, latestPackFor, portalLinkFor } from "@/v3/components/flow/flowPortal";
+import { mintBrief, briefLinkFor } from "@/v3/components/flow/flowBriefs";
 import FlowRespond from "@/v3/components/flow/FlowRespond";
+import FlowBrief from "@/v3/components/flow/FlowBrief";
 import { reportError } from "@/lib/errorReporter";
 import { changedInputFields, relatedArtifactsToStale, crossPhaseArtifactsToStale } from "@/v3/lib/artifactStaleness";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
@@ -1861,9 +1863,16 @@ export default function AppShellV3() {
   // no account — the token IS the access (validated by the flow-portal edge
   // function) and everything they send is quarantined for operator review.
   {
-    const respondToken = new URLSearchParams(window.location.search).get("flowRespond");
+    const params = new URLSearchParams(window.location.search);
+    const respondToken = params.get("flowRespond");
     if (respondToken) {
       return <FlowRespond token={respondToken} />;
+    }
+    // Public sponsor brief: a dated board-pack snapshot, token-gated the
+    // same way — the sponsor needs no account to read where things stand.
+    const briefToken = params.get("flowBrief");
+    if (briefToken) {
+      return <FlowBrief token={briefToken} />;
     }
   }
 
@@ -2121,6 +2130,23 @@ export default function AppShellV3() {
           onScheduleFollowUp={async (movementId, who, date) => {
             const actor = currentUser?.email || "you";
             await persistFlowMutation((program) => scheduleFollowUp(program, movementId, who, date, actor));
+          }}
+          onMintBrief={async () => {
+            const actor = currentUser?.email || "you";
+            let mintedLink: string | null = null;
+            await persistFlowMutation((program) => {
+              const blob = mintBrief(program, actor);
+              if (blob) {
+                const inner = (typeof blob.data === "object" && blob.data !== null ? blob.data : blob) as Record<string, unknown>;
+                const briefs = Array.isArray(inner.flowBriefs) ? inner.flowBriefs : [];
+                const last = briefs[briefs.length - 1] as Record<string, unknown> | undefined;
+                if (last && typeof last.token === "string") {
+                  mintedLink = briefLinkFor(program.id, { token: last.token });
+                }
+              }
+              return blob;
+            });
+            return mintedLink;
           }}
           onMintFollowUp={async (input) => {
             const actor = currentUser?.email || "you";
