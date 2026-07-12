@@ -131,7 +131,6 @@ export default function FlowShell(props: FlowShellProps) {
     listOpenFlowDecisions(program).length + listPortalInbox(program).length > 0 ? "today" : "flow",
   );
   const [switcherOpen, setSwitcherOpen] = useState(false);
-  const [armedDelete, setArmedDelete] = useState<string | null>(null);
   const days = daysToFirstDemo(program);
   const openDecisions = listOpenFlowDecisions(program);
   const portalInbox = listPortalInbox(program);
@@ -150,7 +149,7 @@ export default function FlowShell(props: FlowShellProps) {
 
   // The switcher dismisses like a menu should: backdrop click or Escape.
   useEffect(() => {
-    if (!switcherOpen) { setArmedDelete(null); return undefined; }
+    if (!switcherOpen) return undefined;
     const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setSwitcherOpen(false); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -224,25 +223,10 @@ export default function FlowShell(props: FlowShellProps) {
         <div className="v3fs-switcher" role="menu">
           <div className="v3fs-switcher-l">Programmes</div>
           {props.programs.map((entry) => (
-            <div key={entry.id} className={`v3fs-switcher-row${entry.id === program.id ? " on" : ""}`}>
-              <button type="button" role="menuitem" className="v3fs-switcher-pick"
-                onClick={() => { setSwitcherOpen(false); props.onSelectProgram(entry.id); }}>
-                {entry.name}
-              </button>
-              {props.onDeleteProgram ? (
-                armedDelete === entry.id ? (
-                  <span className="v3fs-switcher-confirm">
-                    <button type="button" className="v3fs-switcher-del danger"
-                      onClick={() => { setArmedDelete(null); setSwitcherOpen(false); props.onDeleteProgram?.(entry.id); }}>Delete</button>
-                    <button type="button" className="v3fs-switcher-del"
-                      onClick={() => setArmedDelete(null)}>Keep</button>
-                  </span>
-                ) : (
-                  <button type="button" className="v3fs-switcher-del" aria-label={`Archive ${entry.name}`}
-                    title="Archive — hides it, keeps the record" onClick={() => setArmedDelete(entry.id)}>×</button>
-                )
-              ) : null}
-            </div>
+            <button key={entry.id} type="button" role="menuitem" className={entry.id === program.id ? "on" : ""}
+              onClick={() => { setSwitcherOpen(false); props.onSelectProgram(entry.id); }}>
+              {entry.name}
+            </button>
           ))}
           <div className="v3fs-switcher-sep" />
           <button type="button" role="menuitem" onClick={() => { setSwitcherOpen(false); props.onCreateProgram(); }}>＋ New programme</button>
@@ -307,6 +291,7 @@ export default function FlowShell(props: FlowShellProps) {
           />
         ) : view === "portfolio" ? (
           <FlowPortfolio
+            onDeleteProgram={props.onDeleteProgram}
             programs={props.programs}
             activeId={program.id}
             onSelectProgram={props.onSelectProgram}
@@ -830,12 +815,14 @@ function SnapshotSafety({ program, onRestoreSnapshot }: {
 
 /* ── Portfolio: every Flow programme, the numbers that matter ────────────── */
 
-function FlowPortfolio({ programs, activeId, onSelectProgram, onHydratePrograms }: {
+function FlowPortfolio({ programs, activeId, onSelectProgram, onHydratePrograms, onDeleteProgram }: {
   programs: ProgramSummary[];
   activeId: string;
   onSelectProgram: (id: string) => void;
   onHydratePrograms: () => Promise<void>;
+  onDeleteProgram?: (id: string) => void;
 }) {
+  const [armedDelete, setArmedDelete] = useState<string | null>(null);
   // Non-active programmes arrive metadata-only; the numbers need blobs.
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => {
@@ -878,6 +865,17 @@ function FlowPortfolio({ programs, activeId, onSelectProgram, onHydratePrograms 
                   onClick={() => onSelectProgram(entry.id)}>
                   {entry.id === activeId ? "You are here" : "Open"}
                 </button>
+                {onDeleteProgram ? (
+                  armedDelete === entry.id ? (
+                    <>
+                      <button type="button" className="v3fs-btn danger" onClick={() => { setArmedDelete(null); onDeleteProgram(entry.id); }}>Archive</button>
+                      <button type="button" className="v3fs-btn" onClick={() => setArmedDelete(null)}>Keep</button>
+                    </>
+                  ) : (
+                    <button type="button" className="v3fs-btn quiet" title="Archive — hides it from the list, keeps the record"
+                      onClick={() => setArmedDelete(entry.id)}>Archive</button>
+                  )
+                ) : null}
               </div>
             </article>
           );
