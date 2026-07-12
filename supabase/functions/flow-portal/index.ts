@@ -168,6 +168,9 @@ Deno.serve(async (req: Request) => {
       if (isRecord(body) && isRecord(body.extract)) {
         const hit = await loadPack(token);
         if (!hit) return jsonResponse({ error: "This link is not valid." }, 404);
+        if (typeof hit.pack.respondedAt === "string") {
+          return jsonResponse({ error: "This link has already been used." }, 410);
+        }
         const extract = body.extract as Record<string, unknown>;
         const fileB64 = typeof extract.file === "string" ? extract.file : "";
         if (!fileB64) return jsonResponse({ error: "Missing file" }, 400);
@@ -214,6 +217,11 @@ Deno.serve(async (req: Request) => {
       for (let attempt = 0; attempt < 3; attempt++) {
         const hit = await loadPack(token);
         if (!hit) return jsonResponse({ error: "This link is not valid." }, 404);
+        // One response per link: answering EXPIRES it. More to add later
+        // travels on a fresh link minted from the kit.
+        if (typeof hit.pack.respondedAt === "string") {
+          return jsonResponse({ error: "This link has already been used — your earlier answers are safely on the record." }, 410);
+        }
 
         const stakeholder = String(hit.pack.stakeholder ?? "Stakeholder");
         const now = new Date().toISOString();

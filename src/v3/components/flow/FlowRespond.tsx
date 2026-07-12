@@ -205,7 +205,17 @@ export default function FlowRespond({ token }: { token: string }) {
             <div className="v3fs-quiet">
               <div className="v3fs-quiet-mark" aria-hidden="true">✓</div>
               <h2>Thank you — your answers are in.</h2>
-              <p>The team reviews everything before it enters the record. If more detail occurs to you later, this link stays open.</p>
+              <p>The team reviews everything before it enters the record. This link is now closed — if more detail occurs to you later, the team can send a fresh one.</p>
+            </div>
+          ) : state.pack.responded ? (
+            <div className="v3fs-quiet">
+              <div className="v3fs-quiet-mark" aria-hidden="true">✓</div>
+              <h2>This link has done its job.</h2>
+              <p>
+                Your {state.pack.kind === "demo" ? "verdict" : "answers"} are on the record — each link takes
+                one response, so nothing gets sent twice. If more detail comes to mind, ask the programme
+                team for a fresh link.
+              </p>
             </div>
           ) : state.pack.kind === "demo" ? (
             <>
@@ -219,9 +229,6 @@ export default function FlowRespond({ token }: { token: string }) {
                 </p>
                 {state.pack.openingQuote ? <blockquote className="v3fs-portal-quote">{state.pack.openingQuote}</blockquote> : null}
                 {state.pack.scenario ? <p className="v3fs-portal-intro">{state.pack.scenario}</p> : null}
-                {state.pack.responded ? (
-                  <p className="v3fs-portal-again">You&rsquo;ve recorded a verdict before — a new one is added alongside, not overwritten.</p>
-                ) : null}
               </header>
               <div className="v3fs-portal-qs">
                 {state.pack.demoUrl ? (
@@ -278,9 +285,6 @@ export default function FlowRespond({ token }: { token: string }) {
                   <span>⏱ ~{Math.max(5, Math.round(state.pack.questions.length * 1.5))} minutes</span>
                   <span>⛨ Reviewed by the team before anything enters the record</span>
                 </div>
-                {state.pack.responded ? (
-                  <p className="v3fs-portal-again">You&rsquo;ve answered before — anything you send now is added alongside, not overwritten.</p>
-                ) : null}
               </header>
               <div className="v3fs-portal-qs">
                 {state.pack.questions.map((question, index) => (
