@@ -825,3 +825,33 @@ describe("setShipLane — the whole lane at once", () => {
     expect(setShipLane({ id: "p1", name: "P", rawData: reset } as never, "l1", false, "op@x.com")).toBeNull();
   });
 });
+
+describe("discovery kit requires stakeholder emails", () => {
+  const frameMovement = flowMovements().find((m) => m.id === "frame")!;
+  const withKit = (interviews: Array<Record<string, unknown>>) => ({
+    id: "p1", name: "P",
+    rawData: { data: { discoveryKit: { title: "Kit", interviews } } },
+  }) as never;
+
+  it("missing addresses hold the gate with a count and an operator hint", () => {
+    const checks = gateChecklist(withKit([
+      { stakeholder: "Dan Reyes", email: "dan@acme.com" },
+      { stakeholder: "Priya Nair" },
+      { stakeholder: "Marcus Webb", email: "not-an-email" },
+    ]), frameMovement, []);
+    const row = checks.find((c) => c.id === "kit-emails")!;
+    expect(row.done).toBe(false);
+    expect(row.label).toBe("Stakeholder emails on file — 2 missing");
+    expect(row.group).toBe("record");
+    expect(row.why).toContain("add emails in the Discovery Kit");
+  });
+
+  it("all addresses on file → met; no kit → no row", () => {
+    const checks = gateChecklist(withKit([
+      { stakeholder: "Dan Reyes", email: "dan@acme.com" },
+    ]), frameMovement, []);
+    expect(checks.find((c) => c.id === "kit-emails")!.done).toBe(true);
+    const bare = gateChecklist({ id: "p2", name: "P", rawData: {} } as never, frameMovement, []);
+    expect(bare.find((c) => c.id === "kit-emails")).toBeUndefined();
+  });
+});

@@ -461,6 +461,24 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
           ? `confidence ${artifact.confidence}%`
           : undefined,
       })),
+      ...(movement.id === "frame" ? (() => {
+        // The kit is a roster the async loop SENDS to: every planned interview
+        // needs an address on file. Emails come from the operator (or the
+        // transcripts) — never from the generator, so this asks the human.
+        const kit = dataRoot(program).discoveryKit;
+        const interviews = kit && typeof kit === "object" && !Array.isArray(kit) && Array.isArray((kit as Record<string, unknown>).interviews)
+          ? ((kit as Record<string, unknown>).interviews as unknown[]).filter((entry): entry is Record<string, unknown> => typeof entry === "object" && entry !== null)
+          : [];
+        if (!interviews.length) return [];
+        const missing = interviews.filter((entry) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(entry.email ?? "").trim())).length;
+        return [{
+          id: "kit-emails",
+          group: "record" as const,
+          label: missing ? `Stakeholder emails on file — ${missing} missing` : "Stakeholder emails on file",
+          done: missing === 0,
+          why: missing ? "Response links need an address — add emails in the Discovery Kit" : undefined,
+        }];
+      })() : []),
       ...(artifacts.some((artifact) => artifact.present) ? [{
         id: "issues",
         group: "record" as const,

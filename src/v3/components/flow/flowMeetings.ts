@@ -309,7 +309,7 @@ export function scriptDocumentRefs(questions: string[]): string[] {
  * put in front of a stakeholder.
  */
 function askableGap(gap: string): boolean {
-  return !/\binputs?\b|\bledger\b|\bartifacts?\b|\bregenerat|\bevidence changed\b/i.test(gap);
+  return !/\binputs?\b|\bledger\b|\bartifacts?\b|\bregenerat|\bevidence changed\b|\bemail\b/i.test(gap);
 }
 
 export function meetingKit(program: ProgramSummary, movementId: string): MeetingKit | null {

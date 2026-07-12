@@ -1150,7 +1150,7 @@ Use the stakeholderSeed rows and any stakeholders named in the sponsor conversat
 Return ONLY valid JSON:
 {
   "title": "Discovery Kit — <programme name>",
-  "interviews": [ { "stakeholder": "name or 'Role — TBC'", "role": "string", "domain": "the workflow domain they own", "durationMinutes": 45, "objectives": ["what this conversation must surface"], "agenda": [ { "minutes": 5, "topic": "string", "questions": ["specific questions"] } ], "askForArtifacts": ["systems/screens/reports to bring"] } ],
+  "interviews": [ { "stakeholder": "name or 'Role — TBC'", "role": "string", "email": "their email address ONLY if it appears in the evidence, else null — NEVER invent an address; the operator fills it in", "domain": "the workflow domain they own", "durationMinutes": 45, "objectives": ["what this conversation must surface"], "agenda": [ { "minutes": 5, "topic": "string", "questions": ["specific questions"] } ], "askForArtifacts": ["systems/screens/reports to bring"] } ],
   "coverageMap": [ { "domain": "string", "coveredBy": ["stakeholders"], "thin": false } ],
   "schedulingGuidance": "sequencing and cadence recommendation for the tour",
   "consentNote": "one-paragraph recording-consent blurb to read out before each conversation",

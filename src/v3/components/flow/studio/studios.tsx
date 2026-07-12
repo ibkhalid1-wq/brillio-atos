@@ -105,7 +105,7 @@ function DiscoveryKitStudio({ doc, onChange }: StudioProps) {
         <CardList
           items={interviews.items}
           itemLabel={(it) => `${asText(it.stakeholder) || "Stakeholder"} — ${asText(it.role) || "role"}`}
-          onAdd={() => interviews.add({ stakeholder: "", role: "", domain: "", durationMinutes: 45, objectives: [], agenda: [], askForArtifacts: [] })}
+          onAdd={() => interviews.add({ stakeholder: "", role: "", email: "", domain: "", durationMinutes: 45, objectives: [], agenda: [], askForArtifacts: [] })}
           onRemove={interviews.remove}
           addLabel="Add interview"
           render={(interview, index) => (
@@ -113,6 +113,7 @@ function DiscoveryKitStudio({ doc, onChange }: StudioProps) {
               <div className="v3fs-stu-grid3">
                 <TextField label="Stakeholder" value={asText(interview.stakeholder)} onChange={(next) => interviews.set(index, { stakeholder: next })} />
                 <TextField label="Role" value={asText(interview.role)} onChange={(next) => interviews.set(index, { role: next })} />
+                <TextField label="Email — response links go here" value={asText(interview.email)} onChange={(next) => interviews.set(index, { email: next })} />
                 <TextField label="Domain" value={asText(interview.domain)} onChange={(next) => interviews.set(index, { domain: next })} />
               </div>
               <StringListEditor label="Objectives" values={asStrings(interview.objectives)}
