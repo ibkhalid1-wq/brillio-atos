@@ -272,6 +272,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
                       <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); window.print(); }}>
                         Export · print or PDF
                       </button>
+                      <button type="button" role="menuitem" onClick={copyJsonLd}>Copy as JSON-LD</button>
                       {artifact.id === "prototype-pack" ? (
                         <button type="button" role="menuitem" onClick={() => {
                           const prompt = buildPrototypePrompt(program);
@@ -279,7 +280,6 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
                           setMenuOpen(false);
                         }}>Copy the build prompt</button>
                       ) : null}
-                      <button type="button" role="menuitem" onClick={copyJsonLd}>Copy as JSON-LD</button>
                     </div>
                   </>
                 ) : null}
