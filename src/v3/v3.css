@@ -5384,3 +5384,8 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-ev-pass {display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:4px}
 .v3fs-ev-pass input,.v3fs-ev-pass select {font:inherit;font-size:12px;padding:5px 9px;border:1px solid var(--fs-line);border-radius:8px;background:var(--fs-card);color:var(--v3-text-primary)}
 .v3fs-ev-pass input {flex:1;min-width:150px}
+/* Quiet-state work list: the Inbox is clear, the record is not. */
+.v3fs-quiet-work {display:flex;flex-direction:column;gap:7px;margin:2px 0 18px;text-align:left}
+.v3fs-quiet-row {display:flex;gap:12px;align-items:baseline;font-size:12.5px;justify-content:center}
+.v3fs-quiet-row b {color:var(--v3-text-primary);font-weight:650;min-width:64px;text-align:right}
+.v3fs-quiet-row span {color:var(--v3-text-secondary)}

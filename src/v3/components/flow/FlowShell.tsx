@@ -5,11 +5,11 @@ import FlowArtifactStudio, { type ArtifactEditInput } from "@/v3/components/flow
 import FlowBoardPack from "@/v3/components/flow/FlowBoardPack";
 import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 import {
-  flowMovements, movementEvidence, movementArtifacts, listenCoverage,
+  flowMovements, movementEvidence, movementArtifacts, gateChecklist, gateReadiness, listenCoverage,
   demoAcceptance, daysToFirstDemo, wordsOfEvidence, frameKpis,
 } from "@/v3/components/flow/flowShellData";
 import {
-  listOpenFlowDecisions, listFlowAttestations, listNextMoments, describeDecisionChanges,
+  listOpenFlowDecisions, listFlowAttestations, describeDecisionChanges,
   type FlowDecision,
 } from "@/v3/components/flow/flowDecisions";
 import {
@@ -332,12 +332,6 @@ function timeAgo(iso: string): string {
   return new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-function fmtMomentDate(value: string): string {
-  const t = Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00` : value);
-  if (Number.isNaN(t)) return value;
-  return new Date(t).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-}
-
 function DecisionCard({ program, decision, movementLabel, busy, onResolve }: {
   program: ProgramSummary;
   decision: FlowDecision;
@@ -400,7 +394,6 @@ function FlowToday({ program, onResolveDecision, onIngestPortalItem, onDismissPo
   const movements = useMemo(() => flowMovements(), []);
   const open = listOpenFlowDecisions(program);
   const feed = listFlowAttestations(program);
-  const moments = listNextMoments(program);
   const inbox = listPortalInbox(program);
   const [busyId, setBusyId] = useState<string | null>(null);
   const label = (id: string) => movements.find((m) => m.id === id)?.displayName ?? id;
@@ -428,6 +421,21 @@ function FlowToday({ program, onResolveDecision, onIngestPortalItem, onDismissPo
   const awayItems = awaySince > 0 && Date.now() - awaySince > AWAY_GAP_MS
     ? feed.filter((entry) => Date.parse(entry.ts) > awaySince)
     : [];
+
+  // The quiet state must not overclaim: an empty Inbox with stale or
+  // still-asking documents is "clear", not "done". Surface each movement
+  // whose record needs work (amber only — untouched movements don't nag).
+  const attention = useMemo(() => {
+    const items: Array<{ movement: string; what: string }> = [];
+    for (const movement of movements) {
+      const artifacts = movementArtifacts(program, movement);
+      const readiness = gateReadiness(program, movement, artifacts, gateChecklist(program, movement, artifacts));
+      if (readiness.tone === "amber" && (readiness.kind === "trails" || readiness.kind === "gaps")) {
+        items.push({ movement: movement.displayName, what: readiness.detail ?? readiness.headline });
+      }
+    }
+    return items;
+  }, [program, movements]);
 
   const resolve = async (id: string, resolution: "confirmed" | "declined") => {
     setBusyId(id);
@@ -458,9 +466,26 @@ function FlowToday({ program, onResolveDecision, onIngestPortalItem, onDismissPo
       {open.length === 0 && inbox.length === 0 ? (
         <div className="v3fs-quiet">
           <div className="v3fs-quiet-mark" aria-hidden="true">◈</div>
-          <h2>Nothing needs you right now.</h2>
-          <p>Decisions and quarantined evidence appear here when they need you.</p>
-          <button type="button" className="v3fs-btn" onClick={onGoFlow}>Review the flow</button>
+          {attention.length ? (
+            <>
+              <h2>The Inbox is clear — the record isn't.</h2>
+              <div className="v3fs-quiet-work">
+                {attention.slice(0, 4).map((item) => (
+                  <div key={item.movement} className="v3fs-quiet-row">
+                    <b>{item.movement}</b>
+                    <span>{item.what}</span>
+                  </div>
+                ))}
+              </div>
+              <button type="button" className="v3fs-btn pri" onClick={onGoFlow}>Review the flow</button>
+            </>
+          ) : (
+            <>
+              <h2>Nothing needs you right now.</h2>
+              <p>Decisions and quarantined evidence appear here when they need you.</p>
+              <button type="button" className="v3fs-btn" onClick={onGoFlow}>Review the flow</button>
+            </>
+          )}
         </div>
       ) : (
         <section className="v3fs-inbox" aria-label="Waiting on you">
@@ -504,47 +529,6 @@ function FlowToday({ program, onResolveDecision, onIngestPortalItem, onDismissPo
         </section>
       )}
 
-      <details className="v3fs-disc">
-        <summary>
-          <span className="v3fs-disc-l">Activity{feed.length ? <em>{feed.length}</em> : null}</span>
-          <span className="v3fs-disc-hint">{feed[0] ? `${feed[0].action} · ${timeAgo(feed[0].ts)}` : "no runs yet"}</span>
-          <span className="v3fs-disc-c" aria-hidden="true" />
-        </summary>
-        <div className="v3fs-disc-b">
-          {feed.length === 0 ? <div className="v3fs-empty">Generate the first artifact in Frame and it will be attested here.</div> : null}
-          {feed.slice(0, 12).map((entry, i) => (
-            <div key={i} className="v3fs-row">
-              <span className={`v3fs-tdot t${entry.tier}`} aria-hidden="true" />
-              <div className="v3fs-row-g">
-                <div className="v3fs-row-n">{entry.action}</div>
-                <div className="v3fs-row-m">{[label(entry.phaseId), entry.detail].filter(Boolean).join(" — ")}</div>
-              </div>
-              <span className="v3fs-feed-ts">{timeAgo(entry.ts)}</span>
-            </div>
-          ))}
-          {feed.length > 12 ? <div className="v3fs-empty">The full searchable trail lives in Mission.</div> : null}
-        </div>
-      </details>
-
-      <details className="v3fs-disc">
-        <summary>
-          <span className="v3fs-disc-l">Moments ahead{moments.length ? <em>{moments.length}</em> : null}</span>
-          <span className="v3fs-disc-hint">{moments[0] ? `${fmtMomentDate(moments[0].date)} — ${moments[0].label}` : "nothing scheduled yet"}</span>
-          <span className="v3fs-disc-c" aria-hidden="true" />
-        </summary>
-        <div className="v3fs-disc-b">
-          {moments.length === 0 ? <div className="v3fs-empty">Booked sessions, pending demonstrations and the first-demo target appear here as they are scheduled.</div> : null}
-          {moments.map((moment, i) => (
-            <div key={i} className="v3fs-row">
-              <span className={`v3fs-tag ${moment.kind === "demo" ? "gn" : "ev"}`}>{fmtMomentDate(moment.date)}</span>
-              <div className="v3fs-row-g">
-                <div className="v3fs-row-n">{moment.label}</div>
-                <div className="v3fs-row-m">{moment.kind === "target" ? "set in Frame" : moment.kind === "session" ? "from the interview roster" : "from the demonstration tour"}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </details>
     </div>
   );
 }
