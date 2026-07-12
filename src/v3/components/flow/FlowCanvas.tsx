@@ -335,7 +335,7 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                   {/* Quiet escape hatch only — the checklist and gate CTA are
                       the purposeful doors into the editor now. */}
                   <button type="button" className="v3fs-edit-toggle quiet" onClick={() => toggle(setEditing, movement.id)}>
-                    {editing.has(movement.id) ? "Close the editor" : "Adjust details"}
+                    {editing.has(movement.id) ? "Close" : "Structured inputs"}
                   </button>
                 </div>
 
