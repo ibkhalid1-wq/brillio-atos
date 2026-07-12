@@ -28,6 +28,8 @@ interface FlowShellProps {
   onCreateProgram: () => void;
   /** Start a new engagement seeded from this programme (sector + ontology mappings). */
   onCloneProgram: () => void;
+  /** Archive a programme — soft delete, hidden but recoverable. */
+  onDeleteProgram?: (id: string) => void;
   onOpenSetup: () => void;
   onOpenCopilot: () => void;
   onRunAgent: (agentId: string, phaseId?: string) => void;
@@ -129,6 +131,7 @@ export default function FlowShell(props: FlowShellProps) {
     listOpenFlowDecisions(program).length + listPortalInbox(program).length > 0 ? "today" : "flow",
   );
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [armedDelete, setArmedDelete] = useState<string | null>(null);
   const days = daysToFirstDemo(program);
   const openDecisions = listOpenFlowDecisions(program);
   const portalInbox = listPortalInbox(program);
@@ -147,7 +150,7 @@ export default function FlowShell(props: FlowShellProps) {
 
   // The switcher dismisses like a menu should: backdrop click or Escape.
   useEffect(() => {
-    if (!switcherOpen) return undefined;
+    if (!switcherOpen) { setArmedDelete(null); return undefined; }
     const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setSwitcherOpen(false); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -221,10 +224,25 @@ export default function FlowShell(props: FlowShellProps) {
         <div className="v3fs-switcher" role="menu">
           <div className="v3fs-switcher-l">Programmes</div>
           {props.programs.map((entry) => (
-            <button key={entry.id} type="button" role="menuitem" className={entry.id === program.id ? "on" : ""}
-              onClick={() => { setSwitcherOpen(false); props.onSelectProgram(entry.id); }}>
-              {entry.name}
-            </button>
+            <div key={entry.id} className={`v3fs-switcher-row${entry.id === program.id ? " on" : ""}`}>
+              <button type="button" role="menuitem" className="v3fs-switcher-pick"
+                onClick={() => { setSwitcherOpen(false); props.onSelectProgram(entry.id); }}>
+                {entry.name}
+              </button>
+              {props.onDeleteProgram ? (
+                armedDelete === entry.id ? (
+                  <span className="v3fs-switcher-confirm">
+                    <button type="button" className="v3fs-switcher-del danger"
+                      onClick={() => { setArmedDelete(null); setSwitcherOpen(false); props.onDeleteProgram?.(entry.id); }}>Delete</button>
+                    <button type="button" className="v3fs-switcher-del"
+                      onClick={() => setArmedDelete(null)}>Keep</button>
+                  </span>
+                ) : (
+                  <button type="button" className="v3fs-switcher-del" aria-label={`Archive ${entry.name}`}
+                    title="Archive — hides it, keeps the record" onClick={() => setArmedDelete(entry.id)}>×</button>
+                )
+              ) : null}
+            </div>
           ))}
           <div className="v3fs-switcher-sep" />
           <button type="button" role="menuitem" onClick={() => { setSwitcherOpen(false); props.onCreateProgram(); }}>＋ New programme</button>

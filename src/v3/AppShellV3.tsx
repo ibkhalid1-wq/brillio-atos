@@ -1741,6 +1741,30 @@ export default function AppShellV3() {
 
 
 
+  // Soft-delete: mark the programme obsolete (is_deleted=true) but KEEP its
+  // blob — recoverable, and the record isn't destroyed. usePrograms filters
+  // deleted rows, so it drops out of the UI. Switches away if it was active.
+  const handleDeleteProgram = useCallback(async (idToDelete: string) => {
+    if (!idToDelete) return;
+    try {
+      if (isSupabaseConfigured && supabase) {
+        const { error } = await supabase
+          .from("adam_programs")
+          .update({ is_deleted: true, updated_at: new Date().toISOString() })
+          .eq("id", idToDelete);
+        if (error) throw error;
+      }
+      if (idToDelete === activeProgramId) {
+        const remaining = programs.filter((p) => p.id !== idToDelete);
+        setActiveProgramId(remaining[0]?.id ?? null);
+      }
+      await refreshPrograms();
+      pushV3Toast("Programme archived — it's hidden from the list but not destroyed.", { duration: 4500 });
+    } catch {
+      pushV3Toast("Could not archive the programme. Please try again.", { tone: "error", duration: 5000 });
+    }
+  }, [activeProgramId, programs, refreshPrograms, setActiveProgramId]);
+
   const handleSavePhaseInputs = useCallback(async (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; clearReviewDefId?: string; staleDefId?: string; attest?: { action: string; detail?: string } }) => {
     if (!activeProgram) return;
     const silent = opts?.silent === true;
@@ -2176,6 +2200,7 @@ export default function AppShellV3() {
           onSelectProgram={(id) => setActiveProgramId(id)}
           onCreateProgram={() => void handleCreateProgram()}
           onCloneProgram={() => void handleCloneProgram()}
+          onDeleteProgram={(id) => void handleDeleteProgram(id)}
           onOpenSetup={() => setWizardOpen(true)}
           onOpenCopilot={() => setAdamCopilotSidebarOpen(true)}
           onRunAgent={handleRunAgent}

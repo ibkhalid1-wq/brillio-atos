@@ -5499,3 +5499,12 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 /* Discovery Kit editor — labeled sub-sections per interviewee. */
 .v3fs-stu-group {border:1px solid var(--fs-line);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:var(--fs-bg);display:flex;flex-direction:column;gap:10px}
 .v3fs-stu-group-h {font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--v3-accent-2);margin-bottom:-2px}
+/* Programme switcher — per-row archive (soft delete). */
+.v3fs-switcher-row {display:flex;align-items:center;gap:4px;border-radius:8px}
+.v3fs-switcher-row.on {background:var(--fs-indigo-wash)}
+.v3fs-switcher-pick {flex:1;text-align:left;background:none;border:none;font:inherit;font-size:13px;padding:8px 10px;color:var(--v3-text-primary);cursor:pointer;border-radius:8px}
+.v3fs-switcher-pick:hover {background:var(--fs-line)}
+.v3fs-switcher-del {background:none;border:none;font:inherit;font-size:13px;color:var(--v3-text-muted);cursor:pointer;padding:4px 8px;border-radius:6px}
+.v3fs-switcher-del:hover {color:var(--v3-text-primary);background:var(--fs-line)}
+.v3fs-switcher-del.danger {color:var(--v3-red, #dc2626);font-size:11.5px;font-weight:650}
+.v3fs-switcher-confirm {display:flex;gap:2px;flex-shrink:0}
