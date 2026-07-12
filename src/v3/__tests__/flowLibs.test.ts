@@ -9,6 +9,7 @@ import { resolveFlowDecision, listOpenFlowDecisions, describeDecisionChanges } f
 import { scriptDocumentRefs, meetingKit } from "@/v3/components/flow/flowMeetings";
 import { locateQuote } from "@/v3/components/flow/flowShellData";
 import { mintBrief, buildBriefSnapshot } from "@/v3/components/flow/flowBriefs";
+import { buildPrototypePrompt } from "@/v3/components/flow/flowBuildPrompt";
 import { validateProgramBlob, migrateProgramBlob, BLOB_VERSION } from "@/v3/lib/blobGuard";
 import { unrosteredVoicesProposal, reDemoProposal, queueWatcherProposal } from "@/v3/components/flow/flowWatchers";
 import { mintFollowUpPack, listInterviewPacks, visibleLinks } from "@/v3/components/flow/flowPortal";
@@ -758,5 +759,40 @@ describe("sponsor briefs — dated, token-gated board-pack snapshots", () => {
     expect((briefs[0].snapshot as Record<string, unknown>).sponsor).toBe("Sarah Chen");
     const log = inner.flowAttestations as Array<Record<string, unknown>>;
     expect(log.some((entry) => String(entry.action).includes("sponsor brief"))).toBe(true);
+  });
+});
+
+describe("buildPrototypePrompt — the pack compiled into a coding-agent brief", () => {
+  const program = {
+    id: "prog-1", name: "Flow Pilot",
+    rawData: { data: {
+      agenticBlueprint: { targetFramework: "LangGraph" },
+      prototypePack: {
+        title: "Prototype Build Pack — Flow Pilot",
+        scaffold: { runtime: "Node 18", framework: "React + FastAPI", structure: ["backend/", "frontend/"] },
+        buildSlices: [
+          { name: "Cycle-time dashboard", demonstrates: "COO review of cycle time", steps: ["panel", "board view"] },
+          { name: "Exception queue", demonstrates: "Ops triage with age filters" },
+        ],
+        seedScenarios: [ { stakeholder: "Dan Reyes", scenario: "Triages the exception queue", data: ["47 open exceptions"] } ],
+        stubbing: { netsuite: "fake the sync with fixtures" },
+        demoEnvironment: "single docker-compose",
+      },
+    } },
+  } as never;
+
+  it("compiles slices in order, seeds verbatim, stubs and scaffold", () => {
+    const prompt = buildPrototypePrompt(program)!;
+    expect(prompt).toContain("# Build brief");
+    expect(prompt.indexOf("1. Cycle-time dashboard")).toBeLessThan(prompt.indexOf("2. Exception queue"));
+    expect(prompt).toContain("Agentic framework: LangGraph");
+    expect(prompt).toContain("Dan Reyes — Triages the exception queue");
+    expect(prompt).toContain("47 open exceptions");
+    expect(prompt).toContain("fake the sync with fixtures");
+    expect(prompt).toContain("TIME TO FIRST DEMO");
+  });
+
+  it("returns null when no pack exists", () => {
+    expect(buildPrototypePrompt({ id: "x", name: "y", rawData: {} } as never)).toBeNull();
   });
 });

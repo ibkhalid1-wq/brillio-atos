@@ -13,6 +13,7 @@ import { artifactDocument, flowMovements, locateQuote, movementEvidence, type Ar
 import { groundingFor, citationGraph, resourceUri, artifactFabioType, SEMANTIC_CONTEXT } from "@/v3/components/flow/flowSemantics";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 import { listOpenFlowDecisions, listFlowAttestations, docSectionDiff } from "@/v3/components/flow/flowDecisions";
+import { buildPrototypePrompt } from "@/v3/components/flow/flowBuildPrompt";
 import { listSnapshots } from "@/v3/lib/blobSnapshots";
 import { STUDIO_REGISTRY } from "./studios";
 import DocumentView from "./DocumentView";
@@ -271,6 +272,13 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
                       <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); window.print(); }}>
                         Export · print or PDF
                       </button>
+                      {artifact.id === "prototype-pack" ? (
+                        <button type="button" role="menuitem" onClick={() => {
+                          const prompt = buildPrototypePrompt(program);
+                          if (prompt) { try { void navigator.clipboard.writeText(prompt); } catch { window.prompt("Copy the build prompt:", prompt); } }
+                          setMenuOpen(false);
+                        }}>Copy the build prompt</button>
+                      ) : null}
                       <button type="button" role="menuitem" onClick={copyJsonLd}>Copy as JSON-LD</button>
                     </div>
                   </>
