@@ -5399,3 +5399,5 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-portal-att-chip {display:inline-flex;align-items:center;gap:5px;font-size:11.5px;padding:3px 8px;border:1px solid var(--fs-line);border-radius:99px;background:var(--fs-card);color:var(--v3-text-secondary)}
 .v3fs-portal-att-chip button {border:none;background:none;cursor:pointer;color:var(--v3-text-muted);font-size:13px;padding:0;line-height:1}
 .v3fs-portal-att-add {font-size:11.5px;color:var(--v3-accent-2);cursor:pointer;font-weight:600}
+/* Link-row actions sit as a right-aligned button pair. */
+.v3fs-async-cta {display:flex;gap:6px;flex-shrink:0}

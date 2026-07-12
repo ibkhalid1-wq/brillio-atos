@@ -36,7 +36,7 @@ export interface FlowPortalItem {
   receivedAt: string;
   text: string;
   /** Documents the respondent attached — quarantined with the answers. */
-  documents?: Array<{ name: string; text: string; question?: number }>;
+  documents?: Array<{ name: string; text: string; question?: number; sourceKey?: string }>;
   /** Demo verdicts only. */
   verdict?: "accepted" | "accepted-with-changes" | "rework";
 }
@@ -93,6 +93,7 @@ export function listPortalInbox(program: ProgramSummary): FlowPortalItem[] {
           name: String(doc.name ?? "document"),
           text: String(doc.text ?? ""),
           question: typeof doc.question === "number" ? doc.question : undefined,
+          sourceKey: typeof doc.sourceKey === "string" ? doc.sourceKey : undefined,
         }))
       : undefined,
     verdict: entry.verdict === "accepted" || entry.verdict === "accepted-with-changes" || entry.verdict === "rework"
@@ -363,7 +364,7 @@ function ingestInterviewResponse(program: ProgramSummary, itemId: string, actor:
   const documents = Array.isArray(item.documents) ? (item.documents as unknown[]).filter(isRecord) : [];
   const documentBlocks = documents
     .filter((doc) => String(doc.text ?? "").trim())
-    .map((doc) => `— Document: ${String(doc.name ?? "document")}${typeof doc.question === "number" ? ` (re: question ${doc.question})` : ""}, provided by ${stakeholder}, ${today} —\n${String(doc.text).trim()}`);
+    .map((doc) => `— Document: ${String(doc.name ?? "document")}${typeof doc.question === "number" ? ` (re: question ${doc.question})` : ""}, provided by ${stakeholder}, ${today} —\n${typeof doc.sourceKey === "string" && doc.sourceKey ? `[source: ${doc.sourceKey}]\n` : ""}${String(doc.text).trim()}`);
   bucket[targetField] = [existingTranscripts.trimEnd(), ...(text ? [`${header}\n${text}`] : []), ...documentBlocks].filter(Boolean).join("\n\n");
 
   // Roster only tracks Listen coverage — flip the matching row to Heard there.

@@ -184,7 +184,19 @@ Deno.serve(async (req: Request) => {
           typeof extract.mime === "string" ? extract.mime : "",
           typeof extract.filename === "string" ? extract.filename : "", 60_000);
         if ("error" in result) return jsonResponse({ error: result.error }, result.status);
-        return jsonResponse(result);
+        // Store the original so the operator can download it in its native
+        // format from the Library once the response is ingested.
+        let sourceKey: string | undefined;
+        try {
+          try { await hit.admin.storage.createBucket("flow-source-docs", { public: false }); } catch { /* exists */ }
+          const safeName = (typeof extract.filename === "string" ? extract.filename : "document").replace(/[^\w.\- ]+/g, "_").slice(0, 120);
+          const key = `${hit.programId}/${crypto.randomUUID()}-${safeName}`;
+          const { error } = await hit.admin.storage.from("flow-source-docs").upload(key, bytes, {
+            contentType: typeof extract.mime === "string" && extract.mime ? extract.mime : "application/octet-stream",
+          });
+          if (!error) sourceKey = key;
+        } catch { /* extraction still succeeds without the original */ }
+        return jsonResponse(sourceKey ? { ...result, sourceKey } : result);
       }
 
       // Compare-and-set with reload-and-retry: a run finishing between our
@@ -237,6 +249,8 @@ Deno.serve(async (req: Request) => {
               name: String(doc.name ?? "document").slice(0, 120),
               text: String(doc.text ?? "").trim().slice(0, 60_000),
               question: typeof doc.question === "number" ? doc.question : undefined,
+              // Only keys under THIS programme's prefix — a foreign key is dropped.
+              sourceKey: typeof doc.sourceKey === "string" && doc.sourceKey.startsWith(`${hit.programId}/`) ? doc.sourceKey : undefined,
             }))
             .filter((doc) => doc.text.length > 0);
           if (answers.length < MIN_ANSWER_CHARS && documents.length === 0) {

@@ -103,7 +103,7 @@ function DictationButton({ onText }: { onText: (spoken: string) => void }) {
 export default function FlowRespond({ token }: { token: string }) {
   const [state, setState] = useState<PackState>({ phase: "loading" });
   const [answers, setAnswers] = useState<Record<number, string>>({});
-  const [attachments, setAttachments] = useState<Record<number, Array<{ name: string; text: string }>>>({});
+  const [attachments, setAttachments] = useState<Record<number, Array<{ name: string; text: string; sourceKey?: string }>>>({});
   const [attachBusy, setAttachBusy] = useState<number | null>(null);
   const [attachNote, setAttachNote] = useState<string | null>(null);
   const [extra, setExtra] = useState("");
@@ -140,7 +140,7 @@ export default function FlowRespond({ token }: { token: string }) {
         setAttachNote(typeof body.error === "string" ? body.error : "Could not read that file.");
         return;
       }
-      setAttachments((current) => ({ ...current, [index]: [...(current[index] ?? []), { name: file.name, text: body.text }] }));
+      setAttachments((current) => ({ ...current, [index]: [...(current[index] ?? []), { name: file.name, text: body.text, sourceKey: typeof body.sourceKey === "string" ? body.sourceKey : undefined }] }));
     } catch {
       setAttachNote("Could not read that file.");
     } finally {
@@ -314,7 +314,7 @@ export default function FlowRespond({ token }: { token: string }) {
                   onClick={() => void submit({
                     answers: composed,
                     documents: Object.entries(attachments).flatMap(([qIndex, docs]) =>
-                      docs.map((doc) => ({ name: doc.name, text: doc.text, question: Number(qIndex) + 1 }))),
+                      docs.map((doc) => ({ name: doc.name, text: doc.text, question: Number(qIndex) + 1, sourceKey: doc.sourceKey }))),
                   })}>
                   {submitting ? "Sending…" : "Send my answers"}
                 </button>

@@ -63,6 +63,9 @@ export interface EvidenceEntry {
   track?: string;
   /** The full attributed block — the drill-down's reading target. */
   text: string;
+  /** Storage key of the ORIGINAL file (documents only) — the Library offers
+   * it back as a native-format download instead of a preview. */
+  sourceKey?: string;
 }
 
 export interface ArtifactCardModel {
@@ -179,13 +182,18 @@ function parseTranscript(movementId: string, fieldLabel: string, text: string): 
     // is a DOCUMENT on the record, named by its title — not a voice.
     const doc = match[1].match(/^Document:\s*(.+?),\s*provided by\s+(.+?)(?:,\s*(\d{4}-\d{2}-\d{2}))?$/i);
     if (doc) {
+      // An optional "[source: <storage key>]" first line carries the pointer
+      // to the original file; it is metadata, never part of the reading text.
+      const sourceMatch = body.match(/^\s*\[source:\s*([^\]]+)\]\s*\n?/);
+      const cleanBody = sourceMatch ? body.replace(sourceMatch[0], "") : body;
       entries.push({
         movementId, fieldLabel, kind: "document",
         who: doc[1].trim(),
-        meta: `document · ${doc[2].trim()}${doc[3] ? ` · ${doc[3]}` : ""} · ${wordCount(body).toLocaleString()} words`,
-        words: wordCount(body),
-        excerpt: firstLine(body),
-        text: body.trim(),
+        meta: `document · ${doc[2].trim()}${doc[3] ? ` · ${doc[3]}` : ""} · ${wordCount(cleanBody).toLocaleString()} words`,
+        words: wordCount(cleanBody),
+        excerpt: firstLine(cleanBody),
+        text: cleanBody.trim(),
+        sourceKey: sourceMatch ? sourceMatch[1].trim() : undefined,
       });
       return;
     }

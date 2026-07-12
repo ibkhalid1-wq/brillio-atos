@@ -18,6 +18,7 @@ import {
 import { readFlowGovernance, flowAgentTier } from "@/v3/components/flow/flowGovernance";
 import { listPortalInbox } from "@/v3/components/flow/flowPortal";
 import { listSnapshots, type BlobSnapshot } from "@/v3/lib/blobSnapshots";
+import { supabase } from "@/integrations/supabase/client";
 
 interface FlowShellProps {
   program: ProgramSummary;
@@ -882,7 +883,21 @@ function FlowLibrary({ program, onSaveArtifactDoc, onOpenInbox }: { program: Pro
         {evidence.length === 0 ? <div className="v3fs-empty">{q ? "Nothing matches that search." : "No evidence captured yet. Add the first conversation in Frame or Listen."}</div> : null}
         {evidence.map((entry, i) => (
           <div key={i} className="v3fs-row v3fs-row-open" role="button" tabIndex={0}
-            onClick={() => setEvFor(entry)}
+            onClick={() => {
+              // Source documents hand back the ORIGINAL file — a download
+              // prompt in its native format, never a preview.
+              if (entry.kind === "document" && entry.sourceKey) {
+                void supabase.functions.invoke("flow-extract", { body: { download: entry.sourceKey } })
+                  .then((result: { data: unknown }) => {
+                    const url = (result.data as { url?: string } | null)?.url;
+                    if (url) window.open(url, "_blank");
+                    else setEvFor(entry);
+                  })
+                  .catch(() => setEvFor(entry));
+                return;
+              }
+              setEvFor(entry);
+            }}
             onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setEvFor(entry); }}>
             <span className="v3fs-tag ev">{label(entry.movementId)}</span>
             <div className="v3fs-row-g">

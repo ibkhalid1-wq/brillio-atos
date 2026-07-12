@@ -651,7 +651,7 @@ async function fileToBase64(file: File): Promise<string> {
 /** Any document → reviewable text via flow-extract (decode, Office XML, or the
  * model reading PDFs/images natively). The operator reads the extraction in
  * the form before "Add the document" makes it evidence — nothing lands blind. */
-function AttachFileButton({ onExtracted }: { onExtracted: (filename: string, text: string) => void }) {
+function AttachFileButton({ programId, onExtracted }: { programId: string; onExtracted: (filename: string, text: string, sourceKey?: string) => void }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
@@ -661,7 +661,7 @@ function AttachFileButton({ onExtracted }: { onExtracted: (filename: string, tex
     setNote(null);
     try {
       const { data, error } = await supabase.functions.invoke("flow-extract", {
-        body: { file: await fileToBase64(file), mime: file.type || "", filename: file.name },
+        body: { file: await fileToBase64(file), mime: file.type || "", filename: file.name, store: true, programId },
       });
       if (error) {
         const detail = await (error as { context?: Response }).context?.json?.().catch(() => null);
@@ -669,7 +669,8 @@ function AttachFileButton({ onExtracted }: { onExtracted: (filename: string, tex
         return;
       }
       const text = typeof (data as { text?: string } | null)?.text === "string" ? (data as { text: string }).text : "";
-      if (text) onExtracted(file.name, text);
+      const sourceKey = typeof (data as { sourceKey?: string } | null)?.sourceKey === "string" ? (data as { sourceKey: string }).sourceKey : undefined;
+      if (text) onExtracted(file.name, text, sourceKey);
       else setNote("The file produced no readable text.");
     } catch {
       setNote("Could not read that file — paste the text instead.");
@@ -791,6 +792,7 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
   const [linkTick, setLinkTick] = useState(false);
   const [docName, setDocName] = useState("");
   const [docText, setDocText] = useState("");
+  const [docSourceKey, setDocSourceKey] = useState<string | null>(null);
   const [docTick, setDocTick] = useState(false);
   const [docOpen, setDocOpen] = useState(false);
   const [fileContradiction, setFileContradiction] = useState(false);
@@ -955,12 +957,13 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
         ? (inner.phaseInputs as Record<string, Record<string, unknown>>)[movementId] ?? {}
         : {};
       const existing = typeof bucket[kit.captureField] === "string" ? bucket[kit.captureField] as string : "";
-      const block = `— Document: ${name}, provided by ${kit.who}, ${new Date().toISOString().slice(0, 10)} —\n${text}`;
+      const block = `— Document: ${name}, provided by ${kit.who}, ${new Date().toISOString().slice(0, 10)} —\n${docSourceKey ? `[source: ${docSourceKey}]\n` : ""}${text}`;
       await onSaveInputs(movementId, { [kit.captureField]: [existing.trimEnd(), block].filter(Boolean).join("\n\n") }, {
         attest: { action: `Document added — ${name}`, detail: `provided by ${kit.who}` },
       });
       setDocName("");
       setDocText("");
+      setDocSourceKey(null);
       setDocTick(true);
       window.setTimeout(() => setDocTick(false), 2200);
     } finally { setBusy(false); }
@@ -986,17 +989,25 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
     } finally { setBusy(false); }
   };
 
-  const sendLink = async () => {
-    if (!onMintFollowUp) return;
+  // Minting is implicit: Copy/Send create the link if none is live yet.
+  const mintLink = async (): Promise<string | null> => {
+    if (!onMintFollowUp) return null;
     setBusy(true);
     try {
-      const link = await onMintFollowUp({ movementId, who: kit.who, questions: kit.questions, captureField: kit.captureField });
-      if (link) {
-        try { await navigator.clipboard.writeText(link); } catch { window.prompt("Copy the follow-up link:", link); }
-        setLinkTick(true);
-        window.setTimeout(() => setLinkTick(false), 2200);
-      }
+      return await onMintFollowUp({ movementId, who: kit.who, questions: kit.questions, captureField: kit.captureField });
     } finally { setBusy(false); }
+  };
+  const copyMintedLink = async () => {
+    const link = await mintLink();
+    if (!link) return;
+    try { await navigator.clipboard.writeText(link); } catch { window.prompt("Copy the follow-up link:", link); }
+    setLinkTick(true);
+    window.setTimeout(() => setLinkTick(false), 2200);
+  };
+  const sendMintedLink = async (email: string) => {
+    const link = await mintLink();
+    if (!link) return;
+    window.location.href = mailtoLink(email, { stakeholder: kit.who, programmeName: program.name, link });
   };
 
   return (
@@ -1016,7 +1027,7 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
           {kit.questions.map((question, index) => <li key={index}>{question}</li>)}
         </ol>
         <div className="v3fs-kit-actions">
-          <button type="button" className="v3fs-btn pri" onClick={() => void copyScript()}>
+          <button type="button" className="v3fs-btn" onClick={() => void copyScript()}>
             {copied ? "Copied ✓" : "Copy the script"}
           </button>
         </div>
@@ -1098,14 +1109,19 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
                               {row.who}
                               <span>{row.meta}</span>
                             </div>
-                            {row.responded ? null : email ? (
-                              <a className="v3fs-a" href={mailtoLink(email, { stakeholder: row.who, programmeName: program.name, link: row.link })}
-                                title={`Opens a draft to ${email} with the link inside`}>✉ Email it</a>
-                            ) : (
-                              <button type="button" className="v3fs-a" title="No email on file — add it in the Discovery Kit to send directly"
-                                onClick={() => { void navigator.clipboard.writeText(row.link).catch(() => window.prompt("Copy the link:", row.link)); }}>
-                                Copy link
-                              </button>
+                            {row.responded ? null : (
+                              <span className="v3fs-async-cta">
+                                <button type="button" className="v3fs-btn"
+                                  onClick={() => { void navigator.clipboard.writeText(row.link).catch(() => window.prompt("Copy the link:", row.link)); }}>
+                                  Copy link
+                                </button>
+                                {email ? (
+                                  <button type="button" className="v3fs-btn" title={`Opens a draft to ${email} with the link inside`}
+                                    onClick={() => { window.location.href = mailtoLink(email, { stakeholder: row.who, programmeName: program.name, link: row.link }); }}>
+                                    ✉ Send link
+                                  </button>
+                                ) : null}
+                              </span>
                             )}
                           </div>
                         );
@@ -1123,10 +1139,19 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
                         {inviteRows.length ? "↺ Demo links for new stakeholders" : "✳ Create demo links"}
                       </button>
                     ) : null}
-                    {kit.followUp && onMintFollowUp ? (
-                      <button type="button" className="v3fs-btn" disabled={busy} onClick={() => void sendLink()}>
-                        {linkTick ? "Link copied ✓" : "✳ Mint the follow-up link"}
-                      </button>
+                    {kit.followUp && onMintFollowUp && !rows.some((row) => !row.responded && row.who.trim().toLowerCase() === kit.who.trim().toLowerCase()) ? (
+                      <>
+                        <button type="button" className="v3fs-btn" disabled={busy} onClick={() => void copyMintedLink()}>
+                          {linkTick ? "Link copied ✓" : "Copy link"}
+                        </button>
+                        {stakeholderEmail(program, kit.who) ? (
+                          <button type="button" className="v3fs-btn" disabled={busy}
+                            title={`Opens a draft to ${stakeholderEmail(program, kit.who)} with the link inside`}
+                            onClick={() => void sendMintedLink(stakeholderEmail(program, kit.who)!)}>
+                            ✉ Send link
+                          </button>
+                        ) : null}
+                      </>
                     ) : null}
                   </div>
                 </div>
@@ -1190,8 +1215,9 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, onSaveInputs, o
             <div className="v3fs-kit-docrow">
               <input value={docName} onChange={(event) => setDocName(event.target.value)}
                 placeholder="Document name (e.g. Q2 pricing export)" aria-label="Document name" />
-              <AttachFileButton onExtracted={(filename, text) => {
+              <AttachFileButton programId={program.id} onExtracted={(filename, text, sourceKey) => {
                 if (!docName.trim()) setDocName(filename.replace(/\.[^.]+$/, ""));
+                if (sourceKey) setDocSourceKey(sourceKey);
                 setDocText((current) => (current.trim() ? `${current.trim()}\n\n${text}` : text));
               }} />
               <textarea rows={2} value={docText} onChange={(event) => setDocText(event.target.value)}

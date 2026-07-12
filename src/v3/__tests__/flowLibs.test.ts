@@ -1019,3 +1019,22 @@ describe("respondent attachments ride quarantine and land as named evidence", ()
     expect(doc.text).toContain("row2 stuck 12 days");
   });
 });
+
+describe("source documents carry their original-file pointer", () => {
+  it("[source: key] is metadata — stripped from the text, exposed as sourceKey", () => {
+    const prog = {
+      id: "p", name: "P",
+      rawData: { data: { phaseInputs: { frame: { sponsorConversation: [
+        "— Document: Strategy deck, provided by the team, 2026-07-12 —",
+        "[source: prog-1/abc-strategy.pptx]",
+        "Slide one content.",
+      ].join("\n") } } } },
+    } as never;
+    const frame = flowMovements().find((m) => m.id === "frame")!;
+    const doc = movementEvidence(prog, frame).find((entry) => entry.kind === "document")!;
+    expect(doc.sourceKey).toBe("prog-1/abc-strategy.pptx");
+    expect(doc.text).not.toContain("[source:");
+    expect(doc.text).toContain("Slide one content.");
+    expect(doc.words).toBe(3);
+  });
+});
