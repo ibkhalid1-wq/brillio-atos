@@ -986,3 +986,36 @@ describe("uploaded documents are evidence — named, not shredded", () => {
     expect(doc.text).toContain("More document content here.");
   });
 });
+
+describe("respondent attachments ride quarantine and land as named evidence", () => {
+  const prog = () => ({
+    id: "p", name: "P",
+    rawData: { data: {
+      flowInterviewPacks: [{ id: "k1", stakeholder: "Dan Reyes", movementId: "listen", captureField: "interviewTranscripts", token: "t", createdAt: "2026-07-01T00:00:00Z" }],
+      flowPortalInbox: [{
+        id: "item1", kind: "interview", stakeholder: "Dan Reyes", role: "RevOps Lead",
+        receivedAt: "2026-07-12T00:00:00Z", text: "Q: Where does it stall?\nA: In the exception queue.",
+        documents: [{ name: "Exception export — May", text: "row1 stuck 9 days\nrow2 stuck 12 days", question: 1 }],
+      }],
+    } },
+  }) as never;
+
+  it("listPortalInbox surfaces the attachments", () => {
+    const item = listPortalInbox(prog())[0];
+    expect(item.documents).toHaveLength(1);
+    expect(item.documents![0].name).toBe("Exception export — May");
+  });
+
+  it("ingest writes the answers AND a named Document block; the Library reads it as a document", () => {
+    const blob = ingestPortalResponse(prog(), "item1", "op@x.com")!;
+    const inner = (blob as { data: Record<string, unknown> }).data;
+    const transcripts = (inner.phaseInputs as Record<string, Record<string, string>>).listen.interviewTranscripts;
+    expect(transcripts).toContain("— Dan Reyes, RevOps Lead,");
+    expect(transcripts).toContain("— Document: Exception export — May (re: question 1), provided by Dan Reyes,");
+    const listen = flowMovements().find((m) => m.id === "listen")!;
+    const entries = movementEvidence({ id: "p", name: "P", rawData: blob } as never, listen);
+    const doc = entries.find((entry) => entry.kind === "document")!;
+    expect(doc.who).toBe("Exception export — May (re: question 1)");
+    expect(doc.text).toContain("row2 stuck 12 days");
+  });
+});

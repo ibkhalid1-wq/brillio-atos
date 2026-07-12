@@ -13,6 +13,7 @@
  * Unknown or stale tokens 404 without confirming whether the programme exists.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
+import { extractDocumentText } from "../_shared/extractText.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -161,6 +162,31 @@ Deno.serve(async (req: Request) => {
       const body = await req.json().catch(() => null);
       const token = isRecord(body) && typeof body.token === "string" ? body.token : "";
 
+      // Attachment extraction for respondents: the live token IS the access.
+      // Returns text only — nothing is stored until the answers are sent, and
+      // even then the response is quarantined for operator review.
+      if (isRecord(body) && isRecord(body.extract)) {
+        const hit = await loadPack(token);
+        if (!hit) return jsonResponse({ error: "This link is not valid." }, 404);
+        const extract = body.extract as Record<string, unknown>;
+        const fileB64 = typeof extract.file === "string" ? extract.file : "";
+        if (!fileB64) return jsonResponse({ error: "Missing file" }, 400);
+        let bytes: Uint8Array;
+        try {
+          const binary = atob(fileB64);
+          bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+        } catch {
+          return jsonResponse({ error: "file is not valid base64" }, 400);
+        }
+        if (bytes.length > 10 * 1024 * 1024) return jsonResponse({ error: "File too large — cap is 10MB" }, 413);
+        const result = await extractDocumentText(bytes, fileB64,
+          typeof extract.mime === "string" ? extract.mime : "",
+          typeof extract.filename === "string" ? extract.filename : "", 60_000);
+        if ("error" in result) return jsonResponse({ error: result.error }, result.status);
+        return jsonResponse(result);
+      }
+
       // Compare-and-set with reload-and-retry: a run finishing between our
       // read and write must never be clobbered by a portal submission (and
       // vice versa). Same discipline as the run-agent persist path.
@@ -202,7 +228,18 @@ Deno.serve(async (req: Request) => {
         } else {
           const answersRaw = isRecord(body) && typeof body.answers === "string" ? body.answers : "";
           const answers = answersRaw.trim().slice(0, MAX_ANSWER_CHARS);
-          if (answers.length < MIN_ANSWER_CHARS) {
+          // Attached documents: capped and sanitised; they ride the quarantined
+          // item and become NAMED evidence only when the operator ingests.
+          const documents = (isRecord(body) && Array.isArray(body.documents) ? body.documents : [])
+            .filter(isRecord)
+            .slice(0, 3)
+            .map((doc) => ({
+              name: String(doc.name ?? "document").slice(0, 120),
+              text: String(doc.text ?? "").trim().slice(0, 60_000),
+              question: typeof doc.question === "number" ? doc.question : undefined,
+            }))
+            .filter((doc) => doc.text.length > 0);
+          if (answers.length < MIN_ANSWER_CHARS && documents.length === 0) {
             return jsonResponse({ error: "Please write a little more — a sentence or two at minimum." }, 400);
           }
           inbox.push({
@@ -212,6 +249,7 @@ Deno.serve(async (req: Request) => {
             role: String(hit.pack.role ?? ""),
             receivedAt: now,
             text: answers,
+            ...(documents.length ? { documents } : {}),
           });
           nextInner.flowInterviewPacks = (hit.inner.flowInterviewPacks as unknown[]).map((entry) =>
             isRecord(entry) && entry.token === hit.pack.token ? { ...entry, respondedAt: now } : entry,
@@ -219,7 +257,7 @@ Deno.serve(async (req: Request) => {
           log.push({
             ts: now, agentId: "portal", phaseId: "listen", tier: 1,
             action: `Received an async interview response — ${stakeholder}`,
-            detail: `${answers.split(/\s+/).length.toLocaleString()} words, quarantined in the evidence inbox for your review.`,
+            detail: `${answers.split(/\s+/).filter(Boolean).length.toLocaleString()} words${(isRecord(body) && Array.isArray(body.documents) && body.documents.length) ? ` + ${body.documents.length} document${body.documents.length === 1 ? "" : "s"}` : ""}, quarantined in the evidence inbox for your review.`,
           });
         }
 

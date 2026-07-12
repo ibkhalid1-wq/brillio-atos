@@ -5394,3 +5394,8 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-kit-chan-a {display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .v3fs-kit-links {display:flex;flex-direction:column;gap:2px;margin-top:6px}
 .v3fs-async-row .v3fs-a {white-space:nowrap}
+/* Respondent attachments on the public form. */
+.v3fs-portal-att {display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px}
+.v3fs-portal-att-chip {display:inline-flex;align-items:center;gap:5px;font-size:11.5px;padding:3px 8px;border:1px solid var(--fs-line);border-radius:99px;background:var(--fs-card);color:var(--v3-text-secondary)}
+.v3fs-portal-att-chip button {border:none;background:none;cursor:pointer;color:var(--v3-text-muted);font-size:13px;padding:0;line-height:1}
+.v3fs-portal-att-add {font-size:11.5px;color:var(--v3-accent-2);cursor:pointer;font-weight:600}

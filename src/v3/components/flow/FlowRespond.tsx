@@ -103,6 +103,9 @@ function DictationButton({ onText }: { onText: (spoken: string) => void }) {
 export default function FlowRespond({ token }: { token: string }) {
   const [state, setState] = useState<PackState>({ phase: "loading" });
   const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [attachments, setAttachments] = useState<Record<number, Array<{ name: string; text: string }>>>({});
+  const [attachBusy, setAttachBusy] = useState<number | null>(null);
+  const [attachNote, setAttachNote] = useState<string | null>(null);
   const [extra, setExtra] = useState("");
   const [verdict, setVerdict] = useState<DemoVerdict | null>(null);
   const [comment, setComment] = useState("");
@@ -117,6 +120,33 @@ export default function FlowRespond({ token }: { token: string }) {
       .catch(() => { if (alive) setState({ phase: "invalid" }); });
     return () => { alive = false; };
   }, [token]);
+
+  const attachFile = async (index: number, file: File) => {
+    setAttachBusy(index);
+    setAttachNote(null);
+    try {
+      const buffer = new Uint8Array(await file.arrayBuffer());
+      let binary = "";
+      for (let i = 0; i < buffer.length; i += 0x8000) {
+        binary += String.fromCharCode(...buffer.subarray(i, i + 0x8000));
+      }
+      const response = await fetch(`${FUNCTIONS_BASE}/flow-portal`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, extract: { file: btoa(binary), mime: file.type || "", filename: file.name } }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok || typeof body.text !== "string") {
+        setAttachNote(typeof body.error === "string" ? body.error : "Could not read that file.");
+        return;
+      }
+      setAttachments((current) => ({ ...current, [index]: [...(current[index] ?? []), { name: file.name, text: body.text }] }));
+    } catch {
+      setAttachNote("Could not read that file.");
+    } finally {
+      setAttachBusy(null);
+    }
+  };
 
   const composed = useMemo(() => {
     if (state.phase !== "ready") return "";
@@ -251,15 +281,41 @@ export default function FlowRespond({ token }: { token: string }) {
                       placeholder="In your own words — type, or speak it."
                     />
                     <DictationButton onText={(spoken) => setAnswers((current) => ({ ...current, [index]: joinDictation(current[index] ?? "", spoken) }))} />
+                    <div className="v3fs-portal-att">
+                      {(attachments[index] ?? []).map((doc, docIndex) => (
+                        <span key={docIndex} className="v3fs-portal-att-chip">
+                          {doc.name}
+                          <button type="button" aria-label={`Remove ${doc.name}`} onClick={() =>
+                            setAttachments((current) => ({ ...current, [index]: (current[index] ?? []).filter((_, i) => i !== docIndex) }))
+                          }>×</button>
+                        </span>
+                      ))}
+                      <label className="v3fs-portal-att-add">
+                        {attachBusy === index ? "Reading…" : "⌲ Attach a document"}
+                        <input type="file" hidden disabled={attachBusy !== null}
+                          onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            event.target.value = "";
+                            if (file) void attachFile(index, file);
+                          }} />
+                      </label>
+                    </div>
                   </label>
                 ))}
+                {attachNote ? <div className="v3fs-portal-err">{attachNote}</div> : null}
                 <label className="v3fs-portal-q">
                   <span>Anything we didn&rsquo;t ask about that we should know?</span>
                   <textarea value={extra} onChange={(event) => setExtra(event.target.value)} rows={3} placeholder="Optional — type, or speak it." />
                   <DictationButton onText={(spoken) => setExtra((current) => joinDictation(current, spoken))} />
                 </label>
                 {error ? <div className="v3fs-portal-err">{error}</div> : null}
-                <button type="button" className="v3fs-btn pri v3fs-portal-send" disabled={submitting || composed.trim().length < 20} onClick={() => void submit({ answers: composed })}>
+                <button type="button" className="v3fs-btn pri v3fs-portal-send"
+                  disabled={submitting || (composed.trim().length < 20 && Object.values(attachments).every((docs) => !docs.length))}
+                  onClick={() => void submit({
+                    answers: composed,
+                    documents: Object.entries(attachments).flatMap(([qIndex, docs]) =>
+                      docs.map((doc) => ({ name: doc.name, text: doc.text, question: Number(qIndex) + 1 }))),
+                  })}>
                   {submitting ? "Sending…" : "Send my answers"}
                 </button>
                 <p className="v3fs-portal-foot">Your answers go to the programme team for review before anything enters the record.</p>

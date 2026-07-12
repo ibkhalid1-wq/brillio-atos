@@ -35,6 +35,8 @@ export interface FlowPortalItem {
   role: string;
   receivedAt: string;
   text: string;
+  /** Documents the respondent attached — quarantined with the answers. */
+  documents?: Array<{ name: string; text: string; question?: number }>;
   /** Demo verdicts only. */
   verdict?: "accepted" | "accepted-with-changes" | "rework";
 }
@@ -86,10 +88,17 @@ export function listPortalInbox(program: ProgramSummary): FlowPortalItem[] {
     role: String(entry.role ?? ""),
     receivedAt: String(entry.receivedAt ?? ""),
     text: String(entry.text ?? ""),
+    documents: Array.isArray(entry.documents)
+      ? (entry.documents as unknown[]).filter(isRecord).map((doc) => ({
+          name: String(doc.name ?? "document"),
+          text: String(doc.text ?? ""),
+          question: typeof doc.question === "number" ? doc.question : undefined,
+        }))
+      : undefined,
     verdict: entry.verdict === "accepted" || entry.verdict === "accepted-with-changes" || entry.verdict === "rework"
       ? entry.verdict
       : undefined,
-  })).filter((item) => item.id && (item.text || item.verdict));
+  })).filter((item) => item.id && (item.text || item.verdict || item.documents?.length));
 }
 
 export function listDemoInvites(program: ProgramSummary): FlowDemoInvite[] {
@@ -349,7 +358,13 @@ function ingestInterviewResponse(program: ProgramSummary, itemId: string, actor:
 
   const header = `— ${[stakeholder, role, today].filter(Boolean).join(", ")} —`;
   const existingTranscripts = typeof bucket[targetField] === "string" ? bucket[targetField] as string : "";
-  bucket[targetField] = [existingTranscripts.trimEnd(), `${header}\n${text}`].filter(Boolean).join("\n\n");
+  // Attached documents land as their OWN named evidence blocks — the Library
+  // lists each by title, provided by the respondent.
+  const documents = Array.isArray(item.documents) ? (item.documents as unknown[]).filter(isRecord) : [];
+  const documentBlocks = documents
+    .filter((doc) => String(doc.text ?? "").trim())
+    .map((doc) => `— Document: ${String(doc.name ?? "document")}${typeof doc.question === "number" ? ` (re: question ${doc.question})` : ""}, provided by ${stakeholder}, ${today} —\n${String(doc.text).trim()}`);
+  bucket[targetField] = [existingTranscripts.trimEnd(), ...(text ? [`${header}\n${text}`] : []), ...documentBlocks].filter(Boolean).join("\n\n");
 
   // Roster only tracks Listen coverage — flip the matching row to Heard there.
   if (targetMovement === "listen") {

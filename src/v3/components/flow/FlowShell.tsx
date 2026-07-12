@@ -514,7 +514,7 @@ function FlowToday({ program, onResolveDecision, onIngestPortalItem, onDismissPo
               <div className="v3fs-dec-rec-b">
                 {item.kind === "demo-verdict"
                   ? "confirming updates the tour ledger and the track's show record"
-                  : `${item.text.split(/\s+/).length.toLocaleString()} words`}
+                  : `${item.text.split(/\s+/).filter(Boolean).length.toLocaleString()} words${item.documents?.length ? ` · ${item.documents.length} document${item.documents.length === 1 ? "" : "s"} attached` : ""}`}
               </div>
               <div className="v3fs-dec-cta">
                 <button type="button" className="v3fs-btn pri" disabled={busyId === item.id}
