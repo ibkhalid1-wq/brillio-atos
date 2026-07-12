@@ -165,6 +165,12 @@ export default function FlowRespond({ token }: { token: string }) {
     return blocks.join("\n\n");
   }, [state, answers, extra]);
 
+  const answeredCount = useMemo(() => {
+    if (state.phase !== "ready" || state.pack.kind === "demo") return 0;
+    return (state.pack.questions ?? []).reduce((count, _q, index) =>
+      count + (((answers[index] ?? "").trim() || (attachments[index] ?? []).length) ? 1 : 0), 0);
+  }, [state, answers, attachments]);
+
   const submit = async (payload: Record<string, unknown>) => {
     setSubmitting(true);
     setError(null);
@@ -261,23 +267,27 @@ export default function FlowRespond({ token }: { token: string }) {
             </>
           ) : (
             <>
-              <header className="v3fs-hero">
-                <h1 className="v3fs-hero-title">
-                  <span className="v3fs-hero-brand">ATOS Flow</span> · {state.pack.programme}
-                </h1>
-                <p className="v3fs-how">
-                  Hello{state.pack.stakeholder ? ` ${state.pack.stakeholder}` : ""} — these questions replace a scheduled
-                  discovery call. Answer whenever suits you; skip anything that doesn&rsquo;t apply.
+              <header className="v3fs-portal-head">
+                <div className="v3fs-hero-eyebrow">{state.pack.programme} <span>· ATOS Flow</span></div>
+                <h1 className="v3fs-portal-title">Hello{state.pack.stakeholder ? ` ${state.pack.stakeholder.split(" ")[0]}` : ""} — your perspective shapes what gets built.</h1>
+                <p className="v3fs-portal-sub">
+                  These questions replace a scheduled discovery call. Answer in your own words, whenever suits you — skip anything that doesn&rsquo;t apply.
                 </p>
                 {state.pack.intro ? <p className="v3fs-portal-intro">{state.pack.intro}</p> : null}
+                <div className="v3fs-portal-meta">
+                  <span>✎ {state.pack.questions.length} questions — answer any</span>
+                  <span>⏱ ~{Math.max(5, Math.round(state.pack.questions.length * 1.5))} minutes</span>
+                  <span>⛨ Reviewed by the team before anything enters the record</span>
+                </div>
                 {state.pack.responded ? (
                   <p className="v3fs-portal-again">You&rsquo;ve answered before — anything you send now is added alongside, not overwritten.</p>
                 ) : null}
               </header>
               <div className="v3fs-portal-qs">
                 {state.pack.questions.map((question, index) => (
-                  <label key={index} className="v3fs-portal-q">
-                    <span>{index + 1}. {question}</span>
+                  <label key={index} className={`v3fs-portal-card${((answers[index] ?? "").trim() || (attachments[index] ?? []).length) ? " done" : ""}`}>
+                    <span className="v3fs-portal-qn"><b>{index + 1}</b><em aria-hidden="true">✓</em></span>
+                    <span className="v3fs-portal-qt">{question}</span>
                     <textarea
                       value={answers[index] ?? ""}
                       onChange={(event) => setAnswers((current) => ({ ...current, [index]: event.target.value }))}
@@ -307,12 +317,21 @@ export default function FlowRespond({ token }: { token: string }) {
                   </label>
                 ))}
                 {attachNote ? <div className="v3fs-portal-err">{attachNote}</div> : null}
-                <label className="v3fs-portal-q">
-                  <span>Anything we didn&rsquo;t ask about that we should know?</span>
+                <label className={`v3fs-portal-card extra${extra.trim() ? " done" : ""}`}>
+                  <span className="v3fs-portal-qn"><b>＋</b><em aria-hidden="true">✓</em></span>
+                  <span className="v3fs-portal-qt">Anything we didn&rsquo;t ask about that we should know?</span>
                   <textarea value={extra} onChange={(event) => setExtra(event.target.value)} rows={3} placeholder="Optional — type, or speak it." />
                   <DictationButton onText={(spoken) => setExtra((current) => joinDictation(current, spoken))} />
                 </label>
                 {error ? <div className="v3fs-portal-err">{error}</div> : null}
+              </div>
+              <div className="v3fs-portal-bar">
+                <div className="v3fs-portal-progress">
+                  <span>{answeredCount} of {state.pack.questions.length} answered</span>
+                  <div className="v3fs-portal-track" aria-hidden="true">
+                    <div style={{ width: `${state.pack.questions.length ? Math.round((answeredCount / state.pack.questions.length) * 100) : 0}%` }} />
+                  </div>
+                </div>
                 <button type="button" className="v3fs-btn pri v3fs-portal-send"
                   disabled={submitting || (composed.trim().length < 20 && Object.values(attachments).every((docs) => !docs.length))}
                   onClick={() => void submit({
@@ -322,7 +341,6 @@ export default function FlowRespond({ token }: { token: string }) {
                   })}>
                   {submitting ? "Sending…" : "Send my answers"}
                 </button>
-                <p className="v3fs-portal-foot">Your answers go to the programme team for review before anything enters the record.</p>
               </div>
             </>
           )}
