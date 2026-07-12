@@ -5508,3 +5508,37 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-switcher-del:hover {color:var(--v3-text-primary);background:var(--fs-line)}
 .v3fs-switcher-del.danger {color:var(--v3-red, #dc2626);font-size:11.5px;font-weight:650}
 .v3fs-switcher-confirm {display:flex;gap:2px;flex-shrink:0}
+/* ── Gate as a verdict dial — the emotional core, read at a glance ─────── */
+.v3fs-gstate-top {display:flex;align-items:center;gap:14px}
+.v3fs-gring {position:relative;flex-shrink:0;width:60px;height:60px;display:grid;place-items:center}
+.v3fs-gring svg {position:absolute;inset:0;transform:none}
+.v3fs-gring-track {fill:none;stroke:var(--fs-line);stroke-width:5}
+.v3fs-gring-fill {fill:none;stroke-width:5;stroke-linecap:round;transition:stroke-dashoffset .7s cubic-bezier(.22,1,.36,1),stroke .3s ease}
+.v3fs-gring.green .v3fs-gring-fill {stroke:var(--v3-green)}
+.v3fs-gring.amber .v3fs-gring-fill {stroke:var(--v3-amber)}
+.v3fs-gring.dim .v3fs-gring-fill {stroke:var(--v3-text-muted)}
+.v3fs-gring-c {position:relative;display:flex;flex-direction:column;align-items:center;line-height:1}
+.v3fs-gring-c b {font-size:19px;font-weight:750;color:var(--v3-text-primary);letter-spacing:-.02em}
+.v3fs-gring-c span {font-size:8.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--v3-text-muted);margin-top:1px}
+.v3fs-gring.green .v3fs-gring-tick {font-size:24px;color:var(--v3-green)}
+.v3fs-gstate-txt {min-width:0}
+.v3fs-gstate .v3fs-gstate-h {font-size:13.5px;font-weight:700;line-height:1.35;color:var(--v3-text-primary)}
+.v3fs-gstate.green .v3fs-gstate-h {color:var(--v3-green)}
+.v3fs-gstate .v3fs-gstate-d {font-size:11.5px;line-height:1.45;color:var(--v3-text-secondary);margin-top:3px}
+.v3fs-gstate-g {display:grid;place-items:center;width:28px;height:28px;border-radius:99px;font-size:15px;flex-shrink:0}
+.v3fs-gstate-g.green {color:var(--v3-green)} .v3fs-gstate-g.amber {color:var(--v3-amber)} .v3fs-gstate-g.dim {color:var(--v3-text-muted)}
+
+/* Criteria fold away behind the verdict — one glance answers "am I ready?" */
+.v3fs-checks-disc {margin-top:12px}
+.v3fs-checks-disc > summary {display:flex;align-items:center;gap:6px;cursor:pointer;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--v3-text-muted);list-style:none;padding:2px 0}
+.v3fs-checks-disc > summary::-webkit-details-marker {display:none}
+.v3fs-checks-chev {width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg);transition:transform .2s ease;margin-left:2px}
+.v3fs-checks-disc[open] .v3fs-checks-chev {transform:rotate(45deg)}
+.v3fs-checks-disc > summary:hover {color:var(--v3-text-secondary)}
+
+/* ── Motion as feedback — a card settling into done ────────────────────── */
+.v3fs-check {transition:background .2s ease,opacity .2s ease}
+.v3fs-check.done .v3fs-check-box {transition:transform .3s cubic-bezier(.34,1.56,.64,1),background .2s ease}
+@media (prefers-reduced-motion: reduce) {
+  .v3fs-gring-fill, .v3fs-checks-chev, .v3fs-check, .v3fs-check.done .v3fs-check-box {transition:none}
+}

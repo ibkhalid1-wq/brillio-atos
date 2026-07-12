@@ -376,13 +376,43 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                     {/* Verdict first: one composed state over the whole loop —
                         evidence criteria, record current, Inbox clear. */}
                     <div className={`v3fs-gstate ${readiness.tone}`}>
-                      <div className="v3fs-gstate-h">
-                        <span className="v3fs-gstate-g" aria-hidden="true">
-                          {readiness.kind === "trails" ? "⟳" : readiness.tone === "green" ? "✓" : readiness.tone === "amber" ? "⚠" : "○"}
-                        </span>
-                        {readiness.headline}
+                      <div className="v3fs-gstate-top">
+                        {checks.length ? (() => {
+                          const done = checks.filter((c) => c.done).length;
+                          const total = checks.length;
+                          const R = 26; const CIRC = 2 * Math.PI * R;
+                          const pct = total ? done / total : (readiness.tone === "green" ? 1 : 0);
+                          return (
+                            <div className={`v3fs-gring ${readiness.tone}`} role="img" aria-label={`${done} of ${total} criteria met`}>
+                              <svg viewBox="0 0 64 64" width="60" height="60">
+                                <circle cx="32" cy="32" r={R} className="v3fs-gring-track" />
+                                <circle cx="32" cy="32" r={R} className="v3fs-gring-fill"
+                                  style={{ strokeDasharray: CIRC, strokeDashoffset: CIRC * (1 - pct) }} transform="rotate(-90 32 32)" />
+                              </svg>
+                              <div className="v3fs-gring-c">
+                                {readiness.kind === "demonstrated" ? <b className="v3fs-gring-tick">✓</b> : <><b>{done}</b><span>of {total}</span></>}
+                              </div>
+                            </div>
+                          );
+                        })() : (
+                          <span className={`v3fs-gstate-g ${readiness.tone}`} aria-hidden="true">
+                            {readiness.kind === "trails" ? "⟳" : readiness.tone === "green" ? "✓" : readiness.tone === "amber" ? "⚠" : "○"}
+                          </span>
+                        )}
+                        <div className="v3fs-gstate-txt">
+                          {(() => {
+                            const countHeadline = /criteria met/.test(readiness.headline);
+                            const primary = countHeadline && readiness.detail ? readiness.detail : readiness.headline;
+                            const secondary = primary === readiness.headline ? readiness.detail : (countHeadline ? null : readiness.detail);
+                            return (
+                              <>
+                                <div className="v3fs-gstate-h">{primary}</div>
+                                {secondary ? <div className="v3fs-gstate-d">{secondary}</div> : null}
+                              </>
+                            );
+                          })()}
+                        </div>
                       </div>
-                      {readiness.detail ? <div className="v3fs-gstate-d">{readiness.detail}</div> : null}
                       {readiness.kind === "ready" && !isDone && onRecordGate ? (
                         <GateActionButton
                           idle="Record the gate — demonstrated"
@@ -401,6 +431,9 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                         />
                       ) : null}
                     </div>
+                    {checks.length ? (
+                    <details className="v3fs-checks-disc" open={readiness.tone !== "green"}>
+                      <summary>Criteria<span aria-hidden="true" className="v3fs-checks-chev" /></summary>
                     <div className="v3fs-checks">
                       {checks.map((item, itemIndex) => {
                         const group = item.group ?? "evidence";
@@ -457,6 +490,8 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                         );
                       })}
                     </div>
+                    </details>
+                    ) : null}
                     <p className="v3fs-gate-say foot">{movement.movement?.readyWhen ?? ""}</p>
                   </div>
                 </div>
