@@ -8,7 +8,7 @@
  */
 import type { ProgramSummary } from "@/new/types";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
-import { flowMovements, movementArtifacts, movementOpenIssues, gateChecklist, readMovementInputs, parseGridRows } from "@/v3/components/flow/flowShellData";
+import { flowMovements, movementArtifacts, movementOpenIssues, kitPersonas, gateChecklist, readMovementInputs, parseGridRows } from "@/v3/components/flow/flowShellData";
 import { FORMAL_ARTIFACT_FIELD_KEYS, FORMAL_ARTIFACT_PHASES } from "@/v3/lib/formalArtifacts";
 
 export interface MeetingKit {
@@ -255,6 +255,12 @@ export function kitGaps(program: ProgramSummary, movementId: string): string[] {
   // someone with authority arbitrates. Each open row becomes an ask on the
   // sponsor's follow-up script (and its async link) automatically.
   if (movementId === "frame") {
+    // A persona nobody can speak for is the sponsor's to place: who faces
+    // them, who owns their part of the workflow?
+    const personas = kitPersonas(program) ?? [];
+    for (const persona of personas.filter((entry) => entry.unrepresented || entry.spokenForBy.length === 0)) {
+      gaps.push(`Who can speak for the ${persona.name}${persona.kind === "external" ? " — the person who faces them, if they can't be in the room" : ""}?`);
+    }
     for (const row of parseGridRows(readMovementInputs(program, "listen").contradictionLog)) {
       if (/open/i.test(row.status ?? "")) {
         const between = (row.between ?? "").trim();

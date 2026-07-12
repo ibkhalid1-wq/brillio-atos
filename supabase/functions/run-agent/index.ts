@@ -1147,10 +1147,13 @@ Return ONLY valid JSON:
 
 Use the stakeholderSeed rows and any stakeholders named in the sponsor conversation (documentCarryForward). Do NOT invent named individuals — where a domain clearly needs a voice but no name is known, emit a role placeholder ("Head of Fulfilment — TBC") and list it under "gaps". Questions must be specific to this objective and industry, not generic discovery boilerplate; each agenda ends by asking what artifacts (screens, reports, exports) the stakeholder can share.
 
+Stakeholders are the voices you interview; PERSONAS are every role that takes part in the workflow — internal (reps, approvers, ops) AND external (customers, partners, vendors). They are not the same list: interviewees may or may not be personas, and external personas usually cannot be interviewed at all. Inventory every persona the objective's workflow touches, and for each name which interviewees can SPEAK FOR it — themselves, their manager, or whoever faces them (support faces the customer). A persona nobody can speak for is a discovery risk: mark it unrepresented and list it under "gaps".
+
 Return ONLY valid JSON:
 {
   "title": "Discovery Kit — <programme name>",
   "interviews": [ { "stakeholder": "name or 'Role — TBC'", "role": "string", "email": "their email address ONLY if it appears in the evidence, else null — NEVER invent an address; the operator fills it in", "domain": "the workflow domain they own", "durationMinutes": 45, "objectives": ["what this conversation must surface"], "agenda": [ { "minutes": 5, "topic": "string", "questions": ["specific questions"] } ], "askForArtifacts": ["systems/screens/reports to bring"] } ],
+  "personas": [ { "name": "a ROLE in the workflow, not a person — e.g. 'Sales Rep', 'End Customer'", "kind": "internal|external", "partInWorkflow": "one sentence: what they do in the process", "spokenForBy": ["interview stakeholders who can speak for this persona"], "unrepresented": false } ],
   "coverageMap": [ { "domain": "string", "coveredBy": ["stakeholders"], "thin": false } ],
   "schedulingGuidance": "sequencing and cadence recommendation for the tour",
   "consentNote": "one-paragraph recording-consent blurb to read out before each conversation",
@@ -1166,6 +1169,8 @@ Return ONLY valid JSON:
     system: `You are the ATOS Current-State Atlas Agent. Synthesise EVERY discovery transcript into the current-state picture: the workflows as they actually run, the pain heatmap, and the contradictions between stakeholders.
 
 Ground every workflow step and pain point in what a stakeholder actually said — carry a verbatim quote with attribution wherever possible. Never invent a step or a hand-off; where the transcripts leave one unclear, record it under "openQuestions" instead. Where two stakeholders describe the same process differently, that is a finding — record it under "contradictions" with a suggested follow-up, never silently pick a side.
+
+Actors are PERSONAS: name steps[].actor using the Discovery Kit's personas (priorPhaseArtifacts) — internal and external alike; the customer or partner appears as an actor wherever the process touches them ("End Customer submits the request"). Every persona in the kit must act in at least one workflow, traced END TO END: from the trigger where they first touch the process to the point they hand off or leave it. A persona whose steps the transcripts do not cover is a hole — record it under "openQuestions" ("What does the <persona> do between X and Y?"), never paper over it.
 
 Return ONLY valid JSON:
 {

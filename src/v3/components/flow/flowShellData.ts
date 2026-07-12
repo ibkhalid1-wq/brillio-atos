@@ -358,6 +358,19 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
   } else if (movement.id === "listen") {
     const coverage = listenCoverage(program);
     const contradictions = parseGridRows(inputs.contradictionLog);
+    const personaAtlas = personasMissingFromAtlas(program);
+    if (personaAtlas) {
+      items.push({
+        id: "personas-act",
+        label: personaAtlas.missing.length
+          ? `Every persona acts in the Atlas — ${personaAtlas.missing.length} of ${personaAtlas.total} missing`
+          : `Every persona acts in the Atlas (${personaAtlas.total})`,
+        done: personaAtlas.missing.length === 0,
+        why: personaAtlas.missing.length
+          ? `${personaAtlas.missing.slice(0, 3).join(", ")} — no workflow step names them; ask, then regenerate the Atlas`
+          : undefined,
+      });
+    }
     items.push(
       { id: "mapped", label: "Voices mapped in the coverage ledger", done: coverage.total > 0, anchor: "input:interviewRoster" },
       { id: "heard", label: coverage.total ? `Every voice heard or waived (${coverage.done}/${coverage.total})` : "Every voice heard or waived", done: coverage.total > 0 && coverage.done >= coverage.total, anchor: "input:interviewRoster" },
@@ -461,6 +474,28 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
           ? `confidence ${artifact.confidence}%`
           : undefined,
       })),
+      ...(movement.id === "frame" ? (() => {
+        // Personas ≠ stakeholders: every role in the workflow — internal and
+        // external — needs at least one interviewee who can speak for it.
+        const personas = kitPersonas(program);
+        if (personas === null) return [];
+        const voiceless = personas.filter((persona) => persona.unrepresented || persona.spokenForBy.length === 0);
+        return [{
+          id: "kit-personas",
+          group: "record" as const,
+          label: personas.length === 0
+            ? "Workflow personas inventoried"
+            : voiceless.length
+              ? `Every persona has a voice — ${voiceless.length} unrepresented`
+              : `Every persona has a voice (${personas.length})`,
+          done: personas.length > 0 && voiceless.length === 0,
+          why: personas.length === 0
+            ? "Regenerate the Discovery Kit — it now inventories every role in the workflow, internal and external"
+            : voiceless.length
+              ? `${voiceless.map((persona) => persona.name).slice(0, 3).join(", ")} — name who speaks for them in the Discovery Kit`
+              : undefined,
+        }];
+      })() : []),
       ...(movement.id === "frame" ? (() => {
         // The kit is a roster the async loop SENDS to: every planned interview
         // needs an address on file. Emails come from the operator (or the
@@ -606,6 +641,61 @@ export function spineRegenerationPlan(program: ProgramSummary): SpineStep[] {
     }
   }
   return steps;
+}
+
+/** The Discovery Kit's persona inventory — every role in the workflow,
+ * internal and external, distinct from the interview roster. */
+export interface KitPersona {
+  name: string;
+  kind: string;
+  spokenForBy: string[];
+  unrepresented: boolean;
+}
+export function kitPersonas(program: ProgramSummary): KitPersona[] | null {
+  const kit = dataRoot(program).discoveryKit;
+  if (!kit || typeof kit !== "object" || Array.isArray(kit)) return null;
+  const list = (kit as Record<string, unknown>).personas;
+  if (!Array.isArray(list)) return null;
+  return list
+    .filter((entry): entry is Record<string, unknown> => typeof entry === "object" && entry !== null)
+    .map((entry) => ({
+      name: String(entry.name ?? "").trim(),
+      kind: String(entry.kind ?? "internal"),
+      spokenForBy: Array.isArray(entry.spokenForBy) ? entry.spokenForBy.map(String).filter(Boolean) : [],
+      unrepresented: entry.unrepresented === true,
+    }))
+    .filter((persona) => persona.name);
+}
+
+/** Personas that never act in any Atlas workflow — loose token match so
+ * "Sales Rep" finds an actor written "sales rep" or "Sales Representative". */
+export function personasMissingFromAtlas(program: ProgramSummary): { missing: string[]; total: number } | null {
+  const personas = kitPersonas(program);
+  const atlas = dataRoot(program).currentStateAtlas;
+  if (!personas || !personas.length || !atlas || typeof atlas !== "object" || Array.isArray(atlas)) return null;
+  const workflows = Array.isArray((atlas as Record<string, unknown>).workflows)
+    ? ((atlas as Record<string, unknown>).workflows as unknown[]).filter((w): w is Record<string, unknown> => typeof w === "object" && w !== null)
+    : [];
+  if (!workflows.length) return null;
+  const actorTokens = new Set<string>();
+  for (const workflow of workflows) {
+    const steps = Array.isArray(workflow.steps) ? workflow.steps : [];
+    for (const step of steps) {
+      if (typeof step === "object" && step !== null) {
+        for (const token of String((step as Record<string, unknown>).actor ?? "").toLowerCase().split(/[^a-z0-9]+/)) {
+          if (token.length >= 3) actorTokens.add(token.replace(/s$/, ""));
+        }
+      }
+    }
+  }
+  const missing = personas
+    .filter((persona) => {
+      const tokens = persona.name.toLowerCase().split(/[^a-z0-9]+/)
+        .map((token) => token.replace(/s$/, "")).filter((token) => token.length >= 3);
+      return tokens.length > 0 && !tokens.some((token) => actorTokens.has(token));
+    })
+    .map((persona) => persona.name);
+  return { missing, total: personas.length };
 }
 
 /** One unresolved question the record is carrying. */

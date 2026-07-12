@@ -99,8 +99,30 @@ function CharterStudio({ doc, onChange }: StudioProps) {
 function DiscoveryKitStudio({ doc, onChange }: StudioProps) {
   const patch = patchOf(doc, onChange);
   const interviews = useListOps(doc, onChange, "interviews");
+  const personas = useListOps(doc, onChange, "personas");
   return (
     <>
+      <Section label="Workflow personas" hint="every role in the process — internal and external; each needs a voice who can speak for it">
+        <CardList
+          items={personas.items}
+          itemLabel={(it) => `${asText(it.name) || "Persona"}${asText(it.kind) === "external" ? " · external" : ""}`}
+          onAdd={() => personas.add({ name: "", kind: "internal", partInWorkflow: "", spokenForBy: [], unrepresented: false })}
+          onRemove={personas.remove}
+          addLabel="Add persona"
+          render={(persona, index) => (
+            <>
+              <div className="v3fs-stu-grid3">
+                <TextField label="Persona (a role, not a person)" value={asText(persona.name)} onChange={(next) => personas.set(index, { name: next })} />
+                <SelectField label="Kind" value={asText(persona.kind) || "internal"} options={["internal", "external"]}
+                  onChange={(next) => personas.set(index, { kind: next })} />
+                <TextField label="Part in the workflow" value={asText(persona.partInWorkflow)} onChange={(next) => personas.set(index, { partInWorkflow: next })} />
+              </div>
+              <ChipsField label="Spoken for by (interviewees)" values={asStrings(persona.spokenForBy)}
+                onChange={(next) => personas.set(index, { spokenForBy: next, unrepresented: next.length === 0 && persona.unrepresented === true })} />
+            </>
+          )}
+        />
+      </Section>
       <Section label="Interviews" hint="a role-aware conversation per stakeholder">
         <CardList
           items={interviews.items}
@@ -758,7 +780,7 @@ const flowFieldKey = (artifactId: string): string => FORMAL_ARTIFACT_FIELD_KEYS[
 
 export const STUDIO_REGISTRY: Record<string, StudioEntry> = {
   "charter": { fieldKey: flowFieldKey("charter"), docOrder: ["mandate", "sponsor", "businessObjective", "objectives", "inScope", "outOfScope", "successCriteria", "keyRisks", "governanceSummary"], Component: CharterStudio },
-  "discovery-kit": { fieldKey: flowFieldKey("discovery-kit"), docOrder: ["interviews", "coverageMap"], Component: DiscoveryKitStudio },
+  "discovery-kit": { fieldKey: flowFieldKey("discovery-kit"), docOrder: ["personas", "interviews", "coverageMap"], Component: DiscoveryKitStudio },
   "current-state-atlas": { fieldKey: flowFieldKey("current-state-atlas"), docOrder: ["workflows", "painHeatmap", "systemsInventory", "openQuestions", "coverage"], Component: AtlasStudio },
   "domain-ontology": { fieldKey: flowFieldKey("domain-ontology"), docOrder: ["entities", "relations", "events", "standardAlignment", "ambiguities"], Component: OntologyStudio },
   "architecture-strategy": { fieldKey: flowFieldKey("architecture-strategy"), docOrder: ["candidates", "recommendation"], Component: StrategyStudio },

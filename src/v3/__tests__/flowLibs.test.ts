@@ -7,7 +7,7 @@ import { describe, it, expect } from "vitest";
 import type { ProgramSummary } from "@/new/types";
 import { resolveFlowDecision, listOpenFlowDecisions, describeDecisionChanges } from "@/v3/components/flow/flowDecisions";
 import { scriptDocumentRefs, meetingKit, stakeholderEmail, buildMeetingIcs, mailtoLink } from "@/v3/components/flow/flowMeetings";
-import { locateQuote } from "@/v3/components/flow/flowShellData";
+import { locateQuote, kitPersonas, personasMissingFromAtlas } from "@/v3/components/flow/flowShellData";
 import { mintBrief, buildBriefSnapshot } from "@/v3/components/flow/flowBriefs";
 import { buildPrototypePrompt } from "@/v3/components/flow/flowBuildPrompt";
 import { validateProgramBlob, migrateProgramBlob, BLOB_VERSION } from "@/v3/lib/blobGuard";
@@ -900,5 +900,60 @@ describe("meeting invites and emailed links ride the kit's roster", () => {
     expect(href.startsWith("mailto:dan@acme.com?subject=")).toBe(true);
     expect(decodeURIComponent(href)).toContain("Hi Dan,");
     expect(decodeURIComponent(href)).toContain("https://x/y?flowRespond=t");
+  });
+});
+
+describe("personas ≠ stakeholders — every workflow role needs a voice, then acts", () => {
+  const frameMovement = flowMovements().find((m) => m.id === "frame")!;
+  const listenMovement = flowMovements().find((m) => m.id === "listen")!;
+  const kit = (personas: Array<Record<string, unknown>>) => ({ title: "Kit", interviews: [], personas });
+  const prog = (data: Record<string, unknown>) => ({ id: "p", name: "P", rawData: { data } }) as never;
+
+  it("an unrepresented persona holds Frame's gate and names itself", () => {
+    const p = prog({ discoveryKit: kit([
+      { name: "Sales Rep", kind: "internal", spokenForBy: ["Priya Nair"] },
+      { name: "End Customer", kind: "external", spokenForBy: [], unrepresented: true },
+    ]) });
+    const row = gateChecklist(p, frameMovement, []).find((c) => c.id === "kit-personas")!;
+    expect(row.done).toBe(false);
+    expect(row.label).toBe("Every persona has a voice — 1 unrepresented");
+    expect(row.why).toContain("End Customer");
+    // and the sponsor's follow-up script asks who can speak for them
+    expect(kitPersonas(p)!.find((persona) => persona.name === "End Customer")!.unrepresented).toBe(true);
+  });
+
+  it("all personas voiced → met; a legacy kit without the section shows no row", () => {
+    const voiced = prog({ discoveryKit: kit([{ name: "Sales Rep", spokenForBy: ["Priya Nair"] }]) });
+    expect(gateChecklist(voiced, frameMovement, []).find((c) => c.id === "kit-personas")!.done).toBe(true);
+    const legacy = prog({ discoveryKit: { title: "Kit", interviews: [] } });
+    expect(gateChecklist(legacy, frameMovement, []).find((c) => c.id === "kit-personas")).toBeUndefined();
+  });
+
+  it("a persona who never acts in the Atlas holds Listen's gate — token-tolerant", () => {
+    const p = prog({
+      discoveryKit: kit([
+        { name: "Sales Rep", spokenForBy: ["Priya"] },
+        { name: "End Customer", spokenForBy: ["Dan"] },
+      ]),
+      currentStateAtlas: { workflows: [
+        { name: "Quote", steps: [{ actor: "Sales Representative", action: "drafts" }] },
+      ] },
+    });
+    const gap = personasMissingFromAtlas(p)!;
+    expect(gap.missing).toEqual(["End Customer"]);
+    const row = gateChecklist(p, listenMovement, []).find((c) => c.id === "personas-act")!;
+    expect(row.done).toBe(false);
+    expect(row.label).toBe("Every persona acts in the Atlas — 1 of 2 missing");
+    expect(row.why).toContain("End Customer");
+  });
+
+  it("all personas acting → met; no atlas or no personas → no row", () => {
+    const p = prog({
+      discoveryKit: kit([{ name: "Sales Rep", spokenForBy: ["Priya"] }]),
+      currentStateAtlas: { workflows: [{ name: "Quote", steps: [{ actor: "sales rep", action: "drafts" }] }] },
+    });
+    expect(gateChecklist(p, listenMovement, []).find((c) => c.id === "personas-act")!.done).toBe(true);
+    const bare = prog({ discoveryKit: kit([{ name: "Sales Rep", spokenForBy: ["Priya"] }]) });
+    expect(gateChecklist(bare, listenMovement, []).find((c) => c.id === "personas-act")).toBeUndefined();
   });
 });
