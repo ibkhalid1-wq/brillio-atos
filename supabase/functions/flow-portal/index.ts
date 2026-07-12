@@ -13,7 +13,7 @@
  * Unknown or stale tokens 404 without confirming whether the programme exists.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
-import { extractDocumentText } from "../_shared/extractText.ts";
+import { extractDocumentText, extractRelevant } from "../_shared/extractText.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -184,6 +184,15 @@ Deno.serve(async (req: Request) => {
           typeof extract.mime === "string" ? extract.mime : "",
           typeof extract.filename === "string" ? extract.filename : "", 60_000);
         if ("error" in result) return jsonResponse({ error: result.error }, result.status);
+        // When the attachment answers a specific question, keep only the
+        // relevant passages (verbatim) — the ORIGINAL file is stored whole,
+        // so nothing is lost; the record just stays focused.
+        let refined = false;
+        if (typeof extract.question === "string" && extract.question.trim()) {
+          const focused = await extractRelevant(result.text, extract.question.trim().slice(0, 500));
+          result.text = focused.text;
+          refined = focused.refined;
+        }
         // Store the original so the operator can download it in its native
         // format from the Library once the response is ingested.
         let sourceKey: string | undefined;
@@ -196,7 +205,7 @@ Deno.serve(async (req: Request) => {
           });
           if (!error) sourceKey = key;
         } catch { /* extraction still succeeds without the original */ }
-        return jsonResponse(sourceKey ? { ...result, sourceKey } : result);
+        return jsonResponse({ ...result, ...(sourceKey ? { sourceKey } : {}), refined });
       }
 
       // Compare-and-set with reload-and-retry: a run finishing between our

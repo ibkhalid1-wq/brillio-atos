@@ -133,14 +133,18 @@ export default function FlowRespond({ token }: { token: string }) {
       const response = await fetch(`${FUNCTIONS_BASE}/flow-portal`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, extract: { file: btoa(binary), mime: file.type || "", filename: file.name } }),
+        body: JSON.stringify({ token, extract: { file: btoa(binary), mime: file.type || "", filename: file.name, question: (state.phase === "ready" ? state.pack.questions?.[index] : "") || "" } }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok || typeof body.text !== "string") {
         setAttachNote(typeof body.error === "string" ? body.error : "Could not read that file.");
         return;
       }
-      setAttachments((current) => ({ ...current, [index]: [...(current[index] ?? []), { name: file.name, text: body.text, sourceKey: typeof body.sourceKey === "string" ? body.sourceKey : undefined }] }));
+      setAttachments((current) => ({ ...current, [index]: [...(current[index] ?? []), {
+        name: body.refined === true ? `${file.name} (relevant extract)` : file.name,
+        text: body.text,
+        sourceKey: typeof body.sourceKey === "string" ? body.sourceKey : undefined,
+      }] }));
     } catch {
       setAttachNote("Could not read that file.");
     } finally {

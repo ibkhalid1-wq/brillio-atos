@@ -79,3 +79,31 @@ export async function extractDocumentText(
     return { error: "Could not read that file — paste the text instead.", status: 502 };
   }
 }
+
+/**
+ * Focus an extraction on ONE question: pull the passages, rows and figures
+ * that bear on it, VERBATIM — never a summary, never invented. Falls back to
+ * the full text when no provider is configured or the pass fails: losing
+ * focus is acceptable, losing evidence is not.
+ */
+export async function extractRelevant(text: string, question: string): Promise<{ text: string; refined: boolean }> {
+  if (text.length < 1_500) return { text, refined: false };
+  try {
+    const result = await completeClaudeText({
+      system: [
+        "You extract the RELEVANT parts of a document for a specific question.",
+        "Rules: copy passages, table rows and figures VERBATIM from the document — never summarise, never paraphrase, never add commentary.",
+        "Preserve enough surrounding context that each excerpt stands alone. Separate excerpts with a blank line.",
+        "If the whole document is relevant, return it whole. If nothing is relevant, return the document's most informative sections anyway — the reviewer decides.",
+      ].join(" "),
+      messages: [{ role: "user", content: `Question being answered:\n${question}\n\nDocument text:\n${text.slice(0, 150_000)}` }],
+      maxTokens: 8_000,
+    });
+    const refined = (result.text ?? "").trim();
+    // A suspiciously tiny result means the pass went wrong — keep the evidence.
+    if (refined.length >= 200 || refined.length >= text.length * 0.5) return { text: refined, refined: true };
+    return { text, refined: false };
+  } catch {
+    return { text, refined: false };
+  }
+}
