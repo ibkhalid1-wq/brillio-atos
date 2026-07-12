@@ -1038,7 +1038,7 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, docsStale, onRe
         {kit.followUp && docsStale ? (
           <div className="v3fs-kit-regen">
             <p>
-              New answers are on the record — the documents haven&rsquo;t read them yet, so this
+              New answers are on the record — the artifacts haven&rsquo;t read them yet, so this
               script would re-ask questions that may already be answered. Regenerate first;
               a fresh script builds from whatever remains open.
             </p>
@@ -1046,7 +1046,7 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, docsStale, onRe
               <button type="button" className="v3fs-btn pri" disabled={busy} onClick={async () => {
                 setBusy(true);
                 try { await onRegenerateStale(); } finally { setBusy(false); }
-              }}>{busy ? "Regenerating…" : "↻ Regenerate the documents"}</button>
+              }}>{busy ? "Regenerating…" : "↻ Regenerate artifacts"}</button>
             ) : null}
           </div>
         ) : (
