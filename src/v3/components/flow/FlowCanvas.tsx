@@ -1126,7 +1126,7 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, docsStale, onRe
                   </div>
                 </div>
               ) : null}
-              {(kit.followUp && onMintFollowUp) || canMintPacks || canMintInvites || rows.length ? (
+              {(onMintFollowUp && kit.questions.length > 0) || canMintPacks || canMintInvites || rows.length ? (
                 <div className="v3fs-kit-chan">
                   <div className="v3fs-kit-chan-t">Links<span>ATOS asks for you — answers arrive in the Inbox, attributed</span></div>
                   {rows.length ? (
