@@ -5434,5 +5434,7 @@ details[open] > summary .v3fs-disc-c::after {display:none}
   .v3fs-portal-bar {flex-direction:column;align-items:stretch;gap:10px;margin:26px 0 0}
   .v3fs-portal-send {width:100%;text-align:center}
 }
-/* The follow-up script's honesty note while documents trail the evidence. */
-.v3fs-kit-stalenote {font-size:11.5px;line-height:1.55;color:var(--v3-amber);background:color-mix(in srgb, var(--v3-amber) 8%, transparent);border:1px solid color-mix(in srgb, var(--v3-amber) 25%, transparent);border-radius:10px;padding:8px 12px;margin:0 0 4px}
+/* Stale follow-up: the script clears; regeneration is the only offer. */
+.v3fs-kit-regen {display:flex;flex-direction:column;gap:10px;background:color-mix(in srgb, var(--v3-amber) 7%, transparent);border:1px solid color-mix(in srgb, var(--v3-amber) 25%, transparent);border-radius:12px;padding:14px 16px;margin:2px 0 6px}
+.v3fs-kit-regen p {font-size:12px;line-height:1.6;color:var(--v3-text-secondary);margin:0}
+.v3fs-kit-regen .v3fs-btn {align-self:flex-start}

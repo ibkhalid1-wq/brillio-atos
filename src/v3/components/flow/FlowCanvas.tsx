@@ -310,6 +310,11 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                     movementId={movement.id}
                     hasEvidence={evidence.length > 0}
                     docsStale={artifacts.some((artifact) => artifact.present && artifact.stale)}
+                    onRegenerateStale={onRunAgentAndWait ? async () => {
+                      for (const artifact of artifacts.filter((entry) => entry.present && entry.stale)) {
+                        await onRunAgentAndWait(artifact.id, movement.id);
+                      }
+                    } : undefined}
                     program={program}
                     onSaveInputs={onSaveInputs}
                     onScheduleFollowUp={onScheduleFollowUp}
@@ -769,7 +774,7 @@ function TranscribeButton({ onText }: { onText: (transcript: string) => void }) 
   );
 }
 
-function MeetingKitCard({ kit, movementId, hasEvidence, program, docsStale, onSaveInputs, onScheduleFollowUp, onMintFollowUp, onMintPacks, onMintDemoInvites, onCaptured }: {
+function MeetingKitCard({ kit, movementId, hasEvidence, program, docsStale, onRegenerateStale, onSaveInputs, onScheduleFollowUp, onMintFollowUp, onMintPacks, onMintDemoInvites, onCaptured }: {
   kit: MeetingKit | null;
   movementId: string;
   hasEvidence: boolean;
@@ -782,6 +787,9 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, docsStale, onSa
   /** A movement document trails the evidence — answered gaps fall off this
    * script only when the documents regenerate. */
   docsStale?: boolean;
+  /** Regenerate this movement's stale documents (the kit offers it in place
+   * of a stale follow-up script). */
+  onRegenerateStale?: () => Promise<void>;
   program: ProgramSummary;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
   onScheduleFollowUp?: (movementId: string, who: string, date: string) => Promise<void>;
@@ -1027,21 +1035,33 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, docsStale, onSa
       </summary>
       <div className="v3fs-kit-b">
         <p className="v3fs-kit-p">{kit.purpose}</p>
-        <div className="v3fs-kit-cap">Interview script — {kit.who}</div>
         {kit.followUp && docsStale ? (
-          <p className="v3fs-kit-stalenote">
-            New answers are on the record but the documents haven&rsquo;t caught up — this script re-asks
-            what THEY still list as open. Regenerate the documents and answered gaps fall off it.
-          </p>
-        ) : null}
-        <ol className="v3fs-kit-qs">
-          {kit.questions.map((question, index) => <li key={index}>{question}</li>)}
-        </ol>
-        <div className="v3fs-kit-actions">
-          <button type="button" className="v3fs-btn pri" onClick={() => void copyScript()}>
-            {copied ? "Copied ✓" : "Copy the script"}
-          </button>
-        </div>
+          <div className="v3fs-kit-regen">
+            <p>
+              New answers are on the record — the documents haven&rsquo;t read them yet, so this
+              script would re-ask questions that may already be answered. Regenerate first;
+              a fresh script builds from whatever remains open.
+            </p>
+            {onRegenerateStale ? (
+              <button type="button" className="v3fs-btn pri" disabled={busy} onClick={async () => {
+                setBusy(true);
+                try { await onRegenerateStale(); } finally { setBusy(false); }
+              }}>{busy ? "Regenerating…" : "↻ Regenerate the documents"}</button>
+            ) : null}
+          </div>
+        ) : (
+          <>
+            <div className="v3fs-kit-cap">Interview script — {kit.who}</div>
+            <ol className="v3fs-kit-qs">
+              {kit.questions.map((question, index) => <li key={index}>{question}</li>)}
+            </ol>
+            <div className="v3fs-kit-actions">
+              <button type="button" className="v3fs-btn pri" onClick={() => void copyScript()}>
+                {copied ? "Copied ✓" : "Copy the script"}
+              </button>
+            </div>
+          </>
+        )}
         {kit.documents.length ? (
           <div className="v3fs-script-docs">
             <div className="v3fs-script-docs-cap">Referenced documents</div>
@@ -1081,7 +1101,7 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, docsStale, onSa
           <>
             <div className="v3fs-kit-cap">Channels</div>
             <div className="v3fs-kit-ch">
-              {onScheduleFollowUp ? (
+              {onScheduleFollowUp && !(kit.followUp && docsStale) ? (
                 <div className="v3fs-kit-chan">
                   <div className="v3fs-kit-chan-t">Meeting<span>Book it — the invite carries the script as its agenda</span></div>
                   <div className="v3fs-kit-chan-a">
@@ -1150,7 +1170,7 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, docsStale, onSa
                         {inviteRows.length ? "↺ Demo links for new stakeholders" : "✳ Create demo links"}
                       </button>
                     ) : null}
-                    {kit.followUp && onMintFollowUp && !rows.some((row) => !row.responded && row.who.trim().toLowerCase() === kit.who.trim().toLowerCase()) ? (
+                    {kit.followUp && onMintFollowUp && !docsStale && !rows.some((row) => !row.responded && row.who.trim().toLowerCase() === kit.who.trim().toLowerCase()) ? (
                       <>
                         <button type="button" className={`v3fs-btn${stakeholderEmail(program, kit.who) ? "" : " pri"}`} disabled={busy} onClick={() => void copyMintedLink()}>
                           {linkTick ? "Link copied ✓" : "Copy link"}
