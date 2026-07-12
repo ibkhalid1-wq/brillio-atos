@@ -5438,3 +5438,14 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-kit-regen {display:flex;flex-direction:column;gap:10px;background:color-mix(in srgb, var(--v3-amber) 7%, transparent);border:1px solid color-mix(in srgb, var(--v3-amber) 25%, transparent);border-radius:12px;padding:14px 16px;margin:2px 0 6px}
 .v3fs-kit-regen p {font-size:12px;line-height:1.6;color:var(--v3-text-secondary);margin:0}
 .v3fs-kit-regen .v3fs-btn {align-self:flex-start}
+/* Transcript editor window — long evidence never balloons inline. */
+.v3-transcript-card {display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid var(--fs-line);border-radius:12px;padding:10px 14px;background:var(--fs-bg)}
+.v3-transcript-meta {display:flex;flex-direction:column;gap:2px}
+.v3-transcript-meta b {font-size:12.5px;color:var(--v3-text-primary)}
+.v3-transcript-meta span {font-size:11px;color:var(--v3-text-muted)}
+.v3-transcript-backdrop {position:fixed;inset:0;background:rgba(15,16,32,.45);z-index:120}
+.v3-transcript-modal {position:fixed;inset:5vh max(24px, calc(50vw - 440px));display:flex;flex-direction:column;background:var(--fs-card);border:1px solid var(--fs-line);border-radius:16px;box-shadow:0 32px 90px -20px rgba(15,16,32,.5);z-index:121;overflow:hidden}
+.v3-transcript-modal header {display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px 22px;border-bottom:1px solid var(--fs-line)}
+.v3-transcript-modal h3 {margin:0;font-size:15px;font-weight:700;color:var(--v3-text-primary)}
+.v3-transcript-modal header span {font-size:11.5px;color:var(--v3-text-muted)}
+.v3-transcript-modal textarea {flex:1;font:inherit;font-size:13px;line-height:1.7;padding:18px 22px;border:none;outline:none;resize:none;background:var(--fs-card);color:var(--v3-text-primary)}

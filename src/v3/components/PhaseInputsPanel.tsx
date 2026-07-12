@@ -348,6 +348,9 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
   // document. Explicit user toggles live here; untouched fields infer their mode
   // from the stored value's shape (multiline/long ⇒ pasted).
   const [transcriptPasteMode, setTranscriptPasteMode] = useState<Record<string, boolean>>({});
+  // A populated transcript opens in its own window — thousands of words of
+  // evidence must not balloon inline between the other fields.
+  const [transcriptModalField, setTranscriptModalField] = useState<string | null>(null);
   const [localWorkstreams, setLocalWorkstreams] = useState<Workstream[]>(
     () => workstreamsFromBucket(existingInputs as Record<string, unknown>, program.workstreams, phaseId),
   );
@@ -1120,7 +1123,23 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
                       setTranscriptPasteMode((current) => ({ ...current, [field.id]: next }));
                     return (
                       <div>
-                        {pasteMode ? (
+                        {pasteMode && looksPasted ? (
+                          (() => {
+                            const voices = [...value.matchAll(/^[—–-]{1,2}\s*(.{3,200}?)\s*[—–-]{1,2}\s*$/gm)].length;
+                            return (
+                              <div className="v3-transcript-card">
+                                <div className="v3-transcript-meta">
+                                  <b>{words.toLocaleString()} words of evidence</b>
+                                  {voices ? <span>{voices} attributed block{voices === 1 ? "" : "s"}</span> : null}
+                                </div>
+                                <button type="button" className="v3-button ghost v3-button-inline-xs"
+                                  onClick={() => setTranscriptModalField(field.id)}>
+                                  ⤢ Open in a window
+                                </button>
+                              </div>
+                            );
+                          })()
+                        ) : pasteMode ? (
                           <AutoGrowTextarea
                             className="v3-input v3-textarea"
                             rows={4}
@@ -1157,7 +1176,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
                           >
                             {pasteMode ? "Reference an uploaded document instead" : "Paste the transcript text instead"}
                           </button>
-                          {pasteMode && words > 0 ? (
+                          {pasteMode && words > 0 && !looksPasted ? (
                             <span style={{ fontSize: 10, color: "var(--v3-text-muted)" }}>
                               {words.toLocaleString()} words of evidence
                             </span>
@@ -1540,6 +1559,32 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
           )}
         </div>
       ) : null}
+      {transcriptModalField ? (() => {
+        const field = schema.fields.find((entry) => entry.id === transcriptModalField);
+        if (!field) return null;
+        const value = values[field.id] ?? "";
+        const words = value.trim() ? value.trim().split(/\s+/).length : 0;
+        return (
+          <>
+            <div className="v3-transcript-backdrop" onClick={() => setTranscriptModalField(null)} aria-hidden="true" />
+            <div className="v3-transcript-modal" role="dialog" aria-modal="true" aria-label={field.label}>
+              <header>
+                <div>
+                  <h3>{field.label}</h3>
+                  <span>{words.toLocaleString()} words — edits save with the panel</span>
+                </div>
+                <button type="button" className="v3-button" onClick={() => setTranscriptModalField(null)}>Done</button>
+              </header>
+              <textarea
+                autoFocus
+                aria-label={field.label}
+                value={value}
+                onChange={(event) => setValues((current) => ({ ...current, [field.id]: event.target.value }))}
+              />
+            </div>
+          </>
+        );
+      })() : null}
     </div>
   );
 }
