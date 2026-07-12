@@ -18,6 +18,7 @@ import { usePrograms } from "@/new/lib/usePrograms";
 import { useProgramSnapshots } from "@/new/lib/useProgramSnapshots";
 import { useCopilotThread } from "@/hooks/useCopilotThread";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
+import { readMovementInputs } from "@/v3/components/flow/flowShellData";
 import type {   ProgramSummary } from "@/new/types";
 import { buildCrossPhaseContext } from "@/lib/adamOrchestrator";
 import CoPilotSidebar from "@/v3/components/CoPilotSidebar";
@@ -1586,6 +1587,66 @@ export default function AppShellV3() {
     }
   }, [refreshPrograms, setActiveProgramId, userId, aiStatus.status, openAISettings]);
 
+  // Clone: a NEW engagement at the same client. Only what genuinely
+  // transfers comes along — the sector context (industry, value-chain
+  // segment) and the ratified ontology standard mappings. Evidence,
+  // documents, decisions and the trail stay with the old programme.
+  const handleCloneProgram = useCallback(async () => {
+    const source = activeProgram;
+    if (!source) return;
+    try {
+      const name = `${source.name} — next engagement`;
+      const seed = buildProgramSeed(name) as Record<string, unknown>;
+      const frame = readMovementInputs(source, "frame");
+      const carried: Record<string, unknown> = {};
+      for (const key of ["industry", "segment"]) {
+        if (typeof frame[key] === "string" && frame[key]) carried[key] = frame[key];
+      }
+      if (Object.keys(carried).length) seed.phaseInputs = { frame: carried };
+      const sourceInner = getProgramState((source.rawData ?? {}) as Record<string, unknown>).inner;
+      if (Array.isArray(sourceInner.ontologyAlignment) && sourceInner.ontologyAlignment.length) {
+        seed.ontologyAlignment = structuredClone(sourceInner.ontologyAlignment);
+      }
+      seed.projectMeta = { name, client: source.client ?? "" };
+      seed.flowAttestations = [{
+        ts: new Date().toISOString(), agentId: currentUser?.email || "you", phaseId: "frame", tier: 2,
+        action: `Started from ${source.name}`,
+        detail: `Carried forward: ${[carried.industry ? "industry" : null, carried.segment ? "segment" : null, seed.ontologyAlignment ? "ontology standard mappings" : null].filter(Boolean).join(", ") || "name and client only"}. Evidence and documents stay with the source programme.`,
+      }];
+      let newId = "";
+      if (isSupabaseConfigured && supabase) {
+        if (!userId) {
+          pushV3Toast("Still signing you in — please try again in a moment.", { tone: "warning", duration: 4000 });
+          return;
+        }
+        newId = generateProgramId();
+        const now = new Date().toISOString();
+        const { error } = await supabase.from("adam_programs").insert({
+          id: newId, name, client: source.client || null, updated_at: now, created_at: now, data: seed, is_deleted: false, owner_id: userId,
+        });
+        if (error) {
+          console.error("[handleCloneProgram] Cloud insert failed:", error.message);
+          pushV3Toast("Could not create the programme in the cloud — check your connection and access.", { tone: "error", duration: 6000 });
+          return;
+        }
+      } else {
+        newId = generateProgramId();
+        const now = new Date().toISOString();
+        const payload = { id: newId, name, client: source.client ?? "", industry: String(carried.industry ?? ""), updatedAt: now, lastActiveAt: now, data: seed };
+        if (typeof localStorage !== "undefined") {
+          const existing = JSON.parse(localStorage.getItem(LOCAL_PROGRAM_STORAGE_KEY) || "[]");
+          localStorage.setItem(LOCAL_PROGRAM_STORAGE_KEY, JSON.stringify(Array.isArray(existing) ? [payload, ...existing] : [payload]));
+        }
+      }
+      await refreshPrograms();
+      setActiveProgramId(newId);
+      pushV3Toast("New engagement started — sector context and ontology mappings carried forward.", { tone: "success", duration: 6000 });
+    } catch (error) {
+      reportError(error instanceof Error ? error : new Error(String(error)), { action: "clone_program" });
+      pushV3Toast("Could not clone the programme.", { tone: "error", duration: 4000 });
+    }
+  }, [activeProgram, refreshPrograms, setActiveProgramId, userId, currentUser?.email]);
+
 
 
 
@@ -2055,6 +2116,7 @@ export default function AppShellV3() {
           runningAgentIds={runningAgentIds}
           onSelectProgram={(id) => setActiveProgramId(id)}
           onCreateProgram={() => void handleCreateProgram()}
+          onCloneProgram={() => void handleCloneProgram()}
           onOpenSetup={() => setWizardOpen(true)}
           onOpenCopilot={() => setAdamCopilotSidebarOpen(true)}
           onRunAgent={handleRunAgent}

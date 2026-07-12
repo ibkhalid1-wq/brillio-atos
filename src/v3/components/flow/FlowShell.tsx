@@ -26,6 +26,8 @@ interface FlowShellProps {
   runningAgentIds: Set<string>;
   onSelectProgram: (id: string) => void;
   onCreateProgram: () => void;
+  /** Start a new engagement seeded from this programme (sector + ontology mappings). */
+  onCloneProgram: () => void;
   onOpenSetup: () => void;
   onOpenCopilot: () => void;
   onRunAgent: (agentId: string, phaseId?: string) => void;
@@ -222,6 +224,7 @@ export default function FlowShell(props: FlowShellProps) {
           ))}
           <div className="v3fs-switcher-sep" />
           <button type="button" role="menuitem" onClick={() => { setSwitcherOpen(false); props.onCreateProgram(); }}>＋ New programme</button>
+          <button type="button" role="menuitem" onClick={() => { setSwitcherOpen(false); props.onCloneProgram(); }}>⧉ New from this programme</button>
           <button type="button" role="menuitem" onClick={() => { setSwitcherOpen(false); props.onOpenSetup(); }}>Programme setup</button>
         </div>
       ) : null}
