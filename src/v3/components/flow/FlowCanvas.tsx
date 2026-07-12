@@ -579,10 +579,27 @@ function GateActionButton({ idle, armedLabel, busyLabel, quiet, onAct }: {
  * transcript lands in the capture box for the operator to READ before it
  * becomes evidence — the recording itself is never stored. Hidden after a
  * 501 (transcription not configured on the project). */
+let transcribeAvailable: boolean | null = null;
+let transcribeProbeInFlight: Promise<void> | null = null;
+
 function TranscribeButton({ onText }: { onText: (transcript: string) => void }) {
   const [state, setState] = useState<"idle" | "busy" | "unavailable">("idle");
   const [note, setNote] = useState<string | null>(null);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+  // Probe once per session: an empty POST answers 501 before any body
+  // validation when the key is missing, so the button never advertises a
+  // feature the project can't deliver.
+  useEffect(() => {
+    if (transcribeAvailable !== null) {
+      if (!transcribeAvailable) setState("unavailable");
+      return;
+    }
+    const probe = transcribeProbeInFlight ??= supabase.functions.invoke("flow-transcribe", { body: {} }).then(({ error }: { error: unknown }) => {
+      const status = (error as { context?: { status?: number } } | null)?.context?.status;
+      transcribeAvailable = status !== 501;
+    });
+    void probe.then(() => { if (!transcribeAvailable) setState("unavailable"); });
+  }, []);
   if (state === "unavailable") return null;
 
   const ingest = async (file: File) => {
