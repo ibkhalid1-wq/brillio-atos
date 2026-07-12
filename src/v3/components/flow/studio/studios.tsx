@@ -124,6 +124,19 @@ function DiscoveryKitStudio({ doc, onChange }: StudioProps) {
         />
       </Section>
       <Section label="Interviews" hint="a role-aware conversation per stakeholder">
+        {interviews.items.length ? (
+          <div className="v3fs-stu-emailroster">
+            <div className="v3fs-stu-emailroster-h">Emails — every interviewee needs one; response links and calendar invites go here</div>
+            {interviews.items.map((interview, index) => (
+              <label key={index} className="v3fs-stu-emailrow">
+                <span>{asText(interview.stakeholder) || `Interviewee ${index + 1}`}</span>
+                <input type="email" value={asText(interview.email)} placeholder="name@company.com"
+                  aria-label={`Email for ${asText(interview.stakeholder) || `interviewee ${index + 1}`}`}
+                  onChange={(event) => interviews.set(index, { email: event.target.value })} />
+              </label>
+            ))}
+          </div>
+        ) : null}
         <CardList
           items={interviews.items}
           itemLabel={(it) => `${asText(it.stakeholder) || "Stakeholder"} — ${asText(it.role) || "role"}`}

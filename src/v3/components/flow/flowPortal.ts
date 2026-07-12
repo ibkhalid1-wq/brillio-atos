@@ -158,42 +158,58 @@ export function mintInterviewPacks(program: ProgramSummary, actor: string): Reco
   const interviews = kit && Array.isArray(kit.interviews) ? kit.interviews.filter(isRecord) : [];
   if (!interviews.length) return null;
 
-  const existing = Array.isArray(inner.flowInterviewPacks) ? (inner.flowInterviewPacks as unknown[]) : [];
-  const packed = new Set(existing.filter(isRecord).map((p) => String(p.stakeholder ?? "").toLowerCase()));
+  const existing = Array.isArray(inner.flowInterviewPacks) ? (inner.flowInterviewPacks as unknown[]).filter(isRecord) : [];
   const now = new Date().toISOString();
+  const agendaQuestions = (interview: Record<string, unknown>): string[] =>
+    (Array.isArray(interview.agenda) ? interview.agenda.filter(isRecord) : [])
+      .flatMap((slot) => (Array.isArray((slot as Record<string, unknown>).questions) ? ((slot as Record<string, unknown>).questions as unknown[]).map(String) : []))
+      .filter(Boolean)
+      .slice(0, 12);
 
+  // Refresh UNANSWERED interview links in place to the current agenda, keeping
+  // the token — a link always asks what the kit currently asks. Answered packs
+  // (on the record) and follow-up packs (gap-specific) stay frozen.
+  const byName = new Map(interviews.map((iv) => [String(iv.stakeholder ?? "").trim().toLowerCase(), iv]));
+  let refreshed = 0;
+  const updatedExisting = existing.map((pack) => {
+    const iv = byName.get(String(pack.stakeholder ?? "").trim().toLowerCase());
+    if (!iv || typeof pack.respondedAt === "string" || pack.role === "Follow-up") return pack;
+    const questions = agendaQuestions(iv);
+    const role = String(iv.role ?? "");
+    if (JSON.stringify(pack.questions) === JSON.stringify(questions) && pack.role === role) return pack;
+    refreshed += 1;
+    return { ...pack, role, questions };
+  });
+
+  const packed = new Set(existing.map((p) => String(p.stakeholder ?? "").trim().toLowerCase()));
   const additions = interviews
-    .filter((interview) => !packed.has(String(interview.stakeholder ?? "").toLowerCase()))
-    .map((interview) => {
-      const agenda = Array.isArray(interview.agenda) ? interview.agenda.filter(isRecord) : [];
-      const questions = agenda
-        .flatMap((slot) => (Array.isArray(slot.questions) ? slot.questions.map(String) : []))
-        .filter(Boolean)
-        .slice(0, 12);
-      return {
-        id: `pack-${randomSecret().slice(0, 10)}`,
-        stakeholder: String(interview.stakeholder ?? "Stakeholder"),
-        role: String(interview.role ?? ""),
-        // Async links carry ONE line of guidance. Objectives are meeting
-        // theatre here (the questions ARE the agenda) and recording consent
-        // belongs to conversations, not forms.
-        intro: "Specifics (numbers, delays, system names, workarounds) are exactly what we need.",
-        questions,
-        token: randomSecret(),
-        createdAt: now,
-      };
-    });
-  if (!additions.length) return null;
+    .filter((interview) => {
+      const name = String(interview.stakeholder ?? "").trim();
+      return name && !packed.has(name.toLowerCase());
+    })
+    .map((interview) => ({
+      id: `pack-${randomSecret().slice(0, 10)}`,
+      stakeholder: String(interview.stakeholder ?? "Stakeholder").trim(),
+      role: String(interview.role ?? ""),
+      intro: "Specifics (numbers, delays, system names, workarounds) are exactly what we need.",
+      questions: agendaQuestions(interview),
+      token: randomSecret(),
+      createdAt: now,
+    }));
+  if (!additions.length && !refreshed) return null;
 
   const log = Array.isArray(inner.flowAttestations) ? (inner.flowAttestations as unknown[]) : [];
+  const parts: string[] = [];
+  if (additions.length) parts.push(`created ${additions.length}`);
+  if (refreshed) parts.push(`refreshed ${refreshed} to the current script`);
   const attestation = {
     ts: now, agentId: actor, phaseId: "listen", tier: 2,
-    action: `Created async interview links for ${additions.length} stakeholder${additions.length === 1 ? "" : "s"}`,
+    action: `Async interview links — ${parts.join(", ")}`,
     detail: additions.map((p) => p.stakeholder).join(", ").slice(0, 160),
   };
   return wrapProgramState(wrapper, {
     ...inner,
-    flowInterviewPacks: [...existing, ...additions].slice(-30),
+    flowInterviewPacks: [...updatedExisting, ...additions].slice(-30),
     flowAttestations: [...log, attestation].slice(-200),
   }, usesNestedData);
 }

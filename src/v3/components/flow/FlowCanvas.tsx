@@ -1093,7 +1093,9 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, docsStale, onRe
             meta: invite.respondedAt ? "verdict received" : "demo · waiting for their verdict",
             link: portalLinkFor(program.id, invite),
           })) : [];
-          const rows = [...inviteRows, ...packRows];
+          // Responded links drop off — their answers are captured and live in
+          // the Library; a "responded" row here is just clutter.
+          const rows = [...inviteRows, ...packRows].filter((row) => !row.responded);
           const canMintPacks = movementId === "listen" && onMintPacks;
           const canMintInvites = movementId === "show" && onMintDemoInvites;
           if (!(onScheduleFollowUp || onMintFollowUp || canMintPacks || canMintInvites || rows.length)) return null;
@@ -1162,7 +1164,7 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, docsStale, onRe
                   <div className="v3fs-kit-chan-a">
                     {canMintPacks ? (
                       <button type="button" className="v3fs-btn" disabled={busy} onClick={async () => { setBusy(true); try { await onMintPacks!(); } finally { setBusy(false); } }}>
-                        {rows.length ? "↺ Links for new stakeholders" : "✳ Create response links"}
+                        {rows.length ? "↺ Refresh & add response links" : "✳ Create response links"}
                       </button>
                     ) : null}
                     {canMintInvites ? (

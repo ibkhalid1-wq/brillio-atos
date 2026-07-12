@@ -5458,3 +5458,10 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-aichip.warn .v3fs-aichip-dot {background:var(--v3-amber)}
 .v3fs-aichip.off .v3fs-aichip-dot {background:var(--v3-red, #dc2626)}
 .v3fs-aichip-cta {color:var(--v3-accent-2);font-weight:700}
+/* Discovery Kit — all interviewees' emails in one visible place. */
+.v3fs-stu-emailroster {border:1px solid var(--fs-line);border-radius:12px;padding:12px 14px;margin-bottom:14px;background:var(--fs-bg)}
+.v3fs-stu-emailroster-h {font-size:11px;font-weight:650;letter-spacing:.02em;color:var(--v3-text-muted);margin-bottom:8px}
+.v3fs-stu-emailrow {display:grid;grid-template-columns:minmax(120px,1fr) minmax(160px,1.4fr);gap:10px;align-items:center;padding:4px 0}
+.v3fs-stu-emailrow > span {font-size:12.5px;font-weight:600;color:var(--v3-text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v3fs-stu-emailrow input {font:inherit;font-size:12.5px;padding:6px 10px;border:1px solid var(--fs-line);border-radius:8px;background:var(--fs-card);color:var(--v3-text-primary)}
+.v3fs-stu-emailrow input:focus {outline:none;border-color:var(--v3-accent-2)}
