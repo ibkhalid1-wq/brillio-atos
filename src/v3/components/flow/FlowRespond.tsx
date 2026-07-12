@@ -103,7 +103,7 @@ function DictationButton({ onText }: { onText: (spoken: string) => void }) {
 export default function FlowRespond({ token }: { token: string }) {
   const [state, setState] = useState<PackState>({ phase: "loading" });
   const [answers, setAnswers] = useState<Record<number, string>>({});
-  const [attachments, setAttachments] = useState<Record<number, Array<{ name: string; text: string; sourceKey?: string }>>>({});
+  const [attachments, setAttachments] = useState<Record<number, Array<{ name: string; sourceKey?: string }>>>({});
   const [attachBusy, setAttachBusy] = useState<number | null>(null);
   const [attachNote, setAttachNote] = useState<string | null>(null);
   const [extra, setExtra] = useState("");
@@ -140,9 +140,18 @@ export default function FlowRespond({ token }: { token: string }) {
         setAttachNote(typeof body.error === "string" ? body.error : "Could not read that file.");
         return;
       }
+      // The extracted content goes straight into the answer field — visible
+      // and editable — so the respondent can see and trust what will be sent.
+      // The original file rides along as a downloadable reference; its text is
+      // NOT re-sent, so the record holds one copy (their answer).
+      const heading = `From "${file.name}"${body.refined === true ? " (the relevant part)" : ""}:`;
+      setAnswers((current) => {
+        const existing = (current[index] ?? "").trimEnd();
+        const insert = `${heading}\n${body.text}`;
+        return { ...current, [index]: existing ? `${existing}\n\n${insert}` : insert };
+      });
       setAttachments((current) => ({ ...current, [index]: [...(current[index] ?? []), {
-        name: body.refined === true ? `${file.name} (relevant extract)` : file.name,
-        text: body.text,
+        name: file.name,
         sourceKey: typeof body.sourceKey === "string" ? body.sourceKey : undefined,
       }] }));
     } catch {
@@ -316,6 +325,9 @@ export default function FlowRespond({ token }: { token: string }) {
                             if (file) void attachFile(index, file);
                           }} />
                       </label>
+                      {(attachments[index] ?? []).length ? (
+                        <span className="v3fs-portal-att-hint">added to your answer above — edit it freely</span>
+                      ) : null}
                     </div>
                   </label>
                 ))}
@@ -340,7 +352,7 @@ export default function FlowRespond({ token }: { token: string }) {
                   onClick={() => void submit({
                     answers: composed,
                     documents: Object.entries(attachments).flatMap(([qIndex, docs]) =>
-                      docs.map((doc) => ({ name: doc.name, text: doc.text, question: Number(qIndex) + 1, sourceKey: doc.sourceKey }))),
+                      docs.filter((doc) => doc.sourceKey).map((doc) => ({ name: doc.name, question: Number(qIndex) + 1, sourceKey: doc.sourceKey }))),
                   })}>
                   {submitting ? "Sending…" : "Send my answers"}
                 </button>

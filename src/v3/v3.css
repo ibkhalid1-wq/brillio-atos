@@ -5449,3 +5449,4 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3-transcript-modal h3 {margin:0;font-size:15px;font-weight:700;color:var(--v3-text-primary)}
 .v3-transcript-modal header span {font-size:11.5px;color:var(--v3-text-muted)}
 .v3-transcript-modal textarea {flex:1;font:inherit;font-size:13px;line-height:1.7;padding:18px 22px;border:none;outline:none;resize:none;background:var(--fs-card);color:var(--v3-text-primary)}
+.v3fs-portal-att-hint {font-size:11px;color:var(--v3-green);align-self:center}

@@ -269,7 +269,7 @@ Deno.serve(async (req: Request) => {
               // Only keys under THIS programme's prefix — a foreign key is dropped.
               sourceKey: typeof doc.sourceKey === "string" && doc.sourceKey.startsWith(`${hit.programId}/`) ? doc.sourceKey : undefined,
             }))
-            .filter((doc) => doc.text.length > 0);
+            .filter((doc) => doc.text.length > 0 || doc.sourceKey);
           if (answers.length < MIN_ANSWER_CHARS && documents.length === 0) {
             return jsonResponse({ error: "Please write a little more — a sentence or two at minimum." }, 400);
           }

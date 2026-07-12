@@ -375,8 +375,14 @@ function ingestInterviewResponse(program: ProgramSummary, itemId: string, actor:
   // lists each by title, provided by the respondent.
   const documents = Array.isArray(item.documents) ? (item.documents as unknown[]).filter(isRecord) : [];
   const documentBlocks = documents
-    .filter((doc) => String(doc.text ?? "").trim())
-    .map((doc) => `— Document: ${String(doc.name ?? "document")}${typeof doc.question === "number" ? ` (re: question ${doc.question})` : ""}, provided by ${stakeholder}, ${today} —\n${typeof doc.sourceKey === "string" && doc.sourceKey ? `[source: ${doc.sourceKey}]\n` : ""}${String(doc.text).trim()}`);
+    .filter((doc) => String(doc.text ?? "").trim() || doc.sourceKey)
+    .map((doc) => {
+      // Respondent attachments merge their text INTO the answer; the block is
+      // just the downloadable original with a pointer. Operator-added docs
+      // (with text, no answer) keep their full content.
+      const docBody = String(doc.text ?? "").trim() || "Original file attached — its content is captured in the response above.";
+      return `— Document: ${String(doc.name ?? "document")}${typeof doc.question === "number" ? ` (re: question ${doc.question})` : ""}, provided by ${stakeholder}, ${today} —\n${typeof doc.sourceKey === "string" && doc.sourceKey ? `[source: ${doc.sourceKey}]\n` : ""}${docBody}`;
+    });
   bucket[targetField] = [existingTranscripts.trimEnd(), ...(text ? [`${header}\n${text}`] : []), ...documentBlocks].filter(Boolean).join("\n\n");
 
   // Roster only tracks Listen coverage — flip the matching row to Heard there.

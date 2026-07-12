@@ -987,6 +987,39 @@ describe("uploaded documents are evidence — named, not shredded", () => {
   });
 });
 
+describe("a respondent's original file lands as a downloadable reference, no text dup", () => {
+  const prog = () => ({
+    id: "p", name: "P",
+    rawData: { data: {
+      flowInterviewPacks: [{ id: "k1", stakeholder: "Dan Reyes", movementId: "listen", captureField: "interviewTranscripts", token: "t", createdAt: "2026-07-01T00:00:00Z" }],
+      flowPortalInbox: [{
+        id: "item1", kind: "interview", stakeholder: "Dan Reyes", role: "RevOps Lead",
+        receivedAt: "2026-07-12T00:00:00Z",
+        // The extracted content is IN the answer (the respondent saw it in the field).
+        text: "Q: Whose day changes?\nA: From \"impact.txt\":\nSales ops and Finance.",
+        // The document rides as a text-less original reference only.
+        documents: [{ name: "impact.txt", text: "", question: 1, sourceKey: "p/abc-impact.txt" }],
+      }],
+    } },
+  }) as never;
+
+  it("ingest writes a pointer Document block with the source marker, not the extract twice", () => {
+    const blob = ingestPortalResponse(prog(), "item1", "op@x.com")!;
+    const inner = (blob as { data: Record<string, unknown> }).data;
+    const transcripts = (inner.phaseInputs as Record<string, Record<string, string>>).listen.interviewTranscripts;
+    // the answer carries the content once
+    expect(transcripts).toContain("Sales ops and Finance.");
+    // the document block is a downloadable pointer, not a second copy
+    expect(transcripts).toContain("— Document: impact.txt (re: question 1), provided by Dan Reyes,");
+    expect(transcripts).toContain("[source: p/abc-impact.txt]");
+    expect(transcripts).toContain("its content is captured in the response above");
+    // the Library reads it as a document with a downloadable original
+    const listen = flowMovements().find((m) => m.id === "listen")!;
+    const doc = movementEvidence({ id: "p", name: "P", rawData: blob } as never, listen).find((e) => e.kind === "document")!;
+    expect(doc.sourceKey).toBe("p/abc-impact.txt");
+  });
+});
+
 describe("respondent attachments ride quarantine and land as named evidence", () => {
   const prog = () => ({
     id: "p", name: "P",
