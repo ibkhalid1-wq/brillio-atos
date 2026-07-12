@@ -488,39 +488,70 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
  * reads its refreshed upstream context. Hand-edited documents keep their
  * guard: those runs land as proposals in the Inbox, never overwrites.
  */
+// The spine run outlives the component: switching views mid-run remounts the
+// canvas, and a multi-minute regeneration must neither stop nor lose its
+// progress display when that happens. Module-level store; remounts re-attach.
+type SpineState =
+  | { phase: "running"; index: number; total: number; title: string }
+  | { phase: "done"; completed: number; failed: string[] }
+  | null;
+let spineState: SpineState = null;
+const spineListeners = new Set<() => void>();
+function setSpineState(next: SpineState) {
+  spineState = next;
+  for (const listener of spineListeners) listener();
+}
+const subscribeSpine = (listener: () => void) => {
+  spineListeners.add(listener);
+  return () => { spineListeners.delete(listener); };
+};
+
 function SpineRunner({ plan, runningAgentIds, onRun }: {
   plan: Array<{ artifactId: string; movementId: string; title: string }>;
   runningAgentIds: Set<string>;
   onRun: (agentId: string, phaseId: string) => Promise<void>;
 }) {
-  const [progress, setProgress] = useState<{ index: number; total: number; title: string } | null>(null);
-  const [doneCount, setDoneCount] = useState<number | null>(null);
+  const state = React.useSyncExternalStore(subscribeSpine, () => spineState);
+  const progress = state?.phase === "running" ? state : null;
+  const done = state?.phase === "done" ? state : null;
   const busyElsewhere = runningAgentIds.size > 0 && !progress;
   const run = async () => {
-    setDoneCount(null);
+    if (spineState?.phase === "running") return;
     const steps = [...plan];
     let completed = 0;
-    try {
-      for (const [index, step] of steps.entries()) {
-        setProgress({ index: index + 1, total: steps.length, title: step.title });
-        await onRun(step.artifactId, step.movementId);
-        completed += 1;
+    const failed: string[] = [];
+    for (const [index, step] of steps.entries()) {
+      setSpineState({ phase: "running", index: index + 1, total: steps.length, title: step.title });
+      // A step can reject transiently — a watcher run holding the single
+      // agent slot right after the previous document landed. Back off and
+      // retry before conceding, and never let one failure stop the rest.
+      let attempts = 0;
+      for (;;) {
+        try {
+          await onRun(step.artifactId, step.movementId);
+          completed += 1;
+          break;
+        } catch {
+          attempts += 1;
+          if (attempts >= 3) { failed.push(step.title); break; }
+          await new Promise((resolve) => setTimeout(resolve, 5000 * attempts));
+        }
       }
-    } finally {
-      setProgress(null);
-      setDoneCount(completed);
     }
+    setSpineState({ phase: "done", completed, failed });
   };
   return (
     <div className="v3fs-spine" role="status">
       <div className="v3fs-spine-t">
         {progress
           ? `Regenerating ${progress.index} of ${progress.total} — ${progress.title}…`
-          : doneCount != null
-            ? `Done — ${doneCount} document${doneCount === 1 ? "" : "s"} regenerated. Any you edited by hand ask first, in the Inbox.`
+          : done
+            ? done.failed.length
+              ? `${done.completed} regenerated; ${done.failed.join(", ")} did not finish — run the spine again to retry.`
+              : `Done — ${done.completed} document${done.completed === 1 ? "" : "s"} regenerated. Any you edited by hand ask first, in the Inbox.`
             : `Evidence changed — ${plan.length} documents need regenerating, in order.`}
       </div>
-      {!progress && doneCount == null ? (
+      {!progress && (!done || done.failed.length > 0) ? (
         <button type="button" className="v3fs-btn pri" disabled={busyElsewhere} onClick={() => void run()}>
           {busyElsewhere ? "An agent is running…" : "Regenerate down the spine"}
         </button>

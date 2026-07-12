@@ -468,8 +468,14 @@ describe("gateReadiness — one composed verdict over the closed loop", () => {
     expect(verdict(metFrame(), [art({ gaps: 2 }), art({ id: "charter", title: "Charter", stale: true })]).kind).toBe("trails");
   });
 
-  it("criteria met but a document never generated → the record trails", () => {
-    expect(verdict(metFrame(), [art({ present: false })]).kind).toBe("trails");
+  it("criteria met but a document never generated → not yet written, never 'out of date'", () => {
+    const r = verdict(metFrame(), [art({ present: false })]);
+    expect(r.kind).toBe("gaps");
+    expect(r.detail).toBe("A document has not been generated yet");
+  });
+
+  it("criteria met and a document trails its evidence → out of date", () => {
+    expect(verdict(metFrame(), [art({ present: true, stale: true })]).kind).toBe("trails");
   });
 
   it("record current but a decision parked in the Inbox → judgment waits", () => {

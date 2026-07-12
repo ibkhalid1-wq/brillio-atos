@@ -540,13 +540,18 @@ export function gateReadiness(
     return { tone: evidenceDone ? "amber" : "dim", kind: "open", headline: counts };
   }
   if (openIn("record")) {
-    const trailing = artifacts.some((artifact) => !artifact.present || artifact.stale);
+    // "Out of date" is reserved for documents that EXIST and trail their
+    // evidence — a document never generated is simply not written yet.
+    const trailing = artifacts.some((artifact) => artifact.present && artifact.stale);
+    const missing = artifacts.some((artifact) => !artifact.present);
     const asking = checks.some((item) => !item.done && item.id === "issues");
     return trailing
       ? { tone: "amber", kind: "trails", headline: counts, detail: "Documents are out of date — evidence changed" }
       : asking
         ? { tone: "amber", kind: "gaps", headline: counts, detail: "The documents still have open questions" }
-        : { tone: "amber", kind: "gaps", headline: counts, detail: "A document still lists open gaps" };
+        : missing
+          ? { tone: "amber", kind: "gaps", headline: counts, detail: "A document has not been generated yet" }
+          : { tone: "amber", kind: "gaps", headline: counts, detail: "A document still lists open gaps" };
   }
   if (openIn("judgment")) {
     return { tone: "amber", kind: "judgment", headline: counts, detail: "A decision is waiting in the Inbox" };
