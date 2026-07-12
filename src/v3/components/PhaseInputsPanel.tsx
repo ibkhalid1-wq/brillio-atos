@@ -351,6 +351,9 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
   // A populated transcript opens in its own window — thousands of words of
   // evidence must not balloon inline between the other fields.
   const [transcriptModalField, setTranscriptModalField] = useState<string | null>(null);
+  // Stakeholder-fact fields render as read-only evidence projections; the rare
+  // hand-override reveals the input for the fields the operator names here.
+  const [overrideFields, setOverrideFields] = useState<Set<string>>(new Set());
   const [localWorkstreams, setLocalWorkstreams] = useState<Workstream[]>(
     () => workstreamsFromBucket(existingInputs as Record<string, unknown>, program.workstreams, phaseId),
   );
@@ -922,6 +925,37 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
 
           {(() => {
             const renderField = (field: PhaseInputField, index: number) => {
+              // Programme configuration lives in the setup wizard — one home for
+              // it; never duplicated as an editable field here.
+              if (field.setupOnly) return null;
+              // Stakeholder-stated facts are a read-only PROJECTION of the
+              // evidence: shown, confirmable, not authored cold. The value is
+              // captured from the sponsor conversation (the charter drafts from
+              // it); to change it, adjust the evidence and regenerate. An
+              // override escape hatch remains for the exceptional correction.
+              if (field.readOnlyProjection && !overrideFields.has(field.id)) {
+                const value = (values[field.id] ?? "").trim();
+                return (
+                  <div key={field.id} data-io-anchor={`input:${field.id}`} className="v3-input-field v3-projection">
+                    <div className="v3-field-label">
+                      {field.label}
+                      {field.required ? <span style={{ color: "var(--v3-accent)", marginLeft: 3 }}>*</span> : null}
+                    </div>
+                    {value ? (
+                      <div className="v3-projection-value">{value}</div>
+                    ) : (
+                      <div className="v3-projection-empty">Not yet on record — captured from the sponsor conversation when the charter generates.</div>
+                    )}
+                    <div className="v3-projection-foot">
+                      <span>From the evidence — adjust the sponsor conversation and regenerate to change.</span>
+                      <button type="button" className="v3-button ghost v3-button-inline-xs"
+                        onClick={() => setOverrideFields((current) => { const next = new Set(current); next.add(field.id); return next; })}>
+                        Override
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
               // On Strategy (showKpis), both the Primary success metric AND the
               // Success KPIs grid are rendered by the bespoke Outcome KPIs editor
               // below — a pinned required primary-metric row plus removable KPI

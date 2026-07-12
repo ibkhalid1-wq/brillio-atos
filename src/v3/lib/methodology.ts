@@ -47,6 +47,13 @@ export interface PhaseInputField {
   /** Once a saved value exists, the field can never be edited again — for
    * facts the whole record is grounded on (e.g. industry → vocabulary). */
   lockOnceSet?: boolean;
+  /** Programme configuration captured in the setup wizard — hidden from the
+   * in-phase "Adjust details" panel so there's one home for it. */
+  setupOnly?: boolean;
+  /** A stakeholder-stated fact: shown in Adjust details as a read-only
+   * projection of the evidence (confirmable, with an override), not a
+   * primary text input. */
+  readOnlyProjection?: boolean;
   /**
    * Input shape. The first six are the primitive editors. The rest are
    * *semantic reference* types — they still persist as a plain string, but the
@@ -253,7 +260,7 @@ export const ATOS_STANDARD: MethodologyDefinition = {
       typicalDurationWeeks: { min: 2, max: 6 },
       inputFields: [
         { id: "businessObjective", label: "Business objective", type: "textarea", placeholder: "What outcome is this programme trying to achieve?", required: true, example: "Reduce cost-to-serve by 20% within 18 months by consolidating three regional service desks onto one platform.", validationRule: "A measurable outcome, not an activity — name the change, the magnitude, and the horizon." },
-        { id: "sponsor", label: "Executive sponsor", type: "text", role: "mandate", placeholder: "Name and title", required: true, example: "Jane Okafor, Chief Operating Officer", validationRule: "A named individual with their role, not a team or department." },
+        { id: "sponsor", label: "Executive sponsor", type: "text", role: "mandate", readOnlyProjection: true, placeholder: "Name and title", required: true, example: "Jane Okafor, Chief Operating Officer", validationRule: "A named individual with their role, not a team or department." },
         { id: "industry", label: "Industry", type: "select", options: INDUSTRY_OPTIONS, required: true, hint: "The client's primary sector. Sets the regulatory backdrop, benchmark cost/benefit norms, and sector language the charter and business case are written in." },
         { id: "startDate", label: "Programme start date", type: "date", required: true, validationRule: "The programme kickoff date." },
         { id: "targetEndDate", label: "Target end date", type: "date", required: true, validationRule: "Must fall after the programme start date." },
@@ -1225,13 +1232,13 @@ export const ATOS_FLOW: MethodologyDefinition = {
         readyWhen: "The sponsor confirms the mandate and the discovery conversations are booked.",
       },
       inputFields: [
-        { id: "businessObjective", label: "Business objective", type: "textarea", placeholder: "What outcome is this system meant to achieve?", required: true, example: "Cut quote-to-order cycle time by 70% by replacing the manual desk with an agentic workflow.", validationRule: "A measurable outcome, not an activity — name the change, the magnitude, and the horizon." },
-        { id: "sponsor", label: "Executive sponsor", type: "text", role: "mandate", placeholder: "Name and title", required: true, example: "Jane Okafor, Chief Operating Officer", validationRule: "A named individual with their role, not a team or department." },
-        { id: "sponsorEmail", label: "Sponsor email", type: "text", role: "mandate", placeholder: "name@company.com", required: false, hint: "Powers the sponsor's calendar invites and emailed links — captured in programme setup." },
-        { id: "industry", label: "Industry", type: "select", lockOnceSet: true, options: INDUSTRY_OPTIONS, required: true, hint: "The client's primary sector — sets the domain language the charter, agendas, and architecture strategy are written in." },
-        { id: "segment", label: "Value-chain segment", type: "text", required: false, placeholder: "e.g. Clinical · Manufacturing & Supply · Commercial", hint: "Optional — sharpens vocabulary steering and discovery scope for forked sectors; inferred from evidence when empty." },
+        { id: "businessObjective", label: "Business objective", type: "textarea", readOnlyProjection: true, placeholder: "What outcome is this system meant to achieve?", required: true, example: "Cut quote-to-order cycle time by 70% by replacing the manual desk with an agentic workflow.", validationRule: "A measurable outcome, not an activity — name the change, the magnitude, and the horizon." },
+        { id: "sponsor", label: "Executive sponsor", type: "text", role: "mandate", readOnlyProjection: true, placeholder: "Name and title", required: true, example: "Jane Okafor, Chief Operating Officer", validationRule: "A named individual with their role, not a team or department." },
+        { id: "sponsorEmail", label: "Sponsor email", type: "text", role: "mandate", setupOnly: true, placeholder: "name@company.com", required: false, hint: "Powers the sponsor's calendar invites and emailed links — captured in programme setup." },
+        { id: "industry", label: "Industry", type: "select", lockOnceSet: true, setupOnly: true, options: INDUSTRY_OPTIONS, required: true, hint: "The client's primary sector — sets the domain language the charter, agendas, and architecture strategy are written in." },
+        { id: "segment", label: "Value-chain segment", type: "text", setupOnly: true, required: false, placeholder: "e.g. Clinical · Manufacturing & Supply · Commercial", hint: "Optional — sharpens vocabulary steering and discovery scope for forked sectors; inferred from evidence when empty." },
         { id: "sponsorConversation", label: "Sponsor conversation transcript", type: "transcript", required: false, usedByArtifacts: ["charter", "discovery-kit"], hint: "Paste the recorded sponsor conversation (or reference the uploaded document). The charter and the discovery kit draft themselves from it — you confirm rather than author." },
-        { id: "successMetric", label: "Primary success metric", type: "text", role: "measure", placeholder: "KPI name, e.g. Quote turnaround time", required: true, example: "Quote turnaround time", validationRule: "A single measurable KPI name — baselines are captured from the discovery conversations." },
+        { id: "successMetric", label: "Primary success metric", type: "text", role: "measure", readOnlyProjection: true, placeholder: "KPI name, e.g. Quote turnaround time", required: true, example: "Quote turnaround time", validationRule: "A single measurable KPI name — baselines are captured from the discovery conversations." },
         {
           // Same field id as the stage-gate spine so KPI consumers (benefits
           // tracking, the Program Graph's measured-by chain) read Flow programmes
@@ -1251,7 +1258,7 @@ export const ATOS_FLOW: MethodologyDefinition = {
             { key: "unit", label: "Unit", type: "text", width: 70, placeholder: "$, %, d" },
           ],
         },
-        { id: "targetFirstDemoDate", label: "Target first-demo date", type: "date", required: false, hint: "Flow's headline metric is time-to-first-demo — the date every stakeholder first watches their own workflow run. Days-to-demo replaces duration-in-weeks." },
+        { id: "targetFirstDemoDate", label: "Target first-demo date", type: "date", setupOnly: true, required: false, hint: "Flow's headline metric is time-to-first-demo — the date every stakeholder first watches their own workflow run. Days-to-demo replaces duration-in-weeks." },
       ],
       artifactInputFlow: {
         "charter": ["businessObjective", "sponsor", "industry", "successMetric"],
