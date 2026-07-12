@@ -57,3 +57,21 @@ describe("staleness fingerprint algorithm is mirrored byte-compatibly", () => {
     expect(EDGE).toMatch(/toString\(16\)/);
   });
 });
+
+describe("conflicts route to the Inbox (propose-then-confirm)", () => {
+  it("atlas-detected contradictions are stripped from the doc and queued as a decision", () => {
+    // The stored Atlas never keeps a contradictions section…
+    expect(EDGE).toMatch(/delete \(formalResult as Record<string, unknown>\)\.contradictions/);
+    // …and what it found queues as a contradictionEntries decision, deduped
+    // against any open filing.
+    const routing = EDGE.slice(EDGE.indexOf("atlasContradictions.length && isFlowProgramme"));
+    expect(routing.slice(0, 1500)).toContain("queueFlowDecision");
+    expect(routing.slice(0, 1500)).toContain("contradictionEntries");
+  });
+
+  it("the contradiction watcher proposes — one open filing at a time", () => {
+    const block = EDGE.slice(EDGE.indexOf('agentId === "contradiction-watcher"') - 500);
+    expect(block.slice(0, 2500)).toContain("queueFlowDecision");
+    expect(block.slice(0, 2500)).toContain("contradictionEntries");
+  });
+});
