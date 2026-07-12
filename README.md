@@ -6,20 +6,20 @@ Powered by **ATOS™** — Agentic Transformation Operating System
 
 ---
 
+**New to this codebase? Read [HANDOFF.md](HANDOFF.md) first** — architecture, data
+model, edge functions, secrets, testing, and the honest debt list live there.
+
 ## Quick Start
 
 ```bash
 # Install dependencies
 npm install
 
-# Run development server (opens at http://localhost:3000)
+# Run development server (http://localhost:5173)
 npm run dev
 
-# Build for production
-npm run build
-
-# Preview production build
-npm run preview
+# The full gate: typecheck + lint + build + test
+npm run validate
 ```
 
 ## Deploy to Vercel (recommended)

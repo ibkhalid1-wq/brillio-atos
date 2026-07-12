@@ -16,7 +16,7 @@ Realtime + Edge Functions) · Vitest.
 npm install        # install dependencies
 npm run dev        # vite dev server at http://localhost:5173
 npm run build      # vite build (production); ignore the >1000 kB chunk warning
-npm run lint       # eslint . --ext js,jsx  (does NOT cover .ts/.tsx — see note)
+npm run lint       # eslint src --ext js,jsx,ts,tsx --max-warnings 0
 npm run test       # vitest run (jsdom; scans src/v3/__tests__/**/*.test.ts)
 npm run test:ui    # vitest --ui
 ```
@@ -25,9 +25,9 @@ npm run test:ui    # vitest --ui
 > prefix it with `export PATH="$HOME/tools/node/bin:$PATH"`. The shell cwd may reset
 > between Bash calls, so use absolute paths or re-`cd` as needed.
 
-> **Lint coverage gap:** `npm run lint` only lints `.js`/`.jsx`. Almost all source is
-> `.ts`/`.tsx`, which ESLint does NOT check here. Rely on `npm run build` (tsc via Vite)
-> and `npm run test` to catch type/logic errors.
+> Lint fully covers `.ts`/`.tsx` and gates at zero warnings. Deliberate hook
+> dependency arrays carry annotated `eslint-disable-next-line` comments explaining WHY —
+> do not "fix" those without reading the reason. See HANDOFF.md for architecture.
 
 ## Shell ownership (read `src/SHELLS.md`)
 

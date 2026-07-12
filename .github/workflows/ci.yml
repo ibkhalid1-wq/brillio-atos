@@ -1,5 +1,5 @@
-# ATOS Flow CI — typecheck, the full suite (646+ tests), and the client↔edge
-# lockstep contracts (src/v3/__tests__/edgeLockstep.test.ts) on every push.
+# ATOS Flow CI — typecheck, lint (zero warnings), the full suite, and the
+# client↔edge lockstep contracts (src/v3/__tests__/edgeLockstep.test.ts) on every push.
 name: ci
 on:
   push:
@@ -17,4 +17,5 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      - run: npm run lint
       - run: npx vitest run
