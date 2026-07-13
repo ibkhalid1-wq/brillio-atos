@@ -4928,6 +4928,11 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-artgrid {display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px;align-items:start}
 .v3fs-artgrid .v3fs-colh, .v3fs-artgrid .v3fs-shipboard, .v3fs-artgrid .v3fs-tour, .v3fs-artgrid .v3fs-doc.ghost:only-of-type {grid-column:1/-1}
 .v3fs-artgrid .v3fs-doc {margin:0}
+/* A document's toned paper tile — same tile language as the people avatars. */
+.v3fs-doc-tile {flex-shrink:0;width:30px;height:30px;border-radius:10px;display:grid;place-items:center;
+  font-size:14px;font-weight:650;background:var(--fs-line);color:var(--v3-text-muted)}
+.v3fs-doc-tile.ok {background:color-mix(in srgb,var(--v3-green) 13%,transparent);color:var(--v3-green)}
+.v3fs-doc-tile.stale {background:var(--v3-amber-soft);color:var(--v3-amber)}
 /* Provenance: what the document read, and what it still owes. */
 .v3fs-doc-prov {font-family:var(--v3-font-mono);font-size:10px;color:var(--v3-text-muted);margin-top:7px}
 .v3fs-doc-regen {font-size:11.5px;padding:7px 13px;border-radius:99px}
@@ -6170,6 +6175,10 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-cdot.toreach {background:var(--v3-accent-2)}
 .v3fs-cn {margin-left:auto;font-family:var(--v3-font-mono);font-size:10px;font-weight:700;color:var(--v3-text-muted);
   background:var(--fs-line);border-radius:99px;padding:2px 8px;min-width:20px;text-align:center;letter-spacing:0}
+/* The section count carries the section's tone — one status language. */
+.v3fs-collect-col-h:has(.v3fs-cdot.heard) .v3fs-cn {background:color-mix(in srgb,var(--v3-green) 13%,transparent);color:var(--v3-green)}
+.v3fs-collect-col-h:has(.v3fs-cdot.waiting) .v3fs-cn {background:var(--v3-amber-soft);color:var(--v3-amber)}
+.v3fs-collect-col-h:has(.v3fs-cdot.toreach) .v3fs-cn {background:var(--fs-indigo-wash);color:var(--v3-accent-2)}
 
 /* Card in the board */
 .v3fs-collect-col .v3fs-ivc {box-shadow:var(--fs-shadow)}
@@ -6177,6 +6186,13 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-ivc.heard .v3fs-ivc-strip {background:var(--v3-green)}
 .v3fs-ivc.waiting .v3fs-ivc-strip {background:var(--v3-amber)}
 .v3fs-ivc.toreach .v3fs-ivc-strip {background:var(--v3-accent-2)}
+/* Status-toned initials tile — people read as people, and the board's
+   status language (green/amber/indigo) carries through the avatar. */
+.v3fs-ivc-av {flex-shrink:0;width:30px;height:30px;border-radius:10px;display:grid;place-items:center;
+  font-size:11px;font-weight:750;letter-spacing:.02em;background:var(--fs-line);color:var(--v3-text-secondary)}
+.v3fs-ivc.heard .v3fs-ivc-av {background:color-mix(in srgb,var(--v3-green) 13%,transparent);color:var(--v3-green)}
+.v3fs-ivc.waiting .v3fs-ivc-av {background:var(--v3-amber-soft);color:var(--v3-amber)}
+.v3fs-ivc.toreach .v3fs-ivc-av {background:var(--fs-indigo-wash);color:var(--v3-accent-2)}
 .v3fs-ivc-who {flex:1}
 .v3fs-ivc-chev {flex-shrink:0;width:7px;height:7px;border-right:1.6px solid var(--v3-text-muted);border-bottom:1.6px solid var(--v3-text-muted);
   transform:rotate(45deg);transition:transform .2s ease}

@@ -17,6 +17,7 @@ import { listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 import { listFlowTracks, trackAcceptance } from "@/v3/components/flow/flowTracks";
 import { rankEvidence, isNoiseEvidence, EVIDENCE_LEAD_COUNT } from "@/v3/components/flow/flowEvidenceRank";
 import { listClaimTags } from "@/v3/components/flow/flowClaims";
+import { safePrompt } from "@/v3/components/flow/flowCapture";
 import { MOVEMENT_CAPTION, leadTab, type MovementTab } from "@/v3/components/flow/flowStages";
 import { SpineQueueItem, UpNextButton, type UpNextItem } from "@/v3/components/flow/flowUpNext";
 import { IntervieweeDiscovery, stakeholderCollection } from "@/v3/components/flow/CollectBoard";
@@ -177,7 +178,10 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                 </span>
               </span>
               <span className="v3fs-sname">{movement.displayName}</span>
-              <span className={`v3fs-sstate ${generating ? "gen" : isDone ? "done" : isLive ? "live" : "wait"}`}>{stateLabel}</span>
+              {/* "Upcoming" ×4 is noise — only states that MEAN something get a word. */}
+              {stateLabel === "Upcoming"
+                ? <span className="v3fs-sstate wait" aria-hidden="true">&nbsp;</span>
+                : <span className={`v3fs-sstate ${generating ? "gen" : isDone ? "done" : isLive ? "live" : "wait"}`}>{stateLabel}</span>}
             </button>
           );
         })}
@@ -551,7 +555,7 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                                           <span>{invite.respondedAt ? "verdict received" : "waiting"}</span>
                                         </div>
                                         <button type="button" className="v3fs-a" onClick={() => {
-                                          void navigator.clipboard.writeText(portalLinkFor(program.id, invite)).catch(() => window.prompt("Copy the link:", portalLinkFor(program.id, invite)));
+                                          void navigator.clipboard.writeText(portalLinkFor(program.id, invite)).catch(() => safePrompt("Copy the link:", portalLinkFor(program.id, invite)));
                                         }}>Copy link</button>
                                       </div>
                                     ) : null}
@@ -988,7 +992,9 @@ function ArtifactDoc({ artifact, running, evidenceNames, evidenceCount, onGenera
   return (
     <div className={`v3fs-doc${artifact.present ? "" : " ghost"}${onOpen ? " openable" : ""}`}>
       <div className="v3fs-doc-t">
-        <span className={`v3fs-st ${artifact.present ? (artifact.stale ? "stale" : "ok") : "none"}`} />
+        {/* A document leads with a toned paper tile, not a bare status dot —
+            the state colours the tile: green current, amber stale, dim absent. */}
+        <span className={`v3fs-doc-tile ${artifact.present ? (artifact.stale ? "stale" : "ok") : "none"}`} aria-hidden="true">¶</span>
         {onOpen ? (
           <button type="button" className="v3fs-doc-open" onClick={onOpen}>{artifact.title}</button>
         ) : (

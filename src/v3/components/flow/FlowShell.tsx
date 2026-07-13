@@ -1,7 +1,7 @@
 import React, { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import FlowCanvas from "@/v3/components/flow/FlowCanvas";
-import { AttachFileButton } from "@/v3/components/flow/flowCapture";
+import { AttachFileButton, safePrompt } from "@/v3/components/flow/flowCapture";
 import FlowArtifactStudio, { type ArtifactEditInput } from "@/v3/components/flow/studio/FlowArtifactStudio";
 import FlowBoardPack from "@/v3/components/flow/FlowBoardPack";
 import EvidenceReader from "@/v3/components/flow/EvidenceReader";
@@ -509,7 +509,7 @@ export default function FlowShell(props: FlowShellProps) {
           <button type="button" className="v3fs-lens-exit" title="Mint a no-login sponsor link and copy it"
             onClick={async () => {
               const link = await props.onMintBrief();
-              if (link) { try { await navigator.clipboard.writeText(link); } catch { window.prompt("Copy the sponsor link:", link); } }
+              if (link) { try { await navigator.clipboard.writeText(link); } catch { safePrompt("Copy the sponsor link:", link); } }
             }}>
             ⎘ Copy sponsor link
           </button>

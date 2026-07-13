@@ -14,7 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { listInterviewPacks, portalLinkFor } from "@/v3/components/flow/flowPortal";
 import { resolveMovementStakeholders, type MovementStakeholder } from "@/v3/components/flow/flowStakeholders";
 import { mapTranscriptSpeakers } from "@/v3/components/flow/flowTranscriptMap";
-import { AttachFileButton, TranscribeButton } from "@/v3/components/flow/flowCapture";
+import { AttachFileButton, TranscribeButton, safePrompt } from "@/v3/components/flow/flowCapture";
 
 /** A movement's discovery, organized by stakeholder. One card per person or
  * role: their script, their link/meeting channels, their captured evidence, a
@@ -125,7 +125,8 @@ export function IntervieweeDiscovery({ program, movementId, captureField, relate
               }) : [];
               return (
                 <IntervieweeCard key={s.id} program={program} movementId={movementId} stakeholder={s} captureField={captureField}
-                  coll={coll} cross={cross} onSaveInputs={onSaveInputs} onMintFollowUp={onMintFollowUp} onCaptured={onCaptured} />
+                  coll={coll} cross={cross} solo={stakeholders.length === 1}
+                  onSaveInputs={onSaveInputs} onMintFollowUp={onMintFollowUp} onCaptured={onCaptured} />
               );
             })}
           </div>
@@ -135,13 +136,16 @@ export function IntervieweeDiscovery({ program, movementId, captureField, relate
   );
 }
 
-function IntervieweeCard({ program, movementId, stakeholder, captureField, coll, cross, onSaveInputs, onMintFollowUp, onCaptured }: {
+function IntervieweeCard({ program, movementId, stakeholder, captureField, coll, cross, solo, onSaveInputs, onMintFollowUp, onCaptured }: {
   program: ProgramSummary;
   movementId: string;
   stakeholder: MovementStakeholder;
   captureField: string;
   coll: StakeholderCollection;
   cross?: Array<{ entry: ReturnType<typeof movementEvidence>[number]; from: string }>;
+  /** The board's only person (Frame's sponsor): their card IS the board, so
+   * it opens by default. On a roster board the tiles stay closed for scanning. */
+  solo?: boolean;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
   onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
   onCaptured?: () => void;
@@ -177,7 +181,7 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
       return link;
     } finally { setLinkBusy(false); }
   };
-  const copyLink = async () => { const link = await ensureLink(); if (link) { try { await navigator.clipboard.writeText(link); } catch { window.prompt("Copy the link:", link); } } };
+  const copyLink = async () => { const link = await ensureLink(); if (link) { try { await navigator.clipboard.writeText(link); } catch { safePrompt("Copy the link:", link); } } };
   const sendLink = async () => { if (!email) return; const link = await ensureLink(); if (link) window.location.href = mailtoLink(email, { stakeholder: name, programmeName: program.name, link }); };
 
   const save = async () => {
@@ -240,9 +244,13 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
 
   return (
     <>
-      <details className={`v3fs-ivc ${status}`} open={!heard}>
+      <details className={`v3fs-ivc ${status}`} open={solo && !heard}>
         <span className="v3fs-ivc-strip" aria-hidden="true" />
         <summary>
+          {/* Status-toned initials — the person reads as a person at a glance. */}
+          <span className={`v3fs-ivc-av ${status}`} aria-hidden="true">
+            {(name || "?").split(/\s+/).slice(0, 2).map((word) => word[0]?.toUpperCase() ?? "").join("") || "?"}
+          </span>
           <span className="v3fs-ivc-who">{name || "Stakeholder"}{role && role !== name ? <span>{role}</span> : null}</span>
           <span className={`v3fs-ivc-st ${status}`}>{statusLabel}</span>
           <span className="v3fs-ivc-chev" aria-hidden="true" />

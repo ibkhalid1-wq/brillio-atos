@@ -7,6 +7,13 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
+/** Copy fallback that can never take the app down: window.prompt() is
+ * unsupported in some embedded contexts and THROWS — a failed copy must
+ * stay a quiet no-op, never an unhandled rejection. */
+export function safePrompt(message: string, value: string): void {
+  try { window.prompt(message, value); } catch { /* clipboard and prompt both unavailable */ }
+}
+
 async function fileToBase64(file: File): Promise<string> {
   const buffer = new Uint8Array(await file.arrayBuffer());
   let binary = "";

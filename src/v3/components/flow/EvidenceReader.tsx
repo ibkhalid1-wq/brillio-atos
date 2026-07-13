@@ -6,6 +6,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFocusTrap } from "@/v3/lib/useFocusTrap";
+import { safePrompt } from "@/v3/components/flow/flowCapture";
 import { flowMovements, locateQuote, type EvidenceEntry } from "@/v3/components/flow/flowShellData";
 
 export default function EvidenceReader({ entry, highlight, targets, onTag, onClose }: {
@@ -38,7 +39,7 @@ export default function EvidenceReader({ entry, highlight, targets, onTag, onClo
   const copyQuote = async () => {
     if (!sel) return;
     const quote = `“${sel.text}”\n— ${entry.who}`;
-    try { await navigator.clipboard.writeText(quote); } catch { window.prompt("Copy the quote:", quote); }
+    try { await navigator.clipboard.writeText(quote); } catch { safePrompt("Copy the quote:", quote); }
     setCopied(true);
     window.setTimeout(() => setSel(null), 900);
   };

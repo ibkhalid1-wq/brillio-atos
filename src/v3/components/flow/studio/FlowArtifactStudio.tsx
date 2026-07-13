@@ -7,6 +7,7 @@
  * away, and artifacts with no stored structure fall back to it.
  */
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { safePrompt } from "@/v3/components/flow/flowCapture";
 import { useFocusTrap } from "@/v3/lib/useFocusTrap";
 import type { ProgramSummary } from "@/new/types";
 import { artifactDocument, flowMovements, locateQuote, movementEvidence, type ArtifactCardModel, type EvidenceEntry } from "@/v3/components/flow/flowShellData";
@@ -332,7 +333,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
                       {artifact.id === "prototype-pack" ? (
                         <button type="button" role="menuitem" onClick={() => {
                           const prompt = buildPrototypePrompt(program);
-                          if (prompt) { try { void navigator.clipboard.writeText(prompt); } catch { window.prompt("Copy the build prompt:", prompt); } }
+                          if (prompt) { try { void navigator.clipboard.writeText(prompt); } catch { safePrompt("Copy the build prompt:", prompt); } }
                           setMenuOpen(false);
                         }}>Copy the build prompt</button>
                       ) : null}

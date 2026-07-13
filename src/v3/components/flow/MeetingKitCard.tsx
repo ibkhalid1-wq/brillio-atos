@@ -10,7 +10,7 @@ import type { ProgramSummary } from "@/new/types";
 import { buildMeetingIcs, mailtoLink, stakeholderEmail, type MeetingKit } from "@/v3/components/flow/flowMeetings";
 import { listInterviewPacks, listDemoInvites, portalLinkFor, visibleLinks } from "@/v3/components/flow/flowPortal";
 import { listFlowTracks } from "@/v3/components/flow/flowTracks";
-import { AttachFileButton, TranscribeButton } from "@/v3/components/flow/flowCapture";
+import { AttachFileButton, TranscribeButton, safePrompt } from "@/v3/components/flow/flowCapture";
 
 export default function MeetingKitCard({ kit, movementId, hasEvidence, program, docsStale, onRegenerateStale, onSaveInputs, onScheduleFollowUp, onMintFollowUp, onMintPacks, onMintDemoInvites, onCaptured }: {
   kit: MeetingKit | null;
@@ -226,7 +226,7 @@ export default function MeetingKitCard({ kit, movementId, hasEvidence, program, 
       await navigator.clipboard.writeText(script);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
-    } catch { window.prompt("Copy the script:", script); }
+    } catch { safePrompt("Copy the script:", script); }
   };
 
   const schedule = async () => {
@@ -251,7 +251,7 @@ export default function MeetingKitCard({ kit, movementId, hasEvidence, program, 
   const copyMintedLink = async () => {
     const link = await mintLink();
     if (!link) return;
-    try { await navigator.clipboard.writeText(link); } catch { window.prompt("Copy the follow-up link:", link); }
+    try { await navigator.clipboard.writeText(link); } catch { safePrompt("Copy the follow-up link:", link); }
     setLinkTick(true);
     window.setTimeout(() => setLinkTick(false), 2200);
   };
@@ -391,7 +391,7 @@ export default function MeetingKitCard({ kit, movementId, hasEvidence, program, 
                             {row.responded ? null : (
                               <span className="v3fs-async-cta">
                                 <button type="button" className={`v3fs-btn${email ? "" : " pri"}`}
-                                  onClick={() => { void navigator.clipboard.writeText(row.link).catch(() => window.prompt("Copy the link:", row.link)); }}>
+                                  onClick={() => { void navigator.clipboard.writeText(row.link).catch(() => safePrompt("Copy the link:", row.link)); }}>
                                   Copy link
                                 </button>
                                 {email ? (
