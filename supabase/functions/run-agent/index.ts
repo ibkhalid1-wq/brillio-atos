@@ -849,6 +849,8 @@ const FORMAL_ARTIFACT_AGENTS: Record<string, FormalArtifactSpec> = {
 
 Use the provided Strategy inputs (sponsor, business objective, success metric, scope, constraints, kpiBaselines). Do NOT invent a sponsor, budget, or scope that is not supported by the context. Where a Strategy-owned input the charter itself needs is genuinely missing (e.g. no quantified budget, no sponsor), say so in "gaps" — but observe the phase-scoped gap discipline below: never list later-phase detail, content already present here or upstream, or approval/baseline state as a gap.
 
+THE RECORD OUTRANKS THE FIELDS. If a fact the charter needs (objective, sponsor, measure, timeline) is clearly stated ANYWHERE in the captured record — including conversation transcripts — DERIVE it from there and use it; do not declare a gap asking for a field to be filled in when the answer is already on the record. When the newest statements in the record contradict an older structured input (e.g. the sponsor has since changed direction), the newer recorded statement wins: charter from it, and note the supersession in "mandate" or "keyRisks" rather than as a gap. A gap is ONLY for facts the record nowhere states.
+
 Return ONLY valid JSON:
 {
   "title": "Transformation Charter — <programme name>",

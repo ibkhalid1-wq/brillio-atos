@@ -467,6 +467,7 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                           aria-label={railPin ? "Unpin the record rail" : "Pin the record rail"}>⌖ {railPin ? "unpin" : "pin"}</button>
                       </div>
                       {railPerson ? (
+                        <div className="v3fs-recrail-body">
                         <div className="v3fs-ivc-fb">
                           {(railEntries ?? []).map((entry, i) => (
                             <button key={i} type="button" className="v3fs-ivc-fb-row" onClick={() => setRailRead(entry)} title="Read in full">
@@ -483,16 +484,35 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                             <div className="v3fs-ivc-fb-empty">Nothing from {railPerson.name.split(",")[0].trim()} yet — reach out from their card.</div>
                           ) : null}
                         </div>
+                        </div>
                       ) : (
                       <>
+                      {/* CONTEXT leads: the movement's established facts —
+                          objective, sponsor, measure — before the records. */}
+                      {(() => {
+                        const facts = movementFacts(program, movement);
+                        return facts.length || (coverage && coverage.total > 0) ? (
+                          <div className="v3fs-recrail-ctx">
+                            {facts.map((fact) => (
+                              <div key={fact.label} className="v3fs-fact"><b>{fact.label}</b><span>{fact.value}</span></div>
+                            ))}
+                            {coverage && coverage.total > 0 ? (
+                              <div className="v3fs-coverage">
+                                <div className="v3fs-coverage-cap"><span>Coverage</span><span>{coverage.done} of {coverage.total}</span></div>
+                                <div className="v3fs-coverage-bar"><div className="v3fs-coverage-fill" style={{ width: `${Math.round((coverage.done / coverage.total) * 100)}%` }} /></div>
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null;
+                      })()}
+                      <div className="v3fs-recrail-body">
                       {!evidence.length && hasPeople ? (
                         <div className="v3fs-tab-ghost">
                           Nothing on the record yet — reach out from the cards; what comes back lands here, attributed.
                         </div>
                       ) : null}
-                  {/* The column leads with the evidence itself — voices, then
-                      facts, then coverage. The kit is the action and follows,
-                      collapsed to one line once a conversation is on record. */}
+                  {/* The records fill the rail's remaining height, scrolling
+                      in place beneath the pinned context. */}
                   {(() => {
                     if (!evidence.length) return null;
                     const voice = (entry: typeof evidence[number], i: number) => (
@@ -651,22 +671,7 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                       </>
                     );
                   })()}
-                  {(() => {
-                    const facts = movementFacts(program, movement);
-                    return facts.length ? (
-                      <div className="v3fs-facts">
-                        {facts.map((fact) => (
-                          <div key={fact.label} className="v3fs-fact"><b>{fact.label}</b><span>{fact.value}</span></div>
-                        ))}
                       </div>
-                    ) : null;
-                  })()}
-                  {coverage && coverage.total > 0 ? (
-                    <div className="v3fs-coverage">
-                      <div className="v3fs-coverage-cap"><span>Coverage</span><span>{coverage.done} of {coverage.total}</span></div>
-                      <div className="v3fs-coverage-bar"><div className="v3fs-coverage-fill" style={{ width: `${Math.round((coverage.done / coverage.total) * 100)}%` }} /></div>
-                    </div>
-                  ) : null}
                       </>
                       )}
                     </aside>
