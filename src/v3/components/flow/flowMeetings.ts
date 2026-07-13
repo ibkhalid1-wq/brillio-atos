@@ -8,7 +8,7 @@
  */
 import type { ProgramSummary } from "@/new/types";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
-import { flowMovements, movementArtifacts, movementOpenIssues, kitPersonas, gateChecklist, readMovementInputs, parseGridRows, readContradictions } from "@/v3/components/flow/flowShellData";
+import { flowMovements, movementArtifacts, movementOpenIssues, kitPersonas, gateChecklist, readMovementInputs, parseGridRows, readContradictions, falsifiedGap } from "@/v3/components/flow/flowShellData";
 import { FORMAL_ARTIFACT_FIELD_KEYS, FORMAL_ARTIFACT_PHASES } from "@/v3/lib/formalArtifacts";
 import { getPhaseDefinition } from "@/v3/lib/methodology";
 
@@ -293,7 +293,10 @@ export function kitGaps(program: ProgramSummary, movementId: string, opts?: { ga
   for (const fieldKey of gapDocKeys) {
     const doc = inner[fieldKey];
     if (isRecord(doc) && Array.isArray(doc.gaps)) {
-      gaps.push(...doc.gaps.map(String).filter(Boolean).slice(0, 4));
+      // Falsified field-demands (the field is demonstrably filled) drop here
+      // too — the scripts, the cards, and the gate read one truth.
+      gaps.push(...doc.gaps.map(String).filter(Boolean)
+        .filter((gap) => !falsifiedGap(program, gap)).slice(0, 4));
     }
   }
   if (gateLabels) {

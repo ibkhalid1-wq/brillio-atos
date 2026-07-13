@@ -851,6 +851,8 @@ Use the provided Strategy inputs (sponsor, business objective, success metric, s
 
 THE RECORD OUTRANKS THE FIELDS. If a fact the charter needs (objective, sponsor, measure, timeline) is clearly stated ANYWHERE in the captured record — including conversation transcripts — DERIVE it from there and use it; do not declare a gap asking for a field to be filled in when the answer is already on the record. When the newest statements in the record contradict an older structured input (e.g. the sponsor has since changed direction), the newer recorded statement wins: charter from it, and note the supersession in "mandate" or "keyRisks" rather than as a gap. A gap is ONLY for facts the record nowhere states.
 
+NEVER emit a gap about the Objective/businessObjective input when the businessObjective you were given (or the one you derived) is non-empty — if you used an objective to write this charter, the objective is not a gap. The same rule applies to sponsor, success metric, and timeline: a fact you used is never simultaneously a gap.
+
 Return ONLY valid JSON:
 {
   "title": "Transformation Charter — <programme name>",

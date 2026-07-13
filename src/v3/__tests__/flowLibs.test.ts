@@ -470,6 +470,24 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
     expect(g).toMatch(/no voice yet[\s\S]*End Customer/);
   });
 
+  it("a gap demanding a FILLED field is falsified by the record — dropped from cards and scripts alike", async () => {
+    const { artifactOpenGaps, falsifiedGap } = await import("@/v3/components/flow/flowShellData");
+    const { kitGaps } = await import("@/v3/components/flow/flowMeetings");
+    const gap = "Add a concise, outcome-oriented statement to the Objective input.";
+    const filled = programme({
+      transformationCharter: { gaps: [gap, "Who owns the pilot vertical end to end?"] },
+      phaseInputs: { frame: { businessObjective: "Improve sales velocity, rep productivity, and satisfaction in 12 months." } },
+    });
+    // The objective field IS filled: the demand is falsified everywhere…
+    expect(falsifiedGap(filled, gap)).toBe(true);
+    expect(artifactOpenGaps(filled, "charter")).toEqual(["Who owns the pilot vertical end to end?"]);
+    expect(kitGaps(filled, "frame").some((g) => /Objective input/i.test(g))).toBe(false);
+    // …but with the field empty the gap is real and stays.
+    const empty = programme({ transformationCharter: { gaps: [gap] }, phaseInputs: { frame: {} } });
+    expect(falsifiedGap(empty, gap)).toBe(false);
+    expect(artifactOpenGaps(empty, "charter")).toEqual([gap]);
+  });
+
   it("role bindings name Envision's personas — real person, real email, and the evidence fingerprint never moves", async () => {
     const { movementInputsFingerprint } = await import("@/v3/components/flow/flowShellData");
     const { readRoleBindings } = await import("@/v3/components/flow/flowStakeholders");

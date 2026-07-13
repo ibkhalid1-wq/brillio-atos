@@ -355,16 +355,40 @@ export function artifactDocument(program: ProgramSummary, artifactId: string): s
   return content && content.trim() ? content : null;
 }
 
+/**
+ * A gap the record itself FALSIFIES: the model sometimes emits "add X to the
+ * <field> input" even when that field is filled (its own run history echoes
+ * old gaps back at it). A demand for a field that demonstrably holds content
+ * is not an open question — suppress it deterministically at read time, so
+ * cards, scripts and the gate all agree without waiting for a lucky regen.
+ */
+const FIELD_DEMANDS: Array<{ match: RegExp; field: string }> = [
+  { match: /objective/i, field: "businessObjective" },
+  { match: /sponsor/i, field: "sponsor" },
+  { match: /success (?:metric|measure)|kpi/i, field: "successMetric" },
+  { match: /demo date|first[- ]demo/i, field: "targetFirstDemoDate" },
+];
+export function falsifiedGap(program: ProgramSummary, gap: string): boolean {
+  if (!/\binputs?\b/i.test(gap)) return false; // only field-demand phrasing
+  const frame = readMovementInputs(program, "frame");
+  const hit = FIELD_DEMANDS.find((demand) => demand.match.test(gap));
+  const value = hit ? frame[hit.field] : undefined;
+  return typeof value === "string" && value.trim().length >= 8;
+}
+
 /** The open gaps a generated document declares about ITSELF ("we still don't
  * know X") — shown on the artifact card, and the same texts the follow-up
- * scripts ask stakeholders. One source, two surfaces. */
+ * scripts ask stakeholders. One source, two surfaces. Falsified field-demand
+ * gaps are dropped. */
 export function artifactOpenGaps(program: ProgramSummary, artifactId: string): string[] {
   const fieldKey = FORMAL_ARTIFACT_FIELD_KEYS[artifactId];
   if (!fieldKey) return [];
   const doc = dataRoot(program)[fieldKey];
   if (!doc || typeof doc !== "object" || Array.isArray(doc)) return [];
   const gaps = (doc as Record<string, unknown>).gaps;
-  return Array.isArray(gaps) ? gaps.map(String).filter(Boolean) : [];
+  return Array.isArray(gaps)
+    ? gaps.map(String).filter(Boolean).filter((gap) => !falsifiedGap(program, gap))
+    : [];
 }
 
 /** Listen's coverage ledger: heard-or-waived over total mapped voices. */
