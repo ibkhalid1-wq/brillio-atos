@@ -322,13 +322,14 @@ export const ATOS_STANDARD: MethodologyDefinition = {
           // exact problem that kept this optional before the ratchet existed.
           required: true,
           requiredSince: "2026-07-02",
-          hint: "The measurable KPIs that prove the objective — each with its baseline (where it stands today) and its target. A KPI without both can't verify attainment.",
+          hint: "The measurable KPIs that prove the objective — each defined once (what it means), with its baseline (where it stands today) and its target. A KPI without both can't verify attainment.",
           usedByArtifacts: ["outcome-framework"],
           columns: [
             { key: "name", label: "KPI", type: "text", placeholder: "e.g. Cost to serve" },
-            { key: "baseline", label: "Baseline", type: "text", width: 140, placeholder: "Where it stands today" },
-            { key: "target", label: "Target", type: "text", width: 140, placeholder: "The goal" },
-            { key: "unit", label: "Unit", type: "text", width: 120, placeholder: "e.g. $, %, days" },
+            { key: "definition", label: "Definition", type: "text", placeholder: "What it means, in their language" },
+            { key: "baseline", label: "Baseline", type: "text", width: 130, placeholder: "Where it stands today" },
+            { key: "target", label: "Target", type: "text", width: 130, placeholder: "The goal" },
+            { key: "unit", label: "Unit", type: "text", width: 110, placeholder: "e.g. $, %, days" },
           ],
         },
         {

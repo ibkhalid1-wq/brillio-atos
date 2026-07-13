@@ -18,6 +18,7 @@ import { usePrograms } from "@/new/lib/usePrograms";
 import { useProgramSnapshots } from "@/new/lib/useProgramSnapshots";
 import { useCopilotThread } from "@/hooks/useCopilotThread";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
+import { drillKindMeta, type DrillKind } from "@/v3/components/flow/flowDrilldown";
 import { readMovementInputs } from "@/v3/components/flow/flowShellData";
 import type {   ProgramSummary } from "@/new/types";
 import { buildCrossPhaseContext } from "@/lib/adamOrchestrator";
@@ -34,7 +35,7 @@ import { mintInterviewPacks, mintDemoInvites, ingestPortalResponse, dismissPorta
 import { recordShowPass } from "@/v3/components/flow/flowTracks";
 import { applyArtifactEdit } from "@/v3/components/flow/flowArtifactEdit";
 import { compileShipLanes, setShipLane, toggleShipItem } from "@/v3/components/flow/flowShip";
-import { scheduleFollowUp } from "@/v3/components/flow/flowMeetings";
+import { scheduleFollowUp, discoveryKitCoverageGuidance } from "@/v3/components/flow/flowMeetings";
 import { mintFollowUpPack, latestPackFor, portalLinkFor } from "@/v3/components/flow/flowPortal";
 import { mintBrief, briefLinkFor } from "@/v3/components/flow/flowBriefs";
 import FlowRespond from "@/v3/components/flow/FlowRespond";
@@ -59,7 +60,7 @@ import { artifactReviewFieldKey } from "@/v3/lib/artifactReview";
 import { listOpenFlowDecisions } from "@/v3/components/flow/flowDecisions";
 import { listPortalInbox } from "@/v3/components/flow/flowPortal";
 import { validateProgramBlob, migrateProgramBlob } from "@/v3/lib/blobGuard";
-import { unrosteredVoicesProposal, reDemoProposal, queueWatcherProposal } from "@/v3/components/flow/flowWatchers";
+import { unrosteredVoicesProposal, reDemoProposal, ontologyRepairProposal, retroAttributionProposal, negatedClaimProposal, queueWatcherProposal, contradictionEvidenceDigest } from "@/v3/components/flow/flowWatchers";
 import { mergePhaseInputBucket } from "@/v3/lib/phaseInputMerge";
 import { isDecisionOpen, pushV3Toast } from "@/v3/utils";
 import "@/new/styles.css";
@@ -997,6 +998,22 @@ export default function AppShellV3() {
 
     const resolvedAgentId = resolveAgentId(agentId);
     let crossPhaseContext = buildCrossPhaseContext(activeProgramId, phaseId);
+    // The contradiction detector's edge-side input is built from classic fields
+    // that are empty for flow programmes — hand it the actual evidence record
+    // (newest blocks vs earlier + standing claims) through the context the edge
+    // folds into its prompt. No deploy needed; conflicts become findable.
+    if (resolvedAgentId === "contradiction-detector" && activeProgram) {
+      const digest = contradictionEvidenceDigest(activeProgram, phaseId);
+      if (digest) crossPhaseContext += `${crossPhaseContext ? "\n\n" : ""}${digest}`;
+    }
+    // Regenerating the Discovery Kit HONOURS the operator's coverage-map edits:
+    // domains they marked thin become an instruction to deepen those domains'
+    // questions and secure a second voice. Without this, a regenerate re-derived
+    // from Frame evidence alone and ignored their triage.
+    if (resolvedAgentId === "discovery-kit" && activeProgram) {
+      const guidance = discoveryKitCoverageGuidance(activeProgram);
+      if (guidance) crossPhaseContext += `${crossPhaseContext ? "\n\n" : ""}${guidance}`;
+    }
     // Append the artifact's stored quality-review suggestions to the prompt context.
     // The edge function folds crossPhaseContext into prompt.system, so the model
     // applies these improvements directly in the regenerated artifact — collapsing
@@ -1370,7 +1387,9 @@ export default function AppShellV3() {
   // it); a version conflict just skips — the next change re-fires the check.
   useEffect(() => {
     if (!activeProgram) return;
-    const proposal = unrosteredVoicesProposal(activeProgram) ?? reDemoProposal(activeProgram);
+    const proposal = unrosteredVoicesProposal(activeProgram) ?? reDemoProposal(activeProgram)
+      ?? ontologyRepairProposal(activeProgram) ?? retroAttributionProposal(activeProgram)
+      ?? negatedClaimProposal(activeProgram);
     if (!proposal) return;
     const blob = queueWatcherProposal(activeProgram, proposal);
     if (!blob) return;
@@ -1649,27 +1668,41 @@ export default function AppShellV3() {
   // transfers comes along — the sector context (industry, value-chain
   // segment) and the ratified ontology standard mappings. Evidence,
   // documents, decisions and the trail stay with the old programme.
-  const handleCloneProgram = useCallback(async () => {
+  // "New from this programme" as a DRILL-DOWN: a focused child anchored on one
+  // slice of the parent (a process, workflow, persona, track, KPI, or free
+  // scope). The child inherits that slice — the parent's ontology (shared
+  // vocabulary) plus the anchor as its stated Frame scope — and stays wired to
+  // the parent via lineage.anchor, so its findings roll back up to the anchor.
+  const handleDrillDown = useCallback(async (anchor: { kind: string; refId: string; label: string }) => {
     const source = activeProgram;
-    if (!source) return;
+    if (!source || !anchor?.label?.trim()) return;
     try {
-      const name = `${source.name} — next engagement`;
+      const noun = drillKindMeta(anchor.kind as DrillKind).noun;
+      const name = `${anchor.label.trim()} — deep dive`;
       const seed = buildProgramSeed(name) as Record<string, unknown>;
       const frame = readMovementInputs(source, "frame");
-      const carried: Record<string, unknown> = {};
+      const carried: Record<string, unknown> = {
+        businessObjective: `Deep-dive into ${anchor.label.trim()} (${noun}), drilled down from ${source.name}.`,
+      };
       for (const key of ["industry", "segment"]) {
         if (typeof frame[key] === "string" && frame[key]) carried[key] = frame[key];
       }
-      if (Object.keys(carried).length) seed.phaseInputs = { frame: carried };
+      seed.phaseInputs = { frame: carried };
       const sourceInner = getProgramState((source.rawData ?? {}) as Record<string, unknown>).inner;
       if (Array.isArray(sourceInner.ontologyAlignment) && sourceInner.ontologyAlignment.length) {
         seed.ontologyAlignment = structuredClone(sourceInner.ontologyAlignment);
       }
       seed.projectMeta = { name, client: source.client ?? "" };
+      // Lineage + anchor — Portfolio nests the child, the child shows a breadcrumb
+      // home, and the parent surfaces it under the anchor's roll-up.
+      seed.lineage = {
+        parentId: source.id, parentName: source.name, startedAt: new Date().toISOString(),
+        anchor: { kind: anchor.kind, refId: anchor.refId, label: anchor.label.trim() },
+      };
       seed.flowAttestations = [{
         ts: new Date().toISOString(), agentId: currentUser?.email || "you", phaseId: "frame", tier: 2,
-        action: `Started from ${source.name}`,
-        detail: `Carried forward: ${[carried.industry ? "industry" : null, carried.segment ? "segment" : null, seed.ontologyAlignment ? "ontology standard mappings" : null].filter(Boolean).join(", ") || "name and client only"}. Evidence and documents stay with the source programme.`,
+        action: `Drilled down from ${source.name}`,
+        detail: `Focus: ${anchor.label.trim()} · ${noun}. Shares the parent's ontology; findings roll up to this anchor.`,
       }];
       let newId = "";
       if (isSupabaseConfigured && supabase) {
@@ -1683,8 +1716,8 @@ export default function AppShellV3() {
           id: newId, name, client: source.client || null, updated_at: now, created_at: now, data: seed, is_deleted: false, owner_id: userId,
         });
         if (error) {
-          console.error("[handleCloneProgram] Cloud insert failed:", error.message);
-          pushV3Toast("Could not create the programme in the cloud — check your connection and access.", { tone: "error", duration: 6000 });
+          console.error("[handleDrillDown] Cloud insert failed:", error.message);
+          pushV3Toast("Could not create the drill-down in the cloud — check your connection and access.", { tone: "error", duration: 6000 });
           return;
         }
       } else {
@@ -1698,10 +1731,10 @@ export default function AppShellV3() {
       }
       await refreshPrograms();
       setActiveProgramId(newId);
-      pushV3Toast("New engagement started — sector context and ontology mappings carried forward.", { tone: "success", duration: 6000 });
+      pushV3Toast(`Drill-down started — focused on ${anchor.label.trim()}, sharing the parent's ontology.`, { tone: "success", duration: 6000 });
     } catch (error) {
-      reportError(error instanceof Error ? error : new Error(String(error)), { action: "clone_program" });
-      pushV3Toast("Could not clone the programme.", { tone: "error", duration: 4000 });
+      reportError(error instanceof Error ? error : new Error(String(error)), { action: "drill_down" });
+      pushV3Toast("Could not create the drill-down.", { tone: "error", duration: 4000 });
     }
   }, [activeProgram, refreshPrograms, setActiveProgramId, userId, currentUser?.email]);
 
@@ -1764,6 +1797,122 @@ export default function AppShellV3() {
       pushV3Toast("Could not archive the programme. Please try again.", { tone: "error", duration: 5000 });
     }
   }, [activeProgramId, programs, refreshPrograms, setActiveProgramId]);
+
+  // Inline rename from the Portfolio. Updates the `name` column for any
+  // programme (active or not); folds projectMeta.name into the blob only when
+  // the blob is fully loaded, so an unhydrated record is never clobbered.
+  const handleRenameProgram = useCallback(async (idToRename: string, rawName: string) => {
+    const name = rawName.trim();
+    if (!idToRename || !name) return;
+    const target = programs.find((p) => p.id === idToRename);
+    if (target && target.name === name) return; // no-op
+    try {
+      if (isSupabaseConfigured && supabase) {
+        const now = new Date().toISOString();
+        const wrapper = (target?.rawData ?? {}) as Record<string, unknown>;
+        const { inner, usesNestedData } = getProgramState(wrapper);
+        const update: Record<string, unknown> = { name, updated_at: now };
+        if (hasSubstantiveProgramData(inner)) {
+          const meta = (typeof inner.projectMeta === "object" && inner.projectMeta !== null)
+            ? (inner.projectMeta as Record<string, unknown>) : {};
+          const nextInner = { ...inner, projectMeta: { ...meta, name } };
+          update.data = wrapProgramState(wrapper, nextInner, usesNestedData) as unknown as Json;
+        }
+        const { error } = await supabase.from("adam_programs").update(update).eq("id", idToRename);
+        if (error) throw error;
+      } else if (typeof localStorage !== "undefined") {
+        const existing = JSON.parse(localStorage.getItem(LOCAL_PROGRAM_STORAGE_KEY) || "[]");
+        if (Array.isArray(existing)) {
+          localStorage.setItem(LOCAL_PROGRAM_STORAGE_KEY, JSON.stringify(existing.map((e) => (e?.id === idToRename ? { ...e, name } : e))));
+        }
+      }
+      await refreshPrograms();
+      pushV3Toast("Programme renamed.", { tone: "success", duration: 2500 });
+    } catch {
+      pushV3Toast("Could not rename the programme. Please try again.", { tone: "error", duration: 5000 });
+    }
+  }, [programs, refreshPrograms]);
+
+  // Tag (or untag) a claim — a quoted evidence span bound to an entity/KPI/
+  // track. Lives in the blob so snapshots capture it; each change is attested.
+  const handleTagClaim = useCallback(async (input: { quote: string; who: string; movementId: string; target: { kind: string; refId: string; label: string }; removeId?: string }) => {
+    const p = activeProgram;
+    if (!p || (!input.removeId && !input.quote.trim())) return;
+    try {
+      if (!(isSupabaseConfigured && supabase)) { pushV3Toast("Claim tagging needs the cloud record.", { tone: "warning", duration: 3500 }); return; }
+      const raw = (p.rawData ?? {}) as Record<string, unknown>;
+      const { inner, usesNestedData } = getProgramState(raw);
+      if (!hasSubstantiveProgramData(inner)) return;
+      const tags = Array.isArray(inner.claimTags) ? [...(inner.claimTags as unknown[])] : [];
+      let action: string;
+      let detail: string;
+      if (input.removeId) {
+        const idx = tags.findIndex((t) => typeof t === "object" && t !== null && (t as Record<string, unknown>).id === input.removeId);
+        if (idx < 0) return;
+        const gone = tags.splice(idx, 1)[0] as Record<string, unknown>;
+        action = `Untagged claim — ${String((gone.target as Record<string, unknown> | undefined)?.label ?? "")}`;
+        detail = `“${String(gone.quote ?? "").slice(0, 120)}”`;
+      } else {
+        tags.push({
+          id: `ct-${Math.random().toString(36).slice(2, 10)}`, quote: input.quote.trim().slice(0, 600),
+          who: input.who, movementId: input.movementId, target: input.target,
+          ts: new Date().toISOString(), by: currentUser?.email || "you",
+        });
+        while (tags.length > 500) tags.shift();
+        action = `Tagged claim → ${input.target.label}`;
+        detail = `“${input.quote.trim().slice(0, 120)}” — ${input.who}`;
+      }
+      const atts = Array.isArray(inner.flowAttestations) ? [...(inner.flowAttestations as unknown[])] : [];
+      atts.push({ ts: new Date().toISOString(), agentId: currentUser?.email || "you", phaseId: input.movementId, tier: 2, action, detail });
+      while (atts.length > 200) atts.shift();
+      const next = wrapProgramState(raw, { ...inner, claimTags: tags, flowAttestations: atts }, usesNestedData);
+      const { error } = await supabase.from("adam_programs")
+        .update({ data: next as unknown as Json, updated_at: new Date().toISOString() }).eq("id", p.id);
+      if (error) throw error;
+      await refreshPrograms();
+      pushV3Toast(input.removeId ? "Claim untagged." : `Claim tagged → ${input.target.label}`, { tone: "success", duration: 2500 });
+    } catch (error) {
+      reportError(error instanceof Error ? error : new Error(String(error)), { action: "tag_claim" });
+      pushV3Toast("Could not save the claim tag.", { tone: "error", duration: 4000 });
+    }
+  }, [activeProgram, refreshPrograms, currentUser?.email]);
+
+  // Anchored comments on an artifact — discussion that stays with the record.
+  // Same storage discipline as claim tags: in the blob, attested, capped.
+  const handleComment = useCallback(async (input: { fieldKey: string; movementId: string; title: string; text?: string; resolveId?: string }) => {
+    const p = activeProgram;
+    if (!p || (!input.resolveId && !input.text?.trim())) return;
+    try {
+      if (!(isSupabaseConfigured && supabase)) { pushV3Toast("Comments need the cloud record.", { tone: "warning", duration: 3500 }); return; }
+      const raw = (p.rawData ?? {}) as Record<string, unknown>;
+      const { inner, usesNestedData } = getProgramState(raw);
+      if (!hasSubstantiveProgramData(inner)) return;
+      const list = Array.isArray(inner.flowComments) ? [...(inner.flowComments as unknown[])] : [];
+      let action: string;
+      if (input.resolveId) {
+        const idx = list.findIndex((c) => typeof c === "object" && c !== null && (c as Record<string, unknown>).id === input.resolveId);
+        if (idx < 0) return;
+        list[idx] = { ...(list[idx] as Record<string, unknown>), resolved: true, resolvedAt: new Date().toISOString(), resolvedBy: currentUser?.email || "you" };
+        action = `Resolved comment — ${input.title}`;
+      } else {
+        list.push({ id: `cm-${Math.random().toString(36).slice(2, 10)}`, fieldKey: input.fieldKey, movementId: input.movementId,
+          text: (input.text ?? "").trim().slice(0, 1000), by: currentUser?.email || "you", ts: new Date().toISOString() });
+        while (list.length > 200) list.shift();
+        action = `Commented — ${input.title}`;
+      }
+      const atts = Array.isArray(inner.flowAttestations) ? [...(inner.flowAttestations as unknown[])] : [];
+      atts.push({ ts: new Date().toISOString(), agentId: currentUser?.email || "you", phaseId: input.movementId, tier: 1, action, detail: (input.text ?? "").slice(0, 140) });
+      while (atts.length > 200) atts.shift();
+      const next = wrapProgramState(raw, { ...inner, flowComments: list, flowAttestations: atts }, usesNestedData);
+      const { error } = await supabase.from("adam_programs")
+        .update({ data: next as unknown as Json, updated_at: new Date().toISOString() }).eq("id", p.id);
+      if (error) throw error;
+      await refreshPrograms();
+    } catch (error) {
+      reportError(error instanceof Error ? error : new Error(String(error)), { action: "comment" });
+      pushV3Toast("Could not save the comment.", { tone: "error", duration: 4000 });
+    }
+  }, [activeProgram, refreshPrograms, currentUser?.email]);
 
   const handleSavePhaseInputs = useCallback(async (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; clearReviewDefId?: string; staleDefId?: string; attest?: { action: string; detail?: string } }) => {
     if (!activeProgram) return;
@@ -2199,8 +2348,11 @@ export default function AppShellV3() {
           runningAgentIds={runningAgentIds}
           onSelectProgram={(id) => setActiveProgramId(id)}
           onCreateProgram={() => void handleCreateProgram()}
-          onCloneProgram={() => void handleCloneProgram()}
+          onDrillDown={(anchor) => void handleDrillDown(anchor)}
           onDeleteProgram={(id) => void handleDeleteProgram(id)}
+          onRenameProgram={(id, name) => handleRenameProgram(id, name)}
+          onTagClaim={handleTagClaim}
+          onComment={handleComment}
           onOpenSetup={() => setWizardOpen(true)}
           onOpenCopilot={() => setAdamCopilotSidebarOpen(true)}
           onRunAgent={handleRunAgent}

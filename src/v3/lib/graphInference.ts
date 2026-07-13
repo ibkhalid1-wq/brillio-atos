@@ -1,6 +1,6 @@
 /**
  * Graph-derived inference — read-only queries and traversals over the Program
- * Graph that turn the accumulated knowledge graph into actionable intelligence.
+ * Graph that turn the derived program graph into actionable intelligence.
  *
  * `buildProgramGraph` (programGraph.ts) assembles the typed instance graph with
  * its structural + derived edges (`grounds`, `traces_to`, `addresses`,

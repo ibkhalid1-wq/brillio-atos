@@ -96,114 +96,148 @@ function CharterStudio({ doc, onChange }: StudioProps) {
   );
 }
 
+// Human-readable coverage states, stored as the boolean `thin` the generator emits.
+const WELL_COVERED = "Well covered";
+const THIN_COVERAGE = "Thin — needs another voice";
+
+/**
+ * Discovery Kit — people-first. The kit IS a list of conversations, so the
+ * editor is a roster on the left and ONE person's essentials on the right:
+ * who they are, how to reach them, and the flat list of questions to ask.
+ * The generator's agenda-block shape (topic/minutes/questions[]) is flattened
+ * for editing and written back as a single block, so every downstream reader
+ * (scripts, links, coverage) keeps working untouched. Personas, coverage and
+ * gaps fold below — present, but never in the way of the main job.
+ */
 function DiscoveryKitStudio({ doc, onChange }: StudioProps) {
   const patch = patchOf(doc, onChange);
   const interviews = useListOps(doc, onChange, "interviews");
   const personas = useListOps(doc, onChange, "personas");
+  const [selected, setSelected] = React.useState(0);
+  const current = interviews.items[selected] as Record<string, unknown> | undefined;
+
+  const questionsOf = (interview: Record<string, unknown>): string[] =>
+    asArray(interview.agenda).map(asRecord).flatMap((block) => asStrings(block.questions));
+  const setQuestions = (index: number, next: string[]) => {
+    const first = asArray((interviews.items[index] as Record<string, unknown>).agenda).map(asRecord)[0] ?? {};
+    interviews.set(index, { agenda: [{ topic: asText(first.topic) || "Conversation", minutes: first.minutes ?? 45, questions: next }] });
+  };
+
+  const thinCount = asArray(doc.coverageMap).map(asRecord).filter((row) => row.thin === true).length;
+
   return (
     <>
-      <Section label="Workflow personas" hint="every role in the process — internal and external; each needs a voice who can speak for it">
-        <CardList
-          items={personas.items}
-          itemLabel={(it) => `${asText(it.name) || "Persona"}${asText(it.kind) === "external" ? " · external" : ""}`}
-          onAdd={() => personas.add({ name: "", kind: "internal", partInWorkflow: "", spokenForBy: [], unrepresented: false })}
-          onRemove={personas.remove}
-          addLabel="Add persona"
-          render={(persona, index) => (
-            <>
-              <div className="v3fs-stu-grid3">
-                <TextField label="Persona (a role, not a person)" value={asText(persona.name)} onChange={(next) => personas.set(index, { name: next })} />
-                <SelectField label="Kind" value={asText(persona.kind) || "internal"} options={["internal", "external"]}
-                  onChange={(next) => personas.set(index, { kind: next })} />
-                <TextField label="Part in the workflow" value={asText(persona.partInWorkflow)} onChange={(next) => personas.set(index, { partInWorkflow: next })} />
-              </div>
-              <ChipsField label="Spoken for by (interviewees)" values={asStrings(persona.spokenForBy)}
-                onChange={(next) => personas.set(index, { spokenForBy: next, unrepresented: next.length === 0 && persona.unrepresented === true })} />
-            </>
-          )}
-        />
-      </Section>
-      <Section label="Interviews" hint="a role-aware conversation per stakeholder">
-        {interviews.items.length ? (
-          <div className="v3fs-stu-emailroster">
-            <div className="v3fs-stu-emailroster-h">Emails — every interviewee needs one; response links and calendar invites go here</div>
-            {interviews.items.map((interview, index) => (
-              <label key={index} className="v3fs-stu-emailrow">
-                <span>{asText(interview.stakeholder) || `Interviewee ${index + 1}`}</span>
-                <input type="email" value={asText(interview.email)} placeholder="name@company.com"
-                  aria-label={`Email for ${asText(interview.stakeholder) || `interviewee ${index + 1}`}`}
-                  onChange={(event) => interviews.set(index, { email: event.target.value })} />
-              </label>
-            ))}
-          </div>
-        ) : null}
-        <CardList
-          items={interviews.items}
-          itemLabel={(it) => `${asText(it.stakeholder) || "Stakeholder"} — ${asText(it.role) || "role"}`}
-          onAdd={() => interviews.add({ stakeholder: "", role: "", email: "", domain: "", durationMinutes: 45, objectives: [], agenda: [], askForArtifacts: [] })}
-          onRemove={interviews.remove}
-          addLabel="Add interview"
-          render={(interview, index) => (
-            <>
-              <div className="v3fs-stu-group">
-                <div className="v3fs-stu-group-h">Contact details</div>
-                <div className="v3fs-stu-grid3">
-                  <TextField label="Name" value={asText(interview.stakeholder)} onChange={(next) => interviews.set(index, { stakeholder: next })} />
-                  <TextField label="Role" value={asText(interview.role)} onChange={(next) => interviews.set(index, { role: next })} />
-                  <TextField label="Email — response links go here" value={asText(interview.email)} onChange={(next) => interviews.set(index, { email: next })} />
-                </div>
-              </div>
-              <div className="v3fs-stu-group">
-                <div className="v3fs-stu-group-h">Domain / coverage</div>
-                <TextField label="Domain they own" value={asText(interview.domain)} onChange={(next) => interviews.set(index, { domain: next })} />
-                <StringListEditor label="Objectives — what this conversation must surface" values={asStrings(interview.objectives)}
-                  onChange={(next) => interviews.set(index, { objectives: next })} addLabel="Add objective" />
-              </div>
-              <div className="v3fs-stu-group">
-                <div className="v3fs-stu-group-h">Workflow / coverage</div>
-              {asArray(interview.agenda).map(asRecord).map((block, blockIndex) => (
-                <div key={blockIndex} className="v3fs-stu-sub">
-                  <div className="v3fs-stu-grid3">
-                    <TextField label="Minutes" value={asText(block.minutes)} onChange={(next) => {
-                      const agenda = asArray(interview.agenda).map(asRecord).map((b, i) => (i === blockIndex ? { ...b, minutes: next } : b));
-                      interviews.set(index, { agenda });
-                    }} />
-                    <TextField label="Topic" value={asText(block.topic)} onChange={(next) => {
-                      const agenda = asArray(interview.agenda).map(asRecord).map((b, i) => (i === blockIndex ? { ...b, topic: next } : b));
-                      interviews.set(index, { agenda });
-                    }} />
-                    <button type="button" className="v3fs-stu-x" aria-label="Remove agenda block" onClick={() => {
-                      interviews.set(index, { agenda: asArray(interview.agenda).filter((_, i) => i !== blockIndex) });
-                    }}>×</button>
-                  </div>
-                  <StringListEditor label="Questions" values={asStrings(block.questions)} onChange={(next) => {
-                    const agenda = asArray(interview.agenda).map(asRecord).map((b, i) => (i === blockIndex ? { ...b, questions: next } : b));
-                    interviews.set(index, { agenda });
-                  }} addLabel="Add question" />
-                </div>
-              ))}
-              <button type="button" className="v3fs-a" onClick={() =>
-                interviews.set(index, { agenda: [...asArray(interview.agenda), { minutes: 10, topic: "", questions: [] }] })}>
-                ＋ Add agenda block
-              </button>
-              <ChipsField label="Ask them to bring" values={asStrings(interview.askForArtifacts)}
-                onChange={(next) => interviews.set(index, { askForArtifacts: next })} />
-              </div>
-            </>
-          )}
-        />
-      </Section>
-      <Section label="Coverage map" hint="every workflow domain needs a voice">
+      {/* Coverage map leads: the plan for WHO to talk to comes before WHAT to
+          ask each of them. Marking a domain thin, then regenerating the kit,
+          tells the generator to deepen that domain's questions. */}
+      <Section label="Coverage map" hint="who covers each workflow domain — mark the thin ones, then regenerate to deepen them">
+        <p className="v3fs-stu-note">
+          One row per workflow domain: who speaks to it, and whether its coverage is <b>thin</b> — only one
+          voice, or shallow evidence. Mark a domain thin and <b>Regenerate the Discovery Kit</b> — the
+          generator adds and deepens questions for the thin domains (the new kit lands in the Inbox to confirm).
+          {thinCount ? <> <b>{thinCount} domain{thinCount === 1 ? "" : "s"} flagged thin.</b></> : null}
+        </p>
         <TableEditor
-          columns={[{ key: "domain", label: "Domain" }, { key: "coveredBy", label: "Covered by", grow: 1.6 }, { key: "thin", label: "Thin?", kind: "select", options: ["false", "true"] }]}
-          rows={asArray(doc.coverageMap).map(asRecord).map((row) => ({ ...row, coveredBy: asStrings(row.coveredBy).join(", "), thin: String(row.thin ?? "false") }))}
-          onChange={(next) => patch({ coverageMap: next.map((row) => ({ ...row, coveredBy: asText(row.coveredBy).split(",").map((s) => s.trim()).filter(Boolean), thin: asText(row.thin) === "true" })) })}
+          columns={[{ key: "domain", label: "Domain" }, { key: "coveredBy", label: "Covered by (comma-separated)", grow: 1.6 }, { key: "thin", label: "Coverage", kind: "select", options: [WELL_COVERED, THIN_COVERAGE] }]}
+          // "Covered by" is edited as free text — splitting to an array on every
+          // keystroke stripped trailing spaces (and blocked a second name), so
+          // it stays a plain string. The generator re-emits an array on
+          // regeneration; a string here reads fine everywhere it's shown.
+          rows={asArray(doc.coverageMap).map(asRecord).map((row) => ({ ...row, coveredBy: Array.isArray(row.coveredBy) ? asStrings(row.coveredBy).join(", ") : asText(row.coveredBy), thin: row.thin === true ? THIN_COVERAGE : WELL_COVERED }))}
+          onChange={(next) => patch({ coverageMap: next.map((row) => ({ ...row, coveredBy: asText(row.coveredBy), thin: asText(row.thin) === THIN_COVERAGE })) })}
           addLabel="Add domain"
         />
       </Section>
-      <Section label="Gaps">
-        <StringListEditor values={asStrings(doc.gaps)} onChange={(next) => patch({ gaps: next })} addLabel="Add gap" />
-      </Section>
+      <div className="v3fs-kit2">
+        <aside className="v3fs-kit2-roster">
+          <div className="v3fs-kit2-roster-h">
+            <span>People</span>
+            <button type="button" className="v3fs-a" onClick={() => {
+              interviews.add({ stakeholder: "", role: "", email: "", domain: "", durationMinutes: 45, objectives: [], agenda: [{ topic: "Conversation", minutes: 45, questions: [] }], askForArtifacts: [] });
+              setSelected(interviews.items.length);
+            }}>＋ Add person</button>
+          </div>
+          {interviews.items.length === 0 ? (
+            <div className="v3fs-stu-empty">No conversations yet — add the first person.</div>
+          ) : null}
+          {interviews.items.map((entry, index) => {
+            const interview = entry as Record<string, unknown>;
+            const count = questionsOf(interview).length;
+            const email = asText(interview.email);
+            return (
+              <button key={index} type="button" className={`v3fs-kit2-person${index === selected ? " on" : ""}`}
+                onClick={() => setSelected(index)}>
+                <span className="v3fs-kit2-pn">{asText(interview.stakeholder) || "Unnamed"}</span>
+                <span className="v3fs-kit2-pm">{asText(interview.role) || "role?"}</span>
+                <span className="v3fs-kit2-pq">
+                  {count} question{count === 1 ? "" : "s"}
+                  {email ? "" : " · needs email"}
+                </span>
+              </button>
+            );
+          })}
+        </aside>
+        <div className="v3fs-kit2-detail">
+          {current ? (
+            <>
+              <div className="v3fs-stu-grid3">
+                <TextField label="Name" value={asText(current.stakeholder)} onChange={(next) => interviews.set(selected, { stakeholder: next })} />
+                <TextField label="Role" value={asText(current.role)} onChange={(next) => interviews.set(selected, { role: next })} />
+                <TextField label={asText(current.email) ? "Email" : "Email — needed for links & invites"} value={asText(current.email)}
+                  onChange={(next) => interviews.set(selected, { email: next })} />
+              </div>
+              <StringListEditor label="Questions — one per line, asked in this order" values={questionsOf(current)}
+                onChange={(next) => setQuestions(selected, next)} addLabel="Add question" />
+              <ChipsField label="Ask them to bring" values={asStrings(current.askForArtifacts)}
+                onChange={(next) => interviews.set(selected, { askForArtifacts: next })} />
+              <details className="v3fs-disc v3fs-disc-sm">
+                <summary><span className="v3fs-disc-l">More — domain & objectives</span><span className="v3fs-disc-c" aria-hidden="true" /></summary>
+                <div className="v3fs-disc-b">
+                  <TextField label="Domain they own" value={asText(current.domain)} onChange={(next) => interviews.set(selected, { domain: next })} />
+                  <StringListEditor label="Objectives — what this conversation must surface" values={asStrings(current.objectives)}
+                    onChange={(next) => interviews.set(selected, { objectives: next })} addLabel="Add objective" />
+                </div>
+              </details>
+              <button type="button" className="v3fs-btn danger" onClick={() => { interviews.remove(selected); setSelected(Math.max(0, selected - 1)); }}>
+                Remove {asText(current.stakeholder) || "this person"}
+              </button>
+            </>
+          ) : (
+            <div className="v3fs-stu-empty">Select a person on the left — their questions and contact details edit here.</div>
+          )}
+        </div>
+      </div>
+
+      <details className="v3fs-disc v3fs-disc-sm">
+        <summary><span className="v3fs-disc-l">Workflow personas<em>{personas.items.length}</em></span><span className="v3fs-disc-hint">every role needs a voice</span><span className="v3fs-disc-c" aria-hidden="true" /></summary>
+        <div className="v3fs-disc-b">
+          <CardList
+            items={personas.items}
+            itemLabel={(it) => `${asText(it.name) || "Persona"}${asText(it.kind) === "external" ? " · external" : ""}`}
+            onAdd={() => personas.add({ name: "", kind: "internal", partInWorkflow: "", spokenForBy: [], unrepresented: false })}
+            onRemove={personas.remove}
+            addLabel="Add persona"
+            render={(persona, index) => (
+              <>
+                <div className="v3fs-stu-grid3">
+                  <TextField label="Persona (a role, not a person)" value={asText(persona.name)} onChange={(next) => personas.set(index, { name: next })} />
+                  <SelectField label="Kind" value={asText(persona.kind) || "internal"} options={["internal", "external"]}
+                    onChange={(next) => personas.set(index, { kind: next })} />
+                  <TextField label="Part in the workflow" value={asText(persona.partInWorkflow)} onChange={(next) => personas.set(index, { partInWorkflow: next })} />
+                </div>
+                <ChipsField label="Spoken for by (interviewees)" values={asStrings(persona.spokenForBy)}
+                  onChange={(next) => personas.set(index, { spokenForBy: next, unrepresented: next.length === 0 && persona.unrepresented === true })} />
+              </>
+            )}
+          />
+        </div>
+      </details>
+      <details className="v3fs-disc v3fs-disc-sm">
+        <summary><span className="v3fs-disc-l">Gaps<em>{asStrings(doc.gaps).length}</em></span><span className="v3fs-disc-hint">flow into follow-up scripts automatically</span><span className="v3fs-disc-c" aria-hidden="true" /></summary>
+        <div className="v3fs-disc-b">
+          <StringListEditor values={asStrings(doc.gaps)} onChange={(next) => patch({ gaps: next })} addLabel="Add gap" />
+        </div>
+      </details>
     </>
   );
 }

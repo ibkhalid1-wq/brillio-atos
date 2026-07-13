@@ -11,12 +11,21 @@ import { locateQuote, kitPersonas, personasMissingFromAtlas } from "@/v3/compone
 import { mintBrief, buildBriefSnapshot } from "@/v3/components/flow/flowBriefs";
 import { buildPrototypePrompt } from "@/v3/components/flow/flowBuildPrompt";
 import { validateProgramBlob, migrateProgramBlob, BLOB_VERSION } from "@/v3/lib/blobGuard";
-import { unrosteredVoicesProposal, reDemoProposal, queueWatcherProposal } from "@/v3/components/flow/flowWatchers";
+import { unrosteredVoicesProposal, reDemoProposal, ontologyRepairProposal, queueWatcherProposal } from "@/v3/components/flow/flowWatchers";
+import { routeAttachedDocument, buildRoutedBlocks } from "@/v3/components/flow/flowDocRouting";
+import { retroAttributionProposal, negatedClaimProposal } from "@/v3/components/flow/flowWatchers";
+import { rankEvidence, isNoiseEvidence, scoreEvidence } from "@/v3/components/flow/flowEvidenceRank";
+import { resolveMovementStakeholders } from "@/v3/components/flow/flowStakeholders";
 import { mintFollowUpPack, listInterviewPacks, visibleLinks } from "@/v3/components/flow/flowPortal";
 import { trackAcceptance, trackBlockers, recordShowPass, listFlowTracks, type FlowTrack } from "@/v3/components/flow/flowTracks";
 import { setShipLane, toggleShipItem, listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 import { ingestPortalResponse, listPortalInbox } from "@/v3/components/flow/flowPortal";
 import { gateChecklist, gateReadiness, flowMovements, movementEvidence } from "@/v3/components/flow/flowShellData";
+import { buildDrilldownFindings, drillRollupTarget, listChildDrilldowns, readDrillAnchor, listDrillAnchors } from "@/v3/components/flow/flowDrilldown";
+import { mapTranscriptSpeakers } from "@/v3/components/flow/flowTranscriptMap";
+import { gateApprovalIntegrity } from "@/v3/components/flow/flowGovernance";
+import { validateOntologyConstraints, hasBlockingOntologyViolations, partitionOntologyViolations } from "@/v3/components/flow/flowOntologyConstraints";
+import { readMetricRegistry, metricConsistency, metricById } from "@/v3/components/flow/flowMetricRegistry";
 
 const programme = (inner: Record<string, unknown>): ProgramSummary =>
   ({ id: "p1", name: "Test", rawData: inner } as unknown as ProgramSummary);
@@ -339,10 +348,163 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
     discoveryKit: { gaps },
   });
 
-  it("operator gaps (input/artifact/regenerate plumbing) never reach a stakeholder script", () => {
-    const kit = meetingKit(framed(["Add a clear objective to the Objective input to resolve the blocker."]), "frame")!;
+  it("a gap about a STAKEHOLDER-OWNED fact rephrases into a sponsor ask — never operator phrasing, never dropped", () => {
+    // "…to the Objective input" is operator wording, but the objective is the
+    // sponsor's fact: the script asks the sponsor for it in their language.
+    const kit = meetingKit(framed(["Add a concise, outcome-oriented statement to the Objective input."]), "frame")!;
+    expect(kit.followUp).toBe(true);
+    expect(kit.questions.some((q) => /what outcome must this programme achieve/i.test(q))).toBe(true);
+    expect(kit.questions.some((q) => /\binputs?\b/i.test(q))).toBe(false); // no plumbing phrasing on any script
+  });
+
+  it("the CHARTER's open gaps reach the Frame kit (its classic phase home is retired) and rephrase for the sponsor", () => {
+    const p = programme({
+      phaseInputs: { frame: {
+        sponsorConversation: "— Sarah Okafor, COO —\nplenty of words on record here",
+        businessObjective: "obj", sponsor: "Sarah Okafor", industry: "Banking",
+        successMetric: "cycle time", targetFirstDemoDate: "2026-07-25",
+      } },
+      transformationCharter: { gaps: ["Add a concise, outcome-oriented statement to the Objective input."] },
+    });
+    const kit = meetingKit(p, "frame")!;
+    expect(kit.followUp).toBe(true);
+    expect(kit.questions.some((q) => /what outcome must this programme achieve/i.test(q))).toBe(true);
+  });
+
+  it("a recorded sponsor conversation clears gate-checklist bookkeeping from the follow-up (#75)", () => {
+    // The conversation is on record; the structured fields the gate tracks are
+    // still empty and no artifact has been generated. The old behaviour
+    // replayed raw gate labels ("Business objective captured") as questions the
+    // sponsor had just answered in prose — now the script clears entirely,
+    // rather than re-asking bookkeeping.
+    const p = programme({ phaseInputs: { frame: {
+      sponsor: "Raj Mamodia",
+      sponsorConversation: "— Raj Mamodia —\nimprove sales velocity, rep productivity and satisfaction, measured against baseline, in 12 months",
+    } } });
+    const kit = meetingKit(p, "frame")!;
+    expect(kit.done).toBe(true);
     expect(kit.followUp).toBe(false);
-    expect(kit.questions.some((q) => /input/i.test(q))).toBe(false);
+    expect(kit.questions).toHaveLength(0);
+  });
+
+  it("gate labels stay in the OPERATOR gap set but never in a stakeholder-facing script (#75)", async () => {
+    const { kitGaps, askableMovementGaps } = await import("@/v3/components/flow/flowMeetings");
+    const p = programme({ phaseInputs: { frame: {
+      sponsor: "Raj Mamodia",
+      sponsorConversation: "— Raj Mamodia —\nplenty of words on the record about the plan and the direction",
+    } } });
+    // Operator view keeps the bookkeeping — it gates whether a follow-up matters.
+    expect(kitGaps(p, "frame").some((g) => /captured|measure set/i.test(g))).toBe(true);
+    // Stakeholder-facing views drop it: no bookkeeping, and here nothing genuine
+    // is open, so the script is empty.
+    expect(kitGaps(p, "frame", { gateLabels: false }).some((g) => /captured|measure set/i.test(g))).toBe(false);
+    expect(askableMovementGaps(p, "frame")).toHaveLength(0);
+  });
+
+  it("attestHeardRoster proposes flipping ONLY collection-heard, un-attested rows — waived and unknown voices untouched", async () => {
+    const { attestHeardRoster } = await import("@/v3/components/flow/flowShellData");
+    const roster = [
+      { name: "Vimal Pandey", role: "Finance SME", status: "To book" },     // heard → flips
+      { name: "Hema Panneerselvam", status: "Waived" },                      // already judged → untouched
+      { name: "Prakash TM", status: "Heard" },                               // already attested → untouched
+      { name: "Sripad", status: "To book" },                                 // no evidence → untouched
+    ];
+    const p = programme({ phaseInputs: { listen: { interviewRoster: JSON.stringify(roster) } } });
+    const proposal = attestHeardRoster(p, ["Vimal Pandey, Finance SME", "Prakash TM"])!;
+    expect(proposal.attested).toEqual(["Vimal Pandey"]);
+    const next = JSON.parse(proposal.value) as Array<Record<string, string>>;
+    expect(next.find((r) => r.name === "Vimal Pandey")?.status).toBe("Heard");
+    expect(next.find((r) => r.name === "Vimal Pandey")?.role).toBe("Finance SME"); // other fields survive
+    expect(next.find((r) => r.name === "Hema Panneerselvam")?.status).toBe("Waived");
+    expect(next.find((r) => r.name === "Sripad")?.status).toBe("To book");
+    // Nothing to attest → no proposal (the queue item never appears).
+    expect(attestHeardRoster(p, ["Sripad-less Nobody"])).toBeNull();
+    expect(attestHeardRoster(programme({ phaseInputs: { listen: { interviewRoster: "Name | Status" } } }), ["Vimal"])).toBeNull();
+  });
+
+  it("the coverage-ledger criterion says what it counts — roster attestation, not collected evidence", () => {
+    // The gate counts roster rows the operator MARKED heard/waived; the People
+    // board counts collected evidence. Same fact-family, different judgments —
+    // the labels must name their source so 2/8 vs 3/12 reads as two measures,
+    // not a bug.
+    const p = programme({ phaseInputs: { listen: { interviewRoster: JSON.stringify([
+      { name: "Vimal", status: "Heard" }, { name: "Hema", status: "To book" },
+    ]) } } });
+    const listen = flowMovements().find((m) => m.id === "listen")!;
+    const heard = gateChecklist(p, listen, []).find((c) => c.id === "heard")!;
+    expect(heard.label).toMatch(/Coverage ledger — 1\/2 voices attested heard or waived/);
+    expect(heard.anchor).toBe("input:interviewRoster"); // the click opens where attesting happens
+  });
+
+  it("EVERY required artifact's gaps reach its movement's script — verified across the whole flow spine", async () => {
+    const { getPhaseSequence, getPhaseDefinition } = await import("@/v3/lib/methodology");
+    const { FORMAL_ARTIFACT_FIELD_KEYS } = await import("@/v3/lib/formalArtifacts");
+    const { askableMovementGaps } = await import("@/v3/components/flow/flowMeetings");
+    let checked = 0;
+    for (const movementId of getPhaseSequence("atos-flow") as readonly string[]) {
+      for (const artifactId of getPhaseDefinition(movementId, "atos-flow")?.requiredArtifacts ?? []) {
+        const fieldKey = FORMAL_ARTIFACT_FIELD_KEYS[artifactId];
+        if (!fieldKey) continue; // artifact with no stored doc — nothing to carry gaps
+        const marker = `Ask the stakeholder which systems feed the ${artifactId} coverage?`;
+        const p = programme({ [fieldKey]: { gaps: [marker] } });
+        expect(askableMovementGaps(p, movementId), `${movementId}/${artifactId} gap must reach the script`).toContain(marker);
+        checked += 1;
+      }
+    }
+    expect(checked).toBeGreaterThanOrEqual(10); // the spine's formal documents are all covered
+  });
+
+  it("coverage-map edits steer discovery-kit regeneration — thin domains become deepen-instructions", async () => {
+    const { discoveryKitCoverageGuidance } = await import("@/v3/components/flow/flowMeetings");
+    // A clean map steers nothing.
+    expect(discoveryKitCoverageGuidance(programme({ discoveryKit: { coverageMap: [{ domain: "RevOps", coveredBy: ["Dan"], thin: false }] } }))).toBeNull();
+    // Marking a domain thin (and leaving a persona unrepresented) becomes guidance
+    // the regeneration prompt receives.
+    const g = discoveryKitCoverageGuidance(programme({ discoveryKit: {
+      coverageMap: [{ domain: "Legal & Compliance", coveredBy: [], thin: true }, { domain: "RevOps", coveredBy: ["Dan"], thin: false }],
+      personas: [{ name: "End Customer", spokenForBy: [], unrepresented: true }],
+    } }))!;
+    expect(g).toMatch(/THINLY covered/);
+    expect(g).toMatch(/Legal & Compliance/);
+    expect(g).not.toMatch(/RevOps/); // well-covered domain isn't flagged
+    expect(g).toMatch(/no voice yet[\s\S]*End Customer/);
+  });
+
+  it("once a stakeholder is HEARD, their agenda clears from the follow-up — only open gaps remain", () => {
+    const agendaQ = "What systems feed a quote today?";
+    const base = {
+      domainOntology: { gaps: ["Ask who owns the Bench entity end to end?"] },
+      discoveryKit: { interviews: [{ stakeholder: "Vimal Pandey", role: "Architect", agenda: [{ questions: [agendaQ] }] }] },
+    };
+    // Not heard yet → the full agenda is the script.
+    const unheard = resolveMovementStakeholders(programme(base), "listen")[0];
+    expect(unheard.questions).toContain(agendaQ);
+    // Heard (a transcript block attributed to them exists) → agenda drops, only
+    // the still-open artifact gap remains.
+    const heard = resolveMovementStakeholders(programme({
+      ...base,
+      phaseInputs: { listen: { interviewTranscripts: "— Vimal Pandey, Architect, 2026-07-13 —\nWe pull quote data from three systems and reconcile by hand each week." } },
+    }), "listen")[0];
+    expect(heard.questions).not.toContain(agendaQ); // already asked — cleared
+    expect(heard.questions.some((q) => /Bench entity/.test(q))).toBe(true); // open gap stays
+  });
+
+  it("listen artifact gaps land on every interviewee's script", () => {
+    const p = programme({
+      domainOntology: { gaps: ["Ask the stakeholder who owns the Bench entity end to end?"] },
+      discoveryKit: { interviews: [
+        { stakeholder: "Vimal Pandey", role: "Architect", agenda: [{ questions: ["What systems feed a quote?"] }] },
+      ] },
+    });
+    const vimal = resolveMovementStakeholders(p, "listen")[0];
+    expect(vimal.questions).toContain("Ask the stakeholder who owns the Bench entity end to end?");
+    expect(vimal.questions).toContain("What systems feed a quote?"); // agenda kept
+  });
+
+  it("genuine plumbing gaps (ledger/regenerate) still never reach a stakeholder script", () => {
+    const kit = meetingKit(framed(["Regenerate the artifact ledger after the evidence changed."]), "frame")!;
+    expect(kit.followUp).toBe(false);
+    expect(kit.questions.some((q) => /ledger|regenerat/i.test(q))).toBe(false);
   });
 
   it("an open contradiction routes to the SPONSOR — Frame's follow-up asks it", () => {
@@ -637,6 +799,533 @@ describe("flowArtifactEdit.applyArtifactEdit", () => {
   it("returns null for a malformed edit", async () => {
     const { applyArtifactEdit } = await import("@/v3/components/flow/flowArtifactEdit");
     expect(applyArtifactEdit(programme({}), { fieldKey: "", movementId: "listen", title: "x", doc: {} }, "u")).toBeNull();
+  });
+
+  it("rejects an ontology edit that would leave a relation dangling (F-004 backstop)", async () => {
+    const { applyArtifactEdit } = await import("@/v3/components/flow/flowArtifactEdit");
+    const p = programme({ domainOntology: { entities: [{ name: "Quote" }] } });
+    // "Order" is never declared — the relation dangles, so no path may persist it.
+    const blocked = applyArtifactEdit(p, {
+      fieldKey: "domainOntology", movementId: "listen", title: "Domain Ontology",
+      doc: { entities: [{ name: "Quote" }], relations: [{ from: "Quote", relation: "becomes", to: "Order", cardinality: "1:N" }] },
+    }, "user@x");
+    expect(blocked).toBeNull();
+    // Add the missing entity and the same edit now persists.
+    const ok = applyArtifactEdit(p, {
+      fieldKey: "domainOntology", movementId: "listen", title: "Domain Ontology",
+      doc: { entities: [{ name: "Quote" }, { name: "Order" }], relations: [{ from: "Quote", relation: "becomes", to: "Order", cardinality: "1:N" }] },
+    }, "user@x");
+    expect(ok).not.toBeNull();
+  });
+});
+
+describe("flowOntologyConstraints — write-time grounding gate (F-004)", () => {
+  it("passes a well-formed ontology", () => {
+    const doc = {
+      entities: [{ name: "Quote" }, { name: "Order", aliases: ["Sales Order"] }],
+      relations: [{ from: "Quote", relation: "converts to", to: "Order", cardinality: "1:1" }],
+      standardAlignment: [{ entity: "Order", standard: "https://schema.org/Order" }],
+    };
+    expect(validateOntologyConstraints(doc)).toEqual([]);
+    expect(hasBlockingOntologyViolations(doc)).toBe(false);
+  });
+
+  it("flags a relation pointing at an undeclared entity as blocking", () => {
+    const v = validateOntologyConstraints({ entities: [{ name: "Quote" }], relations: [{ from: "Quote", relation: "x", to: "Ghost", cardinality: "1:1" }] });
+    expect(v.some((x) => x.kind === "dangling-relation" && x.severity === "blocking")).toBe(true);
+    expect(hasBlockingOntologyViolations({ entities: [{ name: "Quote" }], relations: [{ from: "Quote", relation: "x", to: "Ghost", cardinality: "1:1" }] })).toBe(true);
+  });
+
+  it("resolves an endpoint through an alias, not just the canonical name", () => {
+    const v = validateOntologyConstraints({
+      entities: [{ name: "Order", aliases: ["SO"] }, { name: "Quote" }],
+      relations: [{ from: "Quote", relation: "becomes", to: "SO", cardinality: "1:1" }],
+    });
+    expect(v.filter((x) => x.kind === "dangling-relation")).toEqual([]);
+  });
+
+  it("rejects a malformed cardinality but accepts every side:side form the generator emits", () => {
+    const rel = (cardinality: string) => ({ entities: [{ name: "A" }, { name: "B" }], relations: [{ from: "A", relation: "r", to: "B", cardinality }] });
+    expect(validateOntologyConstraints(rel("many")).some((x) => x.kind === "bad-cardinality" && x.severity === "blocking")).toBe(true);
+    // The generator legitimately writes N:1 (converse of 1:N) and optionality forms 0:1 / 0:N —
+    // the gate must never flag real data (the bug that fired on the live Laila ontology).
+    for (const ok of ["N:1", "0:1", "0:N", "M:N", "n:m", "1:1", "1:N", "unknown", ""]) {
+      expect(validateOntologyConstraints(rel(ok)).filter((x) => x.kind === "bad-cardinality"), `cardinality ${ok || "(empty)"} should be valid`).toEqual([]);
+    }
+  });
+
+  it("carries the missing entity name on a dangling relation so the UI can one-click declare it", () => {
+    const v = validateOntologyConstraints({ entities: [{ name: "Agent" }], relations: [{ from: "Agent", relation: "acts on", to: "Workflow", cardinality: "1:N" }] });
+    const dangling = v.find((x) => x.kind === "dangling-relation");
+    expect(dangling?.missing).toBe("Workflow");
+  });
+});
+
+describe("ontology repair watcher — evidence-grounded propose, never silent apply", () => {
+  const withOntology = (doc: Record<string, unknown>, evidence = "") => programme({
+    domainOntology: doc,
+    phaseInputs: { listen: { interviewNotes: evidence } },
+  });
+
+  it("stays silent when the ontology is structurally clean", () => {
+    expect(ontologyRepairProposal(withOntology({
+      entities: [{ name: "Quote" }, { name: "Order" }],
+      relations: [{ from: "Quote", relation: "becomes", to: "Order", cardinality: "N:1" }],
+    }))).toBeNull();
+  });
+
+  it("declares a dangling entity WITH its evidence quote when the corpus names it", () => {
+    const evidence = "Sarah Okafor: every Workflow starts from an approved quote.\nMore context here to pass the length gate for corpus lines.";
+    const proposal = ontologyRepairProposal(withOntology({
+      entities: [{ name: "Agent" }],
+      relations: [{ from: "Agent", relation: "runs", to: "Workflow", cardinality: "1:N" }],
+    }, evidence))!;
+    expect(proposal).not.toBeNull();
+    expect(proposal.tier).toBe(2);
+    const repaired = (proposal.payload.artifactDocs as Record<string, Record<string, unknown>>).domainOntology;
+    const added = (repaired.entities as Array<Record<string, unknown>>).find((e) => e.name === "Workflow")!;
+    expect(added).toBeTruthy();
+    expect(String(added.evidence)).toContain("every Workflow starts");
+    expect(repaired.relations as unknown[]).toHaveLength(1); // relation kept — it resolves now
+    expect(validateOntologyConstraints(repaired).filter((v) => v.severity === "blocking")).toEqual([]);
+  });
+
+  it("removes a dangling relation when the missing entity appears nowhere in the evidence", () => {
+    const proposal = ontologyRepairProposal(withOntology({
+      entities: [{ name: "Agent" }],
+      relations: [{ from: "Agent", relation: "runs", to: "Ghost", cardinality: "1:N" }],
+    }, "Long enough evidence text that never mentions that word anywhere at all."))!;
+    const repaired = (proposal.payload.artifactDocs as Record<string, Record<string, unknown>>).domainOntology;
+    expect(repaired.relations as unknown[]).toHaveLength(0);
+    expect((repaired.entities as unknown[])).toHaveLength(1); // nothing invented
+    expect(proposal.summary).toMatch(/appears nowhere in the evidence/);
+  });
+
+  it("resets a malformed cardinality to unknown and merges duplicate entities", () => {
+    const proposal = ontologyRepairProposal(withOntology({
+      entities: [{ name: "Order", aliases: ["SO"] }, { name: "order", aliases: ["Sales Order"] }, { name: "Quote" }],
+      relations: [{ from: "Quote", relation: "becomes", to: "Order", cardinality: "lots" }],
+    }))!;
+    const repaired = (proposal.payload.artifactDocs as Record<string, Record<string, unknown>>).domainOntology;
+    const entities = repaired.entities as Array<Record<string, unknown>>;
+    expect(entities).toHaveLength(2); // duplicate folded
+    expect(entities[0].aliases).toEqual(expect.arrayContaining(["SO", "Sales Order"]));
+    expect((repaired.relations as Array<Record<string, unknown>>)[0].cardinality).toBe("unknown");
+  });
+
+  it("is one-shot per finding: the same violations never re-propose once a decision exists", () => {
+    const doc = { entities: [{ name: "Agent" }], relations: [{ from: "Agent", relation: "runs", to: "Ghost", cardinality: "1:N" }] };
+    const first = ontologyRepairProposal(withOntology(doc))!;
+    const withDecision = programme({
+      domainOntology: doc,
+      phaseInputs: { listen: { interviewNotes: "" } },
+      flowDecisions: [{ id: first.id, status: "declined" }],
+    });
+    expect(ontologyRepairProposal(withDecision)).toBeNull();
+  });
+
+  it("library doc routing — reads the document, matches rosters, routes the evidence", () => {
+    const base = {
+      phaseInputs: { frame: { sponsor: "Raj Mamodia" } },
+      // Listen's roster is the discovery kit's interview list.
+      discoveryKit: { interviews: [
+        { stakeholder: "Sarah Okafor", role: "COO", agenda: [] },
+        { stakeholder: "Dan Reyes", role: "RevOps Lead", agenda: [] },
+      ] },
+    };
+    const p = programme(base);
+
+    // A meeting transcript whose speakers are on the Listen roster routes to
+    // Listen with per-speaker attribution ready to write.
+    const transcript = [
+      "Sarah Okafor: The quote cycle takes nine days end to end.",
+      "Dan Reyes: The exceptions queue has no owner today.",
+      "Sarah Okafor: We reconcile by hand every Friday.",
+      "Dan Reyes: Agreed, that is the bottleneck.",
+    ].join("\n");
+    const route = routeAttachedDocument(p, transcript);
+    expect(route.kind).toBe("transcript");
+    expect(route.movementId).toBe("listen");
+    expect(route.matched).toEqual(expect.arrayContaining(["Sarah Okafor", "Dan Reyes"]));
+    expect(route.speakerBlocks.length).toBeGreaterThanOrEqual(2);
+    expect(route.summary).toMatch(/transcript/i);
+
+    // A MIXED conversation (sponsor + interviewee) must NOT route to Show just
+    // because Show's roster is the superset of everyone — Listen is discovery's
+    // home; the sponsor surfaces as unmatched there (and the unrostered-voices
+    // watcher takes it from there). The operator can retarget via forceMovement.
+    const mixed = [
+      "Sarah Okafor: We reconcile quotes by hand every week.",
+      "Raj Mamodia: The mandate is to stop exactly that.",
+      "Sarah Okafor: It takes three systems to build one quote.",
+      "Raj Mamodia: Capture it in the charter.",
+    ].join("\n");
+    const mixedRoute = routeAttachedDocument(p, mixed);
+    expect(mixedRoute.movementId).toBe("listen");
+    expect(mixedRoute.matched).toEqual(["Sarah Okafor"]);
+    expect(mixedRoute.unmatched).toContain("Raj Mamodia");
+    const retargeted = routeAttachedDocument(p, mixed, "frame");
+    expect(retargeted.movementId).toBe("frame");
+    expect(retargeted.captureField).toBe("sponsorConversation");
+    expect(retargeted.matched).toEqual(["Raj Mamodia"]);
+
+    // Source material that only MENTIONS a roster name files as that
+    // movement's context — document, not transcript.
+    const memo = "Q3 planning memo. Dan Reyes owns the reconciliation workstream and reports weekly. Budget attached for review by finance.";
+    const memoRoute = routeAttachedDocument(p, memo);
+    expect(memoRoute.kind).toBe("document");
+    expect(memoRoute.movementId).toBe("listen");
+    expect(memoRoute.matched).toEqual(["Dan Reyes"]);
+    expect(memoRoute.speakerBlocks).toEqual([]);
+
+    // Nothing matches: still routes (unattributed Listen source), says so honestly.
+    const alien = "Generic industry report about CRM market trends and vendor comparisons across regions.";
+    const alienRoute = routeAttachedDocument(p, alien);
+    expect(alienRoute.kind).toBe("document");
+    expect(alienRoute.matched).toEqual([]);
+    expect(alienRoute.summary).toMatch(/no roster names/i);
+
+    // The written blocks carry the canonical doc header, the [source:] pointer,
+    // the full text, and each speaker's own attributed block.
+    const written = buildRoutedBlocks(route, "weekly-sync", transcript, "PRIOR", "docs/abc123");
+    expect(written).toContain("PRIOR");
+    expect(written).toContain("— Document: weekly-sync, provided by the programme team");
+    expect(written).toContain("[source: docs/abc123]");
+    expect(written).toContain("The quote cycle takes nine days");
+    expect(written).toMatch(/— Sarah Okafor, COO, \d{4}-\d{2}-\d{2}( \d{2}:\d{2})? —/); // capture stamp carries time
+    // ...and attribution can be declined, keeping the document whole.
+    const plain = buildRoutedBlocks(route, "weekly-sync", transcript, "", "docs/abc123", false);
+    expect(plain).not.toMatch(/— Sarah Okafor, COO,/);
+  });
+
+  it("retro-attribution: a late-added stakeholder's words lift out of attached documents on confirm", () => {
+    // The transcript was attached BEFORE Priya joined the roster — her turns
+    // sit inside the document block, unattributed.
+    const captured = [
+      "— Document: weekly-sync, provided by the programme team, 2026-07-10 —",
+      "Sarah Okafor: The quote cycle takes nine days.",
+      "Priya Nair: Onboarding new reps takes six weeks because nothing is written down.",
+      "Sarah Okafor: And we reconcile by hand.",
+      "Priya Nair: The copilot should answer rep questions from the record.",
+    ].join("\n");
+    const p = programme({
+      phaseInputs: { listen: { interviewTranscripts: captured } },
+      discoveryKit: { interviews: [
+        { stakeholder: "Sarah Okafor", role: "COO", agenda: [] },
+        { stakeholder: "Priya Nair", role: "Enablement Lead", agenda: [] },
+      ] },
+    });
+    const proposal = retroAttributionProposal(p)!;
+    expect(proposal).not.toBeNull();
+    expect(proposal.tier).toBe(2);
+    // Sarah AND Priya are both unattributed (no "— Name," headers) — both lift.
+    expect(proposal.title).toMatch(/Attribute/);
+    const appends = proposal.payload.evidenceAppends as Array<Record<string, string>>;
+    expect(appends.some((a) => a.block.includes("Priya Nair, Enablement Lead"))).toBe(true);
+    expect(appends.every((a) => a.movementId === "listen" && a.field === "interviewTranscripts")).toBe(true);
+    // Confirm applies through the standard resolver; the watcher then goes silent.
+    const queued = queueWatcherProposal(p, proposal)!;
+    const blob = resolveFlowDecision(programme(queued), proposal.id, "confirmed", "user@x")!;
+    const nextText = ((blob.phaseInputs as Record<string, Record<string, string>>).listen).interviewTranscripts;
+    expect(nextText).toMatch(/— Priya Nair, Enablement Lead, \d{4}-\d{2}-\d{2}( \d{2}:\d{2})? —/);
+    expect(nextText).toContain("Onboarding new reps takes six weeks");
+    const after = programme({ ...blob, discoveryKit: (p.rawData as Record<string, unknown>).discoveryKit });
+    expect(retroAttributionProposal(after)).toBeNull();
+  });
+
+  it("evidence ranking: claim-tagged and substantive voices lead; boilerplate sinks", () => {
+    const entries = [
+      { excerpt: "©2026 Brillio | Proprietary & Confidential", kind: "document", who: "Document: strategy", fieldLabel: "Transcripts" },
+      { excerpt: "The quote cycle takes 9 days and costs $400 per quote end to end.", kind: "transcript", who: "Sarah Okafor, COO", fieldLabel: "Transcripts" },
+      { excerpt: "Thanks, talk soon.", kind: "transcript", who: "Dan Reyes", fieldLabel: "Transcripts" },
+      { excerpt: "We are no longer using Twenty CRM as a foundation.", kind: "transcript", who: "Raj Mamodia", fieldLabel: "Transcripts" },
+    ];
+    const ranked = rankEvidence(entries, ["we are no longer using twenty crm as a foundation"]);
+    expect(ranked[0].who).toBe("Raj Mamodia"); // claim-tagged wins
+    expect(ranked[1].who).toBe("Sarah Okafor, COO"); // measurable + attributed next
+    expect(ranked[ranked.length - 1].excerpt).toMatch(/Proprietary/); // boilerplate last
+    expect(isNoiseEvidence(entries[0])).toBe(true);
+    expect(isNoiseEvidence(entries[1])).toBe(false);
+    expect(scoreEvidence(entries[2], [])).toBeLessThan(scoreEvidence(entries[1], []));
+  });
+
+  it("evidence ranking dedupes the same quote captured twice (and containment)", () => {
+    const entries = [
+      { excerpt: "We are no longer using Twenty CRM as a foundation.", kind: "transcript", who: "Raj Mamodia · doc A", fieldLabel: "T" },
+      { excerpt: "We are no longer using Twenty CRM as a foundation.", kind: "transcript", who: "Raj Mamodia · doc B", fieldLabel: "T" }, // exact dup
+      { excerpt: "No longer using Twenty CRM as a foundation", kind: "transcript", who: "Raj Mamodia · pullquote", fieldLabel: "T" }, // contained
+      { excerpt: "The quote cycle takes nine days.", kind: "transcript", who: "Sarah Okafor", fieldLabel: "T" },
+    ];
+    const ranked = rankEvidence(entries, []);
+    // The three Twenty-CRM variants collapse to one; Sarah's distinct quote stays.
+    expect(ranked).toHaveLength(2);
+    expect(ranked.some((e) => /nine days/.test(e.excerpt))).toBe(true);
+  });
+
+  it("design rec 3: the fact/program graph populates from a FLOW programme's own phases", async () => {
+    const { buildFactGraph } = await import("@/v3/lib/factGraph");
+    const { buildProgramGraph } = await import("@/v3/lib/programGraph");
+    const p = {
+      ...programme({ phaseInputs: { frame: {
+        businessObjective: "Replace Salesforce with an agentic CRM",
+        successMetric: "Cost to serve",
+        kpis: JSON.stringify([{ name: "Cycle time", baseline: "9d", target: "2d", unit: "days" }]),
+      } } }),
+      methodology: "atos-flow" as const,
+      phases: [{ id: "frame" }, { id: "listen" }] as never,
+    };
+    const facts = buildFactGraph(p);
+    // Previously 0 for flow programmes — the derivation iterated the retired
+    // classic phase list. Now the programme's own methodology names the spine.
+    expect(facts.facts.length).toBeGreaterThanOrEqual(2);
+    expect(facts.facts.some((f) => f.factText.includes("Replace Salesforce"))).toBe(true);
+    const graph = buildProgramGraph(p, []);
+    expect(graph.nodes.some((n) => n.type === "fact")).toBe(true);
+    expect(graph.stats.nodeCount).toBeGreaterThan(2);
+  });
+
+  it("design rec 1: evidence entries carry stable content-derived ids", () => {
+    const p = programme({ phaseInputs: { listen: { interviewTranscripts:
+      "— A Voice, Analyst, 2026-07-10 —\nSaid a full sentence about the process worth keeping on the record." } } });
+    const listen = flowMovements().find((m) => m.id === "listen")!;
+    const first = movementEvidence(p, listen);
+    const second = movementEvidence(p, listen);
+    expect(first[0].id).toMatch(/^ev-[0-9a-f]+$/);
+    expect(first[0].id).toBe(second[0].id); // stable across re-parses
+    const other = programme({ phaseInputs: { listen: { interviewTranscripts:
+      "— A Voice, Analyst, 2026-07-10 —\nSaid something entirely different this time around, so the identity changes." } } });
+    expect(movementEvidence(other, listen)[0].id).not.toBe(first[0].id);
+  });
+
+  it("evidence excerpt skips recording-header noise and surfaces a real spoken line", () => {
+    const p = programme({ phaseInputs: { listen: { interviewTranscripts: [
+      "— Discovery Session, Ops, 2026-07-13 —",
+      "Agentic CRM - Discovery Session - Alliances-20260512_190022UTC-Meeting Recording",
+      "Prasoon Gupta 0:27 Hey, hi everyone, thanks for joining today.",
+      "We reconcile quotes by hand every single week and it costs us three days.",
+    ].join("\n") } } });
+    const listen = flowMovements().find((m) => m.id === "listen")!;
+    const entry = movementEvidence(p, listen).find((e) => /Discovery Session/.test(e.who));
+    expect(entry?.excerpt).not.toMatch(/Meeting Recording|UTC/i);
+    expect(entry?.excerpt).toMatch(/reconcile quotes by hand/);
+  });
+
+  it("excerpt honesty: date-stamp lines and transcription-system messages never become pull-quotes", () => {
+    const p = programme({ phaseInputs: { listen: { interviewTranscripts: [
+      "— Document: Discovery Session- Alliances, provided by the programme team, 2026-07-13 —",
+      "May 7, 2026, 3:31PM",
+      "Prasoon Gupta started transcription",
+      "The alliances team loses two days every month re-keying partner quotes.",
+      "Prasoon Gupta stopped transcription",
+    ].join("\n") } } });
+    const listen = flowMovements().find((m) => m.id === "listen")!;
+    const entry = movementEvidence(p, listen).find((e) => /Alliances/.test(e.who));
+    expect(entry?.excerpt).not.toMatch(/3:31PM|transcription/i);
+    expect(entry?.excerpt).toMatch(/loses two days/);
+  });
+
+  it("excerpt honesty: glued speaker-turn transcripts quote the SPEECH, stripped of the turn marker", () => {
+    // Teams-style exports glue the timestamp to the words ("0:20Hey") — every
+    // line is a turn, so filtering lines would leave nothing. The prefix is
+    // stripped instead and the real speech judged on its own.
+    const p = programme({ phaseInputs: { listen: { interviewTranscripts: [
+      "— Vimal Pandey, Finance SME, 2026-07-13 —",
+      "Prasoon Gupta   0:20Hey, hi, good morning.",
+      "Vimal Pandey   0:41The forecast roll-up takes nine days because every region keys it differently.",
+    ].join("\n") } } });
+    const listen = flowMovements().find((m) => m.id === "listen")!;
+    const entry = movementEvidence(p, listen).find((e) => /Vimal/.test(e.who));
+    expect(entry?.excerpt).not.toMatch(/0:20|0:41|good morning/);
+    expect(entry?.excerpt).toMatch(/forecast roll-up takes nine days/);
+  });
+
+  it("evidence entries parse their capture stamp — date-only and date+time headers", () => {
+    const p = programme({ phaseInputs: { listen: { interviewTranscripts: [
+      "— Old Voice, Analyst, 2026-07-10 —\nSpoke about the process at length in this earlier conversation.",
+      "— New Voice, Manager, 2026-07-13 09:45 —\nSpoke later, with a time-stamped header on the record.",
+      "— Document: pricing-export, provided by Dan Reyes, 2026-07-12 14:20 —\nColumns and figures from the export worth keeping on record.",
+    ].join("\n\n") } } });
+    const listen = flowMovements().find((m) => m.id === "listen")!;
+    const entries = movementEvidence(p, listen);
+    expect(entries.find((e) => /Old Voice/.test(e.who))?.capturedAt).toBe("2026-07-10");
+    expect(entries.find((e) => /New Voice/.test(e.who))?.capturedAt).toBe("2026-07-13 09:45");
+    expect(entries.find((e) => /pricing-export/.test(e.who))?.capturedAt).toBe("2026-07-12 14:20");
+  });
+
+  it("negated-claim detector: evidence negating a charter claim lands in the Inbox and files to the log", () => {
+    const p = programme({
+      transformationCharter: { businessObjective: "Replace Salesforce with an Azure-hosted agentic CRM built on an open-source foundation (Twenty), proving it on one pilot vertical." },
+      phaseInputs: { frame: { sponsorConversation: [
+        "— Raj Mamodia, Executive Sponsor, 2026-07-12 —",
+        "Q: What is the platform direction? A: We are no longer using Twenty CRM as a foundation. The team builds from scratch on Azure.",
+      ].join("\n") } },
+    });
+    const proposal = negatedClaimProposal(p)!;
+    expect(proposal).not.toBeNull();
+    expect(proposal.tier).toBe(2); // an Inbox decision — the operator judges
+    const entries = proposal.payload.contradictionEntries as Array<Record<string, string>>;
+    expect(entries[0].statement).toMatch(/no longer using Twenty CRM/i);
+    expect(entries[0].between).toMatch(/Raj Mamodia vs Transformation Charter/);
+    // Confirm files it to the log through the standard resolver...
+    const queued = queueWatcherProposal(p, proposal)!;
+    const blob = resolveFlowDecision(programme(queued), proposal.id, "confirmed", "user@x")!;
+    const log = JSON.parse(((blob.phaseInputs as Record<string, Record<string, string>>).listen).contradictionLog) as Array<Record<string, string>>;
+    expect(log[0].statement).toMatch(/no longer using Twenty/i);
+    expect(log[0].status).toMatch(/^Open/);
+    // ...and once open it routes onward (sponsor script picks it up via kitGaps; involved people via their cards).
+    const after = programme({ ...blob, transformationCharter: (p.rawData as Record<string, unknown>).transformationCharter });
+    expect(negatedClaimProposal(after)).toBeNull(); // one-shot — never re-asked
+  });
+
+  it("negated-claim detector stays silent without a negation or without claim overlap", () => {
+    const charter = { transformationCharter: { businessObjective: "Build an agentic CRM on an open-source foundation." } };
+    expect(negatedClaimProposal(programme({
+      ...charter,
+      phaseInputs: { frame: { sponsorConversation: "— Raj, Sponsor, 2026-07-12 —\nEverything proceeds as planned with the foundation approach." } },
+    }))).toBeNull();
+    expect(negatedClaimProposal(programme({
+      ...charter,
+      phaseInputs: { frame: { sponsorConversation: "— Raj, Sponsor, 2026-07-12 —\nWe are no longer serving breakfast at the town-hall meetings." } },
+    }))).toBeNull();
+  });
+
+  it("readContradictions dedupes near-identical rows so a dispute is asked once", async () => {
+    const { readContradictions } = await import("@/v3/components/flow/flowShellData");
+    const p = programme({ phaseInputs: { listen: { contradictionLog: JSON.stringify([
+      { statement: "A: We are no longer using 20 CRM as a foundation", between: "Raj vs Charter", status: "Open" },
+      { statement: "A: We are no longer using 20 CRM as a foundation", between: "Raj vs Charter", status: "Open" }, // exact dup
+      { statement: "no longer using 20 CRM as a foundation.", between: "Raj vs Charter", status: "Open" }, // near dup
+      { statement: "Cycle time target is 2 days not 5", between: "Sarah vs plan", status: "Open" }, // distinct
+      { statement: "An old resolved thing", between: "x", status: "Resolved" },
+    ]) } } });
+    const open = readContradictions(p, true);
+    expect(open).toHaveLength(2); // the three 20-CRM variants collapse to one; the cycle-time one stays
+    expect(open.some((r) => /20 CRM/.test(r.statement))).toBe(true);
+    expect(open.some((r) => /Cycle time/.test(r.statement))).toBe(true);
+    expect(open.some((r) => /resolved/i.test(r.statement))).toBe(false); // openOnly filtered it
+    // The Frame sponsor's script now carries ONE disagree question, not three.
+    const listen = resolveMovementStakeholders(programme({
+      phaseInputs: { listen: { contradictionLog: (p.rawData as { phaseInputs: { listen: { contradictionLog: string } } }).phaseInputs.listen.contradictionLog } },
+      discoveryKit: { interviews: [{ stakeholder: "Raj", role: "Sponsor", agenda: [] }] },
+    }), "listen");
+    expect(listen[0].questions.filter((q) => /disagree/i.test(q))).toHaveLength(1);
+  });
+
+  it("open contradictions route to the PEOPLE named in them as follow-up questions", () => {
+    const p = programme({
+      phaseInputs: { listen: { contradictionLog: JSON.stringify([
+        { statement: "Fork Twenty CRM as the foundation vs build from scratch", between: "Raj Mamodia, Vimal Pandey", status: "Open — filed 2026-07-12" },
+        { statement: "Already resolved thing", between: "Vimal Pandey", status: "Resolved" },
+      ]) } },
+      discoveryKit: { interviews: [
+        { stakeholder: "Vimal Pandey", role: "Architect", agenda: [{ questions: ["What systems feed a quote?"] }] },
+        { stakeholder: "Avantika Sharma", role: "Sales Ops", agenda: [] },
+      ] },
+    });
+    const listen = resolveMovementStakeholders(p, "listen");
+    const vimal = listen.find((s) => s.name === "Vimal Pandey")!;
+    // The OPEN conflict leads his follow-up; the resolved one doesn't appear.
+    expect(vimal.questions[0]).toMatch(/Two accounts disagree: "Fork Twenty CRM/);
+    expect(vimal.questions[0]).toMatch(/your account vs Raj Mamodia/);
+    expect(vimal.questions.join(" ")).not.toMatch(/Already resolved/);
+    expect(vimal.questions).toContain("What systems feed a quote?"); // agenda kept
+    const avantika = listen.find((s) => s.name === "Avantika Sharma")!;
+    expect(avantika.questions.join(" ")).not.toMatch(/disagree/); // not her conflict
+  });
+
+  it("confirming the proposal applies the repaired document through the standard resolver", () => {
+    const doc = { entities: [{ name: "Agent" }], relations: [{ from: "Agent", relation: "runs", to: "Ghost", cardinality: "1:N" }] };
+    const p = withOntology(doc);
+    const proposal = ontologyRepairProposal(p)!;
+    const queued = queueWatcherProposal(p, proposal)!;
+    const blob = resolveFlowDecision(programme(queued), proposal.id, "confirmed", "user@x")!;
+    const repaired = blob.domainOntology as Record<string, unknown>;
+    expect(repaired.relations as unknown[]).toHaveLength(0);
+    expect(validateOntologyConstraints(repaired).filter((v) => v.severity === "blocking")).toEqual([]);
+  });
+
+  it("catches the same edge declared with two different cardinalities", () => {
+    const v = validateOntologyConstraints({
+      entities: [{ name: "A" }, { name: "B" }],
+      relations: [
+        { from: "A", relation: "owns", to: "B", cardinality: "1:1" },
+        { from: "A", relation: "owns", to: "B", cardinality: "1:N" },
+      ],
+    });
+    expect(v.some((x) => x.kind === "cardinality-conflict" && x.severity === "blocking")).toBe(true);
+  });
+
+  it("flags a duplicate entity name as blocking (ambiguous resolution)", () => {
+    const v = validateOntologyConstraints({ entities: [{ name: "Order" }, { name: "order" }] });
+    expect(v.some((x) => x.kind === "duplicate-entity" && x.severity === "blocking")).toBe(true);
+  });
+
+  it("treats a self-relation and a dangling standard mapping as warnings, not blocking", () => {
+    const { blocking, warnings } = partitionOntologyViolations({
+      entities: [{ name: "A" }],
+      relations: [{ from: "A", relation: "loops", to: "A", cardinality: "1:1" }],
+      standardAlignment: [{ entity: "Nowhere", standard: "https://schema.org/Thing" }],
+    });
+    expect(blocking).toEqual([]);
+    expect(warnings.some((x) => x.kind === "self-relation")).toBe(true);
+    expect(warnings.some((x) => x.kind === "dangling-alignment")).toBe(true);
+  });
+
+  it("treats unknown cardinality as valid (the generator's default)", () => {
+    expect(hasBlockingOntologyViolations({ entities: [{ name: "A" }, { name: "B" }], relations: [{ from: "A", relation: "r", to: "B", cardinality: "unknown" }] })).toBe(false);
+  });
+});
+
+describe("flowMetricRegistry — governed semantic layer (F-002)", () => {
+  const withKpis = (rows: Array<Record<string, string>>) => programme({ phaseInputs: { frame: { kpis: JSON.stringify(rows) } } });
+
+  it("reads one canonical metric list with stable ids and a definition", () => {
+    const p = withKpis([{ id: "m1", name: "Cost to serve", definition: "Fully-loaded cost per transaction", baseline: "$4.50", target: "$2.25", unit: "$" }]);
+    const reg = readMetricRegistry(p);
+    expect(reg).toHaveLength(1);
+    expect(reg[0]).toMatchObject({ id: "m1", name: "Cost to serve", definition: "Fully-loaded cost per transaction", baseline: "$4.50", target: "$2.25", unit: "$" });
+    expect(metricById(p, "m1")?.name).toBe("Cost to serve");
+  });
+
+  it("derives a slug id when a row carries none, and keeps ids unique", () => {
+    const reg = readMetricRegistry(withKpis([{ name: "Cycle time" }, { name: "Cycle time" }]));
+    expect(reg[0].id).toBe("cycle-time");
+    expect(reg[1].id).toBe("cycle-time-2");
+    expect(reg[0].id).not.toBe(reg[1].id);
+  });
+
+  it("reports a fully-governed programme as healthy", () => {
+    const health = metricConsistency(withKpis([
+      { name: "Cost to serve", definition: "Cost per txn", baseline: "$4.50", target: "$2.25", unit: "$" },
+      { name: "Cycle time", definition: "Days quote→cash", baseline: "12", target: "5", unit: "days" },
+    ]));
+    expect(health.governed).toBe(true);
+    expect(health.total).toBe(2);
+    expect(health.defined).toBe(2);
+    expect(health.issues).toEqual([]);
+  });
+
+  it("flags a duplicate metric name as an error — a measure needs one definition", () => {
+    const health = metricConsistency(withKpis([
+      { name: "Adoption", definition: "a", baseline: "0", target: "1" },
+      { name: "adoption", definition: "b", baseline: "0", target: "1" },
+    ]));
+    expect(health.governed).toBe(false);
+    expect(health.issues.some((i) => i.kind === "duplicate-name" && i.severity === "error")).toBe(true);
+  });
+
+  it("flags an undefined metric as a warning and an unverifiable one as an error", () => {
+    const health = metricConsistency(withKpis([{ name: "Vague", baseline: "", target: "" }]));
+    expect(health.issues.some((i) => i.kind === "undefined" && i.severity === "warning")).toBe(true);
+    expect(health.issues.some((i) => i.kind === "unverifiable" && i.severity === "error")).toBe(true);
+    expect(health.governed).toBe(false);
+  });
+
+  it("board pack, brief and drill-down picker all read through the one registry", async () => {
+    const p = withKpis([{ name: "Cost to serve", definition: "Cost per txn", baseline: "$4.50", target: "$2.25", unit: "$" }]);
+    const snapKpis = buildBriefSnapshot(p).kpis as Array<Record<string, string>>;
+    expect(snapKpis[0]).toMatchObject({ name: "Cost to serve", baseline: "$4.50", target: "$2.25" });
+    expect(listDrillAnchors(p, "kpi")[0].label).toBe("Cost to serve");
   });
 });
 
@@ -1119,5 +1808,103 @@ describe("evidence-collection flow — every movement captures into a real evide
     const evidence = movementEvidence(program, ship);
     expect(evidence.length).toBeGreaterThan(0);
     expect(evidence[0].who).toContain("Hardening / SRE Owner");
+  });
+});
+
+describe("flowDrilldown — lineage, anchors, and finding roll-up", () => {
+  const parent = { id: "par", name: "Parent", rawData: {
+    ontologyAlignment: [{ entity: "Order" }, { entity: "Quote" }],
+    currentStateAtlas: { workflows: [{ name: "CPQ", steps: [{ actor: "Rep", action: "quote" }] }] },
+  } } as unknown as ProgramSummary;
+  const child = { id: "kid", name: "CPQ — deep dive", gateReviews: { listen: { status: "approved" } }, rawData: {
+    lineage: { parentId: "par", parentName: "Parent", anchor: { kind: "workflow", refId: "wf-0", label: "CPQ" } },
+    ontologyAlignment: [{ entity: "Order" }, { entity: "Credit Memo" }],
+    domainOntology: { summary: "Nine entities in the CPQ slice." },
+  } } as unknown as ProgramSummary;
+
+  it("reads the child's anchor and nests it under the parent", () => {
+    expect(readDrillAnchor(child)).toEqual({ kind: "workflow", refId: "wf-0", label: "CPQ" });
+    const kids = listChildDrilldowns(parent, [parent, child]);
+    expect(kids).toHaveLength(1);
+    expect(kids[0].child.id).toBe("kid");
+    expect(kids[0].anchor?.label).toBe("CPQ");
+  });
+
+  it("lists real anchors from the parent's data", () => {
+    expect(listDrillAnchors(parent, "workflow").map((o) => o.label)).toEqual(["CPQ"]);
+    expect(listDrillAnchors(parent, "process").map((o) => o.label)).toEqual(["Order", "Quote"]);
+  });
+
+  it("routes roll-ups to the movement that owns the anchor kind", () => {
+    expect(drillRollupTarget("workflow")).toEqual({ movementId: "listen", captureField: "interviewTranscripts" });
+    expect(drillRollupTarget("track")).toEqual({ movementId: "show", captureField: "demoFeedback" });
+    expect(drillRollupTarget("kpi")).toEqual({ movementId: "evolve", captureField: "opsConversations" });
+  });
+
+  it("composes findings: gates, artifact summaries, and only NEW vocabulary", () => {
+    const findings = buildDrilldownFindings(child, parent);
+    expect(findings).toContain("Gates demonstrated: listen");
+    expect(findings).toContain("Domain Ontology: Nine entities in the CPQ slice.");
+    expect(findings).toContain("Credit Memo");
+    expect(findings).not.toContain("New vocabulary discovered: Order");
+  });
+
+  it("returns null when the child has nothing substantive yet", () => {
+    const empty = { id: "e", name: "Empty", rawData: { lineage: { parentId: "par" } } } as unknown as ProgramSummary;
+    expect(buildDrilldownFindings(empty, parent)).toBeNull();
+  });
+});
+
+describe("flowTranscriptMap — speakers auto-map to the roster", () => {
+  const roster = [
+    { name: "Sarah Okafor", role: "COO" },
+    { name: "Dan Reyes", role: "RevOps Lead" },
+  ];
+  const transcript = [
+    "Meeting notes — quote review, 10am",
+    "Sarah Okafor: The board version is one line.",
+    "Dan: The exception queue is where everything stalls.",
+    "It runs fourteen items deep most weeks.",
+    "Sarah Okafor: Then that is the first slice.",
+    "Priya N: I can build the ramp guide.",
+    "Dan: Agreed.",
+  ].join("\n");
+
+  it("maps full names and first names; continuation lines stay with the turn", () => {
+    const mapping = mapTranscriptSpeakers(transcript, roster);
+    expect(mapping).not.toBeNull();
+    expect(mapping!.matched.sort()).toEqual(["Dan", "Sarah Okafor"]);
+    expect(mapping!.unmatched).toEqual(["Priya N"]);
+    const dan = mapping!.blocks.find((b) => b.name === "Dan Reyes");
+    expect(dan?.text).toContain("fourteen items deep");
+    expect(dan?.text).toContain("Agreed.");
+    const sarah = mapping!.blocks.find((b) => b.name === "Sarah Okafor");
+    expect(sarah?.text).toContain("first slice");
+  });
+
+  it("returns null for ordinary documents (not enough speaker turns)", () => {
+    expect(mapTranscriptSpeakers("A plain report.\nWith paragraphs of prose.", roster)).toBeNull();
+    expect(mapTranscriptSpeakers("Sarah Okafor: only one speaker\nSarah Okafor: twice", roster)).toBeNull();
+  });
+});
+
+describe("gateApprovalIntegrity — read-time backstop for forged approvals (F-001)", () => {
+  const check = (done: boolean, id: string) => ({ id, label: id, done, group: "evidence" } as unknown as import("@/v3/components/flow/flowShellData").GateCheckItem);
+  const prog = (status?: string) => ({ id: "p", name: "T", rawData: {}, gateReviews: status ? { frame: { status } } : {} } as unknown as ProgramSummary);
+
+  it("no recorded approval → defensible, no warning", () => {
+    const r = gateApprovalIntegrity(prog(), "frame", [check(false, "a")]);
+    expect(r).toEqual({ approved: false, defensible: true, unmet: 0 });
+  });
+  it("approved with all criteria met → defensible", () => {
+    const r = gateApprovalIntegrity(prog("approved"), "frame", [check(true, "a"), check(true, "b")]);
+    expect(r.approved).toBe(true); expect(r.defensible).toBe(true); expect(r.unmet).toBe(0);
+  });
+  it("approved with unmet criteria (the T6 forgery) → indefensible, with reason", () => {
+    const r = gateApprovalIntegrity(prog("approved"), "frame", [check(true, "a"), check(false, "b"), check(false, "c")]);
+    expect(r.approved).toBe(true);
+    expect(r.defensible).toBe(false);
+    expect(r.unmet).toBe(2);
+    expect(r.reason).toContain("not met");
   });
 });

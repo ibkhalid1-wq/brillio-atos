@@ -8,8 +8,9 @@
  */
 import type { ProgramSummary } from "@/new/types";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
-import { flowMovements, movementArtifacts, movementOpenIssues, kitPersonas, gateChecklist, readMovementInputs, parseGridRows } from "@/v3/components/flow/flowShellData";
+import { flowMovements, movementArtifacts, movementOpenIssues, kitPersonas, gateChecklist, readMovementInputs, parseGridRows, readContradictions } from "@/v3/components/flow/flowShellData";
 import { FORMAL_ARTIFACT_FIELD_KEYS, FORMAL_ARTIFACT_PHASES } from "@/v3/lib/formalArtifacts";
+import { getPhaseDefinition } from "@/v3/lib/methodology";
 
 export interface MeetingKit {
   /** e.g. "The sponsor conversation" */
@@ -241,7 +242,13 @@ function baseMeetingKit(program: ProgramSummary, movementId: string): Omit<Meeti
  * document ("the charter cannot be considered ready because…"). These are the
  * follow-up's agenda.
  */
-export function kitGaps(program: ProgramSummary, movementId: string): string[] {
+export function kitGaps(program: ProgramSummary, movementId: string, opts?: { gateLabels?: boolean }): string[] {
+  // Gate-checklist labels ("Business objective captured") are bookkeeping —
+  // useful to the operator (they gate whether a follow-up still matters), but
+  // never a question to put back in front of a stakeholder once a conversation
+  // is on record. Stakeholder-facing callers pass gateLabels:false so a
+  // follow-up re-asks only what a NEW conversation can actually resolve.
+  const gateLabels = opts?.gateLabels ?? true;
   const movement = flowMovements().find((entry) => entry.id === movementId);
   if (!movement) return [];
   const gaps: string[] = [];
@@ -261,22 +268,37 @@ export function kitGaps(program: ProgramSummary, movementId: string): string[] {
     for (const persona of personas.filter((entry) => entry.unrepresented || entry.spokenForBy.length === 0)) {
       gaps.push(`Who can speak for the ${persona.name}${persona.kind === "external" ? " — the person who faces them, if they can't be in the room" : ""}?`);
     }
-    for (const row of parseGridRows(readMovementInputs(program, "listen").contradictionLog)) {
-      if (/open/i.test(row.status ?? "")) {
-        const between = (row.between ?? "").trim();
-        gaps.push(`Two accounts disagree${between ? ` (${between})` : ""}: "${(row.statement ?? "").trim()}" — which is right, and what settles it?`);
-      }
+    for (const row of readContradictions(program, true)) {
+      const between = row.between.trim();
+      gaps.push(`Two accounts disagree${between ? ` (${between})` : ""}: "${row.statement.trim()}" — which is right, and what settles it?`);
     }
   }
-  for (const item of gateChecklist(program, movement, movementArtifacts(program, movement))) {
-    if (!item.done && item.anchor) gaps.push(item.label);
-  }
+  // ARTIFACT gaps outrank gate-checklist labels: a generated document saying
+  // "we still don't know X" is a real question for a stakeholder; a checklist
+  // label is bookkeeping that only pads the script. EVERY artifact this
+  // movement requires contributes — the methodology's own requiredArtifacts
+  // list is the source of truth, so an artifact whose FORMAL_ARTIFACT_PHASES
+  // entry still names a retired classic home (the charter → "strategy") can
+  // never fall out of sight of its kit.
   const inner = innerData(program);
+  const flowDef = getPhaseDefinition(movementId, "atos-flow");
+  const gapDocKeys = new Set<string>();
   for (const [agentId, phase] of Object.entries(FORMAL_ARTIFACT_PHASES)) {
-    if (phase !== movementId) continue;
-    const doc = inner[FORMAL_ARTIFACT_FIELD_KEYS[agentId]];
+    if (phase === movementId) gapDocKeys.add(FORMAL_ARTIFACT_FIELD_KEYS[agentId]);
+  }
+  for (const artifactId of flowDef?.requiredArtifacts ?? []) {
+    const fieldKey = FORMAL_ARTIFACT_FIELD_KEYS[artifactId];
+    if (fieldKey) gapDocKeys.add(fieldKey);
+  }
+  for (const fieldKey of gapDocKeys) {
+    const doc = inner[fieldKey];
     if (isRecord(doc) && Array.isArray(doc.gaps)) {
       gaps.push(...doc.gaps.map(String).filter(Boolean).slice(0, 4));
+    }
+  }
+  if (gateLabels) {
+    for (const item of gateChecklist(program, movement, movementArtifacts(program, movement))) {
+      if (!item.done && item.anchor) gaps.push(item.label);
     }
   }
   return [...new Set(gaps)].slice(0, 8);
@@ -318,12 +340,72 @@ function askableGap(gap: string): boolean {
   return !/\binputs?\b|\bledger\b|\bartifacts?\b|\bregenerat|\bevidence changed\b|\bemail\b/i.test(gap);
 }
 
+/**
+ * Operator-worded gaps about STAKEHOLDER-OWNED facts become stakeholder
+ * questions instead of dying in the filter. "Add a concise, outcome-oriented
+ * statement to the Objective input" is phrased at the operator — but the
+ * objective is the sponsor's fact, so the follow-up script asks the sponsor
+ * for it directly. Gaps about genuine plumbing (ledgers, regeneration) still
+ * stay off every script.
+ */
+const GAP_REPHRASE: Array<{ match: RegExp; ask: string }> = [
+  { match: /objective|outcome-oriented/i, ask: "In one sentence: what outcome must this programme achieve — by when, and measured how?" },
+  { match: /success (?:criteria|metric)|kpi|baseline|target/i, ask: "Which measurable results would prove this worked — and what are today's baselines and the targets?" },
+  { match: /\bscope\b/i, ask: "What is explicitly in scope — and what is explicitly out?" },
+  { match: /sponsor|mandate|authoris/i, ask: "Who commissioned this programme, and what exactly did they commission?" },
+];
+
+function rephraseGapAsAsk(gap: string): string {
+  if (askableGap(gap)) return gap;
+  const hit = GAP_REPHRASE.find((entry) => entry.match.test(gap));
+  return hit ? hit.ask : gap;
+}
+
+/**
+ * The movement's open gaps as STAKEHOLDER questions — rephrased where the gap
+ * was operator-worded, plumbing filtered out, capped. This is the one door
+ * through which artifact gaps reach interview scripts, so per-person scripts
+ * (the interviewee cards) and the movement kit always agree.
+ */
+export function askableMovementGaps(program: ProgramSummary, movementId: string, cap = 3): string[] {
+  // Stakeholder-facing: drop gate-checklist bookkeeping — an interviewee gets
+  // real artifact questions and disputes, never "discovery kit generated".
+  return [...new Set(kitGaps(program, movementId, { gateLabels: false }).map(rephraseGapAsAsk))].filter(askableGap).slice(0, cap);
+}
+
+/**
+ * Discovery-kit regeneration guidance from the operator's coverage map. Thin
+ * domains (and personas nobody can speak for) become explicit instructions to
+ * deepen those domains' questions and secure a second voice — so a Regenerate
+ * acts on the operator's triage instead of re-deriving from evidence alone.
+ * Returns null when the map is clean (nothing to steer).
+ */
+export function discoveryKitCoverageGuidance(program: ProgramSummary): string | null {
+  const kit = innerData(program).discoveryKit;
+  if (!isRecord(kit)) return null;
+  const rows = Array.isArray(kit.coverageMap) ? kit.coverageMap.filter(isRecord) : [];
+  const thin = rows.filter((row) => row.thin === true).map((row) => String(row.domain ?? "").trim()).filter(Boolean);
+  const unrep = (Array.isArray(kit.personas) ? kit.personas.filter(isRecord) : [])
+    .filter((persona) => persona.unrepresented === true || (Array.isArray(persona.spokenForBy) && persona.spokenForBy.length === 0))
+    .map((persona) => String(persona.name ?? "").trim()).filter(Boolean);
+  if (!thin.length && !unrep.length) return null;
+  const lines = ["## Coverage priorities from the operator (honour these when regenerating the kit)"];
+  if (thin.length) lines.push(`These workflow domains are THINLY covered — add deeper, domain-specific questions for them and line up a second interviewee who owns each: ${thin.join(", ")}.`);
+  if (unrep.length) lines.push(`These personas have no voice yet — add an interview (or a proxy) who can speak for them: ${unrep.join(", ")}.`);
+  return lines.join("\n");
+}
+
 export function meetingKit(program: ProgramSummary, movementId: string): MeetingKit | null {
   const base = baseMeetingKit(program, movementId);
   if (!base) return null;
   if (!base.done) return { ...base, followUp: false, gaps: [], documents: scriptDocumentRefs(base.questions) };
-  const asks = kitGaps(program, movementId).filter(askableGap);
-  if (!asks.length) return { ...base, followUp: false, gaps: [], documents: scriptDocumentRefs(base.questions) };
+  // A conversation is on record: the follow-up re-asks only what a NEW
+  // conversation can resolve — open artifact gaps, contradictions, unplaced
+  // personas — not gate-checklist labels the operator closes by regenerating.
+  const asks = [...new Set(kitGaps(program, movementId, { gateLabels: false }).map(rephraseGapAsAsk))].filter(askableGap);
+  // Heard, nothing outstanding: the script is DONE — show no follow-up
+  // questions rather than replaying the original agenda they've answered.
+  if (!asks.length) return { ...base, followUp: false, gaps: [], questions: [], documents: [] };
   return {
     ...base,
     followUp: true,

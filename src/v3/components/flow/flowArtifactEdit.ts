@@ -6,6 +6,7 @@
  */
 import type { ProgramSummary } from "@/new/types";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
+import { hasBlockingOntologyViolations } from "@/v3/components/flow/flowOntologyConstraints";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -27,6 +28,13 @@ export function applyArtifactEdit(
   const previous = isRecord(inner[input.fieldKey]) ? (inner[input.fieldKey] as Record<string, unknown>) : {};
   const ts = new Date().toISOString();
   const nextDoc = { ...previous, ...input.doc, editedAt: ts, editedBy: actor };
+
+  // Write-time grounding gate (F-004): the domain ontology's declared
+  // domain/range/cardinality is enforced here, not merely displayed. A merge
+  // that would leave a relation dangling, mis-cardinalised or self-contradictory
+  // is rejected — no client path persists a structurally invalid ontology. The
+  // studio blocks Save on the same check, so this is the backstop, not the UX.
+  if (input.fieldKey === "domainOntology" && hasBlockingOntologyViolations(nextDoc)) return null;
 
   const attestation = {
     ts,

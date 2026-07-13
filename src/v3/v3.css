@@ -4503,7 +4503,10 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 .v3fs-wrap {max-width:1200px;margin:0 auto;padding:0 32px 110px}
 
 /* floating dock */
-.v3fs-dock {position:fixed;left:22px;top:50%;transform:translateY(-50%);z-index:95;display:flex;flex-direction:column;gap:4px;
+/* Navigation always wins: the rail and top bar sit ABOVE every overlay layer
+   (docview 81, evidence reader 91, palette/help/criteria 200) so the operator
+   can always leave — clicking a destination also dismisses shell overlays. */
+.v3fs-dock {position:fixed;left:22px;top:50%;transform:translateY(-50%);z-index:210;display:flex;flex-direction:column;gap:4px;
   background:var(--fs-dock);backdrop-filter:blur(14px);border:1px solid var(--fs-line);border-radius:18px;padding:10px 8px;box-shadow:var(--fs-pop)}
 .v3fs-dock .v3fs-brand {width:40px;height:40px;border-radius:13px;background:var(--v3-accent);color:#fff !important;display:grid;place-items:center;font-weight:700;font-size:16px;margin-bottom:8px}
 .v3fs-dock > button:not(.v3fs-brand) {width:44px;padding:9px 0 7px;border-radius:12px;color:var(--v3-text-muted);display:flex;flex-direction:column;align-items:center;gap:3px;transition:background .15s ease,color .15s ease}
@@ -4520,8 +4523,78 @@ svg.v3fs-ric {margin:0 auto}
 .v3fs-dock button[data-tip]:focus-visible::after {content:attr(data-tip);position:absolute;left:calc(100% + 12px);top:50%;transform:translateY(-50%);white-space:nowrap;font-size:10.5px;font-weight:600;letter-spacing:.02em;padding:5px 10px;border-radius:8px;background:var(--v3-text-primary);color:var(--fs-card);box-shadow:0 8px 20px -8px rgba(15,16,32,.4);z-index:70;pointer-events:none}
 .v3fs-cp {color:var(--v3-accent-2) !important}
 
-/* programme switcher */
-.v3fs-switcher {position:fixed;left:84px;top:50%;transform:translateY(-50%);z-index:61;min-width:240px;
+/* The app bar — one slim, full-width strip anchoring the top of the app.
+   Portfolio (left) is the "up and out"; the centre is the command palette's
+   front door styled as a real search field; Help + Copilot close the right.
+   Same z-tier as the rail: navigation always above overlays. */
+.v3fs-appbar {position:fixed;inset:0 0 auto 0;z-index:210;height:52px;
+  display:flex;align-items:center;gap:16px;padding:0 18px;
+  background:var(--fs-dock);backdrop-filter:blur(16px);border-bottom:1px solid var(--fs-line);
+  transition:transform .18s ease}
+/* Auto-hide: a full-height overlay (document studio, board pack) owns the top
+   of the screen while it's open — the bar slides away so the overlay's own
+   header buttons are reachable, leaving a 6px grab edge. Hover the top of the
+   screen (or tab into the bar) and it slides back; close the overlay and it
+   returns on its own. Navigation is never more than one gesture away. */
+body:has(.v3fs-docview) .v3fs-appbar,
+body:has(.v3fs-pack) .v3fs-appbar {transform:translateY(calc(-100% + 6px))}
+body:has(.v3fs-docview) .v3fs-appbar:hover,
+body:has(.v3fs-pack) .v3fs-appbar:hover,
+body:has(.v3fs-docview) .v3fs-appbar:focus-within,
+body:has(.v3fs-pack) .v3fs-appbar:focus-within {transform:none}
+@media (prefers-reduced-motion: reduce) {.v3fs-appbar {transition:none}}
+/* Left takes its natural width (crumbs truncate at their own caps); the search
+   centres itself in whatever remains via auto margins — crumbs never starve. */
+.v3fs-appbar-l {flex:0 1 auto;display:flex;align-items:center;justify-content:flex-start;gap:14px;min-width:0}
+.v3fs-appbar-brand {font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--v3-accent-2);white-space:nowrap;flex-shrink:0}
+.v3fs-appbar-crumbs {display:flex;align-items:center;gap:2px;flex:1;min-width:0;overflow:hidden}
+.v3fs-appbar-sl {color:var(--v3-text-muted);opacity:.45;font-size:12px;flex-shrink:0;padding:0 2px}
+/* Crumb buttons must SHRINK, not collide — each truncates inside its share. */
+.v3fs-appbar-crumb {min-width:0;flex:0 1 auto}
+.v3fs-appbar-crumb span:first-child {display:block;max-width:230px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.v3fs-appbar-crumb.here {color:var(--v3-text-primary);font-weight:650}
+.v3fs-appbar-caret {font-size:8.5px;opacity:.55;flex-shrink:0}
+/* Under pressure the middle hop yields first (Portfolio / … / current). */
+@media (max-width: 1080px) {
+  .v3fs-appbar-crumb.parent, .v3fs-appbar-crumb.parent + .v3fs-appbar-sl {display:none}
+}
+.v3fs-appbar-r {flex:0 0 auto;display:flex;align-items:center;justify-content:flex-end;gap:6px}
+.v3fs-appbar button {font-family:var(--v3-font);cursor:pointer;border:none;background:none;
+  display:flex;align-items:center;gap:8px;color:var(--v3-text-muted);
+  transition:background .15s ease,color .15s ease,border-color .15s ease}
+.v3fs-appbar .v3fs-ric {font-size:14px}
+.v3fs-appbar svg.v3fs-ric {margin:0;flex-shrink:0}
+/* Quiet nav actions: text buttons with a soft wash on hover, an accent
+   underline-free "on" state — chrome, not chips. */
+.v3fs-appbar-nav {padding:7px 12px;border-radius:9px;font-size:12px;font-weight:600;letter-spacing:.01em}
+.v3fs-appbar-nav:hover {background:var(--fs-indigo-wash);color:var(--v3-accent-2)}
+.v3fs-appbar-nav.on {color:var(--v3-accent-2);background:var(--fs-indigo-wash)}
+/* The search field — wide, quiet, obviously clickable-to-type. */
+.v3fs-appbar-search {flex:0 1 460px;min-width:170px;margin:0 auto;height:34px;padding:0 7px 0 12px;border-radius:10px;
+  border:1px solid var(--fs-line);background:var(--fs-card);
+  font-size:12px;font-weight:500;color:var(--v3-text-muted)}
+.v3fs-appbar-search span {flex:1;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.75}
+.v3fs-appbar-search:hover {border-color:color-mix(in srgb,var(--v3-accent-2) 45%,transparent);color:var(--v3-text-secondary)}
+.v3fs-appbar-search kbd {font-family:var(--v3-font-mono);font-size:9.5px;font-weight:600;color:var(--v3-text-muted);
+  border:1px solid var(--fs-line);border-radius:5px;padding:2px 6px;background:var(--fs-bg,transparent)}
+/* Copilot — the one accent on the bar (scoped to outrank the base button rule). */
+.v3fs-appbar button.v3fs-appbar-cp {padding:7px 14px;border-radius:999px;font-size:12px;font-weight:650;letter-spacing:.01em;
+  color:#fff;background:var(--v3-accent)}
+.v3fs-appbar button.v3fs-appbar-cp:hover {background:var(--v3-accent-2);color:#fff}
+/* Content clears the fixed bar (sponsor lens has no bar, keeps its own top). */
+.v3fs-app:not(.v3fs-sponsor) .v3fs-hero {padding-top:84px}
+@media (max-width: 860px) {
+  .v3fs-appbar-nav span, .v3fs-appbar-cp span {display:none} /* icons only when narrow */
+  .v3fs-appbar-nav {padding:8px}
+  .v3fs-appbar-cp {padding:8px 10px}
+  .v3fs-appbar-search span {font-size:11px}
+}
+
+/* programme switcher — drops from the app bar's programme crumb (its canonical
+   trigger); the rail's brand button opens the same panel. Above overlays, like
+   all navigation. */
+.v3fs-switcher {position:fixed;left:120px;top:58px;z-index:211;min-width:260px;max-width:340px;
   background:var(--fs-card);border:1px solid var(--fs-line);border-radius:14px;box-shadow:var(--fs-pop);padding:8px}
 .v3fs-switcher-l {font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--v3-text-muted);padding:6px 10px}
 .v3fs-switcher button {display:block;width:100%;text-align:left;font-size:12.5px;padding:8px 10px;border-radius:8px;color:var(--v3-text-secondary)}
@@ -4540,6 +4613,41 @@ svg.v3fs-ric {margin:0 auto}
 .v3fs-flow {position:relative;margin-top:30px}
 .v3fs-flow::before {content:"";position:absolute;left:16px;top:8px;bottom:8px;width:1.5px;border-radius:2px;background:var(--fs-line)}
 .v3fs-ch {position:relative;padding:6px 0 36px 64px}
+
+/* ── Horizontal spine — the stepper on top, one movement below ─────────── */
+.v3fs-flow-spine::before {display:none}
+.v3fs-flow-spine .v3fs-ch {padding:0;margin-top:16px;background:var(--fs-card);border:1px solid var(--fs-line);
+  border-radius:20px;box-shadow:0 24px 60px -34px rgba(23,26,46,.18);overflow:hidden}
+.v3fs-flow-spine .v3fs-ch-h-static {display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;padding:22px 26px 0}
+.v3fs-flow-spine .v3fs-ch-b {padding:0 26px 26px;margin-top:16px}
+.v3fs-flow-spine .v3fs-ch-collect {margin:22px 0 0;padding:20px 26px 24px;border-top:1px solid var(--fs-line);
+  background:linear-gradient(180deg,color-mix(in srgb,var(--fs-line) 16%,transparent),transparent 44%)}
+.v3fs-flow-spine .v3fs-editor {margin:0 26px 26px}
+.v3fs-stepper {display:flex;align-items:stretch;gap:0;position:relative;overflow-x:auto;padding-bottom:6px}
+.v3fs-stepper-rail {position:absolute;top:33px;left:14px;right:14px;height:2px;background:var(--fs-line);z-index:0}
+.v3fs-step {flex:1;min-width:126px;position:relative;background:none;border:none;font:inherit;cursor:pointer;
+  text-align:left;padding:16px 14px 14px;border-radius:14px;transition:background .18s ease,box-shadow .18s ease}
+.v3fs-step:hover {background:var(--fs-card)}
+.v3fs-step.on {background:var(--fs-card);box-shadow:0 8px 26px -14px rgba(23,26,46,.24)}
+.v3fs-step:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:2px}
+/* Progress ring around the movement number — the GATE ring, small: conic fill =
+   gate criteria met, toned to match the Gate column's gauge (green/amber/dim). */
+.v3fs-sring {position:relative;z-index:1;display:inline-grid;place-items:center;width:40px;height:40px;border-radius:50%;
+  margin-bottom:9px;background:conic-gradient(var(--ring,var(--v3-text-muted)) var(--pct,0%), var(--fs-line) 0)}
+.v3fs-sring.green {--ring:var(--v3-green)}
+.v3fs-sring.amber {--ring:var(--v3-amber)}
+.v3fs-sring.dim {--ring:var(--v3-text-muted)}
+.v3fs-sdot {position:relative;z-index:1;display:grid;place-items:center;width:34px;height:34px;border-radius:50%;
+  font-family:var(--v3-font-mono);font-size:13px;font-weight:750;border:2px solid var(--fs-card);
+  background:var(--fs-card);color:var(--v3-text-muted)}
+.v3fs-sdot.done {border-color:var(--v3-green);background:var(--v3-green);color:#fff}
+.v3fs-sdot.live {border-color:var(--v3-accent);background:var(--v3-accent);color:#fff;box-shadow:0 0 0 5px var(--v3-accent-soft)}
+.v3fs-sname {display:block;font-size:14.5px;font-weight:650;letter-spacing:-.01em;color:var(--v3-text-primary)}
+.v3fs-sstate {display:block;font-size:11px;font-weight:550;color:var(--v3-text-muted);margin-top:1px}
+.v3fs-sstate.done {color:var(--v3-green)}
+.v3fs-sstate.live,.v3fs-sstate.gen {color:var(--v3-accent-2)}
+.v3fs-smeta {display:block;font-family:var(--v3-font-mono);font-size:9.5px;color:var(--v3-text-muted);margin-top:4px}
+@media (max-width:820px){.v3fs-stepper{gap:4px}}
 .v3fs-node {position:absolute;left:0;top:12px;width:34px;height:34px;border-radius:50%;background:var(--fs-card);border:1.5px solid var(--fs-line);display:grid;place-items:center;font-weight:650;font-size:13px;color:var(--v3-text-muted);box-shadow:var(--fs-shadow)}
 .v3fs-ch.done .v3fs-node {border-color:var(--v3-green);color:var(--v3-green);background:var(--v3-green-soft)}
 .v3fs-ch.live .v3fs-node {border-color:var(--v3-accent);color:#fff;background:var(--v3-accent)}
@@ -4567,6 +4675,45 @@ svg.v3fs-ric {margin:0 auto}
 .v3fs-brand-caret {font-size:8px;display:block;line-height:1;opacity:.75;margin-top:1px}
 /* Library search spans the grid above both panels. */
 .v3fs-search-row {grid-column:1 / -1}
+/* Library facets */
+.v3fs-facets {display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+.v3fs-facet {font-family:var(--v3-font);cursor:pointer;border:1px solid var(--fs-line);background:var(--fs-card);
+  display:inline-flex;align-items:center;gap:6px;padding:6px 13px;border-radius:999px;
+  font-size:11.5px;font-weight:600;color:var(--v3-text-secondary);transition:all .14s ease}
+.v3fs-facet:hover {border-color:color-mix(in srgb,var(--v3-accent-2) 40%,transparent)}
+.v3fs-facet.on {background:var(--v3-accent);border-color:var(--v3-accent);color:#fff}
+.v3fs-facet-n {font-family:var(--v3-font-mono);font-size:10px;font-weight:700;opacity:.8}
+/* Recently changed strip */
+.v3fs-recent-row {display:flex;flex-wrap:wrap;gap:8px}
+.v3fs-recent-chip {font-family:var(--v3-font);cursor:pointer;border:1px solid var(--fs-line);background:var(--fs-card);
+  display:inline-flex;align-items:baseline;gap:8px;padding:7px 12px;border-radius:10px;transition:border-color .14s ease}
+.v3fs-recent-chip:hover {border-color:color-mix(in srgb,var(--v3-accent-2) 45%,transparent)}
+.v3fs-recent-when {font-family:var(--v3-font-mono);font-size:10px;color:var(--v3-text-muted)}
+.v3fs-recent-l {font-size:12px;font-weight:600;color:var(--v3-text-primary)}
+/* Evidence grouped by person */
+.v3fs-ev-group {border-bottom:1px solid var(--fs-line)}
+.v3fs-ev-group:last-child {border-bottom:none}
+.v3fs-ev-ghead {width:100%;font-family:var(--v3-font);cursor:pointer;border:none;background:none;text-align:left;
+  display:flex;align-items:center;gap:10px;padding:11px 4px}
+.v3fs-ev-ghead:hover {background:var(--fs-indigo-wash)}
+.v3fs-ev-gchev {font-size:10px;color:var(--v3-text-muted);width:12px}
+.v3fs-ev-gname {font-size:13px;font-weight:650;color:var(--v3-text-primary);flex:1}
+.v3fs-ev-gcount {font-size:11px;color:var(--v3-accent-2);font-weight:600}
+.v3fs-ev-gwhen {font-family:var(--v3-font-mono);font-size:10px;color:var(--v3-text-muted)}
+.v3fs-ev-sub {padding-left:22px}
+/* Artifacts as a status ledger */
+.v3fs-art-row {position:relative}
+.v3fs-art-stripe {position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:2px;background:var(--fs-line)}
+.v3fs-art-row.stale .v3fs-art-stripe {background:var(--v3-amber)}
+.v3fs-art-row.ok .v3fs-art-stripe {background:var(--v3-green)}
+.v3fs-art-row.missing .v3fs-art-stripe {background:var(--v3-text-muted);opacity:.4}
+.v3fs-art-badge {flex-shrink:0;font-size:9.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:2px 7px;border-radius:6px}
+.v3fs-art-badge.stale {background:var(--v3-amber-soft);color:var(--v3-amber)}
+.v3fs-art-badge.ok {background:color-mix(in srgb,var(--v3-green) 12%,transparent);color:var(--v3-green)}
+.v3fs-art-badge.missing {background:var(--fs-line);color:var(--v3-text-muted)}
+/* Contradiction inline actions */
+.v3fs-dispute-cta {display:inline-flex;align-items:center;gap:10px;flex-shrink:0}
+.v3fs-dispute-resolve {font-weight:700;color:var(--v3-green)}
 .v3fs-search {width:100%;background:var(--fs-card);border:1px solid var(--fs-line);border-radius:12px;color:var(--v3-text-primary);font-family:var(--v3-font);font-size:13px;padding:11px 14px}
 .v3fs-search::placeholder {color:var(--v3-text-muted)}
 /* Paper reads as paper in the dark too: a top highlight replaces the
@@ -4582,7 +4729,31 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 
 /* evidence — pull-quotes */
 .v3fs-voice {padding:2px 0 14px 16px;border-left:3px solid var(--v3-accent-b);margin-bottom:6px}
-.v3fs-voice-q {font-size:15.5px;line-height:1.45;color:var(--fs-quote);font-weight:500;letter-spacing:-.01em;max-width:40ch}
+.v3fs-voice-q {font-size:15.5px;line-height:1.45;color:var(--fs-quote);font-weight:500;letter-spacing:-.01em;max-width:40ch;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.v3fs-ev-more {display:block;margin:8px 0 2px;font-size:11.5px;font-weight:600;color:var(--v3-accent-2)}
+.v3fs-row-when {flex-shrink:0;font-family:var(--v3-font-mono);font-size:10px;color:var(--v3-text-muted);white-space:nowrap}
+.v3fs-ivc-evlink {margin-left:8px;font-size:11px;font-weight:600;white-space:nowrap}
+/* Discovery Kit studio — people-first master-detail */
+.v3fs-kit2 {display:grid;grid-template-columns:230px 1fr;gap:18px;margin-bottom:20px;align-items:start}
+.v3fs-kit2-roster {border:1px solid var(--fs-line);border-radius:12px;padding:8px;background:var(--fs-card);
+  display:flex;flex-direction:column;gap:4px;position:sticky;top:64px}
+.v3fs-kit2-roster-h {display:flex;align-items:center;justify-content:space-between;padding:4px 8px 8px;
+  font-size:10px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3fs-kit2-person {font-family:var(--v3-font);cursor:pointer;border:none;background:none;text-align:left;
+  display:flex;flex-direction:column;gap:1px;padding:8px 10px;border-radius:9px;transition:background .12s ease}
+.v3fs-kit2-person:hover {background:var(--fs-indigo-wash)}
+.v3fs-kit2-person.on {background:var(--fs-indigo-wash);box-shadow:inset 2.5px 0 0 var(--v3-accent-2)}
+.v3fs-kit2-pn {font-size:12.5px;font-weight:650;color:var(--v3-text-primary)}
+.v3fs-kit2-pm {font-size:11px;color:var(--v3-text-secondary)}
+.v3fs-kit2-pq {font-size:10px;color:var(--v3-text-muted)}
+.v3fs-kit2-detail {display:flex;flex-direction:column;gap:14px;min-width:0}
+.v3fs-stu-note {font-size:11.5px;line-height:1.5;color:var(--v3-text-muted);margin:0 0 10px}
+.v3fs-stu-note b {font-weight:650;color:var(--v3-text-secondary)}
+@media (max-width: 900px) {
+  .v3fs-kit2 {grid-template-columns:1fr}
+  .v3fs-kit2-roster {position:static;flex-direction:row;flex-wrap:wrap}
+}
 .v3fs-voice-who {font-size:12px;color:var(--v3-text-secondary);font-weight:600;margin-top:6px}
 .v3fs-voice-who span {color:var(--v3-text-muted);font-weight:400;font-family:var(--v3-font-mono);font-size:10.5px;margin-left:8px}
 .v3fs-coverage {margin-top:12px;max-width:340px}
@@ -4640,10 +4811,6 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-gate-rec {font:inherit;font-size:11.5px;font-weight:650;margin:6px 0 2px 22px;align-self:flex-start;border:1px solid currentColor;border-radius:99px;padding:6px 14px;background:transparent;color:inherit;cursor:pointer;transition:background .15s ease}
 .v3fs-gate-rec:hover {background:color-mix(in srgb, currentColor 10%, transparent)}
 .v3fs-gate-rec.armed {background:var(--v3-green);border-color:var(--v3-green);color:#fff}
-.v3fs-spine {display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;border:1px solid var(--v3-amber);border-radius:14px;padding:13px 17px;margin:0 0 26px;background:var(--v3-amber-soft)}
-.v3fs-spine-t {flex:1 1 260px;font-size:12.5px;font-weight:600;color:var(--v3-amber);line-height:1.5}
-.v3fs-spine-bar {flex:1 1 160px;height:6px;border-radius:99px;background:color-mix(in srgb, var(--v3-amber) 20%, transparent);overflow:hidden}
-.v3fs-spine-fill {height:100%;border-radius:99px;background:var(--v3-amber);transition:width .4s ease}
 .v3fs-gate-rec.quiet {font-weight:550;opacity:.8;border-style:dashed}
 .v3fs-gate-rec.quiet.armed {background:var(--v3-amber);border-color:var(--v3-amber);border-style:solid;color:#fff;opacity:1}
 .v3fs-kit-flag {display:flex;align-items:flex-start;gap:8px;font-size:11px;color:var(--v3-text-secondary);line-height:1.5;margin:2px 0 4px;cursor:pointer}
@@ -4656,7 +4823,7 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-check-grp:not(.met) span {color:var(--v3-amber)}
 .v3fs-cta {display:block;width:100%;margin-top:13px;border-radius:10px;padding:11px 14px;font-size:12.5px;font-weight:600;background:var(--v3-accent);color:#fff;text-align:center;box-shadow:0 6px 16px -10px color-mix(in srgb,var(--v3-accent) 60%,transparent);transition:background .15s ease}
 .v3fs-cta:hover {background:color-mix(in srgb,var(--v3-accent) 85%,#fff)}
-.v3fs-switcher-backdrop {position:fixed;inset:0;z-index:60;background:transparent}
+.v3fs-switcher-backdrop {position:fixed;inset:0;z-index:209;background:transparent}
 /* Embedded classic editor, skinned to sit on paper: the inner panel loses its
    own card chrome; the v3fs-editor wrapper provides the surface. */
 .v3fs-editor {background:var(--fs-card);border:1px solid var(--fs-line);border-radius:16px;padding:6px 10px;box-shadow:var(--fs-shadow)}
@@ -4665,6 +4832,103 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 
 /* library / pulse */
 .v3fs-grid2 {display:grid;grid-template-columns:1.05fr 1fr;gap:22px;margin-top:30px}
+.v3fs-panel-wide {grid-column:1 / -1}
+/* ── Movement command strip: gate gauge · one-line brief · counts · next ──── */
+.v3fs-movebar {display:flex;flex-wrap:wrap;align-items:center;gap:14px 16px;padding:14px 26px 2px}
+/* The gate gauge — echoed from the Gate tab so "where's this gate" reads in
+   one glance (#76). Conic fill = criteria met, toned to the readiness colour. */
+.v3fs-mgauge {position:relative;flex-shrink:0;display:inline-grid;place-items:center;width:46px;height:46px;border-radius:50%;
+  border:none;cursor:pointer;padding:0;background:conic-gradient(var(--ring,var(--v3-text-muted)) var(--pct,0%), var(--fs-line) 0)}
+.v3fs-mgauge.green {--ring:var(--v3-green)} .v3fs-mgauge.amber {--ring:var(--v3-amber)} .v3fs-mgauge.dim {--ring:var(--v3-text-muted)}
+.v3fs-mgauge:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:2px}
+.v3fs-mgauge-c {display:inline-flex;align-items:baseline;justify-content:center;width:38px;height:38px;border-radius:50%;background:var(--fs-card)}
+.v3fs-mgauge-c b {font-family:var(--v3-font-mono);font-size:13.5px;font-weight:750;color:var(--v3-text-primary)}
+.v3fs-mgauge-c i {font-family:var(--v3-font-mono);font-size:9px;font-style:normal;color:var(--v3-text-muted)}
+.v3fs-mgauge.green .v3fs-mgauge-c b {color:var(--v3-green)}
+.v3fs-movebar-txt {flex:1 1 340px;min-width:0}
+.v3fs-movebar-cap {font-size:13px;font-weight:500;color:var(--v3-text-secondary);line-height:1.5;margin-bottom:6px;max-width:72ch;text-wrap:pretty}
+/* "Up next" — the ranked frontier queue. The first verb is the primary;
+   the rest wait quietly beneath it. */
+.v3fs-upnext {flex-shrink:0;display:flex;flex-direction:column;align-items:flex-start;gap:6px;max-width:340px}
+.v3fs-upnext-l {font-size:9.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3fs-upnext-btn {font:inherit;font-size:12px;font-weight:600;cursor:pointer;text-align:left;
+  display:inline-flex;align-items:baseline;gap:8px;border:1px solid var(--fs-line);background:var(--fs-card);color:var(--v3-text-secondary);
+  border-radius:99px;padding:6px 14px;transition:border-color .15s ease,color .15s ease,background .15s ease}
+.v3fs-upnext-btn:hover {border-color:color-mix(in srgb,var(--v3-accent) 40%,var(--fs-line));color:var(--v3-text-primary)}
+.v3fs-upnext-btn.pri {font-size:12.5px;font-weight:650;border-color:var(--v3-accent);background:var(--v3-accent);color:#fff;
+  padding:8px 15px;box-shadow:0 6px 16px -10px color-mix(in srgb,var(--v3-accent) 60%,transparent)}
+.v3fs-upnext-btn.pri:hover {background:color-mix(in srgb,var(--v3-accent) 86%,#fff)}
+.v3fs-upnext-btn:disabled {opacity:.6;cursor:default}
+/* Armed confirm state — the button says exactly what the second press does. */
+.v3fs-upnext-btn.armed, .v3fs-upnext-btn.pri.armed {border-color:var(--v3-green);background:var(--v3-green);color:#fff}
+.v3fs-upnext-i {flex-shrink:0}
+.v3fs-upnext-run {display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:600;color:var(--v3-amber);min-width:240px}
+.v3fs-upnext-bar {height:5px;border-radius:99px;background:color-mix(in srgb,var(--v3-amber) 20%,transparent);overflow:hidden}
+.v3fs-upnext-fill {height:100%;border-radius:99px;background:var(--v3-amber);transition:width .4s ease}
+.v3fs-upnext-note {font-size:11px;line-height:1.5;color:var(--v3-text-muted);max-width:32ch}
+/* Movement sub-tabs — Evidence · Artifacts · Gate · People, with live counts. */
+.v3fs-mtabs {display:flex;gap:2px;padding:10px 26px 0;margin-top:10px;border-bottom:1px solid var(--fs-line);overflow-x:auto}
+.v3fs-mtab {font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;background:none;border:none;color:var(--v3-text-muted);
+  padding:9px 13px;border-bottom:2px solid transparent;margin-bottom:-1px;display:inline-flex;align-items:center;gap:7px;white-space:nowrap;transition:color .15s ease}
+.v3fs-mtab:hover {color:var(--v3-text-secondary)}
+.v3fs-mtab.on {color:var(--v3-accent-2);border-bottom-color:var(--v3-accent-2)}
+.v3fs-mtab:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:-2px;border-radius:8px}
+.v3fs-mtab-n {font-family:var(--v3-font-mono);font-size:10px;font-weight:700;color:var(--v3-text-muted);background:var(--fs-line);border-radius:6px;padding:1px 6px}
+.v3fs-mtab.on .v3fs-mtab-n {background:var(--v3-accent-soft);color:var(--v3-accent-2)}
+/* Attention state: the badge turns amber when the tab NEEDS the operator —
+   stale artifacts, an amber gate, unheard people. Placed after the .on rule
+   so a warn badge stays amber even on the active tab. */
+.v3fs-mtab .v3fs-mtab-n.warn, .v3fs-mtab.on .v3fs-mtab-n.warn {background:var(--v3-amber-soft);color:var(--v3-amber)}
+/* Stage glyphs + the arrows that draw the loop left to right. */
+.v3fs-mtab-g {font-size:10px;line-height:1}
+.v3fs-mtab-g.warn {color:var(--v3-amber)}
+.v3fs-mtab-g.ok {color:var(--v3-green)}
+.v3fs-mtab-g.dim {color:var(--v3-text-muted)}
+.v3fs-mtab-arr {align-self:center;font-size:11px;color:var(--v3-text-muted);opacity:.45;padding:0 2px;user-select:none}
+/* The active underline scales in rather than teleporting. */
+.v3fs-mtab {position:relative;border-bottom:none}
+.v3fs-mtab::after {content:"";position:absolute;left:10px;right:10px;bottom:0;height:2px;border-radius:2px;
+  background:var(--v3-accent-2);transform:scaleX(0);transform-origin:center}
+.v3fs-mtab.on::after {transform:scaleX(1)}
+@media (prefers-reduced-motion: no-preference) {
+  .v3fs-mtab::after {transition:transform .18s ease}
+}
+/* Tabbed body: one panel at a time, full width. Hidden panels stay mounted
+   (display:none) so capture boxes and expanders keep their state. */
+.v3fs-ch-b.tabbed {display:block;margin-top:0}
+.v3fs-tabhide {display:none !important}
+.v3fs-ch-b.tabbed .v3fs-ch-collect {margin-top:0;padding-left:0;padding-right:0;border-top:none;background:none}
+/* Switching tabs gets one soft entrance — display:none → block restarts it. */
+@media (prefers-reduced-motion: no-preference) {
+  .v3fs-ch-b.tabbed > div:not(.v3fs-tabhide) {animation:v3fs-tabin .16s ease}
+  @keyframes v3fs-tabin {from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+}
+/* Collect: the status board runs full width; the record beneath reads as a
+   column of text, not a wall — capped at a reading measure. */
+.v3fs-evcol > *:not(.v3fs-ch-collect) {max-width:74ch}
+.v3fs-evcol .v3fs-ch-collect {margin-bottom:22px}
+/* The full record, grouped by person (documents together), newest first. */
+.v3fs-evg {border-bottom:1px solid var(--fs-line)}
+.v3fs-evg:last-of-type {border-bottom:none}
+.v3fs-evg > summary {display:flex;align-items:baseline;gap:10px;cursor:pointer;list-style:none;padding:10px 4px}
+.v3fs-evg > summary::-webkit-details-marker {display:none}
+.v3fs-evg > summary:hover {background:var(--fs-indigo-wash)}
+.v3fs-evg-n {font-size:13px;font-weight:650;color:var(--v3-text-primary);flex:1}
+.v3fs-evg-c {font-size:11px;font-weight:600;color:var(--v3-accent-2)}
+.v3fs-evg-when {font-family:var(--v3-font-mono);font-size:10px;color:var(--v3-text-muted)}
+.v3fs-evg > .v3fs-voice {margin-left:8px}
+/* Artifacts as a two-up ledger at width; header + boards span the full row. */
+.v3fs-artgrid {display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px;align-items:start}
+.v3fs-artgrid .v3fs-colh, .v3fs-artgrid .v3fs-shipboard, .v3fs-artgrid .v3fs-tour, .v3fs-artgrid .v3fs-doc.ghost:only-of-type {grid-column:1/-1}
+.v3fs-artgrid .v3fs-doc {margin:0}
+/* Provenance: what the document read, and what it still owes. */
+.v3fs-doc-prov {font-family:var(--v3-font-mono);font-size:10px;color:var(--v3-text-muted);margin-top:7px}
+.v3fs-doc-regen {font-size:11.5px;padding:7px 13px;border-radius:99px}
+button.v3fs-stale-tag {font-family:inherit;border:none;cursor:pointer}
+/* Empty-tab ghost: name the action that fills it. */
+.v3fs-tab-ghost {font-size:13px;line-height:1.6;color:var(--v3-text-muted);padding:14px 0 18px}
+.v3fs-tab-ghost button {font:inherit;font-weight:650;color:var(--v3-accent-2);background:none;border:none;cursor:pointer;padding:0}
+.v3fs-tab-ghost button:hover {text-decoration:underline}
 .v3fs-panel {background:var(--fs-card);border:1px solid var(--fs-line);border-radius:16px;padding:20px 24px;box-shadow:var(--fs-shadow);min-width:0}
 .v3fs-ph {display:flex;align-items:baseline;gap:12px;margin-bottom:14px}
 .v3fs-ph h3 {font-size:16px;font-weight:600;letter-spacing:-.01em;margin:0}
@@ -4678,14 +4942,23 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-tag.ev {background:var(--fs-blue-wash);color:var(--fs-quote)}
 .v3fs-tag.gn {background:var(--fs-indigo-wash);color:var(--v3-accent-2)}
 .v3fs-empty {font-size:12.5px;color:var(--v3-text-muted);padding:10px 0}
-.v3fs-stats {display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-top:30px}
-.v3fs-stat {background:var(--fs-card);border:1px solid var(--fs-line);border-radius:16px;padding:18px 22px;box-shadow:var(--fs-shadow)}
+.v3fs-stats {display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:20px}
+.v3fs-stat {position:relative;background:var(--fs-card);border:1px solid var(--fs-line);border-radius:16px;padding:18px 22px;box-shadow:var(--fs-shadow)}
 .v3fs-stat-n {font-size:32px;font-weight:300;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
 .v3fs-stat-n b {font-weight:600}
 .v3fs-stat-n small {font-size:14px;color:var(--v3-text-muted);font-weight:400}
 .v3fs-stat-l {font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--v3-text-muted);margin-top:5px}
+.v3fs-stat .v3fs-pf-bar {margin-top:11px}
 .v3fs-stat.hero {background:var(--v3-accent);border-color:transparent;color:#fff}
 .v3fs-stat.hero .v3fs-stat-l,.v3fs-stat.hero small {color:rgba(255,255,255,.75)}
+/* Empty hero: no date yet — read as a quiet card, not a heavy indigo void. */
+.v3fs-stat.hero.empty {background:var(--fs-card);border:1px dashed color-mix(in srgb,var(--v3-accent) 32%,var(--fs-line));color:var(--v3-text-muted)}
+.v3fs-stat.hero.empty .v3fs-stat-n {color:var(--v3-text-muted)}
+.v3fs-stat.hero.empty .v3fs-stat-l,.v3fs-stat.hero.empty small {color:var(--v3-text-muted)}
+/* Pulse lead — matches the Portfolio toolbar language */
+.v3fs-pulse-lead {display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:0 2px}
+.v3fs-pulse-lead-l {display:flex;flex-direction:column;gap:4px}
+.v3fs-pulse-lead-l p {margin:0;font-size:13px;color:var(--v3-text-muted)}
 .v3fs-vc {font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-radius:999px;padding:3px 10px;flex-shrink:0}
 .v3fs-vc.acc {background:var(--v3-green-soft);color:var(--v3-green)}
 .v3fs-vc.pen {background:var(--v3-surface-2);color:var(--v3-text-muted)}
@@ -4694,6 +4967,27 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-kpi-t {display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;gap:12px}
 .v3fs-kpi-t b {font-weight:600}
 .v3fs-kpi-t span {font-family:var(--v3-font-mono);font-size:11px;color:var(--v3-text-muted);white-space:nowrap}
+/* Governed metric registry (F-002) */
+.v3fs-kpi-def {font-size:11.5px;line-height:1.45;color:var(--v3-text-muted);margin:-2px 0 8px}
+.v3fs-kpi-def.undefinedm {font-style:italic;color:var(--v3-amber)}
+.v3fs-metric-health {display:inline-flex;align-items:center;gap:6px;margin:0 0 12px;padding:4px 10px;border-radius:999px;
+  font-size:11px;font-weight:600;background:var(--v3-amber-soft);color:var(--v3-amber);
+  border:1px solid color-mix(in srgb,var(--v3-amber) 34%,transparent)}
+.v3fs-metric-health.ok {background:color-mix(in srgb,var(--v3-green,#16a34a) 9%,transparent);color:var(--v3-green,#16a34a);
+  border-color:color-mix(in srgb,var(--v3-green,#16a34a) 34%,transparent)}
+/* Library attach routing — the inference shown before anything lands. */
+.v3fs-docroute {display:flex;flex-direction:column;gap:10px;margin:0 0 14px;padding:12px 14px;border-radius:12px;
+  background:var(--fs-indigo-wash);border:1px solid color-mix(in srgb,var(--v3-accent-2) 30%,transparent)}
+.v3fs-docroute.transcript {background:color-mix(in srgb,var(--v3-green,#16a34a) 7%,transparent);
+  border-color:color-mix(in srgb,var(--v3-green,#16a34a) 30%,transparent)}
+.v3fs-docroute-g {display:flex;align-items:baseline;gap:10px;min-width:0}
+.v3fs-docroute-k {flex-shrink:0;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--v3-accent-2)}
+.v3fs-docroute.transcript .v3fs-docroute-k {color:var(--v3-green,#16a34a)}
+.v3fs-docroute-t {font-size:12.5px;line-height:1.5;color:var(--v3-text-secondary)}
+.v3fs-docroute-cta {display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.v3fs-docroute-move {display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--v3-text-muted)}
+.v3fs-docroute-move select {font-family:var(--v3-font);font-size:11.5px;font-weight:600;color:var(--v3-text-secondary);
+  border:1px solid var(--fs-line);border-radius:8px;padding:4px 6px;background:var(--fs-card)}
 .v3fs-river {position:relative;height:7px;border-radius:99px;background:var(--v3-surface-2)}
 .v3fs-river-to {position:absolute;inset:0;border-radius:99px;background:linear-gradient(90deg,rgba(0,160,223,.35),rgba(34,197,94,.4))}
 .v3fs-river-mk {position:absolute;top:-3px;left:2%;width:3px;height:13px;background:var(--v3-text-primary);border-radius:3px}
@@ -4744,18 +5038,354 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-stale-tag {font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-radius:6px;padding:2px 7px;background:var(--v3-amber-soft);color:var(--v3-amber);flex-shrink:0}
 
 /* Tracks: the build as workstreams; acceptance is earned pass by pass. */
-.v3fs-trkgrid {display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
-.v3fs-trk {background:var(--fs-card);border:1px solid var(--fs-line);border-radius:16px;box-shadow:var(--fs-shadow);padding:18px 20px;display:flex;flex-direction:column;gap:10px;transition:border-color .15s ease,box-shadow .15s ease,transform .15s ease}
-.v3fs-trk:hover {transform:translateY(-1px);box-shadow:var(--fs-lift)}
-.v3fs-trk.acc {border-color:color-mix(in srgb,var(--v3-green) 45%,var(--fs-line))}
-.v3fs-trk-top {display:flex;align-items:center;justify-content:space-between;gap:10px}
-.v3fs-trk-top h3 {font-size:15.5px;font-weight:600;letter-spacing:-.01em;margin:0}
-.v3fs-pace {font-size:9.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;border-radius:999px;padding:3px 9px;flex-shrink:0}
-.v3fs-pace.on-pace {background:var(--v3-green-soft);color:var(--v3-green)}
-.v3fs-pace.watch {background:var(--v3-amber-soft);color:var(--v3-amber)}
-.v3fs-pace.stalled {background:rgba(220,38,38,.12);color:var(--v3-red,#dc2626)}
-.v3fs-trk-g {font-size:12.5px;line-height:1.55;color:var(--v3-text-muted);margin:0}
-.v3fs-trk-meta {display:flex;flex-wrap:wrap;gap:6px 14px;font-family:var(--v3-font-mono);font-size:10.5px;color:var(--v3-text-muted)}
+/* ── Portfolio — the programme ledger ──────────────────────────────────── */
+.v3fs-pf {max-width:840px;margin:0 auto}
+/* Toolbar — search, then status filters + expand-all */
+.v3fs-pf-toolbar {display:flex;flex-direction:column;gap:12px;margin:0 2px 18px}
+.v3fs-pf-toolbar-row {display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.v3fs-pf-search-wrap {position:relative;display:flex;align-items:center}
+.v3fs-pf-search-i {position:absolute;left:14px;color:var(--v3-text-muted);pointer-events:none}
+.v3fs-pf-search {width:100%;font:inherit;font-size:13.5px;color:var(--v3-text-primary);background:var(--fs-card);border:1px solid var(--fs-line);border-radius:12px;padding:10px 14px 10px 38px;box-shadow:var(--fs-shadow);transition:border-color .14s ease,box-shadow .14s ease}
+.v3fs-pf-search::placeholder {color:var(--v3-text-muted)}
+.v3fs-pf-search:focus {outline:none;border-color:color-mix(in srgb,var(--v3-accent) 45%,var(--fs-line));box-shadow:0 0 0 3px var(--v3-accent-soft)}
+.v3fs-pf-filters {display:inline-flex;gap:4px;padding:4px;background:color-mix(in srgb,var(--fs-line) 42%,transparent);border-radius:12px}
+.v3fs-pf-filter {display:inline-flex;align-items:center;gap:7px;font:inherit;font-size:12.5px;font-weight:600;color:var(--v3-text-muted);background:none;border:none;border-radius:9px;padding:6px 13px;cursor:pointer;transition:background .14s ease,color .14s ease}
+.v3fs-pf-filter:hover {color:var(--v3-text-primary)}
+.v3fs-pf-filter.on {background:var(--fs-card);color:var(--v3-text-primary);box-shadow:var(--fs-shadow)}
+.v3fs-pf-filter:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:1px}
+.v3fs-pf-filter-n {font-family:var(--v3-font-mono);font-size:10.5px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--v3-text-muted);background:color-mix(in srgb,var(--v3-text-muted) 12%,transparent);border-radius:999px;padding:1px 6px;min-width:18px;text-align:center}
+.v3fs-pf-filter.on .v3fs-pf-filter-n {color:var(--v3-accent);background:var(--fs-indigo-wash)}
+.v3fs-pf-expand {font:inherit;font-size:12px;font-weight:600;color:var(--v3-text-muted);background:none;border:1px solid var(--fs-line);border-radius:9px;padding:7px 14px;cursor:pointer;transition:color .14s ease,border-color .14s ease}
+.v3fs-pf-expand:hover {color:var(--v3-text-primary);border-color:color-mix(in srgb,var(--v3-accent) 30%,var(--fs-line))}
+.v3fs-pf-expand:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:1px}
+
+.v3fs-pf-eyebrow {font-family:var(--v3-font-mono);font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3fs-pf-eyebrow.sm {letter-spacing:.1em;display:inline-flex;align-items:center;gap:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+
+.v3fs-pf-list {display:flex;flex-direction:column;gap:12px}
+.v3fs-pf-card {position:relative;display:flex;overflow:hidden;background:var(--fs-card);border:1px solid var(--fs-line);border-radius:16px;box-shadow:var(--fs-shadow);
+  transition:border-color .16s ease,box-shadow .16s ease,transform .16s ease}
+.v3fs-pf-card:hover {transform:translateY(-2px);box-shadow:var(--fs-lift)}
+.v3fs-pf-card.collapsed:hover {transform:none;box-shadow:var(--fs-shadow);border-color:color-mix(in srgb,var(--v3-accent) 26%,var(--fs-line))}
+.v3fs-pf-stripe {flex:0 0 4px;background:var(--fs-line)}
+.v3fs-pf-card.here .v3fs-pf-stripe {background:linear-gradient(180deg,var(--v3-green),color-mix(in srgb,var(--v3-green) 50%,transparent))}
+.v3fs-pf-card.watch .v3fs-pf-stripe {background:linear-gradient(180deg,var(--v3-amber),color-mix(in srgb,var(--v3-amber) 50%,transparent))}
+.v3fs-pf-card.clear .v3fs-pf-stripe {background:color-mix(in srgb,var(--v3-accent) 28%,var(--fs-line))}
+.v3fs-pf-card.here {border-color:color-mix(in srgb,var(--v3-green) 40%,var(--fs-line))}
+.v3fs-pf-body {flex:1;min-width:0;display:flex;flex-direction:column}
+
+/* Head — a full-width expand/collapse toggle */
+.v3fs-pf-head {display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;text-align:left;background:none;border:none;font:inherit;cursor:pointer;padding:15px 18px 15px 20px}
+.v3fs-pf-head:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:-3px;border-radius:14px}
+.v3fs-pf-id {min-width:0;display:flex;flex-direction:column;gap:3px}
+.v3fs-pf-nrow {display:flex;align-items:center;gap:7px;min-width:0}
+.v3fs-pf-name {font-size:16px;font-weight:650;letter-spacing:-.015em;line-height:1.25;color:var(--v3-text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Rename pencil — sits next to the name in both states */
+.v3fs-pf-edit {display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:26px;height:26px;border:none;border-radius:8px;background:transparent;color:var(--v3-text-muted);cursor:pointer;opacity:.65;transition:opacity .14s ease,background .14s ease,color .14s ease}
+.v3fs-pf-edit:hover {opacity:1;background:var(--v3-accent-soft);color:var(--v3-accent)}
+.v3fs-pf-edit:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:1px;opacity:1}
+.v3fs-btn.sm {font-size:11.5px;padding:5px 12px;border-radius:8px}
+.v3fs-pf-head-r {display:flex;align-items:center;gap:10px;flex-shrink:0}
+.v3fs-pf-mini {font-family:var(--v3-font-mono);font-size:10.5px;color:var(--v3-text-muted);white-space:nowrap}
+.v3fs-pf-status {flex-shrink:0;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;border-radius:999px;padding:4px 10px}
+.v3fs-pf-status.here {background:var(--v3-green-soft);color:var(--v3-green)}
+.v3fs-pf-status.watch {background:var(--v3-amber-soft);color:var(--v3-amber)}
+.v3fs-pf-status.clear {background:color-mix(in srgb,var(--v3-text-muted) 11%,transparent);color:var(--v3-text-muted)}
+.v3fs-pf-chev {color:var(--v3-text-muted);font-size:15px;line-height:1;transition:transform .18s ease}
+.v3fs-pf-card.collapsed .v3fs-pf-chev {transform:rotate(-90deg)}
+
+/* Inline rename */
+.v3fs-pf-editrow {display:flex;flex-direction:column;gap:7px;padding:13px 18px 13px 20px}
+.v3fs-pf-editrow-i {display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.v3fs-pf-rename {flex:1;min-width:200px;font:inherit;font-size:16px;font-weight:650;letter-spacing:-.015em;color:var(--v3-text-primary);background:var(--fs-card);border:1px solid color-mix(in srgb,var(--v3-accent) 45%,var(--fs-line));border-radius:10px;padding:8px 12px}
+.v3fs-pf-rename:focus {outline:2px solid var(--v3-accent-2);outline-offset:1px;border-color:transparent}
+
+/* ── Global search palette (⌘K) ─────────────────────────────────────────── */
+.v3fs-cmd-overlay {position:fixed;inset:0;z-index:200;display:flex;justify-content:center;align-items:flex-start}
+.v3fs-cmd-back {position:absolute;inset:0;background:rgba(16,18,32,.34);backdrop-filter:blur(3px)}
+.v3fs-cmd {position:relative;width:min(600px,92vw);margin-top:12vh;background:var(--fs-card);border:1px solid var(--fs-line);border-radius:16px;
+  box-shadow:var(--fs-pop);overflow:hidden;animation:v3fs-cmd-in .16s cubic-bezier(.22,1,.36,1)}
+@keyframes v3fs-cmd-in {from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+.v3fs-cmd-in {display:flex;align-items:center;gap:11px;padding:15px 16px;border-bottom:1px solid var(--fs-line);color:var(--v3-text-muted)}
+.v3fs-cmd-in input {flex:1;min-width:0;font:inherit;font-size:15px;color:var(--v3-text-primary);background:none;border:none;outline:none}
+.v3fs-cmd-in input::placeholder {color:var(--v3-text-muted)}
+.v3fs-cmd-in kbd {font-family:var(--v3-font-mono);font-size:10px;font-weight:600;color:var(--v3-text-muted);background:color-mix(in srgb,var(--fs-line) 55%,transparent);border-radius:6px;padding:3px 7px}
+.v3fs-cmd-body {max-height:min(52vh,440px);overflow-y:auto;padding:8px}
+.v3fs-cmd-hint {padding:16px 12px;font-size:13px;color:var(--v3-text-muted);text-align:center}
+.v3fs-cmd-grp {font-family:var(--v3-font-mono);font-size:9.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--v3-text-muted);padding:12px 10px 5px}
+.v3fs-cmd-row {display:flex;align-items:center;gap:10px;width:100%;text-align:left;font:inherit;background:none;border:none;border-radius:10px;padding:9px 11px;cursor:pointer;transition:background .12s ease}
+.v3fs-cmd-row:hover {background:var(--v3-accent-soft)}
+.v3fs-cmd-row:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:-2px}
+.v3fs-cmd-tag {font-family:var(--v3-font-mono);font-size:8.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--v3-accent);background:var(--v3-accent-soft);border-radius:6px;padding:2px 6px;flex-shrink:0}
+.v3fs-cmd-row-t {font-size:13.5px;font-weight:600;color:var(--v3-text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.v3fs-cmd-row-s {font-size:12px;color:var(--v3-text-muted);margin-left:auto;white-space:nowrap;flex-shrink:0}
+
+/* ── Help panel ─────────────────────────────────────────────────────────── */
+.v3fs-help-overlay {position:fixed;inset:0;z-index:200;display:flex;justify-content:center;align-items:flex-start}
+.v3fs-help {position:relative;width:min(680px,92vw);margin:9vh 0 5vh;max-height:82vh;display:flex;flex-direction:column;background:var(--fs-card);border:1px solid var(--fs-line);border-radius:18px;box-shadow:var(--fs-pop);overflow:hidden;animation:v3fs-cmd-in .18s cubic-bezier(.22,1,.36,1)}
+.v3fs-help-head {display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:22px 24px 16px;border-bottom:1px solid var(--fs-line)}
+.v3fs-help-head h2 {margin:4px 0 0;font-size:22px;font-weight:650;letter-spacing:-.02em}
+.v3fs-help-x {flex-shrink:0;width:32px;height:32px;border-radius:9px;border:1px solid var(--fs-line);background:var(--fs-card);color:var(--v3-text-muted);font-size:14px;cursor:pointer;transition:color .14s ease,border-color .14s ease}
+.v3fs-help-x:hover {color:var(--v3-text-primary);border-color:color-mix(in srgb,var(--v3-accent) 30%,var(--fs-line))}
+.v3fs-help-body {overflow-y:auto;padding:8px 24px 26px}
+.v3fs-help-body section {padding-top:20px}
+.v3fs-help-body h3 {margin:0 0 8px;font-size:14px;font-weight:650;letter-spacing:-.01em}
+.v3fs-help-body p {margin:0 0 12px;font-size:13.5px;line-height:1.6;color:var(--v3-text-secondary)}
+.v3fs-help-steps {margin:0;padding:0;list-style:none;counter-reset:hs;display:flex;flex-direction:column;gap:9px}
+.v3fs-help-steps li {position:relative;padding-left:34px;font-size:13.5px;line-height:1.55;color:var(--v3-text-secondary)}
+.v3fs-help-steps li::before {counter-increment:hs;content:counter(hs);position:absolute;left:0;top:0;width:22px;height:22px;border-radius:7px;display:grid;place-items:center;font-family:var(--v3-font-mono);font-size:11px;font-weight:700;color:var(--v3-accent);background:var(--v3-accent-soft)}
+.v3fs-help-steps li b, .v3fs-help-list li b {color:var(--v3-text-primary);font-weight:650}
+.v3fs-help-list {margin:0;padding-left:18px;display:flex;flex-direction:column;gap:7px}
+.v3fs-help-list li {font-size:13.5px;line-height:1.55;color:var(--v3-text-secondary)}
+
+/* ── Drill-down: breadcrumb, wizard, and the parent roll-up panel ─────────── */
+/* Child breadcrumb in the hero — one tap back to the parent programme */
+.v3fs-breadcrumb {display:inline-flex;align-items:center;gap:9px;margin-bottom:10px;font:inherit;font-size:12px;
+  color:var(--v3-text-secondary);background:var(--fs-card);border:1px solid var(--fs-line);border-radius:999px;
+  padding:5px 6px 5px 6px;cursor:pointer;box-shadow:var(--fs-shadow);transition:border-color .14s,transform .14s}
+.v3fs-breadcrumb:hover {border-color:color-mix(in srgb,var(--v3-accent) 34%,var(--fs-line));transform:translateY(-1px)}
+.v3fs-breadcrumb b {color:var(--v3-text-primary);font-weight:650}
+.v3fs-bc-lens {font-size:10px;font-weight:750;letter-spacing:.03em;text-transform:uppercase;color:var(--v3-accent);
+  background:var(--v3-accent-soft);border-radius:999px;padding:3px 9px}
+.v3fs-bc-sep {color:var(--v3-text-muted)}
+.v3fs-bc-go {font-size:11px;font-weight:650;color:var(--v3-accent);margin-left:2px;padding-right:6px}
+.v3fs-pf-chip.anchor {background:var(--v3-accent-soft);color:color-mix(in srgb,var(--v3-accent) 74%,var(--v3-text-primary));font-weight:700}
+
+/* Wizard */
+.v3fs-drill-overlay {position:fixed;inset:0;z-index:200;display:flex;justify-content:center;align-items:flex-start}
+.v3fs-drill {position:relative;width:min(660px,94vw);margin:8vh 0 5vh;max-height:84vh;display:flex;flex-direction:column;
+  background:var(--fs-card);border:1px solid var(--fs-line);border-radius:18px;box-shadow:var(--fs-pop);overflow:hidden;animation:v3fs-cmd-in .18s cubic-bezier(.22,1,.36,1)}
+.v3fs-drill-head {display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:22px 24px 16px;border-bottom:1px solid var(--fs-line)}
+.v3fs-drill-head h2 {margin:4px 0 6px;font-size:21px;font-weight:650;letter-spacing:-.02em}
+.v3fs-drill-head p {margin:0;font-size:12.5px;line-height:1.5;color:var(--v3-text-muted);max-width:52ch}
+.v3fs-drill-head p b {color:var(--v3-text-secondary);font-weight:650}
+.v3fs-drill-body {overflow-y:auto;padding:18px 24px}
+.v3fs-drill-lenses {display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.v3fs-drill-lens {display:flex;flex-direction:column;gap:5px;text-align:left;font:inherit;padding:15px 16px;border-radius:14px;
+  border:1px solid var(--fs-line);background:var(--fs-card);cursor:pointer;transition:border-color .14s,box-shadow .14s,transform .14s}
+.v3fs-drill-lens:hover:not(:disabled) {border-color:color-mix(in srgb,var(--v3-accent) 38%,var(--fs-line));box-shadow:var(--fs-lift);transform:translateY(-1px)}
+.v3fs-drill-lens:disabled {opacity:.45;cursor:not-allowed}
+.v3fs-drill-lens-i {width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--v3-accent-soft);color:var(--v3-accent);margin-bottom:3px}
+.v3fs-drill-lens-t {font-size:14px;font-weight:650;letter-spacing:-.01em}
+.v3fs-drill-lens-b {font-size:11.5px;line-height:1.45;color:var(--v3-text-muted)}
+.v3fs-drill-lens-n {font-family:var(--v3-font-mono);font-size:10px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--v3-accent);margin-top:4px}
+.v3fs-drill-back {font:inherit;font-size:12px;font-weight:650;color:var(--v3-text-muted);background:none;border:none;cursor:pointer;padding:0 0 12px}
+.v3fs-drill-back:hover {color:var(--v3-accent)}
+.v3fs-drill-free label {display:block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--v3-text-muted);margin-bottom:8px}
+.v3fs-drill-free .v3fs-pf-search {box-shadow:none}
+.v3fs-drill-opts {display:flex;flex-direction:column;gap:8px}
+.v3fs-drill-opt {display:flex;align-items:center;gap:11px;text-align:left;font:inherit;padding:11px 13px;border-radius:11px;
+  border:1px solid var(--fs-line);background:var(--fs-card);cursor:pointer;transition:border-color .13s,background .13s}
+.v3fs-drill-opt:hover {border-color:color-mix(in srgb,var(--v3-accent) 34%,var(--fs-line))}
+.v3fs-drill-opt.on {border-color:var(--v3-accent);background:var(--v3-accent-soft)}
+.v3fs-drill-opt-r {width:16px;height:16px;border-radius:50%;border:2px solid var(--fs-line);flex-shrink:0;transition:border-color .13s}
+.v3fs-drill-opt.on .v3fs-drill-opt-r {border-color:var(--v3-accent);box-shadow:inset 0 0 0 3px var(--fs-card),inset 0 0 0 6px var(--v3-accent)}
+.v3fs-drill-opt-t {font-size:13.5px;font-weight:600;color:var(--v3-text-primary)}
+.v3fs-drill-opt-s {font-size:11.5px;color:var(--v3-text-muted);margin-left:auto;font-family:var(--v3-font-mono);white-space:nowrap}
+.v3fs-drill-foot {display:flex;align-items:center;gap:14px;padding:15px 24px;border-top:1px solid var(--fs-line);background:color-mix(in srgb,var(--fs-line) 22%,transparent)}
+.v3fs-drill-foot-l {flex:1;min-width:0;font-size:12px;color:var(--v3-text-muted);line-height:1.45}
+.v3fs-drill-foot-l b {color:var(--v3-text-primary);font-weight:650}
+
+/* Parent roll-up panel in the Library */
+.v3fs-dd-panel {grid-column:1/-1}
+.v3fs-dd-parent {display:flex;align-items:center;gap:11px;width:100%;text-align:left;font:inherit;font-size:13px;color:var(--v3-text-secondary);
+  background:var(--v3-accent-soft);border:1px solid color-mix(in srgb,var(--v3-accent) 22%,var(--fs-line));border-radius:12px;padding:11px 14px;margin-bottom:10px;cursor:pointer;transition:border-color .14s}
+.v3fs-dd-parent:hover {border-color:color-mix(in srgb,var(--v3-accent) 42%,var(--fs-line))}
+.v3fs-dd-parent-t {flex:1;min-width:0}
+.v3fs-dd-parent-t b {color:var(--v3-text-primary);font-weight:650}
+.v3fs-dd-lens {font-size:9.5px;font-weight:750;letter-spacing:.03em;text-transform:uppercase;color:var(--v3-accent);background:var(--fs-card);border-radius:999px;padding:3px 9px;flex-shrink:0}
+.v3fs-dd-open {font-size:11.5px;font-weight:650;color:var(--v3-accent);flex-shrink:0}
+.v3fs-dd-row .v3fs-dd-lens {background:var(--v3-accent-soft)}
+.v3fs-dd-st {font-size:9.5px;font-weight:750;letter-spacing:.04em;text-transform:uppercase;border-radius:999px;padding:3px 9px;flex-shrink:0}
+.v3fs-dd-st.watch {background:var(--v3-amber-soft);color:var(--v3-amber)}
+.v3fs-dd-st.clear {background:var(--v3-green-soft);color:var(--v3-green)}
+
+/* "◇ deep dive" chip on anchored objects (tracks etc.) */
+.v3fs-ddchip {font:inherit;font-size:9.5px;font-weight:750;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--v3-accent);background:var(--v3-accent-soft);border:none;border-radius:999px;padding:3px 9px;cursor:pointer;transition:background .13s}
+.v3fs-ddchip:hover {background:color-mix(in srgb,var(--v3-accent) 20%,transparent)}
+
+/* Cross-programme evidence projection on stakeholder cards */
+.v3fs-ivc-fb-row.cross {border-style:dashed;background:color-mix(in srgb,var(--v3-accent-soft) 55%,transparent)}
+.v3fs-ivc-fb-from {font-size:9px;font-weight:750;letter-spacing:.04em;text-transform:uppercase;color:var(--v3-accent);
+  background:var(--fs-card);border-radius:999px;padding:2px 7px;max-width:46%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Pulse — drill-down family strip */
+.v3fs-pulse-family {display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-top:16px}
+.v3fs-pulse-fam-chip {display:inline-flex;align-items:center;gap:9px;font:inherit;font-size:12.5px;color:var(--v3-text-secondary);
+  background:var(--fs-card);border:1px solid var(--fs-line);border-radius:999px;padding:7px 13px 7px 8px;cursor:pointer;
+  box-shadow:var(--fs-shadow);transition:border-color .14s,transform .14s}
+.v3fs-pulse-fam-chip:hover {border-color:color-mix(in srgb,var(--v3-accent) 34%,var(--fs-line));transform:translateY(-1px)}
+.v3fs-pulse-fam-chip b {font-weight:650;color:var(--v3-text-primary)}
+.v3fs-pulse-fam-m {font-family:var(--v3-font-mono);font-size:10.5px;color:var(--v3-text-muted)}
+
+/* The gate moment — recording a gate is the one place a flourish is earned:
+   the tick springs in and the verdict card releases one soft green pulse. */
+@media (prefers-reduced-motion: no-preference) {
+  .v3fs-gstate.green .v3fs-gstate-g {display:inline-block;animation:v3fs-tickin .55s cubic-bezier(.34,1.56,.64,1) both}
+  .v3fs-gstate.green {animation:v3fs-gateglow 1.1s ease-out both}
+}
+@keyframes v3fs-tickin {from{transform:scale(.25) rotate(-14deg);opacity:0}to{transform:scale(1) rotate(0);opacity:1}}
+@keyframes v3fs-gateglow {0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--v3-green) 40%,transparent)}100%{box-shadow:0 0 0 20px transparent}}
+
+/* Anchored comments on a document */
+.v3fs-comments {display:flex;flex-direction:column;gap:8px;margin-top:14px;border-top:1px solid var(--fs-line);padding-top:13px}
+.v3fs-comments-h {display:flex;align-items:baseline;gap:10px;font-size:11px;font-weight:750;letter-spacing:.07em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3fs-comments-h span {font-weight:600;letter-spacing:0;text-transform:none;font-family:var(--v3-font-mono);font-size:10.5px}
+.v3fs-comment {display:flex;align-items:flex-start;gap:10px;border:1px solid var(--fs-line);border-left:3px solid var(--v3-accent-b,#00a0df);border-radius:10px;padding:9px 12px;background:var(--fs-card)}
+.v3fs-comment.resolved {opacity:.62;border-left-color:var(--v3-green)}
+.v3fs-comment-g {flex:1;min-width:0}
+.v3fs-comment-t {font-size:12.5px;line-height:1.5;color:var(--v3-text-primary)}
+.v3fs-comment-m {font-family:var(--v3-font-mono);font-size:10px;color:var(--v3-text-muted);margin-top:3px}
+.v3fs-comments-add {display:flex;gap:8px}
+.v3fs-comments-add input {flex:1;font:inherit;font-size:12.5px;border:1px solid var(--fs-line);border-radius:10px;padding:8px 11px;background:var(--fs-bg,var(--fs-card));color:var(--v3-text-primary)}
+.v3fs-comments-add input:focus {outline:none;border-color:var(--v3-accent-2)}
+
+/* Board pack Present mode — sections become slides */
+.v3fs-deck-nav {display:flex;align-items:center;justify-content:center;gap:16px;padding:10px 0;border-bottom:1px solid var(--fs-line)}
+.v3fs-deck-n {font-family:var(--v3-font-mono);font-size:12px;font-weight:700;color:var(--v3-text-muted);min-width:52px;text-align:center}
+.v3fs-pack-deck section.v3fs-slide-off {display:none}
+.v3fs-pack-deck section.v3fs-slide-on {display:block;min-height:52vh;padding-top:5vh;animation:v3fs-cmd-in .22s ease}
+.v3fs-pack-deck section.v3fs-slide-on h2 {font-size:clamp(26px,3.4vw,40px);letter-spacing:-.03em;margin-bottom:22px}
+.v3fs-pack-deck section.v3fs-slide-on p {font-size:17px;line-height:1.65;max-width:58ch}
+.v3fs-pack-deck section.v3fs-slide-on table {font-size:15px}
+.v3fs-pack-deck .v3fs-pack-eyebrow, .v3fs-pack-deck h1, .v3fs-pack-deck .v3fs-pack-client {display:none}
+
+/* PR-style section review inside the "Review changes" disclosure */
+.v3fs-review {display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.v3fs-review-row {display:flex;align-items:center;gap:10px;padding:8px 11px;border:1px solid var(--fs-line);border-radius:10px;background:var(--fs-card)}
+.v3fs-review-kind {flex-shrink:0;font-size:8.5px;font-weight:750;letter-spacing:.05em;text-transform:uppercase;border-radius:999px;padding:2px 8px}
+.v3fs-review-kind.rw {background:var(--v3-amber-soft);color:var(--v3-amber)}
+.v3fs-review-kind.add {background:var(--v3-green-soft);color:var(--v3-green)}
+.v3fs-review-kind.rm {background:var(--v3-red-soft,rgba(220,38,38,.1));color:var(--v3-red,#dc2626)}
+.v3fs-review-l {flex:1;min-width:0;font-size:12.5px;font-weight:600;color:var(--v3-text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v3fs-review-keep {font-size:11px;color:var(--v3-text-muted)}
+.v3fs-review-done {font-size:11px;font-weight:650;color:var(--v3-green)}
+
+/* Indefensible / forged gate approval — read-time backstop (audit F-001) */
+.v3fs-gate-forged {margin-top:11px;font-size:12px;font-weight:600;line-height:1.45;color:var(--v3-red,#dc2626);
+  background:var(--v3-red-soft,rgba(220,38,38,.1));border:1px solid color-mix(in srgb,var(--v3-red,#dc2626) 32%,transparent);
+  border-radius:10px;padding:9px 12px}
+
+/* Gate criteria — INLINE in the Gate tab: the tab is the place, no modal.
+   The verdict is the ceremony: the headline leads at hero weight, and the
+   Record moment (v3fs-gate-rec inside a green verdict) is the one earned
+   flourish, kept from the tickin/gateglow animations above. */
+.v3fs-gate.inline {max-width:640px}
+.v3fs-gate.inline .v3fs-gstate {padding:16px 18px;border-radius:14px}
+.v3fs-gate.inline .v3fs-gstate-h {font-size:16.5px;font-weight:700;letter-spacing:-.015em;line-height:1.3}
+.v3fs-gate.inline .v3fs-gstate-d {font-size:12.5px;padding-left:0}
+.v3fs-gate.inline .v3fs-gstate-g {width:34px;height:34px;font-size:19px}
+.v3fs-gate.inline .v3fs-gate-rec {font-size:12.5px;font-weight:700;margin-left:0;padding:9px 18px}
+.v3fs-gate.inline .v3fs-checks {margin-top:14px}
+.v3fs-gate.inline .v3fs-check {padding:9px 10px;border-radius:10px}
+.v3fs-gate.inline .v3fs-check:hover:not(:disabled) {background:var(--v3-accent-soft)}
+
+/* Sponsor lens — the read-only steering page */
+.v3fs-sponsor .v3fs-wrap {max-width:980px}
+.v3fs-sponsor .v3fs-hero {padding-top:64px}
+.v3fs-lens-exit {position:fixed;top:18px;right:22px;z-index:96;display:inline-flex;align-items:center;gap:8px;
+  font:inherit;font-size:12px;font-weight:650;color:var(--v3-text-secondary);cursor:pointer;
+  background:var(--fs-dock);backdrop-filter:blur(14px);border:1px solid var(--fs-line);border-radius:999px;
+  padding:8px 15px;box-shadow:var(--fs-pop);transition:color .14s,border-color .14s}
+.v3fs-lens-exit:hover {color:var(--v3-text-primary);border-color:color-mix(in srgb,var(--v3-accent) 32%,var(--fs-line))}
+.v3fs-lens-exit .v3fs-ric {width:15px;height:15px}
+
+/* Pulse — "The story so far" timeline */
+.v3fs-story {margin-top:18px}
+.v3fs-story-list {position:relative;display:flex;flex-direction:column;gap:2px;padding-left:4px}
+.v3fs-story-list::before {content:"";position:absolute;left:9px;top:6px;bottom:6px;width:1.5px;border-radius:2px;background:var(--fs-line)}
+.v3fs-story-day {position:relative;z-index:1;font-family:var(--v3-font-mono);font-size:10px;font-weight:750;letter-spacing:.08em;
+  color:var(--v3-text-muted);background:var(--fs-card);padding:10px 0 5px;margin-left:24px}
+.v3fs-story-row {position:relative;display:flex;align-items:flex-start;gap:13px;padding:6px 0}
+.v3fs-story-dot {position:relative;z-index:1;flex-shrink:0;width:11px;height:11px;border-radius:50%;margin:4px 0 0 4px;
+  border:2px solid var(--fs-card);box-shadow:0 0 0 1.5px var(--fs-line)}
+.v3fs-story-row.evidence .v3fs-story-dot {background:var(--v3-accent-b,#00a0df)}
+.v3fs-story-row.action .v3fs-story-dot {background:var(--v3-accent-2)}
+.v3fs-story-row.gate .v3fs-story-dot {background:var(--v3-green)}
+.v3fs-story-g {min-width:0;flex:1}
+.v3fs-story-t {font-size:13px;font-weight:600;color:var(--v3-text-primary);line-height:1.4;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.v3fs-story-mv {font-size:9.5px;font-weight:750;letter-spacing:.05em;text-transform:uppercase;color:var(--v3-text-muted);
+  background:var(--fs-line);border-radius:999px;padding:2px 8px}
+.v3fs-story-d {font-size:12px;line-height:1.5;color:var(--v3-text-secondary);margin-top:2px;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.v3fs-story-more {margin-top:12px}
+.v3fs-story-row.open {width:100%;text-align:left;font:inherit;background:none;border:none;border-radius:10px;cursor:pointer;transition:background .13s}
+.v3fs-story-row.open:hover {background:var(--v3-accent-soft)}
+.v3fs-story-row.open:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:-2px}
+.v3fs-story-open {font-size:10px;font-weight:700;color:var(--v3-accent-2);opacity:0;transition:opacity .13s}
+.v3fs-story-row.open:hover .v3fs-story-open {opacity:1}
+.v3fs-story-asof {margin-left:auto;font:inherit;font-size:11.5px;color:var(--v3-text-secondary);background:var(--fs-card);
+  border:1px solid var(--fs-line);border-radius:9px;padding:6px 10px;cursor:pointer}
+.v3fs-story-past {display:flex;align-items:center;gap:12px;font-size:12px;font-weight:600;color:var(--v3-amber);
+  background:var(--v3-amber-soft);border:1px solid color-mix(in srgb,var(--v3-amber) 30%,transparent);border-radius:10px;padding:9px 13px;margin-bottom:12px}
+.v3fs-story-past .v3fs-a {margin-left:auto}
+
+/* Highlight-to-quote popover in the evidence reader */
+.v3fs-quote-pop {position:absolute;z-index:5;font:inherit;font-size:11.5px;font-weight:650;color:#fff;
+  background:var(--v3-accent);border:none;border-radius:9px;padding:7px 12px;cursor:pointer;
+  box-shadow:0 10px 26px -10px rgba(23,26,46,.5);animation:v3fs-cmd-in .14s ease}
+.v3fs-quote-pop:hover {background:var(--v3-accent-2)}
+.v3fs-quote-pop-w {position:absolute;z-index:5;display:flex;gap:6px;align-items:flex-start}
+.v3fs-quote-pop-w .v3fs-quote-pop {position:static}
+.v3fs-quote-pop.tag {background:var(--v3-accent-2)}
+.v3fs-tag-pick {position:absolute;top:34px;left:0;min-width:230px;max-height:240px;overflow-y:auto;background:var(--fs-card);
+  border:1px solid var(--fs-line);border-radius:12px;box-shadow:var(--fs-pop);padding:6px;display:flex;flex-direction:column;gap:2px}
+.v3fs-tag-pick button {display:flex;align-items:center;gap:8px;width:100%;text-align:left;font:inherit;font-size:12.5px;
+  color:var(--v3-text-primary);background:none;border:none;border-radius:8px;padding:7px 9px;cursor:pointer}
+.v3fs-tag-pick button:hover {background:var(--v3-accent-soft)}
+.v3fs-tag-kind {font-size:8.5px;font-weight:750;letter-spacing:.05em;text-transform:uppercase;color:var(--v3-accent);
+  background:var(--v3-accent-soft);border-radius:999px;padding:2px 7px;flex-shrink:0}
+
+/* Capture row: save + voice side by side */
+.v3fs-ivc-cap-row {display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+/* Sponsor lens top bar + inbox keyboard focus */
+.v3fs-lens-bar {position:fixed;top:18px;right:22px;z-index:96;display:flex;gap:9px}
+.v3fs-lens-bar .v3fs-lens-exit {position:static}
+.v3fs-dec:focus {outline:2px solid var(--v3-accent-2);outline-offset:2px;border-radius:14px}
+
+/* Inbox — "Across the portfolio" strip */
+.v3fs-elsewhere {display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-bottom:16px;
+  border:1px solid var(--fs-line);border-left:3px solid var(--v3-accent-b,#00a0df);border-radius:13px;
+  background:var(--fs-card);padding:11px 14px;box-shadow:var(--fs-shadow)}
+.v3fs-elsewhere-l {font-size:10px;font-weight:750;letter-spacing:.08em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3fs-elsewhere-chip {display:inline-flex;align-items:center;gap:8px;font:inherit;font-size:12.5px;
+  background:none;border:1px solid var(--fs-line);border-radius:999px;padding:5px 12px;cursor:pointer;transition:border-color .13s}
+.v3fs-elsewhere-chip:hover {border-color:color-mix(in srgb,var(--v3-accent) 34%,var(--fs-line))}
+.v3fs-elsewhere-chip b {font-weight:650;color:var(--v3-text-primary);max-width:26ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v3fs-elsewhere-chip span {font-size:10px;font-weight:750;letter-spacing:.04em;text-transform:uppercase;color:var(--v3-amber);background:var(--v3-amber-soft);border-radius:999px;padding:2px 8px}
+
+/* Detail — revealed when expanded */
+.v3fs-pf-detail {display:flex;flex-direction:column;gap:13px;padding:1px 20px 16px}
+.v3fs-pf-stats {display:grid;grid-template-columns:repeat(3,1fr);gap:14px;padding-top:13px;border-top:1px solid color-mix(in srgb,var(--fs-line) 70%,transparent)}
+.v3fs-pf-stat {display:flex;flex-direction:column;gap:3px;min-width:0}
+.v3fs-pf-stat + .v3fs-pf-stat {padding-left:14px;border-left:1px solid color-mix(in srgb,var(--fs-line) 60%,transparent)}
+.v3fs-pf-stat b {font-size:21px;font-weight:650;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1;color:var(--v3-text-primary)}
+.v3fs-pf-stat b i {font-style:normal;font-size:14px;font-weight:600;color:var(--v3-text-muted)}
+.v3fs-pf-stat small {font-family:var(--v3-font-mono);font-size:9.5px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3fs-pf-bar {display:block;margin-top:5px;height:4px;border-radius:99px;background:color-mix(in srgb,var(--fs-line) 85%,transparent);overflow:hidden}
+.v3fs-pf-bar > span {display:block;height:100%;border-radius:99px;background:var(--v3-green);transition:width .5s cubic-bezier(.4,0,.2,1)}
+
+.v3fs-pf-flags {display:flex;flex-wrap:wrap;gap:7px}
+.v3fs-pf-chip {font-size:11px;font-weight:600;border-radius:8px;padding:3px 9px}
+.v3fs-pf-chip.dec {background:var(--fs-indigo-wash);color:color-mix(in srgb,var(--v3-accent) 68%,var(--v3-text-primary))}
+.v3fs-pf-chip.q {background:var(--v3-amber-soft);color:var(--v3-amber)}
+.v3fs-pf-chip.line {background:var(--v3-green-soft);color:var(--v3-green)}
+
+.v3fs-pf-cta {display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:1px}
+.v3fs-pf-arm {display:inline-flex;flex-wrap:wrap;align-items:center;gap:9px}
+.v3fs-pf-arm-q {font-size:12px;font-weight:600;color:var(--v3-text-muted)}
+
+/* Lineage — follow-on engagements nest under their origin, joined by a guide line */
+.v3fs-pf-children {display:flex;flex-direction:column;gap:12px;margin:12px 0 0 24px;padding-left:22px;
+  border-left:2px solid color-mix(in srgb,var(--v3-accent) 22%,var(--fs-line))}
+.v3fs-pf-children > .v3fs-pf-card {position:relative}
+.v3fs-pf-children > .v3fs-pf-card::before {content:"";position:absolute;left:-22px;top:27px;width:20px;height:2px;
+  background:color-mix(in srgb,var(--v3-accent) 22%,var(--fs-line))}
+.v3fs-pf-card.child {border-radius:13px}
+.v3fs-pf-card.child .v3fs-pf-stripe {background:color-mix(in srgb,var(--v3-accent) 40%,var(--fs-line))}
+.v3fs-lineage-tick {color:color-mix(in srgb,var(--v3-accent) 72%,var(--v3-text-muted));font-weight:800}
 .v3fs-pdot {width:9px;height:9px;border-radius:99px;background:var(--v3-green)}
 .v3fs-pdot.rw {background:var(--v3-amber)}
 /* "Waiting on you" — judgment visible from every view, one tap to the Inbox. */
@@ -5130,6 +5760,11 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-script-doc-n {font-size:12.5px;font-weight:600;color:var(--v3-text-primary);min-width:0;overflow-wrap:anywhere}
 .v3fs-script-docs-note {font-size:10.5px;color:var(--v3-text-muted);margin:7px 0 0}
 .v3fs-docview.v3fs-evread{z-index:91;width:min(640px,88vw);border-left:4px solid var(--v3-accent-b)}
+/* The reader arrives as a sheet sliding in from the edge — you keep your place. */
+@media (prefers-reduced-motion: no-preference) {
+  .v3fs-docview.v3fs-evread {animation:v3fs-sheetin .24s cubic-bezier(.22,1,.36,1)}
+  @keyframes v3fs-sheetin {from{transform:translateX(28px);opacity:.4}to{transform:none;opacity:1}}
+}
 .v3fs-evread-who{color:var(--fs-quote)}
 .v3fs-evread-b{font-size:14px;line-height:1.8}
 .v3fs-evread-p{margin:0 0 14px;white-space:pre-wrap;max-width:62ch}
@@ -5150,6 +5785,16 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-dv-band.amber{background:var(--v3-amber-soft);color:var(--v3-amber)}
 .v3fs-dv-band.indigo{background:var(--fs-indigo-wash);color:var(--v3-accent-2)}
 .v3fs-dv-band .v3fs-btn{flex-shrink:0}
+/* Write-time ontology constraint gate (F-004) */
+.v3fs-onto-gate{margin:0 36px 12px;padding:10px 14px;border-radius:10px;font-size:12px;line-height:1.4;
+  background:var(--v3-amber-soft);border:1px solid color-mix(in srgb,var(--v3-amber) 40%,transparent);color:var(--v3-amber)}
+.v3fs-onto-gate.blocking{background:color-mix(in srgb,var(--v3-red,#dc2626) 8%,transparent);
+  border-color:color-mix(in srgb,var(--v3-red,#dc2626) 45%,transparent);color:var(--v3-red,#dc2626)}
+.v3fs-onto-gate-h{display:block;font-weight:700;margin-bottom:5px;letter-spacing:.01em}
+.v3fs-onto-gate ul{margin:0;padding-left:16px;display:flex;flex-direction:column;gap:3px}
+.v3fs-onto-gate li{font-weight:500}
+.v3fs-onto-gate li.warning{opacity:.85}
+.v3fs-onto-gate-fix{margin-left:8px;font-weight:700;white-space:nowrap}
 .v3fs-dv-menuwrap{position:relative}
 .v3fs-dv-menu-backdrop{position:fixed;inset:0;z-index:85}
 .v3fs-dv-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:86;min-width:200px;background:var(--fs-card);border:1px solid var(--fs-line);border-radius:12px;box-shadow:var(--fs-pop);padding:6px;display:flex;flex-direction:column}
@@ -5239,12 +5884,11 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 @keyframes v3fs-unfold {from {opacity:0;transform:translateY(6px)} to {opacity:1;transform:none}}
 @media (prefers-reduced-motion: reduce) {
   .v3fs-ch-b {animation:none}
-  .v3fs-gstate, .v3fs-check-box, .v3fs-spine-fill {transition:none}
+  .v3fs-gstate, .v3fs-check-box, .v3fs-upnext-fill {transition:none}
   .v3fs-mic.on {animation:none}
 }
 
 /* ── Board pack: overlay on screen, the only thing on paper ─────────────── */
-.v3fs-pulse-bar {display:flex;justify-content:flex-end;margin-bottom:14px}
 .v3fs-doc-backdrop.v3fs-pack-layer {z-index:90}
 .v3fs-pack {position:fixed;inset:24px;max-width:820px;margin:0 auto;display:flex;flex-direction:column;background:var(--fs-card);border:1px solid var(--fs-line);border-radius:18px;box-shadow:0 32px 90px -20px rgba(15,16,32,.5);z-index:91;overflow:hidden}
 .v3fs-pack-bar {display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 22px;border-bottom:1px solid var(--fs-line);font-size:11.5px;color:var(--v3-text-muted)}
@@ -5496,6 +6140,68 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-ivc-cap textarea {font:inherit;font-size:12.5px;line-height:1.5;border:1px solid var(--fs-line);border-radius:10px;padding:8px 11px;background:var(--fs-bg);color:var(--v3-text-primary);resize:vertical;min-height:52px}
 .v3fs-ivc-cap textarea:focus {outline:none;border-color:var(--v3-accent-2)}
 .v3fs-ivc-cap .v3fs-btn {align-self:flex-start}
+
+/* ── Stakeholder data collection — full-width status board below the columns ── */
+.v3fs-ch-collect {grid-column:1/-1;margin-top:22px;padding-top:22px;border-top:1px solid var(--fs-line)}
+.v3fs-collect-h {display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.v3fs-collect-h .v3fs-colh {margin:0}
+.v3fs-collect-count {font-size:12px;font-weight:600;color:var(--v3-text-muted)}
+.v3fs-collect-tools {margin-left:auto;display:flex;gap:8px}
+/* One column: every stakeholder card stretches the full width and stacks
+   vertically, grouped under status section headers — identical on every phase. */
+.v3fs-collect-board {display:flex;flex-direction:column;gap:20px}
+.v3fs-collect-col {display:flex;flex-direction:column;gap:12px;min-width:0}
+.v3fs-collect-col-h {display:flex;align-items:center;gap:8px;padding:0 3px 5px;border-bottom:1px solid var(--fs-line);
+  font-size:10.5px;font-weight:750;letter-spacing:.06em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3fs-cdot {width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.v3fs-cdot.heard {background:var(--v3-green)}
+.v3fs-cdot.waiting {background:var(--v3-amber)}
+.v3fs-cdot.toreach {background:var(--v3-accent-2)}
+.v3fs-cn {margin-left:auto;font-family:var(--v3-font-mono);font-size:10px;font-weight:700;color:var(--v3-text-muted);
+  background:var(--fs-line);border-radius:99px;padding:2px 8px;min-width:20px;text-align:center;letter-spacing:0}
+
+/* Card in the board */
+.v3fs-collect-col .v3fs-ivc {box-shadow:var(--fs-shadow)}
+.v3fs-ivc-strip {display:block;height:3px;background:var(--v3-text-muted)}
+.v3fs-ivc.heard .v3fs-ivc-strip {background:var(--v3-green)}
+.v3fs-ivc.waiting .v3fs-ivc-strip {background:var(--v3-amber)}
+.v3fs-ivc.toreach .v3fs-ivc-strip {background:var(--v3-accent-2)}
+.v3fs-ivc-who {flex:1}
+.v3fs-ivc-chev {flex-shrink:0;width:7px;height:7px;border-right:1.6px solid var(--v3-text-muted);border-bottom:1.6px solid var(--v3-text-muted);
+  transform:rotate(45deg);transition:transform .2s ease}
+.v3fs-ivc[open] .v3fs-ivc-chev {transform:rotate(225deg)}
+/* Wide card: sections sit side by side (feedback · questions · reach-out),
+   the capture box runs the full width beneath — premium, scannable, identical
+   across every movement's board. */
+.v3fs-collect-col .v3fs-ivc-b {display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px 26px;align-items:start}
+.v3fs-collect-col .v3fs-ivc-cap {grid-column:1/-1;border-top:1px solid color-mix(in srgb,var(--fs-line) 70%,transparent);padding-top:12px}
+.v3fs-ivc-sec {display:flex;flex-direction:column;gap:7px}
+.v3fs-ivc-sec-h {font-size:9.5px;font-weight:750;letter-spacing:.07em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3fs-ivc-sec-note {display:block;text-transform:none;letter-spacing:0;font-weight:500;font-size:10.5px;color:var(--v3-text-muted);margin-top:3px}
+.v3fs-ivc-fb {display:flex;flex-direction:column;gap:6px;max-height:172px;overflow-y:auto;padding-right:2px}
+.v3fs-ivc-fb-row {display:flex;flex-direction:column;gap:5px;width:100%;text-align:left;font:inherit;border:1px solid var(--fs-line);
+  border-radius:9px;background:var(--fs-card);padding:8px 10px;cursor:pointer;transition:background .13s,border-color .13s}
+.v3fs-ivc-fb-row:hover {background:var(--v3-accent-soft);border-color:color-mix(in srgb,var(--v3-accent-2) 40%,var(--fs-line))}
+.v3fs-ivc-fb-top {display:flex;align-items:center;gap:8px}
+.v3fs-ivc-fb-m {font-family:var(--v3-font-mono);font-size:10px;font-weight:650;color:var(--v3-accent-2)}
+.v3fs-ivc-fb-when {font-family:var(--v3-font-mono);font-size:9.5px;color:var(--v3-text-muted);white-space:nowrap}
+.v3fs-ivc-fb-go {margin-left:auto;font-size:10px;font-weight:700;color:var(--v3-accent-2)}
+.v3fs-ivc-fb-q {font-size:12px;line-height:1.42;color:var(--v3-text-secondary);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.v3fs-ivc-fb-empty {font-size:11.5px;color:var(--v3-text-muted);font-style:italic}
+.v3fs-ivc-fb-kind {font-size:8.5px;font-weight:750;letter-spacing:.05em;text-transform:uppercase;color:var(--v3-accent);
+  background:var(--v3-accent-soft);border-radius:999px;padding:2px 7px;flex-shrink:0}
+.v3fs-ivc-fb-dl {font-size:10px;font-weight:700;color:var(--v3-text-muted);flex-shrink:0;cursor:pointer}
+.v3fs-ivc-fb-dl:hover {color:var(--v3-accent)}
+/* Library evidence panel — attach sits in the header, right-aligned */
+.v3fs-ph-attach {display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.v3fs-ph-attach > :last-child {margin-left:auto}
+
+/* The invite's date picker — present for the browser, invisible to the eye */
+.v3fs-ivc-date-hidden {position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.v3fs-ivc-ch {position:relative}
+.v3fs-ivc-q {margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.v3fs-ivc-q li {list-style:none;font-size:11.5px;line-height:1.42;color:var(--v3-text-secondary);padding-left:15px;position:relative}
+.v3fs-ivc-q li::before {content:"?";position:absolute;left:0;top:0;color:var(--v3-accent-2);font-weight:800}
 /* Discovery Kit editor — labeled sub-sections per interviewee. */
 .v3fs-stu-group {border:1px solid var(--fs-line);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:var(--fs-bg);display:flex;flex-direction:column;gap:10px}
 .v3fs-stu-group-h {font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--v3-accent-2);margin-bottom:-2px}
@@ -5510,17 +6216,6 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-switcher-confirm {display:flex;gap:2px;flex-shrink:0}
 /* ── Gate as a verdict dial — the emotional core, read at a glance ─────── */
 .v3fs-gstate-top {display:flex;align-items:center;gap:14px}
-.v3fs-gring {position:relative;flex-shrink:0;width:60px;height:60px;display:grid;place-items:center}
-.v3fs-gring svg {position:absolute;inset:0;transform:none}
-.v3fs-gring-track {fill:none;stroke:var(--fs-line);stroke-width:5}
-.v3fs-gring-fill {fill:none;stroke-width:5;stroke-linecap:round;transition:stroke-dashoffset .7s cubic-bezier(.22,1,.36,1),stroke .3s ease}
-.v3fs-gring.green .v3fs-gring-fill {stroke:var(--v3-green)}
-.v3fs-gring.amber .v3fs-gring-fill {stroke:var(--v3-amber)}
-.v3fs-gring.dim .v3fs-gring-fill {stroke:var(--v3-text-muted)}
-.v3fs-gring-c {position:relative;display:flex;flex-direction:column;align-items:center;line-height:1}
-.v3fs-gring-c b {font-size:19px;font-weight:750;color:var(--v3-text-primary);letter-spacing:-.02em}
-.v3fs-gring-c span {font-size:8.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--v3-text-muted);margin-top:1px}
-.v3fs-gring.green .v3fs-gring-tick {font-size:24px;color:var(--v3-green)}
 .v3fs-gstate-txt {min-width:0}
 .v3fs-gstate .v3fs-gstate-h {font-size:13.5px;font-weight:700;line-height:1.35;color:var(--v3-text-primary)}
 .v3fs-gstate.green .v3fs-gstate-h {color:var(--v3-green)}
@@ -5528,34 +6223,27 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-gstate-g {display:grid;place-items:center;width:28px;height:28px;border-radius:99px;font-size:15px;flex-shrink:0}
 .v3fs-gstate-g.green {color:var(--v3-green)} .v3fs-gstate-g.amber {color:var(--v3-amber)} .v3fs-gstate-g.dim {color:var(--v3-text-muted)}
 
-/* Criteria fold away behind the verdict — one glance answers "am I ready?" */
-.v3fs-checks-disc {margin-top:12px}
-.v3fs-checks-disc > summary {display:flex;align-items:center;gap:6px;cursor:pointer;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--v3-text-muted);list-style:none;padding:2px 0}
-.v3fs-checks-disc > summary::-webkit-details-marker {display:none}
-.v3fs-checks-chev {width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg);transition:transform .2s ease;margin-left:2px}
-.v3fs-checks-disc[open] .v3fs-checks-chev {transform:rotate(45deg)}
-.v3fs-checks-disc > summary:hover {color:var(--v3-text-secondary)}
-
 /* ── Motion as feedback — a card settling into done ────────────────────── */
 .v3fs-check {transition:background .2s ease,opacity .2s ease}
 .v3fs-check.done .v3fs-check-box {transition:transform .3s cubic-bezier(.34,1.56,.64,1),background .2s ease}
 @media (prefers-reduced-motion: reduce) {
-  .v3fs-gring-fill, .v3fs-checks-chev, .v3fs-check, .v3fs-check.done .v3fs-check-box {transition:none}
+  .v3fs-check, .v3fs-check.done .v3fs-check-box {transition:none}
 }
 /* ── One interactive-card language across every family ─────────────────── */
 /* Cards that open, select, or act share a single tactile response: a soft
    lift and a warmer border on hover — consistency reads as craft. */
-.v3fs-doc:not(.ghost), .v3fs-ivc, .v3fs-trk, .v3fs-portal-card, .v3fs-strat-col, .v3fs-kit {
+.v3fs-doc:not(.ghost), .v3fs-ivc, .v3fs-portal-card, .v3fs-strat-col, .v3fs-kit {
   transition:transform .18s cubic-bezier(.22,1,.36,1), box-shadow .18s ease, border-color .18s ease;
 }
-.v3fs-doc.v3fs-row-open:hover, .v3fs-ivc:hover, .v3fs-trk:hover {
+.v3fs-doc.v3fs-row-open:hover, .v3fs-ivc:hover {
   transform:translateY(-1px);
   box-shadow:0 6px 20px -10px rgba(15,16,32,.22);
   border-color:color-mix(in srgb, var(--v3-accent-2) 22%, var(--fs-line));
 }
 @media (prefers-reduced-motion: reduce) {
-  .v3fs-doc, .v3fs-ivc, .v3fs-trk, .v3fs-portal-card, .v3fs-strat-col, .v3fs-kit {transition:none}
-  .v3fs-doc.v3fs-row-open:hover, .v3fs-ivc:hover, .v3fs-trk:hover {transform:none}
+  .v3fs-doc, .v3fs-ivc, .v3fs-portal-card, .v3fs-strat-col, .v3fs-kit, .v3fs-pf-card {transition:none}
+  .v3fs-doc.v3fs-row-open:hover, .v3fs-ivc:hover, .v3fs-pf-card:hover {transform:none}
+  .v3fs-pf-bar > span {transition:none}
 }
 /* A touch more air between the movement's three columns and its neighbours. */
 .v3fs-ch-b {gap:clamp(20px, 3vw, 40px)}

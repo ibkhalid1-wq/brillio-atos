@@ -51,6 +51,9 @@ export function locateQuote(haystack: string, quote: string): { start: number; e
 }
 
 export interface EvidenceEntry {
+  /** Stable, content-derived identity (design rec 1: evidence as first-class
+   * records) — survives re-parses, keys lists, and anchors links/claims. */
+  id: string;
   movementId: string;
   fieldLabel: string;
   /** Header line when the transcript declares one ("— Maria Chen, Sales Ops, … —"). */
@@ -66,6 +69,27 @@ export interface EvidenceEntry {
   /** Storage key of the ORIGINAL file (documents only) — the Library offers
    * it back as a native-format download instead of a preview. */
   sourceKey?: string;
+  /** When the evidence was captured, parsed from its header — "2026-07-13" or
+   * "2026-07-13 14:05" (new captures stamp the time). Sortable as a string. */
+  capturedAt?: string;
+}
+
+/** The canonical capture stamp for new evidence headers — date AND time, so
+ * the Library can order the record precisely. Older date-only headers keep
+ * parsing; they just sort at the start of their day. */
+export function evidenceStamp(date: Date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+const CAPTURED_AT = /(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2})?)/;
+
+/** Content-derived evidence id — djb2 over the identifying fields. */
+function evidenceId(movementId: string, fieldLabel: string, who: string, text: string): string {
+  const input = `${movementId}|${fieldLabel}|${who}|${text.slice(0, 400)}`;
+  let hash = 5381;
+  for (let i = 0; i < input.length; i += 1) hash = ((hash * 33) ^ input.charCodeAt(i)) >>> 0;
+  return `ev-${hash.toString(16)}`;
 }
 
 export interface ArtifactCardModel {
@@ -124,6 +148,40 @@ export function movementInputsFingerprint(program: ProgramSummary, movementId: s
   return hash.toString(16);
 }
 
+export interface ContradictionRow { statement: string; between: string; positions: string; status: string; }
+
+/**
+ * The contradiction log, DEDUPED. The detector (and manual filings) can log the
+ * same dispute more than once with slightly different wording, which then shows
+ * up as redundant "two accounts disagree" questions on the collection cards.
+ * This is the one reader every consumer (kit gaps, per-person scripts, the
+ * Library panel) goes through, so a dispute is asked once. Dedupe is by
+ * significant-token overlap of the statement, so paraphrase-level repeats
+ * collapse; the first row wins.
+ */
+export function readContradictions(program: ProgramSummary, openOnly = false): ContradictionRow[] {
+  const raw = parseGridRows(readMovementInputs(program, "listen").contradictionLog);
+  const rows = openOnly ? raw.filter((row) => /open/i.test(row.status ?? "")) : raw;
+  const tokens = (text: string): Set<string> =>
+    new Set((text.toLowerCase().match(/[a-z0-9]{3,}/g) ?? []).filter((t) => !["the", "and", "are", "using", "account", "accounts", "disagree"].includes(t)));
+  const overlap = (a: Set<string>, b: Set<string>): number => {
+    if (!a.size || !b.size) return 0;
+    let shared = 0;
+    for (const t of a) if (b.has(t)) shared += 1;
+    return shared / Math.min(a.size, b.size);
+  };
+  const kept: Array<{ row: Record<string, string>; toks: Set<string> }> = [];
+  for (const row of rows) {
+    const toks = tokens(String(row.statement ?? ""));
+    if (toks.size < 3) { kept.push({ row, toks }); continue; }
+    if (!kept.some(({ toks: seen }) => seen.size >= 3 && overlap(toks, seen) >= 0.7)) kept.push({ row, toks });
+  }
+  return kept.map(({ row }) => ({
+    statement: String(row.statement ?? ""), between: String(row.between ?? ""),
+    positions: String(row.positions ?? ""), status: String(row.status ?? ""),
+  }));
+}
+
 /** First movement whose gate is not yet approved — the live frontier. */
 export function frontierMovementId(program: ProgramSummary): string {
   const movements = flowMovements();
@@ -162,12 +220,32 @@ function parseTranscript(movementId: string, fieldLabel: string, text: string): 
   // The pull-quote: prefer the most QUOTABLE line — numbers, money, time, or
   // pain language land better than whatever happened to be said first.
   const quotable = /\d|%|\$|€|£|day|hour|week|month|lose|lost|manual|wait|delay|slow|only|never|every time/i;
+  // Scaffolding, not speech: recording headers, filenames, timestamps,
+  // copyright/agenda lines. These often contain digits, so without excluding
+  // them the "quotable" heuristic would pick the header over the real quote.
+  // A line that IS a date stamp ("May 7, 2026, 3:31PM" / "2026-05-07 15:31")
+  // is scaffolding even though it's full of quotable digits.
+  const headerNoise = /meeting recording|discovery session[- ]|_\d{6}|\d{8}_|utc|\bproprietary\b|confidential|©|all rights reserved|^\s*agenda\b|^\s*\d{1,2}:\d{2}\b|^page \d|^\s*\w+ \d{1,2},? \d{4}(,? at)?[\s,]*\d{0,2}:?\d{0,2}\s*(am|pm)?\s*$|^\s*\d{4}-\d{2}-\d{2}[\s,]*(\d{1,2}:\d{2})?\s*$|(started|stopped|paused|resumed) transcription\s*$/i;
+  // Transcript speaker-turn markers ("Prasoon Gupta 0:27 …"), bare greetings
+  // and bullet fragments are speech but carry no signal — skip them when a
+  // fuller sentence exists (they stay as last-resort fallbacks).
+  const lowValue = /^[a-z][\w .'’-]{1,40}\s+\d{1,2}:\d{2}|^(hey|hi|hello|good (morning|afternoon|evening)|thanks|thank you|welcome|sure|okay|ok|yeah|yes)\b|^[–—•*·-]\s/i;
+  // "Prasoon Gupta   0:20Hey, hi…" — the speech matters, the marker doesn't.
+  // Stripping the prefix (instead of dropping the line) keeps transcripts
+  // whose EVERY line is a speaker turn quotable.
+  const turnPrefix = /^[a-z][\w .'’-]{1,40}\s+\d{1,2}:\d{2}\s*/i;
   const firstLine = (body: string) => {
-    const lines = body.split("\n").map((l) => l.trim()).filter((l) => l.length > 10);
-    return (lines.find((l) => quotable.test(l)) ?? lines[0] ?? "").slice(0, 110);
+    const clean = body.split("\n").map((l) => l.trim().replace(turnPrefix, ""))
+      .filter((l) => l.length > 10 && !headerNoise.test(l));
+    const meaty = clean.filter((l) => !lowValue.test(l));
+    // Best: a substantive, quotable line. Then any substantive line, then any
+    // clean line, then whatever's there — never nothing when there's content.
+    return (meaty.find((l) => quotable.test(l)) ?? meaty[0] ?? clean[0]
+      ?? body.split("\n").map((l) => l.trim()).find((l) => l.length > 10) ?? "").slice(0, 110);
   };
   if (matches.length === 0) {
     return [{
+      id: evidenceId(movementId, fieldLabel, fieldLabel, text),
       movementId, fieldLabel, kind: "transcript",
       who: fieldLabel, meta: `${wordCount(text).toLocaleString()} words`,
       words: wordCount(text), excerpt: firstLine(text), text: text.trim(),
@@ -180,13 +258,15 @@ function parseTranscript(movementId: string, fieldLabel: string, text: string): 
     const trackTag = match[1].match(/\(([^)]{2,60})\)/);
     // "— Document: Q2 pricing export, provided by Dan Reyes, 2026-07-12 —"
     // is a DOCUMENT on the record, named by its title — not a voice.
-    const doc = match[1].match(/^Document:\s*(.+?),\s*provided by\s+(.+?)(?:,\s*(\d{4}-\d{2}-\d{2}))?$/i);
+    const doc = match[1].match(/^Document:\s*(.+?),\s*provided by\s+(.+?)(?:,\s*(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2})?))?$/i);
+    const capturedAt = match[1].match(CAPTURED_AT)?.[1];
     if (doc) {
       // An optional "[source: <storage key>]" first line carries the pointer
       // to the original file; it is metadata, never part of the reading text.
       const sourceMatch = body.match(/^\s*\[source:\s*([^\]]+)\]\s*\n?/);
       const cleanBody = sourceMatch ? body.replace(sourceMatch[0], "") : body;
       entries.push({
+        id: evidenceId(movementId, fieldLabel, doc[1].trim(), cleanBody),
         movementId, fieldLabel, kind: "document",
         who: doc[1].trim(),
         meta: `document · ${doc[2].trim()}${doc[3] ? ` · ${doc[3]}` : ""} · ${wordCount(cleanBody).toLocaleString()} words`,
@@ -194,10 +274,12 @@ function parseTranscript(movementId: string, fieldLabel: string, text: string): 
         excerpt: firstLine(cleanBody),
         text: cleanBody.trim(),
         sourceKey: sourceMatch ? sourceMatch[1].trim() : undefined,
+        capturedAt,
       });
       return;
     }
     entries.push({
+      id: evidenceId(movementId, fieldLabel, match[1], body),
       movementId, fieldLabel, kind: "transcript",
       who: match[1],
       track: trackTag ? trackTag[1].trim() : undefined,
@@ -205,6 +287,7 @@ function parseTranscript(movementId: string, fieldLabel: string, text: string): 
       words: wordCount(body),
       excerpt: firstLine(body),
       text: body.trim(),
+      capturedAt,
     });
   });
   return entries;
@@ -222,6 +305,7 @@ export function movementEvidence(program: ProgramSummary, movement: PhaseDefinit
       out.push(...parseTranscript(movement.id, field.label, value));
     } else {
       out.push({
+        id: evidenceId(movement.id, field.label, value.trim(), value),
         movementId: movement.id, fieldLabel: field.label, kind: "reference",
         who: value.trim(), meta: field.label, words: 0, excerpt: "", text: "",
       });
@@ -278,6 +362,47 @@ export function listenCoverage(program: ProgramSummary): { done: number; total: 
   return { done, total: rows.length };
 }
 
+/**
+ * One-click attestation proposal: roster rows whose person already has
+ * collected evidence (heardNames, from the collection board) but whose status
+ * isn't yet Heard/Waived flip to "Heard". Collection is evidence; attestation
+ * is the operator's judgment — so this only PROPOSES: the caller renders it
+ * behind a confirm, and the write lands attested. Returns the updated roster
+ * JSON and who flipped; null when there's nothing to attest or the roster
+ * isn't a JSON grid.
+ */
+export function attestHeardRoster(program: ProgramSummary, heardNames: string[]): { value: string; attested: string[] } | null {
+  const raw = readMovementInputs(program, "listen").interviewRoster;
+  if (typeof raw !== "string" || !raw.trim().startsWith("[")) return null;
+  let rows: unknown[];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    rows = parsed;
+  } catch { return null; }
+  const heard = heardNames.map((name) => name.split(",")[0].trim().toLowerCase()).filter((name) => name.length > 2);
+  // This match gates a WRITE, so it's stricter than the display-side fuzzy
+  // includes: exact name, or one name is a whole-word prefix of the other
+  // ("Raj" ↔ "Raj Mamodia"). Substrings never attest anyone.
+  const words = (value: string) => value.split(/\s+/).filter(Boolean);
+  const prefixMatch = (a: string[], b: string[]) => a.length > 0 && a.length <= b.length && a.every((word, i) => b[i] === word);
+  const attested: string[] = [];
+  const next = rows.map((row) => {
+    if (!row || typeof row !== "object" || Array.isArray(row)) return row;
+    const record = row as Record<string, unknown>;
+    const name = String(record.name ?? "").trim();
+    const status = String(record.status ?? "");
+    if (!name || /heard|waived/i.test(status)) return row;
+    const key = name.toLowerCase();
+    const match = heard.some((h) => h === key || prefixMatch(words(key), words(h)) || prefixMatch(words(h), words(key)));
+    if (!match) return row;
+    attested.push(name);
+    return { ...record, status: "Heard" };
+  });
+  if (!attested.length) return null;
+  return { value: JSON.stringify(next), attested };
+}
+
 /** Show's demo tour: accepted (incl. with changes) over total demo rows. */
 export function demoAcceptance(program: ProgramSummary): { accepted: number; total: number; rows: Array<Record<string, string>> } {
   const rows = parseGridRows(readMovementInputs(program, "show").demoTour);
@@ -291,11 +416,14 @@ export function gateSignal(program: ProgramSummary, movement: PhaseDefinition, a
     return { tone: "green", text: "Demonstrated — gate recorded" };
   }
   if (movement.id === "listen") {
+    // The gate counts the ROSTER — voices the operator has attested heard or
+    // waived in the coverage ledger. Collected evidence (the People board's
+    // count) is the prerequisite, not the gate: attestation is the judgment.
     const { done, total } = listenCoverage(program);
     if (total === 0) return { tone: "dim", text: "Map the voices — the coverage ledger is empty" };
     return done < total
-      ? { tone: "amber", text: `${total - done} of ${total} voices still to hear` }
-      : { tone: "green", text: `All ${total} voices heard or waived` };
+      ? { tone: "amber", text: `${total - done} of ${total} roster voices still to attest heard` }
+      : { tone: "green", text: `All ${total} roster voices attested heard or waived` };
   }
   if (movement.id === "show") {
     const { accepted, total } = demoAcceptance(program);
@@ -399,7 +527,10 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
     }
     items.push(
       { id: "mapped", label: "Voices mapped in the coverage ledger", done: coverage.total > 0, anchor: "input:interviewRoster" },
-      { id: "heard", label: coverage.total ? `Every voice heard or waived (${coverage.done}/${coverage.total})` : "Every voice heard or waived", done: coverage.total > 0 && coverage.done >= coverage.total, anchor: "input:interviewRoster" },
+      // "Attested" is deliberate: this counts roster rows the operator has
+      // MARKED heard/waived (the coverage ledger), not collected evidence —
+      // the People tab counts that. Same word here and in gateSignal.
+      { id: "heard", label: coverage.total ? `Coverage ledger — ${coverage.done}/${coverage.total} voices attested heard or waived` : "Coverage ledger — attest each voice heard or waived", done: coverage.total > 0 && coverage.done >= coverage.total, anchor: "input:interviewRoster" },
       (() => {
         const latest = [...contradictions].reverse().find((row) => row.resolution);
         return {

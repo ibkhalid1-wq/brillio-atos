@@ -1,5 +1,7 @@
 /**
- * Program Graph — the unified, derived knowledge graph for a single programme.
+ * Program Graph — the unified, derived program graph for a single programme.
+ * (An in-memory typed graph — nodes + derived edges + traversal — assembled per
+ * read, not a persisted graph database.)
  *
  * The Fact Graph (factGraph.ts) holds atomic citable facts and their artifact
  * lineage; deriveTwinGraph holds a thin phase/decision/risk entity view. Neither
@@ -21,7 +23,7 @@
  */
 import type { ProgramSummary } from "@/new/types";
 import { buildFactGraph, type Fact } from "@/v3/lib/factGraph";
-import { ATOS_STANDARD } from "@/v3/lib/methodology";
+import { ATOS_STANDARD, getPhaseDefinition } from "@/v3/lib/methodology";
 import type { DocumentIntelligence, ExtractedEntities } from "@/new/lib/documentIntelligenceTypes";
 
 export type ProgramGraphNodeKind =
@@ -144,7 +146,9 @@ function parseGridRows<T>(raw: unknown): T[] {
  * from facts). Reads the same ATOS_STANDARD registry the Fact Graph uses.
  */
 function artifactsConsumingField(phaseId: string, fieldId: string): string[] {
-  const phase = ATOS_STANDARD.phases.find((p) => p.id === phaseId);
+  // Resolve the phase from whichever methodology defines it — flow phases
+  // (frame/listen/…) are invisible to the classic registry (rec 3).
+  const phase = ATOS_STANDARD.phases.find((p) => p.id === phaseId) ?? getPhaseDefinition(phaseId, "atos-flow");
   if (!phase) return [];
   const out = new Set<string>();
   const field = phase.inputFields?.find((f) => f.id === fieldId);

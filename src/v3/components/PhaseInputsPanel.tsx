@@ -866,9 +866,9 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
           <div style={{ fontSize: 12, color: "var(--v3-text-muted)", marginBottom: 12, lineHeight: 1.55 }}>
             {schema.description}
           </div>
-          {freshnessLabel((existingInputs as Record<string, unknown>).savedAt) ? (
+          {freshnessLabel((existingInputs as Record<string, unknown>)._savedAt ?? (existingInputs as Record<string, unknown>).savedAt) ? (
             <div style={{ fontSize: 11, color: "var(--v3-text-muted)", marginBottom: 12 }}>
-              {freshnessLabel((existingInputs as Record<string, unknown>).savedAt)}
+              {freshnessLabel((existingInputs as Record<string, unknown>)._savedAt ?? (existingInputs as Record<string, unknown>).savedAt)}
             </div>
           ) : null}
 

@@ -15,7 +15,7 @@
  * mechanism behind traceability compression (factId → source resolved in the UI).
  */
 import type { ProgramSummary } from "@/new/types";
-import { ATOS_STANDARD, type GridColumn } from "@/v3/lib/methodology";
+import { getPhaseSequence, getPhaseDefinition, type GridColumn } from "@/v3/lib/methodology";
 import { getPhaseInputSchema } from "@/v3/lib/phaseInputSchema";
 import { getDynamicSchemaStore, dynamicFieldArtifacts } from "@/v3/lib/dynamicSchema";
 import { parseProvenance, provenanceMatches, PROVENANCE_KEY, type FieldProvenance } from "@/new/lib/fieldProvenance";
@@ -169,7 +169,14 @@ export function buildFactGraph(program: ProgramSummary | null | undefined): Fact
   const facts: Fact[] = [];
   let seq = 0;
 
-  for (const phase of ATOS_STANDARD.phases) {
+  // The PROGRAMME'S OWN methodology names the phases (design-review rec 3) —
+  // iterating the classic standard here left flow programmes with 0 facts,
+  // which starved the program graph and every agent context built on it.
+  const variant = program.methodology ?? "atos-standard";
+  const phases = (getPhaseSequence(variant) as readonly string[])
+    .map((phaseId) => getPhaseDefinition(phaseId, variant))
+    .filter((phase): phase is NonNullable<ReturnType<typeof getPhaseDefinition>> => Boolean(phase));
+  for (const phase of phases) {
     const bucket = phaseInputs[phase.id];
     if (!bucket) continue;
     const schema = getPhaseInputSchema(phase.id, dynamicStore);

@@ -1,19 +1,25 @@
-import React, { Fragment, useEffect, useMemo, useState } from "react";
+import React, { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import PhaseInputsPanel from "@/v3/components/PhaseInputsPanel";
 import FlowArtifactStudio, { type ArtifactEditInput } from "@/v3/components/flow/studio/FlowArtifactStudio";
+import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 import {
   flowMovements, frontierMovementId, movementEvidence, movementArtifacts,
   gateReadiness, gateChecklist, listenCoverage, movementFacts, demoAcceptance,
-  spineRegenerationPlan,
+  spineRegenerationPlan, evidenceStamp, locateQuote, attestHeardRoster,
   type ArtifactCardModel,
 } from "@/v3/components/flow/flowShellData";
 import { buildMeetingIcs, mailtoLink, meetingKit, stakeholderEmail, type MeetingKit } from "@/v3/components/flow/flowMeetings";
 import { supabase } from "@/integrations/supabase/client";
 import { listInterviewPacks, listDemoInvites, portalLinkFor, visibleLinks } from "@/v3/components/flow/flowPortal";
 import { resolveMovementStakeholders, type MovementStakeholder } from "@/v3/components/flow/flowStakeholders";
+import { readDrillAnchor } from "@/v3/components/flow/flowDrilldown";
+import { gateApprovalIntegrity } from "@/v3/components/flow/flowGovernance";
+import { mapTranscriptSpeakers } from "@/v3/components/flow/flowTranscriptMap";
 import { listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 import { listFlowTracks, trackAcceptance } from "@/v3/components/flow/flowTracks";
+import { rankEvidence, isNoiseEvidence, EVIDENCE_LEAD_COUNT } from "@/v3/components/flow/flowEvidenceRank";
+import { listClaimTags } from "@/v3/components/flow/flowClaims";
 
 interface FlowCanvasProps {
   program: ProgramSummary;
@@ -38,6 +44,12 @@ interface FlowCanvasProps {
   onSaveArtifactDoc?: (input: ArtifactEditInput) => Promise<void>;
   /** Jump to the Inbox (regeneration-pending band in the studio). */
   onOpenInbox?: () => void;
+  /** The drill-down family (parent + children) — powers cross-programme
+   * evidence on stakeholder cards and "deep dive" chips on anchored objects. */
+  relatedPrograms?: ProgramSummary[];
+  onSelectProgram?: (id: string) => void;
+  /** Add/resolve an anchored comment on an artifact (attested). */
+  onComment?: (input: { fieldKey: string; movementId: string; title: string; text?: string; resolveId?: string }) => Promise<void>;
   /** Record an in-room demonstration pass against a track (Show). */
   onRecordShowPass?: (trackId: string, pass: { stakeholder?: string; verdict: "accepted" | "accepted-with-changes" | "rework"; stableDiff?: boolean }) => Promise<void>;
   /** Record a movement's gate — demonstrated. Locks the movement's inputs. */
@@ -48,20 +60,90 @@ interface FlowCanvasProps {
   onRunAgentAndWait?: (agentId: string, phaseId: string) => Promise<void>;
 }
 
+/** Every movement runs the same loop, and its body is organised as the
+ * loop's three stages — Collect (people + what they said) → Paper (what ATOS
+ * made of it) → Gate (can we demonstrate?). The active one. */
+type MovementTab = "collect" | "paper" | "gate";
+
+/** One line saying what a movement leads with — so every phase reads the same
+ * way and the operator knows where its centre of gravity is (item 1c). */
+const MOVEMENT_CAPTION: Record<string, string> = {
+  frame: "Frame leads with the sponsor conversation — one recorded talk drafts the charter and the discovery kit.",
+  listen: "Listen gathers each stakeholder's workflow, in their own words.",
+  envision: "Envision weighs the architecture options and frames the blueprint.",
+  show: "Show puts each stakeholder in front of their own workflow, running.",
+  ship: "Ship leads with hardening — prove the evals, then cut over.",
+  evolve: "Evolve keeps the system honest — the benefits pulse and the drift review.",
+};
+
+/** Which stage a movement opens on: conversation-led movements start on
+ * Collect, build-led movements start on Paper. */
+function leadTab(movementId: string): MovementTab {
+  if (movementId === "envision" || movementId === "ship" || movementId === "evolve") return "paper";
+  return "collect";
+}
+
+/** One ranked frontier action — a verb with its object. The queue states the
+ * system's opinion of the next move so the operator never hunts. */
+interface UpNextItem {
+  icon: string;
+  label: string;
+  /** Stage the action lands in (also where a click navigates). */
+  toTab?: MovementTab;
+  /** Async work the item runs (regenerate / generate / attest). */
+  run?: () => Promise<void>;
+  /** Two-step verbs (writes that flip judgment): the first press arms and
+   * shows this label; the second runs. */
+  confirm?: string;
+  /** Opens the editor at a field instead of switching stage. */
+  anchor?: string;
+  /** Opens the Inbox — cross-surface work also flows through Up next. */
+  openInbox?: boolean;
+  /** This item IS the spine regeneration — rendered with live progress. */
+  spine?: boolean;
+}
+
 /**
  * "Paper & Flow" — the Flow programme home. The pipeline is drawn as one
- * continuous line down the page; movements are chapters on that spine, not
- * pages behind pills. Each open chapter is the triptych: what people said
- * (blue pull-quotes) → what ATOS made (paper documents) → the gate (verdict-
- * coloured). Nothing locks; editing unfolds in place via the shared inputs
- * panel, so the canvas is the workspace, not a dashboard about one.
+ * continuous line down the page; movements are chapters on that spine. Each
+ * open chapter runs the loop left to right as three stages — Collect (people
+ * and their record) → Paper (the documents ATOS made) → Gate (the verdict
+ * ceremony) — with a header that carries the gate gauge, the movement's
+ * one-line brief, and the ranked "Up next" queue. Nothing locks; editing
+ * unfolds in place via the shared inputs panel.
  */
-export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onSetShipLane, onScheduleFollowUp, onMintFollowUp, onSaveArtifactDoc, onOpenInbox, onRecordShowPass, onRecordGate, onReopenGate, onRunAgentAndWait }: FlowCanvasProps) {
+export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onSetShipLane, onScheduleFollowUp, onMintFollowUp, onSaveArtifactDoc, onOpenInbox, onRecordShowPass, onRecordGate, onReopenGate, onRunAgentAndWait, relatedPrograms, onSelectProgram, onComment }: FlowCanvasProps) {
   const movements = useMemo(() => flowMovements(), []);
   const frontier = frontierMovementId(program);
-  const [open, setOpen] = useState<Set<string>>(() => new Set([frontier]));
+  // The spine is horizontal: one movement is active at a time; the stepper on
+  // top carries every movement's state and switches between them.
+  const [active, setActive] = useState<string>(frontier);
   const [editing, setEditing] = useState<Set<string>>(() => new Set());
   const [docFor, setDocFor] = useState<ArtifactCardModel | null>(null);
+  // Salience over volume: the evidence column leads with the ranked best
+  // quotes; "show all" unfolds the rest per movement.
+  const [evAll, setEvAll] = useState<Set<string>>(() => new Set());
+  // The active stage per movement — falls back to the movement's lead stage
+  // until the operator picks one.
+  const [movementTab, setMovementTab] = useState<Record<string, MovementTab>>({});
+  // [ and ] walk the loop's stages backward/forward — keyboard-first, and the
+  // bracket keys don't collide with the shell's 1–5 view shortcuts.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "[" && event.key !== "]") return;
+      const target = event.target as HTMLElement | null;
+      if (target && (/^(input|textarea|select)$/i.test(target.tagName) || target.isContentEditable)) return;
+      const stages: MovementTab[] = ["collect", "paper", "gate"];
+      setMovementTab((prev) => {
+        const current = prev[active] ?? leadTab(active);
+        const step = event.key === "]" ? 1 : -1;
+        const next = stages[(stages.indexOf(current) + step + stages.length) % stages.length];
+        return { ...prev, [active]: next };
+      });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [active]);
 
   const toggle = (set: React.Dispatch<React.SetStateAction<Set<string>>>, id: string) =>
     set((current) => {
@@ -75,7 +157,7 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
   // we scroll it — or that field — into view and focus its control; opening it
   // silently would look like nothing happened.
   const openEditor = (id: string, fieldAnchor?: string) => {
-    setOpen((current) => new Set(current).add(id));
+    setActive(id);
     setEditing((current) => new Set(current).add(id));
     requestAnimationFrame(() => requestAnimationFrame(() => {
       const editor = document.querySelector(`.v3fs-editor[data-movement="${id}"]`);
@@ -100,63 +182,255 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
 
   const spine = useMemo(() => spineRegenerationPlan(program), [program]);
 
+  // Anchored drill-downs — "◇ deep dive" chips on the objects they zoom into.
+  const anchoredChildren = useMemo(() => (relatedPrograms ?? [])
+    .map((p) => ({ p, anchor: readDrillAnchor(p) }))
+    .filter((e): e is { p: ProgramSummary; anchor: NonNullable<ReturnType<typeof readDrillAnchor>> } => !!e.anchor),
+    [relatedPrograms]);
+
   return (
-    <div className="v3fs-flow">
-      {spine.length >= 2 && onRunAgentAndWait ? (
-        <SpineRunner plan={spine} runningAgentIds={runningAgentIds} onRun={onRunAgentAndWait} />
-      ) : null}
-      {rows.map(({ movement, artifacts, evidence }, index) => {
-        const isOpen = open.has(movement.id);
+    <div className="v3fs-flow v3fs-flow-spine">
+      {/* The horizontal spine — every movement's state at a glance; click to switch. */}
+      <nav className="v3fs-stepper" aria-label="Movements" role="tablist">
+        <div className="v3fs-stepper-rail" aria-hidden="true" />
+        {rows.map(({ movement, artifacts }, index) => {
+          const isDone = program.gateReviews?.[movement.id]?.status === "approved";
+          const generating = artifacts.some((a) => runningAgentIds.has(a.id));
+          const isLive = movement.id === frontier && !isDone;
+          const isLoop = !!movement.movement?.isLoop;
+          const isOn = movement.id === active;
+          const stateLabel = generating ? "Generating" : isDone ? "Demonstrated" : isLive ? "In progress" : isLoop ? "Continuous" : "Upcoming";
+          // The spine ring is the GATE ring, small — same source and colour as
+          // the Gate column's gauge: gate criteria met / total, toned by
+          // readiness. One source of truth, every phase.
+          const stepChecks = gateChecklist(program, movement, artifacts);
+          const stepReadiness = gateReadiness(program, movement, artifacts, stepChecks);
+          const stepDone = stepChecks.filter((c) => c.done).length;
+          const pct = stepChecks.length ? Math.round((100 * stepDone) / stepChecks.length) : (stepReadiness.tone === "green" ? 100 : 0);
+          return (
+            <button key={movement.id} type="button" role="tab" aria-selected={isOn}
+              className={`v3fs-step${isOn ? " on" : ""}`}
+              onClick={() => setActive(movement.id)}>
+              <span className={`v3fs-sring ${stepReadiness.tone}`} style={{ "--pct": `${pct}%` } as React.CSSProperties}
+                title={`Gate ${stepDone}/${stepChecks.length} — ${stepReadiness.headline}`} aria-hidden="true">
+                <span className={`v3fs-sdot${isDone ? " done" : isLive ? " live" : ""}`}>
+                  {isDone ? "✓" : isLoop ? "∞" : index + 1}
+                </span>
+              </span>
+              <span className="v3fs-sname">{movement.displayName}</span>
+              <span className={`v3fs-sstate ${generating ? "gen" : isDone ? "done" : isLive ? "live" : "wait"}`}>{stateLabel}</span>
+            </button>
+          );
+        })}
+      </nav>
+      {rows.filter(({ movement }) => movement.id === active).map(({ movement, artifacts, evidence }, index) => {
+        void index;
+        const isOpen = true;
         const isDone = program.gateReviews?.[movement.id]?.status === "approved";
         const generating = artifacts.some((a) => runningAgentIds.has(a.id));
         const isLive = movement.id === frontier && !isDone;
         const checks = gateChecklist(program, movement, artifacts);
         const readiness = gateReadiness(program, movement, artifacts, checks);
         const openChecks = checks.filter((item) => !item.done).length;
+        void openChecks;
+        // Audit F-001 read-time backstop: a recorded approval whose criteria
+        // aren't met is a forgery masquerading as a gate — surface it, loudly.
+        const gateIntegrity = gateApprovalIntegrity(program, movement.id, checks);
         const isLoop = !!movement.movement?.isLoop;
         const coverage = movement.id === "listen" ? listenCoverage(program) : null;
+        // "Where am I" summary: heard / artifacts current / gate — computed
+        // once so the operator reads the movement's state before scrolling.
+        const sumStakeholders = resolveMovementStakeholders(program, movement.id);
+        // ONE source of truth for "heard": the same stakeholderCollection the
+        // People board uses (evidence attribution + responded links + provided
+        // documents) — so the tab badge, the caption and the board never disagree.
+        const sumPacks = listInterviewPacks(program);
+        const evaluated = sumStakeholders.map((s) => stakeholderCollection(movement.id, s, sumPacks, evidence));
+        const unheard = sumStakeholders.filter((_, i) => !evaluated[i].heard);
+        const sumHeard = sumStakeholders.length - unheard.length;
+        const sumWord = movement.id === "show" ? "reviewed" : movement.id === "listen" || movement.id === "frame" ? "heard" : "consulted";
+        const sumDocsCurrent = artifacts.filter((a) => a.present && !a.stale && a.gaps === 0).length;
+        const sumChecksDone = checks.filter((c) => c.done).length;
+        const staleArtifacts = artifacts.filter((a) => a.present && a.stale);
+        const missingArtifacts = artifacts.filter((a) => !a.present);
+        // The "Up next" queue — the loop's frontier, ranked. Stale paper first
+        // (it poisons everything downstream), then generation, then the voices
+        // still to hear, then roster attestation, then the gate itself. Capped
+        // at three: a queue, not a backlog. The system states its opinion of
+        // the next move so the operator never hunts.
+        const spineOwnsRegen = spine.length >= 2 && !!onRunAgentAndWait;
+        const upNext: UpNextItem[] = [];
+        if (!isDone) {
+          if (spineOwnsRegen) {
+            upNext.push({ icon: "↻", label: `Regenerate ${spine.length} documents — down the spine`, toTab: "paper", spine: true });
+          } else if (staleArtifacts.length && onRunAgentAndWait) {
+            upNext.push({
+              icon: "↻",
+              label: staleArtifacts.length === 1 ? `Regenerate the ${staleArtifacts[0].title}` : `Regenerate ${staleArtifacts.length} stale documents`,
+              toTab: "paper",
+              run: async () => { for (const a of staleArtifacts) await onRunAgentAndWait(a.id, movement.id); },
+            });
+          } else if (missingArtifacts.length && evidence.length) {
+            upNext.push({ icon: "✦", label: `Generate the ${missingArtifacts[0].title}`, toTab: "paper", run: async () => onRunAgent(missingArtifacts[0].id, movement.id) });
+          }
+          if (unheard.length) {
+            const who = unheard[0].name.split(",")[0].trim();
+            upNext.push({ icon: "✉", label: unheard.length === 1 ? `Collect from ${who}` : `Collect from ${who} +${unheard.length - 1} more`, toTab: "collect" });
+          }
+          if (coverage && coverage.total > 0 && coverage.done < coverage.total) {
+            // Evidence has landed for people the roster hasn't attested —
+            // propose the flip. Two-step (arm → confirm) because attestation
+            // is the operator's judgment, and the write lands attested.
+            const heardNames = sumStakeholders.filter((_, i) => evaluated[i].heard).map((s) => s.name);
+            const proposal = attestHeardRoster(program, heardNames);
+            if (proposal) {
+              upNext.push({
+                icon: "✓",
+                label: `Attest ${proposal.attested.length === 1 ? proposal.attested[0].split(",")[0] : `${proposal.attested.length} heard voices`} in the roster`,
+                confirm: `Confirm — marks ${proposal.attested.length === 1 ? proposal.attested[0].split(",")[0] : `${proposal.attested.length} voices`} as Heard`,
+                toTab: "gate",
+                run: async () => onSaveInputs("listen", { interviewRoster: proposal.value }, {
+                  attest: {
+                    action: `Roster attested — ${proposal.attested.length} voice${proposal.attested.length === 1 ? "" : "s"} marked Heard`,
+                    detail: proposal.attested.join(", ").slice(0, 140),
+                  },
+                }),
+              });
+            }
+          }
+          {
+            // Decisions waiting in the Inbox target this movement — the
+            // cross-surface work flows through the same queue.
+            const inboxCheck = checks.find((c) => c.inbox && !c.done);
+            if (inboxCheck && onOpenInbox) {
+              upNext.push({ icon: "◫", label: inboxCheck.label, openInbox: true });
+            }
+          }
+          if (readiness.kind === "ready" && onRecordGate) {
+            upNext.push({ icon: "⚑", label: "Record the gate — demonstrated", toTab: "gate" });
+          }
+          if (!upNext.length && checks.length && sumChecksDone < checks.length) {
+            upNext.push({ icon: "○", label: "Review the open gate criteria", toTab: "gate" });
+          }
+        }
+        const queue = upNext.slice(0, 3);
+        // Which stage is showing — the operator's pick, else the movement's lead.
+        const hasPeople = sumStakeholders.length > 0;
+        const tabKey: MovementTab = movementTab[movement.id] ?? leadTab(movement.id);
+        const goTab = (t: MovementTab) => setMovementTab((prev) => ({ ...prev, [movement.id]: t }));
+        const gaugePct = checks.length ? Math.round((100 * sumChecksDone) / checks.length) : (readiness.tone === "green" ? 100 : 0);
+        // Stage chips read as a sentence — glyph + meaning per stage ("● 3
+        // waiting → ⟳ 2 stale → ◔ 8/11"), so the bar IS the loop's state.
+        const collectState = !hasPeople && !evidence.length
+          ? { glyph: "○", text: "", tone: "dim" }
+          : unheard.length
+            ? { glyph: "●", text: `${unheard.length} waiting`, tone: "warn" }
+            : { glyph: "✓", text: hasPeople ? `all ${sumWord}` : `${evidence.length} on record`, tone: "ok" };
+        const paperState = !artifacts.length ? null
+          : staleArtifacts.length
+            ? { glyph: "⟳", text: `${staleArtifacts.length} stale`, tone: "warn" }
+            : missingArtifacts.length
+              ? { glyph: "○", text: `${missingArtifacts.length} to generate`, tone: "dim" }
+              : sumDocsCurrent < artifacts.length
+                // Present and fresh, but the documents themselves declare open
+                // gaps — not "current" until the gaps close.
+                ? { glyph: "!", text: `${artifacts.length - sumDocsCurrent} with open gaps`, tone: "warn" }
+                : { glyph: "✓", text: "current", tone: "ok" };
+        const gateState = isDone
+          ? { glyph: "✓", text: "demonstrated", tone: "ok" }
+          : readiness.kind === "ready"
+            ? { glyph: "⚑", text: "ready", tone: "ok" }
+            : checks.length
+              ? { glyph: "◔", text: `${sumChecksDone}/${checks.length}`, tone: readiness.tone === "amber" ? "warn" : "dim" }
+              : { glyph: "○", text: "", tone: "dim" };
+        const tabDefs: Array<{ key: MovementTab; label: string; state: { glyph: string; text: string; tone: string } | null; show: boolean }> = [
+          { key: "collect", label: "Collect", state: collectState, show: true },
+          { key: "paper", label: "Paper", state: paperState, show: artifacts.length > 0 },
+          { key: "gate", label: isLoop ? "Health" : "Gate", state: gateState, show: true },
+        ];
 
         return (
           <Fragment key={movement.id}>
           <article
-            className={["v3fs-ch", isOpen ? "open" : "", isDone ? "done" : "", isLive ? "live" : ""].filter(Boolean).join(" ")}
+            className={["v3fs-ch open", isDone ? "done" : "", isLive ? "live" : ""].filter(Boolean).join(" ")}
           >
-            <div className="v3fs-node" aria-hidden="true">{isDone ? "✓" : isLoop ? "∞" : index + 1}</div>
-            {isLive && !isOpen ? (
-              // The pointer: one red arrow aimed at the movement to open next.
-              // The label lives in the tooltip and the accessible name; the
-              // arrow disappears once you're inside — the open chapter is the
-              // marker then.
-              <button
-                type="button"
-                className="v3fs-go"
-                onClick={() => toggle(setOpen, movement.id)}
-                data-tip={`Needs you${openChecks ? ` · ${openChecks}` : ""} — open ${movement.displayName}`}
-                aria-label={`Open ${movement.displayName} — needs you${openChecks ? `, ${openChecks} open` : ""}`}
-              >
-                <svg viewBox="0 0 28 20" width="24" height="17" fill="none" stroke="currentColor"
-                  strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M2 10h16" />
-                  <path d="M13 3l7 7-7 7" />
-                </svg>
-              </button>
-            ) : null}
-            <button type="button" className="v3fs-ch-h" onClick={() => toggle(setOpen, movement.id)} aria-expanded={isOpen}>
+            <div className="v3fs-ch-h v3fs-ch-h-static">
               <h2>{movement.displayName}</h2>
               <span className={`v3fs-state ${generating ? "gen" : isDone ? "done" : isLive ? "live" : isLoop ? "loop" : "wait"}`}>
                 {generating ? "Generating" : isDone ? "Demonstrated" : isLive ? "In progress" : isLoop ? "Continuous" : "Upcoming"}
               </span>
-              {!isOpen && (evidence.length > 0 || artifacts.some((a) => a.present)) ? (
-                <span className="v3fs-meta">
-                  {evidence.length} evidence · {artifacts.filter((a) => a.present && !a.stale && a.gaps === 0).length}/{artifacts.length} documents current
-                </span>
+            </div>
+            {/* The header band: gate gauge, the movement's one-line brief, and
+                the ranked "Up next" queue — one place for state and the verbs
+                that move it. The spine regeneration lives in the queue with
+                live progress, not in a separate banner. */}
+            <div className="v3fs-movebar" role="status">
+              {checks.length ? (
+                <button type="button" className={`v3fs-mgauge ${readiness.tone}`} style={{ "--pct": `${gaugePct}%` } as React.CSSProperties}
+                  onClick={() => goTab("gate")} title={`Gate ${sumChecksDone}/${checks.length} — ${readiness.headline}`}>
+                  <span className="v3fs-mgauge-c">{readiness.kind === "demonstrated" ? <b>✓</b> : <><b>{sumChecksDone}</b><i>/{checks.length}</i></>}</span>
+                </button>
               ) : null}
-            </button>
+              <div className="v3fs-movebar-txt">
+                {MOVEMENT_CAPTION[movement.id]
+                  ? <div className="v3fs-movebar-cap">{MOVEMENT_CAPTION[movement.id]}</div>
+                  : <div className="v3fs-movebar-cap">{sumHeard}/{sumStakeholders.length} {sumWord} · {sumDocsCurrent}/{artifacts.length} artifacts current</div>}
+              </div>
+              {queue.length ? (
+                <div className="v3fs-upnext" aria-label="Up next">
+                  <span className="v3fs-upnext-l">Up next</span>
+                  {queue.map((item, index) => item.spine && onRunAgentAndWait ? (
+                    <SpineQueueItem key="spine" plan={spine} primary={index === 0}
+                      runningAgentIds={runningAgentIds} onRun={onRunAgentAndWait}
+                      onGo={() => goTab("paper")} />
+                  ) : (
+                    <UpNextButton key={item.label} item={item} primary={index === 0}
+                      onGo={() => {
+                        if (item.openInbox) onOpenInbox?.();
+                        else if (item.anchor) openEditor(movement.id, item.anchor);
+                        else if (item.toTab) goTab(item.toTab);
+                      }} />
+                  ))}
+                </div>
+              ) : null}
+            </div>
 
             {isOpen ? (
-              <div className="v3fs-ch-b">
-                <div>
-                  <div className="v3fs-colh ev">Stakeholder evidence{coverage && coverage.total ? ` — ${coverage.done}/${coverage.total}` : ""}</div>
+              <>
+              {/* The stage bar draws the loop left to right — Collect → Paper →
+                  Gate — each chip carrying its state as a glyph + meaning. */}
+              <nav className="v3fs-mtabs" role="tablist" aria-label={`${movement.displayName} stages`}>
+                {tabDefs.filter((t) => t.show).map((t, index, arr) => (
+                  <Fragment key={t.key}>
+                    <button type="button" role="tab" aria-selected={tabKey === t.key}
+                      className={`v3fs-mtab${tabKey === t.key ? " on" : ""}`} onClick={() => goTab(t.key)}>
+                      {t.state ? <span className={`v3fs-mtab-g ${t.state.tone}`} aria-hidden="true">{t.state.glyph}</span> : null}
+                      {t.label}
+                      {t.state?.text ? <span className={`v3fs-mtab-n${t.state.tone === "warn" ? " warn" : ""}`}>{t.state.text}</span> : null}
+                    </button>
+                    {index < arr.length - 1 ? <span className="v3fs-mtab-arr" aria-hidden="true">→</span> : null}
+                  </Fragment>
+                ))}
+              </nav>
+              <div className="v3fs-ch-b tabbed" data-tab={tabKey}>
+                <div className={`v3fs-evcol${tabKey === "collect" ? "" : " v3fs-tabhide"}`}>
+                  {/* Collect: one stage, one subject — the people and what they
+                      said. The status board leads (it's the work); the record
+                      follows (it's what the work produced). */}
+                  {hasPeople ? (
+                    <IntervieweeDiscovery program={program} movementId={movement.id}
+                      captureField={meetingKit(program, movement.id)?.captureField ?? "interviewTranscripts"}
+                      related={relatedPrograms}
+                      onSaveInputs={onSaveInputs} onMintFollowUp={onMintFollowUp}
+                      onMintPacks={movement.id === "listen" ? onMintPacks : undefined}
+                      onCaptured={() => onRunAgent("contradiction-detector", movement.id)} />
+                  ) : null}
+                  <div className="v3fs-colh ev">The record{coverage && coverage.total ? ` — ${coverage.done}/${coverage.total}` : ""}</div>
+                  {!evidence.length && hasPeople ? (
+                    <div className="v3fs-tab-ghost">
+                      Nothing on the record yet — reach out from the cards above; what comes back lands here, attributed.
+                    </div>
+                  ) : null}
                   {/* The column leads with the evidence itself — voices, then
                       facts, then coverage. The kit is the action and follows,
                       collapsed to one line once a conversation is on record. */}
@@ -183,7 +457,56 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                         entries: evidence.filter((entry) => (entry.track ?? "").toLowerCase() === track.name.toLowerCase()),
                       }))
                       .filter((group) => group.entries.length || movement.id === "show");
-                    if (!grouped.length) return evidence.map(voice);
+                    if (!grouped.length) {
+                      // Frame/Listen: salience-ranked — claim-tagged and
+                      // substantive voices lead. The full record unfolds
+                      // GROUPED BY PERSON (documents together), newest group
+                      // first, instead of stretching into a flat wall.
+                      const ranked = rankEvidence(evidence, listClaimTags(program).map((c) => c.quote));
+                      const showAll = evAll.has(movement.id);
+                      const lead = ranked.filter((e) => !isNoiseEvidence(e)).slice(0, EVIDENCE_LEAD_COUNT);
+                      const hidden = ranked.length - lead.length;
+                      const byWho = new Map<string, typeof evidence>();
+                      for (const entry of evidence) {
+                        // Voices group by person; documents group by who
+                        // PROVIDED them (parsed from the meta line), so a
+                        // person's conversations and their documents sit
+                        // together instead of one giant "Documents" bucket.
+                        const provider = entry.kind === "document" ? (entry.meta.split("·")[1] ?? "").trim() : "";
+                        const key = entry.kind === "document"
+                          ? `Documents — ${provider || "programme"}`
+                          : (entry.who.split(",")[0].trim() || entry.who);
+                        const bucket = byWho.get(key) ?? [];
+                        if (!bucket.length) byWho.set(key, bucket);
+                        bucket.push(entry);
+                      }
+                      const evGroups = [...byWho.entries()].map(([name, items]) => ({
+                        name,
+                        items: items.slice().sort((a, b) => (b.capturedAt ?? "").localeCompare(a.capturedAt ?? "")),
+                        latest: items.reduce((max, entry) => (entry.capturedAt && entry.capturedAt > max ? entry.capturedAt : max), ""),
+                      })).sort((a, b) => b.latest.localeCompare(a.latest));
+                      return (
+                        <>
+                          {showAll ? null : lead.map(voice)}
+                          {hidden > 0 || showAll ? (
+                            <button type="button" className="v3fs-a v3fs-ev-more"
+                              onClick={() => setEvAll((prev) => { const next = new Set(prev); if (showAll) next.delete(movement.id); else next.add(movement.id); return next; })}>
+                              {showAll ? "Back to the highlights" : `Show all ${ranked.length} — grouped by person`}
+                            </button>
+                          ) : null}
+                          {showAll ? evGroups.map((group) => (
+                            <details key={group.name} className="v3fs-evg">
+                              <summary>
+                                <span className="v3fs-evg-n">{group.name}</span>
+                                <span className="v3fs-evg-c">{group.items.length} item{group.items.length === 1 ? "" : "s"}</span>
+                                {group.latest ? <span className="v3fs-evg-when">{group.latest}</span> : null}
+                              </summary>
+                              {group.items.map(voice)}
+                            </details>
+                          )) : null}
+                        </>
+                      );
+                    }
                     const tagged = new Set(grouped.flatMap((group) => group.entries));
                     const rest = evidence.filter((entry) => !tagged.has(entry));
                     return (
@@ -197,6 +520,13 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                                 <span className={`v3fs-vc ${acceptance.accepted ? "acc" : "pen"}`}>
                                   {acceptance.accepted ? "Accepted" : acceptance.passes ? `${acceptance.acceptedPasses}/${acceptance.passes} passes` : "no demos yet"}
                                 </span>
+                                {(() => {
+                                  const dd = anchoredChildren.find((e) => e.anchor.kind === "track" && e.anchor.label.toLowerCase() === track.name.toLowerCase());
+                                  return dd && onSelectProgram ? (
+                                    <button type="button" className="v3fs-ddchip" title={`Open ${dd.p.name}`}
+                                      onClick={() => onSelectProgram(dd.p.id)}>◇ deep dive</button>
+                                  ) : null;
+                                })()}
                                 {track.showPasses.length ? (
                                   <span className="v3fs-ev-track-dots" aria-hidden="true">
                                     {track.showPasses.slice(-6).map((pass, i) => (
@@ -306,13 +636,11 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                       <div className="v3fs-coverage-bar"><div className="v3fs-coverage-fill" style={{ width: `${Math.round((coverage.done / coverage.total) * 100)}%` }} /></div>
                     </div>
                   ) : null}
-                  {resolveMovementStakeholders(program, movement.id).length > 0 ? (
-                    <IntervieweeDiscovery program={program} movementId={movement.id}
-                      captureField={meetingKit(program, movement.id)?.captureField ?? "interviewTranscripts"}
-                      onSaveInputs={onSaveInputs} onMintFollowUp={onMintFollowUp}
-                      onMintPacks={movement.id === "listen" ? onMintPacks : undefined}
-                      onCaptured={() => onRunAgent("contradiction-detector", movement.id)} />
-                  ) : (
+                  {/* Stakeholder evidence collection lives in a full-width board
+                      below the three columns (see v3fs-ch-collect). The column
+                      keeps just the evidence + facts + coverage. When a movement
+                      has no per-stakeholder roster, the meeting kit stays here. */}
+                  {resolveMovementStakeholders(program, movement.id).length > 0 ? null : (
                   <MeetingKitCard
                     kit={meetingKit(program, movement.id)}
                     movementId={movement.id}
@@ -339,7 +667,7 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                   </button>
                 </div>
 
-                <div>
+                <div className={`v3fs-artgrid${tabKey === "paper" ? "" : " v3fs-tabhide"}`}>
                   <div className="v3fs-colh gn">{generating ? "Generating…" : "Generated by ATOS"}</div>
                   {movement.id === "ship" && onCompileShipLanes && onToggleShipItem ? (
                     <ShipLanesBoard program={program} onCompile={onCompileShipLanes} onToggle={onToggleShipItem} onSetLane={onSetShipLane} />
@@ -364,41 +692,27 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                       artifact={artifact}
                       running={runningAgentIds.has(artifact.id)}
                       evidenceNames={evidence.map((entry) => entry.who)}
+                      evidenceCount={evidence.length}
                       onGenerate={() => onRunAgent(artifact.id, movement.id)}
                       onOpen={artifact.present ? () => setDocFor(artifact) : undefined}
+                      onGoEvidence={() => goTab("collect")}
                     />
                   ))}
                 </div>
 
-                <div>
+                <div className={tabKey === "gate" ? "" : "v3fs-tabhide"}>
                   <div className={`v3fs-colh gt${isDone ? " done" : ""}`}>{isLoop ? "Steady-state health" : "Gate"}</div>
-                  <div className="v3fs-gate">
+                  <div className="v3fs-gate inline">
                     {/* Verdict first: one composed state over the whole loop —
-                        evidence criteria, record current, Inbox clear. */}
+                        evidence criteria, record current, Inbox clear. The
+                        command strip's gauge already carries the count ring, so
+                        this panel leads with the words and the criteria live
+                        INLINE below — the tab is the place, not a modal. */}
                     <div className={`v3fs-gstate ${readiness.tone}`}>
                       <div className="v3fs-gstate-top">
-                        {checks.length ? (() => {
-                          const done = checks.filter((c) => c.done).length;
-                          const total = checks.length;
-                          const R = 26; const CIRC = 2 * Math.PI * R;
-                          const pct = total ? done / total : (readiness.tone === "green" ? 1 : 0);
-                          return (
-                            <div className={`v3fs-gring ${readiness.tone}`} role="img" aria-label={`${done} of ${total} criteria met`}>
-                              <svg viewBox="0 0 64 64" width="60" height="60">
-                                <circle cx="32" cy="32" r={R} className="v3fs-gring-track" />
-                                <circle cx="32" cy="32" r={R} className="v3fs-gring-fill"
-                                  style={{ strokeDasharray: CIRC, strokeDashoffset: CIRC * (1 - pct) }} transform="rotate(-90 32 32)" />
-                              </svg>
-                              <div className="v3fs-gring-c">
-                                {readiness.kind === "demonstrated" ? <b className="v3fs-gring-tick">✓</b> : <><b>{done}</b><span>of {total}</span></>}
-                              </div>
-                            </div>
-                          );
-                        })() : (
-                          <span className={`v3fs-gstate-g ${readiness.tone}`} aria-hidden="true">
-                            {readiness.kind === "trails" ? "⟳" : readiness.tone === "green" ? "✓" : readiness.tone === "amber" ? "⚠" : "○"}
-                          </span>
-                        )}
+                        <span className={`v3fs-gstate-g ${readiness.tone}`} aria-hidden="true">
+                          {readiness.kind === "demonstrated" ? "✓" : readiness.kind === "trails" ? "⟳" : readiness.tone === "green" ? "✓" : readiness.tone === "amber" ? "⚠" : "○"}
+                        </span>
                         <div className="v3fs-gstate-txt">
                           {(() => {
                             const countHeadline = /criteria met/.test(readiness.headline);
@@ -413,6 +727,11 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                           })()}
                         </div>
                       </div>
+                      {gateIntegrity.approved && !gateIntegrity.defensible ? (
+                        <div className="v3fs-gate-forged" role="alert">
+                          ⚠ {gateIntegrity.reason}. This approval is not server-attested and must not be relied on.
+                        </div>
+                      ) : null}
                       {readiness.kind === "ready" && !isDone && onRecordGate ? (
                         <GateActionButton
                           idle="Record the gate — demonstrated"
@@ -432,14 +751,18 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                       ) : null}
                     </div>
                     {checks.length ? (
-                    <details className="v3fs-checks-disc" open={readiness.tone !== "green"}>
-                      <summary>Criteria<span aria-hidden="true" className="v3fs-checks-chev" /></summary>
                     <div className="v3fs-checks">
                       {checks.map((item, itemIndex) => {
                         const group = item.group ?? "evidence";
                         const prevGroup = itemIndex ? (checks[itemIndex - 1].group ?? "evidence") : null;
                         const grouped = checks.some((c) => (c.group ?? "evidence") !== "evidence");
                         const artifact = item.artifactId ? artifacts.find((a) => a.id === item.artifactId) : undefined;
+                        // Every criterion is a door to where it's settled: an
+                        // anchor opens the editor on its field (the coverage
+                        // ledger's row opens the roster, where attesting
+                        // happens), a document opens the studio, an Inbox item
+                        // opens the Inbox.
+                        const isLedger = /attest/i.test(item.label);
                         const onClick = item.anchor
                           ? () => openEditor(movement.id, item.anchor)
                           : artifact?.present
@@ -447,13 +770,15 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                             : item.inbox && !item.done && onOpenInbox
                               ? () => onOpenInbox()
                               : undefined;
-                        const title = item.anchor
-                          ? item.done ? "Met — open to review or correct" : "Open the editor on this item"
-                          : item.artifactId
-                            ? artifact?.present ? "Open the document" : "Generate from the card"
-                            : item.inbox
-                              ? item.done ? "Nothing waiting" : "Open the Inbox"
-                              : "Met by generating / working the movement";
+                        const title = isLedger
+                          ? "Attest voices in the roster — the People tab shows who's actually been heard"
+                          : item.anchor
+                            ? item.done ? "Met — open to review or correct" : "Open the editor on this item"
+                            : item.artifactId
+                              ? artifact?.present ? "Open the document" : "Generate from the card"
+                              : item.inbox
+                                ? item.done ? "Nothing waiting" : "Open the Inbox"
+                                : "Met by generating / working the movement";
                         // Amber emphasis for any present-but-open record row;
                         // the box glyph says why: ⟳ evidence moved, ! gaps declared.
                         const attention = group === "record" && !item.done && !!artifact?.present;
@@ -490,7 +815,6 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                         );
                       })}
                     </div>
-                    </details>
                     ) : null}
                     <p className="v3fs-gate-say foot">{movement.movement?.readyWhen ?? ""}</p>
                   </div>
@@ -502,6 +826,7 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                   </div>
                 ) : null}
               </div>
+              </>
             ) : null}
           </article>
           </Fragment>
@@ -511,6 +836,7 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
         <FlowArtifactStudio
           program={program}
           artifact={docFor}
+          onComment={onComment}
           onOpenArtifact={(artifactId) => {
             for (const m of flowMovements()) {
               const hit = movementArtifacts(program, m).find((a) => a.id === artifactId && a.present);
@@ -552,10 +878,14 @@ const subscribeSpine = (listener: () => void) => {
   return () => { spineListeners.delete(listener); };
 };
 
-function SpineRunner({ plan, runningAgentIds, onRun }: {
+/** The spine regeneration as the queue's top item — same staged runner, now
+ * living where every other frontier verb lives, with inline progress. */
+function SpineQueueItem({ plan, primary, runningAgentIds, onRun, onGo }: {
   plan: Array<{ artifactId: string; movementId: string; title: string }>;
+  primary: boolean;
   runningAgentIds: Set<string>;
   onRun: (agentId: string, phaseId: string) => Promise<void>;
+  onGo: () => void;
 }) {
   const state = React.useSyncExternalStore(subscribeSpine, () => spineState);
   const progress = state?.phase === "running" ? state : null;
@@ -586,28 +916,28 @@ function SpineRunner({ plan, runningAgentIds, onRun }: {
     }
     setSpineState({ phase: "done", completed, failed });
   };
-  return (
-    <div className="v3fs-spine" role="status">
-      <div className="v3fs-spine-t">
-        {progress
-          ? `Regenerating ${progress.index} of ${progress.total} — ${progress.title}…`
-          : done
-            ? done.failed.length
-              ? `${done.completed} regenerated; ${done.failed.join(", ")} did not finish — run the spine again to retry.`
-              : `Done — ${done.completed} document${done.completed === 1 ? "" : "s"} regenerated. Any you edited by hand ask first, in the Inbox.`
-            : `Evidence changed — ${plan.length} documents need regenerating, in order.`}
-      </div>
-      {!progress && (!done || done.failed.length > 0) ? (
-        <button type="button" className="v3fs-btn pri" disabled={busyElsewhere} onClick={() => void run()}>
-          {busyElsewhere ? "An agent is running…" : "Regenerate down the spine"}
-        </button>
-      ) : null}
-      {progress ? (
-        <div className="v3fs-spine-bar" aria-hidden="true">
-          <div className="v3fs-spine-fill" style={{ width: `${Math.round(((progress.index - 1) / progress.total) * 100)}%` }} />
+  if (progress) {
+    return (
+      <div className="v3fs-upnext-run" role="status">
+        <span>↻ Regenerating {progress.index} of {progress.total} — {progress.title}…</span>
+        <div className="v3fs-upnext-bar" aria-hidden="true">
+          <div className="v3fs-upnext-fill" style={{ width: `${Math.round(((progress.index - 1) / progress.total) * 100)}%` }} />
         </div>
+      </div>
+    );
+  }
+  return (
+    <>
+      <button type="button" className={`v3fs-upnext-btn${primary ? " pri" : ""}`} disabled={busyElsewhere}
+        title={`Evidence changed — ${plan.length} documents regenerate in dependency order, upstream first`}
+        onClick={() => { onGo(); void run(); }}>
+        <span className="v3fs-upnext-i" aria-hidden="true">↻</span>
+        {busyElsewhere ? "An agent is running…" : done?.failed.length ? `Retry — ${done.failed.length} did not finish` : `Regenerate ${plan.length} documents — down the spine`}
+      </button>
+      {done && !done.failed.length && done.completed > 0 ? (
+        <span className="v3fs-upnext-note">Regenerated {done.completed} — hand-edited documents ask first, in the Inbox.</span>
       ) : null}
-    </div>
+    </>
   );
 }
 
@@ -646,6 +976,42 @@ function GateActionButton({ idle, armedLabel, busyLabel, quiet, onAct }: {
 }
 
 /**
+ * One "Up next" verb. An item with async `run` (regenerate / generate) shows
+ * progress and jumps to the stage where the result lands; a navigation-only
+ * item just goes there so the operator sees the thing they need to act on.
+ * The first item in the queue is the primary; the rest stay quiet.
+ */
+function UpNextButton({ item, primary, onGo }: {
+  item: UpNextItem;
+  primary: boolean;
+  onGo: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  // Verbs that write judgment (roster attestation) are two-step: the first
+  // press arms and names exactly what will happen; the second acts. The arm
+  // decays so a stray click never leaves a loaded button behind.
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const timer = window.setTimeout(() => setArmed(false), 4000);
+    return () => window.clearTimeout(timer);
+  }, [armed]);
+  const press = async () => {
+    if (item.confirm && !armed) { setArmed(true); return; }
+    onGo();
+    if (!item.run) return;
+    setBusy(true);
+    try { await item.run(); } finally { setBusy(false); setArmed(false); }
+  };
+  return (
+    <button type="button" className={`v3fs-upnext-btn${primary ? " pri" : ""}${armed ? " armed" : ""}`} disabled={busy} onClick={() => void press()}>
+      <span className="v3fs-upnext-i" aria-hidden="true">{item.icon}</span>
+      {busy ? "Working…" : armed && item.confirm ? item.confirm : item.label}
+    </button>
+  );
+}
+
+/**
  * The meeting kit — if the input is a conversation, hand the user the
  * conversation: who to sit with, the script to run (derived from missing
  * facts and generated agendas), and capture right where the script is.
@@ -656,10 +1022,47 @@ function GateActionButton({ idle, armedLabel, busyLabel, quiet, onAct }: {
  * role: their script, their link/meeting channels, their captured evidence, a
  * capture box — followed until they've been heard. Driven by
  * resolveMovementStakeholders, so it serves every movement. */
-function IntervieweeDiscovery({ program, movementId, captureField, onSaveInputs, onMintFollowUp, onMintPacks, onCaptured }: {
+/** Derive a stakeholder's collection status, their live link pack, and the
+ * evidence attributed to them — the single source of truth for the status
+ * board grouping and each card. */
+function stakeholderCollection(
+  movementId: string,
+  stakeholder: MovementStakeholder,
+  packs: ReturnType<typeof listInterviewPacks>,
+  evidence: ReturnType<typeof movementEvidence>,
+) {
+  const key = stakeholder.name.toLowerCase();
+  const pack = [...packs].reverse().find((p) => String(p.stakeholder ?? "").trim().toLowerCase() === key
+    && (movementId === "listen" ? (!p.movementId || p.movementId === "listen") : p.movementId === movementId));
+  // Their evidence: attributed voice blocks, PLUS documents they provided
+  // (document entries carry the provider in their meta, not in `who`).
+  const mine = (key.length > 2 ? evidence.filter((e) =>
+    e.who.toLowerCase().includes(key)
+    || key.includes(e.who.split(",")[0].trim().toLowerCase())
+    || (e.kind === "document" && e.meta.toLowerCase().includes(key))) : [])
+    // Newest first — the latest response leads the trail.
+    .slice().sort((a, b) => (b.capturedAt ?? "").localeCompare(a.capturedAt ?? ""));
+  const heard = mine.length > 0 || Boolean(pack?.respondedAt);
+  const status: "heard" | "waiting" | "toreach" = heard ? "heard" : pack ? "waiting" : "toreach";
+  return { key, pack, mine, heard, status };
+}
+type StakeholderCollection = ReturnType<typeof stakeholderCollection>;
+
+const COLLECT_COLUMNS: Array<{ key: "heard" | "waiting" | "toreach"; label: string }> = [
+  { key: "heard", label: "Heard" },
+  { key: "waiting", label: "Awaiting response" },
+  { key: "toreach", label: "To reach" },
+];
+
+/** The movement's stakeholder data collection as a STATUS BOARD: cards grouped
+ * into columns by collection state (Heard · Awaiting · To reach), each card the
+ * person's quote, dated feedback trail (click → transcript), follow-ups,
+ * meeting, and link channels. Driven by resolveMovementStakeholders. */
+function IntervieweeDiscovery({ program, movementId, captureField, related, onSaveInputs, onMintFollowUp, onMintPacks, onCaptured }: {
   program: ProgramSummary;
   movementId: string;
   captureField: string;
+  related?: ProgramSummary[];
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
   onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
   onMintPacks?: () => Promise<void>;
@@ -670,59 +1073,101 @@ function IntervieweeDiscovery({ program, movementId, captureField, onSaveInputs,
   const evidence = movement ? movementEvidence(program, movement) : [];
   const packs = listInterviewPacks(program);
   const [mintBusy, setMintBusy] = useState(false);
+  const [allCollapsed, setAllCollapsed] = useState(false);
+  const boardRef = useRef<HTMLDivElement>(null);
+  // Same person, other programmes in the family: their quotes project here
+  // read-only, tagged with origin — evidence never moves between programmes.
+  const crossAll = useMemo(() =>
+    (related ?? []).flatMap((rp) => flowMovements().flatMap((m) =>
+      movementEvidence(rp, m).map((entry) => ({ entry, from: rp.name })))),
+    [related]);
   if (!stakeholders.length) return null;
-  const heardCount = stakeholders.filter((entry) => {
-    const key = entry.name.toLowerCase();
-    return key.length > 2 && (evidence.some((e) => e.who.toLowerCase().includes(key))
-      || packs.some((p) => String(p.stakeholder ?? "").trim().toLowerCase() === key && p.respondedAt));
-  }).length;
-  const word = movementId === "show" ? "reviewed" : movementId === "listen" ? "heard" : "consulted";
+  const evaluated = stakeholders.map((s) => ({ s, coll: stakeholderCollection(movementId, s, packs, evidence) }));
+  const heardCount = evaluated.filter((e) => e.coll.status === "heard").length;
+  const word = movementId === "show" ? "reviewed" : movementId === "listen" || movementId === "frame" ? "heard" : "consulted";
+  const columns = COLLECT_COLUMNS
+    .map((c) => ({ ...c, items: evaluated.filter((e) => e.coll.status === c.key) }))
+    .filter((c) => c.items.length);
+  const toggleAll = () => {
+    const next = !allCollapsed;
+    boardRef.current?.querySelectorAll("details.v3fs-ivc").forEach((node) => { (node as HTMLDetailsElement).open = !next; });
+    setAllCollapsed(next);
+  };
   return (
-    <div className="v3fs-ivd">
-      <div className="v3fs-ivd-h">
-        <span className="v3fs-ivd-t">{stakeholders.length} stakeholder{stakeholders.length === 1 ? "" : "s"} — {heardCount} {word}</span>
-        {movementId === "listen" && onMintPacks ? (
-          <button type="button" className="v3fs-a" disabled={mintBusy}
-            onClick={async () => { setMintBusy(true); try { await onMintPacks(); } finally { setMintBusy(false); } }}>
-            {packs.length ? "↺ Refresh & add links" : "✳ Create everyone's link"}
-          </button>
-        ) : null}
+    <div className="v3fs-ch-collect">
+      <div className="v3fs-collect-h">
+        <div className="v3fs-colh ev">Stakeholder data collection</div>
+        <span className="v3fs-collect-count"
+          title={movementId === "listen"
+            ? "Counted from collected evidence and responded links. The gate's coverage ledger is separate — voices are attested heard or waived in the roster."
+            : "Counted from collected evidence and responded links."}>
+          {heardCount} of {stakeholders.length} {word}
+        </span>
+        <div className="v3fs-collect-tools">
+          {movementId === "listen" && onMintPacks ? (
+            <button type="button" className="v3fs-btn" disabled={mintBusy}
+              onClick={async () => { setMintBusy(true); try { await onMintPacks(); } finally { setMintBusy(false); } }}>
+              {packs.length ? "↺ Refresh & add links" : "✳ Create everyone's link"}
+            </button>
+          ) : null}
+          {stakeholders.length > 1 ? (
+            <button type="button" className="v3fs-btn quiet" onClick={toggleAll}>{allCollapsed ? "Expand all" : "Collapse all"}</button>
+          ) : null}
+        </div>
       </div>
-      {stakeholders.map((entry) => (
-        <IntervieweeCard key={entry.id} program={program} movementId={movementId} stakeholder={entry} captureField={captureField}
-          packs={packs} evidence={evidence} onSaveInputs={onSaveInputs} onMintFollowUp={onMintFollowUp} onCaptured={onCaptured} />
-      ))}
+      <div className="v3fs-collect-board" ref={boardRef}>
+        {columns.map((col) => (
+          <div key={col.key} className="v3fs-collect-col">
+            <div className="v3fs-collect-col-h"><span className={`v3fs-cdot ${col.key}`} aria-hidden="true" />{col.label}<span className="v3fs-cn">{col.items.length}</span></div>
+            {col.items.map(({ s, coll }) => {
+              const key = s.name.toLowerCase();
+              const cross = key.length > 2 ? crossAll.filter(({ entry }) => {
+                const who = entry.who.split(",")[0].trim().toLowerCase();
+                return who && (who.includes(key) || key.includes(who));
+              }) : [];
+              return (
+                <IntervieweeCard key={s.id} program={program} movementId={movementId} stakeholder={s} captureField={captureField}
+                  coll={coll} cross={cross} onSaveInputs={onSaveInputs} onMintFollowUp={onMintFollowUp} onCaptured={onCaptured} />
+              );
+            })}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
-function IntervieweeCard({ program, movementId, stakeholder, captureField, packs, evidence, onSaveInputs, onMintFollowUp, onCaptured }: {
+function IntervieweeCard({ program, movementId, stakeholder, captureField, coll, cross, onSaveInputs, onMintFollowUp, onCaptured }: {
   program: ProgramSummary;
   movementId: string;
   stakeholder: MovementStakeholder;
   captureField: string;
-  packs: ReturnType<typeof listInterviewPacks>;
-  evidence: ReturnType<typeof movementEvidence>;
+  coll: StakeholderCollection;
+  cross?: Array<{ entry: ReturnType<typeof movementEvidence>[number]; from: string }>;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
   onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
   onCaptured?: () => void;
 }) {
   const { name, role, questions } = stakeholder;
+  const { pack, mine, heard, status } = coll;
   const first = name.split(" ")[0] || "they";
   const email = stakeholderEmail(program, name);
-  const key = name.toLowerCase();
-  const pack = [...packs].reverse().find((p) => String(p.stakeholder ?? "").trim().toLowerCase() === key
-    && (movementId === "listen" ? (!p.movementId || p.movementId === "listen") : p.movementId === movementId));
-  const mine = key.length > 2 ? evidence.filter((e) => e.who.toLowerCase().includes(key) || key.includes(e.who.split(",")[0].trim().toLowerCase())) : [];
-  const heard = mine.length > 0 || Boolean(pack?.respondedAt);
-  const status = heard ? "heard" : pack ? "waiting" : "toreach";
-  const statusLabel = heard ? "✓ Heard" : pack ? "Link sent · waiting" : "To reach";
+  // A minted link is only "the" link while its questions still match the
+  // current script — when the script has moved on, the old link goes stale and
+  // Copy/Send mint a fresh pack (which supersedes the unanswered one).
+  const packMatches = !!pack && (Array.isArray(pack.questions) ? pack.questions.map(String).join(" ") : "")
+    === questions.slice(0, 8).join(" ");
+  const statusLabel = heard ? "Heard" : pack ? (packMatches ? "Link sent" : "Link outdated") : "To reach";
   const [capture, setCapture] = useState("");
   const [busy, setBusy] = useState(false);
   const [date, setDate] = useState("");
   const [mintedLink, setMintedLink] = useState<string | null>(null);
   const [linkBusy, setLinkBusy] = useState(false);
-  const effectiveLink = (pack ? portalLinkFor(program.id, pack) : null) ?? mintedLink;
+  const [evFor, setEvFor] = useState<typeof mine[number] | null>(null);
+  // Passage to highlight when the reader opens from a contradiction question.
+  const [evHighlight, setEvHighlight] = useState<string | null>(null);
+  const dateRef = useRef<HTMLInputElement | null>(null);
+  const effectiveLink = (pack && packMatches ? portalLinkFor(program.id, pack) : null) ?? mintedLink;
 
   const ensureLink = async (): Promise<string | null> => {
     if (effectiveLink) return effectiveLink;
@@ -749,7 +1194,7 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, packs
       void phase;
       const bucket = (inner.phaseInputs && typeof inner.phaseInputs === "object" ? (inner.phaseInputs as Record<string, Record<string, unknown>>)[movementId] : undefined) ?? {};
       const existing = typeof bucket[captureField] === "string" ? bucket[captureField] as string : "";
-      const header = `— ${[name, role, new Date().toISOString().slice(0, 10)].filter(Boolean).join(", ")} —`;
+      const header = `— ${[name, role, evidenceStamp()].filter(Boolean).join(", ")} —`;
       await onSaveInputs(phaseId, { [captureField]: [existing.trimEnd(), `${header}\n${text}`].filter(Boolean).join("\n\n") },
         { attest: { action: `Captured — ${name}` } });
       setCapture("");
@@ -757,59 +1202,178 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, packs
     } finally { setBusy(false); }
   };
 
+  // An attached file is EVIDENCE the moment it lands: saved as a document
+  // block in the person's name — canonical header + [source:] pointer — so the
+  // Library lists it and the original stays downloadable. No manual step.
+  // A MEETING TRANSCRIPT goes further: detected speakers are auto-mapped to
+  // the movement's roster and each matched person gets their turns as their
+  // OWN attributed block — everyone in the room is heard, not just this card.
+  const saveAttachedDoc = async (filename: string, text: string, sourceKey?: string) => {
+    const docTitle = filename.replace(/\.[^.]+$/, "");
+    setBusy(true);
+    try {
+      const raw = (program.rawData ?? {}) as Record<string, unknown>;
+      const inner = typeof raw.data === "object" && raw.data !== null ? raw.data as Record<string, unknown> : raw;
+      const bucket = (inner.phaseInputs && typeof inner.phaseInputs === "object" ? (inner.phaseInputs as Record<string, Record<string, unknown>>)[movementId] : undefined) ?? {};
+      const existing = typeof bucket[captureField] === "string" ? bucket[captureField] as string : "";
+      const day = evidenceStamp();
+      const docBlock = `— Document: ${docTitle}, provided by ${name}, ${day} —\n${sourceKey ? `[source: ${sourceKey}]\n` : ""}${text}`;
+      const roster = resolveMovementStakeholders(program, movementId).map((s) => ({ name: s.name, role: s.role }));
+      const mapping = mapTranscriptSpeakers(text, roster);
+      const speakerBlocks = (mapping?.blocks ?? []).map((b) =>
+        `— ${[b.name, b.role, day].filter(Boolean).join(", ")} —\n${b.text}`);
+      const attestDetail = mapping
+        ? `provided by ${name} · speakers mapped: ${mapping.matched.join(", ") || "none"}${mapping.unmatched.length ? ` · unmatched: ${mapping.unmatched.join(", ")}` : ""}`
+        : `provided by ${name}`;
+      await onSaveInputs(movementId,
+        { [captureField]: [existing.trimEnd(), docBlock, ...speakerBlocks].filter(Boolean).join("\n\n") },
+        { attest: { action: mapping?.blocks.length ? `Transcript mapped — ${docTitle}` : `Document added — ${docTitle}`, detail: attestDetail } });
+      onCaptured?.();
+    } finally { setBusy(false); }
+  };
+  const downloadOriginal = (entry: typeof mine[number]) => {
+    void supabase.functions.invoke("flow-extract", { body: { download: entry.sourceKey } })
+      .then((result: { data: unknown }) => {
+        const url = (result.data as { url?: string } | null)?.url;
+        if (url) window.open(url, "_blank"); else setEvFor(entry);
+      })
+      .catch(() => setEvFor(entry));
+  };
+
   return (
-    <details className={`v3fs-ivc ${status}`} open={!heard}>
-      <summary>
-        <span className="v3fs-ivc-who">{name || "Stakeholder"}{role && role !== name ? <span>{role}</span> : null}</span>
-        <span className={`v3fs-ivc-st ${status}`}>{statusLabel}</span>
-      </summary>
-      <div className="v3fs-ivc-b">
-        {questions.length ? (
-          <details className="v3fs-ivc-script">
-            <summary>Their script — {questions.length} question{questions.length === 1 ? "" : "s"}</summary>
-            <ol>{questions.map((q, i) => <li key={i}>{q}</li>)}</ol>
-          </details>
-        ) : null}
-        {mine.length ? (
-          <div className="v3fs-ivc-ev">
-            {mine.slice(0, 3).map((e, i) => (
-              <div key={i} className="v3fs-voice">
-                {e.excerpt ? <div className="v3fs-voice-q">“{e.excerpt}”</div> : null}
-                <div className="v3fs-voice-who">{e.who}<span>{e.meta}</span></div>
+    <>
+      <details className={`v3fs-ivc ${status}`} open={!heard}>
+        <span className="v3fs-ivc-strip" aria-hidden="true" />
+        <summary>
+          <span className="v3fs-ivc-who">{name || "Stakeholder"}{role && role !== name ? <span>{role}</span> : null}</span>
+          <span className={`v3fs-ivc-st ${status}`}>{statusLabel}</span>
+          <span className="v3fs-ivc-chev" aria-hidden="true" />
+        </summary>
+        <div className="v3fs-ivc-b">
+          {/* Feedback trail — every dated response, click to read the transcript. */}
+          <div className="v3fs-ivc-sec">
+            <div className="v3fs-ivc-sec-h">Feedback &amp; responses</div>
+            {mine.length || cross?.length ? (
+              <div className="v3fs-ivc-fb">
+                {mine.map((e, i) => (
+                  <button key={i} type="button" className="v3fs-ivc-fb-row" onClick={() => setEvFor(e)}
+                    title={e.kind === "document" ? "Open the extracted content — ⤓ fetches the original file" : "Read the transcript"}>
+                    <span className="v3fs-ivc-fb-top">
+                      {e.kind === "document" ? <span className="v3fs-ivc-fb-kind">doc</span> : null}
+                      {e.kind === "document" ? <span className="v3fs-ivc-fb-m">{e.who}</span> : null}
+                      {e.capturedAt ? <span className="v3fs-ivc-fb-when">{e.capturedAt}</span> : null}
+                      {e.kind === "document" && e.sourceKey ? (
+                        <span role="button" tabIndex={0} className="v3fs-ivc-fb-dl" title="Download the original file"
+                          onClick={(ev) => { ev.stopPropagation(); downloadOriginal(e); }}
+                          onKeyDown={(ev) => { if (ev.key === "Enter") { ev.stopPropagation(); downloadOriginal(e); } }}>⤓ original</span>
+                      ) : null}
+                      <span className="v3fs-ivc-fb-go">Open ↗</span>
+                    </span>
+                    {e.excerpt ? <span className="v3fs-ivc-fb-q">“{e.excerpt}”</span> : null}
+                  </button>
+                ))}
+                {(cross ?? []).slice(0, 4).map(({ entry, from }, i) => (
+                  <button key={`x-${i}`} type="button" className="v3fs-ivc-fb-row cross" onClick={() => setEvFor(entry)}
+                    title={`Said in ${from} — shown here read-only`}>
+                    <span className="v3fs-ivc-fb-top"><span className="v3fs-ivc-fb-from">◇ {from}</span><span className="v3fs-ivc-fb-m">{entry.meta}</span><span className="v3fs-ivc-fb-go">Open ↗</span></span>
+                    {entry.excerpt ? <span className="v3fs-ivc-fb-q">“{entry.excerpt}”</span> : null}
+                  </button>
+                ))}
               </div>
-            ))}
+            ) : (
+              <div className="v3fs-ivc-fb-empty">No responses yet — collect via a link or a meeting.</div>
+            )}
           </div>
-        ) : null}
-        {!heard ? (
-          <div className="v3fs-ivc-ch">
-            <button type="button" className={`v3fs-btn${email ? "" : " pri"}`} disabled={linkBusy} onClick={() => void copyLink()}>
-              {linkBusy && !email ? "…" : effectiveLink ? "Copy link" : "Create & copy link"}
-            </button>
-            {email ? (
-              <button type="button" className="v3fs-btn pri" disabled={linkBusy} title={`Opens a draft to ${email}`} onClick={() => void sendLink()}>✉ Send link</button>
-            ) : null}
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label={`Meeting date for ${name}`} />
-            <button type="button" className="v3fs-btn" disabled={!date}
-              onClick={() => {
-                const ics = buildMeetingIcs({ who: name, email, date, programmeName: program.name, intro: "", questions });
-                const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
-                const anchor = document.createElement("a");
-                anchor.href = url;
-                anchor.download = `${movementId}-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.ics`;
-                anchor.click();
-                URL.revokeObjectURL(url);
-              }}>⤓ Invite</button>
+
+          {/* Follow-up questions / their script. A question born from a
+              contradiction carries its receipts: the disputed passage links
+              straight into the evidence reader, highlighted, so the operator
+              (or the stakeholder on a call) reviews the source before judging. */}
+          {questions.length ? (
+            <div className="v3fs-ivc-sec">
+              <div className="v3fs-ivc-sec-h">{heard ? "Still open — ask on the next round" : "Their script"}
+                {heard ? <span className="v3fs-ivc-sec-note">these are unresolved gaps &amp; disputes; they clear when the artifact is regenerated or the dispute resolved</span> : null}</div>
+              <ul className="v3fs-ivc-q">{questions.map((q, i) => {
+                const disputed = q.match(/disagree[^"]*"(.{8,140}?)"/i)?.[1];
+                const source = disputed
+                  ? flowMovements().flatMap((m) => movementEvidence(program, m)).find((entry) => entry.text && locateQuote(entry.text, disputed))
+                  : undefined;
+                return (
+                  <li key={i}>
+                    {q}
+                    {source ? (
+                      <button type="button" className="v3fs-a v3fs-ivc-evlink" title={`Said by ${source.who} — read the passage in the source`}
+                        onClick={() => { setEvHighlight(disputed ?? null); setEvFor(source); }}>
+                        ⤷ review evidence
+                      </button>
+                    ) : null}
+                  </li>
+                );
+              })}</ul>
+            </div>
+          ) : null}
+
+          {/* Meeting + link channels. Not-yet-heard people get "Reach out";
+              heard people KEEP the same three channels as "Follow up" whenever
+              the kit still has questions for them (it swaps in the gap-driven
+              follow-up script once a conversation is on record) — so the Frame
+              sponsor's single card never strands the operator without a send
+              button, and every movement's card behaves identically. */}
+          {!heard || questions.length ? (
+            <div className="v3fs-ivc-sec">
+              <div className="v3fs-ivc-sec-h">{heard ? "Follow up" : "Reach out"}</div>
+              {/* Three ways in, no standing form: copy the link, email the
+                  link, or send a meeting invite — the date picker lives INSIDE
+                  the invite action, asked for only when it's needed. */}
+              <div className="v3fs-ivc-ch">
+                <button type="button" className={`v3fs-btn${email ? "" : " pri"}`} disabled={linkBusy} onClick={() => void copyLink()}>
+                  {linkBusy && !email ? "…" : effectiveLink ? "⎘ Copy link" : "⎘ Create & copy link"}
+                </button>
+                {email ? (
+                  <button type="button" className="v3fs-btn pri" disabled={linkBusy} title={`Opens a draft to ${email}`} onClick={() => void sendLink()}>✉ Send link</button>
+                ) : null}
+                <button type="button" className="v3fs-btn" title={`Pick a date — downloads a calendar invite for ${name}`}
+                  onClick={() => {
+                    const picker = dateRef.current;
+                    if (!picker) return;
+                    if ("showPicker" in picker) { try { (picker as HTMLInputElement & { showPicker: () => void }).showPicker(); return; } catch { /* fall through */ } }
+                    picker.focus(); picker.click();
+                  }}>🗓 Send meeting invite</button>
+                <input ref={dateRef} type="date" className="v3fs-ivc-date-hidden" tabIndex={-1} aria-label={`Meeting date for ${name}`}
+                  value={date}
+                  onChange={(e) => {
+                    const picked = e.target.value;
+                    setDate(picked);
+                    if (!picked) return;
+                    const ics = buildMeetingIcs({ who: name, email, date: picked, programmeName: program.name, intro: "", questions });
+                    const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
+                    const anchor = document.createElement("a");
+                    anchor.href = url;
+                    anchor.download = `${movementId}-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.ics`;
+                    anchor.click();
+                    URL.revokeObjectURL(url);
+                  }} />
+              </div>
+            </div>
+          ) : null}
+
+          {/* Capture what they said — typed, or spoken and transcribed. */}
+          <div className="v3fs-ivc-cap">
+            <textarea rows={2} value={capture} onChange={(e) => setCapture(e.target.value)}
+              placeholder={`What ${first} said — attribution added for you`} aria-label={`Capture ${name}'s input`} />
+            <div className="v3fs-ivc-cap-row">
+              <button type="button" className="v3fs-btn pri" disabled={busy || !capture.trim()} onClick={() => void save()}>
+                {busy ? "Saving…" : "Capture"}
+              </button>
+              <TranscribeButton onText={(transcript) => setCapture((current) => (current.trim() ? `${current.trim()}\n\n${transcript}` : transcript))} />
+              <AttachFileButton programId={program.id}
+                onExtracted={(filename, text, sourceKey) => void saveAttachedDoc(filename, text, sourceKey)} />
+            </div>
           </div>
-        ) : null}
-        <div className="v3fs-ivc-cap">
-          <textarea rows={2} value={capture} onChange={(e) => setCapture(e.target.value)}
-            placeholder={`What ${first} said — attribution added for you`} aria-label={`Capture ${name}'s input`} />
-          <button type="button" className="v3fs-btn pri" disabled={busy || !capture.trim()} onClick={() => void save()}>
-            {busy ? "Saving…" : "Capture"}
-          </button>
         </div>
-      </div>
-    </details>
+      </details>
+      {evFor ? <EvidenceReader entry={evFor} highlight={evHighlight ?? undefined} onClose={() => { setEvFor(null); setEvHighlight(null); }} /> : null}
+    </>
   );
 }
 
@@ -862,7 +1426,7 @@ async function fileToBase64(file: File): Promise<string> {
 /** Any document → reviewable text via flow-extract (decode, Office XML, or the
  * model reading PDFs/images natively). The operator reads the extraction in
  * the form before "Add the document" makes it evidence — nothing lands blind. */
-function AttachFileButton({ programId, onExtracted }: { programId: string; onExtracted: (filename: string, text: string, sourceKey?: string) => void }) {
+export function AttachFileButton({ programId, onExtracted }: { programId: string; onExtracted: (filename: string, text: string, sourceKey?: string) => void }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
@@ -1288,11 +1852,19 @@ function MeetingKitCard({ kit, movementId, hasEvidence, program, docsStale, onRe
           // the address is on file, copy otherwise.
           const packRows = visibleLinks(listInterviewPacks(program).filter((pack) =>
             movementId === "listen" ? (!pack.movementId || pack.movementId === "listen") : pack.movementId === movementId,
-          )).map((pack) => ({
-            id: pack.id, who: pack.stakeholder, responded: Boolean(pack.respondedAt),
-            meta: pack.respondedAt ? "responded" : `${pack.role === "Follow-up" ? "follow-up · " : ""}${pack.questions.length} question${pack.questions.length === 1 ? "" : "s"} · waiting`,
-            link: portalLinkFor(program.id, pack),
-          }));
+          )).map((pack) => {
+            // A link whose questions no longer match the current script is
+            // OUTDATED — say so, and point at the refresh that re-mints it.
+            const isKitPerson = pack.stakeholder.trim().toLowerCase() === kit.who.trim().toLowerCase() && pack.role !== "Follow-up";
+            const outdated = isKitPerson && pack.questions.map(String).join(" ") !== kit.questions.slice(0, 8).map(String).join(" ");
+            return {
+              id: pack.id, who: pack.stakeholder, responded: Boolean(pack.respondedAt),
+              meta: pack.respondedAt ? "responded"
+                : outdated ? "script changed — refresh links to re-mint"
+                : `${pack.role === "Follow-up" ? "follow-up · " : ""}${pack.questions.length} question${pack.questions.length === 1 ? "" : "s"} · waiting`,
+              link: portalLinkFor(program.id, pack),
+            };
+          });
           const inviteRows = movementId === "show" ? listDemoInvites(program).map((invite) => ({
             id: invite.id, who: invite.stakeholder, responded: Boolean(invite.respondedAt),
             meta: invite.respondedAt ? "verdict received" : "demo · waiting for their verdict",
@@ -1544,12 +2116,16 @@ function ShipLanesBoard({ program, onCompile, onToggle, onSetLane }: {
   );
 }
 
-function ArtifactDoc({ artifact, running, evidenceNames, onGenerate, onOpen }: {
+function ArtifactDoc({ artifact, running, evidenceNames, evidenceCount, onGenerate, onOpen, onGoEvidence }: {
   artifact: ArtifactCardModel;
   running: boolean;
   evidenceNames: string[];
+  /** How many evidence items this movement holds — the card's provenance. */
+  evidenceCount?: number;
   onGenerate: () => void;
   onOpen?: () => void;
+  /** "evidence changed" chip → the Evidence tab, where the change lives. */
+  onGoEvidence?: () => void;
 }) {
   if (running) {
     // Generation theater: show what ATOS is reading while it drafts, so the
@@ -1578,15 +2154,31 @@ function ArtifactDoc({ artifact, running, evidenceNames, onGenerate, onOpen }: {
         ) : (
           <b>{artifact.title}</b>
         )}
-        {artifact.stale ? <span className="v3fs-stale-tag">evidence changed</span> : null}
+        {artifact.stale ? (
+          onGoEvidence
+            ? <button type="button" className="v3fs-stale-tag" title="See what changed — open the Evidence tab" onClick={onGoEvidence}>evidence changed →</button>
+            : <span className="v3fs-stale-tag">evidence changed</span>
+        ) : null}
         {artifact.confidence != null ? <span className="v3fs-conf">{artifact.confidence}%</span> : null}
       </div>
       <div className="v3fs-doc-x">{artifact.excerpt ?? artifact.description}</div>
+      {artifact.present && evidenceCount != null ? (
+        <div className="v3fs-doc-prov">
+          reads {evidenceCount} evidence item{evidenceCount === 1 ? "" : "s"}
+          {artifact.gaps ? ` · ${artifact.gaps} open gap${artifact.gaps === 1 ? "" : "s"}` : " · no open gaps"}
+        </div>
+      ) : null}
       <div className="v3fs-doc-foot">
         {onOpen ? <button type="button" className="v3fs-a" onClick={onOpen}>Read</button> : null}
-        <button type="button" className="v3fs-a" onClick={onGenerate}>
-          {artifact.present ? (artifact.stale ? "Regenerate — evidence changed" : "Regenerate") : "✦ Generate"}
-        </button>
+        {/* The card's action mirrors its state: a stale document's regenerate
+            is THE thing to do (primary); a current one stays quiet. */}
+        {artifact.present && artifact.stale ? (
+          <button type="button" className="v3fs-btn pri v3fs-doc-regen" onClick={onGenerate}>↻ Regenerate — evidence changed</button>
+        ) : (
+          <button type="button" className="v3fs-a" onClick={onGenerate}>
+            {artifact.present ? "Regenerate" : "✦ Generate"}
+          </button>
+        )}
       </div>
     </div>
   );

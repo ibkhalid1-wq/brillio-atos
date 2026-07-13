@@ -6755,7 +6755,12 @@ Return ONLY valid JSON:
 }
 
 Empty contradictions with "clean": true when nothing genuinely disputes the record. Never invent disputes.`,
-      user: `Input context JSON:\n${specialAgentInputContext || "{}"}`,
+      // Flow programmes carry their evidence in crossPhaseContext (the classic
+      // input-context builder returns empty narrative/plan for them) — when the
+      // client sends the evidence record, THAT is the input to analyse.
+      user: request.crossPhaseContext?.trim()
+        ? `Evidence record — the input context to analyse:\n${request.crossPhaseContext}`
+        : `Input context JSON:\n${specialAgentInputContext || "{}"}`,
     };
   }
 

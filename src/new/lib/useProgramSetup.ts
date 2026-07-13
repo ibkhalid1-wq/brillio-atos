@@ -88,7 +88,9 @@ export function useProgramSetup(
               const cleaned = Object.fromEntries(
                 Object.entries(patch.frameBaseline).filter(([, value]) => typeof value === "string" && value.trim()),
               );
-              return { phaseInputs: { ...buckets, frame: { ...frame, ...cleaned, savedAt: new Date().toISOString() } } };
+              // `_savedAt` (underscore) so it stays out of the movement-inputs
+              // fingerprint — a bare timestamp there re-staled artifacts on save.
+              return { phaseInputs: { ...buckets, frame: (() => { const f = { ...frame, ...cleaned, _savedAt: new Date().toISOString() }; delete (f as Record<string, unknown>).savedAt; return f; })() } };
             })()
           : {}),
         projectMeta: {

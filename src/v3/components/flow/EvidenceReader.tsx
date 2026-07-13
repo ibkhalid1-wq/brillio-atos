@@ -4,18 +4,44 @@
  * the artifact studio so a claim can be checked against its source without
  * losing your place in the document.
  */
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFocusTrap } from "@/v3/lib/useFocusTrap";
 import { flowMovements, locateQuote, type EvidenceEntry } from "@/v3/components/flow/flowShellData";
 
-export default function EvidenceReader({ entry, highlight, onClose }: {
+export default function EvidenceReader({ entry, highlight, targets, onTag, onClose }: {
   entry: EvidenceEntry;
   /** A quoted claim to locate and mark inside the source text. */
   highlight?: string;
+  /** Taggable objects (entities/KPIs/tracks) — enables highlight-to-tag. */
+  targets?: Array<{ kind: string; refId: string; label: string }>;
+  onTag?: (target: { kind: string; refId: string; label: string }, quote: string) => Promise<void>;
   onClose: () => void;
 }) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   useFocusTrap(dialogRef);
+  // Highlight-to-quote: select any passage and lift it out with its
+  // attribution attached — the quotable claim, ready to paste anywhere.
+  const [sel, setSel] = useState<{ text: string; top: number; left: number } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const onSelect = () => {
+    const selection = window.getSelection();
+    const text = selection?.toString().trim() ?? "";
+    if (!text || text.length < 8 || !selection || selection.rangeCount === 0) { setSel(null); return; }
+    const rect = selection.getRangeAt(0).getBoundingClientRect();
+    const host = dialogRef.current?.getBoundingClientRect();
+    if (!host) return;
+    setSel({ text, top: rect.top - host.top - 38, left: Math.max(8, rect.left - host.left) });
+    setCopied(false);
+    setPicking(false);
+  };
+  const copyQuote = async () => {
+    if (!sel) return;
+    const quote = `“${sel.text}”\n— ${entry.who}`;
+    try { await navigator.clipboard.writeText(quote); } catch { window.prompt("Copy the quote:", quote); }
+    setCopied(true);
+    window.setTimeout(() => setSel(null), 900);
+  };
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -53,7 +79,27 @@ export default function EvidenceReader({ entry, highlight, onClose }: {
             <button type="button" className="v3fs-btn" onClick={onClose} aria-label="Close">Close</button>
           </div>
         </header>
-        <div className="v3fs-docview-b v3fs-evread-b">
+        {sel ? (
+          <div className="v3fs-quote-pop-w" style={{ top: sel.top, left: sel.left }}>
+            <button type="button" className="v3fs-quote-pop" onClick={() => void copyQuote()}>
+              {copied ? "✓ Copied with attribution" : "⎘ Copy as quote"}
+            </button>
+            {onTag && targets?.length ? (
+              <button type="button" className="v3fs-quote-pop tag" onClick={() => setPicking((v) => !v)}>⌗ Tag →</button>
+            ) : null}
+            {picking && onTag ? (
+              <div className="v3fs-tag-pick" role="menu">
+                {(targets ?? []).map((t) => (
+                  <button key={`${t.kind}-${t.refId}`} type="button" role="menuitem"
+                    onClick={async () => { await onTag(t, sel.text); setPicking(false); setSel(null); }}>
+                    <span className="v3fs-tag-kind">{t.kind}</span>{t.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+        <div className="v3fs-docview-b v3fs-evread-b" onMouseUp={onSelect}>
           {entry.kind === "reference" || !paragraphs.length ? (
             <p className="v3fs-empty">
               A referenced source — its content lives outside the captured record. Reference: {entry.who}.

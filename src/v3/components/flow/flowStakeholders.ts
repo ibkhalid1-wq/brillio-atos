@@ -8,6 +8,8 @@
  * collect via a link, then capture what came back.
  */
 import type { ProgramSummary } from "@/new/types";
+import { meetingKit, askableMovementGaps } from "@/v3/components/flow/flowMeetings";
+import { readContradictions, flowMovements, movementEvidence } from "@/v3/components/flow/flowShellData";
 
 export interface MovementStakeholder {
   /** Stable key for React + pack matching. */
@@ -30,15 +32,52 @@ function dataRoot(program: ProgramSummary): Record<string, unknown> {
   return isRecord(raw.data) ? (raw.data as Record<string, unknown>) : raw;
 }
 
+/**
+ * Open contradictions that NAME a person route to that person: their side of
+ * the disagreement becomes a question on their own follow-up script (the
+ * sponsor keeps the arbiter's copy via the frame kit). A conflict between two
+ * documents/accounts therefore has two roads out of the Inbox — resolve it in
+ * the log, or ask the people it belongs to.
+ */
+function contradictionAsksFor(program: ProgramSummary, personName: string): string[] {
+  const needle = personName.trim().toLowerCase();
+  if (needle.length < 3) return [];
+  // readContradictions dedupes near-identical rows, so a dispute is asked once.
+  return readContradictions(program, true)
+    .filter((row) => row.between.toLowerCase().includes(needle))
+    .map((row) => `Two accounts disagree: "${row.statement.trim()}" — your account vs ${row.between
+      .split(/,|\bvs\.?\b|&/i).map((part) => part.trim()).filter((part) => part && part.toLowerCase() !== needle).join(", ") || "the other account"}. Which is right, and what settles it?`)
+    .slice(0, 3);
+}
+
 function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
   const kit = dataRoot(program).discoveryKit;
   const interviews = isRecord(kit) && Array.isArray(kit.interviews) ? kit.interviews.filter(isRecord) : [];
+  // Listen's artifact gaps (ontology/atlas open questions) become follow-up
+  // asks on every interviewee's script — an artifact that says "we still don't
+  // know X" is a question for the people who can answer it.
+  const movementAsks = interviews.length ? askableMovementGaps(program, "listen") : [];
+  const listen = flowMovements().find((movement) => movement.id === "listen");
+  const evidence = listen ? movementEvidence(program, listen) : [];
   return interviews.map((interview, index) => {
-    const questions = (Array.isArray(interview.agenda) ? interview.agenda : [])
+    const agenda = (Array.isArray(interview.agenda) ? interview.agenda : [])
       .flatMap((slot) => (isRecord(slot) && Array.isArray(slot.questions) ? slot.questions.map(String) : []))
       .filter(Boolean);
     const name = String(interview.stakeholder ?? "").trim();
-    return { id: `iv-${index}`, name: name || `Interviewee ${index + 1}`, role: String(interview.role ?? ""), questions, isRole: !name };
+    const key = name.toLowerCase();
+    // Heard already? Their turns are on the record. If so, the follow-up is only
+    // what is STILL OPEN (disagreements + artifact gaps) — not the original
+    // agenda they've answered, which is what left it "not getting cleared".
+    const heard = key.length > 2 && evidence.some((entry) =>
+      entry.who.toLowerCase().includes(key) || key.includes(entry.who.split(",")[0].trim().toLowerCase()));
+    const asks = name ? contradictionAsksFor(program, name) : [];
+    const questions = heard
+      ? [...new Set([...asks, ...movementAsks])]
+      : [...new Set([...asks, ...movementAsks, ...agenda])];
+    return {
+      id: `iv-${index}`, name: name || `Interviewee ${index + 1}`, role: String(interview.role ?? ""),
+      questions, isRole: !name,
+    };
   });
 }
 
@@ -77,6 +116,14 @@ const ROLE_TEMPLATES: Record<string, Array<{ role: string; questions: string[] }
 
 /** The stakeholders a movement collects evidence from. */
 export function resolveMovementStakeholders(program: ProgramSummary, movementId: string): MovementStakeholder[] {
+  if (movementId === "frame") {
+    // Frame's one voice is the sponsor — their conversation runs on the same
+    // full-width collection card as every other stakeholder, with the meeting
+    // kit's sponsor script as their questions.
+    const kit = meetingKit(program, "frame");
+    if (!kit || !kit.who.trim()) return [];
+    return [{ id: "frame-sponsor", name: kit.who.trim(), role: "Executive Sponsor", questions: kit.questions, isRole: false }];
+  }
   if (movementId === "listen") return kitInterviews(program);
   if (movementId === "show") {
     // Circle back with everyone heard in Listen, plus the sponsor.

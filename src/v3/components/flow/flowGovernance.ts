@@ -9,6 +9,38 @@
  */
 import type { ProgramSummary } from "@/new/types";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
+import type { GateCheckItem } from "@/v3/components/flow/flowShellData";
+
+/**
+ * Gate-approval integrity (audit F-001, read-time defence).
+ *
+ * A recorded approval lives in the client-writable blob and — as the T6 probe
+ * proved — can be forged by a direct API write with no readiness or approver
+ * check. Server-side prevention is the real fix (see the gate-enforcement
+ * migration); this is the read-time backstop: cross-check every recorded
+ * approval against its OWN live criteria. An approval whose criteria are not
+ * currently met is **indefensible** — the UI, board pack, and exports must not
+ * present it as a legitimate gate, so a forgery can never masquerade as one.
+ */
+export interface GateApprovalIntegrity {
+  approved: boolean;
+  /** True only when every gate criterion is currently met. */
+  defensible: boolean;
+  unmet: number;
+  reason?: string;
+}
+
+export function gateApprovalIntegrity(program: ProgramSummary, movementId: string, checks: GateCheckItem[]): GateApprovalIntegrity {
+  const approved = program.gateReviews?.[movementId]?.status === "approved";
+  if (!approved) return { approved: false, defensible: true, unmet: 0 };
+  const unmet = checks.filter((c) => !c.done).length;
+  return {
+    approved: true,
+    defensible: unmet === 0,
+    unmet,
+    reason: unmet ? `Recorded as approved, but ${unmet} gate criteri${unmet === 1 ? "on is" : "a are"} not met — not defensible` : undefined,
+  };
+}
 
 export interface FlowGovernance {
   haltAll: boolean;

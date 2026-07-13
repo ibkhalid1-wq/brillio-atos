@@ -9,9 +9,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import {
   flowMovements, movementArtifacts, gateChecklist, gateReadiness,
-  listenCoverage, demoAcceptance, daysToFirstDemo, wordsOfEvidence, frameKpis,
+  listenCoverage, demoAcceptance, daysToFirstDemo, wordsOfEvidence,
   readMovementInputs, parseGridRows,
 } from "@/v3/components/flow/flowShellData";
+import { readMetricRegistry } from "@/v3/components/flow/flowMetricRegistry";
 import { listFlowAttestations, listOpenFlowDecisions } from "@/v3/components/flow/flowDecisions";
 import { useFocusTrap } from "@/v3/lib/useFocusTrap";
 
@@ -44,13 +45,39 @@ export default function FlowBoardPack({ program, onMintBrief, onClose }: {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [onClose]);
 
+  // Present mode — the pack's sections become slides: one claim per screen,
+  // ←/→ to move, Esc back to the document. Same data, deck delivery.
+  const [slide, setSlide] = useState<number | null>(null);
+  const pageRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const page = pageRef.current;
+    if (!page) return;
+    const sections = [...page.querySelectorAll<HTMLElement>("section")];
+    sections.forEach((node, i) => {
+      node.classList.toggle("v3fs-slide-off", slide !== null && i !== slide);
+      node.classList.toggle("v3fs-slide-on", slide !== null && i === slide);
+    });
+    page.classList.toggle("v3fs-pack-deck", slide !== null);
+  }, [slide]);
+  useEffect(() => {
+    if (slide === null) return undefined;
+    const count = pageRef.current?.querySelectorAll("section").length ?? 0;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight") { e.stopPropagation(); setSlide((s) => Math.min(count - 1, (s ?? 0) + 1)); }
+      else if (e.key === "ArrowLeft") { e.stopPropagation(); setSlide((s) => Math.max(0, (s ?? 0) - 1)); }
+      else if (e.key === "Escape") { e.stopPropagation(); setSlide(null); }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [slide]);
+
   const movements = useMemo(() => flowMovements(), []);
   const frame = readMovementInputs(program, "frame");
   const days = daysToFirstDemo(program);
   const coverage = listenCoverage(program);
   const demos = demoAcceptance(program);
   const words = wordsOfEvidence(program);
-  const kpis = frameKpis(program);
+  const kpis = readMetricRegistry(program);
   const benefits = parseGridRows(readMovementInputs(program, "evolve").realisedBenefits);
   const waiting = listOpenFlowDecisions(program).length;
   const trail = listFlowAttestations(program).slice(0, 6);
@@ -72,12 +99,22 @@ export default function FlowBoardPack({ program, onMintBrief, onClose }: {
                 {shareState === "busy" ? "Minting\u2026" : shareState === "copied" ? "Link copied \u2713" : shareState === "failed" ? "Could not mint" : "Share a sponsor link"}
               </button>
             ) : null}
+            <button type="button" className="v3fs-btn" onClick={() => setSlide(slide === null ? 0 : null)}>
+              {slide === null ? "▸ Present" : "Exit deck"}
+            </button>
             <button type="button" className="v3fs-btn pri" onClick={() => window.print()}>Print / save as PDF</button>
             <button type="button" className="v3fs-btn" onClick={onClose}>Close</button>
           </span>
         </header>
+        {slide !== null ? (
+          <div className="v3fs-deck-nav">
+            <button type="button" className="v3fs-btn" disabled={slide === 0} onClick={() => setSlide(Math.max(0, slide - 1))}>← Prev</button>
+            <span className="v3fs-deck-n">{slide + 1} / {pageRef.current?.querySelectorAll("section").length ?? "…"}</span>
+            <button type="button" className="v3fs-btn pri" onClick={() => setSlide(Math.min((pageRef.current?.querySelectorAll("section").length ?? 1) - 1, slide + 1))}>Next →</button>
+          </div>
+        ) : null}
 
-        <div className="v3fs-pack-page">
+        <div className="v3fs-pack-page" ref={pageRef}>
           <div className="v3fs-pack-eyebrow">ATOS Flow · Board pack</div>
           <h1>{program.name}</h1>
           {program.client ? <div className="v3fs-pack-client">{program.client}</div> : null}

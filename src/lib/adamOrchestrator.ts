@@ -13,6 +13,7 @@ import type { AgentHandoff, AgentRunResponse } from "@/lib/adamSync";
 import { normalizeProgram, type ProgramRowLike } from "@/new/lib/programData";
 import { buildProgramGraphContext } from "@/v3/lib/programGraph";
 import { buildCoverageDirectives } from "@/v3/lib/graphInference";
+import { getPhaseSequence } from "@/v3/lib/methodology";
 
 type RequestMode = {
   mode: string;
@@ -75,17 +76,8 @@ const ROUTING_FALLBACK: OrchestratorDecision = {
 
 const PROJECTS_STORAGE_KEYS = ["brillio-adam-projects", "brillio-atlas-projects"];
 const PHASE_AGENT_EVENT = "adam:phase-agent-event";
-const ATOS_PHASE_SEQUENCE = [
-  "strategy",
-  "mobilise",
-  "discover",
-  "design",
-  "build",
-  "operate",
-  "govern",
-  "optimize",
-  "valuerealize",
-];
+// The phase spine comes from the programme's methodology (getPhaseSequence) —
+// a hardcoded classic sequence here silently zeroed flow programmes' context.
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -181,11 +173,17 @@ Format: {"agents":["agentId"],"parallel":true,"reasoning":"one sentence"}`;
 }
 
 export function buildCrossPhaseContext(programId: string, targetPhaseId: string, maxChars = 1200): string {
-  const phaseIndex = ATOS_PHASE_SEQUENCE.indexOf(targetPhaseId);
-  if (phaseIndex <= 0) return "";
-
   const project = loadStoredProject(programId);
   if (!project) return "";
+  // The spine is the PROGRAMME'S OWN methodology — the hardcoded classic
+  // sequence made indexOf("frame") = -1, so every flow phase silently got an
+  // EMPTY cross-phase context (design-review rec 3: methodology is data, one
+  // derivation path).
+  const projectData = (project.data ?? {}) as Record<string, unknown>;
+  const methodology = typeof projectData.methodology === "string" ? projectData.methodology : "atos-standard";
+  const sequence = getPhaseSequence(methodology as Parameters<typeof getPhaseSequence>[0]) as readonly string[];
+  const phaseIndex = sequence.indexOf(targetPhaseId);
+  if (phaseIndex <= 0) return "";
 
   const sections: string[] = [];
 
@@ -193,7 +191,7 @@ export function buildCrossPhaseContext(programId: string, targetPhaseId: string,
   const phaseArtifacts = project.data?.phaseArtifacts;
   if (phaseArtifacts) {
     const lines: string[] = ["Prior phase context:"];
-    outer: for (const phaseId of ATOS_PHASE_SEQUENCE.slice(0, phaseIndex)) {
+    outer: for (const phaseId of sequence.slice(0, phaseIndex)) {
       const artifacts = Object.entries(phaseArtifacts[phaseId] ?? {})
         .filter(([, artifact]) => artifact?.status === "approved");
       for (const [artifactId, artifact] of artifacts) {

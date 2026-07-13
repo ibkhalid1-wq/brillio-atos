@@ -9,9 +9,10 @@ import type { ProgramSummary } from "@/new/types";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import {
   flowMovements, movementArtifacts, gateChecklist, gateReadiness,
-  listenCoverage, demoAcceptance, daysToFirstDemo, wordsOfEvidence, frameKpis,
+  listenCoverage, demoAcceptance, daysToFirstDemo, wordsOfEvidence,
   readMovementInputs, parseGridRows,
 } from "@/v3/components/flow/flowShellData";
+import { readMetricRegistry } from "@/v3/components/flow/flowMetricRegistry";
 import { listFlowAttestations, listOpenFlowDecisions } from "@/v3/components/flow/flowDecisions";
 
 const BRIEF_CAP = 10;
@@ -53,7 +54,7 @@ export function buildBriefSnapshot(program: ProgramSummary): Record<string, unkn
       words: wordsOfEvidence(program),
       waiting: listOpenFlowDecisions(program).length,
     },
-    kpis: frameKpis(program).map((kpi) => ({ name: kpi.name, baseline: kpi.baseline, target: kpi.target })),
+    kpis: readMetricRegistry(program).map((kpi) => ({ name: kpi.name, baseline: kpi.baseline, target: kpi.target })),
     gates: flowMovements().map((movement) => {
       const artifacts = movementArtifacts(program, movement);
       const readiness = gateReadiness(program, movement, artifacts, gateChecklist(program, movement, artifacts));

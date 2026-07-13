@@ -17,11 +17,13 @@ import {
   asArray, asRecord, asText, asStrings, type StudioProps,
 } from "./StudioKit";
 
+import { ONTOLOGY_CARDINALITIES } from "@/v3/components/flow/flowOntologyConstraints";
+
 type Selection = { kind: "entity"; id: string } | { kind: "relation"; index: number } | null;
 
-
-
-const CARDINALITIES = ["1:1", "1:N", "N:M", "unknown"];
+// One vocabulary, shared with the write-time gate — the dropdown can always
+// represent what the gate accepts (incl. the generator's N:1 / 0:N forms).
+const CARDINALITIES = [...ONTOLOGY_CARDINALITIES];
 
 function entityId(entity: Record<string, unknown>, index: number): string {
   const name = asText(entity.name).trim();

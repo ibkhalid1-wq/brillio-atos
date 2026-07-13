@@ -262,6 +262,26 @@ export function resolveFlowDecision(
     }
   }
 
+  // Evidence appends: attributed blocks landing on a movement's capture field
+  // (the retro-attribution watcher's payload — a late-added stakeholder's
+  // voice, lifted out of already-attached documents on confirm).
+  if (resolution === "confirmed" && payload && Array.isArray(payload.evidenceAppends)) {
+    const phaseInputs = isRecord(nextInner.phaseInputs) ? { ...(nextInner.phaseInputs as Record<string, unknown>) } : {};
+    let touched = false;
+    for (const append of payload.evidenceAppends.filter(isRecord)) {
+      const movementId = String(append.movementId ?? "");
+      const field = String(append.field ?? "");
+      const block = String(append.block ?? "");
+      if (!movementId || !field || !block.trim()) continue;
+      const bucket = isRecord(phaseInputs[movementId]) ? { ...(phaseInputs[movementId] as Record<string, unknown>) } : {};
+      const existing = typeof bucket[field] === "string" ? (bucket[field] as string) : "";
+      bucket[field] = [existing.trimEnd(), block].filter(Boolean).join("\n\n");
+      phaseInputs[movementId] = bucket;
+      touched = true;
+    }
+    if (touched) nextInner = { ...nextInner, phaseInputs };
+  }
+
   // Governance payloads (e.g. the cap-raise the budget gate queues) merge
   // shallowly, with movement budgets folded per movement.
   if (resolution === "confirmed" && payload && isRecord(payload.flowGovernance)) {
@@ -437,6 +457,15 @@ export function describeDecisionChanges(program: ProgramSummary, decision: FlowD
       target: "Contradiction log (Listen)",
       effect: `${entries.length} open row${entries.length === 1 ? "" : "s"} file — Listen's gate re-asks until resolved`,
       rows: entries.slice(0, 6).map((entry) => `${String(entry.statement)}${entry.between ? ` (${String(entry.between)})` : ""}`.slice(0, 110)),
+    });
+  }
+
+  if (Array.isArray(payload.evidenceAppends)) {
+    const appends = payload.evidenceAppends.filter(isRecord);
+    changes.push({
+      target: "Stakeholder evidence",
+      effect: `${appends.length} attributed passage${appends.length === 1 ? "" : "s"} lift out of already-attached documents`,
+      rows: appends.slice(0, 6).map((append) => `${String(append.movementId)}: ${String(append.block ?? "").split("\n")[0].slice(0, 96)}`),
     });
   }
 

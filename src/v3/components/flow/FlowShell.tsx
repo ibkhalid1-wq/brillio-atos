@@ -1,12 +1,12 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
-import FlowCanvas from "@/v3/components/flow/FlowCanvas";
+import FlowCanvas, { AttachFileButton } from "@/v3/components/flow/FlowCanvas";
 import FlowArtifactStudio, { type ArtifactEditInput } from "@/v3/components/flow/studio/FlowArtifactStudio";
 import FlowBoardPack from "@/v3/components/flow/FlowBoardPack";
 import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 import {
   flowMovements, movementEvidence, movementArtifacts, gateChecklist, gateReadiness, listenCoverage,
-  demoAcceptance, daysToFirstDemo, wordsOfEvidence, frameKpis,
+  demoAcceptance, daysToFirstDemo, wordsOfEvidence, locateQuote, readContradictions, parseGridRows,
 } from "@/v3/components/flow/flowShellData";
 import {
   listOpenFlowDecisions, listFlowAttestations, describeDecisionChanges,
@@ -16,9 +16,18 @@ import {
   listFlowTracks, trackAcceptance, trackPace,
 } from "@/v3/components/flow/flowTracks";
 import { readFlowGovernance, flowAgentTier } from "@/v3/components/flow/flowGovernance";
+import { readMetricRegistry, metricConsistency } from "@/v3/components/flow/flowMetricRegistry";
+import { routeAttachedDocument, buildRoutedBlocks, type DocRoute } from "@/v3/components/flow/flowDocRouting";
 import { listPortalInbox } from "@/v3/components/flow/flowPortal";
 import { listSnapshots, type BlobSnapshot } from "@/v3/lib/blobSnapshots";
 import { supabase } from "@/integrations/supabase/client";
+import { getProgramState } from "@/new/lib/programState";
+import { listClaimTags, claimTargets } from "@/v3/components/flow/flowClaims";
+import {
+  DRILL_KINDS, drillAnchorCounts, listDrillAnchors, readDrillAnchor, readParentId,
+  listChildDrilldowns, drillKindMeta, countNoun, buildDrilldownFindings, drillRollupTarget,
+  type DrillKind,
+} from "@/v3/components/flow/flowDrilldown";
 
 interface FlowShellProps {
   program: ProgramSummary;
@@ -26,14 +35,20 @@ interface FlowShellProps {
   runningAgentIds: Set<string>;
   onSelectProgram: (id: string) => void;
   onCreateProgram: () => void;
-  /** Start a new engagement seeded from this programme (sector + ontology mappings). */
-  onCloneProgram: () => void;
+  /** Create a drill-down child anchored on one slice of this programme. */
+  onDrillDown: (anchor: { kind: string; refId: string; label: string }) => void;
   /** Archive a programme — soft delete, hidden but recoverable. */
   onDeleteProgram?: (id: string) => void;
+  /** Rename a programme inline from the Portfolio. */
+  onRenameProgram?: (id: string, name: string) => void | Promise<void>;
+  /** Tag/untag a quoted evidence span to an entity/KPI/track (attested). */
+  onTagClaim?: (input: { quote: string; who: string; movementId: string; target: { kind: string; refId: string; label: string }; removeId?: string }) => Promise<void>;
+  /** Add/resolve an anchored comment on an artifact (attested). */
+  onComment?: (input: { fieldKey: string; movementId: string; title: string; text?: string; resolveId?: string }) => Promise<void>;
   onOpenSetup: () => void;
   onOpenCopilot: () => void;
   onRunAgent: (agentId: string, phaseId?: string) => void;
-  onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean }) => Promise<void>;
+  onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
   /** Resolve an open decision (confirm applies its prepared payload). */
   onResolveDecision: (decisionId: string, resolution: "confirmed" | "declined") => Promise<void>;
   /** Record a movement's gate — demonstrated. Locks the movement's inputs. */
@@ -86,13 +101,26 @@ interface FlowShellProps {
 
 type FlowView = "today" | "flow" | "library" | "pulse" | "mission" | "portfolio";
 
-/** The rail's three zones: the work, the system, then Copilot at the foot.
- * ("mission" keeps its internal id; the person-facing name is Control.) */
+/** The rail is programme-scoped: the work, then the system. App-global actions
+ * (Search, Portfolio, Copilot, Help) live in the top bar instead — the rail
+ * answers "where am I in THIS programme", the top bar "where can I go in the
+ * app". ("mission" keeps its internal id; the person-facing name is Control.) */
 const DOCK_ZONES: Array<Array<[FlowView, string]>> = [
   [["today", "Inbox"], ["flow", "Flow"], ["library", "Library"], ["pulse", "Pulse"]],
-  [["mission", "Control"], ["portfolio", "Portfolio"]],
+  [["mission", "Control"]],
 ];
 const DOCK_ORDER: FlowView[] = DOCK_ZONES.flat().map(([id]) => id);
+
+/** Hover copy for each rail item — a description, never a bare number that
+ * could be mistaken for a count. The keyboard shortcut stays in aria-label. */
+const DOCK_TIPS: Record<FlowView, string> = {
+  today: "Inbox — responses and decisions waiting on you",
+  flow: "Flow — the live programme, movement by movement",
+  library: "Library — every conversation and artifact",
+  pulse: "Pulse — the steering-meeting view",
+  mission: "Control — agents, governance and settings",
+  portfolio: "Portfolio — every programme and its engagements",
+};
 
 /** One stroke weight, currentColor — the rail's icons stop being a font-glyph grab bag. */
 const DOCK_PATHS: Record<string, React.ReactNode> = {
@@ -103,6 +131,9 @@ const DOCK_PATHS: Record<string, React.ReactNode> = {
   mission: <><path d="M5 8h14" /><path d="M5 16h14" /><circle cx="10" cy="8" r="2.1" /><circle cx="15" cy="16" r="2.1" /></>,
   portfolio: <><path d="M5 5h6v6H5z" /><path d="M13 5h6v6h-6z" /><path d="M5 13h6v6H5z" /><path d="M13 13h6v6h-6z" /></>,
   copilot: <path d="M12 4l1.9 5.6L19.5 12l-5.6 2.4L12 20l-1.9-5.6L4.5 12l5.6-2.4z" />,
+  search: <><circle cx="11" cy="11" r="6.5" /><path d="m20 20-3.6-3.6" /></>,
+  help: <><circle cx="12" cy="12" r="8.5" /><path d="M9.6 9.6a2.4 2.4 0 0 1 4.7.7c0 1.6-2.3 2-2.3 3.7" /><path d="M12 17h.01" /></>,
+  lens: <><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" /><circle cx="12" cy="12" r="3" /></>,
 };
 
 function DockIcon({ id }: { id: string }) {
@@ -111,6 +142,263 @@ function DockIcon({ id }: { id: string }) {
       stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       {DOCK_PATHS[id]}
     </svg>
+  );
+}
+
+/* ── Global search — programmes + this programme's evidence & artifacts ───── */
+function FlowSearch({ programs, program, onSelectProgram, onGoView, onCreateProgram, onOpenDrill, onSponsor, onClose }: {
+  programs: ProgramSummary[];
+  program: ProgramSummary;
+  onSelectProgram: (id: string) => void;
+  onGoView: (view: FlowView) => void;
+  onCreateProgram?: () => void;
+  onOpenDrill?: () => void;
+  onSponsor?: () => void;
+  onClose: () => void;
+}) {
+  const [q, setQ] = useState("");
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  const query = q.trim().toLowerCase();
+  const progHits = programs
+    .filter((p) => p.methodology === "atos-flow" && (!query || `${p.name} ${p.client ?? ""}`.toLowerCase().includes(query)))
+    .slice(0, 8);
+  // Verbs, not just nouns: the palette can also DO things.
+  const actions: Array<{ label: string; hint: string; run: () => void }> = [
+    ...DOCK_ORDER.map((id) => {
+      const label = DOCK_ZONES.flat().find(([zid]) => zid === id)?.[1] ?? id;
+      return { label: `Go to ${label}`, hint: "view", run: () => onGoView(id) };
+    }),
+    // Portfolio lives in the top bar, not the rail — the palette still routes there.
+    { label: "Go to Portfolio", hint: "view", run: () => onGoView("portfolio") },
+    ...(onOpenDrill ? [{ label: "Drill into this programme…", hint: "creates a focused child", run: () => onOpenDrill() }] : []),
+    ...(onCreateProgram ? [{ label: "New programme", hint: "opens setup", run: () => onCreateProgram() }] : []),
+    ...(onSponsor ? [{ label: "Switch to sponsor view", hint: "read-only steering page", run: () => onSponsor() }] : []),
+  ];
+  const actionHits = query ? actions.filter((a) => a.label.toLowerCase().includes(query)).slice(0, 5) : [];
+  const libHits = useMemo(() => {
+    if (!query) return [] as Array<{ tag: string; label: string; sub: string }>;
+    const movements = flowMovements();
+    const ev = movements.flatMap((m) => movementEvidence(program, m))
+      .filter((e) => `${e.who} ${e.fieldLabel} ${e.excerpt} ${e.text}`.toLowerCase().includes(query))
+      .slice(0, 6).map((e) => ({ tag: "Evidence", label: e.who, sub: e.fieldLabel }));
+    const ar = movements.flatMap((m) => movementArtifacts(program, m))
+      .filter((a) => a.present && `${a.title} ${a.excerpt ?? ""}`.toLowerCase().includes(query))
+      .slice(0, 6).map((a) => ({ tag: "Artifact", label: a.title, sub: "generated" }));
+    return [...ev, ...ar];
+  }, [program, query]);
+
+  return (
+    <div className="v3fs-cmd-overlay" role="dialog" aria-modal="true" aria-label="Search">
+      <div className="v3fs-cmd-back" onClick={onClose} aria-hidden="true" />
+      <div className="v3fs-cmd">
+        <div className="v3fs-cmd-in">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.2-3.2" /></svg>
+          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)}
+            placeholder="Search programmes, evidence, artifacts…" aria-label="Search"
+            onKeyDown={(e) => { if (e.key === "Enter" && progHits[0]) onSelectProgram(progHits[0].id); }} />
+          <kbd>Esc</kbd>
+        </div>
+        <div className="v3fs-cmd-body">
+          {!query ? (
+            <div className="v3fs-cmd-hint">Search across every programme, plus this programme&rsquo;s evidence and artifacts.</div>
+          ) : null}
+          {actionHits.length ? <div className="v3fs-cmd-grp">Actions</div> : null}
+          {actionHits.map((a) => (
+            <button key={a.label} type="button" className="v3fs-cmd-row" onClick={() => { a.run(); onClose(); }}>
+              <span className="v3fs-cmd-tag">Action</span>
+              <span className="v3fs-cmd-row-t">{a.label}</span>
+              <span className="v3fs-cmd-row-s">{a.hint}</span>
+            </button>
+          ))}
+          {progHits.length ? <div className="v3fs-cmd-grp">Programmes</div> : null}
+          {progHits.map((p) => (
+            <button key={p.id} type="button" className="v3fs-cmd-row" onClick={() => onSelectProgram(p.id)}>
+              <span className="v3fs-cmd-row-t">{p.name}</span>
+              <span className="v3fs-cmd-row-s">{p.client || "programme"}</span>
+            </button>
+          ))}
+          {libHits.length ? <div className="v3fs-cmd-grp">In {program.name}</div> : null}
+          {libHits.map((it, i) => (
+            <button key={i} type="button" className="v3fs-cmd-row" onClick={() => onGoView("library")}>
+              <span className="v3fs-cmd-tag">{it.tag}</span>
+              <span className="v3fs-cmd-row-t">{it.label}</span>
+              <span className="v3fs-cmd-row-s">{it.sub}</span>
+            </button>
+          ))}
+          {query && !progHits.length && !libHits.length ? (
+            <div className="v3fs-empty">No matches for &ldquo;{q.trim()}&rdquo;.</div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Help — how the programme runs ───────────────────────────────────────── */
+const HELP_MOVEMENTS: Array<[string, string]> = [
+  ["Frame", "Set the mandate — the outcome, sponsor, and success measures the programme is funded to deliver."],
+  ["Listen", "Hear every stakeholder. Discovery interviews and documents become attributed evidence."],
+  ["Envision", "Turn evidence into the target architecture, blueprint, and the first thing to demonstrate."],
+  ["Show", "Demonstrate the prototype back to the people who described the work, and record their acceptance."],
+  ["Ship", "Harden, evaluate, and cut over — with the runbook and go-decision the sponsor signs."],
+  ["Evolve", "Run it live, measure the outcome against baseline, and decide the next engagement."],
+];
+function FlowHelp({ onClose }: { onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return (
+    <div className="v3fs-help-overlay" role="dialog" aria-modal="true" aria-label="Help">
+      <div className="v3fs-cmd-back" onClick={onClose} aria-hidden="true" />
+      <div className="v3fs-help">
+        <div className="v3fs-help-head">
+          <div>
+            <span className="v3fs-pf-eyebrow">Help</span>
+            <h2>How ATOS Flow works</h2>
+          </div>
+          <button type="button" className="v3fs-help-x" onClick={onClose} aria-label="Close help">✕</button>
+        </div>
+        <div className="v3fs-help-body">
+          <section>
+            <h3>One live programme, six movements</h3>
+            <p>The programme runs as a single spine, left to right. Each movement collects evidence from the people it depends on, then generates artifacts traceable back to that evidence. A movement&rsquo;s gate opens when its documents are grounded and confirmed.</p>
+            <ol className="v3fs-help-steps">
+              {HELP_MOVEMENTS.map(([name, desc]) => (
+                <li key={name}><b>{name}</b> — {desc}</li>
+              ))}
+            </ol>
+          </section>
+          <section>
+            <h3>The rail</h3>
+            <ul className="v3fs-help-list">
+              <li><b>Search</b> — jump to any programme, or find evidence and artifacts (⌘K or /).</li>
+              <li><b>Inbox</b> — responses and decisions waiting on your judgment.</li>
+              <li><b>Flow</b> — the live programme, movement by movement.</li>
+              <li><b>Library</b> — every conversation and generated artifact.</li>
+              <li><b>Pulse</b> — the steering read and the board pack.</li>
+              <li><b>Control</b> — agents, budgets, guardrails, and the audit trail.</li>
+              <li><b>Portfolio</b> — every programme and its engagements.</li>
+            </ul>
+          </section>
+          <section>
+            <h3>Working a programme</h3>
+            <ul className="v3fs-help-list">
+              <li>Start fresh with <b>New programme</b>, or seed a same-sector follow-up with <b>New from this programme</b> (from the programme switcher).</li>
+              <li>Collect stakeholder evidence in each movement — schedule a meeting, or send a link.</li>
+              <li>Edit a programme&rsquo;s name inline from the Portfolio; archive one there too.</li>
+              <li><b>Shortcuts:</b> ⌘K or / to search · 1–7 to jump the rail · Esc to close.</li>
+            </ul>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Drill-down wizard — pick a lens, then an anchor from the parent's data ── */
+function DrillIcon({ path }: { path: string }) {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {path.split("M").filter(Boolean).map((seg, i) => <path key={i} d={`M${seg}`} />)}
+    </svg>
+  );
+}
+function FlowDrillWizard({ program, onCreate, onClose }: {
+  program: ProgramSummary;
+  onCreate: (anchor: { kind: string; refId: string; label: string }) => void;
+  onClose: () => void;
+}) {
+  const [kind, setKind] = useState<DrillKind | null>(null);
+  const [picked, setPicked] = useState<string | null>(null);
+  const [scopeText, setScopeText] = useState("");
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  const counts = useMemo(() => drillAnchorCounts(program), [program]);
+  const meta = kind ? drillKindMeta(kind) : null;
+  const options = kind && meta && !meta.freeform ? listDrillAnchors(program, kind) : [];
+  const chosen = options.find((o) => o.refId === picked);
+  const canCreate = meta?.freeform ? scopeText.trim().length > 0 : !!chosen;
+  const create = () => {
+    if (meta?.freeform) { if (scopeText.trim()) onCreate({ kind: "scope", refId: "", label: scopeText.trim() }); return; }
+    if (chosen && kind) onCreate({ kind, refId: chosen.refId, label: chosen.label });
+  };
+
+  return (
+    <div className="v3fs-drill-overlay" role="dialog" aria-modal="true" aria-label="Drill into this programme">
+      <div className="v3fs-cmd-back" onClick={onClose} aria-hidden="true" />
+      <div className="v3fs-drill">
+        <div className="v3fs-drill-head">
+          <div>
+            <span className="v3fs-pf-eyebrow">Drill into this programme</span>
+            <h2>{kind ? drillKindMeta(kind).title : "Pick a lens to go deeper"}</h2>
+            <p>A drill-down is a focused child of <b>{program.name}</b> — it shares this programme&rsquo;s ontology and rolls its findings back up to the slice you choose.</p>
+          </div>
+          <button type="button" className="v3fs-help-x" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+        <div className="v3fs-drill-body">
+          {!kind ? (
+            <div className="v3fs-drill-lenses">
+              {DRILL_KINDS.map((k) => {
+                const n = counts[k.kind];
+                const disabled = !k.freeform && n === 0;
+                return (
+                  <button key={k.kind} type="button" className="v3fs-drill-lens" disabled={disabled}
+                    onClick={() => { setKind(k.kind); setPicked(null); }}>
+                    <span className="v3fs-drill-lens-i"><DrillIcon path={k.icon} /></span>
+                    <span className="v3fs-drill-lens-t">{k.title}</span>
+                    <span className="v3fs-drill-lens-b">{k.blurb}</span>
+                    <span className="v3fs-drill-lens-n">{k.freeform ? "free scope" : disabled ? "none yet" : countNoun(k, n)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="v3fs-drill-pick">
+              <button type="button" className="v3fs-drill-back" onClick={() => { setKind(null); setPicked(null); }}>← All lenses</button>
+              {meta?.freeform ? (
+                <div className="v3fs-drill-free">
+                  <label htmlFor="drill-scope">Name the focus</label>
+                  <input id="drill-scope" className="v3fs-pf-search" autoFocus value={scopeText}
+                    onChange={(e) => setScopeText(e.target.value)}
+                    placeholder="e.g. Enterprise deal desk, EU region, CRM sync boundary…"
+                    onKeyDown={(e) => { if (e.key === "Enter" && scopeText.trim()) create(); }} />
+                </div>
+              ) : options.length ? (
+                <div className="v3fs-drill-opts">
+                  {options.map((o) => (
+                    <button key={o.refId} type="button"
+                      className={`v3fs-drill-opt${picked === o.refId ? " on" : ""}`} onClick={() => setPicked(o.refId)}>
+                      <span className="v3fs-drill-opt-r" aria-hidden="true" />
+                      <span className="v3fs-drill-opt-t">{o.label}</span>
+                      {o.sub ? <span className="v3fs-drill-opt-s">{o.sub}</span> : null}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="v3fs-empty">Nothing to drill into here yet — this programme has no {meta?.noun}s.</div>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="v3fs-drill-foot">
+          <span className="v3fs-drill-foot-l">
+            {canCreate
+              ? <>New drill-down: <b>{meta?.freeform ? scopeText.trim() : chosen?.label}</b> — inherits the ontology, excludes everything else.</>
+              : "Choose what to focus on."}
+          </span>
+          <button type="button" className="v3fs-btn pri" disabled={!canCreate} onClick={create}>Create drill-down</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -131,7 +419,24 @@ export default function FlowShell(props: FlowShellProps) {
     listOpenFlowDecisions(program).length + listPortalInbox(program).length > 0 ? "today" : "flow",
   );
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [drillOpen, setDrillOpen] = useState(false);
+  // Audience lens — the same record through a different pair of eyes. The
+  // sponsor lens is read-only: Pulse (numbers, story, board pack), no
+  // operational chrome. Session-sticky so a projected screen stays clean.
+  const [lens, setLens] = useState<"operator" | "sponsor">(() => {
+    try { return window.sessionStorage.getItem("v3fs-lens") === "sponsor" ? "sponsor" : "operator"; } catch { return "operator"; }
+  });
+  const switchLens = (next: "operator" | "sponsor") => {
+    setLens(next);
+    try { window.sessionStorage.setItem("v3fs-lens", next); } catch { /* ignore */ }
+  };
   const days = daysToFirstDemo(program);
+  // If this programme is a drill-down, resolve its anchor + parent for the breadcrumb.
+  const drillAnchor = readDrillAnchor(program);
+  const drillParentId = readParentId(program);
+  const drillParent = drillParentId ? props.programs.find((p) => p.id === drillParentId) : undefined;
   const openDecisions = listOpenFlowDecisions(program);
   const portalInbox = listPortalInbox(program);
   // "Start here" — one prominent pointer at the right entry: Today when
@@ -155,12 +460,20 @@ export default function FlowShell(props: FlowShellProps) {
     return () => window.removeEventListener("keydown", onKey);
   }, [switcherOpen]);
 
-  // Shortcuts 1–7 jump between views — never while typing.
+  // Shortcuts: ⌘/Ctrl-K or "/" opens global search; 1–7 jump between views.
+  // Nothing fires while the user is typing in a field.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
       const target = event.target as HTMLElement | null;
-      if (target && (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable)) return;
+      const typing = !!target && (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable);
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setSearchOpen(true);
+        return;
+      }
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.key === "/" && !typing) { event.preventDefault(); setSearchOpen(true); return; }
+      if (typing) return;
       const index = Number.parseInt(event.key, 10) - 1;
       const id = DOCK_ORDER[index];
       if (!Number.isNaN(index) && id) {
@@ -172,6 +485,12 @@ export default function FlowShell(props: FlowShellProps) {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // Drill-down lineage, cross-programme evidence, and the portfolio inbox all
+  // read OTHER programmes' blobs — hydrate them once up front (Portfolio does
+  // the same on open; this makes the family visible from every view).
+  const { onHydratePrograms } = props;
+  useEffect(() => { void onHydratePrograms().catch(() => { /* metadata-only fallback */ }); }, [onHydratePrograms]);
+
   // Instrumentation: the shell's core promise is decision latency. Stamp when
   // it opens; the session's first resolution logs open→decided (see FlowToday).
   useEffect(() => {
@@ -179,6 +498,39 @@ export default function FlowShell(props: FlowShellProps) {
       if (!sessionStorage.getItem("v3fs-open-ts")) sessionStorage.setItem("v3fs-open-ts", String(Date.now()));
     } catch { /* metrics never block the shell */ }
   }, []);
+
+  if (lens === "sponsor") {
+    // The sponsor's page: the outcome numbers, the demonstrations, the story,
+    // and the board pack — nothing to operate, nothing to break.
+    return (
+      <div className="v3fs-app v3fs-sponsor">
+        <div className="v3fs-lens-bar">
+          <button type="button" className="v3fs-lens-exit" title="Mint a no-login sponsor link and copy it"
+            onClick={async () => {
+              const link = await props.onMintBrief();
+              if (link) { try { await navigator.clipboard.writeText(link); } catch { window.prompt("Copy the sponsor link:", link); } }
+            }}>
+            ⎘ Copy sponsor link
+          </button>
+          <button type="button" className="v3fs-lens-exit" onClick={() => switchLens("operator")}>
+            <DockIcon id="lens" /> Sponsor view — exit
+          </button>
+        </div>
+        <div className="v3fs-wrap">
+          <header className="v3fs-hero">
+            <div className="v3fs-hero-eyebrow">ATOS Flow{program.client ? <span> · {program.client}</span> : null}</div>
+            <h1 className="v3fs-hero-title">{program.name}</h1>
+            {days != null ? (
+              <p className="v3fs-hero-line">
+                <b>{days}</b> day{Math.abs(days) === 1 ? "" : "s"} {days >= 0 ? "to first demo" : "past the first-demo target"}
+              </p>
+            ) : null}
+          </header>
+          <FlowPulse program={program} programs={props.programs} onSelectProgram={props.onSelectProgram} onMintBrief={props.onMintBrief} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="v3fs-app">
@@ -194,9 +546,14 @@ export default function FlowShell(props: FlowShellProps) {
               const shortcut = DOCK_ORDER.indexOf(id) + 1;
               return (
                 <button key={id} type="button" className={view === id ? "on" : ""}
-                  data-tip={`${label} — ${shortcut}`}
+                  data-tip={DOCK_TIPS[id]}
                   aria-label={`${label} (shortcut ${shortcut})`}
-                  onClick={() => { setView(id); window.scrollTo({ top: 0 }); if (id === startId) dismissStart(); }}>
+                  onClick={() => {
+                    // Navigating dismisses whatever overlay is up — the rail is
+                    // always an exit, never dead under a modal.
+                    setSearchOpen(false); setHelpOpen(false); setDrillOpen(false);
+                    setView(id); window.scrollTo({ top: 0 }); if (id === startId) dismissStart();
+                  }}>
                   {id === "today" && waitingCount > 0 ? <span className="v3fs-dock-n">{waitingCount}</span> : null}
                   <DockIcon id={id} /><span className="v3fs-rlb">{label}</span>
                   {id === startId && !startSeen && view !== startId ? (
@@ -211,10 +568,83 @@ export default function FlowShell(props: FlowShellProps) {
           </React.Fragment>
         ))}
         <div className="v3fs-dock-sep" aria-hidden="true" />
-        <button type="button" className="v3fs-cp" data-tip="Copilot" onClick={props.onOpenCopilot}>
-          <DockIcon id="copilot" /><span className="v3fs-rlb">Copilot</span>
+        <button type="button" data-tip="Sponsor view — the read-only steering page" aria-label="Switch to sponsor view" onClick={() => switchLens("sponsor")}>
+          <DockIcon id="lens" /><span className="v3fs-rlb">Sponsor</span>
         </button>
       </nav>
+
+      {/* The app bar — ONE slim strip, not floating islands. Portfolio sits
+          left as the "up and out" of the current programme; the centre is a
+          real search field (the command palette's front door); Help and
+          Copilot close the right edge. Programme navigation stays in the rail. */}
+      <header className="v3fs-appbar" aria-label="Global">
+        <div className="v3fs-appbar-l">
+          {/* Brand + breadcrumb: Portfolio / (parent) / programme. The trail IS
+              the location — the hero no longer repeats it. The programme crumb
+              opens the switcher; a drill-down shows its parent as a hop. */}
+          <span className="v3fs-appbar-brand">ATOS Flow</span>
+          <nav className="v3fs-appbar-crumbs" aria-label="Breadcrumb">
+            <button type="button" className={`v3fs-appbar-nav${view === "portfolio" ? " on" : ""}`}
+              title={DOCK_TIPS.portfolio} aria-label="Portfolio"
+              onClick={() => {
+                setSearchOpen(false); setHelpOpen(false); setDrillOpen(false);
+                setView("portfolio"); window.scrollTo({ top: 0 });
+              }}>
+              <DockIcon id="portfolio" /><span>Portfolio</span>
+            </button>
+            {view !== "portfolio" && drillParent ? (
+              <>
+                <span className="v3fs-appbar-sl" aria-hidden="true">/</span>
+                <button type="button" className="v3fs-appbar-nav v3fs-appbar-crumb parent" title={`Up to ${drillParent.name}`}
+                  onClick={() => props.onSelectProgram(drillParent.id)}>
+                  <span>{drillParent.name}</span>
+                </button>
+              </>
+            ) : null}
+            {view !== "portfolio" ? (
+              <>
+                <span className="v3fs-appbar-sl" aria-hidden="true">/</span>
+                <button type="button" className="v3fs-appbar-nav v3fs-appbar-crumb here" title="Switch programme"
+                  aria-haspopup="menu" aria-expanded={switcherOpen}
+                  onClick={() => setSwitcherOpen((open) => !open)}>
+                  <span>{program.name}</span>
+                  <span className="v3fs-appbar-caret" aria-hidden="true">▾</span>
+                </button>
+              </>
+            ) : null}
+          </nav>
+        </div>
+        <button type="button" className="v3fs-appbar-search" title="Search — ⌘K or /" aria-label="Search (⌘K)"
+          onClick={() => setSearchOpen(true)}>
+          <DockIcon id="search" />
+          <span>Search programmes, evidence, actions…</span>
+          <kbd>⌘K</kbd>
+        </button>
+        <div className="v3fs-appbar-r">
+          <button type="button" className="v3fs-appbar-nav" title="Help — how ATOS Flow works" aria-label="Help"
+            onClick={() => setHelpOpen(true)}>
+            <DockIcon id="help" /><span>Help</span>
+          </button>
+          <button type="button" className="v3fs-appbar-cp" title="Copilot" aria-label="Copilot" onClick={props.onOpenCopilot}>
+            <DockIcon id="copilot" /><span>Copilot</span>
+          </button>
+        </div>
+      </header>
+      {searchOpen ? (
+        <FlowSearch programs={props.programs} program={program}
+          onSelectProgram={(id) => { props.onSelectProgram(id); setSearchOpen(false); }}
+          onGoView={(v) => { setView(v); window.scrollTo({ top: 0 }); setSearchOpen(false); }}
+          onCreateProgram={() => { setSearchOpen(false); props.onCreateProgram(); }}
+          onOpenDrill={() => { setSearchOpen(false); setDrillOpen(true); }}
+          onSponsor={() => { setSearchOpen(false); switchLens("sponsor"); }}
+          onClose={() => setSearchOpen(false)} />
+      ) : null}
+      {helpOpen ? <FlowHelp onClose={() => setHelpOpen(false)} /> : null}
+      {drillOpen ? (
+        <FlowDrillWizard program={program}
+          onCreate={(anchor) => { setDrillOpen(false); props.onDrillDown(anchor); }}
+          onClose={() => setDrillOpen(false)} />
+      ) : null}
 
       {switcherOpen ? (
         <div className="v3fs-switcher-backdrop" onClick={() => setSwitcherOpen(false)} aria-hidden="true" />
@@ -230,22 +660,45 @@ export default function FlowShell(props: FlowShellProps) {
           ))}
           <div className="v3fs-switcher-sep" />
           <button type="button" role="menuitem" onClick={() => { setSwitcherOpen(false); props.onCreateProgram(); }}>＋ New programme</button>
-          <button type="button" role="menuitem" onClick={() => { setSwitcherOpen(false); props.onCloneProgram(); }}>⧉ New from this programme</button>
+          <button type="button" role="menuitem" onClick={() => { setSwitcherOpen(false); setDrillOpen(true); }}>◇ Drill into this programme →</button>
           <button type="button" role="menuitem" onClick={() => { setSwitcherOpen(false); props.onOpenSetup(); }}>Programme setup</button>
         </div>
       ) : null}
 
       <div className="v3fs-wrap">
         <header className="v3fs-hero">
-          <div className="v3fs-hero-eyebrow">
-            ATOS Flow{program.client ? <span> · {program.client}</span> : null}
-          </div>
-          <h1 className="v3fs-hero-title">{program.name}</h1>
-          {days != null ? (
-            <p className="v3fs-hero-line">
-              <b>{days}</b> day{Math.abs(days) === 1 ? "" : "s"} {days >= 0 ? "to first demo" : "past the first-demo target"}
-            </p>
+          {/* Location lives in the app bar's breadcrumb now — the eyebrow only
+              carries what the trail doesn't: whose programme this is. */}
+          {view !== "portfolio" && program.client ? (
+            <div className="v3fs-hero-eyebrow"><span>{program.client}</span></div>
           ) : null}
+          {view === "portfolio" ? (
+            <>
+              <h1 className="v3fs-hero-title">Portfolio</h1>
+              <p className="v3fs-hero-line v3fs-hero-current">
+                Current programme — <b>{program.name}</b>
+              </p>
+            </>
+          ) : (
+            <>
+              {drillAnchor && (drillParent || drillParentId) ? (
+                <button type="button" className="v3fs-breadcrumb"
+                  onClick={() => drillParentId && props.onSelectProgram(drillParentId)}
+                  title={`Back to ${drillParent?.name ?? "parent programme"}`}>
+                  <span className="v3fs-bc-lens">◇ {drillKindMeta(drillAnchor.kind).noun}</span>
+                  <span className="v3fs-bc-sep">Drill-down of</span>
+                  <b>{drillParent?.name ?? "parent programme"}</b>
+                  <span className="v3fs-bc-go">↩ back</span>
+                </button>
+              ) : null}
+              <h1 className="v3fs-hero-title">{program.name}</h1>
+              {days != null ? (
+                <p className="v3fs-hero-line">
+                  <b>{days}</b> day{Math.abs(days) === 1 ? "" : "s"} {days >= 0 ? "to first demo" : "past the first-demo target"}
+                </p>
+              ) : null}
+            </>
+          )}
           {props.presence?.length ? (
             <span className="v3fs-presence" title={props.presence.join(", ")}>
               <span className="v3fs-presence-dot" aria-hidden="true" />
@@ -269,14 +722,14 @@ export default function FlowShell(props: FlowShellProps) {
 
         <ViewBoundary view={view}>
         {view === "today" ? (
-          <FlowToday program={program} onResolveDecision={props.onResolveDecision}
+          <FlowToday program={program} programs={props.programs} onSelectProgram={props.onSelectProgram} onResolveDecision={props.onResolveDecision}
             onIngestPortalItem={props.onIngestPortalItem} onDismissPortalItem={props.onDismissPortalItem}
             onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
         ) : view === "flow" ? (
-          <FlowCanvas program={program} runningAgentIds={props.runningAgentIds} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} onCompileShipLanes={props.onCompileShipLanes} onToggleShipItem={props.onToggleShipItem} onSetShipLane={props.onSetShipLane} onScheduleFollowUp={props.onScheduleFollowUp} onMintFollowUp={props.onMintFollowUp} onRecordShowPass={props.onRecordShowPass} onSaveArtifactDoc={props.onSaveArtifactDoc} onRecordGate={props.onRecordGate} onReopenGate={props.onReopenGate} onRunAgentAndWait={props.onRunAgentAndWait} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }}
+          <FlowCanvas program={program} runningAgentIds={props.runningAgentIds} relatedPrograms={[...(drillParent ? [drillParent] : []), ...listChildDrilldowns(program, props.programs).map((c) => c.child)]} onSelectProgram={props.onSelectProgram} onComment={props.onComment} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} onCompileShipLanes={props.onCompileShipLanes} onToggleShipItem={props.onToggleShipItem} onSetShipLane={props.onSetShipLane} onScheduleFollowUp={props.onScheduleFollowUp} onMintFollowUp={props.onMintFollowUp} onRecordShowPass={props.onRecordShowPass} onSaveArtifactDoc={props.onSaveArtifactDoc} onRecordGate={props.onRecordGate} onReopenGate={props.onReopenGate} onRunAgentAndWait={props.onRunAgentAndWait} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }}
           />
         ) : view === "library" ? (
-          <FlowLibrary program={program} onSaveArtifactDoc={props.onSaveArtifactDoc} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} />
+          <FlowLibrary program={program} programs={props.programs} onSelectProgram={props.onSelectProgram} onSaveInputs={props.onSaveInputs} onTagClaim={props.onTagClaim} onComment={props.onComment} onSaveArtifactDoc={props.onSaveArtifactDoc} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
         ) : view === "mission" ? (
           <FlowMission
             aiStatus={props.aiStatus}
@@ -292,13 +745,14 @@ export default function FlowShell(props: FlowShellProps) {
         ) : view === "portfolio" ? (
           <FlowPortfolio
             onDeleteProgram={props.onDeleteProgram}
+            onRenameProgram={props.onRenameProgram}
             programs={props.programs}
             activeId={program.id}
-            onSelectProgram={props.onSelectProgram}
+            onSelectProgram={(id) => { props.onSelectProgram(id); setView("flow"); window.scrollTo({ top: 0 }); }}
             onHydratePrograms={props.onHydratePrograms}
           />
         ) : (
-          <FlowPulse program={program} onMintBrief={props.onMintBrief} />
+          <FlowPulse program={program} programs={props.programs} onSelectProgram={props.onSelectProgram} onMintBrief={props.onMintBrief} />
         )}
         </ViewBoundary>
       </div>
@@ -396,8 +850,10 @@ function DecisionCard({ program, decision, movementLabel, busy, onResolve }: {
   );
 }
 
-function FlowToday({ program, onResolveDecision, onIngestPortalItem, onDismissPortalItem, onGoFlow }: {
+function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIngestPortalItem, onDismissPortalItem, onGoFlow }: {
   program: ProgramSummary;
+  programs?: ProgramSummary[];
+  onSelectProgram?: (id: string) => void;
   onResolveDecision: FlowShellProps["onResolveDecision"];
   onIngestPortalItem: FlowShellProps["onIngestPortalItem"];
   onDismissPortalItem: FlowShellProps["onDismissPortalItem"];
@@ -408,12 +864,38 @@ function FlowToday({ program, onResolveDecision, onIngestPortalItem, onDismissPo
   const feed = listFlowAttestations(program);
   const inbox = listPortalInbox(program);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // The rest of the portfolio's judgment queue — one glance, one tap to switch.
+  const elsewhere = (programs ?? [])
+    .filter((p) => p.id !== program.id && p.methodology === "atos-flow")
+    .map((p) => ({ p, waiting: listOpenFlowDecisions(p).length + listPortalInbox(p).length }))
+    .filter((e) => e.waiting > 0);
   const label = (id: string) => movements.find((m) => m.id === id)?.displayName ?? id;
 
   const actOnItem = async (itemId: string, fn: (id: string) => Promise<void>) => {
     setBusyId(itemId);
     try { await fn(itemId); } finally { setBusyId(null); }
   };
+
+  // j/k triage — move focus down/up the queue without touching the mouse.
+  const inboxRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable)) return;
+      if (event.key !== "j" && event.key !== "k") return;
+      const cards = [...(inboxRef.current?.querySelectorAll<HTMLElement>(".v3fs-dec") ?? [])];
+      if (!cards.length) return;
+      event.preventDefault();
+      const current = cards.findIndex((card) => card === document.activeElement || card.contains(document.activeElement));
+      const next = current === -1 ? 0 : event.key === "j" ? Math.min(cards.length - 1, current + 1) : Math.max(0, current - 1);
+      cards[next].tabIndex = -1;
+      cards[next].focus();
+      cards[next].scrollIntoView({ block: "nearest" });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // "While you were away" — the channels story without a transport: the last
   // seen stamp is read ONCE per mount, then refreshed, so the strip shows
@@ -475,6 +957,16 @@ function FlowToday({ program, onResolveDecision, onIngestPortalItem, onDismissPo
           {" "}{awayItems.slice(0, 3).map((entry) => entry.action).join(" · ")}{awayItems.length > 3 ? " · …" : ""}
         </div>
       ) : null}
+      {elsewhere.length && onSelectProgram ? (
+        <div className="v3fs-elsewhere" role="note">
+          <span className="v3fs-elsewhere-l">Across the portfolio</span>
+          {elsewhere.map(({ p, waiting }) => (
+            <button key={p.id} type="button" className="v3fs-elsewhere-chip" onClick={() => onSelectProgram(p.id)}>
+              <b>{p.name}</b><span>{waiting} waiting</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
       {open.length === 0 && inbox.length === 0 ? (
         <div className="v3fs-quiet">
           <div className="v3fs-quiet-mark" aria-hidden="true">◈</div>
@@ -500,7 +992,7 @@ function FlowToday({ program, onResolveDecision, onIngestPortalItem, onDismissPo
           )}
         </div>
       ) : (
-        <section className="v3fs-inbox" aria-label="Waiting on you">
+        <section className="v3fs-inbox" aria-label="Waiting on you" ref={inboxRef}>
           <div className="v3fs-ph">
             <h3>Waiting on you</h3>
             <span>{open.length + inbox.length} item{open.length + inbox.length === 1 ? "" : "s"}</span>
@@ -815,14 +1307,98 @@ function SnapshotSafety({ program, onRestoreSnapshot }: {
 
 /* ── Portfolio: every Flow programme, the numbers that matter ────────────── */
 
-function FlowPortfolio({ programs, activeId, onSelectProgram, onHydratePrograms, onDeleteProgram }: {
+type PfTone = "here" | "watch" | "clear";
+/** A programme and the engagements cloned from it, nested. */
+interface PfNode { entry: ProgramSummary; ordinal: number; children: PfNode[]; }
+interface PfStats { days: number | null; decisions: number; inbox: number; tracksTotal: number; stalled: number; heard: number; total: number; pct: number | null; needsYou: number; }
+
+function computePfStats(entry: ProgramSummary): PfStats {
+  const decisions = listOpenFlowDecisions(entry).length;
+  const inbox = listPortalInbox(entry).length;
+  const tracks = listFlowTracks(entry);
+  const stalled = tracks.filter((t) => trackPace(t, trackAcceptance(t).accepted).tone === "stalled").length;
+  const coverage = listenCoverage(entry);
+  return {
+    days: daysToFirstDemo(entry), decisions, inbox,
+    tracksTotal: tracks.length, stalled,
+    heard: coverage.done, total: coverage.total,
+    pct: coverage.total ? Math.round((coverage.done / coverage.total) * 100) : null,
+    needsYou: decisions + inbox,
+  };
+}
+
+/**
+ * Build the engagement forest: each programme nests under the one it was cloned
+ * from ("New from this programme"). The parent link is read from the stored
+ * `lineage.parentId`; older clones that predate that field fall back to their
+ * "Started from …" attestation matched by name. Roots keep newest-first order;
+ * `ordinal` numbers follow-ons within a chain (Engagement 2, 3, …).
+ */
+function buildLineageForest(programmes: ProgramSummary[]): PfNode[] {
+  const byId = new Map(programmes.map((p) => [p.id, p]));
+  const byName = new Map<string, ProgramSummary>();
+  for (const p of programmes) if (!byName.has(p.name)) byName.set(p.name, p);
+
+  const parentOf = new Map<string, string | null>();
+  for (const p of programmes) {
+    const inner = getProgramState((p.rawData ?? {}) as Record<string, unknown>).inner as Record<string, unknown>;
+    const lineage = inner.lineage as { parentId?: string } | undefined;
+    let parentId: string | null =
+      lineage?.parentId && lineage.parentId !== p.id && byId.has(lineage.parentId) ? lineage.parentId : null;
+    if (!parentId) {
+      const att = listFlowAttestations(p).find((a) => a.action.startsWith("Started from "));
+      if (att) {
+        const parent = byName.get(att.action.slice("Started from ".length).trim());
+        if (parent && parent.id !== p.id) parentId = parent.id;
+      }
+    }
+    parentOf.set(p.id, parentId);
+  }
+
+  // A parent link that loops back onto its own descendant is dropped to a root.
+  const createsCycle = (childId: string, parentId: string): boolean => {
+    let cur: string | null = parentId; const guard = new Set<string>();
+    while (cur) { if (cur === childId || guard.has(cur)) return true; guard.add(cur); cur = parentOf.get(cur) ?? null; }
+    return false;
+  };
+
+  const nodes = new Map<string, PfNode>(programmes.map((p) => [p.id, { entry: p, ordinal: 0, children: [] }]));
+  const roots: PfNode[] = [];
+  for (const p of programmes) {
+    const pid = parentOf.get(p.id);
+    if (pid && nodes.has(pid) && !createsCycle(p.id, pid)) nodes.get(pid)!.children.push(nodes.get(p.id)!);
+    else roots.push(nodes.get(p.id)!);
+  }
+  for (const node of nodes.values()) node.children.forEach((child, i) => { child.ordinal = i + 1; });
+  return roots;
+}
+
+/** Flatten the forest depth-first, carrying each node's depth. */
+function flattenForest(roots: PfNode[]): Array<{ node: PfNode; depth: number }> {
+  const out: Array<{ node: PfNode; depth: number }> = [];
+  const walk = (n: PfNode, depth: number) => { out.push({ node: n, depth }); n.children.forEach((c) => walk(c, depth + 1)); };
+  roots.forEach((r) => walk(r, 0));
+  return out;
+}
+
+const PF_FILTERS: Array<[PfTone | "all", string]> = [["all", "All"], ["watch", "Needs you"], ["clear", "On track"], ["here", "Active"]];
+
+function FlowPortfolio({ programs, activeId, onSelectProgram, onHydratePrograms, onDeleteProgram, onRenameProgram }: {
   programs: ProgramSummary[];
   activeId: string;
   onSelectProgram: (id: string) => void;
   onHydratePrograms: () => Promise<void>;
   onDeleteProgram?: (id: string) => void;
+  onRenameProgram?: (id: string, name: string) => void | Promise<void>;
 }) {
   const [armedDelete, setArmedDelete] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftName, setDraftName] = useState("");
+  const [query, setQuery] = useState("");
+  // Multi-select status filter — empty set means "All".
+  const [activeFilters, setActiveFilters] = useState<Set<PfTone>>(new Set());
+  // Which cards are open. Default is all-collapsed, so this tracks the exceptions.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   // Non-active programmes arrive metadata-only; the numbers need blobs.
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => {
@@ -831,55 +1407,211 @@ function FlowPortfolio({ programs, activeId, onSelectProgram, onHydratePrograms,
     return () => { alive = false; };
   }, [onHydratePrograms]);
 
-  const flowProgrammes = programs.filter((entry) => entry.methodology === "atos-flow");
+  const flowProgrammes = useMemo(() => programs.filter((entry) => entry.methodology === "atos-flow"), [programs]);
   const classicCount = programs.length - flowProgrammes.length;
+  const forest = useMemo(() => buildLineageForest(flowProgrammes), [flowProgrammes]);
+  const statsById = useMemo(() => {
+    const m = new Map<string, PfStats>();
+    for (const p of flowProgrammes) m.set(p.id, computePfStats(p));
+    return m;
+  }, [flowProgrammes]);
 
-  return (
-    <div className="v3fs-today">
-      {!hydrated ? <div className="v3fs-empty">Loading every programme&rsquo;s record…</div> : null}
-      <div className="v3fs-trkgrid">
-        {flowProgrammes.map((entry) => {
-          const days = daysToFirstDemo(entry);
-          const decisions = listOpenFlowDecisions(entry).length;
-          const inbox = listPortalInbox(entry).length;
-          const tracks = listFlowTracks(entry);
-          const stalled = tracks.filter((track) => trackPace(track, trackAcceptance(track).accepted).tone === "stalled").length;
-          const coverage = listenCoverage(entry);
-          const needsYou = decisions + inbox;
-          return (
-            <article key={entry.id} className={`v3fs-trk${entry.id === activeId ? " acc" : ""}`}>
-              <div className="v3fs-trk-top">
-                <h3>{entry.name}</h3>
-                {needsYou > 0 ? <span className="v3fs-pace watch">{needsYou} waiting</span> : <span className="v3fs-pace on-pace">clear</span>}
+  const toneOf = (entry: ProgramSummary): PfTone =>
+    entry.id === activeId ? "here" : (statsById.get(entry.id)?.needsYou ?? 0) > 0 ? "watch" : "clear";
+
+  const counts: Record<PfTone | "all", number> = { all: flowProgrammes.length, here: 0, watch: 0, clear: 0 };
+  for (const p of flowProgrammes) counts[toneOf(p)] += 1;
+
+  const allExpanded = flowProgrammes.length > 0 && flowProgrammes.every((p) => expanded.has(p.id));
+  const toggleCard = (id: string) => setExpanded((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const toggleAll = () => setExpanded(allExpanded ? new Set() : new Set(flowProgrammes.map((p) => p.id)));
+  const toggleFilter = (tone: PfTone) => setActiveFilters((prev) => {
+    const next = new Set(prev);
+    if (next.has(tone)) next.delete(tone); else next.add(tone);
+    return next;
+  });
+  const startRename = (entry: ProgramSummary) => { setEditingId(entry.id); setDraftName(entry.name); };
+  const commitRename = (id: string) => {
+    const name = draftName.trim();
+    setEditingId(null);
+    if (name) void onRenameProgram?.(id, name);
+  };
+
+  const renderCard = (entry: ProgramSummary, depth: number, ordinal: number, childCount: number, nested: boolean) => {
+    const s = statsById.get(entry.id) ?? computePfStats(entry);
+    const tone = toneOf(entry);
+    const active = entry.id === activeId;
+    const isCollapsed = !expanded.has(entry.id);
+    const isEditing = editingId === entry.id;
+    const childAnchor = depth > 0 ? readDrillAnchor(entry) : null;
+    const headId = `pf-${entry.id}`;
+    return (
+      <article key={entry.id} className={`v3fs-pf-card ${tone}${nested && depth > 0 ? " child" : ""}${isCollapsed && !isEditing ? " collapsed" : ""}`}>
+        <span className="v3fs-pf-stripe" aria-hidden="true" />
+        <div className="v3fs-pf-body">
+          {isEditing ? (
+            <div className="v3fs-pf-editrow">
+              <span className="v3fs-pf-eyebrow sm">{depth > 0 ? "Rename engagement" : (entry.client || "Rename programme")}</span>
+              <div className="v3fs-pf-editrow-i">
+                <input className="v3fs-pf-rename" value={draftName} autoFocus aria-label="Programme name"
+                  onChange={(e) => setDraftName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") commitRename(entry.id); if (e.key === "Escape") setEditingId(null); }} />
+                <button type="button" className="v3fs-btn pri" disabled={!draftName.trim()} onClick={() => commitRename(entry.id)}>Save</button>
+                <button type="button" className="v3fs-btn" onClick={() => setEditingId(null)}>Cancel</button>
               </div>
-              {entry.client ? <p className="v3fs-trk-g">{entry.client}</p> : null}
-              <div className="v3fs-trk-meta">
-                <span>{days != null ? `${days}d to first demo` : "no demo date"}</span>
-                {decisions ? <span>{decisions} decision{decisions === 1 ? "" : "s"}</span> : null}
-                {inbox ? <span>{inbox} in quarantine</span> : null}
-                {tracks.length ? <span>{stalled ? `${stalled} stalled` : "tracks on pace"}</span> : null}
-                {coverage.total ? <span>{coverage.done}/{coverage.total} heard</span> : null}
+            </div>
+          ) : (
+            <div className="v3fs-pf-head" role="button" tabIndex={0} aria-expanded={!isCollapsed} aria-controls={`${headId}-detail`}
+              onClick={() => toggleCard(entry.id)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleCard(entry.id); } }}>
+              <span className="v3fs-pf-id">
+                <span className="v3fs-pf-eyebrow sm">
+                  {depth > 0
+                    ? <><span className="v3fs-lineage-tick" aria-hidden="true">↳</span>{childAnchor
+                        ? `Drill-down · ${drillKindMeta(childAnchor.kind).noun}`
+                        : <>Engagement {depth + 1}{ordinal > 1 ? String.fromCharCode(96 + ordinal) : ""}</>}</>
+                    : (entry.client || "Programme")}
+                </span>
+                <span className="v3fs-pf-nrow">
+                  <span className="v3fs-pf-name">{entry.name}</span>
+                  {onRenameProgram ? (
+                    <button type="button" className="v3fs-pf-edit" aria-label={`Rename ${entry.name}`} title="Rename"
+                      onClick={(e) => { e.stopPropagation(); startRename(entry); }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                    </button>
+                  ) : null}
+                </span>
+              </span>
+              <span className="v3fs-pf-head-r">
+                {isCollapsed ? (
+                  <span className="v3fs-pf-mini">
+                    {s.days != null ? `${s.days}d to demo` : "no demo date"}{s.total ? ` · ${s.heard}/${s.total} heard` : ""}
+                  </span>
+                ) : null}
+                <span className={`v3fs-pf-status ${tone}`}>
+                  {active ? "You are here" : s.needsYou > 0 ? `${s.needsYou} waiting` : "On track"}
+                </span>
+                {isCollapsed && !active ? (
+                  <button type="button" className="v3fs-btn sm" onClick={(e) => { e.stopPropagation(); onSelectProgram(entry.id); }}>Open</button>
+                ) : null}
+                <span className="v3fs-pf-chev" aria-hidden="true">⌄</span>
+              </span>
+            </div>
+          )}
+
+          {!isCollapsed || isEditing ? (
+            <div className="v3fs-pf-detail" id={`${headId}-detail`}>
+              <div className="v3fs-pf-stats">
+                <div className="v3fs-pf-stat">
+                  <b>{s.days != null ? s.days : "—"}</b>
+                  <small>{s.days != null ? "days to demo" : "no demo date"}</small>
+                </div>
+                <div className="v3fs-pf-stat">
+                  <b>{s.heard}<i>/{s.total || "?"}</i></b>
+                  <small>stakeholders heard</small>
+                  {s.pct != null ? <span className="v3fs-pf-bar"><span style={{ width: `${s.pct}%` }} /></span> : null}
+                </div>
+                <div className="v3fs-pf-stat">
+                  <b>{s.tracksTotal ? (s.stalled || s.tracksTotal) : "—"}</b>
+                  <small>{s.tracksTotal ? (s.stalled ? `stalled of ${s.tracksTotal}` : "tracks on pace") : "no tracks yet"}</small>
+                </div>
               </div>
-              <div className="v3fs-dec-cta">
-                <button type="button" className="v3fs-btn" disabled={entry.id === activeId}
+
+              {s.decisions || s.inbox || childCount > 0 || childAnchor ? (
+                <div className="v3fs-pf-flags">
+                  {childAnchor ? <span className="v3fs-pf-chip anchor">◇ {childAnchor.label}</span> : null}
+                  {s.decisions ? <span className="v3fs-pf-chip dec">{s.decisions} decision{s.decisions === 1 ? "" : "s"}</span> : null}
+                  {s.inbox ? <span className="v3fs-pf-chip q">{s.inbox} in quarantine</span> : null}
+                  {childCount > 0 ? <span className="v3fs-pf-chip line">{childCount} drill-down{childCount === 1 ? "" : "s"}</span> : null}
+                </div>
+              ) : null}
+
+              <div className="v3fs-pf-cta">
+                <button type="button" className="v3fs-btn pri" disabled={active}
                   onClick={() => onSelectProgram(entry.id)}>
-                  {entry.id === activeId ? "You are here" : "Open"}
+                  {active ? "You are here" : "Open programme"}
                 </button>
                 {onDeleteProgram ? (
                   armedDelete === entry.id ? (
-                    <>
+                    <span className="v3fs-pf-arm">
+                      <span className="v3fs-pf-arm-q">Archive this programme?</span>
                       <button type="button" className="v3fs-btn danger" onClick={() => { setArmedDelete(null); onDeleteProgram(entry.id); }}>Archive</button>
                       <button type="button" className="v3fs-btn" onClick={() => setArmedDelete(null)}>Keep</button>
-                    </>
+                    </span>
                   ) : (
                     <button type="button" className="v3fs-btn quiet" title="Archive — hides it from the list, keeps the record"
                       onClick={() => setArmedDelete(entry.id)}>Archive</button>
                   )
                 ) : null}
               </div>
-            </article>
-          );
-        })}
+            </div>
+          ) : null}
+        </div>
+      </article>
+    );
+  };
+
+  // In "All" the forest nests; a status filter flattens (a tree with holes reads worse).
+  const renderNode = (node: PfNode, depth: number): React.ReactNode => (
+    <React.Fragment key={node.entry.id}>
+      {renderCard(node.entry, depth, node.ordinal, node.children.length, true)}
+      {node.children.length ? <div className="v3fs-pf-children">{node.children.map((c) => renderNode(c, depth + 1))}</div> : null}
+    </React.Fragment>
+  );
+  // Search (name/client) and a multi-select status filter. Either one flattens
+  // the list — a nested tree with holes reads worse than a clean flat result.
+  const q = query.trim().toLowerCase();
+  const matchesQuery = (e: ProgramSummary) => !q || `${e.name} ${e.client ?? ""}`.toLowerCase().includes(q);
+  const isFlat = activeFilters.size > 0 || q.length > 0;
+  const filtered = isFlat
+    ? flattenForest(forest).filter(({ node }) =>
+        (activeFilters.size === 0 || activeFilters.has(toneOf(node.entry))) && matchesQuery(node.entry))
+    : [];
+  const filterWords = PF_FILTERS.filter(([k]) => k !== "all" && activeFilters.has(k as PfTone)).map(([, l]) => l.toLowerCase()).join(" or ");
+  const emptyMsg = q
+    ? `No programmes match “${query.trim()}”${filterWords ? ` in ${filterWords}` : ""}.`
+    : `No programmes are ${filterWords}.`;
+
+  return (
+    <div className="v3fs-pf">
+      <div className="v3fs-pf-toolbar">
+        <div className="v3fs-pf-search-wrap">
+          <svg className="v3fs-pf-search-i" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.2-3.2" /></svg>
+          <input className="v3fs-pf-search" type="search" placeholder="Search programmes by name or client…"
+            value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search programmes" />
+        </div>
+        <div className="v3fs-pf-toolbar-row">
+          <div className="v3fs-pf-filters" role="group" aria-label="Filter programmes by status">
+            {PF_FILTERS.map(([key, label]) => {
+              const on = key === "all" ? activeFilters.size === 0 : activeFilters.has(key as PfTone);
+              return (
+                <button key={key} type="button" role="checkbox" aria-checked={on}
+                  className={`v3fs-pf-filter${on ? " on" : ""}`}
+                  onClick={() => key === "all" ? setActiveFilters(new Set()) : toggleFilter(key as PfTone)}>
+                  {label}<span className="v3fs-pf-filter-n">{counts[key]}</span>
+                </button>
+              );
+            })}
+          </div>
+          {flowProgrammes.length > 1 ? (
+            <button type="button" className="v3fs-pf-expand" onClick={toggleAll}>
+              {allExpanded ? "Collapse all" : "Expand all"}
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      {!hydrated ? <div className="v3fs-empty">Loading every programme&rsquo;s record…</div> : null}
+      <div className="v3fs-pf-list">
+        {!isFlat
+          ? forest.map((node) => renderNode(node, 0))
+          : filtered.length
+            ? filtered.map(({ node, depth }) => renderCard(node.entry, depth, node.ordinal, node.children.length, false))
+            : <div className="v3fs-empty">{emptyMsg}</div>}
       </div>
       {classicCount > 0 ? (
         <div className="v3fs-empty">
@@ -892,9 +1624,71 @@ function FlowPortfolio({ programs, activeId, onSelectProgram, onHydratePrograms,
 
 /* ── Library: everything the programme knows ─────────────────────────────── */
 
-function FlowLibrary({ program, onSaveArtifactDoc, onOpenInbox }: { program: ProgramSummary; onSaveArtifactDoc: FlowShellProps["onSaveArtifactDoc"]; onOpenInbox?: () => void }) {
+function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagClaim, onComment, onSaveArtifactDoc, onOpenInbox, onGoFlow }: { program: ProgramSummary; programs: ProgramSummary[]; onSelectProgram: (id: string) => void; onSaveInputs?: FlowShellProps["onSaveInputs"]; onTagClaim?: FlowShellProps["onTagClaim"]; onComment?: FlowShellProps["onComment"]; onSaveArtifactDoc: FlowShellProps["onSaveArtifactDoc"]; onOpenInbox?: () => void; onGoFlow?: () => void }) {
+  const claims = listClaimTags(program);
+  const tagTargets = useMemo(() => claimTargets(program), [program]);
+  const [claimHighlight, setClaimHighlight] = useState<string | undefined>(undefined);
   const movements = useMemo(() => flowMovements(), []);
   const [query, setQuery] = useState("");
+  // Faceted browse: narrow the Library by KIND instead of scrolling panels.
+  type Facet = "all" | "people" | "documents" | "artifacts" | "disputes";
+  const [facet, setFacet] = useState<Facet>("all");
+  const [openPeople, setOpenPeople] = useState<Set<string>>(new Set());
+  const [resolveBusy, setResolveBusy] = useState<string | null>(null);
+  // An attached file is READ before it is filed: routeAttachedDocument infers
+  // what it is (transcript vs. source material), whose voices it carries, and
+  // which movement it belongs to. The inference is shown here and the record
+  // only changes when the operator confirms.
+  const [pendingDoc, setPendingDoc] = useState<{ filename: string; text: string; sourceKey?: string; route: DocRoute } | null>(null);
+  const fileRoutedDoc = (attributeSpeakers: boolean) => {
+    if (!pendingDoc || !onSaveInputs) return;
+    const { filename, text, sourceKey, route } = pendingDoc;
+    const docTitle = filename.replace(/\.[^.]+$/, "");
+    const raw = (program.rawData ?? {}) as Record<string, unknown>;
+    const inner = getProgramState(raw).inner as Record<string, unknown>;
+    const bucket = (typeof inner.phaseInputs === "object" && inner.phaseInputs !== null
+      ? (inner.phaseInputs as Record<string, Record<string, unknown>>)[route.movementId] : undefined) ?? {};
+    const existing = typeof bucket[route.captureField] === "string" ? bucket[route.captureField] as string : "";
+    void onSaveInputs(route.movementId,
+      { [route.captureField]: buildRoutedBlocks(route, docTitle, text, existing, sourceKey, attributeSpeakers) },
+      { attest: {
+        action: attributeSpeakers && route.speakerBlocks.length ? `Transcript mapped — ${docTitle}` : `Document added — ${docTitle}`,
+        detail: `attached from the Library · filed in ${route.movementId}${route.matched.length ? ` · ${attributeSpeakers ? "speakers mapped" : "mentions"}: ${route.matched.join(", ")}` : ""}`,
+      } });
+    setPendingDoc(null);
+  };
+  // Drill-down integration: this programme's own anchor (if it is a child) and
+  // the focused children that hang off it.
+  const dd = useMemo(() => ({
+    children: listChildDrilldowns(program, programs),
+    parentId: readParentId(program),
+    selfAnchor: readDrillAnchor(program),
+  }), [program, programs]);
+  const ddParent = dd.parentId ? programs.find((p) => p.id === dd.parentId) : undefined;
+  const [pullBusy, setPullBusy] = useState<string | null>(null);
+  const [pulled, setPulled] = useState<Set<string>>(new Set());
+  // Roll a child's confirmed findings up into THIS programme as attributed
+  // evidence at the anchor's movement — the standard save path attests it and
+  // flags the affected documents stale, so regeneration absorbs the deep dive.
+  const pullFindings = async (child: ProgramSummary, anchorKind: DrillKind | null) => {
+    if (!onSaveInputs) return;
+    const findings = buildDrilldownFindings(child, program);
+    if (!findings) return;
+    const target = drillRollupTarget(anchorKind ?? "scope");
+    const raw = (program.rawData ?? {}) as Record<string, unknown>;
+    const innerD = getProgramState(raw).inner as Record<string, unknown>;
+    const bucket = (typeof innerD.phaseInputs === "object" && innerD.phaseInputs !== null
+      ? (innerD.phaseInputs as Record<string, Record<string, unknown>>)[target.movementId] : undefined) ?? {};
+    const existing = typeof bucket[target.captureField] === "string" ? bucket[target.captureField] as string : "";
+    const header = `— Drill-down: ${child.name}, findings, ${new Date().toISOString().slice(0, 10)} —`;
+    setPullBusy(child.id);
+    try {
+      await onSaveInputs(target.movementId,
+        { [target.captureField]: [existing.trimEnd(), `${header}\n${findings}`].filter(Boolean).join("\n\n") },
+        { attest: { action: `Pulled findings — ${child.name}`, detail: `Rolled up to ${target.movementId}. Affected documents flagged for regeneration.` } });
+      setPulled((prev) => new Set(prev).add(child.id));
+    } finally { setPullBusy(null); }
+  };
   const [docFor, setDocFor] = useState<import("@/v3/components/flow/flowShellData").ArtifactCardModel | null>(null);
   const all = useMemo(() => ({
     evidence: movements.flatMap((m) => movementEvidence(program, m)),
@@ -902,9 +1696,68 @@ function FlowLibrary({ program, onSaveArtifactDoc, onOpenInbox }: { program: Pro
   }), [program, movements]);
   const [evFor, setEvFor] = useState<import("@/v3/components/flow/flowShellData").EvidenceEntry | null>(null);
   const q = query.trim().toLowerCase();
-  const evidence = q ? all.evidence.filter((e) => `${e.who} ${e.fieldLabel} ${e.excerpt} ${e.text}`.toLowerCase().includes(q)) : all.evidence;
+  // Newest first: capture stamps sort lexicographically ("2026-07-13 14:05");
+  // undated entries keep their relative order at the end of the list.
+  const byNewest = (list: typeof all.evidence) => [...list]
+    .map((entry, index) => ({ entry, index }))
+    .sort((a, b) => (b.entry.capturedAt ?? "").localeCompare(a.entry.capturedAt ?? "") || a.index - b.index)
+    .map(({ entry }) => entry);
+  const evidence = byNewest(q ? all.evidence.filter((e) => `${e.who} ${e.fieldLabel} ${e.excerpt} ${e.text}`.toLowerCase().includes(q)) : all.evidence);
   const artifacts = q ? all.artifacts.filter((a) => `${a.title} ${a.excerpt ?? ""}`.toLowerCase().includes(q)) : all.artifacts;
   const label = (id: string) => movements.find((m) => m.id === id)?.displayName ?? id;
+
+  const disputes = useMemo(() => readContradictions(program), [program]);
+
+  // Resolve a dispute where it lives: flip its log rows to Resolved, attested.
+  const resolveDispute = async (statement: string) => {
+    if (!onSaveInputs) return;
+    const inner = getProgramState((program.rawData ?? {}) as Record<string, unknown>).inner as Record<string, unknown>;
+    const bucket = (typeof inner.phaseInputs === "object" && inner.phaseInputs !== null
+      ? (inner.phaseInputs as Record<string, Record<string, unknown>>).listen : undefined) ?? {};
+    const rows = parseGridRows(bucket.contradictionLog as unknown);
+    const day = new Date().toISOString().slice(0, 10);
+    const next = rows.map((row) => ((row.statement ?? "").trim() === statement.trim() ? { ...row, status: `Resolved — ${day}` } : row));
+    setResolveBusy(statement);
+    try {
+      await onSaveInputs("listen", { contradictionLog: JSON.stringify(next) },
+        { attest: { action: "Resolved a contradiction", detail: statement.slice(0, 140) } });
+    } finally { setResolveBusy(null); }
+  };
+
+  // Evidence grouped by PERSON — one collapsible row per voice, not a flat wall.
+  const evidenceByPerson = useMemo(() => {
+    const groups = new Map<string, typeof evidence>();
+    for (const entry of evidence) {
+      const person = (entry.who.split(",")[0] || entry.who || "Unattributed").trim();
+      const list = groups.get(person) ?? [];
+      list.push(entry);
+      groups.set(person, list);
+    }
+    return [...groups.entries()].map(([person, items]) => ({ person, items }))
+      .sort((a, b) => b.items.length - a.items.length);
+  }, [evidence]);
+
+  // Artifacts as a status ledger: stale (needs regen) first, then missing, then current.
+  const artifactRank = (a: typeof artifacts[number]) => (a.present ? (a.stale ? 0 : 2) : 1);
+  const artifactLedger = [...artifacts].sort((x, y) => artifactRank(x) - artifactRank(y));
+  const staleCount = artifacts.filter((a) => a.present && a.stale).length;
+
+  // "What moved since I last looked": newest evidence + freshly generated/edited docs.
+  const recent = useMemo(() => {
+    const ev = evidence.filter((e) => e.capturedAt).slice(0, 3)
+      .map((e) => ({ when: e.capturedAt ?? "", kind: "evidence" as const, label: (e.who.split(",")[0] || e.who).trim(), entry: e }));
+    return ev.slice(0, 4);
+  }, [evidence]);
+
+  const facetCounts = {
+    people: evidenceByPerson.length,
+    documents: evidence.filter((e) => e.kind === "document").length,
+    artifacts: artifacts.filter((a) => a.present).length,
+    disputes: disputes.filter((d) => /open/i.test(d.status)).length,
+  };
+  const showEvidence = facet === "all" || facet === "people" || facet === "documents";
+  const showArtifacts = facet === "all" || facet === "artifacts";
+  const showDisputes = (facet === "all" || facet === "disputes") && disputes.length > 0;
 
   return (
     <div className="v3fs-grid2">
@@ -916,97 +1769,332 @@ function FlowLibrary({ program, onSaveArtifactDoc, onOpenInbox }: { program: Pro
           onChange={(event) => setQuery(event.target.value)}
           aria-label="Search evidence and artifacts"
         />
+        <div className="v3fs-facets" role="tablist" aria-label="Filter by kind">
+          {([
+            ["all", "All", null],
+            ["people", "People", facetCounts.people],
+            ["documents", "Documents", facetCounts.documents],
+            ["artifacts", "Artifacts", facetCounts.artifacts],
+            ["disputes", "Open disputes", facetCounts.disputes],
+          ] as Array<[Facet, string, number | null]>).map(([key, name, count]) => (
+            <button key={key} type="button" role="tab" aria-selected={facet === key}
+              className={`v3fs-facet${facet === key ? " on" : ""}`} onClick={() => setFacet(key)}>
+              {name}{count != null ? <span className="v3fs-facet-n">{count}</span> : null}
+            </button>
+          ))}
+        </div>
       </div>
+      {facet === "all" && !q && recent.length ? (
+        <div className="v3fs-panel v3fs-panel-wide v3fs-recent">
+          <div className="v3fs-ph"><h3>Recently changed</h3><span>what moved since you last looked</span></div>
+          <div className="v3fs-recent-row">
+            {recent.map((r, i) => (
+              <button key={i} type="button" className="v3fs-recent-chip" onClick={() => setEvFor(r.entry)}>
+                <span className="v3fs-recent-when">{r.when}</span>
+                <span className="v3fs-recent-l">{r.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      {facet === "all" && (dd.children.length || ddParent) ? (
+        <div className="v3fs-panel v3fs-dd-panel">
+          <div className="v3fs-ph"><h3>Drill-downs</h3><span>focused children of this programme, wired to it</span></div>
+          {ddParent ? (
+            <button type="button" className="v3fs-dd-parent" onClick={() => onSelectProgram(ddParent.id)}>
+              <span className="v3fs-dd-lens">◇ {dd.selfAnchor ? drillKindMeta(dd.selfAnchor.kind).noun : "drill-down"}</span>
+              <span className="v3fs-dd-parent-t">Drill-down of <b>{ddParent.name}</b>{dd.selfAnchor ? ` · focused on ${dd.selfAnchor.label}` : ""}</span>
+              <span className="v3fs-dd-open">↩ open parent</span>
+            </button>
+          ) : null}
+          {dd.children.map(({ child, anchor }) => {
+            const waiting = listOpenFlowDecisions(child).length + listPortalInbox(child).length;
+            const hasFindings = !!buildDrilldownFindings(child, program);
+            return (
+              <div key={child.id} className="v3fs-row v3fs-row-open v3fs-dd-row" role="button" tabIndex={0}
+                onClick={() => onSelectProgram(child.id)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onSelectProgram(child.id); }}>
+                <span className="v3fs-dd-lens">◇ {anchor ? drillKindMeta(anchor.kind).noun : "scope"}</span>
+                <div className="v3fs-row-g">
+                  <div className="v3fs-row-n">{anchor?.label ?? child.name}</div>
+                  <div className="v3fs-row-m">{child.name}</div>
+                </div>
+                {onSaveInputs && hasFindings ? (
+                  <button type="button" className="v3fs-btn sm" disabled={pullBusy === child.id || pulled.has(child.id)}
+                    title="Roll the drill-down's findings up into this programme as attributed evidence"
+                    onClick={(e) => { e.stopPropagation(); void pullFindings(child, anchor?.kind ?? null); }}>
+                    {pullBusy === child.id ? "Pulling…" : pulled.has(child.id) ? "✓ Pulled" : "⇪ Pull findings"}
+                  </button>
+                ) : null}
+                <span className={`v3fs-dd-st ${waiting ? "watch" : "clear"}`}>{waiting ? `${waiting} waiting` : "on track"}</span>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+      {facet === "all" && claims.length ? (
+        <div className="v3fs-panel v3fs-claims">
+          <div className="v3fs-ph"><h3>Claims</h3><span>curated quotes, tagged to the graph — select text in any transcript to add one</span></div>
+          {claims.map((claim) => (
+            <div key={claim.id} className="v3fs-row v3fs-row-open" role="button" tabIndex={0}
+              onClick={() => {
+                const hit = all.evidence.find((e) => e.text.includes(claim.quote.slice(0, 80)));
+                if (hit) { setClaimHighlight(claim.quote); setEvFor(hit); }
+              }}
+              onKeyDown={(e) => { if (e.key === "Enter") { const hit = all.evidence.find((x) => x.text.includes(claim.quote.slice(0, 80))); if (hit) { setClaimHighlight(claim.quote); setEvFor(hit); } } }}>
+              <span className="v3fs-tag ev">{claim.target.kind}</span>
+              <div className="v3fs-row-g">
+                <div className="v3fs-row-n">“{claim.quote.length > 90 ? `${claim.quote.slice(0, 90)}…` : claim.quote}”</div>
+                <div className="v3fs-row-m">→ {claim.target.label} · {claim.who}</div>
+              </div>
+              {onTagClaim ? (
+                <button type="button" className="v3fs-a" title="Untag — attested"
+                  onClick={(e) => { e.stopPropagation(); void onTagClaim({ quote: claim.quote, who: claim.who, movementId: claim.movementId, target: claim.target, removeId: claim.id }); }}>✕</button>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {showEvidence ? (
       <div className="v3fs-panel">
-        <div className="v3fs-ph"><h3>Evidence</h3><span>conversations and source material</span></div>
-        {evidence.length === 0 ? <div className="v3fs-empty">{q ? "Nothing matches that search." : "No evidence captured yet. Add the first conversation in Frame or Listen."}</div> : null}
-        {evidence.map((entry, i) => (
-          <div key={i} className="v3fs-row v3fs-row-open" role="button" tabIndex={0}
-            onClick={() => {
-              // Source documents hand back the ORIGINAL file — a download
-              // prompt in its native format, never a preview.
-              if (entry.kind === "document" && entry.sourceKey) {
-                void supabase.functions.invoke("flow-extract", { body: { download: entry.sourceKey } })
-                  .then((result: { data: unknown }) => {
-                    const url = (result.data as { url?: string } | null)?.url;
-                    if (url) window.open(url, "_blank");
-                    else setEvFor(entry);
-                  })
-                  .catch(() => setEvFor(entry));
-                return;
-              }
-              setEvFor(entry);
-            }}
-            onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setEvFor(entry); }}>
-            <span className="v3fs-tag ev">{label(entry.movementId)}</span>
-            <div className="v3fs-row-g">
-              <div className="v3fs-row-n">{entry.who}</div>
-              <div className="v3fs-row-m">{entry.kind === "reference" ? entry.meta : `${entry.words.toLocaleString()} words`}</div>
+        <div className="v3fs-ph v3fs-ph-attach">
+          <h3>Evidence</h3><span>{facet === "documents" ? "attached source material" : "grouped by voice — click a person to expand"}</span>
+          {onSaveInputs ? (
+            <AttachFileButton programId={program.id}
+              onExtracted={(filename, text, sourceKey) => {
+                // Read before filing: infer what this is, whose voices it
+                // carries, and which movement it belongs to — then ask.
+                setPendingDoc({ filename, text, sourceKey, route: routeAttachedDocument(program, text) });
+              }} />
+          ) : null}
+        </div>
+        {pendingDoc ? (
+          <div className={`v3fs-docroute${pendingDoc.route.kind === "transcript" ? " transcript" : ""}`} role="status">
+            <div className="v3fs-docroute-g">
+              <span className="v3fs-docroute-k">{pendingDoc.route.kind === "transcript" ? "⌁ Transcript" : "≣ Document"}</span>
+              <span className="v3fs-docroute-t"><b>{pendingDoc.filename}</b> — {pendingDoc.route.summary}</span>
+            </div>
+            <div className="v3fs-docroute-cta">
+              {pendingDoc.route.speakerBlocks.length ? (
+                <button type="button" className="v3fs-btn pri" onClick={() => fileRoutedDoc(true)}
+                  title={`Each matched person gets their own attributed evidence in ${pendingDoc.route.movementId}`}>
+                  ✓ File as {pendingDoc.route.matched.length} {pendingDoc.route.matched.length === 1 ? "person's" : "people's"} evidence
+                </button>
+              ) : (
+                <button type="button" className="v3fs-btn pri" onClick={() => fileRoutedDoc(false)}
+                  title={`Files into the ${pendingDoc.route.movementId} evidence`}>
+                  ✓ File in {pendingDoc.route.movementId.charAt(0).toUpperCase() + pendingDoc.route.movementId.slice(1)}
+                </button>
+              )}
+              {pendingDoc.route.speakerBlocks.length ? (
+                <button type="button" className="v3fs-btn" onClick={() => fileRoutedDoc(false)}
+                  title="Keep the document whole — no per-speaker attribution">Just the document</button>
+              ) : null}
+              <label className="v3fs-docroute-move">
+                in
+                <select value={pendingDoc.route.movementId} aria-label="File in movement"
+                  onChange={(e) => setPendingDoc({ ...pendingDoc, route: routeAttachedDocument(program, pendingDoc.text, e.target.value) })}>
+                  {["frame", "listen", "show"].map((m) => (
+                    <option key={m} value={m}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>
+                  ))}
+                </select>
+              </label>
+              <button type="button" className="v3fs-btn quiet" onClick={() => setPendingDoc(null)}>Discard</button>
             </div>
           </div>
-        ))}
+        ) : null}
+        {evidence.length === 0 ? <div className="v3fs-empty">{q ? "Nothing matches that search." : "No evidence captured yet. Add the first conversation in Frame or Listen."}</div> : null}
+        {(() => {
+          const openEntry = (entry: typeof evidence[number]) => {
+            if (entry.kind === "document" && entry.sourceKey) {
+              void supabase.functions.invoke("flow-extract", { body: { download: entry.sourceKey } })
+                .then((result: { data: unknown }) => {
+                  const url = (result.data as { url?: string } | null)?.url;
+                  if (url) window.open(url, "_blank"); else setEvFor(entry);
+                }).catch(() => setEvFor(entry));
+              return;
+            }
+            setEvFor(entry);
+          };
+          const entryRow = (entry: typeof evidence[number], i: number) => (
+            <div key={i} className="v3fs-row v3fs-row-open v3fs-ev-sub" role="button" tabIndex={0}
+              onClick={() => openEntry(entry)}
+              onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") openEntry(entry); }}>
+              <span className="v3fs-tag ev">{label(entry.movementId)}</span>
+              <div className="v3fs-row-g">
+                <div className="v3fs-row-n">{entry.excerpt ? `“${entry.excerpt}”` : entry.who}</div>
+                <div className="v3fs-row-m">{entry.who}{entry.kind === "document" ? " · document" : ""}</div>
+              </div>
+              {entry.capturedAt ? <span className="v3fs-row-when" title="Captured">{entry.capturedAt}</span> : null}
+            </div>
+          );
+          // Documents facet: flat list of source material. Otherwise: grouped by voice.
+          if (facet === "documents") {
+            const docs = evidence.filter((e) => e.kind === "document");
+            return docs.length ? docs.map(entryRow) : <div className="v3fs-empty">No attached documents yet.</div>;
+          }
+          return evidenceByPerson.map(({ person, items }) => {
+            const open = openPeople.has(person);
+            return (
+              <div key={person} className="v3fs-ev-group">
+                <button type="button" className={`v3fs-ev-ghead${open ? " on" : ""}`}
+                  onClick={() => setOpenPeople((prev) => { const n = new Set(prev); if (open) n.delete(person); else n.add(person); return n; })}>
+                  <span className="v3fs-ev-gchev" aria-hidden="true">{open ? "▾" : "▸"}</span>
+                  <span className="v3fs-ev-gname">{person}</span>
+                  <span className="v3fs-ev-gcount">{items.length} item{items.length === 1 ? "" : "s"}</span>
+                  <span className="v3fs-ev-gwhen">{items[0]?.capturedAt ?? ""}</span>
+                </button>
+                {open ? items.map(entryRow) : null}
+              </div>
+            );
+          });
+        })()}
       </div>
+      ) : null}
+      {showArtifacts ? (
       <div className="v3fs-panel">
-        <div className="v3fs-ph"><h3>Artifacts</h3><span>generated, traceable to evidence</span></div>
-        {artifacts.map((artifact) => (
+        <div className="v3fs-ph"><h3>Artifacts</h3><span>{staleCount ? `${staleCount} need regenerating — shown first` : "generated, traceable to evidence"}</span></div>
+        {artifactLedger.map((artifact) => (
           <div key={`${artifact.movementId}:${artifact.id}`}
-            className={`v3fs-row${artifact.present ? " v3fs-row-open" : ""}`}
+            className={`v3fs-row v3fs-art-row ${artifact.present ? (artifact.stale ? "stale" : "ok") : "missing"}${artifact.present ? " v3fs-row-open" : ""}`}
             role={artifact.present ? "button" : undefined}
             tabIndex={artifact.present ? 0 : undefined}
             onClick={artifact.present ? () => setDocFor(artifact) : undefined}
             onKeyDown={artifact.present ? (event) => { if (event.key === "Enter" || event.key === " ") setDocFor(artifact); } : undefined}>
-            <span className={`v3fs-st ${artifact.present ? (artifact.stale ? "stale" : "ok") : "none"}`} />
+            <span className="v3fs-art-stripe" aria-hidden="true" />
             <div className="v3fs-row-g">
               <div className="v3fs-row-n">{artifact.title}</div>
               <div className="v3fs-row-m">
                 {artifact.present
                   ? artifact.stale
-                    ? "evidence changed since generation — regenerate from Flow"
-                    : artifact.confidence != null ? `generated · ${artifact.confidence}%` : "generated"
+                    ? "evidence changed — regenerate"
+                    : artifact.confidence != null ? `current · confidence ${artifact.confidence}%` : "current"
                   : "not yet generated"}
               </div>
             </div>
+            <span className={`v3fs-art-badge ${artifact.present ? (artifact.stale ? "stale" : "ok") : "missing"}`}>
+              {artifact.present ? (artifact.stale ? "Stale" : "Current") : "Missing"}
+            </span>
             <span className="v3fs-tag gn">{label(artifact.movementId)}</span>
           </div>
         ))}
       </div>
-      {docFor ? <FlowArtifactStudio program={program} artifact={docFor} onClose={() => setDocFor(null)} onSaveDoc={onSaveArtifactDoc} onOpenInbox={onOpenInbox}
+      ) : null}
+      {showDisputes ? (
+          <div className="v3fs-panel v3fs-panel-wide">
+            <div className="v3fs-ph"><h3>Contradiction log</h3><span>disputes on the record — resolve, or ask the people involved</span></div>
+            {disputes.map((row, i) => {
+              const statement = row.statement.trim();
+              const source = statement ? all.evidence.find((e) => e.text && locateQuote(e.text, statement)) : undefined;
+              const open = /open/i.test(row.status);
+              return (
+                <div key={i} className="v3fs-row v3fs-dispute-row">
+                  <span className={`v3fs-vc ${open ? "pen" : "acc"}`}>{open ? "Open" : "Resolved"}</span>
+                  <div className="v3fs-row-g">
+                    <div className="v3fs-row-n">“{statement}”</div>
+                    <div className="v3fs-row-m">{row.between || ""}</div>
+                  </div>
+                  <div className="v3fs-dispute-cta">
+                    {source ? (
+                      <button type="button" className="v3fs-a" title={`Read the disputed passage in the source — ${source.who}`}
+                        onClick={() => { setClaimHighlight(statement); setEvFor(source); }}>
+                        ⤷ review evidence
+                      </button>
+                    ) : null}
+                    {open && onGoFlow ? (
+                      <button type="button" className="v3fs-a" title="It's already on the involved stakeholders' follow-up scripts — go collect the answer"
+                        onClick={() => onGoFlow()}>
+                        ↳ ask the people
+                      </button>
+                    ) : null}
+                    {open && onSaveInputs ? (
+                      <button type="button" className="v3fs-a v3fs-dispute-resolve" disabled={resolveBusy === statement}
+                        title="Mark this dispute resolved — attested"
+                        onClick={() => void resolveDispute(statement)}>
+                        {resolveBusy === statement ? "Resolving…" : "✓ Resolve"}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+      ) : null}
+      {docFor ? <FlowArtifactStudio program={program} artifact={docFor} onClose={() => setDocFor(null)} onSaveDoc={onSaveArtifactDoc} onComment={onComment} onOpenInbox={onOpenInbox}
         onOpenArtifact={(artifactId) => {
           for (const m of flowMovements()) {
             const hit = movementArtifacts(program, m).find((a) => a.id === artifactId && a.present);
             if (hit) { setDocFor(hit); return; }
           }
         }} /> : null}
-      {evFor ? <EvidenceReader entry={evFor} onClose={() => setEvFor(null)} /> : null}
+      {evFor ? (
+        <EvidenceReader entry={evFor} highlight={claimHighlight} targets={tagTargets}
+          onTag={onTagClaim ? (target, quote) => onTagClaim({ quote, who: evFor.who, movementId: evFor.movementId, target }) : undefined}
+          onClose={() => { setEvFor(null); setClaimHighlight(undefined); }} />
+      ) : null}
     </div>
   );
 }
 
 /* ── Pulse: the steering-meeting screen ──────────────────────────────────── */
 
-function FlowPulse({ program, onMintBrief }: { program: ProgramSummary; onMintBrief: () => Promise<string | null> }) {
+function FlowPulse({ program, programs, onSelectProgram, onMintBrief }: { program: ProgramSummary; programs?: ProgramSummary[]; onSelectProgram?: (id: string) => void; onMintBrief: () => Promise<string | null> }) {
+  // The family: this programme's drill-downs, each with its steering numbers.
+  const family = programs ? listChildDrilldowns(program, programs) : [];
   const days = daysToFirstDemo(program);
   const coverage = listenCoverage(program);
   const demos = demoAcceptance(program);
   const words = wordsOfEvidence(program);
-  const kpis = frameKpis(program);
+  const kpis = readMetricRegistry(program);
+  const metricHealth = metricConsistency(program);
   const [packOpen, setPackOpen] = useState(false);
+
+  const engagedPct = coverage.total ? Math.round((coverage.done / coverage.total) * 100) : null;
+  const demoPct = demos.total ? Math.round((demos.accepted / demos.total) * 100) : null;
 
   return (
     <div className="v3fs-pulse">
-      <div className="v3fs-pulse-bar">
-        <button type="button" className="v3fs-btn" onClick={() => setPackOpen(true)}>
-          ⎙ Board pack — print or save as PDF
+      <div className="v3fs-pulse-lead">
+        <div className="v3fs-pulse-lead-l">
+          <span className="v3fs-pf-eyebrow">Pulse</span>
+          <p>The steering read — outcomes, demonstrations, and the board pack.</p>
+        </div>
+        <button type="button" className="v3fs-btn pri" onClick={() => setPackOpen(true)}>
+          ⎙ Board pack
         </button>
       </div>
       {packOpen ? <FlowBoardPack program={program} onMintBrief={onMintBrief} onClose={() => setPackOpen(false)} /> : null}
+      {family.length ? (
+        <div className="v3fs-pulse-family">
+          <span className="v3fs-pf-eyebrow sm">Drill-downs</span>
+          {family.map(({ child, anchor }) => {
+            const days = daysToFirstDemo(child);
+            const waiting = listOpenFlowDecisions(child).length + listPortalInbox(child).length;
+            return (
+              <button key={child.id} type="button" className="v3fs-pulse-fam-chip" onClick={() => onSelectProgram?.(child.id)}>
+                <span className="v3fs-dd-lens">◇ {anchor ? drillKindMeta(anchor.kind).noun : "scope"}</span>
+                <b>{anchor?.label ?? child.name}</b>
+                <span className="v3fs-pulse-fam-m">{days != null ? `${days}d to demo` : "no demo date"}{waiting ? ` · ${waiting} waiting` : ""}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
       <div className="v3fs-stats">
-        <div className="v3fs-stat hero">
+        <div className={`v3fs-stat hero${days == null ? " empty" : ""}`}>
           <div className="v3fs-stat-n">{days != null ? <b>{days}</b> : <b>—</b>}{days != null ? <small> days</small> : null}</div>
           <div className="v3fs-stat-l">{days != null ? "to first demo" : "first-demo date unset"}</div>
         </div>
-        <div className="v3fs-stat"><div className="v3fs-stat-n"><b>{coverage.done}</b><small>/{coverage.total || "?"}</small></div><div className="v3fs-stat-l">stakeholders engaged</div></div>
-        <div className="v3fs-stat"><div className="v3fs-stat-n"><b>{demos.accepted}</b><small>/{demos.total || "?"}</small></div><div className="v3fs-stat-l">demonstrations accepted</div></div>
+        <div className="v3fs-stat">
+          <div className="v3fs-stat-n"><b>{coverage.done}</b><small>/{coverage.total || "?"}</small></div>
+          <div className="v3fs-stat-l">stakeholders engaged</div>
+          {engagedPct != null ? <span className="v3fs-pf-bar"><span style={{ width: `${engagedPct}%` }} /></span> : null}
+        </div>
+        <div className="v3fs-stat">
+          <div className="v3fs-stat-n"><b>{demos.accepted}</b><small>/{demos.total || "?"}</small></div>
+          <div className="v3fs-stat-l">demonstrations accepted</div>
+          {demoPct != null ? <span className="v3fs-pf-bar"><span style={{ width: `${demoPct}%` }} /></span> : null}
+        </div>
         <div className="v3fs-stat"><div className="v3fs-stat-n"><b>{words.toLocaleString()}</b></div><div className="v3fs-stat-l">words of evidence</div></div>
       </div>
       <div className="v3fs-grid2">
@@ -1024,16 +2112,139 @@ function FlowPulse({ program, onMintBrief }: { program: ProgramSummary; onMintBr
           ))}
         </div>
         <div className="v3fs-panel">
-          <div className="v3fs-ph"><h3>Outcomes</h3><span>measured against stakeholder-stated baselines</span></div>
+          <div className="v3fs-ph"><h3>Outcomes</h3><span>one governed definition per measure</span></div>
           {kpis.length === 0 ? <div className="v3fs-empty">Success KPIs defined in Frame appear here, with baselines drawn from discovery.</div> : null}
+          {kpis.length ? (
+            <div className={`v3fs-metric-health${metricHealth.governed ? " ok" : ""}`}
+              title="Every surface reads these from one registry, so a definition can't drift between the charter, the board pack and the brief.">
+              {metricHealth.governed
+                ? `✓ ${metricHealth.total} governed — each defined once, verifiable`
+                : `${metricHealth.defined}/${metricHealth.total} defined${metricHealth.issues.some((issue) => issue.severity === "error") ? ` · ${metricHealth.issues.filter((issue) => issue.severity === "error").length} to resolve` : ""}`}
+            </div>
+          ) : null}
           {kpis.map((kpi, i) => (
-            <div key={i} className="v3fs-kpi">
+            <div key={kpi.id || i} className="v3fs-kpi">
               <div className="v3fs-kpi-t"><b>{kpi.name}</b><span>{[kpi.baseline, kpi.target].filter(Boolean).join(" → ")}{kpi.unit ? ` ${kpi.unit}` : ""}</span></div>
+              {kpi.definition ? <div className="v3fs-kpi-def">{kpi.definition}</div> : <div className="v3fs-kpi-def undefinedm">No definition yet — the metric isn’t governed until its meaning is recorded.</div>}
               <div className="v3fs-river"><div className="v3fs-river-to" /><div className="v3fs-river-mk" /></div>
             </div>
           ))}
         </div>
       </div>
+      <FlowStory program={program} />
+    </div>
+  );
+}
+
+/* ── The story so far — the record as a chronological narrative ──────────── */
+interface StoryEvent { ts: string; day: string; kind: "evidence" | "gate" | "action"; title: string; detail?: string; movementId?: string; entry?: import("@/v3/components/flow/flowShellData").EvidenceEntry; }
+
+/** Merge attested actions and dated evidence into one timeline. Everything
+ * here is already on the record — this is the record made readable. */
+function buildStory(program: ProgramSummary): StoryEvent[] {
+  const events: StoryEvent[] = [];
+  for (const att of listFlowAttestations(program)) {
+    if (!att.ts) continue;
+    events.push({
+      ts: att.ts, day: att.ts.slice(0, 10),
+      kind: /gate|demonstrated/i.test(att.action) ? "gate" : "action",
+      title: att.action, detail: att.detail || undefined, movementId: att.phaseId || undefined,
+    });
+  }
+  const movements = flowMovements();
+  for (const movement of movements) {
+    for (const entry of movementEvidence(program, movement)) {
+      const day = (`${entry.who} ${entry.meta}`.match(/\d{4}-\d{2}-\d{2}/) ?? [])[0];
+      if (!day) continue;
+      events.push({
+        ts: `${day}T12:00:00Z`, day, kind: "evidence",
+        title: entry.who, detail: entry.excerpt ? `“${entry.excerpt}”` : undefined, movementId: movement.id, entry,
+      });
+    }
+  }
+  return events.sort((a, b) => (a.ts < b.ts ? 1 : -1));
+}
+
+function FlowStory({ program }: { program: ProgramSummary }) {
+  const [expanded, setExpanded] = useState(false);
+  const [evFor, setEvFor] = useState<import("@/v3/components/flow/flowShellData").EvidenceEntry | null>(null);
+  // Snapshot scrubbing — replay the record as it stood at any saved point.
+  // Snapshots come from the local safety ring; "now" is the live blob.
+  const [snapshots, setSnapshots] = useState<BlobSnapshot[]>([]);
+  const [asOf, setAsOf] = useState<string>("now");
+  useEffect(() => {
+    let alive = true;
+    listSnapshots(program.id).then((list) => { if (alive) setSnapshots(list); }).catch(() => { /* ring unavailable */ });
+    return () => { alive = false; };
+  }, [program.id]);
+  const viewProgram = useMemo(() => {
+    if (asOf === "now") return program;
+    const snap = snapshots.find((s) => String(s.ts) === asOf);
+    return snap ? ({ ...program, rawData: snap.data } as ProgramSummary) : program;
+  }, [program, snapshots, asOf]);
+  const events = useMemo(() => buildStory(viewProgram), [viewProgram]);
+  const movements = useMemo(() => flowMovements(), []);
+  const label = (id?: string) => (id ? movements.find((m) => m.id === id)?.displayName ?? id : null);
+  if (!events.length && asOf === "now") return null;
+  const shown = expanded ? events : events.slice(0, 14);
+  let prevDay = "";
+  return (
+    <div className="v3fs-panel v3fs-story">
+      <div className="v3fs-ph">
+        <h3>The story so far</h3><span>every event on the record, in order — evidence, actions, gates</span>
+        {snapshots.length ? (
+          <select className="v3fs-story-asof" value={asOf} onChange={(e) => setAsOf(e.target.value)} aria-label="View the record as of">
+            <option value="now">As of now</option>
+            {snapshots.map((s) => (
+              <option key={String(s.ts)} value={String(s.ts)}>As of {new Date(s.ts).toLocaleString()}</option>
+            ))}
+          </select>
+        ) : null}
+      </div>
+      {asOf !== "now" ? (
+        <div className="v3fs-story-past" role="note">
+          ⧗ Replaying the record as it stood then — the live record is untouched.
+          <button type="button" className="v3fs-a" onClick={() => setAsOf("now")}>Back to now</button>
+        </div>
+      ) : null}
+      <div className="v3fs-story-list">
+        {shown.map((event, i) => {
+          const dayHead = event.day !== prevDay ? event.day : null;
+          prevDay = event.day;
+          const openable = !!event.entry;
+          const body = (
+            <>
+              <span className="v3fs-story-dot" aria-hidden="true" />
+              <div className="v3fs-story-g">
+                <div className="v3fs-story-t">
+                  {event.title}
+                  {label(event.movementId) ? <span className="v3fs-story-mv">{label(event.movementId)}</span> : null}
+                  {openable ? <span className="v3fs-story-open">read ↗</span> : null}
+                </div>
+                {event.detail ? <div className="v3fs-story-d">{event.detail}</div> : null}
+              </div>
+            </>
+          );
+          return (
+            <Fragment key={i}>
+              {dayHead ? <div className="v3fs-story-day">{dayHead}</div> : null}
+              {openable ? (
+                <button type="button" className={`v3fs-story-row open ${event.kind}`} onClick={() => setEvFor(event.entry ?? null)}>
+                  {body}
+                </button>
+              ) : (
+                <div className={`v3fs-story-row ${event.kind}`}>{body}</div>
+              )}
+            </Fragment>
+          );
+        })}
+      </div>
+      {events.length > 14 ? (
+        <button type="button" className="v3fs-btn quiet v3fs-story-more" onClick={() => setExpanded((v) => !v)}>
+          {expanded ? "Show recent only" : `Show the full story — ${events.length} events`}
+        </button>
+      ) : null}
+      {evFor ? <EvidenceReader entry={evFor} onClose={() => setEvFor(null)} /> : null}
     </div>
   );
 }

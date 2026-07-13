@@ -70,6 +70,10 @@ const KNOWN_KEYS: Record<string, z.ZodTypeAny> = {
   dynamicSchema: record,
   gateReviews: z.record(z.string(), record),
   flowBriefs: z.array(z.object({ id: z.string(), token: z.string(), snapshot: record }).loose()),
+  // Curated claims — a quoted evidence span tagged to an entity/KPI/track.
+  claimTags: z.array(z.object({ id: z.string(), quote: z.string() }).loose()),
+  // Anchored comments — discussion attached to an artifact, on the record.
+  flowComments: z.array(z.object({ id: z.string(), text: z.string() }).loose()),
 };
 
 export interface BlobIssue {
