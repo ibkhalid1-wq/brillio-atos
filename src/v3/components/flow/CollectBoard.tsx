@@ -13,7 +13,7 @@ import { buildMeetingIcs, mailtoLink, stakeholderEmail } from "@/v3/components/f
 import { listInterviewPacks, portalLinkFor } from "@/v3/components/flow/flowPortal";
 import { resolveMovementStakeholders, readRoleBindings, type MovementStakeholder } from "@/v3/components/flow/flowStakeholders";
 import { mapTranscriptSpeakers } from "@/v3/components/flow/flowTranscriptMap";
-import { AttachFileButton, TranscribeButton, safePrompt } from "@/v3/components/flow/flowCapture";
+import { AttachFileButton, TranscribeButton, copyTextFromAction } from "@/v3/components/flow/flowCapture";
 
 /** A movement's discovery, organized by stakeholder. One card per person or
  * role: their script, their link/meeting channels, their captured evidence, a
@@ -237,14 +237,13 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
   };
   const copyLink = async () => {
     setLinkNote(null);
-    const link = await ensureLink();
+    // One click does both: the clipboard is claimed inside the gesture and
+    // the minted link lands in it when ready — never "create, then copy".
+    const link = await copyTextFromAction(ensureLink);
     if (!link) return;
     setLinkShown(link);
-    try {
-      await navigator.clipboard.writeText(link);
-      setCopiedTick(true);
-      window.setTimeout(() => setCopiedTick(false), 2400);
-    } catch { safePrompt("Copy the link:", link); }
+    setCopiedTick(true);
+    window.setTimeout(() => setCopiedTick(false), 2400);
   };
   const sendLink = async () => { if (!email) return; const link = await ensureLink(); if (link) window.location.href = mailtoLink(email, { stakeholder: name, programmeName: program.name, link }); };
 

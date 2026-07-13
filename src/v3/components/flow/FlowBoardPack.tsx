@@ -6,6 +6,7 @@
  * stylesheet strips the app and keeps the paper.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { copyTextFromAction } from "@/v3/components/flow/flowCapture";
 import type { ProgramSummary } from "@/new/types";
 import {
   flowMovements, movementArtifacts, gateChecklist, gateReadiness,
@@ -26,9 +27,8 @@ export default function FlowBoardPack({ program, onMintBrief, onClose }: {
   const share = async () => {
     if (!onMintBrief) return;
     setShareState("busy");
-    const link = await onMintBrief();
+    const link = await copyTextFromAction(() => onMintBrief(), "Copy the sponsor link:");
     if (!link) { setShareState("failed"); return; }
-    try { await navigator.clipboard.writeText(link); } catch { /* the attest trail still holds the mint */ }
     setShareState("copied");
     window.setTimeout(() => setShareState("idle"), 2500);
   };

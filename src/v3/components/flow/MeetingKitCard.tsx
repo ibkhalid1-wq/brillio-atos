@@ -10,7 +10,7 @@ import type { ProgramSummary } from "@/new/types";
 import { buildMeetingIcs, mailtoLink, stakeholderEmail, type MeetingKit } from "@/v3/components/flow/flowMeetings";
 import { listInterviewPacks, listDemoInvites, portalLinkFor, visibleLinks } from "@/v3/components/flow/flowPortal";
 import { listFlowTracks } from "@/v3/components/flow/flowTracks";
-import { AttachFileButton, TranscribeButton, safePrompt } from "@/v3/components/flow/flowCapture";
+import { AttachFileButton, TranscribeButton, safePrompt, copyTextFromAction } from "@/v3/components/flow/flowCapture";
 
 export default function MeetingKitCard({ kit, movementId, hasEvidence, program, docsStale, onRegenerateStale, onSaveInputs, onScheduleFollowUp, onMintFollowUp, onMintPacks, onMintDemoInvites, onCaptured }: {
   kit: MeetingKit | null;
@@ -249,9 +249,8 @@ export default function MeetingKitCard({ kit, movementId, hasEvidence, program, 
     } finally { setBusy(false); }
   };
   const copyMintedLink = async () => {
-    const link = await mintLink();
+    const link = await copyTextFromAction(mintLink, "Copy the follow-up link:");
     if (!link) return;
-    try { await navigator.clipboard.writeText(link); } catch { safePrompt("Copy the follow-up link:", link); }
     setLinkTick(true);
     window.setTimeout(() => setLinkTick(false), 2200);
   };

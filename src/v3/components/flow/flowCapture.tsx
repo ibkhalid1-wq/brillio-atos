@@ -14,6 +14,39 @@ export function safePrompt(message: string, value: string): void {
   try { window.prompt(message, value); } catch { /* clipboard and prompt both unavailable */ }
 }
 
+/**
+ * Copy text the click still has to PRODUCE (a mint, a fetch) without losing
+ * the user gesture. Awaiting the mint first expires the activation window and
+ * the copy throws — the old two-step "create, then copy again". A
+ * ClipboardItem can carry a PROMISE, so the clipboard is claimed
+ * synchronously inside the click and the text lands when the work resolves:
+ * one click, created AND copied. Falls back to a plain writeText, then to
+ * the visible prompt. Returns the produced text; null when production failed.
+ */
+export async function copyTextFromAction(
+  produce: () => Promise<string | null>,
+  promptLabel = "Copy the link:",
+): Promise<string | null> {
+  const pending = produce();
+  if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+    try {
+      const item = new ClipboardItem({
+        "text/plain": pending.then((text) => {
+          if (!text) throw new Error("nothing to copy");
+          return new Blob([text], { type: "text/plain" });
+        }),
+      });
+      await navigator.clipboard.write([item]);
+      return await pending;
+    } catch { /* fall through — pending is shared, the mint runs once */ }
+  }
+  const text = await pending.catch(() => null);
+  if (!text) return null;
+  try { await navigator.clipboard.writeText(text); }
+  catch { safePrompt(promptLabel, text); }
+  return text;
+}
+
 async function fileToBase64(file: File): Promise<string> {
   const buffer = new Uint8Array(await file.arrayBuffer());
   let binary = "";
