@@ -6473,7 +6473,7 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 
 /* Library refinements: caption line, recent-chip excerpt, dispute-open tone,
    evidence group kind glyph. */
-.v3fs-lib-cap { font-size: 12px; opacity: .55; margin: -4px 2px 2px; }
+.v3fs-lib-cap { grid-column: 1 / -1; font-size: 12px; opacity: .55; margin: -4px 2px 2px; }
 .v3fs-recent-sub { display: block; font-size: 11px; opacity: .6; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .v3fs-panel-warn { border-color: color-mix(in srgb, var(--v3-amber, #b58a2c) 45%, transparent); }
 .v3fs-ev-gkind { opacity: .55; font-size: 12px; width: 14px; text-align: center; }

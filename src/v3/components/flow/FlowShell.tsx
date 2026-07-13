@@ -2171,7 +2171,7 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
         </div>
       ) : null}
       {!q && (dd.children.length || ddParent) ? (
-        <div className="v3fs-panel v3fs-dd-panel">
+        <div className="v3fs-panel v3fs-panel-wide v3fs-dd-panel">
           <div className="v3fs-ph"><h3>Drill-downs</h3><span>focused children of this programme, wired to it</span></div>
           {ddParent ? (
             <button type="button" className="v3fs-dd-parent" onClick={() => onSelectProgram(ddParent.id)}>
@@ -2206,7 +2206,7 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
         </div>
       ) : null}
       {claims.length ? (
-        <div className="v3fs-panel v3fs-claims">
+        <div className="v3fs-panel v3fs-panel-wide v3fs-claims">
           <div className="v3fs-ph"><h3>Claims</h3><span>curated quotes, tagged to the graph — select text in any transcript to add one</span></div>
           {claims.map((claim) => (
             <div key={claim.id} className="v3fs-row v3fs-row-open" role="button" tabIndex={0}
