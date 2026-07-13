@@ -3046,9 +3046,12 @@ button.v3-chip:disabled {
 }
 
 .v3-auth-mode-btn.is-active {
-  background: color-mix(in srgb, var(--v3-accent) 16%, var(--v3-panel));
+  /* Raised segment on a crisp shadow, matching the app's stage pipeline. */
+  background: var(--v3-panel);
   color: var(--v3-text-primary);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v3-accent) 24%, transparent);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--v3-accent) 30%, transparent),
+    0 4px 12px -7px rgba(5, 8, 18, 0.5);
 }
 
 .v3-auth-mode-meta {
@@ -3257,16 +3260,21 @@ button.v3-chip:disabled {
 .v3-auth-sidecard {
   border-radius: 28px;
   padding: 28px;
+  /* The brand panel: an accent-tinted ground and an accent left edge so it
+     reads as ATOS's own side, echoing the app's record-rail identity. */
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--v3-surface-2) 94%, white 6%) 0%, var(--v3-surface-2) 100%);
-  border: 1px solid color-mix(in srgb, var(--v3-border) 84%, white 16%);
+    radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--v3-accent-b) 16%, transparent) 0, transparent 55%),
+    linear-gradient(180deg, color-mix(in srgb, var(--v3-accent) 9%, var(--v3-surface-2)) 0%, var(--v3-surface-2) 78%);
+  border: 1px solid color-mix(in srgb, var(--v3-accent) 22%, var(--v3-border));
+  border-left: 3px solid color-mix(in srgb, var(--v3-accent) 70%, var(--v3-accent-b));
   box-shadow:
-    0 24px 48px rgba(5, 8, 18, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    0 24px 48px rgba(5, 8, 18, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
   display: flex;
   flex-direction: column;
   gap: 18px;
 }
+.v3-auth-sidecard-topline { color: color-mix(in srgb, var(--v3-accent) 60%, var(--v3-text-muted)); }
 
 .v3-auth-sidecard-topline {
   font-size: 11px;
@@ -4981,11 +4989,18 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
   .v3fs-recrail.floating {animation:v3fs-railout .18s cubic-bezier(.22,1,.36,1)}
   @keyframes v3fs-railout {from{transform:translateX(14px);opacity:.5}to{transform:none;opacity:1}}
 }
-.v3fs-recrail-h {display:flex;align-items:center;gap:8px;margin-bottom:10px}
+/* The rail header carries the accent identity: a small accent tick before the
+   title, and the count pill in the accent theme. */
+.v3fs-recrail-h {display:flex;align-items:center;gap:8px;margin-bottom:11px;
+  padding-bottom:9px;border-bottom:1px solid color-mix(in srgb,var(--v3-accent-2) 14%,var(--fs-line))}
 .v3fs-recrail-t {flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  font-size:10.5px;font-weight:750;letter-spacing:.11em;text-transform:uppercase;color:var(--v3-accent-b)}
-.v3fs-recrail-n {font-family:var(--v3-font-mono);font-size:10px;font-weight:700;color:var(--v3-text-muted);
-  background:var(--fs-card);border:1px solid var(--fs-line);border-radius:99px;padding:1px 7px}
+  font-size:10.5px;font-weight:750;letter-spacing:.12em;text-transform:uppercase;color:var(--v3-accent-b);
+  display:flex;align-items:center;gap:7px}
+.v3fs-recrail-t::before {content:"";flex:none;width:6px;height:6px;border-radius:2px;
+  background:var(--v3-accent-2);box-shadow:0 0 0 3px color-mix(in srgb,var(--v3-accent-2) 16%,transparent)}
+.v3fs-recrail-n {font-family:var(--v3-font-mono);font-size:10px;font-weight:700;color:var(--v3-accent-2);
+  background:color-mix(in srgb,var(--v3-accent-2) 10%,var(--fs-card));
+  border:1px solid color-mix(in srgb,var(--v3-accent-2) 24%,var(--fs-line));border-radius:99px;padding:1px 7px}
 .v3fs-recrail-x {flex-shrink:0;border:1px solid var(--fs-line);background:var(--fs-card);cursor:pointer;font:inherit;
   font-size:10.5px;font-weight:650;color:var(--v3-text-muted);padding:3px 9px;border-radius:99px;white-space:nowrap;
   transition:color .15s ease,border-color .15s ease,background .15s ease}
