@@ -4833,8 +4833,11 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 /* library / pulse */
 .v3fs-grid2 {display:grid;grid-template-columns:1.05fr 1fr;gap:22px;margin-top:30px}
 .v3fs-panel-wide {grid-column:1 / -1}
-/* ── Movement command strip: gate gauge · one-line brief · counts · next ──── */
-.v3fs-movebar {display:flex;flex-wrap:wrap;align-items:center;gap:14px 16px;padding:14px 26px 2px}
+/* ── Movement header band: gate gauge · one-line brief · Up-next queue ────── */
+/* Top-aligned so the caption and the queue read as two columns of one band,
+   not a short line floating beside a tall stack. */
+.v3fs-movebar {display:flex;flex-wrap:wrap;align-items:flex-start;gap:14px 18px;padding:10px 26px 2px}
+.v3fs-movebar-txt {padding-top:13px}
 /* The gate gauge — echoed from the Gate tab so "where's this gate" reads in
    one glance (#76). Conic fill = criteria met, toned to the readiness colour. */
 .v3fs-mgauge {position:relative;flex-shrink:0;display:inline-grid;place-items:center;width:46px;height:46px;border-radius:50%;
@@ -4847,9 +4850,10 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-mgauge.green .v3fs-mgauge-c b {color:var(--v3-green)}
 .v3fs-movebar-txt {flex:1 1 340px;min-width:0}
 .v3fs-movebar-cap {font-size:13px;font-weight:500;color:var(--v3-text-secondary);line-height:1.5;margin-bottom:6px;max-width:72ch;text-wrap:pretty}
-/* "Up next" — the ranked frontier queue. The first verb is the primary;
-   the rest wait quietly beneath it. */
-.v3fs-upnext {flex-shrink:0;display:flex;flex-direction:column;align-items:flex-start;gap:6px;max-width:340px}
+/* "Up next" — the ranked frontier queue. The first verb is the primary; the
+   rest wait quietly beneath it. Items stretch to one width so the queue
+   reads as a block, not a rag of pills. */
+.v3fs-upnext {flex-shrink:0;display:flex;flex-direction:column;align-items:stretch;gap:6px;min-width:250px;max-width:340px}
 .v3fs-upnext-l {font-size:9.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--v3-text-muted)}
 .v3fs-upnext-btn {font:inherit;font-size:12px;font-weight:600;cursor:pointer;text-align:left;
   display:inline-flex;align-items:baseline;gap:8px;border:1px solid var(--fs-line);background:var(--fs-card);color:var(--v3-text-secondary);
@@ -4867,9 +4871,10 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-upnext-fill {height:100%;border-radius:99px;background:var(--v3-amber);transition:width .4s ease}
 .v3fs-upnext-note {font-size:11px;line-height:1.5;color:var(--v3-text-muted);max-width:32ch}
 /* Movement sub-tabs — Evidence · Artifacts · Gate · People, with live counts. */
-.v3fs-mtabs {display:flex;gap:2px;padding:10px 26px 0;margin-top:10px;border-bottom:1px solid var(--fs-line);overflow-x:auto}
-.v3fs-mtab {font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;background:none;border:none;color:var(--v3-text-muted);
-  padding:9px 13px;border-bottom:2px solid transparent;margin-bottom:-1px;display:inline-flex;align-items:center;gap:7px;white-space:nowrap;transition:color .15s ease}
+.v3fs-mtabs {display:flex;gap:2px;padding:12px 26px 0;margin-top:8px;border-bottom:1px solid var(--fs-line);overflow-x:auto}
+/* The stage bar is the page's primary navigation — sized like it. */
+.v3fs-mtab {font:inherit;font-size:13px;font-weight:650;cursor:pointer;background:none;border:none;color:var(--v3-text-muted);
+  padding:10px 14px;border-bottom:2px solid transparent;margin-bottom:-1px;display:inline-flex;align-items:center;gap:8px;white-space:nowrap;transition:color .15s ease}
 .v3fs-mtab:hover {color:var(--v3-text-secondary)}
 .v3fs-mtab.on {color:var(--v3-accent-2);border-bottom-color:var(--v3-accent-2)}
 .v3fs-mtab:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:-2px;border-radius:8px}
@@ -6147,10 +6152,14 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-collect-h .v3fs-colh {margin:0}
 .v3fs-collect-count {font-size:12px;font-weight:600;color:var(--v3-text-muted)}
 .v3fs-collect-tools {margin-left:auto;display:flex;gap:8px}
-/* One column: every stakeholder card stretches the full width and stacks
-   vertically, grouped under status section headers — identical on every phase. */
+/* The board: status sections stack; WITHIN a section, collapsed person cards
+   tile into a responsive grid (a roster of 12 reads in three rows, not
+   twelve), and the one card you open takes the full row for its detail
+   panel — tiles for scanning, a sheet for working. */
 .v3fs-collect-board {display:flex;flex-direction:column;gap:20px}
-.v3fs-collect-col {display:flex;flex-direction:column;gap:12px;min-width:0}
+.v3fs-collect-col {display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px;align-items:start;min-width:0}
+.v3fs-collect-col-h {grid-column:1/-1}
+.v3fs-collect-col details.v3fs-ivc[open] {grid-column:1/-1}
 .v3fs-collect-col-h {display:flex;align-items:center;gap:8px;padding:0 3px 5px;border-bottom:1px solid var(--fs-line);
   font-size:10.5px;font-weight:750;letter-spacing:.06em;text-transform:uppercase;color:var(--v3-text-muted)}
 .v3fs-cdot {width:8px;height:8px;border-radius:50%;flex-shrink:0}
