@@ -55,12 +55,28 @@ src/v3/AppShellV3.tsx           shell: auth, programme state, realtime, watcher 
                                 every persist handler (persistFlowMutation is the chokepoint)
 src/v3/components/flow/
   FlowShell.tsx                 dock (views: Inbox/Flow/Library/Pulse/Control/Portfolio),
-                                hero, switcher, Today/Inbox surface, Pulse, Control
-  FlowCanvas.tsx                the six movements: evidence column, kit (interview scripts,
-                                capture, transcription), documents, closed-loop gate checklist,
-                                spine runner, Show track units + in-room pass recorder
+                                hero, switcher, Today/Inbox surface, Library (facets,
+                                person-grouped evidence, artifact ledger), Pulse, Control
+  FlowCanvas.tsx                the six movements, each rendered as the loop's three
+                                STAGES — Collect → Paper → Gate — under a header carrying
+                                the gate gauge, the movement brief, and the ranked
+                                "Up next" queue; [ ] cycles stages
+  flowStages.ts                 the stage model: MovementTab, captions, lead stage
+  flowUpNext.tsx                the Up-next queue: ranked frontier verbs, two-step
+                                confirm items, spine regeneration with live progress
+                                (module-level run store survives remounts)
+  CollectBoard.tsx              the Collect stage's status board (Heard/Waiting/To reach),
+                                one card per person: script, channels, feedback trail,
+                                capture box, transcript speaker-mapping
+  MeetingKitCard.tsx            the movement kit for roster-less movements: script,
+                                channels, capture, contradiction resolve/file flags
+  flowCapture.tsx               attach-a-file (extract → review → evidence) and
+                                transcribe-a-recording, shared across all capture points
   flowShellData.ts              ALL derivations: gates, checklists, staleness, open issues,
-                                spine plan, locateQuote (span grounding)
+                                spine plan, evidence ids/stamps/excerpts, roster
+                                attestation proposals, locateQuote (span grounding)
+  flowEvidenceRank.ts           quote salience: rank, dedupe, noise detection
+  flowTranscriptMap.ts          meeting transcript → per-speaker attributed blocks
   flowDecisions.ts              decision queue + resolver families + previews + docSectionDiff
   flowMeetings.ts               interview kits: gap → askable question → script
   flowWatchers.ts               client watchers (unrostered voices, re-demo) → Tier-2 proposals
@@ -97,6 +113,11 @@ supabase/functions/
   demo link verdicts or in-room passes accumulate; Show's gate wants every track accepted.
 - **Regeneration guard**: hand-edited documents (`editedAt` set) are never overwritten —
   regeneration proposes in the Inbox instead.
+- **Attestation loop** (Listen): collection ≠ judgment. The People board counts collected
+  evidence + responded links; the GATE counts roster rows the operator attested Heard/Waived
+  (the coverage ledger). When evidence lands for un-attested voices, `attestHeardRoster`
+  proposes the flip as a two-step confirm in the Up-next queue (word-prefix name matching —
+  substrings can never attest anyone).
 
 ## Secrets (Supabase function env)
 
@@ -108,7 +129,7 @@ supabase/functions/
 
 ## Testing & CI
 
-- `npx vitest run` — 705 tests / 46 files. The load-bearing suites:
+- `npx vitest run` — 799 tests / 47 files. The load-bearing suites:
   - `flowLibs.test.ts` — gate verdicts pinned word-for-word, decision resolution, briefs, locateQuote
   - `coherence.test.ts` — cross-surface invariants (every decision family has a preview, checklist groups)
   - `edgeLockstep.test.ts` — client/edge parity by parsing both sources (fingerprints,
@@ -136,6 +157,10 @@ supabase/functions/
 
 ## Operational notes
 
+- **Pending, deliberately not applied**: `supabase/migrations/20260714_event_journal.sql`
+  creates the append-only `adam_program_events` table; the client dual-write
+  (`src/v3/lib/flowEvents.ts`) is wired but dormant until the migration is applied and
+  the uncommitted-era `run-agent` change is deployed. Apply + deploy together.
 - The **snapshot ring** (Control → Safety) restores any of the last 10 blob states, attested.
 - The **board pack** (Pulse) prints to PDF and mints shareable sponsor briefs (90-day expiry).
 - **Clone** ("New from this programme") carries industry/segment/client + ontology
