@@ -6,7 +6,7 @@ import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 import {
   flowMovements, frontierMovementId, movementEvidence, movementArtifacts,
   gateReadiness, gateChecklist, listenCoverage, movementFacts, demoAcceptance,
-  spineRegenerationPlan, attestHeardRoster,
+  spineRegenerationPlan, attestHeardRoster, artifactOpenGaps,
   type ArtifactCardModel, type EvidenceEntry,
 } from "@/v3/components/flow/flowShellData";
 import { meetingKit } from "@/v3/components/flow/flowMeetings";
@@ -16,8 +16,6 @@ import { readDrillAnchor } from "@/v3/components/flow/flowDrilldown";
 import { gateApprovalIntegrity } from "@/v3/components/flow/flowGovernance";
 import { listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 import { listFlowTracks, trackAcceptance } from "@/v3/components/flow/flowTracks";
-import { rankEvidence, isNoiseEvidence, EVIDENCE_LEAD_COUNT } from "@/v3/components/flow/flowEvidenceRank";
-import { listClaimTags } from "@/v3/components/flow/flowClaims";
 import { safePrompt } from "@/v3/components/flow/flowCapture";
 import { MOVEMENT_CAPTION, leadTab, type MovementTab } from "@/v3/components/flow/flowStages";
 import { SpineQueueItem, UpNextButton, type UpNextItem } from "@/v3/components/flow/flowUpNext";
@@ -84,9 +82,6 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
   const [active, setActive] = useState<string>(frontier);
   const [editing, setEditing] = useState<Set<string>>(() => new Set());
   const [docFor, setDocFor] = useState<ArtifactCardModel | null>(null);
-  // Salience over volume: the evidence column leads with the ranked best
-  // quotes; "show all" unfolds the rest per movement.
-  const [evAll, setEvAll] = useState<Set<string>>(() => new Set());
   // The record rail: a slim full-height edge strip that reveals on hover,
   // pins open on demand, and auto-expands while a person's card is open —
   // its focus follows the card the operator is IN.
@@ -320,7 +315,7 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
               : { glyph: "○", text: "", tone: "dim" };
         const tabDefs: Array<{ key: MovementTab; label: string; state: { glyph: string; text: string; tone: string } | null; show: boolean }> = [
           { key: "collect", label: "Collect", state: collectState, show: true },
-          { key: "paper", label: "Paper", state: paperState, show: artifacts.length > 0 },
+          { key: "paper", label: "Documents", state: paperState, show: artifacts.length > 0 },
           { key: "gate", label: isLoop ? "Health" : "Gate", state: gateState, show: true },
         ];
 
@@ -434,9 +429,11 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                         />
                       )}
                       {/* Quiet escape hatch only — the checklist and gate CTA are
-                          the purposeful doors into the editor now. */}
-                      <button type="button" className="v3fs-edit-toggle quiet" onClick={() => toggle(setEditing, movement.id)}>
-                        {editing.has(movement.id) ? "Close" : "Structured inputs"}
+                          the purposeful doors into the editor now. Opening
+                          SCROLLS to the editor so the click visibly lands. */}
+                      <button type="button" className="v3fs-edit-toggle quiet"
+                        onClick={() => editing.has(movement.id) ? toggle(setEditing, movement.id) : openEditor(movement.id)}>
+                        {editing.has(movement.id) ? "Close structured inputs" : "Structured inputs"}
                       </button>
                     </div>
                     <div className="v3fs-railzone"
@@ -505,53 +502,25 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                       }))
                       .filter((group) => group.entries.length || movement.id === "show");
                     if (!grouped.length) {
-                      // Frame/Listen: salience-ranked — claim-tagged and
-                      // substantive voices lead. The full record unfolds
-                      // GROUPED BY PERSON (documents together), newest group
-                      // first, instead of stretching into a flat wall.
-                      const ranked = rankEvidence(evidence, listClaimTags(program).map((c) => c.quote));
-                      const showAll = evAll.has(movement.id);
-                      const lead = ranked.filter((e) => !isNoiseEvidence(e)).slice(0, EVIDENCE_LEAD_COUNT);
-                      const hidden = ranked.length - lead.length;
-                      const byWho = new Map<string, typeof evidence>();
-                      for (const entry of evidence) {
-                        // Voices group by person; documents group by who
-                        // PROVIDED them (parsed from the meta line), so a
-                        // person's conversations and their documents sit
-                        // together instead of one giant "Documents" bucket.
-                        const provider = entry.kind === "document" ? (entry.meta.split("·")[1] ?? "").trim() : "";
-                        const key = entry.kind === "document"
-                          ? `Documents — ${provider || "programme"}`
-                          : (entry.who.split(",")[0].trim() || entry.who);
-                        const bucket = byWho.get(key) ?? [];
-                        if (!bucket.length) byWho.set(key, bucket);
-                        bucket.push(entry);
-                      }
-                      const evGroups = [...byWho.entries()].map(([name, items]) => ({
-                        name,
-                        items: items.slice().sort((a, b) => (b.capturedAt ?? "").localeCompare(a.capturedAt ?? "")),
-                        latest: items.reduce((max, entry) => (entry.capturedAt && entry.capturedAt > max ? entry.capturedAt : max), ""),
-                      })).sort((a, b) => b.latest.localeCompare(a.latest));
+                      // The movement's COMPLETE record, newest first — every
+                      // entry a clickable row (who · kind · when · excerpt)
+                      // that opens the reader. No hidden tail: the rail
+                      // scrolls, the record doesn't truncate.
+                      const rows = evidence.slice().sort((a, b) => (b.capturedAt ?? "").localeCompare(a.capturedAt ?? ""));
                       return (
-                        <>
-                          {showAll ? null : lead.map(voice)}
-                          {hidden > 0 || showAll ? (
-                            <button type="button" className="v3fs-a v3fs-ev-more"
-                              onClick={() => setEvAll((prev) => { const next = new Set(prev); if (showAll) next.delete(movement.id); else next.add(movement.id); return next; })}>
-                              {showAll ? "Back to the highlights" : `Show all ${ranked.length} — grouped by person`}
+                        <div className="v3fs-ivc-fb">
+                          {rows.map((entry, i) => (
+                            <button key={entry.id ?? i} type="button" className="v3fs-ivc-fb-row" onClick={() => setRailRead(entry)} title="Read in full">
+                              <span className="v3fs-ivc-fb-top">
+                                <span className="v3fs-ivc-fb-m">{entry.who.split(",")[0].trim()}</span>
+                                {entry.kind === "document" ? <span className="v3fs-ivc-fb-kind">doc</span> : null}
+                                {entry.capturedAt ? <span className="v3fs-ivc-fb-when">{entry.capturedAt}</span> : null}
+                                <span className="v3fs-ivc-fb-go">Open ↗</span>
+                              </span>
+                              {entry.excerpt ? <span className="v3fs-ivc-fb-q">“{entry.excerpt}”</span> : null}
                             </button>
-                          ) : null}
-                          {showAll ? evGroups.map((group) => (
-                            <details key={group.name} className="v3fs-evg">
-                              <summary>
-                                <span className="v3fs-evg-n">{group.name}</span>
-                                <span className="v3fs-evg-c">{group.items.length} item{group.items.length === 1 ? "" : "s"}</span>
-                                {group.latest ? <span className="v3fs-evg-when">{group.latest}</span> : null}
-                              </summary>
-                              {group.items.map(voice)}
-                            </details>
-                          )) : null}
-                        </>
+                          ))}
+                        </div>
                       );
                     }
                     const tagged = new Set(grouped.flatMap((group) => group.entries));
@@ -727,6 +696,7 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                       evidenceNames={evidence.map((entry) => entry.who)}
                       evidenceCount={evidence.length}
                       lastError={agentErrors?.[artifact.id]}
+                      openGaps={artifactOpenGaps(program, artifact.id)}
                       onGenerate={() => onRunAgent(artifact.id, movement.id)}
                       onOpen={artifact.present ? () => setDocFor(artifact) : undefined}
                       onGoEvidence={() => goTab("collect")}
@@ -856,6 +826,14 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
 
                 {editing.has(movement.id) ? (
                   <div className="v3fs-editor" data-movement={movement.id}>
+                    {/* The editor announces itself — a headed surface, not a
+                        form that materialises in the whitespace below. */}
+                    <div className="v3fs-editor-h">
+                      <span className="v3fs-editor-t">Structured inputs — {movement.displayName}</span>
+                      <span className="v3fs-editor-sub">the raw fields behind this movement&rsquo;s record</span>
+                      <button type="button" className="v3fs-editor-x" aria-label="Close structured inputs"
+                        onClick={() => toggle(setEditing, movement.id)}>✕</button>
+                    </div>
                     <PhaseInputsPanel program={program} phaseId={movement.id} onSave={onSaveInputs} locked={isDone} />
                   </div>
                 ) : null}
@@ -1031,7 +1009,7 @@ function ShipLanesBoard({ program, onCompile, onToggle, onSetLane }: {
   );
 }
 
-function ArtifactDoc({ artifact, running, evidenceNames, evidenceCount, lastError, onGenerate, onOpen, onGoEvidence }: {
+function ArtifactDoc({ artifact, running, evidenceNames, evidenceCount, lastError, openGaps, onGenerate, onOpen, onGoEvidence }: {
   artifact: ArtifactCardModel;
   running: boolean;
   evidenceNames: string[];
@@ -1039,6 +1017,9 @@ function ArtifactDoc({ artifact, running, evidenceNames, evidenceCount, lastErro
   evidenceCount?: number;
   /** The last run died — its message stays on the card until the next try. */
   lastError?: string;
+  /** The document's own declared gaps — readable on the CARD, and the same
+   * texts the follow-up scripts ask in Collect. One set, two surfaces. */
+  openGaps?: string[];
   onGenerate: () => void;
   onOpen?: () => void;
   /** "evidence changed" chip → the Evidence tab, where the change lives. */
@@ -1091,6 +1072,18 @@ function ArtifactDoc({ artifact, running, evidenceNames, evidenceCount, lastErro
           reads {evidenceCount} evidence item{evidenceCount === 1 ? "" : "s"}
           {artifact.gaps ? ` · ${artifact.gaps} open gap${artifact.gaps === 1 ? "" : "s"}` : " · no open gaps"}
         </div>
+      ) : null}
+      {artifact.present && openGaps?.length ? (
+        <details className="v3fs-doc-gaps">
+          <summary>Open gaps — {openGaps.length}</summary>
+          <ul>
+            {openGaps.map((gap, index) => <li key={index}>{gap}</li>)}
+          </ul>
+          <div className="v3fs-doc-gaps-note">
+            These land as questions on the follow-up scripts
+            {onGoEvidence ? <button type="button" className="v3fs-a" onClick={onGoEvidence}>→ Collect</button> : null}
+          </div>
+        </details>
       ) : null}
       <div className="v3fs-doc-foot">
         {onOpen ? <button type="button" className="v3fs-a" onClick={onOpen}>Read</button> : null}

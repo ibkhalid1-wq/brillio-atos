@@ -367,9 +367,11 @@ function rephraseGapAsAsk(gap: string): string {
  * through which artifact gaps reach interview scripts, so per-person scripts
  * (the interviewee cards) and the movement kit always agree.
  */
-export function askableMovementGaps(program: ProgramSummary, movementId: string, cap = 3): string[] {
+export function askableMovementGaps(program: ProgramSummary, movementId: string, cap = 8): string[] {
   // Stakeholder-facing: drop gate-checklist bookkeeping — an interviewee gets
   // real artifact questions and disputes, never "discovery kit generated".
+  // The cap matches kitGaps' own ceiling so a gap shown on an artifact card is
+  // ALSO on the follow-up script — one set of open questions, two surfaces.
   return [...new Set(kitGaps(program, movementId, { gateLabels: false }).map(rephraseGapAsAsk))].filter(askableGap).slice(0, cap);
 }
 

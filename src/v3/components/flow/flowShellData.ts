@@ -355,6 +355,18 @@ export function artifactDocument(program: ProgramSummary, artifactId: string): s
   return content && content.trim() ? content : null;
 }
 
+/** The open gaps a generated document declares about ITSELF ("we still don't
+ * know X") — shown on the artifact card, and the same texts the follow-up
+ * scripts ask stakeholders. One source, two surfaces. */
+export function artifactOpenGaps(program: ProgramSummary, artifactId: string): string[] {
+  const fieldKey = FORMAL_ARTIFACT_FIELD_KEYS[artifactId];
+  if (!fieldKey) return [];
+  const doc = dataRoot(program)[fieldKey];
+  if (!doc || typeof doc !== "object" || Array.isArray(doc)) return [];
+  const gaps = (doc as Record<string, unknown>).gaps;
+  return Array.isArray(gaps) ? gaps.map(String).filter(Boolean) : [];
+}
+
 /** Listen's coverage ledger: heard-or-waived over total mapped voices. */
 export function listenCoverage(program: ProgramSummary): { done: number; total: number } {
   const rows = parseGridRows(readMovementInputs(program, "listen").interviewRoster);

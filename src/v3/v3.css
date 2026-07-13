@@ -4985,6 +4985,28 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-doc-tile.stale {background:var(--v3-amber-soft);color:var(--v3-amber)}
 /* Provenance: what the document read, and what it still owes. */
 .v3fs-doc-prov {font-family:var(--v3-font-mono);font-size:10px;color:var(--v3-text-muted);margin-top:7px}
+/* The document's own open gaps, readable on the card — same texts the
+   follow-up scripts ask in Collect. */
+.v3fs-doc-gaps {margin-top:8px;border:1px solid var(--fs-line);border-radius:9px;padding:0}
+.v3fs-doc-gaps > summary {cursor:pointer;list-style:none;padding:7px 10px;font-size:10.5px;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--v3-amber)}
+.v3fs-doc-gaps > summary::-webkit-details-marker {display:none}
+.v3fs-doc-gaps > summary::before {content:"▸ ";font-size:9px}
+.v3fs-doc-gaps[open] > summary::before {content:"▾ "}
+.v3fs-doc-gaps ul {margin:0;padding:2px 12px 8px 26px;display:flex;flex-direction:column;gap:5px}
+.v3fs-doc-gaps li {font-size:12px;line-height:1.5;color:var(--v3-text-secondary)}
+.v3fs-doc-gaps-note {display:flex;align-items:center;gap:8px;padding:0 12px 9px;font-size:10.5px;color:var(--v3-text-muted)}
+/* The structured-inputs editor announces itself — headed, closable, never a
+   form that just materialises in the whitespace. */
+.v3fs-editor-h {display:flex;align-items:baseline;gap:10px;padding:12px 14px 4px;border-bottom:1px solid var(--fs-line);margin-bottom:6px}
+.v3fs-editor-t {font-size:13.5px;font-weight:700;letter-spacing:-.01em;color:var(--v3-text-primary)}
+.v3fs-editor-sub {flex:1;min-width:0;font-size:11px;color:var(--v3-text-muted)}
+.v3fs-editor-x {flex-shrink:0;border:none;background:none;cursor:pointer;font:inherit;font-size:13px;
+  color:var(--v3-text-muted);padding:2px 8px;border-radius:7px}
+.v3fs-editor-x:hover {background:var(--fs-line);color:var(--v3-text-primary)}
+@media (prefers-reduced-motion: no-preference) {
+  .v3fs-editor {animation:v3fs-tabin .18s ease}
+}
 /* Failure residue: the last run's error stays on the card until the next try. */
 .v3fs-doc-err {margin-top:8px;font-size:11.5px;line-height:1.5;color:var(--v3-red,#dc2626);
   background:var(--v3-red-soft,rgba(220,38,38,.08));border:1px solid color-mix(in srgb,var(--v3-red,#dc2626) 28%,transparent);
