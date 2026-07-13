@@ -7,7 +7,7 @@ import FlowBoardPack from "@/v3/components/flow/FlowBoardPack";
 import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 import {
   flowMovements, movementEvidence, movementArtifacts, gateChecklist, gateReadiness, listenCoverage,
-  demoAcceptance, daysToFirstDemo, wordsOfEvidence, locateQuote, readContradictions, parseGridRows,
+  demoAcceptance, daysToFirstDemo, wordsOfEvidence, readContradictions, parseGridRows,
 } from "@/v3/components/flow/flowShellData";
 import {
   listOpenFlowDecisions, listFlowAttestations, describeDecisionChanges,
@@ -449,7 +449,8 @@ export default function FlowShell(props: FlowShellProps) {
   // "Start here" — one prominent pointer at the right entry: Today when
   // anything waits on the user, the canvas otherwise. Dismissed for the
   // session the moment they go there.
-  const waitingCount = openDecisions.length + portalInbox.length;
+  const openDisputeCount = useMemo(() => readContradictions(program, true).length, [program]);
+  const waitingCount = openDecisions.length + portalInbox.length + openDisputeCount;
   const startId: FlowView = waitingCount > 0 ? "today" : "flow";
   const [startSeen, setStartSeen] = useState<boolean>(() => {
     try { return window.sessionStorage.getItem("v3fs-start-seen") === "1"; } catch { return true; }
@@ -724,7 +725,7 @@ export default function FlowShell(props: FlowShellProps) {
 
         <ViewBoundary view={view}>
         {view === "today" ? (
-          <FlowToday program={program} programs={props.programs} onSelectProgram={props.onSelectProgram} onResolveDecision={props.onResolveDecision}
+          <FlowToday program={program} programs={props.programs} onSelectProgram={props.onSelectProgram} onResolveDecision={props.onResolveDecision} onSaveInputs={props.onSaveInputs}
             onIngestPortalItem={props.onIngestPortalItem} onDismissPortalItem={props.onDismissPortalItem}
             onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
         ) : view === "flow" ? (
@@ -854,7 +855,7 @@ function DecisionCard({ program, decision, movementLabel, busy, onResolve }: {
   );
 }
 
-function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIngestPortalItem, onDismissPortalItem, onGoFlow }: {
+function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIngestPortalItem, onDismissPortalItem, onGoFlow, onSaveInputs }: {
   program: ProgramSummary;
   programs?: ProgramSummary[];
   onSelectProgram?: (id: string) => void;
@@ -862,12 +863,31 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
   onIngestPortalItem: FlowShellProps["onIngestPortalItem"];
   onDismissPortalItem: FlowShellProps["onDismissPortalItem"];
   onGoFlow: () => void;
+  onSaveInputs?: FlowShellProps["onSaveInputs"];
 }) {
   const movements = useMemo(() => flowMovements(), []);
   const open = listOpenFlowDecisions(program);
   const feed = listFlowAttestations(program);
   const inbox = listPortalInbox(program);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // Open disputes are the operator's to arbitrate — they queue HERE, with the
+  // decisions, not in the Library (which only reads the record).
+  const disputes = useMemo(() => readContradictions(program, true), [program]);
+  const [disputeBusy, setDisputeBusy] = useState<string | null>(null);
+  const resolveDisputeHere = async (statement: string) => {
+    if (!onSaveInputs) return;
+    const inner = getProgramState((program.rawData ?? {}) as Record<string, unknown>).inner as Record<string, unknown>;
+    const bucket = (typeof inner.phaseInputs === "object" && inner.phaseInputs !== null
+      ? (inner.phaseInputs as Record<string, Record<string, unknown>>).listen : undefined) ?? {};
+    const rows = parseGridRows(bucket.contradictionLog as unknown);
+    const day = new Date().toISOString().slice(0, 10);
+    const next = rows.map((row) => ((row.statement ?? "").trim() === statement.trim() ? { ...row, status: `Resolved — ${day}` } : row));
+    setDisputeBusy(statement);
+    try {
+      await onSaveInputs("listen", { contradictionLog: JSON.stringify(next) },
+        { attest: { action: "Resolved a contradiction", detail: statement.slice(0, 140) } });
+    } finally { setDisputeBusy(null); }
+  };
   // The rest of the portfolio's judgment queue — one glance, one tap to switch.
   const elsewhere = (programs ?? [])
     .filter((p) => p.id !== program.id && p.methodology === "atos-flow")
@@ -971,7 +991,7 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
           ))}
         </div>
       ) : null}
-      {open.length === 0 && inbox.length === 0 ? (
+      {open.length === 0 && inbox.length === 0 && disputes.length === 0 ? (
         <div className="v3fs-quiet">
           <div className="v3fs-quiet-mark" aria-hidden="true">◈</div>
           {attention.length ? (
@@ -999,7 +1019,7 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
         <section className="v3fs-inbox" aria-label="Waiting on you" ref={inboxRef}>
           <div className="v3fs-ph">
             <h3>Waiting on you</h3>
-            <span>{open.length + inbox.length} item{open.length + inbox.length === 1 ? "" : "s"}</span>
+            <span>{open.length + inbox.length + disputes.length} item{open.length + inbox.length + disputes.length === 1 ? "" : "s"}</span>
           </div>
           {open.map((decision) => (
             <DecisionCard key={decision.id} program={program} decision={decision} movementLabel={label(decision.movementId)}
@@ -1031,6 +1051,26 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
                   onClick={() => void actOnItem(item.id, onDismissPortalItem)}>
                   Dismiss
                 </button>
+              </div>
+            </article>
+          ))}
+          {disputes.map((row, i) => (
+            <article key={`disp-${i}`} className="v3fs-dec">
+              <div className="v3fs-dec-top">
+                <span className="v3fs-vc pen">Dispute</span>
+                <span className="v3fs-dec-mv">{row.between || "two accounts disagree"}</span>
+              </div>
+              <p className="v3fs-dec-s">“{row.statement.trim().slice(0, 200)}{row.statement.trim().length > 200 ? "…" : ""}”</p>
+              <div className="v3fs-dec-rec-b">resolving marks the log row settled (attested) and clears it from every follow-up script</div>
+              <div className="v3fs-dec-cta">
+                {onSaveInputs ? (
+                  <button type="button" className="v3fs-btn pri" disabled={disputeBusy === row.statement.trim()}
+                    onClick={() => void resolveDisputeHere(row.statement.trim())}>
+                    {disputeBusy === row.statement.trim() ? "Resolving…" : "✓ Resolve — the newer account stands"}
+                  </button>
+                ) : null}
+                <button type="button" className="v3fs-btn" title="It's already on the involved stakeholders' follow-up scripts"
+                  onClick={() => onGoFlow()}>↳ ask the people</button>
               </div>
             </article>
           ))}
@@ -1703,11 +1743,7 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
   const movements = useMemo(() => flowMovements(), []);
   const [query, setQuery] = useState("");
   // Faceted browse: narrow the Library by KIND instead of scrolling panels.
-  type Facet = "all" | "people" | "documents" | "artifacts" | "disputes";
-  const [facet, setFacet] = useState<Facet>("all");
-  const [showResolved, setShowResolved] = useState(false);
-  const [openPeople, setOpenPeople] = useState<Set<string>>(new Set());
-  const [resolveBusy, setResolveBusy] = useState<string | null>(null);
+    const [openPeople, setOpenPeople] = useState<Set<string>>(new Set());
   // An attached file is READ before it is filed: routeAttachedDocument infers
   // what it is (transcript vs. source material), whose voices it carries, and
   // which movement it belongs to. The inference is shown here and the record
@@ -1779,24 +1815,7 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
   const artifacts = q ? all.artifacts.filter((a) => `${a.title} ${a.excerpt ?? ""}`.toLowerCase().includes(q)) : all.artifacts;
   const label = (id: string) => movements.find((m) => m.id === id)?.displayName ?? id;
 
-  const disputes = useMemo(() => readContradictions(program), [program]);
 
-
-  // Resolve a dispute where it lives: flip its log rows to Resolved, attested.
-  const resolveDispute = async (statement: string) => {
-    if (!onSaveInputs) return;
-    const inner = getProgramState((program.rawData ?? {}) as Record<string, unknown>).inner as Record<string, unknown>;
-    const bucket = (typeof inner.phaseInputs === "object" && inner.phaseInputs !== null
-      ? (inner.phaseInputs as Record<string, Record<string, unknown>>).listen : undefined) ?? {};
-    const rows = parseGridRows(bucket.contradictionLog as unknown);
-    const day = new Date().toISOString().slice(0, 10);
-    const next = rows.map((row) => ((row.statement ?? "").trim() === statement.trim() ? { ...row, status: `Resolved — ${day}` } : row));
-    setResolveBusy(statement);
-    try {
-      await onSaveInputs("listen", { contradictionLog: JSON.stringify(next) },
-        { attest: { action: "Resolved a contradiction", detail: statement.slice(0, 140) } });
-    } finally { setResolveBusy(null); }
-  };
 
   // Evidence grouped by PERSON — one collapsible row per voice, not a flat wall.
   const evidenceByPerson = useMemo(() => {
@@ -1838,19 +1857,10 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
     return out;
   }, [evidence]);
 
-  const facetCounts = {
-    documents: evidence.filter((e) => e.kind === "document").length,
-    artifacts: artifacts.filter((a) => a.present).length,
-    disputes: disputes.filter((d) => /open/i.test(d.status)).length,
-  };
   // People shows the DIRECTORY (who exists, contact state) — reading what a
   // person said lives under All/Documents and on the record rail.
-  const showEvidence = facet === "all" || facet === "documents";
-  const showArtifacts = facet === "all" || facet === "artifacts";
-  const disputesShown = q
-    ? disputes.filter((d) => `${d.statement} ${d.between}`.toLowerCase().includes(q))
-    : disputes;
-  const showDisputes = (facet === "all" || facet === "disputes") && disputesShown.length > 0;
+
+  
 
   return (
     <div className="v3fs-grid2">
@@ -1862,22 +1872,10 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
           onChange={(event) => setQuery(event.target.value)}
           aria-label="Search evidence and artifacts"
         />
-        <div className="v3fs-facets" role="tablist" aria-label="Filter by kind">
-          {([
-            ["all", "All", null],
-            ["documents", "Documents", facetCounts.documents],
-            ["artifacts", "Artifacts", facetCounts.artifacts],
-            ["disputes", "Open disputes", facetCounts.disputes],
-          ] as Array<[Facet, string, number | null]>).map(([key, name, count]) => (
-            <button key={key} type="button" role="tab" aria-selected={facet === key}
-              className={`v3fs-facet${facet === key ? " on" : ""}`} onClick={() => setFacet(key)}>
-              {name}{count != null ? <span className="v3fs-facet-n">{count}</span> : null}
-            </button>
-          ))}
-        </div>
+        
       </div>
       <p className="v3fs-lib-cap">Everything the programme knows — search it and read it. Artifacts regenerate from Flow; people live under People; the board pack exports from Pulse.</p>
-      {facet === "all" && !q && recent.length ? (
+      {!q && recent.length ? (
         <div className="v3fs-panel v3fs-panel-wide v3fs-recent">
           <div className="v3fs-ph"><h3>Recently changed</h3><span>what moved since you last looked</span></div>
           <div className="v3fs-recent-row">
@@ -1891,7 +1889,7 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
           </div>
         </div>
       ) : null}
-      {facet === "all" && (dd.children.length || ddParent) ? (
+      {!q && (dd.children.length || ddParent) ? (
         <div className="v3fs-panel v3fs-dd-panel">
           <div className="v3fs-ph"><h3>Drill-downs</h3><span>focused children of this programme, wired to it</span></div>
           {ddParent ? (
@@ -1926,7 +1924,7 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
           })}
         </div>
       ) : null}
-      {facet === "all" && claims.length ? (
+      {claims.length ? (
         <div className="v3fs-panel v3fs-claims">
           <div className="v3fs-ph"><h3>Claims</h3><span>curated quotes, tagged to the graph — select text in any transcript to add one</span></div>
           {claims.map((claim) => (
@@ -1949,10 +1947,9 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
           ))}
         </div>
       ) : null}
-      {showEvidence ? (
       <div className="v3fs-panel">
         <div className="v3fs-ph v3fs-ph-attach">
-          <h3>Evidence</h3><span>{facet === "documents" ? "attached source material" : "grouped by voice — click a person to expand"}</span>
+          <h3>Evidence</h3><span>grouped by voice — click a person to expand</span>
           {onSaveInputs ? (
             <AttachFileButton programId={program.id}
               onExtracted={(filename, text, sourceKey) => {
@@ -2022,11 +2019,6 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
               {entry.capturedAt ? <span className="v3fs-row-when" title="Captured">{entry.capturedAt}</span> : null}
             </div>
           );
-          // Documents facet: flat list of source material. Otherwise: grouped by voice.
-          if (facet === "documents") {
-            const docs = evidence.filter((e) => e.kind === "document");
-            return docs.length ? docs.map(entryRow) : <div className="v3fs-empty">No attached documents yet.</div>;
-          }
           return evidenceByPerson.map(({ person, items }) => {
             const open = openPeople.has(person);
             return (
@@ -2050,8 +2042,6 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
           });
         })()}
       </div>
-      ) : null}
-      {showArtifacts ? (
       <div className="v3fs-panel">
         <div className="v3fs-ph">
           <h3>Artifacts</h3>
@@ -2086,55 +2076,6 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
           </div>
         ))}
       </div>
-      ) : null}
-      {showDisputes ? (
-          <div className={`v3fs-panel v3fs-panel-wide${disputesShown.some((d) => /open/i.test(d.status)) ? " v3fs-panel-warn" : ""}`}>
-            <div className="v3fs-ph">
-              <h3>Contradiction log</h3>
-              <span>{(() => { const open = disputesShown.filter((d) => /open/i.test(d.status)).length; return open ? `${open} open — resolve, or ask the people involved` : "all settled"; })()}</span>
-              {disputesShown.some((d) => !/open/i.test(d.status)) ? (
-                <button type="button" className="v3fs-a" onClick={() => setShowResolved((v) => !v)}>
-                  {showResolved ? "hide resolved" : "show resolved"}
-                </button>
-              ) : null}
-            </div>
-            {disputesShown.filter((row) => showResolved || /open/i.test(row.status)).map((row, i) => {
-              const statement = row.statement.trim();
-              const source = statement ? all.evidence.find((e) => e.text && locateQuote(e.text, statement)) : undefined;
-              const open = /open/i.test(row.status);
-              return (
-                <div key={i} className="v3fs-row v3fs-dispute-row">
-                  <span className={`v3fs-vc ${open ? "pen" : "acc"}`}>{open ? "Open" : "Resolved"}</span>
-                  <div className="v3fs-row-g">
-                    <div className="v3fs-row-n">“{statement}”</div>
-                    <div className="v3fs-row-m">{row.between || ""}</div>
-                  </div>
-                  <div className="v3fs-dispute-cta">
-                    {source ? (
-                      <button type="button" className="v3fs-a" title={`Read the disputed passage in the source — ${source.who}`}
-                        onClick={() => { setClaimHighlight(statement); setEvFor(source); }}>
-                        ⤷ review evidence
-                      </button>
-                    ) : null}
-                    {open && onGoFlow ? (
-                      <button type="button" className="v3fs-a" title="It's already on the involved stakeholders' follow-up scripts — go collect the answer"
-                        onClick={() => onGoFlow()}>
-                        ↳ ask the people
-                      </button>
-                    ) : null}
-                    {open && onSaveInputs ? (
-                      <button type="button" className="v3fs-a v3fs-dispute-resolve" disabled={resolveBusy === statement}
-                        title="Mark this dispute resolved — attested"
-                        onClick={() => void resolveDispute(statement)}>
-                        {resolveBusy === statement ? "Resolving…" : "✓ Resolve"}
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-      ) : null}
       {docFor ? <FlowArtifactStudio program={program} artifact={docFor} onClose={() => setDocFor(null)} onSaveDoc={onSaveArtifactDoc} onSaveInputs={onSaveInputs} onComment={onComment} onOpenInbox={onOpenInbox}
         onOpenArtifact={(artifactId) => {
           for (const m of flowMovements()) {
