@@ -629,7 +629,7 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
       // A failed UPDATE here is the offline / statement-timeout case: the write
       // never reached Postgres. Queue it so the next refresh retries it, and keep
       // the change in this session's local cache so it isn't lost in the meantime.
-      enqueueWrite("adam_programs", programId, { data: payload as Json, updated_at: nextUpdatedAt });
+      enqueueWrite("adam_programs", programId, { data: payload as Json, updated_at: nextUpdatedAt }, expectedUpdatedAt ?? currentUpdatedAt ?? undefined);
       persistLocalProgram(programId, nextData);
       pushV3Toast(
         "Couldn't reach the server — saved locally and queued to retry automatically.",

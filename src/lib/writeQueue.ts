@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { hasSubstantiveProgramData } from "@/v3/lib/programDataGuard";
 
 interface QueuedWrite {
   id: string;
@@ -7,6 +8,9 @@ interface QueuedWrite {
   payload: Record<string, unknown>;
   enqueuedAt: number;
   attempts: number;
+  /** The row's `updated_at` this write was based on. Lets the flush drop a
+   * write whose row has since moved on, rather than blindly clobbering it. */
+  baseUpdatedAt?: string;
 }
 
 const QUEUE_KEY = "adam_write_queue";
@@ -28,20 +32,54 @@ function genId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function enqueueWrite(table: string, programId: string, payload: Record<string, unknown>): void {
+export function enqueueWrite(
+  table: string,
+  programId: string,
+  payload: Record<string, unknown>,
+  baseUpdatedAt?: string,
+): void {
   const queue = readQueue();
-  queue.push({ id: genId(), table, programId, payload, enqueuedAt: Date.now(), attempts: 0 });
+  queue.push({ id: genId(), table, programId, payload, enqueuedAt: Date.now(), attempts: 0, baseUpdatedAt });
   saveQueue(queue);
 }
 
-export async function flushWriteQueue(supabase: SupabaseClient): Promise<{ flushed: number; failed: number }> {
+export async function flushWriteQueue(supabase: SupabaseClient): Promise<{ flushed: number; failed: number; dropped: number }> {
   const queue = readQueue();
-  if (queue.length === 0) return { flushed: 0, failed: 0 };
+  if (queue.length === 0) return { flushed: 0, failed: 0, dropped: 0 };
   let flushed = 0;
   let failed = 0;
+  let dropped = 0;
   const remaining: QueuedWrite[] = [];
   for (const entry of queue) {
     try {
+      // DATA-LOSS GUARD. A queued programme write carries the in-memory `data`
+      // blob captured when the original write failed (offline / statement
+      // timeout / CAS conflict during a regeneration race). That snapshot can
+      // be a skeleton or stale copy, and this replay is a BLIND update — so
+      // without a guard it silently overwrites the live, populated record.
+      // Before applying, read the live row and refuse to clobber it.
+      if (entry.table === "adam_programs") {
+        const queuedData = (entry.payload as { data?: unknown }).data;
+        const { data: current } = await supabase
+          .from("adam_programs")
+          .select("data, updated_at")
+          .eq("id", entry.programId)
+          .maybeSingle();
+        if (current) {
+          // Never let an empty/skeleton queued blob overwrite real content.
+          if (!hasSubstantiveProgramData(queuedData) && hasSubstantiveProgramData((current as { data?: unknown }).data)) {
+            dropped++;
+            continue;
+          }
+          // The row has moved since this write was based → the queued write is
+          // stale; dropping it avoids clobbering the newer server state.
+          const liveUpdatedAt = (current as { updated_at?: string }).updated_at;
+          if (entry.baseUpdatedAt && liveUpdatedAt && liveUpdatedAt !== entry.baseUpdatedAt) {
+            dropped++;
+            continue;
+          }
+        }
+      }
       const { error } = await supabase.from(entry.table).update(entry.payload).eq("id", entry.programId);
       if (error) throw new Error(error.message);
       flushed++;
@@ -52,7 +90,7 @@ export async function flushWriteQueue(supabase: SupabaseClient): Promise<{ flush
     }
   }
   saveQueue(remaining);
-  return { flushed, failed };
+  return { flushed, failed, dropped };
 }
 
 export function getQueuedWriteCount(): number {

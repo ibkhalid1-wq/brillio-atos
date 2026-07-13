@@ -1129,30 +1129,27 @@ export default function AppShellV3() {
             }
           }
         }
-        // The full-blob upsert can exceed Postgres's statement timeout once a
-        // programme's `data` JSONB has grown large (code 57014). That write only
-        // exists to guarantee the row exists before the edge function reads it —
-        // and the debounced autosave already keeps the cloud copy current. So if
-        // the row already exists, a slow/timed-out pre-sync must NOT hard-block
-        // the agent run: fall back to a cheap existence check and proceed. Only a
-        // genuinely missing row (local-only programme) is a real blocker.
-        const ensureRowExists = async (failMsg: string) => {
-          const { data: existing, error: existsError } = await supabase
-            .from("adam_programs")
-            .select("id")
-            .eq("id", activeProgramId)
-            .maybeSingle();
-          if (existsError || !existing) throw new Error(failMsg);
-        };
-        // DATA-LOSS GUARD. This pre-run sync writes the WHOLE `data` blob. If the
-        // blob hasn't hydrated yet, `programData` is empty — writing it would wipe
-        // the cloud copy. Only upsert the full blob when we actually hold content;
-        // otherwise just verify the row exists and proceed without overwriting it.
+        // DATA-LOSS GUARD (structural). This pre-run step exists ONLY to
+        // guarantee the row exists before the edge function reads it — every
+        // mutation already persists to the DB immediately (updateProgramData,
+        // awaited, with compare-and-set), so the cloud copy is current. A blind
+        // full-blob UPSERT of this closure's `activeProgram.rawData` is therefore
+        // never needed for an existing row, and it is actively dangerous: the
+        // snapshot can be stale (a sequential spine loop captures one pre-regen
+        // copy for every step) or partially hydrated, and the upsert overwrites
+        // newer server data — the repeated regen data-loss and the charter
+        // "evidence changed" reappearing after the kit finished. So: if the row
+        // exists, proceed WITHOUT writing. Only a genuinely missing row (a
+        // local-only programme's first run) takes the creating upsert, and only
+        // when we actually hold substantive content.
+        const { data: existingRow, error: existsError } = await supabase
+          .from("adam_programs")
+          .select("id")
+          .eq("id", activeProgramId)
+          .maybeSingle();
+        if (!existsError && existingRow) return; // row is present — never clobber it here
         if (!hasSubstantiveProgramData(programData)) {
-          await ensureRowExists(
-            "Program data hasn't finished loading — open the program and wait a moment before running an agent.",
-          );
-          return;
+          throw new Error("Program data hasn't finished loading — open the program and wait a moment before running an agent.");
         }
         const { error: syncError } = await supabase.from("adam_programs").upsert(
           {
@@ -1166,9 +1163,7 @@ export default function AppShellV3() {
           },
           { onConflict: "id", ignoreDuplicates: false },
         );
-        if (syncError) {
-          await ensureRowExists(`Could not sync programme to cloud before running agent: ${syncError.message}`);
-        }
+        if (syncError) throw new Error(`Could not sync programme to cloud before running agent: ${syncError.message}`);
       };
       await runAgent({
         agentId: resolvedAgentId,
@@ -2387,7 +2382,15 @@ export default function AppShellV3() {
           }}
           presence={presentOthers}
           onRunAgentAndWait={async (agentId, phaseId) => {
-            await runProgramAgent({ agentId, phaseId, triggeredBy: "user" });
+            // Spine regeneration runs steps sequentially, but the runner's
+            // closure captures ONE (pre-regen) activeProgram snapshot for the
+            // whole loop. Without skipPreSync, step 2's preflight would upsert
+            // that stale full blob and CLOBBER step 1's write (e.g. the kit's
+            // pre-sync wiping the freshly regenerated charter → "evidence
+            // changed" and its gaps return, plus "couldn't save" races). Every
+            // mutation already persists to the DB immediately, so each edge
+            // step reads the freshest row — skip the stale full-blob pre-sync.
+            await runProgramAgent({ agentId, phaseId, triggeredBy: "user", skipPreSync: true });
           }}
           aiStatus={aiStatus.status}
           onOpenAISettings={openAISettings}
