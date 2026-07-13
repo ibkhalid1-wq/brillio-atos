@@ -6499,12 +6499,13 @@ select.v3fs-dir-in {cursor:pointer}
 
 /* ── Brillio wordmark (inline SVG) ────────────────────────────────────────
    Height is set per placement; width follows the viewBox aspect (~2.63:1). */
-.brillio-logo {display:inline-block;height:24px;width:63px;align-self:flex-start;
-  user-select:none;flex-shrink:0}
+.brillio-logo {display:inline-block;height:24px;width:auto;object-fit:contain;
+  align-self:flex-start;user-select:none;flex-shrink:0}
+.brillio-tone-invert {filter:brightness(0) invert(1)}
 
 /* Brillio logo — sizing per placement (height-based; aspect preserved). */
-.v3-topbar-logo.brillio-logo {height:26px;width:68px}                        /* topbar / skeleton */
-.v3-auth-brandmark {height:34px;width:89px;margin-bottom:16px}               /* auth kicker slot */
+.v3-topbar-logo.brillio-logo {height:28px}                        /* topbar / skeleton */
+.v3-auth-brandmark {height:40px;margin-bottom:16px}               /* auth kicker slot */
 .v3fs-appbar-brandlock {display:inline-flex;align-items:center;gap:9px}
-.v3fs-appbar-logo {height:22px;width:58px}                                   /* app-bar lockup */
+.v3fs-appbar-logo {height:24px}                                   /* app-bar lockup */
 
