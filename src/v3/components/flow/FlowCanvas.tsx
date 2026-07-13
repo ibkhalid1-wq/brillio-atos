@@ -452,7 +452,10 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                     <div className="v3fs-railzone"
                       onPointerEnter={railEnter}
                       onPointerLeave={railLeave}>
-                    {railPin || railHover || railPerson ? (
+                    {/* Opening a person's card FOCUSES the rail but never
+                        forces it open — the rail reveals on hover or pin,
+                        already switched to the person you're in. */}
+                    {railPin || railHover ? (
                     <aside className={`v3fs-recrail${railPin ? "" : " floating"}`} aria-label="The record">
                       <div className="v3fs-recrail-h">
                         <span className="v3fs-recrail-t">{railPerson ? railPerson.name.split(",")[0].trim() : "The record"}</span>
