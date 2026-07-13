@@ -9043,20 +9043,28 @@ Deno.serve(async (req) => {
               relation: entry.relation === "skos:exactMatch" ? "skos:exactMatch" : "skos:closeMatch",
               confidence: typeof entry.confidence === "number" ? Math.max(0, Math.min(1, entry.confidence)) : null,
             }));
-          if (mappings.length) {
+          // Only what would actually merge reaches the inbox — re-proposing
+          // mappings the operator already adopted is a no-op decision.
+          const adoptedEntities = (() => {
+            const inner = getInnerProgramData(nextProgramData);
+            const rows = Array.isArray(inner.ontologyAlignment) ? inner.ontologyAlignment : [];
+            return new Set(rows.filter(isRecord).map((m) => String(m.entity ?? "").toLowerCase()));
+          })();
+          const newMappings = mappings.filter((m) => !adoptedEntities.has(m.entity.toLowerCase()));
+          if (newMappings.length) {
             nextProgramData = queueFlowDecision(nextProgramData, {
               tier: 2,
               agentId: "domain-ontology",
               movementId: request.phaseId || "listen",
-              title: `Adopt ${mappings.length} standard mapping${mappings.length === 1 ? "" : "s"}`,
-              summary: `Ontology entities aligned to industry vocabularies: ${mappings.slice(0, 3).map((m) => `${m.entity} → ${m.standard.split("/").pop()}`).join(", ")}${mappings.length > 3 ? "…" : ""}.`,
+              title: `Adopt ${newMappings.length} standard mapping${newMappings.length === 1 ? "" : "s"}`,
+              summary: `Ontology entities aligned to industry vocabularies: ${newMappings.slice(0, 3).map((m) => `${m.entity} → ${m.standard.split("/").pop()}`).join(", ")}${newMappings.length > 3 ? "…" : ""}.`,
               blocking: "The ontology stays in the client's private language until the mappings are adopted.",
               recommendation: {
                 action: "Adopt the mappings",
                 rationale: "Grounding entities in the industry's shared vocabulary (SKOS mappings to standard URIs) makes every downstream contract and export interoperable.",
                 band: "proposal — reversible, mappings merge additively",
               } as JsonValue,
-              payload: { ontologyAlignment: mappings as unknown as JsonValue } as JsonValue,
+              payload: { ontologyAlignment: newMappings as unknown as JsonValue } as JsonValue,
             });
           }
         }

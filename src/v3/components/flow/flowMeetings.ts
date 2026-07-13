@@ -12,6 +12,10 @@ import { flowMovements, movementArtifacts, movementOpenIssues, kitPersonas, gate
 import { FORMAL_ARTIFACT_FIELD_KEYS, FORMAL_ARTIFACT_PHASES } from "@/v3/lib/formalArtifacts";
 import { getPhaseDefinition } from "@/v3/lib/methodology";
 
+// stakeholderEmail moved to flowShellData (the gate checklist needs it); the
+// meeting-kit surface keeps importing it from here.
+export { stakeholderEmail } from "@/v3/components/flow/flowShellData";
+
 export interface MeetingKit {
   /** e.g. "The sponsor conversation" */
   title: string;
@@ -471,55 +475,6 @@ export function listFollowUps(program: ProgramSummary): FlowFollowUp[] {
   );
 }
 
-/** The address on file for a stakeholder — from the Discovery Kit roster. */
-export function stakeholderEmail(program: ProgramSummary, name: string): string | null {
-  const raw = (program.rawData ?? {}) as Record<string, unknown>;
-  const inner = typeof raw.data === "object" && raw.data !== null ? (raw.data as Record<string, unknown>) : raw;
-  const kit = inner.discoveryKit;
-  const interviews = kit && typeof kit === "object" && !Array.isArray(kit) && Array.isArray((kit as Record<string, unknown>).interviews)
-    ? ((kit as Record<string, unknown>).interviews as unknown[]).filter((entry): entry is Record<string, unknown> => typeof entry === "object" && entry !== null)
-    : [];
-  const wanted = name.trim().toLowerCase();
-  const hit = interviews.find((entry) => {
-    const who = String(entry.stakeholder ?? "").trim().toLowerCase();
-    return who === wanted || (who.length > 3 && wanted.includes(who)) || (wanted.length > 3 && who.includes(wanted));
-  });
-  const email = String(hit?.email ?? "").trim();
-  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return email;
-  // The sponsor's address lives in Frame's inputs (captured at setup), not
-  // the kit roster — fall through so the sponsor conversation gets it too.
-  const frame = typeof inner.phaseInputs === "object" && inner.phaseInputs !== null
-    ? ((inner.phaseInputs as Record<string, Record<string, unknown>>).frame ?? {})
-    : {};
-  const sponsor = String(frame.sponsor ?? "").trim().toLowerCase();
-  const sponsorEmail = String(frame.sponsorEmail ?? "").trim();
-  if (sponsor && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(sponsorEmail)
-    && (sponsor === wanted || sponsor.includes(wanted) || wanted.includes(sponsor.split(",")[0].trim()))) {
-    return sponsorEmail;
-  }
-  // Role bindings ("our Solution Architect is Priya, priya@…") carry emails
-  // too — scan every movement's `_roleBindings` for the person. Parsed inline
-  // (flowStakeholders imports this module, so no shared helper here).
-  const phaseInputs = typeof inner.phaseInputs === "object" && inner.phaseInputs !== null
-    ? (inner.phaseInputs as Record<string, Record<string, unknown>>)
-    : {};
-  for (const bucket of Object.values(phaseInputs)) {
-    const rawBindings = bucket?._roleBindings;
-    if (typeof rawBindings !== "string" || !rawBindings.trim()) continue;
-    try {
-      const parsed = JSON.parse(rawBindings) as Record<string, { name?: unknown; email?: unknown }>;
-      for (const bound of Object.values(parsed ?? {})) {
-        const boundName = String(bound?.name ?? "").trim().toLowerCase();
-        const boundEmail = String(bound?.email ?? "").trim();
-        if (boundName && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(boundEmail)
-          && (boundName === wanted || (boundName.length > 3 && wanted.includes(boundName)) || (wanted.length > 3 && boundName.includes(wanted)))) {
-          return boundEmail;
-        }
-      }
-    } catch { /* malformed bindings — skip the bucket */ }
-  }
-  return null;
-}
 
 const escapeIcs = (value: string): string =>
   value.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");

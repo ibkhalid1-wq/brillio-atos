@@ -655,12 +655,14 @@ describe("gateReadiness — one composed verdict over the closed loop", () => {
     expect(r.detail).toBe("Documents are out of date — evidence changed");
   });
 
-  it("criteria met, record current, but a document declares gaps → open gaps verdict", () => {
+  it("criteria met, record current, but a document declares gaps → open gaps verdict, naming the document", () => {
     const r = verdict(metFrame(), [art({ gaps: 2 })]);
     expect(r.kind).toBe("gaps");
     expect(r.tone).toBe("amber");
     expect(r.headline).toBe("8 of 9 criteria met");
-    expect(r.detail).toBe("A document still lists open gaps");
+    // The detail names the actual open row — "emails missing" or a specific
+    // document's gaps — never a generic assumption.
+    expect(r.detail).toBe("Discovery Kit — 2 open gaps");
   });
 
   it("staleness outranks gaps in the verdict cause", () => {
