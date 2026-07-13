@@ -4991,9 +4991,23 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
   transition:color .15s ease,border-color .15s ease,background .15s ease}
 .v3fs-recrail-x:hover {border-color:color-mix(in srgb,var(--v3-accent-2) 40%,var(--fs-line));color:var(--v3-text-primary)}
 .v3fs-recrail-x.on {background:var(--v3-accent);border-color:var(--v3-accent);color:#fff}
-/* Inside the rail everything reads a size down. */
-.v3fs-recrail .v3fs-voice {padding-left:12px;margin-bottom:4px}
-.v3fs-recrail .v3fs-voice-q {font-size:13px;-webkit-line-clamp:3}
+/* Inside the rail everything reads a size down — and gets a premium pass:
+   the context facts sit on their own cards, the coverage bar takes the rail's
+   accent, and each voice reads as a quiet quotation card that lifts on hover. */
+.v3fs-recrail-ctx .v3fs-fact {padding:7px 10px;border-radius:9px;gap:2px;
+  background:color-mix(in srgb,var(--v3-accent-2) 5%,var(--fs-card));
+  border:1px solid color-mix(in srgb,var(--v3-accent-2) 12%,var(--fs-line))}
+.v3fs-recrail-ctx .v3fs-fact b {color:var(--v3-accent-b);opacity:.85}
+.v3fs-recrail-ctx .v3fs-coverage {margin-top:4px}
+.v3fs-recrail .v3fs-coverage-bar {height:7px;background:color-mix(in srgb,var(--v3-accent-2) 12%,var(--fs-line))}
+.v3fs-recrail .v3fs-coverage-fill {background:linear-gradient(90deg,var(--v3-accent-2),var(--v3-accent-b))}
+.v3fs-recrail .v3fs-coverage-cap span:last-child {color:var(--v3-accent-b);font-family:var(--v3-font-mono);font-weight:700}
+.v3fs-recrail .v3fs-voice {padding:9px 11px 9px 13px;margin-bottom:7px;border-left:3px solid var(--v3-accent-2);
+  border-radius:0 10px 10px 0;background:color-mix(in srgb,var(--fs-line) 18%,var(--fs-card));
+  transition:background .14s ease,box-shadow .14s ease}
+.v3fs-recrail .v3fs-voice:hover {background:var(--fs-card);box-shadow:0 3px 12px -8px rgba(23,26,46,.4)}
+.v3fs-recrail .v3fs-voice-q {font-size:13px;-webkit-line-clamp:3;color:var(--fs-quote)}
+.v3fs-recrail .v3fs-voice-who {margin-top:5px;font-size:11.5px}
 .v3fs-recrail .v3fs-ivc-fb-row {background:var(--fs-card)}
 /* The card-era 172px cap has no business in the rail: the records own the
    FULL remaining height; the rail body is the one scroll region. */
