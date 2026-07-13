@@ -370,6 +370,35 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
     expect(kit2.questions.some((q) => /\binputs?\b/i.test(q))).toBe(false);
   });
 
+  it("a 'dispute' that restates a filled frame field is agreement — suppressed, never asked", () => {
+    // The watcher can file the newest answer against the very field it
+    // satisfies ("Raj (newest evidence) vs Charter (businessObjective)" where
+    // the statement IS the objective). The record falsifies it — drop it.
+    const objective = "Improve sales velocity, rep productivity, and employee satisfaction — measured against current baselines — delivered within 12 months.";
+    const p = programme({ phaseInputs: {
+      frame: { businessObjective: objective },
+      listen: { contradictionLog: JSON.stringify([
+        { statement: objective, between: "Raj Mamodia (newest evidence) vs Transformation Charter (businessObjective)", positions: "", status: "Open" },
+        { statement: "We are no longer using 20 CRM as a foundation", between: "Raj vs Charter", positions: "", status: "Open" },
+      ]) },
+    } });
+    const rows = readContradictions(p, true);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].statement).toBe("We are no longer using 20 CRM as a foundation");
+  });
+
+  it("a dispute quoted from a TRANSCRIPT field is genuine — the record-match check ignores long captures", () => {
+    const claim = "We are no longer using 20 CRM as a foundation";
+    const transcript = `— Raj Mamodia —\n${"filler words here ".repeat(60)}${claim} and much more was said afterwards.`;
+    const p = programme({ phaseInputs: {
+      frame: { sponsorConversation: transcript },
+      listen: { contradictionLog: JSON.stringify([
+        { statement: claim, between: "Raj vs Charter", positions: "", status: "Open" },
+      ]) },
+    } });
+    expect(readContradictions(p, true)).toHaveLength(1);
+  });
+
   it("self-referential contradiction rows (script echoes) never surface anywhere", () => {
     // A follow-up pack echoes its own question ("Q: Two accounts disagree…")
     // into evidence; the watcher once filed a contradiction ABOUT that echo.

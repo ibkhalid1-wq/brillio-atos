@@ -56,3 +56,19 @@ describe("hasSubstantiveProgramData", () => {
     expect(hasSubstantiveProgramData({ data: {} })).toBe(false);
   });
 });
+
+describe("action side-channels never count as substance", () => {
+  it("a payload holding ONLY a minted pack + attestations reads non-substantive (the 2026-07-13 clobber shape)", () => {
+    expect(hasSubstantiveProgramData({
+      _syncedAt: "2026-07-13T16:00:00Z",
+      flowAttestations: [{ action: "Minted a link" }],
+      flowInterviewPacks: [{ id: "pack-1", link: "https://x" }],
+    })).toBe(false);
+  });
+  it("the same payload plus real inputs reads substantive", () => {
+    expect(hasSubstantiveProgramData({
+      flowInterviewPacks: [{ id: "pack-1" }],
+      phaseInputs: { frame: { sponsor: "Raj" } },
+    })).toBe(true);
+  });
+});

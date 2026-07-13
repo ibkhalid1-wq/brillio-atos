@@ -162,6 +162,16 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
   const [bindEmail, setBindEmail] = useState("");
   const [bindBusy, setBindBusy] = useState(false);
   const [resolveBusy, setResolveBusy] = useState<string | null>(null);
+  // The link exists the moment a card needs one: opening a card with a
+  // script and no link mints it silently, so the operator only ever COPIES.
+  const autoMinted = useRef(false);
+  const autoMintOnOpen = (isOpen: boolean) => {
+    if (!isOpen || autoMinted.current) return;
+    if (effectiveLink || !questions.length || !onMintFollowUp) return;
+    if (heard && docsStale) return; // channels are hidden — regenerate first
+    autoMinted.current = true;
+    void ensureLink();
+  };
   // A dispute the operator judges settled (the newer account stands) resolves
   // right here — same log flip as the Library panel, attested, and the row
   // leaves every script on the next derivation.
@@ -299,7 +309,11 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
   return (
     <>
       <details className={`v3fs-ivc ${status}`} open={solo && !heard}
-        onToggle={(event) => onFocusPerson?.(stakeholder.id, (event.currentTarget as HTMLDetailsElement).open)}>
+        onToggle={(event) => {
+          const isOpen = (event.currentTarget as HTMLDetailsElement).open;
+          onFocusPerson?.(stakeholder.id, isOpen);
+          autoMintOnOpen(isOpen);
+        }}>
         <span className="v3fs-ivc-strip" aria-hidden="true" />
         <summary>
           {/* Status-toned initials — the person reads as a person at a glance. */}

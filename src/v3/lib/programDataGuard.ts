@@ -29,6 +29,15 @@ const META_KEYS = new Set([
   "createdat",
   "is_deleted",
   "projectmeta",
+  // Action side-channels: these exist (or appear) even on a skeleton state —
+  // a mint or an attestation fired pre-hydration must NOT make an otherwise
+  // empty payload look like real content. This is exactly how the 2026-07-13
+  // clobber slipped past the guard: the payload was empty except for the
+  // link pack the action had just appended.
+  "flowattestations",
+  "flowinterviewpacks",
+  "flowdemoinvites",
+  "programsnapshots",
 ]);
 
 function isEmptyValue(value: unknown): boolean {

@@ -400,6 +400,28 @@ function resolveMilestoneRows(phaseInputs: ProgramState): Array<Record<string, u
   return [];
 }
 
+// A contradiction whose statement RESTATES a filled Frame field is agreement
+// wearing the wrong label — the watcher sometimes files the newest answer
+// against the very field it satisfies. Deterministic: never file those.
+function contradictionFalsifiedByRecord(programData: ProgramState, statement: string): boolean {
+  const inner = getInnerProgramData(programData);
+  const phaseInputs = isRecord(inner.phaseInputs) ? inner.phaseInputs as Record<string, unknown> : {};
+  const frame = isRecord(phaseInputs.frame) ? phaseInputs.frame as Record<string, unknown> : {};
+  const tokens = (text: string): Set<string> => new Set(text.toLowerCase().match(/[a-z0-9]{3,}/g) ?? []);
+  const stmt = tokens(statement);
+  if (stmt.size < 4) return false;
+  for (const [key, value] of Object.entries(frame)) {
+    // Short structured facts only — transcript captures contain everything
+    // anyone said and would suppress genuine disputes quoted from them.
+    if (key.startsWith("_") || typeof value !== "string" || value.trim().length < 12 || value.length > 500) continue;
+    const field = tokens(value);
+    let shared = 0;
+    for (const t of stmt) if (field.has(t)) shared += 1;
+    if (shared / stmt.size >= 0.8) return true;
+  }
+  return false;
+}
+
 function getInnerProgramData(programData: ProgramState): ProgramState {
   const nested = normalizeProgramData(programData.data as JsonValue | null);
   return Object.keys(nested).length ? nested : programData;
@@ -8605,23 +8627,24 @@ Deno.serve(async (req) => {
             // ("Q: Two accounts disagree…"); a claim that is itself dispute
             // wording is the watcher reading its own output — never file it.
             .filter((entry) => !/two accounts disagree|which is right, and what settles it|^\s*Q:/i.test(entry.statement));
+          const filteredEntries = entries.filter((entry) => !contradictionFalsifiedByRecord(contextProgramData, entry.statement));
           const existing = getInnerProgramData(contextProgramData).flowDecisions;
           const hasOpenWatcher = Array.isArray(existing) && existing.some((entry) =>
             isRecord(entry) && entry.agentId === "contradiction-watcher" && (entry.status ?? "open") === "open");
-          if (entries.length && !hasOpenWatcher) {
+          if (filteredEntries.length && !hasOpenWatcher) {
             nextProgramData = queueFlowDecision(contextProgramData, {
               tier: 2,
               agentId: "contradiction-watcher",
               movementId: "listen",
-              title: `File ${entries.length} contradiction${entries.length === 1 ? "" : "s"} to the log`,
-              summary: entries.map((entry) => entry.statement).join(" · ").slice(0, 220),
+              title: `File ${filteredEntries.length} contradiction${filteredEntries.length === 1 ? "" : "s"} to the log`,
+              summary: filteredEntries.map((entry) => entry.statement).join(" · ").slice(0, 220),
               blocking: "New evidence disagrees with earlier findings; until it's logged, Listen still shows everything as resolved.",
               recommendation: {
                 action: "File to the contradiction log",
                 rationale: "Logging it makes Listen re-ask the question, and the documents built on the disputed claim get rebuilt.",
                 band: "proposal — additive, log rows only",
               } as JsonValue,
-              payload: { contradictionEntries: entries as unknown as JsonValue } as JsonValue,
+              payload: { contradictionEntries: filteredEntries as unknown as JsonValue } as JsonValue,
             });
           } else {
             nextProgramData = contextProgramData;
@@ -8852,7 +8875,8 @@ Deno.serve(async (req) => {
           })).filter((entry) => entry.statement)
             // Same guard as the watcher: dispute wording echoed from a script
             // is not a claim — never re-file a contradiction about one.
-            .filter((entry) => !/two accounts disagree|which is right, and what settles it|^\s*Q:/i.test(entry.statement));
+            .filter((entry) => !/two accounts disagree|which is right, and what settles it|^\s*Q:/i.test(entry.statement))
+            .filter((entry) => !contradictionFalsifiedByRecord(contextProgramData, entry.statement));
         }
         // Discovery Kit: GUARANTEE roster coverage. The model is asked to
         // interview every rostered person, but it compresses generic roles and

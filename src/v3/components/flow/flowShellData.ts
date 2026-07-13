@@ -160,13 +160,6 @@ export interface ContradictionRow { statement: string; between: string; position
  * collapse; the first row wins.
  */
 export function readContradictions(program: ProgramSummary, openOnly = false): ContradictionRow[] {
-  const raw = parseGridRows(readMovementInputs(program, "listen").contradictionLog)
-    // A follow-up pack echoes its own script ("Q: Two accounts disagree…");
-    // the watcher can mistake that echo for a claim and file a contradiction
-    // ABOUT a contradiction question. Self-referential rows are noise on
-    // every surface — drop them at the one reader everything goes through.
-    .filter((row) => !/two accounts disagree|which is right, and what settles it|^\s*Q:/i.test(String(row.statement ?? "")));
-  const rows = openOnly ? raw.filter((row) => /open/i.test(row.status ?? "")) : raw;
   const tokens = (text: string): Set<string> =>
     new Set((text.toLowerCase().match(/[a-z0-9]{3,}/g) ?? []).filter((t) => !["the", "and", "are", "using", "account", "accounts", "disagree"].includes(t)));
   const overlap = (a: Set<string>, b: Set<string>): number => {
@@ -175,6 +168,30 @@ export function readContradictions(program: ProgramSummary, openOnly = false): C
     for (const t of a) if (b.has(t)) shared += 1;
     return shared / Math.min(a.size, b.size);
   };
+  // What the record currently SAYS — a "dispute" whose statement matches a
+  // filled frame field is agreement wearing the wrong label (the watcher
+  // sometimes files the newest answer against the very field it satisfies).
+  const recordValues = Object.entries(readMovementInputs(program, "frame"))
+    // Short structured FACTS only. Transcript captures (the sponsor
+    // conversation runs to ~100k chars) contain everything anyone said —
+    // matching against them would suppress genuine disputes quoted from the
+    // record. A fact a dispute can restate is a sentence, not a transcript.
+    .filter(([key, value]) => !key.startsWith("_") && typeof value === "string"
+      && (value as string).trim().length >= 12 && (value as string).length <= 500)
+    .map(([, value]) => tokens(String(value)));
+  const raw = parseGridRows(readMovementInputs(program, "listen").contradictionLog)
+    // A follow-up pack echoes its own script ("Q: Two accounts disagree…");
+    // the watcher can mistake that echo for a claim and file a contradiction
+    // ABOUT a contradiction question. Self-referential rows are noise on
+    // every surface — drop them at the one reader everything goes through.
+    .filter((row) => !/two accounts disagree|which is right, and what settles it|^\s*Q:/i.test(String(row.statement ?? "")))
+    // …and rows the record itself falsifies: the statement restates a filled
+    // frame field, so there is nothing to arbitrate.
+    .filter((row) => {
+      const toks = tokens(String(row.statement ?? ""));
+      return toks.size < 4 || !recordValues.some((value) => overlap(toks, value) >= 0.8);
+    });
+  const rows = openOnly ? raw.filter((row) => /open/i.test(row.status ?? "")) : raw;
   const kept: Array<{ row: Record<string, string>; toks: Set<string> }> = [];
   for (const row of rows) {
     const toks = tokens(String(row.statement ?? ""));
