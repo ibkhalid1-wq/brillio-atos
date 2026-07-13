@@ -8,6 +8,7 @@ import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 import {
   flowMovements, movementEvidence, movementArtifacts, gateChecklist, gateReadiness, listenCoverage,
   demoAcceptance, daysToFirstDemo, wordsOfEvidence, readContradictions, parseGridRows,
+  contradictionLogWithout,
 } from "@/v3/components/flow/flowShellData";
 import {
   listOpenFlowDecisions, listFlowAttestations, describeDecisionChanges,
@@ -870,22 +871,43 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
   const feed = listFlowAttestations(program);
   const inbox = listPortalInbox(program);
   const [busyId, setBusyId] = useState<string | null>(null);
-  // Open disputes are the operator's to arbitrate — they queue HERE, with the
-  // decisions, not in the Library (which only reads the record).
+  // Open disputes queue HERE for the operator to ROUTE (to the person who can
+  // settle it) or RESOLVE. Resolving writes the resolution to the record as
+  // EVIDENCE and deletes the rows — there is no standing resolution log.
   const disputes = useMemo(() => readContradictions(program, true), [program]);
+  const people = useMemo(() => resolveMovementStakeholders(program, "listen")
+    .filter((entry) => !entry.isRole).map((entry) => entry.name), [program]);
   const [disputeBusy, setDisputeBusy] = useState<string | null>(null);
-  const resolveDisputeHere = async (statement: string) => {
-    if (!onSaveInputs) return;
+  const listenBucket = () => {
     const inner = getProgramState((program.rawData ?? {}) as Record<string, unknown>).inner as Record<string, unknown>;
-    const bucket = (typeof inner.phaseInputs === "object" && inner.phaseInputs !== null
+    return (typeof inner.phaseInputs === "object" && inner.phaseInputs !== null
       ? (inner.phaseInputs as Record<string, Record<string, unknown>>).listen : undefined) ?? {};
-    const rows = parseGridRows(bucket.contradictionLog as unknown);
-    const day = new Date().toISOString().slice(0, 10);
-    const next = rows.map((row) => ((row.statement ?? "").trim() === statement.trim() ? { ...row, status: `Resolved — ${day}` } : row));
+  };
+  const resolveDisputeHere = async (row: { statement: string; between: string }) => {
+    if (!onSaveInputs) return;
+    const statement = row.statement.trim();
+    const bucket = listenBucket();
+    // Paraphrase-aware: the displayed dispute stands for its near-duplicate
+    // variants too — closing it removes them all.
+    const next = contradictionLogWithout(program, statement);
+    const existing = typeof bucket.interviewTranscripts === "string" ? bucket.interviewTranscripts : "";
+    const note = `— Operator resolution, ${new Date().toISOString().slice(0, 10)} —\nDispute (${row.between}): "${statement}"\nSettled: the newer account stands. Recorded as evidence; the dispute is closed.`;
     setDisputeBusy(statement);
     try {
+      await onSaveInputs("listen", {
+        contradictionLog: next,
+        interviewTranscripts: [existing.trimEnd(), note].filter(Boolean).join("\n\n"),
+      }, { attest: { action: "Dispute resolved — resolution recorded as evidence", detail: statement.slice(0, 140) } });
+    } finally { setDisputeBusy(null); }
+  };
+  const routeDispute = async (statement: string, person: string) => {
+    if (!onSaveInputs || !person) return;
+    const rows = parseGridRows(listenBucket().contradictionLog as unknown);
+    const next = rows.map((r) => ((r.statement ?? "").trim() === statement.trim() ? { ...r, routedTo: person } : r));
+    setDisputeBusy(statement.trim());
+    try {
       await onSaveInputs("listen", { contradictionLog: JSON.stringify(next) },
-        { attest: { action: "Resolved a contradiction", detail: statement.slice(0, 140) } });
+        { attest: { action: `Dispute routed — ${person} settles it`, detail: statement.slice(0, 140) } });
     } finally { setDisputeBusy(null); }
   };
   // The rest of the portfolio's judgment queue — one glance, one tap to switch.
@@ -1059,18 +1081,28 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
               <div className="v3fs-dec-top">
                 <span className="v3fs-vc pen">Dispute</span>
                 <span className="v3fs-dec-mv">{row.between || "two accounts disagree"}</span>
+                {row.routedTo ? <span className="v3fs-tag ev">routed → {row.routedTo}</span> : null}
               </div>
               <p className="v3fs-dec-s">“{row.statement.trim().slice(0, 200)}{row.statement.trim().length > 200 ? "…" : ""}”</p>
-              <div className="v3fs-dec-rec-b">resolving marks the log row settled (attested) and clears it from every follow-up script</div>
+              <div className="v3fs-dec-rec-b">resolve writes the resolution to the record as evidence and closes the dispute — or route it to whoever can settle it (it lands on their follow-up script)</div>
               <div className="v3fs-dec-cta">
                 {onSaveInputs ? (
                   <button type="button" className="v3fs-btn pri" disabled={disputeBusy === row.statement.trim()}
-                    onClick={() => void resolveDisputeHere(row.statement.trim())}>
+                    onClick={() => void resolveDisputeHere(row)}>
                     {disputeBusy === row.statement.trim() ? "Resolving…" : "✓ Resolve — the newer account stands"}
                   </button>
                 ) : null}
-                <button type="button" className="v3fs-btn" title="It's already on the involved stakeholders' follow-up scripts"
-                  onClick={() => onGoFlow()}>↳ ask the people</button>
+                {onSaveInputs && people.length ? (
+                  <label className="v3fs-dec-route">
+                    route to
+                    <select value={row.routedTo ?? ""} aria-label="Route this dispute to a person"
+                      disabled={disputeBusy === row.statement.trim()}
+                      onChange={(event) => { if (event.target.value) void routeDispute(row.statement, event.target.value); }}>
+                      <option value="">choose…</option>
+                      {people.map((name) => <option key={name} value={name}>{name}</option>)}
+                    </select>
+                  </label>
+                ) : null}
               </div>
             </article>
           ))}

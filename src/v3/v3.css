@@ -6417,3 +6417,7 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-recent-sub { display: block; font-size: 11px; opacity: .6; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .v3fs-panel-warn { border-color: color-mix(in srgb, var(--v3-amber, #b58a2c) 45%, transparent); }
 .v3fs-ev-gkind { opacity: .55; font-size: 12px; width: 14px; text-align: center; }
+
+/* Inbox dispute routing control. */
+.v3fs-dec-route { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; opacity: .85; }
+.v3fs-dec-route select { font-size: 12px; padding: 4px 6px; border-radius: 7px; }

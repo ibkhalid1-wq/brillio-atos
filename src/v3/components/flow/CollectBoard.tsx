@@ -8,7 +8,7 @@
 import { useRef, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import EvidenceReader from "@/v3/components/flow/EvidenceReader";
-import { flowMovements, movementEvidence, evidenceStamp, locateQuote, parseGridRows, readMovementInputs } from "@/v3/components/flow/flowShellData";
+import { flowMovements, movementEvidence, evidenceStamp, locateQuote, readMovementInputs, contradictionLogWithout } from "@/v3/components/flow/flowShellData";
 import { buildMeetingIcs, mailtoLink, stakeholderEmail } from "@/v3/components/flow/flowMeetings";
 import { listInterviewPacks, portalLinkFor } from "@/v3/components/flow/flowPortal";
 import { resolveMovementStakeholders, readRoleBindings, type MovementStakeholder } from "@/v3/components/flow/flowStakeholders";
@@ -195,16 +195,17 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
   // right here — same log flip as the Library panel, attested, and the row
   // leaves every script on the next derivation.
   const resolveDisputeRow = async (disputed: string) => {
-    const rows = parseGridRows(readMovementInputs(program, "listen").contradictionLog);
-    const day = new Date().toISOString().slice(0, 10);
-    const next = rows.map((row) => {
-      const stmt = String(row.statement ?? "").trim();
-      return stmt === disputed || stmt.startsWith(disputed) ? { ...row, status: `Resolved — ${day}` } : row;
-    });
+    // Same model as the Inbox: the resolution becomes EVIDENCE and every
+    // near-duplicate row of the dispute is removed — no resolution log.
+    const bucket = readMovementInputs(program, "listen");
+    const existing = typeof bucket.interviewTranscripts === "string" ? bucket.interviewTranscripts : "";
+    const note = `— Operator resolution, ${new Date().toISOString().slice(0, 10)} —\nDispute: "${disputed}"\nSettled: the newer account stands. Recorded as evidence; the dispute is closed.`;
     setResolveBusy(disputed);
     try {
-      await onSaveInputs("listen", { contradictionLog: JSON.stringify(next) },
-        { attest: { action: "Resolved a contradiction", detail: disputed.slice(0, 140) } });
+      await onSaveInputs("listen", {
+        contradictionLog: contradictionLogWithout(program, disputed),
+        interviewTranscripts: [existing.trimEnd(), note].filter(Boolean).join("\n\n"),
+      }, { attest: { action: "Dispute resolved — resolution recorded as evidence", detail: disputed.slice(0, 140) } });
     } finally { setResolveBusy(null); }
   };
   const saveBinding = async () => {

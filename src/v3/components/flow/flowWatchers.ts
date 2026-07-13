@@ -60,6 +60,9 @@ export function unrosteredVoicesProposal(program: ProgramSummary): WatcherPropos
     if (entry.kind !== "transcript" || entry.who === entry.fieldLabel) continue;
     // "Dan Reyes, RevOps Lead, 2026-07-14" → name + role; document refs excluded.
     if (/^document:/i.test(entry.who)) continue;
+    // Operator bookkeeping ("— Operator resolution, 2026-07-13 —") reads like
+    // a speaker header but is the OPERATOR's pen, not a voice to roster.
+    if (/^operator\b|resolution/i.test(entry.who)) continue;
     const parts = entry.who.split(",").map((part) => part.trim());
     const name = parts[0] ?? "";
     if (!name || name.split(/\s+/).length > 4) continue;
@@ -377,13 +380,18 @@ export function negatedClaimProposal(program: ProgramSummary): WatcherProposal |
   if (!claims.length) return null;
 
   const entries = flowMovements().flatMap((movement) => movementEvidence(program, movement))
-    .filter((entry) => entry.text && entry.text.length > 40);
+    .filter((entry) => entry.text && entry.text.length > 40)
+    .filter((entry) => !/^operator\b|resolution/i.test(entry.who));
   const found: Array<{ statement: string; between: string; positions: string }> = [];
   const seen = new Set<string>();
   for (const entry of entries) {
     for (const sentence of entry.text.split(/(?<=[.!?])\s+|\n+/)) {
       const line = sentence.trim();
       if (line.length < 15 || line.length > 300 || !NEGATION.test(line)) continue;
+      // Dispute bookkeeping is not evidence: script echoes ("Q: Two accounts
+      // disagree…") and operator resolution notes both QUOTE the claims they
+      // settle — mining them refiles every dispute the moment it closes.
+      if (/^\s*Q:|two accounts disagree|which is right|^dispute \(|operator resolution|the dispute is closed/i.test(line)) continue;
       // Significant tokens of the negation sentence vs each standing claim.
       const tokens = [...new Set((line.toLowerCase().match(/[a-z][a-z-]{4,}/g) ?? []).filter((t) => !STOPWORDS.has(t)))];
       const hit = claims.find((claim) => {

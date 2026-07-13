@@ -273,6 +273,9 @@ export function kitGaps(program: ProgramSummary, movementId: string, opts?: { ga
       gaps.push(`Who can speak for the ${persona.name}${persona.kind === "external" ? " — the person who faces them, if they can't be in the room" : ""}?`);
     }
     for (const row of readContradictions(program, true)) {
+      // Routed disputes belong to the person the operator chose — they leave
+      // the sponsor's arbiter copy and appear only on that person's script.
+      if (row.routedTo) continue;
       const between = row.between.trim();
       gaps.push(`Two accounts disagree${between ? ` (${between})` : ""}: "${row.statement.trim()}" — which is right, and what settles it?`);
     }

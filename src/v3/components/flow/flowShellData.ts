@@ -148,7 +148,34 @@ export function movementInputsFingerprint(program: ProgramSummary, movementId: s
   return hash.toString(16);
 }
 
-export interface ContradictionRow { statement: string; between: string; positions: string; status: string; }
+const contradictionTokens = (text: string): Set<string> =>
+  new Set((text.toLowerCase().match(/[a-z0-9]{3,}/g) ?? []).filter((t) => !["the", "and", "are", "using", "account", "accounts", "disagree"].includes(t)));
+const contradictionOverlap = (a: Set<string>, b: Set<string>): number => {
+  if (!a.size || !b.size) return 0;
+  let shared = 0;
+  for (const t of a) if (b.has(t)) shared += 1;
+  return shared / Math.min(a.size, b.size);
+};
+
+/**
+ * The contradiction log after CLOSING a dispute: every row that is the given
+ * statement or a paraphrase of it (same near-duplicate rule the reader
+ * dedupes by) is REMOVED — a resolution becomes evidence, never a "resolved"
+ * log row, and no variant of the dispute can resurface.
+ */
+export function contradictionLogWithout(program: ProgramSummary, statement: string): string {
+  const target = contradictionTokens(statement);
+  const rows = parseGridRows(readMovementInputs(program, "listen").contradictionLog)
+    .filter((row) => {
+      const stmt = String(row.statement ?? "").trim();
+      if (stmt === statement.trim()) return false;
+      const toks = contradictionTokens(stmt);
+      return !(target.size >= 3 && toks.size >= 3 && contradictionOverlap(toks, target) >= 0.7);
+    });
+  return JSON.stringify(rows);
+}
+
+export interface ContradictionRow { statement: string; between: string; positions: string; status: string; routedTo?: string; }
 
 /**
  * The contradiction log, DEDUPED. The detector (and manual filings) can log the
@@ -160,14 +187,8 @@ export interface ContradictionRow { statement: string; between: string; position
  * collapse; the first row wins.
  */
 export function readContradictions(program: ProgramSummary, openOnly = false): ContradictionRow[] {
-  const tokens = (text: string): Set<string> =>
-    new Set((text.toLowerCase().match(/[a-z0-9]{3,}/g) ?? []).filter((t) => !["the", "and", "are", "using", "account", "accounts", "disagree"].includes(t)));
-  const overlap = (a: Set<string>, b: Set<string>): number => {
-    if (!a.size || !b.size) return 0;
-    let shared = 0;
-    for (const t of a) if (b.has(t)) shared += 1;
-    return shared / Math.min(a.size, b.size);
-  };
+  const tokens = contradictionTokens;
+  const overlap = contradictionOverlap;
   // What the record currently SAYS — a "dispute" whose statement matches a
   // filled frame field is agreement wearing the wrong label (the watcher
   // sometimes files the newest answer against the very field it satisfies).
@@ -190,6 +211,21 @@ export function readContradictions(program: ProgramSummary, openOnly = false): C
     .filter((row) => {
       const toks = tokens(String(row.statement ?? ""));
       return toks.size < 4 || !recordValues.some((value) => overlap(toks, value) >= 0.8);
+    })
+    // …and doc-vs-evidence rows the REGENERATION already arbitrated: when the
+    // named document's current text contains the disputed statement, the
+    // document adopted the newer account — there is no disagreement left.
+    // (If a real conflict survives a regen, the watcher re-files it fresh.)
+    .filter((row) => {
+      const between = String(row.between ?? "").toLowerCase();
+      const docKey = Object.values(FORMAL_ARTIFACT_FIELD_KEYS).find((fieldKey) =>
+        between.includes(fieldKey.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase()));
+      if (!docKey) return true;
+      const doc = dataRoot(program)[docKey];
+      if (!doc || typeof doc !== "object") return true;
+      const docToks = tokens(JSON.stringify(doc));
+      const stmt = tokens(String(row.statement ?? ""));
+      return stmt.size < 4 || overlap(stmt, docToks) < 0.75;
     });
   const rows = openOnly ? raw.filter((row) => /open/i.test(row.status ?? "")) : raw;
   const kept: Array<{ row: Record<string, string>; toks: Set<string> }> = [];
@@ -201,6 +237,7 @@ export function readContradictions(program: ProgramSummary, openOnly = false): C
   return kept.map(({ row }) => ({
     statement: String(row.statement ?? ""), between: String(row.between ?? ""),
     positions: String(row.positions ?? ""), status: String(row.status ?? ""),
+    routedTo: row.routedTo ? String(row.routedTo) : undefined,
   }));
 }
 

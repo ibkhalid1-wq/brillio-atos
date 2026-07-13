@@ -44,7 +44,8 @@ function contradictionAsksFor(program: ProgramSummary, personName: string): stri
   if (needle.length < 3) return [];
   // readContradictions dedupes near-identical rows, so a dispute is asked once.
   return readContradictions(program, true)
-    .filter((row) => row.between.toLowerCase().includes(needle))
+    .filter((row) => row.between.toLowerCase().includes(needle)
+      || (row.routedTo ?? "").trim().toLowerCase() === needle)
     .map((row) => `Two accounts disagree: "${row.statement.trim()}" — your account vs ${row.between
       .split(/,|\bvs\.?\b|&/i).map((part) => part.trim()).filter((part) => part && part.toLowerCase() !== needle).join(", ") || "the other account"}. Which is right, and what settles it?`)
     .slice(0, 3);

@@ -6,8 +6,8 @@
 import { describe, it, expect } from "vitest";
 import type { ProgramSummary } from "@/new/types";
 import { resolveFlowDecision, listOpenFlowDecisions, describeDecisionChanges } from "@/v3/components/flow/flowDecisions";
-import { scriptDocumentRefs, meetingKit, stakeholderEmail, buildMeetingIcs, mailtoLink } from "@/v3/components/flow/flowMeetings";
-import { locateQuote, kitPersonas, personasMissingFromAtlas, readContradictions } from "@/v3/components/flow/flowShellData";
+import { scriptDocumentRefs, meetingKit, stakeholderEmail, buildMeetingIcs, mailtoLink, kitGaps } from "@/v3/components/flow/flowMeetings";
+import { locateQuote, kitPersonas, personasMissingFromAtlas, readContradictions, contradictionLogWithout } from "@/v3/components/flow/flowShellData";
 import { mintBrief, buildBriefSnapshot } from "@/v3/components/flow/flowBriefs";
 import { buildPrototypePrompt } from "@/v3/components/flow/flowBuildPrompt";
 import { validateProgramBlob, migrateProgramBlob, BLOB_VERSION } from "@/v3/lib/blobGuard";
@@ -385,6 +385,67 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
     const rows = readContradictions(p, true);
     expect(rows).toHaveLength(1);
     expect(rows[0].statement).toBe("We are no longer using 20 CRM as a foundation");
+  });
+
+  it("closing a dispute removes its paraphrase VARIANTS from the log too — nothing resurfaces", () => {
+    const p = programme({ phaseInputs: { listen: { contradictionLog: JSON.stringify([
+      { statement: "A: We are no longer using 20 CRM as a foundation", between: "a vs b", positions: "", status: "Open" },
+      { statement: "no longer using 20 CRM as a foundation.", between: "a vs b", positions: "", status: "Open" },
+      { statement: "We are no longer using 20 CRM as a foundation", between: "c vs d", positions: "", status: "Open" },
+      { statement: "The pilot must exclude the EMEA region entirely", between: "e vs f", positions: "", status: "Open" },
+    ]) } } });
+    const next = JSON.parse(contradictionLogWithout(p, "A: We are no longer using 20 CRM as a foundation"));
+    expect(next).toHaveLength(1);
+    expect(next[0].statement).toMatch(/EMEA/);
+  });
+
+  it("watchers never mine the operator's resolution notes — no refiling, no phantom voice", () => {
+    const note = "— Operator resolution, 2026-07-13 —\nDispute (Raj vs Charter): \"We are no longer using 20 CRM as a foundation\"\nSettled: the newer account stands. Recorded as evidence; the dispute is closed.";
+    const p = programme({
+      transformationCharter: { businessObjective: "A CRM foundation programme improving sales velocity across teams" },
+      phaseInputs: { listen: { interviewTranscripts: note, interviewRoster: JSON.stringify([{ name: "Raj Mamodia", status: "Heard" }]) } },
+    });
+    // the negation inside the quoted dispute must not refile a contradiction
+    expect(negatedClaimProposal(p)).toBeNull();
+    // and "Operator resolution" must not be proposed as a roster voice
+    const voices = unrosteredVoicesProposal(p);
+    expect(voices === null || !JSON.stringify(voices.payload).includes("Operator")).toBe(true);
+  });
+
+  it("a doc-vs-evidence dispute settles itself once the document adopts the statement (regeneration arbitrated)", () => {
+    const claim = "Improve sales velocity, rep productivity, and employee satisfaction across the sales organisation";
+    const p = programme({
+      transformationCharter: { businessObjective: claim },
+      phaseInputs: { listen: { contradictionLog: JSON.stringify([
+        { statement: claim, between: "Raj Mamodia vs Transformation Charter (businessObjective)", positions: "", status: "Open" },
+        { statement: "The pilot must exclude the EMEA region entirely", between: "Raj Mamodia vs Transformation Charter (businessObjective)", positions: "", status: "Open" },
+      ]) } },
+    });
+    const rows = readContradictions(p, true);
+    // the adopted statement settles; the unadopted conflict survives
+    expect(rows).toHaveLength(1);
+    expect(rows[0].statement).toMatch(/EMEA/);
+  });
+
+  it("a routed dispute leaves the sponsor's script and lands on the routed person's card", () => {
+    const p = programme({
+      phaseInputs: {
+        frame: {
+          sponsor: "Raj Mamodia",
+          sponsorConversation: "— Raj Mamodia —\nplenty of words on the record here for the kit trigger",
+          businessObjective: "obj", industry: "Banking", successMetric: "cycle", targetFirstDemoDate: "2026-07-25",
+        },
+        listen: { contradictionLog: JSON.stringify([
+          { statement: "Quotes go through legal twice", between: "Ops vs Finance", positions: "", status: "Open", routedTo: "Prakash TM" },
+        ]) },
+      },
+      discoveryKit: { interviews: [{ stakeholder: "Prakash TM", role: "Sales SME", agenda: [] }] },
+    });
+    // sponsor's frame kit: routed dispute is NOT among its gaps
+    expect(kitGaps(p, "frame", { gateLabels: false }).some((g) => /legal twice/.test(g))).toBe(false);
+    // the routed person's listen card asks it
+    const prakash = resolveMovementStakeholders(p, "listen").find((s2) => /Prakash/.test(s2.name));
+    expect(prakash?.questions.some((q) => /legal twice/.test(q))).toBe(true);
   });
 
   it("a dispute quoted from a TRANSCRIPT field is genuine — the record-match check ignores long captures", () => {
