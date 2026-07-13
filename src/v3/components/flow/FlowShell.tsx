@@ -733,7 +733,7 @@ export default function FlowShell(props: FlowShellProps) {
         ) : view === "people" ? (
           <FlowPeople program={program} />
         ) : view === "library" ? (
-          <FlowLibrary program={program} programs={props.programs} onSelectProgram={props.onSelectProgram} onSaveInputs={props.onSaveInputs} onMintBrief={props.onMintBrief} onTagClaim={props.onTagClaim} onComment={props.onComment} onSaveArtifactDoc={props.onSaveArtifactDoc} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
+          <FlowLibrary program={program} programs={props.programs} onSelectProgram={props.onSelectProgram} onSaveInputs={props.onSaveInputs} onTagClaim={props.onTagClaim} onComment={props.onComment} onSaveArtifactDoc={props.onSaveArtifactDoc} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
         ) : view === "mission" ? (
           <FlowMission
             aiStatus={props.aiStatus}
@@ -1696,7 +1696,7 @@ function FlowPeople({ program }: { program: ProgramSummary }) {
   );
 }
 
-function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagClaim, onComment, onSaveArtifactDoc, onOpenInbox, onGoFlow, onMintBrief }: { program: ProgramSummary; programs: ProgramSummary[]; onSelectProgram: (id: string) => void; onSaveInputs?: FlowShellProps["onSaveInputs"]; onTagClaim?: FlowShellProps["onTagClaim"]; onComment?: FlowShellProps["onComment"]; onSaveArtifactDoc: FlowShellProps["onSaveArtifactDoc"]; onOpenInbox?: () => void; onGoFlow?: () => void; onMintBrief?: () => Promise<string | null> }) {
+function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagClaim, onComment, onSaveArtifactDoc, onOpenInbox, onGoFlow }: { program: ProgramSummary; programs: ProgramSummary[]; onSelectProgram: (id: string) => void; onSaveInputs?: FlowShellProps["onSaveInputs"]; onTagClaim?: FlowShellProps["onTagClaim"]; onComment?: FlowShellProps["onComment"]; onSaveArtifactDoc: FlowShellProps["onSaveArtifactDoc"]; onOpenInbox?: () => void; onGoFlow?: () => void }) {
   const claims = listClaimTags(program);
   const tagTargets = useMemo(() => claimTargets(program), [program]);
   const [claimHighlight, setClaimHighlight] = useState<string | undefined>(undefined);
@@ -1706,7 +1706,6 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
   type Facet = "all" | "people" | "documents" | "artifacts" | "disputes";
   const [facet, setFacet] = useState<Facet>("all");
   const [showResolved, setShowResolved] = useState(false);
-  const [packOpen, setPackOpen] = useState(false);
   const [openPeople, setOpenPeople] = useState<Set<string>>(new Set());
   const [resolveBusy, setResolveBusy] = useState<string | null>(null);
   // An attached file is READ before it is filed: routeAttachedDocument infers
@@ -1876,13 +1875,8 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
             </button>
           ))}
         </div>
-        {onMintBrief ? (
-          <button type="button" className="v3fs-btn" title="Print-ready programme pack — everything here, composed for the board"
-            onClick={() => setPackOpen(true)}>⎙ Board pack</button>
-        ) : null}
       </div>
-      <p className="v3fs-lib-cap">Everything the programme knows — search it, read it, export it. Artifacts regenerate from Flow; people live under People.</p>
-      {packOpen && onMintBrief ? <FlowBoardPack program={program} onMintBrief={onMintBrief} onClose={() => setPackOpen(false)} /> : null}
+      <p className="v3fs-lib-cap">Everything the programme knows — search it and read it. Artifacts regenerate from Flow; people live under People; the board pack exports from Pulse.</p>
       {facet === "all" && !q && recent.length ? (
         <div className="v3fs-panel v3fs-panel-wide v3fs-recent">
           <div className="v3fs-ph"><h3>Recently changed</h3><span>what moved since you last looked</span></div>
