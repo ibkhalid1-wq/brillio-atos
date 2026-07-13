@@ -5709,11 +5709,34 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 @media (prefers-reduced-motion:reduce) {.v3fs-go svg {animation:none}}
 
 /* "Start here" — the one arrow that says where to begin. */
-.v3fs-start {position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:6px;white-space:nowrap;background:var(--v3-accent);color:#fff;font-size:11.5px;font-weight:700;letter-spacing:.01em;border-radius:999px;padding:7px 14px;box-shadow:0 8px 22px -10px color-mix(in srgb,var(--v3-accent) 60%,transparent);pointer-events:none;z-index:5}
-.v3fs-start-a {display:inline-block;animation:v3fs-start-nudge 1.1s ease-in-out infinite}
-@keyframes v3fs-start-nudge {0%,100%{transform:translateX(0)}50%{transform:translateX(-4px)}}
-@media (prefers-reduced-motion:reduce) {.v3fs-start-a {animation:none}}
-@media (max-width:960px) {.v3fs-start {left:50%;top:calc(100% + 8px);transform:translateX(-50%)}}
+/* "Where to go next" — a refined pointer anchored to the recommended rail item.
+   A soft accent halo draws the eye to the icon; a gradient pill with an animated
+   chevron names the stop. Persistent but self-quieting (hidden once you're there). */
+.v3fs-dock-next::after {content:"";position:absolute;inset:-3px;border-radius:15px;pointer-events:none;z-index:0;
+  box-shadow:0 0 0 1.5px color-mix(in srgb,var(--v3-accent) 55%,transparent),0 0 16px -2px color-mix(in srgb,var(--v3-accent) 50%,transparent);
+  animation:v3fs-next-halo 2.6s ease-in-out infinite}
+@keyframes v3fs-next-halo {0%,100%{opacity:.5}50%{opacity:1}}
+
+.v3fs-next {position:absolute;left:calc(100% + 13px);top:50%;transform:translateY(-50%);
+  display:flex;align-items:center;gap:8px;white-space:nowrap;pointer-events:none;z-index:6;
+  padding:6px 13px 6px 8px;border-radius:999px;color:#fff;
+  background:linear-gradient(135deg,var(--v3-accent),var(--v3-accent-2));
+  box-shadow:0 12px 28px -12px color-mix(in srgb,var(--v3-accent) 75%,transparent),inset 0 1px 0 rgba(255,255,255,.16);
+  animation:v3fs-next-in .42s cubic-bezier(.2,.75,.3,1) both}
+@keyframes v3fs-next-in {from{opacity:0;transform:translateY(-50%) translateX(-7px) scale(.96)}to{opacity:1;transform:translateY(-50%) translateX(0) scale(1)}}
+/* a little triangle notch pointing back at the rail icon */
+.v3fs-next::before {content:"";position:absolute;left:-5px;top:50%;transform:translateY(-50%) rotate(45deg);width:9px;height:9px;border-radius:2px;background:var(--v3-accent)}
+.v3fs-next-arw {display:grid;place-items:center;width:19px;height:19px;border-radius:50%;background:rgba(255,255,255,.18);animation:v3fs-next-nudge 1.5s ease-in-out infinite}
+.v3fs-next-arw svg {width:12px;height:12px;display:block}
+@keyframes v3fs-next-nudge {0%,100%{transform:translateX(0)}50%{transform:translateX(-3px)}}
+.v3fs-next-txt {display:flex;flex-direction:column;line-height:1.06}
+.v3fs-next-txt span {font-size:8px;letter-spacing:.14em;text-transform:uppercase;font-weight:800;opacity:.82}
+.v3fs-next-txt b {font-size:11.5px;font-weight:700;letter-spacing:.01em}
+@media (prefers-reduced-motion:reduce) {.v3fs-next,.v3fs-next-arw,.v3fs-dock-next::after {animation:none}}
+@media (max-width:960px) {
+  .v3fs-next {left:50%;top:calc(100% + 9px);transform:translateX(-50%);animation:none}
+  .v3fs-next::before {left:50%;top:-5px;transform:translateX(-50%) rotate(45deg)}
+}
 
 /* The gate as a checklist — criteria check themselves off as data lands. */
 .v3fs-checks {display:flex;flex-direction:column;gap:2px;margin:10px 0 12px}

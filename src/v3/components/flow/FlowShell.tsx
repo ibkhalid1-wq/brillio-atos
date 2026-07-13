@@ -456,14 +456,13 @@ export default function FlowShell(props: FlowShellProps) {
   const unresolvedRoleCount = useMemo(() => readDirectoryPeople(program).filter((entry) => !entry.roleResolved).length, [program]);
   const coverageNameCount = useMemo(() => unresolvedCoverageNames(program).length, [program]);
   const waitingCount = openDecisions.length + portalInbox.length + openDisputeCount + unresolvedRoleCount + coverageNameCount;
-  const startId: FlowView = waitingCount > 0 ? "today" : "flow";
-  const [startSeen, setStartSeen] = useState<boolean>(() => {
-    try { return window.sessionStorage.getItem("v3fs-start-seen") === "1"; } catch { return true; }
-  });
-  const dismissStart = () => {
-    setStartSeen(true);
-    try { window.sessionStorage.setItem("v3fs-start-seen", "1"); } catch { /* ignore */ }
-  };
+  // "Where to go next" — the single rail item the operator should visit now.
+  // Waiting decisions/inbox items pull them to the Inbox; otherwise the work
+  // continues on Flow. The pointer is persistent (it always shows the next
+  // stop) but self-quiets: it hides the moment they are already on that view,
+  // so it guides without nagging.
+  const nextId: FlowView = waitingCount > 0 ? "today" : "flow";
+  const nextHint = nextId === "today" ? `${waitingCount} waiting` : "Continue";
 
   // The switcher dismisses like a menu should: backdrop click or Escape.
   useEffect(() => {
@@ -554,22 +553,25 @@ export default function FlowShell(props: FlowShellProps) {
             <div className="v3fs-dock-sep" aria-hidden="true" />
             {zone.map(([id, label]) => {
               const shortcut = DOCK_ORDER.indexOf(id) + 1;
+              const isNext = id === nextId && view !== nextId;
               return (
-                <button key={id} type="button" className={view === id ? "on" : ""}
+                <button key={id} type="button" className={`${view === id ? "on" : ""}${isNext ? " v3fs-dock-next" : ""}`.trim()}
                   data-tip={DOCK_TIPS[id]}
-                  aria-label={`${label} (shortcut ${shortcut})`}
+                  aria-label={`${label} (shortcut ${shortcut})${isNext ? " — go here next" : ""}`}
                   onClick={() => {
                     // Navigating dismisses whatever overlay is up — the rail is
                     // always an exit, never dead under a modal.
                     setSearchOpen(false); setHelpOpen(false); setDrillOpen(false);
-                    setView(id); window.scrollTo({ top: 0 }); if (id === startId) dismissStart();
+                    setView(id); window.scrollTo({ top: 0 });
                   }}>
                   {id === "today" && waitingCount > 0 ? <span className="v3fs-dock-n">{waitingCount}</span> : null}
                   <DockIcon id={id} /><span className="v3fs-rlb">{label}</span>
-                  {id === startId && !startSeen && view !== startId ? (
-                    <span className="v3fs-start" role="status">
-                      <span className="v3fs-start-a" aria-hidden="true">◀</span>
-                      Start here{startId === "today" ? ` — ${waitingCount} waiting` : ""}
+                  {isNext ? (
+                    <span className="v3fs-next" role="status">
+                      <span className="v3fs-next-arw" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M15 6l-6 6 6 6" /></svg>
+                      </span>
+                      <span className="v3fs-next-txt"><span>Next</span><b>{nextHint}</b></span>
                     </span>
                   ) : null}
                 </button>
@@ -718,7 +720,7 @@ export default function FlowShell(props: FlowShellProps) {
         {view !== "today" && waitingCount > 0 ? (
           // Judgment stays visible from every view: one line naming the first
           // waiting item, one tap to the Inbox. The queue itself lives there.
-          <button type="button" className="v3fs-wait" onClick={() => { setView("today"); window.scrollTo({ top: 0 }); dismissStart(); }}>
+          <button type="button" className="v3fs-wait" onClick={() => { setView("today"); window.scrollTo({ top: 0 }); }}>
             <span className="v3fs-wait-n">{waitingCount}</span>
             <span className="v3fs-wait-t">
               Waiting on you — {openDecisions[0]?.title ?? `${portalInbox[0]?.stakeholder ?? "a stakeholder"}'s response`}
