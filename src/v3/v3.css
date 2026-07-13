@@ -4842,13 +4842,15 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
    one glance (#76). Conic fill = criteria met, toned to the readiness colour. */
 /* Sized for two-digit counts ("10/12") — a slimmer ring and more inner
    room so the numbers breathe instead of cramming the circle. */
-.v3fs-mgauge {position:relative;flex-shrink:0;display:inline-grid;place-items:center;width:54px;height:54px;border-radius:50%;
+.v3fs-mgauge {position:relative;flex-shrink:0;display:inline-grid;place-items:center;width:58px;height:58px;border-radius:50%;
   border:none;cursor:pointer;padding:0;background:conic-gradient(var(--ring,var(--v3-text-muted)) var(--pct,0%), var(--fs-line) 0)}
 .v3fs-mgauge.green {--ring:var(--v3-green)} .v3fs-mgauge.amber {--ring:var(--v3-amber)} .v3fs-mgauge.dim {--ring:var(--v3-text-muted)}
 .v3fs-mgauge:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:2px}
-.v3fs-mgauge-c {display:inline-flex;align-items:baseline;justify-content:center;gap:1px;width:46px;height:46px;border-radius:50%;background:var(--fs-card)}
-.v3fs-mgauge-c b {font-family:var(--v3-font-mono);font-size:13px;font-weight:750;letter-spacing:-.04em;color:var(--v3-text-primary)}
-.v3fs-mgauge-c i {font-family:var(--v3-font-mono);font-size:9px;font-style:normal;letter-spacing:-.03em;color:var(--v3-text-muted)}
+/* Inner disc is bigger relative to the ring (thin 4px ring) so a two-digit
+   count like 10/12 breathes instead of crowding the edge. */
+.v3fs-mgauge-c {display:inline-flex;align-items:baseline;justify-content:center;gap:0;width:50px;height:50px;border-radius:50%;background:var(--fs-card)}
+.v3fs-mgauge-c b {font-family:var(--v3-font-mono);font-size:14px;font-weight:750;letter-spacing:-.05em;color:var(--v3-text-primary)}
+.v3fs-mgauge-c i {font-family:var(--v3-font-mono);font-size:8.5px;font-style:normal;letter-spacing:-.03em;color:var(--v3-text-muted);margin-left:.5px}
 .v3fs-mgauge.green .v3fs-mgauge-c b {color:var(--v3-green)}
 .v3fs-movebar-txt {flex:1 1 340px;min-width:0}
 .v3fs-movebar-cap {font-size:13px;font-weight:500;color:var(--v3-text-secondary);line-height:1.5;margin-bottom:6px;max-width:72ch;text-wrap:pretty}
@@ -4931,9 +4933,14 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-railzone {position:sticky;top:64px;height:calc(100vh - 96px);min-width:0}
 /* The rail is a flex column: header and context stay put, the RECORDS fill
    the remaining height and scroll in place. */
+/* The record rail is a DIFFERENT thing from the Collect/Artifacts/Gate
+   pipeline — it's the source of truth, not a stage. It gets its own identity:
+   an accent left edge and a cooler tinted ground so it reads as a panel apart,
+   never as a fourth tab. */
 .v3fs-recrail {height:100%;display:flex;flex-direction:column;overflow:hidden;
-  border:1px solid var(--fs-line);border-radius:14px;padding:14px 16px;
-  background:color-mix(in srgb,var(--fs-line) 14%,var(--fs-card))}
+  border:1px solid color-mix(in srgb,var(--v3-accent-2) 22%,var(--fs-line));
+  border-left:3px solid var(--v3-accent-2);border-radius:14px;padding:14px 16px;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--v3-accent-2) 7%,var(--fs-card)),var(--fs-card) 62%)}
 .v3fs-recrail-body {flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain}
 .v3fs-recrail-ctx {flex:none;border-bottom:1px solid var(--fs-line);padding-bottom:10px;margin-bottom:10px;
   display:flex;flex-direction:column;gap:7px}
@@ -4970,14 +4977,15 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-recrail .v3fs-ivc-fb {max-height:none;overflow-y:visible}
 /* The resting state: a slim vertical strip spanning the stage's height —
    the record is always one glance (and one hover) away. */
-.v3fs-recrail-tab {writing-mode:vertical-rl;height:100%;width:42px;
+.v3fs-recrail-tab {writing-mode:vertical-rl;height:100%;width:44px;
   display:inline-flex;align-items:center;justify-content:flex-start;gap:9px;padding:16px 0;cursor:pointer;
   font:inherit;font-size:10.5px;font-weight:750;letter-spacing:.12em;text-transform:uppercase;
-  color:var(--v3-text-muted);background:color-mix(in srgb,var(--fs-line) 26%,transparent);
-  border:1px solid var(--fs-line);border-radius:12px;
+  color:var(--v3-accent-b);background:color-mix(in srgb,var(--v3-accent-2) 9%,var(--fs-card));
+  border:1px solid color-mix(in srgb,var(--v3-accent-2) 26%,var(--fs-line));
+  border-right:3px solid var(--v3-accent-2);border-radius:12px;
   transition:color .15s ease,border-color .15s ease,background .15s ease}
-.v3fs-recrail-tab:hover {color:var(--v3-accent-2);background:var(--fs-card);
-  border-color:color-mix(in srgb,var(--v3-accent-2) 40%,var(--fs-line))}
+.v3fs-recrail-tab:hover {color:var(--v3-accent-2);background:color-mix(in srgb,var(--v3-accent-2) 15%,var(--fs-card));
+  border-color:color-mix(in srgb,var(--v3-accent-2) 45%,var(--fs-line))}
 .v3fs-recrail-tab b {font-family:var(--v3-font-mono);font-size:10px}
 /* Narrow: the rail stacks beneath the board; the strip turns horizontal. */
 @media (max-width:1080px) {
@@ -6427,3 +6435,12 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-addp input, .v3fs-addp select { font-size: 12.5px; padding: 6px 8px; border-radius: 8px; }
 .v3fs-addp input { flex: 1 1 150px; min-width: 120px; }
 .v3fs-addp-note { font-size: 12px; opacity: .7; margin: 4px 2px 0; }
+
+/* People directory: inline-editable cells (name, email inputs; role select). */
+.v3fs-dir-in {width:100%;box-sizing:border-box;font:inherit;font-size:12px;padding:4px 7px;
+  border:1px solid transparent;border-radius:7px;background:transparent;color:inherit;
+  transition:border-color .12s ease,background .12s ease}
+.v3fs-dir-in:hover {border-color:var(--fs-line)}
+.v3fs-dir-in:focus {outline:none;border-color:color-mix(in srgb,var(--v3-accent-2) 55%,var(--fs-line));background:var(--fs-card)}
+select.v3fs-dir-in {cursor:pointer}
+.v3fs-dir tr.busy {opacity:.55;pointer-events:none}

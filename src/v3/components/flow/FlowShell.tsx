@@ -1043,7 +1043,7 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
           <div className="v3fs-quiet-mark" aria-hidden="true">◈</div>
           {attention.length ? (
             <>
-              <h2>The Inbox is clear — the record isn’t.</h2>
+              <h2>Inbox is clear.</h2>
               <div className="v3fs-quiet-work">
                 {attention.slice(0, 4).map((item) => (
                   <div key={item.movement} className="v3fs-quiet-row">
@@ -1812,6 +1812,45 @@ function FlowPeople({ program, onSaveInputs, onGoInbox }: { program: ProgramSumm
     } finally { setAddBusy(false); }
   };
 
+  // ── Inline editing ──────────────────────────────────────────────────────
+  const roleOptions = useMemo(() => knownProgramRoles(program).sort((a, b) => a.localeCompare(b)), [program]);
+  const [busyRow, setBusyRow] = useState<string | null>(null);
+  // Set an address for anyone — resolves through `_roleBindings` (the one
+  // contact store), keyed by the person's name on their movement.
+  const setPersonEmail = async (movementId: string, name: string, email: string) => {
+    if (!onSaveInputs || !name) return;
+    const rb = readRoleBindings(program, movementId);
+    const clean = email.trim();
+    const existing = rb[name];
+    if (clean) rb[name] = { name, email: clean };
+    else if (existing) rb[name] = { name };
+    setBusyRow(`${movementId}:${name}`);
+    try { await onSaveInputs(movementId, { _roleBindings: JSON.stringify(rb) }, { attest: { action: `Email set — ${name}`, detail: clean || "cleared" } }); }
+    finally { setBusyRow(null); }
+  };
+  // Edit an operator-added person in place. A role change RE-VALIDATES: an
+  // unknown role flips roleResolved false and the person returns to the Inbox
+  // to clarify; a known one resolves. A rename re-keys their binding.
+  const editAdded = async (id: string, patch: { name?: string; role?: string; email?: string }) => {
+    if (!onSaveInputs) return;
+    const people = readDirectoryPeople(program);
+    const target = people.find((p) => p.id === id);
+    if (!target) return;
+    const nextName = (patch.name ?? target.name).trim() || target.name;
+    const nextRole = (patch.role ?? target.role).trim() || target.role;
+    const nextEmail = patch.email !== undefined ? patch.email.trim() : target.email;
+    const resolved = validateProgramRole(program, nextRole).known;
+    const next = people.map((p) => (p.id === id ? { ...p, name: nextName, role: nextRole, email: nextEmail || undefined, roleResolved: resolved } : p));
+    const rb = readRoleBindings(program, target.movementId);
+    if (patch.name && patch.name.trim() && patch.name.trim() !== target.name) { const b = rb[target.name]; if (b) { delete rb[target.name]; rb[nextName] = { ...b, name: nextName }; } }
+    if (patch.email !== undefined) { const clean = patch.email.trim(); if (clean) rb[nextName] = { name: nextName, email: clean }; else if (rb[nextName]) rb[nextName] = { name: nextName }; }
+    setBusyRow(id);
+    try {
+      await onSaveInputs("listen", { _directoryPeople: JSON.stringify(next) }, { attest: { action: `Person edited — ${nextName}`, detail: patch.role ? (resolved ? `role → ${nextRole}` : `role → ${nextRole} (needs clarification)`) : "name/email" } });
+      await onSaveInputs(target.movementId, { _roleBindings: JSON.stringify(rb) }, { silent: true });
+    } finally { setBusyRow(null); }
+  };
+
   const match = (row: { name: string; role: string; where: string; email?: string | null }) =>
     !query || `${row.name} ${row.role} ${row.where} ${row.email ?? ""}`.toLowerCase().includes(query);
   const rosterShown = roster.filter(match);
@@ -1854,35 +1893,64 @@ function FlowPeople({ program, onSaveInputs, onGoInbox }: { program: ProgramSumm
       <div className="v3fs-panel v3fs-panel-wide">
         <div className="v3fs-ph">
           <h3>People</h3>
-          <span>everyone the programme collects from — {unresolved ? `${unresolved} role${unresolved === 1 ? "" : "s"} to clarify; ` : ""}{missing ? `${missing} without an address; ` : ""}edit on their collect card or in the Discovery Kit</span>
+          <span>everyone the programme collects from — {unresolved ? `${unresolved} role${unresolved === 1 ? "" : "s"} to clarify; ` : ""}{missing ? `${missing} without an address; ` : ""}edit names, emails and roles inline</span>
         </div>
         <table className="v3fs-dir">
-          <thead><tr><th>Where</th><th>Person</th><th>Role</th><th>Email</th><th>Status</th></tr></thead>
+          <thead><tr><th>Where</th><th>Role</th><th>Person</th><th>Email</th><th>Status</th></tr></thead>
           <tbody>
             {addedShown.map((row) => (
-              <tr key={row.id}>
+              <tr key={row.id} className={busyRow === row.id ? "busy" : undefined}>
                 <td>{row.movementId.charAt(0).toUpperCase() + row.movementId.slice(1)} · added</td>
-                <td>{row.name}</td>
-                <td>{row.role}{!row.roleResolved ? <span className="v3fs-ivc-noaddr" title="Role not recognised — clarify in the Inbox">⚠ unclear</span> : null}</td>
-                <td>{(row.email || stakeholderEmail(program, row.name)) ?? <span className="v3fs-ivc-noaddr">✉ no address</span>}</td>
+                <td>
+                  {/* Switch role: a known role resolves; an unknown one is sent
+                      back to the Inbox. The current role is always an option. */}
+                  <select className="v3fs-dir-in" defaultValue={row.role} aria-label={`Role for ${row.name}`}
+                    key={`role-${row.id}-${row.role}`} disabled={!onSaveInputs || busyRow === row.id}
+                    onChange={(e) => { if (e.target.value !== row.role) void editAdded(row.id, { role: e.target.value }); }}>
+                    {!roleOptions.some((r) => r === row.role) ? <option value={row.role}>{row.role}{row.roleResolved ? "" : " (unclear)"}</option> : null}
+                    {roleOptions.map((r) => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </td>
+                <td>
+                  <input className="v3fs-dir-in" defaultValue={row.name} aria-label={`Name for ${row.name}`}
+                    key={`name-${row.id}-${row.name}`} disabled={!onSaveInputs || busyRow === row.id}
+                    onBlur={(e) => { if (e.target.value.trim() && e.target.value.trim() !== row.name) void editAdded(row.id, { name: e.target.value }); }} />
+                </td>
+                <td>
+                  <input className="v3fs-dir-in" type="email" placeholder="add email" defaultValue={row.email ?? ""} aria-label={`Email for ${row.name}`}
+                    key={`email-${row.id}-${row.email ?? ""}`} disabled={!onSaveInputs || busyRow === row.id}
+                    onBlur={(e) => { if (e.target.value.trim() !== (row.email ?? "")) void editAdded(row.id, { email: e.target.value }); }} />
+                </td>
                 <td><span className={`v3fs-vc ${row.roleResolved ? "acc" : "pen"}`}>{row.roleResolved ? "Added" : "Role unclear"}</span></td>
               </tr>
             ))}
             {rosterShown.map((row, i) => (
-              <tr key={`r-${i}`}>
+              <tr key={`r-${i}`} className={busyRow === `listen:${row.name}` ? "busy" : undefined}>
                 <td>{row.where}</td>
-                <td>{row.name}</td>
                 <td>{row.role}</td>
-                <td>{row.email ?? <span className="v3fs-ivc-noaddr">✉ no address</span>}</td>
+                <td>{row.name}</td>
+                <td>
+                  {onSaveInputs ? (
+                    <input className="v3fs-dir-in" type="email" placeholder="add email" defaultValue={row.email ?? ""} aria-label={`Email for ${row.name}`}
+                      key={`re-${i}-${row.email ?? ""}`} disabled={busyRow === `listen:${row.name}`}
+                      onBlur={(e) => { if (e.target.value.trim() !== (row.email ?? "")) void setPersonEmail("listen", row.name, e.target.value); }} />
+                  ) : (row.email ?? <span className="v3fs-ivc-noaddr">✉ no address</span>)}
+                </td>
                 <td><span className={`v3fs-vc ${row.heard ? "acc" : "pen"}`}>{row.heard ? "Heard" : "Awaiting"}</span></td>
               </tr>
             ))}
             {rolesShown.map((row, i) => (
-              <tr key={`d-${i}`}>
+              <tr key={`d-${i}`} className={row.name && busyRow === `${row.where.toLowerCase()}:${row.name}` ? "busy" : undefined}>
                 <td>{row.where}</td>
-                <td>{row.name || <em>unbound — name them on the {row.where} collect card</em>}</td>
                 <td>{row.role}</td>
-                <td>{row.name ? (row.email ?? <span className="v3fs-ivc-noaddr">✉ no address</span>) : ""}</td>
+                <td>{row.name || <em>unbound — name them on the {row.where} collect card</em>}</td>
+                <td>
+                  {row.name && onSaveInputs && !row.isSponsor ? (
+                    <input className="v3fs-dir-in" type="email" placeholder="add email" defaultValue={row.email ?? ""} aria-label={`Email for ${row.name}`}
+                      key={`de-${i}-${row.email ?? ""}`} disabled={busyRow === `${row.where.toLowerCase()}:${row.name}`}
+                      onBlur={(e) => { if (e.target.value.trim() !== (row.email ?? "")) void setPersonEmail(row.where.toLowerCase(), row.name, e.target.value); }} />
+                  ) : row.name ? (row.email ?? <span className="v3fs-ivc-noaddr">✉ no address</span>) : ""}
+                </td>
                 <td><span className={`v3fs-vc ${row.name ? "acc" : "pen"}`}>{row.name ? "Bound" : "Open"}</span></td>
               </tr>
             ))}
