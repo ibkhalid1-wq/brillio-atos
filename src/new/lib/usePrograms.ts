@@ -9,6 +9,7 @@ import { pushV3Toast } from "@/v3/utils";
 import { enqueueWrite, flushWriteQueue, getQueuedWriteCount } from "@/lib/writeQueue";
 import { hasSubstantiveProgramData } from "@/v3/lib/programDataGuard";
 import { logFlowEvent } from "@/v3/lib/flowEvents";
+import { persistExternalTexts, hydrateExternalTexts } from "@/v3/lib/programTextsSync";
 
 type ProgramRow = Database["public"]["Tables"]["adam_programs"]["Row"];
 type LocalProgramEntry = Record<string, unknown>;
@@ -274,9 +275,14 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
       .select("id, updated_at, data")
       .in("id", need);
     if (fetchError || !rows) return false;
-    (rows as Array<{ id: string; updated_at: string; data: Json }>).forEach((r) => {
-      hydratedDataById.current.set(r.id, { updatedAt: r.updated_at, data: r.data });
-    });
+    // Externalization (flag-gated, default OFF): merge each programme's
+    // externalized transcripts back into its blob so the synchronous readers see
+    // the full record. A no-op returning `r.data` unchanged until dual-read is
+    // enabled — see programTextsSync.ts / docs/transcript-externalization.md.
+    for (const r of rows as Array<{ id: string; updated_at: string; data: Json }>) {
+      const merged = await hydrateExternalTexts(supabase, r.id, r.data);
+      hydratedDataById.current.set(r.id, { updatedAt: r.updated_at, data: merged as Json });
+    }
     return true;
   }, []);
 
@@ -616,11 +622,16 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
         throw new ConflictError("Program was updated by another session. Refresh to see the latest version before making changes.");
       }
     }
+    // Externalization (flag-gated, default OFF): split the large transcript
+    // fields out into adam_program_texts so the blob shipped below stays small.
+    // A no-op returning `payload` unchanged until dual-write is enabled — see
+    // programTextsSync.ts / docs/transcript-externalization.md.
+    const blobToStore = await persistExternalTexts(supabase, programId, payload);
     const nextUpdatedAt = new Date().toISOString();
     const { data: updatedRows, error: updateError } = await supabase
       .from("adam_programs")
       .update({
-        data: payload as Json,
+        data: blobToStore as Json,
         updated_at: nextUpdatedAt,
       })
       .eq("id", programId)
@@ -629,7 +640,9 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
       // A failed UPDATE here is the offline / statement-timeout case: the write
       // never reached Postgres. Queue it so the next refresh retries it, and keep
       // the change in this session's local cache so it isn't lost in the meantime.
-      enqueueWrite("adam_programs", programId, { data: payload as Json, updated_at: nextUpdatedAt }, expectedUpdatedAt ?? currentUpdatedAt ?? undefined);
+      // Queue the (already-shrunk) blob; the texts rows were written above, so a
+      // later replay + dual-read merge reconstructs the full record.
+      enqueueWrite("adam_programs", programId, { data: blobToStore as Json, updated_at: nextUpdatedAt }, expectedUpdatedAt ?? currentUpdatedAt ?? undefined);
       persistLocalProgram(programId, nextData);
       pushV3Toast(
         "Couldn't reach the server — saved locally and queued to retry automatically.",
@@ -653,7 +666,7 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
           name: program.name,
           client: program.client || null,
           industry: program.industry || null,
-          data: payload as Json,
+          data: blobToStore as Json,
           updated_at: nextUpdatedAt,
           is_deleted: false,
           owner_id: program.rawData && typeof (program.rawData as Record<string, unknown>).owner_id === "string"
