@@ -11,7 +11,7 @@ import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 import { flowMovements, movementEvidence, evidenceStamp, locateQuote } from "@/v3/components/flow/flowShellData";
 import { buildMeetingIcs, mailtoLink, stakeholderEmail } from "@/v3/components/flow/flowMeetings";
 import { listInterviewPacks, portalLinkFor } from "@/v3/components/flow/flowPortal";
-import { resolveMovementStakeholders, type MovementStakeholder } from "@/v3/components/flow/flowStakeholders";
+import { resolveMovementStakeholders, readRoleBindings, type MovementStakeholder } from "@/v3/components/flow/flowStakeholders";
 import { mapTranscriptSpeakers } from "@/v3/components/flow/flowTranscriptMap";
 import { AttachFileButton, TranscribeButton, safePrompt } from "@/v3/components/flow/flowCapture";
 
@@ -151,10 +151,31 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
   onFocusPerson?: (stakeholderId: string, open: boolean) => void;
   onCaptured?: () => void;
 }) {
-  const { name, role, questions } = stakeholder;
+  const { name, role, questions, isRole } = stakeholder;
   const { pack, heard, status } = coll;
   const first = name.split(" ")[0] || "they";
   const email = stakeholderEmail(program, name);
+  // Role binding: the first-class place to say "our Solution Architect is
+  // Priya, priya@…". Saved under `_roleBindings` (fingerprint-safe), so the
+  // placeholder becomes a person without flagging any document stale.
+  const [bindName, setBindName] = useState("");
+  const [bindEmail, setBindEmail] = useState("");
+  const [bindBusy, setBindBusy] = useState(false);
+  const saveBinding = async () => {
+    const person = bindName.trim();
+    if (!person) return;
+    setBindBusy(true);
+    try {
+      const bindings = readRoleBindings(program, movementId);
+      const emailValue = bindEmail.trim();
+      bindings[role] = emailValue ? { name: person, email: emailValue } : { name: person };
+      await onSaveInputs(movementId, { _roleBindings: JSON.stringify(bindings) }, {
+        attest: { action: `Role bound — ${role} → ${person}`, detail: emailValue || undefined },
+      });
+      setBindName("");
+      setBindEmail("");
+    } finally { setBindBusy(false); }
+  };
   // A minted link is only "the" link while its questions still match the
   // current script — when the script has moved on, the old link goes stale and
   // Copy/Send mint a fresh pack (which supersedes the unanswered one).
@@ -274,6 +295,22 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
           <span className="v3fs-ivc-chev" aria-hidden="true" />
         </summary>
         <div className="v3fs-ivc-b">
+          {/* A role placeholder invites its person: bind a name (and email)
+              and the card becomes theirs — link, invite and captures follow. */}
+          {isRole ? (
+            <div className="v3fs-ivc-sec v3fs-ivc-bind">
+              <div className="v3fs-ivc-sec-h">Who is this?</div>
+              <div className="v3fs-ivc-bind-row">
+                <input value={bindName} onChange={(event) => setBindName(event.target.value)}
+                  placeholder={`Name — who is your ${role}?`} aria-label={`Name the ${role}`} />
+                <input value={bindEmail} onChange={(event) => setBindEmail(event.target.value)}
+                  placeholder="email (optional)" type="email" aria-label={`Email for the ${role}`} />
+                <button type="button" className="v3fs-btn pri" disabled={bindBusy || !bindName.trim()}
+                  onClick={() => void saveBinding()}>{bindBusy ? "Binding…" : "Bind"}</button>
+              </div>
+              <span className="v3fs-ivc-sec-note">Names the {role.toLowerCase()} — their link, meeting invite and captures follow the person from here on.</span>
+            </div>
+          ) : null}
           {/* The person's feedback trail lives on the RECORD RAIL — opening
               this card focuses the rail on them, so the card keeps only the
               work: their script, the channels, and the capture box. */}

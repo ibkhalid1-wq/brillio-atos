@@ -9,7 +9,7 @@
  */
 import type { ProgramSummary } from "@/new/types";
 import { meetingKit, askableMovementGaps } from "@/v3/components/flow/flowMeetings";
-import { readContradictions, flowMovements, movementEvidence } from "@/v3/components/flow/flowShellData";
+import { readContradictions, flowMovements, movementEvidence, readMovementInputs } from "@/v3/components/flow/flowShellData";
 
 export interface MovementStakeholder {
   /** Stable key for React + pack matching. */
@@ -95,6 +95,31 @@ function sponsorStakeholder(program: ProgramSummary): MovementStakeholder | null
   };
 }
 
+/**
+ * Role bindings — the first-class place to say "our Solution Architect is
+ * Priya, priya@…". Stored under the movement's inputs as `_roleBindings`
+ * (JSON: role → {name, email}): the underscore keeps it OUT of the evidence
+ * fingerprint, because naming a person is an org fact, not new evidence —
+ * binding must never flag documents stale.
+ */
+export function readRoleBindings(program: ProgramSummary, movementId: string): Record<string, { name: string; email?: string }> {
+  const raw = readMovementInputs(program, movementId)._roleBindings;
+  if (typeof raw !== "string" || !raw.trim()) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const out: Record<string, { name: string; email?: string }> = {};
+    for (const [role, value] of Object.entries(parsed)) {
+      if (!value || typeof value !== "object") continue;
+      const name = String((value as Record<string, unknown>).name ?? "").trim();
+      if (!name) continue;
+      const email = String((value as Record<string, unknown>).email ?? "").trim();
+      out[role] = email ? { name, email } : { name };
+    }
+    return out;
+  } catch { return {}; }
+}
+
 const ROLE_TEMPLATES: Record<string, Array<{ role: string; questions: string[] }>> = {
   envision: [
     { role: "Solution Architect", questions: ["Which target architecture shape fits our constraints, and what does it trade away?", "Which integrations are non-negotiable, and which are risky?", "Where are the operability and scaling risks?"] },
@@ -147,10 +172,17 @@ export function resolveMovementStakeholders(program: ProgramSummary, movementId:
   const template = ROLE_TEMPLATES[movementId];
   if (template) {
     const sponsor = sponsorStakeholder(program);
+    const bindings = readRoleBindings(program, movementId);
     return template.map((entry, index) => {
       // Bind the "Executive Sponsor" role to the real sponsor when known.
       if (/sponsor/i.test(entry.role) && sponsor) {
         return { id: `${movementId}-${index}`, name: sponsor.name, role: "Executive Sponsor", questions: entry.questions, isRole: false };
+      }
+      // An operator-bound role IS a person: their card carries their name,
+      // their link and invite reach their address, their captures attribute.
+      const bound = bindings[entry.role];
+      if (bound?.name) {
+        return { id: `${movementId}-${index}`, name: bound.name, role: entry.role, questions: entry.questions, isRole: false };
       }
       return { id: `${movementId}-${index}`, name: entry.role, role: entry.role, questions: entry.questions, isRole: true };
     });

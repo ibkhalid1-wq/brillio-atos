@@ -6300,6 +6300,13 @@ details[open] > summary .v3fs-disc-c::after {display:none}
   padding:10px 12px;background:var(--v3-amber-soft)}
 .v3fs-ivc-regen p {margin:0;font-size:11.5px;line-height:1.55;color:var(--v3-amber)}
 .v3fs-ivc-regen .v3fs-btn {align-self:flex-start}
+/* Role binding — "our Solution Architect is Priya, priya@…" */
+.v3fs-ivc-bind {border:1px dashed color-mix(in srgb,var(--v3-accent-2) 36%,var(--fs-line));border-radius:10px;
+  padding:10px 12px;background:var(--fs-indigo-wash)}
+.v3fs-ivc-bind-row {display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+.v3fs-ivc-bind-row input {flex:1 1 140px;min-width:120px;font:inherit;font-size:12px;color:var(--v3-text-primary);
+  background:var(--fs-card);border:1px solid var(--fs-line);border-radius:9px;padding:7px 10px}
+.v3fs-ivc-bind-row input:focus {outline:none;border-color:var(--v3-accent-2)}
 /* Status-toned initials tile — people read as people, and the board's
    status language (green/amber/indigo) carries through the avatar. */
 .v3fs-ivc-av {flex-shrink:0;width:30px;height:30px;border-radius:10px;display:grid;place-items:center;

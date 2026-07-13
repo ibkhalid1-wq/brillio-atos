@@ -470,6 +470,25 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
     expect(g).toMatch(/no voice yet[\s\S]*End Customer/);
   });
 
+  it("role bindings name Envision's personas — real person, real email, and the evidence fingerprint never moves", async () => {
+    const { movementInputsFingerprint } = await import("@/v3/components/flow/flowShellData");
+    const { readRoleBindings } = await import("@/v3/components/flow/flowStakeholders");
+    const before = movementInputsFingerprint(programme({ phaseInputs: { envision: {} } }), "envision");
+    const p = programme({ phaseInputs: { envision: {
+      _roleBindings: JSON.stringify({ "Solution Architect": { name: "Priya Nair", email: "priya@brillio.com" } }),
+    } } });
+    // Naming a person is an org fact, not evidence: `_`-prefixed keys are
+    // excluded from the fingerprint, so binding flags nothing stale.
+    expect(movementInputsFingerprint(p, "envision")).toBe(before);
+    expect(readRoleBindings(p, "envision")["Solution Architect"]).toEqual({ name: "Priya Nair", email: "priya@brillio.com" });
+    const people = resolveMovementStakeholders(p, "envision");
+    const priya = people.find((s) => s.name === "Priya Nair")!;
+    expect(priya.role).toBe("Solution Architect");
+    expect(priya.isRole).toBe(false); // a bound role IS a person
+    expect(people.filter((s) => s.isRole).length).toBeGreaterThan(0); // unbound roles stay placeholders
+    expect(stakeholderEmail(p, "Priya Nair")).toBe("priya@brillio.com");
+  });
+
   it("once a stakeholder is HEARD, their agenda clears from the follow-up — only open gaps remain", () => {
     const agendaQ = "What systems feed a quote today?";
     const base = {

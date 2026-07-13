@@ -494,6 +494,27 @@ export function stakeholderEmail(program: ProgramSummary, name: string): string 
     && (sponsor === wanted || sponsor.includes(wanted) || wanted.includes(sponsor.split(",")[0].trim()))) {
     return sponsorEmail;
   }
+  // Role bindings ("our Solution Architect is Priya, priya@…") carry emails
+  // too — scan every movement's `_roleBindings` for the person. Parsed inline
+  // (flowStakeholders imports this module, so no shared helper here).
+  const phaseInputs = typeof inner.phaseInputs === "object" && inner.phaseInputs !== null
+    ? (inner.phaseInputs as Record<string, Record<string, unknown>>)
+    : {};
+  for (const bucket of Object.values(phaseInputs)) {
+    const rawBindings = bucket?._roleBindings;
+    if (typeof rawBindings !== "string" || !rawBindings.trim()) continue;
+    try {
+      const parsed = JSON.parse(rawBindings) as Record<string, { name?: unknown; email?: unknown }>;
+      for (const bound of Object.values(parsed ?? {})) {
+        const boundName = String(bound?.name ?? "").trim().toLowerCase();
+        const boundEmail = String(bound?.email ?? "").trim();
+        if (boundName && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(boundEmail)
+          && (boundName === wanted || (boundName.length > 3 && wanted.includes(boundName)) || (wanted.length > 3 && boundName.includes(wanted)))) {
+          return boundEmail;
+        }
+      }
+    } catch { /* malformed bindings — skip the bucket */ }
+  }
   return null;
 }
 
