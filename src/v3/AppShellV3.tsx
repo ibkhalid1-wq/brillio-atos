@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import BrilioLogo from "@/v3/components/BrilioLogo";
 import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { useAgentRun } from "@/hooks/useAgentRun";
@@ -148,7 +149,7 @@ const MAX_VISIBLE_TOASTS = 3;
 
 
 function BrandLogo() {
-  return <img src="/brillio-logo.png" alt="Brillio" className="v3-topbar-logo" />;
+  return <BrilioLogo className="v3-topbar-logo" title="Brillio" />;
 }
 
 function isAuthPath(): boolean {
@@ -408,7 +409,7 @@ function AuthScreen({
     <div className="v3-auth-gate">
       <div className="v3-auth-shell">
         <div className="v3-auth-gate-inner">
-          <div className="v3-auth-kicker">Brillio</div>
+          <BrilioLogo className="v3-auth-brandmark" tone="mono" />
           <div className="v3-auth-gate-logo">ATOS</div>
           <h1 className="v3-auth-gate-title">{authTitle}</h1>
           <p className="v3-auth-gate-body">{authBody}</p>

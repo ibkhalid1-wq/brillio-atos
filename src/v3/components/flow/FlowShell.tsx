@@ -1,6 +1,7 @@
 import React, { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import FlowCanvas from "@/v3/components/flow/FlowCanvas";
+import BrilioLogo from "@/v3/components/BrilioLogo";
 import { AttachFileButton, copyTextFromAction } from "@/v3/components/flow/flowCapture";
 import FlowArtifactStudio, { type ArtifactEditInput } from "@/v3/components/flow/studio/FlowArtifactStudio";
 import FlowBoardPack from "@/v3/components/flow/FlowBoardPack";
@@ -588,7 +589,7 @@ export default function FlowShell(props: FlowShellProps) {
           {/* Brand + breadcrumb: Portfolio / (parent) / programme. The trail IS
               the location — the hero no longer repeats it. The programme crumb
               opens the switcher; a drill-down shows its parent as a hop. */}
-          <span className="v3fs-appbar-brand">ATOS Flow</span>
+          <span className="v3fs-appbar-brandlock"><BrilioLogo className="v3fs-appbar-logo" title="Brillio" /><span className="v3fs-appbar-brand">ATOS Flow</span></span>
           <nav className="v3fs-appbar-crumbs" aria-label="Breadcrumb">
             <button type="button" className={`v3fs-appbar-nav${view === "portfolio" ? " on" : ""}`}
               title={DOCK_TIPS.portfolio} aria-label="Portfolio"

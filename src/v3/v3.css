@@ -6496,3 +6496,27 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-dir-in:focus {outline:none;border-color:color-mix(in srgb,var(--v3-accent-2) 55%,var(--fs-line));background:var(--fs-card)}
 select.v3fs-dir-in {cursor:pointer}
 .v3fs-dir tr.busy {opacity:.55;pointer-events:none}
+
+/* ── Brillio wordmark ─────────────────────────────────────────────────────
+   Live type in the display face + the signature two green dots. Crisp at any
+   size; adapts to the surrounding ink via currentColor (tone="auto"). */
+.brillio-logo {display:inline-flex;flex-direction:column;align-items:center;line-height:1;
+  gap:.16em;user-select:none;vertical-align:middle}
+.brillio-word {font-family:var(--v3-font);font-weight:800;font-size:1em;line-height:.9;
+  letter-spacing:-.05em;color:currentColor;white-space:nowrap}
+.brillio-dots {display:flex;gap:.26em}
+.brillio-dots i {width:.185em;height:.185em;border-radius:50%;background:var(--brillio-green,#33b24a);
+  display:block}
+.brillio-tone-mono {color:var(--v3-text-primary)}
+.brillio-tone-invert {color:#fff}
+
+/* Brillio wordmark — sizing per placement. */
+.v3-topbar-logo {height:auto;width:auto;font-size:19px}          /* topbar / skeleton */
+.v3-auth-brandmark {font-size:19px;margin-bottom:16px}           /* auth kicker slot */
+.v3fs-appbar-brandlock {display:inline-flex;align-items:center;gap:10px}
+.v3fs-appbar-logo {font-size:15px}                                /* app-bar lockup */
+.v3fs-appbar-logo .brillio-dots {gap:.24em}
+/* The wordmark replaces the raster in the topbar: the img-era filter/opacity
+   must not touch it (it would recolour the green dots). currentColor already
+   matches the topbar ink per theme. */
+.v3-topbar-logo.brillio-logo {filter:none;opacity:1}
