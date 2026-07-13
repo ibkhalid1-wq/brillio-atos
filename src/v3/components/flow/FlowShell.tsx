@@ -1,9 +1,10 @@
-import React, { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import React, { Fragment, Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import FlowCanvas from "@/v3/components/flow/FlowCanvas";
 import BrilioLogo from "@/v3/components/BrilioLogo";
 import { AttachFileButton, copyTextFromAction } from "@/v3/components/flow/flowCapture";
-import FlowArtifactStudio, { type ArtifactEditInput } from "@/v3/components/flow/studio/FlowArtifactStudio";
+const FlowArtifactStudio = lazy(() => import("@/v3/components/flow/studio/FlowArtifactStudio"));
+import type { ArtifactEditInput } from "@/v3/components/flow/studio/FlowArtifactStudio";
 import FlowBoardPack from "@/v3/components/flow/FlowBoardPack";
 import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 import {
@@ -2356,13 +2357,13 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
           </div>
         ))}
       </div>
-      {docFor ? <FlowArtifactStudio program={program} artifact={docFor} onClose={() => setDocFor(null)} onSaveDoc={onSaveArtifactDoc} onSaveInputs={onSaveInputs} onComment={onComment} onOpenInbox={onOpenInbox}
+      {docFor ? <Suspense fallback={null}><FlowArtifactStudio program={program} artifact={docFor} onClose={() => setDocFor(null)} onSaveDoc={onSaveArtifactDoc} onSaveInputs={onSaveInputs} onComment={onComment} onOpenInbox={onOpenInbox}
         onOpenArtifact={(artifactId) => {
           for (const m of flowMovements()) {
             const hit = movementArtifacts(program, m).find((a) => a.id === artifactId && a.present);
             if (hit) { setDocFor(hit); return; }
           }
-        }} /> : null}
+        }} /></Suspense> : null}
       {evFor ? (
         <EvidenceReader entry={evFor} highlight={claimHighlight} targets={tagTargets}
           onTag={onTagClaim ? (target, quote) => onTagClaim({ quote, who: evFor.who, movementId: evFor.movementId, target }) : undefined}

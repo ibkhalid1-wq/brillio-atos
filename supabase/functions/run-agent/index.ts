@@ -1637,6 +1637,16 @@ function flowedArtifactInputs(
 function buildGroundingFacts(phaseRecord: Record<string, unknown>): string[] {
   const lines: string[] = [];
   let seq = 0;
+  // Grounding facts are ATOMIC facts, not documents. A pasted transcript can
+  // run to ~100k chars; passed verbatim it re-inflates every downstream agent's
+  // prompt (charter, kit, ontology, atlas, blueprint each re-read it). The full
+  // text still reaches the agents that need it via documentCarryForward — so
+  // here each fact value is capped, and giant free-text fields are elided to a
+  // pointer rather than dumped inline.
+  const MAX_FACT_LEN = 700;
+  const cap = (text: string): string => text.length <= MAX_FACT_LEN
+    ? text
+    : `${text.slice(0, MAX_FACT_LEN).trimEnd()} …[+${text.length - MAX_FACT_LEN} chars; full text in the attached documents]`;
   for (const [fieldId, value] of Object.entries(phaseRecord)) {
     // savedAt is autosave bookkeeping; `_`-prefixed keys (timestamps, role
     // bindings, provenance) are metadata, never facts for the model.
@@ -1652,7 +1662,7 @@ function buildGroundingFacts(phaseRecord: Record<string, unknown>): string[] {
             .filter((cell): cell is string => Boolean(cell));
           if (!cells.length) continue;
           seq += 1;
-          lines.push(`F${seq}: ${fieldId} — ${cells.join(" · ")}`);
+          lines.push(cap(`F${seq}: ${fieldId} — ${cells.join(" · ")}`));
         }
         continue;
       }
@@ -1660,7 +1670,7 @@ function buildGroundingFacts(phaseRecord: Record<string, unknown>): string[] {
     const stringified = stringifyFlowValue(value);
     if (stringified) {
       seq += 1;
-      lines.push(`F${seq}: ${fieldId} — ${stringified}`);
+      lines.push(`F${seq}: ${fieldId} — ${cap(stringified)}`);
     }
   }
   return lines;
@@ -8282,9 +8292,15 @@ Deno.serve(async (req) => {
         .join("\n");
       prompt.system += `\n\n## Relevant patterns from similar programmes\nThe following patterns from prior programmes of similar type are applicable to this phase. Reference them where relevant to improve the quality of your recommendations:\n${patternSummary}`;
     }
-    prompt.system += extractAgentServerMemory(contextProgramData, request.agentId);
-    if (memoryContext) {
-      prompt.system += `\n\n## Recent run history for this agent on this programme\n${memoryContext}`;
+    // Formal document agents (the spine) SKIP the prior-run memory/history
+    // append: feeding them their own earlier output re-surfaces stale gaps and
+    // inflates the prompt. Advisory agents keep it for continuity.
+    const echoesPriorOutput = FORMAL_ARTIFACT_AGENTS[request.agentId] !== undefined;
+    if (!echoesPriorOutput) {
+      prompt.system += extractAgentServerMemory(contextProgramData, request.agentId);
+      if (memoryContext) {
+        prompt.system += `\n\n## Recent run history for this agent on this programme\n${memoryContext}`;
+      }
     }
     prompt.user += extractHumanNotes(contextProgramData, request.agentId, request.phaseId);
     // Persist the fully-assembled prompt (system + user, after every cross-phase,

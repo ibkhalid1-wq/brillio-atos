@@ -139,13 +139,26 @@ export function flowMovements(): PhaseDefinition[] {
  * moved after the artifact was written. MIRRORS the edge implementation in
  * supabase/functions/run-agent/index.ts — keep byte-compatible.
  */
+// Fingerprinting JSON-stringifies the movement's whole input bucket — which
+// includes multi-100k-char transcripts — and the derivation layer calls it many
+// times per render. Cache the result on the program's data object (a stable
+// reference until the next update), so a transcript is hashed at most once per
+// version, not once per call.
+const fingerprintCache = new WeakMap<object, Map<string, string>>();
 export function movementInputsFingerprint(program: ProgramSummary, movementId: string): string {
+  const cacheKey = (program.rawData ?? program) as object;
+  let perMovement = fingerprintCache.get(cacheKey);
+  const cached = perMovement?.get(movementId);
+  if (cached !== undefined) return cached;
   const bucket = readMovementInputs(program, movementId);
   const keys = Object.keys(bucket).filter((key) => !key.startsWith("_")).sort();
   const text = JSON.stringify(keys.map((key) => [key, bucket[key]]));
   let hash = 5381;
   for (let index = 0; index < text.length; index += 1) hash = ((hash * 33) ^ text.charCodeAt(index)) >>> 0;
-  return hash.toString(16);
+  const fingerprint = hash.toString(16);
+  if (!perMovement) { perMovement = new Map(); fingerprintCache.set(cacheKey, perMovement); }
+  perMovement.set(movementId, fingerprint);
+  return fingerprint;
 }
 
 const contradictionTokens = (text: string): Set<string> =>

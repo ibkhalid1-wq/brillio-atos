@@ -1,7 +1,11 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import PhaseInputsPanel from "@/v3/components/PhaseInputsPanel";
-import FlowArtifactStudio, { type ArtifactEditInput } from "@/v3/components/flow/studio/FlowArtifactStudio";
+// The artifact studio pulls React Flow and every WYSIWYG editor — a heavy
+// chunk only needed when a document is opened. Lazy-load it so it never
+// weighs on the initial Flow render.
+const FlowArtifactStudio = lazy(() => import("@/v3/components/flow/studio/FlowArtifactStudio"));
+import type { ArtifactEditInput } from "@/v3/components/flow/studio/FlowArtifactStudio";
 import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 import {
   flowMovements, frontierMovementId, movementEvidence, movementArtifacts,
@@ -872,7 +876,7 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
         );
       })}
       {docFor ? (
-        <FlowArtifactStudio
+        <Suspense fallback={null}><FlowArtifactStudio
           program={program}
           artifact={docFor}
           onSaveInputs={onSaveInputs}
@@ -887,7 +891,7 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
           onRegenerate={() => onRunAgent(docFor.id, docFor.movementId)}
           onSaveDoc={onSaveArtifactDoc}
           onOpenInbox={onOpenInbox}
-        />
+        /></Suspense>
       ) : null}
     </div>
   );
