@@ -27,6 +27,9 @@ import MeetingKitCard from "@/v3/components/flow/MeetingKitCard";
 interface FlowCanvasProps {
   program: ProgramSummary;
   runningAgentIds: Set<string>;
+  /** Per-artifact failure residue from the last run — shown on the card
+   * until the next attempt, so a dead run can never pass for a quiet one. */
+  agentErrors?: Record<string, string>;
   onRunAgent: (agentId: string, phaseId?: string) => void;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
   /** Mint async-interview response links from the Discovery Kit (Listen). */
@@ -73,7 +76,7 @@ interface FlowCanvasProps {
  * one-line brief, and the ranked "Up next" queue. Nothing locks; editing
  * unfolds in place via the shared inputs panel.
  */
-export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onSetShipLane, onScheduleFollowUp, onMintFollowUp, onSaveArtifactDoc, onOpenInbox, onRecordShowPass, onRecordGate, onReopenGate, onRunAgentAndWait, relatedPrograms, onSelectProgram, onComment }: FlowCanvasProps) {
+export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onSetShipLane, onScheduleFollowUp, onMintFollowUp, onSaveArtifactDoc, onOpenInbox, onRecordShowPass, onRecordGate, onReopenGate, onRunAgentAndWait, relatedPrograms, onSelectProgram, onComment }: FlowCanvasProps) {
   const movements = useMemo(() => flowMovements(), []);
   const frontier = frontierMovementId(program);
   // The spine is horizontal: one movement is active at a time; the stepper on
@@ -84,13 +87,14 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
   // Salience over volume: the evidence column leads with the ranked best
   // quotes; "show all" unfolds the rest per movement.
   const [evAll, setEvAll] = useState<Set<string>>(() => new Set());
-  // The record rail: open by default, collapsible to an edge tab. Its focus
-  // follows the card the operator is IN — open a person's card and the rail
-  // shows THEIR trail; close it and the movement's record returns.
-  const [railOpen, setRailOpen] = useState(true);
+  // The record rail: a slim full-height edge strip that reveals on hover,
+  // pins open on demand, and auto-expands while a person's card is open —
+  // its focus follows the card the operator is IN.
+  const [railPin, setRailPin] = useState(false);
+  const [railHover, setRailHover] = useState(false);
   const [railFocus, setRailFocus] = useState<string | null>(null);
   const [railRead, setRailRead] = useState<EvidenceEntry | null>(null);
-  useEffect(() => { setRailFocus(null); setRailRead(null); }, [active]);
+  useEffect(() => { setRailFocus(null); setRailRead(null); setRailHover(false); }, [active]);
   // The active stage per movement — falls back to the movement's lead stage
   // until the operator picks one.
   const [movementTab, setMovementTab] = useState<Record<string, MovementTab>>({});
@@ -393,13 +397,20 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                     const railPerson = railIdx >= 0 ? sumStakeholders[railIdx] : null;
                     const railEntries = railIdx >= 0 ? evaluated[railIdx].mine : null;
                     return (
-                  <div className={`v3fs-collect-wrap${railOpen ? "" : " norail"}`}>
+                  <div className={`v3fs-collect-wrap${railPin ? " pinned" : ""}`}>
                     <div className="v3fs-collect-main">
                       {hasPeople ? (
                         <IntervieweeDiscovery program={program} movementId={movement.id}
                           captureField={meetingKit(program, movement.id)?.captureField ?? "interviewTranscripts"}
+                          docsStale={staleArtifacts.length > 0}
+                          onRegenerateStale={onRunAgentAndWait ? async () => {
+                            for (const artifact of staleArtifacts) {
+                              await onRunAgentAndWait(artifact.id, movement.id);
+                            }
+                          } : undefined}
                           onSaveInputs={onSaveInputs} onMintFollowUp={onMintFollowUp}
                           onMintPacks={movement.id === "listen" ? onMintPacks : undefined}
+                          onScheduleFollowUp={onScheduleFollowUp}
                           onFocusPerson={(id, open) => setRailFocus((cur) => (open ? id : cur === id ? null : cur))}
                           onCaptured={() => onRunAgent("contradiction-detector", movement.id)} />
                       ) : (
@@ -428,15 +439,20 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                         {editing.has(movement.id) ? "Close" : "Structured inputs"}
                       </button>
                     </div>
-                    {railOpen ? (
-                    <aside className="v3fs-recrail" aria-label="The record">
+                    <div className="v3fs-railzone"
+                      onMouseEnter={() => setRailHover(true)}
+                      onMouseLeave={() => setRailHover(false)}>
+                    {railPin || railHover || railPerson ? (
+                    <aside className={`v3fs-recrail${railPin ? "" : " floating"}`} aria-label="The record">
                       <div className="v3fs-recrail-h">
                         <span className="v3fs-recrail-t">{railPerson ? railPerson.name.split(",")[0].trim() : "The record"}</span>
                         <span className="v3fs-recrail-n">{railPerson ? (railEntries?.length ?? 0) : evidence.length}</span>
                         {railPerson ? (
                           <button type="button" className="v3fs-a" onClick={() => setRailFocus(null)} title="Back to the movement's record">all</button>
                         ) : null}
-                        <button type="button" className="v3fs-recrail-x" onClick={() => setRailOpen(false)} aria-label="Collapse the record rail">⟩</button>
+                        <button type="button" className="v3fs-recrail-x" onClick={() => setRailPin((pinned) => !pinned)}
+                          title={railPin ? "Unpin — the rail returns to hover-reveal" : "Pin the rail open"}
+                          aria-label={railPin ? "Unpin the record rail" : "Pin the record rail"}>{railPin ? "⟩" : "⌖ pin"}</button>
                       </div>
                       {railPerson ? (
                         <div className="v3fs-ivc-fb">
@@ -671,10 +687,13 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                       )}
                     </aside>
                     ) : (
-                      <button type="button" className="v3fs-recrail-tab" onClick={() => setRailOpen(true)} aria-label="Open the record rail">
-                        ◧ Record<b>{evidence.length}</b>
+                      <button type="button" className="v3fs-recrail-tab"
+                        onClick={() => setRailPin(true)} onFocus={() => setRailHover(true)}
+                        aria-label="Open the record rail" title="The record — hover to peek, click to pin">
+                        ◧<span>The record</span><b>{evidence.length}</b>
                       </button>
                     )}
+                    </div>
                   </div>
                     );
                   })()}
@@ -707,6 +726,7 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                       running={runningAgentIds.has(artifact.id)}
                       evidenceNames={evidence.map((entry) => entry.who)}
                       evidenceCount={evidence.length}
+                      lastError={agentErrors?.[artifact.id]}
                       onGenerate={() => onRunAgent(artifact.id, movement.id)}
                       onOpen={artifact.present ? () => setDocFor(artifact) : undefined}
                       onGoEvidence={() => goTab("collect")}
@@ -1011,12 +1031,14 @@ function ShipLanesBoard({ program, onCompile, onToggle, onSetLane }: {
   );
 }
 
-function ArtifactDoc({ artifact, running, evidenceNames, evidenceCount, onGenerate, onOpen, onGoEvidence }: {
+function ArtifactDoc({ artifact, running, evidenceNames, evidenceCount, lastError, onGenerate, onOpen, onGoEvidence }: {
   artifact: ArtifactCardModel;
   running: boolean;
   evidenceNames: string[];
   /** How many evidence items this movement holds — the card's provenance. */
   evidenceCount?: number;
+  /** The last run died — its message stays on the card until the next try. */
+  lastError?: string;
   onGenerate: () => void;
   onOpen?: () => void;
   /** "evidence changed" chip → the Evidence tab, where the change lives. */
@@ -1059,6 +1081,11 @@ function ArtifactDoc({ artifact, running, evidenceNames, evidenceCount, onGenera
         {artifact.confidence != null ? <span className="v3fs-conf">{artifact.confidence}%</span> : null}
       </div>
       <div className="v3fs-doc-x">{artifact.excerpt ?? artifact.description}</div>
+      {lastError ? (
+        <div className="v3fs-doc-err" role="alert">
+          ⚠ The last run failed: {lastError.slice(0, 160)} — try again.
+        </div>
+      ) : null}
       {artifact.present && evidenceCount != null ? (
         <div className="v3fs-doc-prov">
           reads {evidenceCount} evidence item{evidenceCount === 1 ? "" : "s"}

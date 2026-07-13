@@ -824,9 +824,19 @@ const COMPACT_OUTPUT_AGENTS = new Set<string>([
 ]);
 const COMPACT_OUTPUT_TOKENS = 2048;
 const DEFAULT_OUTPUT_TOKENS = 4096;
+// Roster-scaled long-form documents (a 12-interview discovery kit, per-track
+// demo scripts) legitimately exceed the 4096 default once a programme's
+// roster grows. A truncated stream costs MORE than the tokens it saves: the
+// run fails, the repair pass fails on the same ceiling, and the operator
+// retries the whole thing. Diagnosed live 2026-07-13: three consecutive
+// discovery-kit runs died "no parseable output" with the JSON cut mid-object.
+const LARGE_OUTPUT_AGENTS = new Set<string>(["discovery-kit", "demo-scripts"]);
+const LARGE_OUTPUT_TOKENS = 16384;
 
-/** Per-agent output-token budget — bounded JSON agents get a tighter ceiling. */
+/** Per-agent output-token budget — bounded JSON agents get a tighter ceiling,
+ * roster-scaled documents a taller one. */
 function resolveOutputTokenBudget(agentId: string): number {
+  if (LARGE_OUTPUT_AGENTS.has(agentId)) return LARGE_OUTPUT_TOKENS;
   return COMPACT_OUTPUT_AGENTS.has(agentId) ? COMPACT_OUTPUT_TOKENS : DEFAULT_OUTPUT_TOKENS;
 }
 
@@ -8421,7 +8431,10 @@ Deno.serve(async (req) => {
       const retry = await streamClaudeText({
         system: "You are a JSON repair tool. The user message contains text that was meant to be a single valid JSON object but could not be parsed (it may be wrapped in prose, fenced in markdown, or truncated). Reconstruct and return ONLY the corrected, complete JSON object — no markdown code fences, no commentary before or after.",
         messages: [{ role: "user", content: claudeResult.text }],
-        maxTokens: outputTokenBudget,
+        // The repair must RE-EMIT the complete object: when the original died
+        // by truncation, a repair capped at the same ceiling dies the same
+        // way. Give it the tall ceiling regardless of the agent's own budget.
+        maxTokens: Math.max(outputTokenBudget, LARGE_OUTPUT_TOKENS),
         temperature: 0,
         tier: "tier1", // JSON repair is light fix-up work — route to the cheap model.
       });

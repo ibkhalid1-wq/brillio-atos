@@ -55,13 +55,18 @@ const COLLECT_COLUMNS: Array<{ key: "heard" | "waiting" | "toreach"; label: stri
  * into columns by collection state (Heard · Awaiting · To reach), each card the
  * person's quote, dated feedback trail (click → transcript), follow-ups,
  * meeting, and link channels. Driven by resolveMovementStakeholders. */
-export function IntervieweeDiscovery({ program, movementId, captureField, onSaveInputs, onMintFollowUp, onMintPacks, onFocusPerson, onCaptured }: {
+export function IntervieweeDiscovery({ program, movementId, captureField, docsStale, onRegenerateStale, onSaveInputs, onMintFollowUp, onMintPacks, onScheduleFollowUp, onFocusPerson, onCaptured }: {
   program: ProgramSummary;
   movementId: string;
   captureField: string;
+  /** A required document trails the evidence — cards offer the regenerate
+   * instead of re-asking "still open" items that may already be answered. */
+  docsStale?: boolean;
+  onRegenerateStale?: () => Promise<void>;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
   onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
   onMintPacks?: () => Promise<void>;
+  onScheduleFollowUp?: (movementId: string, who: string, date: string) => Promise<void>;
   /** A card opened or closed — the record rail follows the person you're in. */
   onFocusPerson?: (stakeholderId: string, open: boolean) => void;
   onCaptured?: () => void;
@@ -113,8 +118,9 @@ export function IntervieweeDiscovery({ program, movementId, captureField, onSave
             <div className="v3fs-collect-col-h"><span className={`v3fs-cdot ${col.key}`} aria-hidden="true" />{col.label}<span className="v3fs-cn">{col.items.length}</span></div>
             {col.items.map(({ s, coll }) => (
               <IntervieweeCard key={s.id} program={program} movementId={movementId} stakeholder={s} captureField={captureField}
-                coll={coll} solo={stakeholders.length === 1}
-                onSaveInputs={onSaveInputs} onMintFollowUp={onMintFollowUp} onFocusPerson={onFocusPerson} onCaptured={onCaptured} />
+                coll={coll} solo={stakeholders.length === 1} docsStale={docsStale} onRegenerateStale={onRegenerateStale}
+                onSaveInputs={onSaveInputs} onMintFollowUp={onMintFollowUp} onScheduleFollowUp={onScheduleFollowUp}
+                onFocusPerson={onFocusPerson} onCaptured={onCaptured} />
             ))}
           </div>
         ))}
@@ -123,7 +129,7 @@ export function IntervieweeDiscovery({ program, movementId, captureField, onSave
   );
 }
 
-function IntervieweeCard({ program, movementId, stakeholder, captureField, coll, solo, onSaveInputs, onMintFollowUp, onFocusPerson, onCaptured }: {
+function IntervieweeCard({ program, movementId, stakeholder, captureField, coll, solo, docsStale, onRegenerateStale, onSaveInputs, onMintFollowUp, onScheduleFollowUp, onFocusPerson, onCaptured }: {
   program: ProgramSummary;
   movementId: string;
   stakeholder: MovementStakeholder;
@@ -132,8 +138,16 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
   /** The board's only person (Frame's sponsor): their card IS the board, so
    * it opens by default. On a roster board the tiles stay closed for scanning. */
   solo?: boolean;
+  /** A required document trails the evidence — answered "still open" items
+   * only clear when it regenerates, so the card offers the regenerate instead
+   * of re-asking what may already be answered. */
+  docsStale?: boolean;
+  onRegenerateStale?: () => Promise<void>;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
   onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
+  /** Put the meeting on the programme calendar (attested) — the .ics download
+   * is the invite; this is the record of it. */
+  onScheduleFollowUp?: (movementId: string, who: string, date: string) => Promise<void>;
   onFocusPerson?: (stakeholderId: string, open: boolean) => void;
   onCaptured?: () => void;
 }) {
@@ -155,20 +169,45 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
   const [evFor, setEvFor] = useState<StakeholderCollection["mine"][number] | null>(null);
   // Passage to highlight when the reader opens from a contradiction question.
   const [evHighlight, setEvHighlight] = useState<string | null>(null);
+  // The copy action can't rely on the clipboard (embedded contexts deny it
+  // silently) — the link is ALWAYS shown inline after minting; the clipboard
+  // write is best-effort and the tick reports whether it landed.
+  const [linkShown, setLinkShown] = useState<string | null>(null);
+  const [copiedTick, setCopiedTick] = useState(false);
+  const [linkNote, setLinkNote] = useState<string | null>(null);
+  const [inviteTick, setInviteTick] = useState<string | null>(null);
+  const [regenBusy, setRegenBusy] = useState(false);
   const dateRef = useRef<HTMLInputElement | null>(null);
   const effectiveLink = (pack && packMatches ? portalLinkFor(program.id, pack) : null) ?? mintedLink;
 
   const ensureLink = async (): Promise<string | null> => {
     if (effectiveLink) return effectiveLink;
-    if (!onMintFollowUp || !questions.length) return null;
+    if (!onMintFollowUp || !questions.length) {
+      setLinkNote(questions.length ? "Links aren't available here." : "Nothing to ask yet — the script is empty.");
+      return null;
+    }
     setLinkBusy(true);
     try {
       const link = await onMintFollowUp({ movementId, who: name, questions, captureField });
       if (link) setMintedLink(link);
+      else setLinkNote("Could not create the link — try again.");
       return link;
+    } catch {
+      setLinkNote("Could not create the link — try again.");
+      return null;
     } finally { setLinkBusy(false); }
   };
-  const copyLink = async () => { const link = await ensureLink(); if (link) { try { await navigator.clipboard.writeText(link); } catch { safePrompt("Copy the link:", link); } } };
+  const copyLink = async () => {
+    setLinkNote(null);
+    const link = await ensureLink();
+    if (!link) return;
+    setLinkShown(link);
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopiedTick(true);
+      window.setTimeout(() => setCopiedTick(false), 2400);
+    } catch { safePrompt("Copy the link:", link); }
+  };
   const sendLink = async () => { if (!email) return; const link = await ensureLink(); if (link) window.location.href = mailtoLink(email, { stakeholder: name, programmeName: program.name, link }); };
 
   const save = async () => {
@@ -243,7 +282,24 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
               contradiction carries its receipts: the disputed passage links
               straight into the evidence reader, highlighted, so the operator
               (or the stakeholder on a call) reviews the source before judging. */}
-          {questions.length ? (
+          {heard && docsStale ? (
+            // Their answers are ON THE RECORD but the documents haven't read
+            // them yet — re-asking "still open" items now would re-ask what may
+            // already be answered. The regenerate IS the next step; whatever
+            // remains open afterwards returns as a fresh follow-up script.
+            <div className="v3fs-ivc-sec">
+              <div className="v3fs-ivc-sec-h">Answers on the record</div>
+              <div className="v3fs-ivc-regen">
+                <p>{first}&rsquo;s answers haven&rsquo;t been read into the documents yet — regenerate first; anything still open returns here as a fresh script.</p>
+                {onRegenerateStale ? (
+                  <button type="button" className="v3fs-btn pri" disabled={regenBusy} onClick={async () => {
+                    setRegenBusy(true);
+                    try { await onRegenerateStale(); } finally { setRegenBusy(false); }
+                  }}>{regenBusy ? "Regenerating…" : "↻ Regenerate the documents"}</button>
+                ) : null}
+              </div>
+            </div>
+          ) : questions.length ? (
             <div className="v3fs-ivc-sec">
               <div className="v3fs-ivc-sec-h">{heard ? "Still open — ask on the next round" : "Their script"}
                 {heard ? <span className="v3fs-ivc-sec-note">these are unresolved gaps &amp; disputes; they clear when the artifact is regenerated or the dispute resolved</span> : null}</div>
@@ -281,12 +337,12 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
                   the invite action, asked for only when it's needed. */}
               <div className="v3fs-ivc-ch">
                 <button type="button" className={`v3fs-btn${email ? "" : " pri"}`} disabled={linkBusy} onClick={() => void copyLink()}>
-                  {linkBusy && !email ? "…" : effectiveLink ? "⎘ Copy link" : "⎘ Create & copy link"}
+                  {linkBusy && !email ? "…" : copiedTick ? "Copied ✓" : effectiveLink ? "⎘ Copy link" : "⎘ Create & copy link"}
                 </button>
                 {email ? (
                   <button type="button" className="v3fs-btn pri" disabled={linkBusy} title={`Opens a draft to ${email}`} onClick={() => void sendLink()}>✉ Send link</button>
                 ) : null}
-                <button type="button" className="v3fs-btn" title={`Pick a date — downloads a calendar invite for ${name}`}
+                <button type="button" className="v3fs-btn" title={`Pick a date — schedules the meeting and downloads the invite for ${name}`}
                   onClick={() => {
                     const picker = dateRef.current;
                     if (!picker) return;
@@ -299,6 +355,10 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
                     const picked = e.target.value;
                     setDate(picked);
                     if (!picked) return;
+                    // Two halves of one action: the meeting goes ON THE
+                    // PROGRAMME CALENDAR (attested, visible in Today), and the
+                    // .ics downloads as the stakeholder's invite.
+                    void onScheduleFollowUp?.(movementId, name, picked);
                     const ics = buildMeetingIcs({ who: name, email, date: picked, programmeName: program.name, intro: "", questions });
                     const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
                     const anchor = document.createElement("a");
@@ -306,8 +366,19 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
                     anchor.download = `${movementId}-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.ics`;
                     anchor.click();
                     URL.revokeObjectURL(url);
+                    setInviteTick(`Scheduled for ${picked}${onScheduleFollowUp ? " — on the programme calendar" : ""}; the invite downloaded — open it to send.`);
+                    window.setTimeout(() => setInviteTick(null), 6000);
                   }} />
               </div>
+              {linkShown ? (
+                <div className="v3fs-ivc-linkrow">
+                  <input readOnly value={linkShown} onFocus={(event) => event.currentTarget.select()}
+                    aria-label={`Response link for ${name}`} />
+                  {copiedTick ? <span className="v3fs-ivc-linkok">Copied ✓</span> : <span className="v3fs-ivc-linkhint">select to copy</span>}
+                </div>
+              ) : null}
+              {linkNote ? <div className="v3fs-ivc-note warn">{linkNote}</div> : null}
+              {inviteTick ? <div className="v3fs-ivc-note ok">🗓 {inviteTick}</div> : null}
             </div>
           ) : null}
 

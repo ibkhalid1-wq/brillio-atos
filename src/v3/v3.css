@@ -4911,41 +4911,58 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
   @keyframes v3fs-tabin {from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
 }
 /* ── Collect = the WORK (board/kit) + the RECORD (context rail) ──────────
-   The rail is sticky and collapsible; its focus follows the card the
-   operator is in — open a person, read their trail beside their card. */
-.v3fs-collect-wrap {display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:26px;align-items:start}
-.v3fs-collect-wrap.norail {grid-template-columns:minmax(0,1fr) auto}
+   The rail is a slim FULL-HEIGHT edge strip by default: hover it and the
+   record slides out as a floating panel; pin it and it takes a real
+   column. Opening a person's card auto-reveals the rail focused on them —
+   context follows the operator. */
+.v3fs-collect-wrap {display:grid;grid-template-columns:minmax(0,1fr) 42px;gap:20px;align-items:start}
+.v3fs-collect-wrap.pinned {grid-template-columns:minmax(0,1fr) 330px;gap:26px}
 .v3fs-collect-main {min-width:0;display:flex;flex-direction:column;gap:16px;align-items:flex-start}
 .v3fs-collect-main > * {align-self:stretch}
 .v3fs-collect-main > .v3fs-kit {max-width:74ch}
-.v3fs-recrail {position:sticky;top:64px;max-height:calc(100vh - 88px);overflow-y:auto;min-width:0;
+/* The zone is the rail's full-height home — sticky, viewport-tall, and the
+   positioning context for the floating panel. */
+.v3fs-railzone {position:sticky;top:64px;height:calc(100vh - 96px);min-width:0}
+.v3fs-recrail {height:100%;overflow-y:auto;overscroll-behavior:contain;
   border:1px solid var(--fs-line);border-radius:14px;padding:14px 16px;
-  background:color-mix(in srgb,var(--fs-line) 16%,transparent)}
+  background:color-mix(in srgb,var(--fs-line) 14%,var(--fs-card))}
+/* Hover-revealed: the panel floats over the board from the right edge. */
+.v3fs-recrail.floating {position:absolute;top:0;right:0;width:min(370px,86vw);max-height:100%;height:auto;min-height:220px;
+  background:var(--fs-card);z-index:40;
+  box-shadow:-20px 0 52px -26px rgba(15,16,32,.4), 0 20px 56px -28px rgba(15,16,32,.35)}
+@media (prefers-reduced-motion: no-preference) {
+  .v3fs-recrail.floating {animation:v3fs-railout .18s cubic-bezier(.22,1,.36,1)}
+  @keyframes v3fs-railout {from{transform:translateX(14px);opacity:.5}to{transform:none;opacity:1}}
+}
 .v3fs-recrail-h {display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .v3fs-recrail-t {flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   font-size:10.5px;font-weight:750;letter-spacing:.11em;text-transform:uppercase;color:var(--v3-accent-b)}
 .v3fs-recrail-n {font-family:var(--v3-font-mono);font-size:10px;font-weight:700;color:var(--v3-text-muted);
   background:var(--fs-card);border:1px solid var(--fs-line);border-radius:99px;padding:1px 7px}
-.v3fs-recrail-x {flex-shrink:0;border:none;background:none;cursor:pointer;font:inherit;font-size:13px;
-  color:var(--v3-text-muted);padding:2px 7px;border-radius:7px}
-.v3fs-recrail-x:hover {background:var(--fs-card);color:var(--v3-text-primary)}
+.v3fs-recrail-x {flex-shrink:0;border:none;background:none;cursor:pointer;font:inherit;font-size:10.5px;font-weight:650;
+  color:var(--v3-text-muted);padding:3px 8px;border-radius:7px;white-space:nowrap}
+.v3fs-recrail-x:hover {background:var(--fs-line);color:var(--v3-text-primary)}
 /* Inside the rail everything reads a size down. */
 .v3fs-recrail .v3fs-voice {padding-left:12px;margin-bottom:4px}
 .v3fs-recrail .v3fs-voice-q {font-size:13px;-webkit-line-clamp:3}
 .v3fs-recrail .v3fs-ivc-fb-row {background:var(--fs-card)}
-/* Collapsed: a slim vertical tab keeps the record one click away. */
-.v3fs-recrail-tab {writing-mode:vertical-rl;position:sticky;top:64px;justify-self:end;
-  display:inline-flex;align-items:center;gap:8px;padding:14px 7px;cursor:pointer;
-  font:inherit;font-size:10.5px;font-weight:750;letter-spacing:.1em;text-transform:uppercase;
-  color:var(--v3-text-muted);background:var(--fs-card);border:1px solid var(--fs-line);border-radius:10px;
-  transition:color .15s ease,border-color .15s ease}
-.v3fs-recrail-tab:hover {color:var(--v3-accent-2);border-color:color-mix(in srgb,var(--v3-accent-2) 40%,var(--fs-line))}
+/* The resting state: a slim vertical strip spanning the stage's height —
+   the record is always one glance (and one hover) away. */
+.v3fs-recrail-tab {writing-mode:vertical-rl;height:100%;width:42px;
+  display:inline-flex;align-items:center;justify-content:flex-start;gap:9px;padding:16px 0;cursor:pointer;
+  font:inherit;font-size:10.5px;font-weight:750;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--v3-text-muted);background:color-mix(in srgb,var(--fs-line) 26%,transparent);
+  border:1px solid var(--fs-line);border-radius:12px;
+  transition:color .15s ease,border-color .15s ease,background .15s ease}
+.v3fs-recrail-tab:hover {color:var(--v3-accent-2);background:var(--fs-card);
+  border-color:color-mix(in srgb,var(--v3-accent-2) 40%,var(--fs-line))}
 .v3fs-recrail-tab b {font-family:var(--v3-font-mono);font-size:10px}
-/* Narrow: the rail stacks beneath the board; the tab turns horizontal. */
+/* Narrow: the rail stacks beneath the board; the strip turns horizontal. */
 @media (max-width:1080px) {
-  .v3fs-collect-wrap, .v3fs-collect-wrap.norail {grid-template-columns:minmax(0,1fr)}
-  .v3fs-recrail {position:static;max-height:60vh}
-  .v3fs-recrail-tab {writing-mode:horizontal-tb;position:static;justify-self:start;padding:8px 14px}
+  .v3fs-collect-wrap, .v3fs-collect-wrap.pinned {grid-template-columns:minmax(0,1fr)}
+  .v3fs-railzone {position:static;height:auto}
+  .v3fs-recrail, .v3fs-recrail.floating {position:static;width:100%;height:auto;max-height:60vh;animation:none}
+  .v3fs-recrail-tab {writing-mode:horizontal-tb;height:auto;width:auto;padding:9px 14px}
 }
 /* The full record, grouped by person (documents together), newest first. */
 .v3fs-evg {border-bottom:1px solid var(--fs-line)}
@@ -4968,6 +4985,10 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-doc-tile.stale {background:var(--v3-amber-soft);color:var(--v3-amber)}
 /* Provenance: what the document read, and what it still owes. */
 .v3fs-doc-prov {font-family:var(--v3-font-mono);font-size:10px;color:var(--v3-text-muted);margin-top:7px}
+/* Failure residue: the last run's error stays on the card until the next try. */
+.v3fs-doc-err {margin-top:8px;font-size:11.5px;line-height:1.5;color:var(--v3-red,#dc2626);
+  background:var(--v3-red-soft,rgba(220,38,38,.08));border:1px solid color-mix(in srgb,var(--v3-red,#dc2626) 28%,transparent);
+  border-radius:9px;padding:7px 10px}
 .v3fs-doc-regen {font-size:11.5px;padding:7px 13px;border-radius:99px}
 button.v3fs-stale-tag {font-family:inherit;border:none;cursor:pointer}
 /* Empty-tab ghost: name the action that fills it. */
@@ -6219,6 +6240,20 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-ivc.heard .v3fs-ivc-strip {background:var(--v3-green)}
 .v3fs-ivc.waiting .v3fs-ivc-strip {background:var(--v3-amber)}
 .v3fs-ivc.toreach .v3fs-ivc-strip {background:var(--v3-accent-2)}
+/* Card feedback surfaces: the minted link shown inline (clipboard is
+   best-effort), schedule/link notes, and the regenerate-first notice. */
+.v3fs-ivc-linkrow {display:flex;align-items:center;gap:8px;margin-top:8px}
+.v3fs-ivc-linkrow input {flex:1;min-width:0;font-family:var(--v3-font-mono);font-size:10.5px;color:var(--v3-text-secondary);
+  background:var(--fs-bg,transparent);border:1px solid var(--fs-line);border-radius:8px;padding:6px 9px}
+.v3fs-ivc-linkok {flex-shrink:0;font-size:11px;font-weight:700;color:var(--v3-green)}
+.v3fs-ivc-linkhint {flex-shrink:0;font-size:10.5px;color:var(--v3-text-muted)}
+.v3fs-ivc-note {margin-top:7px;font-size:11.5px;line-height:1.5}
+.v3fs-ivc-note.ok {color:var(--v3-green)}
+.v3fs-ivc-note.warn {color:var(--v3-amber)}
+.v3fs-ivc-regen {display:flex;flex-direction:column;gap:9px;border:1px dashed var(--v3-amber);border-radius:10px;
+  padding:10px 12px;background:var(--v3-amber-soft)}
+.v3fs-ivc-regen p {margin:0;font-size:11.5px;line-height:1.55;color:var(--v3-amber)}
+.v3fs-ivc-regen .v3fs-btn {align-self:flex-start}
 /* Status-toned initials tile — people read as people, and the board's
    status language (green/amber/indigo) carries through the avatar. */
 .v3fs-ivc-av {flex-shrink:0;width:30px;height:30px;border-radius:10px;display:grid;place-items:center;

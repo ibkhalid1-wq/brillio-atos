@@ -847,6 +847,10 @@ export default function AppShellV3() {
     ),
     [activeRuns],
   );
+  // Per-artifact failure residue: a run that dies (unparseable output, edge
+  // error) leaves its message ON THE CARD until the next attempt — a toast
+  // alone disappears before anyone reads it.
+  const [agentErrors, setAgentErrors] = useState<Record<string, string>>({});
   // Mission Control's fleet board — the same in-flight runs, with movement.
   const flowFleet = useMemo(
     () => activeRuns
@@ -962,6 +966,14 @@ export default function AppShellV3() {
     skipPreSync?: boolean;
   }) => {
     if (!activeProgramId) return;
+    // A fresh attempt clears the artifact's failure residue — the card's
+    // error note refers to the LAST completed outcome, never a stale one.
+    setAgentErrors((prev) => {
+      if (!(agentId in prev)) return prev;
+      const next = { ...prev };
+      delete next[agentId];
+      return next;
+    });
 
     // Guard: retired agents. These agent families (legacy critical-path
     // scheduling, retrospective generation, pattern mining/query, digital-twin
@@ -1183,6 +1195,9 @@ export default function AppShellV3() {
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Agent run failed";
+      // Failure residue: the artifact card shows this until the next attempt —
+      // a 5-second toast is not a record.
+      setAgentErrors((prev) => ({ ...prev, [agentId]: message }));
       const isRateLimit = /rate limit|temporarily busy|429|too many requests/i.test(message);
       if (isRateLimit) {
         // Park the cooldown so background agents stop competing for the throttled budget.
@@ -1209,7 +1224,7 @@ export default function AppShellV3() {
             action: { label: "AI Settings →", onClick: openAISettings },
           });
         } else {
-          pushV3Toast(`Agent failed: ${message}`, { tone: "error", duration: 5000 });
+          pushV3Toast(`Agent failed: ${message}`, { tone: "error", duration: 9000 });
         }
       }
     } finally {
@@ -2356,6 +2371,7 @@ export default function AppShellV3() {
           onOpenSetup={() => setWizardOpen(true)}
           onOpenCopilot={() => setAdamCopilotSidebarOpen(true)}
           onRunAgent={handleRunAgent}
+          agentErrors={agentErrors}
           onSaveInputs={handleSavePhaseInputs}
           onResolveDecision={async (decisionId, resolution) => {
             const resolvedBy = currentUser?.email || "you";
