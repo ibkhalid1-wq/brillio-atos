@@ -15,7 +15,7 @@ import { unrosteredVoicesProposal, reDemoProposal, ontologyRepairProposal, queue
 import { routeAttachedDocument, buildRoutedBlocks } from "@/v3/components/flow/flowDocRouting";
 import { retroAttributionProposal, negatedClaimProposal } from "@/v3/components/flow/flowWatchers";
 import { rankEvidence, isNoiseEvidence, scoreEvidence } from "@/v3/components/flow/flowEvidenceRank";
-import { resolveMovementStakeholders, deliveryRoleDirectory, validateProgramRole, knownProgramRoles, readDirectoryPeople } from "@/v3/components/flow/flowStakeholders";
+import { resolveMovementStakeholders, deliveryRoleDirectory, validateProgramRole, knownProgramRoles, readDirectoryPeople, unresolvedCoverageNames, knownPeopleNames } from "@/v3/components/flow/flowStakeholders";
 import { mintFollowUpPack, listInterviewPacks, visibleLinks } from "@/v3/components/flow/flowPortal";
 import { trackAcceptance, trackBlockers, recordShowPass, listFlowTracks, type FlowTrack } from "@/v3/components/flow/flowTracks";
 import { setShipLane, toggleShipItem, listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
@@ -2127,5 +2127,33 @@ describe("People directory — operator-added roles validate against the program
     const people = readDirectoryPeople(p);
     expect(people).toHaveLength(2);
     expect(people.filter((x) => !x.roleResolved).map((x) => x.name)).toEqual(["Nadia"]);
+  });
+});
+
+describe("Discovery Kit coverage names that aren't people → Inbox", () => {
+  it("flags a coverage name not on the programme, and clears it once added/roster-known or dismissed", () => {
+    const base = {
+      discoveryKit: { coverageMap: [
+        { domain: "Sales", coveredBy: "Raj Mamodia, Nadia Okonkwo" },
+        { domain: "Ops", coveredBy: ["Team Ops"] },
+      ] },
+      phaseInputs: { frame: { sponsor: "Raj Mamodia" }, listen: { interviewRoster: JSON.stringify([{ name: "Raj Mamodia", status: "Heard" }]) } },
+    };
+    // Raj is known (roster + sponsor); Nadia + Team Ops are not.
+    const p = programme(base);
+    const flagged = unresolvedCoverageNames(p).map((x) => x.name);
+    expect(flagged).toContain("Nadia Okonkwo");
+    expect(flagged).toContain("Team Ops");
+    expect(flagged).not.toContain("Raj Mamodia");
+    // Add Nadia to the directory → she's known now.
+    const withNadia = programme({ ...base, phaseInputs: { ...base.phaseInputs, listen: { ...base.phaseInputs.listen,
+      _directoryPeople: JSON.stringify([{ id: "dp-1", name: "Nadia Okonkwo", role: "Sales", movementId: "listen", roleResolved: true }]) } } });
+    expect(unresolvedCoverageNames(withNadia).map((x) => x.name)).not.toContain("Nadia Okonkwo");
+    // Dismiss "Team Ops" → it stops prompting.
+    const dismissed = programme({ ...base, phaseInputs: { ...base.phaseInputs, listen: { ...base.phaseInputs.listen,
+      _dismissedCoverageNames: JSON.stringify(["Team Ops"]) } } });
+    expect(unresolvedCoverageNames(dismissed).map((x) => x.name)).not.toContain("Team Ops");
+    // knownPeopleNames includes roster + sponsor.
+    expect(knownPeopleNames(p).has("raj mamodia")).toBe(true);
   });
 });

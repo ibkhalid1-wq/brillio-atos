@@ -238,6 +238,67 @@ export function validateProgramRole(program: ProgramSummary, role: string):
   return { known: false, match: null, suggestions: scored.slice(0, 4).map((entry) => entry.role) };
 }
 
+/**
+ * Every person the programme already KNOWS by name: the Listen roster voices,
+ * operator-added directory people, everyone bound in `_roleBindings`, and the
+ * sponsor. Used to tell whether a name typed into the Discovery Kit coverage
+ * map is a real person or one the operator must still add.
+ */
+export function knownPeopleNames(program: ProgramSummary): Set<string> {
+  const names = new Set<string>();
+  const add = (n: string) => { const v = n.trim().toLowerCase(); if (v) names.add(v); };
+  for (const entry of resolveMovementStakeholders(program, "listen")) if (!entry.isRole) add(entry.name);
+  for (const p of readDirectoryPeople(program)) add(p.name);
+  const frame = readMovementInputs(program, "frame");
+  if (typeof frame.sponsor === "string") add(frame.sponsor.split(",")[0]);
+  for (const bucket of Object.values((() => {
+    const inner = dataRoot(program).phaseInputs;
+    return isRecord(inner) ? inner as Record<string, Record<string, unknown>> : {};
+  })())) {
+    const raw = bucket?._roleBindings;
+    if (typeof raw !== "string") continue;
+    try { for (const b of Object.values(JSON.parse(raw) as Record<string, { name?: unknown }>)) add(String(b?.name ?? "")); } catch { /* skip */ }
+  }
+  return names;
+}
+
+/** Names the operator explicitly marked "not a person" on the coverage map —
+ * team/function labels that should not keep prompting. Fingerprint-safe. */
+function dismissedCoverageNames(program: ProgramSummary): Set<string> {
+  const raw = readMovementInputs(program, "listen")._dismissedCoverageNames;
+  if (typeof raw !== "string" || !raw.trim()) return new Set();
+  try { const a = JSON.parse(raw); return new Set(Array.isArray(a) ? a.map((x) => String(x).trim().toLowerCase()) : []); }
+  catch { return new Set(); }
+}
+
+/**
+ * Names written into the Discovery Kit coverage map's "covered by" that are NOT
+ * yet people on the programme. Each is an Inbox item to resolve: add them to
+ * People, or mark the label as not-a-person. Team/function labels the operator
+ * dismissed are excluded.
+ */
+export function unresolvedCoverageNames(program: ProgramSummary): Array<{ name: string; domain: string }> {
+  const kit = dataRoot(program).discoveryKit;
+  const rows = isRecord(kit) && Array.isArray(kit.coverageMap) ? kit.coverageMap.filter(isRecord) : [];
+  const known = knownPeopleNames(program);
+  const dismissed = dismissedCoverageNames(program);
+  const out: Array<{ name: string; domain: string }> = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const domain = String(row.domain ?? "").trim();
+    const coveredBy = Array.isArray(row.coveredBy) ? row.coveredBy.map(String) : String(row.coveredBy ?? "").split(",");
+    for (const raw of coveredBy) {
+      const name = raw.trim();
+      const key = name.toLowerCase();
+      if (!name || name.split(/\s+/).length > 5) continue; // skip empties + sentence-like blobs
+      if (known.has(key) || dismissed.has(key) || seen.has(key)) continue;
+      seen.add(key);
+      out.push({ name, domain });
+    }
+  }
+  return out;
+}
+
 export function deliveryRoleDirectory(program: ProgramSummary): DeliveryRoleEntry[] {
   const frame = readMovementInputs(program, "frame");
   const sponsor = typeof frame.sponsor === "string" ? frame.sponsor.trim() : "";

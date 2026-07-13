@@ -55,13 +55,17 @@ const COLLECT_COLUMNS: Array<{ key: "heard" | "waiting" | "toreach"; label: stri
  * into columns by collection state (Heard · Awaiting · To reach), each card the
  * person's quote, dated feedback trail (click → transcript), follow-ups,
  * meeting, and link channels. Driven by resolveMovementStakeholders. */
-export function IntervieweeDiscovery({ program, movementId, captureField, docsStale, onRegenerateStale, onSaveInputs, onMintFollowUp, onMintPacks, onScheduleFollowUp, onFocusPerson, onCaptured }: {
+export function IntervieweeDiscovery({ program, movementId, captureField, docsStale, regenerating, onRegenerateStale, onSaveInputs, onMintFollowUp, onMintPacks, onScheduleFollowUp, onFocusPerson, onCaptured }: {
   program: ProgramSummary;
   movementId: string;
   captureField: string;
   /** A required document trails the evidence — cards offer the regenerate
    * instead of re-asking "still open" items that may already be answered. */
   docsStale?: boolean;
+  /** A regeneration is IN FLIGHT for this movement — suppress the follow-up
+   * script until every document lands, so the card never shows a script
+   * derived from a half-regenerated kit. */
+  regenerating?: boolean;
   onRegenerateStale?: () => Promise<void>;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
   onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
@@ -118,7 +122,7 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
             <div className="v3fs-collect-col-h"><span className={`v3fs-cdot ${col.key}`} aria-hidden="true" />{col.label}<span className="v3fs-cn">{col.items.length}</span></div>
             {col.items.map(({ s, coll }) => (
               <IntervieweeCard key={s.id} program={program} movementId={movementId} stakeholder={s} captureField={captureField}
-                coll={coll} solo={stakeholders.length === 1} docsStale={docsStale} onRegenerateStale={onRegenerateStale}
+                coll={coll} solo={stakeholders.length === 1} docsStale={docsStale} regenerating={regenerating} onRegenerateStale={onRegenerateStale}
                 onSaveInputs={onSaveInputs} onMintFollowUp={onMintFollowUp} onScheduleFollowUp={onScheduleFollowUp}
                 onFocusPerson={onFocusPerson} onCaptured={onCaptured} />
             ))}
@@ -129,7 +133,7 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
   );
 }
 
-function IntervieweeCard({ program, movementId, stakeholder, captureField, coll, solo, docsStale, onRegenerateStale, onSaveInputs, onMintFollowUp, onScheduleFollowUp, onFocusPerson, onCaptured }: {
+function IntervieweeCard({ program, movementId, stakeholder, captureField, coll, solo, docsStale, regenerating, onRegenerateStale, onSaveInputs, onMintFollowUp, onScheduleFollowUp, onFocusPerson, onCaptured }: {
   program: ProgramSummary;
   movementId: string;
   stakeholder: MovementStakeholder;
@@ -142,6 +146,8 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
    * only clear when it regenerates, so the card offers the regenerate instead
    * of re-asking what may already be answered. */
   docsStale?: boolean;
+  /** A regeneration is in flight — the script is suppressed until it finishes. */
+  regenerating?: boolean;
   onRegenerateStale?: () => Promise<void>;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
   onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
@@ -384,7 +390,18 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
               contradiction carries its receipts: the disputed passage links
               straight into the evidence reader, highlighted, so the operator
               (or the stakeholder on a call) reviews the source before judging. */}
-          {heard && docsStale ? (
+          {heard && regenerating ? (
+            // A regeneration is in flight. The follow-up script is derived from
+            // the documents — showing it now, while a kit or charter is still
+            // regenerating, would present a half-built, inaccurate script. Hold
+            // it until the whole run lands; the accurate script returns then.
+            <div className="v3fs-ivc-sec">
+              <div className="v3fs-ivc-sec-h">Documents regenerating</div>
+              <div className="v3fs-ivc-regen">
+                <p>Reading {first}&rsquo;s answers into the documents… the follow-up script updates once every document has finished regenerating.</p>
+              </div>
+            </div>
+          ) : heard && docsStale ? (
             // Their answers are ON THE RECORD but the documents haven't read
             // them yet — re-asking "still open" items now would re-ask what may
             // already be answered. The regenerate IS the next step; whatever
@@ -438,7 +455,7 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
               follow-up script once a conversation is on record) — so the Frame
               sponsor's single card never strands the operator without a send
               button, and every movement's card behaves identically. */}
-          {(!heard || questions.length) && !(heard && docsStale) ? (
+          {(!heard || questions.length) && !(heard && docsStale) && !(heard && regenerating) ? (
             // While answers await regeneration the channels HIDE: sending a
             // link or booking a meeting now would re-ask a stale script. The
             // regenerate notice above is the only door until the record reads.

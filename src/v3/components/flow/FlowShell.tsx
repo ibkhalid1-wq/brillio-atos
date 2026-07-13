@@ -7,7 +7,7 @@ import FlowBoardPack from "@/v3/components/flow/FlowBoardPack";
 import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 import {
   flowMovements, movementEvidence, movementArtifacts, gateChecklist, gateReadiness, listenCoverage,
-  demoAcceptance, daysToFirstDemo, wordsOfEvidence, readContradictions, parseGridRows,
+  demoAcceptance, daysToFirstDemo, wordsOfEvidence, readContradictions, parseGridRows, readMovementInputs,
   contradictionLogWithout,
 } from "@/v3/components/flow/flowShellData";
 import {
@@ -18,7 +18,7 @@ import {
   listFlowTracks, trackAcceptance, trackPace,
 } from "@/v3/components/flow/flowTracks";
 import { readFlowGovernance, flowAgentTier } from "@/v3/components/flow/flowGovernance";
-import { resolveMovementStakeholders, deliveryRoleDirectory, readDirectoryPeople, validateProgramRole, readRoleBindings, knownProgramRoles } from "@/v3/components/flow/flowStakeholders";
+import { resolveMovementStakeholders, deliveryRoleDirectory, readDirectoryPeople, validateProgramRole, readRoleBindings, knownProgramRoles, unresolvedCoverageNames } from "@/v3/components/flow/flowStakeholders";
 import { stakeholderEmail } from "@/v3/components/flow/flowMeetings";
 import { readMetricRegistry, metricConsistency } from "@/v3/components/flow/flowMetricRegistry";
 import { routeAttachedDocument, buildRoutedBlocks, type DocRoute } from "@/v3/components/flow/flowDocRouting";
@@ -452,7 +452,8 @@ export default function FlowShell(props: FlowShellProps) {
   // session the moment they go there.
   const openDisputeCount = useMemo(() => readContradictions(program, true).length, [program]);
   const unresolvedRoleCount = useMemo(() => readDirectoryPeople(program).filter((entry) => !entry.roleResolved).length, [program]);
-  const waitingCount = openDecisions.length + portalInbox.length + openDisputeCount + unresolvedRoleCount;
+  const coverageNameCount = useMemo(() => unresolvedCoverageNames(program).length, [program]);
+  const waitingCount = openDecisions.length + portalInbox.length + openDisputeCount + unresolvedRoleCount + coverageNameCount;
   const startId: FlowView = waitingCount > 0 ? "today" : "flow";
   const [startSeen, setStartSeen] = useState<boolean>(() => {
     try { return window.sessionStorage.getItem("v3fs-start-seen") === "1"; } catch { return true; }
@@ -925,6 +926,34 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
   const removeDirectoryPerson = (id: string, name: string) =>
     patchDirectoryPerson(id, null, `Person removed — ${name}`, "added in error");
 
+  // Names written into the kit coverage map that aren't people on the
+  // programme — an Inbox item to resolve. Adding routes them into the
+  // directory (role clarified there if unfamiliar); "not a person" records a
+  // dismissal so a team/function label stops prompting.
+  const coverageNames = useMemo(() => unresolvedCoverageNames(program), [program]);
+  const addCoverageName = async (name: string, domain: string) => {
+    if (!onSaveInputs) return;
+    const role = domain || "Contributor";
+    const resolved = validateProgramRole(program, role).known;
+    const entry = { id: `dp-${Date.now().toString(36)}-${name.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 8)}`, name, role, movementId: "listen", roleResolved: resolved };
+    setDisputeBusy(name);
+    try {
+      await onSaveInputs("listen", { _directoryPeople: JSON.stringify([...readDirectoryPeople(program), entry]) },
+        { attest: { action: `Person added from coverage — ${name}`, detail: resolved ? role : `${role} — needs clarification` } });
+    } finally { setDisputeBusy(null); }
+  };
+  const dismissCoverageName = async (name: string) => {
+    if (!onSaveInputs) return;
+    const raw = readMovementInputs(program, "listen")._dismissedCoverageNames;
+    let list: string[] = [];
+    try { const a = typeof raw === "string" ? JSON.parse(raw) : []; list = Array.isArray(a) ? a.map(String) : []; } catch { /* reset */ }
+    setDisputeBusy(name);
+    try {
+      await onSaveInputs("listen", { _dismissedCoverageNames: JSON.stringify([...new Set([...list, name])]) },
+        { attest: { action: `Coverage label marked not-a-person — ${name}`, detail: "won't prompt again" } });
+    } finally { setDisputeBusy(null); }
+  };
+
   const routeDispute = async (statement: string, person: string) => {
     if (!onSaveInputs || !person) return;
     const rows = parseGridRows(listenBucket().contradictionLog as unknown);
@@ -1038,7 +1067,7 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
           ))}
         </div>
       ) : null}
-      {open.length === 0 && inbox.length === 0 && disputes.length === 0 && unresolvedRoles.length === 0 ? (
+      {open.length === 0 && inbox.length === 0 && disputes.length === 0 && unresolvedRoles.length === 0 && coverageNames.length === 0 ? (
         <div className="v3fs-quiet">
           <div className="v3fs-quiet-mark" aria-hidden="true">◈</div>
           {attention.length ? (
@@ -1066,7 +1095,7 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
         <section className="v3fs-inbox" aria-label="Waiting on you" ref={inboxRef}>
           <div className="v3fs-ph">
             <h3>Waiting on you</h3>
-            <span>{open.length + inbox.length + disputes.length + unresolvedRoles.length} item{open.length + inbox.length + disputes.length + unresolvedRoles.length === 1 ? "" : "s"}</span>
+            <span>{(() => { const n = open.length + inbox.length + disputes.length + unresolvedRoles.length + coverageNames.length; return `${n} item${n === 1 ? "" : "s"}`; })()}</span>
           </div>
           {open.map((decision) => (
             <DecisionCard key={decision.id} program={program} decision={decision} movementLabel={label(decision.movementId)}
@@ -1160,6 +1189,28 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
                 {onSaveInputs ? (
                   <button type="button" className="v3fs-btn quiet" disabled={disputeBusy === person.id}
                     onClick={() => void removeDirectoryPerson(person.id, person.name)}>Remove</button>
+                ) : null}
+              </div>
+            </article>
+          ))}
+          {coverageNames.map((cov) => (
+            <article key={`cov-${cov.name}`} className="v3fs-dec">
+              <div className="v3fs-dec-top">
+                <span className="v3fs-vc pen">Identify person</span>
+                <span className="v3fs-dec-mv">{cov.domain || "Discovery Kit coverage"}</span>
+              </div>
+              <p className="v3fs-dec-s">&ldquo;{cov.name}&rdquo; is listed in the Discovery Kit coverage but isn&rsquo;t a person on the programme yet. Add them to People, or mark it as a team/function label.</p>
+              <div className="v3fs-dec-rec-b">adding routes them into People (their role is clarified there if it&rsquo;s unfamiliar)</div>
+              <div className="v3fs-dec-cta">
+                {onSaveInputs ? (
+                  <button type="button" className="v3fs-btn pri" disabled={disputeBusy === cov.name}
+                    onClick={() => void addCoverageName(cov.name, cov.domain)}>
+                    {disputeBusy === cov.name ? "Adding…" : `✓ Add ${cov.name} to People`}
+                  </button>
+                ) : null}
+                {onSaveInputs ? (
+                  <button type="button" className="v3fs-btn quiet" disabled={disputeBusy === cov.name}
+                    onClick={() => void dismissCoverageName(cov.name)}>Not a person</button>
                 ) : null}
               </div>
             </article>

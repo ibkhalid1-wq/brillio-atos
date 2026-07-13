@@ -52,6 +52,15 @@ const subscribeSpine = (listener: () => void) => {
   return () => { spineListeners.delete(listener); };
 };
 
+/** True while a down-the-spine regeneration is running. The collect cards read
+ * this to SUPPRESS the follow-up script mid-run: a script derived from a kit
+ * that is still regenerating is inaccurate, so nothing is shown until every
+ * document in the run has landed. */
+export function useSpineRunning(): boolean {
+  const state = React.useSyncExternalStore(subscribeSpine, () => spineState);
+  return state?.phase === "running";
+}
+
 /** The spine regeneration as the queue's top item — same staged runner, now
  * living where every other frontier verb lives, with inline progress. */
 export function SpineQueueItem({ plan, primary, runningAgentIds, onRun, onGo }: {

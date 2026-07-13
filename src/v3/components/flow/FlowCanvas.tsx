@@ -18,7 +18,7 @@ import { listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 import { listFlowTracks, trackAcceptance } from "@/v3/components/flow/flowTracks";
 import { safePrompt } from "@/v3/components/flow/flowCapture";
 import { MOVEMENT_CAPTION, leadTab, type MovementTab } from "@/v3/components/flow/flowStages";
-import { SpineQueueItem, UpNextButton, type UpNextItem } from "@/v3/components/flow/flowUpNext";
+import { SpineQueueItem, UpNextButton, useSpineRunning, type UpNextItem } from "@/v3/components/flow/flowUpNext";
 import { IntervieweeDiscovery, stakeholderCollection } from "@/v3/components/flow/CollectBoard";
 import MeetingKitCard from "@/v3/components/flow/MeetingKitCard";
 
@@ -76,6 +76,9 @@ interface FlowCanvasProps {
  */
 export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onSetShipLane, onScheduleFollowUp, onMintFollowUp, onSaveArtifactDoc, onOpenInbox, onRecordShowPass, onRecordGate, onReopenGate, onRunAgentAndWait, relatedPrograms, onSelectProgram, onComment }: FlowCanvasProps) {
   const movements = useMemo(() => flowMovements(), []);
+  // A spine regeneration in flight — the collect cards suppress their script
+  // until it lands (a script off a half-regenerated kit is inaccurate).
+  const spineRunning = useSpineRunning();
   const frontier = frontierMovementId(program);
   // The spine is horizontal: one movement is active at a time; the stepper on
   // top carries every movement's state and switches between them.
@@ -411,6 +414,7 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                         <IntervieweeDiscovery program={program} movementId={movement.id}
                           captureField={meetingKit(program, movement.id)?.captureField ?? "interviewTranscripts"}
                           docsStale={staleArtifacts.length > 0}
+                          regenerating={spineRunning || generating}
                           onRegenerateStale={onRunAgentAndWait ? async () => {
                             for (const artifact of staleArtifacts) {
                               await onRunAgentAndWait(artifact.id, movement.id);
