@@ -1,0 +1,376 @@
+/**
+ * The Collect stage's status board — a movement's discovery, organized by
+ * stakeholder. One card per person or role: their script, their link/meeting
+ * channels, their captured evidence, a capture box — followed until they've
+ * been heard. Driven by resolveMovementStakeholders, so it serves every
+ * movement.
+ */
+import { useMemo, useRef, useState } from "react";
+import type { ProgramSummary } from "@/new/types";
+import EvidenceReader from "@/v3/components/flow/EvidenceReader";
+import { flowMovements, movementEvidence, evidenceStamp, locateQuote } from "@/v3/components/flow/flowShellData";
+import { buildMeetingIcs, mailtoLink, stakeholderEmail } from "@/v3/components/flow/flowMeetings";
+import { supabase } from "@/integrations/supabase/client";
+import { listInterviewPacks, portalLinkFor } from "@/v3/components/flow/flowPortal";
+import { resolveMovementStakeholders, type MovementStakeholder } from "@/v3/components/flow/flowStakeholders";
+import { mapTranscriptSpeakers } from "@/v3/components/flow/flowTranscriptMap";
+import { AttachFileButton, TranscribeButton } from "@/v3/components/flow/flowCapture";
+
+/** A movement's discovery, organized by stakeholder. One card per person or
+ * role: their script, their link/meeting channels, their captured evidence, a
+ * capture box — followed until they've been heard. Driven by
+ * resolveMovementStakeholders, so it serves every movement. */
+/** Derive a stakeholder's collection status, their live link pack, and the
+ * evidence attributed to them — the single source of truth for the status
+ * board grouping and each card. */
+export function stakeholderCollection(
+  movementId: string,
+  stakeholder: MovementStakeholder,
+  packs: ReturnType<typeof listInterviewPacks>,
+  evidence: ReturnType<typeof movementEvidence>,
+) {
+  const key = stakeholder.name.toLowerCase();
+  const pack = [...packs].reverse().find((p) => String(p.stakeholder ?? "").trim().toLowerCase() === key
+    && (movementId === "listen" ? (!p.movementId || p.movementId === "listen") : p.movementId === movementId));
+  // Their evidence: attributed voice blocks, PLUS documents they provided
+  // (document entries carry the provider in their meta, not in `who`).
+  const mine = (key.length > 2 ? evidence.filter((e) =>
+    e.who.toLowerCase().includes(key)
+    || key.includes(e.who.split(",")[0].trim().toLowerCase())
+    || (e.kind === "document" && e.meta.toLowerCase().includes(key))) : [])
+    // Newest first — the latest response leads the trail.
+    .slice().sort((a, b) => (b.capturedAt ?? "").localeCompare(a.capturedAt ?? ""));
+  const heard = mine.length > 0 || Boolean(pack?.respondedAt);
+  const status: "heard" | "waiting" | "toreach" = heard ? "heard" : pack ? "waiting" : "toreach";
+  return { key, pack, mine, heard, status };
+}
+type StakeholderCollection = ReturnType<typeof stakeholderCollection>;
+
+const COLLECT_COLUMNS: Array<{ key: "heard" | "waiting" | "toreach"; label: string }> = [
+  { key: "heard", label: "Heard" },
+  { key: "waiting", label: "Awaiting response" },
+  { key: "toreach", label: "To reach" },
+];
+
+/** The movement's stakeholder data collection as a STATUS BOARD: cards grouped
+ * into columns by collection state (Heard · Awaiting · To reach), each card the
+ * person's quote, dated feedback trail (click → transcript), follow-ups,
+ * meeting, and link channels. Driven by resolveMovementStakeholders. */
+export function IntervieweeDiscovery({ program, movementId, captureField, related, onSaveInputs, onMintFollowUp, onMintPacks, onCaptured }: {
+  program: ProgramSummary;
+  movementId: string;
+  captureField: string;
+  related?: ProgramSummary[];
+  onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
+  onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
+  onMintPacks?: () => Promise<void>;
+  onCaptured?: () => void;
+}) {
+  const stakeholders = resolveMovementStakeholders(program, movementId);
+  const movement = flowMovements().find((m) => m.id === movementId);
+  const evidence = movement ? movementEvidence(program, movement) : [];
+  const packs = listInterviewPacks(program);
+  const [mintBusy, setMintBusy] = useState(false);
+  const [allCollapsed, setAllCollapsed] = useState(false);
+  const boardRef = useRef<HTMLDivElement>(null);
+  // Same person, other programmes in the family: their quotes project here
+  // read-only, tagged with origin — evidence never moves between programmes.
+  const crossAll = useMemo(() =>
+    (related ?? []).flatMap((rp) => flowMovements().flatMap((m) =>
+      movementEvidence(rp, m).map((entry) => ({ entry, from: rp.name })))),
+    [related]);
+  if (!stakeholders.length) return null;
+  const evaluated = stakeholders.map((s) => ({ s, coll: stakeholderCollection(movementId, s, packs, evidence) }));
+  const heardCount = evaluated.filter((e) => e.coll.status === "heard").length;
+  const word = movementId === "show" ? "reviewed" : movementId === "listen" || movementId === "frame" ? "heard" : "consulted";
+  const columns = COLLECT_COLUMNS
+    .map((c) => ({ ...c, items: evaluated.filter((e) => e.coll.status === c.key) }))
+    .filter((c) => c.items.length);
+  const toggleAll = () => {
+    const next = !allCollapsed;
+    boardRef.current?.querySelectorAll("details.v3fs-ivc").forEach((node) => { (node as HTMLDetailsElement).open = !next; });
+    setAllCollapsed(next);
+  };
+  return (
+    <div className="v3fs-ch-collect">
+      <div className="v3fs-collect-h">
+        <div className="v3fs-colh ev">Stakeholder data collection</div>
+        <span className="v3fs-collect-count"
+          title={movementId === "listen"
+            ? "Counted from collected evidence and responded links. The gate's coverage ledger is separate — voices are attested heard or waived in the roster."
+            : "Counted from collected evidence and responded links."}>
+          {heardCount} of {stakeholders.length} {word}
+        </span>
+        <div className="v3fs-collect-tools">
+          {movementId === "listen" && onMintPacks ? (
+            <button type="button" className="v3fs-btn" disabled={mintBusy}
+              onClick={async () => { setMintBusy(true); try { await onMintPacks(); } finally { setMintBusy(false); } }}>
+              {packs.length ? "↺ Refresh & add links" : "✳ Create everyone's link"}
+            </button>
+          ) : null}
+          {stakeholders.length > 1 ? (
+            <button type="button" className="v3fs-btn quiet" onClick={toggleAll}>{allCollapsed ? "Expand all" : "Collapse all"}</button>
+          ) : null}
+        </div>
+      </div>
+      <div className="v3fs-collect-board" ref={boardRef}>
+        {columns.map((col) => (
+          <div key={col.key} className="v3fs-collect-col">
+            <div className="v3fs-collect-col-h"><span className={`v3fs-cdot ${col.key}`} aria-hidden="true" />{col.label}<span className="v3fs-cn">{col.items.length}</span></div>
+            {col.items.map(({ s, coll }) => {
+              const key = s.name.toLowerCase();
+              const cross = key.length > 2 ? crossAll.filter(({ entry }) => {
+                const who = entry.who.split(",")[0].trim().toLowerCase();
+                return who && (who.includes(key) || key.includes(who));
+              }) : [];
+              return (
+                <IntervieweeCard key={s.id} program={program} movementId={movementId} stakeholder={s} captureField={captureField}
+                  coll={coll} cross={cross} onSaveInputs={onSaveInputs} onMintFollowUp={onMintFollowUp} onCaptured={onCaptured} />
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function IntervieweeCard({ program, movementId, stakeholder, captureField, coll, cross, onSaveInputs, onMintFollowUp, onCaptured }: {
+  program: ProgramSummary;
+  movementId: string;
+  stakeholder: MovementStakeholder;
+  captureField: string;
+  coll: StakeholderCollection;
+  cross?: Array<{ entry: ReturnType<typeof movementEvidence>[number]; from: string }>;
+  onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
+  onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
+  onCaptured?: () => void;
+}) {
+  const { name, role, questions } = stakeholder;
+  const { pack, mine, heard, status } = coll;
+  const first = name.split(" ")[0] || "they";
+  const email = stakeholderEmail(program, name);
+  // A minted link is only "the" link while its questions still match the
+  // current script — when the script has moved on, the old link goes stale and
+  // Copy/Send mint a fresh pack (which supersedes the unanswered one).
+  const packMatches = !!pack && (Array.isArray(pack.questions) ? pack.questions.map(String).join(" ") : "")
+    === questions.slice(0, 8).join(" ");
+  const statusLabel = heard ? "Heard" : pack ? (packMatches ? "Link sent" : "Link outdated") : "To reach";
+  const [capture, setCapture] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [date, setDate] = useState("");
+  const [mintedLink, setMintedLink] = useState<string | null>(null);
+  const [linkBusy, setLinkBusy] = useState(false);
+  const [evFor, setEvFor] = useState<typeof mine[number] | null>(null);
+  // Passage to highlight when the reader opens from a contradiction question.
+  const [evHighlight, setEvHighlight] = useState<string | null>(null);
+  const dateRef = useRef<HTMLInputElement | null>(null);
+  const effectiveLink = (pack && packMatches ? portalLinkFor(program.id, pack) : null) ?? mintedLink;
+
+  const ensureLink = async (): Promise<string | null> => {
+    if (effectiveLink) return effectiveLink;
+    if (!onMintFollowUp || !questions.length) return null;
+    setLinkBusy(true);
+    try {
+      const link = await onMintFollowUp({ movementId, who: name, questions, captureField });
+      if (link) setMintedLink(link);
+      return link;
+    } finally { setLinkBusy(false); }
+  };
+  const copyLink = async () => { const link = await ensureLink(); if (link) { try { await navigator.clipboard.writeText(link); } catch { window.prompt("Copy the link:", link); } } };
+  const sendLink = async () => { if (!email) return; const link = await ensureLink(); if (link) window.location.href = mailtoLink(email, { stakeholder: name, programmeName: program.name, link }); };
+
+  const save = async () => {
+    const text = capture.trim();
+    if (!text) return;
+    setBusy(true);
+    try {
+      const raw = (program.rawData ?? {}) as Record<string, unknown>;
+      const inner = typeof raw.data === "object" && raw.data !== null ? raw.data as Record<string, unknown> : raw;
+      const phase = flowMovements().find((m) => m.id === movementId);
+      const phaseId = movementId;
+      void phase;
+      const bucket = (inner.phaseInputs && typeof inner.phaseInputs === "object" ? (inner.phaseInputs as Record<string, Record<string, unknown>>)[movementId] : undefined) ?? {};
+      const existing = typeof bucket[captureField] === "string" ? bucket[captureField] as string : "";
+      const header = `— ${[name, role, evidenceStamp()].filter(Boolean).join(", ")} —`;
+      await onSaveInputs(phaseId, { [captureField]: [existing.trimEnd(), `${header}\n${text}`].filter(Boolean).join("\n\n") },
+        { attest: { action: `Captured — ${name}` } });
+      setCapture("");
+      onCaptured?.();
+    } finally { setBusy(false); }
+  };
+
+  // An attached file is EVIDENCE the moment it lands: saved as a document
+  // block in the person's name — canonical header + [source:] pointer — so the
+  // Library lists it and the original stays downloadable. No manual step.
+  // A MEETING TRANSCRIPT goes further: detected speakers are auto-mapped to
+  // the movement's roster and each matched person gets their turns as their
+  // OWN attributed block — everyone in the room is heard, not just this card.
+  const saveAttachedDoc = async (filename: string, text: string, sourceKey?: string) => {
+    const docTitle = filename.replace(/\.[^.]+$/, "");
+    setBusy(true);
+    try {
+      const raw = (program.rawData ?? {}) as Record<string, unknown>;
+      const inner = typeof raw.data === "object" && raw.data !== null ? raw.data as Record<string, unknown> : raw;
+      const bucket = (inner.phaseInputs && typeof inner.phaseInputs === "object" ? (inner.phaseInputs as Record<string, Record<string, unknown>>)[movementId] : undefined) ?? {};
+      const existing = typeof bucket[captureField] === "string" ? bucket[captureField] as string : "";
+      const day = evidenceStamp();
+      const docBlock = `— Document: ${docTitle}, provided by ${name}, ${day} —\n${sourceKey ? `[source: ${sourceKey}]\n` : ""}${text}`;
+      const roster = resolveMovementStakeholders(program, movementId).map((s) => ({ name: s.name, role: s.role }));
+      const mapping = mapTranscriptSpeakers(text, roster);
+      const speakerBlocks = (mapping?.blocks ?? []).map((b) =>
+        `— ${[b.name, b.role, day].filter(Boolean).join(", ")} —\n${b.text}`);
+      const attestDetail = mapping
+        ? `provided by ${name} · speakers mapped: ${mapping.matched.join(", ") || "none"}${mapping.unmatched.length ? ` · unmatched: ${mapping.unmatched.join(", ")}` : ""}`
+        : `provided by ${name}`;
+      await onSaveInputs(movementId,
+        { [captureField]: [existing.trimEnd(), docBlock, ...speakerBlocks].filter(Boolean).join("\n\n") },
+        { attest: { action: mapping?.blocks.length ? `Transcript mapped — ${docTitle}` : `Document added — ${docTitle}`, detail: attestDetail } });
+      onCaptured?.();
+    } finally { setBusy(false); }
+  };
+  const downloadOriginal = (entry: typeof mine[number]) => {
+    void supabase.functions.invoke("flow-extract", { body: { download: entry.sourceKey } })
+      .then((result: { data: unknown }) => {
+        const url = (result.data as { url?: string } | null)?.url;
+        if (url) window.open(url, "_blank"); else setEvFor(entry);
+      })
+      .catch(() => setEvFor(entry));
+  };
+
+  return (
+    <>
+      <details className={`v3fs-ivc ${status}`} open={!heard}>
+        <span className="v3fs-ivc-strip" aria-hidden="true" />
+        <summary>
+          <span className="v3fs-ivc-who">{name || "Stakeholder"}{role && role !== name ? <span>{role}</span> : null}</span>
+          <span className={`v3fs-ivc-st ${status}`}>{statusLabel}</span>
+          <span className="v3fs-ivc-chev" aria-hidden="true" />
+        </summary>
+        <div className="v3fs-ivc-b">
+          {/* Feedback trail — every dated response, click to read the transcript. */}
+          <div className="v3fs-ivc-sec">
+            <div className="v3fs-ivc-sec-h">Feedback &amp; responses</div>
+            {mine.length || cross?.length ? (
+              <div className="v3fs-ivc-fb">
+                {mine.map((e, i) => (
+                  <button key={i} type="button" className="v3fs-ivc-fb-row" onClick={() => setEvFor(e)}
+                    title={e.kind === "document" ? "Open the extracted content — ⤓ fetches the original file" : "Read the transcript"}>
+                    <span className="v3fs-ivc-fb-top">
+                      {e.kind === "document" ? <span className="v3fs-ivc-fb-kind">doc</span> : null}
+                      {e.kind === "document" ? <span className="v3fs-ivc-fb-m">{e.who}</span> : null}
+                      {e.capturedAt ? <span className="v3fs-ivc-fb-when">{e.capturedAt}</span> : null}
+                      {e.kind === "document" && e.sourceKey ? (
+                        <span role="button" tabIndex={0} className="v3fs-ivc-fb-dl" title="Download the original file"
+                          onClick={(ev) => { ev.stopPropagation(); downloadOriginal(e); }}
+                          onKeyDown={(ev) => { if (ev.key === "Enter") { ev.stopPropagation(); downloadOriginal(e); } }}>⤓ original</span>
+                      ) : null}
+                      <span className="v3fs-ivc-fb-go">Open ↗</span>
+                    </span>
+                    {e.excerpt ? <span className="v3fs-ivc-fb-q">“{e.excerpt}”</span> : null}
+                  </button>
+                ))}
+                {(cross ?? []).slice(0, 4).map(({ entry, from }, i) => (
+                  <button key={`x-${i}`} type="button" className="v3fs-ivc-fb-row cross" onClick={() => setEvFor(entry)}
+                    title={`Said in ${from} — shown here read-only`}>
+                    <span className="v3fs-ivc-fb-top"><span className="v3fs-ivc-fb-from">◇ {from}</span><span className="v3fs-ivc-fb-m">{entry.meta}</span><span className="v3fs-ivc-fb-go">Open ↗</span></span>
+                    {entry.excerpt ? <span className="v3fs-ivc-fb-q">“{entry.excerpt}”</span> : null}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="v3fs-ivc-fb-empty">No responses yet — collect via a link or a meeting.</div>
+            )}
+          </div>
+
+          {/* Follow-up questions / their script. A question born from a
+              contradiction carries its receipts: the disputed passage links
+              straight into the evidence reader, highlighted, so the operator
+              (or the stakeholder on a call) reviews the source before judging. */}
+          {questions.length ? (
+            <div className="v3fs-ivc-sec">
+              <div className="v3fs-ivc-sec-h">{heard ? "Still open — ask on the next round" : "Their script"}
+                {heard ? <span className="v3fs-ivc-sec-note">these are unresolved gaps &amp; disputes; they clear when the artifact is regenerated or the dispute resolved</span> : null}</div>
+              <ul className="v3fs-ivc-q">{questions.map((q, i) => {
+                const disputed = q.match(/disagree[^"]*"(.{8,140}?)"/i)?.[1];
+                const source = disputed
+                  ? flowMovements().flatMap((m) => movementEvidence(program, m)).find((entry) => entry.text && locateQuote(entry.text, disputed))
+                  : undefined;
+                return (
+                  <li key={i}>
+                    {q}
+                    {source ? (
+                      <button type="button" className="v3fs-a v3fs-ivc-evlink" title={`Said by ${source.who} — read the passage in the source`}
+                        onClick={() => { setEvHighlight(disputed ?? null); setEvFor(source); }}>
+                        ⤷ review evidence
+                      </button>
+                    ) : null}
+                  </li>
+                );
+              })}</ul>
+            </div>
+          ) : null}
+
+          {/* Meeting + link channels. Not-yet-heard people get "Reach out";
+              heard people KEEP the same three channels as "Follow up" whenever
+              the kit still has questions for them (it swaps in the gap-driven
+              follow-up script once a conversation is on record) — so the Frame
+              sponsor's single card never strands the operator without a send
+              button, and every movement's card behaves identically. */}
+          {!heard || questions.length ? (
+            <div className="v3fs-ivc-sec">
+              <div className="v3fs-ivc-sec-h">{heard ? "Follow up" : "Reach out"}</div>
+              {/* Three ways in, no standing form: copy the link, email the
+                  link, or send a meeting invite — the date picker lives INSIDE
+                  the invite action, asked for only when it's needed. */}
+              <div className="v3fs-ivc-ch">
+                <button type="button" className={`v3fs-btn${email ? "" : " pri"}`} disabled={linkBusy} onClick={() => void copyLink()}>
+                  {linkBusy && !email ? "…" : effectiveLink ? "⎘ Copy link" : "⎘ Create & copy link"}
+                </button>
+                {email ? (
+                  <button type="button" className="v3fs-btn pri" disabled={linkBusy} title={`Opens a draft to ${email}`} onClick={() => void sendLink()}>✉ Send link</button>
+                ) : null}
+                <button type="button" className="v3fs-btn" title={`Pick a date — downloads a calendar invite for ${name}`}
+                  onClick={() => {
+                    const picker = dateRef.current;
+                    if (!picker) return;
+                    if ("showPicker" in picker) { try { (picker as HTMLInputElement & { showPicker: () => void }).showPicker(); return; } catch { /* fall through */ } }
+                    picker.focus(); picker.click();
+                  }}>🗓 Send meeting invite</button>
+                <input ref={dateRef} type="date" className="v3fs-ivc-date-hidden" tabIndex={-1} aria-label={`Meeting date for ${name}`}
+                  value={date}
+                  onChange={(e) => {
+                    const picked = e.target.value;
+                    setDate(picked);
+                    if (!picked) return;
+                    const ics = buildMeetingIcs({ who: name, email, date: picked, programmeName: program.name, intro: "", questions });
+                    const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
+                    const anchor = document.createElement("a");
+                    anchor.href = url;
+                    anchor.download = `${movementId}-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.ics`;
+                    anchor.click();
+                    URL.revokeObjectURL(url);
+                  }} />
+              </div>
+            </div>
+          ) : null}
+
+          {/* Capture what they said — typed, or spoken and transcribed. */}
+          <div className="v3fs-ivc-cap">
+            <textarea rows={2} value={capture} onChange={(e) => setCapture(e.target.value)}
+              placeholder={`What ${first} said — attribution added for you`} aria-label={`Capture ${name}'s input`} />
+            <div className="v3fs-ivc-cap-row">
+              <button type="button" className="v3fs-btn pri" disabled={busy || !capture.trim()} onClick={() => void save()}>
+                {busy ? "Saving…" : "Capture"}
+              </button>
+              <TranscribeButton onText={(transcript) => setCapture((current) => (current.trim() ? `${current.trim()}\n\n${transcript}` : transcript))} />
+              <AttachFileButton programId={program.id}
+                onExtracted={(filename, text, sourceKey) => void saveAttachedDoc(filename, text, sourceKey)} />
+            </div>
+          </div>
+        </div>
+      </details>
+      {evFor ? <EvidenceReader entry={evFor} highlight={evHighlight ?? undefined} onClose={() => { setEvFor(null); setEvHighlight(null); }} /> : null}
+    </>
+  );
+}

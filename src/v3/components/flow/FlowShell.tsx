@@ -1,6 +1,7 @@
 import React, { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
-import FlowCanvas, { AttachFileButton } from "@/v3/components/flow/FlowCanvas";
+import FlowCanvas from "@/v3/components/flow/FlowCanvas";
+import { AttachFileButton } from "@/v3/components/flow/flowCapture";
 import FlowArtifactStudio, { type ArtifactEditInput } from "@/v3/components/flow/studio/FlowArtifactStudio";
 import FlowBoardPack from "@/v3/components/flow/FlowBoardPack";
 import EvidenceReader from "@/v3/components/flow/EvidenceReader";
