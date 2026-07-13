@@ -15,7 +15,7 @@ import { unrosteredVoicesProposal, reDemoProposal, ontologyRepairProposal, queue
 import { routeAttachedDocument, buildRoutedBlocks } from "@/v3/components/flow/flowDocRouting";
 import { retroAttributionProposal, negatedClaimProposal } from "@/v3/components/flow/flowWatchers";
 import { rankEvidence, isNoiseEvidence, scoreEvidence } from "@/v3/components/flow/flowEvidenceRank";
-import { resolveMovementStakeholders } from "@/v3/components/flow/flowStakeholders";
+import { resolveMovementStakeholders, deliveryRoleDirectory } from "@/v3/components/flow/flowStakeholders";
 import { mintFollowUpPack, listInterviewPacks, visibleLinks } from "@/v3/components/flow/flowPortal";
 import { trackAcceptance, trackBlockers, recordShowPass, listFlowTracks, type FlowTrack } from "@/v3/components/flow/flowTracks";
 import { setShipLane, toggleShipItem, listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
@@ -512,6 +512,19 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
     const empty = programme({ transformationCharter: { gaps: [gap] }, phaseInputs: { frame: {} } });
     expect(falsifiedGap(empty, gap)).toBe(false);
     expect(artifactOpenGaps(empty, "charter")).toEqual([gap]);
+  });
+
+  it("deliveryRoleDirectory lists every Envision-onward role with its binding state — the kit studio's people hub", () => {
+    const p = programme({ phaseInputs: {
+      frame: { sponsor: "Raj Mamodia" },
+      envision: { _roleBindings: JSON.stringify({ "Solution Architect": { name: "Priya Nair", email: "priya@x.com" } }) },
+    } });
+    const dir = deliveryRoleDirectory(p);
+    // Every templated movement contributes; bound, unbound and sponsor rows are distinguishable.
+    expect(dir.some((r) => r.movementId === "envision" && r.role === "Solution Architect" && r.bound?.name === "Priya Nair" && r.bound?.email === "priya@x.com")).toBe(true);
+    expect(dir.some((r) => r.movementId === "envision" && r.role === "Product Owner" && r.bound === null)).toBe(true);
+    expect(dir.some((r) => r.movementId === "ship" && r.isSponsor && r.bound?.name === "Raj Mamodia")).toBe(true);
+    expect(dir.some((r) => r.movementId === "evolve" && r.role === "Operating Owner")).toBe(true);
   });
 
   it("role bindings name Envision's personas — real person, real email, and the evidence fingerprint never moves", async () => {

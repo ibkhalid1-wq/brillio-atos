@@ -871,6 +871,7 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
         <FlowArtifactStudio
           program={program}
           artifact={docFor}
+          onSaveInputs={onSaveInputs}
           onComment={onComment}
           onOpenArtifact={(artifactId) => {
             for (const m of flowMovements()) {

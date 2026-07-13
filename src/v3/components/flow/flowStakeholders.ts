@@ -139,6 +139,36 @@ const ROLE_TEMPLATES: Record<string, Array<{ role: string; questions: string[] }
   ],
 };
 
+/**
+ * Every delivery role Envision onward, with its binding state — the Discovery
+ * Kit studio shows this directory next to the interview roster so ALL of the
+ * programme's people (heard voices and delivery roles alike) are managed in
+ * one place. The sponsor rows auto-bind to Frame's sponsor.
+ */
+export interface DeliveryRoleEntry {
+  movementId: string;
+  role: string;
+  bound: { name: string; email?: string } | null;
+  /** True when the binding is inherited from Frame's sponsor, not editable here. */
+  isSponsor: boolean;
+}
+export function deliveryRoleDirectory(program: ProgramSummary): DeliveryRoleEntry[] {
+  const frame = readMovementInputs(program, "frame");
+  const sponsor = typeof frame.sponsor === "string" ? frame.sponsor.trim() : "";
+  const out: DeliveryRoleEntry[] = [];
+  for (const [movementId, entries] of Object.entries(ROLE_TEMPLATES)) {
+    const bindings = readRoleBindings(program, movementId);
+    for (const entry of entries) {
+      if (/sponsor/i.test(entry.role)) {
+        out.push({ movementId, role: entry.role, bound: sponsor ? { name: sponsor } : null, isSponsor: true });
+        continue;
+      }
+      out.push({ movementId, role: entry.role, bound: bindings[entry.role] ?? null, isSponsor: false });
+    }
+  }
+  return out;
+}
+
 /** The stakeholders a movement collects evidence from. */
 export function resolveMovementStakeholders(program: ProgramSummary, movementId: string): MovementStakeholder[] {
   if (movementId === "frame") {

@@ -6,6 +6,7 @@
  * composed from the StudioKit primitives.
  */
 import React from "react";
+import { deliveryRoleDirectory } from "@/v3/components/flow/flowStakeholders";
 import OntologyStudio from "./OntologyStudio";
 import WorkflowStudio from "./WorkflowStudio";
 import JourneyGrid from "./JourneyGrid";
@@ -109,7 +110,7 @@ const THIN_COVERAGE = "Thin — needs another voice";
  * (scripts, links, coverage) keeps working untouched. Personas, coverage and
  * gaps fold below — present, but never in the way of the main job.
  */
-function DiscoveryKitStudio({ doc, onChange }: StudioProps) {
+function DiscoveryKitStudio({ doc, onChange, program, onBindRole }: StudioProps) {
   const patch = patchOf(doc, onChange);
   const interviews = useListOps(doc, onChange, "interviews");
   const personas = useListOps(doc, onChange, "personas");
@@ -238,10 +239,83 @@ function DiscoveryKitStudio({ doc, onChange }: StudioProps) {
           <StringListEditor values={asStrings(doc.gaps)} onChange={(next) => patch({ gaps: next })} addLabel="Add gap" />
         </div>
       </details>
+      {/* The kit is the programme's people hub — the delivery roles Envision
+          onward live here too, next to the interview roster, so names and
+          emails for EVERY phase are managed in one place. Bindings are org
+          facts (`_roleBindings`): they never flag documents stale. */}
+      {program ? <DeliveryRolesSection program={program} onBindRole={onBindRole} /> : null}
     </>
   );
 }
 
+function DeliveryRolesSection({ program, onBindRole }: {
+  program: import("@/new/types").ProgramSummary;
+  onBindRole?: (movementId: string, role: string, name: string, email: string) => Promise<void>;
+}) {
+  const roles = deliveryRoleDirectory(program);
+  const movementName = (id: string) => id.charAt(0).toUpperCase() + id.slice(1);
+  const [drafts, setDrafts] = React.useState<Record<string, { name: string; email: string }>>({});
+  const [busy, setBusy] = React.useState<string | null>(null);
+  if (!roles.length) return null;
+  const bind = async (key: string, movementId: string, role: string) => {
+    const draft = drafts[key];
+    const name = draft?.name?.trim();
+    if (!name || !onBindRole) return;
+    setBusy(key);
+    try {
+      await onBindRole(movementId, role, name, draft.email?.trim() ?? "");
+      setDrafts((prev) => ({ ...prev, [key]: { name: "", email: "" } }));
+    } finally { setBusy(null); }
+  };
+  return (
+    <Section label="Delivery roles — Envision onward" hint="who fills each later-phase role; their links, invites and captures follow the person">
+      <p className="v3fs-stu-note">
+        Envision, Ship and Evolve collect from <b>roles</b> until you name the person. Bind them here (or on
+        the movement&rsquo;s collect card) — the binding is an org fact, so it never flags documents stale.
+        Sponsor rows follow Frame&rsquo;s sponsor automatically.
+      </p>
+      <table className="v3fs-stu-table">
+        <thead><tr><th>Movement</th><th>Role</th><th>Person</th><th>Email</th><th /></tr></thead>
+        <tbody>
+          {roles.map((entry) => {
+            const key = `${entry.movementId}:${entry.role}`;
+            const draft = drafts[key] ?? { name: "", email: "" };
+            return (
+              <tr key={key}>
+                <td>{movementName(entry.movementId)}</td>
+                <td>{entry.role}</td>
+                {entry.isSponsor ? (
+                  <td colSpan={3}>{entry.bound ? `${entry.bound.name} — follows Frame's sponsor` : "set the sponsor in Frame"}</td>
+                ) : (
+                  <>
+                    <td>
+                      <input value={draft.name || ""} placeholder={entry.bound?.name ?? "name"}
+                        aria-label={`Who is the ${entry.role}?`}
+                        onChange={(event) => setDrafts((prev) => ({ ...prev, [key]: { ...draft, name: event.target.value } }))} />
+                    </td>
+                    <td>
+                      <input value={draft.email || ""} placeholder={entry.bound?.email ?? "email (optional)"} type="email"
+                        aria-label={`Email for the ${entry.role}`}
+                        onChange={(event) => setDrafts((prev) => ({ ...prev, [key]: { ...draft, email: event.target.value } }))} />
+                    </td>
+                    <td>
+                      {onBindRole ? (
+                        <button type="button" className="v3fs-btn" disabled={busy === key || !draft.name?.trim()}
+                          onClick={() => void bind(key, entry.movementId, entry.role)}>
+                          {busy === key ? "Binding…" : entry.bound ? "Update" : "Bind"}
+                        </button>
+                      ) : (entry.bound ? "bound" : "unbound")}
+                    </td>
+                  </>
+                )}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </Section>
+  );
+}
 /* ── Listen ───────────────────────────────────────────────────────────────── */
 
 const SEVERITIES = ["high", "medium", "low"];

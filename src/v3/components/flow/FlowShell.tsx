@@ -2018,7 +2018,7 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
             })}
           </div>
       ) : null}
-      {docFor ? <FlowArtifactStudio program={program} artifact={docFor} onClose={() => setDocFor(null)} onSaveDoc={onSaveArtifactDoc} onComment={onComment} onOpenInbox={onOpenInbox}
+      {docFor ? <FlowArtifactStudio program={program} artifact={docFor} onClose={() => setDocFor(null)} onSaveDoc={onSaveArtifactDoc} onSaveInputs={onSaveInputs} onComment={onComment} onOpenInbox={onOpenInbox}
         onOpenArtifact={(artifactId) => {
           for (const m of flowMovements()) {
             const hit = movementArtifacts(program, m).find((a) => a.id === artifactId && a.present);

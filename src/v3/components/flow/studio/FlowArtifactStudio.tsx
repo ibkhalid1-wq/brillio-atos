@@ -12,6 +12,7 @@ import { useFocusTrap } from "@/v3/lib/useFocusTrap";
 import type { ProgramSummary } from "@/new/types";
 import { artifactDocument, falsifiedGap, flowMovements, locateQuote, movementEvidence, type ArtifactCardModel, type EvidenceEntry } from "@/v3/components/flow/flowShellData";
 import { groundingFor, citationGraph, resourceUri, artifactFabioType, SEMANTIC_CONTEXT } from "@/v3/components/flow/flowSemantics";
+import { readRoleBindings } from "@/v3/components/flow/flowStakeholders";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 import { partitionOntologyViolations } from "@/v3/components/flow/flowOntologyConstraints";
 import { listOpenFlowDecisions, listFlowAttestations, docSectionDiff } from "@/v3/components/flow/flowDecisions";
@@ -28,7 +29,7 @@ export interface ArtifactEditInput {
   doc: Record<string, unknown>;
 }
 
-export default function FlowArtifactStudio({ program, artifact, onClose, onRegenerate, onSaveDoc, onComment, onOpenInbox, onOpenArtifact }: {
+export default function FlowArtifactStudio({ program, artifact, onClose, onRegenerate, onSaveDoc, onComment, onOpenInbox, onOpenArtifact, onSaveInputs }: {
   program: ProgramSummary;
   artifact: ArtifactCardModel;
   onClose: () => void;
@@ -40,6 +41,8 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
   onOpenInbox?: () => void;
   /** Open a different artifact's document (chips in studios drill through). */
   onOpenArtifact?: (artifactId: string) => void;
+  /** Save a movement's inputs (role bindings from the kit studio). */
+  onSaveInputs?: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
 }) {
   const entry = STUDIO_REGISTRY[artifact.id];
   const storedDoc = useMemo(
@@ -451,7 +454,14 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
         <div className="v3fs-docview-b" ref={docBodyRef} onClick={traceQuote}>
 
           {studioActive && entry && draft ? (
-            <entry.Component doc={draft} onChange={(next) => { setDraft(next); setDirty(true); }} onOpenArtifact={onOpenArtifact} />
+            <entry.Component doc={draft} onChange={(next) => { setDraft(next); setDirty(true); }} onOpenArtifact={onOpenArtifact} program={program}
+                onBindRole={onSaveInputs ? async (movementId, role, name, email) => {
+                  const bindings = readRoleBindings(program, movementId);
+                  bindings[role] = email ? { name, email } : { name };
+                  await onSaveInputs(movementId, { _roleBindings: JSON.stringify(bindings) }, {
+                    attest: { action: `Role bound — ${role} → ${name}`, detail: email || undefined },
+                  });
+                } : undefined} />
           ) : (
             <>
               {groundingDisclosure}

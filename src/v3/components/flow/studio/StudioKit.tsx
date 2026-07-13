@@ -159,4 +159,8 @@ export interface StudioProps {
   onChange: (next: Record<string, unknown>) => void;
   /** Open another artifact's document (e.g. an entity chip → the ontology). */
   onOpenArtifact?: (artifactId: string) => void;
+  /** The programme — studios that show derived state (role bindings) read it. */
+  program?: import("@/new/types").ProgramSummary;
+  /** Bind a delivery role to a person (attested `_roleBindings` write). */
+  onBindRole?: (movementId: string, role: string, name: string, email: string) => Promise<void>;
 }
