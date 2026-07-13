@@ -5767,7 +5767,18 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-docview-h {display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:26px 36px 16px;border-bottom:1px solid var(--fs-line)}
 .v3fs-docview-h h2 {font-size:23px;font-weight:650;letter-spacing:-.02em;margin:0;text-wrap:balance}
 .v3fs-docview-m {font-family:var(--v3-font-mono);font-size:10.5px;color:var(--v3-text-muted);display:block;margin-top:4px}
-.v3fs-docview-cta {display:flex;gap:8px;flex-shrink:0}
+.v3fs-docview-cta {display:flex;gap:8px;flex-shrink:0;align-items:center}
+/* Approval — a status pill in the header, and a send/notice bar below it. */
+.v3fs-approval-pill {display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;letter-spacing:.01em;padding:5px 11px;border-radius:999px;white-space:nowrap}
+.v3fs-approval-pill.ok {background:color-mix(in srgb,var(--v3-green,#2e7d5b) 15%,transparent);color:var(--v3-green,#2e7d5b)}
+.v3fs-approval-pill.wait {background:color-mix(in srgb,var(--v3-amber,#b58a2c) 16%,transparent);color:var(--v3-amber,#b58a2c)}
+.v3fs-approval-pill.changes {background:color-mix(in srgb,var(--v3-accent-2) 14%,transparent);color:var(--v3-accent-2)}
+.v3fs-approval-bar {display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 36px;border-bottom:1px solid var(--fs-line);background:var(--fs-indigo-wash);font-size:13px}
+.v3fs-approval-bar.sent {background:color-mix(in srgb,var(--v3-green,#2e7d5b) 9%,transparent)}
+.v3fs-approval-bar.changes {background:color-mix(in srgb,var(--v3-accent-2) 8%,transparent);color:var(--v3-accent-2);font-weight:600}
+.v3fs-approval-bar-l {font-weight:600}
+.v3fs-approval-bar-empty {opacity:.7}
+.v3fs-approval-bar .v3fs-dir-in {min-width:220px;flex:1}
 .v3fs-docview-b {overflow-y:auto;padding:22px 36px 40px;font-size:15px;line-height:1.75;max-width:100%}
 .v3fs-docview-blk {margin:0 0 16px}
 .v3fs-docview-b p {margin:0 0 6px;white-space:pre-wrap;overflow-wrap:break-word}

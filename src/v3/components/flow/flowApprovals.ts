@@ -14,9 +14,10 @@ import type { ProgramSummary } from "@/new/types";
 import type { PhaseDefinition } from "@/v3/lib/methodology";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import {
-  movementOpenIssues, evidenceStamp,
+  movementOpenIssues, evidenceStamp, flowMovements, stakeholderEmail,
   type ArtifactCardModel, type EvidenceEntry,
 } from "@/v3/components/flow/flowShellData";
+import { resolveMovementStakeholders, readDirectoryPeople } from "@/v3/components/flow/flowStakeholders";
 
 const APPROVAL_CAP = 40;
 
@@ -48,6 +49,27 @@ function readPacks(inner: Record<string, unknown>): FlowApprovalPack[] {
   return Array.isArray(inner.flowApprovalPacks)
     ? (inner.flowApprovalPacks as unknown[]).filter(isRecord) as unknown as FlowApprovalPack[]
     : [];
+}
+
+/** Who the operator can pick as approver — everyone on the record with an email
+ * on file (the link is emailed/sent to them). Deduped by name, sponsor first. */
+export function eligibleApprovers(program: ProgramSummary): Array<{ name: string; role: string; email: string }> {
+  const seen = new Map<string, { name: string; role: string; email: string }>();
+  const add = (name: string, role: string) => {
+    const clean = name.trim();
+    if (!clean) return;
+    const key = clean.toLowerCase();
+    if (seen.has(key)) return;
+    const email = stakeholderEmail(program, clean);
+    if (email) seen.set(key, { name: clean, role: role.trim(), email });
+  };
+  for (const movement of flowMovements()) {
+    for (const person of resolveMovementStakeholders(program, movement.id)) {
+      if (!person.isRole) add(person.name, person.role);
+    }
+  }
+  for (const person of readDirectoryPeople(program)) add(person.name, person.role);
+  return [...seen.values()];
 }
 
 /** An artifact may be sent for approval once it exists and the movement's open

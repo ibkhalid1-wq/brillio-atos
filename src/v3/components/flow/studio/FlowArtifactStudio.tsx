@@ -13,6 +13,7 @@ import type { ProgramSummary } from "@/new/types";
 import { artifactDocument, falsifiedGap, flowMovements, locateQuote, movementEvidence, type ArtifactCardModel, type EvidenceEntry } from "@/v3/components/flow/flowShellData";
 import { groundingFor, citationGraph, resourceUri, artifactFabioType, SEMANTIC_CONTEXT } from "@/v3/components/flow/flowSemantics";
 import { readRoleBindings } from "@/v3/components/flow/flowStakeholders";
+import { canSendForApproval, artifactApprovalState, eligibleApprovers } from "@/v3/components/flow/flowApprovals";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 import { partitionOntologyViolations } from "@/v3/components/flow/flowOntologyConstraints";
 import { listOpenFlowDecisions, listFlowAttestations, docSectionDiff } from "@/v3/components/flow/flowDecisions";
@@ -29,12 +30,14 @@ export interface ArtifactEditInput {
   doc: Record<string, unknown>;
 }
 
-export default function FlowArtifactStudio({ program, artifact, onClose, onRegenerate, onSaveDoc, onComment, onOpenInbox, onOpenArtifact, onSaveInputs }: {
+export default function FlowArtifactStudio({ program, artifact, onClose, onRegenerate, onSaveDoc, onSendForApproval, onComment, onOpenInbox, onOpenArtifact, onSaveInputs }: {
   program: ProgramSummary;
   artifact: ArtifactCardModel;
   onClose: () => void;
   onRegenerate?: () => void;
   onSaveDoc?: (input: ArtifactEditInput) => Promise<void>;
+  /** Send this artifact to a chosen approver — mints a no-login link. */
+  onSendForApproval?: (input: { artifactId: string; movementId: string; artifactTitle: string; approver: { name: string; role: string; email?: string } }) => Promise<string | null>;
   /** Add/resolve an anchored comment on this artifact (attested). */
   onComment?: (input: { fieldKey: string; movementId: string; title: string; text?: string; resolveId?: string }) => Promise<void>;
   /** Jump to the Inbox (used when a regenerated version awaits a confirm). */
@@ -49,6 +52,28 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
     () => (entry ? readArtifactDoc(program, entry.fieldKey) : null),
     [program, entry],
   );
+
+  // ── Approval: send this artifact to a chosen approver, over a no-login link ──
+  const movement = useMemo(() => flowMovements().find((m) => m.id === artifact.movementId), [artifact.movementId]);
+  const approval = useMemo(() => artifactApprovalState(program, artifact.movementId, artifact.id), [program, artifact.movementId, artifact.id]);
+  const approvers = useMemo(() => eligibleApprovers(program), [program]);
+  const canSend = !!onSendForApproval && !!movement && canSendForApproval(program, movement, artifact) && approval.status !== "in-review" && approval.status !== "approved";
+  const [pickingApprover, setPickingApprover] = useState(false);
+  const [approverName, setApproverName] = useState("");
+  const [sendBusy, setSendBusy] = useState(false);
+  const [sentLink, setSentLink] = useState<string | null>(null);
+  const doSend = async () => {
+    if (!onSendForApproval) return;
+    const chosen = approvers.find((a) => a.name === approverName) ?? approvers[0];
+    if (!chosen) return;
+    setSendBusy(true);
+    try {
+      const link = await onSendForApproval({ artifactId: artifact.id, movementId: artifact.movementId, artifactTitle: artifact.title, approver: chosen });
+      setSentLink(link);
+      if (link) { try { await navigator.clipboard.writeText(link); } catch { /* clipboard blocked — link still shown */ } }
+      setPickingApprover(false);
+    } finally { setSendBusy(false); }
+  };
 
   const dialogRef = React.useRef<HTMLDivElement | null>(null);
   useFocusTrap(dialogRef);
@@ -345,9 +370,43 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
                 ) : null}
               </div>
             ) : null}
+            {approval.status === "approved" ? (
+              <span className="v3fs-approval-pill ok" title={approval.approver ? `Approved by ${approval.approver.name}` : "Approved"}>✓ Approved{approval.approver ? ` · ${approval.approver.name}` : ""}</span>
+            ) : approval.status === "in-review" ? (
+              <span className="v3fs-approval-pill wait" title={approval.approver ? `Awaiting ${approval.approver.name}` : "In review"}>◷ In review{approval.approver ? ` · ${approval.approver.name}` : ""}</span>
+            ) : approval.status === "changes" ? (
+              <span className="v3fs-approval-pill changes">↺ Changes requested</span>
+            ) : null}
+            {canSend && !editing ? (
+              <button type="button" className="v3fs-btn pri" onClick={() => { setApproverName(approvers[0]?.name ?? ""); setPickingApprover(true); }}>➤ Send for approval</button>
+            ) : null}
             <button type="button" className="v3fs-btn" onClick={onClose} aria-label="Close">Close</button>
           </div>
         </header>
+        {pickingApprover ? (
+          <div className="v3fs-approval-bar" role="group" aria-label="Send for approval">
+            <span className="v3fs-approval-bar-l">Send &ldquo;{artifact.title}&rdquo; to</span>
+            {approvers.length ? (
+              <>
+                <select className="v3fs-dir-in" value={approverName} onChange={(event) => setApproverName(event.target.value)} aria-label="Choose approver">
+                  {approvers.map((a) => <option key={a.name} value={a.name}>{a.name}{a.role ? ` — ${a.role}` : ""}</option>)}
+                </select>
+                <button type="button" className="v3fs-btn pri" disabled={sendBusy} onClick={() => void doSend()}>{sendBusy ? "Minting…" : "Mint approval link"}</button>
+              </>
+            ) : (
+              <span className="v3fs-approval-bar-empty">No one has an email on file yet — add an address on the People page first.</span>
+            )}
+            <button type="button" className="v3fs-btn" onClick={() => setPickingApprover(false)}>Cancel</button>
+          </div>
+        ) : null}
+        {sentLink ? (
+          <div className="v3fs-approval-bar sent" role="status">
+            <span>✓ Approval link ready — copied to your clipboard. Send it to the approver.</span>
+            <input className="v3fs-dir-in" readOnly value={sentLink} aria-label="Approval link" onFocus={(event) => event.currentTarget.select()} />
+          </div>
+        ) : approval.status === "changes" && approval.comment ? (
+          <div className="v3fs-approval-bar changes" role="status">↺ {approval.approver?.name ?? "Approver"} requested changes: &ldquo;{approval.comment}&rdquo;</div>
+        ) : null}
 
         {!editing && artifact.stale ? (
           <div className="v3fs-dv-band amber">

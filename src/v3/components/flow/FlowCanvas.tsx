@@ -50,6 +50,8 @@ interface FlowCanvasProps {
   onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
   /** Persist a studio edit to an artifact document (attested). */
   onSaveArtifactDoc?: (input: ArtifactEditInput) => Promise<void>;
+  /** Send an artifact to a chosen approver — mints a no-login link. */
+  onSendForApproval?: (input: { artifactId: string; movementId: string; artifactTitle: string; approver: { name: string; role: string; email?: string } }) => Promise<string | null>;
   /** Jump to the Inbox (regeneration-pending band in the studio). */
   onOpenInbox?: () => void;
   /** The drill-down family (parent + children) — powers cross-programme
@@ -78,7 +80,7 @@ interface FlowCanvasProps {
  * one-line brief, and the ranked "Up next" queue. Nothing locks; editing
  * unfolds in place via the shared inputs panel.
  */
-export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onSetShipLane, onScheduleFollowUp, onMintFollowUp, onSaveArtifactDoc, onOpenInbox, onRecordShowPass, onRecordGate, onReopenGate, onRunAgentAndWait, relatedPrograms, onSelectProgram, onComment }: FlowCanvasProps) {
+export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onSetShipLane, onScheduleFollowUp, onMintFollowUp, onSaveArtifactDoc, onSendForApproval, onOpenInbox, onRecordShowPass, onRecordGate, onReopenGate, onRunAgentAndWait, relatedPrograms, onSelectProgram, onComment }: FlowCanvasProps) {
   const movements = useMemo(() => flowMovements(), []);
   // A spine regeneration in flight — the collect cards suppress their script
   // until it lands (a script off a half-regenerated kit is inaccurate).
@@ -890,6 +892,7 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
           onClose={() => setDocFor(null)}
           onRegenerate={() => onRunAgent(docFor.id, docFor.movementId)}
           onSaveDoc={onSaveArtifactDoc}
+          onSendForApproval={onSendForApproval}
           onOpenInbox={onOpenInbox}
         /></Suspense>
       ) : null}

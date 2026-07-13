@@ -32,6 +32,7 @@ import ProgramSetupWizard from "@/v3/components/ProgramSetupWizard";
 import FlowShell from "@/v3/components/flow/FlowShell";
 import { resolveFlowDecision } from "@/v3/components/flow/flowDecisions";
 import { renamePersonInProgram } from "@/v3/components/flow/flowStakeholders";
+import { mintApprovalRequest, approvalLinkFor, ingestApprovalResponse } from "@/v3/components/flow/flowApprovals";
 import { setHaltAll, toggleAgentHalt, setMovementBudget } from "@/v3/components/flow/flowGovernance";
 import { mintInterviewPacks, mintDemoInvites, ingestPortalResponse, dismissPortalResponse, portalItemTargetMovement } from "@/v3/components/flow/flowPortal";
 import { recordShowPass } from "@/v3/components/flow/flowTracks";
@@ -2470,6 +2471,25 @@ export default function AppShellV3() {
               return blob;
             });
             return mintedLink;
+          }}
+          onSendForApproval={async (input) => {
+            const actor = currentUser?.email || "you";
+            let link: string | null = null;
+            await persistFlowMutation((program) => {
+              const blob = mintApprovalRequest(program, input, actor);
+              if (blob) {
+                const inner = (typeof blob.data === "object" && blob.data !== null ? blob.data : blob) as Record<string, unknown>;
+                const packs = Array.isArray(inner.flowApprovalPacks) ? inner.flowApprovalPacks : [];
+                const last = packs[packs.length - 1] as Record<string, unknown> | undefined;
+                if (last && typeof last.token === "string") link = approvalLinkFor(program.id, { token: last.token });
+              }
+              return blob;
+            });
+            return link;
+          }}
+          onRecordApproval={async (itemId) => {
+            const actor = currentUser?.email || "you";
+            await persistFlowMutation((program) => ingestApprovalResponse(program, itemId, actor));
           }}
           onMintFollowUp={async (input) => {
             const actor = currentUser?.email || "you";
