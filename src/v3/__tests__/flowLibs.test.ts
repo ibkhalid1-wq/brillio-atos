@@ -543,6 +543,17 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
     expect(artifactOpenGaps(empty, "charter")).toEqual([gap]);
   });
 
+  it("bindings OUTRANK a kit-document email — one contact store, the kit is legacy", () => {
+    const p = programme({
+      discoveryKit: { interviews: [{ stakeholder: "Raj Mamodia", email: "stale@old.com" }] },
+      phaseInputs: { frame: { _roleBindings: JSON.stringify({ "Raj Mamodia": { name: "Raj Mamodia", email: "raj@current.com" } }) } },
+    });
+    expect(stakeholderEmail(p, "Raj Mamodia")).toBe("raj@current.com");
+    // kit email still resolves when no binding exists (legacy data keeps working)
+    const legacy = programme({ discoveryKit: { interviews: [{ stakeholder: "Raj Mamodia", email: "stale@old.com" }] } });
+    expect(stakeholderEmail(legacy, "Raj Mamodia")).toBe("stale@old.com");
+  });
+
   it("a name-keyed binding carries an address the senders and the gate can resolve — the card's 'Save address' path", () => {
     // The card writes { [person's name]: { name, email } } into the
     // movement's _roleBindings; stakeholderEmail matches by the bound NAME,

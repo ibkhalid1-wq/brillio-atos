@@ -6,7 +6,7 @@
  * composed from the StudioKit primitives.
  */
 import React from "react";
-import { deliveryRoleDirectory } from "@/v3/components/flow/flowStakeholders";
+import { stakeholderEmail } from "@/v3/components/flow/flowMeetings";
 import OntologyStudio from "./OntologyStudio";
 import WorkflowStudio from "./WorkflowStudio";
 import JourneyGrid from "./JourneyGrid";
@@ -110,7 +110,7 @@ const THIN_COVERAGE = "Thin — needs another voice";
  * (scripts, links, coverage) keeps working untouched. Personas, coverage and
  * gaps fold below — present, but never in the way of the main job.
  */
-function DiscoveryKitStudio({ doc, onChange, program, onBindRole }: StudioProps) {
+function DiscoveryKitStudio({ doc, onChange, program }: StudioProps) {
   const patch = patchOf(doc, onChange);
   const interviews = useListOps(doc, onChange, "interviews");
   const personas = useListOps(doc, onChange, "personas");
@@ -154,7 +154,7 @@ function DiscoveryKitStudio({ doc, onChange, program, onBindRole }: StudioProps)
           <div className="v3fs-kit2-roster-h">
             <span>People</span>
             <button type="button" className="v3fs-a" onClick={() => {
-              interviews.add({ stakeholder: "", role: "", email: "", domain: "", durationMinutes: 45, objectives: [], agenda: [{ topic: "Conversation", minutes: 45, questions: [] }], askForArtifacts: [] });
+              interviews.add({ stakeholder: "", role: "", domain: "", durationMinutes: 45, objectives: [], agenda: [{ topic: "Conversation", minutes: 45, questions: [] }], askForArtifacts: [] });
               setSelected(interviews.items.length);
             }}>＋ Add person</button>
           </div>
@@ -164,7 +164,7 @@ function DiscoveryKitStudio({ doc, onChange, program, onBindRole }: StudioProps)
           {interviews.items.map((entry, index) => {
             const interview = entry as Record<string, unknown>;
             const count = questionsOf(interview).length;
-            const email = asText(interview.email);
+            const email = (program ? stakeholderEmail(program, asText(interview.stakeholder)) : null) ?? asText(interview.email);
             return (
               <button key={index} type="button" className={`v3fs-kit2-person${index === selected ? " on" : ""}`}
                 onClick={() => setSelected(index)}>
@@ -184,8 +184,17 @@ function DiscoveryKitStudio({ doc, onChange, program, onBindRole }: StudioProps)
               <div className="v3fs-stu-grid3">
                 <TextField label="Name" value={asText(current.stakeholder)} onChange={(next) => interviews.set(selected, { stakeholder: next })} />
                 <TextField label="Role" value={asText(current.role)} onChange={(next) => interviews.set(selected, { role: next })} />
-                <TextField label={asText(current.email) ? "Email" : "Email — needed for links & invites"} value={asText(current.email)}
-                  onChange={(next) => interviews.set(selected, { email: next })} />
+                {/* ONE contact store: `_roleBindings` on the record. The kit is
+                    the interview PLAN — showing the resolved address here, but
+                    the write lives on the person's collect card. */}
+                <div className="v3fs-stu-field">
+                  <span className="v3fs-stu-fl">Email</span>
+                  <span className="v3fs-stu-ro">
+                    {((program ? stakeholderEmail(program, asText(current.stakeholder)) : null)
+                      ?? asText(current.email))
+                      || "none on file — add it on their collect card"}
+                  </span>
+                </div>
               </div>
               <StringListEditor label="Questions — one per line, asked in this order" values={questionsOf(current)}
                 onChange={(next) => setQuestions(selected, next)} addLabel="Add question" />
@@ -239,83 +248,15 @@ function DiscoveryKitStudio({ doc, onChange, program, onBindRole }: StudioProps)
           <StringListEditor values={asStrings(doc.gaps)} onChange={(next) => patch({ gaps: next })} addLabel="Add gap" />
         </div>
       </details>
-      {/* The kit is the programme's people hub — the delivery roles Envision
-          onward live here too, next to the interview roster, so names and
-          emails for EVERY phase are managed in one place. Bindings are org
-          facts (`_roleBindings`): they never flag documents stale. */}
-      {program ? <DeliveryRolesSection program={program} onBindRole={onBindRole} /> : null}
+      {/* ONE directory: Library › People shows every voice and delivery role
+          with contact state; collect cards take the edits. The kit stays the
+          interview PLAN — duplicating the directory here bred two versions
+          of the truth. */}
+      <p className="v3fs-stu-note">Looking for people beyond this roster? The whole programme&rsquo;s directory — Listen voices and every Envision-onward delivery role, with contact state — lives in <b>Library &rsaquo; People</b>. Names and addresses are edited on the collect cards and land on the record as bindings.</p>
     </>
   );
 }
 
-function DeliveryRolesSection({ program, onBindRole }: {
-  program: import("@/new/types").ProgramSummary;
-  onBindRole?: (movementId: string, role: string, name: string, email: string) => Promise<void>;
-}) {
-  const roles = deliveryRoleDirectory(program);
-  const movementName = (id: string) => id.charAt(0).toUpperCase() + id.slice(1);
-  const [drafts, setDrafts] = React.useState<Record<string, { name: string; email: string }>>({});
-  const [busy, setBusy] = React.useState<string | null>(null);
-  if (!roles.length) return null;
-  const bind = async (key: string, movementId: string, role: string) => {
-    const draft = drafts[key];
-    const name = draft?.name?.trim();
-    if (!name || !onBindRole) return;
-    setBusy(key);
-    try {
-      await onBindRole(movementId, role, name, draft.email?.trim() ?? "");
-      setDrafts((prev) => ({ ...prev, [key]: { name: "", email: "" } }));
-    } finally { setBusy(null); }
-  };
-  return (
-    <Section label="Delivery roles — Envision onward" hint="who fills each later-phase role; their links, invites and captures follow the person">
-      <p className="v3fs-stu-note">
-        Envision, Ship and Evolve collect from <b>roles</b> until you name the person. Bind them here (or on
-        the movement&rsquo;s collect card) — the binding is an org fact, so it never flags documents stale.
-        Sponsor rows follow Frame&rsquo;s sponsor automatically.
-      </p>
-      <table className="v3fs-stu-table">
-        <thead><tr><th>Movement</th><th>Role</th><th>Person</th><th>Email</th><th /></tr></thead>
-        <tbody>
-          {roles.map((entry) => {
-            const key = `${entry.movementId}:${entry.role}`;
-            const draft = drafts[key] ?? { name: "", email: "" };
-            return (
-              <tr key={key}>
-                <td>{movementName(entry.movementId)}</td>
-                <td>{entry.role}</td>
-                {entry.isSponsor ? (
-                  <td colSpan={3}>{entry.bound ? `${entry.bound.name} — follows Frame's sponsor` : "set the sponsor in Frame"}</td>
-                ) : (
-                  <>
-                    <td>
-                      <input value={draft.name || ""} placeholder={entry.bound?.name ?? "name"}
-                        aria-label={`Who is the ${entry.role}?`}
-                        onChange={(event) => setDrafts((prev) => ({ ...prev, [key]: { ...draft, name: event.target.value } }))} />
-                    </td>
-                    <td>
-                      <input value={draft.email || ""} placeholder={entry.bound?.email ?? "email (optional)"} type="email"
-                        aria-label={`Email for the ${entry.role}`}
-                        onChange={(event) => setDrafts((prev) => ({ ...prev, [key]: { ...draft, email: event.target.value } }))} />
-                    </td>
-                    <td>
-                      {onBindRole ? (
-                        <button type="button" className="v3fs-btn" disabled={busy === key || !draft.name?.trim()}
-                          onClick={() => void bind(key, entry.movementId, entry.role)}>
-                          {busy === key ? "Binding…" : entry.bound ? "Update" : "Bind"}
-                        </button>
-                      ) : (entry.bound ? "bound" : "unbound")}
-                    </td>
-                  </>
-                )}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </Section>
-  );
-}
 /* ── Listen ───────────────────────────────────────────────────────────────── */
 
 const SEVERITIES = ["high", "medium", "low"];
