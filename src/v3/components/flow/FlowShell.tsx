@@ -1773,12 +1773,14 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
   }, [evidence]);
 
   const facetCounts = {
-    people: evidenceByPerson.length,
+    people: directory.roster.length + directory.roles.length,
     documents: evidence.filter((e) => e.kind === "document").length,
     artifacts: artifacts.filter((a) => a.present).length,
     disputes: disputes.filter((d) => /open/i.test(d.status)).length,
   };
-  const showEvidence = facet === "all" || facet === "people" || facet === "documents";
+  // People shows the DIRECTORY (who exists, contact state) — reading what a
+  // person said lives under All/Documents and on the record rail.
+  const showEvidence = facet === "all" || facet === "documents";
   const showArtifacts = facet === "all" || facet === "artifacts";
   const showDisputes = (facet === "all" || facet === "disputes") && disputes.length > 0;
 
