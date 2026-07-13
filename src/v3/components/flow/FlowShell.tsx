@@ -17,6 +17,8 @@ import {
   listFlowTracks, trackAcceptance, trackPace,
 } from "@/v3/components/flow/flowTracks";
 import { readFlowGovernance, flowAgentTier } from "@/v3/components/flow/flowGovernance";
+import { resolveMovementStakeholders, deliveryRoleDirectory } from "@/v3/components/flow/flowStakeholders";
+import { stakeholderEmail } from "@/v3/components/flow/flowMeetings";
 import { readMetricRegistry, metricConsistency } from "@/v3/components/flow/flowMetricRegistry";
 import { routeAttachedDocument, buildRoutedBlocks, type DocRoute } from "@/v3/components/flow/flowDocRouting";
 import { listPortalInbox } from "@/v3/components/flow/flowPortal";
@@ -1706,6 +1708,29 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
 
   const disputes = useMemo(() => readContradictions(program), [program]);
 
+  // The programme's people, ONE table: the Listen roster (heard state +
+  // address) and every Envision-onward delivery role (binding state). A
+  // read-only directory — names and addresses are edited where they live,
+  // on the collect cards and in the Discovery Kit studio.
+  const directory = useMemo(() => {
+    const roster = resolveMovementStakeholders(program, "listen")
+      .filter((entry) => !entry.isRole)
+      .map((entry) => ({
+        kind: "roster" as const, where: "Listen roster",
+        name: entry.name, role: entry.role,
+        email: stakeholderEmail(program, entry.name),
+        heard: all.evidence.some((e) => e.who.toLowerCase().includes(entry.name.trim().toLowerCase())),
+      }));
+    const roles = deliveryRoleDirectory(program).map((entry) => ({
+      kind: "role" as const,
+      where: entry.movementId.charAt(0).toUpperCase() + entry.movementId.slice(1),
+      name: entry.bound?.name ?? "", role: entry.role,
+      email: entry.bound?.name ? (entry.bound.email ?? stakeholderEmail(program, entry.bound.name)) : null,
+      heard: false,
+    }));
+    return { roster, roles };
+  }, [program, all.evidence]);
+
   // Resolve a dispute where it lives: flip its log rows to Resolved, attested.
   const resolveDispute = async (statement: string) => {
     if (!onSaveInputs) return;
@@ -1977,6 +2002,34 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
           </div>
         ))}
       </div>
+      ) : null}
+      {facet === "people" ? (
+        <div className="v3fs-panel v3fs-panel-wide">
+          <div className="v3fs-ph"><h3>People directory</h3><span>everyone the programme collects from — contact state at a glance; edit on their card or in the Discovery Kit</span></div>
+          <table className="v3fs-dir">
+            <thead><tr><th>Where</th><th>Person</th><th>Role</th><th>Email</th><th>Status</th></tr></thead>
+            <tbody>
+              {directory.roster.map((row, i) => (
+                <tr key={`r-${i}`}>
+                  <td>{row.where}</td>
+                  <td>{row.name}</td>
+                  <td>{row.role}</td>
+                  <td>{row.email ?? <span className="v3fs-ivc-noaddr">✉ no address</span>}</td>
+                  <td><span className={`v3fs-vc ${row.heard ? "acc" : "pen"}`}>{row.heard ? "Heard" : "Awaiting"}</span></td>
+                </tr>
+              ))}
+              {directory.roles.map((row, i) => (
+                <tr key={`d-${i}`}>
+                  <td>{row.where}</td>
+                  <td>{row.name || <em>unbound — name them on the {row.where} collect card or in the kit</em>}</td>
+                  <td>{row.role}</td>
+                  <td>{row.name ? (row.email ?? <span className="v3fs-ivc-noaddr">✉ no address</span>) : ""}</td>
+                  <td><span className={`v3fs-vc ${row.name ? "acc" : "pen"}`}>{row.name ? "Bound" : "Open"}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : null}
       {showDisputes ? (
           <div className="v3fs-panel v3fs-panel-wide">
