@@ -4,6 +4,12 @@ import {
 } from "../_shared/claudeClient.ts";
 import { estimateCostUsd, resolveAgentTier } from "../_shared/modelCatalog.ts";
 import { logger } from "../_shared/logger.ts";
+import {
+  splitExternalTexts,
+  mergeExternalTexts,
+  resolvePhaseInputsContainer,
+  type ExternalText,
+} from "../_shared/programTexts.ts";
 import type {
   AgentHandoff,
   AgentObservationRecord,
@@ -4540,6 +4546,83 @@ function mergeProgramDelta(base: JsonValue, next: JsonValue, fresh: JsonValue): 
   return next;
 }
 
+// ── Transcript externalization (phase 6) ───────────────────────────────────
+// The client splits large transcripts out of the blob into adam_program_texts
+// (split on write); here the edge reconstructs them so grounding/evidence see
+// the full record (merge on read), and — only once cutover is deliberately
+// enabled via the EXTERNALIZE_CUTOVER env flag — splits its own write-backs so
+// agent runs don't re-inflate the blob. All of it is defensive: a missing table
+// or empty result is a silent no-op, so this is safe to deploy before the
+// migration is applied and before the client cutover flag is flipped.
+const EXTERNALIZE_CUTOVER = (Deno.env.get("EXTERNALIZE_CUTOVER") || "").toLowerCase() === "on";
+
+/** Merge the programme's externalized texts back into `programRow.data` in place,
+ * preserving the blob's flat-vs-nested shape. No-op if the table is absent or
+ * has no rows for this programme. */
+async function mergeProgramTextsIntoRow(
+  admin: SupabaseClient,
+  programId: string,
+  programRow: { data: JsonValue },
+): Promise<void> {
+  const container = resolvePhaseInputsContainer(programRow.data);
+  if (!container) return;
+  const { data: rows, error } = await admin
+    .from("adam_program_texts")
+    .select("field_key, movement_id, content")
+    .eq("program_id", programId);
+  if (error || !rows || !rows.length) return; // table absent / empty → inline blob
+  const texts: ExternalText[] = rows.map((r) => {
+    const row = r as Record<string, unknown>;
+    return {
+      fieldKey: String(row.field_key),
+      movementId: String(row.movement_id ?? ""),
+      content: String(row.content ?? ""),
+    };
+  });
+  const merged = mergeExternalTexts(container, texts);
+  if (container === (programRow.data as unknown)) {
+    programRow.data = merged as JsonValue;
+  } else {
+    (programRow.data as Record<string, unknown>).data = merged;
+  }
+}
+
+/** Before a write-back, split large transcripts out of `data` into the texts
+ * table and return the shrunk blob. Gated on EXTERNALIZE_CUTOVER: until that is
+ * set, returns `data` untouched (the transcripts stay inline). On any table
+ * failure, falls back to the full inline blob so transcripts are never lost. */
+async function splitProgramTextsForWrite(
+  admin: SupabaseClient,
+  programId: string,
+  data: ProgramState,
+): Promise<ProgramState> {
+  if (!EXTERNALIZE_CUTOVER) return data;
+  const container = resolvePhaseInputsContainer(data as unknown);
+  if (!container) return data;
+  try {
+    const { inner, texts } = splitExternalTexts(container);
+    if (texts.length) {
+      const rows = texts.map((t) => ({
+        program_id: programId,
+        field_key: t.fieldKey,
+        movement_id: t.movementId,
+        content: t.content,
+        chars: t.content.length,
+        updated_at: new Date().toISOString(),
+      }));
+      const { error } = await admin
+        .from("adam_program_texts")
+        .upsert(rows, { onConflict: "program_id,field_key" });
+      if (error) throw error;
+    }
+    if (container === (data as unknown)) return inner as ProgramState;
+    return { ...(data as Record<string, unknown>), data: inner } as ProgramState;
+  } catch (err) {
+    logger.warn("program_texts_split_failed", { programId, errorMessage: String(err) });
+    return data;
+  }
+}
+
 async function persistProgramData(
   admin: SupabaseClient,
   programId: string,
@@ -4548,9 +4631,10 @@ async function persistProgramData(
 ): Promise<void> {
   // Back-compat path: no concurrency token → blind last-write-wins.
   if (!concurrency) {
+    const blob = await splitProgramTextsForWrite(admin, programId, data);
     const { error } = await admin
       .from("adam_programs")
-      .update({ data, updated_at: new Date().toISOString() })
+      .update({ data: blob, updated_at: new Date().toISOString() })
       .eq("id", programId);
     if (error) {
       throw new Error(`Failed to persist program state: ${error.message}`);
@@ -4567,9 +4651,10 @@ async function persistProgramData(
   let toWrite: ProgramState = data;
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const casBlob = await splitProgramTextsForWrite(admin, programId, toWrite);
     let update = admin
       .from("adam_programs")
-      .update({ data: toWrite, updated_at: new Date().toISOString() })
+      .update({ data: casBlob, updated_at: new Date().toISOString() })
       .eq("id", programId);
     update = expectedUpdatedAt
       ? update.eq("updated_at", expectedUpdatedAt)
@@ -4598,9 +4683,10 @@ async function persistProgramData(
 
   // Exhausted retries (heavy contention) — fall back to a final merged write so the
   // run doesn't hard-fail. toWrite already reflects the most recent merge.
+  const finalBlob = await splitProgramTextsForWrite(admin, programId, toWrite);
   const { error } = await admin
     .from("adam_programs")
-    .update({ data: toWrite, updated_at: new Date().toISOString() })
+    .update({ data: finalBlob, updated_at: new Date().toISOString() })
     .eq("id", programId);
   if (error) {
     throw new Error(`Failed to persist program state after ${MAX_ATTEMPTS} attempts: ${error.message}`);
@@ -7940,6 +8026,11 @@ Deno.serve(async (req) => {
     const ownerId = auth.ownerId || programRow.owner_id || null;
     const now = new Date().toISOString();
     runId = request.runId || crypto.randomUUID();
+    // Phase 6 — externalization merge-on-read: reconstruct the full transcripts
+    // into programRow.data before any prompt/grounding/evidence is built, so the
+    // agent sees the same record the operator does. No-op if the texts table is
+    // absent (pre-migration) or empty for this programme.
+    await mergeProgramTextsIntoRow(auth.admin, request.programId, programRow as { data: JsonValue });
     const contextProgramData = normalizeProgramData(programRow.data as JsonValue | null);
     // Optimistic-concurrency token: every program-data write-back below uses this so
     // parallel agent cascades merge instead of clobbering each other's slices.
