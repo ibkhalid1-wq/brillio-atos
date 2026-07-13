@@ -4910,10 +4910,43 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
   .v3fs-ch-b.tabbed > div:not(.v3fs-tabhide) {animation:v3fs-tabin .16s ease}
   @keyframes v3fs-tabin {from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
 }
-/* Collect: the status board runs full width; the record beneath reads as a
-   column of text, not a wall — capped at a reading measure. */
-.v3fs-evcol > *:not(.v3fs-ch-collect) {max-width:74ch}
-.v3fs-evcol .v3fs-ch-collect {margin-bottom:22px}
+/* ── Collect = the WORK (board/kit) + the RECORD (context rail) ──────────
+   The rail is sticky and collapsible; its focus follows the card the
+   operator is in — open a person, read their trail beside their card. */
+.v3fs-collect-wrap {display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:26px;align-items:start}
+.v3fs-collect-wrap.norail {grid-template-columns:minmax(0,1fr) auto}
+.v3fs-collect-main {min-width:0;display:flex;flex-direction:column;gap:16px;align-items:flex-start}
+.v3fs-collect-main > * {align-self:stretch}
+.v3fs-collect-main > .v3fs-kit {max-width:74ch}
+.v3fs-recrail {position:sticky;top:64px;max-height:calc(100vh - 88px);overflow-y:auto;min-width:0;
+  border:1px solid var(--fs-line);border-radius:14px;padding:14px 16px;
+  background:color-mix(in srgb,var(--fs-line) 16%,transparent)}
+.v3fs-recrail-h {display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.v3fs-recrail-t {flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:10.5px;font-weight:750;letter-spacing:.11em;text-transform:uppercase;color:var(--v3-accent-b)}
+.v3fs-recrail-n {font-family:var(--v3-font-mono);font-size:10px;font-weight:700;color:var(--v3-text-muted);
+  background:var(--fs-card);border:1px solid var(--fs-line);border-radius:99px;padding:1px 7px}
+.v3fs-recrail-x {flex-shrink:0;border:none;background:none;cursor:pointer;font:inherit;font-size:13px;
+  color:var(--v3-text-muted);padding:2px 7px;border-radius:7px}
+.v3fs-recrail-x:hover {background:var(--fs-card);color:var(--v3-text-primary)}
+/* Inside the rail everything reads a size down. */
+.v3fs-recrail .v3fs-voice {padding-left:12px;margin-bottom:4px}
+.v3fs-recrail .v3fs-voice-q {font-size:13px;-webkit-line-clamp:3}
+.v3fs-recrail .v3fs-ivc-fb-row {background:var(--fs-card)}
+/* Collapsed: a slim vertical tab keeps the record one click away. */
+.v3fs-recrail-tab {writing-mode:vertical-rl;position:sticky;top:64px;justify-self:end;
+  display:inline-flex;align-items:center;gap:8px;padding:14px 7px;cursor:pointer;
+  font:inherit;font-size:10.5px;font-weight:750;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--v3-text-muted);background:var(--fs-card);border:1px solid var(--fs-line);border-radius:10px;
+  transition:color .15s ease,border-color .15s ease}
+.v3fs-recrail-tab:hover {color:var(--v3-accent-2);border-color:color-mix(in srgb,var(--v3-accent-2) 40%,var(--fs-line))}
+.v3fs-recrail-tab b {font-family:var(--v3-font-mono);font-size:10px}
+/* Narrow: the rail stacks beneath the board; the tab turns horizontal. */
+@media (max-width:1080px) {
+  .v3fs-collect-wrap, .v3fs-collect-wrap.norail {grid-template-columns:minmax(0,1fr)}
+  .v3fs-recrail {position:static;max-height:60vh}
+  .v3fs-recrail-tab {writing-mode:horizontal-tb;position:static;justify-self:start;padding:8px 14px}
+}
 /* The full record, grouped by person (documents together), newest first. */
 .v3fs-evg {border-bottom:1px solid var(--fs-line)}
 .v3fs-evg:last-of-type {border-bottom:none}

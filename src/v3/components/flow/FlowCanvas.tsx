@@ -2,11 +2,12 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import PhaseInputsPanel from "@/v3/components/PhaseInputsPanel";
 import FlowArtifactStudio, { type ArtifactEditInput } from "@/v3/components/flow/studio/FlowArtifactStudio";
+import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 import {
   flowMovements, frontierMovementId, movementEvidence, movementArtifacts,
   gateReadiness, gateChecklist, listenCoverage, movementFacts, demoAcceptance,
   spineRegenerationPlan, attestHeardRoster,
-  type ArtifactCardModel,
+  type ArtifactCardModel, type EvidenceEntry,
 } from "@/v3/components/flow/flowShellData";
 import { meetingKit } from "@/v3/components/flow/flowMeetings";
 import { listInterviewPacks, listDemoInvites, portalLinkFor } from "@/v3/components/flow/flowPortal";
@@ -83,6 +84,13 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
   // Salience over volume: the evidence column leads with the ranked best
   // quotes; "show all" unfolds the rest per movement.
   const [evAll, setEvAll] = useState<Set<string>>(() => new Set());
+  // The record rail: open by default, collapsible to an edge tab. Its focus
+  // follows the card the operator is IN — open a person's card and the rail
+  // shows THEIR trail; close it and the movement's record returns.
+  const [railOpen, setRailOpen] = useState(true);
+  const [railFocus, setRailFocus] = useState<string | null>(null);
+  const [railRead, setRailRead] = useState<EvidenceEntry | null>(null);
+  useEffect(() => { setRailFocus(null); setRailRead(null); }, [active]);
   // The active stage per movement — falls back to the movement's lead stage
   // until the operator picks one.
   const [movementTab, setMovementTab] = useState<Record<string, MovementTab>>({});
@@ -377,23 +385,83 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
               </nav>
               <div className="v3fs-ch-b tabbed" data-tab={tabKey}>
                 <div className={`v3fs-evcol${tabKey === "collect" ? "" : " v3fs-tabhide"}`}>
-                  {/* Collect: one stage, one subject — the people and what they
-                      said. The status board leads (it's the work); the record
-                      follows (it's what the work produced). */}
-                  {hasPeople ? (
-                    <IntervieweeDiscovery program={program} movementId={movement.id}
-                      captureField={meetingKit(program, movement.id)?.captureField ?? "interviewTranscripts"}
-                      related={relatedPrograms}
-                      onSaveInputs={onSaveInputs} onMintFollowUp={onMintFollowUp}
-                      onMintPacks={movement.id === "listen" ? onMintPacks : undefined}
-                      onCaptured={() => onRunAgent("contradiction-detector", movement.id)} />
-                  ) : null}
-                  <div className="v3fs-colh ev">The record{coverage && coverage.total ? ` — ${coverage.done}/${coverage.total}` : ""}</div>
-                  {!evidence.length && hasPeople ? (
-                    <div className="v3fs-tab-ghost">
-                      Nothing on the record yet — reach out from the cards above; what comes back lands here, attributed.
+                  {/* Collect: the WORK on the left (board / kit / capture), the
+                      RECORD on a sticky right rail whose focus follows the card
+                      the operator is in — open a person, read their trail. */}
+                  {(() => {
+                    const railIdx = railFocus ? sumStakeholders.findIndex((s) => s.id === railFocus) : -1;
+                    const railPerson = railIdx >= 0 ? sumStakeholders[railIdx] : null;
+                    const railEntries = railIdx >= 0 ? evaluated[railIdx].mine : null;
+                    return (
+                  <div className={`v3fs-collect-wrap${railOpen ? "" : " norail"}`}>
+                    <div className="v3fs-collect-main">
+                      {hasPeople ? (
+                        <IntervieweeDiscovery program={program} movementId={movement.id}
+                          captureField={meetingKit(program, movement.id)?.captureField ?? "interviewTranscripts"}
+                          onSaveInputs={onSaveInputs} onMintFollowUp={onMintFollowUp}
+                          onMintPacks={movement.id === "listen" ? onMintPacks : undefined}
+                          onFocusPerson={(id, open) => setRailFocus((cur) => (open ? id : cur === id ? null : cur))}
+                          onCaptured={() => onRunAgent("contradiction-detector", movement.id)} />
+                      ) : (
+                        <MeetingKitCard
+                          kit={meetingKit(program, movement.id)}
+                          movementId={movement.id}
+                          hasEvidence={evidence.length > 0}
+                          docsStale={artifacts.some((artifact) => artifact.present && artifact.stale)}
+                          onRegenerateStale={onRunAgentAndWait ? async () => {
+                            for (const artifact of artifacts.filter((entry) => entry.present && entry.stale)) {
+                              await onRunAgentAndWait(artifact.id, movement.id);
+                            }
+                          } : undefined}
+                          program={program}
+                          onSaveInputs={onSaveInputs}
+                          onScheduleFollowUp={onScheduleFollowUp}
+                          onMintFollowUp={onMintFollowUp}
+                          onMintPacks={onMintPacks}
+                          onMintDemoInvites={onMintDemoInvites}
+                          onCaptured={() => onRunAgent("contradiction-detector", movement.id)}
+                        />
+                      )}
+                      {/* Quiet escape hatch only — the checklist and gate CTA are
+                          the purposeful doors into the editor now. */}
+                      <button type="button" className="v3fs-edit-toggle quiet" onClick={() => toggle(setEditing, movement.id)}>
+                        {editing.has(movement.id) ? "Close" : "Structured inputs"}
+                      </button>
                     </div>
-                  ) : null}
+                    {railOpen ? (
+                    <aside className="v3fs-recrail" aria-label="The record">
+                      <div className="v3fs-recrail-h">
+                        <span className="v3fs-recrail-t">{railPerson ? railPerson.name.split(",")[0].trim() : "The record"}</span>
+                        <span className="v3fs-recrail-n">{railPerson ? (railEntries?.length ?? 0) : evidence.length}</span>
+                        {railPerson ? (
+                          <button type="button" className="v3fs-a" onClick={() => setRailFocus(null)} title="Back to the movement's record">all</button>
+                        ) : null}
+                        <button type="button" className="v3fs-recrail-x" onClick={() => setRailOpen(false)} aria-label="Collapse the record rail">⟩</button>
+                      </div>
+                      {railPerson ? (
+                        <div className="v3fs-ivc-fb">
+                          {(railEntries ?? []).map((entry, i) => (
+                            <button key={i} type="button" className="v3fs-ivc-fb-row" onClick={() => setRailRead(entry)} title="Read in full">
+                              <span className="v3fs-ivc-fb-top">
+                                {entry.kind === "document" ? <span className="v3fs-ivc-fb-kind">doc</span> : null}
+                                {entry.kind === "document" ? <span className="v3fs-ivc-fb-m">{entry.who}</span> : null}
+                                {entry.capturedAt ? <span className="v3fs-ivc-fb-when">{entry.capturedAt}</span> : null}
+                                <span className="v3fs-ivc-fb-go">Open ↗</span>
+                              </span>
+                              {entry.excerpt ? <span className="v3fs-ivc-fb-q">“{entry.excerpt}”</span> : null}
+                            </button>
+                          ))}
+                          {!(railEntries ?? []).length ? (
+                            <div className="v3fs-ivc-fb-empty">Nothing from {railPerson.name.split(",")[0].trim()} yet — reach out from their card.</div>
+                          ) : null}
+                        </div>
+                      ) : (
+                      <>
+                      {!evidence.length && hasPeople ? (
+                        <div className="v3fs-tab-ghost">
+                          Nothing on the record yet — reach out from the cards; what comes back lands here, attributed.
+                        </div>
+                      ) : null}
                   {/* The column leads with the evidence itself — voices, then
                       facts, then coverage. The kit is the action and follows,
                       collapsed to one line once a conversation is on record. */}
@@ -599,35 +667,18 @@ export default function FlowCanvas({ program, runningAgentIds, onRunAgent, onSav
                       <div className="v3fs-coverage-bar"><div className="v3fs-coverage-fill" style={{ width: `${Math.round((coverage.done / coverage.total) * 100)}%` }} /></div>
                     </div>
                   ) : null}
-                  {/* Stakeholder evidence collection lives in a full-width board
-                      below the three columns (see v3fs-ch-collect). The column
-                      keeps just the evidence + facts + coverage. When a movement
-                      has no per-stakeholder roster, the meeting kit stays here. */}
-                  {resolveMovementStakeholders(program, movement.id).length > 0 ? null : (
-                  <MeetingKitCard
-                    kit={meetingKit(program, movement.id)}
-                    movementId={movement.id}
-                    hasEvidence={evidence.length > 0}
-                    docsStale={artifacts.some((artifact) => artifact.present && artifact.stale)}
-                    onRegenerateStale={onRunAgentAndWait ? async () => {
-                      for (const artifact of artifacts.filter((entry) => entry.present && entry.stale)) {
-                        await onRunAgentAndWait(artifact.id, movement.id);
-                      }
-                    } : undefined}
-                    program={program}
-                    onSaveInputs={onSaveInputs}
-                    onScheduleFollowUp={onScheduleFollowUp}
-                    onMintFollowUp={onMintFollowUp}
-                    onMintPacks={onMintPacks}
-                    onMintDemoInvites={onMintDemoInvites}
-                    onCaptured={() => onRunAgent("contradiction-detector", movement.id)}
-                  />
-                  )}
-                  {/* Quiet escape hatch only — the checklist and gate CTA are
-                      the purposeful doors into the editor now. */}
-                  <button type="button" className="v3fs-edit-toggle quiet" onClick={() => toggle(setEditing, movement.id)}>
-                    {editing.has(movement.id) ? "Close" : "Structured inputs"}
-                  </button>
+                      </>
+                      )}
+                    </aside>
+                    ) : (
+                      <button type="button" className="v3fs-recrail-tab" onClick={() => setRailOpen(true)} aria-label="Open the record rail">
+                        ◧ Record<b>{evidence.length}</b>
+                      </button>
+                    )}
+                  </div>
+                    );
+                  })()}
+                  {railRead ? <EvidenceReader entry={railRead} onClose={() => setRailRead(null)} /> : null}
                 </div>
 
                 <div className={`v3fs-artgrid${tabKey === "paper" ? "" : " v3fs-tabhide"}`}>

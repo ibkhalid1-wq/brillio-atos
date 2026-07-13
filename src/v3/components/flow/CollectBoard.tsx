@@ -5,12 +5,11 @@
  * been heard. Driven by resolveMovementStakeholders, so it serves every
  * movement.
  */
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 import { flowMovements, movementEvidence, evidenceStamp, locateQuote } from "@/v3/components/flow/flowShellData";
 import { buildMeetingIcs, mailtoLink, stakeholderEmail } from "@/v3/components/flow/flowMeetings";
-import { supabase } from "@/integrations/supabase/client";
 import { listInterviewPacks, portalLinkFor } from "@/v3/components/flow/flowPortal";
 import { resolveMovementStakeholders, type MovementStakeholder } from "@/v3/components/flow/flowStakeholders";
 import { mapTranscriptSpeakers } from "@/v3/components/flow/flowTranscriptMap";
@@ -56,14 +55,15 @@ const COLLECT_COLUMNS: Array<{ key: "heard" | "waiting" | "toreach"; label: stri
  * into columns by collection state (Heard · Awaiting · To reach), each card the
  * person's quote, dated feedback trail (click → transcript), follow-ups,
  * meeting, and link channels. Driven by resolveMovementStakeholders. */
-export function IntervieweeDiscovery({ program, movementId, captureField, related, onSaveInputs, onMintFollowUp, onMintPacks, onCaptured }: {
+export function IntervieweeDiscovery({ program, movementId, captureField, onSaveInputs, onMintFollowUp, onMintPacks, onFocusPerson, onCaptured }: {
   program: ProgramSummary;
   movementId: string;
   captureField: string;
-  related?: ProgramSummary[];
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
   onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
   onMintPacks?: () => Promise<void>;
+  /** A card opened or closed — the record rail follows the person you're in. */
+  onFocusPerson?: (stakeholderId: string, open: boolean) => void;
   onCaptured?: () => void;
 }) {
   const stakeholders = resolveMovementStakeholders(program, movementId);
@@ -73,12 +73,6 @@ export function IntervieweeDiscovery({ program, movementId, captureField, relate
   const [mintBusy, setMintBusy] = useState(false);
   const [allCollapsed, setAllCollapsed] = useState(false);
   const boardRef = useRef<HTMLDivElement>(null);
-  // Same person, other programmes in the family: their quotes project here
-  // read-only, tagged with origin — evidence never moves between programmes.
-  const crossAll = useMemo(() =>
-    (related ?? []).flatMap((rp) => flowMovements().flatMap((m) =>
-      movementEvidence(rp, m).map((entry) => ({ entry, from: rp.name })))),
-    [related]);
   if (!stakeholders.length) return null;
   const evaluated = stakeholders.map((s) => ({ s, coll: stakeholderCollection(movementId, s, packs, evidence) }));
   const heardCount = evaluated.filter((e) => e.coll.status === "heard").length;
@@ -117,18 +111,11 @@ export function IntervieweeDiscovery({ program, movementId, captureField, relate
         {columns.map((col) => (
           <div key={col.key} className="v3fs-collect-col">
             <div className="v3fs-collect-col-h"><span className={`v3fs-cdot ${col.key}`} aria-hidden="true" />{col.label}<span className="v3fs-cn">{col.items.length}</span></div>
-            {col.items.map(({ s, coll }) => {
-              const key = s.name.toLowerCase();
-              const cross = key.length > 2 ? crossAll.filter(({ entry }) => {
-                const who = entry.who.split(",")[0].trim().toLowerCase();
-                return who && (who.includes(key) || key.includes(who));
-              }) : [];
-              return (
-                <IntervieweeCard key={s.id} program={program} movementId={movementId} stakeholder={s} captureField={captureField}
-                  coll={coll} cross={cross} solo={stakeholders.length === 1}
-                  onSaveInputs={onSaveInputs} onMintFollowUp={onMintFollowUp} onCaptured={onCaptured} />
-              );
-            })}
+            {col.items.map(({ s, coll }) => (
+              <IntervieweeCard key={s.id} program={program} movementId={movementId} stakeholder={s} captureField={captureField}
+                coll={coll} solo={stakeholders.length === 1}
+                onSaveInputs={onSaveInputs} onMintFollowUp={onMintFollowUp} onFocusPerson={onFocusPerson} onCaptured={onCaptured} />
+            ))}
           </div>
         ))}
       </div>
@@ -136,22 +123,22 @@ export function IntervieweeDiscovery({ program, movementId, captureField, relate
   );
 }
 
-function IntervieweeCard({ program, movementId, stakeholder, captureField, coll, cross, solo, onSaveInputs, onMintFollowUp, onCaptured }: {
+function IntervieweeCard({ program, movementId, stakeholder, captureField, coll, solo, onSaveInputs, onMintFollowUp, onFocusPerson, onCaptured }: {
   program: ProgramSummary;
   movementId: string;
   stakeholder: MovementStakeholder;
   captureField: string;
   coll: StakeholderCollection;
-  cross?: Array<{ entry: ReturnType<typeof movementEvidence>[number]; from: string }>;
   /** The board's only person (Frame's sponsor): their card IS the board, so
    * it opens by default. On a roster board the tiles stay closed for scanning. */
   solo?: boolean;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
   onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
+  onFocusPerson?: (stakeholderId: string, open: boolean) => void;
   onCaptured?: () => void;
 }) {
   const { name, role, questions } = stakeholder;
-  const { pack, mine, heard, status } = coll;
+  const { pack, heard, status } = coll;
   const first = name.split(" ")[0] || "they";
   const email = stakeholderEmail(program, name);
   // A minted link is only "the" link while its questions still match the
@@ -165,7 +152,7 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
   const [date, setDate] = useState("");
   const [mintedLink, setMintedLink] = useState<string | null>(null);
   const [linkBusy, setLinkBusy] = useState(false);
-  const [evFor, setEvFor] = useState<typeof mine[number] | null>(null);
+  const [evFor, setEvFor] = useState<StakeholderCollection["mine"][number] | null>(null);
   // Passage to highlight when the reader opens from a contradiction question.
   const [evHighlight, setEvHighlight] = useState<string | null>(null);
   const dateRef = useRef<HTMLInputElement | null>(null);
@@ -233,18 +220,10 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
       onCaptured?.();
     } finally { setBusy(false); }
   };
-  const downloadOriginal = (entry: typeof mine[number]) => {
-    void supabase.functions.invoke("flow-extract", { body: { download: entry.sourceKey } })
-      .then((result: { data: unknown }) => {
-        const url = (result.data as { url?: string } | null)?.url;
-        if (url) window.open(url, "_blank"); else setEvFor(entry);
-      })
-      .catch(() => setEvFor(entry));
-  };
-
   return (
     <>
-      <details className={`v3fs-ivc ${status}`} open={solo && !heard}>
+      <details className={`v3fs-ivc ${status}`} open={solo && !heard}
+        onToggle={(event) => onFocusPerson?.(stakeholder.id, (event.currentTarget as HTMLDetailsElement).open)}>
         <span className="v3fs-ivc-strip" aria-hidden="true" />
         <summary>
           {/* Status-toned initials — the person reads as a person at a glance. */}
@@ -256,40 +235,9 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
           <span className="v3fs-ivc-chev" aria-hidden="true" />
         </summary>
         <div className="v3fs-ivc-b">
-          {/* Feedback trail — every dated response, click to read the transcript. */}
-          <div className="v3fs-ivc-sec">
-            <div className="v3fs-ivc-sec-h">Feedback &amp; responses</div>
-            {mine.length || cross?.length ? (
-              <div className="v3fs-ivc-fb">
-                {mine.map((e, i) => (
-                  <button key={i} type="button" className="v3fs-ivc-fb-row" onClick={() => setEvFor(e)}
-                    title={e.kind === "document" ? "Open the extracted content — ⤓ fetches the original file" : "Read the transcript"}>
-                    <span className="v3fs-ivc-fb-top">
-                      {e.kind === "document" ? <span className="v3fs-ivc-fb-kind">doc</span> : null}
-                      {e.kind === "document" ? <span className="v3fs-ivc-fb-m">{e.who}</span> : null}
-                      {e.capturedAt ? <span className="v3fs-ivc-fb-when">{e.capturedAt}</span> : null}
-                      {e.kind === "document" && e.sourceKey ? (
-                        <span role="button" tabIndex={0} className="v3fs-ivc-fb-dl" title="Download the original file"
-                          onClick={(ev) => { ev.stopPropagation(); downloadOriginal(e); }}
-                          onKeyDown={(ev) => { if (ev.key === "Enter") { ev.stopPropagation(); downloadOriginal(e); } }}>⤓ original</span>
-                      ) : null}
-                      <span className="v3fs-ivc-fb-go">Open ↗</span>
-                    </span>
-                    {e.excerpt ? <span className="v3fs-ivc-fb-q">“{e.excerpt}”</span> : null}
-                  </button>
-                ))}
-                {(cross ?? []).slice(0, 4).map(({ entry, from }, i) => (
-                  <button key={`x-${i}`} type="button" className="v3fs-ivc-fb-row cross" onClick={() => setEvFor(entry)}
-                    title={`Said in ${from} — shown here read-only`}>
-                    <span className="v3fs-ivc-fb-top"><span className="v3fs-ivc-fb-from">◇ {from}</span><span className="v3fs-ivc-fb-m">{entry.meta}</span><span className="v3fs-ivc-fb-go">Open ↗</span></span>
-                    {entry.excerpt ? <span className="v3fs-ivc-fb-q">“{entry.excerpt}”</span> : null}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="v3fs-ivc-fb-empty">No responses yet — collect via a link or a meeting.</div>
-            )}
-          </div>
+          {/* The person's feedback trail lives on the RECORD RAIL — opening
+              this card focuses the rail on them, so the card keeps only the
+              work: their script, the channels, and the capture box. */}
 
           {/* Follow-up questions / their script. A question born from a
               contradiction carries its receipts: the disputed passage links
