@@ -18,7 +18,7 @@ import {
   listFlowTracks, trackAcceptance, trackPace,
 } from "@/v3/components/flow/flowTracks";
 import { readFlowGovernance, flowAgentTier } from "@/v3/components/flow/flowGovernance";
-import { resolveMovementStakeholders, deliveryRoleDirectory } from "@/v3/components/flow/flowStakeholders";
+import { resolveMovementStakeholders, deliveryRoleDirectory, readDirectoryPeople, validateProgramRole, readRoleBindings, knownProgramRoles } from "@/v3/components/flow/flowStakeholders";
 import { stakeholderEmail } from "@/v3/components/flow/flowMeetings";
 import { readMetricRegistry, metricConsistency } from "@/v3/components/flow/flowMetricRegistry";
 import { routeAttachedDocument, buildRoutedBlocks, type DocRoute } from "@/v3/components/flow/flowDocRouting";
@@ -451,7 +451,8 @@ export default function FlowShell(props: FlowShellProps) {
   // anything waits on the user, the canvas otherwise. Dismissed for the
   // session the moment they go there.
   const openDisputeCount = useMemo(() => readContradictions(program, true).length, [program]);
-  const waitingCount = openDecisions.length + portalInbox.length + openDisputeCount;
+  const unresolvedRoleCount = useMemo(() => readDirectoryPeople(program).filter((entry) => !entry.roleResolved).length, [program]);
+  const waitingCount = openDecisions.length + portalInbox.length + openDisputeCount + unresolvedRoleCount;
   const startId: FlowView = waitingCount > 0 ? "today" : "flow";
   const [startSeen, setStartSeen] = useState<boolean>(() => {
     try { return window.sessionStorage.getItem("v3fs-start-seen") === "1"; } catch { return true; }
@@ -733,7 +734,7 @@ export default function FlowShell(props: FlowShellProps) {
           <FlowCanvas program={program} runningAgentIds={props.runningAgentIds} agentErrors={props.agentErrors} relatedPrograms={[...(drillParent ? [drillParent] : []), ...listChildDrilldowns(program, props.programs).map((c) => c.child)]} onSelectProgram={props.onSelectProgram} onComment={props.onComment} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} onCompileShipLanes={props.onCompileShipLanes} onToggleShipItem={props.onToggleShipItem} onSetShipLane={props.onSetShipLane} onScheduleFollowUp={props.onScheduleFollowUp} onMintFollowUp={props.onMintFollowUp} onRecordShowPass={props.onRecordShowPass} onSaveArtifactDoc={props.onSaveArtifactDoc} onRecordGate={props.onRecordGate} onReopenGate={props.onReopenGate} onRunAgentAndWait={props.onRunAgentAndWait} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }}
           />
         ) : view === "people" ? (
-          <FlowPeople program={program} />
+          <FlowPeople program={program} onSaveInputs={props.onSaveInputs} onGoInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} />
         ) : view === "library" ? (
           <FlowLibrary program={program} programs={props.programs} onSelectProgram={props.onSelectProgram} onSaveInputs={props.onSaveInputs} onTagClaim={props.onTagClaim} onComment={props.onComment} onSaveArtifactDoc={props.onSaveArtifactDoc} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
         ) : view === "mission" ? (
@@ -900,6 +901,30 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
       }, { attest: { action: "Dispute resolved — resolution recorded as evidence", detail: statement.slice(0, 140) } });
     } finally { setDisputeBusy(null); }
   };
+  // Roles the operator added that the programme doesn't yet recognise. Like
+  // disputes, these are DERIVED from the record — the clarify card is present
+  // exactly while a role is unresolved, so it keeps clarifying until the
+  // operator maps it (or accepts it as a new programme role) right here.
+  const unresolvedRoles = useMemo(() => readDirectoryPeople(program).filter((entry) => !entry.roleResolved), [program]);
+  const roleOptions = useMemo(() => knownProgramRoles(program).sort((a, b) => a.localeCompare(b)), [program]);
+  const patchDirectoryPerson = async (id: string, patch: Record<string, unknown> | null, action: string, detail: string) => {
+    if (!onSaveInputs) return;
+    const people = readDirectoryPeople(program);
+    const next = patch === null
+      ? people.filter((entry) => entry.id !== id)
+      : people.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry));
+    setDisputeBusy(id);
+    try {
+      await onSaveInputs("listen", { _directoryPeople: JSON.stringify(next) }, { attest: { action, detail } });
+    } finally { setDisputeBusy(null); }
+  };
+  const mapRole = (id: string, name: string, role: string) =>
+    patchDirectoryPerson(id, { role, roleResolved: true }, `Role clarified — ${name} → ${role}`, role);
+  const acceptRole = (id: string, name: string, role: string) =>
+    patchDirectoryPerson(id, { roleResolved: true }, `Role accepted as new — ${name} (${role})`, `"${role}" is now a recognised programme role`);
+  const removeDirectoryPerson = (id: string, name: string) =>
+    patchDirectoryPerson(id, null, `Person removed — ${name}`, "added in error");
+
   const routeDispute = async (statement: string, person: string) => {
     if (!onSaveInputs || !person) return;
     const rows = parseGridRows(listenBucket().contradictionLog as unknown);
@@ -1013,7 +1038,7 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
           ))}
         </div>
       ) : null}
-      {open.length === 0 && inbox.length === 0 && disputes.length === 0 ? (
+      {open.length === 0 && inbox.length === 0 && disputes.length === 0 && unresolvedRoles.length === 0 ? (
         <div className="v3fs-quiet">
           <div className="v3fs-quiet-mark" aria-hidden="true">◈</div>
           {attention.length ? (
@@ -1041,7 +1066,7 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
         <section className="v3fs-inbox" aria-label="Waiting on you" ref={inboxRef}>
           <div className="v3fs-ph">
             <h3>Waiting on you</h3>
-            <span>{open.length + inbox.length + disputes.length} item{open.length + inbox.length + disputes.length === 1 ? "" : "s"}</span>
+            <span>{open.length + inbox.length + disputes.length + unresolvedRoles.length} item{open.length + inbox.length + disputes.length + unresolvedRoles.length === 1 ? "" : "s"}</span>
           </div>
           {open.map((decision) => (
             <DecisionCard key={decision.id} program={program} decision={decision} movementLabel={label(decision.movementId)}
@@ -1102,6 +1127,39 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
                       {people.map((name) => <option key={name} value={name}>{name}</option>)}
                     </select>
                   </label>
+                ) : null}
+              </div>
+            </article>
+          ))}
+          {unresolvedRoles.map((person) => (
+            <article key={`role-${person.id}`} className="v3fs-dec">
+              <div className="v3fs-dec-top">
+                <span className="v3fs-vc pen">Role to clarify</span>
+                <span className="v3fs-dec-mv">{person.name}{person.movementId ? ` · ${person.movementId.charAt(0).toUpperCase()}${person.movementId.slice(1)}` : ""}</span>
+              </div>
+              <p className="v3fs-dec-s">&ldquo;{person.role}&rdquo; isn&rsquo;t a role this programme recognises. Map it to a known role, or accept it as a new one — the person can&rsquo;t be placed in coverage until it&rsquo;s settled.</p>
+              <div className="v3fs-dec-rec-b">mapping or accepting resolves it; it keeps clarifying until you do</div>
+              <div className="v3fs-dec-cta">
+                {onSaveInputs ? (
+                  <label className="v3fs-dec-route">
+                    map to
+                    <select defaultValue="" aria-label={`Map ${person.name}'s role to a known role`}
+                      disabled={disputeBusy === person.id}
+                      onChange={(event) => { if (event.target.value) void mapRole(person.id, person.name, event.target.value); }}>
+                      <option value="">choose a known role…</option>
+                      {roleOptions.map((r) => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                  </label>
+                ) : null}
+                {onSaveInputs ? (
+                  <button type="button" className="v3fs-btn" disabled={disputeBusy === person.id}
+                    onClick={() => void acceptRole(person.id, person.name, person.role)}>
+                    {disputeBusy === person.id ? "Saving…" : `✓ Keep "${person.role}" as a new role`}
+                  </button>
+                ) : null}
+                {onSaveInputs ? (
+                  <button type="button" className="v3fs-btn quiet" disabled={disputeBusy === person.id}
+                    onClick={() => void removeDirectoryPerson(person.id, person.name)}>Remove</button>
                 ) : null}
               </div>
             </article>
@@ -1701,7 +1759,7 @@ function FlowPortfolio({ programs, activeId, onSelectProgram, onHydratePrograms,
 /* ── Library: everything the programme knows ─────────────────────────────── */
 
 /* ── People — the programme-wide directory, its own destination ─────────── */
-function FlowPeople({ program }: { program: ProgramSummary }) {
+function FlowPeople({ program, onSaveInputs, onGoInbox }: { program: ProgramSummary; onSaveInputs?: FlowShellProps["onSaveInputs"]; onGoInbox?: () => void }) {
   const [q, setQ] = useState("");
   const query = q.trim().toLowerCase();
   const evidence = useMemo(
@@ -1721,25 +1779,95 @@ function FlowPeople({ program }: { program: ProgramSummary }) {
     email: entry.bound?.name ? (entry.bound.email ?? stakeholderEmail(program, entry.bound.name)) : null,
     bound: !!entry.bound?.name, isSponsor: entry.isSponsor,
   })), [program]);
+  const added = useMemo(() => readDirectoryPeople(program), [program]);
+
+  // Add a person + role. The role is validated against the programme; a known
+  // role lands resolved, an unfamiliar one lands UNRESOLVED and surfaces in the
+  // Inbox to clarify (it keeps clarifying until the operator settles it there).
+  const MOVEMENTS = ["listen", "envision", "show", "ship", "evolve"];
+  const [form, setForm] = useState({ name: "", role: "", email: "", movementId: "listen" });
+  const [addBusy, setAddBusy] = useState(false);
+  const [lastAdd, setLastAdd] = useState<{ name: string; resolved: boolean } | null>(null);
+  const addPerson = async () => {
+    const name = form.name.trim(); const role = form.role.trim();
+    if (!name || !role || !onSaveInputs) return;
+    const resolved = validateProgramRole(program, role).known;
+    const entry = {
+      id: `dp-${Date.now().toString(36)}-${name.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 8)}`,
+      name, role, email: form.email.trim() || undefined, movementId: form.movementId, roleResolved: resolved,
+    };
+    setAddBusy(true);
+    try {
+      // Add the person, and — one contact store — bind any address into
+      // `_roleBindings` on their movement in the same write, so sends and the
+      // gate resolve it immediately regardless of whether the role is known.
+      const rb = readRoleBindings(program, form.movementId);
+      if (entry.email) rb[name] = { name, email: entry.email };
+      await onSaveInputs("listen", { _directoryPeople: JSON.stringify([...readDirectoryPeople(program), entry]) }, {
+        attest: { action: `Person added — ${name} (${role})`, detail: resolved ? "role recognised" : "role needs clarification — routed to the Inbox" },
+      });
+      if (entry.email) await onSaveInputs(form.movementId, { _roleBindings: JSON.stringify(rb) }, { silent: true });
+      setLastAdd({ name, resolved });
+      setForm({ name: "", role: "", email: "", movementId: form.movementId });
+    } finally { setAddBusy(false); }
+  };
+
   const match = (row: { name: string; role: string; where: string; email?: string | null }) =>
     !query || `${row.name} ${row.role} ${row.where} ${row.email ?? ""}`.toLowerCase().includes(query);
   const rosterShown = roster.filter(match);
   const rolesShown = roles.filter(match);
+  const addedShown = added.filter((p) => match({ name: p.name, role: p.role, where: "Added", email: p.email ?? "" }));
   const missing = roster.filter((r) => !r.email).length + roles.filter((r) => r.bound && !r.email && !r.isSponsor).length;
+  const unresolved = added.filter((p) => !p.roleResolved).length;
   return (
     <div className="v3fs-grid2">
       <div className="v3fs-search-row">
         <input className="v3fs-search" placeholder="Find a person, role, or address…"
           value={q} onChange={(event) => setQ(event.target.value)} aria-label="Search people" />
       </div>
+      {onSaveInputs ? (
+        <div className="v3fs-panel v3fs-panel-wide">
+          <div className="v3fs-ph"><h3>Add a person</h3><span>name a new person and their role — a role the programme doesn&rsquo;t recognise is sent to the Inbox to clarify</span></div>
+          <div className="v3fs-addp">
+            <input placeholder="Name" aria-label="Name" value={form.name}
+              onChange={(event) => setForm({ ...form, name: event.target.value })} />
+            <input placeholder="Role (e.g. Data Steward)" aria-label="Role" value={form.role}
+              onChange={(event) => setForm({ ...form, role: event.target.value })} />
+            <input placeholder="Email (optional)" type="email" aria-label="Email" value={form.email}
+              onChange={(event) => setForm({ ...form, email: event.target.value })} />
+            <select value={form.movementId} aria-label="Movement" onChange={(event) => setForm({ ...form, movementId: event.target.value })}>
+              {MOVEMENTS.map((m) => <option key={m} value={m}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>)}
+            </select>
+            <button type="button" className="v3fs-btn pri" disabled={addBusy || !form.name.trim() || !form.role.trim()}
+              onClick={() => void addPerson()}>{addBusy ? "Adding…" : "Add person"}</button>
+          </div>
+          {form.role.trim() && !validateProgramRole(program, form.role).known ? (
+            <p className="v3fs-addp-note">&ldquo;{form.role.trim()}&rdquo; isn&rsquo;t a role this programme recognises yet — adding will route it to the Inbox to clarify.{(() => { const s = validateProgramRole(program, form.role).suggestions; return s.length ? ` Closest: ${s.slice(0, 3).join(", ")}.` : ""; })()}</p>
+          ) : null}
+          {lastAdd ? (
+            <p className="v3fs-addp-note">{lastAdd.resolved
+              ? `${lastAdd.name} added — role recognised.`
+              : <>{lastAdd.name} added — their role needs clarification. {onGoInbox ? <button type="button" className="v3fs-a" onClick={() => onGoInbox()}>Clarify in the Inbox →</button> : "Clarify it in the Inbox."}</>}</p>
+          ) : null}
+        </div>
+      ) : null}
       <div className="v3fs-panel v3fs-panel-wide">
         <div className="v3fs-ph">
           <h3>People</h3>
-          <span>everyone the programme collects from — {missing ? `${missing} without an address; ` : ""}edit on their collect card or in the Discovery Kit</span>
+          <span>everyone the programme collects from — {unresolved ? `${unresolved} role${unresolved === 1 ? "" : "s"} to clarify; ` : ""}{missing ? `${missing} without an address; ` : ""}edit on their collect card or in the Discovery Kit</span>
         </div>
         <table className="v3fs-dir">
           <thead><tr><th>Where</th><th>Person</th><th>Role</th><th>Email</th><th>Status</th></tr></thead>
           <tbody>
+            {addedShown.map((row) => (
+              <tr key={row.id}>
+                <td>{row.movementId.charAt(0).toUpperCase() + row.movementId.slice(1)} · added</td>
+                <td>{row.name}</td>
+                <td>{row.role}{!row.roleResolved ? <span className="v3fs-ivc-noaddr" title="Role not recognised — clarify in the Inbox">⚠ unclear</span> : null}</td>
+                <td>{(row.email || stakeholderEmail(program, row.name)) ?? <span className="v3fs-ivc-noaddr">✉ no address</span>}</td>
+                <td><span className={`v3fs-vc ${row.roleResolved ? "acc" : "pen"}`}>{row.roleResolved ? "Added" : "Role unclear"}</span></td>
+              </tr>
+            ))}
             {rosterShown.map((row, i) => (
               <tr key={`r-${i}`}>
                 <td>{row.where}</td>
@@ -1758,7 +1886,7 @@ function FlowPeople({ program }: { program: ProgramSummary }) {
                 <td><span className={`v3fs-vc ${row.name ? "acc" : "pen"}`}>{row.name ? "Bound" : "Open"}</span></td>
               </tr>
             ))}
-            {!rosterShown.length && !rolesShown.length ? (
+            {!rosterShown.length && !rolesShown.length && !addedShown.length ? (
               <tr><td colSpan={5}><div className="v3fs-empty">Nothing matches that search.</div></td></tr>
             ) : null}
           </tbody>

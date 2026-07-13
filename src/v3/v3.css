@@ -6421,3 +6421,9 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 /* Inbox dispute routing control. */
 .v3fs-dec-route { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; opacity: .85; }
 .v3fs-dec-route select { font-size: 12px; padding: 4px 6px; border-radius: 7px; }
+
+/* People tab: add-a-person form. */
+.v3fs-addp { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 2px 2px; }
+.v3fs-addp input, .v3fs-addp select { font-size: 12.5px; padding: 6px 8px; border-radius: 8px; }
+.v3fs-addp input { flex: 1 1 150px; min-width: 120px; }
+.v3fs-addp-note { font-size: 12px; opacity: .7; margin: 4px 2px 0; }

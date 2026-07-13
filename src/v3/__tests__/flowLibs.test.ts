@@ -15,7 +15,7 @@ import { unrosteredVoicesProposal, reDemoProposal, ontologyRepairProposal, queue
 import { routeAttachedDocument, buildRoutedBlocks } from "@/v3/components/flow/flowDocRouting";
 import { retroAttributionProposal, negatedClaimProposal } from "@/v3/components/flow/flowWatchers";
 import { rankEvidence, isNoiseEvidence, scoreEvidence } from "@/v3/components/flow/flowEvidenceRank";
-import { resolveMovementStakeholders, deliveryRoleDirectory } from "@/v3/components/flow/flowStakeholders";
+import { resolveMovementStakeholders, deliveryRoleDirectory, validateProgramRole, knownProgramRoles, readDirectoryPeople } from "@/v3/components/flow/flowStakeholders";
 import { mintFollowUpPack, listInterviewPacks, visibleLinks } from "@/v3/components/flow/flowPortal";
 import { trackAcceptance, trackBlockers, recordShowPass, listFlowTracks, type FlowTrack } from "@/v3/components/flow/flowTracks";
 import { setShipLane, toggleShipItem, listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
@@ -2095,5 +2095,37 @@ describe("gateApprovalIntegrity — read-time backstop for forged approvals (F-0
     expect(r.defensible).toBe(false);
     expect(r.unmet).toBe(2);
     expect(r.reason).toContain("not met");
+  });
+});
+
+describe("People directory — operator-added roles validate against the programme", () => {
+  it("a template role (or close variant) validates as known; an unfamiliar role does not", () => {
+    const p = programme({});
+    expect(validateProgramRole(p, "Solution Architect").known).toBe(true);
+    expect(validateProgramRole(p, "Executive Sponsor").known).toBe(true);
+    // a close variant sharing the significant tokens resolves by overlap
+    expect(validateProgramRole(p, "Lead Solution Architect").known).toBe(true);
+    // an unfamiliar role is unresolved and offers suggestions
+    const unknown = validateProgramRole(p, "Data Steward");
+    expect(unknown.known).toBe(false);
+    expect(Array.isArray(unknown.suggestions)).toBe(true);
+  });
+
+  it("a role already accepted in the directory becomes a KNOWN role for the next person", () => {
+    const p = programme({ phaseInputs: { listen: { _directoryPeople: JSON.stringify([
+      { id: "dp-1", name: "Nadia Okonkwo", role: "Data Steward", movementId: "listen", roleResolved: true },
+    ]) } } });
+    expect(knownProgramRoles(p).some((r) => /Data Steward/i.test(r))).toBe(true);
+    expect(validateProgramRole(p, "Data Steward").known).toBe(true);
+  });
+
+  it("readDirectoryPeople round-trips and reports unresolved roles", () => {
+    const p = programme({ phaseInputs: { listen: { _directoryPeople: JSON.stringify([
+      { id: "dp-1", name: "Nadia", role: "Data Steward", movementId: "listen", roleResolved: false },
+      { id: "dp-2", name: "Omar", role: "Solution Architect", movementId: "envision", roleResolved: true },
+    ]) } } });
+    const people = readDirectoryPeople(p);
+    expect(people).toHaveLength(2);
+    expect(people.filter((x) => !x.roleResolved).map((x) => x.name)).toEqual(["Nadia"]);
   });
 });

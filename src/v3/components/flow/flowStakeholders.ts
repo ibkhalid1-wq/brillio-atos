@@ -9,7 +9,7 @@
  */
 import type { ProgramSummary } from "@/new/types";
 import { meetingKit, askableMovementGaps } from "@/v3/components/flow/flowMeetings";
-import { readContradictions, flowMovements, movementEvidence, readMovementInputs } from "@/v3/components/flow/flowShellData";
+import { readContradictions, flowMovements, movementEvidence, readMovementInputs, parseGridRows } from "@/v3/components/flow/flowShellData";
 
 export interface MovementStakeholder {
   /** Stable key for React + pack matching. */
@@ -153,6 +153,91 @@ export interface DeliveryRoleEntry {
   /** True when the binding is inherited from Frame's sponsor, not editable here. */
   isSponsor: boolean;
 }
+/**
+ * People the OPERATOR added directly in the People tab — stored under Listen's
+ * inputs as `_directoryPeople` (underscore ⇒ fingerprint-safe: adding a person
+ * is an org fact, never new evidence). Each carries a `roleResolved` flag: a
+ * role the programme already recognises resolves on add; an unfamiliar one
+ * stays unresolved and surfaces in the Inbox to clarify.
+ */
+export interface DirectoryPerson {
+  id: string;
+  name: string;
+  email?: string;
+  role: string;
+  movementId: string;
+  roleResolved: boolean;
+}
+export function readDirectoryPeople(program: ProgramSummary): DirectoryPerson[] {
+  const raw = readMovementInputs(program, "listen")._directoryPeople;
+  if (typeof raw !== "string" || !raw.trim()) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(isRecord).map((entry) => ({
+      id: String(entry.id ?? ""),
+      name: String(entry.name ?? "").trim(),
+      email: entry.email ? String(entry.email).trim() : undefined,
+      role: String(entry.role ?? "").trim(),
+      movementId: String(entry.movementId ?? "listen"),
+      roleResolved: entry.roleResolved === true,
+    })).filter((entry) => entry.id && entry.name);
+  } catch { return []; }
+}
+
+const normRole = (role: string): string => role.trim().toLowerCase().replace(/\s*\([^)]*\)\s*/g, " ").replace(/\/+/g, " ").replace(/\s+/g, " ").trim();
+const roleTokens = (role: string): Set<string> =>
+  new Set((normRole(role).match(/[a-z]{3,}/g) ?? []).filter((t) => !["the", "and", "for", "lead", "owner", "sme"].includes(t)));
+
+/**
+ * Every role the programme RECOGNISES: the methodology's delivery-role
+ * templates, the sponsor role, the discovery-kit personas and heard roster
+ * roles, and any operator-declared role already resolved in the directory.
+ * This is the vocabulary a newly-added person's role is validated against.
+ */
+export function knownProgramRoles(program: ProgramSummary): string[] {
+  const roles = new Set<string>();
+  roles.add("Executive Sponsor");
+  for (const entries of Object.values(ROLE_TEMPLATES)) for (const entry of entries) roles.add(entry.role);
+  const kit = dataRoot(program).discoveryKit;
+  if (isRecord(kit) && Array.isArray(kit.interviews)) {
+    for (const iv of kit.interviews) if (isRecord(iv) && typeof iv.role === "string" && iv.role.trim()) roles.add(iv.role.trim());
+  }
+  for (const rosterRow of parseGridRows(readMovementInputs(program, "listen").interviewRoster)) {
+    const role = String(rosterRow.role ?? "").trim();
+    if (role) roles.add(role);
+  }
+  for (const person of readDirectoryPeople(program)) if (person.roleResolved && person.role) roles.add(person.role);
+  return [...roles];
+}
+
+/**
+ * Does this role match a role the programme already knows? Exact (normalised)
+ * or strong token overlap counts as known; otherwise it is unresolved and the
+ * caller routes it to the Inbox. `suggestions` are the closest known roles.
+ */
+export function validateProgramRole(program: ProgramSummary, role: string):
+  { known: boolean; match: string | null; suggestions: string[] } {
+  const target = normRole(role);
+  if (!target) return { known: false, match: null, suggestions: [] };
+  const known = knownProgramRoles(program);
+  const exact = known.find((k) => normRole(k) === target);
+  if (exact) return { known: true, match: exact, suggestions: [] };
+  const targetToks = roleTokens(role);
+  const scored = known
+    .map((k) => {
+      const kt = roleTokens(k);
+      let shared = 0;
+      for (const t of targetToks) if (kt.has(t)) shared += 1;
+      return { role: k, score: kt.size && targetToks.size ? shared / Math.min(kt.size, targetToks.size) : 0 };
+    })
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score);
+  const strong = scored.find((entry) => entry.score >= 0.75);
+  if (strong) return { known: true, match: strong.role, suggestions: [] };
+  return { known: false, match: null, suggestions: scored.slice(0, 4).map((entry) => entry.role) };
+}
+
 export function deliveryRoleDirectory(program: ProgramSummary): DeliveryRoleEntry[] {
   const frame = readMovementInputs(program, "frame");
   const sponsor = typeof frame.sponsor === "string" ? frame.sponsor.trim() : "";
