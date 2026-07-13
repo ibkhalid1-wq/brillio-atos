@@ -129,7 +129,7 @@ supabase/functions/
 
 ## Testing & CI
 
-- `npx vitest run` — 807 tests / 47 files. The load-bearing suites:
+- `npx vitest run` — 808 tests / 47 files. The load-bearing suites:
   - `flowLibs.test.ts` — gate verdicts pinned word-for-word, decision resolution, briefs, locateQuote
   - `coherence.test.ts` — cross-surface invariants (every decision family has a preview, checklist groups)
   - `edgeLockstep.test.ts` — client/edge parity by parsing both sources (fingerprints,

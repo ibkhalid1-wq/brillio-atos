@@ -543,6 +543,16 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
     expect(artifactOpenGaps(empty, "charter")).toEqual([gap]);
   });
 
+  it("a name-keyed binding carries an address the senders and the gate can resolve — the card's 'Save address' path", () => {
+    // The card writes { [person's name]: { name, email } } into the
+    // movement's _roleBindings; stakeholderEmail matches by the bound NAME,
+    // so the key never collides with role templates.
+    const p = programme({ phaseInputs: {
+      frame: { _roleBindings: JSON.stringify({ "Raj Mamodia": { name: "Raj Mamodia", email: "raj@laila.com" } }) },
+    } });
+    expect(stakeholderEmail(p, "Raj Mamodia")).toBe("raj@laila.com");
+  });
+
   it("deliveryRoleDirectory lists every Envision-onward role with its binding state — the kit studio's people hub", () => {
     const p = programme({ phaseInputs: {
       frame: { sponsor: "Raj Mamodia" },

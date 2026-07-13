@@ -6235,6 +6235,11 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-ivc > summary::-webkit-details-marker {display:none}
 .v3fs-ivc-who {display:flex;flex-direction:column;gap:1px;font-size:13.5px;font-weight:650;color:var(--v3-text-primary);min-width:0}
 .v3fs-ivc-who span {font-size:11px;font-weight:500;color:var(--v3-text-muted)}
+
+/* "No address" hint on a collection card's collapsed row — quiet amber, the
+   operator sees the missing contact without opening the card. */
+.v3fs-ivc-noaddr { font-size: 10.5px; letter-spacing: .02em; color: var(--v3-amber, #b58a2c); background: color-mix(in srgb, var(--v3-amber, #b58a2c) 12%, transparent); border: 1px solid color-mix(in srgb, var(--v3-amber, #b58a2c) 30%, transparent); border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+
 .v3fs-ivc-st {flex-shrink:0;font-size:10.5px;font-weight:650;padding:3px 9px;border-radius:99px;letter-spacing:.02em}
 .v3fs-ivc-st.heard {background:color-mix(in srgb, var(--v3-green) 14%, transparent);color:var(--v3-green)}
 .v3fs-ivc-st.waiting {background:color-mix(in srgb, var(--v3-amber) 14%, transparent);color:var(--v3-amber)}

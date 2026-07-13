@@ -162,6 +162,25 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
   const [bindEmail, setBindEmail] = useState("");
   const [bindBusy, setBindBusy] = useState(false);
   const [resolveBusy, setResolveBusy] = useState<string | null>(null);
+  const [emailDraft, setEmailDraft] = useState("");
+  const [emailBusy, setEmailBusy] = useState(false);
+  // A named person with no address: the operator adds it right on the card.
+  // Stored as a name-keyed role binding — stakeholderEmail resolves bindings
+  // by the bound NAME, so every sender and the gate's "emails on file"
+  // criterion pick it up without touching the generated kit document.
+  const saveEmail = async () => {
+    const address = emailDraft.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) return;
+    setEmailBusy(true);
+    try {
+      const bindings = readRoleBindings(program, movementId);
+      bindings[name] = { name, email: address };
+      await onSaveInputs(movementId, { _roleBindings: JSON.stringify(bindings) }, {
+        attest: { action: `Email on file — ${name}`, detail: address },
+      });
+      setEmailDraft("");
+    } finally { setEmailBusy(false); }
+  };
   // The link exists the moment a card needs one: opening a card with a
   // script and no link mints it silently, so the operator only ever COPIES.
   const autoMinted = useRef(false);
@@ -322,6 +341,7 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
           </span>
           <span className="v3fs-ivc-who">{name || "Stakeholder"}{role && role !== name ? <span>{role}</span> : null}</span>
           <span className={`v3fs-ivc-st ${status}`}>{statusLabel}</span>
+          {!isRole && !email ? <span className="v3fs-ivc-noaddr" title="No email on file — open the card to add it">✉ no address</span> : null}
           <span className="v3fs-ivc-chev" aria-hidden="true" />
         </summary>
         <div className="v3fs-ivc-b">
@@ -339,6 +359,20 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
                   onClick={() => void saveBinding()}>{bindBusy ? "Binding…" : "Bind"}</button>
               </div>
               <span className="v3fs-ivc-sec-note">Names the {role.toLowerCase()} — their link, meeting invite and captures follow the person from here on.</span>
+            </div>
+          ) : null}
+          {/* A named person with NO address: say so, and take it here — the
+              gate's "emails on file" criterion and every send follow it. */}
+          {!isRole && !email ? (
+            <div className="v3fs-ivc-sec v3fs-ivc-bind">
+              <div className="v3fs-ivc-sec-h">No email on file</div>
+              <div className="v3fs-ivc-bind-row">
+                <input value={emailDraft} onChange={(event) => setEmailDraft(event.target.value)}
+                  placeholder={`Email for ${name}`} type="email" aria-label={`Email for ${name}`} />
+                <button type="button" className="v3fs-btn pri" disabled={emailBusy || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailDraft.trim())}
+                  onClick={() => void saveEmail()}>{emailBusy ? "Saving…" : "Save address"}</button>
+              </div>
+              <span className="v3fs-ivc-sec-note">The link can still be copied without it — but email sends, meeting invites and the gate&rsquo;s &ldquo;emails on file&rdquo; criterion need an address. Saved to the record, attested.</span>
             </div>
           ) : null}
           {/* The person's feedback trail lives on the RECORD RAIL — opening
