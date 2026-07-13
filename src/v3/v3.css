@@ -4871,13 +4871,19 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-upnext-fill {height:100%;border-radius:99px;background:var(--v3-amber);transition:width .4s ease}
 .v3fs-upnext-note {font-size:11px;line-height:1.5;color:var(--v3-text-muted);max-width:32ch}
 /* Movement sub-tabs — Evidence · Artifacts · Gate · People, with live counts. */
-.v3fs-mtabs {display:flex;gap:2px;padding:12px 26px 0;margin-top:8px;border-bottom:1px solid var(--fs-line);overflow-x:auto}
-/* The stage bar is the page's primary navigation — sized like it. */
-.v3fs-mtab {font:inherit;font-size:13px;font-weight:650;cursor:pointer;background:none;border:none;color:var(--v3-text-muted);
-  padding:10px 14px;border-bottom:2px solid transparent;margin-bottom:-1px;display:inline-flex;align-items:center;gap:8px;white-space:nowrap;transition:color .15s ease}
-.v3fs-mtab:hover {color:var(--v3-text-secondary)}
-.v3fs-mtab.on {color:var(--v3-accent-2);border-bottom-color:var(--v3-accent-2)}
-.v3fs-mtab:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:-2px;border-radius:8px}
+/* ── The stage bar — the loop as a SEGMENTED PIPELINE ──────────────────────
+   Three thirds of one track, read left to right: Collect → Paper → Gate.
+   The active stage lifts as a card; the others wait in the track. One
+   object, not three text tabs. */
+.v3fs-mtabs {display:flex;align-items:stretch;gap:2px;margin:16px 26px 2px;padding:4px;
+  background:color-mix(in srgb,var(--fs-line) 40%,transparent);border-radius:14px;overflow-x:auto}
+.v3fs-mtab {flex:1;justify-content:center;font:inherit;font-size:13px;font-weight:650;cursor:pointer;
+  background:transparent;border:none;color:var(--v3-text-muted);padding:10px 14px;border-radius:11px;
+  display:inline-flex;align-items:center;gap:8px;white-space:nowrap;
+  transition:background .18s ease,color .18s ease,box-shadow .18s ease}
+.v3fs-mtab:hover {color:var(--v3-text-secondary);background:color-mix(in srgb,var(--fs-card) 55%,transparent)}
+.v3fs-mtab.on {color:var(--v3-text-primary);background:var(--fs-card);box-shadow:0 3px 12px -7px rgba(23,26,46,.3)}
+.v3fs-mtab:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:1px}
 .v3fs-mtab-n {font-family:var(--v3-font-mono);font-size:10px;font-weight:700;color:var(--v3-text-muted);background:var(--fs-line);border-radius:6px;padding:1px 6px}
 .v3fs-mtab.on .v3fs-mtab-n {background:var(--v3-accent-soft);color:var(--v3-accent-2)}
 /* Attention state: the badge turns amber when the tab NEEDS the operator —
@@ -4889,14 +4895,10 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-mtab-g.warn {color:var(--v3-amber)}
 .v3fs-mtab-g.ok {color:var(--v3-green)}
 .v3fs-mtab-g.dim {color:var(--v3-text-muted)}
-.v3fs-mtab-arr {align-self:center;font-size:11px;color:var(--v3-text-muted);opacity:.45;padding:0 2px;user-select:none}
-/* The active underline scales in rather than teleporting. */
-.v3fs-mtab {position:relative;border-bottom:none}
-.v3fs-mtab::after {content:"";position:absolute;left:10px;right:10px;bottom:0;height:2px;border-radius:2px;
-  background:var(--v3-accent-2);transform:scaleX(0);transform-origin:center}
-.v3fs-mtab.on::after {transform:scaleX(1)}
-@media (prefers-reduced-motion: no-preference) {
-  .v3fs-mtab::after {transition:transform .18s ease}
+.v3fs-mtab-arr {flex:none;align-self:center;font-size:11px;color:var(--v3-text-muted);opacity:.4;padding:0 3px;user-select:none}
+/* Reduced motion: the segment activation snaps instead of easing. */
+@media (prefers-reduced-motion: reduce) {
+  .v3fs-mtab {transition:none}
 }
 /* Tabbed body: one panel at a time, full width. Hidden panels stay mounted
    (display:none) so capture boxes and expanders keep their state. */
