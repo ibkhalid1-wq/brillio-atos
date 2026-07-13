@@ -1614,7 +1614,9 @@ function buildGroundingFacts(phaseRecord: Record<string, unknown>): string[] {
   const lines: string[] = [];
   let seq = 0;
   for (const [fieldId, value] of Object.entries(phaseRecord)) {
-    if (fieldId === "savedAt" || fieldId === "_provenance") continue;
+    // savedAt is autosave bookkeeping; `_`-prefixed keys (timestamps, role
+    // bindings, provenance) are metadata, never facts for the model.
+    if (fieldId === "savedAt" || fieldId.startsWith("_")) continue;
     // Grid value: persisted as a JSON-stringified array of row objects.
     if (typeof value === "string" && value.trim().startsWith("[")) {
       const rows = safeJsonParse<unknown[]>(value, []);
@@ -2547,7 +2549,15 @@ function buildSpecialAgentInputContext(
       scopeInclusions: strategyInputs.scopeInclusions || strategyInputs.scopeIn || null,
       scopeExclusions: strategyInputs.scopeExclusions || strategyInputs.scopeOut || null,
       kpiBaselines: parseKpiBaselines(strategyInputs.kpis ?? frameInputs.kpis),
-      groundingFacts: [...buildGroundingFacts(phaseInputs), ...kitRosterSeed],
+      // ATOS Flow keeps the mandate CONVERSATION on Frame while the charter's
+      // spec phase is Strategy — empty on Flow programmes. Grounded only in
+      // that empty bucket, the model never reads the sponsor's own words, so
+      // "the record outranks the fields" has no record to work with. Fall
+      // back to Frame's captured inputs when the spec phase holds nothing.
+      groundingFacts: [
+        ...buildGroundingFacts(Object.keys(phaseInputs).length ? phaseInputs : frameInputs),
+        ...kitRosterSeed,
+      ],
       documentCarryForward: buildDocumentCarryForward(options?.documents || [], formalSpec.phase),
       valueProjected: coerceNumber(inner.valueProjected ?? businessCase.projectedValue ?? valueRealizeData.projectedValue, 0),
       narrative,
