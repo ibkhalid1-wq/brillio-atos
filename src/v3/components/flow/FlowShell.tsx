@@ -57,6 +57,8 @@ interface FlowShellProps {
   onOpenCopilot: () => void;
   onRunAgent: (agentId: string, phaseId?: string) => void;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
+  /** Rename a person across the roster + contact bindings (People page). */
+  onRenamePerson?: (oldName: string, newName: string) => Promise<void>;
   /** Resolve an open decision (confirm applies its prepared payload). */
   onResolveDecision: (decisionId: string, resolution: "confirmed" | "declined") => Promise<void>;
   /** Record a movement's gate — demonstrated. Locks the movement's inputs. */
@@ -739,7 +741,7 @@ export default function FlowShell(props: FlowShellProps) {
           <FlowCanvas program={program} runningAgentIds={props.runningAgentIds} agentErrors={props.agentErrors} relatedPrograms={[...(drillParent ? [drillParent] : []), ...listChildDrilldowns(program, props.programs).map((c) => c.child)]} onSelectProgram={props.onSelectProgram} onComment={props.onComment} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} onCompileShipLanes={props.onCompileShipLanes} onToggleShipItem={props.onToggleShipItem} onSetShipLane={props.onSetShipLane} onScheduleFollowUp={props.onScheduleFollowUp} onMintFollowUp={props.onMintFollowUp} onRecordShowPass={props.onRecordShowPass} onSaveArtifactDoc={props.onSaveArtifactDoc} onRecordGate={props.onRecordGate} onReopenGate={props.onReopenGate} onRunAgentAndWait={props.onRunAgentAndWait} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }}
           />
         ) : view === "people" ? (
-          <FlowPeople program={program} onSaveInputs={props.onSaveInputs} onGoInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} />
+          <FlowPeople program={program} onSaveInputs={props.onSaveInputs} onRenamePerson={props.onRenamePerson} onGoInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} />
         ) : view === "library" ? (
           <FlowLibrary program={program} programs={props.programs} onSelectProgram={props.onSelectProgram} onSaveInputs={props.onSaveInputs} onTagClaim={props.onTagClaim} onComment={props.onComment} onSaveArtifactDoc={props.onSaveArtifactDoc} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
         ) : view === "mission" ? (
@@ -1814,7 +1816,7 @@ function FlowPortfolio({ programs, activeId, onSelectProgram, onHydratePrograms,
 /* ── Library: everything the programme knows ─────────────────────────────── */
 
 /* ── People — the programme-wide directory, its own destination ─────────── */
-function FlowPeople({ program, onSaveInputs, onGoInbox }: { program: ProgramSummary; onSaveInputs?: FlowShellProps["onSaveInputs"]; onGoInbox?: () => void }) {
+function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { program: ProgramSummary; onSaveInputs?: FlowShellProps["onSaveInputs"]; onRenamePerson?: FlowShellProps["onRenamePerson"]; onGoInbox?: () => void }) {
   const [q, setQ] = useState("");
   const query = q.trim().toLowerCase();
   const evidence = useMemo(
@@ -1882,6 +1884,14 @@ function FlowPeople({ program, onSaveInputs, onGoInbox }: { program: ProgramSumm
     setBusyRow(`${movementId}:${name}`);
     try { await onSaveInputs(movementId, { _roleBindings: JSON.stringify(rb) }, { attest: { action: `Email set — ${name}`, detail: clean || "cleared" } }); }
     finally { setBusyRow(null); }
+  };
+  // Rename anyone on the record — patches the Discovery-Kit roster (the join
+  // key) and re-keys their contact binding, so the address follows the name.
+  const renamePerson = async (oldName: string, newName: string) => {
+    const clean = newName.trim();
+    if (!onRenamePerson || !clean || clean === oldName) return;
+    setBusyRow(`rename:${oldName}`);
+    try { await onRenamePerson(oldName, clean); } finally { setBusyRow(null); }
   };
   // Edit an operator-added person in place. A role change RE-VALIDATES: an
   // unknown role flips roleResolved false and the person returns to the Inbox
@@ -1980,10 +1990,16 @@ function FlowPeople({ program, onSaveInputs, onGoInbox }: { program: ProgramSumm
               </tr>
             ))}
             {rosterShown.map((row, i) => (
-              <tr key={`r-${i}`} className={busyRow === `listen:${row.name}` ? "busy" : undefined}>
+              <tr key={`r-${i}`} className={busyRow === `listen:${row.name}` || busyRow === `rename:${row.name}` ? "busy" : undefined}>
                 <td>{row.where}</td>
                 <td>{row.role}</td>
-                <td>{row.name}</td>
+                <td>
+                  {onRenamePerson ? (
+                    <input className="v3fs-dir-in" defaultValue={row.name} aria-label={`Name for ${row.name}`}
+                      key={`rn-${i}-${row.name}`} disabled={busyRow === `listen:${row.name}` || busyRow === `rename:${row.name}`}
+                      onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== row.name) void renamePerson(row.name, v); }} />
+                  ) : row.name}
+                </td>
                 <td>
                   {onSaveInputs ? (
                     <input className="v3fs-dir-in" type="email" placeholder="add email" defaultValue={row.email ?? ""} aria-label={`Email for ${row.name}`}
@@ -1998,7 +2014,13 @@ function FlowPeople({ program, onSaveInputs, onGoInbox }: { program: ProgramSumm
               <tr key={`d-${i}`} className={row.name && busyRow === `${row.where.toLowerCase()}:${row.name}` ? "busy" : undefined}>
                 <td>{row.where}</td>
                 <td>{row.role}</td>
-                <td>{row.name || <em>unbound — name them on the {row.where} collect card</em>}</td>
+                <td>
+                  {row.name && onRenamePerson ? (
+                    <input className="v3fs-dir-in" defaultValue={row.name} aria-label={`Name for ${row.name}`}
+                      key={`dn-${i}-${row.name}`} disabled={busyRow === `${row.where.toLowerCase()}:${row.name}` || busyRow === `rename:${row.name}`}
+                      onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== row.name) void renamePerson(row.name, v); }} />
+                  ) : row.name || <em>unbound — name them on the {row.where} collect card</em>}
+                </td>
                 <td>
                   {row.name && onSaveInputs && !row.isSponsor ? (
                     <input className="v3fs-dir-in" type="email" placeholder="add email" defaultValue={row.email ?? ""} aria-label={`Email for ${row.name}`}

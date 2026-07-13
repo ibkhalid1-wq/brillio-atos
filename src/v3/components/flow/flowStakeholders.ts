@@ -8,6 +8,7 @@
  * collect via a link, then capture what came back.
  */
 import type { ProgramSummary } from "@/new/types";
+import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { meetingKit, askableMovementGaps } from "@/v3/components/flow/flowMeetings";
 import { readContradictions, flowMovements, movementEvidence, readMovementInputs, parseGridRows } from "@/v3/components/flow/flowShellData";
 
@@ -365,4 +366,94 @@ export function resolveMovementStakeholders(program: ProgramSummary, movementId:
     });
   }
   return [];
+}
+
+/**
+ * Rename a person across the record. The Discovery-Kit roster is the join key
+ * every reader uses (roster, interview packs, the gate's email check, evidence
+ * matching), so the rename patches it there and re-keys the one contact store
+ * (`_roleBindings`) so their email travels with them. Historical transcript
+ * headers keep the original name — they are an immutable record of what was
+ * captured — so only forward-looking reads pick up the new name. Returns the
+ * new inner blob for persistFlowMutation, or null when nothing changed.
+ */
+export function renamePersonInProgram(
+  program: ProgramSummary,
+  oldName: string,
+  newName: string,
+  actor: string,
+): Record<string, unknown> | null {
+  const from = oldName.trim();
+  const to = newName.trim();
+  if (!from || !to || from.toLowerCase() === to.toLowerCase()) return null;
+  const { wrapper, inner, usesNestedData } = getProgramState((program.rawData ?? {}) as Record<string, unknown>);
+  const eq = (value: unknown) => String(value ?? "").trim().toLowerCase() === from.toLowerCase();
+  let touched = false;
+
+  // 1) Discovery-Kit roster — the source every reader joins on.
+  const kit = isRecord(inner.discoveryKit) ? { ...(inner.discoveryKit as Record<string, unknown>) } : null;
+  if (kit) {
+    if (Array.isArray(kit.interviews)) {
+      kit.interviews = (kit.interviews as unknown[]).map((iv) => {
+        if (isRecord(iv) && eq(iv.stakeholder)) { touched = true; return { ...iv, stakeholder: to }; }
+        return iv;
+      });
+    }
+    if (Array.isArray(kit.personas)) {
+      kit.personas = (kit.personas as unknown[]).map((p) => {
+        if (!isRecord(p) || !Array.isArray(p.spokenForBy)) return p;
+        const names = (p.spokenForBy as unknown[]).map((n) => (eq(n) ? (touched = true, to) : n));
+        return { ...p, spokenForBy: names };
+      });
+    }
+  }
+
+  // 2) One contact store — re-key the binding so the address follows the name.
+  const phaseInputs = isRecord(inner.phaseInputs) ? { ...(inner.phaseInputs as Record<string, unknown>) } : {};
+  for (const [mid, bucketRaw] of Object.entries(phaseInputs)) {
+    if (!isRecord(bucketRaw)) continue;
+    // Sponsor's name lives as a plain string on Frame's inputs.
+    if (typeof bucketRaw.sponsor === "string" && eq(bucketRaw.sponsor)) {
+      phaseInputs[mid] = { ...bucketRaw, sponsor: to }; touched = true;
+    }
+    const raw = (phaseInputs[mid] as Record<string, unknown>)._roleBindings;
+    if (typeof raw !== "string" || !raw.trim()) continue;
+    try {
+      const parsed = JSON.parse(raw) as Record<string, { name?: unknown; email?: unknown }>;
+      let changed = false;
+      const next: Record<string, unknown> = {};
+      for (const [key, val] of Object.entries(parsed)) {
+        if ((isRecord(val) && eq(val.name)) || key.trim().toLowerCase() === from.toLowerCase()) {
+          next[to] = isRecord(val) ? { ...val, name: to } : val; changed = true; touched = true;
+        } else next[key] = val;
+      }
+      if (changed) phaseInputs[mid] = { ...(phaseInputs[mid] as Record<string, unknown>), _roleBindings: JSON.stringify(next) };
+    } catch { /* skip malformed bindings */ }
+  }
+
+  // 3) Operator-added directory people.
+  const listen = isRecord(phaseInputs.listen) ? { ...(phaseInputs.listen as Record<string, unknown>) } : null;
+  if (listen && typeof listen._directoryPeople === "string") {
+    try {
+      const dp = JSON.parse(listen._directoryPeople) as unknown[];
+      if (Array.isArray(dp)) {
+        listen._directoryPeople = JSON.stringify(dp.map((p) => (isRecord(p) && eq(p.name) ? (touched = true, { ...p, name: to }) : p)));
+        phaseInputs.listen = listen;
+      }
+    } catch { /* skip */ }
+  }
+
+  if (!touched) return null;
+
+  const log = Array.isArray(inner.flowAttestations) ? (inner.flowAttestations as unknown[]) : [];
+  return wrapProgramState(wrapper, {
+    ...inner,
+    ...(kit ? { discoveryKit: kit } : {}),
+    phaseInputs,
+    flowAttestations: [...log, {
+      ts: new Date().toISOString(), agentId: actor, phaseId: "listen", tier: 2,
+      action: `Person renamed — ${from} → ${to}`,
+      detail: "roster and contact binding updated; historical evidence keeps the original attribution",
+    }].slice(-200),
+  }, usesNestedData);
 }

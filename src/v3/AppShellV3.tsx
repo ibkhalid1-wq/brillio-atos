@@ -31,6 +31,7 @@ import HelpPanel from "@/v3/components/HelpPanel";
 import ProgramSetupWizard from "@/v3/components/ProgramSetupWizard";
 import FlowShell from "@/v3/components/flow/FlowShell";
 import { resolveFlowDecision } from "@/v3/components/flow/flowDecisions";
+import { renamePersonInProgram } from "@/v3/components/flow/flowStakeholders";
 import { setHaltAll, toggleAgentHalt, setMovementBudget } from "@/v3/components/flow/flowGovernance";
 import { mintInterviewPacks, mintDemoInvites, ingestPortalResponse, dismissPortalResponse, portalItemTargetMovement } from "@/v3/components/flow/flowPortal";
 import { recordShowPass } from "@/v3/components/flow/flowTracks";
@@ -2369,6 +2370,10 @@ export default function AppShellV3() {
           onRunAgent={handleRunAgent}
           agentErrors={agentErrors}
           onSaveInputs={handleSavePhaseInputs}
+          onRenamePerson={async (oldName, newName) => {
+            const actor = currentUser?.email || "you";
+            await persistFlowMutation((program) => renamePersonInProgram(program, oldName, newName, actor));
+          }}
           onResolveDecision={async (decisionId, resolution) => {
             const resolvedBy = currentUser?.email || "you";
             await persistFlowMutation((program) => resolveFlowDecision(program, decisionId, resolution, resolvedBy));
