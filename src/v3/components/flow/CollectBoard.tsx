@@ -8,7 +8,7 @@
 import { useRef, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import EvidenceReader from "@/v3/components/flow/EvidenceReader";
-import { flowMovements, movementEvidence, evidenceStamp, locateQuote } from "@/v3/components/flow/flowShellData";
+import { flowMovements, movementEvidence, evidenceStamp, locateQuote, parseGridRows, readMovementInputs } from "@/v3/components/flow/flowShellData";
 import { buildMeetingIcs, mailtoLink, stakeholderEmail } from "@/v3/components/flow/flowMeetings";
 import { listInterviewPacks, portalLinkFor } from "@/v3/components/flow/flowPortal";
 import { resolveMovementStakeholders, readRoleBindings, type MovementStakeholder } from "@/v3/components/flow/flowStakeholders";
@@ -161,6 +161,23 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
   const [bindName, setBindName] = useState("");
   const [bindEmail, setBindEmail] = useState("");
   const [bindBusy, setBindBusy] = useState(false);
+  const [resolveBusy, setResolveBusy] = useState<string | null>(null);
+  // A dispute the operator judges settled (the newer account stands) resolves
+  // right here — same log flip as the Library panel, attested, and the row
+  // leaves every script on the next derivation.
+  const resolveDisputeRow = async (disputed: string) => {
+    const rows = parseGridRows(readMovementInputs(program, "listen").contradictionLog);
+    const day = new Date().toISOString().slice(0, 10);
+    const next = rows.map((row) => {
+      const stmt = String(row.statement ?? "").trim();
+      return stmt === disputed || stmt.startsWith(disputed) ? { ...row, status: `Resolved — ${day}` } : row;
+    });
+    setResolveBusy(disputed);
+    try {
+      await onSaveInputs("listen", { contradictionLog: JSON.stringify(next) },
+        { attest: { action: "Resolved a contradiction", detail: disputed.slice(0, 140) } });
+    } finally { setResolveBusy(null); }
+  };
   const saveBinding = async () => {
     const person = bindName.trim();
     if (!person) return;
@@ -352,6 +369,13 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
                       <button type="button" className="v3fs-a v3fs-ivc-evlink" title={`Said by ${source.who} — read the passage in the source`}
                         onClick={() => { setEvHighlight(disputed ?? null); setEvFor(source); }}>
                         ⤷ review evidence
+                      </button>
+                    ) : null}
+                    {disputed ? (
+                      <button type="button" className="v3fs-a v3fs-ivc-evlink" disabled={resolveBusy === disputed}
+                        title="Already answered — mark the dispute resolved (attested); it leaves the scripts"
+                        onClick={() => void resolveDisputeRow(disputed)}>
+                        {resolveBusy === disputed ? "Resolving…" : "✓ mark resolved"}
                       </button>
                     ) : null}
                   </li>

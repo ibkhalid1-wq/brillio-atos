@@ -7,7 +7,7 @@ import { describe, it, expect } from "vitest";
 import type { ProgramSummary } from "@/new/types";
 import { resolveFlowDecision, listOpenFlowDecisions, describeDecisionChanges } from "@/v3/components/flow/flowDecisions";
 import { scriptDocumentRefs, meetingKit, stakeholderEmail, buildMeetingIcs, mailtoLink } from "@/v3/components/flow/flowMeetings";
-import { locateQuote, kitPersonas, personasMissingFromAtlas } from "@/v3/components/flow/flowShellData";
+import { locateQuote, kitPersonas, personasMissingFromAtlas, readContradictions } from "@/v3/components/flow/flowShellData";
 import { mintBrief, buildBriefSnapshot } from "@/v3/components/flow/flowBriefs";
 import { buildPrototypePrompt } from "@/v3/components/flow/flowBuildPrompt";
 import { validateProgramBlob, migrateProgramBlob, BLOB_VERSION } from "@/v3/lib/blobGuard";
@@ -355,6 +355,32 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
     expect(kit.followUp).toBe(true);
     expect(kit.questions.some((q) => /what outcome must this programme achieve/i.test(q))).toBe(true);
     expect(kit.questions.some((q) => /\binputs?\b/i.test(q))).toBe(false); // no plumbing phrasing on any script
+  });
+
+  it("a field-demand gap with NO bespoke rephrase still reaches the script — the generic fallback asks for the fact", () => {
+    // Regression: "Add a quantified budget envelope … to the Budget input."
+    // used to die in the askable filter (contains "input", no budget rule) —
+    // the charter card said "→ Collect" but Collect never asked. Now a budget
+    // rule exists, and unknown field-demands fall back to a generic ask.
+    const kit = meetingKit(framed(["Add a quantified budget envelope and tracking approach to the Budget input."]), "frame")!;
+    expect(kit.followUp).toBe(true);
+    expect(kit.questions.some((q) => /budget envelope/i.test(q))).toBe(true);
+    const kit2 = meetingKit(framed(["Add the launch region details to the Rollout Regions input."]), "frame")!;
+    expect(kit2.questions.some((q) => /rollout regions/i.test(q))).toBe(true);
+    expect(kit2.questions.some((q) => /\binputs?\b/i.test(q))).toBe(false);
+  });
+
+  it("self-referential contradiction rows (script echoes) never surface anywhere", () => {
+    // A follow-up pack echoes its own question ("Q: Two accounts disagree…")
+    // into evidence; the watcher once filed a contradiction ABOUT that echo.
+    // readContradictions is the single reader — it drops such rows.
+    const p = programme({ phaseInputs: { listen: { contradictionLog: JSON.stringify([
+      { statement: "Nothing should be dropped", between: "Raj vs Raj", positions: "", status: "Open" },
+      { statement: 'Q: Two accounts disagree (X vs Y): "Instead of like what we do now" — which is right, and what settles it?', between: "Raj vs Charter", positions: "", status: "Open" },
+    ]) } } });
+    const rows = readContradictions(p, true);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].statement).toBe("Nothing should be dropped");
   });
 
   it("the CHARTER's open gaps reach the Frame kit (its classic phase home is retired) and rephrase for the sponsor", () => {

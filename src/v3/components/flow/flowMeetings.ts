@@ -360,12 +360,19 @@ const GAP_REPHRASE: Array<{ match: RegExp; ask: string }> = [
   { match: /success (?:criteria|metric)|kpi|baseline|target/i, ask: "Which measurable results would prove this worked — and what are today's baselines and the targets?" },
   { match: /\bscope\b/i, ask: "What is explicitly in scope — and what is explicitly out?" },
   { match: /sponsor|mandate|authoris/i, ask: "Who commissioned this programme, and what exactly did they commission?" },
+  { match: /budget|funding|cost envelope/i, ask: "What budget envelope backs this programme — and how should spend be tracked against it?" },
 ];
 
 function rephraseGapAsAsk(gap: string): string {
   if (askableGap(gap)) return gap;
   const hit = GAP_REPHRASE.find((entry) => entry.match.test(gap));
-  return hit ? hit.ask : gap;
+  if (hit) return hit.ask;
+  // No bespoke rule, but the gap names the field it wants ("… to the Budget
+  // input"): ask the stakeholder for the FACT rather than dropping the ask —
+  // a gap shown on the artifact card must reach the follow-up script.
+  const field = gap.match(/to the ([A-Za-z][\w ,&/-]{2,48}?) inputs?\b/i)?.[1];
+  if (field) return `What should go on record for ${field.trim().toLowerCase()}? Please give the specifics a document could cite.`;
+  return gap;
 }
 
 /**

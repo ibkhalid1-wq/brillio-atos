@@ -160,7 +160,12 @@ export interface ContradictionRow { statement: string; between: string; position
  * collapse; the first row wins.
  */
 export function readContradictions(program: ProgramSummary, openOnly = false): ContradictionRow[] {
-  const raw = parseGridRows(readMovementInputs(program, "listen").contradictionLog);
+  const raw = parseGridRows(readMovementInputs(program, "listen").contradictionLog)
+    // A follow-up pack echoes its own script ("Q: Two accounts disagree…");
+    // the watcher can mistake that echo for a claim and file a contradiction
+    // ABOUT a contradiction question. Self-referential rows are noise on
+    // every surface — drop them at the one reader everything goes through.
+    .filter((row) => !/two accounts disagree|which is right, and what settles it|^\s*Q:/i.test(String(row.statement ?? "")));
   const rows = openOnly ? raw.filter((row) => /open/i.test(row.status ?? "")) : raw;
   const tokens = (text: string): Set<string> =>
     new Set((text.toLowerCase().match(/[a-z0-9]{3,}/g) ?? []).filter((t) => !["the", "and", "are", "using", "account", "accounts", "disagree"].includes(t)));

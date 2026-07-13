@@ -8600,7 +8600,11 @@ Deno.serve(async (req) => {
             statement: String((row as Record<string, unknown>).statement ?? (row as Record<string, unknown>).description ?? "").slice(0, 140),
             between: String((row as Record<string, unknown>).between ?? "").slice(0, 90),
             positions: String((row as Record<string, unknown>).positions ?? (row as Record<string, unknown>).recommendation ?? "").slice(0, 160),
-          })).filter((entry) => entry.statement);
+          })).filter((entry) => entry.statement)
+            // A follow-up pack echoes its own script back into evidence
+            // ("Q: Two accounts disagree…"); a claim that is itself dispute
+            // wording is the watcher reading its own output — never file it.
+            .filter((entry) => !/two accounts disagree|which is right, and what settles it|^\s*Q:/i.test(entry.statement));
           const existing = getInnerProgramData(contextProgramData).flowDecisions;
           const hasOpenWatcher = Array.isArray(existing) && existing.some((entry) =>
             isRecord(entry) && entry.agentId === "contradiction-watcher" && (entry.status ?? "open") === "open");
@@ -8845,7 +8849,10 @@ Deno.serve(async (req) => {
             statement: String(row.statement ?? "").slice(0, 140),
             between: (Array.isArray(row.between) ? row.between.map(String).join(" vs ") : String(row.between ?? "")).slice(0, 90),
             positions: (Array.isArray(row.positions) ? row.positions.map(String).join(" · ") : String(row.positions ?? "")).slice(0, 160),
-          })).filter((entry) => entry.statement);
+          })).filter((entry) => entry.statement)
+            // Same guard as the watcher: dispute wording echoed from a script
+            // is not a claim — never re-file a contradiction about one.
+            .filter((entry) => !/two accounts disagree|which is right, and what settles it|^\s*Q:/i.test(entry.statement));
         }
         // Discovery Kit: GUARANTEE roster coverage. The model is asked to
         // interview every rostered person, but it compresses generic roles and
