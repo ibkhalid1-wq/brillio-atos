@@ -4965,6 +4965,9 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-recrail .v3fs-voice {padding-left:12px;margin-bottom:4px}
 .v3fs-recrail .v3fs-voice-q {font-size:13px;-webkit-line-clamp:3}
 .v3fs-recrail .v3fs-ivc-fb-row {background:var(--fs-card)}
+/* The card-era 172px cap has no business in the rail: the records own the
+   FULL remaining height; the rail body is the one scroll region. */
+.v3fs-recrail .v3fs-ivc-fb {max-height:none;overflow-y:visible}
 /* The resting state: a slim vertical strip spanning the stage's height —
    the record is always one glance (and one hover) away. */
 .v3fs-recrail-tab {writing-mode:vertical-rl;height:100%;width:42px;
