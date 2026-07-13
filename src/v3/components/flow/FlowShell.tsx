@@ -104,14 +104,14 @@ interface FlowShellProps {
   onDismissPortalItem: (itemId: string) => Promise<void>;
 }
 
-type FlowView = "today" | "flow" | "library" | "pulse" | "mission" | "portfolio";
+type FlowView = "today" | "flow" | "library" | "people" | "pulse" | "mission" | "portfolio";
 
 /** The rail is programme-scoped: the work, then the system. App-global actions
  * (Search, Portfolio, Copilot, Help) live in the top bar instead — the rail
  * answers "where am I in THIS programme", the top bar "where can I go in the
  * app". ("mission" keeps its internal id; the person-facing name is Control.) */
 const DOCK_ZONES: Array<Array<[FlowView, string]>> = [
-  [["today", "Inbox"], ["flow", "Flow"], ["library", "Library"], ["pulse", "Pulse"]],
+  [["today", "Inbox"], ["flow", "Flow"], ["library", "Library"], ["people", "People"], ["pulse", "Pulse"]],
   [["mission", "Control"]],
 ];
 const DOCK_ORDER: FlowView[] = DOCK_ZONES.flat().map(([id]) => id);
@@ -122,6 +122,7 @@ const DOCK_TIPS: Record<FlowView, string> = {
   today: "Inbox — responses and decisions waiting on you",
   flow: "Flow — the live programme, movement by movement",
   library: "Library — every conversation and artifact",
+  people: "People — everyone the programme collects from, with contact state",
   pulse: "Pulse — the steering-meeting view",
   mission: "Control — agents, governance and settings",
   portfolio: "Portfolio — every programme and its engagements",
@@ -132,6 +133,7 @@ const DOCK_PATHS: Record<string, React.ReactNode> = {
   today: <><path d="M4 6h16v12H4z" /><path d="M4 13h5l2 2.5h2L15 13h5" /></>,
   flow: <><path d="M4 12h13" /><path d="M13 7l5 5-5 5" /></>,
   library: <><path d="M6 4v16" /><path d="M11 4v16" /><path d="M14.5 5.5L19 19.5" /></>,
+  people: <><circle cx="9" cy="8.5" r="3" /><path d="M3.5 19c.8-3.2 3-4.8 5.5-4.8s4.7 1.6 5.5 4.8" /><circle cx="17" cy="9.5" r="2.3" /><path d="M15.5 14.6c2.4.2 4.2 1.6 5 4.4" /></>,
   pulse: <path d="M3 12h4l2.5-6 4 12 2.5-6H21" />,
   mission: <><path d="M5 8h14" /><path d="M5 16h14" /><circle cx="10" cy="8" r="2.1" /><circle cx="15" cy="16" r="2.1" /></>,
   portfolio: <><path d="M5 5h6v6H5z" /><path d="M13 5h6v6h-6z" /><path d="M5 13h6v6H5z" /><path d="M13 13h6v6h-6z" /></>,
@@ -728,8 +730,10 @@ export default function FlowShell(props: FlowShellProps) {
         ) : view === "flow" ? (
           <FlowCanvas program={program} runningAgentIds={props.runningAgentIds} agentErrors={props.agentErrors} relatedPrograms={[...(drillParent ? [drillParent] : []), ...listChildDrilldowns(program, props.programs).map((c) => c.child)]} onSelectProgram={props.onSelectProgram} onComment={props.onComment} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} onCompileShipLanes={props.onCompileShipLanes} onToggleShipItem={props.onToggleShipItem} onSetShipLane={props.onSetShipLane} onScheduleFollowUp={props.onScheduleFollowUp} onMintFollowUp={props.onMintFollowUp} onRecordShowPass={props.onRecordShowPass} onSaveArtifactDoc={props.onSaveArtifactDoc} onRecordGate={props.onRecordGate} onReopenGate={props.onReopenGate} onRunAgentAndWait={props.onRunAgentAndWait} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }}
           />
+        ) : view === "people" ? (
+          <FlowPeople program={program} />
         ) : view === "library" ? (
-          <FlowLibrary program={program} programs={props.programs} onSelectProgram={props.onSelectProgram} onSaveInputs={props.onSaveInputs} onTagClaim={props.onTagClaim} onComment={props.onComment} onSaveArtifactDoc={props.onSaveArtifactDoc} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
+          <FlowLibrary program={program} programs={props.programs} onSelectProgram={props.onSelectProgram} onSaveInputs={props.onSaveInputs} onMintBrief={props.onMintBrief} onTagClaim={props.onTagClaim} onComment={props.onComment} onSaveArtifactDoc={props.onSaveArtifactDoc} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
         ) : view === "mission" ? (
           <FlowMission
             aiStatus={props.aiStatus}
@@ -1624,7 +1628,75 @@ function FlowPortfolio({ programs, activeId, onSelectProgram, onHydratePrograms,
 
 /* ── Library: everything the programme knows ─────────────────────────────── */
 
-function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagClaim, onComment, onSaveArtifactDoc, onOpenInbox, onGoFlow }: { program: ProgramSummary; programs: ProgramSummary[]; onSelectProgram: (id: string) => void; onSaveInputs?: FlowShellProps["onSaveInputs"]; onTagClaim?: FlowShellProps["onTagClaim"]; onComment?: FlowShellProps["onComment"]; onSaveArtifactDoc: FlowShellProps["onSaveArtifactDoc"]; onOpenInbox?: () => void; onGoFlow?: () => void }) {
+/* ── People — the programme-wide directory, its own destination ─────────── */
+function FlowPeople({ program }: { program: ProgramSummary }) {
+  const [q, setQ] = useState("");
+  const query = q.trim().toLowerCase();
+  const evidence = useMemo(
+    () => flowMovements().flatMap((m) => movementEvidence(program, m)),
+    [program],
+  );
+  const roster = useMemo(() => resolveMovementStakeholders(program, "listen")
+    .filter((entry) => !entry.isRole)
+    .map((entry) => ({
+      where: "Listen roster", name: entry.name, role: entry.role,
+      email: stakeholderEmail(program, entry.name),
+      heard: evidence.some((e) => e.who.toLowerCase().includes(entry.name.trim().toLowerCase())),
+    })), [program, evidence]);
+  const roles = useMemo(() => deliveryRoleDirectory(program).map((entry) => ({
+    where: entry.movementId.charAt(0).toUpperCase() + entry.movementId.slice(1),
+    name: entry.bound?.name ?? "", role: entry.role,
+    email: entry.bound?.name ? (entry.bound.email ?? stakeholderEmail(program, entry.bound.name)) : null,
+    bound: !!entry.bound?.name, isSponsor: entry.isSponsor,
+  })), [program]);
+  const match = (row: { name: string; role: string; where: string; email?: string | null }) =>
+    !query || `${row.name} ${row.role} ${row.where} ${row.email ?? ""}`.toLowerCase().includes(query);
+  const rosterShown = roster.filter(match);
+  const rolesShown = roles.filter(match);
+  const missing = roster.filter((r) => !r.email).length + roles.filter((r) => r.bound && !r.email && !r.isSponsor).length;
+  return (
+    <div className="v3fs-grid2">
+      <div className="v3fs-search-row">
+        <input className="v3fs-search" placeholder="Find a person, role, or address…"
+          value={q} onChange={(event) => setQ(event.target.value)} aria-label="Search people" />
+      </div>
+      <div className="v3fs-panel v3fs-panel-wide">
+        <div className="v3fs-ph">
+          <h3>People</h3>
+          <span>everyone the programme collects from — {missing ? `${missing} without an address; ` : ""}edit on their collect card or in the Discovery Kit</span>
+        </div>
+        <table className="v3fs-dir">
+          <thead><tr><th>Where</th><th>Person</th><th>Role</th><th>Email</th><th>Status</th></tr></thead>
+          <tbody>
+            {rosterShown.map((row, i) => (
+              <tr key={`r-${i}`}>
+                <td>{row.where}</td>
+                <td>{row.name}</td>
+                <td>{row.role}</td>
+                <td>{row.email ?? <span className="v3fs-ivc-noaddr">✉ no address</span>}</td>
+                <td><span className={`v3fs-vc ${row.heard ? "acc" : "pen"}`}>{row.heard ? "Heard" : "Awaiting"}</span></td>
+              </tr>
+            ))}
+            {rolesShown.map((row, i) => (
+              <tr key={`d-${i}`}>
+                <td>{row.where}</td>
+                <td>{row.name || <em>unbound — name them on the {row.where} collect card</em>}</td>
+                <td>{row.role}</td>
+                <td>{row.name ? (row.email ?? <span className="v3fs-ivc-noaddr">✉ no address</span>) : ""}</td>
+                <td><span className={`v3fs-vc ${row.name ? "acc" : "pen"}`}>{row.name ? "Bound" : "Open"}</span></td>
+              </tr>
+            ))}
+            {!rosterShown.length && !rolesShown.length ? (
+              <tr><td colSpan={5}><div className="v3fs-empty">Nothing matches that search.</div></td></tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagClaim, onComment, onSaveArtifactDoc, onOpenInbox, onGoFlow, onMintBrief }: { program: ProgramSummary; programs: ProgramSummary[]; onSelectProgram: (id: string) => void; onSaveInputs?: FlowShellProps["onSaveInputs"]; onTagClaim?: FlowShellProps["onTagClaim"]; onComment?: FlowShellProps["onComment"]; onSaveArtifactDoc: FlowShellProps["onSaveArtifactDoc"]; onOpenInbox?: () => void; onGoFlow?: () => void; onMintBrief?: () => Promise<string | null> }) {
   const claims = listClaimTags(program);
   const tagTargets = useMemo(() => claimTargets(program), [program]);
   const [claimHighlight, setClaimHighlight] = useState<string | undefined>(undefined);
@@ -1633,6 +1705,8 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
   // Faceted browse: narrow the Library by KIND instead of scrolling panels.
   type Facet = "all" | "people" | "documents" | "artifacts" | "disputes";
   const [facet, setFacet] = useState<Facet>("all");
+  const [showResolved, setShowResolved] = useState(false);
+  const [packOpen, setPackOpen] = useState(false);
   const [openPeople, setOpenPeople] = useState<Set<string>>(new Set());
   const [resolveBusy, setResolveBusy] = useState<string | null>(null);
   // An attached file is READ before it is filed: routeAttachedDocument infers
@@ -1708,28 +1782,6 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
 
   const disputes = useMemo(() => readContradictions(program), [program]);
 
-  // The programme's people, ONE table: the Listen roster (heard state +
-  // address) and every Envision-onward delivery role (binding state). A
-  // read-only directory — names and addresses are edited where they live,
-  // on the collect cards and in the Discovery Kit studio.
-  const directory = useMemo(() => {
-    const roster = resolveMovementStakeholders(program, "listen")
-      .filter((entry) => !entry.isRole)
-      .map((entry) => ({
-        kind: "roster" as const, where: "Listen roster",
-        name: entry.name, role: entry.role,
-        email: stakeholderEmail(program, entry.name),
-        heard: all.evidence.some((e) => e.who.toLowerCase().includes(entry.name.trim().toLowerCase())),
-      }));
-    const roles = deliveryRoleDirectory(program).map((entry) => ({
-      kind: "role" as const,
-      where: entry.movementId.charAt(0).toUpperCase() + entry.movementId.slice(1),
-      name: entry.bound?.name ?? "", role: entry.role,
-      email: entry.bound?.name ? (entry.bound.email ?? stakeholderEmail(program, entry.bound.name)) : null,
-      heard: false,
-    }));
-    return { roster, roles };
-  }, [program, all.evidence]);
 
   // Resolve a dispute where it lives: flip its log rows to Resolved, attested.
   const resolveDispute = async (statement: string) => {
@@ -1767,13 +1819,27 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
 
   // "What moved since I last looked": newest evidence + freshly generated/edited docs.
   const recent = useMemo(() => {
-    const ev = evidence.filter((e) => e.capturedAt).slice(0, 3)
-      .map((e) => ({ when: e.capturedAt ?? "", kind: "evidence" as const, label: (e.who.split(",")[0] || e.who).trim(), entry: e }));
-    return ev.slice(0, 4);
+    // Latest item PER PERSON, with what it was — four chips reading the same
+    // name with different timestamps said nothing.
+    const seen = new Set<string>();
+    const out: Array<{ when: string; glyph: string; label: string; sub: string; entry: typeof evidence[number] }> = [];
+    for (const e of evidence) {
+      if (!e.capturedAt) continue;
+      const person = (e.who.split(",")[0] || e.who).trim();
+      if (seen.has(person)) continue;
+      seen.add(person);
+      out.push({
+        when: e.capturedAt, entry: e,
+        glyph: e.kind === "document" ? "≣" : "⌁",
+        label: person,
+        sub: (e.excerpt ?? "").replace(/\s+/g, " ").slice(0, 64),
+      });
+      if (out.length === 4) break;
+    }
+    return out;
   }, [evidence]);
 
   const facetCounts = {
-    people: directory.roster.length + directory.roles.length,
     documents: evidence.filter((e) => e.kind === "document").length,
     artifacts: artifacts.filter((a) => a.present).length,
     disputes: disputes.filter((d) => /open/i.test(d.status)).length,
@@ -1782,7 +1848,10 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
   // person said lives under All/Documents and on the record rail.
   const showEvidence = facet === "all" || facet === "documents";
   const showArtifacts = facet === "all" || facet === "artifacts";
-  const showDisputes = (facet === "all" || facet === "disputes") && disputes.length > 0;
+  const disputesShown = q
+    ? disputes.filter((d) => `${d.statement} ${d.between}`.toLowerCase().includes(q))
+    : disputes;
+  const showDisputes = (facet === "all" || facet === "disputes") && disputesShown.length > 0;
 
   return (
     <div className="v3fs-grid2">
@@ -1797,7 +1866,6 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
         <div className="v3fs-facets" role="tablist" aria-label="Filter by kind">
           {([
             ["all", "All", null],
-            ["people", "People", facetCounts.people],
             ["documents", "Documents", facetCounts.documents],
             ["artifacts", "Artifacts", facetCounts.artifacts],
             ["disputes", "Open disputes", facetCounts.disputes],
@@ -1808,15 +1876,22 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
             </button>
           ))}
         </div>
+        {onMintBrief ? (
+          <button type="button" className="v3fs-btn" title="Print-ready programme pack — everything here, composed for the board"
+            onClick={() => setPackOpen(true)}>⎙ Board pack</button>
+        ) : null}
       </div>
+      <p className="v3fs-lib-cap">Everything the programme knows — search it, read it, export it. Artifacts regenerate from Flow; people live under People.</p>
+      {packOpen && onMintBrief ? <FlowBoardPack program={program} onMintBrief={onMintBrief} onClose={() => setPackOpen(false)} /> : null}
       {facet === "all" && !q && recent.length ? (
         <div className="v3fs-panel v3fs-panel-wide v3fs-recent">
           <div className="v3fs-ph"><h3>Recently changed</h3><span>what moved since you last looked</span></div>
           <div className="v3fs-recent-row">
             {recent.map((r, i) => (
               <button key={i} type="button" className="v3fs-recent-chip" onClick={() => setEvFor(r.entry)}>
-                <span className="v3fs-recent-when">{r.when}</span>
+                <span className="v3fs-recent-when">{r.glyph} {r.when}</span>
                 <span className="v3fs-recent-l">{r.label}</span>
+                {r.sub ? <span className="v3fs-recent-sub">“{r.sub}…”</span> : null}
               </button>
             ))}
           </div>
@@ -1965,8 +2040,14 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
                 <button type="button" className={`v3fs-ev-ghead${open ? " on" : ""}`}
                   onClick={() => setOpenPeople((prev) => { const n = new Set(prev); if (open) n.delete(person); else n.add(person); return n; })}>
                   <span className="v3fs-ev-gchev" aria-hidden="true">{open ? "▾" : "▸"}</span>
-                  <span className="v3fs-ev-gname">{person}</span>
-                  <span className="v3fs-ev-gcount">{items.length} item{items.length === 1 ? "" : "s"}</span>
+                  <span className="v3fs-ev-gkind" aria-hidden="true" title={items.some((e) => e.kind !== "document") ? "Conversation" : "Document"}>
+                    {items.some((e) => e.kind !== "document") ? "⌁" : "≣"}
+                  </span>
+                  <span className="v3fs-ev-gname">{person.replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim()}</span>
+                  <span className="v3fs-ev-gcount">{(() => {
+                    const words = items.reduce((n, e) => n + (e.text ? e.text.trim().split(/\s+/).length : 0), 0);
+                    return words >= 100 ? `${(words / 1000).toFixed(words >= 10000 ? 0 : 1)}k words` : `${items.length} item${items.length === 1 ? "" : "s"}`;
+                  })()}</span>
                   <span className="v3fs-ev-gwhen">{items[0]?.capturedAt ?? ""}</span>
                 </button>
                 {open ? items.map(entryRow) : null}
@@ -1978,7 +2059,14 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
       ) : null}
       {showArtifacts ? (
       <div className="v3fs-panel">
-        <div className="v3fs-ph"><h3>Artifacts</h3><span>{staleCount ? `${staleCount} need regenerating — shown first` : "generated, traceable to evidence"}</span></div>
+        <div className="v3fs-ph">
+          <h3>Artifacts</h3>
+          <span>{staleCount ? `${staleCount} need regenerating — shown first` : "generated, traceable to evidence"}</span>
+          {staleCount && onGoFlow ? (
+            <button type="button" className="v3fs-a" title="The spine runner lives on the Flow page — its Up-next queue leads with this"
+              onClick={() => onGoFlow()}>↻ regenerate in Flow</button>
+          ) : null}
+        </div>
         {artifactLedger.map((artifact) => (
           <div key={`${artifact.movementId}:${artifact.id}`}
             className={`v3fs-row v3fs-art-row ${artifact.present ? (artifact.stale ? "stale" : "ok") : "missing"}${artifact.present ? " v3fs-row-open" : ""}`}
@@ -1994,7 +2082,7 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
                   ? artifact.stale
                     ? "evidence changed — regenerate"
                     : artifact.confidence != null ? `current · confidence ${artifact.confidence}%` : "current"
-                  : "not yet generated"}
+                  : `not yet generated — runs in ${label(artifact.movementId)} once its inputs land`}
               </div>
             </div>
             <span className={`v3fs-art-badge ${artifact.present ? (artifact.stale ? "stale" : "ok") : "missing"}`}>
@@ -2005,38 +2093,18 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
         ))}
       </div>
       ) : null}
-      {facet === "people" ? (
-        <div className="v3fs-panel v3fs-panel-wide">
-          <div className="v3fs-ph"><h3>People directory</h3><span>everyone the programme collects from — contact state at a glance; edit on their card or in the Discovery Kit</span></div>
-          <table className="v3fs-dir">
-            <thead><tr><th>Where</th><th>Person</th><th>Role</th><th>Email</th><th>Status</th></tr></thead>
-            <tbody>
-              {directory.roster.map((row, i) => (
-                <tr key={`r-${i}`}>
-                  <td>{row.where}</td>
-                  <td>{row.name}</td>
-                  <td>{row.role}</td>
-                  <td>{row.email ?? <span className="v3fs-ivc-noaddr">✉ no address</span>}</td>
-                  <td><span className={`v3fs-vc ${row.heard ? "acc" : "pen"}`}>{row.heard ? "Heard" : "Awaiting"}</span></td>
-                </tr>
-              ))}
-              {directory.roles.map((row, i) => (
-                <tr key={`d-${i}`}>
-                  <td>{row.where}</td>
-                  <td>{row.name || <em>unbound — name them on the {row.where} collect card or in the kit</em>}</td>
-                  <td>{row.role}</td>
-                  <td>{row.name ? (row.email ?? <span className="v3fs-ivc-noaddr">✉ no address</span>) : ""}</td>
-                  <td><span className={`v3fs-vc ${row.name ? "acc" : "pen"}`}>{row.name ? "Bound" : "Open"}</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : null}
       {showDisputes ? (
-          <div className="v3fs-panel v3fs-panel-wide">
-            <div className="v3fs-ph"><h3>Contradiction log</h3><span>disputes on the record — resolve, or ask the people involved</span></div>
-            {disputes.map((row, i) => {
+          <div className={`v3fs-panel v3fs-panel-wide${disputesShown.some((d) => /open/i.test(d.status)) ? " v3fs-panel-warn" : ""}`}>
+            <div className="v3fs-ph">
+              <h3>Contradiction log</h3>
+              <span>{(() => { const open = disputesShown.filter((d) => /open/i.test(d.status)).length; return open ? `${open} open — resolve, or ask the people involved` : "all settled"; })()}</span>
+              {disputesShown.some((d) => !/open/i.test(d.status)) ? (
+                <button type="button" className="v3fs-a" onClick={() => setShowResolved((v) => !v)}>
+                  {showResolved ? "hide resolved" : "show resolved"}
+                </button>
+              ) : null}
+            </div>
+            {disputesShown.filter((row) => showResolved || /open/i.test(row.status)).map((row, i) => {
               const statement = row.statement.trim();
               const source = statement ? all.evidence.find((e) => e.text && locateQuote(e.text, statement)) : undefined;
               const open = /open/i.test(row.status);
