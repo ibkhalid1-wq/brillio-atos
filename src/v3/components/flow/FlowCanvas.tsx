@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import PhaseInputsPanel from "@/v3/components/PhaseInputsPanel";
 import FlowArtifactStudio, { type ArtifactEditInput } from "@/v3/components/flow/studio/FlowArtifactStudio";
@@ -90,6 +90,19 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
   const [railFocus, setRailFocus] = useState<string | null>(null);
   const [railRead, setRailRead] = useState<EvidenceEntry | null>(null);
   useEffect(() => { setRailFocus(null); setRailRead(null); setRailHover(false); }, [active]);
+  // Hover-intent: the rail collapses on a GRACE DELAY, not on the first pixel
+  // the pointer strays — and re-entering cancels the collapse. Pinning keeps
+  // hover alive through the layout shift so the panel never flaps.
+  const railLeaveTimer = useRef<number | null>(null);
+  const railEnter = () => {
+    if (railLeaveTimer.current) { window.clearTimeout(railLeaveTimer.current); railLeaveTimer.current = null; }
+    setRailHover(true);
+  };
+  const railLeave = () => {
+    if (railLeaveTimer.current) window.clearTimeout(railLeaveTimer.current);
+    railLeaveTimer.current = window.setTimeout(() => { setRailHover(false); railLeaveTimer.current = null; }, 280);
+  };
+  useEffect(() => () => { if (railLeaveTimer.current) window.clearTimeout(railLeaveTimer.current); }, []);
   // The active stage per movement — falls back to the movement's lead stage
   // until the operator picks one.
   const [movementTab, setMovementTab] = useState<Record<string, MovementTab>>({});
@@ -437,8 +450,8 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                       </button>
                     </div>
                     <div className="v3fs-railzone"
-                      onMouseEnter={() => setRailHover(true)}
-                      onMouseLeave={() => setRailHover(false)}>
+                      onPointerEnter={railEnter}
+                      onPointerLeave={railLeave}>
                     {railPin || railHover || railPerson ? (
                     <aside className={`v3fs-recrail${railPin ? "" : " floating"}`} aria-label="The record">
                       <div className="v3fs-recrail-h">
@@ -447,9 +460,11 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                         {railPerson ? (
                           <button type="button" className="v3fs-a" onClick={() => setRailFocus(null)} title="Back to the movement's record">all</button>
                         ) : null}
-                        <button type="button" className="v3fs-recrail-x" onClick={() => setRailPin((pinned) => !pinned)}
+                        <button type="button" className={`v3fs-recrail-x${railPin ? " on" : ""}`}
+                          onClick={() => { setRailPin((pinned) => !pinned); railEnter(); }}
                           title={railPin ? "Unpin — the rail returns to hover-reveal" : "Pin the rail open"}
-                          aria-label={railPin ? "Unpin the record rail" : "Pin the record rail"}>{railPin ? "⟩" : "⌖ pin"}</button>
+                          aria-pressed={railPin}
+                          aria-label={railPin ? "Unpin the record rail" : "Pin the record rail"}>⌖ {railPin ? "unpin" : "pin"}</button>
                       </div>
                       {railPerson ? (
                         <div className="v3fs-ivc-fb">
@@ -657,7 +672,7 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                     </aside>
                     ) : (
                       <button type="button" className="v3fs-recrail-tab"
-                        onClick={() => setRailPin(true)} onFocus={() => setRailHover(true)}
+                        onClick={() => { setRailPin(true); railEnter(); }} onFocus={railEnter}
                         aria-label="Open the record rail" title="The record — hover to peek, click to pin">
                         ◧<span>The record</span><b>{evidence.length}</b>
                       </button>

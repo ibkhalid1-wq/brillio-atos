@@ -329,7 +329,10 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
               follow-up script once a conversation is on record) — so the Frame
               sponsor's single card never strands the operator without a send
               button, and every movement's card behaves identically. */}
-          {!heard || questions.length ? (
+          {(!heard || questions.length) && !(heard && docsStale) ? (
+            // While answers await regeneration the channels HIDE: sending a
+            // link or booking a meeting now would re-ask a stale script. The
+            // regenerate notice above is the only door until the record reads.
             <div className="v3fs-ivc-sec">
               <div className="v3fs-ivc-sec-h">{heard ? "Follow up" : "Reach out"}</div>
               {/* Three ways in, no standing form: copy the link, email the
@@ -339,6 +342,16 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
                 <button type="button" className={`v3fs-btn${email ? "" : " pri"}`} disabled={linkBusy} onClick={() => void copyLink()}>
                   {linkBusy && !email ? "…" : copiedTick ? "Copied ✓" : effectiveLink ? "⎘ Copy link" : "⎘ Create & copy link"}
                 </button>
+                {/* The live URL sits beside the button whenever one EXISTS —
+                    derived from the persisted pack, so it survives the card
+                    remounting when minting moves it across status columns. */}
+                {(effectiveLink ?? linkShown) ? (
+                  <span className="v3fs-ivc-linkrow">
+                    <input readOnly value={effectiveLink ?? linkShown ?? ""} onFocus={(event) => event.currentTarget.select()}
+                      aria-label={`Response link for ${name}`} />
+                    {copiedTick ? <span className="v3fs-ivc-linkok">✓</span> : null}
+                  </span>
+                ) : null}
                 {email ? (
                   <button type="button" className="v3fs-btn pri" disabled={linkBusy} title={`Opens a draft to ${email}`} onClick={() => void sendLink()}>✉ Send link</button>
                 ) : null}
@@ -370,13 +383,6 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
                     window.setTimeout(() => setInviteTick(null), 6000);
                   }} />
               </div>
-              {linkShown ? (
-                <div className="v3fs-ivc-linkrow">
-                  <input readOnly value={linkShown} onFocus={(event) => event.currentTarget.select()}
-                    aria-label={`Response link for ${name}`} />
-                  {copiedTick ? <span className="v3fs-ivc-linkok">Copied ✓</span> : <span className="v3fs-ivc-linkhint">select to copy</span>}
-                </div>
-              ) : null}
               {linkNote ? <div className="v3fs-ivc-note warn">{linkNote}</div> : null}
               {inviteTick ? <div className="v3fs-ivc-note ok">🗓 {inviteTick}</div> : null}
             </div>
