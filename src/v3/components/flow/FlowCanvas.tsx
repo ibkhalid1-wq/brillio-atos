@@ -328,7 +328,7 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
               : { glyph: "○", text: "", tone: "dim" };
         const tabDefs: Array<{ key: MovementTab; label: string; state: { glyph: string; text: string; tone: string } | null; show: boolean }> = [
           { key: "collect", label: "Collect", state: collectState, show: true },
-          { key: "paper", label: "Documents", state: paperState, show: artifacts.length > 0 },
+          { key: "paper", label: "Artifacts", state: paperState, show: artifacts.length > 0 },
           { key: "gate", label: isLoop ? "Health" : "Gate", state: gateState, show: true },
         ];
 

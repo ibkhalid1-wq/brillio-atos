@@ -337,9 +337,12 @@ export function movementArtifacts(program: ProgramSummary, movement: PhaseDefini
       ?? (typeof stub?.confidence === "number" ? Math.round(stub.confidence) : null);
     const present = !!content || !!stub;
     const mirror = root[FORMAL_ARTIFACT_FIELD_KEYS[def.id]];
+    // Falsified field-demand gaps (the field is demonstrably filled) don't
+    // count anywhere: card badges, gate criteria and stage chips agree.
     const gaps = present && mirror && typeof mirror === "object" && !Array.isArray(mirror)
       && Array.isArray((mirror as Record<string, unknown>).gaps)
-      ? ((mirror as Record<string, unknown>).gaps as unknown[]).filter(Boolean).length
+      ? ((mirror as Record<string, unknown>).gaps as unknown[])
+          .map(String).filter(Boolean).filter((gap) => !falsifiedGap(program, gap)).length
       : 0;
     return {
       id: def.id, movementId: movement.id, title: def.label, description: def.description,
@@ -930,7 +933,11 @@ export function movementOpenIssues(program: ProgramSummary, movement: PhaseDefin
     if (Array.isArray(doc.openQuestions)) {
       for (const question of doc.openQuestions) {
         const text = String(question ?? "").trim();
-        if (text) issues.push({ artifactId: def.id, artifactTitle: def.label, kind: "open-question", text });
+        // A question demanding a field that demonstrably holds content is
+        // falsified by the record — it holds no gate and asks nobody.
+        if (text && !falsifiedGap(program, text)) {
+          issues.push({ artifactId: def.id, artifactTitle: def.label, kind: "open-question", text });
+        }
       }
     }
   }

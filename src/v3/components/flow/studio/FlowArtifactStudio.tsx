@@ -10,7 +10,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { safePrompt } from "@/v3/components/flow/flowCapture";
 import { useFocusTrap } from "@/v3/lib/useFocusTrap";
 import type { ProgramSummary } from "@/new/types";
-import { artifactDocument, flowMovements, locateQuote, movementEvidence, type ArtifactCardModel, type EvidenceEntry } from "@/v3/components/flow/flowShellData";
+import { artifactDocument, falsifiedGap, flowMovements, locateQuote, movementEvidence, type ArtifactCardModel, type EvidenceEntry } from "@/v3/components/flow/flowShellData";
 import { groundingFor, citationGraph, resourceUri, artifactFabioType, SEMANTIC_CONTEXT } from "@/v3/components/flow/flowSemantics";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 import { partitionOntologyViolations } from "@/v3/components/flow/flowOntologyConstraints";
@@ -456,7 +456,14 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
             <>
               {groundingDisclosure}
               {draft ? (
-                <DocumentView key={typeof draft.editedAt === "string" ? String(draft.editedAt) : "unedited"} doc={draft} order={entry?.docOrder}
+                <DocumentView key={typeof draft.editedAt === "string" ? String(draft.editedAt) : "unedited"}
+                  // Falsified field-demand gaps (the field demonstrably holds
+                  // content) are suppressed here too — the document view, the
+                  // card, the scripts and the gate read one truth.
+                  doc={Array.isArray(draft.gaps)
+                    ? { ...draft, gaps: (draft.gaps as unknown[]).map(String).filter((gap) => gap && !falsifiedGap(program, gap)) }
+                    : draft}
+                  order={entry?.docOrder}
                   onPatch={canEdit ? (key, value) => { setDraft({ ...draft, [key]: value }); setDirty(true); } : undefined}
                   onOpenFullEditor={canEdit ? () => setEditing(true) : undefined} />
               ) : (
