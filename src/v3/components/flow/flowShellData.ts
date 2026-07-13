@@ -333,8 +333,13 @@ export function movementArtifacts(program: ProgramSummary, movement: PhaseDefini
     const excerpt = summaryText
       ? summaryText.replace(/\s+/g, " ").slice(0, 150)
       : content ? content.replace(/[#*`>\n-]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 150) : null;
+    // The ledger stub stores confidence on the generator's 0-1 scale — the
+    // mirror reader normalizes to 0-100, so the fallback must too (0.9 must
+    // read "90%", never "1%").
     const confidence = getFormalArtifactConfidence(root, def.id)
-      ?? (typeof stub?.confidence === "number" ? Math.round(stub.confidence) : null);
+      ?? (typeof stub?.confidence === "number"
+        ? Math.round(stub.confidence <= 1 ? stub.confidence * 100 : stub.confidence)
+        : null);
     const present = !!content || !!stub;
     const mirror = root[FORMAL_ARTIFACT_FIELD_KEYS[def.id]];
     // Falsified field-demand gaps (the field is demonstrably filled) don't
