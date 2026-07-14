@@ -89,15 +89,56 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
   // addressed ask ("Ask the sponsor: …") must not spam the interviewees
   // (it reaches the sponsor through Frame's card).
   const sponsor = sponsorStakeholder(program);
-  const audienceRoster = [
-    ...interviews.map((interview) => ({ name: String(interview.stakeholder ?? "").trim(), role: String(interview.role ?? "").trim() })),
-    ...(sponsor ? [{ name: sponsor.name, role: sponsor.role }] : []),
-  ];
   // Listen role bindings: a placeholder bound on its card ("our Recruitment
   // Operations lead is Maya") BECOMES that person here — the one place every
   // downstream reader (collect board, People page, approvals) derives from.
   const listenBindings = readRoleBindings(program, "listen");
-  return interviews.map((interview, index) => {
+  // UNREPRESENTED PERSONAS become role-placeholder cards. The generator is
+  // told to emit an interview entry for every voice the programme needs, but
+  // when it only inventories a role under kit.personas (seen live: "Recruitment
+  // Operations Staff" on Pharma), that role must still surface — on the collect
+  // board and the People page — or the programme silently never hears it.
+  // External personas (customers, partners) are excluded: they can't be
+  // interviewed; internal ones with nobody to speak for them can and must.
+  const covered = new Set<string>();
+  for (const interview of interviews) {
+    for (const value of [interview.stakeholder, interview.role]) {
+      const token = String(value ?? "").trim().toLowerCase().replace(/\s*[—–-]\s*tbc\s*$/i, "");
+      if (token) covered.add(token);
+    }
+  }
+  const personas = isRecord(kit) && Array.isArray(kit.personas) ? kit.personas.filter(isRecord) : [];
+  const personaRoles = personas
+    .filter((persona) => String(persona.kind ?? "internal") !== "external")
+    .filter((persona) => persona.unrepresented === true
+      || !(Array.isArray(persona.spokenForBy) && persona.spokenForBy.map(String).filter((s) => s.trim()).length))
+    .map((persona) => String(persona.name ?? "").trim())
+    .filter((roleName) => roleName && !covered.has(roleName.toLowerCase()));
+  const audienceRoster = [
+    ...interviews.map((interview) => ({ name: String(interview.stakeholder ?? "").trim(), role: String(interview.role ?? "").trim() })),
+    ...personaRoles.map((roleName) => ({ name: listenBindings[roleName]?.name ?? "", role: roleName })),
+    ...(sponsor ? [{ name: sponsor.name, role: sponsor.role }] : []),
+  ];
+  const personaCards: MovementStakeholder[] = personaRoles.map((roleName, index) => {
+    const bound = listenBindings[roleName];
+    const name = bound?.name ?? "";
+    const key = (name || roleName).toLowerCase();
+    const myAsks = movementAsks.filter((ask) => {
+      const audience = askAudience(ask, audienceRoster);
+      return audience.size === 0 || audience.has(key) || audience.has(name.toLowerCase());
+    });
+    return {
+      id: `persona-${index}`,
+      name: name || roleName,
+      role: roleName,
+      questions: [...new Set([
+        "Walk us through your part of the process — what do you pick up, from whom, and what do you hand off when you're done?",
+        ...myAsks,
+      ])],
+      isRole: !name,
+    };
+  });
+  const interviewCards = interviews.map((interview, index) => {
     const agenda = (Array.isArray(interview.agenda) ? interview.agenda : [])
       .flatMap((slot) => (isRecord(slot) && Array.isArray(slot.questions) ? slot.questions.map(String) : []))
       .filter(Boolean);
@@ -129,6 +170,7 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
       questions, isRole: !name,
     };
   });
+  return [...interviewCards, ...personaCards];
 }
 
 function sponsorStakeholder(program: ProgramSummary): MovementStakeholder | null {
