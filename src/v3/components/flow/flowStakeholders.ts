@@ -304,7 +304,11 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
   // A dismissed role's placeholder card leaves the board too — but a NAMED
   // person is never dropped by a role dismissal (people outrank roles).
   return [...interviewCards, ...personaCards]
-    .filter((card) => !(card.isRole && dismissedRoles.has(card.role.trim().toLowerCase())));
+    .filter((card) => !(card.isRole && dismissedRoles.has(card.role.trim().toLowerCase())))
+    // The sponsor is a Listen arbiter — their card exists ONLY to resolve
+    // conflicts. With no open conflicts there's nothing to ask, so the card
+    // shouldn't show at all (they're heard in Frame, not here).
+    .filter((card) => !(isSponsorCard(card.name, card.role) && card.questions.length === 0));
 }
 
 function sponsorStakeholder(program: ProgramSummary): MovementStakeholder | null {

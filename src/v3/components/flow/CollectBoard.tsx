@@ -224,41 +224,34 @@ function AreaBoard({ program }: { program: ProgramSummary }) {
   if (rows.length < 2) return null;
   const ready = rows.filter((r) => r.listenReady).length;
   return (
-    <details className="v3fs-areab" open>
-      <summary>
-        <span className="v3fs-areab-ic" aria-hidden="true">▦</span>
+    <section className="v3fs-areac" aria-label="Areas">
+      <header className="v3fs-areac-h">
+        <span className="v3fs-areac-ic" aria-hidden="true">▦</span>
         <b>Areas</b>
-        <span className="v3fs-areab-count">{ready} of {rows.length} ready to move on</span>
-      </summary>
-      <p className="v3fs-areab-lead">
-        Each area runs on its own clock — once an area&rsquo;s voices are all heard it can move to Envision and Show
-        while the others keep collecting.
-      </p>
-      <div className="v3fs-areab-grid">
-        {rows.map((r) => (
-          <div key={r.area} className={`v3fs-areab-card${r.listenReady ? " ready" : ""}`}>
-            <div className="v3fs-areab-card-h">
-              <b>{r.area}</b>
-              <span className={`v3fs-areab-badge${r.listenReady ? " ready" : ""}`}>
-                {r.listenReady ? "Ready to envision" : "Collecting"}
-              </span>
-            </div>
-            <div className="v3fs-areab-meta">
-              <span>{r.workflows} workflow{r.workflows === 1 ? "" : "s"}</span>
-              <span>{r.entities} term{r.entities === 1 ? "" : "s"}</span>
-            </div>
-            {r.personas.length ? (
-              <div className="v3fs-areab-heard">
-                <div className="v3fs-areab-bar">
-                  <span style={{ width: `${Math.round((r.heard.length / r.personas.length) * 100)}%` }} />
-                </div>
-                <span>{r.heard.length}/{r.personas.length} voices heard</span>
+        <span className="v3fs-areac-sub">each moves on its own clock</span>
+        <span className="v3fs-areac-count">{ready}<i>/{rows.length} ready</i></span>
+      </header>
+      <ul className="v3fs-areac-list">
+        {rows.map((r) => {
+          const pct = r.personas.length ? Math.round((r.heard.length / r.personas.length) * 100) : 0;
+          return (
+            <li key={r.area} className={`v3fs-areac-row${r.listenReady ? " ready" : ""}`}>
+              <div className="v3fs-areac-name">
+                <b>{r.area}</b>
+                <span>{r.workflows} workflow{r.workflows === 1 ? "" : "s"} · {r.entities} term{r.entities === 1 ? "" : "s"}</span>
               </div>
-            ) : <div className="v3fs-areab-heard"><span>no named voices yet</span></div>}
-          </div>
-        ))}
-      </div>
-    </details>
+              <div className="v3fs-areac-voices" title={r.personas.length ? `${r.heard.length} of ${r.personas.length} voices heard` : "no named voices yet"}>
+                <div className="v3fs-areac-bar"><span style={{ width: `${pct}%` }} /></div>
+                <span>{r.personas.length ? `${r.heard.length}/${r.personas.length}` : "—"}</span>
+              </div>
+              <span className={`v3fs-areac-st${r.listenReady ? " ready" : ""}`}>
+                <i aria-hidden="true">{r.listenReady ? "●" : "◔"}</i>{r.listenReady ? "Ready to envision" : "Collecting"}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 

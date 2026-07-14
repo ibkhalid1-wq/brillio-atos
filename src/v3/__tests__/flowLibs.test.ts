@@ -627,6 +627,20 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
     expect(review!.workflows[0].steps).toEqual(["drafts"]);
   });
 
+  it("the Listen sponsor card disappears when there are no conflicts to arbitrate", () => {
+    // Sponsor listed as a Listen interviewee, but NO open contradictions.
+    const p = programme({
+      phaseInputs: { frame: { sponsor: "Raj Mamodia" } },
+      discoveryKit: { interviews: [
+        { stakeholder: "Raj Mamodia", role: "Executive Sponsor", agenda: [] },
+        { stakeholder: "Dana Ops", role: "Sales Ops", agenda: [{ questions: ["walk me through it"] }] },
+      ] },
+    });
+    const cards = resolveMovementStakeholders(p, "listen");
+    expect(cards.some((c) => /Raj/.test(c.name))).toBe(false); // no conflicts → no sponsor card
+    expect(cards.some((c) => /Dana/.test(c.name))).toBe(true);  // operational voice stays
+  });
+
   it("in Listen the sponsor's card carries ONLY conflicts to resolve; discovery routes to the stakeholders", () => {
     const agendaQ = "Walk me through how a quote is drafted end to end";
     const p = programme({
