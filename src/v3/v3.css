@@ -6641,20 +6641,24 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-ivd {display:flex;flex-direction:column;gap:8px;margin-top:6px}
 .v3fs-ivd-h {display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:2px}
 .v3fs-ivd-t {font-size:12px;font-weight:650;color:var(--v3-text-secondary)}
-.v3fs-ivc {border:1px solid var(--fs-line);border-radius:12px;background:var(--fs-card);overflow:hidden}
-.v3fs-ivc.heard {border-color:color-mix(in srgb, var(--v3-green) 40%, var(--fs-line))}
-.v3fs-ivc > summary {display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 14px;cursor:pointer;list-style:none}
+.v3fs-ivc {border:1px solid var(--fs-line);border-radius:14px;background:var(--fs-card);overflow:hidden;
+  transition:box-shadow .18s ease,border-color .18s ease}
+.v3fs-ivc.heard {border-color:color-mix(in srgb, var(--v3-green) 34%, var(--fs-line))}
+.v3fs-lane-b .v3fs-ivc:hover, .v3fs-collect-col .v3fs-ivc:hover {box-shadow:0 12px 30px -18px rgba(20,20,45,.3)}
+.v3fs-ivc > summary {display:flex;align-items:center;justify-content:space-between;gap:11px;padding:12px 15px;cursor:pointer;list-style:none}
 .v3fs-ivc > summary::-webkit-details-marker {display:none}
-.v3fs-ivc-who {display:flex;flex-direction:column;gap:1px;font-size:13.5px;font-weight:650;color:var(--v3-text-primary);min-width:0}
+.v3fs-ivc-who {display:flex;flex-direction:column;gap:2px;font-size:13.5px;font-weight:650;color:var(--v3-text-primary);min-width:0;letter-spacing:-.005em}
 .v3fs-ivc-who span {font-size:11px;font-weight:500;color:var(--v3-text-muted)}
 
 /* "No address" hint on a collection card's collapsed row — quiet amber, the
    operator sees the missing contact without opening the card. */
 .v3fs-ivc-noaddr { font-size: 10.5px; letter-spacing: .02em; color: var(--v3-amber, #b58a2c); background: color-mix(in srgb, var(--v3-amber, #b58a2c) 12%, transparent); border: 1px solid color-mix(in srgb, var(--v3-amber, #b58a2c) 30%, transparent); border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
 
-.v3fs-ivc-st {flex-shrink:0;font-size:10.5px;font-weight:650;padding:3px 9px;border-radius:99px;letter-spacing:.02em}
+.v3fs-ivc-st {flex-shrink:0;display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:650;padding:3px 10px;border-radius:99px;letter-spacing:.02em}
+.v3fs-ivc-st::before {content:"";width:5px;height:5px;border-radius:99px;background:currentColor;opacity:.9}
 .v3fs-ivc-st.heard {background:color-mix(in srgb, var(--v3-green) 14%, transparent);color:var(--v3-green)}
-.v3fs-ivc-st.waiting {background:color-mix(in srgb, var(--v3-amber) 14%, transparent);color:var(--v3-amber)}
+/* Awaiting a response is the calm resting state, not an amber alarm — indigo-tinted. */
+.v3fs-ivc-st.waiting {background:color-mix(in srgb, var(--v3-accent-2) 11%, transparent);color:var(--v3-accent-2)}
 .v3fs-ivc-st.toreach {background:var(--fs-line);color:var(--v3-text-muted)}
 /* Sign-off lifecycle: heard → pending approval → approved. */
 .v3fs-ivc-st.pending-approval {background:var(--fs-indigo-wash);color:var(--v3-accent-2)}
@@ -6692,7 +6696,7 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 
 /* ── Stakeholder data collection — full-width status board below the columns ── */
 .v3fs-ch-collect {grid-column:1/-1;margin-top:22px;padding-top:22px;border-top:1px solid var(--fs-line)}
-.v3fs-collect-h {display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.v3fs-collect-h {display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px}
 .v3fs-collect-h .v3fs-colh {margin:0}
 .v3fs-collect-count {font-size:12px;font-weight:600;color:var(--v3-text-muted)}
 .v3fs-collect-tools {margin-left:auto;display:flex;gap:8px}
@@ -6719,10 +6723,10 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 
 /* Card in the board */
 .v3fs-collect-col .v3fs-ivc {box-shadow:var(--fs-shadow)}
-.v3fs-ivc-strip {display:block;height:3px;background:var(--v3-text-muted)}
+.v3fs-ivc-strip {display:block;height:2px;background:color-mix(in srgb,var(--v3-text-muted) 45%,transparent)}
 .v3fs-ivc.heard .v3fs-ivc-strip {background:var(--v3-green)}
-.v3fs-ivc.waiting .v3fs-ivc-strip {background:var(--v3-amber)}
-.v3fs-ivc.toreach .v3fs-ivc-strip {background:var(--v3-accent-2)}
+.v3fs-ivc.waiting .v3fs-ivc-strip {background:color-mix(in srgb,var(--v3-accent-2) 60%,transparent)}
+.v3fs-ivc.toreach .v3fs-ivc-strip {background:color-mix(in srgb,var(--v3-accent-2) 30%,transparent)}
 /* Card feedback surfaces: the minted link shown inline (clipboard is
    best-effort), schedule/link notes, and the regenerate-first notice. */
 /* The minted URL sits INLINE beside the copy button — visible the moment it
@@ -6785,49 +6789,52 @@ details[open] > summary .v3fs-disc-c::after {display:none}
    stakeholder cards, headed by the area's shape (workflows · terms), a
    voices-heard bar, and a collecting/ready state. The lane body lays its cards
    out on the same responsive grid the status board uses. ─────────────────── */
-.v3fs-lanes {display:flex;flex-direction:column;gap:14px}
-.v3fs-lane {--lane-accent:var(--v3-accent-2);position:relative;border:1px solid var(--fs-line);border-radius:16px;
-  background:var(--v3-surface);box-shadow:var(--fs-shadow);overflow:hidden;
-  transition:box-shadow .18s ease,border-color .18s ease}
-/* area identity: a coloured edge marks each domain down the left of its lane */
-.v3fs-lane::before {content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--lane-accent);z-index:1}
-.v3fs-lane:hover {box-shadow:0 14px 34px -16px rgba(20,20,45,.32);border-color:color-mix(in srgb,var(--lane-accent) 34%,var(--fs-line))}
-.v3fs-lane.ready {border-color:color-mix(in srgb,var(--v3-green) 38%,var(--fs-line))}
+.v3fs-lanes {display:flex;flex-direction:column;gap:16px}
+.v3fs-lane {--lane-accent:var(--v3-accent-2);position:relative;border:1px solid var(--fs-line);border-radius:18px;
+  background:var(--v3-surface);box-shadow:0 1px 2px rgba(20,20,45,.04);overflow:hidden;
+  transition:box-shadow .2s ease,border-color .2s ease,transform .2s ease}
+/* area identity: a soft coloured edge marks each domain down the left of its lane */
+.v3fs-lane::before {content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:0 3px 3px 0;
+  background:var(--lane-accent);opacity:.8;z-index:1;transition:top .2s ease,bottom .2s ease}
+.v3fs-lane:hover {box-shadow:0 18px 44px -22px rgba(20,20,45,.28);border-color:color-mix(in srgb,var(--lane-accent) 26%,var(--fs-line))}
+.v3fs-lane:hover::before {top:0;bottom:0}
+.v3fs-lane.ready {border-color:color-mix(in srgb,var(--v3-green) 32%,var(--fs-line))}
 .v3fs-lane.ready::before {background:var(--v3-green)}
-.v3fs-lane-h {display:grid;grid-template-columns:auto 1fr auto auto auto;align-items:center;gap:14px;
-  padding:14px 18px;cursor:pointer;list-style:none;user-select:none;transition:background .12s;
-  background:linear-gradient(90deg,color-mix(in srgb,var(--lane-accent) 6%,transparent),transparent 58%)}
+.v3fs-lane-h {display:grid;grid-template-columns:auto 1fr auto auto auto;align-items:center;gap:16px;
+  padding:16px 22px;cursor:pointer;list-style:none;user-select:none;transition:background .14s ease}
 .v3fs-lane-h::-webkit-details-marker {display:none}
-.v3fs-lane-h:hover {background:linear-gradient(90deg,color-mix(in srgb,var(--lane-accent) 11%,transparent),transparent 64%)}
-.v3fs-lane-ic {display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;flex-shrink:0;
-  border-radius:11px;background:color-mix(in srgb,var(--lane-accent) 15%,var(--v3-surface));color:var(--lane-accent);
-  font-size:12px;font-weight:800;letter-spacing:.03em;
-  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--lane-accent) 26%,transparent)}
-.v3fs-lane.ready .v3fs-lane-ic {background:color-mix(in srgb,var(--v3-green) 14%,transparent);color:var(--v3-green);
-  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--v3-green) 30%,transparent)}
-.v3fs-lane-id {display:flex;flex-direction:column;gap:2px;min-width:0}
-.v3fs-lane-id b {font-size:15px;font-weight:750;letter-spacing:-.01em;color:var(--v3-text)}
-.v3fs-lane-id span {font-size:11px;color:var(--v3-text-muted)}
-.v3fs-lane-prog {display:flex;align-items:center;gap:8px;font-family:var(--v3-font-mono);font-size:10.5px;font-weight:700;color:var(--v3-text-muted)}
-.v3fs-lane-bar {width:64px;height:6px;border-radius:99px;background:color-mix(in srgb,var(--lane-accent) 15%,var(--fs-line));overflow:hidden}
-.v3fs-lane-bar > span {display:block;height:100%;background:var(--lane-accent);border-radius:99px;transition:width .3s ease}
+.v3fs-lane-h:hover {background:color-mix(in srgb,var(--lane-accent) 4%,transparent)}
+.v3fs-lane[open] > .v3fs-lane-h {background:color-mix(in srgb,var(--lane-accent) 3%,transparent)}
+.v3fs-lane-ic {display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;flex-shrink:0;
+  border-radius:12px;background:color-mix(in srgb,var(--lane-accent) 12%,var(--v3-surface));color:var(--lane-accent);
+  font-size:12.5px;font-weight:800;letter-spacing:.02em}
+.v3fs-lane.ready .v3fs-lane-ic {background:color-mix(in srgb,var(--v3-green) 12%,transparent);color:var(--v3-green)}
+.v3fs-lane-id {display:flex;flex-direction:column;gap:3px;min-width:0}
+.v3fs-lane-id b {font-size:15px;font-weight:700;letter-spacing:-.015em;color:var(--v3-text)}
+.v3fs-lane-id span {font-size:11px;font-weight:500;color:var(--v3-text-muted);letter-spacing:.01em}
+.v3fs-lane-prog {display:flex;align-items:center;gap:9px;font-size:11px;font-weight:700;color:var(--v3-text-muted);font-variant-numeric:tabular-nums}
+.v3fs-lane-bar {width:72px;height:5px;border-radius:99px;background:color-mix(in srgb,var(--v3-text-muted) 16%,transparent);overflow:hidden}
+.v3fs-lane-bar > span {display:block;height:100%;background:var(--lane-accent);border-radius:99px;transition:width .35s cubic-bezier(.4,0,.2,1)}
 .v3fs-lane.ready .v3fs-lane-bar > span {background:var(--v3-green)}
-.v3fs-lane-st {display:inline-flex;align-items:center;gap:6px;white-space:nowrap;font-size:11px;font-weight:700;
-  letter-spacing:.01em;padding:5px 12px;border-radius:99px;color:var(--v3-amber);background:var(--v3-amber-soft)}
-.v3fs-lane-st i {font-size:8px;font-style:normal;line-height:1}
-.v3fs-lane-st.ready {color:var(--v3-green);background:color-mix(in srgb,var(--v3-green) 12%,transparent)}
-.v3fs-lane-chev {width:8px;height:8px;border-right:2px solid var(--v3-text-muted);border-bottom:2px solid var(--v3-text-muted);
-  transform:rotate(-45deg);transition:transform .18s ease;opacity:.55}
+/* "Collecting" is the calm resting state — indigo-tinted, not an amber alarm.
+   Only genuine attention states elsewhere carry amber. */
+.v3fs-lane-st {display:inline-flex;align-items:center;gap:6px;white-space:nowrap;font-size:11px;font-weight:650;
+  letter-spacing:.01em;padding:5px 12px;border-radius:99px;color:var(--v3-accent-2);
+  background:color-mix(in srgb,var(--v3-accent-2) 9%,transparent)}
+.v3fs-lane-st i {font-size:7px;font-style:normal;line-height:1;opacity:.9}
+.v3fs-lane-st.ready {color:var(--v3-green);background:color-mix(in srgb,var(--v3-green) 11%,transparent)}
+.v3fs-lane-chev {width:8px;height:8px;border-right:1.5px solid var(--v3-text-muted);border-bottom:1.5px solid var(--v3-text-muted);
+  transform:rotate(-45deg);transition:transform .2s ease;opacity:.5}
 .v3fs-lane[open] .v3fs-lane-chev {transform:rotate(45deg)}
-.v3fs-lane-b {display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px;align-items:start;
-  padding:8px 14px 15px;border-top:1px solid var(--fs-line)}
+.v3fs-lane-b {display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;align-items:start;
+  padding:14px 20px 18px;border-top:1px solid color-mix(in srgb,var(--fs-line) 60%,transparent)}
 .v3fs-lane-b details.v3fs-ivc[open] {grid-column:1/-1}
 .v3fs-lane-b .v3fs-ivc {box-shadow:var(--fs-shadow)}
 /* "Invite everyone" — a lane-wide action to mint links for all not-yet-reached
    people in this area, spanning the card grid above them. */
 .v3fs-lane-invite {grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
-  padding:8px 13px;border-radius:11px;background:color-mix(in srgb,var(--v3-accent-2) 5%,transparent);
-  border:1px dashed color-mix(in srgb,var(--v3-accent-2) 32%,var(--fs-line))}
+  padding:10px 15px;border-radius:12px;background:color-mix(in srgb,var(--v3-accent-2) 5%,var(--v3-surface));
+  border:1px solid color-mix(in srgb,var(--v3-accent-2) 20%,var(--fs-line))}
 .v3fs-lane-invite > span {font-size:11.5px;font-weight:600;color:var(--v3-text-secondary)}
 .v3fs-lane-invite .v3fs-btn {white-space:nowrap}
 @media (max-width:560px){
@@ -7063,11 +7070,11 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-ivc-bind-row input:focus {outline:none;border-color:var(--v3-accent-2)}
 /* Status-toned initials tile — people read as people, and the board's
    status language (green/amber/indigo) carries through the avatar. */
-.v3fs-ivc-av {flex-shrink:0;width:30px;height:30px;border-radius:10px;display:grid;place-items:center;
-  font-size:11px;font-weight:750;letter-spacing:.02em;background:var(--fs-line);color:var(--v3-text-secondary)}
+.v3fs-ivc-av {flex-shrink:0;width:33px;height:33px;border-radius:11px;display:grid;place-items:center;
+  font-size:11.5px;font-weight:750;letter-spacing:.02em;background:var(--fs-line);color:var(--v3-text-secondary)}
 .v3fs-ivc.heard .v3fs-ivc-av {background:color-mix(in srgb,var(--v3-green) 13%,transparent);color:var(--v3-green)}
-.v3fs-ivc.waiting .v3fs-ivc-av {background:var(--v3-amber-soft);color:var(--v3-amber)}
-.v3fs-ivc.toreach .v3fs-ivc-av {background:var(--fs-indigo-wash);color:var(--v3-accent-2)}
+.v3fs-ivc.waiting .v3fs-ivc-av {background:color-mix(in srgb,var(--v3-accent-2) 11%,transparent);color:var(--v3-accent-2)}
+.v3fs-ivc.toreach .v3fs-ivc-av {background:var(--fs-line);color:var(--v3-text-muted)}
 .v3fs-ivc-who {flex:1}
 .v3fs-ivc-chev {flex-shrink:0;width:7px;height:7px;border-right:1.6px solid var(--v3-text-muted);border-bottom:1.6px solid var(--v3-text-muted);
   transform:rotate(45deg);transition:transform .2s ease}
