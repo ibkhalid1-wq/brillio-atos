@@ -11,6 +11,7 @@
  */
 import { useState } from "react";
 import type { OntologyTerm, OntologyRelation } from "@/v3/components/flow/flowReviews";
+import { DictationButton, joinDictation } from "@/v3/components/flow/FlowDictation";
 
 /** A workflow step as the editor holds it — the compose reads action/original/
  * added/removed; actor/system/entities ride along for display only. */
@@ -162,9 +163,13 @@ export function OntologyMap({ terms, relations, comments, onComment }: {
             </div>
             {terms[selected].definition ? <p>{terms[selected].definition}</p> : null}
             {terms[selected].aliases && terms[selected].aliases!.length ? <p className="v3fs-omap-aka">also called: {terms[selected].aliases!.join(", ")}</p> : null}
-            <input className="v3fs-omap-comment" value={comments[String(selected)] ?? ""}
-              onChange={(e) => onComment(selected, e.target.value)}
-              placeholder="Wrong, missing, or named differently? (optional)" autoFocus />
+            <div className="v3fs-rvw-field">
+              <input className="v3fs-omap-comment" value={comments[String(selected)] ?? ""}
+                onChange={(e) => onComment(selected, e.target.value)}
+                placeholder="Wrong, missing, or named differently? (optional)" autoFocus />
+              <DictationButton compact label="Speak this note"
+                onText={(spoken) => onComment(selected, joinDictation(comments[String(selected)] ?? "", spoken))} />
+            </div>
           </>
         ) : (
           <p className="v3fs-omap-hint">Tap a term to read it and tell us if it&rsquo;s wrong or missing. Lines show how they connect.</p>

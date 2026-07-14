@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ScreenCard } from "@/v3/components/flow/studio/ExperienceDesignStudio";
 import FlowReviewSurface from "@/v3/components/flow/FlowReviewSurface";
 import type { ReviewPayload } from "@/v3/components/flow/flowReviews";
+import { DictationButton, joinDictation } from "@/v3/components/flow/FlowDictation";
 
 /**
  * The public async-interview page — what a stakeholder sees when they open a
@@ -50,72 +51,6 @@ interface Pack {
 type DemoVerdict = "accepted" | "accepted-with-changes" | "rework";
 
 const FUNCTIONS_BASE = `${import.meta.env.VITE_SUPABASE_URL || ""}/functions/v1`;
-
-// Voice answers: browser dictation (Web Speech API) types into the same
-// field — the respondent reviews and edits before sending, and the submit
-// path stays text-through-quarantine either way. Hidden when unsupported.
-const SpeechRecognitionCtor: (new () => SpeechRecognitionLike) | undefined = typeof window !== "undefined"
-  ? ((window as unknown as Record<string, unknown>).SpeechRecognition
-      ?? (window as unknown as Record<string, unknown>).webkitSpeechRecognition) as (new () => SpeechRecognitionLike) | undefined
-  : undefined;
-
-interface SpeechRecognitionLike {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  onresult: ((event: { resultIndex: number; results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void) | null;
-  onend: (() => void) | null;
-  onerror: (() => void) | null;
-  start: () => void;
-  stop: () => void;
-}
-
-/** Append a dictated sentence to what's already typed, with sane spacing. */
-function joinDictation(existing: string, spoken: string): string {
-  const text = spoken.trim();
-  if (!text) return existing;
-  const lead = text.charAt(0).toUpperCase() + text.slice(1);
-  return existing.trim() ? `${existing.replace(/\s+$/, "")} ${lead}` : lead;
-}
-
-function DictationButton({ onText }: { onText: (spoken: string) => void }) {
-  const [listening, setListening] = useState(false);
-  const recognizerRef = useRef<SpeechRecognitionLike | null>(null);
-  useEffect(() => () => recognizerRef.current?.stop(), []);
-  if (!SpeechRecognitionCtor) return null;
-  const toggle = () => {
-    if (listening) {
-      recognizerRef.current?.stop();
-      return;
-    }
-    const recognizer = new SpeechRecognitionCtor();
-    recognizer.continuous = true;
-    recognizer.interimResults = false;
-    recognizer.lang = navigator.language || "en-US";
-    recognizer.onresult = (event) => {
-      for (let index = event.resultIndex; index < event.results.length; index += 1) {
-        const result = event.results[index];
-        if (result.isFinal) onText(result[0].transcript);
-      }
-    };
-    recognizer.onend = () => setListening(false);
-    recognizer.onerror = () => setListening(false);
-    recognizerRef.current = recognizer;
-    recognizer.start();
-    setListening(true);
-  };
-  return (
-    <button
-      type="button"
-      className={`v3fs-mic${listening ? " on" : ""}`}
-      aria-pressed={listening}
-      onClick={toggle}
-      title={listening ? "Stop — what you said stays in the field" : "Speak instead of typing — you can edit before sending"}
-    >
-      {listening ? "◉ Listening… tap to stop" : "🎙 Speak your answer"}
-    </button>
-  );
-}
 
 export default function FlowRespond({ token }: { token: string }) {
   const [state, setState] = useState<PackState>({ phase: "loading" });

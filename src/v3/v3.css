@@ -5645,6 +5645,14 @@ button.v3fs-stale-tag {font-family:inherit;border:none;cursor:pointer}
 .v3fs-mic {font:inherit;font-size:11.5px;font-weight:600;align-self:flex-start;margin-top:7px;border:1px solid var(--fs-line);border-radius:99px;padding:6px 13px;background:var(--fs-card);color:var(--v3-text-secondary);cursor:pointer;transition:border-color .15s ease,color .15s ease}
 .v3fs-mic:hover {border-color:var(--v3-accent-2);color:var(--v3-accent-2)}
 .v3fs-mic.on {border-color:var(--v3-amber);color:var(--v3-amber);animation:v3fs-mic-pulse 1.6s ease-in-out infinite}
+/* Compact mic that sits inside a field — voice input on any review answer. */
+.v3fs-rvw-field {position:relative;display:block}
+.v3fs-rvw-field textarea,.v3fs-rvw-field input {width:100%;padding-right:40px}
+.v3fs-micdot {position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:50%;border:1px solid var(--fs-line);
+  background:var(--v3-surface);color:var(--v3-text-muted);font-size:13px;line-height:1;cursor:pointer;display:flex;
+  align-items:center;justify-content:center;transition:border-color .15s,color .15s,background .15s}
+.v3fs-micdot:hover {border-color:var(--v3-accent-2);color:var(--v3-accent-2)}
+.v3fs-micdot.on {border-color:var(--v3-amber);color:#fff;background:var(--v3-amber);animation:v3fs-mic-pulse 1.6s ease-in-out infinite}
 @keyframes v3fs-mic-pulse {0%,100% {box-shadow:0 0 0 0 color-mix(in srgb, var(--v3-amber) 35%, transparent)} 50% {box-shadow:0 0 0 6px transparent}}
 .v3fs-portal-err {font-size:12.5px;color:var(--v3-red,#dc2626)}
 .v3fs-portal-send {align-self:flex-start;font-size:14px;padding:10px 22px;text-decoration:none;display:inline-block}

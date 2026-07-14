@@ -15,6 +15,7 @@ import {
   type AgentifyReview, type OntologyAtlasReview, type ListenWorkflowReview, type ReviewPayload,
 } from "@/v3/components/flow/flowReviews";
 import { WorkflowFlow, OntologyMap, type FlowNode } from "@/v3/components/flow/FlowReviewVisuals";
+import { DictationButton, joinDictation } from "@/v3/components/flow/FlowDictation";
 
 const DISPOSITIONS: Array<{ key: string; label: string; hint: string }> = [
   { key: "keep", label: "Stays human", hint: "judgement, relationships, the irreducibly human call" },
@@ -275,6 +276,7 @@ function ListenWorkflowSurface({ review, stakeholder, submitting, error, onSubmi
           <div className="v3fs-rvw-wf-h"><b>Describe any change in your own words</b></div>
           <textarea className="v3fs-rvw-overall" rows={3} value={narration} onChange={(e) => setNarration(e.target.value)}
             placeholder="e.g. Legal actually reviews the quote twice — once before pricing and again before it goes out." />
+          <DictationButton label="Speak your changes" onText={(spoken) => setNarration((cur) => joinDictation(cur, spoken))} />
         </section>
 
         {review.terms.length ? (
@@ -293,7 +295,10 @@ function ListenWorkflowSurface({ review, stakeholder, submitting, error, onSubmi
             {review.questions.map((q, i) => (
               <label key={i} className="v3fs-rvw-bq">
                 <span>{q}</span>
-                <textarea rows={2} value={answers[String(i)] ?? ""} onChange={(e) => setAnswers((p) => ({ ...p, [String(i)]: e.target.value }))} />
+                <div className="v3fs-rvw-field">
+                  <textarea rows={2} value={answers[String(i)] ?? ""} onChange={(e) => setAnswers((p) => ({ ...p, [String(i)]: e.target.value }))} />
+                  <DictationButton compact label="Speak this answer" onText={(spoken) => setAnswers((p) => ({ ...p, [String(i)]: joinDictation(p[String(i)] ?? "", spoken) }))} />
+                </div>
               </label>
             ))}
           </div>
