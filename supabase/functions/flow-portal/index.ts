@@ -57,12 +57,25 @@ function innerOf(raw: Record<string, unknown>): { inner: Record<string, unknown>
     : { inner: raw, nested: false };
 }
 
-async function loadPack(token: string) {
+// Distinct, honest failure reasons — the old code collapsed every one of these
+// into a single "This link is not valid.", which made the common case (a fresh
+// programme whose links never reached the cloud) indistinguishable from a typo
+// or an expired link. Each caller returns `reason` when present.
+const MALFORMED = "This link is malformed — check it was copied in full.";
+const NO_PROGRAMME = "We couldn't find this programme. If it was just created, its links may not have finished saving to the cloud yet — reopen the programme and re-mint the link.";
+const NO_LINK = "This link isn't recognised for this programme — it may have been replaced by a newer one. Ask for a fresh link.";
+const EXPIRED = "This link has expired. Ask for a fresh one.";
+
+async function loadPack(token: string): Promise<{ reason: string } | {
+  admin: ReturnType<typeof createClient>; programId: string; programName: string;
+  raw: Record<string, unknown>; inner: Record<string, unknown>; nested: boolean;
+  kind: "interview" | "demo" | "approval"; pack: Record<string, unknown>; updatedAt: string | null;
+}> {
   const dot = token.indexOf(".");
-  if (dot <= 0) return null;
+  if (dot <= 0) return { reason: MALFORMED };
   const programId = token.slice(0, dot);
   const secret = token.slice(dot + 1);
-  if (!/^[0-9a-f-]{20,64}$/i.test(programId) || !/^[0-9a-f]{24,64}$/.test(secret)) return null;
+  if (!/^[0-9a-f-]{20,64}$/i.test(programId) || !/^[0-9a-f]{24,64}$/.test(secret)) return { reason: MALFORMED };
 
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -72,7 +85,7 @@ async function loadPack(token: string) {
     .select("id, name, data, updated_at")
     .eq("id", programId)
     .maybeSingle();
-  if (!row) return null;
+  if (!row) return { reason: NO_PROGRAMME };
   const raw = isRecord(row.data) ? row.data as Record<string, unknown> : {};
   const { inner, nested } = innerOf(raw);
   const packs = Array.isArray(inner.flowInterviewPacks) ? inner.flowInterviewPacks.filter(isRecord) : [];
@@ -81,11 +94,11 @@ async function loadPack(token: string) {
   const pack = packs.find((entry) => entry.token === secret);
   const invite = pack ? undefined : invites.find((entry) => entry.token === secret);
   const approval = (pack || invite) ? undefined : approvals.find((entry) => entry.token === secret);
-  if (!pack && !invite && !approval) return null;
+  if (!pack && !invite && !approval) return { reason: NO_LINK };
   // Tokens expire: a link forwarded months later must not still open the
   // programme. 30 days covers any realistic response window.
   const created = Date.parse(String((pack ?? invite ?? approval)?.createdAt ?? ""));
-  if (Number.isFinite(created) && Date.now() - created > 30 * 86_400_000) return null;
+  if (Number.isFinite(created) && Date.now() - created > 30 * 86_400_000) return { reason: EXPIRED };
   const kind: "interview" | "demo" | "approval" = pack ? "interview" : invite ? "demo" : "approval";
   return {
     admin, programId, programName: String(row.name ?? "the programme"),
@@ -131,7 +144,7 @@ Deno.serve(async (req: Request) => {
       }
       const token = new URL(req.url).searchParams.get("token") || "";
       const hit = await loadPack(token);
-      if (!hit) return jsonResponse({ error: "This link is not valid." }, 404);
+      if ("reason" in hit) return jsonResponse({ error: hit.reason }, 404);
       if (hit.kind === "approval") {
         return jsonResponse({
           kind: "approval",
@@ -182,7 +195,7 @@ Deno.serve(async (req: Request) => {
       // even then the response is quarantined for operator review.
       if (isRecord(body) && isRecord(body.extract)) {
         const hit = await loadPack(token);
-        if (!hit) return jsonResponse({ error: "This link is not valid." }, 404);
+        if ("reason" in hit) return jsonResponse({ error: hit.reason }, 404);
         if (typeof hit.pack.respondedAt === "string") {
           return jsonResponse({ error: "This link has already been used." }, 410);
         }
@@ -231,7 +244,7 @@ Deno.serve(async (req: Request) => {
       // vice versa). Same discipline as the run-agent persist path.
       for (let attempt = 0; attempt < 3; attempt++) {
         const hit = await loadPack(token);
-        if (!hit) return jsonResponse({ error: "This link is not valid." }, 404);
+        if ("reason" in hit) return jsonResponse({ error: hit.reason }, 404);
         // One response per link: answering EXPIRES it. More to add later
         // travels on a fresh link minted from the kit.
         if (typeof hit.pack.respondedAt === "string") {

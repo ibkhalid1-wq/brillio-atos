@@ -669,9 +669,11 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
           data: blobToStore as Json,
           updated_at: nextUpdatedAt,
           is_deleted: false,
-          owner_id: program.rawData && typeof (program.rawData as Record<string, unknown>).owner_id === "string"
-            ? (program.rawData as Record<string, unknown>).owner_id as string
-            : null,
+          // owner_id is a COLUMN, never part of the data blob — reading it from
+          // rawData always yielded null, and an upsert with owner_id:null is
+          // exactly what the `owner_id = auth.uid()` RLS check rejects, so this
+          // recovery path always failed. Use the authenticated user id.
+          owner_id: userId ?? cloudMetaRowsRef.current.find((r) => r.id === programId)?.owner_id ?? null,
         }, { onConflict: "id" });
       if (upsertError) {
         // Upsert also failed — persist locally so the change isn't lost from THIS
@@ -699,7 +701,7 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
     const persistedUpdatedAt = (updatedRows?.[0] as { updated_at?: string } | undefined)?.updated_at || nextUpdatedAt;
     hydratedDataById.current.set(programId, { updatedAt: persistedUpdatedAt, data: payload as Json });
     await refreshPrograms();
-  }, [programs, programRoles, refreshPrograms]);
+  }, [programs, programRoles, refreshPrograms, userId]);
 
   const resolveDecision = useCallback(async (
     programId: string,

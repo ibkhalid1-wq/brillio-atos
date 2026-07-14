@@ -10,7 +10,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 type PackState =
   | { phase: "loading" }
-  | { phase: "invalid" }
+  | { phase: "invalid"; reason?: string }
   | { phase: "ready"; pack: Pack }
   | { phase: "sent" };
 
@@ -115,9 +115,15 @@ export default function FlowRespond({ token }: { token: string }) {
   useEffect(() => {
     let alive = true;
     fetch(`${FUNCTIONS_BASE}/flow-portal?token=${encodeURIComponent(token)}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("invalid"))))
+      .then(async (r) => {
+        const body = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(typeof body?.error === "string" ? body.error : "invalid");
+        return body as Pack;
+      })
       .then((pack: Pack) => { if (alive) setState({ phase: "ready", pack }); })
-      .catch(() => { if (alive) setState({ phase: "invalid" }); });
+      .catch((err: unknown) => {
+        if (alive) setState({ phase: "invalid", reason: err instanceof Error && err.message !== "invalid" ? err.message : undefined });
+      });
     return () => { alive = false; };
   }, [token]);
 
@@ -208,7 +214,7 @@ export default function FlowRespond({ token }: { token: string }) {
           ) : state.phase === "invalid" ? (
             <div className="v3fs-quiet">
               <h2>This link isn&rsquo;t valid.</h2>
-              <p>It may have been replaced — ask the person who sent it for a fresh one.</p>
+              <p>{state.reason ?? "It may have been replaced — ask the person who sent it for a fresh one."}</p>
             </div>
           ) : state.phase === "sent" ? (
             <div className="v3fs-quiet">

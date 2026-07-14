@@ -1795,11 +1795,24 @@ export default function AppShellV3() {
     if (!idToDelete) return;
     try {
       if (isSupabaseConfigured && supabase) {
-        const { error } = await supabase
+        // `.select()` so we learn how many rows the write actually touched. An
+        // UPDATE that matches zero rows returns success with an empty set — that
+        // is the silent failure behind "can't archive": the row is visible (it
+        // was listed from cache or as a shared record) but this account can't
+        // write it (owner_id ≠ auth.uid()), or it was never saved to the cloud.
+        const { data: affected, error } = await supabase
           .from("adam_programs")
           .update({ is_deleted: true, updated_at: new Date().toISOString() })
-          .eq("id", idToDelete);
+          .eq("id", idToDelete)
+          .select("id");
         if (error) throw error;
+        if (!affected || affected.length === 0) {
+          pushV3Toast(
+            "Couldn't archive this programme — the cloud write changed nothing. Your sign-in may have expired (reload and sign in again), or it isn't owned by this account. Nothing was changed.",
+            { tone: "error", duration: 9000 },
+          );
+          return;
+        }
       }
       if (idToDelete === activeProgramId) {
         const remaining = programs.filter((p) => p.id !== idToDelete);
@@ -1832,8 +1845,18 @@ export default function AppShellV3() {
           const nextInner = { ...inner, projectMeta: { ...meta, name } };
           update.data = wrapProgramState(wrapper, nextInner, usesNestedData) as unknown as Json;
         }
-        const { error } = await supabase.from("adam_programs").update(update).eq("id", idToRename);
+        const { data: affected, error } = await supabase.from("adam_programs").update(update).eq("id", idToRename).select("id");
         if (error) throw error;
+        if (!affected || affected.length === 0) {
+          // Zero rows touched → the write silently no-op'd (not owned by this
+          // account, or never saved to the cloud). Report it instead of the
+          // misleading "renamed" success that hid this failure before.
+          pushV3Toast(
+            "Couldn't rename this programme — the cloud write changed nothing. Your sign-in may have expired (reload and sign in again), or it isn't owned by this account. The name wasn't changed.",
+            { tone: "error", duration: 9000 },
+          );
+          return;
+        }
       } else if (typeof localStorage !== "undefined") {
         const existing = JSON.parse(localStorage.getItem(LOCAL_PROGRAM_STORAGE_KEY) || "[]");
         if (Array.isArray(existing)) {
