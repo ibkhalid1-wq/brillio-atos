@@ -164,26 +164,27 @@ Deno.serve(async (req: Request) => {
           respondedAt,
         });
       }
+      // The INTERPRETIVE PROTOTYPE slice: when an Experience Design exists,
+      // links that show the prototype carry its flows + the screens they
+      // reference — capped and stripped, nothing else leaves. Rides demo
+      // invites AND Show-movement interview links (a Show follow-up asks for
+      // demo feedback; walking the wireframes belongs beside the questions).
+      const designSlice = (): Record<string, unknown> | undefined => {
+        const xd = hit.inner.experienceDesign;
+        if (!isRecord(xd) || !Array.isArray(xd.screens) || !Array.isArray(xd.flows)) return undefined;
+        const flows = (xd.flows as unknown[]).filter(isRecord).slice(0, 6);
+        const wanted = new Set(flows.flatMap((flow) =>
+          (Array.isArray(flow.steps) ? flow.steps : []).filter(isRecord).map((step) => String(step.screen ?? "").toLowerCase())));
+        const screens = (xd.screens as unknown[]).filter(isRecord)
+          .filter((screen) => wanted.has(String(screen.id ?? "").toLowerCase()) || wanted.has(String(screen.name ?? "").toLowerCase()))
+          .slice(0, 12);
+        return flows.length && screens.length ? { flows, screens } : undefined;
+      };
       if (hit.kind === "demo") {
         const showInputs = isRecord(hit.inner.phaseInputs) && isRecord((hit.inner.phaseInputs as Record<string, unknown>).show)
           ? (hit.inner.phaseInputs as Record<string, Record<string, unknown>>).show
           : {};
-        // The INTERPRETIVE PROTOTYPE: when an Experience Design exists, the
-        // demo link carries its flows + the screens they reference, so the
-        // stakeholder walks their own workflow as wireframes even before a
-        // deployed build exists. Capped and stripped — the pack's own fields
-        // plus the design slice, nothing else leaves.
-        let design: Record<string, unknown> | undefined;
-        const xd = hit.inner.experienceDesign;
-        if (isRecord(xd) && Array.isArray(xd.screens) && Array.isArray(xd.flows)) {
-          const flows = (xd.flows as unknown[]).filter(isRecord).slice(0, 6);
-          const wanted = new Set(flows.flatMap((flow) =>
-            (Array.isArray(flow.steps) ? flow.steps : []).filter(isRecord).map((step) => String(step.screen ?? "").toLowerCase())));
-          const screens = (xd.screens as unknown[]).filter(isRecord)
-            .filter((screen) => wanted.has(String(screen.id ?? "").toLowerCase()) || wanted.has(String(screen.name ?? "").toLowerCase()))
-            .slice(0, 12);
-          if (flows.length && screens.length) design = { flows, screens };
-        }
+        const design = designSlice();
         return jsonResponse({
           ...(design ? { design } : {}),
           kind: "demo",
@@ -210,6 +211,9 @@ Deno.serve(async (req: Request) => {
         }))
         .filter((person) => person.name && person.name.toLowerCase() !== selfKey)
         .slice(0, 24);
+      // Show-movement links (follow-ups asking for demo feedback) carry the
+      // wireframe walkthrough beside the questions.
+      const interviewDesign = String(hit.pack.movementId ?? "") === "show" ? designSlice() : undefined;
       return jsonResponse({
         kind: "interview",
         programme: hit.programName,
@@ -218,6 +222,7 @@ Deno.serve(async (req: Request) => {
         intro: String(hit.pack.intro ?? ""),
         questions: Array.isArray(hit.pack.questions) ? hit.pack.questions.map(String).slice(0, 12) : [],
         roster,
+        ...(interviewDesign ? { design: interviewDesign } : {}),
         responded: typeof hit.pack.respondedAt === "string",
       });
     }

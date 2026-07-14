@@ -315,6 +315,11 @@ export default function FlowRespond({ token }: { token: string }) {
                 </div>
               </header>
               <div className="v3fs-portal-qs">
+                {state.pack.design ? (
+                  // A Show follow-up asks for demo feedback — the wireframe
+                  // walkthrough sits right above the questions it informs.
+                  <DemoWalker design={state.pack.design} />
+                ) : null}
                 {state.pack.questions.map((question, index) => (
                   <label key={index} className={`v3fs-portal-card${((answers[index] ?? "").trim() || (attachments[index] ?? []).length || deferrals[index]) ? " done" : ""}${deferrals[index] ? " deferred" : ""}`}>
                     <span className="v3fs-portal-qn"><b>{index + 1}</b><em aria-hidden="true">{deferrals[index] ? "→" : "✓"}</em></span>
