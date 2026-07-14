@@ -5969,6 +5969,71 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .react-flow__node.v3fs-onto-node.selected .react-flow__handle{opacity:1}
 .v3fs-onto-hint{font-size:11.5px;color:var(--v3-text-secondary);margin:2px 0 6px}
 .v3fs-derived-note{font-size:12px;line-height:1.55;color:var(--v3-text-secondary);border:1px solid var(--fs-line);border-left:3px solid var(--v3-accent-2);border-radius:10px;padding:9px 14px;margin:10px 22px 4px;background:var(--fs-indigo-wash)}
+/* ── Experience Design studio: wireframes as skeleton screens ──────────── */
+.v3fs-wf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.v3fs-wf-screen{display:flex;flex-direction:column;gap:8px;text-align:left;font:inherit;cursor:pointer;
+  border:1.5px solid var(--fs-line);border-radius:13px;padding:12px;background:var(--fs-card);transition:border-color .15s ease, box-shadow .15s ease}
+.v3fs-wf-screen:hover{border-color:color-mix(in srgb,var(--v3-accent-2) 45%,var(--fs-line))}
+.v3fs-wf-screen.on{border-color:var(--v3-accent-2);box-shadow:0 0 0 2px color-mix(in srgb,var(--v3-accent-2) 30%,transparent)}
+.v3fs-wf-title{display:flex;flex-direction:column;gap:1px}
+.v3fs-wf-title b{font-size:12.5px}
+.v3fs-wf-title span{font-size:10.5px;color:var(--v3-text-muted)}
+.v3fs-wf-frame{border:1px solid var(--fs-line);border-radius:8px;overflow:hidden;background:var(--v3-bg)}
+.v3fs-wf-region{padding:6px;display:flex;flex-direction:column;gap:6px}
+.v3fs-wf-region.header{border-bottom:1px solid var(--fs-line);background:color-mix(in srgb,var(--fs-line) 30%,transparent)}
+.v3fs-wf-body{display:flex}
+.v3fs-wf-region.nav{flex:0 0 26%;border-right:1px solid var(--fs-line)}
+.v3fs-wf-region.main{flex:1}
+.v3fs-wf-region.aside{flex:0 0 30%;border-left:1px solid var(--fs-line)}
+.v3fs-wf-block{border:1px dashed color-mix(in srgb,var(--v3-text-muted) 40%,transparent);border-radius:6px;padding:5px 7px;display:flex;flex-direction:column;gap:4px}
+.v3fs-wf-block-h{display:flex;align-items:center;gap:5px;font-size:9.5px;color:var(--v3-text-secondary)}
+.v3fs-wf-block-h b{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v3fs-wf-entity{font-style:normal;font-size:8.5px;font-weight:700;color:var(--v3-accent-2);background:var(--fs-indigo-wash);border-radius:99px;padding:1px 6px;margin-left:auto}
+.v3fs-wf-skel.rows{display:flex;flex-direction:column;gap:3px}
+.v3fs-wf-skel.rows span{height:5px;border-radius:3px;background:color-mix(in srgb,var(--v3-text-muted) 18%,transparent)}
+.v3fs-wf-skel.rows span:nth-child(2){width:82%}
+.v3fs-wf-skel.rows span:nth-child(3){width:64%}
+.v3fs-wf-skel.fields{display:flex;flex-direction:column;gap:4px}
+.v3fs-wf-skel.fields label{font-size:8px;color:var(--v3-text-muted);display:flex;flex-direction:column;gap:2px}
+.v3fs-wf-skel.fields span{height:9px;border:1px solid color-mix(in srgb,var(--v3-text-muted) 30%,transparent);border-radius:3px}
+.v3fs-wf-skel.metric{display:flex;align-items:baseline;gap:6px}
+.v3fs-wf-skel.metric b{font-size:15px;color:var(--v3-text-secondary)}
+.v3fs-wf-skel.metric span{flex:1;height:4px;border-radius:2px;background:color-mix(in srgb,var(--v3-text-muted) 18%,transparent)}
+.v3fs-wf-btn{display:inline-block;font-size:8.5px;font-weight:700;color:#fff;background:var(--v3-accent-2);border-radius:6px;padding:2.5px 9px}
+.v3fs-wf-fields{font-size:9px;color:var(--v3-text-muted)}
+.v3fs-wf-meta{display:flex;flex-wrap:wrap;gap:4px}
+.v3fs-wf-chip{font-size:9.5px;font-weight:650;padding:1.5px 8px;border-radius:99px;background:var(--fs-line);color:var(--v3-text-secondary)}
+.v3fs-wf-chip.ent{background:var(--fs-indigo-wash);color:var(--v3-accent-2)}
+.v3fs-wf-detail{margin-top:12px;border:1px solid var(--fs-line);border-left:3px solid var(--v3-accent-2);border-radius:10px;padding:12px 16px;display:flex;flex-direction:column;gap:6px}
+.v3fs-wf-detail b{font-size:13px}
+.v3fs-wf-detail p{margin:0;font-size:12.5px;color:var(--v3-text-secondary)}
+.v3fs-wf-states{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}
+.v3fs-wf-state{font-size:11.5px;display:flex;flex-direction:column;gap:1px}
+.v3fs-wf-state em{font-style:normal;font-size:9.5px;font-weight:750;letter-spacing:.05em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3fs-wf-intent p{margin:0 0 8px;font-size:13px;max-width:68ch}
+.v3fs-wf-flows{display:flex;flex-direction:column;gap:10px}
+.v3fs-wf-flow{border:1px solid var(--fs-line);border-radius:11px;padding:11px 14px;display:flex;flex-direction:column;gap:8px}
+.v3fs-wf-flow.on{border-color:color-mix(in srgb,var(--v3-accent-2) 45%,var(--fs-line))}
+.v3fs-wf-flow-h{display:flex;align-items:center;gap:10px}
+.v3fs-wf-flow-h b{font-size:12.5px}
+.v3fs-wf-flow-h span{font-size:10.5px;color:var(--v3-text-muted);flex:1}
+.v3fs-wf-pain{margin:0;font-size:12px;font-style:italic;color:var(--v3-text-secondary);border-left:3px solid var(--v3-amber);padding-left:10px}
+.v3fs-wf-pain cite{font-style:normal;font-size:10.5px;color:var(--v3-text-muted)}
+.v3fs-wf-walk{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.v3fs-wf-step{display:flex;align-items:center;gap:6px;font:inherit;font-size:11px;cursor:pointer;
+  border:1px solid var(--fs-line);border-radius:99px;padding:3px 10px;background:var(--fs-card)}
+.v3fs-wf-step.on{border-color:var(--v3-accent-2);background:var(--fs-indigo-wash);color:var(--v3-accent-2);font-weight:650}
+.v3fs-wf-step b{font-size:9.5px}
+.v3fs-wf-step em{font-style:normal;font-size:9px;color:var(--v3-amber)}
+.v3fs-wf-outcome{flex-basis:100%;font-size:11.5px;color:var(--v3-text-secondary)}
+.v3fs-wf-machines{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.v3fs-wf-machine{border:1px solid var(--fs-line);border-radius:11px;padding:11px 14px;display:flex;flex-direction:column;gap:7px}
+.v3fs-wf-machine>b{font-size:12.5px}
+.v3fs-wf-statesrow{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.v3fs-wf-statesrow em{font-style:normal;color:var(--v3-text-muted);font-size:10px}
+.v3fs-wf-trans{display:flex;flex-direction:column;gap:2px;font-size:10.5px;color:var(--v3-text-secondary)}
+.v3fs-wf-trans b{font-weight:650}
+.v3fs-wf-trans em{font-style:normal;color:var(--v3-text-muted)}
 .v3fs-derived-note b{color:var(--v3-text-primary)}
 .v3fs-onto-count{font-size:11.5px;font-weight:650;color:var(--v3-text-secondary);align-self:center;padding:0 4px}
 .v3fs-onto-focus{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);z-index:5;max-width:88%;
