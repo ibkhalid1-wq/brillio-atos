@@ -129,6 +129,8 @@ export default function FlowRespond({ token }: { token: string }) {
   const [extra, setExtra] = useState("");
   const [verdict, setVerdict] = useState<DemoVerdict | null>(null);
   const [comment, setComment] = useState("");
+  // Per-phase demo comments, keyed by flow · step — folded into the verdict.
+  const [phaseComments, setPhaseComments] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -276,7 +278,9 @@ export default function FlowRespond({ token }: { token: string }) {
                     ▶ Open the prototype
                   </a>
                 ) : null}
-                {state.pack.design ? <DemoWalker design={state.pack.design} script={state.pack.script} /> : null}
+                {state.pack.design ? <DemoWalker design={state.pack.design} script={state.pack.script}
+                  phaseComments={phaseComments}
+                  onPhaseComment={(key, value) => setPhaseComments((prev) => ({ ...prev, [key]: value }))} /> : null}
                 {state.pack.steps?.length ? (
                   <div className="v3fs-portal-steps">
                     {state.pack.steps.map((step, index) => (
@@ -299,7 +303,7 @@ export default function FlowRespond({ token }: { token: string }) {
                   </div>
                 </div>
                 <label className="v3fs-portal-q">
-                  <span>{verdict === "accepted" ? "Anything worth noting? (optional)" : "What should change?"}</span>
+                  <span>{verdict === "accepted" ? "Anything worth noting on the whole workflow? (optional)" : "What should change overall?"}</span>
                   <textarea value={comment} onChange={(event) => setComment(event.target.value)} rows={3}
                     placeholder="Add your comment — type, or speak it." />
                   <DictationButton onText={(spoken) => setComment((current) => joinDictation(current, spoken))} />
@@ -307,7 +311,16 @@ export default function FlowRespond({ token }: { token: string }) {
                 {error ? <div className="v3fs-portal-err">{error}</div> : null}
                 <button type="button" className="v3fs-btn pri v3fs-portal-send"
                   disabled={submitting || !verdict}
-                  onClick={() => void submit({ verdict, comment })}>
+                  onClick={() => {
+                    // Fold the per-phase notes into the verdict comment so the
+                    // operator reads phase-by-phase feedback beside the overall.
+                    const phaseLines = Object.entries(phaseComments)
+                      .filter(([, value]) => value.trim())
+                      .map(([key, value]) => `• ${key}: ${value.trim()}`);
+                    const full = [comment.trim(), phaseLines.length ? `Phase-by-phase:\n${phaseLines.join("\n")}` : ""]
+                      .filter(Boolean).join("\n\n");
+                    void submit({ verdict, comment: full });
+                  }}>
                   {submitting ? "Sending…" : "Record my verdict"}
                 </button>
                 <p className="v3fs-portal-foot">Your verdict goes to the programme team for review before it enters the record.</p>
@@ -438,7 +451,10 @@ export default function FlowRespond({ token }: { token: string }) {
  * it, watch each step's screen light up. Same renderer the design studio
  * uses, so what they walk IS the signed-off design.
  */
-function DemoWalker({ design, script }: { design: NonNullable<Pack["design"]>; script?: Pack["script"] }) {
+function DemoWalker({ design, script, phaseComments, onPhaseComment }: {
+  design: NonNullable<Pack["design"]>; script?: Pack["script"];
+  phaseComments?: Record<string, string>; onPhaseComment?: (key: string, value: string) => void;
+}) {
   const [flowIndex, setFlowIndex] = useState(0);
   const [stepIndex, setStepIndex] = useState(0);
   const flows = design.flows ?? [];
@@ -482,6 +498,17 @@ function DemoWalker({ design, script }: { design: NonNullable<Pack["design"]>; s
       </div>
       {screen ? <ScreenCard screen={screen} active onClick={() => { /* focused already */ }} /> : null}
       {step && String(step.outcome ?? "") ? <div className="v3fs-wf-outcome">→ {String(step.outcome)}</div> : null}
+      {onPhaseComment ? (() => {
+        const key = `${String(flow?.name ?? "Flow")} · step ${stepIndex + 1}${step?.action ? ` (${String(step.action)})` : ""}`;
+        return (
+          <label className="v3fs-demo-phasec">
+            <span>Comment on this phase (optional)</span>
+            <textarea rows={2} value={phaseComments?.[key] ?? ""}
+              onChange={(event) => onPhaseComment(key, event.target.value)}
+              placeholder="Does this phase run the way you need it to?" />
+          </label>
+        );
+      })() : null}
       {narration && (narration.say || narration.callback) ? (
         <div className="v3fs-demo-say">
           {narration.say ? <p>{narration.say}</p> : null}
