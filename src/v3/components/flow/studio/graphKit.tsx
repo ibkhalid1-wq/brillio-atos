@@ -130,19 +130,44 @@ export function layeredPositions(
     }
   }
 
-  // ── Placement. With sizes: pack each row by real widths (no overlap) and
-  // space rows by real heights. Without: centred fixed slots. ──
+  // ── Placement. With sizes: pack rows by real widths (no overlap), space rows
+  // by real heights, then STRAIGHTEN — iteratively pull each node toward its
+  // neighbours' centre (keeping the row overlap-free) so edges shorten, stop
+  // cutting across unrelated nodes, and cross far less. Without sizes: the old
+  // centred fixed slots (Blueprint graph). ──
   const out: Record<string, { x: number; y: number }> = {};
   if (sizes) {
+    const layerOf = new Map<string, number>();
+    const yByLayer: number[] = [];
+    const xById = new Map<string, number>();
     let y = 0;
-    for (const layer of layers) {
+    layers.forEach((layer, li) => {
       const total = layer.reduce((sum, id) => sum + widthOf(id), 0) + gapX * Math.max(0, layer.length - 1);
       let cx = -total / 2;
-      for (const id of layer) {
-        out[id] = { x: Math.round(cx + widthOf(id) / 2), y: Math.round(y) };
-        cx += widthOf(id) + gapX;
-      }
+      for (const id of layer) { xById.set(id, cx + widthOf(id) / 2); cx += widthOf(id) + gapX; layerOf.set(id, li); }
+      yByLayer.push(y);
       y += Math.max(...layer.map(heightOf), 0) + rowGap;
+    });
+    const minGap = (a: string, b: string) => widthOf(a) / 2 + gapX + widthOf(b) / 2;
+    for (let pass = 0; pass < 6; pass += 1) {
+      const order = pass % 2 === 0 ? layers.map((_, i) => i) : layers.map((_, i) => i).reverse();
+      for (const li of order) {
+        const layer = layers[li];
+        // Desired x: the average of each node's connected neighbours (any row).
+        const desired = layer.map((id) => {
+          const xs = neighbours.get(id)!.map((n) => xById.get(n)).filter((v): v is number => v !== undefined);
+          return xs.length ? xs.reduce((s, v) => s + v, 0) / xs.length : xById.get(id)!;
+        });
+        // Enforce order + gap left→right, then shift the whole (rigid) row back
+        // onto the desired barycentre — preserves spacing, kills rightward drift.
+        const xs = desired.slice();
+        for (let i = 1; i < layer.length; i += 1) xs[i] = Math.max(xs[i], xs[i - 1] + minGap(layer[i - 1], layer[i]));
+        const shift = (desired.reduce((s, v) => s + v, 0) - xs.reduce((s, v) => s + v, 0)) / Math.max(1, layer.length);
+        layer.forEach((id, i) => xById.set(id, xs[i] + shift));
+      }
+    }
+    for (const id of ids) {
+      if (xById.has(id)) out[id] = { x: Math.round(xById.get(id)!), y: Math.round(yByLayer[layerOf.get(id)!]) };
     }
   } else {
     layers.forEach((layer, depth) => {

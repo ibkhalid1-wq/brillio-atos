@@ -13,7 +13,7 @@ import {
   spineRegenerationPlan, attestHeardRoster, artifactOpenGaps, artifactDocument,
   type ArtifactCardModel, type EvidenceEntry,
 } from "@/v3/components/flow/flowShellData";
-import { canSendForApproval, artifactApprovalState, eligibleApprovers, type ApprovalStatus } from "@/v3/components/flow/flowApprovals";
+import { canSendForApproval, artifactApprovalState, eligibleApprovers, approvalLinkFor, type ApprovalStatus } from "@/v3/components/flow/flowApprovals";
 import { meetingKit } from "@/v3/components/flow/flowMeetings";
 import { listInterviewPacks, listDemoInvites, portalLinkFor } from "@/v3/components/flow/flowPortal";
 import { resolveMovementStakeholders } from "@/v3/components/flow/flowStakeholders";
@@ -752,6 +752,7 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                       approvalStatus={approval.status}
                       approver={approval.approver}
                       approvalComment={approval.comment}
+                      approvalLink={approval.token ? approvalLinkFor(program.id, { token: approval.token }) : null}
                       canSend={canSend}
                       approvers={canSend ? eligibleApprovers(program) : []}
                       onSend={onSendForApproval ? (approver) => onSendForApproval({
@@ -1069,7 +1070,7 @@ function ShipLanesBoard({ program, onCompile, onToggle, onSetLane }: {
   );
 }
 
-function ArtifactDoc({ artifact, running, evidenceNames, evidenceCount, lastError, openGaps, onGenerate, onOpen, onGoEvidence, approvalStatus, approver, approvalComment, canSend, approvers, onSend }: {
+function ArtifactDoc({ artifact, running, evidenceNames, evidenceCount, lastError, openGaps, onGenerate, onOpen, onGoEvidence, approvalStatus, approver, approvalComment, approvalLink, canSend, approvers, onSend }: {
   artifact: ArtifactCardModel;
   running: boolean;
   evidenceNames: string[];
@@ -1089,6 +1090,8 @@ function ArtifactDoc({ artifact, running, evidenceNames, evidenceCount, lastErro
   approvalStatus?: ApprovalStatus;
   approver?: { name: string; role: string };
   approvalComment?: string;
+  /** The live no-login link while in review — shown on the card to re-send. */
+  approvalLink?: string | null;
   canSend?: boolean;
   approvers?: Array<{ name: string; role: string; email: string }>;
   onSend?: (approver: { name: string; role: string; email?: string }) => Promise<string | null>;
@@ -1097,6 +1100,11 @@ function ArtifactDoc({ artifact, running, evidenceNames, evidenceCount, lastErro
   const [approverName, setApproverName] = useState("");
   const [sendBusy, setSendBusy] = useState(false);
   const [sentLink, setSentLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const copyApprovalLink = () => {
+    if (!approvalLink) return;
+    navigator.clipboard?.writeText(approvalLink).then(() => { setCopied(true); window.setTimeout(() => setCopied(false), 2000); }).catch(() => { /* clipboard blocked — link is shown inline */ });
+  };
   const doSend = async () => {
     if (!onSend || !approvers?.length) return;
     const chosen = approvers.find((a) => a.name === approverName) ?? approvers[0];
@@ -1184,7 +1192,16 @@ function ArtifactDoc({ artifact, running, evidenceNames, evidenceCount, lastErro
       {approvalStatus === "approved" ? (
         <div className="v3fs-doc-appr ok">✓ Approved{approver ? ` · ${approver.name}` : ""}</div>
       ) : approvalStatus === "in-review" ? (
-        <div className="v3fs-doc-appr wait">◷ In review{approver ? ` · ${approver.name}` : ""}</div>
+        <div className="v3fs-doc-appr wait">
+          <span>◷ In review{approver ? ` · ${approver.name}` : ""}</span>
+          {approvalLink ? (
+            <button type="button" className="v3fs-a" onClick={copyApprovalLink}>{copied ? "✓ Copied" : "⎘ Copy link to re-send"}</button>
+          ) : null}
+          {approvalLink ? (
+            <input className="v3fs-dir-in" readOnly value={approvalLink} aria-label="Approval link"
+              onFocus={(event) => event.currentTarget.select()} />
+          ) : null}
+        </div>
       ) : approvalStatus === "changes" ? (
         <div className="v3fs-doc-appr changes">↺ Changes requested{approvalComment ? ` — “${approvalComment.slice(0, 80)}”` : ""}</div>
       ) : null}

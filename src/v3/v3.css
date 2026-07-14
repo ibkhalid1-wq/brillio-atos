@@ -4529,6 +4529,10 @@ svg.v3fs-ric {margin:0 auto}
 /* Tooltips: name + shortcut, riding the rail's right edge. */
 .v3fs-dock button[data-tip]:hover::after,
 .v3fs-dock button[data-tip]:focus-visible::after {content:attr(data-tip);position:absolute;left:calc(100% + 12px);top:50%;transform:translateY(-50%);white-space:nowrap;font-size:10.5px;font-weight:600;letter-spacing:.02em;padding:5px 10px;border-radius:8px;background:var(--v3-text-primary);color:var(--fs-card);box-shadow:0 8px 20px -8px rgba(15,16,32,.4);z-index:70;pointer-events:none}
+/* When the "Continue here" pill is on a dock item, its hover tooltip would
+   collide with the pill — suppress the tooltip on that item. */
+.v3fs-dock button.v3fs-dock-next[data-tip]:hover::after,
+.v3fs-dock button.v3fs-dock-next[data-tip]:focus-visible::after {content:none}
 .v3fs-cp {color:var(--v3-accent-2) !important}
 
 /* The app bar — one slim, full-width strip anchoring the top of the app.

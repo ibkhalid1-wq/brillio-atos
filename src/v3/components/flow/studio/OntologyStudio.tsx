@@ -73,7 +73,7 @@ export default function OntologyStudio({ doc, onChange }: StudioProps) {
       const positions = layeredPositions(
         ids,
         relations.map((relation) => ({ from: String(relation.from ?? ""), to: String(relation.to ?? "") })),
-        { sizes, y: 120 },
+        { sizes, y: 170, gapX: 84 },
       );
       return current.map((node) => ({ ...node, position: positions[node.id] ?? node.position }));
     });

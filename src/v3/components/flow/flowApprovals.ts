@@ -14,10 +14,11 @@ import type { ProgramSummary } from "@/new/types";
 import type { PhaseDefinition } from "@/v3/lib/methodology";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import {
-  movementOpenIssues, evidenceStamp, flowMovements, stakeholderEmail,
+  movementOpenIssues, evidenceStamp, flowMovements, stakeholderEmail, movementEvidence,
   type ArtifactCardModel, type EvidenceEntry,
 } from "@/v3/components/flow/flowShellData";
 import { resolveMovementStakeholders, readDirectoryPeople } from "@/v3/components/flow/flowStakeholders";
+import { listInterviewPacks } from "@/v3/components/flow/flowPortal";
 
 const APPROVAL_CAP = 40;
 
@@ -76,16 +77,38 @@ export function eligibleApprovers(program: ProgramSummary): Array<{ name: string
   return [...seen.values()];
 }
 
-/** An artifact may be sent for approval once it exists and the movement's open
- * interview questions are cleared — the record is complete enough to sign off. */
-export function canSendForApproval(program: ProgramSummary, movement: PhaseDefinition, artifact: ArtifactCardModel): boolean {
-  if (!artifact.present) return false;
-  return movementOpenIssues(program, movement).length === 0;
+/** True while any of the movement's stakeholders still owes a response — someone
+ * to reach, or a link sent but unanswered. Approval waits until the evidence is
+ * in, so a document isn't signed off over an incomplete record. */
+export function movementQuestionsPending(program: ProgramSummary, movement: PhaseDefinition): boolean {
+  const stakeholders = resolveMovementStakeholders(program, movement.id).filter((s) => !s.isRole);
+  if (!stakeholders.length) return false;
+  const packs = listInterviewPacks(program);
+  const evidence = movementEvidence(program, movement);
+  return stakeholders.some((s) => {
+    const key = s.name.trim().toLowerCase();
+    const pack = [...packs].reverse().find((p) => String(p.stakeholder ?? "").trim().toLowerCase() === key
+      && (movement.id === "listen" ? (!p.movementId || p.movementId === "listen") : p.movementId === movement.id));
+    const heard = (key.length > 2 && evidence.some((e) => e.who.toLowerCase().includes(key))) || Boolean(pack?.respondedAt);
+    return !heard;
+  });
 }
 
-/** The live approval state of an artifact — drives the card chip and the gate. */
+/** An artifact may be sent for approval once it exists, its own open questions
+ * are cleared, AND no stakeholder question is still outstanding — the record is
+ * complete enough to sign off. */
+export function canSendForApproval(program: ProgramSummary, movement: PhaseDefinition, artifact: ArtifactCardModel): boolean {
+  if (!artifact.present) return false;
+  if (movementOpenIssues(program, movement).length > 0) return false;
+  if (movementQuestionsPending(program, movement)) return false;
+  return true;
+}
+
+/** The live approval state of an artifact — drives the card chip and the gate.
+ * While in review it also carries the live pack `token` so the card can show
+ * the link and let the operator copy it again to re-send. */
 export function artifactApprovalState(program: ProgramSummary, movementId: string, artifactId: string): {
-  status: ApprovalStatus; approver?: { name: string; role: string }; sentAt?: string; decidedAt?: string; comment?: string;
+  status: ApprovalStatus; approver?: { name: string; role: string }; sentAt?: string; decidedAt?: string; comment?: string; token?: string;
 } {
   const { inner } = getProgramState((program.rawData ?? {}) as Record<string, unknown>);
   const bucket = isRecord(inner.phaseArtifacts) && isRecord((inner.phaseArtifacts as Record<string, unknown>)[movementId])
@@ -99,7 +122,9 @@ export function artifactApprovalState(program: ProgramSummary, movementId: strin
     return { status: "changes", approver: approval.approver as { name: string; role: string } | undefined, comment: approval.comment as string | undefined, decidedAt: approval.decidedAt as string | undefined };
   }
   if (approval) {
-    return { status: "in-review", approver: approval.approver as { name: string; role: string } | undefined, sentAt: approval.sentAt as string | undefined };
+    // The live (unanswered) pack for this artifact carries the resend link.
+    const pack = readPacks(inner).filter((p) => p.artifactId === artifactId && p.movementId === movementId && !p.respondedAt).slice(-1)[0];
+    return { status: "in-review", approver: approval.approver as { name: string; role: string } | undefined, sentAt: approval.sentAt as string | undefined, token: pack?.token };
   }
   return { status: "none" };
 }
