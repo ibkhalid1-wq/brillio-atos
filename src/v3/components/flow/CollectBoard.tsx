@@ -802,9 +802,10 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
         { [captureField]: [existing.trimEnd(), docBlock, ...speakerBlocks].filter(Boolean).join("\n\n") },
         { attest: { action: mapping?.blocks.length ? `Transcript mapped — ${docTitle}` : `Document added — ${docTitle}`, detail: attestDetail } });
       onCaptured?.();
-      // A document/transcript is a discrete evidence event — regenerate the
-      // impacted artifacts now (typed capture doesn't, to avoid firing on every
-      // partial paste).
+      // A document/transcript is a discrete evidence event: it re-fingerprints
+      // the movement's inputs, so the impacted artifacts flip to "Stale —
+      // regenerate" and wait for the operator (or auto-build, if opted in).
+      // We no longer force a blocking rebuild here — that blanked the board.
       onDocumentCaptured?.();
     } finally { setBusy(false); }
   };

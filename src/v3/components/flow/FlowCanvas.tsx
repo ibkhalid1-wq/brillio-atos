@@ -500,14 +500,14 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                           onSendForApproval={onSendForApproval}
                           onFocusPerson={(id, open) => setRailFocus((cur) => (open ? id : cur === id ? null : cur))}
                           onCaptured={() => onRunAgent("contradiction-detector", movement.id)}
-                          onDocumentCaptured={onRunAgentAndWait ? async () => {
-                            // A transcript/document just landed — regenerate this
-                            // movement's present artifacts from the new evidence,
-                            // in dependency order, without waiting for the operator.
-                            for (const art of artifacts.filter((a) => a.present)) {
-                              await onRunAgentAndWait(art.id, movement.id);
-                            }
-                          } : undefined} />
+                          /* Evidence arriving no longer auto-regenerates artifacts.
+                             A landed document stales the impacted artifacts (by
+                             fingerprint) and they show "Stale — regenerate" for the
+                             operator to run when ready. Blocking every capture on a
+                             full artifact rebuild blanked the board and could cascade
+                             into "generate the previous phase first". Operators who
+                             DO want hands-off rebuilds turn on "Auto-build artifacts
+                             on input", which the autonomous effect honours. */ />
                       ) : (
                         <MeetingKitCard
                           kit={meetingKit(program, movement.id)}

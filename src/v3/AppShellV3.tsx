@@ -2280,12 +2280,14 @@ export default function AppShellV3() {
     for (const movement of flowMovements()) {
       if (p.gateReviews?.[movement.id]?.status === "approved") continue; // locked — inputs frozen
       const arts = movementArtifacts(p, movement);
-      const stale = arts.filter((a) => a.present && a.stale);
-      // AUTO-FIRST-GENERATION (opt-in): when the operator has turned auto-build
-      // on, also FIRST-generate an impacted artifact whose declared inputs have
-      // arrived but which was never generated — not just regenerate stale ones.
-      // Off by default, so nothing fires model calls unprompted.
-      const firstBuild = autoBuildEnabled(p)
+      // Auto-build is the ONE switch for hands-off generation, and it's OFF by
+      // default: evidence arriving stales the impacted artifacts, and they wait
+      // for the operator to press Regenerate. Only when the operator opts in does
+      // this effect regenerate stale artifacts AND first-generate impacted ones
+      // whose inputs have arrived — so nothing fires model calls unprompted.
+      const auto = autoBuildEnabled(p);
+      const stale = auto ? arts.filter((a) => a.present && a.stale) : [];
+      const firstBuild = auto
         ? arts.filter((a) => !a.present && artifactInputsReady(p, movement.id, a.id))
         : [];
       const work = [...stale, ...firstBuild];

@@ -5112,14 +5112,17 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-plan-btn.quiet:hover {color:var(--v3-text);border-color:var(--v3-accent-2)}
 /* The zone is the rail's full-height home — sticky, viewport-tall, and the
    positioning context for the floating panel. */
-.v3fs-railzone {position:sticky;top:64px;height:calc(100vh - 96px);min-width:0}
+/* The zone is the rail's full-height track — it stretches to the bottom of the
+   board (align-self:stretch fills the grid row), never a stubby viewport-height
+   pill, while staying sticky so the rail follows the scroll. */
+.v3fs-railzone {position:sticky;top:64px;align-self:stretch;min-height:calc(100vh - 96px);min-width:0}
 /* The rail is a flex column: header and context stay put, the RECORDS fill
    the remaining height and scroll in place. */
 /* The record rail is a DIFFERENT thing from the Collect/Artifacts/Gate
    pipeline — it's the source of truth, not a stage. It gets its own identity:
    an accent left edge and a cooler tinted ground so it reads as a panel apart,
    never as a fourth tab. */
-.v3fs-recrail {height:100%;display:flex;flex-direction:column;overflow:hidden;
+.v3fs-recrail {height:calc(100vh - 96px);max-height:100%;display:flex;flex-direction:column;overflow:hidden;
   border:1px solid color-mix(in srgb,var(--v3-accent-2) 22%,var(--fs-line));
   border-left:3px solid var(--v3-accent-2);border-radius:14px;padding:14px 16px;
   background:linear-gradient(180deg,color-mix(in srgb,var(--v3-accent-2) 7%,var(--fs-card)),var(--fs-card) 62%)}
@@ -5133,7 +5136,7 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-recrail-ctx .v3fs-coverage {margin-top:2px}
 /* Hover-revealed: the panel floats over the board from the right edge,
    FULL-HEIGHT — the open rail aligns with the strip it replaces. */
-.v3fs-recrail.floating {position:absolute;top:0;right:0;width:min(370px,86vw);height:100%;
+.v3fs-recrail.floating {position:absolute;top:0;right:0;width:min(370px,86vw);height:calc(100vh - 96px);max-height:none;
   background:var(--fs-card);z-index:40;
   box-shadow:-20px 0 52px -26px rgba(15,16,32,.4), 0 20px 56px -28px rgba(15,16,32,.35)}
 @media (prefers-reduced-motion: no-preference) {
