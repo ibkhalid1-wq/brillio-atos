@@ -10,6 +10,11 @@
  */
 import { useEffect, useRef, useState } from "react";
 
+const FUNCTIONS_BASE = `${import.meta.env.VITE_SUPABASE_URL || ""}/functions/v1`;
+const ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || "";
+const canRecord = typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia
+  && typeof MediaRecorder !== "undefined" && !!import.meta.env.VITE_SUPABASE_URL;
+
 interface SpeechRecognitionLike {
   continuous: boolean;
   interimResults: boolean;
@@ -37,9 +42,71 @@ export function joinDictation(existing: string, spoken: string): string {
   return existing.trim() ? `${existing.replace(/\s+$/, "")} ${lead}` : lead;
 }
 
+async function blobToBase64(blob: Blob): Promise<string> {
+  const buffer = new Uint8Array(await blob.arrayBuffer());
+  let binary = "";
+  for (let i = 0; i < buffer.length; i += 0x8000) binary += String.fromCharCode(...buffer.subarray(i, i + 0x8000));
+  return btoa(binary);
+}
+
+/**
+ * The fallback for browsers with no live dictation (Firefox): record audio and
+ * transcribe it server-side (flow-transcribe), then drop the text in the field.
+ */
+function AudioRecordButton({ onText, compact, label }: { onText: (s: string) => void; compact?: boolean; label?: string }) {
+  const [state, setState] = useState<"idle" | "recording" | "working">("idle");
+  const recRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
+  useEffect(() => () => { recRef.current?.state === "recording" && recRef.current.stop(); streamRef.current?.getTracks().forEach((t) => t.stop()); }, []);
+
+  const stop = () => { if (recRef.current?.state === "recording") recRef.current.stop(); };
+  const start = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const rec = new MediaRecorder(stream);
+      chunksRef.current = [];
+      rec.ondataavailable = (e) => { if (e.data.size) chunksRef.current.push(e.data); };
+      rec.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
+        if (blob.size < 1200) { setState("idle"); return; }
+        setState("working");
+        try {
+          const audio = await blobToBase64(blob);
+          const res = await fetch(`${FUNCTIONS_BASE}/flow-transcribe`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` },
+            body: JSON.stringify({ audio, mime: blob.type }),
+          });
+          const body = await res.json().catch(() => ({}));
+          if (res.ok && typeof body.text === "string" && body.text.trim()) onText(body.text.trim());
+        } catch { /* leave the field untouched on failure */ }
+        setState("idle");
+      };
+      recRef.current = rec;
+      rec.start();
+      setState("recording");
+    } catch { setState("idle"); }
+  };
+
+  const cls = compact ? "v3fs-micdot" : "v3fs-mic";
+  const busy = state === "working";
+  return (
+    <button type="button" className={`${cls}${state === "recording" ? " on" : ""}`} disabled={busy}
+      aria-pressed={state === "recording"} onClick={() => (state === "recording" ? stop() : void start())}
+      title={state === "recording" ? "Stop and transcribe" : busy ? "Transcribing…" : (label || "Record your answer")}>
+      {compact ? <span aria-hidden="true">{busy ? "…" : state === "recording" ? "◉" : "🎙"}</span>
+        : (busy ? "Transcribing…" : state === "recording" ? "◉ Recording… tap to stop" : `🎙 ${label || "Record your answer"}`)}
+    </button>
+  );
+}
+
 /**
  * A mic that dictates into a field. `compact` renders a small icon button
  * (for sitting inside/next to an input); the default is the labelled button.
+ * Falls back to record-and-transcribe where the browser has no live dictation.
  */
 export function DictationButton({ onText, compact, label }: {
   onText: (spoken: string) => void;
@@ -49,7 +116,9 @@ export function DictationButton({ onText, compact, label }: {
   const [listening, setListening] = useState(false);
   const recognizerRef = useRef<SpeechRecognitionLike | null>(null);
   useEffect(() => () => recognizerRef.current?.stop(), []);
-  if (!SpeechRecognitionCtor) return null;
+  if (!SpeechRecognitionCtor) {
+    return canRecord ? <AudioRecordButton onText={onText} compact={compact} label={label} /> : null;
+  }
   const toggle = () => {
     if (listening) { recognizerRef.current?.stop(); return; }
     const recognizer = new SpeechRecognitionCtor();

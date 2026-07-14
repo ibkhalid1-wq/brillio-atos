@@ -210,13 +210,18 @@ function ListenWorkflowSurface({ review, stakeholder, submitting, error, onSubmi
   onSubmit: (answers: string) => void;
 }) {
   const [wfSteps, setWfSteps] = useState<FlowNode[][]>(
-    () => review.workflows.map((w) => w.steps.map((s) => ({ action: s.action, original: s.action, actor: s.actor, system: s.system, entities: s.entities }))));
+    () => review.workflows.map((w) => w.steps.map((s) => ({
+      action: s.action, original: s.action, actor: s.actor, originalActor: s.actor, system: s.system, originalSystem: s.system, entities: s.entities,
+    }))));
   const [narration, setNarration] = useState("");
   const [termNotes, setTermNotes] = useState<Record<string, string>>({});
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [addedTerms, setAddedTerms] = useState<Array<{ name: string; note: string }>>([]);
 
   const editStep = (wi: number, si: number, action: string) => setWfSteps((prev) =>
     prev.map((steps, i) => i !== wi ? steps : steps.map((s, j) => j !== si ? s : { ...s, action })));
+  const editMeta = (wi: number, si: number, field: "actor" | "system", value: string) => setWfSteps((prev) =>
+    prev.map((steps, i) => i !== wi ? steps : steps.map((s, j) => j !== si ? s : { ...s, [field]: value })));
   const toggleRemove = (wi: number, si: number) => setWfSteps((prev) =>
     prev.map((steps, i) => {
       if (i !== wi) return steps;
@@ -232,26 +237,40 @@ function ListenWorkflowSurface({ review, stakeholder, submitting, error, onSubmi
       next.splice(at + 1, 0, { action: "", added: true });
       return next;
     }));
+  const reorderStep = (wi: number, from: number, to: number) => setWfSteps((prev) =>
+    prev.map((steps, i) => {
+      if (i !== wi) return steps;
+      const next = [...steps];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    }));
 
   // Everything the stakeholder is proposing — the LIVE preview, rebuilt on edit.
   const proposal = useMemo(() => {
+    const changed = (s: FlowNode) => s.added ? s.action.trim() : (
+      s.removed || (s.original != null && s.original !== s.action)
+      || (s.originalActor ?? "") !== (s.actor ?? "") || (s.originalSystem ?? "") !== (s.system ?? ""));
     const workflows = review.workflows.map((w, wi) => {
       const steps = wfSteps[wi] ?? [];
-      const changes = steps.filter((s) => s.added ? s.action.trim() : (s.removed || (s.original != null && s.original !== s.action)));
-      return { name: w.name, changes, steps };
-    }).filter((w) => w.changes.length);
+      const reordered = steps.some((s, j) => s.original != null && s.original !== (review.workflows[wi]?.steps[j]?.action ?? s.original));
+      const changes = steps.filter(changed);
+      return { name: w.name, changes, steps, reordered };
+    }).filter((w) => w.changes.length || w.reordered);
     const notedTerms = review.terms.map((t, i) => ({ name: t.name, note: (termNotes[String(i)] ?? "").trim() })).filter((r) => r.note);
+    const newTerms = addedTerms.filter((t) => t.name.trim());
     const answered = review.questions.map((q, i) => ({ q, a: (answers[String(i)] ?? "").trim() })).filter((r) => r.a);
-    const count = workflows.reduce((n, w) => n + w.changes.length, 0) + (narration.trim() ? 1 : 0) + notedTerms.length + answered.length;
-    return { workflows, notedTerms, answered, count };
-  }, [review, wfSteps, narration, termNotes, answers]);
+    const count = workflows.reduce((n, w) => n + w.changes.length + (w.reordered ? 1 : 0), 0)
+      + (narration.trim() ? 1 : 0) + notedTerms.length + newTerms.length + answered.length;
+    return { workflows, notedTerms, newTerms, answered, count };
+  }, [review, wfSteps, narration, termNotes, answers, addedTerms]);
 
   const [area, setArea] = useState("");
   const areas = areasOf(review.workflows);
 
   const compose = () => composeListenWorkflowAnswers(review, {
     workflows: review.workflows.map((w, wi) => ({ name: w.name, steps: wfSteps[wi] ?? [] })),
-    narration, termNotes, answers,
+    narration, termNotes, answers, addedTerms,
   });
 
   return (
@@ -267,8 +286,10 @@ function ListenWorkflowSurface({ review, stakeholder, submitting, error, onSubmi
           <section key={wi} className="v3fs-rvw-wf plain">
             <WorkflowFlow name={wf.name} trigger={wf.trigger} steps={wfSteps[wi] ?? []}
               onEdit={(si, action) => editStep(wi, si, action)}
+              onEditMeta={(si, field, value) => editMeta(wi, si, field, value)}
               onToggleRemove={(si) => toggleRemove(wi, si)}
-              onAdd={(at) => addStep(wi, at)} />
+              onAdd={(at) => addStep(wi, at)}
+              onReorder={(from, to) => reorderStep(wi, from, to)} />
           </section>
         ))}
 
@@ -285,6 +306,23 @@ function ListenWorkflowSurface({ review, stakeholder, submitting, error, onSubmi
             <section className="v3fs-rvw-wf plain">
               <OntologyMap terms={review.terms} relations={review.relations}
                 comments={termNotes} onComment={(i, v) => setTermNotes((p) => ({ ...p, [String(i)]: v }))} />
+              <div className="v3fs-addterm">
+                {addedTerms.map((t, i) => (
+                  <div key={i} className="v3fs-addterm-row">
+                    <input className="v3fs-addterm-name" value={t.name} placeholder="A term we missed"
+                      onChange={(e) => setAddedTerms((p) => p.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} />
+                    <div className="v3fs-rvw-field">
+                      <input value={t.note} placeholder="What is it? (optional)"
+                        onChange={(e) => setAddedTerms((p) => p.map((x, j) => j === i ? { ...x, note: e.target.value } : x))} />
+                      <DictationButton compact label="Speak this"
+                        onText={(spoken) => setAddedTerms((p) => p.map((x, j) => j === i ? { ...x, note: joinDictation(x.note, spoken) } : x))} />
+                    </div>
+                    <button type="button" className="v3fs-addterm-x" title="Remove"
+                      onClick={() => setAddedTerms((p) => p.filter((_, j) => j !== i))}>✕</button>
+                  </div>
+                ))}
+                <button type="button" className="v3fs-addterm-add" onClick={() => setAddedTerms((p) => [...p, { name: "", note: "" }])}>＋ Add a term we missed</button>
+              </div>
             </section>
           </>
         ) : null}
@@ -319,10 +357,12 @@ function ListenWorkflowSurface({ review, stakeholder, submitting, error, onSubmi
                       {s.added ? `Added: ${s.action}` : s.removed ? `Removed: ${s.original ?? s.action}` : `Changed: ${s.action}`}
                     </li>
                   ))}
+                  {w.reordered ? <li className="chg">Steps reordered</li> : null}
                 </ul>
               </div>
             ))}
             {narration.trim() ? <p className="v3fs-rvw-live-note">“{narration.trim()}”</p> : null}
+            {proposal.newTerms.length ? <p className="v3fs-rvw-live-note add">{proposal.newTerms.length} new term{proposal.newTerms.length === 1 ? "" : "s"}</p> : null}
             {proposal.notedTerms.length ? <p className="v3fs-rvw-live-note">{proposal.notedTerms.length} term note{proposal.notedTerms.length === 1 ? "" : "s"}</p> : null}
             {proposal.answered.length ? <p className="v3fs-rvw-live-note">{proposal.answered.length} note{proposal.answered.length === 1 ? "" : "s"} on constraints</p> : null}
           </div>

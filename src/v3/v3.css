@@ -6765,8 +6765,15 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-vflow-h b {font-size:15px;font-weight:750;letter-spacing:-.01em}
 .v3fs-vflow-h span {font-size:11.5px;color:var(--v3-text-muted)}
 .v3fs-vflow-list {list-style:none;margin:0;padding:0}
-.v3fs-vflow-node {position:relative;display:grid;grid-template-columns:40px 1fr;align-items:stretch;padding:0 12px}
-.v3fs-vflow-rail {position:relative;display:flex;justify-content:center;padding:8px 0}
+.v3fs-vflow-node {position:relative;display:grid;grid-template-columns:40px 1fr;align-items:stretch;padding:0 12px;transition:opacity .12s,transform .12s}
+.v3fs-vflow-node.dragging {opacity:.4}
+.v3fs-vflow-node.over .v3fs-vflow-card {border-color:var(--v3-accent-2);box-shadow:0 -3px 0 -1px var(--v3-accent-2)}
+.v3fs-vflow-rail {position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 0}
+.v3fs-vflow-grip {z-index:1;margin-top:8px;font-size:12px;line-height:1;color:var(--v3-text-muted);cursor:grab;letter-spacing:-1px;
+  opacity:0;transition:opacity .12s,color .12s}
+.v3fs-vflow-node:hover .v3fs-vflow-grip {opacity:.75}
+.v3fs-vflow-grip:hover {color:var(--v3-accent-2)}
+.v3fs-vflow-grip:active {cursor:grabbing}
 /* the connector line runs THROUGH the rail, behind the dots */
 .v3fs-vflow-node:not(:last-child) .v3fs-vflow-rail::after {content:"";position:absolute;top:0;bottom:-8px;left:50%;
   width:2px;transform:translateX(-50%);background:linear-gradient(var(--v3-accent-2),color-mix(in srgb,var(--v3-accent-2) 30%,var(--fs-line)))}
@@ -6783,6 +6790,18 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-vflow-actor {color:var(--v3-accent-2);background:var(--fs-indigo-wash)}
 .v3fs-vflow-sys {color:var(--v3-text-muted);background:var(--fs-line);font-family:var(--v3-font-mono);font-size:9.5px}
 .v3fs-vflow-ent {color:var(--v3-text-secondary);background:color-mix(in srgb,var(--v3-text-muted) 12%,transparent)}
+/* editable actor / system chips — a hint word + inline input, pill-shaped */
+.v3fs-vflow-metaf {display:inline-flex;align-items:center;gap:5px;padding:2px 5px 2px 9px;border-radius:99px;
+  border:1px solid transparent;transition:border-color .12s,background .12s}
+.v3fs-vflow-metaf:focus-within {border-color:color-mix(in srgb,var(--v3-accent-2) 40%,transparent);background:var(--v3-surface)}
+.v3fs-vflow-metaf > span {font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3fs-vflow-metaf input {font:inherit;font-size:10.5px;font-weight:650;border:none;background:transparent;color:var(--v3-text);
+  padding:1px 0;min-width:64px;max-width:150px;width:auto}
+.v3fs-vflow-metaf input:focus {outline:none}
+.v3fs-vflow-metaf.actor {background:var(--fs-indigo-wash)}
+.v3fs-vflow-metaf.actor input {color:var(--v3-accent-2)}
+.v3fs-vflow-metaf.sys {background:var(--fs-line)}
+.v3fs-vflow-metaf.sys input {font-family:var(--v3-font-mono);font-size:9.5px;color:var(--v3-text-muted)}
 .v3fs-vflow-x {align-self:flex-start;font-size:10.5px;font-weight:600;color:var(--v3-text-muted);background:none;border:none;
   cursor:pointer;padding:2px 0}
 .v3fs-vflow-x:hover {color:var(--v3-red,var(--v3-amber))}
@@ -6798,6 +6817,20 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-vflow-node:hover .v3fs-vflow-insert,.v3fs-vflow-insert:focus {opacity:1}
 .v3fs-vflow-insert:hover {border-color:var(--v3-green);color:var(--v3-green);transform:translate(-50%,0) scale(1.12)}
 .v3fs-vflow-empty {padding:8px 12px 4px}
+
+/* Add-a-missing-term — respondent-added ontology terms below the map */
+.v3fs-addterm {display:flex;flex-direction:column;gap:8px;margin-top:12px;padding-top:12px;border-top:1px dashed var(--fs-line)}
+.v3fs-addterm-row {display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.v3fs-addterm-name {font:inherit;font-size:13px;font-weight:650;color:var(--v3-text);border:1px solid var(--fs-line);
+  border-radius:9px;padding:7px 11px;background:var(--v3-surface);min-width:150px;flex:0 0 auto}
+.v3fs-addterm-name:focus {outline:none;border-color:var(--v3-green);box-shadow:0 0 0 3px color-mix(in srgb,var(--v3-green) 12%,transparent)}
+.v3fs-addterm-row .v3fs-rvw-field {flex:1 1 200px;min-width:180px}
+.v3fs-addterm-x {flex:0 0 auto;font-size:12px;color:var(--v3-text-muted);background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:7px}
+.v3fs-addterm-x:hover {color:var(--v3-red,var(--v3-amber));background:var(--fs-line)}
+.v3fs-addterm-add {align-self:flex-start;font:inherit;font-size:12.5px;font-weight:650;color:var(--v3-green);background:none;
+  border:1px dashed color-mix(in srgb,var(--v3-green) 45%,transparent);border-radius:99px;padding:6px 14px;cursor:pointer;
+  transition:background .12s,border-color .12s}
+.v3fs-addterm-add:hover {background:color-mix(in srgb,var(--v3-green) 8%,transparent);border-color:var(--v3-green)}
 
 /* ── Ontology MAP — a node-link diagram of the domain's terms ────────────────── */
 .v3fs-omap {border:1px solid var(--fs-line);border-radius:16px;background:var(--v3-surface);box-shadow:var(--fs-shadow);overflow:hidden}

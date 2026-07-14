@@ -21,7 +21,9 @@ export interface FlowNode {
   added?: boolean;
   removed?: boolean;
   actor?: string;
+  originalActor?: string;
   system?: string;
+  originalSystem?: string;
   entities?: string[];
 }
 
@@ -34,15 +36,20 @@ function areaHue(area: string | undefined): number {
   return AREA_HUES[key];
 }
 
-/** The editable workflow, drawn as a vertical flow. */
-export function WorkflowFlow({ name, trigger, steps, onEdit, onToggleRemove, onAdd }: {
+/** The editable workflow, drawn as a vertical flow. Steps drag to reorder; the
+ * actor and system are editable inline. */
+export function WorkflowFlow({ name, trigger, steps, onEdit, onEditMeta, onToggleRemove, onAdd, onReorder }: {
   name: string;
   trigger?: string;
   steps: FlowNode[];
   onEdit: (index: number, action: string) => void;
+  onEditMeta: (index: number, field: "actor" | "system", value: string) => void;
   onToggleRemove: (index: number) => void;
   onAdd: (afterIndex: number) => void;
+  onReorder: (from: number, to: number) => void;
 }) {
+  const [drag, setDrag] = useState<number | null>(null);
+  const [over, setOver] = useState<number | null>(null);
   return (
     <div className="v3fs-vflow">
       <div className="v3fs-vflow-h">
@@ -54,18 +61,33 @@ export function WorkflowFlow({ name, trigger, steps, onEdit, onToggleRemove, onA
       </div>
       <ol className="v3fs-vflow-list">
         {steps.map((node, si) => (
-          <li key={si} className={`v3fs-vflow-node${node.removed ? " removed" : ""}${node.added ? " added" : ""}`}>
-            <div className="v3fs-vflow-rail" aria-hidden="true">
-              <span className="v3fs-vflow-dot">{node.added ? "+" : node.removed ? "×" : si + 1}</span>
+          <li key={si}
+            className={`v3fs-vflow-node${node.removed ? " removed" : ""}${node.added ? " added" : ""}${drag === si ? " dragging" : ""}${over === si && drag !== null && drag !== si ? " over" : ""}`}
+            draggable={!node.removed}
+            onDragStart={(e) => { setDrag(si); e.dataTransfer.effectAllowed = "move"; }}
+            onDragEnd={() => { setDrag(null); setOver(null); }}
+            onDragOver={(e) => { if (drag !== null) { e.preventDefault(); setOver(si); } }}
+            onDrop={(e) => { e.preventDefault(); if (drag !== null && drag !== si) onReorder(drag, si); setDrag(null); setOver(null); }}>
+            <div className="v3fs-vflow-rail">
+              <span className="v3fs-vflow-grip" aria-hidden="true" title="Drag to reorder">⠿</span>
+              <span className="v3fs-vflow-dot" aria-hidden="true">{node.added ? "+" : node.removed ? "×" : si + 1}</span>
             </div>
             <div className="v3fs-vflow-card">
               <input className="v3fs-vflow-action" value={node.action} disabled={node.removed}
                 placeholder={node.added ? "Describe the step we missed…" : ""}
                 onChange={(e) => onEdit(si, e.target.value)} aria-label={`Step ${si + 1}`} />
-              {(node.actor || node.system || (node.entities && node.entities.length)) && !node.added ? (
+              {!node.removed ? (
                 <div className="v3fs-vflow-meta">
-                  {node.actor ? <span className="v3fs-vflow-actor">{node.actor}</span> : null}
-                  {node.system ? <span className="v3fs-vflow-sys">{node.system}</span> : null}
+                  <label className="v3fs-vflow-metaf actor">
+                    <span aria-hidden="true">who</span>
+                    <input value={node.actor ?? ""} placeholder="who does this?"
+                      onChange={(e) => onEditMeta(si, "actor", e.target.value)} aria-label="Who does this step" />
+                  </label>
+                  <label className="v3fs-vflow-metaf sys">
+                    <span aria-hidden="true">on</span>
+                    <input value={node.system ?? ""} placeholder="which system?"
+                      onChange={(e) => onEditMeta(si, "system", e.target.value)} aria-label="Which system" />
+                  </label>
                   {(node.entities ?? []).slice(0, 4).map((ent) => <span key={ent} className="v3fs-vflow-ent">{ent}</span>)}
                 </div>
               ) : null}
