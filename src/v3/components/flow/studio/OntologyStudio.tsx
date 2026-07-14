@@ -5,10 +5,10 @@
  * change rewrites the same entities/relations shape the generator emits,
  * so grounding, standards alignment and the blueprint keep reading it.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ReactFlow, Background, Controls, MarkerType, useNodesState,
-  type Node, type Edge, type Connection,
+  type Node, type Edge, type Connection, type ReactFlowInstance,
 } from "@xyflow/react";
 import { FLOATING_EDGE_TYPES, layeredPositions } from "./graphKit";
 import "@xyflow/react/dist/style.css";
@@ -44,6 +44,7 @@ export default function OntologyStudio({ doc, onChange }: StudioProps) {
   // measured dimensions edges need to route; we sync structure from the doc
   // below while preserving positions and measurements across rebuilds.
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const flowRef = useRef<ReactFlowInstance<Node, Edge> | null>(null);
 
   const adopted = useMemo(() => {
     const rows = asArray(doc.standardAlignment).map(asRecord);
@@ -60,8 +61,24 @@ export default function OntologyStudio({ doc, onChange }: StudioProps) {
   // whenever entities/selection change, carrying prior position + measured
   // size by id so the graph never snaps back or loses its edges.
   const rearrange = useCallback(() => {
-    const positions = seedPositions(ids, relations);
-    setNodes((current) => current.map((node) => ({ ...node, position: positions[node.id] ?? node.position })));
+    setNodes((current) => {
+      // Feed the layout each node's MEASURED box so the row packing never
+      // overlaps and rows clear each other by real height.
+      const sizes: Record<string, { width: number; height: number }> = {};
+      for (const node of current) {
+        const width = node.measured?.width ?? node.width;
+        const height = node.measured?.height ?? node.height;
+        if (width && height) sizes[node.id] = { width, height };
+      }
+      const positions = layeredPositions(
+        ids,
+        relations.map((relation) => ({ from: String(relation.from ?? ""), to: String(relation.to ?? "") })),
+        { sizes, y: 120 },
+      );
+      return current.map((node) => ({ ...node, position: positions[node.id] ?? node.position }));
+    });
+    // Re-frame on the tidied graph once the new positions have painted.
+    requestAnimationFrame(() => flowRef.current?.fitView({ padding: 0.2, duration: 400 }));
   }, [ids, relations, setNodes]);
 
   useEffect(() => {
@@ -176,6 +193,7 @@ export default function OntologyStudio({ doc, onChange }: StudioProps) {
           onNodeClick={(_, node) => setSelected({ kind: "entity", id: node.id })}
           onEdgeClick={(_, edge) => setSelected({ kind: "relation", index: Number(edge.id.replace("rel-", "")) })}
           onPaneClick={() => setSelected(null)}
+          onInit={(instance) => { flowRef.current = instance; }}
           fitView
           proOptions={{ hideAttribution: true }}
           nodesConnectable

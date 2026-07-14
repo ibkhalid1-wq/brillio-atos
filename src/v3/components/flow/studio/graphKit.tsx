@@ -57,24 +57,40 @@ export function FloatingStepEdge({ id, source, target, markerEnd, label, selecte
 
 export const FLOATING_EDGE_TYPES = { floating: FloatingStepEdge };
 
+/**
+ * A layered (Sugiyama-style) layout: entities fall into rows by BFS distance
+ * from the best-connected hub, then each row is re-ordered by the MEDIAN of its
+ * neighbours' slots — swept up AND down and iterated — to pull connected nodes
+ * in line and cut edge crossings. When node `sizes` are supplied the row is
+ * packed by real widths (never overlapping) with rows spaced by real heights;
+ * without sizes it falls back to fixed slots (callers that don't measure).
+ */
 export function layeredPositions(
   ids: string[],
   links: Array<{ from: string; to: string }>,
-  spacing: { x?: number; y?: number } = {},
+  opts: { x?: number; y?: number; gapX?: number; sizes?: Record<string, { width: number; height: number }> } = {},
 ): Record<string, { x: number; y: number }> {
-  const stepX = spacing.x ?? 240;
-  const stepY = spacing.y ?? 150;
+  const slotX = opts.x ?? 240;
+  const rowGap = opts.y ?? 150;
+  const gapX = opts.gapX ?? 60;
+  const sizes = opts.sizes;
+  const widthOf = (id: string) => Math.max(120, sizes?.[id]?.width ?? 170);
+  const heightOf = (id: string) => Math.max(40, sizes?.[id]?.height ?? 48);
+
   const neighbours = new Map<string, string[]>(ids.map((id) => [id, []]));
   for (const link of links) {
-    if (neighbours.has(link.from) && neighbours.has(link.to)) {
+    if (link.from !== link.to && neighbours.has(link.from) && neighbours.has(link.to)) {
       neighbours.get(link.from)!.push(link.to);
       neighbours.get(link.to)!.push(link.from);
     }
   }
+
+  // ── Layer assignment: BFS rows from the most-connected unplaced node. ──
   const layers: string[][] = [];
   const unvisited = new Set(ids);
+  const degree = (id: string) => neighbours.get(id)!.length;
   while (unvisited.size) {
-    const root = [...unvisited].sort((a, b) => (neighbours.get(b)!.length - neighbours.get(a)!.length))[0];
+    const root = [...unvisited].sort((a, b) => degree(b) - degree(a))[0];
     let frontier = [root];
     unvisited.delete(root);
     let depth = layers.length;
@@ -83,31 +99,57 @@ export function layeredPositions(
       const next: string[] = [];
       for (const id of frontier) {
         for (const other of neighbours.get(id)!) {
-          if (unvisited.has(other)) {
-            unvisited.delete(other);
-            next.push(other);
-          }
+          if (unvisited.has(other)) { unvisited.delete(other); next.push(other); }
         }
       }
       frontier = next;
       depth += 1;
     }
   }
-  for (let depth = 1; depth < layers.length; depth += 1) {
-    const above = new Map(layers[depth - 1].map((id, index) => [id, index]));
-    layers[depth].sort((a, b) => {
-      const mean = (id: string) => {
-        const ups = neighbours.get(id)!.map((other) => above.get(other)).filter((v): v is number => v !== undefined);
-        return ups.length ? ups.reduce((sum, v) => sum + v, 0) / ups.length : Number.MAX_SAFE_INTEGER;
-      };
-      return mean(a) - mean(b);
+
+  // ── Crossing reduction: median heuristic, alternating sweeps, iterated. A
+  // node with no neighbour in the adjacent row keeps its current slot. ──
+  const median = (id: string, adjPos: Map<string, number>): number => {
+    const ps = neighbours.get(id)!.map((n) => adjPos.get(n)).filter((v): v is number => v !== undefined).sort((a, b) => a - b);
+    if (!ps.length) return -1;
+    const mid = Math.floor(ps.length / 2);
+    return ps.length % 2 ? ps[mid] : (ps[mid - 1] + ps[mid]) / 2;
+  };
+  const reorder = (layer: string[], adj: string[]): string[] => {
+    const adjPos = new Map(adj.map((id, i) => [id, i]));
+    return layer
+      .map((id, i) => ({ id, key: (() => { const m = median(id, adjPos); return m < 0 ? i * (adj.length / Math.max(1, layer.length)) : m; })() }))
+      .sort((a, b) => a.key - b.key)
+      .map((k) => k.id);
+  };
+  for (let pass = 0; pass < 8 && layers.length > 1; pass += 1) {
+    if (pass % 2 === 0) {
+      for (let depth = 1; depth < layers.length; depth += 1) layers[depth] = reorder(layers[depth], layers[depth - 1]);
+    } else {
+      for (let depth = layers.length - 2; depth >= 0; depth -= 1) layers[depth] = reorder(layers[depth], layers[depth + 1]);
+    }
+  }
+
+  // ── Placement. With sizes: pack each row by real widths (no overlap) and
+  // space rows by real heights. Without: centred fixed slots. ──
+  const out: Record<string, { x: number; y: number }> = {};
+  if (sizes) {
+    let y = 0;
+    for (const layer of layers) {
+      const total = layer.reduce((sum, id) => sum + widthOf(id), 0) + gapX * Math.max(0, layer.length - 1);
+      let cx = -total / 2;
+      for (const id of layer) {
+        out[id] = { x: Math.round(cx + widthOf(id) / 2), y: Math.round(y) };
+        cx += widthOf(id) + gapX;
+      }
+      y += Math.max(...layer.map(heightOf), 0) + rowGap;
+    }
+  } else {
+    layers.forEach((layer, depth) => {
+      layer.forEach((id, index) => {
+        out[id] = { x: Math.round((index - (layer.length - 1) / 2) * slotX), y: depth * rowGap };
+      });
     });
   }
-  const out: Record<string, { x: number; y: number }> = {};
-  layers.forEach((layer, depth) => {
-    layer.forEach((id, index) => {
-      out[id] = { x: Math.round((index - (layer.length - 1) / 2) * stepX), y: depth * stepY };
-    });
-  });
   return out;
 }
