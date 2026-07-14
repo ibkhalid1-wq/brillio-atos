@@ -155,7 +155,11 @@ export function crossArtifactViolations(program: ProgramSummary): CrossViolation
  */
 export function gateAugmentations(program: ProgramSummary, movementId: string): GateCheckItem[] {
   const items: GateCheckItem[] = [];
-  if (movementId === "listen") {
+  // Contributor sign-off is a gate criterion on the evidence-driven discovery
+  // movements — Frame (the sponsor signs the charter) and Listen (each voice
+  // signs the atlas/ontology they shaped). Without this on Frame, a sponsor
+  // could approve the charter and the gate would never reflect it.
+  if (movementId === "listen" || movementId === "frame") {
     const movement = flowMovements().find((entry) => entry.id === movementId);
     if (movement) {
       for (const artifact of movementArtifacts(program, movement).filter((entry) => entry.present)) {

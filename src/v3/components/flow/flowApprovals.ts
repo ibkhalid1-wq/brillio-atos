@@ -277,6 +277,14 @@ export function artifactApprovalState(program: ProgramSummary, movementId: strin
     ? ((inner.phaseArtifacts as Record<string, Record<string, unknown>>)[movementId]) : {};
   const record = isRecord(bucket[artifactId]) ? bucket[artifactId] as Record<string, unknown> : {};
   const approval = isRecord(record.approval) ? record.approval as Record<string, unknown> : null;
+  // The per-contributor rollup is the SAME reconciled truth the card reads (it
+  // backfills a verdict-less responded pack from the artifact record). Defer to
+  // it for "approved" so the studio, the gate and the card never disagree — a
+  // pack whose verdict landed on the record but not on the pack still reads
+  // approved here, instead of leaving the artifact stuck "in review".
+  if (artifactApprovalRollup(program, movementId, artifactId).overall === "approved") {
+    return { status: "approved", approver: approval?.approver as { name: string; role: string } | undefined, decidedAt: approval?.decidedAt as string | undefined };
+  }
   if (record.status === "approved") {
     return { status: "approved", approver: approval?.approver as { name: string; role: string } | undefined, decidedAt: approval?.decidedAt as string | undefined };
   }

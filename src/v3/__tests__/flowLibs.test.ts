@@ -28,6 +28,7 @@ import { validateOntologyConstraints, hasBlockingOntologyViolations, partitionOn
 import { readMetricRegistry, metricConsistency, metricById } from "@/v3/components/flow/flowMetricRegistry";
 import { readGovernedExceptions, withNewException, withResolvedException } from "@/v3/components/flow/flowExceptions";
 import { projectAgentifyReview, projectOntologyAtlasReview, atlasPersonas, composeAgentifyAnswers } from "@/v3/components/flow/flowReviews";
+import { gateAugmentations } from "@/v3/components/flow/flowCrossValidation";
 
 const programme = (inner: Record<string, unknown>): ProgramSummary =>
   ({ id: "p1", name: "Test", rawData: inner } as unknown as ProgramSummary);
@@ -484,6 +485,24 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
     const resolved = withResolvedException(added, added[0].id, "Legal signed the next day", "you");
     expect(resolved[0].status).toBe("resolved");
     expect(resolved[0].resolution).toMatch(/Legal signed/);
+  });
+
+  it("the Frame gate carries a charter sign-off criterion, satisfied once the sponsor approves", () => {
+    const evidence = `— Raj Mamodia, Executive Sponsor, 2026-07-10 —\n${"the sponsor set the mandate in plenty of detail here. ".repeat(8)}`;
+    const base = {
+      phaseInputs: { frame: { sponsor: "Raj Mamodia", sponsorConversation: evidence } },
+      transformationCharter: { title: "Transformation Charter", summary: "Automate quote-to-cash across the sales org.", generatedAt: "2026-07-10T00:00:00Z" },
+    };
+    const pack = { id: "ap1", token: "t", artifactId: "charter", movementId: "frame",
+      approver: { name: "Raj Mamodia", role: "Executive Sponsor" }, createdAt: "2026-07-11T00:00:00Z", respondedAt: "2026-07-12T00:00:00Z" };
+    // Before sign-off: the criterion exists on Frame (it did NOT before) and is open.
+    const pending = programme({ ...base, flowApprovalPacks: [pack] });
+    const openItem = gateAugmentations(pending, "frame").find((i) => i.id === "signoff-charter");
+    expect(openItem).toBeTruthy();
+    expect(openItem?.done).toBe(false);
+    // After the sponsor approves: the same criterion is satisfied.
+    const approved = programme({ ...base, flowApprovalPacks: [{ ...pack, verdict: "approved" }] });
+    expect(gateAugmentations(approved, "frame").find((i) => i.id === "signoff-charter")?.done).toBe(true);
   });
 
   it("agentify review projects a persona's own workflow with their steps flagged, and composes dispositions", () => {
