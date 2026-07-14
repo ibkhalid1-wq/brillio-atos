@@ -800,11 +800,14 @@ export default function AppShellV3() {
   const authRoute = isAuthPath();
   const [activePhaseId, setActivePhaseId] = useState<string | null>(null);
   const [theme] = useState<"dark" | "light">(() => {
-    if (typeof window === "undefined") return "dark";
+    if (typeof window === "undefined") return "light";
+    // Brillio is a LIGHT-led brand ("lead with Deep Indigo and white"), and
+    // there is no in-app dark toggle — so default to the branded light theme for
+    // everyone, regardless of OS scheme. An explicit "dark" in storage still
+    // wins (for a future toggle), but OS-dark no longer forces the off-brand
+    // theme on a fresh visit.
     const stored = window.localStorage.getItem(V3_THEME_STORAGE_KEY);
-    if (stored === "light" || stored === "dark") return stored;
-    // Respect OS preference if no explicit choice stored
-    return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+    return stored === "dark" ? "dark" : "light";
   });
 
   // Apply theme to <html> and persist
