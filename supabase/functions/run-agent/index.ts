@@ -1253,6 +1253,10 @@ Derive the FULL CAST from the industry and the objective, not just from who the 
 
 Stakeholders are the voices you interview; PERSONAS are every role that takes part in the workflow — internal (reps, approvers, ops) AND external (customers, partners, vendors). They are not the same list: interviewees may or may not be personas, and external personas usually cannot be interviewed at all. Inventory every persona the objective's workflow touches, and for each name which interviewees can SPEAK FOR it — themselves, their manager, or whoever faces them (support faces the customer). When the evidence NAMES who speaks for a persona (e.g. an answer like "use <name>" to a who-can-speak-for question), record that name in spokenForBy, set unrepresented to false, and add an interview entry for them if they are not already rostered — an answered question must NEVER be re-asked. Only a persona nobody is named or able to speak for is a discovery risk: mark it unrepresented and list it under "gaps".
 
+COVERAGE MAP RULES: the coverageMap is the completeness ledger — it MUST carry one row for every distinct workflow domain the cast spans (the same business areas the interviews' roles name: Sales, Delivery, Finance, Talent, Regulatory, …), not just the ones with a named voice. For each domain, list who covers it in coveredBy, and set thin=true when it is covered by ONLY ONE voice, by nobody named (placeholders only), or by someone whose main role sits in another domain — thin marks where a second, dedicated voice is needed. A domain with no coveredBy at all also goes under gaps.
+
+DEDUPLICATE the cast: normalise role/persona names to ONE canonical label — never emit both "Sales Rep" and "Sales Representative", or "Talent Acquisition" and "Recruiting", as separate personas or interviews. One role, one entry.
+
 Return ONLY valid JSON:
 {
   "title": "Discovery Kit — <programme name>",
@@ -1327,6 +1331,8 @@ Return ONLY valid JSON:
 
 Candidates must differ in SHAPE — e.g. a single orchestrator with tools, a crew of specialist agents, agents embedded per-workflow — not merely in technology names. Anchor every candidate to the workflows and pains recorded in the Atlas. Honour the agenticFramework input: when it is "Undecided — recommend one", recommend a framework with rationale; otherwise design for the one chosen.
 
+Where the conversationRecord carries stakeholders' AGENTIFY DISPOSITIONS — each of their workflow steps marked Keep / Assist / Agentify with a comment — treat them as first-class demand signal: bias candidates toward automating the steps people asked to Agentify, an assistive agent where they said Assist, and a human-owned step where they said Keep. Cite those dispositions in scoresBasis, and flag in gaps any step a stakeholder wanted agentified that no candidate covers.
+
 ROBUSTNESS RULES (enforced, not optional):
 - Score EVERY candidate on the non-functional dimensions too (security, dataResidencyPII, scaleLatency, reliability), not just fit/speed/operability/cost. A blank NFR score is a gap, not a zero.
 - Ground every score: cite the Atlas workflow, pain, KPI or a NAMED assumption behind it in scoresBasis, and lower the candidate/overall confidence for any score you are guessing.
@@ -1353,6 +1359,8 @@ Return ONLY valid JSON:
     system: `You are the ATOS Agentic Blueprint Agent. Compile the chosen architecture direction (directionDecision + the Architecture Strategy in priorPhaseArtifacts/existingArtifacts) into a buildable spec targeted at the chosen agenticFramework: agents, tools, orchestration, data contracts, human-in-the-loop points, guardrails and the eval plan.
 
 Derive the data model from the Domain Ontology — name entities EXACTLY as the ontology does. Every agent must trace to a workflow in the Atlas; every HITL point to a risk or judgement call a stakeholder actually voiced. Sequence the build so the first slice is demoable to a named stakeholder.
+
+Honour the stakeholders' AGENTIFY DISPOSITIONS from the conversationRecord (each of their workflow steps marked Keep / Assist / Agentify with a comment): give an autonomous agent to the steps they marked Agentify, an assistive (human-in-the-loop) agent to Assist steps, and leave Keep steps human — a Keep on a risky/irreversible step becomes a hitlPoint, never an autonomous agent. If you must diverge from a stated disposition, say why in the relevant agent's rationale.
 
 ROBUSTNESS RULES (enforced, not optional):
 - Autonomy has a safety envelope: every agent declares reversibility and blastRadius. HARD INVARIANT — any agent with autonomyLevel "act" acting on an irreversible / high-blast-radius workflow MUST have a matching hitlPoint; set requiresHitl=true and ensure hitlPoints covers it. List any violation in safetyInvariants.actWithoutHitl (aim: empty).
@@ -1868,12 +1876,18 @@ interface CarryForwardDocument {
  */
 const CONVERSATION_RECORD_AGENTS = new Set<string>([
   "charter", "discovery-kit", "domain-ontology", "current-state-atlas",
+  // Envision synthesis grounds in the same record — it carries the agentify
+  // dispositions (what stakeholders asked to automate) that these agents honour.
+  "architecture-strategy", "agentic-blueprint",
 ]);
 
 function buildConversationRecord(inner: Record<string, unknown>): string {
   const phaseInputs = normalizeProgramData(inner.phaseInputs as JsonValue | null);
   const parts: string[] = [];
-  for (const phaseId of ["frame", "listen", "strategy", "discovery"]) {
+  // "envision" carries the agentify review — stakeholders' Keep / Assist /
+  // Agentify disposition on each of their workflow steps — so the architecture
+  // and blueprint agents can honour what people asked to automate.
+  for (const phaseId of ["frame", "listen", "strategy", "discovery", "envision"]) {
     const record = normalizeProgramData(phaseInputs[phaseId] as JsonValue | null);
     for (const [fieldId, value] of Object.entries(record)) {
       if (fieldId === "savedAt" || fieldId.startsWith("_")) continue;
@@ -9256,9 +9270,9 @@ Deno.serve(async (req) => {
               email: null,
               domain: String(row.domain ?? "").trim(),
               durationMinutes: 45,
-              objectives: [`Hear ${name}'s first-hand account of their workflow, the pains in it, and what "good" looks like.`],
-              agenda: [{ minutes: 45, topic: "Their workflow today", questions: [
-                "Walk me through your process, end to end — the systems and the hand-offs.",
+              objectives: [`Hear ${name}'s first-hand account of ${role ? `the ${role} workflow` : "their workflow"}, the pains in it, and what "good" looks like.`],
+              agenda: [{ minutes: 45, topic: role ? `${role} — how it runs today` : "Their workflow today", questions: [
+                `Walk me through ${role ? `the ${role} process` : "your process"}, end to end — the systems and the hand-offs.`,
                 "Where does it break down, and how often? Give me the last real example.",
                 "What must be true for the new way to be better, not just different?",
               ] }],
@@ -9299,8 +9313,8 @@ Deno.serve(async (req) => {
               domain: "",
               durationMinutes: 45,
               objectives: [`Find and hear the ${name} — their part of the workflow has no voice on the record yet.`],
-              agenda: [{ minutes: 45, topic: "Their part of the process", questions: [
-                "Walk us through your part of the process — what do you pick up, from whom, and what do you hand off when you're done?",
+              agenda: [{ minutes: 45, topic: `${name} — their part of the process`, questions: [
+                `Walk us through your part of the process as the ${name} — what do you pick up, from whom, and what do you hand off when you're done?`,
                 "Where does it break down, and how often? Give us the last real example.",
               ] }],
               askForArtifacts: ["Any screens, reports or exports they work from"],
