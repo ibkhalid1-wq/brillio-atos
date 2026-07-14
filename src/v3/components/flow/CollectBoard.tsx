@@ -5,7 +5,7 @@
  * been heard. Driven by resolveMovementStakeholders, so it serves every
  * movement.
  */
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode, type CSSProperties } from "react";
 import type { ProgramSummary } from "@/new/types";
 import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 import { flowMovements, movementEvidence, evidenceStamp, locateQuote, readMovementInputs, contradictionLogWithout, artifactDocument } from "@/v3/components/flow/flowShellData";
@@ -102,6 +102,24 @@ const COLLECT_COLUMNS: Array<{ key: CollectStatus; label: string }> = [
   { key: "waiting", label: "Awaiting response" },
   { key: "toreach", label: "To reach" },
 ];
+
+// Each area carries a stable identity colour so the board reads as a set of
+// distinct business domains, not a stack of identical rows. Hue is derived
+// deterministically from the name off a curated wheel that stays legible on the
+// surface; General is deliberately neutral.
+const AREA_HUES = [214, 266, 28, 156, 340, 190, 44, 8, 128, 300, 236, 168];
+export function areaAccent(area: string): string {
+  if (!area || area === GENERAL_AREA) return "var(--v3-text-muted)";
+  let hash = 0;
+  for (let i = 0; i < area.length; i += 1) hash = (hash * 31 + area.charCodeAt(i)) >>> 0;
+  return `hsl(${AREA_HUES[hash % AREA_HUES.length]} 58% 46%)`;
+}
+/** A short monogram for the area's identity tile — "Legal & Compliance" → "LC". */
+export function areaMonogram(area: string): string {
+  const words = area.split(/[^A-Za-z0-9]+/).filter(Boolean);
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  return area.slice(0, 2).toUpperCase();
+}
 
 /** The movement's stakeholder data collection as a STATUS BOARD: cards grouped
  * into columns by collection state (Heard · Awaiting · To reach), each card the
@@ -273,6 +291,7 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
         <div className="v3fs-lanes">
           {laneData.map((lane) => (
             <AreaLane key={lane.area} area={lane.area} row={lane.row} heard={lane.heard} total={lane.total}
+              accent={areaAccent(lane.area)} monogram={areaMonogram(lane.area)}
               readyLabel={movementId === "listen" ? "Ready to envision" : movementId === "envision" ? "Ready to show" : "All reviewed"}
               defaultOpen={lane.total === 0 || lane.heard < lane.total}
               toReach={lane.toReach} inviting={inviteBusyArea === lane.area}
@@ -305,7 +324,7 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
  * state; its body holds that area's stakeholder cards. Collapsible, so a
  * finished area folds away while the operator works the ones still open.
  */
-function AreaLane({ area, row, heard, total, ready, readyLabel, defaultOpen, toReach, inviting, onInvite, children }: {
+function AreaLane({ area, row, heard, total, ready, readyLabel, defaultOpen, toReach, accent, monogram, inviting, onInvite, children }: {
   area: string;
   row?: AreaProgress;
   heard: number;
@@ -315,6 +334,9 @@ function AreaLane({ area, row, heard, total, ready, readyLabel, defaultOpen, toR
   defaultOpen: boolean;
   /** People in this area not yet reached — the count "invite everyone" covers. */
   toReach?: number;
+  /** The area's identity colour + monogram for its tile and accent edge. */
+  accent?: string;
+  monogram?: string;
   inviting?: boolean;
   /** Mint the unified link for every not-yet-reached person in this area. */
   onInvite?: () => void | Promise<void>;
@@ -324,9 +346,10 @@ function AreaLane({ area, row, heard, total, ready, readyLabel, defaultOpen, toR
   const pct = total ? Math.round((heard / total) * 100) : 0;
   const complete = ready ?? done;
   return (
-    <details className={`v3fs-lane${complete ? " ready" : ""}`} open={defaultOpen}>
+    <details className={`v3fs-lane${complete ? " ready" : ""}`} open={defaultOpen}
+      style={accent ? ({ "--lane-accent": accent } as CSSProperties) : undefined}>
       <summary className="v3fs-lane-h">
-        <span className="v3fs-lane-ic" aria-hidden="true">▦</span>
+        <span className="v3fs-lane-ic" aria-hidden="true">{monogram ?? "▦"}</span>
         <div className="v3fs-lane-id">
           <b>{area}</b>
           {row ? <span>{row.workflows} workflow{row.workflows === 1 ? "" : "s"} · {row.entities} term{row.entities === 1 ? "" : "s"}</span> : null}
