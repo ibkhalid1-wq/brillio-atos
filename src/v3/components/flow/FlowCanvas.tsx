@@ -197,10 +197,21 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
           const stepReadiness = gateReadiness(program, movement, artifacts, stepChecks);
           const stepDone = stepChecks.filter((c) => c.done).length;
           const pct = stepChecks.length ? Math.round((100 * stepDone) / stepChecks.length) : (stepReadiness.tone === "green" ? 100 : 0);
+          // "Where to go" — point at the frontier phase, but only when the
+          // operator has wandered off it; on the frontier itself the highlight
+          // already says "you're here", so the arrow would be noise.
+          const isFrontier = movement.id === frontier;
+          const pointHere = isFrontier && active !== frontier && !isDone;
           return (
             <button key={movement.id} type="button" role="tab" aria-selected={isOn}
-              className={`v3fs-step${isOn ? " on" : ""}`}
+              className={`v3fs-step${isOn ? " on" : ""}${pointHere ? " v3fs-step-next" : ""}`}
               onClick={() => setActive(movement.id)}>
+              {pointHere ? (
+                <span className="v3fs-spoint" role="status" aria-label={`Continue in ${movement.displayName}`}>
+                  <span className="v3fs-spoint-t">Continue here</span>
+                  <span className="v3fs-spoint-a" aria-hidden="true">▾</span>
+                </span>
+              ) : null}
               <span className={`v3fs-sring ${stepReadiness.tone}`} style={{ "--pct": `${pct}%` } as React.CSSProperties}
                 title={`Gate ${stepDone}/${stepChecks.length} — ${stepReadiness.headline}`} aria-hidden="true">
                 <span className={`v3fs-sdot${isDone ? " done" : isLive ? " live" : ""}`}>

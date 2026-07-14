@@ -4637,6 +4637,15 @@ body:has(.v3fs-pack) .v3fs-appbar:focus-within {transform:none}
   text-align:left;padding:16px 14px 14px;border-radius:14px;transition:background .18s ease,box-shadow .18s ease}
 .v3fs-step:hover {background:var(--fs-card)}
 .v3fs-step.on {background:var(--fs-card);box-shadow:0 8px 26px -14px rgba(23,26,46,.24)}
+/* "Continue here" — a refined pointer over the frontier phase when the operator
+   has navigated away, nudging them back to where the work is. */
+.v3fs-step-next {background:color-mix(in srgb,var(--v3-accent) 6%,transparent)}
+.v3fs-spoint {position:absolute;left:50%;top:-30px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:1px;pointer-events:none;z-index:6;animation:v3fs-spoint-in .4s cubic-bezier(.2,.75,.3,1) both}
+@keyframes v3fs-spoint-in {from{opacity:0;transform:translateX(-50%) translateY(-5px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+.v3fs-spoint-t {white-space:nowrap;font-size:9.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#fff;padding:4px 10px;border-radius:999px;background:linear-gradient(135deg,var(--v3-accent),var(--v3-accent-2));box-shadow:0 8px 18px -8px color-mix(in srgb,var(--v3-accent) 70%,transparent)}
+.v3fs-spoint-a {font-size:13px;line-height:.7;color:var(--v3-accent-2);animation:v3fs-spoint-bob 1.5s ease-in-out infinite}
+@keyframes v3fs-spoint-bob {0%,100%{transform:translateY(0)}50%{transform:translateY(3px)}}
+@media (prefers-reduced-motion:reduce) {.v3fs-spoint,.v3fs-spoint-a {animation:none}}
 .v3fs-step:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:2px}
 /* Progress ring around the movement number — the GATE ring, small: conic fill =
    gate criteria met, toned to match the Gate column's gauge (green/amber/dim). */
