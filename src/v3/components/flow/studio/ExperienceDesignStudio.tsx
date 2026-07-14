@@ -13,7 +13,7 @@ const BLOCK_GLYPH: Record<string, string> = {
   list: "☰", table: "▦", form: "✎", detail: "¶", metric: "◔", action: "▸", timeline: "⋯",
 };
 
-function WireBlock({ block }: { block: Record<string, unknown> }) {
+export function WireBlock({ block }: { block: Record<string, unknown> }) {
   const kind = asText(block.kind) || "detail";
   const fields = asStrings(block.fields);
   return (
@@ -44,7 +44,7 @@ function WireBlock({ block }: { block: Record<string, unknown> }) {
   );
 }
 
-function ScreenCard({ screen, active, onClick }: { screen: Record<string, unknown>; active: boolean; onClick: () => void }) {
+export function ScreenCard({ screen, active, onClick }: { screen: Record<string, unknown>; active: boolean; onClick: () => void }) {
   const regions = asArray(screen.wireframe).map(asRecord);
   const byRegion = (name: string) => regions.filter((r) => asText(r.region) === name);
   const mains = [...byRegion("main"), ...regions.filter((r) => !["header", "nav", "main", "aside", "footer"].includes(asText(r.region)))];

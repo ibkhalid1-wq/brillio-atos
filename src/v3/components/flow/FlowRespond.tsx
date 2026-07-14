@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ScreenCard } from "@/v3/components/flow/studio/ExperienceDesignStudio";
 
 /**
  * The public async-interview page — what a stakeholder sees when they open a
@@ -31,6 +32,10 @@ interface Pack {
   steps?: string[];
   acceptanceAsk?: string;
   demoUrl?: string;
+  /** The interpretive prototype: Experience Design flows + their screens —
+   * lets the stakeholder walk their workflow as wireframes before a
+   * deployed build exists. */
+  design?: { flows: Array<Record<string, unknown>>; screens: Array<Record<string, unknown>> };
 }
 
 type DemoVerdict = "accepted" | "accepted-with-changes" | "rework";
@@ -258,6 +263,7 @@ export default function FlowRespond({ token }: { token: string }) {
                     ▶ Open the prototype
                   </a>
                 ) : null}
+                {state.pack.design ? <DemoWalker design={state.pack.design} /> : null}
                 {state.pack.steps?.length ? (
                   <div className="v3fs-portal-steps">
                     {state.pack.steps.map((step, index) => (
@@ -401,6 +407,57 @@ export default function FlowRespond({ token }: { token: string }) {
             </>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The interpretive prototype — the demo link's built-in walkthrough. When the
+ * programme has an Experience Design and (or before) a deployed build, the
+ * stakeholder walks their workflow as wireframes: pick a flow, step through
+ * it, watch each step's screen light up. Same renderer the design studio
+ * uses, so what they walk IS the signed-off design.
+ */
+function DemoWalker({ design }: { design: NonNullable<Pack["design"]> }) {
+  const [flowIndex, setFlowIndex] = useState(0);
+  const [stepIndex, setStepIndex] = useState(0);
+  const flows = design.flows ?? [];
+  const screens = design.screens ?? [];
+  const flow = flows[flowIndex];
+  const steps = Array.isArray(flow?.steps) ? (flow.steps as Array<Record<string, unknown>>) : [];
+  const step = steps[stepIndex];
+  const screenId = String(step?.screen ?? "").toLowerCase();
+  const screen = screens.find((s) =>
+    String(s.id ?? "").toLowerCase() === screenId || String(s.name ?? "").toLowerCase() === screenId);
+  if (!flows.length || !screens.length) return null;
+  return (
+    <div className="v3fs-demo-walk">
+      <div className="v3fs-demo-walk-h">
+        <b>Walk it as wireframes</b>
+        {flows.length > 1 ? (
+          <select value={flowIndex} aria-label="Choose a flow"
+            onChange={(event) => { setFlowIndex(Number(event.target.value)); setStepIndex(0); }}>
+            {flows.map((f, i) => <option key={i} value={i}>{String(f.name ?? `Flow ${i + 1}`)}</option>)}
+          </select>
+        ) : <span>{String(flow?.name ?? "")}</span>}
+      </div>
+      <div className="v3fs-wf-walk">
+        {steps.map((s, i) => (
+          <button key={i} type="button" className={`v3fs-wf-step${i === stepIndex ? " on" : ""}`}
+            onClick={() => setStepIndex(i)}>
+            <b>{i + 1}</b>
+            <span>{String(s.action ?? "")}</span>
+            {String(s.hitl ?? "") ? <em title={String(s.hitl)}>⛨ approval</em> : null}
+          </button>
+        ))}
+      </div>
+      {screen ? <ScreenCard screen={screen} active onClick={() => { /* focused already */ }} /> : null}
+      {step && String(step.outcome ?? "") ? <div className="v3fs-wf-outcome">→ {String(step.outcome)}</div> : null}
+      <div className="v3fs-wf-walknav">
+        <button type="button" className="v3fs-btn" disabled={stepIndex === 0} onClick={() => setStepIndex((i) => Math.max(0, i - 1))}>← Back</button>
+        <span>{stepIndex + 1} of {steps.length}</span>
+        <button type="button" className="v3fs-btn pri" disabled={stepIndex >= steps.length - 1} onClick={() => setStepIndex((i) => Math.min(steps.length - 1, i + 1))}>Next →</button>
       </div>
     </div>
   );

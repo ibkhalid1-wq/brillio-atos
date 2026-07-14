@@ -168,7 +168,24 @@ Deno.serve(async (req: Request) => {
         const showInputs = isRecord(hit.inner.phaseInputs) && isRecord((hit.inner.phaseInputs as Record<string, unknown>).show)
           ? (hit.inner.phaseInputs as Record<string, Record<string, unknown>>).show
           : {};
+        // The INTERPRETIVE PROTOTYPE: when an Experience Design exists, the
+        // demo link carries its flows + the screens they reference, so the
+        // stakeholder walks their own workflow as wireframes even before a
+        // deployed build exists. Capped and stripped — the pack's own fields
+        // plus the design slice, nothing else leaves.
+        let design: Record<string, unknown> | undefined;
+        const xd = hit.inner.experienceDesign;
+        if (isRecord(xd) && Array.isArray(xd.screens) && Array.isArray(xd.flows)) {
+          const flows = (xd.flows as unknown[]).filter(isRecord).slice(0, 6);
+          const wanted = new Set(flows.flatMap((flow) =>
+            (Array.isArray(flow.steps) ? flow.steps : []).filter(isRecord).map((step) => String(step.screen ?? "").toLowerCase())));
+          const screens = (xd.screens as unknown[]).filter(isRecord)
+            .filter((screen) => wanted.has(String(screen.id ?? "").toLowerCase()) || wanted.has(String(screen.name ?? "").toLowerCase()))
+            .slice(0, 12);
+          if (flows.length && screens.length) design = { flows, screens };
+        }
         return jsonResponse({
+          ...(design ? { design } : {}),
           kind: "demo",
           programme: hit.programName,
           stakeholder: String(hit.pack.stakeholder ?? "Stakeholder"),
