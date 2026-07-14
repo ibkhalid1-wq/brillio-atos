@@ -93,6 +93,16 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
   // The spine is horizontal: one movement is active at a time; the stepper on
   // top carries every movement's state and switches between them.
   const [active, setActive] = useState<string>(frontier);
+  // The Gate is a verdict ceremony pulled out of the stage row into a modal,
+  // opened from the top-right button (or the movebar gauge). Holds the movement
+  // whose gate is open, or null.
+  const [gateModalFor, setGateModalFor] = useState<string | null>(null);
+  useEffect(() => {
+    if (!gateModalFor) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setGateModalFor(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [gateModalFor]);
   const [editing, setEditing] = useState<Set<string>>(() => new Set());
   const [docFor, setDocFor] = useState<ArtifactCardModel | null>(null);
   // The record rail: a slim full-height edge strip that reveals on hover,
@@ -126,7 +136,7 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
       if (event.key !== "[" && event.key !== "]") return;
       const target = event.target as HTMLElement | null;
       if (target && (/^(input|textarea|select)$/i.test(target.tagName) || target.isContentEditable)) return;
-      const stages: MovementTab[] = ["collect", "paper", "gate"];
+      const stages: MovementTab[] = ["paper", "collect"];
       setMovementTab((prev) => {
         const current = prev[active] ?? leadTab(active);
         const step = event.key === "]" ? 1 : -1;
@@ -346,8 +356,14 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
         const queue = upNext.slice(0, 3);
         // Which stage is showing — the operator's pick, else the movement's lead.
         const hasPeople = sumStakeholders.length > 0;
-        const tabKey: MovementTab = movementTab[movement.id] ?? leadTab(movement.id);
-        const goTab = (t: MovementTab) => setMovementTab((prev) => ({ ...prev, [movement.id]: t }));
+        // Gate is no longer a stage — it opens as a modal — so a stored "gate"
+        // pick falls back to the lead stage, and goTab("gate") opens the modal.
+        const storedTab = movementTab[movement.id];
+        const tabKey: MovementTab = storedTab && storedTab !== "gate" ? storedTab : leadTab(movement.id);
+        const goTab = (t: MovementTab) => {
+          if (t === "gate") { setGateModalFor(movement.id); return; }
+          setMovementTab((prev) => ({ ...prev, [movement.id]: t }));
+        };
         const gaugePct = blockingChecks.length ? Math.round((100 * sumChecksDone) / blockingChecks.length) : (readiness.tone === "green" ? 100 : 0);
         // Stage chips read as a sentence — glyph + meaning per stage ("● 3
         // waiting → ⟳ 2 stale → ◔ 8/11"), so the bar IS the loop's state.
@@ -373,10 +389,11 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
             : blockingChecks.length
               ? { glyph: "◔", text: `${sumChecksDone}/${blockingChecks.length}`, tone: readiness.tone === "amber" ? "warn" : "dim" }
               : { glyph: "○", text: "", tone: "dim" };
+        // Order: Artifacts first, then Verify (formerly Collect). The Gate is no
+        // longer a stage — it lives in the top-right button as a modal verdict.
         const tabDefs: Array<{ key: MovementTab; label: string; state: { glyph: string; text: string; tone: string } | null; show: boolean }> = [
-          { key: "collect", label: "Collect", state: collectState, show: true },
           { key: "paper", label: "Artifacts", state: paperState, show: artifacts.length > 0 },
-          { key: "gate", label: isLoop ? "Health" : "Gate", state: gateState, show: true },
+          { key: "collect", label: "Verify", state: collectState, show: true },
         ];
 
         return (
@@ -389,6 +406,15 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
               <span className={`v3fs-state ${generating ? "gen" : isDone ? "done" : isLive ? "live" : isLoop ? "loop" : "wait"}`}>
                 {generating ? "Generating" : isDone ? "Demonstrated" : isLive ? "In progress" : isLoop ? "Continuous" : "Upcoming"}
               </span>
+              {/* Gate is the verdict, not a stage — a top-right button opening
+                  the modal, carrying its readiness glyph + count at a glance. */}
+              <button type="button" className={`v3fs-gatebtn ${readiness.tone}`}
+                onClick={() => setGateModalFor(movement.id)}
+                title={`${isLoop ? "Health" : "Gate"} — ${readiness.headline}`}>
+                {gateState ? <span className={`v3fs-gatebtn-g ${gateState.tone}`} aria-hidden="true">{gateState.glyph}</span> : null}
+                <span>{isLoop ? "Health" : "Gate"}</span>
+                {blockingChecks.length ? <span className="v3fs-gatebtn-n">{sumChecksDone}/{blockingChecks.length}</span> : null}
+              </button>
             </div>
             {/* The header band: gate gauge, the movement's one-line brief, and
                 the ranked "Up next" queue — one place for state and the verbs
@@ -810,8 +836,14 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                   })}
                 </div>
 
-                <div className={tabKey === "gate" ? "" : "v3fs-tabhide"}>
-                  <div className={`v3fs-colh gt${isDone ? " done" : ""}`}>{isLoop ? "Steady-state health" : "Gate"}</div>
+                {gateModalFor === movement.id ? (
+                <div className="v3fs-gatemodal-scrim" role="dialog" aria-modal="true" aria-label={isLoop ? "Steady-state health" : "Gate"}
+                  onClick={() => setGateModalFor(null)}>
+                <div className="v3fs-gatemodal" onClick={(e) => e.stopPropagation()}>
+                  <div className="v3fs-gatemodal-h">
+                    <span className={`v3fs-gatemodal-t${isDone ? " done" : ""}`}>{isLoop ? "Steady-state health" : `${movement.displayName} — Gate`}</span>
+                    <button type="button" className="v3fs-gatemodal-x" aria-label="Close the gate" onClick={() => setGateModalFor(null)}>✕</button>
+                  </div>
                   <div className="v3fs-gate inline">
                     {/* Verdict first: one composed state over the whole loop —
                         evidence criteria, record current, Inbox clear. The
@@ -932,6 +964,8 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                     <p className="v3fs-gate-say foot">{movement.movement?.readyWhen ?? ""}</p>
                   </div>
                 </div>
+                </div>
+                ) : null}
 
                 {editing.has(movement.id) ? (
                   <div className="v3fs-editor" data-movement={movement.id}>

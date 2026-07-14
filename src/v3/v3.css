@@ -4682,6 +4682,34 @@ body:has(.v3fs-pack) .v3fs-appbar:focus-within {transform:none}
 /* Movement state as a dot chip — colour carries the state, no pill fill. */
 .v3fs-state {display:inline-flex;align-items:center;gap:7px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
 .v3fs-state::before {content:"";width:7px;height:7px;border-radius:99px;background:currentColor;flex-shrink:0}
+
+/* Gate is the verdict, not a stage: a top-right button opening the modal. */
+.v3fs-gatebtn {margin-left:auto;display:inline-flex;align-items:center;gap:7px;font:inherit;font-size:12px;font-weight:600;
+  color:var(--v3-text);background:var(--v3-surface);border:1px solid var(--fs-line);border-radius:10px;padding:6px 13px;
+  cursor:pointer;transition:border-color .12s ease,box-shadow .12s ease;align-self:center}
+.v3fs-gatebtn:hover {border-color:var(--v3-accent-2);box-shadow:0 3px 10px -6px rgba(20,20,45,.3)}
+.v3fs-gatebtn:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:2px}
+.v3fs-gatebtn.green {border-color:color-mix(in srgb,var(--v3-green) 42%,var(--fs-line))}
+.v3fs-gatebtn.amber {border-color:color-mix(in srgb,var(--v3-amber) 46%,var(--fs-line))}
+.v3fs-gatebtn-g {font-size:13px;line-height:1}
+.v3fs-gatebtn-g.ok {color:var(--v3-green)} .v3fs-gatebtn-g.warn {color:var(--v3-amber)} .v3fs-gatebtn-g.dim {color:var(--v3-text-muted)}
+.v3fs-gatebtn-n {font-size:11px;font-weight:700;color:var(--v3-text-muted);font-variant-numeric:tabular-nums}
+
+/* Gate modal — the verdict ceremony, centred over a scrim. */
+.v3fs-gatemodal-scrim {position:fixed;inset:0;z-index:60;display:flex;align-items:flex-start;justify-content:center;
+  padding:6vh 20px 20px;background:rgba(18,16,38,.42);backdrop-filter:blur(2px);animation:v3fs-scrim-in .14s ease}
+@keyframes v3fs-scrim-in {from{opacity:0}to{opacity:1}}
+.v3fs-gatemodal {width:min(640px,100%);max-height:88vh;overflow:auto;background:var(--v3-surface);border:1px solid var(--fs-line);
+  border-radius:18px;box-shadow:0 30px 80px -24px rgba(18,16,38,.5);animation:v3fs-modal-in .16s ease}
+@keyframes v3fs-modal-in {from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.v3fs-gatemodal-h {display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;
+  border-bottom:1px solid var(--fs-line);position:sticky;top:0;background:var(--v3-surface);z-index:1}
+.v3fs-gatemodal-t {font-size:14px;font-weight:600;color:var(--v3-text);letter-spacing:-.01em}
+.v3fs-gatemodal-t.done {color:var(--v3-green)}
+.v3fs-gatemodal-x {background:none;border:none;cursor:pointer;color:var(--v3-text-muted);font-size:16px;line-height:1;
+  padding:4px;border-radius:8px}
+.v3fs-gatemodal-x:hover {color:var(--v3-text);background:color-mix(in srgb,var(--v3-text) 8%,transparent)}
+.v3fs-gatemodal .v3fs-gate.inline {padding:18px 20px}
 .v3fs-state.done {color:var(--v3-green)}
 .v3fs-state.live,.v3fs-state.gen {color:var(--v3-accent-2)}
 .v3fs-state.wait {color:var(--v3-text-muted)}
