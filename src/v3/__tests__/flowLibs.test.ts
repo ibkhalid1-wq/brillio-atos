@@ -448,6 +448,34 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
     expect(prakash?.questions.some((q) => /legal twice/.test(q))).toBe(true);
   });
 
+  it("in Listen the sponsor's card carries ONLY conflicts to resolve; discovery routes to the stakeholders", () => {
+    const agendaQ = "Walk me through how a quote is drafted end to end";
+    const p = programme({
+      phaseInputs: {
+        frame: { sponsor: "Raj Mamodia" },
+        listen: { contradictionLog: JSON.stringify([
+          { statement: "Quotes go through legal twice", between: "Ops vs Finance", positions: "", status: "Open" },
+        ]) },
+      },
+      discoveryKit: { interviews: [
+        // The sponsor is also listed as a Listen interviewee with a discovery agenda…
+        { stakeholder: "Raj Mamodia", role: "Executive Sponsor", agenda: [{ questions: [agendaQ] }] },
+        { stakeholder: "Dana Ops", role: "Sales Ops", agenda: [{ questions: ["What do you hand off?"] }] },
+      ] },
+    });
+    const cards = resolveMovementStakeholders(p, "listen");
+    const sponsorCard = cards.find((s2) => /Raj/.test(s2.name));
+    // Sponsor: conflicts only — the discovery agenda is NOT on their script.
+    expect(sponsorCard?.questions.every((q) => /Conflict to resolve/.test(q))).toBe(true);
+    expect(sponsorCard?.questions.some((q) => q === agendaQ)).toBe(false);
+    expect(sponsorCard?.questions.some((q) => /legal twice/.test(q))).toBe(true);
+    // The operational stakeholder still carries their own discovery agenda.
+    const ops = cards.find((s2) => /Dana/.test(s2.name));
+    expect(ops?.questions.some((q) => /hand off/.test(q))).toBe(true);
+    // …and never gets handed a "resolve this conflict" arbiter ask.
+    expect(ops?.questions.some((q) => /Conflict to resolve/.test(q))).toBe(false);
+  });
+
   it("a dispute quoted from a TRANSCRIPT field is genuine — the record-match check ignores long captures", () => {
     const claim = "We are no longer using 20 CRM as a foundation";
     const transcript = `— Raj Mamodia —\n${"filler words here ".repeat(60)}${claim} and much more was said afterwards.`;

@@ -59,6 +59,24 @@ function contradictionAsksFor(program: ProgramSummary, personName: string): stri
 }
 
 /**
+ * The conflicts the SPONSOR must arbitrate — every still-open contradiction on
+ * record, phrased for a decision-maker rather than a party. In Listen the
+ * sponsor is the arbiter, not a process witness: their script carries ONLY
+ * conflicts to resolve, while the discovery questions route to the people who
+ * actually own the work. Deduped and capped so one dispute is asked once.
+ */
+function sponsorConflictAsks(program: ProgramSummary): string[] {
+  return readContradictions(program, true)
+    .filter((row) => !/resolved|closed|settled/i.test(row.status ?? ""))
+    .map((row) => {
+      const parties = row.between
+        .split(/,|\bvs\.?\b|&/i).map((part) => part.trim()).filter(Boolean).join(" vs ");
+      return `Conflict to resolve: "${row.statement.trim()}"${parties ? ` — ${parties}` : ""}. As sponsor, which account stands, and what settles it?`;
+    })
+    .slice(0, 8);
+}
+
+/**
  * Which rostered people an artifact ask is ADDRESSED to. A gap that names a
  * person ("Ask Dan: …") or a role ("the Talent Acquisition SME's hand-off…")
  * belongs on THAT card only — putting it on everyone's script asks the Legal
@@ -140,10 +158,18 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
   const movementAsks = interviews.length ? askableMovementGaps(program, "listen") : [];
   const listen = flowMovements().find((movement) => movement.id === "listen");
   const evidence = listen ? movementEvidence(program, listen) : [];
-  // The routing roster: every interviewee plus the sponsor — a sponsor-
-  // addressed ask ("Ask the sponsor: …") must not spam the interviewees
-  // (it reaches the sponsor through Frame's card).
+  // The routing roster is the interviewees ONLY — the sponsor is deliberately
+  // left off. In Listen the sponsor arbitrates; they don't witness the process.
+  // So a discovery ask that happens to name the sponsor should reach the people
+  // who own the work (movement-wide), not sit on a sponsor script — and the
+  // sponsor's own card carries only conflicts to resolve (sponsorConflictAsks).
   const sponsor = sponsorStakeholder(program);
+  const sponsorFirst = sponsor ? sponsor.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "" : "";
+  const isSponsorCard = (personName: string, personRole: string): boolean => {
+    if (/executive sponsor/i.test(personRole)) return true;
+    const first = personName.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+    return sponsorFirst.length > 2 && first.length > 2 && first === sponsorFirst;
+  };
   // Listen role bindings: a placeholder bound on its card ("our Recruitment
   // Operations lead is Maya") BECOMES that person here — the one place every
   // downstream reader (collect board, People page, approvals) derives from.
@@ -191,7 +217,8 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
   const audienceRoster = [
     ...interviews.map((interview) => ({ name: String(interview.stakeholder ?? "").trim(), role: String(interview.role ?? "").trim() })),
     ...personaRoles.map((roleName) => ({ name: listenBindings[roleName]?.name ?? "", role: roleName })),
-    ...(sponsor ? [{ name: sponsor.name, role: sponsor.role }] : []),
+    // Sponsor intentionally excluded — see the note above: their discovery asks
+    // fall through to the stakeholders who own the work.
   ];
   const personaCards: MovementStakeholder[] = personaRoles.map((roleName, index) => {
     const bound = listenBindings[roleName];
@@ -207,11 +234,13 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
       id: `persona-${index}`,
       name: name || roleName,
       role: roleName,
-      questions: [...new Set([
-        "Walk us through your part of the process — what do you pick up, from whom, and what do you hand off when you're done?",
-        ...deferredFor(name, roleName),
-        ...myAsks,
-      ])],
+      questions: isSponsorCard(name, roleName)
+        ? sponsorConflictAsks(program)
+        : [...new Set([
+          "Walk us through your part of the process — what do you pick up, from whom, and what do you hand off when you're done?",
+          ...deferredFor(name, roleName),
+          ...myAsks,
+        ])],
       isRole: !name,
     };
   });
@@ -250,9 +279,14 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
     });
     const asks = name ? contradictionAsksFor(program, name) : [];
     const routedToMe = deferredFor(name, roleLabel);
-    const questions = heard
-      ? [...new Set([...asks, ...routedToMe, ...myAsks])]
-      : [...new Set([...asks, ...routedToMe, ...myAsks, ...agenda.filter((question) => !isDeferredElsewhere(question))])];
+    // The sponsor's Listen card is arbiter-only: conflicts to resolve, nothing
+    // else. The discovery agenda that would sit here reaches the process owners
+    // through their own cards (the sponsor is off the routing roster).
+    const questions = isSponsorCard(name, roleLabel)
+      ? sponsorConflictAsks(program)
+      : heard
+        ? [...new Set([...asks, ...routedToMe, ...myAsks])]
+        : [...new Set([...asks, ...routedToMe, ...myAsks, ...agenda.filter((question) => !isDeferredElsewhere(question))])];
     return {
       id: `iv-${index}`, name: name || roleLabel || `Interviewee ${index + 1}`, role: roleLabel,
       questions, isRole: !name,
