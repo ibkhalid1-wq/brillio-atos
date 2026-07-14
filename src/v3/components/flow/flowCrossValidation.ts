@@ -165,6 +165,12 @@ export function gateAugmentations(program: ProgramSummary, movementId: string): 
       for (const artifact of movementArtifacts(program, movement).filter((entry) => entry.present)) {
         const rollup = artifactApprovalRollup(program, movementId, artifact.id);
         if (!rollup.total) continue; // no contributors yet — nothing to sign off
+        // The gate tracks sign-offs you actually STARTED — an artifact nobody was
+        // asked to sign (overall "none") isn't a blocker. This keeps a movement
+        // from being held on a derived artifact (e.g. Frame's discovery kit) that
+        // the operator never sent for sign-off, while a REQUESTED sign-off still
+        // must complete before the gate.
+        if (rollup.overall === "none") continue;
         items.push({
           id: `signoff-${artifact.id}`,
           label: `${artifact.title} — validated by its contributors (${rollup.approvedCount}/${rollup.total} approved)`,

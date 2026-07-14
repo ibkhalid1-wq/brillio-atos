@@ -20,7 +20,7 @@ import { useProgramSnapshots } from "@/new/lib/useProgramSnapshots";
 import { useCopilotThread } from "@/hooks/useCopilotThread";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { drillKindMeta, type DrillKind } from "@/v3/components/flow/flowDrilldown";
-import { readMovementInputs, flowMovements, movementArtifacts, gateChecklist } from "@/v3/components/flow/flowShellData";
+import { readMovementInputs, flowMovements, movementArtifacts, gateChecklist, gateReadiness } from "@/v3/components/flow/flowShellData";
 import { gateAugmentations } from "@/v3/components/flow/flowCrossValidation";
 import type {   ProgramSummary } from "@/new/types";
 import { buildCrossPhaseContext } from "@/lib/adamOrchestrator";
@@ -2251,6 +2251,39 @@ export default function AppShellV3() {
     autoIngestApprovalRef.current = true;
     void persistFlowMutation((program) => ingestApprovalResponse(program, String(item.id), "auto-record"))
       .finally(() => { autoIngestApprovalRef.current = false; });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProgram]);
+
+  // AUTONOMOUS GATE CLOSE. A gate is the criteria being met, not a separate
+  // ceremony — so once every criterion is met (documents current, Inbox clear,
+  // requested sign-offs in), record it automatically. Scoped to the discovery
+  // and design movements (Frame · Listen · Envision · Show); Ship and Evolve
+  // stay a deliberate operator decision (cutover / ongoing ops). Only a FRESH
+  // gate auto-closes — a manually reopened gate (status "remediation-requested")
+  // waits for the operator, so auto-close never fights a reopen. Reopenable.
+  const AUTO_GATE_MOVEMENTS = useMemo(() => new Set(["frame", "listen", "envision", "show"]), []);
+  const autoGateRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const p = activeProgram;
+    if (!p || !hasSubstantiveProgramData(p.rawData)) return;
+    for (const movement of flowMovements()) {
+      if (!AUTO_GATE_MOVEMENTS.has(movement.id)) continue;
+      const review = p.gateReviews?.[movement.id];
+      // Leave a gate the operator has settled: recorded ("approved") or
+      // deliberately reopened ("remediation-requested"). Any other state
+      // (no review yet, or a transient AI-readiness note) may auto-close.
+      if (review && (review.status === "approved" || review.status === "remediation-requested")) continue;
+      const key = `${p.id}:${movement.id}`;
+      if (autoGateRef.current.has(key)) continue;
+      const arts = movementArtifacts(p, movement);
+      const checks = [...gateChecklist(p, movement, arts), ...gateAugmentations(p, movement.id)];
+      if (!checks.length || gateReadiness(p, movement, arts, checks).kind !== "ready") continue;
+      autoGateRef.current.add(key);
+      void approveGate(movement.id)
+        .then(() => pushV3Toast(`${movement.displayName} gate closed automatically — every criterion is met.`, { tone: "success", duration: 4000 }))
+        .catch(() => autoGateRef.current.delete(key));
+      break; // one per pass; the refresh re-fires this effect for the next
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProgram]);
 

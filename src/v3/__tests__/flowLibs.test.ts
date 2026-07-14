@@ -506,6 +506,17 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
     expect(gateAugmentations(approved, "frame").find((i) => i.id === "signoff-charter")?.done).toBe(true);
   });
 
+  it("a present artifact nobody was asked to sign off does NOT gate the movement", () => {
+    // Charter present + a contributor (the sponsor), but no sign-off was ever
+    // requested for it → the gate must not invent a blocker.
+    const p = programme({
+      phaseInputs: { frame: { sponsor: "Raj Mamodia", sponsorConversation: `— Raj Mamodia, Executive Sponsor, 2026-07-10 —\n${"the sponsor set the mandate in detail here. ".repeat(8)}` } },
+      transformationCharter: { title: "Charter", summary: "Automate quote-to-cash.", generatedAt: "2026-07-10T00:00:00Z" },
+      // no flowApprovalPacks at all
+    });
+    expect(gateAugmentations(p, "frame").some((i) => i.id === "signoff-charter")).toBe(false);
+  });
+
   it("agentify review projects a persona's own workflow with their steps flagged, and composes dispositions", () => {
     const p = programme({ data: { currentStateAtlas: { workflows: [
       { name: "Quote-to-Cash", trigger: "RFQ arrives", steps: [
