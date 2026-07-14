@@ -825,6 +825,9 @@ export default function AppShellV3() {
   // this holds that draft's id so cancelling can discard it (rather than
   // leaving an empty "New Programme" behind). Cleared once setup is saved.
   const [draftProgramId, setDraftProgramId] = useState<string | null>(null);
+  // Bumped when a new programme's setup saves, to command FlowShell to open on
+  // the Flow board (FlowShell owns the view state; this is the signal in).
+  const [flowJumpNonce, setFlowJumpNonce] = useState(0);
   const [adamCopilotSidebarOpen, setAdamCopilotSidebarOpen] = useState(false);
   const [toasts, setToasts] = useState<ShellToast[]>([]);
   const [currentUser, setCurrentUser] = useState<{ id: string; email?: string } | null>(null);
@@ -1764,17 +1767,22 @@ export default function AppShellV3() {
 
 
   const handleSaveSetup = useCallback(async (patch: ProgramSetupPatch) => {
+    // A draft id means this save is a brand-new programme's first setup — land
+    // it on the Flow board afterwards, not back on whatever view (usually
+    // Portfolio) the operator created it from.
+    const wasNewProgramme = draftProgramId !== null;
     try {
       await saveSetup(patch);
       // The draft is now a real, named programme — keep it on cancel/close.
       setDraftProgramId(null);
       setWizardOpen(false);
+      if (wasNewProgramme) setFlowJumpNonce((n) => n + 1);
       pushV3Toast("Programme details saved.", { tone: "success", duration: 2500 });
     } catch (error) {
       pushV3Toast("Could not save programme details.", { tone: "error", duration: 4000 });
       throw error;
     }
-  }, [saveSetup]);
+  }, [saveSetup, draftProgramId]);
 
   // Cancelling the wizard. If it was opened on a freshly-created, never-saved
   // draft, discard that programme so an empty "New Programme" isn't left behind.
@@ -2535,6 +2543,7 @@ export default function AppShellV3() {
         <FlowShell
           program={activeProgram}
           programs={programs}
+          jumpToFlowNonce={flowJumpNonce}
           runningAgentIds={runningAgentIds}
           onSelectProgram={(id) => setActiveProgramId(id)}
           onCreateProgram={() => void handleCreateProgram()}

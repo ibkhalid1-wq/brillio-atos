@@ -117,6 +117,9 @@ interface FlowShellProps {
   /** Confirm a quarantined portal response into evidence. */
   onIngestPortalItem: (itemId: string) => Promise<void>;
   onDismissPortalItem: (itemId: string) => Promise<void>;
+  /** Bumped by the shell to command a jump to the Flow board — used after a
+   * new programme is created so setup lands on the work, not the last view. */
+  jumpToFlowNonce?: number;
 }
 
 type FlowView = "today" | "flow" | "library" | "people" | "pulse" | "mission" | "portfolio";
@@ -440,6 +443,13 @@ export default function FlowShell(props: FlowShellProps) {
   const [view, setView] = useState<FlowView>(() =>
     listOpenFlowDecisions(program).length + listPortalInbox(program).length + governedExceptionsForInbox(program).length > 0 ? "today" : "flow",
   );
+  // A freshly-created programme should open on the work — the shell bumps this
+  // nonce after setup saves so we jump to the canvas regardless of the view the
+  // operator was on (typically Portfolio, where they clicked "New programme").
+  const jumpNonce = props.jumpToFlowNonce ?? 0;
+  useEffect(() => {
+    if (jumpNonce > 0) { setView("flow"); window.scrollTo({ top: 0 }); }
+  }, [jumpNonce]);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
