@@ -532,9 +532,13 @@ const CHARTER_FIELDS_FOR_FACT: Record<string, string[]> = {
 /** Is a Frame fact captured — in its raw input field, OR extracted into the
  * charter? Lets a fact provided in the sponsor conversation (and charted) count
  * as answered, instead of nagging to "add it to the inputs". */
-export function frameFactOnRecord(program: ProgramSummary, fact: string, inputField = fact): boolean {
+export function frameFactOnRecord(program: ProgramSummary, fact: string, inputField = fact, minRawLen = 1): boolean {
+  // Raw input counts at the caller's threshold — the gate treats any filled box
+  // as captured (minRawLen 1, matching its own `has()`); gap-suppression wants a
+  // SUBSTANTIVE value before it silences a "provide this" gap (minRawLen 8). The
+  // charter fallback (a substantive extracted fact) is the shared addition.
   const raw = readMovementInputs(program, "frame")[inputField];
-  if (typeof raw === "string" && raw.trim().length >= 8) return true;
+  if (typeof raw === "string" && raw.trim().length >= minRawLen) return true;
   const charter = dataRoot(program).transformationCharter;
   if (!charter || typeof charter !== "object" || Array.isArray(charter)) return false;
   for (const key of CHARTER_FIELDS_FOR_FACT[fact] ?? []) {
@@ -551,7 +555,7 @@ export function falsifiedGap(program: ProgramSummary, gap: string): boolean {
   // Satisfied when the fact is on record — in the raw input field OR extracted
   // into the charter. A fact provided in the sponsor conversation and charted
   // must not be re-flagged just because its structured input box is blank.
-  return frameFactOnRecord(program, hit.fact ?? hit.field, hit.field);
+  return frameFactOnRecord(program, hit.fact ?? hit.field, hit.field, 8);
 }
 
 /** The open gaps a generated document declares about ITSELF ("we still don't
@@ -723,10 +727,13 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
   if (movement.id === "frame") {
     items.push(
       { id: "conv", label: "Sponsor conversation on record", done: has("sponsorConversation"), anchor: "input:sponsorConversation", why: whyFromTranscript(inputs.sponsorConversation) },
-      { id: "objective", label: "Business objective captured", done: has("businessObjective"), anchor: "input:businessObjective", why: whyFromValue(inputs.businessObjective) },
+      // Objective + metric are satisfied by the raw input OR the charter (the
+      // structured projection of the sponsor conversation) — a charted fact
+      // must close the gate item, not sit red because its input box is blank.
+      { id: "objective", label: "Business objective captured", done: frameFactOnRecord(program, "businessObjective"), anchor: "input:businessObjective", why: whyFromValue(inputs.businessObjective) },
       { id: "sponsor", label: "Sponsor named", done: has("sponsor"), anchor: "input:sponsor", why: whyFromValue(inputs.sponsor) },
       { id: "industry", label: "Industry set — grounds the ontology's shared vocabulary", done: has("industry"), anchor: "input:industry", why: whyFromValue(inputs.industry) },
-      { id: "metric", label: "Success measure set", done: has("successMetric"), anchor: "input:successMetric", why: whyFromValue(inputs.successMetric) },
+      { id: "metric", label: "Success measure set", done: frameFactOnRecord(program, "successMetric"), anchor: "input:successMetric", why: whyFromValue(inputs.successMetric) },
       { id: "demo-date", label: "First-demonstration date set", done: has("targetFirstDemoDate"), anchor: "input:targetFirstDemoDate", why: whyFromValue(inputs.targetFirstDemoDate) },
     );
   } else if (movement.id === "listen") {
