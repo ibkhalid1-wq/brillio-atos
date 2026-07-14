@@ -129,6 +129,7 @@ const VALID_AGENT_IDS = new Set([
   "domain-ontology",
   "architecture-strategy",
   "agentic-blueprint",
+  "experience-design",
   "prototype-pack",
   "demo-scripts",
   "hardening-plan",
@@ -869,7 +870,7 @@ const LARGE_OUTPUT_AGENTS = new Set<string>([
   "discovery-kit", "demo-scripts",
   "domain-ontology", "current-state-atlas",
   "architecture-strategy", "agentic-blueprint",
-  "prototype-pack", "hardening-plan", "eval-suite",
+  "experience-design", "prototype-pack", "hardening-plan", "eval-suite",
 ]);
 const LARGE_OUTPUT_TOKENS = 16384;
 
@@ -1336,11 +1337,38 @@ Return ONLY valid JSON:
   "confidence": 0.0
 }`,
   },
+  "experience-design": {
+    phase: "show",
+    fieldKey: "experienceDesign",
+    title: "Experience Design",
+    system: `You are the ATOS Experience Design Agent — the design crew for the prototype. From the Agentic Blueprint's journeys, the Current-State Atlas's workflows and pains, the Demo Scripts and the Domain Ontology (priorPhaseArtifacts/existingArtifacts), design the experience the prototype must deliver: the screens, the flows, the wireframes and the workflow state machines.
+
+DESIGN RULES (enforced, not optional):
+- EVERY journey stage in the Blueprint gets a screen; every persona gets a flow; a stage or persona with no screen/flow is a gap, never an omission.
+- Every quoted pain from the record must have a MOMENT in a flow where it visibly disappears — name the verbatim quote it answers.
+- Wireframes speak the ONTOLOGY's vocabulary: every entity a block shows is named exactly as the ontology names it.
+- Every state per screen (empty/loading/populated/error) is designed, not just the happy path.
+- Workflow machines carry the HITL points from the Blueprint as explicit approval states.
+
+Return ONLY valid JSON:
+{
+  "title": "Experience Design — <programme name>",
+  "designIntent": { "personality": "how the product should feel, grounded in the client's world", "density": "spacious|balanced|dense", "vocabulary": "the stakeholders' own terms the UI must use" },
+  "screens": [ { "id": "kebab-case-id", "name": "screen name in the stakeholders' language", "purpose": "one sentence", "journey": "Blueprint journey name", "stage": "the journey stage it serves", "personas": ["who uses it"], "entities": ["ontology entities shown — named exactly"], "primaryActions": ["what the user does here"], "states": { "empty": "what shows", "loading": "what shows", "populated": "what shows", "error": "what shows" }, "wireframe": [ { "region": "header|nav|main|aside|footer", "blocks": [ { "kind": "list|table|form|detail|metric|action|timeline", "label": "block title", "entity": "ontology entity or null", "fields": ["key fields shown"] } ] } ] } ],
+  "flows": [ { "name": "flow name", "journey": "Blueprint journey", "persona": "who walks it", "steps": [ { "screen": "screen id", "action": "what they do", "outcome": "what happens", "hitl": "the approval moment, or null" } ], "painAnswered": { "quote": "the verbatim pain this flow dissolves", "who": "speaker" } } ],
+  "workflowMachines": [ { "name": "machine name", "states": ["ordered states"], "transitions": [ { "from": "state", "to": "state", "on": "trigger", "actor": "persona or agent name" } ] } ],
+  "gaps": ["journey stages or personas without screens, pains without a flow, entities the ontology doesn't know"],
+  "summary": "one sentence verdict on design readiness",
+  "confidence": 0.0
+}`,
+  },
   "prototype-pack": {
     phase: "show",
     fieldKey: "prototypePack",
     title: "Prototype Build Pack",
     system: `You are the ATOS Prototype Build Pack Agent. Turn the Agentic Blueprint (priorPhaseArtifacts) into a build pack a coding agent or team can execute to a working prototype fast — without a follow-up meeting: scaffold, agent wiring, seed data lifted from the discovery evidence, and an explicit scope contract.
+
+When an Experience Design exists (existingArtifacts), BUILD TO IT: its screens are the interface inventory, its flows are the walkthrough, its workflow machines are the behaviour — do not invent a second design.
 
 Optimise for time-to-first-demo: the thinnest vertical slice that lets each stakeholder watch THEIR OWN workflow run. Seed scenarios must come from real transcript moments — their numbers, their step names, the delays they complained about — so the demo lands as recognition, not fiction. Stub what the slice does not need.
 
@@ -9244,6 +9272,7 @@ Deno.serve(async (req) => {
           "current-state-atlas": ["workflows"],
           "discovery-kit": ["interviews"],
           "agentic-blueprint": ["agents"],
+          "experience-design": ["screens", "flows"],
         } as Record<string, string[]>)[request.agentId] ?? [];
         const shrinkNotes: string[] = [];
         if (isFlowProgramme(contextProgramData) && isRecord(priorMirror)) {

@@ -1368,10 +1368,10 @@ export const ATOS_FLOW: MethodologyDefinition = {
       id: "show",
       displayName: "Show",
       description: "The Blueprint compiles into a working prototype; every stakeholder watches their own workflow run, scripted from their own words. The gate is the demo.",
-      requiredArtifacts: ["prototype-pack", "demo-scripts"],
+      requiredArtifacts: ["experience-design", "prototype-pack", "demo-scripts"],
       mandatoryExitCriteriaTemplates: ["Every stakeholder saw their workflow run", "Demo acceptances recorded"],
       entryGuards: ["Agentic Blueprint accepted"],
-      recommendedAgents: ["prototype-pack", "demo-scripts"],
+      recommendedAgents: ["experience-design", "prototype-pack", "demo-scripts"],
       typicalDurationWeeks: { min: 1, max: 3 },
       dynamicSchema: true,
       movement: {

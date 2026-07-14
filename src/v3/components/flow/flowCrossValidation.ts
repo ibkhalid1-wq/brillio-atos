@@ -113,6 +113,29 @@ export function crossArtifactViolations(program: ProgramSummary): CrossViolation
     }
   }
 
+  // Experience Design ↔ record: every screen speaks the ontology's
+  // vocabulary, and every Blueprint journey is covered by at least one flow.
+  const design = isRecord(inner.experienceDesign) ? inner.experienceDesign : null;
+  if (design && Array.isArray(design.screens) && vocabulary.size) {
+    for (const screen of design.screens.filter(isRecord)) {
+      for (const entity of (Array.isArray(screen.entities) ? screen.entities : [])) {
+        const key = norm(entity);
+        if (key && !vocabulary.has(key)) {
+          violations.push({ kind: "unmapped-entity", detail: `Screen “${String(screen.name ?? screen.id)}” shows “${String(entity)}”, which is not an Ontology entity.` });
+        }
+      }
+    }
+  }
+  if (design && blueprint && Array.isArray(blueprint.journeys) && Array.isArray(design.flows)) {
+    const covered = new Set(design.flows.filter(isRecord).map((flow) => norm(flow.journey)).filter(Boolean));
+    for (const journey of blueprint.journeys.filter(isRecord)) {
+      const name = norm(journey.name);
+      if (name && !covered.has(name)) {
+        violations.push({ kind: "unknown-workflow", detail: `Journey “${String(journey.name)}” has no Experience Design flow.` });
+      }
+    }
+  }
+
   const strategy = isRecord(inner.architectureStrategy) ? inner.architectureStrategy : null;
   if (strategy && isRecord(strategy.recommendation) && strategy.recommendation.hardConstraintsMet === false) {
     const unmet = Array.isArray(strategy.recommendation.unmetConstraints)

@@ -81,8 +81,16 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const canEdit = !!entry && !!draft && !!onSaveDoc;
-  const studioActive = canEdit && editing;
+  // ARTIFACTS ARE DERIVED, NOT AUTHORED (operator direction 2026-07-14):
+  // every document is a generated view of the record, so operator hand-edits
+  // are disabled — a change must arrive as EVIDENCE (capture the correction
+  // from its owner on the collect board) and land through resynthesis, where
+  // the shrink guard, grounding rules and contributor sign-off all apply.
+  // The studios still open (the diagram IS the document for graph-first
+  // artifacts) but read-only: edits don't dirty, and there is no Save.
+  const EDITS_LOCKED = true;
+  const canEdit = !EDITS_LOCKED && !!entry && !!draft && !!onSaveDoc;
+  const studioActive = !!entry && !!draft && editing;
 
   // Write-time ontology gate (F-004): while editing the domain ontology, the
   // declared domain/range/cardinality is checked live. Blocking violations
@@ -469,7 +477,17 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
         <div className="v3fs-docview-b" ref={docBodyRef} onClick={traceQuote}>
 
           {studioActive && entry && draft ? (
-            <entry.Component doc={draft} onChange={(next) => { setDraft(next); setDirty(true); }} onOpenArtifact={onOpenArtifact} program={program}
+            <>
+              {/* Derived-document contract: the studio renders, edits don't
+                  land. A change enters as EVIDENCE and returns via resynthesis. */}
+              <div className="v3fs-derived-note" role="note">
+                <b>Derived from the record.</b> Content edits are disabled — to change this document,
+                capture the correction as evidence on its owner&rsquo;s collect card, then resynthesize.
+                Role bindings and sign-offs still work here.
+              </div>
+              <entry.Component doc={draft}
+                onChange={canEdit ? (next) => { setDraft(next); setDirty(true); } : () => { /* derived — edits don't land */ }}
+                onOpenArtifact={onOpenArtifact} program={program}
                 onBindRole={onSaveInputs ? async (movementId, role, name, email) => {
                   const bindings = readRoleBindings(program, movementId);
                   bindings[role] = email ? { name, email } : { name };
@@ -477,6 +495,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
                     attest: { action: `Role bound — ${role} → ${name}`, detail: email || undefined },
                   });
                 } : undefined} />
+            </>
           ) : (
             <>
               {groundingDisclosure}
