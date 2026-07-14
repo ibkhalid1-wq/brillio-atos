@@ -123,17 +123,50 @@ export function readRoleBindings(program: ProgramSummary, movementId: string): R
 }
 
 const ROLE_TEMPLATES: Record<string, Array<{ role: string; questions: string[] }>> = {
+  // Envision questions are DECISION-SHAPED: each answer becomes a fact the
+  // Architecture Strategy's constraint-satisfaction matrix, buildVsBuy
+  // exit-paths, score weighting and failure modes verify against — not a
+  // vague preference the generator has to guess from.
   envision: [
-    { role: "Solution Architect", questions: ["Which target architecture shape fits our constraints, and what does it trade away?", "Which integrations are non-negotiable, and which are risky?", "Where are the operability and scaling risks?"] },
-    { role: "Product Owner", questions: ["Which build slices demonstrate the most value first?", "What must the very first demonstration prove?", "What is explicitly out of scope for the pilot?"] },
-    { role: "Experience Designer", questions: ["What must the user journey feel like at each stage?", "Where does a human stay in the loop, and why?", "What would make an agent's action feel trustworthy to a user?"] },
-    { role: "Data / Engineering Lead", questions: ["Where does each entity live, and what are the sync constraints?", "What data-quality issues will bite us?", "What are the hard security and access boundaries?"] },
+    { role: "Solution Architect", questions: [
+      "Constraints as verdicts: which system must remain the system of record? Which data may not leave your tenancy or region? What peak volume (records/day) must this survive? What uptime does the business actually need?",
+      "Which integrations are non-negotiable, and which are risky? For each system: API, export, or human-only access — and who owns the credentials?",
+      "What have you already tried or bought for this problem, and what happened?",
+      "Where are the operability and scaling risks?",
+    ] },
+    { role: "Product Owner", questions: [
+      "Which build slices demonstrate the most value first?",
+      "What must the very first demonstration prove?",
+      "What is explicitly out of scope for the pilot?",
+      "If you had to trade: faster first demo vs. lower run-cost vs. easier operations — rank them, and say why.",
+    ] },
+    { role: "Experience Designer", questions: [
+      "What must the user journey feel like at each stage?",
+      "Where does a human stay in the loop, and why?",
+      "What is the worst way an automated system could embarrass you in front of a customer?",
+    ] },
+    { role: "Data / Engineering Lead", questions: [
+      "Where does each entity live, and what are the sync constraints?",
+      "What data-quality issues will bite us?",
+      "What are the hard security and access boundaries — and which data carries PII or regulatory handling rules?",
+      "Build vs buy: where does your organisation default, and who owns that decision?",
+    ] },
   ],
   ship: [
-    { role: "Hardening / SRE Owner", questions: ["What guardrails and failure modes must we cover before go-live?", "What is the rollback plan if a slice misbehaves?", "What load or edge cases worry you most?"] },
+    { role: "Hardening / SRE Owner", questions: [
+      "What guardrails and failure modes must we cover before go-live?",
+      "What is the rollback plan if a slice misbehaves — and who can call the abort during the cutover window?",
+      "What load or edge cases worry you most?",
+      "What service levels must hold in production — and what alert should defend each one?",
+    ] },
     { role: "Eval / QA Owner", questions: ["What behaviours must we prove before go-live?", "What is the pass bar for each?", "Where would you not yet trust the agent?"] },
-    { role: "Ops / Runbook Owner", questions: ["How is this run day to day, and who owns each routine?", "What is the incident-response path?", "What monitoring tells you it's healthy?"] },
-    { role: "Executive Sponsor", questions: ["What must be true for you to approve cutover?", "What residual risk is acceptable to you?"] },
+    { role: "Ops / Runbook Owner", questions: [
+      "How is this run day to day, and who owns each routine?",
+      "What is the incident-response path?",
+      "What monitoring tells you it's healthy?",
+      "Who must be told what — before, during and after cutover — and on which channel?",
+    ] },
+    { role: "Executive Sponsor", questions: ["What must be true for you to approve cutover?", "What residual risk is acceptable to you — and are you prepared to accept it on the record?"] },
   ],
   evolve: [
     { role: "Operating Owner", questions: ["What is working in live operation, and what breaks?", "Where is manual effort still creeping back in?", "What would you change first?"] },
