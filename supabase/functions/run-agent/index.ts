@@ -1276,6 +1276,8 @@ Return ONLY valid JSON:
     title: "Current-State Atlas",
     system: `You are the ATOS Current-State Atlas Agent. Synthesise EVERY discovery transcript into the current-state picture: the workflows as they actually run, the pain heatmap, and the contradictions between stakeholders.
 
+PROVISIONAL SEED: when no discovery transcripts exist yet but the Frame MANDATE does (the sponsor's conversation and the charter's objective/scope in groundingFacts), do NOT return an empty atlas — draft a PROVISIONAL current-state from the mandate: the obvious workflows the objective implies (for "streamline customer onboarding and compliance": an onboarding workflow, a compliance-check workflow), each step's evidence marked "from the sponsor mandate — to confirm in interviews", and gaps naming whom to hear. Once interviews arrive, they replace the seed with the real picture.
+
 Ground every workflow step and pain point in what a stakeholder actually said — carry a verbatim quote with attribution wherever possible. Never invent a step or a hand-off; where the transcripts leave one unclear, record it under "openQuestions" instead. Where two stakeholders describe the same process differently, that is a finding — record it under "contradictions" with a suggested follow-up, never silently pick a side.
 
 openQuestions and gaps become interview questions, so phrase each one a stakeholder must answer as a PLAIN BUSINESS QUESTION in their vocabulary — "After you approve a quote, who sends it to the client, and how?" — never methodology vocabulary (workflow, persona, coverage, hand-off mapping). Only operator-side work (e.g. a voice not yet rostered) may be phrased at the operator.
@@ -1303,6 +1305,8 @@ Return ONLY valid JSON:
     fieldKey: "domainOntology",
     title: "Domain Ontology",
     system: `You are the ATOS Domain Ontology Agent. Build the domain ontology from the discovery conversations: the entities the business actually reasons about, their relationships, the events that move them, and the systems of record.
+
+PROVISIONAL SEED: when no discovery conversations exist yet but the Frame MANDATE does (the sponsor's conversation and the charter's objective/scope in groundingFacts), do NOT return zero entities — draft a PROVISIONAL ontology from the mandate: the core entities the objective clearly implies (for "streamline customer onboarding and compliance": Customer, Onboarding Application, Compliance Check, and the success measure named — e.g. NPS Survey), each with evidence "from the sponsor mandate — to confirm", and gaps naming whom to hear. Interviews then enrich and correct it.
 
 Use the stakeholders' own nouns — the ontology's names should be their language, not generic data-modelling vocabulary. Every entity carries at least one evidence source. Where different teams use different words for the same thing (or the same word for different things), record it under "ambiguities" — those collisions are exactly what the Blueprint's data contracts must resolve.
 
@@ -2817,7 +2821,14 @@ function buildSpecialAgentInputContext(
       // "the record outranks the fields" has no record to work with. Fall
       // back to Frame's captured inputs when the spec phase holds nothing.
       groundingFacts: [
-        ...buildGroundingFacts(Object.keys(phaseInputs).length ? phaseInputs : frameInputs),
+        // Always carry the FRAME mandate (the sponsor's own words + the charter
+        // facts) as grounding, MERGED with the spec phase's own inputs. The old
+        // ternary used the phase inputs OR frame — never both — so once Listen
+        // had any input at all (an empty roster, a _savedAt), the sponsor
+        // conversation was dropped and a re-run with no interviews saw NO
+        // evidence and produced an empty ontology/atlas. The phase's own inputs
+        // still win on any key they re-state.
+        ...buildGroundingFacts(Object.keys(phaseInputs).length ? { ...frameInputs, ...phaseInputs } : frameInputs),
         ...kitRosterSeed,
       ],
       documentCarryForward: buildDocumentCarryForward(options?.documents || [], formalSpec.phase),
