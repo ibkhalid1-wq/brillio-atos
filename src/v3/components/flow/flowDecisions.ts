@@ -54,10 +54,20 @@ function innerData(program: ProgramSummary): Record<string, unknown> {
   return typeof raw.data === "object" && raw.data !== null ? (raw.data as Record<string, unknown>) : raw;
 }
 
+// Standard-vocabulary alignment is now auto-adopted at generation time (the
+// edge merges the mappings straight into ontologyAlignment), so the old "Adopt
+// N standard mappings" Inbox card is obsolete. Legacy blobs still carry those
+// open decisions; hide them here so they stop surfacing everywhere at once —
+// their mappings are already (or harmlessly re-)adopted, so nothing is lost.
+function isObsoleteAlignmentDecision(entry: Record<string, unknown>): boolean {
+  const payload = isRecord(entry.payload) ? entry.payload : null;
+  return !!payload && Array.isArray(payload.ontologyAlignment);
+}
+
 export function listFlowDecisions(program: ProgramSummary): FlowDecision[] {
   const list = innerData(program).flowDecisions;
   if (!Array.isArray(list)) return [];
-  return list.filter(isRecord).map((entry): FlowDecision => ({
+  return list.filter(isRecord).filter((entry) => !isObsoleteAlignmentDecision(entry)).map((entry): FlowDecision => ({
     id: String(entry.id ?? ""),
     tier: entry.tier === 3 ? 3 : 2,
     status: entry.status === "confirmed" || entry.status === "declined" ? entry.status : "open",

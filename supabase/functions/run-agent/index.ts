@@ -1308,6 +1308,10 @@ Return ONLY valid JSON:
 
 PROVISIONAL SEED: when no discovery conversations exist yet but the Frame MANDATE does (the sponsor's conversation and the charter's objective/scope in groundingFacts), do NOT return zero entities — draft a PROVISIONAL ontology from the mandate: the core entities the objective clearly implies (for "streamline customer onboarding and compliance": Customer, Onboarding Application, Compliance Check, and the success measure named — e.g. NPS Survey), each with evidence "from the sponsor mandate — to confirm", and gaps naming whom to hear. Interviews then enrich and correct it.
 
+STANDARD-GROUNDED DEPTH: the input context's vocabularySteering names this industry's reference model (e.g. HL7 FHIR for healthcare, FIBO for finance). Use it as a CHECKLIST for structural depth, not just for the standardAlignment URIs. A thin ontology that lists only the obvious actors is a failure — the reference model's backbone concepts are almost always in scope. For a healthcare referral mandate FHIR implies, beyond Patient and the referring/receiving clinicians: the PROVIDER ORGANISATION that employs each clinician (FHIR Organization), the CARE SERVICE / PROCEDURE being requested (FHIR ServiceRequest — the reason the referral exists), the ENCOUNTER, and COVERAGE / payer where funding is in scope. Seed the backbone concepts the mandate clearly implies as provisional entities with evidence "implied by <standard> — to confirm"; do NOT invent specifics the mandate cannot support — where a concept is plausible but unconfirmed, raise it as a gap question instead of a fabricated entity.
+
+COMPLETENESS CHECK before returning: for the core process in the mandate, account for each of — (1) every ACTOR named, (2) the ORGANISATION each actor belongs to, (3) the THING being requested / exchanged / produced (the service, product, application or request at the heart of the process), (4) the SYSTEM OF RECORD each entity lives in, (5) the OUTCOME MEASURE the objective names. Each of these is either a provisional entity (labelled "— to confirm") or, if the mandate cannot support it, an explicit gap phrased as a plain business question. Never silently drop one.
+
 Use the stakeholders' own nouns — the ontology's names should be their language, not generic data-modelling vocabulary. Every entity carries at least one evidence source. Where different teams use different words for the same thing (or the same word for different things), record it under "ambiguities" — those collisions are exactly what the Blueprint's data contracts must resolve.
 
 Gaps become interview questions, so phrase every gap a stakeholder must close as a PLAIN BUSINESS QUESTION in their vocabulary — never modelling vocabulary. A cardinality question becomes "Can one client have several active deals at the same time, or exactly one?" — NEVER "confirm the cardinality of Account→Opportunity". Words like entity, relation, cardinality, ontology, mapping, 1:N do not belong in anything a stakeholder reads.
@@ -9528,20 +9532,18 @@ Deno.serve(async (req) => {
             return new Set(rows.filter(isRecord).map((m) => String(m.entity ?? "").toLowerCase()));
           })();
           const newMappings = mappings.filter((m) => !adoptedEntities.has(m.entity.toLowerCase()));
+          // Auto-adopt: standard-vocabulary alignment is low-risk, additive and
+          // reversible — mapping "Patient" to its FHIR URI enriches the ontology
+          // without changing what it means. It used to land as an "Adopt N
+          // standard mappings" Inbox decision, but asking the operator to accept
+          // the industry vocabulary on every ontology (re)generation was pure
+          // ceremony. Merge silently, like the blueprint's URI inheritance; the
+          // Ontology studio's Standard-alignment table remains the place to
+          // review, edit or remove any mapping.
           if (newMappings.length) {
-            nextProgramData = queueFlowDecision(nextProgramData, {
-              tier: 2,
-              agentId: "domain-ontology",
-              movementId: request.phaseId || "listen",
-              title: `Adopt ${newMappings.length} standard mapping${newMappings.length === 1 ? "" : "s"}`,
-              summary: `Ontology entities aligned to industry vocabularies: ${newMappings.slice(0, 3).map((m) => `${m.entity} → ${m.standard.split("/").pop()}`).join(", ")}${newMappings.length > 3 ? "…" : ""}.`,
-              blocking: "The ontology stays in the client's private language until the mappings are adopted.",
-              recommendation: {
-                action: "Adopt the mappings",
-                rationale: "Grounding entities in the industry's shared vocabulary (SKOS mappings to standard URIs) makes every downstream contract and export interoperable.",
-                band: "proposal — reversible, mappings merge additively",
-              } as JsonValue,
-              payload: { ontologyAlignment: newMappings as unknown as JsonValue } as JsonValue,
+            nextProgramData = updateInnerProgramData(nextProgramData, (inner) => {
+              const current = Array.isArray(inner.ontologyAlignment) ? (inner.ontologyAlignment as JsonValue[]) : [];
+              return { ...inner, ontologyAlignment: [...current, ...(newMappings as unknown as JsonValue[])].slice(-60) };
             });
           }
         }
