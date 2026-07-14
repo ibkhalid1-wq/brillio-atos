@@ -16,7 +16,7 @@ import { resolveMovementStakeholders, readRoleBindings, type MovementStakeholder
 import { mapTranscriptSpeakers } from "@/v3/components/flow/flowTranscriptMap";
 import { AttachFileButton, TranscribeButton, copyTextFromAction } from "@/v3/components/flow/flowCapture";
 import { readGovernedExceptions, withNewException, withResolvedException } from "@/v3/components/flow/flowExceptions";
-import { projectAgentifyReview, projectListenWorkflowReview, reviewFallbackQuestions } from "@/v3/components/flow/flowReviews";
+import { projectAgentifyReview, projectListenWorkflowReview, reviewFallbackQuestions, type ListenWorkflowReview, type AgentifyReview } from "@/v3/components/flow/flowReviews";
 import { areaProgress, hasMultipleAreas, stakeholderPrimaryArea, programAreas, GENERAL_AREA, type AreaProgress } from "@/v3/components/flow/flowAreas";
 
 /** A movement's discovery, organized by stakeholder. One card per person or
@@ -68,6 +68,33 @@ export function stakeholderCollection(
 }
 type StakeholderCollection = ReturnType<typeof stakeholderCollection>;
 
+/** The area-scoped visual review a stakeholder's ONE link carries on Listen /
+ * Envision, with their gap script folded into a listen-workflow review's
+ * questions. Shared by the card's link and the lane's "invite everyone", so
+ * both mint identical packs. Null for Frame/Show (a plain questions link — the
+ * edge folds a Show demo walkthrough onto it). */
+export function projectStakeholderReview(
+  program: ProgramSummary, movementId: string, name: string,
+  primaryArea: string | undefined, linkQuestions: string[],
+): ListenWorkflowReview | AgentifyReview | null {
+  const kind = movementId === "listen" ? "listen-workflow" : movementId === "envision" ? "agentify" : null;
+  if (!kind) return null;
+  const base = kind === "listen-workflow" ? projectListenWorkflowReview(program, name) : projectAgentifyReview(program, name);
+  if (!base) return null;
+  if (primaryArea && primaryArea !== GENERAL_AREA) {
+    const scoped = base.workflows.filter((w) => w.area === primaryArea);
+    if (scoped.length) base.workflows = scoped;
+  }
+  // Fold their gap script into a listen-workflow review's question list (the
+  // agentify surface has none) so the one link still asks it below the flow.
+  if (base.kind === "listen-workflow") {
+    const seen = new Set(base.questions.map((q) => q.trim().toLowerCase()));
+    const extra = linkQuestions.filter((q) => q.trim() && !seen.has(q.trim().toLowerCase()));
+    base.questions = [...extra, ...base.questions].slice(0, 10);
+  }
+  return base;
+}
+
 const COLLECT_COLUMNS: Array<{ key: CollectStatus; label: string }> = [
   { key: "approved", label: "Approved" },
   { key: "pending-approval", label: "Pending approval" },
@@ -118,6 +145,8 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
   // the operator touches a card; the solo default is applied at render below.
   const [openIdsState, setOpenIdsState] = useState<Set<string> | null>(null);
   const [allCollapsed, setAllCollapsed] = useState(false);
+  // The area whose "invite everyone" is minting — disables that lane's button.
+  const [inviteBusyArea, setInviteBusyArea] = useState<string | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   if (!stakeholders.length) return null;
   // Sign-off state per relevant approver (evidence contributors): drives the
@@ -194,9 +223,31 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
     return order.filter((a) => groups.has(a)).map((area) => {
       const list = groups.get(area)!.slice().sort((a, b) => STATUS_RANK[a.coll.status] - STATUS_RANK[b.coll.status]);
       const heard = list.filter((e) => e.coll.heard && !e.s.questions.length).length;
-      return { area, row: areaRows.get(area), list, heard, total: list.length };
+      const toReach = list.filter((e) => e.coll.status === "toreach").length;
+      return { area, row: areaRows.get(area), list, heard, total: list.length, toReach };
     });
   })() : [];
+
+  // "Invite everyone" — mint the ONE unified link for each person in an area who
+  // hasn't been reached yet (skips anyone heard or already holding a link), so
+  // an operator opens a whole area's collection in one click. Each person still
+  // gets the same review-or-questions pack the card would mint.
+  const inviteArea = async (list: typeof evaluated) => {
+    for (const { s, coll } of list) {
+      if (coll.heard || coll.pack || s.isRole) continue;
+      const linkQs = s.linkQuestions?.length ? s.linkQuestions : s.questions;
+      const review = projectStakeholderReview(program, movementId, s.name, stakeholderPrimaryArea(program, s.name, s.role), linkQs);
+      if (review && onMintReview) {
+        await onMintReview({
+          movementId, who: s.name, role: s.role || "Reviewer", captureField, reviewKind: review.kind,
+          review, questions: linkQs.length ? linkQs : reviewFallbackQuestions(review), intro: review.intro,
+        });
+      } else if (onMintFollowUp && linkQs.length) {
+        await onMintFollowUp({ movementId, who: s.name, questions: linkQs, captureField });
+      }
+    }
+  };
+  const canInvite = !!(onMintReview || onMintFollowUp);
 
   return (
     <div className="v3fs-ch-collect">
@@ -219,7 +270,12 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
           {laneData.map((lane) => (
             <AreaLane key={lane.area} area={lane.area} row={lane.row} heard={lane.heard} total={lane.total}
               readyLabel={movementId === "listen" ? "Ready to envision" : movementId === "envision" ? "Ready to show" : "All reviewed"}
-              defaultOpen={lane.total === 0 || lane.heard < lane.total}>
+              defaultOpen={lane.total === 0 || lane.heard < lane.total}
+              toReach={lane.toReach} inviting={inviteBusyArea === lane.area}
+              onInvite={canInvite && lane.toReach > 0 ? async () => {
+                setInviteBusyArea(lane.area);
+                try { await inviteArea(lane.list); } finally { setInviteBusyArea(null); }
+              } : undefined}>
               {lane.list.map(renderCard)}
             </AreaLane>
           ))}
@@ -245,7 +301,7 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
  * state; its body holds that area's stakeholder cards. Collapsible, so a
  * finished area folds away while the operator works the ones still open.
  */
-function AreaLane({ area, row, heard, total, ready, readyLabel, defaultOpen, children }: {
+function AreaLane({ area, row, heard, total, ready, readyLabel, defaultOpen, toReach, inviting, onInvite, children }: {
   area: string;
   row?: AreaProgress;
   heard: number;
@@ -253,6 +309,11 @@ function AreaLane({ area, row, heard, total, ready, readyLabel, defaultOpen, chi
   ready?: boolean;
   readyLabel: string;
   defaultOpen: boolean;
+  /** People in this area not yet reached — the count "invite everyone" covers. */
+  toReach?: number;
+  inviting?: boolean;
+  /** Mint the unified link for every not-yet-reached person in this area. */
+  onInvite?: () => void | Promise<void>;
   children: ReactNode;
 }) {
   const done = total > 0 && heard >= total;
@@ -275,7 +336,19 @@ function AreaLane({ area, row, heard, total, ready, readyLabel, defaultOpen, chi
         </span>
         <span className="v3fs-lane-chev" aria-hidden="true" />
       </summary>
-      <div className="v3fs-lane-b">{children}</div>
+      <div className="v3fs-lane-b">
+        {onInvite && toReach ? (
+          <div className="v3fs-lane-invite">
+            <span>{toReach} not reached yet in {area}</span>
+            <button type="button" className="v3fs-btn" disabled={inviting}
+              onClick={(e) => { e.preventDefault(); void onInvite(); }}
+              title={`Create the collect-feedback link for all ${toReach} people not yet reached in ${area}`}>
+              {inviting ? "Creating links…" : `✳ Invite everyone (${toReach})`}
+            </button>
+          </div>
+        ) : null}
+        {children}
+      </div>
     </details>
   );
 }
@@ -504,34 +577,13 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
       setBindEmail("");
     } finally { setBindBusy(false); }
   };
-  // A minted link is only "the" link while its questions still match the
-  // current script — when the script has moved on, the old link goes stale and
-  // Copy/Send mint a fresh pack (which supersedes the unanswered one).
-  // Listen/Envision bundle the person's questions into a projected VISUAL
-  // review — their own workflow (scoped to their area) plus the domain terms
-  // — so the stakeholder opens ONE link with everything. Frame/Show mint a
-  // plain questions link (the edge folds the demo walkthrough onto a Show pack).
-  const reviewKind: "listen-workflow" | "agentify" | null =
-    movementId === "listen" ? "listen-workflow" : movementId === "envision" ? "agentify" : null;
-  const reviewForLink = useMemo(() => {
-    if (!reviewKind) return null;
-    const base = reviewKind === "listen-workflow"
-      ? projectListenWorkflowReview(program, name)
-      : projectAgentifyReview(program, name);
-    if (!base) return null;
-    if (primaryArea && primaryArea !== GENERAL_AREA) {
-      const scoped = base.workflows.filter((w) => w.area === primaryArea);
-      if (scoped.length) base.workflows = scoped;
-    }
-    // Fold their gap script into a listen-workflow review's question list (the
-    // agentify surface has none) so the one link still asks it below the flow.
-    if (base.kind === "listen-workflow") {
-      const seen = new Set(base.questions.map((q) => q.trim().toLowerCase()));
-      const extra = linkQuestions.filter((q) => q.trim() && !seen.has(q.trim().toLowerCase()));
-      base.questions = [...extra, ...base.questions].slice(0, 10);
-    }
-    return base;
-  }, [program, name, reviewKind, primaryArea, linkQuestions]);
+  // The card's ONE link: a projected visual review (Listen/Envision) that
+  // carries their questions, else a plain questions link. Shared with the lane's
+  // "invite everyone" via projectStakeholderReview so both mint the same pack.
+  const reviewForLink = useMemo(
+    () => projectStakeholderReview(program, movementId, name, primaryArea, linkQuestions),
+    [program, movementId, name, primaryArea, linkQuestions],
+  );
   // A questions link is "the" link only while its questions still match the
   // current script; a review link stands as long as it exists (its content is
   // the projected review, not the volatile gap script).

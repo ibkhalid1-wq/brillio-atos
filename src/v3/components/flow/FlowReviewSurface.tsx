@@ -9,13 +9,30 @@
  * block (composeAgentify/composeOntologyAtlasAnswers) and hands it up as the
  * interview `answers` text — the same quarantine → evidence path as a script.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import {
   composeAgentifyAnswers, composeOntologyAtlasAnswers, composeListenWorkflowAnswers,
   type AgentifyReview, type OntologyAtlasReview, type ListenWorkflowReview, type ReviewPayload,
 } from "@/v3/components/flow/flowReviews";
 import { WorkflowFlow, OntologyMap, type FlowNode } from "@/v3/components/flow/FlowReviewVisuals";
 import { DictationButton, joinDictation } from "@/v3/components/flow/FlowDictation";
+
+/** State that persists to the respondent's own device (keyed by the link token
+ * plus a field name), so they can close a long review and return without losing
+ * their edits. Best-effort — private mode or a full quota just falls back to
+ * ordinary in-memory state. FlowRespond clears every field on submit. */
+function usePersistentState<T>(baseKey: string | undefined, field: string, initial: T): [T, Dispatch<SetStateAction<T>>] {
+  const key = baseKey ? `${baseKey}.${field}` : "";
+  const [value, setValue] = useState<T>(() => {
+    if (!key) return initial;
+    try { const raw = localStorage.getItem(key); return raw != null ? JSON.parse(raw) as T : initial; } catch { return initial; }
+  });
+  useEffect(() => {
+    if (!key) return;
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* best-effort */ }
+  }, [key, value]);
+  return [value, setValue];
+}
 
 const DISPOSITIONS: Array<{ key: string; label: string; hint: string }> = [
   { key: "keep", label: "Stays human", hint: "judgement, relationships, the irreducibly human call" },
@@ -43,11 +60,11 @@ function AreaChips({ areas, active, onPick }: { areas: string[]; active: string;
   );
 }
 
-function AgentifySurface({ review, stakeholder, submitting, error, onSubmit }: {
+function AgentifySurface({ review, stakeholder, submitting, error, onSubmit, draftKey }: {
   review: AgentifyReview; stakeholder: string; submitting: boolean; error: string | null;
-  onSubmit: (answers: string) => void;
+  onSubmit: (answers: string) => void; draftKey?: string;
 }) {
-  const [responses, setResponses] = useState<Record<string, { disposition?: string; comment?: string }>>({});
+  const [responses, setResponses] = usePersistentState<Record<string, { disposition?: string; comment?: string }>>(draftKey, "ag", {});
   const [area, setArea] = useState("");
   const areas = areasOf(review.workflows);
   const totalSteps = review.workflows.reduce((n, w) => n + w.steps.length, 0);
@@ -111,6 +128,7 @@ function AgentifySurface({ review, stakeholder, submitting, error, onSubmit }: {
       <div className="v3fs-rvw-foot">
         <div className="v3fs-rvw-progress"><span style={{ width: `${totalSteps ? Math.round((decided / totalSteps) * 100) : 0}%` }} /></div>
         <span className="v3fs-rvw-count">{decided} of {totalSteps} steps marked</span>
+        {draftKey && decided ? <p className="v3fs-rvw-saved">✓ Saved on this device — you can close this and come back</p> : null}
         {error ? <p className="v3fs-portal-err">{error}</p> : null}
         <button type="button" className="v3fs-btn pri v3fs-rvw-send" disabled={submitting || !decided}
           onClick={() => onSubmit(composeAgentifyAnswers(review, responses))}>
@@ -121,13 +139,13 @@ function AgentifySurface({ review, stakeholder, submitting, error, onSubmit }: {
   );
 }
 
-function OntologyAtlasSurface({ review, stakeholder, submitting, error, onSubmit }: {
+function OntologyAtlasSurface({ review, stakeholder, submitting, error, onSubmit, draftKey }: {
   review: OntologyAtlasReview; stakeholder: string; submitting: boolean; error: string | null;
-  onSubmit: (answers: string) => void;
+  onSubmit: (answers: string) => void; draftKey?: string;
 }) {
-  const [termComments, setTermComments] = useState<Record<string, string>>({});
-  const [workflowComments, setWorkflowComments] = useState<Record<string, string>>({});
-  const [overall, setOverall] = useState("");
+  const [termComments, setTermComments] = usePersistentState<Record<string, string>>(draftKey, "oaTerms", {});
+  const [workflowComments, setWorkflowComments] = usePersistentState<Record<string, string>>(draftKey, "oaWf", {});
+  const [overall, setOverall] = usePersistentState(draftKey, "oaOverall", "");
   const [area, setArea] = useState("");
   const areas = areasOf([...review.terms, ...review.workflows]);
   const touched = useMemo(() =>
@@ -195,6 +213,7 @@ function OntologyAtlasSurface({ review, stakeholder, submitting, error, onSubmit
         </section>
       </div>
       <div className="v3fs-rvw-foot">
+        {draftKey && touched ? <p className="v3fs-rvw-saved">✓ Saved on this device — you can close this and come back</p> : null}
         {error ? <p className="v3fs-portal-err">{error}</p> : null}
         <button type="button" className="v3fs-btn pri v3fs-rvw-send" disabled={submitting || !touched}
           onClick={() => onSubmit(composeOntologyAtlasAnswers(review, termComments, workflowComments, overall))}>
@@ -205,18 +224,18 @@ function OntologyAtlasSurface({ review, stakeholder, submitting, error, onSubmit
   );
 }
 
-function ListenWorkflowSurface({ review, stakeholder, submitting, error, onSubmit }: {
+function ListenWorkflowSurface({ review, stakeholder, submitting, error, onSubmit, draftKey }: {
   review: ListenWorkflowReview; stakeholder: string; submitting: boolean; error: string | null;
-  onSubmit: (answers: string) => void;
+  onSubmit: (answers: string) => void; draftKey?: string;
 }) {
-  const [wfSteps, setWfSteps] = useState<FlowNode[][]>(
-    () => review.workflows.map((w) => w.steps.map((s) => ({
+  const [wfSteps, setWfSteps] = usePersistentState<FlowNode[][]>(draftKey, "lwSteps",
+    review.workflows.map((w) => w.steps.map((s) => ({
       action: s.action, original: s.action, actor: s.actor, originalActor: s.actor, system: s.system, originalSystem: s.system, entities: s.entities,
     }))));
-  const [narration, setNarration] = useState("");
-  const [termNotes, setTermNotes] = useState<Record<string, string>>({});
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [addedTerms, setAddedTerms] = useState<Array<{ name: string; note: string }>>([]);
+  const [narration, setNarration] = usePersistentState(draftKey, "lwNarr", "");
+  const [termNotes, setTermNotes] = usePersistentState<Record<string, string>>(draftKey, "lwTerms", {});
+  const [answers, setAnswers] = usePersistentState<Record<string, string>>(draftKey, "lwAns", {});
+  const [addedTerms, setAddedTerms] = usePersistentState<Array<{ name: string; note: string }>>(draftKey, "lwAdd", []);
 
   const editStep = (wi: number, si: number, action: string) => setWfSteps((prev) =>
     prev.map((steps, i) => i !== wi ? steps : steps.map((s, j) => j !== si ? s : { ...s, action })));
@@ -370,6 +389,7 @@ function ListenWorkflowSurface({ review, stakeholder, submitting, error, onSubmi
       </aside>
 
       <div className="v3fs-rvw-foot">
+        {draftKey && proposal.count ? <p className="v3fs-rvw-saved">✓ Saved on this device — you can close this and come back</p> : null}
         {error ? <p className="v3fs-portal-err">{error}</p> : null}
         <button type="button" className="v3fs-btn pri v3fs-rvw-send" disabled={submitting || !proposal.count}
           onClick={() => onSubmit(compose())}>{submitting ? "Sending…" : "Send my changes"}</button>
@@ -378,15 +398,18 @@ function ListenWorkflowSurface({ review, stakeholder, submitting, error, onSubmi
   );
 }
 
-export default function FlowReviewSurface({ review, stakeholder, submitting, error, onSubmit }: {
+export default function FlowReviewSurface({ review, stakeholder, submitting, error, onSubmit, draftKey }: {
   review: ReviewPayload; stakeholder: string; submitting: boolean; error: string | null;
   onSubmit: (answers: string) => void;
+  /** Persist the respondent's edits to their device under this key so they can
+   * close a long review and return. FlowRespond clears it on submit. */
+  draftKey?: string;
 }) {
   if (review.kind === "agentify") {
-    return <AgentifySurface review={review} stakeholder={stakeholder} submitting={submitting} error={error} onSubmit={onSubmit} />;
+    return <AgentifySurface review={review} stakeholder={stakeholder} submitting={submitting} error={error} onSubmit={onSubmit} draftKey={draftKey} />;
   }
   if (review.kind === "listen-workflow") {
-    return <ListenWorkflowSurface review={review} stakeholder={stakeholder} submitting={submitting} error={error} onSubmit={onSubmit} />;
+    return <ListenWorkflowSurface review={review} stakeholder={stakeholder} submitting={submitting} error={error} onSubmit={onSubmit} draftKey={draftKey} />;
   }
-  return <OntologyAtlasSurface review={review} stakeholder={stakeholder} submitting={submitting} error={error} onSubmit={onSubmit} />;
+  return <OntologyAtlasSurface review={review} stakeholder={stakeholder} submitting={submitting} error={error} onSubmit={onSubmit} draftKey={draftKey} />;
 }

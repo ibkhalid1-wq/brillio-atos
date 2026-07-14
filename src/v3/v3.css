@@ -5639,6 +5639,10 @@ button.v3fs-stale-tag {font-family:inherit;border:none;cursor:pointer}
 .v3fs-portal-progress > span {font-size:11.5px;font-weight:600;color:var(--v3-text-secondary)}
 .v3fs-portal-track {height:5px;border-radius:99px;background:var(--fs-line);overflow:hidden}
 .v3fs-portal-track div {height:100%;border-radius:99px;background:linear-gradient(90deg, var(--v3-accent-2), var(--v3-accent-b, #7c6ef2));transition:width .4s cubic-bezier(.22,1,.36,1)}
+/* "Saved on this device" — the reassurance that a half-finished response won't
+   be lost, on both the plain form and the visual review surfaces. */
+.v3fs-portal-saved,.v3fs-rvw-saved {margin:0;font-size:11px;font-weight:600;color:var(--v3-green);display:inline-flex;align-items:center;gap:5px}
+.v3fs-rvw-saved {margin-top:2px}
 .v3fs-portal-intro {font-size:13px;line-height:1.65;color:var(--v3-text-muted);white-space:pre-line;margin:14px 0 0}
 .v3fs-portal-again {font-size:12px;color:var(--v3-amber);margin:10px 0 0}
 .v3fs-portal-qs {display:flex;flex-direction:column;gap:22px;margin-top:34px;padding-bottom:8px}
@@ -6678,6 +6682,13 @@ details[open] > summary .v3fs-disc-c::after {display:none}
   padding:8px 14px 15px;border-top:1px solid var(--fs-line)}
 .v3fs-lane-b details.v3fs-ivc[open] {grid-column:1/-1}
 .v3fs-lane-b .v3fs-ivc {box-shadow:var(--fs-shadow)}
+/* "Invite everyone" — a lane-wide action to mint links for all not-yet-reached
+   people in this area, spanning the card grid above them. */
+.v3fs-lane-invite {grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  padding:8px 13px;border-radius:11px;background:color-mix(in srgb,var(--v3-accent-2) 5%,transparent);
+  border:1px dashed color-mix(in srgb,var(--v3-accent-2) 32%,var(--fs-line))}
+.v3fs-lane-invite > span {font-size:11.5px;font-weight:600;color:var(--v3-text-secondary)}
+.v3fs-lane-invite .v3fs-btn {white-space:nowrap}
 @media (max-width:560px){
   .v3fs-lane-h {grid-template-columns:auto 1fr auto;gap:9px}
   .v3fs-lane-prog {grid-column:2;grid-row:2;justify-self:start}

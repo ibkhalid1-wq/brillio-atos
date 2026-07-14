@@ -52,22 +52,56 @@ type DemoVerdict = "accepted" | "accepted-with-changes" | "rework";
 
 const FUNCTIONS_BASE = `${import.meta.env.VITE_SUPABASE_URL || ""}/functions/v1`;
 
+/** A stakeholder's in-progress answers, kept on THEIR device so they can close
+ * the link and come back without losing work. Keyed by the link token, cleared
+ * once they submit. Answers never leave the browser until they press send. */
+interface RespondDraft {
+  answers?: Record<number, string>;
+  deferrals?: Record<number, string>;
+  extra?: string;
+  verdict?: DemoVerdict | null;
+  comment?: string;
+  phaseComments?: Record<string, string>;
+}
+function readRespondDraft(key: string): RespondDraft {
+  try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) as RespondDraft : {}; } catch { return {}; }
+}
+
 export default function FlowRespond({ token }: { token: string }) {
+  const draftKey = `atos.respond.${token}`;
+  const draft0 = readRespondDraft(draftKey);
   const [state, setState] = useState<PackState>({ phase: "loading" });
-  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [answers, setAnswers] = useState<Record<number, string>>(draft0.answers ?? {});
   // Per-question deferral: "not me — this is for <name>". A deferred question
   // counts as handled here and is routed to that person's card on ingest.
-  const [deferrals, setDeferrals] = useState<Record<number, string>>({});
+  const [deferrals, setDeferrals] = useState<Record<number, string>>(draft0.deferrals ?? {});
   const [attachments, setAttachments] = useState<Record<number, Array<{ name: string; sourceKey?: string }>>>({});
   const [attachBusy, setAttachBusy] = useState<number | null>(null);
   const [attachNote, setAttachNote] = useState<string | null>(null);
-  const [extra, setExtra] = useState("");
-  const [verdict, setVerdict] = useState<DemoVerdict | null>(null);
-  const [comment, setComment] = useState("");
+  const [extra, setExtra] = useState(draft0.extra ?? "");
+  const [verdict, setVerdict] = useState<DemoVerdict | null>(draft0.verdict ?? null);
+  const [comment, setComment] = useState(draft0.comment ?? "");
   // Per-phase demo comments, keyed by flow · step — folded into the verdict.
-  const [phaseComments, setPhaseComments] = useState<Record<string, string>>({});
+  const [phaseComments, setPhaseComments] = useState<Record<string, string>>(draft0.phaseComments ?? {});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Persist the draft as they type; clear it once the link is submitted or spent.
+  const hasDraft = !!(Object.keys(answers).length || extra.trim() || Object.keys(deferrals).length
+    || verdict || comment.trim() || Object.keys(phaseComments).length);
+  useEffect(() => {
+    try {
+      if (state.phase === "sent") {
+        // Clear the plain-form draft AND every review-surface sub-key (draftKey.*).
+        for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+          const k = localStorage.key(i);
+          if (k && (k === draftKey || k.startsWith(`${draftKey}.`))) localStorage.removeItem(k);
+        }
+        return;
+      }
+      if (hasDraft) localStorage.setItem(draftKey, JSON.stringify({ answers, deferrals, extra, verdict, comment, phaseComments }));
+    } catch { /* private mode / quota — draft-save is best-effort */ }
+  }, [draftKey, state.phase, hasDraft, answers, deferrals, extra, verdict, comment, phaseComments]);
 
   useEffect(() => {
     let alive = true;
@@ -192,7 +226,7 @@ export default function FlowRespond({ token }: { token: string }) {
             </div>
           ) : state.pack.review ? (
             <FlowReviewSurface review={state.pack.review} stakeholder={state.pack.stakeholder}
-              submitting={submitting} error={error}
+              submitting={submitting} error={error} draftKey={draftKey}
               onSubmit={(answers) => void submit({ answers })} />
           ) : state.pack.kind === "demo" ? (
             <>
@@ -258,7 +292,7 @@ export default function FlowRespond({ token }: { token: string }) {
                   }}>
                   {submitting ? "Sending…" : "Record my verdict"}
                 </button>
-                <p className="v3fs-portal-foot">Your verdict goes to the programme team for review before it enters the record.</p>
+                <p className="v3fs-portal-foot">Your verdict goes to the programme team for review before it enters the record.{hasDraft ? " Your progress is saved on this device — you can close this and come back." : ""}</p>
               </div>
             </>
           ) : (
@@ -357,6 +391,7 @@ export default function FlowRespond({ token }: { token: string }) {
                   <div className="v3fs-portal-track" aria-hidden="true">
                     <div style={{ width: `${state.pack.questions.length ? Math.round((answeredCount / state.pack.questions.length) * 100) : 0}%` }} />
                   </div>
+                  {hasDraft ? <span className="v3fs-portal-saved">✓ Saved on this device — you can close this and come back</span> : null}
                 </div>
                 <button type="button" className="v3fs-btn pri v3fs-portal-send"
                   disabled={submitting || (composed.trim().length < 20 && Object.values(attachments).every((docs) => !docs.length) && !Object.keys(deferrals).length)}
