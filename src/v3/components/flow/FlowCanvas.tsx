@@ -10,9 +10,10 @@ import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 import {
   flowMovements, frontierMovementId, movementEvidence, movementArtifacts,
   gateReadiness, gateChecklist, listenCoverage, movementFacts, demoAcceptance,
-  spineRegenerationPlan, attestHeardRoster, artifactOpenGaps,
+  spineRegenerationPlan, attestHeardRoster, artifactOpenGaps, artifactDocument,
   type ArtifactCardModel, type EvidenceEntry,
 } from "@/v3/components/flow/flowShellData";
+import { canSendForApproval, artifactApprovalState, eligibleApprovers, type ApprovalStatus } from "@/v3/components/flow/flowApprovals";
 import { meetingKit } from "@/v3/components/flow/flowMeetings";
 import { listInterviewPacks, listDemoInvites, portalLinkFor } from "@/v3/components/flow/flowPortal";
 import { resolveMovementStakeholders } from "@/v3/components/flow/flowStakeholders";
@@ -721,7 +722,11 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                       </div>
                     ) : null;
                   })() : null}
-                  {artifacts.map((artifact) => (
+                  {artifacts.map((artifact) => {
+                    const approval = artifactApprovalState(program, movement.id, artifact.id);
+                    const canSend = !!onSendForApproval && canSendForApproval(program, movement, artifact)
+                      && approval.status !== "in-review" && approval.status !== "approved";
+                    return (
                     <ArtifactDoc
                       key={artifact.id}
                       artifact={artifact}
@@ -733,8 +738,18 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                       onGenerate={() => onRunAgent(artifact.id, movement.id)}
                       onOpen={artifact.present ? () => setDocFor(artifact) : undefined}
                       onGoEvidence={() => goTab("collect")}
+                      approvalStatus={approval.status}
+                      approver={approval.approver}
+                      approvalComment={approval.comment}
+                      canSend={canSend}
+                      approvers={canSend ? eligibleApprovers(program) : []}
+                      onSend={onSendForApproval ? (approver) => onSendForApproval({
+                        artifactId: artifact.id, movementId: movement.id, artifactTitle: artifact.title,
+                        approver, snapshot: artifactDocument(program, artifact.id) ?? artifact.excerpt ?? undefined,
+                      }) : undefined}
                     />
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <div className={tabKey === "gate" ? "" : "v3fs-tabhide"}>
@@ -892,7 +907,6 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
           onClose={() => setDocFor(null)}
           onRegenerate={() => onRunAgent(docFor.id, docFor.movementId)}
           onSaveDoc={onSaveArtifactDoc}
-          onSendForApproval={onSendForApproval}
           onOpenInbox={onOpenInbox}
         /></Suspense>
       ) : null}
@@ -1044,7 +1058,7 @@ function ShipLanesBoard({ program, onCompile, onToggle, onSetLane }: {
   );
 }
 
-function ArtifactDoc({ artifact, running, evidenceNames, evidenceCount, lastError, openGaps, onGenerate, onOpen, onGoEvidence }: {
+function ArtifactDoc({ artifact, running, evidenceNames, evidenceCount, lastError, openGaps, onGenerate, onOpen, onGoEvidence, approvalStatus, approver, approvalComment, canSend, approvers, onSend }: {
   artifact: ArtifactCardModel;
   running: boolean;
   evidenceNames: string[];
@@ -1059,7 +1073,30 @@ function ArtifactDoc({ artifact, running, evidenceNames, evidenceCount, lastErro
   onOpen?: () => void;
   /** "evidence changed" chip → the Evidence tab, where the change lives. */
   onGoEvidence?: () => void;
+  /** Approval — surfaced on the card so sign-off is part of the process, not
+   * buried in the document. */
+  approvalStatus?: ApprovalStatus;
+  approver?: { name: string; role: string };
+  approvalComment?: string;
+  canSend?: boolean;
+  approvers?: Array<{ name: string; role: string; email: string }>;
+  onSend?: (approver: { name: string; role: string; email?: string }) => Promise<string | null>;
 }) {
+  const [picking, setPicking] = useState(false);
+  const [approverName, setApproverName] = useState("");
+  const [sendBusy, setSendBusy] = useState(false);
+  const [sentLink, setSentLink] = useState<string | null>(null);
+  const doSend = async () => {
+    if (!onSend || !approvers?.length) return;
+    const chosen = approvers.find((a) => a.name === approverName) ?? approvers[0];
+    setSendBusy(true);
+    try {
+      const link = await onSend(chosen);
+      setSentLink(link);
+      if (link) { try { await navigator.clipboard.writeText(link); } catch { /* clipboard blocked */ } }
+      setPicking(false);
+    } finally { setSendBusy(false); }
+  };
   if (running) {
     // Generation theater: show what ATOS is reading while it drafts, so the
     // evidence → artifact transformation is visible, not a spinner.
@@ -1132,6 +1169,39 @@ function ArtifactDoc({ artifact, running, evidenceNames, evidenceCount, lastErro
           </button>
         )}
       </div>
+      {/* Approval lives on the card — sign-off is part of the process. */}
+      {approvalStatus === "approved" ? (
+        <div className="v3fs-doc-appr ok">✓ Approved{approver ? ` · ${approver.name}` : ""}</div>
+      ) : approvalStatus === "in-review" ? (
+        <div className="v3fs-doc-appr wait">◷ In review{approver ? ` · ${approver.name}` : ""}</div>
+      ) : approvalStatus === "changes" ? (
+        <div className="v3fs-doc-appr changes">↺ Changes requested{approvalComment ? ` — “${approvalComment.slice(0, 80)}”` : ""}</div>
+      ) : null}
+      {sentLink ? (
+        <div className="v3fs-doc-appr sent">
+          ✓ Approval link ready — copied. Send it to the approver.
+          <input className="v3fs-dir-in" readOnly value={sentLink} aria-label="Approval link"
+            onFocus={(event) => event.currentTarget.select()} />
+        </div>
+      ) : canSend && picking ? (
+        <div className="v3fs-doc-send" role="group" aria-label="Send for approval">
+          {approvers?.length ? (
+            <>
+              <select className="v3fs-dir-in" value={approverName} onChange={(event) => setApproverName(event.target.value)} aria-label="Choose approver">
+                {approvers.map((a) => <option key={a.name} value={a.name}>{a.name}{a.role ? ` — ${a.role}` : ""}</option>)}
+              </select>
+              <button type="button" className="v3fs-btn pri" disabled={sendBusy} onClick={() => void doSend()}>{sendBusy ? "Minting…" : "Mint link"}</button>
+            </>
+          ) : (
+            <span className="v3fs-doc-send-empty">No one has an email on file — add an address on People first.</span>
+          )}
+          <button type="button" className="v3fs-btn" onClick={() => setPicking(false)}>Cancel</button>
+        </div>
+      ) : canSend ? (
+        <div className="v3fs-doc-foot v3fs-doc-sendrow">
+          <button type="button" className="v3fs-btn" onClick={() => { setApproverName(approvers?.[0]?.name ?? ""); setPicking(true); }}>➤ Send for approval</button>
+        </div>
+      ) : null}
     </div>
   );
 }

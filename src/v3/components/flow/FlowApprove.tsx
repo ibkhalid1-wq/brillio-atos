@@ -98,7 +98,20 @@ export default function FlowApprove({ token }: { token: string }) {
                 </p>
               </header>
               <article className="v3fs-panel v3fs-approve-doc" aria-label={state.pack.artifactTitle}>
-                <div className="v3fs-ph"><h3>{state.pack.artifactTitle}</h3><span>as prepared for your sign-off</span></div>
+                <div className="v3fs-ph">
+                  <h3>{state.pack.artifactTitle}</h3><span>as prepared for your sign-off</span>
+                  {state.pack.snapshot ? (
+                    <button type="button" className="v3fs-a v3fs-approve-dl" onClick={() => {
+                      const text = `${state.pack.artifactTitle}\n${"=".repeat(state.pack.artifactTitle.length)}\n\n${state.pack.snapshot}\n`;
+                      const url = URL.createObjectURL(new Blob([text], { type: "text/markdown;charset=utf-8" }));
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `${state.pack.artifactTitle.replace(/[^\w.\- ]+/g, "_").trim() || "document"}.md`;
+                      document.body.appendChild(a); a.click(); a.remove();
+                      URL.revokeObjectURL(url);
+                    }}>⤓ Download</button>
+                  ) : null}
+                </div>
                 <div className="v3fs-approve-snap">{state.pack.snapshot || "The document text wasn't captured — ask the team to re-send with the content."}</div>
               </article>
               <div className="v3fs-panel v3fs-approve-act">
