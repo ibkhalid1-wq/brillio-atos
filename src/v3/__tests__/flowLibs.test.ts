@@ -26,6 +26,7 @@ import { mapTranscriptSpeakers } from "@/v3/components/flow/flowTranscriptMap";
 import { gateApprovalIntegrity } from "@/v3/components/flow/flowGovernance";
 import { validateOntologyConstraints, hasBlockingOntologyViolations, partitionOntologyViolations } from "@/v3/components/flow/flowOntologyConstraints";
 import { readMetricRegistry, metricConsistency, metricById } from "@/v3/components/flow/flowMetricRegistry";
+import { readGovernedExceptions, withNewException, withResolvedException } from "@/v3/components/flow/flowExceptions";
 
 const programme = (inner: Record<string, unknown>): ProgramSummary =>
   ({ id: "p1", name: "Test", rawData: inner } as unknown as ProgramSummary);
@@ -446,6 +447,23 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
     // the routed person's listen card asks it
     const prakash = resolveMovementStakeholders(p, "listen").find((s2) => /Prakash/.test(s2.name));
     expect(prakash?.questions.some((q) => /legal twice/.test(q))).toBe(true);
+  });
+
+  it("governed exceptions: log, read back per movement, and resolve — fingerprint-safe under _governedExceptions", () => {
+    const added = withNewException([], { scope: "Cutover before Legal sign-off", justification: "Deadline immovable; risk accepted", basis: "Sponsor decision", reviewBy: "2026-08-01" }, "you");
+    expect(added).toHaveLength(1);
+    expect(added[0].status).toBe("open");
+    // Invalid (missing scope/justification) is a no-op — returns the SAME array.
+    expect(withNewException(added, { scope: "", justification: "", basis: "" }, "you")).toBe(added);
+    const p = programme({ phaseInputs: { envision: { _governedExceptions: JSON.stringify(added) } } });
+    const read = readGovernedExceptions(p, "envision");
+    expect(read).toHaveLength(1);
+    expect(read[0].scope).toBe("Cutover before Legal sign-off");
+    expect(readGovernedExceptions(p, "listen")).toHaveLength(0);  // scoped per movement
+    // Resolve flips status and stamps a resolution; open sorts before resolved.
+    const resolved = withResolvedException(added, added[0].id, "Legal signed the next day", "you");
+    expect(resolved[0].status).toBe("resolved");
+    expect(resolved[0].resolution).toMatch(/Legal signed/);
   });
 
   it("in Listen the sponsor's card carries ONLY conflicts to resolve; discovery routes to the stakeholders", () => {

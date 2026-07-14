@@ -15,6 +15,7 @@ import { listInterviewPacks, portalLinkFor } from "@/v3/components/flow/flowPort
 import { resolveMovementStakeholders, readRoleBindings, type MovementStakeholder } from "@/v3/components/flow/flowStakeholders";
 import { mapTranscriptSpeakers } from "@/v3/components/flow/flowTranscriptMap";
 import { AttachFileButton, TranscribeButton, copyTextFromAction } from "@/v3/components/flow/flowCapture";
+import { readGovernedExceptions, withNewException, withResolvedException } from "@/v3/components/flow/flowExceptions";
 
 /** A movement's discovery, organized by stakeholder. One card per person or
  * role: their script, their link/meeting channels, their captured evidence, a
@@ -190,7 +191,124 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
           </div>
         ))}
       </div>
+      <GovernedExceptions program={program} movementId={movementId} onSaveInputs={onSaveInputs} />
     </div>
+  );
+}
+
+/**
+ * Governed exceptions — the escape valve for the edit-lock. The operator can't
+ * hand-edit artifacts, but they CAN record a deliberate, justified deviation:
+ * a first-class logged entry with a scope, a justification, an authority, and a
+ * review date. It reads alongside the evidence, is attested tier-1, and is
+ * auditable — a decision, never a silent change. Available on every movement.
+ */
+function GovernedExceptions({ program, movementId, onSaveInputs }: {
+  program: ProgramSummary;
+  movementId: string;
+  onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
+}) {
+  const exceptions = readGovernedExceptions(program, movementId);
+  const openCount = exceptions.filter((entry) => entry.status === "open").length;
+  const [adding, setAdding] = useState(false);
+  const [scope, setScope] = useState("");
+  const [justification, setJustification] = useState("");
+  const [basis, setBasis] = useState("");
+  const [reviewBy, setReviewBy] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [resolveNote, setResolveNote] = useState("");
+
+  const persist = async (next: ReturnType<typeof readGovernedExceptions>, action: string, detail?: string) => {
+    setBusy(true);
+    try {
+      await onSaveInputs(movementId, { _governedExceptions: JSON.stringify(next) }, { silent: true, attest: { action, detail } });
+    } finally { setBusy(false); }
+  };
+  const save = async () => {
+    const next = withNewException(exceptions, { scope, justification, basis, reviewBy }, "you");
+    if (next === exceptions) return;
+    await persist(next, `Governed exception logged — ${movementId}`, scope.trim().slice(0, 140));
+    setScope(""); setJustification(""); setBasis(""); setReviewBy(""); setAdding(false);
+  };
+  const resolve = async (id: string) => {
+    const next = withResolvedException(exceptions, id, resolveNote, "you");
+    await persist(next, `Governed exception resolved — ${movementId}`, resolveNote.trim().slice(0, 140) || undefined);
+    setResolvingId(null); setResolveNote("");
+  };
+
+  return (
+    <details className="v3fs-gex" open={openCount > 0}>
+      <summary>
+        <span className="v3fs-gex-ic" aria-hidden="true">⚖</span>
+        <b>Governed exceptions</b>
+        {exceptions.length
+          ? <span className="v3fs-gex-count">{openCount ? `${openCount} open` : "all resolved"} · {exceptions.length} logged</span>
+          : <span className="v3fs-gex-count quiet">none logged</span>}
+      </summary>
+      <p className="v3fs-gex-lead">
+        A logged, justified deviation — recorded and auditable, never a silent change to an artifact.
+        Use it when the programme knowingly departs from the record: a waived constraint, a domain heard
+        from a single voice, a step taken before a sign-off lands.
+      </p>
+      {exceptions.length ? (
+        <div className="v3fs-gex-list">
+          {exceptions.map((ex) => (
+            <div key={ex.id} className={`v3fs-gex-row ${ex.status}`}>
+              <div className="v3fs-gex-row-h">
+                <span className={`v3fs-gex-st ${ex.status}`}>{ex.status === "open" ? "● Open" : "✓ Resolved"}</span>
+                <b>{ex.scope}</b>
+              </div>
+              <p className="v3fs-gex-just">{ex.justification}</p>
+              <div className="v3fs-gex-meta">
+                {ex.basis ? <span title="Authority / evidence basis">⚑ {ex.basis}</span> : null}
+                {ex.reviewBy ? <span title="Review by">↻ review {ex.reviewBy}</span> : null}
+                <span title="Logged">{(ex.createdAt || "").slice(0, 10)} · {ex.createdBy}</span>
+                {ex.resolution ? <span className="ok" title="How it closed">→ {ex.resolution}</span> : null}
+              </div>
+              {ex.status === "open" ? (
+                resolvingId === ex.id ? (
+                  <div className="v3fs-gex-resolve">
+                    <input value={resolveNote} onChange={(e) => setResolveNote(e.target.value)}
+                      placeholder="How was it closed? (optional)" aria-label="Resolution note" />
+                    <button type="button" className="v3fs-btn pri" disabled={busy} onClick={() => void resolve(ex.id)}>Confirm</button>
+                    <button type="button" className="v3fs-btn quiet" onClick={() => { setResolvingId(null); setResolveNote(""); }}>Cancel</button>
+                  </div>
+                ) : (
+                  <button type="button" className="v3fs-btn quiet v3fs-gex-mark" onClick={() => setResolvingId(ex.id)}>Mark resolved</button>
+                )
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {adding ? (
+        <div className="v3fs-gex-form">
+          <label>What are you making an exception for?
+            <input value={scope} onChange={(e) => setScope(e.target.value)}
+              placeholder="e.g. Cutover proceeds before Legal's sign-off" />
+          </label>
+          <label>Why is it justified?
+            <textarea value={justification} onChange={(e) => setJustification(e.target.value)} rows={2}
+              placeholder="The reasoning the programme is standing behind" />
+          </label>
+          <label>On whose authority, or on what basis?
+            <input value={basis} onChange={(e) => setBasis(e.target.value)}
+              placeholder="e.g. Sponsor decision 2026-07-14; residual risk accepted on the record" />
+          </label>
+          <label className="v3fs-gex-date">Review by (optional)
+            <input type="date" value={reviewBy} onChange={(e) => setReviewBy(e.target.value)} />
+          </label>
+          <div className="v3fs-gex-actions">
+            <button type="button" className="v3fs-btn pri" disabled={busy || !scope.trim() || !justification.trim()}
+              onClick={() => void save()}>{busy ? "Logging…" : "Log exception"}</button>
+            <button type="button" className="v3fs-btn quiet" onClick={() => setAdding(false)}>Cancel</button>
+          </div>
+        </div>
+      ) : (
+        <button type="button" className="v3fs-btn v3fs-gex-add" onClick={() => setAdding(true)}>⚖ Log a governed exception</button>
+      )}
+    </details>
   );
 }
 
