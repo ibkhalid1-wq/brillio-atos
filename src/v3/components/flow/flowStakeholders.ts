@@ -660,8 +660,9 @@ export function deliveryRoleDirectory(program: ProgramSummary): DeliveryRoleEntr
   return out;
 }
 
-/** The stakeholders a movement collects evidence from. */
-export function resolveMovementStakeholders(program: ProgramSummary, movementId: string): MovementStakeholder[] {
+/** The base stakeholders a movement's OWN model produces (kit interviews, role
+ * templates, the sponsor) — before operator-added people are folded in. */
+function movementStakeholdersBase(program: ProgramSummary, movementId: string): MovementStakeholder[] {
   if (movementId === "frame") {
     // Frame's one voice is the sponsor — their conversation runs on the same
     // full-width collection card as every other stakeholder, with the meeting
@@ -713,6 +714,54 @@ export function resolveMovementStakeholders(program: ProgramSummary, movementId:
     });
   }
   return [];
+}
+
+/** A movement-appropriate opening question for an operator-added person, so a
+ * name dropped onto the People page becomes a real collection card rather than
+ * a row that never gets asked anything. */
+const DIRECTORY_OPENERS: Record<string, string> = {
+  listen: "Walk us through your part of the process — what do you pick up, from whom, and what do you hand off when you're done?",
+  envision: "For your part of this, what must be true — technically and operationally — for it to work, and where are the risks?",
+  show: "Watch your part of the workflow run in the prototype — does it do what you described, and would you sign off on it?",
+  ship: "What must hold in production for your area, and what would you need to see before go-live?",
+  evolve: "In live operation, what's working in your area and what still needs attention?",
+};
+
+/** Operator-added people (People page → Add a person) as collection cards for
+ * their movement — so everyone listed under People maps to a real collection
+ * card. A directory role that matches a movement's template inherits that
+ * template's questions; otherwise it gets the movement's opener. */
+function directoryStakeholdersFor(program: ProgramSummary, movementId: string): MovementStakeholder[] {
+  const opener = DIRECTORY_OPENERS[movementId];
+  if (!opener) return [];
+  const template = ROLE_TEMPLATES[movementId] ?? [];
+  return readDirectoryPeople(program)
+    .filter((person) => person.movementId === movementId && person.name.trim())
+    .map((person, index) => {
+      const templated = template.find((entry) => normRole(entry.role) === normRole(person.role));
+      const asks = contradictionAsksFor(program, person.name);
+      return {
+        id: `dir-${movementId}-${index}`,
+        name: person.name.trim(),
+        role: person.role.trim() || "Contributor",
+        questions: [...new Set([...(templated ? templated.questions : [opener]), ...asks])],
+        isRole: false,
+      };
+    });
+}
+
+/**
+ * The stakeholders a movement collects evidence from — the movement's own model
+ * PLUS anyone the operator added to it on the People page, so every person under
+ * People maps to a real collection card. Dedup keeps a directory person who is
+ * already a roster voice from listing twice.
+ */
+export function resolveMovementStakeholders(program: ProgramSummary, movementId: string): MovementStakeholder[] {
+  const base = movementStakeholdersBase(program, movementId);
+  const directory = directoryStakeholdersFor(program, movementId);
+  if (!directory.length) return base;
+  const seen = new Set(base.map((s) => s.name.trim().toLowerCase()).filter(Boolean));
+  return [...base, ...directory.filter((s) => !seen.has(s.name.trim().toLowerCase()))];
 }
 
 /**

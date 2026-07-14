@@ -475,6 +475,34 @@ describe("Listen gap routing — ontology gaps reach the SME they name, and read
   });
 });
 
+describe("People → collection mapping — everyone added under People gets a card", () => {
+  it("an operator-added person surfaces in THEIR movement's collection, once, with a real script", () => {
+    const p = programme({
+      phaseInputs: { listen: { _directoryPeople: JSON.stringify([
+        { id: "dp1", name: "Maya Chen", role: "Data Steward", movementId: "envision", roleResolved: true },
+      ]) } },
+    });
+    const envision = resolveMovementStakeholders(p, "envision");
+    const maya = envision.find((s) => s.name === "Maya Chen");
+    expect(maya).toBeTruthy();
+    expect(maya!.isRole).toBe(false);
+    expect(maya!.questions.length).toBeGreaterThan(0);
+    // Listed once, and only under the movement they were added to.
+    expect(envision.filter((s) => s.name === "Maya Chen")).toHaveLength(1);
+    expect(resolveMovementStakeholders(p, "ship").some((s) => s.name === "Maya Chen")).toBe(false);
+  });
+
+  it("a directory role matching a movement template inherits that template's questions", () => {
+    const p = programme({
+      phaseInputs: { listen: { _directoryPeople: JSON.stringify([
+        { id: "dp2", name: "Sam Rao", role: "Solution Architect", movementId: "envision", roleResolved: true },
+      ]) } },
+    });
+    const sam = resolveMovementStakeholders(p, "envision").find((s) => s.name === "Sam Rao");
+    expect(sam?.questions.some((q) => /system of record|constraints/i.test(q))).toBe(true);
+  });
+});
+
 describe("meetingKit follow-up — only askable gaps become script questions", () => {
   const framed = (gaps: string[]) => programme({
     phaseInputs: { frame: {
