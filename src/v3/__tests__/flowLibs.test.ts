@@ -5,7 +5,7 @@
  */
 import { describe, it, expect } from "vitest";
 import type { ProgramSummary } from "@/new/types";
-import { resolveFlowDecision, listOpenFlowDecisions, describeDecisionChanges, handledContradictionStatements, isContradictionHandled } from "@/v3/components/flow/flowDecisions";
+import { resolveFlowDecision, listOpenFlowDecisions, describeDecisionChanges, handledContradictionStatements, isContradictionHandled, pruneFlowDecisionsForStorage } from "@/v3/components/flow/flowDecisions";
 import { scriptDocumentRefs, meetingKit, stakeholderEmail, buildMeetingIcs, mailtoLink, kitGaps } from "@/v3/components/flow/flowMeetings";
 import { locateQuote, kitPersonas, personasMissingFromAtlas, readContradictions, contradictionLogWithout } from "@/v3/components/flow/flowShellData";
 import { mintBrief, buildBriefSnapshot } from "@/v3/components/flow/flowBriefs";
@@ -277,6 +277,49 @@ describe("contradictionEntries — watcher findings file as open log rows", () =
     const blob = resolveFlowDecision(withDecision(), "cw1", "declined", "you")!;
     const listen = (blob.phaseInputs as Record<string, Record<string, string>> | undefined)?.listen;
     expect(listen?.contradictionLog).toBeUndefined();
+  });
+});
+
+describe("pruneFlowDecisionsForStorage — the decision log can't balloon the blob", () => {
+  const heavy = { artifactDocs: { charter: { body: "x".repeat(500) } }, artifactStubs: [{ record: "y".repeat(500) }] };
+
+  it("keeps OPEN decisions' payload intact (it applies on confirm)", () => {
+    const open = [{ id: "o1", status: "open", agentId: "x", payload: heavy }];
+    const out = pruneFlowDecisionsForStorage(open) as Array<Record<string, unknown>>;
+    expect(out[0].payload).toEqual(heavy);
+  });
+
+  it("slims a RESOLVED decision's heavy payload but keeps contradiction rows for dedup", () => {
+    const resolved = [{ id: "r1", status: "confirmed", agentId: "x",
+      payload: { ...heavy, contradictionEntries: [{ statement: "Quote table disputed" }] } }];
+    const [row] = pruneFlowDecisionsForStorage(resolved) as Array<Record<string, unknown>>;
+    const payload = row.payload as Record<string, unknown>;
+    expect(payload.artifactDocs).toBeUndefined();
+    expect(payload.artifactStubs).toBeUndefined();
+    expect(payload.contradictionEntries).toEqual([{ statement: "Quote table disputed" }]);
+    // A resolved decision with only heavy keys is left with a null payload.
+    const [bare] = pruneFlowDecisionsForStorage([{ id: "r2", status: "declined", payload: heavy }]) as Array<Record<string, unknown>>;
+    expect(bare.payload).toBeNull();
+  });
+
+  it("caps how many resolved decisions are retained, newest kept, order preserved", () => {
+    const many = Array.from({ length: 70 }, (_, i) => ({ id: `r${i}`, status: "confirmed", payload: {} }));
+    const withOpen = [...many, { id: "open1", status: "open", payload: heavy }];
+    const out = pruneFlowDecisionsForStorage(withOpen, 60) as Array<Record<string, unknown>>;
+    // 60 newest resolved + the open one.
+    expect(out).toHaveLength(61);
+    expect(out.some((d) => d.id === "r0")).toBe(false); // oldest dropped
+    expect(out.some((d) => d.id === "r69")).toBe(true); // newest kept
+    expect(out[out.length - 1].id).toBe("open1"); // open decision preserved in place
+  });
+
+  it("the slimmed log still answers the contradiction dedup", () => {
+    const pruned = pruneFlowDecisionsForStorage([
+      { id: "r1", status: "declined", agentId: "contradiction-watcher",
+        payload: { artifactDocs: heavy.artifactDocs, contradictionEntries: [{ statement: "Two accounts disagree on the source of record" }] } },
+    ]) as unknown[];
+    const p = programme({ flowDecisions: pruned });
+    expect(handledContradictionStatements(p)).toContain("two accounts disagree on the source of record");
   });
 });
 

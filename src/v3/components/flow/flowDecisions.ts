@@ -119,6 +119,41 @@ export function isContradictionHandled(handled: string[], statement: string): bo
   return handled.some((entry) => entry.includes(s) || s.includes(entry));
 }
 
+// A resolved decision's payload has already been applied to the blob, so its
+// heavy keys (whole regenerated documents in artifactDocs / artifactStubs) are
+// dead weight. Only these light keys are still read after resolution — keep them.
+const RESOLVED_PAYLOAD_KEEP = new Set(["contradictionEntries"]);
+
+/**
+ * Keep the decision log from dominating the stored blob. OPEN decisions keep
+ * their FULL payload — it applies on confirm. RESOLVED ones (confirmed or
+ * declined) have already been applied, so their payload is slimmed to the few
+ * light keys later logic still reads (contradiction dedup), and the oldest
+ * resolved beyond a cap are dropped entirely. Pure and order-preserving; runs on
+ * every write so a legacy oversized blob self-heals. Without this the Inbox log
+ * grows unbounded — a run of regeneration proposals embeds whole documents and
+ * the blob eventually trips Postgres's statement_timeout on save.
+ */
+export function pruneFlowDecisionsForStorage(decisions: unknown, maxResolved = 60): unknown {
+  if (!Array.isArray(decisions)) return decisions;
+  const isOpen = (d: unknown): boolean => isRecord(d) && (d.status ?? "open") === "open";
+  const resolvedPositions: number[] = [];
+  decisions.forEach((d, i) => { if (!isOpen(d)) resolvedPositions.push(i); });
+  const drop = new Set(resolvedPositions.slice(0, Math.max(0, resolvedPositions.length - maxResolved)));
+  const out: unknown[] = [];
+  decisions.forEach((decision, i) => {
+    if (drop.has(i)) return;
+    if (!isOpen(decision) && isRecord(decision) && isRecord(decision.payload)) {
+      const slim: Record<string, unknown> = {};
+      for (const key of RESOLVED_PAYLOAD_KEEP) if (key in decision.payload) slim[key] = (decision.payload as Record<string, unknown>)[key];
+      out.push({ ...decision, payload: Object.keys(slim).length ? slim : null });
+    } else {
+      out.push(decision);
+    }
+  });
+  return out;
+}
+
 export function listFlowAttestations(program: ProgramSummary): FlowAttestation[] {
   const list = innerData(program).flowAttestations;
   if (!Array.isArray(list)) return [];

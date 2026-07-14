@@ -10,6 +10,7 @@ import { enqueueWrite, flushWriteQueue, getQueuedWriteCount } from "@/lib/writeQ
 import { hasSubstantiveProgramData } from "@/v3/lib/programDataGuard";
 import { logFlowEvent } from "@/v3/lib/flowEvents";
 import { persistExternalTexts, hydrateExternalTexts } from "@/v3/lib/programTextsSync";
+import { pruneFlowDecisionsForStorage } from "@/v3/components/flow/flowDecisions";
 
 type ProgramRow = Database["public"]["Tables"]["adam_programs"]["Row"];
 type LocalProgramEntry = Record<string, unknown>;
@@ -595,6 +596,13 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
         kept = kept.slice(0, kept.length - 1);
       }
       payload.programSnapshots = kept;
+    }
+    // Same self-heal for the Inbox decision log: a resolved decision's payload
+    // has already been applied, and regeneration proposals embed whole documents
+    // (artifactDocs / artifactStubs), so an uncapped log balloons the blob until
+    // the UPDATE trips statement_timeout. Slim resolved payloads on every write.
+    if (Array.isArray(payload.flowDecisions)) {
+      payload.flowDecisions = pruneFlowDecisionsForStorage(payload.flowDecisions) as unknown[];
     }
     // DATA-LOSS GUARD. A content-free payload almost always means the program's
     // `data` blob hasn't finished hydrating (rawData was still `{}` when this save
