@@ -213,6 +213,9 @@ export default function OntologyStudio({ doc, onChange }: StudioProps) {
           onPaneClick={() => setSelected(null)}
           onInit={(instance) => { flowRef.current = instance; }}
           fitView
+          fitViewOptions={{ padding: 0.2, minZoom: 0.1 }}
+          minZoom={0.1}
+          maxZoom={2.5}
           proOptions={{ hideAttribution: true }}
           nodesConnectable
           nodesDraggable

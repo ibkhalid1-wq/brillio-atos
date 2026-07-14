@@ -103,6 +103,9 @@ export default function BlueprintGraph({ doc }: Pick<StudioProps, "doc">) {
         nodesDraggable
         nodesConnectable={false}
         fitView
+        fitViewOptions={{ padding: 0.2, minZoom: 0.1 }}
+        minZoom={0.1}
+        maxZoom={2.5}
         proOptions={{ hideAttribution: true }}
       >
         <Background gap={22} size={1} />
