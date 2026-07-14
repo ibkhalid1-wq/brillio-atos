@@ -466,7 +466,15 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                           onScheduleFollowUp={onScheduleFollowUp}
                           onSendForApproval={onSendForApproval}
                           onFocusPerson={(id, open) => setRailFocus((cur) => (open ? id : cur === id ? null : cur))}
-                          onCaptured={() => onRunAgent("contradiction-detector", movement.id)} />
+                          onCaptured={() => onRunAgent("contradiction-detector", movement.id)}
+                          onDocumentCaptured={onRunAgentAndWait ? async () => {
+                            // A transcript/document just landed — regenerate this
+                            // movement's present artifacts from the new evidence,
+                            // in dependency order, without waiting for the operator.
+                            for (const art of artifacts.filter((a) => a.present)) {
+                              await onRunAgentAndWait(art.id, movement.id);
+                            }
+                          } : undefined} />
                       ) : (
                         <MeetingKitCard
                           kit={meetingKit(program, movement.id)}

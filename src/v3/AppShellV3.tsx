@@ -64,6 +64,7 @@ import { getPreviousScore, recordConfidenceSnapshot } from "@/v3/lib/confidenceH
 import { artifactReviewFieldKey } from "@/v3/lib/artifactReview";
 import { listOpenFlowDecisions } from "@/v3/components/flow/flowDecisions";
 import { listPortalInbox } from "@/v3/components/flow/flowPortal";
+import { personaAreas } from "@/v3/components/flow/flowAreas";
 import { validateProgramBlob, migrateProgramBlob } from "@/v3/lib/blobGuard";
 import { unrosteredVoicesProposal, reDemoProposal, ontologyRepairProposal, retroAttributionProposal, negatedClaimProposal, queueWatcherProposal, contradictionEvidenceDigest } from "@/v3/components/flow/flowWatchers";
 import { mergePhaseInputBucket } from "@/v3/lib/phaseInputMerge";
@@ -2681,6 +2682,13 @@ export default function AppShellV3() {
             const impacted = movement && activeProgram
               ? movementArtifacts(activeProgram, movement).filter((a) => a.present).map((a) => a.id)
               : [];
+            // The area this response touches — steers the regeneration to focus
+            // there and preserve other areas' slices unchanged (area-aware regen).
+            const who = activeProgram ? (listPortalInbox(activeProgram).find((i) => i.id === itemId)?.stakeholder ?? "") : "";
+            const areas = activeProgram && who ? personaAreas(activeProgram, who) : [];
+            const regenGuidance = areas.length
+              ? `AREA-FOCUSED REGENERATION: new evidence just arrived from ${who} in the ${areas.join(" / ")} area. Re-derive faithfully from ALL evidence, giving special attention to ${areas[0]}; keep the workflows and entities of OTHER areas intact where their evidence is unchanged.`
+              : undefined;
             await persistFlowMutation((program) => ingestPortalResponse(program, itemId, actor));
             void runProgramAgent({ agentId: "contradiction-detector", phaseId: target, triggeredBy: "trigger", skipPreSync: true });
             // Auto-regenerate the IMPACTED movement's artifacts — new stakeholder
@@ -2692,7 +2700,7 @@ export default function AppShellV3() {
             if (impacted.length) {
               void (async () => {
                 for (const artifactId of impacted) {
-                  await runProgramAgent({ agentId: artifactId, phaseId: target, triggeredBy: "trigger" });
+                  await runProgramAgent({ agentId: artifactId, phaseId: target, triggeredBy: "trigger", regenGuidance });
                 }
               })();
             }

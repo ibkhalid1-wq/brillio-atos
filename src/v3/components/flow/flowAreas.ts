@@ -105,6 +105,37 @@ export function hasMultipleAreas(program: ProgramSummary): boolean {
   return programAreas(program).length > 1;
 }
 
+/** The areas a persona (Atlas actor) works in — the areas of the workflows
+ * whose steps they own. */
+export function personaAreas(program: ProgramSummary, persona: string): string[] {
+  const key = persona.trim().toLowerCase();
+  if (!key) return [];
+  const set = new Set<string>();
+  for (const workflow of atlasWorkflows(program)) {
+    const acts = Array.isArray(workflow.steps) && workflow.steps.filter(isRecord)
+      .some((s) => str(s.actor).trim().toLowerCase() === key);
+    if (acts) set.add(workflowArea(workflow));
+  }
+  return [...set];
+}
+
+/** The areas whose Listen voices are all heard — ready to move to Envision/Show
+ * while other areas keep collecting. */
+export function readyAreas(program: ProgramSummary): Set<string> {
+  return new Set(areaProgress(program).filter((r) => r.listenReady).map((r) => r.area));
+}
+
+/** True when a persona may start Envision/Show — their area's Listen voices are
+ * all heard. Ungated (always true) for a single-area programme or a persona
+ * with no area yet, so the gate never strands anyone. */
+export function personaReadyToAdvance(program: ProgramSummary, persona: string): boolean {
+  if (!hasMultipleAreas(program)) return true;
+  const areas = personaAreas(program, persona);
+  if (!areas.length) return true;
+  const ready = readyAreas(program);
+  return areas.some((area) => ready.has(area));
+}
+
 export interface AreaProgress {
   area: string;
   workflows: number;

@@ -29,7 +29,7 @@ import { readMetricRegistry, metricConsistency, metricById } from "@/v3/componen
 import { readGovernedExceptions, withNewException, withResolvedException } from "@/v3/components/flow/flowExceptions";
 import { projectAgentifyReview, projectOntologyAtlasReview, atlasPersonas, composeAgentifyAnswers, projectListenWorkflowReview, composeListenWorkflowAnswers } from "@/v3/components/flow/flowReviews";
 import { gateAugmentations } from "@/v3/components/flow/flowCrossValidation";
-import { programAreas, workflowArea, inferArea, areaProgress } from "@/v3/components/flow/flowAreas";
+import { programAreas, workflowArea, inferArea, areaProgress, personaAreas, personaReadyToAdvance } from "@/v3/components/flow/flowAreas";
 
 const programme = (inner: Record<string, unknown>): ProgramSummary =>
   ({ id: "p1", name: "Test", rawData: inner } as unknown as ProgramSummary);
@@ -555,6 +555,22 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
     const sales = rows.find((r) => r.area === "Sales");
     expect(marketing?.listenReady).toBe(true);   // Priya heard
     expect(sales?.listenReady).toBe(false);       // Dana not heard yet
+  });
+
+  it("per-area gate: a persona can advance only once their area's voices are heard", () => {
+    const p = programme({ data: {
+      phaseInputs: { listen: { interviewTranscripts: "— Priya, Marketing Lead, 2026-07-14 —\nlots of detail about the campaign build and nurture flow here and more besides." } },
+      currentStateAtlas: { workflows: [
+        { name: "Campaign build", area: "Marketing", steps: [{ actor: "Priya", action: "drafts" }] },
+        { name: "Quote-to-Cash", area: "Sales", steps: [{ actor: "Dana", action: "prices" }] },
+      ] },
+    } });
+    expect(personaAreas(p, "Priya")).toEqual(["Marketing"]);
+    expect(personaReadyToAdvance(p, "Priya")).toBe(true);   // Marketing heard
+    expect(personaReadyToAdvance(p, "Dana")).toBe(false);   // Sales not heard
+    // Single-area (or unknown persona) is never gated.
+    const single = programme({ data: { currentStateAtlas: { workflows: [{ name: "Only flow", steps: [{ actor: "Sam", action: "does" }] }] } } });
+    expect(personaReadyToAdvance(single, "Sam")).toBe(true);
   });
 
   it("listen-workflow review projects the persona's workflow and composes an edit diff", () => {

@@ -17,7 +17,7 @@ import { mapTranscriptSpeakers } from "@/v3/components/flow/flowTranscriptMap";
 import { AttachFileButton, TranscribeButton, copyTextFromAction } from "@/v3/components/flow/flowCapture";
 import { readGovernedExceptions, withNewException, withResolvedException } from "@/v3/components/flow/flowExceptions";
 import { projectAgentifyReview, projectOntologyAtlasReview, projectListenWorkflowReview, atlasPersonas, reviewFallbackQuestions, type ReviewPayload } from "@/v3/components/flow/flowReviews";
-import { areaProgress, hasMultipleAreas } from "@/v3/components/flow/flowAreas";
+import { areaProgress, hasMultipleAreas, personaReadyToAdvance, personaAreas } from "@/v3/components/flow/flowAreas";
 
 /** A movement's discovery, organized by stakeholder. One card per person or
  * role: their script, their link/meeting channels, their captured evidence, a
@@ -80,7 +80,7 @@ const COLLECT_COLUMNS: Array<{ key: CollectStatus; label: string }> = [
  * into columns by collection state (Heard · Awaiting · To reach), each card the
  * person's quote, dated feedback trail (click → transcript), follow-ups,
  * meeting, and link channels. Driven by resolveMovementStakeholders. */
-export function IntervieweeDiscovery({ program, movementId, captureField, docsStale, regenerating, onRegenerateStale, onSaveInputs, onMintFollowUp, onMintReview, onMintPacks, onScheduleFollowUp, onSendForApproval, onFocusPerson, onCaptured }: {
+export function IntervieweeDiscovery({ program, movementId, captureField, docsStale, regenerating, onRegenerateStale, onSaveInputs, onMintFollowUp, onMintReview, onMintPacks, onScheduleFollowUp, onSendForApproval, onFocusPerson, onCaptured, onDocumentCaptured }: {
   program: ProgramSummary;
   movementId: string;
   captureField: string;
@@ -105,6 +105,9 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
   /** A card opened or closed — the record rail follows the person you're in. */
   onFocusPerson?: (stakeholderId: string, open: boolean) => void;
   onCaptured?: () => void;
+  /** A DOCUMENT (transcript/file) just landed — fires only on upload, not typed
+   * capture, so the impacted artifacts auto-regenerate on a discrete event. */
+  onDocumentCaptured?: () => void;
 }) {
   const stakeholders = resolveMovementStakeholders(program, movementId);
   const movement = flowMovements().find((m) => m.id === movementId);
@@ -194,7 +197,7 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
                 approvalItems={approvalByName.get(s.name.trim().toLowerCase())?.items}
                 onSendForApproval={onSendForApproval}
                 onSaveInputs={onSaveInputs} onMintFollowUp={onMintFollowUp} onScheduleFollowUp={onScheduleFollowUp}
-                onFocusPerson={onFocusPerson} onCaptured={onCaptured} />
+                onFocusPerson={onFocusPerson} onCaptured={onCaptured} onDocumentCaptured={onDocumentCaptured} />
             ))}
           </div>
         ))}
@@ -349,22 +352,35 @@ function ReviewShare({ program, movementId, reviewKind, onMintReview }: {
         <p className="v3fs-rvs-empty">No {perPersona ? "workflow personas" : "people"} to share with yet.</p>
       ) : (
         <div className="v3fs-rvs-list">
-          {uniqueReviewers.map((r) => (
-            <div key={r.name} className="v3fs-rvs-row">
-              <div className="v3fs-rvs-who">
-                <b>{r.name}</b>
-                {r.role ? <span>{r.role}</span> : null}
+          {uniqueReviewers.map((r) => {
+            // Envision is gated per AREA: a persona can only be sent an
+            // agentification review once their area's Listen voices are all
+            // heard — so Marketing starts envisioning while Sales still collects.
+            const gated = reviewKind === "agentify" && !personaReadyToAdvance(program, r.name);
+            const areas = gated ? personaAreas(program, r.name) : [];
+            return (
+              <div key={r.name} className="v3fs-rvs-row">
+                <div className="v3fs-rvs-who">
+                  <b>{r.name}</b>
+                  {r.role ? <span>{r.role}</span> : null}
+                </div>
+                {gated ? (
+                  <span className="v3fs-rvs-gate" title={`Finish hearing ${areas.join(", ") || "this area"} in Listen first`}>
+                    ◔ Listening open{areas.length ? ` — ${areas[0]}` : ""}
+                  </span>
+                ) : (
+                  <button type="button" className="v3fs-btn" disabled={busy === r.name} onClick={() => void share(r.name, r.role)}>
+                    {busy === r.name ? "…" : copied === r.name ? "Copied ✓" : links[r.name] ? "⎘ Copy link" : "⎘ Create & copy link"}
+                  </button>
+                )}
+                {links[r.name] ? (
+                  <span className="v3fs-rvs-linkrow">
+                    <input readOnly value={links[r.name]} onFocus={(e) => e.currentTarget.select()} aria-label={`Review link for ${r.name}`} />
+                  </span>
+                ) : null}
               </div>
-              <button type="button" className="v3fs-btn" disabled={busy === r.name} onClick={() => void share(r.name, r.role)}>
-                {busy === r.name ? "…" : copied === r.name ? "Copied ✓" : links[r.name] ? "⎘ Copy link" : "⎘ Create & copy link"}
-              </button>
-              {links[r.name] ? (
-                <span className="v3fs-rvs-linkrow">
-                  <input readOnly value={links[r.name]} onFocus={(e) => e.currentTarget.select()} aria-label={`Review link for ${r.name}`} />
-                </span>
-              ) : null}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
       {note ? <div className="v3fs-ivc-note warn">{note}</div> : null}
@@ -488,7 +504,7 @@ function GovernedExceptions({ program, movementId, onSaveInputs }: {
   );
 }
 
-function IntervieweeCard({ program, movementId, stakeholder, captureField, coll, open, onOpenChange, docsStale, regenerating, onRegenerateStale, approvalItems, onSendForApproval, onSaveInputs, onMintFollowUp, onScheduleFollowUp, onFocusPerson, onCaptured }: {
+function IntervieweeCard({ program, movementId, stakeholder, captureField, coll, open, onOpenChange, docsStale, regenerating, onRegenerateStale, approvalItems, onSendForApproval, onSaveInputs, onMintFollowUp, onScheduleFollowUp, onFocusPerson, onCaptured, onDocumentCaptured }: {
   program: ProgramSummary;
   movementId: string;
   stakeholder: MovementStakeholder;
@@ -515,6 +531,9 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
   onScheduleFollowUp?: (movementId: string, who: string, date: string) => Promise<void>;
   onFocusPerson?: (stakeholderId: string, open: boolean) => void;
   onCaptured?: () => void;
+  /** A DOCUMENT (transcript/file) just landed — fires only on upload, not typed
+   * capture, so the impacted artifacts auto-regenerate on a discrete event. */
+  onDocumentCaptured?: () => void;
 }) {
   const { name, role, questions, isRole } = stakeholder;
   // Questions to mint a LINK with. Usually the displayed script, but the Frame
@@ -722,6 +741,10 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
         { [captureField]: [existing.trimEnd(), docBlock, ...speakerBlocks].filter(Boolean).join("\n\n") },
         { attest: { action: mapping?.blocks.length ? `Transcript mapped — ${docTitle}` : `Document added — ${docTitle}`, detail: attestDetail } });
       onCaptured?.();
+      // A document/transcript is a discrete evidence event — regenerate the
+      // impacted artifacts now (typed capture doesn't, to avoid firing on every
+      // partial paste).
+      onDocumentCaptured?.();
     } finally { setBusy(false); }
   };
   return (
