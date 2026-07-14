@@ -19,6 +19,7 @@ import {
 } from "@/v3/components/flow/flowShellData";
 import { resolveMovementStakeholders, readDirectoryPeople } from "@/v3/components/flow/flowStakeholders";
 import { listInterviewPacks } from "@/v3/components/flow/flowPortal";
+import { FORMAL_ARTIFACT_FIELD_KEYS } from "@/v3/lib/formalArtifacts";
 
 const APPROVAL_CAP = 40;
 
@@ -149,11 +150,19 @@ function latestPacksByApprover(inner: Record<string, unknown>, movementId: strin
 export interface ApproverState {
   name: string; role: string; email?: string;
   status: ApprovalStatus; token?: string; decidedAt?: string; comment?: string;
+  /** The verdict predates the document's CURRENT generation — a sign-off on
+   * v1 must not silently bless v3. Re-request to re-validate. */
+  preDatesDocument?: boolean;
 }
 
-const packState = (pack: FlowApprovalPack | undefined): { status: ApprovalStatus; token?: string; decidedAt?: string; comment?: string } => {
+const packState = (pack: FlowApprovalPack | undefined, docGeneratedAt?: string): { status: ApprovalStatus; token?: string; decidedAt?: string; comment?: string; preDatesDocument?: boolean } => {
   if (!pack) return { status: "none" };
-  if (pack.verdict === "approved") return { status: "approved", decidedAt: pack.respondedAt };
+  if (pack.verdict === "approved") {
+    // An approval recorded BEFORE the document's current generation is stale:
+    // still on the record (history), but it cannot count toward "validated".
+    const preDatesDocument = Boolean(docGeneratedAt && pack.respondedAt && Date.parse(pack.respondedAt) < Date.parse(docGeneratedAt));
+    return { status: "approved", decidedAt: pack.respondedAt, preDatesDocument: preDatesDocument || undefined };
+  }
   if (pack.verdict === "changes") return { status: "changes", decidedAt: pack.respondedAt, comment: pack.comment };
   // Answered but verdict-less: an old-contract response whose verdict is still
   // in the inbox awaiting (auto-)ingestion. In review — but NEVER hand the
@@ -161,6 +170,17 @@ const packState = (pack: FlowApprovalPack | undefined): { status: ApprovalStatus
   if (pack.respondedAt) return { status: "in-review" };
   return { status: "in-review", token: pack.token };
 };
+
+/** The stored document's current generation stamp — the reference point that
+ * decides whether a recorded approval still covers what's on the record. */
+function documentGeneratedAt(inner: Record<string, unknown>, artifactId: string): string | undefined {
+  const fieldKey = FORMAL_ARTIFACT_FIELD_KEYS[artifactId];
+  if (!fieldKey) return undefined;
+  const doc = inner[fieldKey];
+  if (!isRecord(doc)) return undefined;
+  const stamp = typeof doc.editedAt === "string" && doc.editedAt ? doc.editedAt : doc.generatedAt;
+  return typeof stamp === "string" && stamp ? stamp : undefined;
+}
 
 /**
  * An artifact's approval ROLLUP across its relevant stakeholders — the truth
@@ -172,11 +192,14 @@ export function artifactApprovalRollup(program: ProgramSummary, movementId: stri
 } {
   const { inner } = getProgramState((program.rawData ?? {}) as Record<string, unknown>);
   const byApprover = latestPacksByApprover(inner, movementId, artifactId);
+  const generatedAt = documentGeneratedAt(inner, artifactId);
   const approvers: ApproverState[] = relevantApprovers(program, movementId).map((approver) => ({
     ...approver,
-    ...packState(byApprover.get(approver.name.trim().toLowerCase())),
+    ...packState(byApprover.get(approver.name.trim().toLowerCase()), generatedAt),
   }));
-  const approvedCount = approvers.filter((a) => a.status === "approved").length;
+  // A sign-off that predates the current generation is HISTORY, not
+  // validation — the document changed after they read it.
+  const approvedCount = approvers.filter((a) => a.status === "approved" && !a.preDatesDocument).length;
   const overall: ApprovalStatus = !approvers.length ? "none"
     : approvers.some((a) => a.status === "changes") ? "changes"
       : approvedCount === approvers.length ? "approved"
@@ -187,6 +210,8 @@ export function artifactApprovalRollup(program: ProgramSummary, movementId: stri
 export interface StakeholderApprovalItem {
   artifactId: string; artifactTitle: string;
   status: ApprovalStatus; token?: string; decidedAt?: string; comment?: string;
+  /** Their approval predates the current generation — re-request to re-validate. */
+  preDatesDocument?: boolean;
 }
 
 /** One stakeholder's sign-off queue for a movement — every present artifact
@@ -201,7 +226,7 @@ export function stakeholderApprovalItems(program: ProgramSummary, movementId: st
     .map((artifact) => ({
       artifactId: artifact.id,
       artifactTitle: artifact.title,
-      ...packState(latestPacksByApprover(inner, movementId, artifact.id).get(key)),
+      ...packState(latestPacksByApprover(inner, movementId, artifact.id).get(key), documentGeneratedAt(inner, artifact.id)),
     }));
 }
 

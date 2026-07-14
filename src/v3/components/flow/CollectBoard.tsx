@@ -117,7 +117,9 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
     const items = stakeholderApprovalItems(program, movementId, s.name);
     approvalByName.set(s.name.trim().toLowerCase(), {
       pending: items.some((item) => item.status === "in-review"),
-      allApproved: items.length > 0 && items.every((item) => item.status === "approved"),
+      // A sign-off that predates the current generation is history, not
+      // validation — the card only reads Approved on FRESH approvals.
+      allApproved: items.length > 0 && items.every((item) => item.status === "approved" && !item.preDatesDocument),
       items,
     });
   }
@@ -535,7 +537,17 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
                 {approvalItems.map((item) => (
                   <div key={item.artifactId} className={`v3fs-ivc-appr-row ${item.status}`}>
                     <span className="v3fs-ivc-appr-t">{item.artifactTitle}</span>
-                    {item.status === "approved" ? (
+                    {item.status === "approved" && item.preDatesDocument ? (
+                      <>
+                        <span className="v3fs-ivc-appr-st changes" title="The document changed after they approved it — their sign-off covers an earlier version">
+                          ↻ Approved before latest changes
+                        </span>
+                        <button type="button" className="v3fs-btn" disabled={approvalBusy === item.artifactId}
+                          onClick={() => void sendApproval(item)}>
+                          {approvalBusy === item.artifactId ? "…" : "Re-request"}
+                        </button>
+                      </>
+                    ) : item.status === "approved" ? (
                       <span className="v3fs-ivc-appr-st ok">✓ Approved{item.decidedAt ? ` · ${String(item.decidedAt).slice(0, 10)}` : ""}</span>
                     ) : item.status === "changes" ? (
                       <>
