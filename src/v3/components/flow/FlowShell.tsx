@@ -25,7 +25,7 @@ import { stakeholderEmail } from "@/v3/components/flow/flowMeetings";
 import { readMetricRegistry, metricConsistency } from "@/v3/components/flow/flowMetricRegistry";
 import { routeAttachedDocument, buildRoutedBlocks, type DocRoute } from "@/v3/components/flow/flowDocRouting";
 import { listPortalInbox } from "@/v3/components/flow/flowPortal";
-import { approvalEvidenceEntries } from "@/v3/components/flow/flowApprovals";
+import { approvalEvidenceEntries, listApprovalResponses } from "@/v3/components/flow/flowApprovals";
 import { listSnapshots, type BlobSnapshot } from "@/v3/lib/blobSnapshots";
 import { supabase } from "@/integrations/supabase/client";
 import { getProgramState } from "@/new/lib/programState";
@@ -102,7 +102,7 @@ interface FlowShellProps {
   /** Mint a shareable sponsor brief (dated board-pack snapshot); resolves to the URL. */
   onMintBrief: () => Promise<string | null>;
   /** Send an artifact to a chosen approver — mints a no-login link, returns it. */
-  onSendForApproval?: (input: { artifactId: string; movementId: string; artifactTitle: string; approver: { name: string; role: string; email?: string } }) => Promise<string | null>;
+  onSendForApproval?: (input: { artifactId: string; movementId: string; artifactTitle: string; approver: { name: string; role: string; email?: string }; snapshot?: string }) => Promise<string | null>;
   /** Record an approver's verdict from the Inbox (flips the artifact, logs evidence). */
   onRecordApproval?: (itemId: string) => Promise<void>;
   /** Record an in-room demonstration pass against a track (Show). */
@@ -456,13 +456,14 @@ export default function FlowShell(props: FlowShellProps) {
   const drillParent = drillParentId ? props.programs.find((p) => p.id === drillParentId) : undefined;
   const openDecisions = listOpenFlowDecisions(program);
   const portalInbox = listPortalInbox(program);
+  const approvalResponseCount = listApprovalResponses(program).length;
   // "Start here" — one prominent pointer at the right entry: Today when
   // anything waits on the user, the canvas otherwise. Dismissed for the
   // session the moment they go there.
   const openDisputeCount = useMemo(() => readContradictions(program, true).length, [program]);
   const unresolvedRoleCount = useMemo(() => readDirectoryPeople(program).filter((entry) => !entry.roleResolved).length, [program]);
   const coverageNameCount = useMemo(() => unresolvedCoverageNames(program).length, [program]);
-  const waitingCount = openDecisions.length + portalInbox.length + openDisputeCount + unresolvedRoleCount + coverageNameCount;
+  const waitingCount = openDecisions.length + portalInbox.length + approvalResponseCount + openDisputeCount + unresolvedRoleCount + coverageNameCount;
   // "Where to go next" — the single rail item the operator should visit now.
   // Waiting decisions/inbox items pull them to the Inbox; otherwise the work
   // continues on Flow. The pointer is persistent (it always shows the next
@@ -740,7 +741,7 @@ export default function FlowShell(props: FlowShellProps) {
         <ViewBoundary view={view}>
         {view === "today" ? (
           <FlowToday program={program} programs={props.programs} onSelectProgram={props.onSelectProgram} onResolveDecision={props.onResolveDecision} onSaveInputs={props.onSaveInputs}
-            onIngestPortalItem={props.onIngestPortalItem} onDismissPortalItem={props.onDismissPortalItem}
+            onIngestPortalItem={props.onIngestPortalItem} onDismissPortalItem={props.onDismissPortalItem} onRecordApproval={props.onRecordApproval}
             onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
         ) : view === "flow" ? (
           <FlowCanvas program={program} runningAgentIds={props.runningAgentIds} agentErrors={props.agentErrors} relatedPrograms={[...(drillParent ? [drillParent] : []), ...listChildDrilldowns(program, props.programs).map((c) => c.child)]} onSelectProgram={props.onSelectProgram} onComment={props.onComment} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} onCompileShipLanes={props.onCompileShipLanes} onToggleShipItem={props.onToggleShipItem} onSetShipLane={props.onSetShipLane} onScheduleFollowUp={props.onScheduleFollowUp} onMintFollowUp={props.onMintFollowUp} onRecordShowPass={props.onRecordShowPass} onSaveArtifactDoc={props.onSaveArtifactDoc} onRecordGate={props.onRecordGate} onReopenGate={props.onReopenGate} onRunAgentAndWait={props.onRunAgentAndWait} onSendForApproval={props.onSendForApproval} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }}
@@ -869,13 +870,14 @@ function DecisionCard({ program, decision, movementLabel, busy, onResolve }: {
   );
 }
 
-function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIngestPortalItem, onDismissPortalItem, onGoFlow, onSaveInputs }: {
+function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIngestPortalItem, onDismissPortalItem, onRecordApproval, onGoFlow, onSaveInputs }: {
   program: ProgramSummary;
   programs?: ProgramSummary[];
   onSelectProgram?: (id: string) => void;
   onResolveDecision: FlowShellProps["onResolveDecision"];
   onIngestPortalItem: FlowShellProps["onIngestPortalItem"];
   onDismissPortalItem: FlowShellProps["onDismissPortalItem"];
+  onRecordApproval?: FlowShellProps["onRecordApproval"];
   onGoFlow: () => void;
   onSaveInputs?: FlowShellProps["onSaveInputs"];
 }) {
@@ -883,6 +885,7 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
   const open = listOpenFlowDecisions(program);
   const feed = listFlowAttestations(program);
   const inbox = listPortalInbox(program);
+  const approvals = listApprovalResponses(program);
   const [busyId, setBusyId] = useState<string | null>(null);
   // Open disputes queue HERE for the operator to ROUTE (to the person who can
   // settle it) or RESOLVE. Resolving writes the resolution to the record as
@@ -1078,7 +1081,7 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
           ))}
         </div>
       ) : null}
-      {open.length === 0 && inbox.length === 0 && disputes.length === 0 && unresolvedRoles.length === 0 && coverageNames.length === 0 ? (
+      {open.length === 0 && inbox.length === 0 && approvals.length === 0 && disputes.length === 0 && unresolvedRoles.length === 0 && coverageNames.length === 0 ? (
         <div className="v3fs-quiet">
           <div className="v3fs-quiet-mark" aria-hidden="true">◈</div>
           {attention.length ? (
@@ -1106,7 +1109,7 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
         <section className="v3fs-inbox" aria-label="Waiting on you" ref={inboxRef}>
           <div className="v3fs-ph">
             <h3>Waiting on you</h3>
-            <span>{(() => { const n = open.length + inbox.length + disputes.length + unresolvedRoles.length + coverageNames.length; return `${n} item${n === 1 ? "" : "s"}`; })()}</span>
+            <span>{(() => { const n = open.length + inbox.length + approvals.length + disputes.length + unresolvedRoles.length + coverageNames.length; return `${n} item${n === 1 ? "" : "s"}`; })()}</span>
           </div>
           {open.map((decision) => (
             <DecisionCard key={decision.id} program={program} decision={decision} movementLabel={label(decision.movementId)}
@@ -1141,6 +1144,35 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
               </div>
             </article>
           ))}
+          {onRecordApproval ? approvals.map((item) => {
+            const id = String(item.id ?? "");
+            const approver = (item.approver && typeof item.approver === "object" ? item.approver : {}) as { name?: string; role?: string };
+            const verdict = item.verdict === "approved" ? "approved" : "changes";
+            const comment = String(item.comment ?? "").trim();
+            const title = String(item.artifactTitle ?? "a document");
+            return (
+              <article key={id} className="v3fs-dec v3fs-evitem">
+                <div className="v3fs-dec-top">
+                  <span className={`v3fs-vc ${verdict === "approved" ? "acc" : "pen"}`}>{verdict === "approved" ? "approved" : "changes requested"}</span>
+                  <span className="v3fs-dec-mv">{approver.name || "Approver"}{approver.role ? ` · ${approver.role}` : ""}</span>
+                  {item.receivedAt ? <span className="v3fs-dec-when">{timeAgo(String(item.receivedAt))}</span> : null}
+                </div>
+                <h3 className="v3fs-dec-t">{verdict === "approved" ? `Approved — ${title}` : `Changes requested — ${title}`}</h3>
+                {comment ? <p className="v3fs-dec-s">“{comment.slice(0, 220)}{comment.length > 220 ? "…" : ""}”</p> : null}
+                <div className="v3fs-dec-rec-b">
+                  {verdict === "approved"
+                    ? "recording marks the artifact approved and files the sign-off as evidence"
+                    : "recording returns the artifact to draft with this note attached"}
+                </div>
+                <div className="v3fs-dec-cta">
+                  <button type="button" className="v3fs-btn pri" disabled={busyId === id}
+                    onClick={() => void actOnItem(id, onRecordApproval)}>
+                    {busyId === id ? "Recording…" : verdict === "approved" ? "Record the approval" : "Record the request"}
+                  </button>
+                </div>
+              </article>
+            );
+          }) : null}
           {disputes.map((row, i) => (
             <article key={`disp-${i}`} className="v3fs-dec">
               <div className="v3fs-dec-top">

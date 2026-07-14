@@ -5779,6 +5779,14 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-approval-bar-l {font-weight:600}
 .v3fs-approval-bar-empty {opacity:.7}
 .v3fs-approval-bar .v3fs-dir-in {min-width:220px;flex:1}
+/* Public approver page */
+.v3fs-approve-doc {margin-top:18px}
+.v3fs-approve-snap {white-space:pre-wrap;font-size:14px;line-height:1.7;max-height:52vh;overflow:auto;padding:4px 2px;color:var(--v3-text-primary)}
+.v3fs-approve-act {margin-top:16px;display:flex;flex-direction:column;gap:10px}
+.v3fs-approve-note-l {font-size:12px;font-weight:600;color:var(--v3-text-muted)}
+.v3fs-approve-note {width:100%;border:1px solid var(--fs-line);border-radius:12px;padding:12px 14px;font:inherit;font-size:14px;resize:vertical;background:var(--fs-card);color:var(--v3-text-primary)}
+.v3fs-approve-btns {display:flex;gap:10px;flex-wrap:wrap}
+.v3fs-approve-err {color:var(--v3-red,#b3341f);font-size:13px;font-weight:600;margin:0}
 .v3fs-docview-b {overflow-y:auto;padding:22px 36px 40px;font-size:15px;line-height:1.75;max-width:100%}
 .v3fs-docview-blk {margin:0 0 16px}
 .v3fs-docview-b p {margin:0 0 6px;white-space:pre-wrap;overflow-wrap:break-word}

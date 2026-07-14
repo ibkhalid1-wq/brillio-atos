@@ -77,17 +77,19 @@ async function loadPack(token: string) {
   const { inner, nested } = innerOf(raw);
   const packs = Array.isArray(inner.flowInterviewPacks) ? inner.flowInterviewPacks.filter(isRecord) : [];
   const invites = Array.isArray(inner.flowDemoInvites) ? inner.flowDemoInvites.filter(isRecord) : [];
+  const approvals = Array.isArray(inner.flowApprovalPacks) ? inner.flowApprovalPacks.filter(isRecord) : [];
   const pack = packs.find((entry) => entry.token === secret);
   const invite = pack ? undefined : invites.find((entry) => entry.token === secret);
-  if (!pack && !invite) return null;
+  const approval = (pack || invite) ? undefined : approvals.find((entry) => entry.token === secret);
+  if (!pack && !invite && !approval) return null;
   // Tokens expire: a link forwarded months later must not still open the
   // programme. 30 days covers any realistic response window.
-  const created = Date.parse(String((pack ?? invite)?.createdAt ?? ""));
+  const created = Date.parse(String((pack ?? invite ?? approval)?.createdAt ?? ""));
   if (Number.isFinite(created) && Date.now() - created > 30 * 86_400_000) return null;
-  const kind: "interview" | "demo" = pack ? "interview" : "demo";
+  const kind: "interview" | "demo" | "approval" = pack ? "interview" : invite ? "demo" : "approval";
   return {
     admin, programId, programName: String(row.name ?? "the programme"),
-    raw, inner, nested, kind, pack: (pack ?? invite) as Record<string, unknown>,
+    raw, inner, nested, kind, pack: (pack ?? invite ?? approval) as Record<string, unknown>,
     updatedAt: typeof row.updated_at === "string" ? row.updated_at : null,
   };
 }
@@ -130,6 +132,19 @@ Deno.serve(async (req: Request) => {
       const token = new URL(req.url).searchParams.get("token") || "";
       const hit = await loadPack(token);
       if (!hit) return jsonResponse({ error: "This link is not valid." }, 404);
+      if (hit.kind === "approval") {
+        return jsonResponse({
+          kind: "approval",
+          programme: hit.programName,
+          artifactTitle: String(hit.pack.artifactTitle ?? "document"),
+          movement: String(hit.pack.movementId ?? ""),
+          approver: isRecord(hit.pack.approver)
+            ? { name: String((hit.pack.approver as Record<string, unknown>).name ?? ""), role: String((hit.pack.approver as Record<string, unknown>).role ?? "") }
+            : { name: "", role: "" },
+          snapshot: String(hit.pack.snapshot ?? ""),
+          responded: typeof hit.pack.respondedAt === "string",
+        });
+      }
       if (hit.kind === "demo") {
         const showInputs = isRecord(hit.inner.phaseInputs) && isRecord((hit.inner.phaseInputs as Record<string, unknown>).show)
           ? (hit.inner.phaseInputs as Record<string, Record<string, unknown>>).show
@@ -224,12 +239,47 @@ Deno.serve(async (req: Request) => {
         }
 
         const stakeholder = String(hit.pack.stakeholder ?? "Stakeholder");
+        const approverName = isRecord(hit.pack.approver) ? String((hit.pack.approver as Record<string, unknown>).name ?? "") : "";
         const now = new Date().toISOString();
         const inbox = Array.isArray(hit.inner.flowPortalInbox) ? [...hit.inner.flowPortalInbox] : [];
         const log = Array.isArray(hit.inner.flowAttestations) ? [...hit.inner.flowAttestations] : [];
         const nextInner: Record<string, unknown> = { ...hit.inner };
 
-        if (hit.kind === "demo") {
+        if (hit.kind === "approval") {
+          const verdict = isRecord(body) && body.verdict === "approved" ? "approved"
+            : isRecord(body) && body.verdict === "changes" ? "changes" : "";
+          if (!verdict) return jsonResponse({ error: "Choose approve or request changes." }, 400);
+          const comment = isRecord(body) && typeof body.comment === "string"
+            ? body.comment.trim().slice(0, MAX_ANSWER_CHARS) : "";
+          // A change request must say what to change — an approval need not.
+          if (verdict === "changes" && !comment) {
+            return jsonResponse({ error: "Add a note so the team knows what to change." }, 400);
+          }
+          const movementId = String(hit.pack.movementId ?? "frame");
+          inbox.push({
+            id: crypto.randomUUID(),
+            kind: "approval",
+            artifactId: String(hit.pack.artifactId ?? ""),
+            movementId,
+            artifactTitle: String(hit.pack.artifactTitle ?? "document"),
+            approver: isRecord(hit.pack.approver)
+              ? { name: approverName, role: String((hit.pack.approver as Record<string, unknown>).role ?? "") }
+              : { name: approverName, role: "" },
+            receivedAt: now,
+            verdict,
+            comment,
+          });
+          nextInner.flowApprovalPacks = (hit.inner.flowApprovalPacks as unknown[]).map((entry) =>
+            isRecord(entry) && entry.token === hit.pack.token ? { ...entry, respondedAt: now } : entry,
+          );
+          log.push({
+            ts: now, agentId: "portal", phaseId: movementId, tier: 1,
+            action: verdict === "approved"
+              ? `Approval received — ${String(hit.pack.artifactTitle ?? "document")}`
+              : `Changes requested — ${String(hit.pack.artifactTitle ?? "document")}`,
+            detail: `${approverName || "The approver"}${comment ? `: "${comment.slice(0, 120)}"` : ""} — quarantined for your review.`,
+          });
+        } else if (hit.kind === "demo") {
           const verdict = isRecord(body) && typeof body.verdict === "string" ? body.verdict : "";
           if (!DEMO_VERDICTS.has(verdict)) {
             return jsonResponse({ error: "Pick a verdict before sending." }, 400);
@@ -312,9 +362,11 @@ Deno.serve(async (req: Request) => {
               payload: { source: "flow-portal", kind: hit.kind, at: now },
             });
           } catch { /* best effort — the poll still catches it */ }
-          notifyWebhook(hit.kind === "demo"
-            ? `ATOS Flow — ${hit.programName}: ${stakeholder} returned a demo verdict. It is waiting in the evidence inbox.`
-            : `ATOS Flow — ${hit.programName}: ${stakeholder} answered an async interview. It is waiting in the evidence inbox.`);
+          notifyWebhook(hit.kind === "approval"
+            ? `ATOS Flow — ${hit.programName}: ${approverName || "an approver"} responded to "${String(hit.pack.artifactTitle ?? "a document")}". It is waiting in the inbox.`
+            : hit.kind === "demo"
+              ? `ATOS Flow — ${hit.programName}: ${stakeholder} returned a demo verdict. It is waiting in the evidence inbox.`
+              : `ATOS Flow — ${hit.programName}: ${stakeholder} answered an async interview. It is waiting in the evidence inbox.`);
           return jsonResponse({ ok: true });
         }
         // CAS miss — another writer landed in between; reload and retry.

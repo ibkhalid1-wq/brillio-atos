@@ -43,6 +43,7 @@ import { mintFollowUpPack, latestPackFor, portalLinkFor } from "@/v3/components/
 import { mintBrief, briefLinkFor } from "@/v3/components/flow/flowBriefs";
 import FlowRespond from "@/v3/components/flow/FlowRespond";
 import FlowBrief from "@/v3/components/flow/FlowBrief";
+import FlowApprove from "@/v3/components/flow/FlowApprove";
 import { reportError } from "@/lib/errorReporter";
 import { changedInputFields, relatedArtifactsToStale, crossPhaseArtifactsToStale } from "@/v3/lib/artifactStaleness";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
@@ -2179,6 +2180,12 @@ export default function AppShellV3() {
     const briefToken = params.get("flowBrief");
     if (briefToken) {
       return <FlowBrief token={briefToken} />;
+    }
+    // Public artifact approval: a chosen approver reads a frozen snapshot and
+    // returns Approve / Request-changes — no account, token-gated the same way.
+    const approveToken = params.get("flowApprove");
+    if (approveToken) {
+      return <FlowApprove token={approveToken} />;
     }
   }
 

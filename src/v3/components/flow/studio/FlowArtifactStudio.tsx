@@ -37,7 +37,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
   onRegenerate?: () => void;
   onSaveDoc?: (input: ArtifactEditInput) => Promise<void>;
   /** Send this artifact to a chosen approver — mints a no-login link. */
-  onSendForApproval?: (input: { artifactId: string; movementId: string; artifactTitle: string; approver: { name: string; role: string; email?: string } }) => Promise<string | null>;
+  onSendForApproval?: (input: { artifactId: string; movementId: string; artifactTitle: string; approver: { name: string; role: string; email?: string }; snapshot?: string }) => Promise<string | null>;
   /** Add/resolve an anchored comment on this artifact (attested). */
   onComment?: (input: { fieldKey: string; movementId: string; title: string; text?: string; resolveId?: string }) => Promise<void>;
   /** Jump to the Inbox (used when a regenerated version awaits a confirm). */
@@ -68,7 +68,9 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
     if (!chosen) return;
     setSendBusy(true);
     try {
-      const link = await onSendForApproval({ artifactId: artifact.id, movementId: artifact.movementId, artifactTitle: artifact.title, approver: chosen });
+      // Freeze what the approver reads: the artifact's rendered text as shown.
+      const snapshot = dialogRef.current?.querySelector(".v3fs-docview-b")?.textContent?.replace(/\s+\n/g, "\n").trim() || undefined;
+      const link = await onSendForApproval({ artifactId: artifact.id, movementId: artifact.movementId, artifactTitle: artifact.title, approver: chosen, snapshot });
       setSentLink(link);
       if (link) { try { await navigator.clipboard.writeText(link); } catch { /* clipboard blocked — link still shown */ } }
       setPickingApprover(false);

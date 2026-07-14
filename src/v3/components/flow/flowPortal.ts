@@ -81,7 +81,9 @@ export function listInterviewPacks(program: ProgramSummary): FlowInterviewPack[]
 export function listPortalInbox(program: ProgramSummary): FlowPortalItem[] {
   const list = innerData(program).flowPortalInbox;
   if (!Array.isArray(list)) return [];
-  return list.filter(isRecord).map((entry): FlowPortalItem => ({
+  // Artifact-approval verdicts share the quarantine inbox but have their own
+  // surface (listApprovalResponses) — keep them out of the interview/demo list.
+  return list.filter(isRecord).filter((entry) => entry.kind !== "approval").map((entry): FlowPortalItem => ({
     id: String(entry.id ?? ""),
     kind: entry.kind === "demo-verdict" ? "demo-verdict" : "interview",
     stakeholder: String(entry.stakeholder ?? "Stakeholder"),

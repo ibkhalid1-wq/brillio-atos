@@ -28,11 +28,15 @@ export interface FlowApprovalPack {
   movementId: string;
   artifactTitle: string;
   approver: { name: string; role: string; email?: string };
+  /** Plain-text render of the artifact, frozen at send — what the approver reads. */
+  snapshot?: string;
   createdAt: string;
   respondedAt?: string;
   verdict?: "approved" | "changes";
   comment?: string;
 }
+
+const SNAPSHOT_CAP = 40_000;
 
 export type ApprovalStatus = "none" | "in-review" | "approved" | "changes";
 
@@ -105,7 +109,7 @@ export function artifactApprovalState(program: ProgramSummary, movementId: strin
  * blob (the fresh token rides the LAST pack); null if the artifact is missing. */
 export function mintApprovalRequest(
   program: ProgramSummary,
-  input: { artifactId: string; movementId: string; artifactTitle: string; approver: { name: string; role: string; email?: string } },
+  input: { artifactId: string; movementId: string; artifactTitle: string; approver: { name: string; role: string; email?: string }; snapshot?: string },
   actor: string,
 ): Record<string, unknown> | null {
   const name = input.approver.name.trim();
@@ -120,6 +124,7 @@ export function mintApprovalRequest(
     movementId: input.movementId,
     artifactTitle: input.artifactTitle,
     approver,
+    snapshot: input.snapshot ? input.snapshot.slice(0, SNAPSHOT_CAP) : undefined,
     createdAt: now,
   };
   // Supersede any earlier open pack for the same artifact (re-send after edits).

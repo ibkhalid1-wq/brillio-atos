@@ -51,7 +51,7 @@ interface FlowCanvasProps {
   /** Persist a studio edit to an artifact document (attested). */
   onSaveArtifactDoc?: (input: ArtifactEditInput) => Promise<void>;
   /** Send an artifact to a chosen approver — mints a no-login link. */
-  onSendForApproval?: (input: { artifactId: string; movementId: string; artifactTitle: string; approver: { name: string; role: string; email?: string } }) => Promise<string | null>;
+  onSendForApproval?: (input: { artifactId: string; movementId: string; artifactTitle: string; approver: { name: string; role: string; email?: string }; snapshot?: string }) => Promise<string | null>;
   /** Jump to the Inbox (regeneration-pending band in the studio). */
   onOpenInbox?: () => void;
   /** The drill-down family (parent + children) — powers cross-programme
