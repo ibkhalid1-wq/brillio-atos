@@ -268,8 +268,13 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
   // Copy/Send mint a fresh pack (which supersedes the unanswered one).
   const packMatches = !!pack && (Array.isArray(pack.questions) ? pack.questions.map(String).join(" ") : "")
     === questions.slice(0, 8).join(" ");
+  // The pending chip carries the per-artifact count — "1/2 approved" — so a
+  // card that stays pending after one verdict reads as "one more to go", not
+  // as a contradiction with the answered link.
+  const apprDone = approvalItems?.filter((item) => item.status === "approved").length ?? 0;
+  const apprTotal = approvalItems?.length ?? 0;
   const statusLabel = status === "approved" ? "Approved"
-    : status === "pending-approval" ? "Pending approval"
+    : status === "pending-approval" ? `Pending approval${apprTotal > 1 ? ` · ${apprDone}/${apprTotal}` : ""}`
       : status === "heard" ? "Heard"
         : heard ? "Follow-up open"
           : pack ? (packMatches ? "Link sent" : "Link outdated") : "To reach";
