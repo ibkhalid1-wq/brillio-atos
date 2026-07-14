@@ -141,7 +141,14 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
 
   const prefillMark = (field: string) => (prefilledFields.has(field) && !prefilling ? " is-prefilled" : "");
 
-  const canSave = name.trim().length > 0 && client.trim().length > 0 && industry.trim().length > 0;
+  // The sponsor's address powers their calendar invites and emailed links —
+  // and EVERY reader (stakeholderEmail, meeting kit, approval links) silently
+  // requires a well-formed address, dropping anything that fails the check.
+  // So a half-typed value like "name@" or "name" would save to the record and
+  // then vanish from the UI, reading as "the email didn't save". Validate here
+  // and block the save so a malformed address can never be silently stored.
+  const emailMalformed = sponsorEmail.trim().length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(sponsorEmail.trim());
+  const canSave = name.trim().length > 0 && client.trim().length > 0 && industry.trim().length > 0 && !emailMalformed;
 
   return (
     <div className="v3-wizard-overlay" role="dialog" aria-modal="true" aria-label="Programme setup">
@@ -207,8 +214,12 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
               <input className="v3-input" aria-label="Executive sponsor" type="text" placeholder="Name and title"
                 value={sponsor} onChange={(event) => setSponsor(event.target.value)} />
               <div className="v3-field-label">Sponsor email</div>
-              <input className="v3-input" aria-label="Sponsor email" type="email" placeholder="name@company.com"
+              <input className={`v3-input${emailMalformed ? " has-error" : ""}`} aria-label="Sponsor email" type="email"
+                placeholder="name@company.com" aria-invalid={emailMalformed}
                 value={sponsorEmail} onChange={(event) => setSponsorEmail(event.target.value)} />
+              {emailMalformed ? (
+                <div className="v3-field-hint error">Enter a complete address (name@company.com) — it powers the sponsor&apos;s invites and links.</div>
+              ) : null}
             </label>
             <label>
               <div className="v3-field-label">Target first-demo date</div>
@@ -246,7 +257,11 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
         </section>
 
         {!canSave ? (
-          <div className="v3-wizard-note">Programme name, client and industry are required.</div>
+          <div className="v3-wizard-note">
+            {emailMalformed
+              ? "The sponsor email isn't a complete address — fix or clear it to continue."
+              : "Programme name, client and industry are required."}
+          </div>
         ) : null}
 
         <div className="v3-wizard-footer">
@@ -257,7 +272,7 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
             type="button"
             className="v3-button primary"
             disabled={isSaving || !canSave}
-            title={!canSave ? "Enter a programme name, client and industry to continue" : undefined}
+            title={!canSave ? (emailMalformed ? "Enter a complete sponsor email — or clear it — to continue" : "Enter a programme name, client and industry to continue") : undefined}
             onClick={() => {
               // Every programme is an agentic system build: seed the Flow spine,
               // carrying over progress and target dates for shared phase ids.
