@@ -29,7 +29,7 @@ import { readMetricRegistry, metricConsistency, metricById } from "@/v3/componen
 import { readGovernedExceptions, withNewException, withResolvedException, governedExceptionsForInbox } from "@/v3/components/flow/flowExceptions";
 import { projectAgentifyReview, projectOntologyAtlasReview, atlasPersonas, composeAgentifyAnswers, projectListenWorkflowReview, composeListenWorkflowAnswers } from "@/v3/components/flow/flowReviews";
 import { gateAugmentations } from "@/v3/components/flow/flowCrossValidation";
-import { programAreas, workflowArea, inferArea, areaProgress, personaAreas, personaReadyToAdvance } from "@/v3/components/flow/flowAreas";
+import { programAreas, workflowArea, inferArea, areaProgress, personaAreas, personaReadyToAdvance, stakeholderPrimaryArea } from "@/v3/components/flow/flowAreas";
 
 const programme = (inner: Record<string, unknown>): ProgramSummary =>
   ({ id: "p1", name: "Test", rawData: inner } as unknown as ProgramSummary);
@@ -662,6 +662,25 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
     expect(areas).toContain("Sales");
     expect(areas).toContain("Marketing");
     expect(areas[areas.length - 1]).toBe("General"); // General sorts last
+  });
+
+  it("stakeholderPrimaryArea files a role-named area even when only the ontology has it — Talent Acquisition SME → Talent, not General", () => {
+    const p = programme({ data: {
+      currentStateAtlas: { workflows: [
+        { name: "Quote-to-Cash", area: "Sales", steps: [{ actor: "Vertical Sales SME", action: "prices" }] },
+      ] },
+      // "Talent" exists ONLY via the ontology — the atlas has no Talent workflow.
+      domainOntology: { entities: [
+        { name: "Requisition", area: "Talent" },
+        { name: "Quote", area: "Sales" },
+      ] },
+    } });
+    expect(programAreas(p)).toContain("Talent");
+    // The kit role names the domain → routes to Talent (so it gets its own lane),
+    // rather than falling into General because the atlas lacks the workflow.
+    expect(stakeholderPrimaryArea(p, "Ahmed", "Talent Acquisition SME")).toBe("Talent");
+    // A role that matches an atlas actor still resolves there.
+    expect(stakeholderPrimaryArea(p, "Avantika", "Vertical Sales SME")).toBe("Sales");
   });
 
   it("areaProgress marks an area ready to envision once its voices are heard — independently of other areas", () => {

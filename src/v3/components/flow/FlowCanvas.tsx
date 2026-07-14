@@ -306,9 +306,12 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
               });
             }
           }
-          if (!staleArtifacts.length && !missingArtifacts.length) {
-            // VALIDATE: documents are current — the loop's next stage is the
-            // contributors' sign-off. Named, so the operator knows who to nudge.
+          if (!staleArtifacts.length && !missingArtifacts.length && !unheard.length) {
+            // VALIDATE: documents are current AND every voice is in — only then
+            // is the loop's next stage the contributors' sign-off. While anyone
+            // is still unheard (a whole area may be pending), collecting them
+            // outranks validating, so this stays quiet. Named, so the operator
+            // knows who to nudge.
             const awaiting = artifacts
               .filter((a) => a.present)
               .map((a) => artifactApprovalRollup(program, movement.id, a.id))

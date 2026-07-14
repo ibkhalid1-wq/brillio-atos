@@ -162,8 +162,23 @@ export function stakeholderPrimaryArea(program: ProgramSummary, name: string, ro
       }
     }
   }
-  // The person's own role keyword is a strong signal — align it to the atlas
-  // area that shares it (canonical "Legal & Compliance" → the atlas's "Legal").
+  // The person's TITLE usually names their domain directly ("Talent Acquisition
+  // SME" → the "Talent" area, "Marketing SME" → "Marketing"). Match the role/name
+  // against each real area LABEL — a strong signal that survives when the atlas
+  // has no workflow for that area yet, so a Discovery-Kit-only area still gets
+  // its own lane instead of the person falling into General. Compound labels
+  // ("Alliances/Marketing/Talent") score toward the matched clean segment.
+  for (const area of programAreas(program)) {
+    if (area === GENERAL_AREA) continue;
+    const segments = area.includes("/") ? area.split("/").map((s) => s.trim()).filter(Boolean) : [area];
+    for (const label of labels) {
+      for (const segment of segments) {
+        if (labelsOverlap(segment, label)) { bump(segment, 8); break; }
+      }
+    }
+  }
+  // The person's own role keyword, aligned to the area that shares it (canonical
+  // "Legal & Compliance" → the atlas's "Legal").
   const inferred = inferArea(`${role ?? ""} ${name}`);
   if (inferred) for (const area of programAreas(program)) {
     if (area === inferred || labelsOverlap(area, inferred)) bump(area, 6);
