@@ -6690,6 +6690,45 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-rvw-progress > span {display:block;height:100%;background:var(--v3-accent-2);border-radius:99px;transition:width .2s ease}
 .v3fs-rvw-count {font-size:11.5px;color:var(--v3-text-muted)}
 .v3fs-rvw-send {align-self:flex-start;padding:11px 22px;font-size:14px}
+
+/* Listen workflow EDITOR — add/edit/remove steps with a live proposal preview. */
+.v3fs-rvw-edit {list-style:none;margin:0;padding:8px;display:flex;flex-direction:column;gap:7px}
+.v3fs-rvw-erow {display:flex;align-items:center;gap:9px;border:1px solid var(--fs-line);border-radius:10px;padding:7px 9px;background:var(--fs-bg)}
+.v3fs-rvw-erow.removed {opacity:.55}
+.v3fs-rvw-erow.removed .v3fs-rvw-estep {text-decoration:line-through;color:var(--v3-text-muted)}
+.v3fs-rvw-erow.added {border-color:var(--v3-green);background:color-mix(in srgb,var(--v3-green) 6%,var(--fs-bg))}
+.v3fs-rvw-erow.added .v3fs-rvw-num {background:var(--v3-green);color:#fff}
+.v3fs-rvw-estep {flex:1;min-width:0;font-size:14px;font-family:inherit;color:var(--v3-text);border:none;background:transparent;padding:5px 4px}
+.v3fs-rvw-estep:focus {outline:none;box-shadow:inset 0 -2px 0 var(--v3-accent-2)}
+.v3fs-rvw-x,.v3fs-rvw-add {flex-shrink:0;width:28px;height:28px;border-radius:8px;border:1px solid var(--fs-line);background:var(--v3-surface);
+  color:var(--v3-text-muted);font-size:13px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center}
+.v3fs-rvw-x:hover {border-color:var(--v3-red,var(--v3-amber));color:var(--v3-red,var(--v3-amber))}
+.v3fs-rvw-add:hover {border-color:var(--v3-green);color:var(--v3-green)}
+.v3fs-rvw-belowqs {display:flex;flex-direction:column;gap:12px;padding:12px}
+.v3fs-rvw-bq {display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--v3-text-secondary)}
+.v3fs-rvw-bq textarea {font-size:13px;font-family:inherit;border:1px solid var(--fs-line);border-radius:8px;padding:8px 11px;
+  background:var(--v3-surface);color:var(--v3-text);resize:vertical;line-height:1.5}
+.v3fs-rvw-bq textarea:focus {outline:none;border-color:var(--v3-accent-2);box-shadow:0 0 0 3px color-mix(in srgb,var(--v3-accent-2) 14%,transparent)}
+/* The live "your changes" preview — sticky at the bottom of the surface. */
+.v3fs-rvw-live {position:sticky;bottom:12px;margin-top:22px;border:1px solid var(--fs-line);border-radius:14px;
+  background:var(--v3-surface);box-shadow:var(--fs-shadow);padding:14px 16px}
+.v3fs-rvw-live.on {border-color:color-mix(in srgb,var(--v3-accent-2) 40%,var(--fs-line))}
+.v3fs-rvw-live-h {display:flex;align-items:center;gap:8px;font-size:11px;font-weight:750;letter-spacing:.05em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3fs-rvw-live-h span {font-family:var(--v3-font-mono);font-size:10.5px;font-weight:700;color:var(--v3-accent-2);
+  background:var(--fs-indigo-wash);border-radius:99px;padding:1px 8px;letter-spacing:0}
+.v3fs-rvw-live-empty {margin:8px 0 0;font-size:12px;color:var(--v3-text-muted);font-style:italic}
+.v3fs-rvw-live-body {display:flex;flex-direction:column;gap:9px;margin-top:9px;max-height:34vh;overflow:auto}
+.v3fs-rvw-live-wf b {font-size:12.5px}
+.v3fs-rvw-live-wf ul {list-style:none;margin:3px 0 0;padding:0;display:flex;flex-direction:column;gap:3px}
+.v3fs-rvw-live-wf li {font-size:12px;padding-left:16px;position:relative}
+.v3fs-rvw-live-wf li::before {position:absolute;left:0;font-weight:700}
+.v3fs-rvw-live-wf li.add {color:var(--v3-green)}
+.v3fs-rvw-live-wf li.add::before {content:"+"}
+.v3fs-rvw-live-wf li.del {color:var(--v3-red,var(--v3-amber))}
+.v3fs-rvw-live-wf li.del::before {content:"−"}
+.v3fs-rvw-live-wf li.chg {color:var(--v3-accent-2)}
+.v3fs-rvw-live-wf li.chg::before {content:"~"}
+.v3fs-rvw-live-note {margin:0;font-size:12px;color:var(--v3-text-secondary);line-height:1.5}
 .v3fs-ivc-regen {display:flex;flex-direction:column;gap:9px;border:1px dashed var(--v3-amber);border-radius:10px;
   padding:10px 12px;background:var(--v3-amber-soft)}
 .v3fs-ivc-regen p {margin:0;font-size:11.5px;line-height:1.55;color:var(--v3-amber)}

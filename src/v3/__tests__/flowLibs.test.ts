@@ -27,7 +27,7 @@ import { gateApprovalIntegrity } from "@/v3/components/flow/flowGovernance";
 import { validateOntologyConstraints, hasBlockingOntologyViolations, partitionOntologyViolations } from "@/v3/components/flow/flowOntologyConstraints";
 import { readMetricRegistry, metricConsistency, metricById } from "@/v3/components/flow/flowMetricRegistry";
 import { readGovernedExceptions, withNewException, withResolvedException } from "@/v3/components/flow/flowExceptions";
-import { projectAgentifyReview, projectOntologyAtlasReview, atlasPersonas, composeAgentifyAnswers } from "@/v3/components/flow/flowReviews";
+import { projectAgentifyReview, projectOntologyAtlasReview, atlasPersonas, composeAgentifyAnswers, projectListenWorkflowReview, composeListenWorkflowAnswers } from "@/v3/components/flow/flowReviews";
 import { gateAugmentations } from "@/v3/components/flow/flowCrossValidation";
 
 const programme = (inner: Record<string, unknown>): ProgramSummary =>
@@ -522,6 +522,31 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
     expect(review!.workflows[0].steps[1].mine).toBe(false);  // Finance's step
     const text = composeAgentifyAnswers(review!, { "0.0": { disposition: "agentify", comment: "auto-price it" } });
     expect(text).toMatch(/\[Agentify\] drafts the quote — auto-price it/);
+  });
+
+  it("listen-workflow review projects the persona's workflow and composes an edit diff", () => {
+    const p = programme({ data: {
+      currentStateAtlas: { workflows: [{ name: "Quote-to-Cash", steps: [
+        { actor: "Sales Rep", action: "drafts the quote", entities: ["Quote"] },
+      ] }] },
+      domainOntology: { entities: [{ name: "Quote", definition: "a priced offer" }] },
+    } });
+    const review = projectListenWorkflowReview(p, "Sales Rep");
+    expect(review).not.toBeNull();
+    expect(review!.workflows[0].name).toBe("Quote-to-Cash");
+    expect(review!.terms.some((t) => t.name === "Quote")).toBe(true);
+    expect(review!.questions.length).toBeGreaterThan(0); // non-structural questions below
+    const text = composeListenWorkflowAnswers(review!, {
+      workflows: [{ name: "Quote-to-Cash", steps: [
+        { action: "drafts the quote", original: "drafts the quote" },
+        { action: "legal reviews it", added: true },
+      ] }],
+      narration: "legal reviews twice",
+      termNotes: {}, answers: { "0": "GDPR applies" },
+    });
+    expect(text).toMatch(/\+ \[ADDED\] legal reviews it/);
+    expect(text).toMatch(/legal reviews twice/);
+    expect(text).toMatch(/GDPR applies/);
   });
 
   it("ontology+atlas review projects the terms and mapped workflows to share", () => {

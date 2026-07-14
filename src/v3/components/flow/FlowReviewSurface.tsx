@@ -11,8 +11,8 @@
  */
 import { useMemo, useState } from "react";
 import {
-  composeAgentifyAnswers, composeOntologyAtlasAnswers,
-  type AgentifyReview, type OntologyAtlasReview, type ReviewPayload,
+  composeAgentifyAnswers, composeOntologyAtlasAnswers, composeListenWorkflowAnswers,
+  type AgentifyReview, type OntologyAtlasReview, type ListenWorkflowReview, type ReviewPayload, type EditedStep,
 } from "@/v3/components/flow/flowReviews";
 
 const DISPOSITIONS: Array<{ key: string; label: string; hint: string }> = [
@@ -175,12 +175,162 @@ function OntologyAtlasSurface({ review, stakeholder, submitting, error, onSubmit
   );
 }
 
+function ListenWorkflowSurface({ review, stakeholder, submitting, error, onSubmit }: {
+  review: ListenWorkflowReview; stakeholder: string; submitting: boolean; error: string | null;
+  onSubmit: (answers: string) => void;
+}) {
+  const [wfSteps, setWfSteps] = useState<EditedStep[][]>(
+    () => review.workflows.map((w) => w.steps.map((s) => ({ action: s.action, original: s.action }))));
+  const [narration, setNarration] = useState("");
+  const [termNotes, setTermNotes] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+
+  const editStep = (wi: number, si: number, action: string) => setWfSteps((prev) =>
+    prev.map((steps, i) => i !== wi ? steps : steps.map((s, j) => j !== si ? s : { ...s, action })));
+  const toggleRemove = (wi: number, si: number) => setWfSteps((prev) =>
+    prev.map((steps, i) => {
+      if (i !== wi) return steps;
+      const step = steps[si];
+      // A brand-new (added) row is deleted outright; an original is struck through.
+      if (step.added) return steps.filter((_, j) => j !== si);
+      return steps.map((s, j) => j !== si ? s : { ...s, removed: !s.removed });
+    }));
+  const addStep = (wi: number, at: number) => setWfSteps((prev) =>
+    prev.map((steps, i) => {
+      if (i !== wi) return steps;
+      const next = [...steps];
+      next.splice(at + 1, 0, { action: "", added: true });
+      return next;
+    }));
+
+  // Everything the stakeholder is proposing — the LIVE preview, rebuilt on edit.
+  const proposal = useMemo(() => {
+    const workflows = review.workflows.map((w, wi) => {
+      const steps = wfSteps[wi] ?? [];
+      const changes = steps.filter((s) => s.added ? s.action.trim() : (s.removed || (s.original != null && s.original !== s.action)));
+      return { name: w.name, changes, steps };
+    }).filter((w) => w.changes.length);
+    const notedTerms = review.terms.map((t, i) => ({ name: t.name, note: (termNotes[String(i)] ?? "").trim() })).filter((r) => r.note);
+    const answered = review.questions.map((q, i) => ({ q, a: (answers[String(i)] ?? "").trim() })).filter((r) => r.a);
+    const count = workflows.reduce((n, w) => n + w.changes.length, 0) + (narration.trim() ? 1 : 0) + notedTerms.length + answered.length;
+    return { workflows, notedTerms, answered, count };
+  }, [review, wfSteps, narration, termNotes, answers]);
+
+  const compose = () => composeListenWorkflowAnswers(review, {
+    workflows: review.workflows.map((w, wi) => ({ name: w.name, steps: wfSteps[wi] ?? [] })),
+    narration, termNotes, answers,
+  });
+
+  return (
+    <>
+      <header className="v3fs-hero">
+        <h1 className="v3fs-hero-title"><span className="v3fs-hero-brand">ATOS Flow</span></h1>
+        <p className="v3fs-how">{stakeholder ? `${stakeholder} — ` : ""}{review.intro}</p>
+      </header>
+      <div className="v3fs-rvw">
+        {review.workflows.map((wf, wi) => (
+          <section key={wi} className="v3fs-rvw-wf">
+            <div className="v3fs-rvw-wf-h">
+              <b>{wf.name}</b>
+              {wf.trigger ? <span className="v3fs-rvw-trigger">Starts when: {wf.trigger}</span> : null}
+            </div>
+            <ol className="v3fs-rvw-edit">
+              {(wfSteps[wi] ?? []).map((step, si) => (
+                <li key={si} className={`v3fs-rvw-erow${step.removed ? " removed" : ""}${step.added ? " added" : ""}`}>
+                  <span className="v3fs-rvw-num" aria-hidden="true">{step.added ? "+" : step.removed ? "−" : si + 1}</span>
+                  <input className="v3fs-rvw-estep" value={step.action} disabled={step.removed}
+                    placeholder={step.added ? "Describe the step we missed…" : ""}
+                    onChange={(e) => editStep(wi, si, e.target.value)} aria-label={`Step ${si + 1}`} />
+                  <button type="button" className="v3fs-rvw-x" title={step.removed ? "Keep this step" : step.added ? "Delete" : "This step doesn't happen"}
+                    onClick={() => toggleRemove(wi, si)}>{step.removed ? "↺" : "✕"}</button>
+                  <button type="button" className="v3fs-rvw-add" title="Add a step after this one" onClick={() => addStep(wi, si)}>＋</button>
+                </li>
+              ))}
+              {!(wfSteps[wi] ?? []).length ? (
+                <li><button type="button" className="v3fs-btn" onClick={() => addStep(wi, -1)}>＋ Add the first step</button></li>
+              ) : null}
+            </ol>
+          </section>
+        ))}
+
+        <section className="v3fs-rvw-wf">
+          <div className="v3fs-rvw-wf-h"><b>Describe any change in your own words</b></div>
+          <textarea className="v3fs-rvw-overall" rows={3} value={narration} onChange={(e) => setNarration(e.target.value)}
+            placeholder="e.g. Legal actually reviews the quote twice — once before pricing and again before it goes out." />
+        </section>
+
+        {review.terms.length ? (
+          <section className="v3fs-rvw-wf">
+            <div className="v3fs-rvw-wf-h"><b>The terms in your world</b><span className="v3fs-rvw-trigger">Wrong or missing? Tell us.</span></div>
+            <div className="v3fs-rvw-terms">
+              {review.terms.map((term, i) => (
+                <div key={i} className="v3fs-rvw-term">
+                  <div className="v3fs-rvw-term-h"><b>{term.name}</b>{term.systemOfRecord ? <span className="v3fs-rvw-sor">{term.systemOfRecord}</span> : null}</div>
+                  {term.definition ? <p className="v3fs-rvw-def">{term.definition}</p> : null}
+                  <input className="v3fs-rvw-comment" value={termNotes[String(i)] ?? ""}
+                    onChange={(e) => setTermNotes((p) => ({ ...p, [String(i)]: e.target.value }))}
+                    placeholder="Wrong, missing, or named differently? (optional)" />
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        <section className="v3fs-rvw-wf">
+          <div className="v3fs-rvw-wf-h"><b>A few things that shape the work</b><span className="v3fs-rvw-trigger">These don&rsquo;t change the steps — just good to know</span></div>
+          <div className="v3fs-rvw-belowqs">
+            {review.questions.map((q, i) => (
+              <label key={i} className="v3fs-rvw-bq">
+                <span>{q}</span>
+                <textarea rows={2} value={answers[String(i)] ?? ""} onChange={(e) => setAnswers((p) => ({ ...p, [String(i)]: e.target.value }))} />
+              </label>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      {/* Live preview — what the record will show once you send. */}
+      <aside className={`v3fs-rvw-live${proposal.count ? " on" : ""}`} aria-live="polite">
+        <div className="v3fs-rvw-live-h">Your changes {proposal.count ? <span>{proposal.count}</span> : null}</div>
+        {proposal.count ? (
+          <div className="v3fs-rvw-live-body">
+            {proposal.workflows.map((w, i) => (
+              <div key={i} className="v3fs-rvw-live-wf">
+                <b>{w.name}</b>
+                <ul>
+                  {w.changes.map((s, j) => (
+                    <li key={j} className={s.added ? "add" : s.removed ? "del" : "chg"}>
+                      {s.added ? `Added: ${s.action}` : s.removed ? `Removed: ${s.original ?? s.action}` : `Changed: ${s.action}`}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+            {narration.trim() ? <p className="v3fs-rvw-live-note">“{narration.trim()}”</p> : null}
+            {proposal.notedTerms.length ? <p className="v3fs-rvw-live-note">{proposal.notedTerms.length} term note{proposal.notedTerms.length === 1 ? "" : "s"}</p> : null}
+            {proposal.answered.length ? <p className="v3fs-rvw-live-note">{proposal.answered.length} note{proposal.answered.length === 1 ? "" : "s"} on constraints</p> : null}
+          </div>
+        ) : <p className="v3fs-rvw-live-empty">Edit a step, add one, or describe a change — it appears here.</p>}
+      </aside>
+
+      <div className="v3fs-rvw-foot">
+        {error ? <p className="v3fs-portal-err">{error}</p> : null}
+        <button type="button" className="v3fs-btn pri v3fs-rvw-send" disabled={submitting || !proposal.count}
+          onClick={() => onSubmit(compose())}>{submitting ? "Sending…" : "Send my changes"}</button>
+      </div>
+    </>
+  );
+}
+
 export default function FlowReviewSurface({ review, stakeholder, submitting, error, onSubmit }: {
   review: ReviewPayload; stakeholder: string; submitting: boolean; error: string | null;
   onSubmit: (answers: string) => void;
 }) {
   if (review.kind === "agentify") {
     return <AgentifySurface review={review} stakeholder={stakeholder} submitting={submitting} error={error} onSubmit={onSubmit} />;
+  }
+  if (review.kind === "listen-workflow") {
+    return <ListenWorkflowSurface review={review} stakeholder={stakeholder} submitting={submitting} error={error} onSubmit={onSubmit} />;
   }
   return <OntologyAtlasSurface review={review} stakeholder={stakeholder} submitting={submitting} error={error} onSubmit={onSubmit} />;
 }

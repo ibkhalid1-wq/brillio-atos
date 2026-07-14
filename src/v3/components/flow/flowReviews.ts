@@ -138,7 +138,96 @@ export function projectOntologyAtlasReview(program: ProgramSummary): OntologyAtl
   };
 }
 
-export type ReviewPayload = AgentifyReview | OntologyAtlasReview;
+// ── listen: edit the workflow, narrate changes ────────────────────────────────
+
+export interface ListenWorkflowStep { action: string; actor?: string; system?: string; entities?: string[] }
+export interface ListenWorkflow { name: string; trigger?: string; steps: ListenWorkflowStep[] }
+export interface ListenWorkflowReview {
+  kind: "listen-workflow";
+  persona: string;
+  intro: string;
+  workflows: ListenWorkflow[];
+  /** The ontology terms the persona's steps touch — commentable. */
+  terms: OntologyTerm[];
+  /** Questions that DON'T reshape the workflow/ontology (compliance, risk, …). */
+  questions: string[];
+}
+
+/** Non-structural prompts — they capture constraints, not workflow shape, so the
+ * Listen surface lists them BELOW the editable workflow. */
+export const NON_STRUCTURAL_QUESTIONS: string[] = [
+  "Any compliance, regulatory, or policy rules that constrain this work?",
+  "What are the biggest risks or failure points here today?",
+  "Anything that must NOT change — hard constraints, systems that stay?",
+];
+
+/** The Listen workflow-edit review — the persona's own workflow (editable) plus
+ * the terms it touches, projected from the record. */
+export function projectListenWorkflowReview(program: ProgramSummary, persona: string): ListenWorkflowReview | null {
+  const agentify = projectAgentifyReview(program, persona);
+  if (!agentify) return null;
+  const oa = projectOntologyAtlasReview(program);
+  const touched = new Set(agentify.workflows.flatMap((w) => w.steps.flatMap((s) => (s.entities ?? []).map((e) => e.toLowerCase()))));
+  const relevant = (oa?.terms ?? []).filter((t) => touched.size === 0 || touched.has(t.name.toLowerCase()));
+  return {
+    kind: "listen-workflow",
+    persona: persona || "You",
+    intro: "This is how we've captured your workflow so far. Fix any step, add steps we missed, or describe changes in your own words — you'll see your changes build up below as you go.",
+    workflows: agentify.workflows.map((w) => ({
+      name: w.name, trigger: w.trigger,
+      steps: w.steps.map((s) => ({ action: s.action, actor: s.actor, system: s.system, entities: s.entities })),
+    })),
+    terms: (relevant.length ? relevant : (oa?.terms ?? [])).slice(0, 16),
+    questions: NON_STRUCTURAL_QUESTIONS,
+  };
+}
+
+/** One workflow's edited step list, as the surface holds it. */
+export interface EditedStep { action: string; original?: string; added?: boolean; removed?: boolean }
+
+/** Compose the persona's workflow edits, term notes, narration and answers into
+ * one attributed evidence block — changes marked so synthesis reads the diff. */
+export function composeListenWorkflowAnswers(
+  review: ListenWorkflowReview,
+  edits: {
+    workflows: Array<{ name: string; steps: EditedStep[] }>;
+    narration: string;
+    termNotes: Record<string, string>;
+    answers: Record<string, string>;
+  },
+): string {
+  const lines: string[] = [`Workflow review — ${review.persona}`, ""];
+  edits.workflows.forEach((wf) => {
+    lines.push(`## ${wf.name}`);
+    wf.steps.forEach((step, i) => {
+      const n = i + 1;
+      if (step.removed) lines.push(`${n}. − [REMOVED] ${step.original ?? step.action}`);
+      else if (step.added) lines.push(`${n}. + [ADDED] ${step.action}`);
+      else if (step.original != null && step.original !== step.action) lines.push(`${n}. ~ [WAS: ${step.original}] ${step.action}`);
+      else lines.push(`${n}. ${step.action}`);
+    });
+    lines.push("");
+  });
+  if (edits.narration.trim()) { lines.push("### Changes in their words", edits.narration.trim(), ""); }
+  const termLines = review.terms
+    .map((t, i) => ({ t, note: (edits.termNotes[String(i)] ?? "").trim() }))
+    .filter((r) => r.note);
+  if (termLines.length) {
+    lines.push("### Terms");
+    termLines.forEach((r) => lines.push(`- ${r.t.name}: ${r.note}`));
+    lines.push("");
+  }
+  const answered = review.questions
+    .map((q, i) => ({ q, a: (edits.answers[String(i)] ?? "").trim() }))
+    .filter((r) => r.a);
+  if (answered.length) {
+    lines.push("### Constraints, compliance & risks");
+    answered.forEach((r) => lines.push(`Q: ${r.q}\nA: ${r.a}`));
+  }
+  return lines.join("\n").trim();
+}
+
+export type ReviewPayload = AgentifyReview | OntologyAtlasReview | ListenWorkflowReview;
 
 /** Distinct actors across the Atlas workflows — the personas whose workflow can
  * be shared for an agentification review, most-active first. */
@@ -216,6 +305,12 @@ export function reviewFallbackQuestions(review: ReviewPayload): string[] {
     return [
       "For each step of your workflow, should an agent take it over, assist you, or stay human — and why?",
       "Which single step would help you most if it were automated?",
+    ];
+  }
+  if (review.kind === "listen-workflow") {
+    return [
+      "Walk us through your workflow — what's right, what's wrong, and what steps are missing?",
+      ...NON_STRUCTURAL_QUESTIONS,
     ];
   }
   return [

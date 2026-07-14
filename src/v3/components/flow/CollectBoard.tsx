@@ -16,7 +16,7 @@ import { resolveMovementStakeholders, readRoleBindings, type MovementStakeholder
 import { mapTranscriptSpeakers } from "@/v3/components/flow/flowTranscriptMap";
 import { AttachFileButton, TranscribeButton, copyTextFromAction } from "@/v3/components/flow/flowCapture";
 import { readGovernedExceptions, withNewException, withResolvedException } from "@/v3/components/flow/flowExceptions";
-import { projectAgentifyReview, projectOntologyAtlasReview, atlasPersonas, reviewFallbackQuestions } from "@/v3/components/flow/flowReviews";
+import { projectAgentifyReview, projectOntologyAtlasReview, projectListenWorkflowReview, atlasPersonas, reviewFallbackQuestions, type ReviewPayload } from "@/v3/components/flow/flowReviews";
 
 /** A movement's discovery, organized by stakeholder. One card per person or
  * role: their script, their link/meeting channels, their captured evidence, a
@@ -199,7 +199,7 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
         <ReviewShare program={program} movementId={movementId} reviewKind="agentify" onMintReview={onMintReview} />
       ) : null}
       {movementId === "listen" ? (
-        <ReviewShare program={program} movementId={movementId} reviewKind="ontology-atlas" onMintReview={onMintReview} />
+        <ReviewShare program={program} movementId={movementId} reviewKind="listen-workflow" onMintReview={onMintReview} />
       ) : null}
       <GovernedExceptions program={program} movementId={movementId} onSaveInputs={onSaveInputs} />
     </div>
@@ -216,7 +216,7 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
 function ReviewShare({ program, movementId, reviewKind, onMintReview }: {
   program: ProgramSummary;
   movementId: string;
-  reviewKind: "agentify" | "ontology-atlas";
+  reviewKind: "agentify" | "ontology-atlas" | "listen-workflow";
   onMintReview?: (input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string }) => Promise<string | null>;
 }) {
   const [links, setLinks] = useState<Record<string, string>>({});
@@ -224,10 +224,15 @@ function ReviewShare({ program, movementId, reviewKind, onMintReview }: {
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
-  // Who can review. Agentify: the personas who act in the Atlas (their own
-  // workflow). Ontology+atlas: the named people we've heard, each commenting
-  // on the shared map — one link per person keeps responses attributed.
-  const reviewers = reviewKind === "agentify"
+  // Per-persona reviews (agentify, listen-workflow) go to the people who act in
+  // the Atlas — each gets THEIR own workflow. The shared ontology+atlas review
+  // goes to every named voice, each commenting on the same map.
+  const perPersona = reviewKind === "agentify" || reviewKind === "listen-workflow";
+  const projectFor = (name: string): ReviewPayload | null =>
+    reviewKind === "agentify" ? projectAgentifyReview(program, name)
+      : reviewKind === "listen-workflow" ? projectListenWorkflowReview(program, name)
+        : projectOntologyAtlasReview(program);
+  const reviewers = perPersona
     ? atlasPersonas(program).map((name) => ({ name, role: "" }))
     : resolveMovementStakeholders(program, "listen")
       .filter((s) => !s.isRole && s.name.trim())
@@ -241,20 +246,24 @@ function ReviewShare({ program, movementId, reviewKind, onMintReview }: {
   });
 
   const captureField = reviewKind === "agentify" ? "steeringConversation" : "interviewTranscripts";
-  const heading = reviewKind === "agentify" ? "Workflow agentification review" : "Ontology & current-state review";
+  const heading = reviewKind === "agentify" ? "Workflow agentification review"
+    : reviewKind === "listen-workflow" ? "Workflow & ontology review"
+      : "Ontology & current-state review";
   const lead = reviewKind === "agentify"
     ? "Send a persona their own workflow, step by step, and ask which steps an agent should take over. Their answers come back as evidence."
-    : "Share how we've mapped the domain — the terms and the workflows — and ask each person what's wrong or missing. Their comments come back as evidence.";
+    : reviewKind === "listen-workflow"
+      ? "Send a persona their own workflow to correct — add steps, fix what's wrong, narrate changes — and see it build as they type. Their edits come back as evidence."
+      : "Share how we've mapped the domain — the terms and the workflows — and ask each person what's wrong or missing. Their comments come back as evidence.";
+  const needsAtlas = "Generate the Current-State Atlas to share workflows for review.";
+  const needsBoth = "Generate the Domain Ontology and Current-State Atlas to share them for review.";
 
   const share = async (name: string, role: string) => {
     setNote(null);
     setBusy(name);
     try {
-      const review = reviewKind === "agentify" ? projectAgentifyReview(program, name) : projectOntologyAtlasReview(program);
+      const review = projectFor(name);
       if (!review || !onMintReview) {
-        setNote(reviewKind === "agentify"
-          ? "No workflow to review yet — generate the Current-State Atlas first."
-          : "Nothing to review yet — generate the Domain Ontology and Current-State Atlas first.");
+        setNote(reviewKind === "ontology-atlas" ? needsBoth : needsAtlas);
         return;
       }
       const link = await copyTextFromAction(() => onMintReview({
@@ -271,9 +280,7 @@ function ReviewShare({ program, movementId, reviewKind, onMintReview }: {
     } finally { setBusy(null); }
   };
 
-  const ready = reviewKind === "agentify"
-    ? !!projectAgentifyReview(program, uniqueReviewers[0]?.name ?? "")
-    : !!projectOntologyAtlasReview(program);
+  const ready = !!projectFor(perPersona ? (uniqueReviewers[0]?.name ?? "") : "");
 
   return (
     <details className="v3fs-rvs" open={false}>
@@ -284,11 +291,9 @@ function ReviewShare({ program, movementId, reviewKind, onMintReview }: {
       </summary>
       <p className="v3fs-rvs-lead">{lead}</p>
       {!ready ? (
-        <p className="v3fs-rvs-empty">{reviewKind === "agentify"
-          ? "Generate the Current-State Atlas to share workflows for review."
-          : "Generate the Domain Ontology and Current-State Atlas to share them for review."}</p>
+        <p className="v3fs-rvs-empty">{reviewKind === "ontology-atlas" ? needsBoth : needsAtlas}</p>
       ) : !uniqueReviewers.length ? (
-        <p className="v3fs-rvs-empty">No {reviewKind === "agentify" ? "workflow personas" : "people"} to share with yet.</p>
+        <p className="v3fs-rvs-empty">No {perPersona ? "workflow personas" : "people"} to share with yet.</p>
       ) : (
         <div className="v3fs-rvs-list">
           {uniqueReviewers.map((r) => (
