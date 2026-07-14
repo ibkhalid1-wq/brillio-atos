@@ -76,23 +76,80 @@ function sponsorConflictAsks(program: ProgramSummary): string[] {
     .slice(0, 8);
 }
 
+const ADDRESSEE_STOP = new Set(["the", "and", "for", "our", "your", "their", "lead", "owner", "sme", "team", "staff", "head", "chief", "officer", "manager", "director", "specialist", "analyst", "coordinator", "representative"]);
+/** Domain tokens of a role/name/addressee — lowercased, ≥3 chars, singularised
+ * (so "practices" ~ "practice"), with the generic title words dropped so
+ * "Sales SME" reduces to {sales} and routes on the domain it actually names. */
+function domainTokens(text: string): Set<string> {
+  return new Set((text.toLowerCase().match(/[a-z]{3,}/g) ?? [])
+    .map((token) => token.replace(/s$/, ""))
+    .filter((token) => token.length >= 3 && !ADDRESSEE_STOP.has(token)));
+}
+
+/** The addressee a routed gap names — "Ask the Talent Acquisition SME: …" →
+ * "Talent Acquisition SME", "Ask Priya — …" → "Priya". Null when the gap opens
+ * some other way (it is then genuinely movement-wide). Capped to a short phrase
+ * so a stray "Ask what the process is: …" isn't mistaken for an address. */
+function askAddressee(ask: string): string | null {
+  const match = ask.match(/^\s*ask\s+(?:the\s+)?([^:：—–-]{2,60}?)\s*[:：—–-]\s+/i);
+  if (!match) return null;
+  const who = match[1].trim();
+  return who && who.split(/\s+/).length <= 6 ? who : null;
+}
+
+/** The gap with its "Ask <who>:" address removed — the card already identifies
+ * the person, so the question reads as a question, not a routing instruction. */
+export function stripAskAddressee(ask: string): string {
+  const match = ask.match(/^\s*ask\s+(?:the\s+)?[^:：—–-]{2,60}?\s*[:：—–-]\s+(.*)$/is);
+  if (!match) return ask;
+  const rest = match[1].trim();
+  return rest ? rest.charAt(0).toUpperCase() + rest.slice(1) : ask;
+}
+
+interface RosterAudienceEntry { name: string; role: string; coverage?: Set<string> }
+/** Does this addressee name this rostered person — by name, by the domain their
+ * role names, or by the discovery-kit COVERAGE MAP domain they own? */
+function personMatchesAddressee(addressee: string, person: RosterAudienceEntry): boolean {
+  const addr = addressee.toLowerCase();
+  const name = person.name.trim().toLowerCase();
+  const first = name.split(/\s+/)[0] ?? "";
+  if (name.length >= 3 && (addr.includes(name) || name.includes(addr))) return true;
+  if (first.length >= 3 && addr.includes(first)) return true;
+  const addrToks = domainTokens(addressee);
+  if (!addrToks.size) return false;
+  const roleToks = domainTokens(`${person.name} ${person.role}`);
+  for (const token of addrToks) if (roleToks.has(token)) return true;
+  // Coverage-map grounding: route on the domain the map says this person owns,
+  // even when their role label doesn't spell it out.
+  if (person.coverage) for (const token of addrToks) if (person.coverage.has(token)) return true;
+  return false;
+}
+
 /**
  * Which rostered people an artifact ask is ADDRESSED to. A gap that names a
- * person ("Ask Dan: …") or a role ("the Talent Acquisition SME's hand-off…")
- * belongs on THAT card only — putting it on everyone's script asks the Legal
- * SME about talent acquisition, which reads as noise and burns goodwill.
- * Returns the matched roster keys; empty means the ask names no one and stays
- * movement-wide.
+ * person ("Ask Dan: …") or a role ("Ask the Talent Acquisition SME: …") belongs
+ * on THAT card only — putting it on everyone's script asks the Legal SME about
+ * talent acquisition, which reads as noise and burns goodwill. Matching is by
+ * the DOMAIN the address names (role tokens + coverage map), so "Ask the Sales
+ * SME" reaches the sales voices even though no role is literally "Sales SME".
+ * Returns the matched roster keys; empty means the ask names no one it can place
+ * and stays movement-wide.
  */
-function askAudience(ask: string, roster: Array<{ name: string; role: string }>): Set<string> {
-  const text = ask.toLowerCase();
+function askAudience(ask: string, roster: RosterAudienceEntry[]): Set<string> {
   const matched = new Set<string>();
+  const addressee = askAddressee(ask);
+  if (addressee) {
+    for (const person of roster) {
+      if (personMatchesAddressee(addressee, person)) matched.add(person.name.trim().toLowerCase());
+    }
+    return matched;
+  }
+  // Unaddressed gap: fall back to literal name/role containment.
+  const text = ask.toLowerCase();
   for (const person of roster) {
     const name = person.name.trim().toLowerCase();
     const role = person.role.trim().toLowerCase();
     const first = name.split(/\s+/)[0] ?? "";
-    // 3-char first names ("Raj", "Ana") are real; roles stay stricter — short
-    // role tokens ("SME") appear inside too many other roles to route on.
     if ((name.length >= 3 && text.includes(name))
       || (first.length >= 3 && text.includes(first))
       || (role.length > 3 && text.includes(role))) {
@@ -223,9 +280,29 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
     })
     .map((persona) => String(persona.name ?? "").trim())
     .filter((roleName) => roleName && !covered.has(roleName.toLowerCase()) && !dismissedRoles.has(roleName.toLowerCase()));
-  const audienceRoster = [
-    ...interviews.map((interview) => ({ name: String(interview.stakeholder ?? "").trim(), role: String(interview.role ?? "").trim() })),
-    ...personaRoles.map((roleName) => ({ name: listenBindings[roleName]?.name ?? "", role: roleName })),
+  // Coverage-map grounding: the discovery kit's coverage map assigns each
+  // business DOMAIN to the people who cover it. Index the domain tokens per
+  // person so a gap addressed to a domain ("Ask the Sales SME: …") routes to
+  // whoever the map says owns Sales — even when their role label doesn't say it.
+  const coverageRows = isRecord(kit) && Array.isArray(kit.coverageMap) ? kit.coverageMap.filter(isRecord) : [];
+  const coverageTokensByPerson = new Map<string, Set<string>>();
+  for (const row of coverageRows) {
+    const domToks = domainTokens(String(row.domain ?? ""));
+    if (!domToks.size) continue;
+    const coveredBy = Array.isArray(row.coveredBy) ? row.coveredBy.map(String) : String(row.coveredBy ?? "").split(",");
+    for (const raw of coveredBy) {
+      const key = raw.trim().toLowerCase().replace(/\s*[—–−‑-]\s*tbc\s*$/i, "");
+      if (!key) continue;
+      const set = coverageTokensByPerson.get(key) ?? new Set<string>();
+      for (const token of domToks) set.add(token);
+      coverageTokensByPerson.set(key, set);
+    }
+  }
+  const withCoverage = (name: string, role: string): RosterAudienceEntry =>
+    ({ name, role, coverage: coverageTokensByPerson.get(name.trim().toLowerCase()) });
+  const audienceRoster: RosterAudienceEntry[] = [
+    ...interviews.map((interview) => withCoverage(String(interview.stakeholder ?? "").trim(), String(interview.role ?? "").trim())),
+    ...personaRoles.map((roleName) => withCoverage(listenBindings[roleName]?.name ?? "", roleName)),
     // Sponsor intentionally excluded — see the note above: their discovery asks
     // fall through to the stakeholders who own the work.
   ];
@@ -238,7 +315,7 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
       if (to && !matchesTarget(to, name, roleName)) return false;
       const audience = askAudience(ask, audienceRoster);
       return audience.size === 0 || audience.has(key) || audience.has(name.toLowerCase());
-    });
+    }).map(stripAskAddressee);
     return {
       id: `persona-${index}`,
       name: name || roleName,
@@ -275,7 +352,7 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
       if (isDeferredElsewhere(ask)) return false;
       const audience = askAudience(ask, audienceRoster);
       return audience.size === 0 || audience.has(key);
-    });
+    }).map(stripAskAddressee);
     // Heard already? Their turns are on the record. If so, the follow-up is only
     // what is STILL OPEN (disagreements + artifact gaps) — not the original
     // agenda they've answered, which is what left it "not getting cleared".

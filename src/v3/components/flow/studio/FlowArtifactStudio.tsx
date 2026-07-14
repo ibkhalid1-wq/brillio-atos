@@ -323,13 +323,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
             <h2>{artifact.title}</h2>
           </div>
           <div className="v3fs-docview-cta">
-            {canEdit && !editing ? (
-              <button type="button" className="v3fs-btn pri" onClick={() => setEditing(true)}>✎ Edit</button>
-            ) : null}
-            {editing && !dirty ? (
-              <button type="button" className="v3fs-btn" onClick={() => setEditing(false)}>View document</button>
-            ) : null}
-            {!editing ? (
+            {entry ? (
               <div className="v3fs-dv-menuwrap">
                 <button type="button" className="v3fs-btn" aria-label="More actions" aria-expanded={menuOpen}
                   onClick={() => setMenuOpen((open) => !open)}>⋯</button>
@@ -372,7 +366,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
           <div className="v3fs-approval-bar changes" role="status">↺ {approval.approver?.name ?? "Approver"} requested changes: &ldquo;{approval.comment}&rdquo;</div>
         ) : null}
 
-        {!editing && artifact.stale ? (
+        {artifact.stale ? (
           <div className="v3fs-dv-band amber">
             <span>Evidence changed since this document was generated.</span>
             {onRegenerate ? (
@@ -380,7 +374,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
             ) : null}
           </div>
         ) : null}
-        {!editing && lastChange ? (
+        {lastChange ? (
           <details className="v3fs-dv-changed">
             <summary>
               Review changes — {lastChange.rows.length} section{lastChange.rows.length === 1 ? "" : "s"} since {new Date(lastChange.ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
@@ -408,7 +402,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
             </div>
           </details>
         ) : null}
-        {!editing && onComment && entry ? (
+        {onComment && entry ? (
           <div className="v3fs-comments">
             <div className="v3fs-comments-h">
               Comments
@@ -437,7 +431,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
             </div>
           </div>
         ) : null}
-        {!editing && regenPending ? (
+        {regenPending ? (
           <div className="v3fs-dv-band indigo">
             <span>A regenerated version awaits your confirm in the Inbox — your hand edits are protected until then.</span>
             {onOpenInbox ? (

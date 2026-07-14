@@ -17,7 +17,7 @@ import { mapTranscriptSpeakers } from "@/v3/components/flow/flowTranscriptMap";
 import { AttachFileButton, TranscribeButton, copyTextFromAction } from "@/v3/components/flow/flowCapture";
 import { readGovernedExceptions, withNewException, withResolvedException } from "@/v3/components/flow/flowExceptions";
 import { projectAgentifyReview, projectListenWorkflowReview, reviewFallbackQuestions, type ListenWorkflowReview, type AgentifyReview } from "@/v3/components/flow/flowReviews";
-import { areaProgress, hasMultipleAreas, stakeholderPrimaryArea, programAreas, GENERAL_AREA, type AreaProgress } from "@/v3/components/flow/flowAreas";
+import { areaProgress, stakeholderPrimaryArea, programAreas, GENERAL_AREA, type AreaProgress } from "@/v3/components/flow/flowAreas";
 
 /** A movement's discovery, organized by stakeholder. One card per person or
  * role: their script, their link/meeting channels, their captured evidence, a
@@ -168,6 +168,9 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
     s,
     coll: stakeholderCollection(movementId, s, packs, evidence, approvalByName.get(s.name.trim().toLowerCase())),
   }));
+  // Resolve each stakeholder's ontology-grounded primary area ONCE — the single
+  // source for the by-area gate, the lane grouping, and each card's area chip.
+  const primaryAreaOf = new Map(evaluated.map((e) => [e.s.id, stakeholderPrimaryArea(program, e.s.name, e.s.role)] as const));
   const heardCount = evaluated.filter((e) => e.coll.heard && !e.s.questions.length).length;
   const word = movementId === "show" ? "reviewed" : movementId === "listen" || movementId === "frame" ? "heard" : "consulted";
   const columns = COLLECT_COLUMNS
@@ -193,14 +196,15 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
   // more than one — each area is a lane holding its own stakeholder cards, each
   // card carrying ONE link that bundles that person's questions and their
   // area's workflows. Frame and single-area programmes keep the status board.
-  const areaOrganized = (movementId === "listen" || movementId === "envision" || movementId === "show") && hasMultipleAreas(program);
+  const areaOrganized = (movementId === "listen" || movementId === "envision" || movementId === "show")
+    && new Set(primaryAreaOf.values()).size > 1;
   const areaRows = new Map(areaProgress(program).map((r) => [r.area, r] as const));
   const STATUS_RANK: Record<CollectStatus, number> = { toreach: 0, waiting: 1, heard: 2, "pending-approval": 3, approved: 4 };
 
   const renderCard = ({ s, coll }: (typeof evaluated)[number]) => (
     <IntervieweeCard key={s.id} program={program} movementId={movementId} stakeholder={s} captureField={captureField}
       coll={coll} open={openIds.has(s.id)} onOpenChange={(isOpen) => setCardOpen(s.id, isOpen)}
-      primaryArea={areaOrganized ? stakeholderPrimaryArea(program, s.name, s.role) : undefined}
+      primaryArea={areaOrganized ? primaryAreaOf.get(s.id) : undefined}
       docsStale={docsStale} regenerating={regenerating} onRegenerateStale={onRegenerateStale}
       approvalItems={approvalByName.get(s.name.trim().toLowerCase())?.items}
       onSendForApproval={onSendForApproval}
@@ -214,7 +218,7 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
   const laneData = areaOrganized ? (() => {
     const groups = new Map<string, typeof evaluated>();
     for (const e of evaluated) {
-      const area = stakeholderPrimaryArea(program, e.s.name, e.s.role);
+      const area = primaryAreaOf.get(e.s.id) ?? GENERAL_AREA;
       const list = groups.get(area) ?? [];
       list.push(e); groups.set(area, list);
     }
@@ -236,7 +240,7 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
     for (const { s, coll } of list) {
       if (coll.heard || coll.pack || s.isRole) continue;
       const linkQs = s.linkQuestions?.length ? s.linkQuestions : s.questions;
-      const review = projectStakeholderReview(program, movementId, s.name, stakeholderPrimaryArea(program, s.name, s.role), linkQs);
+      const review = projectStakeholderReview(program, movementId, s.name, primaryAreaOf.get(s.id) ?? stakeholderPrimaryArea(program, s.name, s.role), linkQs);
       if (review && onMintReview) {
         await onMintReview({
           movementId, who: s.name, role: s.role || "Reviewer", captureField, reviewKind: review.kind,

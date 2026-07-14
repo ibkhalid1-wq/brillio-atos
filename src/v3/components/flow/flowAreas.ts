@@ -31,7 +31,7 @@ const AREA_KEYWORDS: Array<{ area: string; re: RegExp }> = [
   { area: "Marketing", re: /\b(market|campaign|lead gen|demand gen|content|brand|seo|advertis|nurtur|webinar)/i },
   { area: "Finance", re: /\b(financ|invoic|billing|payment|revenue|accounts payable|accounts receivable|ledger|collections|budget|reconcil)/i },
   { area: "People", re: /\b(hr\b|human resource|recruit|hiring|onboard|talent|employee|payroll|people ops)/i },
-  { area: "Legal & Compliance", re: /\b(legal|contract review|complian|regulat|policy|governance|audit|risk assessment)/i },
+  { area: "Legal & Compliance", re: /\b(legal|contract review|complian|regulat|policy|governance|audit|risk assessment|privacy|consent|data protection|gdpr|hipaa|ethics|informed consent)/i },
   { area: "Support", re: /\b(support|ticket|customer service|help ?desk|case management|escalation|service request)/i },
   { area: "Operations", re: /\b(operations|fulfil|logistics|supply|inventory|procurement|warehouse|dispatch|manufactur)/i },
   { area: "Product & Engineering", re: /\b(product|engineering|develop|release|deploy|feature|sprint|backlog)/i },
@@ -186,6 +186,13 @@ export function stakeholderPrimaryArea(program: ProgramSummary, name: string, ro
   let best = GENERAL_AREA;
   let top = 0;
   for (const [area, sc] of score) if (sc > top) { top = sc; best = area; }
+  // Nothing in the ontology/atlas claimed this person. Fall back to the domain
+  // their own role names ("Regulatory Affairs Lead" → Legal & Compliance,
+  // "Data Privacy Officer" → Legal & Compliance) so a THIN ontology — one that
+  // hasn't tagged areas yet, like an early clinical programme — still files
+  // each voice under a real business area instead of collapsing to General.
+  // The ontology/atlas-grounded matches above always win when they exist.
+  if (top === 0 && inferred) return inferred;
   return best;
 }
 

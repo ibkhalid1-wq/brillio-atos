@@ -15,7 +15,7 @@ import { unrosteredVoicesProposal, reDemoProposal, ontologyRepairProposal, queue
 import { routeAttachedDocument, buildRoutedBlocks } from "@/v3/components/flow/flowDocRouting";
 import { retroAttributionProposal, negatedClaimProposal } from "@/v3/components/flow/flowWatchers";
 import { rankEvidence, isNoiseEvidence, scoreEvidence } from "@/v3/components/flow/flowEvidenceRank";
-import { resolveMovementStakeholders, deliveryRoleDirectory, validateProgramRole, knownProgramRoles, readDirectoryPeople, unresolvedCoverageNames, knownPeopleNames } from "@/v3/components/flow/flowStakeholders";
+import { resolveMovementStakeholders, deliveryRoleDirectory, validateProgramRole, knownProgramRoles, readDirectoryPeople, unresolvedCoverageNames, knownPeopleNames, stripAskAddressee } from "@/v3/components/flow/flowStakeholders";
 import { mintFollowUpPack, listInterviewPacks, visibleLinks } from "@/v3/components/flow/flowPortal";
 import { trackAcceptance, trackBlockers, recordShowPass, listFlowTracks, type FlowTrack } from "@/v3/components/flow/flowTracks";
 import { setShipLane, toggleShipItem, listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
@@ -427,6 +427,51 @@ describe("blobGuard — validation and migration at the blob boundary", () => {
     expect(first.inner._blobVersion).toBe(BLOB_VERSION);
     const second = migrateProgramBlob(first.inner);
     expect(second.migrated).toBe(false);
+  });
+});
+
+describe("Listen gap routing — ontology gaps reach the SME they name, and read clean", () => {
+  it("strips the 'Ask the <who>:' address so the card shows a question, not an instruction", () => {
+    expect(stripAskAddressee("Ask the Sales SME: What is the deal-shaping process?"))
+      .toBe("What is the deal-shaping process?");
+    expect(stripAskAddressee("Ask Priya — how do you hand a hire to the bench?"))
+      .toBe("How do you hand a hire to the bench?");
+    // A question that doesn't open with an address is left untouched.
+    expect(stripAskAddressee("Walk us through a typical opportunity.")).toBe("Walk us through a typical opportunity.");
+  });
+
+  it("routes each 'Ask the <role> SME' gap to that role's card only — never onto every SME", () => {
+    const p = programme({
+      discoveryKit: {
+        interviews: [
+          { stakeholder: "Avantika", role: "Vertical Sales SME", agenda: [] },
+          { stakeholder: "Hema", role: "Delivery Manager SME", agenda: [] },
+          { stakeholder: "Vimal", role: "Finance SME", agenda: [] },
+        ],
+      },
+      // Listen's artifact gaps live on the Current-State Atlas, phrased
+      // "Ask the <role> SME: …" the way the atlas/ontology generator emits them.
+      currentStateAtlas: {
+        gaps: [
+          "Ask the Sales SME: What is the deal-shaping process for cross-practice opportunities?",
+          "Ask the Delivery SME: How is resource ramp-up coordinated?",
+          "Ask the Finance SME: How is margin reconciled across systems?",
+        ],
+      },
+    });
+    const byName = new Map(resolveMovementStakeholders(p, "listen").map((s) => [s.name, s.questions]));
+    const avantika = byName.get("Avantika") ?? [];
+    const hema = byName.get("Hema") ?? [];
+    const vimal = byName.get("Vimal") ?? [];
+    // Each SME sees only their own domain's gap …
+    expect(avantika.some((q) => /deal-shaping/i.test(q))).toBe(true);
+    expect(hema.some((q) => /resource ramp-up/i.test(q))).toBe(true);
+    expect(vimal.some((q) => /margin reconciled/i.test(q))).toBe(true);
+    // … and NOT the other SMEs' gaps (the reported bug: all four on one card).
+    expect(avantika.some((q) => /resource ramp-up|margin reconciled/i.test(q))).toBe(false);
+    expect(hema.some((q) => /deal-shaping|margin reconciled/i.test(q))).toBe(false);
+    // … and the address prefix never shows on the card.
+    expect([...avantika, ...hema, ...vimal].some((q) => /^ask the/i.test(q))).toBe(false);
   });
 });
 
