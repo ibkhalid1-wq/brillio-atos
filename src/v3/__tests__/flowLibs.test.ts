@@ -561,7 +561,10 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
       for (const artifactId of getPhaseDefinition(movementId, "atos-flow")?.requiredArtifacts ?? []) {
         const fieldKey = FORMAL_ARTIFACT_FIELD_KEYS[artifactId];
         if (!fieldKey) continue; // artifact with no stored doc — nothing to carry gaps
-        const marker = `Ask the stakeholder which systems feed the ${artifactId} coverage?`;
+        // Plain-language marker: gaps phrased in modelling jargon (the raw
+        // "domain-ontology" id trips the \bontolog net) stay operator-side by
+        // design — this test asserts the STAKEHOLDER-phrased path routes.
+        const marker = `Ask the stakeholder which systems feed the ${fieldKey} work?`;
         const p = programme({ [fieldKey]: { gaps: [marker] } });
         expect(askableMovementGaps(p, movementId), `${movementId}/${artifactId} gap must reach the script`).toContain(marker);
         checked += 1;

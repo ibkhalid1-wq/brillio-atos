@@ -1226,6 +1226,8 @@ Return ONLY valid JSON:
 
 Ground every workflow step and pain point in what a stakeholder actually said — carry a verbatim quote with attribution wherever possible. Never invent a step or a hand-off; where the transcripts leave one unclear, record it under "openQuestions" instead. Where two stakeholders describe the same process differently, that is a finding — record it under "contradictions" with a suggested follow-up, never silently pick a side.
 
+openQuestions and gaps become interview questions, so phrase each one a stakeholder must answer as a PLAIN BUSINESS QUESTION in their vocabulary — "After you approve a quote, who sends it to the client, and how?" — never methodology vocabulary (workflow, persona, coverage, hand-off mapping). Only operator-side work (e.g. a voice not yet rostered) may be phrased at the operator.
+
 Actors are PERSONAS: name steps[].actor using the Discovery Kit's personas (priorPhaseArtifacts) — internal and external alike; the customer or partner appears as an actor wherever the process touches them ("End Customer submits the request"). Every persona in the kit must act in at least one workflow, traced END TO END: from the trigger where they first touch the process to the point they hand off or leave it. A persona whose steps the transcripts do not cover is a hole — record it under "openQuestions" ("What does the <persona> do between X and Y?"), never paper over it.
 
 Return ONLY valid JSON:
@@ -1252,6 +1254,8 @@ Return ONLY valid JSON:
 
 Use the stakeholders' own nouns — the ontology's names should be their language, not generic data-modelling vocabulary. Every entity carries at least one evidence source. Where different teams use different words for the same thing (or the same word for different things), record it under "ambiguities" — those collisions are exactly what the Blueprint's data contracts must resolve.
 
+Gaps become interview questions, so phrase every gap a stakeholder must close as a PLAIN BUSINESS QUESTION in their vocabulary — never modelling vocabulary. A cardinality question becomes "Can one client have several active deals at the same time, or exactly one?" — NEVER "confirm the cardinality of Account→Opportunity". Words like entity, relation, cardinality, ontology, mapping, 1:N do not belong in anything a stakeholder reads.
+
 Return ONLY valid JSON:
 {
   "title": "Domain Ontology — <programme name>",
@@ -1262,7 +1266,7 @@ Return ONLY valid JSON:
   "standardAlignment": [ { "entity": "ontology entity name", "standard": "full URI, e.g. https://schema.org/Order", "vocabulary": "schema.org|FIBO|GS1|FHIR", "relation": "skos:closeMatch|skos:exactMatch", "confidence": 0.0 } ],
   // Propose mappings ONLY from the vocabularies named in the input context's vocabularySteering — it is derived deterministically from the programme's industry; any other namespace is rejected before review. Only propose mappings you are confident in; omit rather than force.
   "ambiguities": [ { "term": "string", "conflictingMeanings": ["meaning per team"], "resolution": "proposed resolution or 'unresolved'" } ],
-  "gaps": ["entities referenced but never defined, domains not yet mapped"],
+  "gaps": ["phrased as plain business questions a stakeholder can answer (e.g. 'Ask Dan: when a deal closes, does the contract live in DocuSign or the CRM?') — or as operator work when only the operator can close it"],
   "summary": "one sentence verdict on ontology completeness",
   "confidence": 0.0
 }`,
@@ -1484,6 +1488,10 @@ When you list a gap, decide who must CLOSE it:
 Stakeholder-phrased gaps flow into the follow-up interview script automatically;
 operator-phrased gaps stay on the document and the gate. Misphrasing a
 stakeholder fact as input-editing strands it where no conversation will ask it.
+Stakeholder-phrased gaps are PLAIN LANGUAGE: the stakeholder's own vocabulary,
+never the methodology's (entity, relation, cardinality, ontology, persona,
+workflow coverage, mapping). Ask about their business reality — "Can one client
+hold several active contracts at once?" — not about the model of it.
 
 ### Source priority order
 When information conflicts, always trust the higher-priority source and never let

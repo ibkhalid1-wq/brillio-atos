@@ -350,7 +350,13 @@ export function scriptDocumentRefs(questions: string[]): string[] {
  * put in front of a stakeholder.
  */
 function askableGap(gap: string): boolean {
-  return !/\binputs?\b|\bledger\b|\bartifacts?\b|\bregenerat|\bevidence changed\b|\bemail\b/i.test(gap);
+  // Two families stay off stakeholder scripts: the app's plumbing (inputs,
+  // ledgers, regeneration) AND unambiguous modelling jargon (cardinality,
+  // ontology, 1:N…) — a question a business stakeholder can't parse belongs
+  // on the artifact card for the operator, not on someone's link. Generators
+  // are instructed to phrase stakeholder gaps in plain language; this is the
+  // safety net for the ones that slip.
+  return !/\binputs?\b|\bledger\b|\bartifacts?\b|\bregenerat|\bevidence changed\b|\bemail\b|\bcardinalit|\bontolog|\bdata model|\b1:\s?N\b|\bN:\s?M\b|\bskos\b|\bschema\.org\b/i.test(gap);
 }
 
 /**
