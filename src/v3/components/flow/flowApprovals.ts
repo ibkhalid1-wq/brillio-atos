@@ -14,7 +14,7 @@ import type { ProgramSummary } from "@/new/types";
 import type { PhaseDefinition } from "@/v3/lib/methodology";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import {
-  movementOpenIssues, evidenceStamp, flowMovements, stakeholderEmail, movementEvidence,
+  movementOpenIssues, evidenceStamp, flowMovements, stakeholderEmail, movementEvidence, movementArtifacts,
   type ArtifactCardModel, type EvidenceEntry,
 } from "@/v3/components/flow/flowShellData";
 import { resolveMovementStakeholders, readDirectoryPeople } from "@/v3/components/flow/flowStakeholders";
@@ -104,6 +104,99 @@ export function canSendForApproval(program: ProgramSummary, movement: PhaseDefin
   return true;
 }
 
+/**
+ * The stakeholders whose evidence FED a movement — its relevant approvers.
+ * An artifact (the atlas, the ontology) is a synthesis of what these people
+ * said, so THEY are who signs it off: approval is per-stakeholder, and the
+ * artifact only reads approved when every contributor has approved it.
+ */
+export function relevantApprovers(program: ProgramSummary, movementId: string): Array<{ name: string; role: string; email?: string }> {
+  const movement = flowMovements().find((m) => m.id === movementId);
+  if (!movement) return [];
+  const evidence = movementEvidence(program, movement);
+  return resolveMovementStakeholders(program, movementId)
+    .filter((s) => !s.isRole)
+    .filter((s) => {
+      const key = s.name.trim().toLowerCase();
+      // Same attribution matching as the collect board — one source of truth
+      // for "this person's evidence is on the record".
+      return key.length > 2 && evidence.some((e) =>
+        e.who.toLowerCase().includes(key)
+        || key.includes(e.who.split(",")[0].trim().toLowerCase())
+        || (e.kind === "document" && e.meta.toLowerCase().includes(key)));
+    })
+    .map((s) => ({ name: s.name, role: s.role, email: stakeholderEmail(program, s.name) || undefined }));
+}
+
+/** The LATEST approval pack per approver for one artifact — later sends
+ * supersede earlier ones, answered or not, as that person's standing ask. */
+function latestPacksByApprover(inner: Record<string, unknown>, movementId: string, artifactId: string): Map<string, FlowApprovalPack> {
+  const map = new Map<string, FlowApprovalPack>();
+  for (const pack of readPacks(inner)) {
+    if (String(pack.movementId) !== movementId || String(pack.artifactId) !== artifactId) continue;
+    const key = String(pack.approver?.name ?? "").trim().toLowerCase();
+    if (!key) continue;
+    const held = map.get(key);
+    if (!held || String(pack.createdAt) > String(held.createdAt)) map.set(key, pack);
+  }
+  return map;
+}
+
+export interface ApproverState {
+  name: string; role: string; email?: string;
+  status: ApprovalStatus; token?: string; decidedAt?: string; comment?: string;
+}
+
+const packState = (pack: FlowApprovalPack | undefined): { status: ApprovalStatus; token?: string; decidedAt?: string; comment?: string } => {
+  if (!pack) return { status: "none" };
+  if (pack.verdict === "approved") return { status: "approved", decidedAt: pack.respondedAt };
+  if (pack.verdict === "changes") return { status: "changes", decidedAt: pack.respondedAt, comment: pack.comment };
+  return { status: "in-review", token: pack.token };
+};
+
+/**
+ * An artifact's approval ROLLUP across its relevant stakeholders — the truth
+ * the artifact card shows. Approved only when EVERY contributor approved;
+ * a single changes-requested outranks everything else.
+ */
+export function artifactApprovalRollup(program: ProgramSummary, movementId: string, artifactId: string): {
+  approvers: ApproverState[]; approvedCount: number; total: number; overall: ApprovalStatus;
+} {
+  const { inner } = getProgramState((program.rawData ?? {}) as Record<string, unknown>);
+  const byApprover = latestPacksByApprover(inner, movementId, artifactId);
+  const approvers: ApproverState[] = relevantApprovers(program, movementId).map((approver) => ({
+    ...approver,
+    ...packState(byApprover.get(approver.name.trim().toLowerCase())),
+  }));
+  const approvedCount = approvers.filter((a) => a.status === "approved").length;
+  const overall: ApprovalStatus = !approvers.length ? "none"
+    : approvers.some((a) => a.status === "changes") ? "changes"
+      : approvedCount === approvers.length ? "approved"
+        : approvers.some((a) => a.status === "in-review") ? "in-review" : "none";
+  return { approvers, approvedCount, total: approvers.length, overall };
+}
+
+export interface StakeholderApprovalItem {
+  artifactId: string; artifactTitle: string;
+  status: ApprovalStatus; token?: string; decidedAt?: string; comment?: string;
+}
+
+/** One stakeholder's sign-off queue for a movement — every present artifact
+ * with THEIR latest ask/verdict. Drives the approval section of their card. */
+export function stakeholderApprovalItems(program: ProgramSummary, movementId: string, stakeholderName: string): StakeholderApprovalItem[] {
+  const movement = flowMovements().find((m) => m.id === movementId);
+  if (!movement) return [];
+  const key = stakeholderName.trim().toLowerCase();
+  const { inner } = getProgramState((program.rawData ?? {}) as Record<string, unknown>);
+  return movementArtifacts(program, movement)
+    .filter((artifact) => artifact.present)
+    .map((artifact) => ({
+      artifactId: artifact.id,
+      artifactTitle: artifact.title,
+      ...packState(latestPacksByApprover(inner, movementId, artifact.id).get(key)),
+    }));
+}
+
 /** The live approval state of an artifact — drives the card chip and the gate.
  * While in review it also carries the live pack `token` so the card can show
  * the link and let the operator copy it again to re-send. */
@@ -152,8 +245,13 @@ export function mintApprovalRequest(
     snapshot: input.snapshot ? input.snapshot.slice(0, SNAPSHOT_CAP) : undefined,
     createdAt: now,
   };
-  // Supersede any earlier open pack for the same artifact (re-send after edits).
-  const packs = readPacks(inner).filter((p) => !(p.artifactId === input.artifactId && p.movementId === input.movementId && !p.respondedAt));
+  // Supersede any earlier open pack for the same artifact AND approver — each
+  // relevant stakeholder holds their own live ask, so re-sending to one person
+  // never invalidates another's link.
+  const packs = readPacks(inner).filter((p) => !(
+    p.artifactId === input.artifactId && p.movementId === input.movementId && !p.respondedAt
+    && String(p.approver?.name ?? "").trim().toLowerCase() === name.toLowerCase()
+  ));
 
   const phaseArtifacts = isRecord(inner.phaseArtifacts) ? { ...(inner.phaseArtifacts as Record<string, unknown>) } : {};
   const bucket = isRecord(phaseArtifacts[input.movementId]) ? { ...(phaseArtifacts[input.movementId] as Record<string, unknown>) } : {};

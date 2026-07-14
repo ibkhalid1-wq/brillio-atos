@@ -112,7 +112,9 @@ export default function FlowApprove({ token }: { token: string }) {
                     }}>⤓ Download</button>
                   ) : null}
                 </div>
-                <div className="v3fs-approve-snap">{state.pack.snapshot || "The document text wasn't captured — ask the team to re-send with the content."}</div>
+                {state.pack.snapshot
+                  ? <SnapshotDoc text={state.pack.snapshot} />
+                  : <div className="v3fs-approve-snap">The document text wasn&rsquo;t captured — ask the team to re-send with the content.</div>}
               </article>
               <div className="v3fs-panel v3fs-approve-act">
                 <label className="v3fs-approve-note-l" htmlFor="approve-note">Add a note (required to request changes)</label>
@@ -133,6 +135,65 @@ export default function FlowApprove({ token }: { token: string }) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Typeset renderer for the frozen snapshot — every artifact type sends the
+ * same plain-text shape (## sections, ### subsections, - bullets, **Label:**
+ * facts), so one parser gives every approver a refined reading page instead
+ * of a raw text dump. Consecutive facts group into a fact sheet; consecutive
+ * bullets into a list.
+ */
+function SnapshotDoc({ text }: { text: string }) {
+  const strip = (value: string) => value.replace(/\*\*([^*]+)\*\*/g, "$1");
+  type Block =
+    | { kind: "h2" | "h3" | "p"; text: string }
+    | { kind: "ul"; items: string[] }
+    | { kind: "facts"; rows: Array<{ label: string; value: string }> };
+  const blocks: Block[] = [];
+  const push = (block: Block) => blocks.push(block);
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (line.startsWith("### ")) { push({ kind: "h3", text: strip(line.slice(4)) }); continue; }
+    if (line.startsWith("## ")) { push({ kind: "h2", text: strip(line.slice(3)) }); continue; }
+    if (line.startsWith("# ")) { push({ kind: "h2", text: strip(line.slice(2)) }); continue; }
+    if (/^[-•*]\s+/.test(line)) {
+      const item = strip(line.replace(/^[-•*]\s+/, ""));
+      const last = blocks[blocks.length - 1];
+      if (last?.kind === "ul") last.items.push(item);
+      else push({ kind: "ul", items: [item] });
+      continue;
+    }
+    const fact = line.match(/^\*\*([^*]{1,64})\*\*:?\s*(.+)$/);
+    if (fact) {
+      const row = { label: fact[1].replace(/:\s*$/, ""), value: strip(fact[2]) };
+      const last = blocks[blocks.length - 1];
+      if (last?.kind === "facts") last.rows.push(row);
+      else push({ kind: "facts", rows: [row] });
+      continue;
+    }
+    push({ kind: "p", text: strip(line) });
+  }
+  return (
+    <div className="v3fs-apv-doc">
+      {blocks.map((block, index) =>
+        block.kind === "h2" ? <h2 key={index} className="v3fs-apv-h2">{block.text}</h2>
+          : block.kind === "h3" ? <h3 key={index} className="v3fs-apv-h3">{block.text}</h3>
+            : block.kind === "ul" ? (
+              <ul key={index} className="v3fs-apv-ul">
+                {block.items.map((item, i) => <li key={i}>{item}</li>)}
+              </ul>
+            ) : block.kind === "facts" ? (
+              <dl key={index} className="v3fs-apv-facts">
+                {block.rows.map((row, i) => (
+                  <div key={i} className="v3fs-apv-fact"><dt>{row.label}</dt><dd>{row.value}</dd></div>
+                ))}
+              </dl>
+            ) : <p key={index} className="v3fs-apv-p">{block.text}</p>,
+      )}
     </div>
   );
 }

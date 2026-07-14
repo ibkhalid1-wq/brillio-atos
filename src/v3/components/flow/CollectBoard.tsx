@@ -8,7 +8,8 @@
 import { useRef, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import EvidenceReader from "@/v3/components/flow/EvidenceReader";
-import { flowMovements, movementEvidence, evidenceStamp, locateQuote, readMovementInputs, contradictionLogWithout } from "@/v3/components/flow/flowShellData";
+import { flowMovements, movementEvidence, evidenceStamp, locateQuote, readMovementInputs, contradictionLogWithout, artifactDocument } from "@/v3/components/flow/flowShellData";
+import { relevantApprovers, stakeholderApprovalItems, approvalLinkFor, type StakeholderApprovalItem } from "@/v3/components/flow/flowApprovals";
 import { buildMeetingIcs, mailtoLink, stakeholderEmail } from "@/v3/components/flow/flowMeetings";
 import { listInterviewPacks, portalLinkFor } from "@/v3/components/flow/flowPortal";
 import { resolveMovementStakeholders, readRoleBindings, type MovementStakeholder } from "@/v3/components/flow/flowStakeholders";
@@ -22,11 +23,16 @@ import { AttachFileButton, TranscribeButton, copyTextFromAction } from "@/v3/com
 /** Derive a stakeholder's collection status, their live link pack, and the
  * evidence attributed to them — the single source of truth for the status
  * board grouping and each card. */
+export type CollectStatus = "approved" | "pending-approval" | "heard" | "waiting" | "toreach";
+
 export function stakeholderCollection(
   movementId: string,
   stakeholder: MovementStakeholder,
   packs: ReturnType<typeof listInterviewPacks>,
   evidence: ReturnType<typeof movementEvidence>,
+  /** The person's sign-off state (relevant approvers only) — lifts a heard
+   * card into "pending-approval" / "approved" once their questions are done. */
+  approval?: { pending: boolean; allApproved: boolean },
 ) {
   const key = stakeholder.name.toLowerCase();
   const pack = [...packs].reverse().find((p) => String(p.stakeholder ?? "").trim().toLowerCase() === key
@@ -40,12 +46,22 @@ export function stakeholderCollection(
     // Newest first — the latest response leads the trail.
     .slice().sort((a, b) => (b.capturedAt ?? "").localeCompare(a.capturedAt ?? ""));
   const heard = mine.length > 0 || Boolean(pack?.respondedAt);
-  const status: "heard" | "waiting" | "toreach" = heard ? "heard" : pack ? "waiting" : "toreach";
+  // Lifecycle: to reach → awaiting response → heard (only once their questions
+  // are settled) → pending approval (a sign-off ask is out) → approved. A heard
+  // person with OPEN questions stays in "awaiting" — they owe another round.
+  const status: CollectStatus = !heard
+    ? (pack ? "waiting" : "toreach")
+    : stakeholder.questions.length ? "waiting"
+      : approval?.pending ? "pending-approval"
+        : approval?.allApproved ? "approved"
+          : "heard";
   return { key, pack, mine, heard, status };
 }
 type StakeholderCollection = ReturnType<typeof stakeholderCollection>;
 
-const COLLECT_COLUMNS: Array<{ key: "heard" | "waiting" | "toreach"; label: string }> = [
+const COLLECT_COLUMNS: Array<{ key: CollectStatus; label: string }> = [
+  { key: "approved", label: "Approved" },
+  { key: "pending-approval", label: "Pending approval" },
   { key: "heard", label: "Heard" },
   { key: "waiting", label: "Awaiting response" },
   { key: "toreach", label: "To reach" },
@@ -55,7 +71,7 @@ const COLLECT_COLUMNS: Array<{ key: "heard" | "waiting" | "toreach"; label: stri
  * into columns by collection state (Heard · Awaiting · To reach), each card the
  * person's quote, dated feedback trail (click → transcript), follow-ups,
  * meeting, and link channels. Driven by resolveMovementStakeholders. */
-export function IntervieweeDiscovery({ program, movementId, captureField, docsStale, regenerating, onRegenerateStale, onSaveInputs, onMintFollowUp, onMintPacks, onScheduleFollowUp, onFocusPerson, onCaptured }: {
+export function IntervieweeDiscovery({ program, movementId, captureField, docsStale, regenerating, onRegenerateStale, onSaveInputs, onMintFollowUp, onMintPacks, onScheduleFollowUp, onSendForApproval, onFocusPerson, onCaptured }: {
   program: ProgramSummary;
   movementId: string;
   captureField: string;
@@ -71,6 +87,9 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
   onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
   onMintPacks?: () => Promise<void>;
   onScheduleFollowUp?: (movementId: string, who: string, date: string) => Promise<void>;
+  /** Mint a sign-off link for ONE stakeholder × artifact — approval lives on
+   * the stakeholder card; the artifact rolls up from everyone's verdicts. */
+  onSendForApproval?: (input: { artifactId: string; movementId: string; artifactTitle: string; approver: { name: string; role: string; email?: string }; snapshot?: string }) => Promise<string | null>;
   /** A card opened or closed — the record rail follows the person you're in. */
   onFocusPerson?: (stakeholderId: string, open: boolean) => void;
   onCaptured?: () => void;
@@ -83,8 +102,24 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
   const [allCollapsed, setAllCollapsed] = useState(false);
   const boardRef = useRef<HTMLDivElement>(null);
   if (!stakeholders.length) return null;
-  const evaluated = stakeholders.map((s) => ({ s, coll: stakeholderCollection(movementId, s, packs, evidence) }));
-  const heardCount = evaluated.filter((e) => e.coll.status === "heard").length;
+  // Sign-off state per relevant approver (evidence contributors): drives the
+  // heard → pending-approval → approved card lifecycle and the card section.
+  const relevantNames = new Set(relevantApprovers(program, movementId).map((a) => a.name.trim().toLowerCase()));
+  const approvalByName = new Map<string, { pending: boolean; allApproved: boolean; items: StakeholderApprovalItem[] }>();
+  for (const s of stakeholders) {
+    if (s.isRole || !relevantNames.has(s.name.trim().toLowerCase())) continue;
+    const items = stakeholderApprovalItems(program, movementId, s.name);
+    approvalByName.set(s.name.trim().toLowerCase(), {
+      pending: items.some((item) => item.status === "in-review"),
+      allApproved: items.length > 0 && items.every((item) => item.status === "approved"),
+      items,
+    });
+  }
+  const evaluated = stakeholders.map((s) => ({
+    s,
+    coll: stakeholderCollection(movementId, s, packs, evidence, approvalByName.get(s.name.trim().toLowerCase())),
+  }));
+  const heardCount = evaluated.filter((e) => e.coll.heard && !e.s.questions.length).length;
   const word = movementId === "show" ? "reviewed" : movementId === "listen" || movementId === "frame" ? "heard" : "consulted";
   const columns = COLLECT_COLUMNS
     .map((c) => ({ ...c, items: evaluated.filter((e) => e.coll.status === c.key) }))
@@ -123,6 +158,8 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
             {col.items.map(({ s, coll }) => (
               <IntervieweeCard key={s.id} program={program} movementId={movementId} stakeholder={s} captureField={captureField}
                 coll={coll} solo={stakeholders.length === 1} docsStale={docsStale} regenerating={regenerating} onRegenerateStale={onRegenerateStale}
+                approvalItems={approvalByName.get(s.name.trim().toLowerCase())?.items}
+                onSendForApproval={onSendForApproval}
                 onSaveInputs={onSaveInputs} onMintFollowUp={onMintFollowUp} onScheduleFollowUp={onScheduleFollowUp}
                 onFocusPerson={onFocusPerson} onCaptured={onCaptured} />
             ))}
@@ -133,7 +170,7 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
   );
 }
 
-function IntervieweeCard({ program, movementId, stakeholder, captureField, coll, solo, docsStale, regenerating, onRegenerateStale, onSaveInputs, onMintFollowUp, onScheduleFollowUp, onFocusPerson, onCaptured }: {
+function IntervieweeCard({ program, movementId, stakeholder, captureField, coll, solo, docsStale, regenerating, onRegenerateStale, approvalItems, onSendForApproval, onSaveInputs, onMintFollowUp, onScheduleFollowUp, onFocusPerson, onCaptured }: {
   program: ProgramSummary;
   movementId: string;
   stakeholder: MovementStakeholder;
@@ -149,6 +186,9 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
   /** A regeneration is in flight — the script is suppressed until it finishes. */
   regenerating?: boolean;
   onRegenerateStale?: () => Promise<void>;
+  /** This person's per-artifact sign-off queue (relevant approvers only). */
+  approvalItems?: StakeholderApprovalItem[];
+  onSendForApproval?: (input: { artifactId: string; movementId: string; artifactTitle: string; approver: { name: string; role: string; email?: string }; snapshot?: string }) => Promise<string | null>;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
   onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
   /** Put the meeting on the programme calendar (attested) — the .ics download
@@ -228,7 +268,11 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
   // Copy/Send mint a fresh pack (which supersedes the unanswered one).
   const packMatches = !!pack && (Array.isArray(pack.questions) ? pack.questions.map(String).join(" ") : "")
     === questions.slice(0, 8).join(" ");
-  const statusLabel = heard ? "Heard" : pack ? (packMatches ? "Link sent" : "Link outdated") : "To reach";
+  const statusLabel = status === "approved" ? "Approved"
+    : status === "pending-approval" ? "Pending approval"
+      : status === "heard" ? "Heard"
+        : heard ? "Follow-up open"
+          : pack ? (packMatches ? "Link sent" : "Link outdated") : "To reach";
   const [capture, setCapture] = useState("");
   const [busy, setBusy] = useState(false);
   const [date, setDate] = useState("");
@@ -245,6 +289,31 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
   const [linkNote, setLinkNote] = useState<string | null>(null);
   const [inviteTick, setInviteTick] = useState<string | null>(null);
   const [regenBusy, setRegenBusy] = useState(false);
+  // Sign-off actions: mint (or re-mint) this person's approval link for one
+  // artifact, always showing the URL inline (clipboard is best-effort).
+  const [approvalBusy, setApprovalBusy] = useState<string | null>(null);
+  const [approvalCopied, setApprovalCopied] = useState<string | null>(null);
+  const [approvalLinkShown, setApprovalLinkShown] = useState<string | null>(null);
+  const sendApproval = async (item: StakeholderApprovalItem) => {
+    if (!onSendForApproval) return;
+    setApprovalBusy(item.artifactId);
+    try {
+      const link = await copyTextFromAction(() => onSendForApproval({
+        artifactId: item.artifactId, movementId, artifactTitle: item.artifactTitle,
+        approver: { name, role, email: email || undefined },
+        snapshot: artifactDocument(program, item.artifactId) ?? undefined,
+      }));
+      if (link) { setApprovalLinkShown(link); setApprovalCopied(item.artifactId); window.setTimeout(() => setApprovalCopied(null), 2400); }
+    } finally { setApprovalBusy(null); }
+  };
+  const copyApprovalLink = async (item: StakeholderApprovalItem) => {
+    if (!item.token) return;
+    const link = approvalLinkFor(program.id, { token: item.token });
+    await copyTextFromAction(async () => link);
+    setApprovalLinkShown(link);
+    setApprovalCopied(item.artifactId);
+    window.setTimeout(() => setApprovalCopied(null), 2400);
+  };
   const dateRef = useRef<HTMLInputElement | null>(null);
   const effectiveLink = (pack && packMatches ? portalLinkFor(program.id, pack) : null) ?? mintedLink;
 
@@ -439,6 +508,54 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
                   </li>
                 );
               })}</ul>
+            </div>
+          ) : null}
+
+          {/* Sign-off: the approval workflow LIVES ON THE PERSON, not the
+              artifact — each artifact this contributor's evidence fed lists
+              here with their own ask/verdict; the artifact card only rolls
+              up everyone's verdicts. Shown once their questions are settled. */}
+          {!isRole && approvalItems?.length && !questions.length && onSendForApproval ? (
+            <div className="v3fs-ivc-sec">
+              <div className="v3fs-ivc-sec-h">Sign-off
+                <span className="v3fs-ivc-sec-note">these documents were built from {first}&rsquo;s evidence — their approval is part of the record</span>
+              </div>
+              <div className="v3fs-ivc-appr">
+                {approvalItems.map((item) => (
+                  <div key={item.artifactId} className={`v3fs-ivc-appr-row ${item.status}`}>
+                    <span className="v3fs-ivc-appr-t">{item.artifactTitle}</span>
+                    {item.status === "approved" ? (
+                      <span className="v3fs-ivc-appr-st ok">✓ Approved{item.decidedAt ? ` · ${String(item.decidedAt).slice(0, 10)}` : ""}</span>
+                    ) : item.status === "changes" ? (
+                      <>
+                        <span className="v3fs-ivc-appr-st changes" title={item.comment || undefined}>↺ Changes requested{item.comment ? ` — “${item.comment.slice(0, 60)}”` : ""}</span>
+                        <button type="button" className="v3fs-btn" disabled={approvalBusy === item.artifactId}
+                          onClick={() => void sendApproval(item)}>
+                          {approvalBusy === item.artifactId ? "…" : "Send again"}
+                        </button>
+                      </>
+                    ) : item.status === "in-review" ? (
+                      <>
+                        <span className="v3fs-ivc-appr-st wait">◷ Awaiting verdict</span>
+                        <button type="button" className="v3fs-btn" onClick={() => void copyApprovalLink(item)}>
+                          {approvalCopied === item.artifactId ? "Copied ✓" : "⎘ Copy link"}
+                        </button>
+                      </>
+                    ) : (
+                      <button type="button" className="v3fs-btn pri" disabled={approvalBusy === item.artifactId}
+                        onClick={() => void sendApproval(item)}>
+                        {approvalBusy === item.artifactId ? "Creating…" : "Request sign-off"}
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {approvalLinkShown ? (
+                  <span className="v3fs-ivc-linkrow">
+                    <input readOnly value={approvalLinkShown} onFocus={(event) => event.currentTarget.select()}
+                      aria-label={`Sign-off link for ${name}`} />
+                  </span>
+                ) : null}
+              </div>
             </div>
           ) : null}
 

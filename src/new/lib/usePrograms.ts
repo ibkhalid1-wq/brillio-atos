@@ -369,7 +369,13 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
         ((allRows || []) as ProgramRow[]).filter((row) => row.is_deleted).map((row) => row.id),
       );
       if (deletedIds.size) purgeLocalPrograms(deletedIds);
-      const liveCloudRows = ((allRows || []) as ProgramRow[]).filter((row) => !row.is_deleted);
+      // Multi-tenant hard scope: an operator sees ONLY programmes they own.
+      // RLS should already enforce this server-side, but the client no longer
+      // trusts visibility alone — a row that leaks through a permissive policy
+      // (or a stale cache) must not appear in the portfolio, where every write
+      // to it would fail the ownership check anyway.
+      const liveCloudRows = ((allRows || []) as ProgramRow[])
+        .filter((row) => !row.is_deleted && (!userId || row.owner_id === userId));
       const liveLocalPrograms = localPrograms.filter((program) => !deletedIds.has(program.id));
 
       // Evict blob-cache entries for programmes that are gone or soft-deleted, so

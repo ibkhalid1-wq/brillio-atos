@@ -274,21 +274,35 @@ Deno.serve(async (req: Request) => {
           const approver = isRecord(hit.pack.approver)
             ? { name: approverName, role: String((hit.pack.approver as Record<string, unknown>).role ?? "") }
             : { name: approverName, role: "" };
-          // Auto-record: apply the verdict straight to the record — an approval
-          // flips the artifact to `approved` (the derived evidence follows from
-          // the stamped pack), a change request returns it to draft. No operator
-          // inbox step. Mirrors the client ingestApprovalResponse.
+          // Auto-record with a PER-STAKEHOLDER rollup: the verdict stamps this
+          // approver's pack, then the artifact's status derives from EVERYONE's
+          // latest verdicts — approved only when every asked approver approved,
+          // back to draft the moment anyone requests changes, in-review while
+          // any ask is still open. No operator inbox step.
+          const stampedPacks = (Array.isArray(hit.inner.flowApprovalPacks) ? hit.inner.flowApprovalPacks : []).map((entry) =>
+            isRecord(entry) && entry.token === hit.pack.token ? { ...entry, respondedAt: now, verdict, comment: comment || undefined } : entry,
+          );
+          nextInner.flowApprovalPacks = stampedPacks;
+          // Latest pack per approver for this artifact — later sends supersede.
+          const latestByApprover = new Map<string, Record<string, unknown>>();
+          for (const entry of stampedPacks) {
+            if (!isRecord(entry) || String(entry.movementId) !== movementId || String(entry.artifactId) !== artifactId) continue;
+            const key = isRecord(entry.approver) ? String((entry.approver as Record<string, unknown>).name ?? "").trim().toLowerCase() : "";
+            if (!key) continue;
+            const held = latestByApprover.get(key);
+            if (!held || String(entry.createdAt ?? "") > String(held.createdAt ?? "")) latestByApprover.set(key, entry);
+          }
+          const latest = [...latestByApprover.values()];
+          const allApproved = latest.length > 0 && latest.every((entry) => entry.verdict === "approved");
+          const anyChanges = latest.some((entry) => entry.verdict === "changes");
           const phaseArtifacts = isRecord(hit.inner.phaseArtifacts) ? { ...(hit.inner.phaseArtifacts as Record<string, unknown>) } : {};
           const bucket = isRecord(phaseArtifacts[movementId]) ? { ...(phaseArtifacts[movementId] as Record<string, unknown>) } : {};
           const record = isRecord(bucket[artifactId]) ? { ...(bucket[artifactId] as Record<string, unknown>) } : {};
-          record.status = verdict === "approved" ? "approved" : "draft";
+          record.status = anyChanges ? "draft" : allApproved ? "approved" : "in-review";
           record.approval = { approver, verdict, decidedAt: now, comment: comment || undefined };
           bucket[artifactId] = record;
           phaseArtifacts[movementId] = bucket;
           nextInner.phaseArtifacts = phaseArtifacts;
-          nextInner.flowApprovalPacks = (hit.inner.flowApprovalPacks as unknown[]).map((entry) =>
-            isRecord(entry) && entry.token === hit.pack.token ? { ...entry, respondedAt: now, verdict, comment: comment || undefined } : entry,
-          );
           log.push({
             ts: now, agentId: approverName || "approver", phaseId: movementId, tier: 2,
             action: verdict === "approved" ? `Approved — ${artifactTitle}` : `Changes requested — ${artifactTitle}`,
