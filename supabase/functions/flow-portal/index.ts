@@ -146,6 +146,10 @@ Deno.serve(async (req: Request) => {
       const hit = await loadPack(token);
       if ("reason" in hit) return jsonResponse({ error: hit.reason }, 404);
       if (hit.kind === "approval") {
+        // `responded` guards against an empty-string stamp reading as answered;
+        // the recorded verdict + date ride along so a re-opened link can SAY
+        // what was recorded instead of a bare "done its job".
+        const respondedAt = typeof hit.pack.respondedAt === "string" && hit.pack.respondedAt ? hit.pack.respondedAt : "";
         return jsonResponse({
           kind: "approval",
           programme: hit.programName,
@@ -155,7 +159,9 @@ Deno.serve(async (req: Request) => {
             ? { name: String((hit.pack.approver as Record<string, unknown>).name ?? ""), role: String((hit.pack.approver as Record<string, unknown>).role ?? "") }
             : { name: "", role: "" },
           snapshot: String(hit.pack.snapshot ?? ""),
-          responded: typeof hit.pack.respondedAt === "string",
+          responded: Boolean(respondedAt),
+          verdict: hit.pack.verdict === "approved" ? "approved" : hit.pack.verdict === "changes" ? "changes" : "",
+          respondedAt,
         });
       }
       if (hit.kind === "demo") {

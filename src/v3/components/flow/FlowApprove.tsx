@@ -16,6 +16,9 @@ interface ApprovalPack {
   approver: { name: string; role: string };
   snapshot: string;
   responded: boolean;
+  /** The verdict already on the record when this link was re-opened. */
+  verdict?: "approved" | "changes" | "";
+  respondedAt?: string;
 }
 
 type State =
@@ -82,9 +85,18 @@ export default function FlowApprove({ token }: { token: string }) {
             </div>
           ) : state.pack.responded ? (
             <div className="v3fs-quiet">
-              <div className="v3fs-quiet-mark" aria-hidden="true">✓</div>
-              <h2>This link has done its job.</h2>
-              <p>Your decision is on the record — each link takes one response. Ask the programme team for a fresh link if you need to revisit it.</p>
+              <div className="v3fs-quiet-mark" aria-hidden="true">{state.pack.verdict === "changes" ? "↺" : "✓"}</div>
+              <h2>
+                {state.pack.verdict === "approved" ? `${state.pack.artifactTitle} — approved.`
+                  : state.pack.verdict === "changes" ? `${state.pack.artifactTitle} — changes requested.`
+                    : "This link has done its job."}
+              </h2>
+              <p>
+                {state.pack.verdict
+                  ? <>Your verdict{state.pack.respondedAt ? ` from ${String(state.pack.respondedAt).slice(0, 10)}` : ""} is on the record — each link takes one response, so this one is now closed.</>
+                  : <>Your decision is on the record — each link takes one response.</>}
+                {" "}If the document changes or another round is needed, the programme team will send a fresh link.
+              </p>
             </div>
           ) : (
             <>
