@@ -627,6 +627,22 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
     expect(review!.workflows[0].steps).toEqual(["drafts"]);
   });
 
+  it("ontology map projects relations whose endpoints both exist; dangling edges drop", () => {
+    const p = programme({ data: {
+      domainOntology: {
+        entities: [{ name: "Quote" }, { name: "Order" }],
+        relations: [
+          { from: "Quote", relation: "converts to", to: "Order" },  // both present → kept
+          { from: "Quote", relation: "references", to: "Customer" }, // Customer absent → dropped
+        ],
+      },
+      currentStateAtlas: { workflows: [{ name: "Q2C", steps: [{ action: "x" }] }] },
+    } });
+    const review = projectOntologyAtlasReview(p);
+    expect(review!.relations).toHaveLength(1);
+    expect(review!.relations[0]).toEqual({ from: "Quote", relation: "converts to", to: "Order" });
+  });
+
   it("the Listen sponsor card disappears when there are no conflicts to arbitrate", () => {
     // Sponsor listed as a Listen interviewee, but NO open contradictions.
     const p = programme({

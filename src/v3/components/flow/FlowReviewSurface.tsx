@@ -12,8 +12,9 @@
 import { useMemo, useState } from "react";
 import {
   composeAgentifyAnswers, composeOntologyAtlasAnswers, composeListenWorkflowAnswers,
-  type AgentifyReview, type OntologyAtlasReview, type ListenWorkflowReview, type ReviewPayload, type EditedStep,
+  type AgentifyReview, type OntologyAtlasReview, type ListenWorkflowReview, type ReviewPayload,
 } from "@/v3/components/flow/flowReviews";
+import { WorkflowFlow, OntologyMap, type FlowNode } from "@/v3/components/flow/FlowReviewVisuals";
 
 const DISPOSITIONS: Array<{ key: string; label: string; hint: string }> = [
   { key: "keep", label: "Stays human", hint: "judgement, relationships, the irreducibly human call" },
@@ -207,8 +208,8 @@ function ListenWorkflowSurface({ review, stakeholder, submitting, error, onSubmi
   review: ListenWorkflowReview; stakeholder: string; submitting: boolean; error: string | null;
   onSubmit: (answers: string) => void;
 }) {
-  const [wfSteps, setWfSteps] = useState<EditedStep[][]>(
-    () => review.workflows.map((w) => w.steps.map((s) => ({ action: s.action, original: s.action }))));
+  const [wfSteps, setWfSteps] = useState<FlowNode[][]>(
+    () => review.workflows.map((w) => w.steps.map((s) => ({ action: s.action, original: s.action, actor: s.actor, system: s.system, entities: s.entities }))));
   const [narration, setNarration] = useState("");
   const [termNotes, setTermNotes] = useState<Record<string, string>>({});
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -260,28 +261,13 @@ function ListenWorkflowSurface({ review, stakeholder, submitting, error, onSubmi
       </header>
       <AreaChips areas={areas} active={area} onPick={setArea} />
       <div className="v3fs-rvw">
+        <div className="v3fs-rvw-section-h"><span className="v3fs-rvw-step-ic" aria-hidden="true">⇄</span>Your workflow — fix it, add steps, or mark what doesn&rsquo;t happen</div>
         {review.workflows.map((wf, wi) => area && wf.area !== area ? null : (
-          <section key={wi} className="v3fs-rvw-wf">
-            <div className="v3fs-rvw-wf-h">
-              <b>{wf.name}</b>
-              {wf.trigger ? <span className="v3fs-rvw-trigger">Starts when: {wf.trigger}</span> : null}
-            </div>
-            <ol className="v3fs-rvw-edit">
-              {(wfSteps[wi] ?? []).map((step, si) => (
-                <li key={si} className={`v3fs-rvw-erow${step.removed ? " removed" : ""}${step.added ? " added" : ""}`}>
-                  <span className="v3fs-rvw-num" aria-hidden="true">{step.added ? "+" : step.removed ? "−" : si + 1}</span>
-                  <input className="v3fs-rvw-estep" value={step.action} disabled={step.removed}
-                    placeholder={step.added ? "Describe the step we missed…" : ""}
-                    onChange={(e) => editStep(wi, si, e.target.value)} aria-label={`Step ${si + 1}`} />
-                  <button type="button" className="v3fs-rvw-x" title={step.removed ? "Keep this step" : step.added ? "Delete" : "This step doesn't happen"}
-                    onClick={() => toggleRemove(wi, si)}>{step.removed ? "↺" : "✕"}</button>
-                  <button type="button" className="v3fs-rvw-add" title="Add a step after this one" onClick={() => addStep(wi, si)}>＋</button>
-                </li>
-              ))}
-              {!(wfSteps[wi] ?? []).length ? (
-                <li><button type="button" className="v3fs-btn" onClick={() => addStep(wi, -1)}>＋ Add the first step</button></li>
-              ) : null}
-            </ol>
+          <section key={wi} className="v3fs-rvw-wf plain">
+            <WorkflowFlow name={wf.name} trigger={wf.trigger} steps={wfSteps[wi] ?? []}
+              onEdit={(si, action) => editStep(wi, si, action)}
+              onToggleRemove={(si) => toggleRemove(wi, si)}
+              onAdd={(at) => addStep(wi, at)} />
           </section>
         ))}
 
@@ -292,20 +278,13 @@ function ListenWorkflowSurface({ review, stakeholder, submitting, error, onSubmi
         </section>
 
         {review.terms.length ? (
-          <section className="v3fs-rvw-wf">
-            <div className="v3fs-rvw-wf-h"><b>The terms in your world</b><span className="v3fs-rvw-trigger">Wrong or missing? Tell us.</span></div>
-            <div className="v3fs-rvw-terms">
-              {review.terms.map((term, i) => (
-                <div key={i} className="v3fs-rvw-term">
-                  <div className="v3fs-rvw-term-h"><b>{term.name}</b>{term.systemOfRecord ? <span className="v3fs-rvw-sor">{term.systemOfRecord}</span> : null}</div>
-                  {term.definition ? <p className="v3fs-rvw-def">{term.definition}</p> : null}
-                  <input className="v3fs-rvw-comment" value={termNotes[String(i)] ?? ""}
-                    onChange={(e) => setTermNotes((p) => ({ ...p, [String(i)]: e.target.value }))}
-                    placeholder="Wrong, missing, or named differently? (optional)" />
-                </div>
-              ))}
-            </div>
-          </section>
+          <>
+            <div className="v3fs-rvw-section-h"><span className="v3fs-rvw-step-ic" aria-hidden="true">◉</span>The terms in your world — tap one to flag it</div>
+            <section className="v3fs-rvw-wf plain">
+              <OntologyMap terms={review.terms} relations={review.relations}
+                comments={termNotes} onComment={(i, v) => setTermNotes((p) => ({ ...p, [String(i)]: v }))} />
+            </section>
+          </>
         ) : null}
 
         <section className="v3fs-rvw-wf">
