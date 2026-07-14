@@ -32,7 +32,7 @@ import ProgramSetupWizard from "@/v3/components/ProgramSetupWizard";
 import FlowShell from "@/v3/components/flow/FlowShell";
 import { resolveFlowDecision } from "@/v3/components/flow/flowDecisions";
 import { renamePersonInProgram } from "@/v3/components/flow/flowStakeholders";
-import { mintApprovalRequest, approvalLinkFor, ingestApprovalResponse } from "@/v3/components/flow/flowApprovals";
+import { mintApprovalRequest, approvalLinkFor, ingestApprovalResponse, listApprovalResponses } from "@/v3/components/flow/flowApprovals";
 import { setHaltAll, toggleAgentHalt, setMovementBudget } from "@/v3/components/flow/flowGovernance";
 import { mintInterviewPacks, mintDemoInvites, ingestPortalResponse, dismissPortalResponse, portalItemTargetMovement } from "@/v3/components/flow/flowPortal";
 import { recordShowPass } from "@/v3/components/flow/flowTracks";
@@ -2194,6 +2194,64 @@ export default function AppShellV3() {
     void handleSaveProgramSnapshot(`${name} locked`, "lock");
   }, [activeProgram, handleSaveProgramSnapshot]);
 
+  // Every Flow mutation persists through this chokepoint. Declared here — with
+  // the hooks, ABOVE the early returns — so the auto-ingest effect below can
+  // use it without a conditional-hook violation.
+  const persistFlowMutation = async (mutate: (program: NonNullable<typeof activeProgram>) => Record<string, unknown> | null) => {
+    if (!activeProgram) return;
+    // Pre-hydration guard for EVERY Flow mutation. If the blob hasn't hydrated
+    // yet (metadata-only in memory), a mutation builds on an empty base — and
+    // some (a mint, a rename, an approval) write "substantive"-looking keys like
+    // phaseArtifacts, so updateProgramData's own guard wouldn't catch the near-
+    // empty payload and it would clobber the full cloud record. Refuse at the
+    // single chokepoint, kick a hydrate, and let the operator retry.
+    if (!hasSubstantiveProgramData(activeProgram.rawData)) {
+      window.dispatchEvent(new CustomEvent("atlas-v3-toast", {
+        detail: { message: "Still loading this programme — one moment, then try that again.", tone: "warning" },
+      }));
+      void hydratePrograms([activeProgram.id]);
+      return;
+    }
+    try {
+      const blob = mutate(activeProgram);
+      if (!blob) return;
+      try {
+        await updateProgramData(activeProgram.id, blob, activeProgram.updatedAt);
+      } catch (err) {
+        if (!(err instanceof ConflictError) || !isSupabaseConfigured || !supabase) throw err;
+        const { data: fresh } = await supabase
+          .from("adam_programs")
+          .select("data, updated_at")
+          .eq("id", activeProgram.id)
+          .single();
+        const freshRaw = (fresh?.data as Record<string, unknown> | undefined) ?? activeProgram.rawData ?? {};
+        const rebased = mutate({ ...activeProgram, rawData: freshRaw });
+        if (!rebased) return;
+        await updateProgramData(activeProgram.id, rebased, fresh?.updated_at ?? undefined);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not save that action. Please try again.";
+      window.dispatchEvent(new CustomEvent("atlas-v3-toast", { detail: { message, tone: "error" } }));
+    }
+  };
+
+  // Approval verdicts RECORD THEMSELVES. The edge now applies them directly,
+  // but verdicts that arrived under the old contract are parked in the
+  // quarantine inbox as kind:"approval" items awaiting a manual "Record" the
+  // operator asked us to remove. Ingest one per pass (each write refreshes
+  // activeProgram, which re-fires this effect for the next) until none remain.
+  const autoIngestApprovalRef = useRef(false);
+  useEffect(() => {
+    const p = activeProgram;
+    if (!p || autoIngestApprovalRef.current || !hasSubstantiveProgramData(p.rawData)) return;
+    const item = listApprovalResponses(p)[0];
+    if (!item) return;
+    autoIngestApprovalRef.current = true;
+    void persistFlowMutation((program) => ingestApprovalResponse(program, String(item.id), "auto-record"))
+      .finally(() => { autoIngestApprovalRef.current = false; });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProgram]);
+
 
 
 
@@ -2391,44 +2449,6 @@ export default function AppShellV3() {
   // once onto the freshest server copy on a version conflict — Flow rows are
   // hot (agents write between hydration and the click) and a human action
   // must never be silently dropped.
-  const persistFlowMutation = async (mutate: (program: NonNullable<typeof activeProgram>) => Record<string, unknown> | null) => {
-    if (!activeProgram) return;
-    // Pre-hydration guard for EVERY Flow mutation. If the blob hasn't hydrated
-    // yet (metadata-only in memory), a mutation builds on an empty base — and
-    // some (a mint, a rename, an approval) write "substantive"-looking keys like
-    // phaseArtifacts, so updateProgramData's own guard wouldn't catch the near-
-    // empty payload and it would clobber the full cloud record. Refuse at the
-    // single chokepoint, kick a hydrate, and let the operator retry.
-    if (!hasSubstantiveProgramData(activeProgram.rawData)) {
-      window.dispatchEvent(new CustomEvent("atlas-v3-toast", {
-        detail: { message: "Still loading this programme — one moment, then try that again.", tone: "warning" },
-      }));
-      void hydratePrograms([activeProgram.id]);
-      return;
-    }
-    try {
-      const blob = mutate(activeProgram);
-      if (!blob) return;
-      try {
-        await updateProgramData(activeProgram.id, blob, activeProgram.updatedAt);
-      } catch (err) {
-        if (!(err instanceof ConflictError) || !isSupabaseConfigured || !supabase) throw err;
-        const { data: fresh } = await supabase
-          .from("adam_programs")
-          .select("data, updated_at")
-          .eq("id", activeProgram.id)
-          .single();
-        const freshRaw = (fresh?.data as Record<string, unknown> | undefined) ?? activeProgram.rawData ?? {};
-        const rebased = mutate({ ...activeProgram, rawData: freshRaw });
-        if (!rebased) return;
-        await updateProgramData(activeProgram.id, rebased, fresh?.updated_at ?? undefined);
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not save that action. Please try again.";
-      window.dispatchEvent(new CustomEvent("atlas-v3-toast", { detail: { message, tone: "error" } }));
-    }
-  };
-
   // ── The Flow workspace — the only workspace ────────────────────────────
   // The classic stage-gate shell was retired (2026-07); every programme
   // renders the Flow chrome. Auth, splash and the no-programme welcome all

@@ -151,6 +151,10 @@ const packState = (pack: FlowApprovalPack | undefined): { status: ApprovalStatus
   if (!pack) return { status: "none" };
   if (pack.verdict === "approved") return { status: "approved", decidedAt: pack.respondedAt };
   if (pack.verdict === "changes") return { status: "changes", decidedAt: pack.respondedAt, comment: pack.comment };
+  // Answered but verdict-less: an old-contract response whose verdict is still
+  // in the inbox awaiting (auto-)ingestion. In review — but NEVER hand the
+  // used link out again; the token only rides a genuinely open ask.
+  if (pack.respondedAt) return { status: "in-review" };
   return { status: "in-review", token: pack.token };
 };
 
@@ -317,9 +321,16 @@ export function ingestApprovalResponse(program: ProgramSummary, itemId: string, 
   bucket[artifactId] = record;
   phaseArtifacts[movementId] = bucket;
 
+  // Stamp the approver's pack with the verdict. Matched on MISSING VERDICT
+  // (not missing respondedAt): responses that arrived under the old edge
+  // contract already carry respondedAt with the verdict parked on this inbox
+  // item — those packs must still receive their verdict here, or the
+  // per-stakeholder rollup keeps counting them as awaiting forever.
+  const approverKey = approver.name.trim().toLowerCase();
   const packs = readPacks(inner).map((p) =>
-    p.artifactId === artifactId && p.movementId === movementId && !p.respondedAt
-      ? { ...p, respondedAt: now, verdict, comment: comment || undefined } : p);
+    p.artifactId === artifactId && p.movementId === movementId && !p.verdict
+      && String(p.approver?.name ?? "").trim().toLowerCase() === approverKey
+      ? { ...p, respondedAt: p.respondedAt ?? now, verdict, comment: comment || undefined } : p);
 
   const log = Array.isArray(inner.flowAttestations) ? (inner.flowAttestations as unknown[]) : [];
   return wrapProgramState(wrapper, {
