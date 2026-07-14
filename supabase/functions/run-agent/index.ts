@@ -1456,6 +1456,13 @@ rather than the industry at large.
 Structured inputs are the system of record. This document is a generated VIEW of
 the program's structured data, never an independently authored source.
 
+### The conversation record
+When the context carries "conversationRecord", it is the FULL captured
+conversation/transcript record — grounding facts only PREVIEW long fields
+(700-char caps). Synthesise from the conversationRecord: every interview,
+every track, every speaker in it counts as evidence, not just the excerpts
+the facts show.
+
 ### Regeneration is ADDITIVE
 When runMode is incremental_update or cascade_refresh, START from the existing
 document (existingArtifacts carries it) and MERGE the new evidence in — never
@@ -1714,9 +1721,10 @@ function buildGroundingFacts(phaseRecord: Record<string, unknown>): string[] {
   // Grounding facts are ATOMIC facts, not documents. A pasted transcript can
   // run to ~100k chars; passed verbatim it re-inflates every downstream agent's
   // prompt (charter, kit, ontology, atlas, blueprint each re-read it). The full
-  // text still reaches the agents that need it via documentCarryForward — so
-  // here each fact value is capped, and giant free-text fields are elided to a
-  // pointer rather than dumped inline.
+  // text reaches the agents that NEED it via conversationRecord (the synthesis
+  // agents — see CONVERSATION_RECORD_AGENTS; documentCarryForward covers only
+  // Library uploads) — so here each fact value is capped, and giant free-text
+  // fields are elided to a pointer rather than dumped inline.
   const MAX_FACT_LEN = 700;
   const cap = (text: string): string => text.length <= MAX_FACT_LEN
     ? text
@@ -1754,6 +1762,42 @@ function buildGroundingFacts(phaseRecord: Record<string, unknown>): string[] {
 interface CarryForwardDocument {
   fileName: string;
   intelligence: Record<string, unknown>;
+}
+
+/**
+ * The FULL captured conversation record for the synthesis agents. Grounding
+ * facts cap long fields at 700 chars "…full text in the attached documents" —
+ * but documentCarryForward only carries LIBRARY-uploaded files' intelligence,
+ * so everything captured into the conversation FIELDS (pasted transcripts,
+ * portal responses, speaker-mapped meeting blocks) never reached these agents
+ * at all. Diagnosed live 2026-07-14: an ontology capped at the 8 entities the
+ * uploaded documents alone could support while the transcript field held the
+ * other tracks. This channel closes that hole: every long free-text field on
+ * Frame + Listen rides in FULL for the agents whose whole job is to
+ * synthesise the record.
+ */
+const CONVERSATION_RECORD_AGENTS = new Set<string>([
+  "charter", "discovery-kit", "domain-ontology", "current-state-atlas",
+]);
+
+function buildConversationRecord(inner: Record<string, unknown>): string {
+  const phaseInputs = normalizeProgramData(inner.phaseInputs as JsonValue | null);
+  const parts: string[] = [];
+  for (const phaseId of ["frame", "listen", "strategy", "discovery"]) {
+    const record = normalizeProgramData(phaseInputs[phaseId] as JsonValue | null);
+    for (const [fieldId, value] of Object.entries(record)) {
+      if (fieldId === "savedAt" || fieldId.startsWith("_")) continue;
+      if (typeof value !== "string" || value.length <= 700) continue; // short fields already ride groundingFacts whole
+      if (value.trim().startsWith("[")) continue; // grids expand to facts already
+      // Defensive ceiling per field: keep the head AND the tail so neither the
+      // earliest interviews nor the newest responses fall off.
+      const text = value.length > 160_000
+        ? `${value.slice(0, 110_000)}\n…[${(value.length - 160_000).toLocaleString()} chars elided]…\n${value.slice(-50_000)}`
+        : value;
+      parts.push(`=== ${phaseId}.${fieldId} — the full captured record ===\n${text}`);
+    }
+  }
+  return parts.join("\n\n");
 }
 
 /**
@@ -2634,6 +2678,12 @@ function buildSpecialAgentInputContext(
             meta.industry || strategyInputs.industry || frameInputs.industry || projectMeta.industry,
             frameInputs.segment || strategyInputs.segment,
           ) }
+        : {}),
+      // The synthesis agents read the WHOLE captured record — grounding facts
+      // only preview long fields, and documentCarryForward only covers Library
+      // uploads. Without this, field-captured transcripts are invisible.
+      ...(target && CONVERSATION_RECORD_AGENTS.has(target.agentId)
+        ? { conversationRecord: buildConversationRecord(inner) }
         : {}),
       valueChainSegment: frameInputs.segment || strategyInputs.segment || null,
       // The current phase's intent boundary: its objective, the artifacts it owns,
