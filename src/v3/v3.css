@@ -5955,10 +5955,15 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .react-flow__node.v3fs-onto-node:hover .react-flow__handle,
 .react-flow__node.v3fs-onto-node.selected .react-flow__handle{opacity:1}
 .v3fs-onto-hint{font-size:11.5px;color:var(--v3-text-secondary);margin:2px 0 6px}
+.v3fs-onto-count{font-size:11.5px;font-weight:650;color:var(--v3-text-secondary);align-self:center;padding:0 4px}
+.v3fs-onto-focus{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);z-index:5;max-width:88%;
+  font-size:11.5px;line-height:1.45;padding:6px 12px;border:1px solid color-mix(in srgb,var(--v3-accent-2) 45%,var(--fs-line));
+  border-radius:99px;background:var(--fs-card);color:var(--v3-text-secondary);box-shadow:var(--fs-shadow);cursor:pointer}
+.v3fs-onto-focus b{color:var(--v3-accent-2)}
 /* Focus mode: clicking an entity spotlights it + its neighbours; the rest dims. */
 .react-flow__node.v3fs-onto-node.related{border-left-color:var(--v3-accent-2);box-shadow:0 0 0 2px color-mix(in srgb,var(--v3-accent-2) 45%,transparent)}
-.react-flow__node.v3fs-onto-node.dimmed{opacity:.16;filter:saturate(.5);transition:opacity .2s ease}
-.react-flow__edge.dimmed{opacity:.08;transition:opacity .2s ease}
+.react-flow__node.v3fs-onto-node.dimmed{opacity:.38;filter:saturate(.45);transition:opacity .2s ease}
+.react-flow__edge.dimmed{opacity:.2;transition:opacity .2s ease}
 .react-flow__edge.dimmed .v3fs-onto-elabel{opacity:0}
 .react-flow__edge.related path{stroke:var(--v3-accent-2) !important;stroke-width:2 !important}
 .react-flow__edge.related .v3fs-onto-elabel{color:var(--v3-accent-2);border-color:var(--v3-accent-2);font-weight:700}

@@ -221,7 +221,18 @@ export default function OntologyStudio({ doc, onChange }: StudioProps) {
         <div className="v3fs-onto-toolbar">
           <button type="button" className="v3fs-btn" onClick={addEntity}>＋ Add entity</button>
           <button type="button" className="v3fs-btn" onClick={rearrange} title="Re-apply the layered layout — shortest connectors, fewest crossings">⌗ Arrange</button>
+          {/* The honest inventory: what the DOCUMENT holds, regardless of what
+              the viewport or focus mode currently shows. If this reads low,
+              the data shrank; if it reads full while the canvas looks empty,
+              it's a display state (focus/zoom), never data loss. */}
+          <span className="v3fs-onto-count">{entities.length} entit{entities.length === 1 ? "y" : "ies"} · {relations.length} relation{relations.length === 1 ? "" : "s"}</span>
         </div>
+        {/* Focus mode is a spotlight, not a filter — say so while it's on. */}
+        {selectedEntityId ? (
+          <button type="button" className="v3fs-onto-focus" onClick={() => setSelected(null)}>
+            Focused on <b>{selectedEntityId}</b> — showing its direct relationships; the rest is dimmed, not gone. Click to show all.
+          </button>
+        ) : null}
       </div>
 
       <aside className="v3fs-onto-panel">
