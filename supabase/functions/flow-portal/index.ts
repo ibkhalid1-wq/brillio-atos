@@ -256,28 +256,30 @@ Deno.serve(async (req: Request) => {
             return jsonResponse({ error: "Add a note so the team knows what to change." }, 400);
           }
           const movementId = String(hit.pack.movementId ?? "frame");
-          inbox.push({
-            id: crypto.randomUUID(),
-            kind: "approval",
-            artifactId: String(hit.pack.artifactId ?? ""),
-            movementId,
-            artifactTitle: String(hit.pack.artifactTitle ?? "document"),
-            approver: isRecord(hit.pack.approver)
-              ? { name: approverName, role: String((hit.pack.approver as Record<string, unknown>).role ?? "") }
-              : { name: approverName, role: "" },
-            receivedAt: now,
-            verdict,
-            comment,
-          });
+          const artifactId = String(hit.pack.artifactId ?? "");
+          const artifactTitle = String(hit.pack.artifactTitle ?? "document");
+          const approver = isRecord(hit.pack.approver)
+            ? { name: approverName, role: String((hit.pack.approver as Record<string, unknown>).role ?? "") }
+            : { name: approverName, role: "" };
+          // Auto-record: apply the verdict straight to the record — an approval
+          // flips the artifact to `approved` (the derived evidence follows from
+          // the stamped pack), a change request returns it to draft. No operator
+          // inbox step. Mirrors the client ingestApprovalResponse.
+          const phaseArtifacts = isRecord(hit.inner.phaseArtifacts) ? { ...(hit.inner.phaseArtifacts as Record<string, unknown>) } : {};
+          const bucket = isRecord(phaseArtifacts[movementId]) ? { ...(phaseArtifacts[movementId] as Record<string, unknown>) } : {};
+          const record = isRecord(bucket[artifactId]) ? { ...(bucket[artifactId] as Record<string, unknown>) } : {};
+          record.status = verdict === "approved" ? "approved" : "draft";
+          record.approval = { approver, verdict, decidedAt: now, comment: comment || undefined };
+          bucket[artifactId] = record;
+          phaseArtifacts[movementId] = bucket;
+          nextInner.phaseArtifacts = phaseArtifacts;
           nextInner.flowApprovalPacks = (hit.inner.flowApprovalPacks as unknown[]).map((entry) =>
-            isRecord(entry) && entry.token === hit.pack.token ? { ...entry, respondedAt: now } : entry,
+            isRecord(entry) && entry.token === hit.pack.token ? { ...entry, respondedAt: now, verdict, comment: comment || undefined } : entry,
           );
           log.push({
-            ts: now, agentId: "portal", phaseId: movementId, tier: 1,
-            action: verdict === "approved"
-              ? `Approval received — ${String(hit.pack.artifactTitle ?? "document")}`
-              : `Changes requested — ${String(hit.pack.artifactTitle ?? "document")}`,
-            detail: `${approverName || "The approver"}${comment ? `: "${comment.slice(0, 120)}"` : ""} — quarantined for your review.`,
+            ts: now, agentId: approverName || "approver", phaseId: movementId, tier: 2,
+            action: verdict === "approved" ? `Approved — ${artifactTitle}` : `Changes requested — ${artifactTitle}`,
+            detail: `${approverName || "The approver"}${approver.role ? ` (${approver.role})` : ""}${comment ? ` — "${comment.slice(0, 120)}"` : ""}. Recorded automatically.`,
           });
         } else if (hit.kind === "demo") {
           const verdict = isRecord(body) && typeof body.verdict === "string" ? body.verdict : "";
@@ -363,7 +365,7 @@ Deno.serve(async (req: Request) => {
             });
           } catch { /* best effort — the poll still catches it */ }
           notifyWebhook(hit.kind === "approval"
-            ? `ATOS Flow — ${hit.programName}: ${approverName || "an approver"} responded to "${String(hit.pack.artifactTitle ?? "a document")}". It is waiting in the inbox.`
+            ? `ATOS Flow — ${hit.programName}: ${approverName || "an approver"} responded to "${String(hit.pack.artifactTitle ?? "a document")}" — recorded automatically.`
             : hit.kind === "demo"
               ? `ATOS Flow — ${hit.programName}: ${stakeholder} returned a demo verdict. It is waiting in the evidence inbox.`
               : `ATOS Flow — ${hit.programName}: ${stakeholder} answered an async interview. It is waiting in the evidence inbox.`);

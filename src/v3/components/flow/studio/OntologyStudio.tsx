@@ -40,6 +40,20 @@ export default function OntologyStudio({ doc, onChange }: StudioProps) {
   const ids = useMemo(() => entities.map(entityId), [entities]);
 
   const [selected, setSelected] = useState<Selection>(null);
+  // Focus mode: clicking an entity spotlights it, its direct neighbours, and the
+  // relations between them; everything else dims so a single relationship reads
+  // clearly without having to drag nodes apart.
+  const selectedEntityId = selected?.kind === "entity" ? selected.id : null;
+  const focusIds = useMemo(() => {
+    if (!selectedEntityId) return null;
+    const set = new Set<string>([selectedEntityId]);
+    for (const relation of relations) {
+      const from = String(relation.from ?? ""), to = String(relation.to ?? "");
+      if (from === selectedEntityId) set.add(to);
+      if (to === selectedEntityId) set.add(from);
+    }
+    return set;
+  }, [selectedEntityId, relations]);
   // Controlled node state via React Flow's own reducer — it records the
   // measured dimensions edges need to route; we sync structure from the doc
   // below while preserving positions and measurements across rebuilds.
@@ -93,7 +107,7 @@ export default function OntologyStudio({ doc, onChange }: StudioProps) {
           ...(prev ?? {}),
           id,
           position: prev?.position ?? seeded[id] ?? { x: 40 * (index % 5) - 80, y: 48 * Math.floor(index / 5) - 48 },
-          className: `v3fs-onto-node${selected?.kind === "entity" && selected.id === id ? " selected" : ""}`,
+          className: `v3fs-onto-node${selected?.kind === "entity" && selected.id === id ? " selected" : ""}${focusIds && focusIds.has(id) && selectedEntityId !== id ? " related" : ""}${focusIds && !focusIds.has(id) ? " dimmed" : ""}`,
           data: {
             label: (
               <div className="v3fs-onto-nl">
@@ -106,21 +120,23 @@ export default function OntologyStudio({ doc, onChange }: StudioProps) {
         } as Node;
       });
     });
-  }, [entities, ids, relations, adopted, selected, setNodes]);
+  }, [entities, ids, relations, adopted, selected, selectedEntityId, focusIds, setNodes]);
 
   const edges: Edge[] = useMemo(() => relations.map((relation, index) => {
     const cardinality = asText(relation.cardinality);
+    const from = asText(relation.from), to = asText(relation.to);
+    const touchesFocus = selectedEntityId != null && (from === selectedEntityId || to === selectedEntityId);
     return {
       id: `rel-${index}`,
       type: "floating",
       selected: selected?.kind === "relation" && selected.index === index,
-      source: asText(relation.from),
-      target: asText(relation.to),
+      source: from,
+      target: to,
       label: `${asText(relation.relation) || "relates to"}${cardinality && cardinality !== "unknown" ? ` · ${cardinality}` : ""}`,
-      className: `v3fs-onto-edge${selected?.kind === "relation" && selected.index === index ? " selected" : ""}`,
+      className: `v3fs-onto-edge${selected?.kind === "relation" && selected.index === index ? " selected" : ""}${selectedEntityId ? (touchesFocus ? " related" : " dimmed") : ""}`,
       markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 },
     };
-  }), [relations, selected]);
+  }), [relations, selected, selectedEntityId]);
 
   const patch = (next: Partial<Record<string, unknown>>) => onChange({ ...doc, ...next });
 
