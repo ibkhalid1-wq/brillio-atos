@@ -133,6 +133,27 @@ export function flowMovements(): PhaseDefinition[] {
 }
 
 /**
+ * Questions a respondent DEFERRED to someone else ("not me — ask our Partner
+ * Ops lead"). Stored under Listen's inputs as `_deferredAsks` (underscore ⇒
+ * fingerprint-safe: a deferral is routing, not new evidence). Script
+ * derivation routes each to the target's card and keeps it off everyone
+ * else's; answered-question suppression must NOT treat a deferred question
+ * as answered.
+ */
+export function deferredAsks(program: ProgramSummary): Array<{ question: string; to: string; from: string }> {
+  const raw = readMovementInputs(program, "listen")._deferredAsks;
+  if (typeof raw !== "string" || !raw.trim()) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((entry): entry is Record<string, unknown> => typeof entry === "object" && entry !== null)
+      .map((entry) => ({ question: String(entry.question ?? "").trim(), to: String(entry.to ?? "").trim(), from: String(entry.from ?? "").trim() }))
+      .filter((entry) => entry.question && entry.to);
+  } catch { return []; }
+}
+
+/**
  * Fingerprint of a movement's input bucket — djb2 over the key-sorted JSON,
  * `_`-prefixed keys excluded. The run-agent edge stamps this on artifact stubs
  * at generation time (`inputsFingerprint`); a mismatch here means the evidence

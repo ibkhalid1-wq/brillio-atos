@@ -21,6 +21,9 @@ interface Pack {
   role: string;
   intro: string;
   questions: string[];
+  /** The programme's cast — lets the respondent defer a question to the
+   * person who actually owns the answer. */
+  roster?: Array<{ name: string; role: string }>;
   responded: boolean;
   /** Demo invites only. */
   openingQuote?: string;
@@ -103,6 +106,9 @@ function DictationButton({ onText }: { onText: (spoken: string) => void }) {
 export default function FlowRespond({ token }: { token: string }) {
   const [state, setState] = useState<PackState>({ phase: "loading" });
   const [answers, setAnswers] = useState<Record<number, string>>({});
+  // Per-question deferral: "not me — this is for <name>". A deferred question
+  // counts as handled here and is routed to that person's card on ingest.
+  const [deferrals, setDeferrals] = useState<Record<number, string>>({});
   const [attachments, setAttachments] = useState<Record<number, Array<{ name: string; sourceKey?: string }>>>({});
   const [attachBusy, setAttachBusy] = useState<number | null>(null);
   const [attachNote, setAttachNote] = useState<string | null>(null);
@@ -172,19 +178,20 @@ export default function FlowRespond({ token }: { token: string }) {
     // Demo packs carry no questions — this memo only serves the interview view.
     const blocks = (state.pack.questions ?? [])
       .map((question, index) => {
+        if (deferrals[index]) return ""; // deferred — routed, not answered here
         const answer = (answers[index] ?? "").trim();
         return answer ? `Q: ${question}\nA: ${answer}` : "";
       })
       .filter(Boolean);
     if (extra.trim()) blocks.push(`Anything else:\n${extra.trim()}`);
     return blocks.join("\n\n");
-  }, [state, answers, extra]);
+  }, [state, answers, extra, deferrals]);
 
   const answeredCount = useMemo(() => {
     if (state.phase !== "ready" || state.pack.kind === "demo") return 0;
     return (state.pack.questions ?? []).reduce((count, _q, index) =>
-      count + (((answers[index] ?? "").trim() || (attachments[index] ?? []).length) ? 1 : 0), 0);
-  }, [state, answers, attachments]);
+      count + (((answers[index] ?? "").trim() || (attachments[index] ?? []).length || deferrals[index]) ? 1 : 0), 0);
+  }, [state, answers, attachments, deferrals]);
 
   const submit = async (payload: Record<string, unknown>) => {
     setSubmitting(true);
@@ -303,15 +310,39 @@ export default function FlowRespond({ token }: { token: string }) {
               </header>
               <div className="v3fs-portal-qs">
                 {state.pack.questions.map((question, index) => (
-                  <label key={index} className={`v3fs-portal-card${((answers[index] ?? "").trim() || (attachments[index] ?? []).length) ? " done" : ""}`}>
-                    <span className="v3fs-portal-qn"><b>{index + 1}</b><em aria-hidden="true">✓</em></span>
+                  <label key={index} className={`v3fs-portal-card${((answers[index] ?? "").trim() || (attachments[index] ?? []).length || deferrals[index]) ? " done" : ""}${deferrals[index] ? " deferred" : ""}`}>
+                    <span className="v3fs-portal-qn"><b>{index + 1}</b><em aria-hidden="true">{deferrals[index] ? "→" : "✓"}</em></span>
                     <span className="v3fs-portal-qt">{question}</span>
+                    {deferrals[index] ? (
+                      <div className="v3fs-portal-defer-note">
+                        Routed to <b>{deferrals[index]}</b> — they&rsquo;ll be asked directly.
+                        <button type="button" className="v3fs-a" onClick={() =>
+                          setDeferrals((current) => { const next = { ...current }; delete next[index]; return next; })
+                        }>I&rsquo;ll answer it myself</button>
+                      </div>
+                    ) : (
                     <textarea
                       value={answers[index] ?? ""}
                       onChange={(event) => setAnswers((current) => ({ ...current, [index]: event.target.value }))}
                       rows={3}
                       placeholder="In your own words — type, or speak it."
                     />
+                    )}
+                    {!deferrals[index] && (state.pack.roster?.length ?? 0) > 0 ? (
+                      <div className="v3fs-portal-defer">
+                        <span>Not yours to answer?</span>
+                        <select value="" aria-label={`Defer question ${index + 1} to someone else`}
+                          onChange={(event) => {
+                            const to = event.target.value;
+                            if (to) setDeferrals((current) => ({ ...current, [index]: to }));
+                          }}>
+                          <option value="">this is for someone else…</option>
+                          {(state.pack.roster ?? []).map((person) => (
+                            <option key={person.name} value={person.name}>{person.name}{person.role ? ` — ${person.role}` : ""}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : null}
                     <DictationButton onText={(spoken) => setAnswers((current) => ({ ...current, [index]: joinDictation(current[index] ?? "", spoken) }))} />
                     <div className="v3fs-portal-att">
                       {(attachments[index] ?? []).map((doc, docIndex) => (
@@ -354,11 +385,14 @@ export default function FlowRespond({ token }: { token: string }) {
                   </div>
                 </div>
                 <button type="button" className="v3fs-btn pri v3fs-portal-send"
-                  disabled={submitting || (composed.trim().length < 20 && Object.values(attachments).every((docs) => !docs.length))}
+                  disabled={submitting || (composed.trim().length < 20 && Object.values(attachments).every((docs) => !docs.length) && !Object.keys(deferrals).length)}
                   onClick={() => void submit({
                     answers: composed,
                     documents: Object.entries(attachments).flatMap(([qIndex, docs]) =>
                       docs.filter((doc) => doc.sourceKey).map((doc) => ({ name: doc.name, question: Number(qIndex) + 1, sourceKey: doc.sourceKey }))),
+                    deferrals: Object.entries(deferrals).map(([qIndex, to]) => ({
+                      question: state.pack.questions[Number(qIndex)] ?? "", to,
+                    })).filter((entry) => entry.question && entry.to),
                   })}>
                   {submitting ? "Sending…" : "Send my answers"}
                 </button>

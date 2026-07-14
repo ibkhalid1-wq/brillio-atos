@@ -181,6 +181,18 @@ Deno.serve(async (req: Request) => {
           responded: typeof hit.pack.respondedAt === "string",
         });
       }
+      // The programme's cast rides along so the respondent can DEFER a
+      // question to the right person ("not me — ask our Partner Ops lead").
+      const kitRecord = isRecord(hit.inner.discoveryKit) ? hit.inner.discoveryKit as Record<string, unknown> : null;
+      const selfKey = String(hit.pack.stakeholder ?? "").trim().toLowerCase();
+      const roster = (kitRecord && Array.isArray(kitRecord.interviews) ? kitRecord.interviews : [])
+        .filter(isRecord)
+        .map((interview) => ({
+          name: String(interview.stakeholder ?? "").replace(/\s*[—–-]\s*TBC\s*$/i, "").trim(),
+          role: String(interview.role ?? "").trim(),
+        }))
+        .filter((person) => person.name && person.name.toLowerCase() !== selfKey)
+        .slice(0, 24);
       return jsonResponse({
         kind: "interview",
         programme: hit.programName,
@@ -188,6 +200,7 @@ Deno.serve(async (req: Request) => {
         role: String(hit.pack.role ?? ""),
         intro: String(hit.pack.intro ?? ""),
         questions: Array.isArray(hit.pack.questions) ? hit.pack.questions.map(String).slice(0, 12) : [],
+        roster,
         responded: typeof hit.pack.respondedAt === "string",
       });
     }
@@ -355,7 +368,17 @@ Deno.serve(async (req: Request) => {
               sourceKey: typeof doc.sourceKey === "string" && doc.sourceKey.startsWith(`${hit.programId}/`) ? doc.sourceKey : undefined,
             }))
             .filter((doc) => doc.text.length > 0 || doc.sourceKey);
-          if (answers.length < MIN_ANSWER_CHARS && documents.length === 0) {
+          // Deferrals: "not me — this is for X". Only questions actually ON
+          // this pack can be deferred; the target is a short label matched
+          // against the cast at ingest time. Routing happens on the operator's
+          // side — nothing here trusts the respondent beyond a string.
+          const packQuestions = new Set((Array.isArray(hit.pack.questions) ? hit.pack.questions : []).map((q) => String(q)));
+          const deferrals = (isRecord(body) && Array.isArray(body.deferrals) ? body.deferrals : [])
+            .filter(isRecord)
+            .map((entry) => ({ question: String(entry.question ?? ""), to: String(entry.to ?? "").trim().slice(0, 80) }))
+            .filter((entry) => entry.to && packQuestions.has(entry.question))
+            .slice(0, 12);
+          if (answers.length < MIN_ANSWER_CHARS && documents.length === 0 && deferrals.length === 0) {
             return jsonResponse({ error: "Please write a little more — a sentence or two at minimum." }, 400);
           }
           inbox.push({
@@ -366,6 +389,7 @@ Deno.serve(async (req: Request) => {
             receivedAt: now,
             text: answers,
             ...(documents.length ? { documents } : {}),
+            ...(deferrals.length ? { deferrals } : {}),
           });
           nextInner.flowInterviewPacks = (hit.inner.flowInterviewPacks as unknown[]).map((entry) =>
             isRecord(entry) && entry.token === hit.pack.token ? { ...entry, respondedAt: now } : entry,

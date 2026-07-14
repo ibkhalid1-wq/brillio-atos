@@ -8,7 +8,7 @@
  */
 import type { ProgramSummary } from "@/new/types";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
-import { flowMovements, movementArtifacts, movementOpenIssues, kitPersonas, gateChecklist, readMovementInputs, parseGridRows, readContradictions, falsifiedGap } from "@/v3/components/flow/flowShellData";
+import { flowMovements, movementArtifacts, movementOpenIssues, kitPersonas, gateChecklist, readMovementInputs, parseGridRows, readContradictions, falsifiedGap, deferredAsks } from "@/v3/components/flow/flowShellData";
 import { FORMAL_ARTIFACT_FIELD_KEYS, FORMAL_ARTIFACT_PHASES } from "@/v3/lib/formalArtifacts";
 import { getPhaseDefinition } from "@/v3/lib/methodology";
 
@@ -412,12 +412,15 @@ export function answeredScriptQuestions(program: ProgramSummary): Set<string> {
   const packs = innerData(program).flowInterviewPacks;
   const out = new Set<string>();
   if (!Array.isArray(packs)) return out;
+  // A DEFERRED question was on a responded pack but explicitly NOT answered —
+  // it must survive suppression so the person it was routed to still gets it.
+  const deferred = new Set(deferredAsks(program).map((entry) => normaliseAsk(entry.question)));
   for (const pack of packs) {
     if (!isRecord(pack) || typeof pack.respondedAt !== "string") continue;
     if (Array.isArray(pack.questions)) {
       for (const question of pack.questions) {
         const key = normaliseAsk(String(question ?? ""));
-        if (key) out.add(key);
+        if (key && !deferred.has(key)) out.add(key);
       }
     }
   }

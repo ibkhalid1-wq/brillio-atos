@@ -10,7 +10,7 @@
 import type { ProgramSummary } from "@/new/types";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { meetingKit, askableMovementGaps } from "@/v3/components/flow/flowMeetings";
-import { readContradictions, flowMovements, movementEvidence, readMovementInputs, parseGridRows } from "@/v3/components/flow/flowShellData";
+import { readContradictions, flowMovements, movementEvidence, readMovementInputs, parseGridRows, deferredAsks } from "@/v3/components/flow/flowShellData";
 
 export interface MovementStakeholder {
   /** Stable key for React + pack matching. */
@@ -140,6 +140,22 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
   // Operations lead is Maya") BECOMES that person here — the one place every
   // downstream reader (collect board, People page, approvals) derives from.
   const listenBindings = readRoleBindings(program, "listen");
+  // DEFERRED questions: a respondent said "not me — ask X". Each routes ONLY
+  // to its target's card (matched by name or role, either direction), and is
+  // removed from everyone else's script — including the deferrer's.
+  const deferrals = deferredAsks(program);
+  const normAsk = (text: string) => text.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+  const deferralByAsk = new Map(deferrals.map((entry) => [normAsk(entry.question), entry.to.toLowerCase()]));
+  const matchesTarget = (to: string, name: string, role: string): boolean => {
+    const target = to.trim().toLowerCase();
+    if (!target) return false;
+    const personName = name.trim().toLowerCase();
+    const personRole = role.trim().toLowerCase();
+    return (personName.length > 2 && (target.includes(personName) || personName.includes(target)))
+      || (personRole.length > 2 && (target.includes(personRole) || personRole.includes(target)));
+  };
+  const deferredFor = (name: string, role: string): string[] =>
+    deferrals.filter((entry) => matchesTarget(entry.to, name, role)).map((entry) => entry.question);
   // UNREPRESENTED PERSONAS become role-placeholder cards. The generator is
   // told to emit an interview entry for every voice the programme needs, but
   // when it only inventories a role under kit.personas (seen live: "Recruitment
@@ -174,6 +190,8 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
     const name = bound?.name ?? "";
     const key = (name || roleName).toLowerCase();
     const myAsks = movementAsks.filter((ask) => {
+      const to = deferralByAsk.get(normAsk(ask));
+      if (to && !matchesTarget(to, name, roleName)) return false;
       const audience = askAudience(ask, audienceRoster);
       return audience.size === 0 || audience.has(key) || audience.has(name.toLowerCase());
     });
@@ -183,6 +201,7 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
       role: roleName,
       questions: [...new Set([
         "Walk us through your part of the process — what do you pick up, from whom, and what do you hand off when you're done?",
+        ...deferredFor(name, roleName),
         ...myAsks,
       ])],
       isRole: !name,
@@ -202,7 +221,12 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
     const bound = placeholder && roleLabel ? listenBindings[roleLabel] : undefined;
     const name = placeholder ? (bound?.name ?? "") : rawName;
     const key = name.toLowerCase();
+    const isDeferredElsewhere = (ask: string): boolean => {
+      const to = deferralByAsk.get(normAsk(ask));
+      return !!to && !matchesTarget(to, name, roleLabel);
+    };
     const myAsks = movementAsks.filter((ask) => {
+      if (isDeferredElsewhere(ask)) return false;
       const audience = askAudience(ask, audienceRoster);
       return audience.size === 0 || audience.has(key);
     });
@@ -212,9 +236,10 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
     const heard = key.length > 2 && evidence.some((entry) =>
       entry.who.toLowerCase().includes(key) || key.includes(entry.who.split(",")[0].trim().toLowerCase()));
     const asks = name ? contradictionAsksFor(program, name) : [];
+    const routedToMe = deferredFor(name, roleLabel);
     const questions = heard
-      ? [...new Set([...asks, ...myAsks])]
-      : [...new Set([...asks, ...myAsks, ...agenda])];
+      ? [...new Set([...asks, ...routedToMe, ...myAsks])]
+      : [...new Set([...asks, ...routedToMe, ...myAsks, ...agenda.filter((question) => !isDeferredElsewhere(question))])];
     return {
       id: `iv-${index}`, name: name || roleLabel || `Interviewee ${index + 1}`, role: roleLabel,
       questions, isRole: !name,

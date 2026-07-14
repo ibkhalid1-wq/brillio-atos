@@ -442,6 +442,26 @@ function ingestInterviewResponse(program: ProgramSummary, itemId: string, actor:
   }
   phaseInputs[targetMovement] = bucket;
 
+  // Deferred questions are ROUTING facts, saved fingerprint-safe on Listen:
+  // the script derivation gives each to its target's card and drops it from
+  // everyone else's, and answered-suppression skips them (deferred ≠ answered).
+  const deferrals = Array.isArray(item.deferrals) ? (item.deferrals as unknown[]).filter(isRecord) : [];
+  if (deferrals.length) {
+    const listenBucket = targetMovement === "listen"
+      ? bucket
+      : (isRecord(phaseInputs.listen) ? { ...(phaseInputs.listen as Record<string, unknown>) } : {});
+    let existingDefs: unknown[] = [];
+    try {
+      const parsed = typeof listenBucket._deferredAsks === "string" ? JSON.parse(listenBucket._deferredAsks) : [];
+      if (Array.isArray(parsed)) existingDefs = parsed;
+    } catch { /* reset */ }
+    const nextDefs = [...existingDefs, ...deferrals.map((entry) => ({
+      question: String(entry.question ?? ""), to: String(entry.to ?? ""), from: stakeholder, ts: today,
+    }))].slice(-60);
+    listenBucket._deferredAsks = JSON.stringify(nextDefs);
+    phaseInputs.listen = listenBucket;
+  }
+
   const packs = Array.isArray(inner.flowInterviewPacks) ? (inner.flowInterviewPacks as unknown[]) : [];
   const nextPacks = packs.map((pack) =>
     isRecord(pack) && String(pack.stakeholder ?? "").toLowerCase() === stakeholder.toLowerCase()
@@ -454,9 +474,11 @@ function ingestInterviewResponse(program: ProgramSummary, itemId: string, actor:
   const attestation = {
     ts: new Date().toISOString(), agentId: actor, phaseId: targetMovement, tier: 2,
     action: `Ingested async response — ${stakeholder}`,
-    detail: targetMovement === "listen"
+    detail: `${targetMovement === "listen"
       ? `${words.toLocaleString()} words into the interview transcripts; roster marked Heard.`
-      : `${words.toLocaleString()} words into ${targetMovement}'s conversation record.`,
+      : `${words.toLocaleString()} words into ${targetMovement}'s conversation record.`}${deferrals.length
+      ? ` ${deferrals.length} question${deferrals.length === 1 ? "" : "s"} deferred → ${[...new Set(deferrals.map((entry) => String(entry.to ?? "")))].join(", ")}.`
+      : ""}`,
   };
 
   return wrapProgramState(wrapper, {
