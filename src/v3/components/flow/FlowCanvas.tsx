@@ -306,6 +306,24 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
               });
             }
           }
+          if (!staleArtifacts.length && !missingArtifacts.length) {
+            // VALIDATE: documents are current — the loop's next stage is the
+            // contributors' sign-off. Named, so the operator knows who to nudge.
+            const awaiting = artifacts
+              .filter((a) => a.present)
+              .map((a) => artifactApprovalRollup(program, movement.id, a.id))
+              .filter((r) => r.total > 0 && r.overall !== "approved");
+            if (awaiting.length) {
+              const names = [...new Set(awaiting.flatMap((r) => r.approvers
+                .filter((ap) => ap.status !== "approved" || ap.preDatesDocument)
+                .map((ap) => ap.name.split(" ")[0])))].slice(0, 3);
+              upNext.push({
+                icon: "✍",
+                label: names.length ? `Validate — request sign-off from ${names.join(", ")}` : "Validate — request contributor sign-off",
+                toTab: "collect",
+              });
+            }
+          }
           {
             // Decisions waiting in the Inbox target this movement — the
             // cross-surface work flows through the same queue.
@@ -743,6 +761,19 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                     // artifact is approved when every relevant contributor
                     // has approved it. The asks live on the collect board.
                     const rollup = artifact.present ? artifactApprovalRollup(program, movement.id, artifact.id) : null;
+                    // The MATURITY LADDER — every document states where it is
+                    // on Draft → Grounded → Validated, so "generated ✓" never
+                    // masquerades as "done". Draft: partial evidence or stale;
+                    // Grounded: every voice heard at a current generation;
+                    // Validated: fresh sign-off from every contributor.
+                    const voices = sumStakeholders.filter((s) => !s.isRole).length;
+                    const voicesHeard = sumStakeholders.filter((s, i) => !s.isRole && evaluated[i].heard).length;
+                    const maturity = !artifact.present ? undefined
+                      : rollup?.overall === "approved"
+                        ? { label: "Validated", tone: "validated" as const, hint: `signed off by all ${rollup.total} contributor${rollup.total === 1 ? "" : "s"}` }
+                        : !artifact.stale && voices > 0 && voicesHeard >= voices
+                          ? { label: "Grounded", tone: "grounded" as const, hint: `every voice heard (${voices}) — ready for sign-off` }
+                          : { label: "Draft", tone: "draft" as const, hint: artifact.stale ? "evidence changed since generation — resynthesize" : voices > 0 ? `reads ${voicesHeard} of ${voices} voices` : undefined };
                     return (
                     <ArtifactDoc
                       key={artifact.id}
@@ -756,6 +787,7 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                       onOpen={artifact.present ? () => setDocFor(artifact) : undefined}
                       onGoEvidence={() => goTab("collect")}
                       approvalRollup={rollup}
+                      maturity={maturity}
                       onGoApprovals={() => goTab("collect")}
                     />
                     );
@@ -1068,7 +1100,7 @@ function ShipLanesBoard({ program, onCompile, onToggle, onSetLane }: {
   );
 }
 
-function ArtifactDoc({ artifact, running, evidenceNames, evidenceCount, lastError, openGaps, onGenerate, onOpen, onGoEvidence, approvalRollup, onGoApprovals }: {
+function ArtifactDoc({ artifact, running, evidenceNames, evidenceCount, lastError, openGaps, onGenerate, onOpen, onGoEvidence, approvalRollup, maturity, onGoApprovals }: {
   artifact: ArtifactCardModel;
   running: boolean;
   evidenceNames: string[];
@@ -1086,6 +1118,9 @@ function ArtifactDoc({ artifact, running, evidenceNames, evidenceCount, lastErro
   /** Sign-off ROLLUP: approval is asked per stakeholder on the collect board;
    * the card only reports where the artifact stands across its contributors. */
   approvalRollup?: { approvers: ApproverState[]; approvedCount: number; total: number; overall: ApprovalStatus } | null;
+  /** Where this document sits on the maturity ladder — Draft (partial
+   * evidence or stale) → Grounded (all voices, current) → Validated. */
+  maturity?: { label: string; tone: "draft" | "grounded" | "validated"; hint?: string };
   /** The rollup chip → the Collect board, where the per-person asks live. */
   onGoApprovals?: () => void;
 }) {
@@ -1123,9 +1158,17 @@ function ArtifactDoc({ artifact, running, evidenceNames, evidenceCount, lastErro
             ? <button type="button" className="v3fs-stale-tag" title="See what changed — open the Evidence tab" onClick={onGoEvidence}>evidence changed →</button>
             : <span className="v3fs-stale-tag">evidence changed</span>
         ) : null}
+        {maturity ? (
+          <span className={`v3fs-doc-mat ${maturity.tone}`} title={maturity.hint}>
+            {maturity.tone === "validated" ? "✓ " : ""}{maturity.label}
+          </span>
+        ) : null}
         {artifact.confidence != null ? <span className="v3fs-conf">{artifact.confidence}%</span> : null}
       </div>
       <div className="v3fs-doc-x">{artifact.excerpt ?? artifact.description}</div>
+      {maturity?.hint && maturity.tone !== "validated" ? (
+        <div className="v3fs-doc-mat-hint">{maturity.hint}</div>
+      ) : null}
       {lastError ? (
         <div className="v3fs-doc-err" role="alert">
           ⚠ The last run failed: {lastError.slice(0, 160)} — try again.
