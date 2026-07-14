@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { hasSubstantiveProgramData } from "@/v3/lib/programDataGuard";
+import { pruneFlowDecisionsForStorage } from "@/v3/components/flow/flowDecisions";
 
 interface QueuedWrite {
   id: string;
@@ -78,6 +79,16 @@ export async function flushWriteQueue(supabase: SupabaseClient): Promise<{ flush
             dropped++;
             continue;
           }
+        }
+      }
+      // Heal an oversized queued blob before replaying it. A write that failed
+      // on statement_timeout carries the FULL pre-trim blob, so a blind retry
+      // just times out again — slim its resolved-decision log the same way a
+      // live save does, so the stuck write finally goes through.
+      if (entry.table === "adam_programs") {
+        const data = (entry.payload as { data?: unknown }).data;
+        if (data && typeof data === "object" && Array.isArray((data as Record<string, unknown>).flowDecisions)) {
+          (data as Record<string, unknown>).flowDecisions = pruneFlowDecisionsForStorage((data as Record<string, unknown>).flowDecisions) as unknown[];
         }
       }
       const { error } = await supabase.from(entry.table).update(entry.payload).eq("id", entry.programId);
