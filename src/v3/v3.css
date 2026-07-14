@@ -4635,8 +4635,12 @@ body:has(.v3fs-pack) .v3fs-appbar:focus-within {transform:none}
 .v3fs-flow-spine .v3fs-ch-collect {margin:22px 0 0;padding:20px 26px 24px;border-top:1px solid var(--fs-line);
   background:linear-gradient(180deg,color-mix(in srgb,var(--fs-line) 16%,transparent),transparent 44%)}
 .v3fs-flow-spine .v3fs-editor {margin:0 26px 26px}
-.v3fs-stepper {display:flex;align-items:stretch;gap:0;position:relative;overflow-x:auto;padding-bottom:6px}
-.v3fs-stepper-rail {position:absolute;top:33px;left:14px;right:14px;height:2px;background:var(--fs-line);z-index:0}
+/* padding-top reserves room for the "Continue here" pointer, which sits above
+   the frontier phase — overflow-x:auto forces overflow-y to auto, so anything
+   above the row would otherwise be clipped by the scroll container. The rail
+   shifts down by the same amount to stay centred on the phase rings. */
+.v3fs-stepper {display:flex;align-items:stretch;gap:0;position:relative;overflow-x:auto;padding-top:30px;padding-bottom:6px}
+.v3fs-stepper-rail {position:absolute;top:63px;left:14px;right:14px;height:2px;background:var(--fs-line);z-index:0}
 .v3fs-step {flex:1;min-width:126px;position:relative;background:none;border:none;font:inherit;cursor:pointer;
   text-align:left;padding:16px 14px 14px;border-radius:14px;transition:background .18s ease,box-shadow .18s ease}
 .v3fs-step:hover {background:var(--fs-card)}
