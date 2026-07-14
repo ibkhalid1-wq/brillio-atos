@@ -223,6 +223,11 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
   onCaptured?: () => void;
 }) {
   const { name, role, questions, isRole } = stakeholder;
+  // Questions to mint a LINK with. Usually the displayed script, but the Frame
+  // sponsor's script collapses to [] once the mandate is on record while their
+  // card still offers a confirmation link — linkQuestions keeps that non-empty
+  // so "Copy link" never mints a dead, question-less form.
+  const linkQuestions = stakeholder.linkQuestions?.length ? stakeholder.linkQuestions : questions;
   const { pack, heard, status } = coll;
   const first = name.split(" ")[0] || "they";
   const email = stakeholderEmail(program, name);
@@ -292,7 +297,7 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
   // current script — when the script has moved on, the old link goes stale and
   // Copy/Send mint a fresh pack (which supersedes the unanswered one).
   const packMatches = !!pack && (Array.isArray(pack.questions) ? pack.questions.map(String).join(" ") : "")
-    === questions.slice(0, 8).join(" ");
+    === linkQuestions.slice(0, 8).join(" ");
   // The pending chip carries the per-artifact count — "1/2 approved" — so a
   // card that stays pending after one verdict reads as "one more to go", not
   // as a contradiction with the answered link.
@@ -349,13 +354,13 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
 
   const ensureLink = async (): Promise<string | null> => {
     if (effectiveLink) return effectiveLink;
-    if (!onMintFollowUp || !questions.length) {
-      setLinkNote(questions.length ? "Links aren't available here." : "Nothing to ask yet — the script is empty.");
+    if (!onMintFollowUp || !linkQuestions.length) {
+      setLinkNote(!onMintFollowUp ? "Links aren't available here." : "Nothing to ask yet — the script is empty.");
       return null;
     }
     setLinkBusy(true);
     try {
-      const link = await onMintFollowUp({ movementId, who: name, questions, captureField });
+      const link = await onMintFollowUp({ movementId, who: name, questions: linkQuestions, captureField });
       if (link) setMintedLink(link);
       else setLinkNote("Could not create the link — try again.");
       return link;
@@ -577,10 +582,15 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
                       </>
                     ) : item.status === "in-review" ? (
                       <>
-                        <span className="v3fs-ivc-appr-st wait">◷ Awaiting verdict</span>
-                        <button type="button" className="v3fs-btn" onClick={() => void copyApprovalLink(item)}>
-                          {approvalCopied === item.artifactId ? "Copied ✓" : "⎘ Copy link"}
-                        </button>
+                        <span className="v3fs-ivc-appr-st wait">◷ {item.token ? "Awaiting verdict" : "Reply received — recording…"}</span>
+                        {/* The link is copyable only while the ask is genuinely
+                            open; once answered, the used link is withheld (its
+                            verdict is landing), so no dead "Copy link" button. */}
+                        {item.token ? (
+                          <button type="button" className="v3fs-btn" onClick={() => void copyApprovalLink(item)}>
+                            {approvalCopied === item.artifactId ? "Copied ✓" : "⎘ Copy link"}
+                          </button>
+                        ) : null}
                       </>
                     ) : (
                       <button type="button" className="v3fs-btn pri" disabled={approvalBusy === item.artifactId}
@@ -652,7 +662,7 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
                     // PROGRAMME CALENDAR (attested, visible in Today), and the
                     // .ics downloads as the stakeholder's invite.
                     void onScheduleFollowUp?.(movementId, name, picked);
-                    const ics = buildMeetingIcs({ who: name, email, date: picked, programmeName: program.name, intro: "", questions });
+                    const ics = buildMeetingIcs({ who: name, email, date: picked, programmeName: program.name, intro: "", questions: linkQuestions });
                     const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
                     const anchor = document.createElement("a");
                     anchor.href = url;

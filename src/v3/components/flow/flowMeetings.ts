@@ -490,6 +490,25 @@ export function meetingKit(program: ProgramSummary, movementId: string): Meeting
   };
 }
 
+/**
+ * The sponsor's agenda for a DATA-COLLECTION link — always non-empty. The kit
+ * collapses `questions` to `[]` once the mandate is on record and no gaps
+ * remain (so a heard sponsor isn't re-asked their answered agenda), but the
+ * card still offers a confirmation link — and a link with no questions is a
+ * dead form. This returns the base Frame script, falling back to a short
+ * re-confirm agenda so a link can ALWAYS be minted for the sponsor.
+ */
+export function sponsorLinkQuestions(program: ProgramSummary): string[] {
+  const base = baseMeetingKit(program, "frame");
+  const questions = (base?.questions ?? []).filter((q) => q.trim());
+  if (questions.length) return questions;
+  return [
+    "Anything shifted since we last spoke — scope, urgency, people?",
+    "Does the charter still read as your mandate — what would you change?",
+    "Is the first-demonstration date still right?",
+  ];
+}
+
 /** Schedule a follow-up: it lands on Today's calendar with its gap agenda. */
 export function scheduleFollowUp(
   program: ProgramSummary,

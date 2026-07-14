@@ -9,7 +9,7 @@
  */
 import type { ProgramSummary } from "@/new/types";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
-import { meetingKit, askableMovementGaps } from "@/v3/components/flow/flowMeetings";
+import { meetingKit, askableMovementGaps, sponsorLinkQuestions } from "@/v3/components/flow/flowMeetings";
 import { readContradictions, flowMovements, movementEvidence, readMovementInputs, parseGridRows, deferredAsks } from "@/v3/components/flow/flowShellData";
 
 export interface MovementStakeholder {
@@ -21,6 +21,12 @@ export interface MovementStakeholder {
   role: string;
   /** The area-specific questions their conversation must surface. */
   questions: string[];
+  /** The agenda to mint a data-collection LINK with, when it differs from the
+   * displayed `questions`. The Frame sponsor's script collapses to `[]` once
+   * the mandate is on record (so a heard sponsor isn't re-asked), but their
+   * card still offers a confirmation link — this keeps that link non-empty
+   * without pushing the collapsed questions back into their status. */
+  linkQuestions?: string[];
   /** True when this is a role placeholder, not yet a named person. */
   isRole: boolean;
 }
@@ -538,7 +544,11 @@ export function resolveMovementStakeholders(program: ProgramSummary, movementId:
     // kit's sponsor script as their questions.
     const kit = meetingKit(program, "frame");
     if (!kit || !kit.who.trim()) return [];
-    return [{ id: "frame-sponsor", name: kit.who.trim(), role: "Executive Sponsor", questions: kit.questions, isRole: false }];
+    // `questions` drives their status (empty ⇒ nothing outstanding). The LINK
+    // agenda is always non-empty so "Copy link" mints a working confirmation
+    // link even after the mandate is on record.
+    return [{ id: "frame-sponsor", name: kit.who.trim(), role: "Executive Sponsor", questions: kit.questions,
+      linkQuestions: kit.questions.length ? undefined : sponsorLinkQuestions(program), isRole: false }];
   }
   if (movementId === "listen") return kitInterviews(program);
   if (movementId === "show") {
