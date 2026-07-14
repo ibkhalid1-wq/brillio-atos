@@ -694,10 +694,19 @@ export default function FlowShell(props: FlowShellProps) {
           ) : null}
           {view === "portfolio" ? (
             <>
-              <h1 className="v3fs-hero-title">Portfolio</h1>
-              <p className="v3fs-hero-line v3fs-hero-current">
-                Current programme — <b>{program.name}</b>
-              </p>
+              <div className="v3fs-portfolio-head">
+                <div>
+                  <h1 className="v3fs-hero-title">Portfolio</h1>
+                  <p className="v3fs-hero-line v3fs-hero-current">
+                    Current programme — <b>{program.name}</b>
+                  </p>
+                </div>
+                {props.onCreateProgram ? (
+                  <button type="button" className="v3fs-btn pri v3fs-portfolio-new" onClick={() => props.onCreateProgram()}>
+                    ＋ New programme
+                  </button>
+                ) : null}
+              </div>
             </>
           ) : (
             <>

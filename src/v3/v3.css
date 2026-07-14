@@ -4619,6 +4619,8 @@ body:has(.v3fs-pack) .v3fs-appbar:focus-within {transform:none}
 .v3fs-hero-eyebrow {font-size:10.5px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--v3-accent-2);margin-bottom:10px}
 .v3fs-hero-eyebrow span {color:var(--v3-text-muted);font-weight:600}
 .v3fs-hero-title {font-size:clamp(26px,3.2vw,38px);font-weight:650;letter-spacing:-.03em;color:var(--v3-text-primary);text-wrap:balance;line-height:1.12}
+.v3fs-portfolio-head {display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.v3fs-portfolio-new {flex-shrink:0;margin-top:4px;white-space:nowrap}
 .v3fs-how {margin-top:14px;max-width:64ch;font-size:14px;line-height:1.6;color:var(--v3-text-secondary)}
 
 /* the flow spine + chapters */
