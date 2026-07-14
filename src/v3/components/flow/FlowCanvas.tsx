@@ -10,7 +10,7 @@ import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 import {
   flowMovements, frontierMovementId, movementEvidence, movementArtifacts,
   gateReadiness, gateChecklist, listenCoverage, movementFacts, demoAcceptance,
-  spineRegenerationPlan, attestHeardRoster, artifactOpenGaps,
+  spineRegenerationPlan, attestHeardRoster, artifactOpenGaps, readMovementInputs,
   type ArtifactCardModel, type EvidenceEntry,
 } from "@/v3/components/flow/flowShellData";
 import { artifactApprovalRollup, type ApprovalStatus, type ApproverState } from "@/v3/components/flow/flowApprovals";
@@ -391,9 +391,13 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
               : { glyph: "○", text: "", tone: "dim" };
         // Order: Artifacts first, then Verify (formerly Collect). The Gate is no
         // longer a stage — it lives in the top-right button as a modal verdict.
+        // Frame carries a third tab, the Listen plan, after Verify.
+        const planConfirmed = String(readMovementInputs(program, "frame")._listenCoverageConfirmed ?? "").trim().length > 0;
+        const planState = { glyph: planConfirmed ? "✓" : "◇", text: "", tone: planConfirmed ? "ok" : "dim" };
         const tabDefs: Array<{ key: MovementTab; label: string; state: { glyph: string; text: string; tone: string } | null; show: boolean }> = [
           { key: "paper", label: "Artifacts", state: paperState, show: artifacts.length > 0 },
           { key: "collect", label: "Verify", state: collectState, show: true },
+          ...(movement.id === "frame" ? [{ key: "plan" as MovementTab, label: "Listen plan", state: planState, show: true }] : []),
         ];
 
         return (
@@ -529,12 +533,8 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                           evidence/artifacts, not hand-typed fields. The editor
                           still opens from its purposeful doors — a gate
                           checklist item or an artifact gap — when a specific
-                          fact genuinely needs a manual correction. In Frame,
-                          the operator instead confirms the discovery plan: the
-                          roles Listen will hear and the areas it will cover. */}
-                      {movement.id === "frame" ? (
-                        <FrameCoveragePlan program={program} onSaveInputs={onSaveInputs} />
-                      ) : null}
+                          fact genuinely needs a manual correction. Frame's
+                          discovery plan lives on its own "Listen plan" tab. */}
                     </div>
                     <div className="v3fs-railzone"
                       onPointerEnter={railEnter}
@@ -835,6 +835,12 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                     );
                   })}
                 </div>
+
+                {movement.id === "frame" ? (
+                  <div className={tabKey === "plan" ? "" : "v3fs-tabhide"}>
+                    <FrameCoveragePlan program={program} onSaveInputs={onSaveInputs} />
+                  </div>
+                ) : null}
 
                 {gateModalFor === movement.id ? (
                 <div className="v3fs-gatemodal-scrim" role="dialog" aria-modal="true" aria-label={isLoop ? "Steady-state health" : "Gate"}

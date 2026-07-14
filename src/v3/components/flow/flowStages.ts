@@ -6,7 +6,7 @@
 /** Every movement runs the same loop, and its body is organised as the
  * loop's three stages — Collect (people + what they said) → Paper (what ATOS
  * made of it) → Gate (can we demonstrate?). The active one. */
-export type MovementTab = "collect" | "paper" | "gate";
+export type MovementTab = "collect" | "paper" | "gate" | "plan";
 
 /** One line saying what a movement leads with — so every phase reads the same
  * way and the operator knows where its centre of gravity is (item 1c). */
