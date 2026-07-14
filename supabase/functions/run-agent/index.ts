@@ -1444,6 +1444,15 @@ rather than the industry at large.
 Structured inputs are the system of record. This document is a generated VIEW of
 the program's structured data, never an independently authored source.
 
+### Regeneration is ADDITIVE
+When runMode is incremental_update or cascade_refresh, START from the existing
+document (existingArtifacts carries it) and MERGE the new evidence in — never
+rebuild from only the changed inputs. Every entity, relation, workflow, agent
+and interview already on the document STAYS unless the record now contradicts
+it; dropping coverage merely because the latest evidence didn't re-mention it
+is data loss, and a smaller document than the one on record is treated as a
+FAILED regeneration.
+
 ### Gap phrasing — who closes it decides how it reads
 When you list a gap, decide who must CLOSE it:
 - Missing information a STAKEHOLDER must supply (objectives, success measures,
@@ -9084,7 +9093,29 @@ Deno.serve(async (req) => {
           && isRecord(priorMirror)
           && typeof priorMirror.editedAt === "string"
           && Date.parse(priorMirror.editedAt) > (typeof priorMirror.generatedAt === "string" ? Date.parse(priorMirror.generatedAt) : 0);
-        if (handEdited) {
+        // ── Shrink guard ───────────────────────────────────────────────────
+        // A regeneration that COVERS LESS than the document on record is a
+        // red flag, not a result: the model redrew from the latest delta
+        // instead of merging (seen live: an ontology dropping 17 → 8 entities,
+        // an atlas collapsing to the newest track). Such a draft must not
+        // overwrite the record silently — it rides the same propose-then-
+        // confirm door as hand-edit protection.
+        const coreSections = ({
+          "domain-ontology": ["entities", "relations"],
+          "current-state-atlas": ["workflows"],
+          "discovery-kit": ["interviews"],
+          "agentic-blueprint": ["agents"],
+        } as Record<string, string[]>)[request.agentId] ?? [];
+        const shrinkNotes: string[] = [];
+        if (isFlowProgramme(contextProgramData) && isRecord(priorMirror)) {
+          for (const key of coreSections) {
+            const prevN = Array.isArray((priorMirror as Record<string, unknown>)[key]) ? ((priorMirror as Record<string, unknown>)[key] as unknown[]).length : 0;
+            const nextN = Array.isArray((formalResult as Record<string, unknown>)[key]) ? ((formalResult as Record<string, unknown>)[key] as unknown[]).length : 0;
+            if (prevN >= 4 && nextN < Math.ceil(prevN * 0.7)) shrinkNotes.push(`${nextN} ${key} vs ${prevN} on record`);
+          }
+        }
+        const shrunk = shrinkNotes.length > 0;
+        if (handEdited || shrunk) {
           const proposedAt = new Date().toISOString();
           const proposedDoc = {
             ...formalResult,
@@ -9097,8 +9128,12 @@ Deno.serve(async (req) => {
           nextProgramData = queueFlowDecision(contextProgramData, {
             tier: 2,
             movementId,
-            title: `Accept the regenerated ${spec.title}`,
-            summary: `You hand-edited this document on ${String(priorMirror.editedAt).slice(0, 10)}. Confirming replaces your edits with the fresh generation; declining keeps your version on the record.`,
+            title: shrunk && !handEdited
+              ? `Regenerated ${spec.title} covers LESS than the record — review before it replaces it`
+              : `Accept the regenerated ${spec.title}`,
+            summary: shrunk && !handEdited
+              ? `The fresh draft shrank (${shrinkNotes.join("; ")}) — it likely redrew from the newest evidence instead of merging. Confirming replaces the fuller document on record with this smaller draft; declining keeps the record and you can regenerate again.`
+              : `You hand-edited this document on ${String((priorMirror as Record<string, unknown>).editedAt).slice(0, 10)}. Confirming replaces your edits with the fresh generation; declining keeps your version on the record.${shrunk ? ` Note: the draft also covers less (${shrinkNotes.join("; ")}).` : ""}`,
             payload: {
               artifactDocs: { [spec.fieldKey]: proposedDoc } as JsonValue,
               artifactStubs: [{
@@ -9122,7 +9157,9 @@ Deno.serve(async (req) => {
             agentId: request.agentId,
             phaseId: movementId,
             tier: 2,
-            action: `Proposed regenerated ${spec.title} — your hand edits are protected, awaiting your confirm`,
+            action: shrunk && !handEdited
+              ? `Held a shrunken ${spec.title} regeneration (${shrinkNotes.join("; ")}) — the record stands, awaiting your review`
+              : `Proposed regenerated ${spec.title} — your hand edits are protected, awaiting your confirm`,
             detail: (outputSummary || "").slice(0, 160),
           });
         } else {
