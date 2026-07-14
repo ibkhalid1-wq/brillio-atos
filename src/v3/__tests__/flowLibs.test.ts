@@ -515,6 +515,45 @@ describe("People → collection mapping — everyone added under People gets a c
   });
 });
 
+describe("Frame facts on record via the charter — no re-asking what's already provided", () => {
+  it("a charted objective / metric / scope falsifies the 'add to inputs' gaps and drops the sponsor re-ask", async () => {
+    const { falsifiedGap, frameFactOnRecord, artifactOpenGaps } = await import("@/v3/components/flow/flowShellData");
+    const p = programme({
+      phaseInputs: { frame: {
+        sponsor: "Ibrahim Khalid",
+        sponsorConversation: "— Ibrahim Khalid, Executive Sponsor —\nStreamline onboarding and compliance; lift NPS 40 → 60+.",
+        targetFirstDemoDate: "2026-08-05",
+        // businessObjective / successMetric input fields left blank on purpose
+      } },
+      transformationCharter: {
+        businessObjective: "Streamline customer onboarding and compliance to lift NPS.",
+        successCriteria: ["Increase NPS from 40 to 60+ via CSAT surveys."],
+        inScope: ["Redesign onboarding workflows."],
+        outOfScope: ["Core banking changes unrelated to onboarding."],
+      },
+      discoveryKit: { gaps: [
+        "Add a clear business objective and success metric to the Business objective and Primary success metric inputs.",
+        "Add a narrative description of the current onboarding process to the Business objective input.",
+        "Add scope inclusions and exclusions to the Scope inclusions inputs.",
+      ] },
+    });
+    // Facts extracted into the charter count as on record even with blank inputs.
+    expect(frameFactOnRecord(p, "businessObjective")).toBe(true);
+    expect(frameFactOnRecord(p, "successMetric")).toBe(true);
+    expect(frameFactOnRecord(p, "scope")).toBe(true);
+    // So none of the three "add … to the inputs" gaps survive on the kit card,
+    // including the misplaced "current process → business objective" one.
+    expect(artifactOpenGaps(p, "discovery-kit")).toEqual([]);
+    // The sponsor's Frame script no longer re-asks the objective or the metric.
+    const sponsor = resolveMovementStakeholders(p, "frame")[0];
+    expect(sponsor.questions.some((q) => /outcome should this system achieve|single measure proves/i.test(q))).toBe(false);
+    // Guard: with NO charter and blank inputs, the gap legitimately stays open.
+    const bare = programme({ phaseInputs: { frame: { sponsor: "X" } },
+      discoveryKit: { gaps: ["Add a clear business objective to the Business objective input."] } });
+    expect(falsifiedGap(bare, "Add a clear business objective to the Business objective input.")).toBe(false);
+  });
+});
+
 describe("meetingKit follow-up — only askable gaps become script questions", () => {
   const framed = (gaps: string[]) => programme({
     phaseInputs: { frame: {

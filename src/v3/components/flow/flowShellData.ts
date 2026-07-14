@@ -511,18 +511,47 @@ export function stakeholderEmail(program: ProgramSummary, name: string): string 
  * is not an open question — suppress it deterministically at read time, so
  * cards, scripts and the gate all agree without waiting for a lucky regen.
  */
-const FIELD_DEMANDS: Array<{ match: RegExp; field: string }> = [
-  { match: /objective/i, field: "businessObjective" },
-  { match: /sponsor/i, field: "sponsor" },
-  { match: /success (?:metric|measure)|kpi/i, field: "successMetric" },
+const FIELD_DEMANDS: Array<{ match: RegExp; field: string; fact?: string }> = [
+  { match: /objective/i, field: "businessObjective", fact: "businessObjective" },
+  { match: /sponsor/i, field: "sponsor", fact: "sponsor" },
+  { match: /success (?:metric|measure)|kpi/i, field: "successMetric", fact: "successMetric" },
   { match: /demo date|first[- ]demo/i, field: "targetFirstDemoDate" },
+  { match: /scope|inclusion|exclusion/i, field: "scopeInclusions", fact: "scope" },
 ];
+
+/** The Transformation Charter fields that carry each Frame fact. A fact
+ * extracted into the charter (the structured projection of the sponsor
+ * conversation) is ON RECORD even when its raw input box is blank — so it must
+ * not be re-flagged or re-asked. */
+const CHARTER_FIELDS_FOR_FACT: Record<string, string[]> = {
+  businessObjective: ["businessObjective", "mandate"],
+  successMetric: ["successCriteria"],
+  sponsor: ["sponsor"],
+  scope: ["inScope", "outOfScope"],
+};
+/** Is a Frame fact captured — in its raw input field, OR extracted into the
+ * charter? Lets a fact provided in the sponsor conversation (and charted) count
+ * as answered, instead of nagging to "add it to the inputs". */
+export function frameFactOnRecord(program: ProgramSummary, fact: string, inputField = fact): boolean {
+  const raw = readMovementInputs(program, "frame")[inputField];
+  if (typeof raw === "string" && raw.trim().length >= 8) return true;
+  const charter = dataRoot(program).transformationCharter;
+  if (!charter || typeof charter !== "object" || Array.isArray(charter)) return false;
+  for (const key of CHARTER_FIELDS_FOR_FACT[fact] ?? []) {
+    const value = (charter as Record<string, unknown>)[key];
+    if (typeof value === "string" && value.trim().length >= 8) return true;
+    if (Array.isArray(value) && value.some((entry) => String(entry ?? "").trim().length >= 3)) return true;
+  }
+  return false;
+}
 export function falsifiedGap(program: ProgramSummary, gap: string): boolean {
   if (!/\binputs?\b/i.test(gap)) return false; // only field-demand phrasing
-  const frame = readMovementInputs(program, "frame");
   const hit = FIELD_DEMANDS.find((demand) => demand.match.test(gap));
-  const value = hit ? frame[hit.field] : undefined;
-  return typeof value === "string" && value.trim().length >= 8;
+  if (!hit) return false;
+  // Satisfied when the fact is on record — in the raw input field OR extracted
+  // into the charter. A fact provided in the sponsor conversation and charted
+  // must not be re-flagged just because its structured input box is blank.
+  return frameFactOnRecord(program, hit.fact ?? hit.field, hit.field);
 }
 
 /** The open gaps a generated document declares about ITSELF ("we still don't

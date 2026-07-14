@@ -8,7 +8,7 @@
  */
 import type { ProgramSummary } from "@/new/types";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
-import { flowMovements, movementArtifacts, movementOpenIssues, kitPersonas, gateChecklist, readMovementInputs, parseGridRows, readContradictions, falsifiedGap, deferredAsks } from "@/v3/components/flow/flowShellData";
+import { flowMovements, movementArtifacts, movementOpenIssues, kitPersonas, gateChecklist, readMovementInputs, parseGridRows, readContradictions, falsifiedGap, frameFactOnRecord, deferredAsks } from "@/v3/components/flow/flowShellData";
 import { FORMAL_ARTIFACT_FIELD_KEYS, FORMAL_ARTIFACT_PHASES } from "@/v3/lib/formalArtifacts";
 import { getPhaseDefinition } from "@/v3/lib/methodology";
 
@@ -65,9 +65,13 @@ function baseMeetingKit(program: ProgramSummary, movementId: string): Omit<Meeti
     const sponsor = filled(inputs.sponsor) ? String(inputs.sponsor) : "the executive sponsor";
     const done = filled(inputs.sponsorConversation);
     const questions: string[] = [];
-    if (!filled(inputs.businessObjective)) questions.push("What outcome should this system achieve — the change, the magnitude, and by when?");
+    // A fact captured in the sponsor conversation and extracted into the charter
+    // is on record — frameFactOnRecord checks BOTH the raw input and the charter,
+    // so a charted objective/metric is never re-asked just because its input box
+    // is blank.
+    if (!frameFactOnRecord(program, "businessObjective")) questions.push("What outcome should this system achieve — the change, the magnitude, and by when?");
     if (!filled(inputs.sponsor)) questions.push("Who owns this transformation end to end — name and role?");
-    if (!filled(inputs.successMetric)) questions.push("Which single measure proves it worked? What is it today, and what should it become?");
+    if (!frameFactOnRecord(program, "successMetric")) questions.push("Which single measure proves it worked? What is it today, and what should it become?");
     if (parseGridRows(readMovementInputs(program, "listen").interviewRoster).length === 0) questions.push("Whose working day changes? Name the people we must hear from.");
     if (!filled(inputs.targetFirstDemoDate)) questions.push("When should the first stakeholder watch their own workflow run — pick a date.");
     // Conditional like every other line: once constraints are on record the
