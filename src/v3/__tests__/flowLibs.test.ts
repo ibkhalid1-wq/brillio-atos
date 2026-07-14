@@ -333,6 +333,12 @@ describe("blobGuard — validation and migration at the blob boundary", () => {
     expect(inner.flowDecisions).toEqual({ not: "an array" });
   });
 
+  it("a partial attestation (append-only log) is NOT flagged — only the array-of-objects shape is enforced", () => {
+    expect(validateProgramBlob({ flowAttestations: [{ action: "Minted a link" }, { ts: "x" }] })).toEqual([]);
+    // A non-array is still caught.
+    expect(validateProgramBlob({ flowAttestations: { not: "an array" } })).toHaveLength(1);
+  });
+
   it("migration stamps the version once and is idempotent", () => {
     const first = migrateProgramBlob({ phaseInputs: {} });
     expect(first.migrated).toBe(true);

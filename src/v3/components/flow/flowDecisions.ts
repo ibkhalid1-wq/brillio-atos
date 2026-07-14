@@ -247,8 +247,16 @@ export function resolveFlowDecision(
     const phaseInputs = isRecord(nextInner.phaseInputs) ? { ...(nextInner.phaseInputs as Record<string, unknown>) } : {};
     const bucket = isRecord(phaseInputs.listen) ? { ...(phaseInputs.listen as Record<string, unknown>) } : {};
     const rows = parseGridRows(bucket.contradictionLog);
+    // Don't file a contradiction that's already logged — the detector can
+    // re-propose the same dispute across runs, and appending it again would
+    // grow duplicate "Open" rows that the gate keeps re-asking.
+    const loggedStatements = rows.map((row) => String(row.statement ?? "").trim().toLowerCase()).filter((s) => s.length >= 8);
+    const isLogged = (statement: string): boolean => {
+      const s = statement.trim().toLowerCase();
+      return s.length >= 8 && loggedStatements.some((logged) => logged.includes(s) || s.includes(logged));
+    };
     const additions = payload.contradictionEntries.filter(isRecord)
-      .filter((entry) => entry.statement)
+      .filter((entry) => entry.statement && !isLogged(String(entry.statement)))
       .map((entry) => ({
         statement: String(entry.statement),
         between: String(entry.between ?? ""),

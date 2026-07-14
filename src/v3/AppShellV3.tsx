@@ -20,7 +20,7 @@ import { useProgramSnapshots } from "@/new/lib/useProgramSnapshots";
 import { useCopilotThread } from "@/hooks/useCopilotThread";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { drillKindMeta, type DrillKind } from "@/v3/components/flow/flowDrilldown";
-import { readMovementInputs, flowMovements, movementArtifacts, gateChecklist, gateReadiness } from "@/v3/components/flow/flowShellData";
+import { readMovementInputs, flowMovements, movementArtifacts, gateChecklist, gateReadiness, movementInputsFingerprint } from "@/v3/components/flow/flowShellData";
 import { gateAugmentations } from "@/v3/components/flow/flowCrossValidation";
 import type {   ProgramSummary } from "@/new/types";
 import { buildCrossPhaseContext } from "@/lib/adamOrchestrator";
@@ -2253,6 +2253,34 @@ export default function AppShellV3() {
       .finally(() => { autoIngestApprovalRef.current = false; });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProgram]);
+
+  // AUTONOMOUS REGENERATION. When feedback lands and a document falls behind its
+  // evidence, ATOS rebuilds it on its own — the operator is never prompted to
+  // "regenerate, evidence changed" (they keep a manual regenerate as an option).
+  // Keyed by the movement's evidence FINGERPRINT so it runs once per genuine
+  // change: a successful rebuild clears the staleness (no re-fire), and a failed
+  // one won't loop until new evidence arrives. One movement per pass, and never
+  // while another agent is mid-run. Locked (gated) movements are left alone.
+  const autoRegenRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const p = activeProgram;
+    if (!p || !hasSubstantiveProgramData(p.rawData) || runningAgentIds.size > 0) return;
+    for (const movement of flowMovements()) {
+      if (p.gateReviews?.[movement.id]?.status === "approved") continue; // locked — inputs frozen
+      const stale = movementArtifacts(p, movement).filter((a) => a.present && a.stale);
+      if (!stale.length) continue;
+      const key = `${p.id}:${movement.id}:${movementInputsFingerprint(p, movement.id)}`;
+      if (autoRegenRef.current.has(key)) continue;
+      autoRegenRef.current.add(key);
+      void (async () => {
+        for (const art of stale) {
+          await runProgramAgent({ agentId: art.id, phaseId: movement.id, triggeredBy: "proactive" });
+        }
+      })();
+      break; // one movement per pass; the refresh re-fires this for the next
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProgram, runningAgentIds]);
 
   // AUTONOMOUS GATE CLOSE. A gate is the criteria being met, not a separate
   // ceremony — so once every criterion is met (documents current, Inbox clear,

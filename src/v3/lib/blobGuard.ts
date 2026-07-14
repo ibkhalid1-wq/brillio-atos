@@ -20,15 +20,6 @@ export const BLOB_VERSION = 2;
 
 const record = z.record(z.string(), z.unknown());
 
-const attestation = z.object({
-  ts: z.string(),
-  agentId: z.string(),
-  phaseId: z.string(),
-  tier: z.union([z.literal(1), z.literal(2), z.literal(3)]),
-  action: z.string(),
-  detail: z.string().optional(),
-});
-
 const decision = z.object({
   id: z.string(),
   tier: z.number().optional(),
@@ -58,7 +49,11 @@ const KNOWN_KEYS: Record<string, z.ZodTypeAny> = {
   phaseInputs: z.record(z.string(), record),
   phaseArtifacts: z.record(z.string(), z.record(z.string(), record)),
   flowDecisions: z.array(decision),
-  flowAttestations: z.array(attestation.loose()),
+  // The attestation LOG is append-only and non-load-bearing — every reader is
+  // defensive and the app works around a partial entry. A historical row that
+  // predates the current shape (e.g. missing tier/agentId) must not raise a
+  // "malformed" flag, so validate only that each row is an object.
+  flowAttestations: z.array(record),
   flowFollowUps: z.array(followUp),
   flowInterviewPacks: z.array(portalPack),
   flowDemoInvites: z.array(portalPack),

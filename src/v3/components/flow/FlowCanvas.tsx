@@ -270,15 +270,11 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
         const spineOwnsRegen = spine.length >= 2 && !!onRunAgentAndWait;
         const upNext: UpNextItem[] = [];
         if (!isDone) {
-          if (spineOwnsRegen) {
-            upNext.push({ icon: "↻", label: `Regenerate ${spine.length} documents — down the spine`, toTab: "paper", spine: true });
-          } else if (staleArtifacts.length && onRunAgentAndWait) {
-            upNext.push({
-              icon: "↻",
-              label: staleArtifacts.length === 1 ? `Regenerate the ${staleArtifacts[0].title}` : `Regenerate ${staleArtifacts.length} stale documents`,
-              toTab: "paper",
-              run: async () => { for (const a of staleArtifacts) await onRunAgentAndWait(a.id, movement.id); },
-            });
+          if (spineOwnsRegen || staleArtifacts.length) {
+            // Stale documents rebuild THEMSELVES now — no "regenerate, evidence
+            // changed" prompt. A passive note while they catch up; the manual
+            // regenerate stays available on the Paper tab as an option.
+            upNext.push({ icon: "↻", label: generating ? "Documents updating from the latest evidence…" : "Documents refreshing from the latest evidence", toTab: "paper" });
           } else if (missingArtifacts.length && evidence.length) {
             upNext.push({ icon: "✦", label: `Generate the ${missingArtifacts[0].title}`, toTab: "paper", run: async () => onRunAgent(missingArtifacts[0].id, movement.id) });
           }

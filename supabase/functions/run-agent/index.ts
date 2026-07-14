@@ -8905,7 +8905,31 @@ Deno.serve(async (req) => {
             // ("Q: Two accounts disagree…"); a claim that is itself dispute
             // wording is the watcher reading its own output — never file it.
             .filter((entry) => !/two accounts disagree|which is right, and what settles it|^\s*Q:/i.test(entry.statement));
-          const filteredEntries = entries.filter((entry) => !contradictionFalsifiedByRecord(contextProgramData, entry.statement));
+          // Contradictions ALREADY in the log must not be re-proposed — the
+          // detector re-runs on every regeneration and re-finds the same
+          // disputes, so without this the "File N contradictions" decision
+          // reappears in the Inbox after it was filed. Match on normalised
+          // statement text (either direction, to tolerate slicing/paraphrase).
+          const innerForLog = getInnerProgramData(contextProgramData);
+          const listenInputs = isRecord(innerForLog.phaseInputs) && isRecord((innerForLog.phaseInputs as Record<string, unknown>).listen)
+            ? ((innerForLog.phaseInputs as Record<string, unknown>).listen as Record<string, unknown>) : {};
+          const loggedStatements: string[] = [];
+          const rawLog = listenInputs.contradictionLog;
+          if (typeof rawLog === "string" && rawLog.trim().startsWith("[")) {
+            try {
+              const parsedLog = JSON.parse(rawLog);
+              if (Array.isArray(parsedLog)) for (const row of parsedLog) {
+                if (isRecord(row)) { const s = String((row as Record<string, unknown>).statement ?? "").trim().toLowerCase(); if (s.length >= 8) loggedStatements.push(s); }
+              }
+            } catch { /* ignore a malformed log */ }
+          }
+          const alreadyLogged = (statement: string): boolean => {
+            const s = statement.trim().toLowerCase();
+            if (s.length < 8) return false;
+            return loggedStatements.some((logged) => logged.includes(s) || s.includes(logged));
+          };
+          const filteredEntries = entries.filter((entry) =>
+            !contradictionFalsifiedByRecord(contextProgramData, entry.statement) && !alreadyLogged(entry.statement));
           const existing = getInnerProgramData(contextProgramData).flowDecisions;
           const hasOpenWatcher = Array.isArray(existing) && existing.some((entry) =>
             isRecord(entry) && entry.agentId === "contradiction-watcher" && (entry.status ?? "open") === "open");

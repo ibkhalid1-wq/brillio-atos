@@ -817,19 +817,19 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
               </div>
             </div>
           ) : heard && docsStale ? (
-            // Their answers are ON THE RECORD but the documents haven't read
-            // them yet — re-asking "still open" items now would re-ask what may
-            // already be answered. The regenerate IS the next step; whatever
-            // remains open afterwards returns as a fresh follow-up script.
+            // Their answers are ON THE RECORD; the documents rebuild from them
+            // AUTOMATICALLY (autonomous regeneration) — no "regenerate first"
+            // prompt. A quiet "update now" stays as an option; whatever remains
+            // open afterwards returns here as a fresh follow-up script.
             <div className="v3fs-ivc-sec">
               <div className="v3fs-ivc-sec-h">Answers on the record</div>
               <div className="v3fs-ivc-regen">
-                <p>{first}&rsquo;s answers haven&rsquo;t been read into the documents yet — regenerate first; anything still open returns here as a fresh script.</p>
+                <p>{first}&rsquo;s answers are updating the documents automatically — anything still open returns here as a fresh script once they land.</p>
                 {onRegenerateStale ? (
-                  <button type="button" className="v3fs-btn pri" disabled={regenBusy} onClick={async () => {
+                  <button type="button" className="v3fs-btn quiet" disabled={regenBusy} onClick={async () => {
                     setRegenBusy(true);
                     try { await onRegenerateStale(); } finally { setRegenBusy(false); }
-                  }}>{regenBusy ? "Regenerating…" : "↻ Regenerate the documents"}</button>
+                  }}>{regenBusy ? "Updating…" : "↻ Update now"}</button>
                 ) : null}
               </div>
             </div>
