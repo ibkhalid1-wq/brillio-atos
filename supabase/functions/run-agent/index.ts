@@ -1238,7 +1238,7 @@ Actors are PERSONAS: name steps[].actor using the Discovery Kit's personas (prio
 Return ONLY valid JSON:
 {
   "title": "Current-State Atlas — <programme name>",
-  "workflows": [ { "name": "string", "owner": "role", "trigger": "what starts it", "steps": [ { "actor": "role", "action": "string", "system": "system used or null", "duration": "stated duration or null", "evidence": "verbatim quote — speaker", "entities": ["domain entities this step touches — use the ontology's names"] } ], "handoffs": ["cross-team hand-offs"], "failureModes": ["where it goes wrong today"] } ],
+  "workflows": [ { "name": "string", "area": "the business area this workflow belongs to (e.g. Sales, Marketing, Finance, People, Operations) — a short, consistent label reused across workflows", "owner": "role", "trigger": "what starts it", "steps": [ { "actor": "role", "action": "string", "system": "system used or null", "duration": "stated duration or null", "evidence": "verbatim quote — speaker", "entities": ["domain entities this step touches — use the ontology's names"] } ], "handoffs": ["cross-team hand-offs"], "failureModes": ["where it goes wrong today"] } ],
   // Division of record: the Atlas owns ACTIVITIES and field findings. Reference domain entities by the Ontology's names in steps[].entities — never define or describe entities here; definitions, attributes and systems-of-record belong to the Domain Ontology. systemsInventory records usage and complaints, not which entities live where.
   "painHeatmap": [ { "area": "string", "pain": "string", "severity": "high|medium|low", "voicedBy": ["stakeholders"], "quote": "the strongest verbatim expression of it" } ],
   "systemsInventory": [ { "system": "string", "usedFor": "string", "complaints": ["stakeholder complaints about it"] } ],
@@ -1264,7 +1264,7 @@ Gaps become interview questions, so phrase every gap a stakeholder must close as
 Return ONLY valid JSON:
 {
   "title": "Domain Ontology — <programme name>",
-  "entities": [ { "name": "their noun", "definition": "one sentence in their language", "attributes": ["key attributes mentioned"], "systemOfRecord": "system or null", "aliases": ["what other teams call it"], "evidence": "verbatim quote — speaker" } ],
+  "entities": [ { "name": "their noun", "definition": "one sentence in their language", "area": "the business area this concept belongs to — reuse the same short labels as the Current-State Atlas workflows (e.g. Sales, Marketing, Finance)", "attributes": ["key attributes mentioned"], "systemOfRecord": "system or null", "aliases": ["what other teams call it"], "evidence": "verbatim quote — speaker" } ],
   "relations": [ { "from": "entity", "relation": "verb phrase", "to": "entity", "cardinality": "1:1|1:N|N:M|unknown" } ],
   "events": [ { "name": "business event", "triggers": "what causes it", "produces": "what it changes" } ],
   // Division of record: the Ontology owns NOUNS and state changes. Events are facts that occur (QuoteAmended), never sequences — actors, step order, durations and systems-in-use belong to the Current-State Atlas's workflows. Ambiguities are terminology collisions (same word, different meanings); factual disputes between people are contradictions and belong to the programme's contradiction log, not here.

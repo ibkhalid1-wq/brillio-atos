@@ -29,6 +29,7 @@ import { readMetricRegistry, metricConsistency, metricById } from "@/v3/componen
 import { readGovernedExceptions, withNewException, withResolvedException } from "@/v3/components/flow/flowExceptions";
 import { projectAgentifyReview, projectOntologyAtlasReview, atlasPersonas, composeAgentifyAnswers, projectListenWorkflowReview, composeListenWorkflowAnswers } from "@/v3/components/flow/flowReviews";
 import { gateAugmentations } from "@/v3/components/flow/flowCrossValidation";
+import { programAreas, workflowArea, inferArea } from "@/v3/components/flow/flowAreas";
 
 const programme = (inner: Record<string, unknown>): ProgramSummary =>
   ({ id: "p1", name: "Test", rawData: inner } as unknown as ProgramSummary);
@@ -522,6 +523,23 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
     expect(review!.workflows[0].steps[1].mine).toBe(false);  // Finance's step
     const text = composeAgentifyAnswers(review!, { "0.0": { disposition: "agentify", comment: "auto-price it" } });
     expect(text).toMatch(/\[Agentify\] drafts the quote — auto-price it/);
+  });
+
+  it("areas: explicit area wins; otherwise inferred from the workflow name; distinct set with General last", () => {
+    expect(inferArea("Quote-to-Cash pipeline")).toBe("Sales");
+    expect(inferArea("Campaign nurture")).toBe("Marketing");
+    expect(inferArea("Widget assembly")).toBeNull();
+    expect(workflowArea({ name: "Anything", area: "Custom Area" })).toBe("Custom Area"); // explicit wins
+    expect(workflowArea({ name: "Lead qualification", steps: [] })).toBe("Sales"); // inferred
+    const p = programme({ data: { currentStateAtlas: { workflows: [
+      { name: "Quote-to-Cash", steps: [] },
+      { name: "Campaign build", steps: [] },
+      { name: "Widget assembly", steps: [] }, // no keyword → General
+    ] } } });
+    const areas = programAreas(p);
+    expect(areas).toContain("Sales");
+    expect(areas).toContain("Marketing");
+    expect(areas[areas.length - 1]).toBe("General"); // General sorts last
   });
 
   it("listen-workflow review projects the persona's workflow and composes an edit diff", () => {

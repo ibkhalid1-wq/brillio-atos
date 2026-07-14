@@ -21,11 +21,33 @@ const DISPOSITIONS: Array<{ key: string; label: string; hint: string }> = [
   { key: "agentify", label: "Agentify", hint: "an agent can run this end to end" },
 ];
 
+/** The distinct areas across a set of items, General last. */
+function areasOf(items: Array<{ area?: string }>): string[] {
+  const set = new Set<string>();
+  for (const it of items) if (it.area) set.add(it.area);
+  return [...set].sort((a, b) => a === "General" ? 1 : b === "General" ? -1 : a.localeCompare(b));
+}
+
+/** Area filter chips — hidden below two areas (nothing to filter). */
+function AreaChips({ areas, active, onPick }: { areas: string[]; active: string; onPick: (area: string) => void }) {
+  if (areas.length < 2) return null;
+  return (
+    <div className="v3fs-rvw-areas" role="group" aria-label="Filter by area">
+      <button type="button" className={`v3fs-rvw-area${active === "" ? " on" : ""}`} onClick={() => onPick("")}>All areas</button>
+      {areas.map((area) => (
+        <button key={area} type="button" className={`v3fs-rvw-area${active === area ? " on" : ""}`} onClick={() => onPick(area)}>{area}</button>
+      ))}
+    </div>
+  );
+}
+
 function AgentifySurface({ review, stakeholder, submitting, error, onSubmit }: {
   review: AgentifyReview; stakeholder: string; submitting: boolean; error: string | null;
   onSubmit: (answers: string) => void;
 }) {
   const [responses, setResponses] = useState<Record<string, { disposition?: string; comment?: string }>>({});
+  const [area, setArea] = useState("");
+  const areas = areasOf(review.workflows);
   const totalSteps = review.workflows.reduce((n, w) => n + w.steps.length, 0);
   const decided = Object.values(responses).filter((r) => r.disposition).length;
   const setDisposition = (key: string, disposition: string) =>
@@ -41,8 +63,9 @@ function AgentifySurface({ review, stakeholder, submitting, error, onSubmit }: {
           {stakeholder ? `${stakeholder} — ` : ""}{review.intro}
         </p>
       </header>
+      <AreaChips areas={areas} active={area} onPick={setArea} />
       <div className="v3fs-rvw">
-        {review.workflows.map((workflow, wi) => (
+        {review.workflows.map((workflow, wi) => area && workflow.area !== area ? null : (
           <section key={wi} className="v3fs-rvw-wf">
             <div className="v3fs-rvw-wf-h">
               <b>{workflow.name}</b>
@@ -103,11 +126,15 @@ function OntologyAtlasSurface({ review, stakeholder, submitting, error, onSubmit
   const [termComments, setTermComments] = useState<Record<string, string>>({});
   const [workflowComments, setWorkflowComments] = useState<Record<string, string>>({});
   const [overall, setOverall] = useState("");
+  const [area, setArea] = useState("");
+  const areas = areasOf([...review.terms, ...review.workflows]);
   const touched = useMemo(() =>
     Object.values(termComments).some((v) => v.trim())
     || Object.values(workflowComments).some((v) => v.trim())
     || overall.trim().length > 0,
     [termComments, workflowComments, overall]);
+  const shownTerms = area ? review.terms.filter((t) => t.area === area) : review.terms;
+  const shownWorkflows = area ? review.workflows.filter((w) => w.area === area) : review.workflows;
 
   return (
     <>
@@ -115,12 +142,13 @@ function OntologyAtlasSurface({ review, stakeholder, submitting, error, onSubmit
         <h1 className="v3fs-hero-title"><span className="v3fs-hero-brand">ATOS Flow</span></h1>
         <p className="v3fs-how">{stakeholder ? `${stakeholder} — ` : ""}{review.intro}</p>
       </header>
+      <AreaChips areas={areas} active={area} onPick={setArea} />
       <div className="v3fs-rvw">
-        {review.terms.length ? (
+        {shownTerms.length ? (
           <section className="v3fs-rvw-wf">
             <div className="v3fs-rvw-wf-h"><b>The terms we heard</b><span className="v3fs-rvw-trigger">Your world, in your words</span></div>
             <div className="v3fs-rvw-terms">
-              {review.terms.map((term, i) => (
+              {review.terms.map((term, i) => area && term.area !== area ? null : (
                 <div key={i} className="v3fs-rvw-term">
                   <div className="v3fs-rvw-term-h">
                     <b>{term.name}</b>
@@ -136,11 +164,11 @@ function OntologyAtlasSurface({ review, stakeholder, submitting, error, onSubmit
             </div>
           </section>
         ) : null}
-        {review.workflows.length ? (
+        {shownWorkflows.length ? (
           <section className="v3fs-rvw-wf">
             <div className="v3fs-rvw-wf-h"><b>The workflows we mapped</b><span className="v3fs-rvw-trigger">Does this match how it really runs?</span></div>
             <div className="v3fs-rvw-terms">
-              {review.workflows.map((workflow, i) => (
+              {review.workflows.map((workflow, i) => area && workflow.area !== area ? null : (
                 <div key={i} className="v3fs-rvw-term">
                   <div className="v3fs-rvw-term-h">
                     <b>{workflow.name}</b>
@@ -216,6 +244,9 @@ function ListenWorkflowSurface({ review, stakeholder, submitting, error, onSubmi
     return { workflows, notedTerms, answered, count };
   }, [review, wfSteps, narration, termNotes, answers]);
 
+  const [area, setArea] = useState("");
+  const areas = areasOf(review.workflows);
+
   const compose = () => composeListenWorkflowAnswers(review, {
     workflows: review.workflows.map((w, wi) => ({ name: w.name, steps: wfSteps[wi] ?? [] })),
     narration, termNotes, answers,
@@ -227,8 +258,9 @@ function ListenWorkflowSurface({ review, stakeholder, submitting, error, onSubmi
         <h1 className="v3fs-hero-title"><span className="v3fs-hero-brand">ATOS Flow</span></h1>
         <p className="v3fs-how">{stakeholder ? `${stakeholder} — ` : ""}{review.intro}</p>
       </header>
+      <AreaChips areas={areas} active={area} onPick={setArea} />
       <div className="v3fs-rvw">
-        {review.workflows.map((wf, wi) => (
+        {review.workflows.map((wf, wi) => area && wf.area !== area ? null : (
           <section key={wi} className="v3fs-rvw-wf">
             <div className="v3fs-rvw-wf-h">
               <b>{wf.name}</b>

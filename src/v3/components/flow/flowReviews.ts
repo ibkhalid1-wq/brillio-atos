@@ -17,6 +17,7 @@
  * / Listen synthesis reads it like any other stakeholder input.
  */
 import type { ProgramSummary } from "@/new/types";
+import { workflowArea, entityArea } from "@/v3/components/flow/flowAreas";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -51,7 +52,7 @@ export interface AgentifyStep {
   /** True when the reviewing persona performs this step — their steps lead. */
   mine: boolean;
 }
-export interface AgentifyWorkflow { name: string; trigger?: string; steps: AgentifyStep[] }
+export interface AgentifyWorkflow { name: string; trigger?: string; area?: string; steps: AgentifyStep[] }
 export interface AgentifyReview {
   kind: "agentify";
   persona: string;
@@ -72,6 +73,7 @@ export function projectAgentifyReview(program: ProgramSummary, persona: string):
   const projected: AgentifyWorkflow[] = workflows.map((workflow) => ({
     name: str(workflow.name) || "Workflow",
     trigger: str(workflow.trigger) || undefined,
+    area: workflowArea(workflow),
     steps: (Array.isArray(workflow.steps) ? workflow.steps : []).filter(isRecord).map((step) => ({
       action: str(step.action) || "step",
       actor: str(step.actor),
@@ -97,8 +99,8 @@ export function projectAgentifyReview(program: ProgramSummary, persona: string):
 
 // ── ontology + atlas ──────────────────────────────────────────────────────────
 
-export interface OntologyTerm { name: string; definition?: string; aliases?: string[]; systemOfRecord?: string }
-export interface AtlasStage { name: string; owner?: string; trigger?: string; steps: string[] }
+export interface OntologyTerm { name: string; definition?: string; aliases?: string[]; systemOfRecord?: string; area?: string }
+export interface AtlasStage { name: string; owner?: string; trigger?: string; steps: string[]; area?: string }
 export interface OntologyAtlasReview {
   kind: "ontology-atlas";
   intro: string;
@@ -118,6 +120,7 @@ export function projectOntologyAtlasReview(program: ProgramSummary): OntologyAtl
       definition: str(entity.definition) || undefined,
       aliases: strs(entity.aliases).slice(0, 4),
       systemOfRecord: str(entity.systemOfRecord) || undefined,
+      area: entityArea(entity, program),
     })).filter((term) => term.name).slice(0, 40)
     : [];
   const workflows: AtlasStage[] = atlas && Array.isArray(atlas.workflows)
@@ -125,6 +128,7 @@ export function projectOntologyAtlasReview(program: ProgramSummary): OntologyAtl
       name: str(workflow.name) || "Workflow",
       owner: str(workflow.owner) || undefined,
       trigger: str(workflow.trigger) || undefined,
+      area: workflowArea(workflow),
       steps: (Array.isArray(workflow.steps) ? workflow.steps : []).filter(isRecord)
         .map((step) => str(step.action)).filter(Boolean).slice(0, 10),
     })).filter((workflow) => workflow.name).slice(0, 10)
@@ -141,7 +145,7 @@ export function projectOntologyAtlasReview(program: ProgramSummary): OntologyAtl
 // ── listen: edit the workflow, narrate changes ────────────────────────────────
 
 export interface ListenWorkflowStep { action: string; actor?: string; system?: string; entities?: string[] }
-export interface ListenWorkflow { name: string; trigger?: string; steps: ListenWorkflowStep[] }
+export interface ListenWorkflow { name: string; trigger?: string; area?: string; steps: ListenWorkflowStep[] }
 export interface ListenWorkflowReview {
   kind: "listen-workflow";
   persona: string;
@@ -174,7 +178,7 @@ export function projectListenWorkflowReview(program: ProgramSummary, persona: st
     persona: persona || "You",
     intro: "This is how we've captured your workflow so far. Fix any step, add steps we missed, or describe changes in your own words — you'll see your changes build up below as you go.",
     workflows: agentify.workflows.map((w) => ({
-      name: w.name, trigger: w.trigger,
+      name: w.name, trigger: w.trigger, area: w.area,
       steps: w.steps.map((s) => ({ action: s.action, actor: s.actor, system: s.system, entities: s.entities })),
     })),
     terms: (relevant.length ? relevant : (oa?.terms ?? [])).slice(0, 16),
