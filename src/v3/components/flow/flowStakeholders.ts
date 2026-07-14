@@ -413,9 +413,11 @@ export function unresolvedCoverageNames(program: ProgramSummary): Array<{ name: 
     const coveredBy = Array.isArray(row.coveredBy) ? row.coveredBy.map(String) : String(row.coveredBy ?? "").split(",");
     for (const raw of coveredBy) {
       const name = raw.trim();
-      const key = name.toLowerCase();
+      // "End Patient — TBC" and "End Patient" are the same identity: strip the
+      // TBC suffix before matching, so adding the person resolves the label.
+      const key = name.toLowerCase().replace(/\s*[—–-]\s*tbc\s*$/i, "").trim();
       if (!name || name.split(/\s+/).length > 5) continue; // skip empties + sentence-like blobs
-      if (known.has(key) || dismissed.has(key) || seen.has(key)) continue;
+      if (!key || known.has(key) || dismissed.has(key) || seen.has(key)) continue;
       seen.add(key);
       out.push({ name, domain });
     }

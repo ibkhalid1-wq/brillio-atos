@@ -970,6 +970,22 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
         { attest: { action: `Coverage label marked not-a-person — ${name}`, detail: "won't prompt again" } });
     } finally { setDisputeBusy(null); }
   };
+  // Coverage names ADD THEMSELVES (operator direction 2026-07-14: do not
+  // prompt). One per pass — each write refreshes the programme, which
+  // re-fires this effect for the next — with any "— TBC" suffix stripped:
+  // the label is a role awaiting a person, and People owns naming them.
+  // A wrongly-added entry is removed on the People page in one click.
+  const autoCoverageRef = useRef(false);
+  useEffect(() => {
+    if (!onSaveInputs || autoCoverageRef.current) return;
+    const cov = coverageNames[0];
+    if (!cov) return;
+    autoCoverageRef.current = true;
+    const cleanName = cov.name.replace(/\s*[—–-]\s*TBC\s*$/i, "").trim() || cov.name;
+    void addCoverageName(cleanName, cov.domain)
+      .finally(() => { autoCoverageRef.current = false; });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coverageNames, onSaveInputs]);
 
   const routeDispute = async (statement: string, person: string) => {
     if (!onSaveInputs || !person) return;
