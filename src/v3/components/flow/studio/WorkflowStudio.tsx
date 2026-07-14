@@ -11,7 +11,7 @@ import React, { useCallback, useMemo, useState } from "react";
 import {
   TextField, ChipsField, asArray, asRecord, asText, asStrings, type StudioProps,
 } from "./StudioKit";
-import { workflowArea, GENERAL_AREA } from "@/v3/components/flow/flowAreas";
+import { workflowArea, programAreas, GENERAL_AREA } from "@/v3/components/flow/flowAreas";
 
 interface PainHit {
   severity: string;
@@ -42,7 +42,7 @@ function painForStep(step: Record<string, unknown>, pains: Array<Record<string, 
   return best;
 }
 
-export default function WorkflowStudio({ doc, onChange, onOpenArtifact }: StudioProps) {
+export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program }: StudioProps) {
   const workflows = useMemo(() => asArray(doc.workflows).map(asRecord), [doc.workflows]);
   const pains = useMemo(() => asArray(doc.painHeatmap).map(asRecord), [doc.painHeatmap]);
   const [active, setActive] = useState(0);
@@ -66,6 +66,20 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact }: Studio
       a === GENERAL_AREA ? 1 : b === GENERAL_AREA ? -1 : a.localeCompare(b));
   }, [workflows]);
   const multiArea = groupedTabs.length > 1;
+  // Areas the ONTOLOGY defines but the atlas hasn't mapped a workflow for yet —
+  // e.g. Talent, whose entities are on the ontology but whose current-state
+  // process has no evidence (its SME hasn't been heard). Surfacing them here
+  // keeps the atlas honest: the domain is known, its workflow is still a gap.
+  const unmappedAreas = useMemo(() => {
+    if (!program) return [];
+    const covered = new Set(groupedTabs.map(([area]) => area));
+    // Clean single-domain areas only — a compound label ("Alliances/Finance")
+    // is an entity spanning areas already mapped by their segments, not its own
+    // missing workflow. So "Talent" surfaces; "Talent/Delivery" doesn't.
+    return programAreas(program).filter((area) =>
+      area !== GENERAL_AREA && !area.includes("/") && !covered.has(area)
+      && ![...covered].some((mapped) => mapped.toLowerCase() === area.toLowerCase()));
+  }, [program, groupedTabs]);
 
   // Personas: rows in order of first appearance; blank actors pool at the foot.
   const lanes = useMemo(() => {
@@ -128,6 +142,13 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact }: Studio
                 {name}
               </button>
             ))}
+          </div>
+        ))}
+        {unmappedAreas.map((area) => (
+          <div key={`unmapped-${area}`} className="v3fs-wf-tabgroup unmapped"
+            title={`${area} is defined in the Domain Ontology but has no current-state workflow yet — hear the ${area} SME, then regenerate the Atlas to map it`}>
+            <span className="v3fs-wf-tabgroup-l">{area}</span>
+            <span className="v3fs-wf-unmapped">not mapped yet</span>
           </div>
         ))}
         <button type="button" className="v3fs-a" onClick={addWorkflow}>＋ workflow</button>

@@ -237,13 +237,13 @@ function DiscoveryKitStudio({ doc, onChange, program }: StudioProps) {
 
 const SEVERITIES = ["high", "medium", "low"];
 
-function AtlasStudio({ doc, onChange, onOpenArtifact }: StudioProps) {
+function AtlasStudio({ doc, onChange, onOpenArtifact, program }: StudioProps) {
   const patch = patchOf(doc, onChange);
   const pains = useListOps(doc, onChange, "painHeatmap");
   return (
     <>
       <Section label="Workflows — the diagram" hint="each step: who does what, in which system; entity chips open the ontology">
-        <WorkflowStudio doc={doc} onChange={onChange} onOpenArtifact={onOpenArtifact} />
+        <WorkflowStudio doc={doc} onChange={onChange} onOpenArtifact={onOpenArtifact} program={program} />
       </Section>
       <Section label="Pain heatmap" hint="colour = severity">
         <div className="v3fs-stu-heat">

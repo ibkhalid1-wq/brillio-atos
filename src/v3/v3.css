@@ -6343,6 +6343,8 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-wf-tabs.grouped {gap:6px 14px}
 .v3fs-wf-tabgroup {display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:4px 4px 4px 10px;border-left:2px solid var(--fs-line);border-radius:2px}
 .v3fs-wf-tabgroup-l {font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--v3-text-tertiary,var(--v3-text-secondary));margin-right:2px}
+.v3fs-wf-tabgroup.unmapped {border-left-style:dashed;opacity:.85}
+.v3fs-wf-unmapped {font-size:10.5px;font-weight:600;color:var(--v3-amber);background:var(--v3-amber-soft);border-radius:99px;padding:3px 9px}
 .v3fs-wf-tabs button[role="tab"] {font:inherit;font-size:11.5px;font-weight:600;border:1px solid var(--fs-line);border-radius:99px;padding:5px 12px;background:var(--fs-card);color:var(--v3-text-secondary);cursor:pointer}
 .v3fs-wf-tabs button[role="tab"].on {background:var(--v3-accent);border-color:var(--v3-accent);color:#fff}
 .v3fs-wf-tabs button[role="tab"] em {font-style:normal;font-size:9.5px;opacity:.75;margin-left:6px;text-transform:uppercase;letter-spacing:.05em}
