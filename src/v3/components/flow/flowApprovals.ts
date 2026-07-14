@@ -119,11 +119,15 @@ export function relevantApprovers(program: ProgramSummary, movementId: string): 
     .filter((s) => {
       const key = s.name.trim().toLowerCase();
       // Same attribution matching as the collect board — one source of truth
-      // for "this person's evidence is on the record".
-      return key.length > 2 && evidence.some((e) =>
-        e.who.toLowerCase().includes(key)
-        || key.includes(e.who.split(",")[0].trim().toLowerCase())
-        || (e.kind === "document" && e.meta.toLowerCase().includes(key)));
+      // for "this person's evidence is on the record". Exact first-token
+      // equality works at any name length; fuzzy paths keep the 3-char floor.
+      return evidence.some((e) => {
+        const firstToken = e.who.split(",")[0].trim().toLowerCase();
+        if (firstToken && firstToken === key) return true;
+        return key.length > 2 && (e.who.toLowerCase().includes(key)
+          || key.includes(firstToken)
+          || (e.kind === "document" && e.meta.toLowerCase().includes(key)));
+      });
     })
     .map((s) => ({ name: s.name, role: s.role, email: stakeholderEmail(program, s.name) || undefined }));
 }

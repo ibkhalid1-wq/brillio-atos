@@ -9190,7 +9190,7 @@ Deno.serve(async (req) => {
           const currentInterviews = ((formalResult.interviews as unknown[]) || []).filter(isRecord);
           const coveredRoles = new Set<string>();
           for (const iv of currentInterviews) {
-            coveredRoles.add(norm(iv.stakeholder).replace(/\s*[—–-]\s*tbc\s*$/i, ""));
+            coveredRoles.add(norm(iv.stakeholder).replace(/\s*[—–−‑-]\s*tbc\s*$/i, ""));
             coveredRoles.add(norm(iv.role));
           }
           const personaAdds: Record<string, unknown>[] = [];

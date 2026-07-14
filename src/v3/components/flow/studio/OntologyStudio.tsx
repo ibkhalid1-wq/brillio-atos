@@ -142,6 +142,8 @@ export default function OntologyStudio({ doc, onChange }: StudioProps) {
 
   const onConnect = useCallback((connection: Connection) => {
     if (!connection.source || !connection.target) return;
+    // A self-relation says nothing an attribute can't — and it knots the layout.
+    if (connection.source === connection.target) return;
     const next = [...relations, { from: connection.source, relation: "relates to", to: connection.target, cardinality: "unknown" }];
     patch({ relations: next });
     setSelected({ kind: "relation", index: next.length - 1 });

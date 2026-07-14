@@ -130,7 +130,7 @@ export default function FlowApprove({ token }: { token: string }) {
               </article>
               <div className="v3fs-panel v3fs-approve-act">
                 <label className="v3fs-approve-note-l" htmlFor="approve-note">Add a note (required to request changes)</label>
-                <textarea id="approve-note" className="v3fs-approve-note" value={comment} rows={3}
+                <textarea id="approve-note" className="v3fs-approve-note" value={comment} rows={3} maxLength={20000}
                   placeholder="Optional for an approval; tell the team what to change if you're requesting changes…"
                   onChange={(event) => setComment(event.target.value)} />
                 {error ? <p className="v3fs-approve-err" role="alert">{error}</p> : null}

@@ -67,8 +67,10 @@ function askAudience(ask: string, roster: Array<{ name: string; role: string }>)
     const name = person.name.trim().toLowerCase();
     const role = person.role.trim().toLowerCase();
     const first = name.split(/\s+/)[0] ?? "";
-    if ((name.length > 3 && text.includes(name))
-      || (first.length > 3 && text.includes(first))
+    // 3-char first names ("Raj", "Ana") are real; roles stay stricter — short
+    // role tokens ("SME") appear inside too many other roles to route on.
+    if ((name.length >= 3 && text.includes(name))
+      || (first.length >= 3 && text.includes(first))
       || (role.length > 3 && text.includes(role))) {
       matched.add(name);
     }
@@ -166,7 +168,7 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
   const covered = new Set<string>();
   for (const interview of interviews) {
     for (const value of [interview.stakeholder, interview.role]) {
-      const token = String(value ?? "").trim().toLowerCase().replace(/\s*[—–-]\s*tbc\s*$/i, "");
+      const token = String(value ?? "").trim().toLowerCase().replace(/\s*[—–−‑-]\s*tbc\s*$/i, "");
       if (token) covered.add(token);
     }
   }
@@ -215,8 +217,8 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
     // the "Role — TBC" convention the generator is instructed to emit. Its
     // label is the role awaiting a person, never someone's name.
     const rawName = String(interview.stakeholder ?? "").trim();
-    const tbc = /\s*[—–-]\s*TBC\s*$/i.test(rawName);
-    const roleLabel = String(interview.role ?? "").trim() || rawName.replace(/\s*[—–-]\s*TBC\s*$/i, "").trim();
+    const tbc = /\s*[—–−‑-]\s*TBC\s*$/i.test(rawName);
+    const roleLabel = String(interview.role ?? "").trim() || rawName.replace(/\s*[—–−‑-]\s*TBC\s*$/i, "").trim();
     const placeholder = !rawName || tbc;
     const bound = placeholder && roleLabel ? listenBindings[roleLabel] : undefined;
     const name = placeholder ? (bound?.name ?? "") : rawName;
@@ -233,8 +235,13 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
     // Heard already? Their turns are on the record. If so, the follow-up is only
     // what is STILL OPEN (disagreements + artifact gaps) — not the original
     // agenda they've answered, which is what left it "not getting cleared".
-    const heard = key.length > 2 && evidence.some((entry) =>
-      entry.who.toLowerCase().includes(key) || key.includes(entry.who.split(",")[0].trim().toLowerCase()));
+    // Exact first-token equality matches ANY length (so "Jo" is heard when
+    // "Jo, CEO" speaks); the fuzzy containment paths keep the 3-char floor.
+    const heard = evidence.some((entry) => {
+      const firstToken = entry.who.split(",")[0].trim().toLowerCase();
+      if (firstToken && firstToken === key) return true;
+      return key.length > 2 && (entry.who.toLowerCase().includes(key) || key.includes(firstToken));
+    });
     const asks = name ? contradictionAsksFor(program, name) : [];
     const routedToMe = deferredFor(name, roleLabel);
     const questions = heard
@@ -496,7 +503,7 @@ export function unresolvedCoverageNames(program: ProgramSummary): Array<{ name: 
       const name = raw.trim();
       // "End Patient — TBC" and "End Patient" are the same identity: strip the
       // TBC suffix before matching, so adding the person resolves the label.
-      const key = name.toLowerCase().replace(/\s*[—–-]\s*tbc\s*$/i, "").trim();
+      const key = name.toLowerCase().replace(/\s*[—–−‑-]\s*tbc\s*$/i, "").trim();
       if (!name || name.split(/\s+/).length > 5) continue; // skip empties + sentence-like blobs
       if (!key || known.has(key) || dismissed.has(key) || dismissedRoles.has(key) || seen.has(key)) continue;
       seen.add(key);
@@ -649,17 +656,34 @@ export function renamePersonInProgram(
     } catch { /* skip */ }
   }
 
+  // Interview + approval packs follow the person too: a rename must not
+  // orphan their standing links or drop their recorded verdicts from the
+  // per-stakeholder rollup (which matches by name).
+  const nextInterviewPacks = Array.isArray(inner.flowInterviewPacks)
+    ? (inner.flowInterviewPacks as unknown[]).map((pack) =>
+        isRecord(pack) && eq(pack.stakeholder) ? (touched = true, { ...pack, stakeholder: to }) : pack)
+    : undefined;
+  const nextApprovalPacks = Array.isArray(inner.flowApprovalPacks)
+    ? (inner.flowApprovalPacks as unknown[]).map((pack) => {
+        if (!isRecord(pack) || !isRecord(pack.approver) || !eq((pack.approver as Record<string, unknown>).name)) return pack;
+        touched = true;
+        return { ...pack, approver: { ...(pack.approver as Record<string, unknown>), name: to } };
+      })
+    : undefined;
+
   if (!touched) return null;
 
   const log = Array.isArray(inner.flowAttestations) ? (inner.flowAttestations as unknown[]) : [];
   return wrapProgramState(wrapper, {
     ...inner,
     ...(kit ? { discoveryKit: kit } : {}),
+    ...(nextInterviewPacks ? { flowInterviewPacks: nextInterviewPacks } : {}),
+    ...(nextApprovalPacks ? { flowApprovalPacks: nextApprovalPacks } : {}),
     phaseInputs,
     flowAttestations: [...log, {
       ts: new Date().toISOString(), agentId: actor, phaseId: "listen", tier: 2,
       action: `Person renamed — ${from} → ${to}`,
-      detail: "roster and contact binding updated; historical evidence keeps the original attribution",
+      detail: "roster, contact binding, links and approval packs updated; historical evidence keeps the original attribution",
     }].slice(-200),
   }, usesNestedData);
 }

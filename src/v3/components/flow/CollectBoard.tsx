@@ -39,10 +39,16 @@ export function stakeholderCollection(
     && (movementId === "listen" ? (!p.movementId || p.movementId === "listen") : p.movementId === movementId));
   // Their evidence: attributed voice blocks, PLUS documents they provided
   // (document entries carry the provider in their meta, not in `who`).
-  const mine = (key.length > 2 ? evidence.filter((e) =>
-    e.who.toLowerCase().includes(key)
-    || key.includes(e.who.split(",")[0].trim().toLowerCase())
-    || (e.kind === "document" && e.meta.toLowerCase().includes(key))) : [])
+  const mine = evidence.filter((e) => {
+    const firstToken = e.who.split(",")[0].trim().toLowerCase();
+    // Exact first-token equality works at ANY name length ("Jo, CEO");
+    // fuzzy containment keeps the 3-char floor against false positives.
+    if (firstToken && firstToken === key) return true;
+    if (key.length <= 2) return false;
+    return e.who.toLowerCase().includes(key)
+      || key.includes(firstToken)
+      || (e.kind === "document" && e.meta.toLowerCase().includes(key));
+  })
     // Newest first — the latest response leads the trail.
     .slice().sort((a, b) => (b.capturedAt ?? "").localeCompare(a.capturedAt ?? ""));
   const heard = mine.length > 0 || Boolean(pack?.respondedAt);

@@ -132,7 +132,8 @@ export function visibleLinks(packs: FlowInterviewPack[]): FlowInterviewPack[] {
   for (const pack of packs) {
     const key = `${pack.stakeholder.trim().toLowerCase()}|${pack.respondedAt ? "answered" : "waiting"}`;
     const held = byKey.get(key);
-    if (!held || pack.createdAt > held.createdAt) byKey.set(key, pack);
+    // Tie-break same-second mints on id so duplicates never both survive.
+    if (!held || pack.createdAt > held.createdAt || (pack.createdAt === held.createdAt && pack.id > held.id)) byKey.set(key, pack);
   }
   return packs.filter((pack) => byKey.get(`${pack.stakeholder.trim().toLowerCase()}|${pack.respondedAt ? "answered" : "waiting"}`) === pack);
 }

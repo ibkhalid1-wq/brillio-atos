@@ -981,7 +981,7 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
     const cov = coverageNames[0];
     if (!cov) return;
     autoCoverageRef.current = true;
-    const cleanName = cov.name.replace(/\s*[—–-]\s*TBC\s*$/i, "").trim() || cov.name;
+    const cleanName = cov.name.replace(/\s*[—–−‑-]\s*TBC\s*$/i, "").trim() || cov.name;
     void addCoverageName(cleanName, cov.domain)
       .finally(() => { autoCoverageRef.current = false; });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1937,8 +1937,15 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
   // internal and external, spoken-for or not — so no role lives only inside
   // the kit document. Roles already surfaced as roster rows are not repeated.
   const personas = useMemo(() => {
-    const rosterRoles = new Set(resolveMovementStakeholders(program, "listen").map((entry) => entry.role.trim().toLowerCase()).filter(Boolean));
-    return kitPersonaDirectory(program).filter((persona) => !rosterRoles.has(persona.name.trim().toLowerCase()));
+    const rosterEntries = resolveMovementStakeholders(program, "listen");
+    // Exclude personas already surfaced as roster rows — by ROLE and by NAME
+    // (a persona named identically to a person must never list twice).
+    const rosterRoles = new Set(rosterEntries.map((entry) => entry.role.trim().toLowerCase()).filter(Boolean));
+    const rosterNames = new Set(rosterEntries.map((entry) => entry.name.trim().toLowerCase()).filter(Boolean));
+    return kitPersonaDirectory(program).filter((persona) => {
+      const key = persona.name.trim().toLowerCase();
+      return !rosterRoles.has(key) && !rosterNames.has(key);
+    });
   }, [program]);
   // Remove a ROLE from the cast (operator judgement, attested). Named people
   // are never removed this way — people outrank roles.

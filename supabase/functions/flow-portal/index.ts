@@ -188,7 +188,7 @@ Deno.serve(async (req: Request) => {
       const roster = (kitRecord && Array.isArray(kitRecord.interviews) ? kitRecord.interviews : [])
         .filter(isRecord)
         .map((interview) => ({
-          name: String(interview.stakeholder ?? "").replace(/\s*[—–-]\s*TBC\s*$/i, "").trim(),
+          name: String(interview.stakeholder ?? "").replace(/\s*[—–−‑-]\s*TBC\s*$/i, "").trim(),
           role: String(interview.role ?? "").trim(),
         }))
         .filter((person) => person.name && person.name.toLowerCase() !== selfKey)

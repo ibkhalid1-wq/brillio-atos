@@ -325,6 +325,7 @@ export default function FlowRespond({ token }: { token: string }) {
                       value={answers[index] ?? ""}
                       onChange={(event) => setAnswers((current) => ({ ...current, [index]: event.target.value }))}
                       rows={3}
+                      maxLength={20000}
                       placeholder="In your own words — type, or speak it."
                     />
                     )}
@@ -372,7 +373,7 @@ export default function FlowRespond({ token }: { token: string }) {
                 <label className={`v3fs-portal-card extra${extra.trim() ? " done" : ""}`}>
                   <span className="v3fs-portal-qn"><b>＋</b><em aria-hidden="true">✓</em></span>
                   <span className="v3fs-portal-qt">Anything we didn&rsquo;t ask about that we should know?</span>
-                  <textarea value={extra} onChange={(event) => setExtra(event.target.value)} rows={3} placeholder="Optional — type, or speak it." />
+                  <textarea value={extra} onChange={(event) => setExtra(event.target.value)} rows={3} maxLength={20000} placeholder="Optional — type, or speak it." />
                   <DictationButton onText={(spoken) => setExtra((current) => joinDictation(current, spoken))} />
                 </label>
                 {error ? <div className="v3fs-portal-err">{error}</div> : null}
