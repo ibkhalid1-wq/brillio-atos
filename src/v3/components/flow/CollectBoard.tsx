@@ -5,7 +5,7 @@
  * been heard. Driven by resolveMovementStakeholders, so it serves every
  * movement.
  */
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import type { ProgramSummary } from "@/new/types";
 import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 import { flowMovements, movementEvidence, evidenceStamp, locateQuote, readMovementInputs, contradictionLogWithout, artifactDocument } from "@/v3/components/flow/flowShellData";
@@ -16,8 +16,8 @@ import { resolveMovementStakeholders, readRoleBindings, type MovementStakeholder
 import { mapTranscriptSpeakers } from "@/v3/components/flow/flowTranscriptMap";
 import { AttachFileButton, TranscribeButton, copyTextFromAction } from "@/v3/components/flow/flowCapture";
 import { readGovernedExceptions, withNewException, withResolvedException } from "@/v3/components/flow/flowExceptions";
-import { projectAgentifyReview, projectOntologyAtlasReview, projectListenWorkflowReview, atlasPersonas, reviewFallbackQuestions, type ReviewPayload } from "@/v3/components/flow/flowReviews";
-import { areaProgress, hasMultipleAreas, personaReadyToAdvance, personaAreas } from "@/v3/components/flow/flowAreas";
+import { projectAgentifyReview, projectListenWorkflowReview, reviewFallbackQuestions } from "@/v3/components/flow/flowReviews";
+import { areaProgress, hasMultipleAreas, stakeholderPrimaryArea, programAreas, GENERAL_AREA, type AreaProgress } from "@/v3/components/flow/flowAreas";
 
 /** A movement's discovery, organized by stakeholder. One card per person or
  * role: their script, their link/meeting channels, their captured evidence, a
@@ -80,7 +80,7 @@ const COLLECT_COLUMNS: Array<{ key: CollectStatus; label: string }> = [
  * into columns by collection state (Heard · Awaiting · To reach), each card the
  * person's quote, dated feedback trail (click → transcript), follow-ups,
  * meeting, and link channels. Driven by resolveMovementStakeholders. */
-export function IntervieweeDiscovery({ program, movementId, captureField, docsStale, regenerating, onRegenerateStale, onSaveInputs, onMintFollowUp, onMintReview, onMintPacks, onScheduleFollowUp, onSendForApproval, onFocusPerson, onCaptured, onDocumentCaptured }: {
+export function IntervieweeDiscovery({ program, movementId, captureField, docsStale, regenerating, onRegenerateStale, onSaveInputs, onMintFollowUp, onMintReview, onScheduleFollowUp, onSendForApproval, onFocusPerson, onCaptured, onDocumentCaptured }: {
   program: ProgramSummary;
   movementId: string;
   captureField: string;
@@ -113,7 +113,6 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
   const movement = flowMovements().find((m) => m.id === movementId);
   const evidence = movement ? movementEvidence(program, movement) : [];
   const packs = listInterviewPacks(program);
-  const [mintBusy, setMintBusy] = useState(false);
   // Card open-state lives here (controlled), so minting a link — which moves a
   // card to another column and remounts it — never collapses it. Null until
   // the operator touches a card; the solo default is applied at render below.
@@ -161,13 +160,48 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
     setOpenIdsState(next ? new Set() : new Set(stakeholders.map((s) => s.id)));
     setAllCollapsed(next);
   };
+  // Listen · Envision · Show organize the board BY AREA once the programme spans
+  // more than one — each area is a lane holding its own stakeholder cards, each
+  // card carrying ONE link that bundles that person's questions and their
+  // area's workflows. Frame and single-area programmes keep the status board.
+  const areaOrganized = (movementId === "listen" || movementId === "envision" || movementId === "show") && hasMultipleAreas(program);
+  const areaRows = new Map(areaProgress(program).map((r) => [r.area, r] as const));
+  const STATUS_RANK: Record<CollectStatus, number> = { toreach: 0, waiting: 1, heard: 2, "pending-approval": 3, approved: 4 };
+
+  const renderCard = ({ s, coll }: (typeof evaluated)[number]) => (
+    <IntervieweeCard key={s.id} program={program} movementId={movementId} stakeholder={s} captureField={captureField}
+      coll={coll} open={openIds.has(s.id)} onOpenChange={(isOpen) => setCardOpen(s.id, isOpen)}
+      primaryArea={areaOrganized ? stakeholderPrimaryArea(program, s.name, s.role) : undefined}
+      docsStale={docsStale} regenerating={regenerating} onRegenerateStale={onRegenerateStale}
+      approvalItems={approvalByName.get(s.name.trim().toLowerCase())?.items}
+      onSendForApproval={onSendForApproval}
+      onSaveInputs={onSaveInputs} onMintFollowUp={onMintFollowUp} onMintReview={onMintReview} onScheduleFollowUp={onScheduleFollowUp}
+      onFocusPerson={onFocusPerson} onCaptured={onCaptured} onDocumentCaptured={onDocumentCaptured} />
+  );
+
+  // Group each stakeholder into exactly ONE area lane (their primary area), then
+  // order lanes as the programme lists its areas (General last) and sort cards
+  // within a lane by state so the work to do sits at the top.
+  const laneData = areaOrganized ? (() => {
+    const groups = new Map<string, typeof evaluated>();
+    for (const e of evaluated) {
+      const area = stakeholderPrimaryArea(program, e.s.name, e.s.role);
+      const list = groups.get(area) ?? [];
+      list.push(e); groups.set(area, list);
+    }
+    const order = [...programAreas(program)];
+    for (const a of groups.keys()) if (!order.includes(a)) order.push(a);
+    return order.filter((a) => groups.has(a)).map((area) => {
+      const list = groups.get(area)!.slice().sort((a, b) => STATUS_RANK[a.coll.status] - STATUS_RANK[b.coll.status]);
+      const heard = list.filter((e) => e.coll.heard && !e.s.questions.length).length;
+      return { area, row: areaRows.get(area), list, heard, total: list.length };
+    });
+  })() : [];
+
   return (
     <div className="v3fs-ch-collect">
-      {(movementId === "listen" || movementId === "envision") && hasMultipleAreas(program) ? (
-        <AreaBoard program={program} />
-      ) : null}
       <div className="v3fs-collect-h">
-        <div className="v3fs-colh ev">Stakeholder data collection</div>
+        <div className="v3fs-colh ev">{areaOrganized ? "Data collection — by area" : "Stakeholder data collection"}</div>
         <span className="v3fs-collect-count"
           title={movementId === "listen"
             ? "Counted from collected evidence and responded links. The gate's coverage ledger is separate — voices are attested heard or waived in the roster."
@@ -175,208 +209,73 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
           {heardCount} of {stakeholders.length} {word}
         </span>
         <div className="v3fs-collect-tools">
-          {movementId === "listen" && onMintPacks ? (
-            <button type="button" className="v3fs-btn" disabled={mintBusy}
-              onClick={async () => { setMintBusy(true); try { await onMintPacks(); } finally { setMintBusy(false); } }}>
-              {packs.length ? "↺ Refresh & add links" : "✳ Create everyone's link"}
-            </button>
-          ) : null}
           {stakeholders.length > 1 ? (
             <button type="button" className="v3fs-btn quiet" onClick={toggleAll}>{allCollapsed ? "Expand all" : "Collapse all"}</button>
           ) : null}
         </div>
       </div>
-      <div className="v3fs-collect-board" ref={boardRef}>
-        {columns.map((col) => (
-          <div key={col.key} className="v3fs-collect-col">
-            <div className="v3fs-collect-col-h"><span className={`v3fs-cdot ${col.key}`} aria-hidden="true" />{col.label}<span className="v3fs-cn">{col.items.length}</span></div>
-            {col.items.map(({ s, coll }) => (
-              <IntervieweeCard key={s.id} program={program} movementId={movementId} stakeholder={s} captureField={captureField}
-                coll={coll} open={openIds.has(s.id)} onOpenChange={(isOpen) => setCardOpen(s.id, isOpen)}
-                docsStale={docsStale} regenerating={regenerating} onRegenerateStale={onRegenerateStale}
-                approvalItems={approvalByName.get(s.name.trim().toLowerCase())?.items}
-                onSendForApproval={onSendForApproval}
-                onSaveInputs={onSaveInputs} onMintFollowUp={onMintFollowUp} onScheduleFollowUp={onScheduleFollowUp}
-                onFocusPerson={onFocusPerson} onCaptured={onCaptured} onDocumentCaptured={onDocumentCaptured} />
-            ))}
-          </div>
-        ))}
-      </div>
-      {movementId === "envision" ? (
-        <ReviewShare program={program} movementId={movementId} reviewKind="agentify" onMintReview={onMintReview} />
-      ) : null}
-      {movementId === "listen" ? (
-        <ReviewShare program={program} movementId={movementId} reviewKind="listen-workflow" onMintReview={onMintReview} />
-      ) : null}
+      {areaOrganized ? (
+        <div className="v3fs-lanes">
+          {laneData.map((lane) => (
+            <AreaLane key={lane.area} area={lane.area} row={lane.row} heard={lane.heard} total={lane.total}
+              readyLabel={movementId === "listen" ? "Ready to envision" : movementId === "envision" ? "Ready to show" : "All reviewed"}
+              defaultOpen={lane.total === 0 || lane.heard < lane.total}>
+              {lane.list.map(renderCard)}
+            </AreaLane>
+          ))}
+        </div>
+      ) : (
+        <div className="v3fs-collect-board" ref={boardRef}>
+          {columns.map((col) => (
+            <div key={col.key} className="v3fs-collect-col">
+              <div className="v3fs-collect-col-h"><span className={`v3fs-cdot ${col.key}`} aria-hidden="true" />{col.label}<span className="v3fs-cn">{col.items.length}</span></div>
+              {col.items.map(renderCard)}
+            </div>
+          ))}
+        </div>
+      )}
       <GovernedExceptions program={program} movementId={movementId} onSaveInputs={onSaveInputs} />
     </div>
   );
 }
 
 /**
- * The AREA BOARD — the parallel-work view. Each business area advances through
- * the phases on its own clock: an area whose voices are all heard is ready to
- * Envision and Show while other areas are still collecting. Shown once the
- * programme spans more than one area.
+ * One AREA LANE — a business area's own collection strip. Its header carries the
+ * area's shape (workflows · terms), a voices-heard bar, and a ready/collecting
+ * state; its body holds that area's stakeholder cards. Collapsible, so a
+ * finished area folds away while the operator works the ones still open.
  */
-function AreaBoard({ program }: { program: ProgramSummary }) {
-  const rows = areaProgress(program);
-  if (rows.length < 2) return null;
-  const ready = rows.filter((r) => r.listenReady).length;
-  return (
-    <section className="v3fs-areac" aria-label="Areas">
-      <header className="v3fs-areac-h">
-        <span className="v3fs-areac-ic" aria-hidden="true">▦</span>
-        <b>Areas</b>
-        <span className="v3fs-areac-sub">each moves on its own clock</span>
-        <span className="v3fs-areac-count">{ready}<i>/{rows.length} ready</i></span>
-      </header>
-      <ul className="v3fs-areac-list">
-        {rows.map((r) => {
-          const pct = r.personas.length ? Math.round((r.heard.length / r.personas.length) * 100) : 0;
-          return (
-            <li key={r.area} className={`v3fs-areac-row${r.listenReady ? " ready" : ""}`}>
-              <div className="v3fs-areac-name">
-                <b>{r.area}</b>
-                <span>{r.workflows} workflow{r.workflows === 1 ? "" : "s"} · {r.entities} term{r.entities === 1 ? "" : "s"}</span>
-              </div>
-              <div className="v3fs-areac-voices" title={r.personas.length ? `${r.heard.length} of ${r.personas.length} voices heard` : "no named voices yet"}>
-                <div className="v3fs-areac-bar"><span style={{ width: `${pct}%` }} /></div>
-                <span>{r.personas.length ? `${r.heard.length}/${r.personas.length}` : "—"}</span>
-              </div>
-              <span className={`v3fs-areac-st${r.listenReady ? " ready" : ""}`}>
-                <i aria-hidden="true">{r.listenReady ? "●" : "◔"}</i>{r.listenReady ? "Ready to envision" : "Collecting"}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
-    </section>
-  );
-}
-
-/**
- * Shareable stakeholder REVIEWS — a visual input surface sent over a no-login
- * link. Envision shares each persona's workflow for an "agentify each step"
- * pass; Listen shares the ontology + current-state atlas for a "what's wrong or
- * missing" pass. The payload is projected from the record here and stored on
- * the pack; responses land back as evidence through the normal quarantine.
- */
-function ReviewShare({ program, movementId, reviewKind, onMintReview }: {
-  program: ProgramSummary;
-  movementId: string;
-  reviewKind: "agentify" | "ontology-atlas" | "listen-workflow";
-  onMintReview?: (input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string }) => Promise<string | null>;
+function AreaLane({ area, row, heard, total, ready, readyLabel, defaultOpen, children }: {
+  area: string;
+  row?: AreaProgress;
+  heard: number;
+  total: number;
+  ready?: boolean;
+  readyLabel: string;
+  defaultOpen: boolean;
+  children: ReactNode;
 }) {
-  const [links, setLinks] = useState<Record<string, string>>({});
-  const [copied, setCopied] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [note, setNote] = useState<string | null>(null);
-
-  // Per-persona reviews (agentify, listen-workflow) go to the people who act in
-  // the Atlas — each gets THEIR own workflow. The shared ontology+atlas review
-  // goes to every named voice, each commenting on the same map.
-  const perPersona = reviewKind === "agentify" || reviewKind === "listen-workflow";
-  const projectFor = (name: string): ReviewPayload | null =>
-    reviewKind === "agentify" ? projectAgentifyReview(program, name)
-      : reviewKind === "listen-workflow" ? projectListenWorkflowReview(program, name)
-        : projectOntologyAtlasReview(program);
-  const reviewers = perPersona
-    ? atlasPersonas(program).map((name) => ({ name, role: "" }))
-    : resolveMovementStakeholders(program, "listen")
-      .filter((s) => !s.isRole && s.name.trim())
-      .map((s) => ({ name: s.name, role: s.role }));
-  // Dedupe by name (an actor can appear under several workflows).
-  const seen = new Set<string>();
-  const uniqueReviewers = reviewers.filter((r) => {
-    const key = r.name.trim().toLowerCase();
-    if (!key || seen.has(key)) return false;
-    seen.add(key); return true;
-  });
-
-  const captureField = reviewKind === "agentify" ? "steeringConversation" : "interviewTranscripts";
-  const heading = reviewKind === "agentify" ? "Workflow agentification review"
-    : reviewKind === "listen-workflow" ? "Workflow & ontology review"
-      : "Ontology & current-state review";
-  const lead = reviewKind === "agentify"
-    ? "Send a persona their own workflow, step by step, and ask which steps an agent should take over. Their answers come back as evidence."
-    : reviewKind === "listen-workflow"
-      ? "Send a persona their own workflow to correct — add steps, fix what's wrong, narrate changes — and see it build as they type. Their edits come back as evidence."
-      : "Share how we've mapped the domain — the terms and the workflows — and ask each person what's wrong or missing. Their comments come back as evidence.";
-  const needsAtlas = "Generate the Current-State Atlas to share workflows for review.";
-  const needsBoth = "Generate the Domain Ontology and Current-State Atlas to share them for review.";
-
-  const share = async (name: string, role: string) => {
-    setNote(null);
-    setBusy(name);
-    try {
-      const review = projectFor(name);
-      if (!review || !onMintReview) {
-        setNote(reviewKind === "ontology-atlas" ? needsBoth : needsAtlas);
-        return;
-      }
-      const link = await copyTextFromAction(() => onMintReview({
-        movementId, who: name, role: role || "Reviewer", captureField, reviewKind,
-        review, questions: reviewFallbackQuestions(review), intro: review.intro,
-      }));
-      if (link) {
-        setLinks((prev) => ({ ...prev, [name]: link }));
-        setCopied(name);
-        window.setTimeout(() => setCopied((current) => (current === name ? null : current)), 2400);
-      } else {
-        setNote("Could not create the link — try again.");
-      }
-    } finally { setBusy(null); }
-  };
-
-  const ready = !!projectFor(perPersona ? (uniqueReviewers[0]?.name ?? "") : "");
-
+  const done = total > 0 && heard >= total;
+  const pct = total ? Math.round((heard / total) * 100) : 0;
+  const complete = ready ?? done;
   return (
-    <details className="v3fs-rvs" open={false}>
-      <summary>
-        <span className="v3fs-rvs-ic" aria-hidden="true">◇</span>
-        <b>{heading}</b>
-        <span className="v3fs-rvs-tag">shareable</span>
-      </summary>
-      <p className="v3fs-rvs-lead">{lead}</p>
-      {!ready ? (
-        <p className="v3fs-rvs-empty">{reviewKind === "ontology-atlas" ? needsBoth : needsAtlas}</p>
-      ) : !uniqueReviewers.length ? (
-        <p className="v3fs-rvs-empty">No {perPersona ? "workflow personas" : "people"} to share with yet.</p>
-      ) : (
-        <div className="v3fs-rvs-list">
-          {uniqueReviewers.map((r) => {
-            // Envision is gated per AREA: a persona can only be sent an
-            // agentification review once their area's Listen voices are all
-            // heard — so Marketing starts envisioning while Sales still collects.
-            const gated = reviewKind === "agentify" && !personaReadyToAdvance(program, r.name);
-            const areas = gated ? personaAreas(program, r.name) : [];
-            return (
-              <div key={r.name} className="v3fs-rvs-row">
-                <div className="v3fs-rvs-who">
-                  <b>{r.name}</b>
-                  {r.role ? <span>{r.role}</span> : null}
-                </div>
-                {gated ? (
-                  <span className="v3fs-rvs-gate" title={`Finish hearing ${areas.join(", ") || "this area"} in Listen first`}>
-                    ◔ Listening open{areas.length ? ` — ${areas[0]}` : ""}
-                  </span>
-                ) : (
-                  <button type="button" className="v3fs-btn" disabled={busy === r.name} onClick={() => void share(r.name, r.role)}>
-                    {busy === r.name ? "…" : copied === r.name ? "Copied ✓" : links[r.name] ? "⎘ Copy link" : "⎘ Create & copy link"}
-                  </button>
-                )}
-                {links[r.name] ? (
-                  <span className="v3fs-rvs-linkrow">
-                    <input readOnly value={links[r.name]} onFocus={(e) => e.currentTarget.select()} aria-label={`Review link for ${r.name}`} />
-                  </span>
-                ) : null}
-              </div>
-            );
-          })}
+    <details className={`v3fs-lane${complete ? " ready" : ""}`} open={defaultOpen}>
+      <summary className="v3fs-lane-h">
+        <span className="v3fs-lane-ic" aria-hidden="true">▦</span>
+        <div className="v3fs-lane-id">
+          <b>{area}</b>
+          {row ? <span>{row.workflows} workflow{row.workflows === 1 ? "" : "s"} · {row.entities} term{row.entities === 1 ? "" : "s"}</span> : null}
         </div>
-      )}
-      {note ? <div className="v3fs-ivc-note warn">{note}</div> : null}
+        <div className="v3fs-lane-prog" title={`${heard} of ${total} heard in ${area}`}>
+          <div className="v3fs-lane-bar"><span style={{ width: `${pct}%` }} /></div>
+          <span>{total ? `${heard}/${total}` : "—"}</span>
+        </div>
+        <span className={`v3fs-lane-st${complete ? " ready" : ""}`}>
+          <i aria-hidden="true">{complete ? "●" : "◔"}</i>{complete ? readyLabel : "Collecting"}
+        </span>
+        <span className="v3fs-lane-chev" aria-hidden="true" />
+      </summary>
+      <div className="v3fs-lane-b">{children}</div>
     </details>
   );
 }
@@ -497,12 +396,15 @@ function GovernedExceptions({ program, movementId, onSaveInputs }: {
   );
 }
 
-function IntervieweeCard({ program, movementId, stakeholder, captureField, coll, open, onOpenChange, docsStale, regenerating, onRegenerateStale, approvalItems, onSendForApproval, onSaveInputs, onMintFollowUp, onScheduleFollowUp, onFocusPerson, onCaptured, onDocumentCaptured }: {
+function IntervieweeCard({ program, movementId, stakeholder, captureField, coll, open, onOpenChange, primaryArea, docsStale, regenerating, onRegenerateStale, approvalItems, onSendForApproval, onSaveInputs, onMintFollowUp, onMintReview, onScheduleFollowUp, onFocusPerson, onCaptured, onDocumentCaptured }: {
   program: ProgramSummary;
   movementId: string;
   stakeholder: MovementStakeholder;
   captureField: string;
   coll: StakeholderCollection;
+  /** The one area this card is filed under (area-organized movements) — scopes
+   * their review link to that area's workflows so they review THEIR world. */
+  primaryArea?: string;
   /** Open state is owned by the board (controlled) so minting a link — which
    * moves the card to another column and remounts it — never collapses it. */
   open: boolean;
@@ -519,6 +421,9 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
   onSendForApproval?: (input: { artifactId: string; movementId: string; artifactTitle: string; approver: { name: string; role: string; email?: string }; snapshot?: string }) => Promise<string | null>;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
   onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
+  /** Mint the ONE unified link for Listen/Envision — their questions folded into
+   * a projected visual review (their workflow + the domain terms). */
+  onMintReview?: (input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string }) => Promise<string | null>;
   /** Put the meeting on the programme calendar (attested) — the .ics download
    * is the invite; this is the record of it. */
   onScheduleFollowUp?: (movementId: string, who: string, date: string) => Promise<void>;
@@ -602,8 +507,38 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
   // A minted link is only "the" link while its questions still match the
   // current script — when the script has moved on, the old link goes stale and
   // Copy/Send mint a fresh pack (which supersedes the unanswered one).
-  const packMatches = !!pack && (Array.isArray(pack.questions) ? pack.questions.map(String).join(" ") : "")
-    === linkQuestions.slice(0, 8).join(" ");
+  // Listen/Envision bundle the person's questions into a projected VISUAL
+  // review — their own workflow (scoped to their area) plus the domain terms
+  // — so the stakeholder opens ONE link with everything. Frame/Show mint a
+  // plain questions link (the edge folds the demo walkthrough onto a Show pack).
+  const reviewKind: "listen-workflow" | "agentify" | null =
+    movementId === "listen" ? "listen-workflow" : movementId === "envision" ? "agentify" : null;
+  const reviewForLink = useMemo(() => {
+    if (!reviewKind) return null;
+    const base = reviewKind === "listen-workflow"
+      ? projectListenWorkflowReview(program, name)
+      : projectAgentifyReview(program, name);
+    if (!base) return null;
+    if (primaryArea && primaryArea !== GENERAL_AREA) {
+      const scoped = base.workflows.filter((w) => w.area === primaryArea);
+      if (scoped.length) base.workflows = scoped;
+    }
+    // Fold their gap script into a listen-workflow review's question list (the
+    // agentify surface has none) so the one link still asks it below the flow.
+    if (base.kind === "listen-workflow") {
+      const seen = new Set(base.questions.map((q) => q.trim().toLowerCase()));
+      const extra = linkQuestions.filter((q) => q.trim() && !seen.has(q.trim().toLowerCase()));
+      base.questions = [...extra, ...base.questions].slice(0, 10);
+    }
+    return base;
+  }, [program, name, reviewKind, primaryArea, linkQuestions]);
+  // A questions link is "the" link only while its questions still match the
+  // current script; a review link stands as long as it exists (its content is
+  // the projected review, not the volatile gap script).
+  const isReviewPack = !!pack && String(pack.role ?? "").startsWith("review:");
+  const packMatches = isReviewPack
+    || (!!pack && (Array.isArray(pack.questions) ? pack.questions.map(String).join(" ") : "")
+      === linkQuestions.slice(0, 8).join(" "));
   // The pending chip carries the per-artifact count — "1/2 approved" — so a
   // card that stays pending after one verdict reads as "one more to go", not
   // as a contradiction with the answered link.
@@ -660,16 +595,30 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
 
   const ensureLink = async (): Promise<string | null> => {
     if (effectiveLink) return effectiveLink;
-    if (!onMintFollowUp || !linkQuestions.length) {
-      setLinkNote(!onMintFollowUp ? "Links aren't available here." : "Nothing to ask yet — the script is empty.");
-      return null;
-    }
     setLinkBusy(true);
     try {
-      const link = await onMintFollowUp({ movementId, who: name, questions: linkQuestions, captureField });
-      if (link) setMintedLink(link);
-      else setLinkNote("Could not create the link — try again.");
-      return link;
+      // The ONE unified link: a projected visual review (Listen/Envision) that
+      // carries their questions, else a plain questions link (Frame/Show — the
+      // edge folds a Show pack's demo walkthrough on automatically).
+      if (reviewForLink && onMintReview) {
+        const link = await onMintReview({
+          movementId, who: name, role: role || "Reviewer", captureField,
+          reviewKind: reviewForLink.kind, review: reviewForLink,
+          questions: linkQuestions.length ? linkQuestions : reviewFallbackQuestions(reviewForLink),
+          intro: reviewForLink.intro,
+        });
+        if (link) setMintedLink(link);
+        else setLinkNote("Could not create the link — try again.");
+        return link;
+      }
+      if (onMintFollowUp && linkQuestions.length) {
+        const link = await onMintFollowUp({ movementId, who: name, questions: linkQuestions, captureField });
+        if (link) setMintedLink(link);
+        else setLinkNote("Could not create the link — try again.");
+        return link;
+      }
+      setLinkNote(!onMintFollowUp && !onMintReview ? "Links aren't available here." : "Nothing to ask yet — the script is empty.");
+      return null;
     } catch {
       setLinkNote("Could not create the link — try again.");
       return null;

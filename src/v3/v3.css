@@ -6643,34 +6643,43 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 
 /* Area board — the parallel-work view, one compact status card. Each business
    area is a row: name + voices-heard + a status chip, on its own clock. */
-.v3fs-areac {margin-bottom:20px;border:1px solid var(--fs-line);border-radius:14px;background:var(--v3-surface);
-  box-shadow:var(--fs-shadow);overflow:hidden}
-.v3fs-areac-h {display:flex;align-items:baseline;gap:9px;padding:12px 16px;border-bottom:1px solid var(--fs-line)}
-.v3fs-areac-ic {font-size:12px;color:var(--v3-accent-2);align-self:center}
-.v3fs-areac-h b {font-size:12.5px;font-weight:750;letter-spacing:.01em}
-.v3fs-areac-sub {font-size:11px;color:var(--v3-text-muted)}
-.v3fs-areac-count {margin-left:auto;font-family:var(--v3-font-mono);font-size:13px;font-weight:750;color:var(--v3-accent-2)}
-.v3fs-areac-count i {font-size:10.5px;font-weight:600;color:var(--v3-text-muted);font-style:normal;margin-left:1px}
-.v3fs-areac-list {list-style:none;margin:0;padding:0}
-.v3fs-areac-row {display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:18px;padding:11px 16px;
-  border-bottom:1px solid var(--fs-line);transition:background .12s}
-.v3fs-areac-row:last-child {border-bottom:none}
-.v3fs-areac-row:hover {background:color-mix(in srgb,var(--v3-accent-2) 3%,transparent)}
-.v3fs-areac-name {display:flex;flex-direction:column;gap:2px;min-width:0}
-.v3fs-areac-name b {font-size:13.5px;font-weight:650;color:var(--v3-text)}
-.v3fs-areac-name span {font-size:11px;color:var(--v3-text-muted)}
-.v3fs-areac-voices {display:flex;align-items:center;gap:8px;font-family:var(--v3-font-mono);font-size:10.5px;font-weight:700;color:var(--v3-text-muted)}
-.v3fs-areac-bar {width:64px;height:5px;border-radius:99px;background:var(--fs-line);overflow:hidden}
-.v3fs-areac-bar > span {display:block;height:100%;background:var(--v3-green);border-radius:99px;transition:width .25s ease}
-.v3fs-areac-st {display:inline-flex;align-items:center;gap:6px;justify-self:end;white-space:nowrap;
-  font-size:11px;font-weight:700;letter-spacing:.01em;padding:5px 12px;border-radius:99px;
-  color:var(--v3-amber);background:var(--v3-amber-soft)}
-.v3fs-areac-st i {font-size:8px;font-style:normal;line-height:1}
-.v3fs-areac-st.ready {color:var(--v3-green);background:color-mix(in srgb,var(--v3-green) 12%,transparent)}
+/* ── Collection AREA LANES — each business area is its own collapsible strip of
+   stakeholder cards, headed by the area's shape (workflows · terms), a
+   voices-heard bar, and a collecting/ready state. The lane body lays its cards
+   out on the same responsive grid the status board uses. ─────────────────── */
+.v3fs-lanes {display:flex;flex-direction:column;gap:14px}
+.v3fs-lane {border:1px solid var(--fs-line);border-radius:16px;background:var(--v3-surface);box-shadow:var(--fs-shadow);overflow:hidden}
+.v3fs-lane.ready {border-color:color-mix(in srgb,var(--v3-green) 38%,var(--fs-line))}
+.v3fs-lane-h {display:grid;grid-template-columns:auto 1fr auto auto auto;align-items:center;gap:14px;
+  padding:13px 16px;cursor:pointer;list-style:none;user-select:none;transition:background .12s}
+.v3fs-lane-h::-webkit-details-marker {display:none}
+.v3fs-lane-h:hover {background:color-mix(in srgb,var(--v3-accent-2) 3%,transparent)}
+.v3fs-lane-ic {display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;flex-shrink:0;
+  border-radius:9px;background:var(--fs-indigo-wash);color:var(--v3-accent-2);font-size:13px}
+.v3fs-lane.ready .v3fs-lane-ic {background:color-mix(in srgb,var(--v3-green) 12%,transparent);color:var(--v3-green)}
+.v3fs-lane-id {display:flex;flex-direction:column;gap:1px;min-width:0}
+.v3fs-lane-id b {font-size:14.5px;font-weight:750;letter-spacing:-.01em;color:var(--v3-text)}
+.v3fs-lane-id span {font-size:11px;color:var(--v3-text-muted)}
+.v3fs-lane-prog {display:flex;align-items:center;gap:8px;font-family:var(--v3-font-mono);font-size:10.5px;font-weight:700;color:var(--v3-text-muted)}
+.v3fs-lane-bar {width:56px;height:5px;border-radius:99px;background:var(--fs-line);overflow:hidden}
+.v3fs-lane-bar > span {display:block;height:100%;background:var(--v3-green);border-radius:99px;transition:width .25s ease}
+.v3fs-lane-st {display:inline-flex;align-items:center;gap:6px;white-space:nowrap;font-size:11px;font-weight:700;
+  letter-spacing:.01em;padding:5px 12px;border-radius:99px;color:var(--v3-amber);background:var(--v3-amber-soft)}
+.v3fs-lane-st i {font-size:8px;font-style:normal;line-height:1}
+.v3fs-lane-st.ready {color:var(--v3-green);background:color-mix(in srgb,var(--v3-green) 12%,transparent)}
+.v3fs-lane-chev {width:8px;height:8px;border-right:2px solid var(--v3-text-muted);border-bottom:2px solid var(--v3-text-muted);
+  transform:rotate(-45deg);transition:transform .18s ease;opacity:.55}
+.v3fs-lane[open] .v3fs-lane-chev {transform:rotate(45deg)}
+.v3fs-lane-b {display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px;align-items:start;
+  padding:8px 14px 15px;border-top:1px solid var(--fs-line)}
+.v3fs-lane-b details.v3fs-ivc[open] {grid-column:1/-1}
+.v3fs-lane-b .v3fs-ivc {box-shadow:var(--fs-shadow)}
 @media (max-width:560px){
-  .v3fs-areac-row {grid-template-columns:1fr auto;gap:10px}
-  .v3fs-areac-voices {grid-column:1;grid-row:2}
-  .v3fs-areac-st {grid-column:2;grid-row:1/3}
+  .v3fs-lane-h {grid-template-columns:auto 1fr auto;gap:9px}
+  .v3fs-lane-prog {grid-column:2;grid-row:2;justify-self:start}
+  .v3fs-lane-st {grid-column:3;grid-row:1}
+  .v3fs-lane-chev {display:none}
+  .v3fs-lane-b {grid-template-columns:1fr}
 }
 
 /* Shareable review panel (operator side) — mint a per-person link to a visual

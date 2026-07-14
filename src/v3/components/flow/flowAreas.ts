@@ -119,6 +119,61 @@ export function personaAreas(program: ProgramSummary, persona: string): string[]
   return [...set];
 }
 
+/** Token overlap between a roster label and an Atlas actor — "Enrollment Lead"
+ * finds the actor "Enrollment Coordinator" on the shared "enrollment" token, so
+ * named people map to the area their role acts in even when the strings differ.
+ * Ignores short/common stop tokens so "the Manager" doesn't match everything. */
+const AREA_STOP_TOKENS = new Set(["the", "and", "for", "lead", "team", "senior", "junior", "head", "chief", "officer", "manager", "director", "specialist", "analyst", "associate", "coordinator", "representative", "rep", "exec", "executive"]);
+function labelTokens(text: string): Set<string> {
+  return new Set(text.toLowerCase().split(/[^a-z0-9]+/)
+    .map((token) => token.replace(/s$/, ""))
+    .filter((token) => token.length >= 3 && !AREA_STOP_TOKENS.has(token)));
+}
+function labelsOverlap(a: string, b: string): boolean {
+  const ta = labelTokens(a);
+  const tb = labelTokens(b);
+  if (!ta.size || !tb.size) return false;
+  for (const token of tb) if (ta.has(token)) return true;
+  return false;
+}
+
+/** The single area a stakeholder is filed under on the collection board. Scores
+ * each atlas area by how well the person matches its workflows' actors — exact
+ * actor equality weighs heaviest, then the person's own role keyword aligned to
+ * an atlas area, then a fuzzy actor-token overlap — and files them under the top
+ * area. Keeps a person in exactly ONE lane so no card is ever listed twice.
+ * Scoring (not first-match) stops a Sales SME landing in a Marketing workflow
+ * that merely happens to include a sales actor. */
+export function stakeholderPrimaryArea(program: ProgramSummary, name: string, role?: string): string {
+  const workflows = atlasWorkflows(program);
+  const labels = [role, name].filter((v): v is string => !!v && v.trim().length > 0).map((v) => v.trim().toLowerCase());
+  if (!labels.length) return GENERAL_AREA;
+  const score = new Map<string, number>();
+  const bump = (area: string, n: number) => score.set(area, (score.get(area) ?? 0) + n);
+  for (const workflow of workflows) {
+    const area = workflowArea(workflow);
+    const steps = Array.isArray(workflow.steps) ? workflow.steps.filter(isRecord) : [];
+    for (const step of steps) {
+      const actor = str(step.actor).trim();
+      if (!actor) continue;
+      for (const label of labels) {
+        if (actor.toLowerCase() === label) bump(area, 10);
+        else if (labelsOverlap(actor, label)) bump(area, 2);
+      }
+    }
+  }
+  // The person's own role keyword is a strong signal — align it to the atlas
+  // area that shares it (canonical "Legal & Compliance" → the atlas's "Legal").
+  const inferred = inferArea(`${role ?? ""} ${name}`);
+  if (inferred) for (const area of programAreas(program)) {
+    if (area === inferred || labelsOverlap(area, inferred)) bump(area, 6);
+  }
+  let best = GENERAL_AREA;
+  let top = 0;
+  for (const [area, sc] of score) if (sc > top) { top = sc; best = area; }
+  return best;
+}
+
 /** The areas whose Listen voices are all heard — ready to move to Envision/Show
  * while other areas keep collecting. */
 export function readyAreas(program: ProgramSummary): Set<string> {
