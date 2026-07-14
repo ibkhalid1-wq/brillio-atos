@@ -57,7 +57,8 @@ describe("gate ↔ cards", () => {
     for (const artifacts of [[art({})], [art({ stale: true })], [art({ gaps: 2 })], []]) {
       const checks = gateChecklist(programme(FULL_FRAME), frame(), artifacts);
       const readiness = gateReadiness(programme(FULL_FRAME), frame(), artifacts, checks);
-      const done = checks.filter((c) => c.done).length;
+      // Advisory rows don't gate, so the verdict arithmetic counts blocking rows.
+      const done = checks.filter((c) => c.done && !c.advisory).length;
       if (readiness.kind !== "demonstrated" && readiness.kind !== "signal") {
         expect(readiness.kind === "ready" ? readiness.detail : readiness.headline).toContain(`${done}`);
       }
@@ -151,15 +152,17 @@ describe("the record's questions hold the gate and reach the script", () => {
     expect(issues[0].text).toContain("Order");
   });
 
-  it("the gate holds — and names the first question — until the record stops asking", () => {
+  it("open questions are ADVISORY — surfaced and named, but they no longer hold the gate", () => {
     const row = gateChecklist(listenP(), listen(), [art({ id: "domain-ontology", title: "Domain Ontology" })])
       .find((c) => c.id === "issues")!;
     expect(row.done).toBe(false);
+    expect(row.advisory).toBe(true);
     expect(row.label).toBe("Open questions & ambiguities — 2 to resolve");
     expect(row.why).toContain("Order");
+    // With the structural criteria met, the advisory row does NOT block readiness.
     const readiness = gateReadiness(listenP(), listen(), [art({ id: "domain-ontology", title: "Domain Ontology" })],
       gateChecklist(listenP(), listen(), [art({ id: "domain-ontology", title: "Domain Ontology" })]));
-    expect(readiness.tone).not.toBe("green");
+    expect(readiness.tone).toBe("green");
   });
 
   it("the same questions land on the follow-up script for stakeholders", () => {

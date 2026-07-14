@@ -239,8 +239,11 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
         // sign-off on Listen's documents, cross-artifact consistency on
         // Envision — the gate ring and the Gate tab read the same augmented list.
         const checks = [...gateChecklist(program, movement, artifacts), ...gateAugmentations(program, movement.id)];
+        // Advisory rows (persona coverage, emails, open questions) inform but
+        // don't gate — the gauge and counts read the STRUCTURAL criteria only.
+        const blockingChecks = checks.filter((item) => !item.advisory);
         const readiness = gateReadiness(program, movement, artifacts, checks);
-        const openChecks = checks.filter((item) => !item.done).length;
+        const openChecks = blockingChecks.filter((item) => !item.done).length;
         void openChecks;
         // Audit F-001 read-time backstop: a recorded approval whose criteria
         // aren't met is a forgery masquerading as a gate — surface it, loudly.
@@ -259,7 +262,7 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
         const sumHeard = sumStakeholders.length - unheard.length;
         const sumWord = movement.id === "show" ? "reviewed" : movement.id === "listen" || movement.id === "frame" ? "heard" : "consulted";
         const sumDocsCurrent = artifacts.filter((a) => a.present && !a.stale && a.gaps === 0).length;
-        const sumChecksDone = checks.filter((c) => c.done).length;
+        const sumChecksDone = blockingChecks.filter((c) => c.done).length;
         const staleArtifacts = artifacts.filter((a) => a.present && a.stale);
         const missingArtifacts = artifacts.filter((a) => !a.present);
         // The "Up next" queue — the loop's frontier, ranked. Stale paper first
@@ -332,7 +335,7 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
           if (readiness.kind === "ready" && onRecordGate) {
             upNext.push({ icon: "⚑", label: "Record the gate — demonstrated", toTab: "gate" });
           }
-          if (!upNext.length && checks.length && sumChecksDone < checks.length) {
+          if (!upNext.length && blockingChecks.length && sumChecksDone < blockingChecks.length) {
             upNext.push({ icon: "○", label: "Review the open gate criteria", toTab: "gate" });
           }
         }
@@ -341,7 +344,7 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
         const hasPeople = sumStakeholders.length > 0;
         const tabKey: MovementTab = movementTab[movement.id] ?? leadTab(movement.id);
         const goTab = (t: MovementTab) => setMovementTab((prev) => ({ ...prev, [movement.id]: t }));
-        const gaugePct = checks.length ? Math.round((100 * sumChecksDone) / checks.length) : (readiness.tone === "green" ? 100 : 0);
+        const gaugePct = blockingChecks.length ? Math.round((100 * sumChecksDone) / blockingChecks.length) : (readiness.tone === "green" ? 100 : 0);
         // Stage chips read as a sentence — glyph + meaning per stage ("● 3
         // waiting → ⟳ 2 stale → ◔ 8/11"), so the bar IS the loop's state.
         const collectState = !hasPeople && !evidence.length
@@ -363,8 +366,8 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
           ? { glyph: "✓", text: "demonstrated", tone: "ok" }
           : readiness.kind === "ready"
             ? { glyph: "⚑", text: "ready", tone: "ok" }
-            : checks.length
-              ? { glyph: "◔", text: `${sumChecksDone}/${checks.length}`, tone: readiness.tone === "amber" ? "warn" : "dim" }
+            : blockingChecks.length
+              ? { glyph: "◔", text: `${sumChecksDone}/${blockingChecks.length}`, tone: readiness.tone === "amber" ? "warn" : "dim" }
               : { glyph: "○", text: "", tone: "dim" };
         const tabDefs: Array<{ key: MovementTab; label: string; state: { glyph: string; text: string; tone: string } | null; show: boolean }> = [
           { key: "collect", label: "Collect", state: collectState, show: true },
@@ -388,10 +391,10 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                 that move it. The spine regeneration lives in the queue with
                 live progress, not in a separate banner. */}
             <div className="v3fs-movebar" role="status">
-              {checks.length ? (
+              {blockingChecks.length ? (
                 <button type="button" className={`v3fs-mgauge ${readiness.tone}`} style={{ "--pct": `${gaugePct}%` } as React.CSSProperties}
-                  onClick={() => goTab("gate")} title={`Gate ${sumChecksDone}/${checks.length} — ${readiness.headline}`}>
-                  <span className="v3fs-mgauge-c">{readiness.kind === "demonstrated" ? <b>✓</b> : <><b>{sumChecksDone}</b><i>/{checks.length}</i></>}</span>
+                  onClick={() => goTab("gate")} title={`Gate ${sumChecksDone}/${blockingChecks.length} — ${readiness.headline}`}>
+                  <span className="v3fs-mgauge-c">{readiness.kind === "demonstrated" ? <b>✓</b> : <><b>{sumChecksDone}</b><i>/{blockingChecks.length}</i></>}</span>
                 </button>
               ) : null}
               <div className="v3fs-movebar-txt">
@@ -880,12 +883,14 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                                 : "Met by generating / working the movement";
                         // Amber emphasis for any present-but-open record row;
                         // the box glyph says why: ⟳ evidence moved, ! gaps declared.
-                        const attention = group === "record" && !item.done && !!artifact?.present;
-                        const boxGlyph = item.done ? "✓" : attention ? (artifact?.stale ? "⟳" : "!") : "";
+                        const attention = group === "record" && !item.done && !!artifact?.present && !item.advisory;
+                        const boxGlyph = item.done ? "✓" : attention ? (artifact?.stale ? "⟳" : "!") : item.advisory ? "◦" : "";
                         return (
                           <Fragment key={item.id}>
                             {grouped && group !== prevGroup ? (() => {
-                              const members = checks.filter((c) => (c.group ?? "evidence") === group);
+                              // Advisory rows are shown but not counted — the
+                              // group tally reflects the criteria that gate.
+                              const members = checks.filter((c) => (c.group ?? "evidence") === group && !c.advisory);
                               const met = members.filter((c) => c.done).length;
                               const name = group === "evidence" ? "Evidence" : group === "record" ? "Documents" : "Inbox";
                               const count = group === "judgment"
@@ -899,14 +904,15 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                             })() : null}
                             <button
                               type="button"
-                              className={`v3fs-check${item.done ? " done" : ""}${attention ? " stale" : ""}`}
+                              className={`v3fs-check${item.done ? " done" : ""}${attention ? " stale" : ""}${item.advisory ? " advisory" : ""}`}
                               disabled={!onClick}
                               onClick={onClick}
-                              title={title}
+                              title={item.advisory ? "Advisory — worth doing, but it doesn't hold the gate" : title}
                             >
                               <span className="v3fs-check-box" aria-hidden="true">{boxGlyph}</span>
                               <span className="v3fs-check-l">
                                 {item.label}
+                                {item.advisory ? <span className="v3fs-check-adv">advisory</span> : null}
                                 {item.done && item.why ? <span className="v3fs-check-why">{item.why}</span> : null}
                               </span>
                             </button>

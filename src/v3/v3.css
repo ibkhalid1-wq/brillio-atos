@@ -5791,6 +5791,12 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-check.done .v3fs-check-l {color:var(--v3-text-muted)}
 /* Provenance under a met criterion: what on the record satisfies it. */
 .v3fs-check-why {display:block;font-family:var(--v3-font-mono);font-size:9.5px;line-height:1.5;color:var(--v3-text-muted);opacity:.85;overflow-wrap:anywhere}
+/* Advisory rows — informational, never gating: dimmed, hollow marker, a tag. */
+.v3fs-check.advisory {opacity:.82}
+.v3fs-check.advisory .v3fs-check-box {border-style:dashed;border-color:var(--v3-text-muted);background:transparent;color:var(--v3-text-muted)}
+.v3fs-check.advisory .v3fs-check-l {color:var(--v3-text-secondary)}
+.v3fs-check-adv {display:inline-block;margin-left:7px;font-size:8.5px;font-weight:750;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--v3-text-muted);background:var(--fs-line);border-radius:99px;padding:1px 7px;vertical-align:1px}
 
 /* The reading pane: full-document drill-down for every generated artifact. */
 .v3fs-doc-backdrop {position:fixed;inset:0;background:rgba(15,16,32,.5);backdrop-filter:blur(8px);z-index:80}

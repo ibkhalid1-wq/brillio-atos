@@ -2554,7 +2554,7 @@ export default function AppShellV3() {
                 const unmet = [
                   ...gateChecklist(activeProgram, movement, movementArtifacts(activeProgram, movement)),
                   ...gateAugmentations(activeProgram, movementId),
-                ].filter((item) => !item.done);
+                ].filter((item) => !item.done && !item.advisory);
                 if (unmet.length) {
                   pushV3Toast(
                     `Not recorded — ${unmet.length} gate criteri${unmet.length === 1 ? "on is" : "a are"} no longer met: ${unmet.slice(0, 2).map((item) => item.label).join("; ")}${unmet.length > 2 ? "…" : ""}`,

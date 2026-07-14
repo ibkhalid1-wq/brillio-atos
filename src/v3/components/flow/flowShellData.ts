@@ -638,6 +638,12 @@ export interface GateCheckItem {
   id: string;
   label: string;
   done: boolean;
+  /** ADVISORY rows inform but do not GATE — a stakeholder-completeness item
+   * (a persona nobody speaks for, a missing email, a document's open question)
+   * that the operator should see but that must not hold the movement closed.
+   * Readiness, the gate gauge and the write-time check all ignore advisory
+   * rows; only the structural criteria block. */
+  advisory?: boolean;
   /** Which facet of readiness the row belongs to; evidence when absent. */
   group?: "evidence" | "record" | "judgment";
   /** Editor field to land on when the item is worked (input:<fieldId>). */
@@ -825,6 +831,7 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
         return [{
           id: "kit-personas",
           group: "record" as const,
+          advisory: true,
           label: personas.length === 0
             ? "Workflow personas inventoried"
             : voiceless.length
@@ -852,6 +859,7 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
         return [{
           id: "kit-emails",
           group: "record" as const,
+          advisory: true,
           label: missing ? `Stakeholder emails on file — ${missing} missing` : "Stakeholder emails on file",
           done: missing === 0,
           why: missing ? "Response links need an address — add emails in the Discovery Kit" : undefined,
@@ -860,6 +868,7 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
       ...(artifacts.some((artifact) => artifact.present) ? [{
         id: "issues",
         group: "record" as const,
+        advisory: true,
         label: openIssues.length
           ? `Open questions & ambiguities — ${openIssues.length} to resolve`
           : "No open questions or ambiguities",
@@ -921,6 +930,9 @@ export function gateReadiness(
   if (program.gateReviews?.[movement.id]?.status === "approved") {
     return { tone: "green", kind: "demonstrated", headline: "Demonstrated — gate recorded" };
   }
+  // Advisory rows inform but never gate — readiness reads the STRUCTURAL
+  // criteria only, so a movement closes once those are met.
+  checks = checks.filter((item) => !item.advisory);
   if (!checks.length) {
     const signal = gateSignal(program, movement, artifacts);
     return { tone: signal.tone, kind: "signal", headline: signal.text };

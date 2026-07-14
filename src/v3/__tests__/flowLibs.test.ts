@@ -1058,14 +1058,15 @@ describe("gateReadiness — one composed verdict over the closed loop", () => {
     const r = verdict(programme({}), [art()]);
     expect(r.kind).toBe("open");
     expect(r.tone).toBe("dim");
-    expect(r.headline).toBe("3 of 9 criteria met");
+    // Advisory rows (open questions) are excluded from the gating count.
+    expect(r.headline).toBe("2 of 8 criteria met");
   });
 
   it("criteria met but a document stale → amber, the record trails", () => {
     const r = verdict(metFrame(), [art({ stale: true }), art({ id: "charter", title: "Transformation Charter" })]);
     expect(r.kind).toBe("trails");
     expect(r.tone).toBe("amber");
-    expect(r.headline).toBe("9 of 10 criteria met");
+    expect(r.headline).toBe("8 of 9 criteria met");
     expect(r.detail).toBe("Documents are out of date — evidence changed");
   });
 
@@ -1073,9 +1074,8 @@ describe("gateReadiness — one composed verdict over the closed loop", () => {
     const r = verdict(metFrame(), [art({ gaps: 2 })]);
     expect(r.kind).toBe("gaps");
     expect(r.tone).toBe("amber");
-    expect(r.headline).toBe("8 of 9 criteria met");
-    // The detail names the actual open row — "emails missing" or a specific
-    // document's gaps — never a generic assumption.
+    expect(r.headline).toBe("7 of 8 criteria met");
+    // The detail names the actual open row — a specific document's gaps.
     expect(r.detail).toBe("Discovery Kit — 2 open gaps");
   });
 
@@ -1098,7 +1098,7 @@ describe("gateReadiness — one composed verdict over the closed loop", () => {
     const r = verdict(p, [art()]);
     expect(r.kind).toBe("judgment");
     expect(r.tone).toBe("amber");
-    expect(r.headline).toBe("8 of 9 criteria met");
+    expect(r.headline).toBe("7 of 8 criteria met");
     expect(r.detail).toBe("A decision is waiting in the Inbox");
   });
 
@@ -1106,7 +1106,21 @@ describe("gateReadiness — one composed verdict over the closed loop", () => {
     const r = verdict(metFrame(), [art()]);
     expect(r.kind).toBe("ready");
     expect(r.tone).toBe("green");
-    expect(r.detail).toBe("9 criteria met · documents current · Inbox clear");
+    expect(r.detail).toBe("8 criteria met · documents current · Inbox clear");
+  });
+
+  it("advisory rows never gate — structural criteria met + an open advisory row → still ready", () => {
+    const m = movement("frame");
+    const checks = [
+      { id: "fact", label: "Sponsor named", done: true },
+      { id: "art-charter", label: "Charter generated", done: true, group: "record" as const },
+      { id: "kit-emails", label: "Stakeholder emails on file — 2 missing", done: false, group: "record" as const, advisory: true },
+      { id: "issues", label: "Open questions & ambiguities — 3 to resolve", done: false, group: "record" as const, advisory: true },
+      { id: "inbox", label: "Inbox clear", done: true, group: "judgment" as const },
+    ];
+    const r = gateReadiness(programme({}), m, [], checks);
+    expect(r.kind).toBe("ready");
+    expect(r.tone).toBe("green");
   });
 
   it("an approved gate outranks everything", () => {
