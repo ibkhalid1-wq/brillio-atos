@@ -26,7 +26,7 @@ import { mapTranscriptSpeakers } from "@/v3/components/flow/flowTranscriptMap";
 import { gateApprovalIntegrity } from "@/v3/components/flow/flowGovernance";
 import { validateOntologyConstraints, hasBlockingOntologyViolations, partitionOntologyViolations } from "@/v3/components/flow/flowOntologyConstraints";
 import { readMetricRegistry, metricConsistency, metricById } from "@/v3/components/flow/flowMetricRegistry";
-import { readGovernedExceptions, withNewException, withResolvedException } from "@/v3/components/flow/flowExceptions";
+import { readGovernedExceptions, withNewException, withResolvedException, governedExceptionsForInbox } from "@/v3/components/flow/flowExceptions";
 import { projectAgentifyReview, projectOntologyAtlasReview, atlasPersonas, composeAgentifyAnswers, projectListenWorkflowReview, composeListenWorkflowAnswers } from "@/v3/components/flow/flowReviews";
 import { gateAugmentations } from "@/v3/components/flow/flowCrossValidation";
 import { programAreas, workflowArea, inferArea, areaProgress, personaAreas, personaReadyToAdvance } from "@/v3/components/flow/flowAreas";
@@ -574,6 +574,29 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
     const resolved = withResolvedException(added, added[0].id, "Legal signed the next day", "you");
     expect(resolved[0].status).toBe("resolved");
     expect(resolved[0].resolution).toMatch(/Legal signed/);
+  });
+
+  it("governedExceptionsForInbox: routes open deviations needing action, defers future-dated, skips resolved", () => {
+    const p = programme({ phaseInputs: {
+      listen: { _governedExceptions: JSON.stringify([
+        { id: "e1", scope: "standing waiver", justification: "j", status: "open", createdAt: "2026-07-01" },
+        { id: "e2", scope: "deferred", justification: "j", status: "open", reviewBy: "2999-01-01", createdAt: "2026-07-01" },
+        { id: "e3", scope: "overdue", justification: "j", status: "open", reviewBy: "2000-01-01", createdAt: "2026-07-01" },
+        { id: "e4", scope: "closed", justification: "j", status: "resolved", createdAt: "2026-07-01" },
+      ]) },
+      envision: { _governedExceptions: JSON.stringify([
+        { id: "e5", scope: "another movement", justification: "j", status: "open", createdAt: "2026-07-02" },
+      ]) },
+    } });
+    const inbox = governedExceptionsForInbox(p);
+    const ids = inbox.map((e) => e.id);
+    expect(ids).toEqual(expect.arrayContaining(["e1", "e3", "e5"])); // open + due, across movements
+    expect(ids).not.toContain("e2"); // future review → deferred out of the inbox
+    expect(ids).not.toContain("e4"); // resolved → not surfaced
+    expect(inbox[0].id).toBe("e3");  // overdue sorts first
+    expect(inbox.find((e) => e.id === "e3")?.overdue).toBe(true);
+    expect(inbox.find((e) => e.id === "e1")?.overdue).toBe(false);
+    expect(inbox.find((e) => e.id === "e5")?.movementId).toBe("envision");
   });
 
   it("the Frame gate carries a charter sign-off criterion, satisfied once the sponsor approves", () => {

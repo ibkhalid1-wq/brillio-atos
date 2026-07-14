@@ -17,7 +17,7 @@
  * stale (the same contract as `_roleBindings` and `_dismissedListenRoles`).
  */
 import type { ProgramSummary } from "@/new/types";
-import { readMovementInputs } from "@/v3/components/flow/flowShellData";
+import { readMovementInputs, flowMovements } from "@/v3/components/flow/flowShellData";
 
 export interface GovernedException {
   id: string;
@@ -101,6 +101,37 @@ export function withNewException(
       createdBy: actor || "you",
     },
   ].slice(-100);
+}
+
+export interface InboxGovernedException extends GovernedException {
+  /** Which movement's Collect panel it was logged under. */
+  movementId: string;
+  /** The review date has passed (vs merely due today, or no date set). */
+  overdue: boolean;
+}
+
+/**
+ * Open governed exceptions across EVERY movement that require operator
+ * interaction now — surfaced in the Inbox so a live deviation isn't forgotten
+ * in a per-movement Collect panel. "Requires interaction" = open AND not
+ * deferred to a future review: a standing deviation with no review date, or one
+ * whose review date has arrived. A future-dated exception waits out of the
+ * Inbox until its date. Overdue (review date already passed) sort first.
+ */
+export function governedExceptionsForInbox(program: ProgramSummary): InboxGovernedException[] {
+  const today = new Date().toISOString().slice(0, 10);
+  const out: InboxGovernedException[] = [];
+  for (const movement of flowMovements()) {
+    for (const exception of readGovernedExceptions(program, movement.id)) {
+      if (exception.status !== "open") continue;
+      if (exception.reviewBy && exception.reviewBy > today) continue; // deferred
+      out.push({ ...exception, movementId: movement.id, overdue: !!exception.reviewBy && exception.reviewBy < today });
+    }
+  }
+  return out.sort((a, b) => {
+    if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
+    return (a.reviewBy || a.createdAt).localeCompare(b.reviewBy || b.createdAt);
+  });
 }
 
 /** The list with one exception marked resolved. */

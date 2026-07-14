@@ -64,6 +64,7 @@ import { getPreviousScore, recordConfidenceSnapshot } from "@/v3/lib/confidenceH
 import { artifactReviewFieldKey } from "@/v3/lib/artifactReview";
 import { listOpenFlowDecisions } from "@/v3/components/flow/flowDecisions";
 import { listPortalInbox } from "@/v3/components/flow/flowPortal";
+import { governedExceptionsForInbox } from "@/v3/components/flow/flowExceptions";
 import { personaAreas } from "@/v3/components/flow/flowAreas";
 import { validateProgramBlob, migrateProgramBlob } from "@/v3/lib/blobGuard";
 import { unrosteredVoicesProposal, reDemoProposal, ontologyRepairProposal, retroAttributionProposal, negatedClaimProposal, queueWatcherProposal, contradictionEvidenceDigest } from "@/v3/components/flow/flowWatchers";
@@ -1414,7 +1415,7 @@ export default function AppShellV3() {
   }, [activeProgram, updateProgramData]);
 
   const actionCenterCount = useMemo(
-    () => (activeProgram ? listOpenFlowDecisions(activeProgram).length + listPortalInbox(activeProgram).length : 0),
+    () => (activeProgram ? listOpenFlowDecisions(activeProgram).length + listPortalInbox(activeProgram).length + governedExceptionsForInbox(activeProgram).length : 0),
     [activeProgram],
   );
   // ── Unified confidence score (Priority 1) ────────────────────────────────────

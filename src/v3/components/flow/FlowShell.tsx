@@ -25,6 +25,7 @@ import { stakeholderEmail } from "@/v3/components/flow/flowMeetings";
 import { readMetricRegistry, metricConsistency } from "@/v3/components/flow/flowMetricRegistry";
 import { routeAttachedDocument, buildRoutedBlocks, type DocRoute } from "@/v3/components/flow/flowDocRouting";
 import { listPortalInbox } from "@/v3/components/flow/flowPortal";
+import { governedExceptionsForInbox, readGovernedExceptions, withResolvedException } from "@/v3/components/flow/flowExceptions";
 import { approvalEvidenceEntries, listApprovalResponses } from "@/v3/components/flow/flowApprovals";
 import { listSnapshots, type BlobSnapshot } from "@/v3/lib/blobSnapshots";
 import { supabase } from "@/integrations/supabase/client";
@@ -434,7 +435,7 @@ export default function FlowShell(props: FlowShellProps) {
   // judgment (decisions / quarantined evidence); the canvas otherwise, where
   // the spine pointer takes over. Today stays one badge-tap away.
   const [view, setView] = useState<FlowView>(() =>
-    listOpenFlowDecisions(program).length + listPortalInbox(program).length > 0 ? "today" : "flow",
+    listOpenFlowDecisions(program).length + listPortalInbox(program).length + governedExceptionsForInbox(program).length > 0 ? "today" : "flow",
   );
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -895,6 +896,20 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
   // settle it) or RESOLVE. Resolving writes the resolution to the record as
   // EVIDENCE and deletes the rows — there is no standing resolution log.
   const disputes = useMemo(() => readContradictions(program, true), [program]);
+  // Open governed exceptions that require operator interaction now — a logged
+  // deviation is a standing decision to revisit, so it queues HERE (not buried
+  // in a per-movement Collect panel) until it's resolved or a future review
+  // date defers it. Resolving marks it closed on the record.
+  const exceptions = useMemo(() => governedExceptionsForInbox(program), [program]);
+  const resolveException = async (movementId: string, id: string) => {
+    if (!onSaveInputs) return;
+    const next = withResolvedException(readGovernedExceptions(program, movementId), id, "", "you");
+    setBusyId(id);
+    try {
+      await onSaveInputs(movementId, { _governedExceptions: JSON.stringify(next) },
+        { silent: true, attest: { action: `Governed exception resolved — ${movementId}` } });
+    } finally { setBusyId(null); }
+  };
   const people = useMemo(() => resolveMovementStakeholders(program, "listen")
     .filter((entry) => !entry.isRole).map((entry) => entry.name), [program]);
   const [disputeBusy, setDisputeBusy] = useState<string | null>(null);
@@ -1101,7 +1116,7 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
           ))}
         </div>
       ) : null}
-      {open.length === 0 && inbox.length === 0 && approvals.length === 0 && disputes.length === 0 && unresolvedRoles.length === 0 && coverageNames.length === 0 ? (
+      {open.length === 0 && inbox.length === 0 && approvals.length === 0 && disputes.length === 0 && unresolvedRoles.length === 0 && coverageNames.length === 0 && exceptions.length === 0 ? (
         <div className="v3fs-quiet">
           <div className="v3fs-quiet-mark" aria-hidden="true">◈</div>
           {attention.length ? (
@@ -1129,7 +1144,7 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
         <section className="v3fs-inbox" aria-label="Waiting on you" ref={inboxRef}>
           <div className="v3fs-ph">
             <h3>Waiting on you</h3>
-            <span>{(() => { const n = open.length + inbox.length + approvals.length + disputes.length + unresolvedRoles.length + coverageNames.length; return `${n} item${n === 1 ? "" : "s"}`; })()}</span>
+            <span>{(() => { const n = open.length + inbox.length + approvals.length + disputes.length + unresolvedRoles.length + coverageNames.length + exceptions.length; return `${n} item${n === 1 ? "" : "s"}`; })()}</span>
           </div>
           {open.map((decision) => (
             <DecisionCard key={decision.id} program={program} decision={decision} movementLabel={label(decision.movementId)}
@@ -1274,6 +1289,29 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
                 {onSaveInputs ? (
                   <button type="button" className="v3fs-btn quiet" disabled={disputeBusy === cov.name}
                     onClick={() => void dismissCoverageName(cov.name)}>Not a person</button>
+                ) : null}
+              </div>
+            </article>
+          ))}
+          {exceptions.map((ex) => (
+            <article key={`gex-${ex.id}`} className="v3fs-dec">
+              <div className="v3fs-dec-top">
+                <span className={`v3fs-vc ${ex.overdue ? "pen" : "acc"}`}>⚖ Governed exception</span>
+                <span className="v3fs-dec-mv">{label(ex.movementId)}</span>
+                {ex.overdue ? <span className="v3fs-tag ev">review overdue{ex.reviewBy ? ` · ${ex.reviewBy}` : ""}</span>
+                  : ex.reviewBy ? <span className="v3fs-tag ev">review due</span> : null}
+              </div>
+              <h3 className="v3fs-dec-t">{ex.scope}</h3>
+              <p className="v3fs-dec-s">{ex.justification}</p>
+              <div className="v3fs-dec-rec-b">
+                {ex.basis ? `${ex.basis} · ` : ""}logged {(ex.createdAt || "").slice(0, 10)} by {ex.createdBy} — resolving marks the deviation closed on the record
+              </div>
+              <div className="v3fs-dec-cta">
+                {onSaveInputs ? (
+                  <button type="button" className="v3fs-btn pri" disabled={busyId === ex.id}
+                    onClick={() => void resolveException(ex.movementId, ex.id)}>
+                    {busyId === ex.id ? "Resolving…" : "✓ Mark resolved"}
+                  </button>
                 ) : null}
               </div>
             </article>
