@@ -475,6 +475,18 @@ describe("Listen gap routing — ontology gaps reach the SME they name, and read
   });
 });
 
+describe("operator asks — a hand-raised question rides on the stakeholder's link", () => {
+  it("reads the operator's questions for a person, keyed by name", async () => {
+    const { operatorAsksFor, readOperatorAsks } = await import("@/v3/components/flow/flowStakeholders");
+    const p = programme({ phaseInputs: { listen: { _operatorAsks: JSON.stringify({
+      "avantika sharma": ["How is cross-practice deal shaping governed?"],
+    }) } } });
+    expect(operatorAsksFor(p, "listen", "Avantika Sharma")).toEqual(["How is cross-practice deal shaping governed?"]);
+    expect(operatorAsksFor(p, "listen", "Nobody")).toEqual([]);
+    expect(readOperatorAsks(p, "envision")).toEqual({}); // scoped per movement
+  });
+});
+
 describe("People → collection mapping — everyone added under People gets a card", () => {
   it("an operator-added person surfaces in THEIR movement's collection, once, with a real script", () => {
     const p = programme({

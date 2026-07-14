@@ -12,7 +12,7 @@ import { flowMovements, movementEvidence, evidenceStamp, locateQuote, readMoveme
 import { relevantApprovers, stakeholderApprovalItems, approvalLinkFor, type StakeholderApprovalItem } from "@/v3/components/flow/flowApprovals";
 import { buildMeetingIcs, mailtoLink, stakeholderEmail } from "@/v3/components/flow/flowMeetings";
 import { listInterviewPacks, portalLinkFor } from "@/v3/components/flow/flowPortal";
-import { resolveMovementStakeholders, readRoleBindings, type MovementStakeholder } from "@/v3/components/flow/flowStakeholders";
+import { resolveMovementStakeholders, readRoleBindings, readOperatorAsks, operatorAsksFor, type MovementStakeholder } from "@/v3/components/flow/flowStakeholders";
 import { mapTranscriptSpeakers } from "@/v3/components/flow/flowTranscriptMap";
 import { AttachFileButton, TranscribeButton, copyTextFromAction } from "@/v3/components/flow/flowCapture";
 import { readGovernedExceptions, withNewException, withResolvedException } from "@/v3/components/flow/flowExceptions";
@@ -534,11 +534,38 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
   onDocumentCaptured?: () => void;
 }) {
   const { name, role, questions, isRole } = stakeholder;
+  // Questions the OPERATOR raised for this person, right here on the card — they
+  // travel on the person's link and stay until answered or removed.
+  const askKey = (name || role).trim().toLowerCase();
+  const operatorAsks = useMemo(() => operatorAsksFor(program, movementId, name || role), [program, movementId, name, role]);
+  const [askDraft, setAskDraft] = useState("");
+  const [askBusy, setAskBusy] = useState(false);
+  const saveOperatorAsks = async (next: string[]) => {
+    const all = readOperatorAsks(program, movementId);
+    if (next.length) all[askKey] = next; else delete all[askKey];
+    await onSaveInputs(movementId, { _operatorAsks: JSON.stringify(all) }, {
+      attest: { action: `Question raised for ${name || role}`, detail: next[next.length - 1]?.slice(0, 120) },
+    });
+  };
+  const addOperatorAsk = async () => {
+    const q = askDraft.trim();
+    if (!q || operatorAsks.some((existing) => existing.toLowerCase() === q.toLowerCase())) { setAskDraft(""); return; }
+    setAskBusy(true);
+    try { await saveOperatorAsks([...operatorAsks, q]); setAskDraft(""); } finally { setAskBusy(false); }
+  };
+  const removeOperatorAsk = async (q: string) => {
+    setAskBusy(true);
+    try { await saveOperatorAsks(operatorAsks.filter((existing) => existing !== q)); } finally { setAskBusy(false); }
+  };
   // Questions to mint a LINK with. Usually the displayed script, but the Frame
   // sponsor's script collapses to [] once the mandate is on record while their
   // card still offers a confirmation link — linkQuestions keeps that non-empty
-  // so "Copy link" never mints a dead, question-less form.
-  const linkQuestions = stakeholder.linkQuestions?.length ? stakeholder.linkQuestions : questions;
+  // so "Copy link" never mints a dead, question-less form. Operator-raised
+  // questions always ride along so a hand-typed ask reaches the stakeholder.
+  const linkQuestions = useMemo(() => [...new Set([
+    ...(stakeholder.linkQuestions?.length ? stakeholder.linkQuestions : questions),
+    ...operatorAsks,
+  ])], [stakeholder.linkQuestions, questions, operatorAsks]);
   const { pack, heard, status } = coll;
   const first = name.split(" ")[0] || "they";
   const email = stakeholderEmail(program, name);
@@ -882,6 +909,35 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
                   </li>
                 );
               })}</ul>
+            </div>
+          ) : null}
+
+          {/* Ask a question: the operator can raise their own question for THIS
+              stakeholder at any point — it rides on the person's link and stays
+              on their card until answered or removed. Available on every card,
+              every movement (Listen, Envision, Show…). */}
+          {!regenerating ? (
+            <div className="v3fs-ivc-sec v3fs-ivc-ask">
+              <div className="v3fs-ivc-sec-h">Ask {first} a question
+                <span className="v3fs-ivc-sec-note">your own question — travels on {first}&rsquo;s link until answered</span>
+              </div>
+              {operatorAsks.length ? (
+                <ul className="v3fs-ivc-q v3fs-ivc-askq">{operatorAsks.map((q, i) => (
+                  <li key={i}>
+                    {q}
+                    <button type="button" className="v3fs-a v3fs-ivc-evlink" disabled={askBusy}
+                      title="Remove this question" onClick={() => void removeOperatorAsk(q)}>✕ remove</button>
+                  </li>
+                ))}</ul>
+              ) : null}
+              <div className="v3fs-ivc-askadd">
+                <input value={askDraft} onChange={(event) => setAskDraft(event.target.value)}
+                  placeholder={`Ask ${first} something…`} aria-label={`Ask ${name || role} a question`} disabled={askBusy}
+                  onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void addOperatorAsk(); } }} />
+                <button type="button" className="v3fs-btn" disabled={askBusy || !askDraft.trim()} onClick={() => void addOperatorAsk()}>
+                  {askBusy ? "Adding…" : "＋ Ask"}
+                </button>
+              </div>
             </div>
           ) : null}
 

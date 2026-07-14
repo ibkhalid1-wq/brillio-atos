@@ -716,6 +716,33 @@ function movementStakeholdersBase(program: ProgramSummary, movementId: string): 
   return [];
 }
 
+/**
+ * Questions the OPERATOR raised for a specific stakeholder, from their collect
+ * card — stored under the movement's inputs as `_operatorAsks` (underscore ⇒
+ * fingerprint-safe: an operator question is a request, not captured evidence).
+ * Keyed by the person's name, else their role, lowercased. These fold into that
+ * person's link and script until they're answered or the operator removes them.
+ */
+export function readOperatorAsks(program: ProgramSummary, movementId: string): Record<string, string[]> {
+  const raw = readMovementInputs(program, movementId)._operatorAsks;
+  if (typeof raw !== "string" || !raw.trim()) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const out: Record<string, string[]> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (!Array.isArray(value)) continue;
+      const questions = value.map((entry) => String(entry).trim()).filter(Boolean);
+      if (questions.length) out[key.trim().toLowerCase()] = questions;
+    }
+    return out;
+  } catch { return {}; }
+}
+/** The operator's own questions for one stakeholder in a movement. */
+export function operatorAsksFor(program: ProgramSummary, movementId: string, who: string): string[] {
+  return readOperatorAsks(program, movementId)[who.trim().toLowerCase()] ?? [];
+}
+
 /** A movement-appropriate opening question for an operator-added person, so a
  * name dropped onto the People page becomes a real collection card rather than
  * a row that never gets asked anything. */
