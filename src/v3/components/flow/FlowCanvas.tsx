@@ -27,6 +27,7 @@ import { MOVEMENT_CAPTION, leadTab, type MovementTab } from "@/v3/components/flo
 import { SpineQueueItem, UpNextButton, useSpineRunning, type UpNextItem } from "@/v3/components/flow/flowUpNext";
 import { IntervieweeDiscovery, stakeholderCollection } from "@/v3/components/flow/CollectBoard";
 import MeetingKitCard from "@/v3/components/flow/MeetingKitCard";
+import FrameCoveragePlan from "@/v3/components/flow/FrameCoveragePlan";
 
 interface FlowCanvasProps {
   program: ProgramSummary;
@@ -497,13 +498,17 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                           onCaptured={() => onRunAgent("contradiction-detector", movement.id)}
                         />
                       )}
-                      {/* Quiet escape hatch only — the checklist and gate CTA are
-                          the purposeful doors into the editor now. Opening
-                          SCROLLS to the editor so the click visibly lands. */}
-                      <button type="button" className="v3fs-edit-toggle quiet"
-                        onClick={() => editing.has(movement.id) ? toggle(setEditing, movement.id) : openEditor(movement.id)}>
-                        {editing.has(movement.id) ? "Close structured inputs" : "Structured inputs"}
-                      </button>
+                      {/* The structured-inputs escape hatch is gone: facts now
+                          come from the sponsor conversation and the captured
+                          evidence/artifacts, not hand-typed fields. The editor
+                          still opens from its purposeful doors — a gate
+                          checklist item or an artifact gap — when a specific
+                          fact genuinely needs a manual correction. In Frame,
+                          the operator instead confirms the discovery plan: the
+                          roles Listen will hear and the areas it will cover. */}
+                      {movement.id === "frame" ? (
+                        <FrameCoveragePlan program={program} onSaveInputs={onSaveInputs} />
+                      ) : null}
                     </div>
                     <div className="v3fs-railzone"
                       onPointerEnter={railEnter}

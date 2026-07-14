@@ -1818,9 +1818,9 @@ function FlowPortfolio({ programs, activeId, onSelectProgram, onHydratePrograms,
               </div>
             </div>
           ) : (
-            <div className="v3fs-pf-head" role="button" tabIndex={0} aria-expanded={!isCollapsed} aria-controls={`${headId}-detail`}
-              onClick={() => toggleCard(entry.id)}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleCard(entry.id); } }}>
+            <div className="v3fs-pf-head" role="button" tabIndex={0} aria-label={`Open ${entry.name}`}
+              onClick={() => onSelectProgram(entry.id)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelectProgram(entry.id); } }}>
               <span className="v3fs-pf-id">
                 <span className="v3fs-pf-eyebrow sm">
                   {depth > 0
@@ -1848,10 +1848,9 @@ function FlowPortfolio({ programs, activeId, onSelectProgram, onHydratePrograms,
                 <span className={`v3fs-pf-status ${tone}`}>
                   {active ? "You are here" : s.needsYou > 0 ? `${s.needsYou} waiting` : "On track"}
                 </span>
-                {isCollapsed && !active ? (
-                  <button type="button" className="v3fs-btn sm" onClick={(e) => { e.stopPropagation(); onSelectProgram(entry.id); }}>Open</button>
-                ) : null}
-                <span className="v3fs-pf-chev" aria-hidden="true">⌄</span>
+                <button type="button" className="v3fs-pf-chev" aria-label={isCollapsed ? "Show details" : "Hide details"}
+                  aria-expanded={!isCollapsed} aria-controls={`${headId}-detail`}
+                  onClick={(e) => { e.stopPropagation(); toggleCard(entry.id); }}>⌄</button>
               </span>
             </div>
           )}

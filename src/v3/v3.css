@@ -5000,6 +5000,40 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-collect-main {min-width:0;display:flex;flex-direction:column;gap:16px;align-items:flex-start}
 .v3fs-collect-main > * {align-self:stretch}
 .v3fs-collect-main > .v3fs-kit {max-width:74ch}
+
+/* Frame's Listen coverage plan — derived roles + areas, one confirmation. */
+.v3fs-coverage {border:1px solid var(--fs-line);border-radius:16px;background:var(--v3-surface);
+  padding:18px 20px;display:flex;flex-direction:column;gap:16px;max-width:74ch;
+  box-shadow:0 1px 2px rgba(20,20,45,.04)}
+.v3fs-coverage.is-confirmed {border-color:color-mix(in srgb,var(--v3-green) 40%,var(--fs-line));
+  background:linear-gradient(180deg,color-mix(in srgb,var(--v3-green) 5%,var(--v3-surface)),var(--v3-surface) 60%)}
+.v3fs-coverage-h {display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.v3fs-coverage-htext {min-width:0}
+.v3fs-coverage-eyebrow {font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--v3-accent-2)}
+.v3fs-coverage-t {margin:4px 0 0;font-size:16px;font-weight:600;color:var(--v3-text);letter-spacing:-.01em}
+.v3fs-coverage-sub {margin:6px 0 0;font-size:12.5px;line-height:1.55;color:var(--v3-text-muted);max-width:56ch}
+.v3fs-coverage-badge {flex-shrink:0;font-size:11px;font-weight:700;color:var(--v3-green);
+  background:color-mix(in srgb,var(--v3-green) 12%,transparent);border-radius:999px;padding:4px 11px;white-space:nowrap}
+.v3fs-coverage-cols {display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:620px){.v3fs-coverage-cols {grid-template-columns:1fr}}
+.v3fs-coverage-col {border:1px solid var(--fs-line);border-radius:12px;padding:12px 14px;background:var(--v3-bg)}
+.v3fs-coverage-label {display:flex;align-items:center;justify-content:space-between;gap:8px;
+  font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--v3-text-muted);margin-bottom:10px}
+.v3fs-coverage-label > span {font-size:11px;font-weight:700;color:var(--v3-accent-2);
+  background:color-mix(in srgb,var(--v3-accent-2) 12%,transparent);border-radius:999px;padding:1px 8px;letter-spacing:0}
+.v3fs-coverage-roles {list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.v3fs-coverage-roles li {display:flex;flex-direction:column;gap:1px;padding-left:14px;position:relative}
+.v3fs-coverage-roles li::before {content:"";position:absolute;left:0;top:6px;width:6px;height:6px;border-radius:99px;
+  background:color-mix(in srgb,var(--v3-accent-2) 55%,transparent)}
+.v3fs-coverage-role {font-size:13px;font-weight:600;color:var(--v3-text);line-height:1.35}
+.v3fs-coverage-name {font-size:11.5px;color:var(--v3-text-muted)}
+.v3fs-coverage-chips {list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.v3fs-coverage-chip {font-size:12px;font-weight:600;color:var(--v3-text);background:var(--v3-surface);
+  border:1px solid var(--fs-line);border-radius:8px;padding:4px 10px}
+.v3fs-coverage-empty {margin:0;font-size:12px;line-height:1.5;color:var(--v3-text-muted)}
+.v3fs-coverage-foot {display:flex;align-items:center;gap:12px}
+.v3fs-coverage-note {font-size:12px;color:var(--v3-text-muted)}
+.v3fs-coverage-note::before {content:"✓ ";color:var(--v3-green);font-weight:700}
 /* The zone is the rail's full-height home — sticky, viewport-tall, and the
    positioning context for the floating panel. */
 .v3fs-railzone {position:sticky;top:64px;height:calc(100vh - 96px);min-width:0}
@@ -5302,7 +5336,9 @@ button.v3fs-stale-tag {font-family:inherit;border:none;cursor:pointer}
 .v3fs-pf-status.here {background:var(--v3-green-soft);color:var(--v3-green)}
 .v3fs-pf-status.watch {background:var(--v3-amber-soft);color:var(--v3-amber)}
 .v3fs-pf-status.clear {background:color-mix(in srgb,var(--v3-text-muted) 11%,transparent);color:var(--v3-text-muted)}
-.v3fs-pf-chev {color:var(--v3-text-muted);font-size:15px;line-height:1;transition:transform .18s ease}
+.v3fs-pf-chev {color:var(--v3-text-muted);font-size:15px;line-height:1;transition:transform .18s ease,color .12s ease;background:none;border:none;cursor:pointer;padding:4px;border-radius:8px}
+.v3fs-pf-chev:hover {color:var(--v3-text)}
+.v3fs-pf-chev:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:1px}
 .v3fs-pf-card.collapsed .v3fs-pf-chev {transform:rotate(-90deg)}
 
 /* Inline rename */
