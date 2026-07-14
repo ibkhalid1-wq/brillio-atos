@@ -1897,12 +1897,18 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
     () => flowMovements().flatMap((m) => movementEvidence(program, m)),
     [program],
   );
+  // The FULL Listen roster — including role placeholders ("Recruitment
+  // Operations Staff — TBC"): a role awaiting a person is still someone the
+  // programme must collect from, so it appears here with a bind-name input
+  // instead of silently vanishing from the People page.
   const roster = useMemo(() => resolveMovementStakeholders(program, "listen")
-    .filter((entry) => !entry.isRole)
     .map((entry) => ({
-      where: "Listen roster", name: entry.name, role: entry.role,
-      email: stakeholderEmail(program, entry.name),
-      heard: evidence.some((e) => e.who.toLowerCase().includes(entry.name.trim().toLowerCase())),
+      where: "Listen roster",
+      isRole: entry.isRole,
+      name: entry.isRole ? "" : entry.name,
+      role: entry.role || entry.name,
+      email: entry.isRole ? null : stakeholderEmail(program, entry.name),
+      heard: !entry.isRole && evidence.some((e) => e.who.toLowerCase().includes(entry.name.trim().toLowerCase())),
     })), [program, evidence]);
   const roles = useMemo(() => deliveryRoleDirectory(program).map((entry) => ({
     where: entry.movementId.charAt(0).toUpperCase() + entry.movementId.slice(1),
@@ -1995,7 +2001,21 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
   const rosterShown = roster.filter(match);
   const rolesShown = roles.filter(match);
   const addedShown = added.filter((p) => match({ name: p.name, role: p.role, where: "Added", email: p.email ?? "" }));
-  const missing = roster.filter((r) => !r.email).length + roles.filter((r) => r.bound && !r.email && !r.isSponsor).length;
+  const missing = roster.filter((r) => !r.isRole && !r.email).length + roles.filter((r) => r.bound && !r.email && !r.isSponsor).length;
+  // Bind a Listen role placeholder to a real person, right from this page —
+  // same store the collect card's bind box writes (`_roleBindings` on Listen).
+  const bindListenRole = async (role: string, name: string) => {
+    const clean = name.trim();
+    if (!onSaveInputs || !role || !clean) return;
+    const rb = readRoleBindings(program, "listen");
+    rb[role] = { name: clean };
+    setBusyRow(`bind:${role}`);
+    try {
+      await onSaveInputs("listen", { _roleBindings: JSON.stringify(rb) }, {
+        attest: { action: `Role bound — ${role} → ${clean}` },
+      });
+    } finally { setBusyRow(null); }
+  };
   const unresolved = added.filter((p) => !p.roleResolved).length;
   return (
     <div className="v3fs-grid2">
@@ -2064,6 +2084,23 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
               </tr>
             ))}
             {rosterShown.map((row, i) => (
+              row.isRole ? (
+                // A role placeholder: the kit knows the programme must hear
+                // this ROLE but no person is named yet — bind them right here.
+                <tr key={`r-${i}`} className={busyRow === `bind:${row.role}` ? "busy" : undefined}>
+                  <td>{row.where}</td>
+                  <td>{row.role}</td>
+                  <td>
+                    {onSaveInputs ? (
+                      <input className="v3fs-dir-in" placeholder="who is this? add their name" aria-label={`Name the ${row.role}`}
+                        key={`rb-${i}-${row.role}`} disabled={busyRow === `bind:${row.role}`}
+                        onBlur={(e) => { const v = e.target.value.trim(); if (v) void bindListenRole(row.role, v); }} />
+                    ) : <em>unbound — name them on the Listen collect card</em>}
+                  </td>
+                  <td></td>
+                  <td><span className="v3fs-vc pen">Unnamed role</span></td>
+                </tr>
+              ) : (
               <tr key={`r-${i}`} className={busyRow === `listen:${row.name}` || busyRow === `rename:${row.name}` ? "busy" : undefined}>
                 <td>{row.where}</td>
                 <td>{row.role}</td>
@@ -2083,6 +2120,7 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
                 </td>
                 <td><span className={`v3fs-vc ${row.heard ? "acc" : "pen"}`}>{row.heard ? "Heard" : "Awaiting"}</span></td>
               </tr>
+              )
             ))}
             {rolesShown.map((row, i) => (
               <tr key={`d-${i}`} className={row.name && busyRow === `${row.where.toLowerCase()}:${row.name}` ? "busy" : undefined}>

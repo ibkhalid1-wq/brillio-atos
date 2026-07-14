@@ -93,11 +93,23 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
     ...interviews.map((interview) => ({ name: String(interview.stakeholder ?? "").trim(), role: String(interview.role ?? "").trim() })),
     ...(sponsor ? [{ name: sponsor.name, role: sponsor.role }] : []),
   ];
+  // Listen role bindings: a placeholder bound on its card ("our Recruitment
+  // Operations lead is Maya") BECOMES that person here — the one place every
+  // downstream reader (collect board, People page, approvals) derives from.
+  const listenBindings = readRoleBindings(program, "listen");
   return interviews.map((interview, index) => {
     const agenda = (Array.isArray(interview.agenda) ? interview.agenda : [])
       .flatMap((slot) => (isRecord(slot) && Array.isArray(slot.questions) ? slot.questions.map(String) : []))
       .filter(Boolean);
-    const name = String(interview.stakeholder ?? "").trim();
+    // A kit entry is a ROLE PLACEHOLDER when the stakeholder is empty OR uses
+    // the "Role — TBC" convention the generator is instructed to emit. Its
+    // label is the role awaiting a person, never someone's name.
+    const rawName = String(interview.stakeholder ?? "").trim();
+    const tbc = /\s*[—–-]\s*TBC\s*$/i.test(rawName);
+    const roleLabel = String(interview.role ?? "").trim() || rawName.replace(/\s*[—–-]\s*TBC\s*$/i, "").trim();
+    const placeholder = !rawName || tbc;
+    const bound = placeholder && roleLabel ? listenBindings[roleLabel] : undefined;
+    const name = placeholder ? (bound?.name ?? "") : rawName;
     const key = name.toLowerCase();
     const myAsks = movementAsks.filter((ask) => {
       const audience = askAudience(ask, audienceRoster);
@@ -113,7 +125,7 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
       ? [...new Set([...asks, ...myAsks])]
       : [...new Set([...asks, ...myAsks, ...agenda])];
     return {
-      id: `iv-${index}`, name: name || `Interviewee ${index + 1}`, role: String(interview.role ?? ""),
+      id: `iv-${index}`, name: name || roleLabel || `Interviewee ${index + 1}`, role: roleLabel,
       questions, isRole: !name,
     };
   });
