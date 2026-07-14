@@ -76,6 +76,53 @@ function askAudience(ask: string, roster: Array<{ name: string; role: string }>)
   return matched;
 }
 
+/**
+ * Roles the OPERATOR removed from the programme's cast — stored under Listen's
+ * inputs as `_dismissedListenRoles` (underscore ⇒ fingerprint-safe: removing a
+ * role is an operator judgement, never new evidence). Every role-derived
+ * surface (persona cards, TBC placeholders, People rows) filters against it,
+ * and regeneration can't resurrect a dismissed role.
+ */
+export function dismissedListenRoles(program: ProgramSummary): Set<string> {
+  const raw = readMovementInputs(program, "listen")._dismissedListenRoles;
+  if (typeof raw !== "string" || !raw.trim()) return new Set();
+  try {
+    const parsed = JSON.parse(raw);
+    return new Set(Array.isArray(parsed) ? parsed.map((entry) => String(entry).trim().toLowerCase()).filter(Boolean) : []);
+  } catch { return new Set(); }
+}
+
+/** Every persona the Discovery Kit inventoried — the programme's full cast of
+ * roles, internal AND external, minus the ones the operator dismissed. The
+ * People page lists these so no role lives only inside the kit document. */
+export interface KitPersonaEntry {
+  name: string;
+  kind: "internal" | "external";
+  spokenForBy: string[];
+  unrepresented: boolean;
+}
+export function kitPersonaDirectory(program: ProgramSummary): KitPersonaEntry[] {
+  const kit = dataRoot(program).discoveryKit;
+  const personas = isRecord(kit) && Array.isArray(kit.personas) ? kit.personas.filter(isRecord) : [];
+  const dismissed = dismissedListenRoles(program);
+  const seen = new Set<string>();
+  const out: KitPersonaEntry[] = [];
+  for (const persona of personas) {
+    const name = String(persona.name ?? "").trim();
+    const key = name.toLowerCase();
+    if (!name || seen.has(key) || dismissed.has(key)) continue;
+    seen.add(key);
+    const spokenForBy = Array.isArray(persona.spokenForBy) ? persona.spokenForBy.map(String).map((s) => s.trim()).filter(Boolean) : [];
+    out.push({
+      name,
+      kind: String(persona.kind ?? "internal") === "external" ? "external" : "internal",
+      spokenForBy,
+      unrepresented: persona.unrepresented === true || !spokenForBy.length,
+    });
+  }
+  return out;
+}
+
 function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
   const kit = dataRoot(program).discoveryKit;
   const interviews = isRecord(kit) && Array.isArray(kit.interviews) ? kit.interviews.filter(isRecord) : [];
@@ -108,12 +155,15 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
     }
   }
   const personas = isRecord(kit) && Array.isArray(kit.personas) ? kit.personas.filter(isRecord) : [];
+  // Operator-dismissed roles leave the cast everywhere: no card, no People
+  // row, and a regeneration can't resurrect them.
+  const dismissedRoles = dismissedListenRoles(program);
   const personaRoles = personas
     .filter((persona) => String(persona.kind ?? "internal") !== "external")
     .filter((persona) => persona.unrepresented === true
       || !(Array.isArray(persona.spokenForBy) && persona.spokenForBy.map(String).filter((s) => s.trim()).length))
     .map((persona) => String(persona.name ?? "").trim())
-    .filter((roleName) => roleName && !covered.has(roleName.toLowerCase()));
+    .filter((roleName) => roleName && !covered.has(roleName.toLowerCase()) && !dismissedRoles.has(roleName.toLowerCase()));
   const audienceRoster = [
     ...interviews.map((interview) => ({ name: String(interview.stakeholder ?? "").trim(), role: String(interview.role ?? "").trim() })),
     ...personaRoles.map((roleName) => ({ name: listenBindings[roleName]?.name ?? "", role: roleName })),
@@ -170,7 +220,10 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
       questions, isRole: !name,
     };
   });
-  return [...interviewCards, ...personaCards];
+  // A dismissed role's placeholder card leaves the board too — but a NAMED
+  // person is never dropped by a role dismissal (people outrank roles).
+  return [...interviewCards, ...personaCards]
+    .filter((card) => !(card.isRole && dismissedRoles.has(card.role.trim().toLowerCase())));
 }
 
 function sponsorStakeholder(program: ProgramSummary): MovementStakeholder | null {
@@ -406,6 +459,9 @@ export function unresolvedCoverageNames(program: ProgramSummary): Array<{ name: 
   const rows = isRecord(kit) && Array.isArray(kit.coverageMap) ? kit.coverageMap.filter(isRecord) : [];
   const known = knownPeopleNames(program);
   const dismissed = dismissedCoverageNames(program);
+  // A role the operator removed from the cast must not auto-add back in
+  // through its coverage label.
+  const dismissedRoles = dismissedListenRoles(program);
   const out: Array<{ name: string; domain: string }> = [];
   const seen = new Set<string>();
   for (const row of rows) {
@@ -417,7 +473,7 @@ export function unresolvedCoverageNames(program: ProgramSummary): Array<{ name: 
       // TBC suffix before matching, so adding the person resolves the label.
       const key = name.toLowerCase().replace(/\s*[—–-]\s*tbc\s*$/i, "").trim();
       if (!name || name.split(/\s+/).length > 5) continue; // skip empties + sentence-like blobs
-      if (!key || known.has(key) || dismissed.has(key) || seen.has(key)) continue;
+      if (!key || known.has(key) || dismissed.has(key) || dismissedRoles.has(key) || seen.has(key)) continue;
       seen.add(key);
       out.push({ name, domain });
     }

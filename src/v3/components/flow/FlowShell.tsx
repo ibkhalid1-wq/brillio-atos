@@ -20,7 +20,7 @@ import {
   listFlowTracks, trackAcceptance, trackPace,
 } from "@/v3/components/flow/flowTracks";
 import { readFlowGovernance, flowAgentTier } from "@/v3/components/flow/flowGovernance";
-import { resolveMovementStakeholders, deliveryRoleDirectory, readDirectoryPeople, validateProgramRole, readRoleBindings, knownProgramRoles, unresolvedCoverageNames } from "@/v3/components/flow/flowStakeholders";
+import { resolveMovementStakeholders, deliveryRoleDirectory, readDirectoryPeople, validateProgramRole, readRoleBindings, knownProgramRoles, unresolvedCoverageNames, kitPersonaDirectory } from "@/v3/components/flow/flowStakeholders";
 import { stakeholderEmail } from "@/v3/components/flow/flowMeetings";
 import { readMetricRegistry, metricConsistency } from "@/v3/components/flow/flowMetricRegistry";
 import { routeAttachedDocument, buildRoutedBlocks, type DocRoute } from "@/v3/components/flow/flowDocRouting";
@@ -1933,6 +1933,26 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
     bound: !!entry.bound?.name, isSponsor: entry.isSponsor,
   })), [program]);
   const added = useMemo(() => readDirectoryPeople(program), [program]);
+  // The kit's FULL persona cast — every role the discovery inventoried,
+  // internal and external, spoken-for or not — so no role lives only inside
+  // the kit document. Roles already surfaced as roster rows are not repeated.
+  const personas = useMemo(() => {
+    const rosterRoles = new Set(resolveMovementStakeholders(program, "listen").map((entry) => entry.role.trim().toLowerCase()).filter(Boolean));
+    return kitPersonaDirectory(program).filter((persona) => !rosterRoles.has(persona.name.trim().toLowerCase()));
+  }, [program]);
+  // Remove a ROLE from the cast (operator judgement, attested). Named people
+  // are never removed this way — people outrank roles.
+  const removeRole = async (role: string) => {
+    if (!onSaveInputs || !role.trim()) return;
+    const raw = readMovementInputs(program, "listen")._dismissedListenRoles;
+    let list: string[] = [];
+    try { const parsed = typeof raw === "string" ? JSON.parse(raw) : []; list = Array.isArray(parsed) ? parsed.map(String) : []; } catch { /* reset */ }
+    setBusyRow(`role-rm:${role}`);
+    try {
+      await onSaveInputs("listen", { _dismissedListenRoles: JSON.stringify([...new Set([...list, role.trim()])]) },
+        { attest: { action: `Role removed from the cast — ${role}`, detail: "operator judgement; regeneration will not resurrect it" } });
+    } finally { setBusyRow(null); }
+  };
 
   // Add a person + role. The role is validated against the programme; a known
   // role lands resolved, an unfamiliar one lands UNRESOLVED and surfaces in the
@@ -2016,6 +2036,7 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
     !query || `${row.name} ${row.role} ${row.where} ${row.email ?? ""}`.toLowerCase().includes(query);
   const rosterShown = roster.filter(match);
   const rolesShown = roles.filter(match);
+  const personasShown = personas.filter((persona) => match({ name: persona.spokenForBy.join(", "), role: persona.name, where: "Discovery Kit persona" }));
   const addedShown = added.filter((p) => match({ name: p.name, role: p.role, where: "Added", email: p.email ?? "" }));
   const missing = roster.filter((r) => !r.isRole && !r.email).length + roles.filter((r) => r.bound && !r.email && !r.isSponsor).length;
   // Bind a Listen role placeholder to a real person, right from this page —
@@ -2114,7 +2135,16 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
                     ) : <em>unbound — name them on the Listen collect card</em>}
                   </td>
                   <td></td>
-                  <td><span className="v3fs-vc pen">Unnamed role</span></td>
+                  <td>
+                    <span className="v3fs-vc pen">Unnamed role</span>
+                    {onSaveInputs ? (
+                      <button type="button" className="v3fs-btn quiet" disabled={busyRow === `role-rm:${row.role}`}
+                        title="Remove this role from the cast — regeneration will not bring it back"
+                        onClick={() => void removeRole(row.role)}>
+                        {busyRow === `role-rm:${row.role}` ? "…" : "Remove"}
+                      </button>
+                    ) : null}
+                  </td>
                 </tr>
               ) : (
               <tr key={`r-${i}`} className={busyRow === `listen:${row.name}` || busyRow === `rename:${row.name}` ? "busy" : undefined}>
@@ -2159,7 +2189,30 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
                 <td><span className={`v3fs-vc ${row.name ? "acc" : "pen"}`}>{row.name ? "Bound" : "Open"}</span></td>
               </tr>
             ))}
-            {!rosterShown.length && !rolesShown.length && !addedShown.length ? (
+            {personasShown.map((persona) => (
+              // The kit's persona cast — roles the discovery inventoried that
+              // aren't roster rows above: external actors and represented
+              // roles. Removable; a removal is attested and survives regens.
+              <tr key={`p-${persona.name}`} className={busyRow === `role-rm:${persona.name}` ? "busy" : undefined}>
+                <td>Discovery Kit · persona</td>
+                <td>{persona.name}</td>
+                <td>{persona.spokenForBy.length ? <span title="who speaks for this role">via {persona.spokenForBy.join(", ")}</span> : <em>{persona.kind === "external" ? "external — heard through whoever faces them" : "no voice yet"}</em>}</td>
+                <td></td>
+                <td>
+                  <span className={`v3fs-vc ${persona.spokenForBy.length ? "acc" : "pen"}`}>
+                    {persona.kind === "external" ? "External" : persona.spokenForBy.length ? "Represented" : "Unheard"}
+                  </span>
+                  {onSaveInputs ? (
+                    <button type="button" className="v3fs-btn quiet" disabled={busyRow === `role-rm:${persona.name}`}
+                      title="Remove this role from the cast — regeneration will not bring it back"
+                      onClick={() => void removeRole(persona.name)}>
+                      {busyRow === `role-rm:${persona.name}` ? "…" : "Remove"}
+                    </button>
+                  ) : null}
+                </td>
+              </tr>
+            ))}
+            {!rosterShown.length && !rolesShown.length && !addedShown.length && !personasShown.length ? (
               <tr><td colSpan={5}><div className="v3fs-empty">Nothing matches that search.</div></td></tr>
             ) : null}
           </tbody>
