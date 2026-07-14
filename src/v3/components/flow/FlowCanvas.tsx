@@ -14,6 +14,7 @@ import {
   type ArtifactCardModel, type EvidenceEntry,
 } from "@/v3/components/flow/flowShellData";
 import { artifactApprovalRollup, type ApprovalStatus, type ApproverState } from "@/v3/components/flow/flowApprovals";
+import { gateAugmentations } from "@/v3/components/flow/flowCrossValidation";
 import { meetingKit } from "@/v3/components/flow/flowMeetings";
 import { listInterviewPacks, listDemoInvites, portalLinkFor } from "@/v3/components/flow/flowPortal";
 import { resolveMovementStakeholders } from "@/v3/components/flow/flowStakeholders";
@@ -193,7 +194,7 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
           // The spine ring is the GATE ring, small — same source and colour as
           // the Gate column's gauge: gate criteria met / total, toned by
           // readiness. One source of truth, every phase.
-          const stepChecks = gateChecklist(program, movement, artifacts);
+          const stepChecks = [...gateChecklist(program, movement, artifacts), ...gateAugmentations(program, movement.id)];
           const stepReadiness = gateReadiness(program, movement, artifacts, stepChecks);
           const stepDone = stepChecks.filter((c) => c.done).length;
           const pct = stepChecks.length ? Math.round((100 * stepDone) / stepChecks.length) : (stepReadiness.tone === "green" ? 100 : 0);
@@ -233,7 +234,10 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
         const isDone = program.gateReviews?.[movement.id]?.status === "approved";
         const generating = artifacts.some((a) => runningAgentIds.has(a.id));
         const isLive = movement.id === frontier && !isDone;
-        const checks = gateChecklist(program, movement, artifacts);
+        // The base checklist plus the validation model's criteria: contributor
+        // sign-off on Listen's documents, cross-artifact consistency on
+        // Envision — the gate ring and the Gate tab read the same augmented list.
+        const checks = [...gateChecklist(program, movement, artifacts), ...gateAugmentations(program, movement.id)];
         const readiness = gateReadiness(program, movement, artifacts, checks);
         const openChecks = checks.filter((item) => !item.done).length;
         void openChecks;
