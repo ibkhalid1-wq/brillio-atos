@@ -187,16 +187,10 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
       setEmailDraft("");
     } finally { setEmailBusy(false); }
   };
-  // The link exists the moment a card needs one: opening a card with a
-  // script and no link mints it silently, so the operator only ever COPIES.
-  const autoMinted = useRef(false);
-  const autoMintOnOpen = (isOpen: boolean) => {
-    if (!isOpen || autoMinted.current) return;
-    if (effectiveLink || !questions.length || !onMintFollowUp) return;
-    if (heard && docsStale) return; // channels are hidden — regenerate first
-    autoMinted.current = true;
-    void ensureLink();
-  };
+  // The link is minted on demand by Copy/Send (ensureLink) — never on open, so
+  // opening a "to reach" card to work it never flips its status and jumps it
+  // into "Awaiting response" (which unmounts the card and collapses it). A
+  // person is "awaiting response" once the operator SENDS, not when they look.
   // A dispute the operator judges settled (the newer account stands) resolves
   // right here — same log flip as the Library panel, attested, and the row
   // leaves every script on the next derivation.
@@ -338,7 +332,6 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
         onToggle={(event) => {
           const isOpen = (event.currentTarget as HTMLDetailsElement).open;
           onFocusPerson?.(stakeholder.id, isOpen);
-          autoMintOnOpen(isOpen);
         }}>
         <span className="v3fs-ivc-strip" aria-hidden="true" />
         <summary>
