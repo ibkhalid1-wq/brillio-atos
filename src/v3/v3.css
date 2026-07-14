@@ -4839,6 +4839,11 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-srcs {display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .v3fs-srcs span {font-size:11px;border-radius:999px;padding:3px 10px;background:var(--fs-blue-wash);color:var(--fs-quote);font-weight:600}
 .v3fs-gdot {width:9px;height:9px;border-radius:50%;background:var(--v3-accent)}
+/* Fleet roster states: ready = quiet outline, held = amber. Running uses the
+   pulsing gdot above. */
+.v3fs-fdot {width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.v3fs-fdot.ready {background:transparent;border:1.5px solid var(--v3-text-muted)}
+.v3fs-fdot.held {background:var(--v3-amber)}
 @media (prefers-reduced-motion: no-preference) {
   .v3fs-gdot {animation:v3fs-pp 1.2s ease-in-out infinite}
   @keyframes v3fs-pp {0%,100%{opacity:1}50%{opacity:.3}}

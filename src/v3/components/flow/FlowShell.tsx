@@ -1345,30 +1345,53 @@ function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggle
 
       <div className="v3fs-grid2">
         <div className="v3fs-panel">
-          <div className="v3fs-ph"><h3>Fleet</h3><span>running now</span></div>
-          {fleet.length === 0 ? <div className="v3fs-empty">The fleet is idle. Runs appear here the moment one starts.</div> : null}
-          {fleet.map((run, i) => (
-            <div key={`${run.agentId}-${i}`} className="v3fs-row">
-              <span className="v3fs-gdot" aria-hidden="true" />
-              <div className="v3fs-row-g">
-                <div className="v3fs-row-n">{run.agentId}</div>
-                <div className="v3fs-row-m">{[run.status, run.phaseId].filter(Boolean).join(" · ")}</div>
-              </div>
-              <span className="v3fs-tag gn">tier {flowAgentTier(run.agentId)}</span>
-            </div>
-          ))}
-          {governance.haltedAgents.length ? (
-            <>
-              <div className="v3fs-ph v3fs-ph-sub"><h3>Held</h3><span>halted agents — resume to allow runs</span></div>
-              {governance.haltedAgents.map((agentId) => (
-                <div key={agentId} className="v3fs-row">
-                  <span className="v3fs-tdot t2" aria-hidden="true" />
-                  <div className="v3fs-row-g"><div className="v3fs-row-n">{agentId}</div></div>
-                  <button type="button" className="v3fs-btn" disabled={busy} onClick={() => void act(() => onToggleAgentHalt(agentId, false))}>Resume</button>
-                </div>
-              ))}
-            </>
-          ) : null}
+          <div className="v3fs-ph"><h3>Fleet</h3><span>the complete roster — live status, hold/resume per agent</span></div>
+          {(() => {
+            // The COMPLETE fleet: every agent the programme can run, plus any
+            // id currently in flight or held that the registry doesn't list
+            // (watchers, planners). Running first, held next, ready last.
+            const runByAgent = new Map<string, { status: string; phaseId?: string }>();
+            for (const run of fleet) if (!runByAgent.has(run.agentId)) runByAgent.set(run.agentId, run);
+            const roster = [...new Set([...agentIds, ...fleet.map((run) => run.agentId), ...governance.haltedAgents])];
+            const stateOf = (agentId: string): "running" | "held" | "ready" =>
+              runByAgent.has(agentId) ? "running" : governance.haltedAgents.includes(agentId) ? "held" : "ready";
+            const order = { running: 0, held: 1, ready: 2 } as const;
+            roster.sort((a, b) => order[stateOf(a)] - order[stateOf(b)] || a.localeCompare(b));
+            const runningCount = roster.filter((agentId) => stateOf(agentId) === "running").length;
+            return (
+              <>
+                {runningCount === 0 ? <div className="v3fs-empty">The fleet is idle — every agent below is ready to run.</div> : null}
+                {roster.map((agentId) => {
+                  const state = stateOf(agentId);
+                  const run = runByAgent.get(agentId);
+                  const halted = governance.haltedAgents.includes(agentId);
+                  return (
+                    <div key={agentId} className="v3fs-row">
+                      {state === "running"
+                        ? <span className="v3fs-gdot" aria-hidden="true" />
+                        : <span className={`v3fs-fdot ${state}`} aria-hidden="true" />}
+                      <div className="v3fs-row-g">
+                        <div className="v3fs-row-n">{agentId}</div>
+                        <div className="v3fs-row-m">
+                          {state === "running" ? [run?.status || "running", run?.phaseId].filter(Boolean).join(" · ")
+                            : state === "held" ? "held — new runs are blocked"
+                              : "ready"}
+                        </div>
+                      </div>
+                      <span className="v3fs-tag gn">tier {flowAgentTier(agentId)}</span>
+                      <button type="button" className={`v3fs-btn${halted ? " pri" : ""}`} disabled={busy}
+                        title={halted ? "Resume — allow this agent to run again"
+                          : state === "running" ? "Hold — the current run finishes; new runs are blocked until resumed"
+                            : "Hold — block this agent's runs until resumed"}
+                        onClick={() => void act(() => onToggleAgentHalt(agentId, !halted))}>
+                        {halted ? "Resume" : "Hold"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </>
+            );
+          })()}
         </div>
 
         <div className="v3fs-panel">
