@@ -12,6 +12,7 @@
  * field always wins once a regeneration sets it.
  */
 import type { ProgramSummary } from "@/new/types";
+import { flowMovements, movementEvidence, demoAcceptance } from "@/v3/components/flow/flowShellData";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -102,4 +103,63 @@ export function programAreas(program: ProgramSummary): string[] {
  * filters and parallel per-area work start to matter. */
 export function hasMultipleAreas(program: ProgramSummary): boolean {
   return programAreas(program).length > 1;
+}
+
+export interface AreaProgress {
+  area: string;
+  workflows: number;
+  entities: number;
+  /** The distinct Atlas actors who own steps in this area. */
+  personas: string[];
+  /** …of whom these have Listen evidence on record. */
+  heard: string[];
+  /** Every persona in the area is heard — the area is ready to move to Envision
+   * while other areas are still collecting. */
+  listenReady: boolean;
+  /** Stakeholders across the programme who have accepted their demo (Show). */
+  demosAccepted: number;
+  demosTotal: number;
+}
+
+/**
+ * Per-area progress — the parallel-work view. An area whose voices are all
+ * heard is ready to Envision and Show even while other areas keep collecting.
+ */
+export function areaProgress(program: ProgramSummary): AreaProgress[] {
+  const workflows = atlasWorkflows(program);
+  const entities = ontologyEntities(program);
+  const listen = flowMovements().find((m) => m.id === "listen");
+  const evidence = listen ? movementEvidence(program, listen) : [];
+  const isHeard = (persona: string): boolean => {
+    const key = persona.trim().toLowerCase();
+    if (key.length < 3) return false;
+    return evidence.some((e) => {
+      const first = e.who.split(",")[0].trim().toLowerCase();
+      return first === key || (first.length > 2 && (first.includes(key) || key.includes(first)));
+    });
+  };
+  const demo = demoAcceptance(program);
+  return programAreas(program).map((area) => {
+    const areaWf = workflows.filter((w) => workflowArea(w) === area);
+    const areaEnt = entities.filter((e) => entityArea(e, program) === area);
+    const personaSet = new Set<string>();
+    for (const w of areaWf) {
+      for (const s of (Array.isArray(w.steps) ? w.steps.filter(isRecord) : [])) {
+        const actor = str(s.actor).trim();
+        if (actor) personaSet.add(actor);
+      }
+    }
+    const personas = [...personaSet];
+    const heard = personas.filter(isHeard);
+    return {
+      area,
+      workflows: areaWf.length,
+      entities: areaEnt.length,
+      personas,
+      heard,
+      listenReady: personas.length > 0 && heard.length >= personas.length,
+      demosAccepted: demo.accepted,
+      demosTotal: demo.total,
+    };
+  });
 }

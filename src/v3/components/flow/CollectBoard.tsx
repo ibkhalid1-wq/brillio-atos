@@ -17,6 +17,7 @@ import { mapTranscriptSpeakers } from "@/v3/components/flow/flowTranscriptMap";
 import { AttachFileButton, TranscribeButton, copyTextFromAction } from "@/v3/components/flow/flowCapture";
 import { readGovernedExceptions, withNewException, withResolvedException } from "@/v3/components/flow/flowExceptions";
 import { projectAgentifyReview, projectOntologyAtlasReview, projectListenWorkflowReview, atlasPersonas, reviewFallbackQuestions, type ReviewPayload } from "@/v3/components/flow/flowReviews";
+import { areaProgress, hasMultipleAreas } from "@/v3/components/flow/flowAreas";
 
 /** A movement's discovery, organized by stakeholder. One card per person or
  * role: their script, their link/meeting channels, their captured evidence, a
@@ -159,6 +160,9 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
   };
   return (
     <div className="v3fs-ch-collect">
+      {(movementId === "listen" || movementId === "envision") && hasMultipleAreas(program) ? (
+        <AreaBoard program={program} />
+      ) : null}
       <div className="v3fs-collect-h">
         <div className="v3fs-colh ev">Stakeholder data collection</div>
         <span className="v3fs-collect-count"
@@ -203,6 +207,55 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
       ) : null}
       <GovernedExceptions program={program} movementId={movementId} onSaveInputs={onSaveInputs} />
     </div>
+  );
+}
+
+/**
+ * The AREA BOARD — the parallel-work view. Each business area advances through
+ * the phases on its own clock: an area whose voices are all heard is ready to
+ * Envision and Show while other areas are still collecting. Shown once the
+ * programme spans more than one area.
+ */
+function AreaBoard({ program }: { program: ProgramSummary }) {
+  const rows = areaProgress(program);
+  if (rows.length < 2) return null;
+  const ready = rows.filter((r) => r.listenReady).length;
+  return (
+    <details className="v3fs-areab" open>
+      <summary>
+        <span className="v3fs-areab-ic" aria-hidden="true">▦</span>
+        <b>Areas</b>
+        <span className="v3fs-areab-count">{ready} of {rows.length} ready to move on</span>
+      </summary>
+      <p className="v3fs-areab-lead">
+        Each area runs on its own clock — once an area&rsquo;s voices are all heard it can move to Envision and Show
+        while the others keep collecting.
+      </p>
+      <div className="v3fs-areab-grid">
+        {rows.map((r) => (
+          <div key={r.area} className={`v3fs-areab-card${r.listenReady ? " ready" : ""}`}>
+            <div className="v3fs-areab-card-h">
+              <b>{r.area}</b>
+              <span className={`v3fs-areab-badge${r.listenReady ? " ready" : ""}`}>
+                {r.listenReady ? "Ready to envision" : "Collecting"}
+              </span>
+            </div>
+            <div className="v3fs-areab-meta">
+              <span>{r.workflows} workflow{r.workflows === 1 ? "" : "s"}</span>
+              <span>{r.entities} term{r.entities === 1 ? "" : "s"}</span>
+            </div>
+            {r.personas.length ? (
+              <div className="v3fs-areab-heard">
+                <div className="v3fs-areab-bar">
+                  <span style={{ width: `${Math.round((r.heard.length / r.personas.length) * 100)}%` }} />
+                </div>
+                <span>{r.heard.length}/{r.personas.length} voices heard</span>
+              </div>
+            ) : <div className="v3fs-areab-heard"><span>no named voices yet</span></div>}
+          </div>
+        ))}
+      </div>
+    </details>
   );
 }
 

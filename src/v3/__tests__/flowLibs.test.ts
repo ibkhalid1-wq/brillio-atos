@@ -29,7 +29,7 @@ import { readMetricRegistry, metricConsistency, metricById } from "@/v3/componen
 import { readGovernedExceptions, withNewException, withResolvedException } from "@/v3/components/flow/flowExceptions";
 import { projectAgentifyReview, projectOntologyAtlasReview, atlasPersonas, composeAgentifyAnswers, projectListenWorkflowReview, composeListenWorkflowAnswers } from "@/v3/components/flow/flowReviews";
 import { gateAugmentations } from "@/v3/components/flow/flowCrossValidation";
-import { programAreas, workflowArea, inferArea } from "@/v3/components/flow/flowAreas";
+import { programAreas, workflowArea, inferArea, areaProgress } from "@/v3/components/flow/flowAreas";
 
 const programme = (inner: Record<string, unknown>): ProgramSummary =>
   ({ id: "p1", name: "Test", rawData: inner } as unknown as ProgramSummary);
@@ -540,6 +540,21 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
     expect(areas).toContain("Sales");
     expect(areas).toContain("Marketing");
     expect(areas[areas.length - 1]).toBe("General"); // General sorts last
+  });
+
+  it("areaProgress marks an area ready to envision once its voices are heard — independently of other areas", () => {
+    const p = programme({ data: {
+      phaseInputs: { listen: { interviewTranscripts: "— Priya, Marketing Lead, 2026-07-14 —\nplenty of words about campaigns and the nurture flow here and more detail besides." } },
+      currentStateAtlas: { workflows: [
+        { name: "Campaign build", area: "Marketing", steps: [{ actor: "Priya", action: "drafts" }] },
+        { name: "Quote-to-Cash", area: "Sales", steps: [{ actor: "Dana", action: "prices" }] },
+      ] },
+    } });
+    const rows = areaProgress(p);
+    const marketing = rows.find((r) => r.area === "Marketing");
+    const sales = rows.find((r) => r.area === "Sales");
+    expect(marketing?.listenReady).toBe(true);   // Priya heard
+    expect(sales?.listenReady).toBe(false);       // Dana not heard yet
   });
 
   it("listen-workflow review projects the persona's workflow and composes an edit diff", () => {
