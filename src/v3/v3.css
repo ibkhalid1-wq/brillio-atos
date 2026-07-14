@@ -6623,6 +6623,73 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-gex-date {max-width:220px}
 .v3fs-gex-actions {display:flex;gap:8px;margin-top:2px}
 .v3fs-gex-add {margin:2px 15px 14px}
+
+/* Shareable review panel (operator side) — mint a per-person link to a visual
+   review surface (workflow-agentify on Envision, ontology+atlas on Listen). */
+.v3fs-rvs {margin-top:14px;border:1px solid var(--fs-line);border-radius:12px;background:var(--v3-surface);overflow:hidden}
+.v3fs-rvs > summary {display:flex;align-items:center;gap:9px;padding:12px 15px;cursor:pointer;list-style:none;font-size:12.5px;user-select:none}
+.v3fs-rvs > summary::-webkit-details-marker {display:none}
+.v3fs-rvs > summary:hover {background:color-mix(in srgb,var(--v3-teal,var(--v3-accent-2)) 5%,transparent)}
+.v3fs-rvs-ic {font-size:13px;line-height:1;color:var(--v3-teal,var(--v3-accent-2))}
+.v3fs-rvs > summary b {font-weight:700}
+.v3fs-rvs-tag {margin-left:auto;font-family:var(--v3-font-mono);font-size:9.5px;font-weight:750;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--v3-teal,var(--v3-accent-2));background:color-mix(in srgb,var(--v3-teal,var(--v3-accent-2)) 12%,transparent);border-radius:99px;padding:2px 9px}
+.v3fs-rvs-lead {margin:0 15px 12px;font-size:11.5px;line-height:1.6;color:var(--v3-text-muted);max-width:70ch}
+.v3fs-rvs-empty {margin:0 15px 14px;font-size:11.5px;color:var(--v3-text-muted);font-style:italic}
+.v3fs-rvs-list {display:flex;flex-direction:column;gap:8px;padding:0 15px 14px}
+.v3fs-rvs-row {display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 12px;border:1px solid var(--fs-line);border-radius:9px;background:var(--fs-bg)}
+.v3fs-rvs-who {display:flex;flex-direction:column;gap:1px;min-width:130px}
+.v3fs-rvs-who b {font-size:12.5px;font-weight:650;color:var(--v3-text)}
+.v3fs-rvs-who span {font-size:10.5px;color:var(--v3-text-muted)}
+.v3fs-rvs-row .v3fs-btn {margin-left:auto}
+.v3fs-rvs-linkrow {display:inline-flex;flex:1 1 200px;min-width:170px}
+.v3fs-rvs-linkrow input {flex:1;min-width:0;font-family:var(--v3-font-mono);font-size:10.5px;color:var(--v3-text-secondary);
+  background:var(--v3-surface);border:1px solid var(--fs-line);border-radius:99px;padding:6px 11px}
+.v3fs-rvs-linkrow input:focus {outline:none;border-color:var(--v3-accent-2)}
+
+/* Stakeholder review surfaces (public portal) — agentify + ontology/atlas. */
+.v3fs-rvw {display:flex;flex-direction:column;gap:20px;margin-top:8px}
+.v3fs-rvw-wf {border:1px solid var(--fs-line);border-radius:14px;background:var(--v3-surface);overflow:hidden}
+.v3fs-rvw-wf-h {display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;padding:14px 18px;border-bottom:1px solid var(--fs-line);
+  background:color-mix(in srgb,var(--v3-accent-2) 4%,transparent)}
+.v3fs-rvw-wf-h b {font-size:15px;font-weight:700;letter-spacing:-.01em}
+.v3fs-rvw-trigger {font-size:11.5px;color:var(--v3-text-muted)}
+.v3fs-rvw-steps {list-style:none;margin:0;padding:8px;display:flex;flex-direction:column;gap:8px;counter-reset:none}
+.v3fs-rvw-step {border:1px solid var(--fs-line);border-radius:10px;padding:11px 13px;display:flex;flex-direction:column;gap:9px;background:var(--fs-bg)}
+.v3fs-rvw-step.mine {border-left:3px solid var(--v3-accent-2);background:color-mix(in srgb,var(--v3-accent-2) 4%,var(--fs-bg))}
+.v3fs-rvw-step-a {display:flex;gap:11px;align-items:flex-start}
+.v3fs-rvw-num {flex-shrink:0;width:22px;height:22px;border-radius:50%;background:var(--fs-line);color:var(--v3-text-secondary);
+  font-family:var(--v3-font-mono);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.v3fs-rvw-step.mine .v3fs-rvw-num {background:var(--v3-accent-2);color:#fff}
+.v3fs-rvw-step-body {display:flex;flex-direction:column;gap:2px;min-width:0}
+.v3fs-rvw-action {font-size:14px;line-height:1.45;color:var(--v3-text)}
+.v3fs-rvw-meta {display:flex;gap:7px;font-size:11px;color:var(--v3-text-muted)}
+.v3fs-rvw-meta .you {color:var(--v3-accent-2);font-weight:650}
+.v3fs-rvw-seg {display:flex;gap:6px;flex-wrap:wrap}
+.v3fs-rvw-opt {flex:1 1 auto;min-width:96px;padding:8px 12px;border:1px solid var(--fs-line);border-radius:8px;background:var(--v3-surface);
+  font-size:12px;font-weight:600;color:var(--v3-text-secondary);cursor:pointer;transition:border-color .12s,background .12s,color .12s}
+.v3fs-rvw-opt:hover {border-color:var(--v3-accent-2)}
+.v3fs-rvw-opt.on.keep {border-color:var(--v3-text-muted);background:color-mix(in srgb,var(--v3-text-muted) 12%,transparent);color:var(--v3-text)}
+.v3fs-rvw-opt.on.assist {border-color:var(--v3-amber);background:var(--v3-amber-soft);color:var(--v3-amber)}
+.v3fs-rvw-opt.on.agentify {border-color:var(--v3-green);background:color-mix(in srgb,var(--v3-green) 14%,transparent);color:var(--v3-green)}
+.v3fs-rvw-comment,.v3fs-rvw-overall {width:100%;font-size:13px;font-family:inherit;border:1px solid var(--fs-line);border-radius:8px;
+  padding:9px 12px;background:var(--v3-surface);color:var(--v3-text)}
+.v3fs-rvw-comment:focus,.v3fs-rvw-overall:focus {outline:none;border-color:var(--v3-accent-2);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--v3-accent-2) 14%,transparent)}
+.v3fs-rvw-overall {resize:vertical;line-height:1.5}
+.v3fs-rvw-terms {display:flex;flex-direction:column;gap:10px;padding:12px}
+.v3fs-rvw-term {border:1px solid var(--fs-line);border-radius:10px;padding:11px 13px;display:flex;flex-direction:column;gap:6px;background:var(--fs-bg)}
+.v3fs-rvw-term-h {display:flex;align-items:baseline;gap:9px}
+.v3fs-rvw-term-h b {font-size:14px;font-weight:700}
+.v3fs-rvw-sor {font-family:var(--v3-font-mono);font-size:10px;color:var(--v3-text-muted);background:var(--fs-line);border-radius:99px;padding:2px 8px}
+.v3fs-rvw-def {margin:0;font-size:12.5px;line-height:1.5;color:var(--v3-text-secondary)}
+.v3fs-rvw-aka {margin:0;font-size:11px;color:var(--v3-text-muted);font-style:italic}
+.v3fs-rvw-ministeps {margin:2px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--v3-text-secondary)}
+.v3fs-rvw-foot {display:flex;flex-direction:column;gap:10px;margin-top:20px;align-items:flex-start}
+.v3fs-rvw-progress {width:100%;height:5px;border-radius:99px;background:var(--fs-line);overflow:hidden}
+.v3fs-rvw-progress > span {display:block;height:100%;background:var(--v3-accent-2);border-radius:99px;transition:width .2s ease}
+.v3fs-rvw-count {font-size:11.5px;color:var(--v3-text-muted)}
+.v3fs-rvw-send {align-self:flex-start;padding:11px 22px;font-size:14px}
 .v3fs-ivc-regen {display:flex;flex-direction:column;gap:9px;border:1px dashed var(--v3-amber);border-radius:10px;
   padding:10px 12px;background:var(--v3-amber-soft)}
 .v3fs-ivc-regen p {margin:0;font-size:11.5px;line-height:1.55;color:var(--v3-amber)}

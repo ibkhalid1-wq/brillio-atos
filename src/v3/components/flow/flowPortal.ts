@@ -26,6 +26,11 @@ export interface FlowInterviewPack {
   createdAt: string;
   respondedAt?: string;  /** Set on follow-up packs — the movement whose gaps it asks. */
   movementId?: string;
+  /** Where ingested answers land (defaults to interviewTranscripts). */
+  captureField?: string;
+  /** A projected REVIEW surface (workflow-agentify or ontology+atlas) served
+   * beside the questions — the pack still answers through the interview path. */
+  review?: unknown;
 }
 
 export interface FlowPortalItem {
@@ -344,6 +349,66 @@ export function mintFollowUpPack(
     flowInterviewPacks: [...kept, pack].slice(-30),
     flowAttestations: [...log, attestation].slice(-200),
   }, usesNestedData);
+}
+
+/**
+ * Mint a shareable REVIEW link — a visual input surface (workflow-agentify or
+ * ontology+atlas) projected from the record and stored on the pack. The edge
+ * serves the review beside a short fallback agenda; answers come back through
+ * the same quarantine → evidence path as any interview. Idempotent per person ×
+ * movement × review-kind: re-sharing reuses the standing link, and a fresh
+ * projection supersedes an unanswered older one.
+ */
+export function mintReviewPack(
+  program: ProgramSummary,
+  input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string },
+  actor: string,
+): Record<string, unknown> | null {
+  if (!input.who.trim() || !input.review) return null;
+  const { wrapper, inner, usesNestedData } = getProgramState((program.rawData ?? {}) as Record<string, unknown>);
+  const existing = Array.isArray(inner.flowInterviewPacks) ? (inner.flowInterviewPacks as unknown[]) : [];
+  const roleTag = `review:${input.reviewKind}`;
+  const sameKind = (pack: unknown): boolean => isRecord(pack)
+    && String(pack.stakeholder ?? "").trim().toLowerCase() === input.who.trim().toLowerCase()
+    && String(pack.movementId ?? "") === input.movementId
+    && String(pack.role ?? "") === roleTag;
+  // A standing, UNANSWERED review link for the same target stands — reuse it.
+  const standing = [...existing].reverse().find((pack) => sameKind(pack) && typeof (pack as Record<string, unknown>).respondedAt !== "string");
+  if (standing) return null;
+  // Retire superseded unanswered review links; keep answered ones (the record).
+  const kept = existing.filter((pack) => !(sameKind(pack) && typeof (pack as Record<string, unknown>).respondedAt !== "string"));
+  const now = new Date().toISOString();
+  const pack = {
+    id: `pack-${randomSecret().slice(0, 10)}`,
+    stakeholder: input.who.trim(),
+    role: roleTag,
+    intro: input.intro,
+    questions: input.questions.slice(0, 8),
+    token: randomSecret(),
+    createdAt: now,
+    movementId: input.movementId,
+    captureField: input.captureField,
+    review: input.review,
+  };
+  const log = Array.isArray(inner.flowAttestations) ? (inner.flowAttestations as unknown[]) : [];
+  const attestation = {
+    ts: now, agentId: actor, phaseId: input.movementId, tier: 2,
+    action: `Shared a ${input.reviewKind === "agentify" ? "workflow agentification" : "ontology & current-state"} review — ${pack.stakeholder}`,
+  };
+  return wrapProgramState(wrapper, {
+    ...inner,
+    flowInterviewPacks: [...kept, pack].slice(-30),
+    flowAttestations: [...log, attestation].slice(-200),
+  }, usesNestedData);
+}
+
+/** Newest review pack for a person × movement × kind — the link to copy after minting. */
+export function latestReviewPackFor(program: ProgramSummary, movementId: string, who: string, reviewKind: string): FlowInterviewPack | null {
+  const roleTag = `review:${reviewKind}`;
+  const packs = listInterviewPacks(program).filter((pack) =>
+    pack.stakeholder.trim().toLowerCase() === who.trim().toLowerCase()
+    && (pack.movementId ?? "") === movementId && pack.role === roleTag);
+  return packs.length ? packs[packs.length - 1] : null;
 }
 
 /** Newest pack for a stakeholder — the link to copy right after minting. */

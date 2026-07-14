@@ -40,7 +40,7 @@ import { recordShowPass } from "@/v3/components/flow/flowTracks";
 import { applyArtifactEdit } from "@/v3/components/flow/flowArtifactEdit";
 import { compileShipLanes, setShipLane, toggleShipItem } from "@/v3/components/flow/flowShip";
 import { scheduleFollowUp, discoveryKitCoverageGuidance } from "@/v3/components/flow/flowMeetings";
-import { mintFollowUpPack, latestPackFor, portalLinkFor } from "@/v3/components/flow/flowPortal";
+import { mintFollowUpPack, latestPackFor, portalLinkFor, mintReviewPack, latestReviewPackFor } from "@/v3/components/flow/flowPortal";
 import { mintBrief, briefLinkFor } from "@/v3/components/flow/flowBriefs";
 import FlowRespond from "@/v3/components/flow/FlowRespond";
 import FlowBrief from "@/v3/components/flow/FlowBrief";
@@ -2634,6 +2634,28 @@ export default function AppShellV3() {
               // Minting was a no-op because the identical pack already exists —
               // hand back the standing link instead of a fresh secret.
               const existing = latestPackFor(activeProgram, input.who);
+              if (existing) mintedLink = portalLinkFor(activeProgram.id, existing);
+            }
+            return mintedLink;
+          }}
+          onMintReview={async (input) => {
+            const actor = currentUser?.email || "you";
+            let mintedLink: string | null = null;
+            await persistFlowMutation((program) => {
+              const blob = mintReviewPack(program, input, actor);
+              if (blob) {
+                const inner = (typeof blob.data === "object" && blob.data !== null ? blob.data : blob) as Record<string, unknown>;
+                const packs = Array.isArray(inner.flowInterviewPacks) ? inner.flowInterviewPacks : [];
+                const last = packs[packs.length - 1] as Record<string, unknown> | undefined;
+                if (last && typeof last.token === "string") {
+                  mintedLink = `${window.location.origin}${window.location.pathname}?flowRespond=${encodeURIComponent(`${program.id}.${last.token}`)}`;
+                }
+              }
+              return blob;
+            });
+            if (!mintedLink && activeProgram) {
+              // A standing review link already covers this person — reuse it.
+              const existing = latestReviewPackFor(activeProgram, input.movementId, input.who, input.reviewKind);
               if (existing) mintedLink = portalLinkFor(activeProgram.id, existing);
             }
             return mintedLink;

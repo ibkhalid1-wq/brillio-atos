@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ScreenCard } from "@/v3/components/flow/studio/ExperienceDesignStudio";
+import FlowReviewSurface from "@/v3/components/flow/FlowReviewSurface";
+import type { ReviewPayload } from "@/v3/components/flow/flowReviews";
 
 /**
  * The public async-interview page — what a stakeholder sees when they open a
@@ -39,6 +41,10 @@ interface Pack {
   /** THEIR demo script — narrates the walk: opening quote, scenario,
    * per-beat talk track and callbacks, closing acceptance ask. */
   script?: { openingQuote?: string; scenario?: string; acceptanceAsk?: string; steps?: Array<{ beat?: string; say?: string; callback?: string }> };
+  /** A projected REVIEW surface — workflow-agentify or ontology+atlas. When
+   * present, the page renders the visual review instead of the plain form; its
+   * composed response still submits through the interview `answers` path. */
+  review?: ReviewPayload;
 }
 
 type DemoVerdict = "accepted" | "accepted-with-changes" | "rework";
@@ -247,6 +253,10 @@ export default function FlowRespond({ token }: { token: string }) {
                 team for a fresh link.
               </p>
             </div>
+          ) : state.pack.review ? (
+            <FlowReviewSurface review={state.pack.review} stakeholder={state.pack.stakeholder}
+              submitting={submitting} error={error}
+              onSubmit={(answers) => void submit({ answers })} />
           ) : state.pack.kind === "demo" ? (
             <>
               <header className="v3fs-hero">

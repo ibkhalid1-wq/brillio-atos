@@ -273,6 +273,9 @@ Deno.serve(async (req: Request) => {
         roster,
         ...(interviewDesign ? { design: interviewDesign } : {}),
         ...(interviewScript ? { script: interviewScript } : {}),
+        // A shareable review surface (workflow-agentify or ontology+atlas),
+        // projected client-side at mint and passed straight through.
+        ...(isRecord(hit.pack.review) ? { review: hit.pack.review } : {}),
         responded: typeof hit.pack.respondedAt === "string",
       });
     }

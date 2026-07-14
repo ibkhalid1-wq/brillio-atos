@@ -50,6 +50,7 @@ interface FlowCanvasProps {
   onScheduleFollowUp?: (movementId: string, who: string, date: string) => Promise<void>;
   /** Mint a follow-up link (async form of the meeting); resolves to the URL. */
   onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
+  onMintReview?: (input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string }) => Promise<string | null>;
   /** Persist a studio edit to an artifact document (attested). */
   onSaveArtifactDoc?: (input: ArtifactEditInput) => Promise<void>;
   /** Send an artifact to a chosen approver — mints a no-login link. */
@@ -82,7 +83,7 @@ interface FlowCanvasProps {
  * one-line brief, and the ranked "Up next" queue. Nothing locks; editing
  * unfolds in place via the shared inputs panel.
  */
-export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onSetShipLane, onScheduleFollowUp, onMintFollowUp, onSaveArtifactDoc, onSendForApproval, onOpenInbox, onRecordShowPass, onRecordGate, onReopenGate, onRunAgentAndWait, relatedPrograms, onSelectProgram, onComment }: FlowCanvasProps) {
+export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onSetShipLane, onScheduleFollowUp, onMintFollowUp, onMintReview, onSaveArtifactDoc, onSendForApproval, onOpenInbox, onRecordShowPass, onRecordGate, onReopenGate, onRunAgentAndWait, relatedPrograms, onSelectProgram, onComment }: FlowCanvasProps) {
   const movements = useMemo(() => flowMovements(), []);
   // A spine regeneration in flight — the collect cards suppress their script
   // until it lands (a script off a half-regenerated kit is inaccurate).
@@ -460,7 +461,7 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                               await onRunAgentAndWait(artifact.id, movement.id);
                             }
                           } : undefined}
-                          onSaveInputs={onSaveInputs} onMintFollowUp={onMintFollowUp}
+                          onSaveInputs={onSaveInputs} onMintFollowUp={onMintFollowUp} onMintReview={onMintReview}
                           onMintPacks={movement.id === "listen" ? onMintPacks : undefined}
                           onScheduleFollowUp={onScheduleFollowUp}
                           onSendForApproval={onSendForApproval}

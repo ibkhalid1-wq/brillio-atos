@@ -16,6 +16,7 @@ import { resolveMovementStakeholders, readRoleBindings, type MovementStakeholder
 import { mapTranscriptSpeakers } from "@/v3/components/flow/flowTranscriptMap";
 import { AttachFileButton, TranscribeButton, copyTextFromAction } from "@/v3/components/flow/flowCapture";
 import { readGovernedExceptions, withNewException, withResolvedException } from "@/v3/components/flow/flowExceptions";
+import { projectAgentifyReview, projectOntologyAtlasReview, atlasPersonas, reviewFallbackQuestions } from "@/v3/components/flow/flowReviews";
 
 /** A movement's discovery, organized by stakeholder. One card per person or
  * role: their script, their link/meeting channels, their captured evidence, a
@@ -78,7 +79,7 @@ const COLLECT_COLUMNS: Array<{ key: CollectStatus; label: string }> = [
  * into columns by collection state (Heard · Awaiting · To reach), each card the
  * person's quote, dated feedback trail (click → transcript), follow-ups,
  * meeting, and link channels. Driven by resolveMovementStakeholders. */
-export function IntervieweeDiscovery({ program, movementId, captureField, docsStale, regenerating, onRegenerateStale, onSaveInputs, onMintFollowUp, onMintPacks, onScheduleFollowUp, onSendForApproval, onFocusPerson, onCaptured }: {
+export function IntervieweeDiscovery({ program, movementId, captureField, docsStale, regenerating, onRegenerateStale, onSaveInputs, onMintFollowUp, onMintReview, onMintPacks, onScheduleFollowUp, onSendForApproval, onFocusPerson, onCaptured }: {
   program: ProgramSummary;
   movementId: string;
   captureField: string;
@@ -92,6 +93,9 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
   onRegenerateStale?: () => Promise<void>;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
   onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
+  /** Mint a shareable REVIEW link (workflow-agentify or ontology+atlas) — the
+   * projected payload is built on the client and stored on the pack. */
+  onMintReview?: (input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string }) => Promise<string | null>;
   onMintPacks?: () => Promise<void>;
   onScheduleFollowUp?: (movementId: string, who: string, date: string) => Promise<void>;
   /** Mint a sign-off link for ONE stakeholder × artifact — approval lives on
@@ -191,8 +195,122 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
           </div>
         ))}
       </div>
+      {movementId === "envision" ? (
+        <ReviewShare program={program} movementId={movementId} reviewKind="agentify" onMintReview={onMintReview} />
+      ) : null}
+      {movementId === "listen" ? (
+        <ReviewShare program={program} movementId={movementId} reviewKind="ontology-atlas" onMintReview={onMintReview} />
+      ) : null}
       <GovernedExceptions program={program} movementId={movementId} onSaveInputs={onSaveInputs} />
     </div>
+  );
+}
+
+/**
+ * Shareable stakeholder REVIEWS — a visual input surface sent over a no-login
+ * link. Envision shares each persona's workflow for an "agentify each step"
+ * pass; Listen shares the ontology + current-state atlas for a "what's wrong or
+ * missing" pass. The payload is projected from the record here and stored on
+ * the pack; responses land back as evidence through the normal quarantine.
+ */
+function ReviewShare({ program, movementId, reviewKind, onMintReview }: {
+  program: ProgramSummary;
+  movementId: string;
+  reviewKind: "agentify" | "ontology-atlas";
+  onMintReview?: (input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string }) => Promise<string | null>;
+}) {
+  const [links, setLinks] = useState<Record<string, string>>({});
+  const [copied, setCopied] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+
+  // Who can review. Agentify: the personas who act in the Atlas (their own
+  // workflow). Ontology+atlas: the named people we've heard, each commenting
+  // on the shared map — one link per person keeps responses attributed.
+  const reviewers = reviewKind === "agentify"
+    ? atlasPersonas(program).map((name) => ({ name, role: "" }))
+    : resolveMovementStakeholders(program, "listen")
+      .filter((s) => !s.isRole && s.name.trim())
+      .map((s) => ({ name: s.name, role: s.role }));
+  // Dedupe by name (an actor can appear under several workflows).
+  const seen = new Set<string>();
+  const uniqueReviewers = reviewers.filter((r) => {
+    const key = r.name.trim().toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key); return true;
+  });
+
+  const captureField = reviewKind === "agentify" ? "steeringConversation" : "interviewTranscripts";
+  const heading = reviewKind === "agentify" ? "Workflow agentification review" : "Ontology & current-state review";
+  const lead = reviewKind === "agentify"
+    ? "Send a persona their own workflow, step by step, and ask which steps an agent should take over. Their answers come back as evidence."
+    : "Share how we've mapped the domain — the terms and the workflows — and ask each person what's wrong or missing. Their comments come back as evidence.";
+
+  const share = async (name: string, role: string) => {
+    setNote(null);
+    setBusy(name);
+    try {
+      const review = reviewKind === "agentify" ? projectAgentifyReview(program, name) : projectOntologyAtlasReview(program);
+      if (!review || !onMintReview) {
+        setNote(reviewKind === "agentify"
+          ? "No workflow to review yet — generate the Current-State Atlas first."
+          : "Nothing to review yet — generate the Domain Ontology and Current-State Atlas first.");
+        return;
+      }
+      const link = await copyTextFromAction(() => onMintReview({
+        movementId, who: name, role: role || "Reviewer", captureField, reviewKind,
+        review, questions: reviewFallbackQuestions(review), intro: review.intro,
+      }));
+      if (link) {
+        setLinks((prev) => ({ ...prev, [name]: link }));
+        setCopied(name);
+        window.setTimeout(() => setCopied((current) => (current === name ? null : current)), 2400);
+      } else {
+        setNote("Could not create the link — try again.");
+      }
+    } finally { setBusy(null); }
+  };
+
+  const ready = reviewKind === "agentify"
+    ? !!projectAgentifyReview(program, uniqueReviewers[0]?.name ?? "")
+    : !!projectOntologyAtlasReview(program);
+
+  return (
+    <details className="v3fs-rvs" open={false}>
+      <summary>
+        <span className="v3fs-rvs-ic" aria-hidden="true">◇</span>
+        <b>{heading}</b>
+        <span className="v3fs-rvs-tag">shareable</span>
+      </summary>
+      <p className="v3fs-rvs-lead">{lead}</p>
+      {!ready ? (
+        <p className="v3fs-rvs-empty">{reviewKind === "agentify"
+          ? "Generate the Current-State Atlas to share workflows for review."
+          : "Generate the Domain Ontology and Current-State Atlas to share them for review."}</p>
+      ) : !uniqueReviewers.length ? (
+        <p className="v3fs-rvs-empty">No {reviewKind === "agentify" ? "workflow personas" : "people"} to share with yet.</p>
+      ) : (
+        <div className="v3fs-rvs-list">
+          {uniqueReviewers.map((r) => (
+            <div key={r.name} className="v3fs-rvs-row">
+              <div className="v3fs-rvs-who">
+                <b>{r.name}</b>
+                {r.role ? <span>{r.role}</span> : null}
+              </div>
+              <button type="button" className="v3fs-btn" disabled={busy === r.name} onClick={() => void share(r.name, r.role)}>
+                {busy === r.name ? "…" : copied === r.name ? "Copied ✓" : links[r.name] ? "⎘ Copy link" : "⎘ Create & copy link"}
+              </button>
+              {links[r.name] ? (
+                <span className="v3fs-rvs-linkrow">
+                  <input readOnly value={links[r.name]} onFocus={(e) => e.currentTarget.select()} aria-label={`Review link for ${r.name}`} />
+                </span>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      )}
+      {note ? <div className="v3fs-ivc-note warn">{note}</div> : null}
+    </details>
   );
 }
 
