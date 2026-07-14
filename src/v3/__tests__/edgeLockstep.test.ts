@@ -118,3 +118,40 @@ describe("the Discovery Kit guarantees coverage-roster inclusion", () => {
     expect(EDGE).toMatch(/Every named person on that roster MUST get an interview/);
   });
 });
+
+describe("evidence pipeline guards stay wired (2026-07-14 regression pins)", () => {
+  // The shrunken-ontology incident had three compounding causes; each now has
+  // a source-level pin so a refactor can't quietly remove the guard.
+  it("synthesis agents receive the full conversation record", () => {
+    const block = EDGE.match(/CONVERSATION_RECORD_AGENTS = new Set<string>\(\[([\s\S]*?)\]\)/);
+    expect(block).toBeTruthy();
+    for (const id of ["charter", "discovery-kit", "domain-ontology", "current-state-atlas"]) {
+      expect(block![1]).toContain(`"${id}"`);
+    }
+    expect(EDGE).toContain("conversationRecord: buildConversationRecord(inner)");
+  });
+
+  it("evidence-scaled documents keep the tall output ceiling", () => {
+    const block = EDGE.match(/LARGE_OUTPUT_AGENTS = new Set<string>\(\[([\s\S]*?)\]\)/);
+    expect(block).toBeTruthy();
+    for (const id of [
+      "discovery-kit", "demo-scripts", "domain-ontology", "current-state-atlas",
+      "architecture-strategy", "agentic-blueprint", "prototype-pack", "hardening-plan", "eval-suite",
+    ]) {
+      expect(block![1]).toContain(`"${id}"`);
+    }
+  });
+
+  it("the shrink guard covers the coverage-bearing artifacts", () => {
+    expect(EDGE).toContain('"domain-ontology": ["entities", "relations"]');
+    expect(EDGE).toContain('"current-state-atlas": ["workflows"]');
+    expect(EDGE).toContain('"discovery-kit": ["interviews"]');
+    expect(EDGE).toContain('"agentic-blueprint": ["agents"]');
+  });
+
+  it("every generation stamps its input-coverage receipt", () => {
+    expect(EDGE).toContain("inputCoverage: {");
+    expect(EDGE).toContain("conversationRecordChars:");
+    expect(EDGE).toContain("outputRepaired");
+  });
+});

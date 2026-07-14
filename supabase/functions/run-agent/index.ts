@@ -8680,7 +8680,13 @@ Deno.serve(async (req) => {
     // Input tokens collapse to the size of the broken output, so the repair costs
     // a fraction of a full re-run. If the repair still fails, throw so the run is
     // recorded as failed rather than silently completing with zero artifacts.
+    // Truncation forensics: a repair that "succeeds" on a cut stream yields a
+    // valid but AMPUTATED document (the 8-entity ontology, 2026-07-14). The
+    // flag rides generation metadata so an amputation risk is visible on the
+    // artifact, and the shrink guard downstream holds any actual coverage loss.
+    let outputRepaired = false;
     if (!hasUsableAgentJson(claudeResult.text)) {
+      outputRepaired = true;
       await logObservation(auth.admin, {
         runId,
         programId: request.programId,
@@ -9061,6 +9067,17 @@ Deno.serve(async (req) => {
           changedInputs: formalGenChangedInputs.map((c) => c.field),
           conflictsResolved: formalGenChangedInputs.map((c) => ({ field: c.field, sourceUsed: "currentInput", sourceIgnored: "existingArtifact" })),
           inputSnapshot,
+          // Coverage receipt: HOW MUCH record this run actually received, and
+          // whether its output needed a repair pass (amputation risk). Input
+          // starvation and truncation were both invisible until 2026-07-14 —
+          // this stamp makes either legible on the artifact after the fact.
+          inputCoverage: {
+            conversationRecordChars: CONVERSATION_RECORD_AGENTS.has(request.agentId)
+              ? buildConversationRecord(getInnerProgramData(contextProgramData)).length
+              : 0,
+            carryForwardDocuments: carryForwardDocuments.length,
+            outputRepaired,
+          },
           generatedAt: new Date().toISOString(),
         };
         // The Strategic Roadmap is the single folded delivery artifact: alongside
