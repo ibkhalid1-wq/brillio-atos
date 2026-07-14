@@ -68,8 +68,15 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
     if (!chosen) return;
     setSendBusy(true);
     try {
-      // Freeze what the approver reads: the artifact's rendered text as shown.
-      const snapshot = dialogRef.current?.querySelector(".v3fs-docview-b")?.textContent?.replace(/\s+\n/g, "\n").trim() || undefined;
+      // Freeze what the approver reads: the artifact's rendered prose — minus
+      // the grounding/citation panels, which are operator tooling, not content.
+      let snapshot: string | undefined;
+      const body = dialogRef.current?.querySelector(".v3fs-docview-b");
+      if (body) {
+        const clone = body.cloneNode(true) as HTMLElement;
+        clone.querySelectorAll(".v3fs-ground, .v3fs-disc").forEach((el) => el.remove());
+        snapshot = clone.textContent?.replace(/\s{2,}/g, " ").replace(/\s+\n/g, "\n").trim() || undefined;
+      }
       const link = await onSendForApproval({ artifactId: artifact.id, movementId: artifact.movementId, artifactTitle: artifact.title, approver: chosen, snapshot });
       setSentLink(link);
       if (link) { try { await navigator.clipboard.writeText(link); } catch { /* clipboard blocked — link still shown */ } }
