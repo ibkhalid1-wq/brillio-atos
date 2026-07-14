@@ -5,7 +5,7 @@
  */
 import { describe, it, expect } from "vitest";
 import type { ProgramSummary } from "@/new/types";
-import { resolveFlowDecision, listOpenFlowDecisions, describeDecisionChanges } from "@/v3/components/flow/flowDecisions";
+import { resolveFlowDecision, listOpenFlowDecisions, describeDecisionChanges, handledContradictionStatements, isContradictionHandled } from "@/v3/components/flow/flowDecisions";
 import { scriptDocumentRefs, meetingKit, stakeholderEmail, buildMeetingIcs, mailtoLink, kitGaps } from "@/v3/components/flow/flowMeetings";
 import { locateQuote, kitPersonas, personasMissingFromAtlas, readContradictions, contradictionLogWithout } from "@/v3/components/flow/flowShellData";
 import { mintBrief, buildBriefSnapshot } from "@/v3/components/flow/flowBriefs";
@@ -277,6 +277,45 @@ describe("contradictionEntries — watcher findings file as open log rows", () =
     const blob = resolveFlowDecision(withDecision(), "cw1", "declined", "you")!;
     const listen = (blob.phaseInputs as Record<string, Record<string, string>> | undefined)?.listen;
     expect(listen?.contradictionLog).toBeUndefined();
+  });
+});
+
+describe("contradiction stickiness — a dispute is proposed once, whatever the verdict", () => {
+  it("handledContradictionStatements gathers log rows AND every decision's statements, any verdict", () => {
+    const p = programme({
+      phaseInputs: { listen: { contradictionLog: JSON.stringify([{ statement: "Logged dispute", status: "Open" }]) } },
+      flowDecisions: [
+        { id: "d1", tier: 2, status: "declined", agentId: "contradiction-watcher", movementId: "listen",
+          payload: { contradictionEntries: [{ statement: "Declined dispute" }] } },
+        { id: "d2", tier: 2, status: "confirmed", agentId: "current-state-atlas", movementId: "listen",
+          payload: { contradictionEntries: [{ statement: "Atlas dispute" }] } },
+      ],
+    });
+    const handled = handledContradictionStatements(p);
+    expect(handled).toEqual(expect.arrayContaining(["logged dispute", "declined dispute", "atlas dispute"]));
+    expect(isContradictionHandled(handled, "Declined dispute")).toBe(true);
+    // Either-direction containment tolerates paraphrase/slicing.
+    expect(isContradictionHandled(handled, "the Atlas dispute, restated at length")).toBe(true);
+    expect(isContradictionHandled(handled, "a brand new disagreement")).toBe(false);
+  });
+
+  it("the negated-claim watcher stays silent when the dispute was already judged by ANOTHER agent (declined)", () => {
+    const claim = { transformationCharter: { businessObjective: "Build the CRM on the Twenty open-source foundation, proving it on one pilot." } };
+    const evidence = { phaseInputs: { frame: { sponsorConversation: "— Raj, Sponsor, 2026-07-12 —\nWe are no longer using Twenty as the foundation; the team builds from scratch." } } };
+    // Fresh: the watcher proposes it.
+    expect(negatedClaimProposal(programme({ ...claim, ...evidence }))).not.toBeNull();
+    // But a DECLINED atlas decision (different id, different agent) already
+    // carried that statement — so it is NOT re-surfaced. Without the per-statement
+    // filter the stable-id check would miss this (the ids don't match).
+    const alreadyJudged = programme({
+      ...claim, ...evidence,
+      flowDecisions: [{
+        id: "atlas-x", tier: 2, status: "declined", agentId: "current-state-atlas", movementId: "listen",
+        title: "File 1 contradiction to the log",
+        payload: { contradictionEntries: [{ statement: "We are no longer using Twenty as the foundation", between: "Raj vs Charter", positions: "" }] },
+      }],
+    });
+    expect(negatedClaimProposal(alreadyJudged)).toBeNull();
   });
 });
 

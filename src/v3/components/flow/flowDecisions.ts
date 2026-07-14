@@ -84,6 +84,41 @@ export function listOpenFlowDecisions(program: ProgramSummary): FlowDecision[] {
   return listFlowDecisions(program).filter((decision) => decision.status === "open");
 }
 
+/**
+ * Every contradiction statement the programme has already HANDLED — filed in
+ * Listen's log OR carried by any contradiction-watcher decision, whatever its
+ * verdict (open, confirmed, or declined). A dispute is proposed ONCE: this is
+ * the set the detector and the negated-claim watcher check so a decision the
+ * human already judged — including one they DECLINED — never re-appears.
+ */
+export function handledContradictionStatements(program: ProgramSummary): string[] {
+  const out: string[] = [];
+  for (const row of parseGridRows(readMovementInputs(program, "listen").contradictionLog)) {
+    const statement = String(row.statement ?? "").trim().toLowerCase();
+    if (statement.length >= 8) out.push(statement);
+  }
+  for (const decision of listFlowDecisions(program)) {
+    // Any decision carrying contradiction rows counts — the watcher AND the
+    // Atlas both queue "File N contradictions" cards, so both are "handled".
+    if (!decision.payload || !Array.isArray(decision.payload.contradictionEntries)) continue;
+    const entries = decision.payload.contradictionEntries;
+    for (const entry of entries) {
+      if (!isRecord(entry)) continue;
+      const statement = String(entry.statement ?? "").trim().toLowerCase();
+      if (statement.length >= 8) out.push(statement);
+    }
+  }
+  return out;
+}
+
+/** True when a statement matches one already handled — either-direction
+ * containment, so paraphrase and slicing don't slip a duplicate through. */
+export function isContradictionHandled(handled: string[], statement: string): boolean {
+  const s = statement.trim().toLowerCase();
+  if (s.length < 8) return false;
+  return handled.some((entry) => entry.includes(s) || s.includes(entry));
+}
+
 export function listFlowAttestations(program: ProgramSummary): FlowAttestation[] {
   const list = innerData(program).flowAttestations;
   if (!Array.isArray(list)) return [];

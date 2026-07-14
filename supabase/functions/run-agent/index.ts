@@ -434,6 +434,49 @@ function getInnerProgramData(programData: ProgramState): ProgramState {
   return Object.keys(nested).length ? nested : programData;
 }
 
+/**
+ * Every contradiction statement the programme has already HANDLED — filed in
+ * Listen's contradiction log OR carried by ANY prior contradiction decision
+ * (from the watcher or the Atlas), whatever its verdict: open, confirmed, or
+ * declined. A dispute is proposed ONCE. Both the contradiction detector and the
+ * Atlas check this set before queuing "File N contradictions", so a decision the
+ * human already judged — including one they DECLINED — never returns to the
+ * Inbox on the next capture or regeneration.
+ */
+function flowHandledContradictionStatements(programData: ProgramState): string[] {
+  const inner = getInnerProgramData(programData);
+  const out: string[] = [];
+  const phaseInputs = isRecord(inner.phaseInputs) ? inner.phaseInputs as Record<string, unknown> : {};
+  const listen = isRecord(phaseInputs.listen) ? phaseInputs.listen as Record<string, unknown> : {};
+  const rawLog = listen.contradictionLog;
+  if (typeof rawLog === "string" && rawLog.trim().startsWith("[")) {
+    try {
+      const parsed = JSON.parse(rawLog);
+      if (Array.isArray(parsed)) for (const row of parsed) {
+        if (isRecord(row)) { const s = String(row.statement ?? "").trim().toLowerCase(); if (s.length >= 8) out.push(s); }
+      }
+    } catch { /* ignore a malformed log */ }
+  }
+  const decisions = Array.isArray(inner.flowDecisions) ? (inner.flowDecisions as unknown[]).filter(isRecord) : [];
+  for (const decision of decisions) {
+    const payload = isRecord(decision.payload) ? decision.payload as Record<string, unknown> : {};
+    const entries = Array.isArray(payload.contradictionEntries) ? payload.contradictionEntries.filter(isRecord) : [];
+    for (const entry of entries) {
+      const s = String((entry as Record<string, unknown>).statement ?? "").trim().toLowerCase();
+      if (s.length >= 8) out.push(s);
+    }
+  }
+  return out;
+}
+
+/** True when a statement matches one already handled (either-direction
+ * containment, tolerant of paraphrase and slicing). */
+function flowContradictionHandled(handled: string[], statement: string): boolean {
+  const s = statement.trim().toLowerCase();
+  if (s.length < 8) return false;
+  return handled.some((entry) => entry.includes(s) || s.includes(entry));
+}
+
 function updateInnerProgramData(
   programData: ProgramState,
   updater: (inner: ProgramState) => ProgramState,
@@ -8905,34 +8948,23 @@ Deno.serve(async (req) => {
             // ("Q: Two accounts disagree…"); a claim that is itself dispute
             // wording is the watcher reading its own output — never file it.
             .filter((entry) => !/two accounts disagree|which is right, and what settles it|^\s*Q:/i.test(entry.statement));
-          // Contradictions ALREADY in the log must not be re-proposed — the
-          // detector re-runs on every regeneration and re-finds the same
-          // disputes, so without this the "File N contradictions" decision
-          // reappears in the Inbox after it was filed. Match on normalised
-          // statement text (either direction, to tolerate slicing/paraphrase).
-          const innerForLog = getInnerProgramData(contextProgramData);
-          const listenInputs = isRecord(innerForLog.phaseInputs) && isRecord((innerForLog.phaseInputs as Record<string, unknown>).listen)
-            ? ((innerForLog.phaseInputs as Record<string, unknown>).listen as Record<string, unknown>) : {};
-          const loggedStatements: string[] = [];
-          const rawLog = listenInputs.contradictionLog;
-          if (typeof rawLog === "string" && rawLog.trim().startsWith("[")) {
-            try {
-              const parsedLog = JSON.parse(rawLog);
-              if (Array.isArray(parsedLog)) for (const row of parsedLog) {
-                if (isRecord(row)) { const s = String((row as Record<string, unknown>).statement ?? "").trim().toLowerCase(); if (s.length >= 8) loggedStatements.push(s); }
-              }
-            } catch { /* ignore a malformed log */ }
-          }
-          const alreadyLogged = (statement: string): boolean => {
-            const s = statement.trim().toLowerCase();
-            if (s.length < 8) return false;
-            return loggedStatements.some((logged) => logged.includes(s) || s.includes(logged));
-          };
+          // A proposed contradiction is STICKY: once the watcher has surfaced a
+          // dispute it must never re-surface it, whatever the human decided. The
+          // detector re-runs on every capture/regeneration and re-finds the same
+          // disputes; deduping only against the LOG left a hole — a DECLINED
+          // proposal (nothing logged) came straight back next run, and a filed
+          // one the model rephrased slipped past the log match too. So gather the
+          // "already handled" set from BOTH the contradiction log AND every prior
+          // contradiction-watcher decision (open, confirmed, or declined), and
+          // match on normalised text (either direction, to tolerate paraphrase).
+          const handledStatements = flowHandledContradictionStatements(contextProgramData);
           const filteredEntries = entries.filter((entry) =>
-            !contradictionFalsifiedByRecord(contextProgramData, entry.statement) && !alreadyLogged(entry.statement));
-          const existing = getInnerProgramData(contextProgramData).flowDecisions;
-          const hasOpenWatcher = Array.isArray(existing) && existing.some((entry) =>
-            isRecord(entry) && entry.agentId === "contradiction-watcher" && (entry.status ?? "open") === "open");
+            !contradictionFalsifiedByRecord(contextProgramData, entry.statement)
+            && !flowContradictionHandled(handledStatements, entry.statement));
+          const existing = Array.isArray(getInnerProgramData(contextProgramData).flowDecisions)
+            ? (getInnerProgramData(contextProgramData).flowDecisions as unknown[]).filter(isRecord) : [];
+          const hasOpenWatcher = existing.some((entry) =>
+            entry.agentId === "contradiction-watcher" && (entry.status ?? "open") === "open");
           if (filteredEntries.length && !hasOpenWatcher) {
             nextProgramData = queueFlowDecision(contextProgramData, {
               tier: 2,
@@ -9190,6 +9222,12 @@ Deno.serve(async (req) => {
             // is not a claim — never re-file a contradiction about one.
             .filter((entry) => !/two accounts disagree|which is right, and what settles it|^\s*Q:/i.test(entry.statement))
             .filter((entry) => !contradictionFalsifiedByRecord(contextProgramData, entry.statement));
+          // Sticky: the Atlas re-detects the same disagreeing accounts on every
+          // regeneration. Drop any dispute already logged OR already carried by a
+          // prior contradiction decision (any verdict, declined included), so the
+          // "File N contradictions" card never returns after the human judged it.
+          const handledAtlas = flowHandledContradictionStatements(contextProgramData);
+          atlasContradictions = atlasContradictions.filter((entry) => !flowContradictionHandled(handledAtlas, entry.statement));
         }
         // Discovery Kit: GUARANTEE roster coverage. The model is asked to
         // interview every rostered person, but it compresses generic roles and

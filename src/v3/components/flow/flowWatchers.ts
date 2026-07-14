@@ -17,7 +17,7 @@
 import type { ProgramSummary } from "@/new/types";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { flowMovements, movementEvidence, parseGridRows, readMovementInputs, evidenceStamp } from "@/v3/components/flow/flowShellData";
-import { listFlowDecisions } from "@/v3/components/flow/flowDecisions";
+import { listFlowDecisions, handledContradictionStatements, isContradictionHandled } from "@/v3/components/flow/flowDecisions";
 import { validateOntologyConstraints, isValidCardinality } from "@/v3/components/flow/flowOntologyConstraints";
 import { resolveMovementStakeholders } from "@/v3/components/flow/flowStakeholders";
 import { mapTranscriptSpeakers } from "@/v3/components/flow/flowTranscriptMap";
@@ -382,7 +382,7 @@ export function negatedClaimProposal(program: ProgramSummary): WatcherProposal |
   const entries = flowMovements().flatMap((movement) => movementEvidence(program, movement))
     .filter((entry) => entry.text && entry.text.length > 40)
     .filter((entry) => !/^operator\b|resolution/i.test(entry.who));
-  const found: Array<{ statement: string; between: string; positions: string }> = [];
+  let found: Array<{ statement: string; between: string; positions: string }> = [];
   const seen = new Set<string>();
   for (const entry of entries) {
     for (const sentence of entry.text.split(/(?<=[.!?])\s+|\n+/)) {
@@ -411,6 +411,11 @@ export function negatedClaimProposal(program: ProgramSummary): WatcherProposal |
     }
     if (found.length >= 4) break;
   }
+  // A dispute already filed OR already judged (even declined) must not re-surface
+  // — filter per statement, so a fresh negation doesn't drag settled ones back
+  // in with it. Handled centrally with the edge detector via the same set.
+  const handled = handledContradictionStatements(program);
+  found = found.filter((entry) => !isContradictionHandled(handled, entry.statement));
   if (!found.length) return null;
 
   const id = `watch-negated-${djb2(found.map((f) => f.statement.toLowerCase()).sort().join("|"))}`;
