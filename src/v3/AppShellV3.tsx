@@ -20,7 +20,7 @@ import { useProgramSnapshots } from "@/new/lib/useProgramSnapshots";
 import { useCopilotThread } from "@/hooks/useCopilotThread";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { drillKindMeta, type DrillKind } from "@/v3/components/flow/flowDrilldown";
-import { readMovementInputs, flowMovements, movementArtifacts, gateChecklist, gateReadiness, movementInputsFingerprint } from "@/v3/components/flow/flowShellData";
+import { readMovementInputs, flowMovements, movementArtifacts, gateChecklist, gateReadiness, movementInputsFingerprint, autoBuildEnabled, artifactInputsReady } from "@/v3/components/flow/flowShellData";
 import { gateAugmentations } from "@/v3/components/flow/flowCrossValidation";
 import type {   ProgramSummary } from "@/new/types";
 import { buildCrossPhaseContext } from "@/lib/adamOrchestrator";
@@ -2268,13 +2268,22 @@ export default function AppShellV3() {
     if (!p || !hasSubstantiveProgramData(p.rawData) || runningAgentIds.size > 0) return;
     for (const movement of flowMovements()) {
       if (p.gateReviews?.[movement.id]?.status === "approved") continue; // locked — inputs frozen
-      const stale = movementArtifacts(p, movement).filter((a) => a.present && a.stale);
-      if (!stale.length) continue;
-      const key = `${p.id}:${movement.id}:${movementInputsFingerprint(p, movement.id)}`;
+      const arts = movementArtifacts(p, movement);
+      const stale = arts.filter((a) => a.present && a.stale);
+      // AUTO-FIRST-GENERATION (opt-in): when the operator has turned auto-build
+      // on, also FIRST-generate an impacted artifact whose declared inputs have
+      // arrived but which was never generated — not just regenerate stale ones.
+      // Off by default, so nothing fires model calls unprompted.
+      const firstBuild = autoBuildEnabled(p)
+        ? arts.filter((a) => !a.present && artifactInputsReady(p, movement.id, a.id))
+        : [];
+      const work = [...stale, ...firstBuild];
+      if (!work.length) continue;
+      const key = `${p.id}:${movement.id}:${movementInputsFingerprint(p, movement.id)}${autoBuildEnabled(p) ? ":ab" : ""}`;
       if (autoRegenRef.current.has(key)) continue;
       autoRegenRef.current.add(key);
       void (async () => {
-        for (const art of stale) {
+        for (const art of work) {
           await runProgramAgent({ agentId: art.id, phaseId: movement.id, triggeredBy: "proactive" });
         }
       })();
@@ -2532,6 +2541,14 @@ export default function AppShellV3() {
           onTagClaim={handleTagClaim}
           onComment={handleComment}
           onOpenSetup={() => setWizardOpen(true)}
+          autoBuildOn={autoBuildEnabled(activeProgram)}
+          onToggleAutoBuild={() => void persistFlowMutation((program) => {
+            const raw = (program.rawData ?? {}) as Record<string, unknown>;
+            const nested = typeof raw.data === "object" && raw.data !== null;
+            const inner = (nested ? raw.data : raw) as Record<string, unknown>;
+            const next = { ...inner, _autoBuild: !(inner._autoBuild === true) };
+            return nested ? { ...raw, data: next } : next;
+          })}
           onOpenCopilot={() => setAdamCopilotSidebarOpen(true)}
           onRunAgent={handleRunAgent}
           agentErrors={agentErrors}

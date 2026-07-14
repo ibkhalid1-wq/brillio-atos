@@ -487,6 +487,22 @@ describe("operator asks — a hand-raised question rides on the stakeholder's li
   });
 });
 
+describe("guarded auto-first-generation", () => {
+  it("autoBuildEnabled reflects the _autoBuild flag (off by default)", async () => {
+    const { autoBuildEnabled } = await import("@/v3/components/flow/flowShellData");
+    expect(autoBuildEnabled(programme({}))).toBe(false);
+    expect(autoBuildEnabled(programme({ _autoBuild: true }))).toBe(true);
+  });
+  it("a Listen artifact is input-ready once the Frame mandate is on record, not before", async () => {
+    const { artifactInputsReady } = await import("@/v3/components/flow/flowShellData");
+    const withMandate = programme({ phaseInputs: { frame: {
+      sponsorConversation: "— Sponsor —\nStreamline onboarding and compliance; lift NPS 40 → 60.",
+    } } });
+    expect(artifactInputsReady(withMandate, "listen", "current-state-atlas")).toBe(true);
+    expect(artifactInputsReady(programme({ phaseInputs: { frame: {} } }), "listen", "current-state-atlas")).toBe(false);
+  });
+});
+
 describe("People → collection mapping — everyone added under People gets a card", () => {
   it("an operator-added person surfaces in THEIR movement's collection, once, with a real script", () => {
     const p = programme({

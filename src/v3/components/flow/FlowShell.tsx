@@ -45,6 +45,9 @@ interface FlowShellProps {
   agentErrors?: Record<string, string>;
   onSelectProgram: (id: string) => void;
   onCreateProgram: () => void;
+  /** Per-programme "auto-build artifacts on input" toggle (opt-in). */
+  autoBuildOn?: boolean;
+  onToggleAutoBuild?: () => void;
   /** Create a drill-down child anchored on one slice of this programme. */
   onDrillDown: (anchor: { kind: string; refId: string; label: string }) => void;
   /** Archive a programme — soft delete, hidden but recoverable. */
@@ -682,6 +685,17 @@ export default function FlowShell(props: FlowShellProps) {
           <button type="button" role="menuitem" onClick={() => { setSwitcherOpen(false); props.onCreateProgram(); }}>＋ New programme</button>
           <button type="button" role="menuitem" onClick={() => { setSwitcherOpen(false); setDrillOpen(true); }}>◇ Drill into this programme →</button>
           <button type="button" role="menuitem" onClick={() => { setSwitcherOpen(false); props.onOpenSetup(); }}>Programme setup</button>
+          {props.onToggleAutoBuild ? (
+            <>
+              <div className="v3fs-switcher-sep" />
+              <button type="button" role="menuitemcheckbox" aria-checked={!!props.autoBuildOn}
+                className={props.autoBuildOn ? "on" : ""}
+                title="When on, ATOS generates an artifact automatically as soon as its inputs arrive — otherwise it waits for you to press Generate."
+                onClick={() => { setSwitcherOpen(false); props.onToggleAutoBuild?.(); }}>
+                {props.autoBuildOn ? "☑" : "☐"} Auto-build artifacts on input
+              </button>
+            </>
+          ) : null}
         </div>
       ) : null}
 

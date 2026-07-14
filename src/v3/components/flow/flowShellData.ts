@@ -8,7 +8,7 @@
  * (what was accepted). These readers hand each view exactly those three kinds.
  */
 import type { ProgramSummary } from "@/new/types";
-import { getMethodology, type PhaseDefinition } from "@/v3/lib/methodology";
+import { getMethodology, getPhaseDefinition, type PhaseDefinition } from "@/v3/lib/methodology";
 import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
 import { getFormalArtifactContent, getFormalArtifactConfidence, FORMAL_ARTIFACT_FIELD_KEYS } from "@/v3/lib/formalArtifacts";
 import { listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
@@ -556,6 +556,29 @@ export function falsifiedGap(program: ProgramSummary, gap: string): boolean {
   // into the charter. A fact provided in the sponsor conversation and charted
   // must not be re-flagged just because its structured input box is blank.
   return frameFactOnRecord(program, hit.fact ?? hit.field, hit.field, 8);
+}
+
+/** Operator opt-in: when ON, ATOS first-generates an impacted artifact as soon
+ * as its inputs arrive — not only regenerating already-present stale ones. OFF
+ * by default so nothing fires model calls unprompted. Fingerprint-safe (`_`). */
+export function autoBuildEnabled(program: ProgramSummary): boolean {
+  return dataRoot(program)._autoBuild === true;
+}
+
+/** Whether an artifact's declared input fields are populated enough to first-
+ * generate it (used by guarded auto-first-generation). Frame and Listen
+ * artifacts also seed from the FRAME mandate — the sponsor conversation — so
+ * they're ready once that's on record even before their own bucket fills. */
+export function artifactInputsReady(program: ProgramSummary, movementId: string, artifactId: string): boolean {
+  const def = getPhaseDefinition(movementId, "atos-flow");
+  const fields = def?.artifactInputFlow?.[artifactId] ?? [];
+  const inputs = readMovementInputs(program, movementId);
+  const frame = readMovementInputs(program, "frame");
+  const filled = (value: unknown) =>
+    (typeof value === "string" && value.trim().length > 0) || (Array.isArray(value) && value.length > 0);
+  if (fields.some((field) => filled(inputs[field]) || filled(frame[field]))) return true;
+  const mandateSeeds = movementId === "frame" || movementId === "listen";
+  return mandateSeeds && filled(frame.sponsorConversation);
 }
 
 /** The open gaps a generated document declares about ITSELF ("we still don't
