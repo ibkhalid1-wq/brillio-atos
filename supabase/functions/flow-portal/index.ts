@@ -173,9 +173,18 @@ Deno.serve(async (req: Request) => {
         const xd = hit.inner.experienceDesign;
         if (!isRecord(xd) || !Array.isArray(xd.screens) || !Array.isArray(xd.flows)) return undefined;
         // PERSONA-FIRST: the holder of this link lands on THEIR flow — flows
-        // whose persona (or journey) matches the pack's stakeholder/role sort
-        // ahead, so the walker opens on their own workflow.
-        const who = `${String(hit.pack.stakeholder ?? "")} ${String(hit.pack.role ?? "")}`.toLowerCase();
+        // whose persona matches the pack's stakeholder/role sort ahead, so
+        // the walker opens on their own workflow. Follow-up packs carry the
+        // role "Follow-up", so the REAL role is resolved from the kit roster.
+        let holderRole = String(hit.pack.role ?? "");
+        if (!holderRole || /follow-?up/i.test(holderRole)) {
+          const kitDoc = isRecord(hit.inner.discoveryKit) ? hit.inner.discoveryKit as Record<string, unknown> : null;
+          const holderKey = String(hit.pack.stakeholder ?? "").trim().toLowerCase();
+          const rosterHit = (kitDoc && Array.isArray(kitDoc.interviews) ? kitDoc.interviews : []).filter(isRecord)
+            .find((interview) => String(interview.stakeholder ?? "").trim().toLowerCase() === holderKey);
+          if (rosterHit) holderRole = String(rosterHit.role ?? "");
+        }
+        const who = `${String(hit.pack.stakeholder ?? "")} ${holderRole}`.toLowerCase();
         const affinity = (flow: Record<string, unknown>): number => {
           const persona = String(flow.persona ?? "").trim().toLowerCase();
           if (persona && (who.includes(persona) || persona.split(/\s+/).some((token) => token.length > 3 && who.includes(token)))) return 0;
