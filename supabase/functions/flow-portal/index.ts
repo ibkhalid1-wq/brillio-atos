@@ -172,7 +172,20 @@ Deno.serve(async (req: Request) => {
       const designSlice = (): Record<string, unknown> | undefined => {
         const xd = hit.inner.experienceDesign;
         if (!isRecord(xd) || !Array.isArray(xd.screens) || !Array.isArray(xd.flows)) return undefined;
-        const flows = (xd.flows as unknown[]).filter(isRecord).slice(0, 6);
+        // PERSONA-FIRST: the holder of this link lands on THEIR flow — flows
+        // whose persona (or journey) matches the pack's stakeholder/role sort
+        // ahead, so the walker opens on their own workflow.
+        const who = `${String(hit.pack.stakeholder ?? "")} ${String(hit.pack.role ?? "")}`.toLowerCase();
+        const affinity = (flow: Record<string, unknown>): number => {
+          const persona = String(flow.persona ?? "").trim().toLowerCase();
+          if (persona && (who.includes(persona) || persona.split(/\s+/).some((token) => token.length > 3 && who.includes(token)))) return 0;
+          return 1;
+        };
+        const flows = (xd.flows as unknown[]).filter(isRecord)
+          .map((flow, index) => ({ flow, index }))
+          .sort((a, b) => affinity(a.flow) - affinity(b.flow) || a.index - b.index)
+          .map((entry) => entry.flow)
+          .slice(0, 6);
         const wanted = new Set(flows.flatMap((flow) =>
           (Array.isArray(flow.steps) ? flow.steps : []).filter(isRecord).map((step) => String(step.screen ?? "").toLowerCase())));
         const screens = (xd.screens as unknown[]).filter(isRecord)
@@ -180,13 +193,37 @@ Deno.serve(async (req: Request) => {
           .slice(0, 12);
         return flows.length && screens.length ? { flows, screens } : undefined;
       };
+      // THEIR demo script narrates the walk: opening quote, scenario, the
+      // per-beat talk track and callbacks, and the closing acceptance ask.
+      const scriptSlice = (): Record<string, unknown> | undefined => {
+        const doc = hit.inner.demoScripts;
+        if (!isRecord(doc) || !Array.isArray(doc.scripts)) return undefined;
+        const key = String(hit.pack.stakeholder ?? "").trim().toLowerCase();
+        const script = (doc.scripts as unknown[]).filter(isRecord).find((entry) => {
+          const name = String(entry.stakeholder ?? "").trim().toLowerCase();
+          return name && (name === key || name.split(/\s+/)[0] === key.split(/\s+/)[0]);
+        });
+        if (!script) return undefined;
+        return {
+          openingQuote: String(script.openingQuote ?? "").slice(0, 300),
+          scenario: String(script.scenario ?? "").slice(0, 400),
+          acceptanceAsk: String(script.acceptanceAsk ?? "").slice(0, 300),
+          steps: (Array.isArray(script.steps) ? script.steps : []).filter(isRecord).slice(0, 10).map((step) => ({
+            beat: String(step.beat ?? "").slice(0, 200),
+            say: String(step.say ?? "").slice(0, 300),
+            callback: String(step.callback ?? "").slice(0, 200),
+          })),
+        };
+      };
       if (hit.kind === "demo") {
         const showInputs = isRecord(hit.inner.phaseInputs) && isRecord((hit.inner.phaseInputs as Record<string, unknown>).show)
           ? (hit.inner.phaseInputs as Record<string, Record<string, unknown>>).show
           : {};
         const design = designSlice();
+        const script = scriptSlice();
         return jsonResponse({
           ...(design ? { design } : {}),
+          ...(script ? { script } : {}),
           kind: "demo",
           programme: hit.programName,
           stakeholder: String(hit.pack.stakeholder ?? "Stakeholder"),
@@ -212,8 +249,11 @@ Deno.serve(async (req: Request) => {
         .filter((person) => person.name && person.name.toLowerCase() !== selfKey)
         .slice(0, 24);
       // Show-movement links (follow-ups asking for demo feedback) carry the
-      // wireframe walkthrough beside the questions.
-      const interviewDesign = String(hit.pack.movementId ?? "") === "show" ? designSlice() : undefined;
+      // wireframe walkthrough — narrated by their demo script — beside the
+      // questions.
+      const isShowPack = String(hit.pack.movementId ?? "") === "show";
+      const interviewDesign = isShowPack ? designSlice() : undefined;
+      const interviewScript = isShowPack ? scriptSlice() : undefined;
       return jsonResponse({
         kind: "interview",
         programme: hit.programName,
@@ -223,6 +263,7 @@ Deno.serve(async (req: Request) => {
         questions: Array.isArray(hit.pack.questions) ? hit.pack.questions.map(String).slice(0, 12) : [],
         roster,
         ...(interviewDesign ? { design: interviewDesign } : {}),
+        ...(interviewScript ? { script: interviewScript } : {}),
         responded: typeof hit.pack.respondedAt === "string",
       });
     }

@@ -34,8 +34,11 @@ interface Pack {
   demoUrl?: string;
   /** The interpretive prototype: Experience Design flows + their screens —
    * lets the stakeholder walk their workflow as wireframes before a
-   * deployed build exists. */
+   * deployed build exists. Flows arrive persona-first for this holder. */
   design?: { flows: Array<Record<string, unknown>>; screens: Array<Record<string, unknown>> };
+  /** THEIR demo script — narrates the walk: opening quote, scenario,
+   * per-beat talk track and callbacks, closing acceptance ask. */
+  script?: { openingQuote?: string; scenario?: string; acceptanceAsk?: string; steps?: Array<{ beat?: string; say?: string; callback?: string }> };
 }
 
 type DemoVerdict = "accepted" | "accepted-with-changes" | "rework";
@@ -263,7 +266,7 @@ export default function FlowRespond({ token }: { token: string }) {
                     ▶ Open the prototype
                   </a>
                 ) : null}
-                {state.pack.design ? <DemoWalker design={state.pack.design} /> : null}
+                {state.pack.design ? <DemoWalker design={state.pack.design} script={state.pack.script} /> : null}
                 {state.pack.steps?.length ? (
                   <div className="v3fs-portal-steps">
                     {state.pack.steps.map((step, index) => (
@@ -317,8 +320,9 @@ export default function FlowRespond({ token }: { token: string }) {
               <div className="v3fs-portal-qs">
                 {state.pack.design ? (
                   // A Show follow-up asks for demo feedback — the wireframe
-                  // walkthrough sits right above the questions it informs.
-                  <DemoWalker design={state.pack.design} />
+                  // walkthrough, narrated by their demo script, sits right
+                  // above the questions it informs.
+                  <DemoWalker design={state.pack.design} script={state.pack.script} />
                 ) : null}
                 {state.pack.questions.map((question, index) => (
                   <label key={index} className={`v3fs-portal-card${((answers[index] ?? "").trim() || (attachments[index] ?? []).length || deferrals[index]) ? " done" : ""}${deferrals[index] ? " deferred" : ""}`}>
@@ -424,12 +428,15 @@ export default function FlowRespond({ token }: { token: string }) {
  * it, watch each step's screen light up. Same renderer the design studio
  * uses, so what they walk IS the signed-off design.
  */
-function DemoWalker({ design }: { design: NonNullable<Pack["design"]> }) {
+function DemoWalker({ design, script }: { design: NonNullable<Pack["design"]>; script?: Pack["script"] }) {
   const [flowIndex, setFlowIndex] = useState(0);
   const [stepIndex, setStepIndex] = useState(0);
   const flows = design.flows ?? [];
   const screens = design.screens ?? [];
   const flow = flows[flowIndex];
+  // Their demo script narrates the FIRST flow (persona-first ordering puts
+  // theirs there): beat-by-beat talk track + the callback to their own words.
+  const narration = flowIndex === 0 ? script?.steps?.[stepIndex] : undefined;
   const steps = Array.isArray(flow?.steps) ? (flow.steps as Array<Record<string, unknown>>) : [];
   const step = steps[stepIndex];
   const screenId = String(step?.screen ?? "").toLowerCase();
@@ -438,6 +445,12 @@ function DemoWalker({ design }: { design: NonNullable<Pack["design"]> }) {
   if (!flows.length || !screens.length) return null;
   return (
     <div className="v3fs-demo-walk">
+      {script?.openingQuote && flowIndex === 0 ? (
+        <blockquote className="v3fs-wf-pain">“{script.openingQuote}”</blockquote>
+      ) : null}
+      {script?.scenario && flowIndex === 0 ? (
+        <p className="v3fs-demo-scenario">{script.scenario}</p>
+      ) : null}
       <div className="v3fs-demo-walk-h">
         <b>Walk it as wireframes</b>
         {flows.length > 1 ? (
@@ -459,6 +472,15 @@ function DemoWalker({ design }: { design: NonNullable<Pack["design"]> }) {
       </div>
       {screen ? <ScreenCard screen={screen} active onClick={() => { /* focused already */ }} /> : null}
       {step && String(step.outcome ?? "") ? <div className="v3fs-wf-outcome">→ {String(step.outcome)}</div> : null}
+      {narration && (narration.say || narration.callback) ? (
+        <div className="v3fs-demo-say">
+          {narration.say ? <p>{narration.say}</p> : null}
+          {narration.callback ? <em>↩ {narration.callback}</em> : null}
+        </div>
+      ) : null}
+      {flowIndex === 0 && stepIndex >= steps.length - 1 && script?.acceptanceAsk ? (
+        <div className="v3fs-demo-ask">{script.acceptanceAsk}</div>
+      ) : null}
       <div className="v3fs-wf-walknav">
         <button type="button" className="v3fs-btn" disabled={stepIndex === 0} onClick={() => setStepIndex((i) => Math.max(0, i - 1))}>← Back</button>
         <span>{stepIndex + 1} of {steps.length}</span>

@@ -6031,6 +6031,11 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-demo-walk-h b{font-size:13px}
 .v3fs-demo-walk-h select{font:inherit;font-size:12px;border:1px solid var(--fs-line);border-radius:8px;padding:3px 8px;background:var(--fs-card);color:var(--v3-text-primary)}
 .v3fs-demo-walk .v3fs-wf-screen{cursor:default;max-width:480px}
+.v3fs-demo-scenario{margin:0;font-size:12.5px;color:var(--v3-text-secondary);max-width:64ch}
+.v3fs-demo-say{border-left:3px solid var(--v3-accent-2);background:var(--fs-indigo-wash);border-radius:0 10px 10px 0;padding:9px 13px;display:flex;flex-direction:column;gap:4px}
+.v3fs-demo-say p{margin:0;font-size:12.5px;color:var(--v3-text-primary)}
+.v3fs-demo-say em{font-style:normal;font-size:11px;color:var(--v3-accent-2)}
+.v3fs-demo-ask{font-size:13px;font-weight:650;border:1.5px solid color-mix(in srgb,var(--v3-green) 45%,var(--fs-line));border-radius:10px;padding:10px 14px;background:color-mix(in srgb,var(--v3-green) 7%,transparent)}
 .v3fs-wf-walknav{display:flex;align-items:center;gap:12px}
 .v3fs-wf-walknav span{font-size:11px;color:var(--v3-text-muted)}
 .v3fs-wf-machines{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
