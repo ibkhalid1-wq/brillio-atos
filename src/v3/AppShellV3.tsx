@@ -20,7 +20,8 @@ import { useProgramSnapshots } from "@/new/lib/useProgramSnapshots";
 import { useCopilotThread } from "@/hooks/useCopilotThread";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { drillKindMeta, type DrillKind } from "@/v3/components/flow/flowDrilldown";
-import { readMovementInputs } from "@/v3/components/flow/flowShellData";
+import { readMovementInputs, flowMovements, movementArtifacts, gateChecklist } from "@/v3/components/flow/flowShellData";
+import { gateAugmentations } from "@/v3/components/flow/flowCrossValidation";
 import type {   ProgramSummary } from "@/new/types";
 import { buildCrossPhaseContext } from "@/lib/adamOrchestrator";
 import CoPilotSidebar from "@/v3/components/CoPilotSidebar";
@@ -2481,6 +2482,26 @@ export default function AppShellV3() {
             await persistFlowMutation((program) => resolveFlowDecision(program, decisionId, resolution, resolvedBy));
           }}
           onRecordGate={async (movementId) => {
+            // WRITE-TIME defence: re-check the criteria at the moment of
+            // recording, not just at render — a response landing mid-click
+            // must not let a gate lock over unmet criteria. (The read-time
+            // "indefensible" banner stays as the backstop for later drift.)
+            if (activeProgram) {
+              const movement = flowMovements().find((entry) => entry.id === movementId);
+              if (movement) {
+                const unmet = [
+                  ...gateChecklist(activeProgram, movement, movementArtifacts(activeProgram, movement)),
+                  ...gateAugmentations(activeProgram, movementId),
+                ].filter((item) => !item.done);
+                if (unmet.length) {
+                  pushV3Toast(
+                    `Not recorded — ${unmet.length} gate criteri${unmet.length === 1 ? "on is" : "a are"} no longer met: ${unmet.slice(0, 2).map((item) => item.label).join("; ")}${unmet.length > 2 ? "…" : ""}`,
+                    { tone: "error", duration: 8000 },
+                  );
+                  return;
+                }
+              }
+            }
             await approveGate(movementId);
             pushV3Toast("Gate recorded — this movement is demonstrated and its inputs are now locked.", { tone: "success", duration: 4000 });
           }}
