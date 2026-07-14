@@ -11,6 +11,7 @@ import React, { useCallback, useMemo, useState } from "react";
 import {
   TextField, ChipsField, asArray, asRecord, asText, asStrings, type StudioProps,
 } from "./StudioKit";
+import { workflowArea, GENERAL_AREA } from "@/v3/components/flow/flowAreas";
 
 interface PainHit {
   severity: string;
@@ -48,6 +49,23 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact }: Studio
   const [selected, setSelected] = useState<number | null>(null);
   const workflow = workflows[Math.min(active, Math.max(0, workflows.length - 1))];
   const steps = useMemo(() => (workflow ? asArray(workflow.steps).map(asRecord) : []), [workflow]);
+
+  // The atlas is organised BY the ontology's business areas: each workflow files
+  // under its area (the generator's explicit tag, else inferred), so the tabs
+  // read as the domain map the ontology defines — Sales workflows together,
+  // Delivery together — rather than one flat undifferentiated row.
+  const groupedTabs = useMemo(() => {
+    const groups = new Map<string, Array<{ name: string; index: number }>>();
+    workflows.forEach((entry, index) => {
+      const area = workflowArea(entry);
+      const list = groups.get(area) ?? [];
+      list.push({ name: asText(entry.name) || `Workflow ${index + 1}`, index });
+      groups.set(area, list);
+    });
+    return [...groups.entries()].sort(([a], [b]) =>
+      a === GENERAL_AREA ? 1 : b === GENERAL_AREA ? -1 : a.localeCompare(b));
+  }, [workflows]);
+  const multiArea = groupedTabs.length > 1;
 
   // Personas: rows in order of first appearance; blank actors pool at the foot.
   const lanes = useMemo(() => {
@@ -99,13 +117,18 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact }: Studio
 
   return (
     <div className="v3fs-wf">
-      <div className="v3fs-wf-tabs" role="tablist" aria-label="Workflows">
-        {workflows.map((entry, index) => (
-          <button key={index} type="button" role="tab" aria-selected={index === active}
-            className={index === active ? "on" : ""}
-            onClick={() => { setActive(index); setSelected(null); }}>
-            {asText(entry.name) || `Workflow ${index + 1}`}
-          </button>
+      <div className={`v3fs-wf-tabs${multiArea ? " grouped" : ""}`} role="tablist" aria-label="Workflows">
+        {groupedTabs.map(([area, items]) => (
+          <div key={area} className="v3fs-wf-tabgroup">
+            {multiArea ? <span className="v3fs-wf-tabgroup-l" title={`${area} workflows`}>{area}</span> : null}
+            {items.map(({ name, index }) => (
+              <button key={index} type="button" role="tab" aria-selected={index === active}
+                className={index === active ? "on" : ""}
+                onClick={() => { setActive(index); setSelected(null); }}>
+                {name}
+              </button>
+            ))}
+          </div>
         ))}
         <button type="button" className="v3fs-a" onClick={addWorkflow}>＋ workflow</button>
       </div>
