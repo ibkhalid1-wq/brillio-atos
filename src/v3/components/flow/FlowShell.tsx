@@ -1349,14 +1349,24 @@ function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggle
           {(() => {
             // The COMPLETE fleet: every agent the programme can run, plus any
             // id currently in flight or held that the registry doesn't list
-            // (watchers, planners). Running first, held next, ready last.
+            // (watchers, planners). Ordered along the methodology spine —
+            // Frame's agents first, then Listen, Envision, Show, Ship, Evolve;
+            // unmapped ids (planner, watchers) close the list. Within a
+            // movement: running, then held, then ready.
             const runByAgent = new Map<string, { status: string; phaseId?: string }>();
             for (const run of fleet) if (!runByAgent.has(run.agentId)) runByAgent.set(run.agentId, run);
+            const movementOf = new Map<string, number>();
+            movements.forEach((movement, index) => {
+              for (const artifact of movementArtifacts(program, movement)) {
+                if (!movementOf.has(artifact.id)) movementOf.set(artifact.id, index);
+              }
+            });
             const roster = [...new Set([...agentIds, ...fleet.map((run) => run.agentId), ...governance.haltedAgents])];
             const stateOf = (agentId: string): "running" | "held" | "ready" =>
               runByAgent.has(agentId) ? "running" : governance.haltedAgents.includes(agentId) ? "held" : "ready";
             const order = { running: 0, held: 1, ready: 2 } as const;
-            roster.sort((a, b) => order[stateOf(a)] - order[stateOf(b)] || a.localeCompare(b));
+            const spineIndex = (agentId: string) => movementOf.get(agentId) ?? movements.length;
+            roster.sort((a, b) => spineIndex(a) - spineIndex(b) || order[stateOf(a)] - order[stateOf(b)] || a.localeCompare(b));
             const runningCount = roster.filter((agentId) => stateOf(agentId) === "running").length;
             return (
               <>
@@ -1365,6 +1375,7 @@ function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggle
                   const state = stateOf(agentId);
                   const run = runByAgent.get(agentId);
                   const halted = governance.haltedAgents.includes(agentId);
+                  const movementName = movements[movementOf.get(agentId) ?? -1]?.displayName ?? "Programme-wide";
                   return (
                     <div key={agentId} className="v3fs-row">
                       {state === "running"
@@ -1373,9 +1384,9 @@ function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggle
                       <div className="v3fs-row-g">
                         <div className="v3fs-row-n">{agentId}</div>
                         <div className="v3fs-row-m">
-                          {state === "running" ? [run?.status || "running", run?.phaseId].filter(Boolean).join(" · ")
-                            : state === "held" ? "held — new runs are blocked"
-                              : "ready"}
+                          {state === "running" ? [movementName, run?.status || "running"].filter(Boolean).join(" · ")
+                            : state === "held" ? `${movementName} · held — new runs are blocked`
+                              : `${movementName} · ready`}
                         </div>
                       </div>
                       <span className="v3fs-tag gn">tier {flowAgentTier(agentId)}</span>
