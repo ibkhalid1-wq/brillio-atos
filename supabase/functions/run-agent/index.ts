@@ -9267,7 +9267,7 @@ Deno.serve(async (req) => {
               ? `Regenerated ${spec.title} covers LESS than the record — review before it replaces it`
               : `Accept the regenerated ${spec.title}`,
             summary: shrunk && !handEdited
-              ? `The fresh draft shrank (${shrinkNotes.join("; ")}) — it likely redrew from the newest evidence instead of merging. Confirming replaces the fuller document on record with this smaller draft; declining keeps the record and you can regenerate again.`
+              ? `The fresh draft shrank (${shrinkNotes.join("; ")}) — it likely redrew from the newest evidence instead of merging. This run read ${(generationMetadata.inputCoverage.conversationRecordChars).toLocaleString()} chars of conversation record and ${generationMetadata.inputCoverage.carryForwardDocuments} document${generationMetadata.inputCoverage.carryForwardDocuments === 1 ? "" : "s"}${generationMetadata.inputCoverage.outputRepaired ? ", and its output needed a repair pass (possible truncation)" : ""}. Confirming replaces the fuller document on record with this smaller draft; declining keeps the record and you can regenerate again.`
               : `You hand-edited this document on ${String((priorMirror as Record<string, unknown>).editedAt).slice(0, 10)}. Confirming replaces your edits with the fresh generation; declining keeps your version on the record.${shrunk ? ` Note: the draft also covers less (${shrinkNotes.join("; ")}).` : ""}`,
             payload: {
               artifactDocs: { [spec.fieldKey]: proposedDoc } as JsonValue,
