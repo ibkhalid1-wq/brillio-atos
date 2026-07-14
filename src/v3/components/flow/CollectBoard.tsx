@@ -104,15 +104,28 @@ const COLLECT_COLUMNS: Array<{ key: CollectStatus; label: string }> = [
 ];
 
 // Each area carries a stable identity colour so the board reads as a set of
-// distinct business domains, not a stack of identical rows. Hue is derived
-// deterministically from the name off a curated wheel that stays legible on the
-// surface; General is deliberately neutral.
-const AREA_HUES = [214, 266, 28, 156, 340, 190, 44, 8, 128, 300, 236, 168];
+// distinct business domains, not a stack of identical rows. Brand-pure: the
+// tones are a cool INDIGO → VIOLET → PLUM family, all cousins of Brillio Deep
+// Indigo (#211747), distinguished by hue AND lightness so lanes stay legible
+// while the board reads on-brand rather than as a rainbow. General is neutral.
+const AREA_TONES = [
+  "hsl(252 46% 34%)", "hsl(266 42% 46%)", "hsl(288 36% 42%)", "hsl(240 44% 44%)",
+  "hsl(306 30% 44%)", "hsl(258 48% 40%)", "hsl(276 38% 50%)", "hsl(228 42% 40%)",
+  "hsl(294 32% 38%)", "hsl(246 40% 52%)",
+];
 export function areaAccent(area: string): string {
   if (!area || area === GENERAL_AREA) return "var(--v3-text-muted)";
   let hash = 0;
   for (let i = 0; i < area.length; i += 1) hash = (hash * 31 + area.charCodeAt(i)) >>> 0;
-  return `hsl(${AREA_HUES[hash % AREA_HUES.length]} 58% 46%)`;
+  return AREA_TONES[hash % AREA_TONES.length];
+}
+// When lanes render as an ordered set, assign each its tone by POSITION so the
+// board never doubles a colour — a name hash can collide two areas onto one
+// tone, but the ordered index cannot for up to AREA_TONES.length lanes. General
+// stays neutral and doesn't consume a tone slot.
+function laneAccentAt(area: string, index: number): string {
+  if (!area || area === GENERAL_AREA) return "var(--v3-text-muted)";
+  return AREA_TONES[index % AREA_TONES.length];
 }
 /** A short monogram for the area's identity tile — "Legal & Compliance" → "LC". */
 export function areaMonogram(area: string): string {
@@ -289,9 +302,9 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
       </div>
       {areaOrganized ? (
         <div className="v3fs-lanes">
-          {laneData.map((lane) => (
+          {laneData.map((lane, i) => (
             <AreaLane key={lane.area} area={lane.area} row={lane.row} heard={lane.heard} total={lane.total}
-              accent={areaAccent(lane.area)} monogram={areaMonogram(lane.area)}
+              accent={laneAccentAt(lane.area, i)} monogram={areaMonogram(lane.area)}
               readyLabel={movementId === "listen" ? "Ready to envision" : movementId === "envision" ? "Ready to show" : "All reviewed"}
               defaultOpen={lane.total === 0 || lane.heard < lane.total}
               toReach={lane.toReach} inviting={inviteBusyArea === lane.area}
@@ -643,8 +656,8 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
   // the projected review, not the volatile gap script).
   const isReviewPack = !!pack && String(pack.role ?? "").startsWith("review:");
   const packMatches = isReviewPack
-    || (!!pack && (Array.isArray(pack.questions) ? pack.questions.map(String).join(" ") : "")
-      === linkQuestions.slice(0, 8).join(" "));
+    || (!!pack && (Array.isArray(pack.questions) ? pack.questions.map(String).join(" ") : "")
+      === linkQuestions.slice(0, 8).join(" "));
   // The pending chip carries the per-artifact count — "1/2 approved" — so a
   // card that stays pending after one verdict reads as "one more to go", not
   // as a contradiction with the answered link.
