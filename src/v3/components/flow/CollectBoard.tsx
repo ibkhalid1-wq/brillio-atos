@@ -105,6 +105,10 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
   const evidence = movement ? movementEvidence(program, movement) : [];
   const packs = listInterviewPacks(program);
   const [mintBusy, setMintBusy] = useState(false);
+  // Card open-state lives here (controlled), so minting a link — which moves a
+  // card to another column and remounts it — never collapses it. Null until
+  // the operator touches a card; the solo default is applied at render below.
+  const [openIdsState, setOpenIdsState] = useState<Set<string> | null>(null);
   const [allCollapsed, setAllCollapsed] = useState(false);
   const boardRef = useRef<HTMLDivElement>(null);
   if (!stakeholders.length) return null;
@@ -132,9 +136,20 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
   const columns = COLLECT_COLUMNS
     .map((c) => ({ ...c, items: evaluated.filter((e) => e.coll.status === c.key) }))
     .filter((c) => c.items.length);
+  // Default: the solo card (Frame's sponsor) opens; a roster board stays
+  // closed for scanning. `openIdsState` overrides once the operator toggles.
+  const soloId = stakeholders.length === 1 && !evaluated[0]?.coll.heard ? stakeholders[0].id : null;
+  const openIds = openIdsState ?? new Set(soloId ? [soloId] : []);
+  const setCardOpen = (id: string, open: boolean) => setOpenIdsState((prev) => {
+    const base = prev ?? new Set(soloId ? [soloId] : []);
+    if (base.has(id) === open) return base;
+    const next = new Set(base);
+    if (open) next.add(id); else next.delete(id);
+    return next;
+  });
   const toggleAll = () => {
     const next = !allCollapsed;
-    boardRef.current?.querySelectorAll("details.v3fs-ivc").forEach((node) => { (node as HTMLDetailsElement).open = !next; });
+    setOpenIdsState(next ? new Set() : new Set(stakeholders.map((s) => s.id)));
     setAllCollapsed(next);
   };
   return (
@@ -165,7 +180,8 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
             <div className="v3fs-collect-col-h"><span className={`v3fs-cdot ${col.key}`} aria-hidden="true" />{col.label}<span className="v3fs-cn">{col.items.length}</span></div>
             {col.items.map(({ s, coll }) => (
               <IntervieweeCard key={s.id} program={program} movementId={movementId} stakeholder={s} captureField={captureField}
-                coll={coll} solo={stakeholders.length === 1} docsStale={docsStale} regenerating={regenerating} onRegenerateStale={onRegenerateStale}
+                coll={coll} open={openIds.has(s.id)} onOpenChange={(isOpen) => setCardOpen(s.id, isOpen)}
+                docsStale={docsStale} regenerating={regenerating} onRegenerateStale={onRegenerateStale}
                 approvalItems={approvalByName.get(s.name.trim().toLowerCase())?.items}
                 onSendForApproval={onSendForApproval}
                 onSaveInputs={onSaveInputs} onMintFollowUp={onMintFollowUp} onScheduleFollowUp={onScheduleFollowUp}
@@ -178,15 +194,16 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
   );
 }
 
-function IntervieweeCard({ program, movementId, stakeholder, captureField, coll, solo, docsStale, regenerating, onRegenerateStale, approvalItems, onSendForApproval, onSaveInputs, onMintFollowUp, onScheduleFollowUp, onFocusPerson, onCaptured }: {
+function IntervieweeCard({ program, movementId, stakeholder, captureField, coll, open, onOpenChange, docsStale, regenerating, onRegenerateStale, approvalItems, onSendForApproval, onSaveInputs, onMintFollowUp, onScheduleFollowUp, onFocusPerson, onCaptured }: {
   program: ProgramSummary;
   movementId: string;
   stakeholder: MovementStakeholder;
   captureField: string;
   coll: StakeholderCollection;
-  /** The board's only person (Frame's sponsor): their card IS the board, so
-   * it opens by default. On a roster board the tiles stay closed for scanning. */
-  solo?: boolean;
+  /** Open state is owned by the board (controlled) so minting a link — which
+   * moves the card to another column and remounts it — never collapses it. */
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   /** A required document trails the evidence — answered "still open" items
    * only clear when it regenerates, so the card offers the regenerate instead
    * of re-asking what may already be answered. */
@@ -410,9 +427,10 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
   };
   return (
     <>
-      <details className={`v3fs-ivc ${status}`} open={solo && !heard}
+      <details className={`v3fs-ivc ${status}`} open={open}
         onToggle={(event) => {
           const isOpen = (event.currentTarget as HTMLDetailsElement).open;
+          if (isOpen !== open) onOpenChange(isOpen);
           onFocusPerson?.(stakeholder.id, isOpen);
         }}>
         <span className="v3fs-ivc-strip" aria-hidden="true" />
@@ -611,7 +629,10 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
                     {copiedTick ? <span className="v3fs-ivc-linkok">✓</span> : null}
                   </span>
                 ) : null}
-                {email ? (
+                {/* Send appears only once a link EXISTS — you copy/create the
+                    link first, then send it. Sending before a link is minted
+                    would email a draft with nothing in it. */}
+                {email && (effectiveLink ?? linkShown) ? (
                   <button type="button" className="v3fs-btn pri" disabled={linkBusy} title={`Opens a draft to ${email}`} onClick={() => void sendLink()}>✉ Send link</button>
                 ) : null}
                 <button type="button" className="v3fs-btn" title={`Pick a date — schedules the meeting and downloads the invite for ${name}`}
