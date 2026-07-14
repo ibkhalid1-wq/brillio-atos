@@ -9174,6 +9174,47 @@ Deno.serve(async (req) => {
           if (added.length) {
             formalResult = { ...formalResult, interviews: [...interviews, ...added] };
           }
+          // Same guarantee for PERSONAS: an internal persona nobody can speak
+          // for is a voice the programme still needs. The model is told to
+          // emit a "Role — TBC" interview entry for each; when it only
+          // inventories the persona (seen live 2026-07-14: "Recruitment
+          // Operations Staff" on Pharma), synthesize the placeholder entry so
+          // the RECORD itself is complete for every reader — not just the
+          // client projections that learned to compensate.
+          const personas = Array.isArray((formalResult as Record<string, unknown>).personas)
+            ? ((formalResult as Record<string, unknown>).personas as unknown[]).filter(isRecord) : [];
+          const currentInterviews = ((formalResult.interviews as unknown[]) || []).filter(isRecord);
+          const coveredRoles = new Set<string>();
+          for (const iv of currentInterviews) {
+            coveredRoles.add(norm(iv.stakeholder).replace(/\s*[—–-]\s*tbc\s*$/i, ""));
+            coveredRoles.add(norm(iv.role));
+          }
+          const personaAdds: Record<string, unknown>[] = [];
+          for (const persona of personas) {
+            const name = String(persona.name ?? "").trim();
+            if (!name || coveredRoles.has(norm(name))) continue;
+            const kind = String(persona.kind ?? "internal");
+            const spoken = Array.isArray(persona.spokenForBy) ? persona.spokenForBy.map(String).filter((s) => s.trim()).length : 0;
+            const unrepresented = persona.unrepresented === true || spoken === 0;
+            if (kind === "external" || !unrepresented) continue;
+            coveredRoles.add(norm(name));
+            personaAdds.push({
+              stakeholder: `${name} — TBC`,
+              role: name,
+              email: null,
+              domain: "",
+              durationMinutes: 45,
+              objectives: [`Find and hear the ${name} — their part of the workflow has no voice on the record yet.`],
+              agenda: [{ minutes: 45, topic: "Their part of the process", questions: [
+                "Walk us through your part of the process — what do you pick up, from whom, and what do you hand off when you're done?",
+                "Where does it break down, and how often? Give us the last real example.",
+              ] }],
+              askForArtifacts: ["Any screens, reports or exports they work from"],
+            });
+          }
+          if (personaAdds.length) {
+            formalResult = { ...formalResult, interviews: [...currentInterviews, ...personaAdds] };
+          }
         }
         // ── Regeneration guard ─────────────────────────────────────────────
         // Documents are data; the studio lets humans edit that data. A doc

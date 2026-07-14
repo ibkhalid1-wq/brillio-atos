@@ -573,6 +573,30 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
     expect(checked).toBeGreaterThanOrEqual(10); // the spine's formal documents are all covered
   });
 
+  it("an unrepresented internal persona surfaces as a Listen role-placeholder card (2026-07-14 regression pin)", async () => {
+    const { resolveMovementStakeholders } = await import("@/v3/components/flow/flowStakeholders");
+    const p = programme({
+      discoveryKit: {
+        interviews: [{ stakeholder: "Dan Reyes", role: "Sales Lead", agenda: [] }],
+        personas: [
+          // The Pharma case: a role inventoried as a persona with NO matching
+          // interview entry — it must still surface as a to-reach card.
+          { name: "Recruitment Operations Staff", kind: "internal", spokenForBy: [], unrepresented: true },
+          // External personas can't be interviewed — never a card.
+          { name: "End Customer", kind: "external", spokenForBy: [], unrepresented: true },
+          // A spoken-for persona is covered by its interviewee — no extra card.
+          { name: "Sales Lead", kind: "internal", spokenForBy: ["Dan Reyes"], unrepresented: false },
+        ],
+      },
+    });
+    const cards = resolveMovementStakeholders(p, "listen");
+    const placeholder = cards.find((card) => card.role === "Recruitment Operations Staff");
+    expect(placeholder, "persona-only role must become a card").toBeTruthy();
+    expect(placeholder?.isRole).toBe(true);
+    expect(cards.filter((card) => card.name === "End Customer")).toHaveLength(0);
+    expect(cards.filter((card) => card.role === "Sales Lead")).toHaveLength(1); // Dan only, no duplicate
+  });
+
   it("coverage-map edits steer discovery-kit regeneration — thin domains become deepen-instructions", async () => {
     const { discoveryKitCoverageGuidance } = await import("@/v3/components/flow/flowMeetings");
     // A clean map steers nothing.
