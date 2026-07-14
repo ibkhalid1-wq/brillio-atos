@@ -743,6 +743,37 @@ export function operatorAsksFor(program: ProgramSummary, movementId: string, who
   return readOperatorAsks(program, movementId)[who.trim().toLowerCase()] ?? [];
 }
 
+/**
+ * People a respondent named as "who else should we speak with?" on their link —
+ * stored fingerprint-safe under Listen's `_suggestedVoices`. Surfaced on the
+ * People page for the operator to ADD (→ a real collection card) or dismiss;
+ * anyone already on the programme drops off automatically.
+ */
+export interface SuggestedVoice { name: string; role: string; note?: string; from?: string; ts?: string }
+export function readSuggestedVoices(program: ProgramSummary): SuggestedVoice[] {
+  const raw = readMovementInputs(program, "listen")._suggestedVoices;
+  if (typeof raw !== "string" || !raw.trim()) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    const known = knownPeopleNames(program);
+    const dismissed = dismissedListenRoles(program);
+    const seen = new Set<string>();
+    return parsed.filter(isRecord).map((entry) => ({
+      name: String(entry.name ?? "").trim(),
+      role: String(entry.role ?? "").trim(),
+      note: entry.note ? String(entry.note).trim() : undefined,
+      from: entry.from ? String(entry.from).trim() : undefined,
+      ts: entry.ts ? String(entry.ts) : undefined,
+    })).filter((entry) => {
+      const key = entry.name.toLowerCase();
+      if (!entry.name || known.has(key) || dismissed.has(key) || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  } catch { return []; }
+}
+
 /** A movement-appropriate opening question for an operator-added person, so a
  * name dropped onto the People page becomes a real collection card rather than
  * a row that never gets asked anything. */

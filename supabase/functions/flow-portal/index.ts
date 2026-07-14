@@ -453,7 +453,19 @@ Deno.serve(async (req: Request) => {
             .map((entry) => ({ question: String(entry.question ?? ""), to: String(entry.to ?? "").trim().slice(0, 80) }))
             .filter((entry) => entry.to && packQuestions.has(entry.question))
             .slice(0, 12);
-          if (answers.length < MIN_ANSWER_CHARS && documents.length === 0 && deferrals.length === 0) {
+          // "Who else should we speak with?" — new voices the respondent names.
+          // Nothing is trusted beyond short strings; the operator decides whether
+          // to add them (they land as a suggestion, never straight into the cast).
+          const suggestedVoices = (isRecord(body) && Array.isArray(body.suggestedVoices) ? body.suggestedVoices : [])
+            .filter(isRecord)
+            .map((entry) => ({
+              name: String(entry.name ?? "").trim().slice(0, 80),
+              role: String(entry.role ?? "").trim().slice(0, 80),
+              note: String(entry.note ?? "").trim().slice(0, 200),
+            }))
+            .filter((entry) => entry.name)
+            .slice(0, 8);
+          if (answers.length < MIN_ANSWER_CHARS && documents.length === 0 && deferrals.length === 0 && suggestedVoices.length === 0) {
             return jsonResponse({ error: "Please write a little more — a sentence or two at minimum." }, 400);
           }
           inbox.push({
@@ -465,6 +477,7 @@ Deno.serve(async (req: Request) => {
             text: answers,
             ...(documents.length ? { documents } : {}),
             ...(deferrals.length ? { deferrals } : {}),
+            ...(suggestedVoices.length ? { suggestedVoices } : {}),
           });
           nextInner.flowInterviewPacks = (hit.inner.flowInterviewPacks as unknown[]).map((entry) =>
             isRecord(entry) && entry.token === hit.pack.token ? { ...entry, respondedAt: now } : entry,

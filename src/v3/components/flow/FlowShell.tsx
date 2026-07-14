@@ -20,7 +20,7 @@ import {
   listFlowTracks, trackAcceptance, trackPace,
 } from "@/v3/components/flow/flowTracks";
 import { readFlowGovernance, flowAgentTier } from "@/v3/components/flow/flowGovernance";
-import { resolveMovementStakeholders, deliveryRoleDirectory, readDirectoryPeople, validateProgramRole, readRoleBindings, knownProgramRoles, unresolvedCoverageNames, kitPersonaDirectory } from "@/v3/components/flow/flowStakeholders";
+import { resolveMovementStakeholders, deliveryRoleDirectory, readDirectoryPeople, validateProgramRole, readRoleBindings, knownProgramRoles, unresolvedCoverageNames, kitPersonaDirectory, readSuggestedVoices } from "@/v3/components/flow/flowStakeholders";
 import { stakeholderEmail } from "@/v3/components/flow/flowMeetings";
 import { readMetricRegistry, metricConsistency } from "@/v3/components/flow/flowMetricRegistry";
 import { routeAttachedDocument, buildRoutedBlocks, type DocRoute } from "@/v3/components/flow/flowDocRouting";
@@ -2104,6 +2104,33 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
     } finally { setBusyRow(null); }
   };
   const unresolved = added.filter((p) => !p.roleResolved).length;
+  // People a respondent named on their link ("who else should we speak with?").
+  const suggested = readSuggestedVoices(program);
+  const rewriteSuggested = (dropName: string) => {
+    const raw = readMovementInputs(program, "listen")._suggestedVoices;
+    let list: unknown[] = [];
+    try { const parsed = typeof raw === "string" ? JSON.parse(raw) : []; list = Array.isArray(parsed) ? parsed : []; } catch { /* reset */ }
+    return list.filter((entry) => !(entry && typeof entry === "object" && String((entry as Record<string, unknown>).name ?? "").trim().toLowerCase() === dropName.toLowerCase()));
+  };
+  const addSuggested = async (voice: { name: string; role: string; from?: string }) => {
+    if (!onSaveInputs) return;
+    const role = voice.role.trim() || "Contributor";
+    const resolved = validateProgramRole(program, role).known;
+    const entry = { id: `dp-${Date.now().toString(36)}-${voice.name.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 8)}`, name: voice.name, role, email: undefined, movementId: "listen", roleResolved: resolved };
+    setBusyRow(`sug-add:${voice.name}`);
+    try {
+      await onSaveInputs("listen", {
+        _directoryPeople: JSON.stringify([...readDirectoryPeople(program), entry]),
+        _suggestedVoices: JSON.stringify(rewriteSuggested(voice.name)),
+      }, { attest: { action: `Suggested voice added — ${voice.name} (${role})`, detail: voice.from ? `named by ${voice.from}` : undefined } });
+    } finally { setBusyRow(null); }
+  };
+  const dismissSuggested = async (name: string) => {
+    if (!onSaveInputs) return;
+    setBusyRow(`sug-dismiss:${name}`);
+    try { await onSaveInputs("listen", { _suggestedVoices: JSON.stringify(rewriteSuggested(name)) }, { attest: { action: `Suggested voice dismissed — ${name}` } }); }
+    finally { setBusyRow(null); }
+  };
   return (
     <div className="v3fs-grid2">
       <div className="v3fs-search-row">
@@ -2134,6 +2161,33 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
               ? `${lastAdd.name} added — role recognised.`
               : <>{lastAdd.name} added — their role needs clarification. {onGoInbox ? <button type="button" className="v3fs-a" onClick={() => onGoInbox()}>Clarify in the Inbox →</button> : "Clarify it in the Inbox."}</>}</p>
           ) : null}
+        </div>
+      ) : null}
+      {suggested.length ? (
+        <div className="v3fs-panel v3fs-panel-wide v3fs-sugg">
+          <div className="v3fs-ph">
+            <h3>Suggested by stakeholders <span className="v3fs-sugg-count">{suggested.length}</span></h3>
+            <span>people named on a response as &ldquo;who else should we speak with?&rdquo; — add them to collect from, or dismiss</span>
+          </div>
+          <div className="v3fs-sugg-list">
+            {suggested.map((voice) => (
+              <div key={voice.name} className="v3fs-sugg-row">
+                <div className="v3fs-sugg-id">
+                  <b>{voice.name}</b>
+                  <span>{[voice.role, voice.from ? `named by ${voice.from}` : ""].filter(Boolean).join(" · ")}</span>
+                  {voice.note ? <em>&ldquo;{voice.note}&rdquo;</em> : null}
+                </div>
+                {onSaveInputs ? (
+                  <div className="v3fs-sugg-act">
+                    <button type="button" className="v3fs-btn pri" disabled={busyRow === `sug-add:${voice.name}`}
+                      onClick={() => void addSuggested(voice)}>{busyRow === `sug-add:${voice.name}` ? "Adding…" : "＋ Add"}</button>
+                    <button type="button" className="v3fs-btn quiet" disabled={busyRow === `sug-dismiss:${voice.name}`}
+                      onClick={() => void dismissSuggested(voice.name)}>Dismiss</button>
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
         </div>
       ) : null}
       <div className="v3fs-panel v3fs-panel-wide">

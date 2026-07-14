@@ -42,6 +42,10 @@ export interface FlowPortalItem {
   text: string;
   /** Documents the respondent attached — quarantined with the answers. */
   documents?: Array<{ name: string; text: string; question?: number; sourceKey?: string }>;
+  /** "Not me — ask X" routing the respondent chose. */
+  deferrals?: Array<{ question: string; to: string }>;
+  /** "Who else should we speak with?" — new voices the respondent named. */
+  suggestedVoices?: Array<{ name: string; role: string; note?: string }>;
   /** Demo verdicts only. */
   verdict?: "accepted" | "accepted-with-changes" | "rework";
 }
@@ -526,6 +530,32 @@ function ingestInterviewResponse(program: ProgramSummary, itemId: string, actor:
     }))].slice(-60);
     listenBucket._deferredAsks = JSON.stringify(nextDefs);
     phaseInputs.listen = listenBucket;
+  }
+
+  // Suggested voices — new people a respondent named as "who else should we
+  // speak with?". Saved fingerprint-safe on Listen for the operator to add or
+  // dismiss on the People page; never straight into the cast.
+  const suggested = Array.isArray(item.suggestedVoices) ? (item.suggestedVoices as unknown[]).filter(isRecord) : [];
+  if (suggested.length) {
+    const listenBucket = targetMovement === "listen"
+      ? bucket
+      : (isRecord(phaseInputs.listen) ? { ...(phaseInputs.listen as Record<string, unknown>) } : {});
+    let existing: unknown[] = [];
+    try {
+      const parsed = typeof listenBucket._suggestedVoices === "string" ? JSON.parse(listenBucket._suggestedVoices) : [];
+      if (Array.isArray(parsed)) existing = parsed;
+    } catch { /* reset */ }
+    const seen = new Set(existing.filter(isRecord).map((entry) => String(entry.name ?? "").trim().toLowerCase()));
+    const additions = suggested
+      .map((entry) => ({
+        name: String(entry.name ?? "").trim(), role: String(entry.role ?? "").trim(),
+        note: String(entry.note ?? "").trim(), from: stakeholder, ts: today,
+      }))
+      .filter((entry) => entry.name && !seen.has(entry.name.toLowerCase()));
+    if (additions.length) {
+      listenBucket._suggestedVoices = JSON.stringify([...existing, ...additions].slice(-40));
+      phaseInputs.listen = listenBucket;
+    }
   }
 
   const packs = Array.isArray(inner.flowInterviewPacks) ? (inner.flowInterviewPacks as unknown[]) : [];

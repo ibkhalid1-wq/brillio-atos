@@ -55,10 +55,12 @@ const FUNCTIONS_BASE = `${import.meta.env.VITE_SUPABASE_URL || ""}/functions/v1`
 /** A stakeholder's in-progress answers, kept on THEIR device so they can close
  * the link and come back without losing work. Keyed by the link token, cleared
  * once they submit. Answers never leave the browser until they press send. */
+interface SuggestedVoice { name: string; role: string; note: string }
 interface RespondDraft {
   answers?: Record<number, string>;
   deferrals?: Record<number, string>;
   extra?: string;
+  suggestedVoices?: SuggestedVoice[];
   verdict?: DemoVerdict | null;
   comment?: string;
   phaseComments?: Record<string, string>;
@@ -79,6 +81,14 @@ export default function FlowRespond({ token }: { token: string }) {
   const [attachBusy, setAttachBusy] = useState<number | null>(null);
   const [attachNote, setAttachNote] = useState<string | null>(null);
   const [extra, setExtra] = useState(draft0.extra ?? "");
+  // "Who else should we speak with?" — the respondent can name people the tour
+  // is missing. Named voices route to the operator to add, closing the gap where
+  // a stakeholder knew who owned an answer but had no way to say so.
+  const [suggestedVoices, setSuggestedVoices] = useState<SuggestedVoice[]>(
+    draft0.suggestedVoices?.length ? draft0.suggestedVoices : [{ name: "", role: "", note: "" }]);
+  const setVoice = (index: number, patch: Partial<SuggestedVoice>) =>
+    setSuggestedVoices((current) => current.map((voice, i) => (i === index ? { ...voice, ...patch } : voice)));
+  const filledVoices = suggestedVoices.filter((voice) => voice.name.trim());
   const [verdict, setVerdict] = useState<DemoVerdict | null>(draft0.verdict ?? null);
   const [comment, setComment] = useState(draft0.comment ?? "");
   // Per-phase demo comments, keyed by flow · step — folded into the verdict.
@@ -88,7 +98,7 @@ export default function FlowRespond({ token }: { token: string }) {
 
   // Persist the draft as they type; clear it once the link is submitted or spent.
   const hasDraft = !!(Object.keys(answers).length || extra.trim() || Object.keys(deferrals).length
-    || verdict || comment.trim() || Object.keys(phaseComments).length);
+    || filledVoices.length || verdict || comment.trim() || Object.keys(phaseComments).length);
   useEffect(() => {
     try {
       if (state.phase === "sent") {
@@ -99,9 +109,9 @@ export default function FlowRespond({ token }: { token: string }) {
         }
         return;
       }
-      if (hasDraft) localStorage.setItem(draftKey, JSON.stringify({ answers, deferrals, extra, verdict, comment, phaseComments }));
+      if (hasDraft) localStorage.setItem(draftKey, JSON.stringify({ answers, deferrals, extra, suggestedVoices, verdict, comment, phaseComments }));
     } catch { /* private mode / quota — draft-save is best-effort */ }
-  }, [draftKey, state.phase, hasDraft, answers, deferrals, extra, verdict, comment, phaseComments]);
+  }, [draftKey, state.phase, hasDraft, answers, deferrals, extra, suggestedVoices, verdict, comment, phaseComments]);
 
   useEffect(() => {
     let alive = true;
@@ -383,6 +393,31 @@ export default function FlowRespond({ token }: { token: string }) {
                   <textarea value={extra} onChange={(event) => setExtra(event.target.value)} rows={3} maxLength={20000} placeholder="Optional — type, or speak it." />
                   <DictationButton onText={(spoken) => setExtra((current) => joinDictation(current, spoken))} />
                 </label>
+                <div className={`v3fs-portal-card whoelse${filledVoices.length ? " done" : ""}`}>
+                  <span className="v3fs-portal-qn"><b aria-hidden="true">☎</b><em aria-hidden="true">✓</em></span>
+                  <span className="v3fs-portal-qt">Who else should we speak with?</span>
+                  <p className="v3fs-portal-cardhint">If someone else owns a part of this — name them and we&rsquo;ll reach out. Nothing happens automatically; the team decides who to invite.</p>
+                  <div className="v3fs-portal-voices">
+                    {suggestedVoices.map((voice, index) => (
+                      <div key={index} className="v3fs-portal-voice">
+                        <input value={voice.name} aria-label={`Person ${index + 1} name`} placeholder="Name"
+                          onChange={(event) => setVoice(index, { name: event.target.value })} />
+                        <input value={voice.role} aria-label={`Person ${index + 1} role or team`} placeholder="Role or team"
+                          onChange={(event) => setVoice(index, { role: event.target.value })} />
+                        <input value={voice.note} aria-label={`Person ${index + 1} why`} placeholder="Why them? (optional)"
+                          onChange={(event) => setVoice(index, { note: event.target.value })} />
+                        {suggestedVoices.length > 1 ? (
+                          <button type="button" className="v3fs-portal-voice-rm" aria-label={`Remove person ${index + 1}`}
+                            onClick={() => setSuggestedVoices((current) => current.filter((_, i) => i !== index))}>×</button>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                  <button type="button" className="v3fs-a v3fs-portal-voice-add"
+                    onClick={() => setSuggestedVoices((current) => [...current, { name: "", role: "", note: "" }])}>
+                    ＋ add another person
+                  </button>
+                </div>
                 {error ? <div className="v3fs-portal-err">{error}</div> : null}
               </div>
               <div className="v3fs-portal-bar">
@@ -394,7 +429,7 @@ export default function FlowRespond({ token }: { token: string }) {
                   {hasDraft ? <span className="v3fs-portal-saved">✓ Saved on this device — you can close this and come back</span> : null}
                 </div>
                 <button type="button" className="v3fs-btn pri v3fs-portal-send"
-                  disabled={submitting || (composed.trim().length < 20 && Object.values(attachments).every((docs) => !docs.length) && !Object.keys(deferrals).length)}
+                  disabled={submitting || (composed.trim().length < 20 && Object.values(attachments).every((docs) => !docs.length) && !Object.keys(deferrals).length && !filledVoices.length)}
                   onClick={() => void submit({
                     answers: composed,
                     documents: Object.entries(attachments).flatMap(([qIndex, docs]) =>
@@ -402,6 +437,9 @@ export default function FlowRespond({ token }: { token: string }) {
                     deferrals: Object.entries(deferrals).map(([qIndex, to]) => ({
                       question: state.pack.questions[Number(qIndex)] ?? "", to,
                     })).filter((entry) => entry.question && entry.to),
+                    suggestedVoices: filledVoices.map((voice) => ({
+                      name: voice.name.trim(), role: voice.role.trim(), note: voice.note.trim(),
+                    })),
                   })}>
                   {submitting ? "Sending…" : "Send my answers"}
                 </button>
