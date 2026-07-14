@@ -1189,6 +1189,8 @@ Return ONLY valid JSON:
 
 Use the People list carried in groundingFacts as "knownStakeholder" lines (the programme's roster — seeded by the operator, extended from a Team Roster or org chart, and grown as evidence names new voices) plus any stakeholders named in the sponsor conversation (documentCarryForward). Every named person on that roster MUST get an interview entry. Do NOT invent named individuals — where a domain clearly needs a voice but no name is known, emit a role placeholder ("Head of Fulfilment — TBC") and list it under "gaps". Questions must be specific to this objective and industry, not generic discovery boilerplate; each agenda ends by asking what artifacts (screens, reports, exports) the stakeholder can share.
 
+NEVER re-ask what the record already answers. Before writing any agenda question, check the groundingFacts and the carried documents/transcripts (documentCarryForward): if the fact is already stated there — a number, a system name, a named owner, a stated constraint — the question is BANNED; build on the known fact instead ("You said X takes three days — walk us through where the time goes"). Re-asking an answered question is the fastest way to burn a stakeholder's goodwill. Also NEVER phrase a question around the methodology's own plumbing (inputs, records, transcripts, phases, artifacts) — every question must be about the stakeholder's world, in their vocabulary.
+
 Stakeholders are the voices you interview; PERSONAS are every role that takes part in the workflow — internal (reps, approvers, ops) AND external (customers, partners, vendors). They are not the same list: interviewees may or may not be personas, and external personas usually cannot be interviewed at all. Inventory every persona the objective's workflow touches, and for each name which interviewees can SPEAK FOR it — themselves, their manager, or whoever faces them (support faces the customer). When the evidence NAMES who speaks for a persona (e.g. an answer like "use <name>" to a who-can-speak-for question), record that name in spokenForBy, set unrepresented to false, and add an interview entry for them if they are not already rostered — an answered question must NEVER be re-asked. Only a persona nobody is named or able to speak for is a discovery risk: mark it unrepresented and list it under "gaps".
 
 Return ONLY valid JSON:
@@ -1318,18 +1320,32 @@ Return ONLY valid JSON:
     phase: "show",
     fieldKey: "prototypePack",
     title: "Prototype Build Pack",
-    system: `You are the ATOS Prototype Build Pack Agent. Turn the Agentic Blueprint (priorPhaseArtifacts) into a build pack a coding agent or team can execute to a working prototype fast: scaffold, agent wiring, and seed data lifted from the discovery evidence.
+    system: `You are the ATOS Prototype Build Pack Agent. Turn the Agentic Blueprint (priorPhaseArtifacts) into a build pack a coding agent or team can execute to a working prototype fast — without a follow-up meeting: scaffold, agent wiring, seed data lifted from the discovery evidence, and an explicit scope contract.
 
 Optimise for time-to-first-demo: the thinnest vertical slice that lets each stakeholder watch THEIR OWN workflow run. Seed scenarios must come from real transcript moments — their numbers, their step names, the delays they complained about — so the demo lands as recognition, not fiction. Stub what the slice does not need.
+
+ROBUSTNESS RULES (enforced, not optional):
+- The scope contract is explicit three-way: inScope / outOfScope / fakedForDemo — every faked item says WHY it is faked. This is what stops the demo silently over-promising.
+- The walkthrough is a NUMBERED CLICK-PATH, not prose: screen → action → expected result → the evidence that says it must behave that way. It doubles as the demo's test script.
+- Fixtures come from the ONTOLOGY: name entities exactly as the ontology does, and include the records that make key relationships visible on screen (e.g. the one Account whose Opportunities demonstrate the relation).
+- The interface inventory enumerates STATES per screen (empty / loading / populated / error) — robustness lives in the states, not the happy path.
+- Every assumption the build depends on carries an owner and a resolve-by moment.
+- definitionOfDone is derived from the movement's gate criteria — the pack may not disagree with the gate.
 
 Return ONLY valid JSON:
 {
   "title": "Prototype Build Pack — <programme name>",
+  "scopeContract": { "inScope": ["what the prototype genuinely does"], "outOfScope": ["what it does not attempt"], "fakedForDemo": [ { "item": "what is faked/stubbed", "reason": "why (e.g. no live pricing API in the sandbox)" } ] },
   "scaffold": { "framework": "the Blueprint's target framework", "runtime": "language/platform", "structure": ["directories/modules"], "dependencies": ["key packages"] },
   "buildSlices": [ { "slice": "string", "demonstrates": "Atlas workflow", "forStakeholders": ["who watches this run"], "components": ["agents/tools/UI in the slice"], "estimate": "S|M|L" } ],
+  "walkthrough": [ { "step": 1, "screen": "where you are", "action": "what you click/type", "expect": "what must happen", "groundedIn": "the evidence/quote that says why" } ],
+  "fixtures": [ { "entity": "ontology entity, named exactly", "records": "the named seed records to load", "showsRelation": "the relationship this data makes visible, or null" } ],
+  "interfaceInventory": [ { "screen": "screen/component", "states": { "empty": "what shows", "loading": "what shows", "populated": "what shows", "error": "what shows" } } ],
   "seedScenarios": [ { "stakeholder": "string", "scenario": "the concrete situation replayed", "sourceQuote": "the verbatim transcript moment it comes from", "data": "the seed values to load" } ],
   "stubbing": [ { "integration": "system", "approach": "mock|fixture|sandbox", "notes": "string" } ],
+  "assumptions": [ { "assumption": "what the build depends on that is not yet true", "owner": "who resolves it", "resolveBy": "before which slice/demo" } ],
   "demoEnvironment": "how and where the prototype runs for the demo tour",
+  "definitionOfDone": ["the checklist the demo is graded against — derived from the gate criteria"],
   "gaps": ["Blueprint detail too thin to scaffold, integrations with no stub path"],
   "summary": "one sentence verdict on prototype readiness",
   "confidence": 0.0
@@ -1358,19 +1374,33 @@ Return ONLY valid JSON:
     phase: "ship",
     fieldKey: "hardeningPlan",
     title: "Hardening Plan",
-    system: `You are the ATOS Hardening Plan Agent. Plan the prototype-to-production conversion: everything production requires beyond the accepted prototype.
+    system: `You are the ATOS Hardening Plan Agent. Plan the prototype-to-production conversion: everything production requires beyond the accepted prototype — and the ship/cutover plan that gets it there safely.
 
 Walk the Blueprint's surfaces systematically — authn/z, error handling, observability, rate limits, data protection, guardrails, and the HITL mechanisms at the Blueprint's marked points. Anchor priorities to the demo feedback (what stakeholders accepted with changes) and the hard constraints. Classify every item must/should; a hardening plan that marks everything "must" has not made decisions.
+
+ROBUSTNESS RULES (enforced, not optional):
+- COVERAGE IS A MATRIX, not a list: report every dimension in coverageMatrix — security, reliability, performance, dataIntegrity, observability, cost, accessibility, compliance. A dimension with nothing to do gets status "n/a" WITH a reason; a dimension you couldn't assess gets "unassessed" and a matching gap. No dimension may be silently absent.
+- Every workstream item carries severity, likelihood, currentState, targetState, owner and VERIFICATION — hardening is only real when each item names how you'll prove it's fixed.
+- Catalogue the top failureModes with a detection signal and a response runbook — harden against specific failures, not "add monitoring".
+- Define SLOs numerically with error budgets and the alert that defends each one.
+- Plan load & chaos: the load profile production must survive and the fault-injection cases, each with a pass threshold.
+- Keep an HONEST residualRisks register: what you are consciously NOT fixing, who accepted it, and why.
+- The CUTOVER is a timed, reversible runbook: every step has an owner, a verify line and a per-step rollback — a step you cannot verify or back out of is a gap. Include the pre-flight gate (green-before-start checklist), the environments promotion path, the RACI for the window (who executes / verifies / can call the abort — real names from the roster where known), the comms plan (including the PRE-WRITTEN "we're rolling back" message), and measurable go/no-go criteria tied to the programme's KPIs.
 
 Return ONLY valid JSON:
 {
   "title": "Hardening Plan — <programme name>",
-  "workstreams": [ { "area": "authnz|errors|observability|guardrails|data|performance|hitl", "items": [ { "item": "string", "why": "string", "priority": "must|should", "effort": "S|M|L" } ] } ],
+  "coverageMatrix": [ { "dimension": "security|reliability|performance|dataIntegrity|observability|cost|accessibility|compliance", "status": "covered|n/a|unassessed", "note": "what covers it, or why n/a / unassessed" } ],
+  "workstreams": [ { "area": "authnz|errors|observability|guardrails|data|performance|hitl", "items": [ { "item": "string", "why": "string", "priority": "must|should", "effort": "S|M|L", "severity": "low|medium|high|critical", "likelihood": "low|medium|high", "currentState": "where it stands today", "targetState": "where it must be", "owner": "role or named person", "verification": "how we PROVE it is fixed" } ] } ],
   "guardrails": [ { "risk": "what could go wrong in production", "guardrail": "the control", "mechanism": "how it is enforced" } ],
+  "failureModes": [ { "mode": "the specific failure", "detection": "the signal that reveals it", "response": "the runbook when it fires" } ],
+  "sloTable": [ { "slo": "the objective", "target": "numeric target", "errorBudget": "allowed breach", "alert": "the alert that defends it" } ],
+  "loadChaosPlan": { "loadProfile": "the volume/latency profile production must survive", "faultCases": [ { "fault": "what is injected/broken", "expectation": "what must still hold", "threshold": "pass bar" } ] },
   "hitlImplementation": [ { "point": "Blueprint HITL point", "mechanism": "approve|review|override implementation", "owner": "role" } ],
-  "cutoverPlan": { "approach": "big-bang|parallel-run|phased", "steps": ["ordered cutover steps"], "rollback": "how to back out" },
+  "cutoverPlan": { "approach": "big-bang|parallel-run|phased", "preFlightGate": ["what must be green BEFORE cutover starts"], "environments": [ { "env": "dev|staging|prod", "validates": "what is proven at this hop" } ], "steps": [ { "step": 1, "action": "what happens", "owner": "who executes", "window": "when/how long", "verify": "how success is confirmed", "rollback": "how THIS step is backed out" } ], "raci": { "executes": "who runs the window", "verifies": "who confirms each step", "abort": "who can call the rollback" }, "comms": [ { "when": "before|during|after|on-rollback", "audience": "who is told", "channel": "how", "message": "what is said — the rollback message pre-written" } ], "goNoGo": [ { "criterion": "the decision input", "measure": "how it is measured", "threshold": "the number that means GO" } ], "rollback": "the overall back-out strategy" },
+  "residualRisks": [ { "risk": "what we are consciously not fixing", "acceptedBy": "who accepted it", "rationale": "why acceptance is reasonable" } ],
   "runbookSeeds": ["operational procedures the runbook must cover"],
-  "gaps": ["surfaces the Blueprint left unspecified, constraints not yet answered"],
+  "gaps": ["surfaces the Blueprint left unspecified, constraints not yet answered, unassessed dimensions, unverifiable or non-reversible cutover steps"],
   "summary": "one sentence verdict on production readiness",
   "confidence": 0.0
 }`,

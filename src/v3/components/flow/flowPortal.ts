@@ -162,11 +162,30 @@ export function mintInterviewPacks(program: ProgramSummary, actor: string): Reco
 
   const existing = Array.isArray(inner.flowInterviewPacks) ? (inner.flowInterviewPacks as unknown[]).filter(isRecord) : [];
   const now = new Date().toISOString();
-  const agendaQuestions = (interview: Record<string, unknown>): string[] =>
-    (Array.isArray(interview.agenda) ? interview.agenda.filter(isRecord) : [])
+  // Asked-and-answered guard: the questions each person has ALREADY answered
+  // (their responded packs). A refreshed or new link must never re-ask them —
+  // the answer is on the record, and re-asking burns the stakeholder's
+  // goodwill fastest of anything we could do.
+  const normalise = (text: string): string => text.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+  const answeredBy = new Map<string, Set<string>>();
+  for (const pack of existing) {
+    if (typeof pack.respondedAt !== "string" || !Array.isArray(pack.questions)) continue;
+    const key = String(pack.stakeholder ?? "").trim().toLowerCase();
+    const set = answeredBy.get(key) ?? new Set<string>();
+    for (const question of pack.questions) {
+      const norm = normalise(String(question ?? ""));
+      if (norm) set.add(norm);
+    }
+    answeredBy.set(key, set);
+  }
+  const agendaQuestions = (interview: Record<string, unknown>): string[] => {
+    const answered = answeredBy.get(String(interview.stakeholder ?? "").trim().toLowerCase());
+    return (Array.isArray(interview.agenda) ? interview.agenda.filter(isRecord) : [])
       .flatMap((slot) => (Array.isArray((slot as Record<string, unknown>).questions) ? ((slot as Record<string, unknown>).questions as unknown[]).map(String) : []))
       .filter(Boolean)
+      .filter((question) => !answered?.has(normalise(question)))
       .slice(0, 12);
+  };
 
   // Refresh UNANSWERED interview links in place to the current agenda, keeping
   // the token — a link always asks what the kit currently asks. Answered packs

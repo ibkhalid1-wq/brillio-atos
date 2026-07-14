@@ -131,9 +131,26 @@ export function compileShipLanes(program: ProgramSummary, actor: string): Record
     item("enable-runbook", "Runbook handed to the operating team", "standard"),
   ];
 
+  // The hardening plan's cutover runbook, when present, IS the ship plan's
+  // cutover lane: pre-flight gate first, then the timed steps (new docs carry
+  // {action, verify, rollback} objects; older ones plain strings — both fold).
+  const cutover = isRecord(hardening.cutoverPlan) ? hardening.cutoverPlan as Record<string, unknown> : {};
+  const preFlightItems = (Array.isArray(cutover.preFlightGate) ? cutover.preFlightGate : [])
+    .map(String).filter(Boolean).slice(0, 6)
+    .map((entry, index) => item(`cut-pre-${index}`, `Pre-flight: ${entry}`, "hardening plan cutover"));
+  const runbookItems = (Array.isArray(cutover.steps) ? cutover.steps : [])
+    .slice(0, 10)
+    .flatMap((step, index) => {
+      const label = isRecord(step)
+        ? [String(step.action ?? ""), step.verify ? `verify: ${String(step.verify)}` : ""].filter(Boolean).join(" — ")
+        : String(step ?? "");
+      return label ? [item(`cut-step-${index}`, label, "hardening plan cutover")] : [];
+    });
   const cutoverItems = [
+    ...preFlightItems,
     item("cut-rehearsal", "Cutover rehearsal completed", "standard"),
     item("cut-go", "Go / no-go decision recorded", "gate criterion"),
+    ...runbookItems,
     item("cut-execute", "Production cutover executed", "gate criterion"),
     item("cut-hypercare", "Hypercare window closed", "standard"),
   ];

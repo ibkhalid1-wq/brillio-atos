@@ -240,6 +240,18 @@ export default function OntologyStudio({ doc, onChange }: StudioProps) {
               onChange={(next) => updateEntity(selectedEntityIndex, { aliases: next })} />
             <TextArea label="Evidence" rows={2} value={asText(selectedEntity.evidence)}
               onChange={(next) => updateEntity(selectedEntityIndex, { evidence: next })} />
+            {/* Explicit relation creation — same result as dragging node-to-
+                node on the canvas, but discoverable: pick the target entity
+                and the new relation opens in this panel to be named. */}
+            <SelectField label="Add relation to…" value=""
+              options={["", ...ids.filter((entityName) => entityName !== asText(selectedEntity.name))]}
+              onChange={(target) => {
+                if (!target) return;
+                const next = [...relations, { from: asText(selectedEntity.name), relation: "relates to", to: target, cardinality: "unknown" }];
+                patch({ relations: next });
+                setSelected({ kind: "relation", index: next.length - 1 });
+              }} />
+            <p className="v3fs-onto-hint">…or drag from this entity’s edge dot to another entity on the canvas.</p>
             <button type="button" className="v3fs-btn danger" onClick={() => deleteEntity(selectedEntityIndex)}>
               Delete entity
             </button>

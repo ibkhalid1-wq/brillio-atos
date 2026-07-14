@@ -1791,6 +1791,23 @@ export default function AppShellV3() {
   // Soft-delete: mark the programme obsolete (is_deleted=true) but KEEP its
   // blob — recoverable, and the record isn't destroyed. usePrograms filters
   // deleted rows, so it drops out of the UI. Switches away if it was active.
+  // Remove a programme's entry from the localStorage list. Returns true when an
+  // entry was actually there — the signal that this was a local-only programme
+  // (created while the cloud insert failed / sign-in unresolved).
+  const removeLocalProgram = (id: string): boolean => {
+    if (typeof localStorage === "undefined") return false;
+    try {
+      const existing = JSON.parse(localStorage.getItem(LOCAL_PROGRAM_STORAGE_KEY) || "[]");
+      if (!Array.isArray(existing)) return false;
+      const next = existing.filter((e) => e?.id !== id);
+      if (next.length === existing.length) return false;
+      localStorage.setItem(LOCAL_PROGRAM_STORAGE_KEY, JSON.stringify(next));
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const handleDeleteProgram = useCallback(async (idToDelete: string) => {
     if (!idToDelete) return;
     try {
@@ -1807,12 +1824,20 @@ export default function AppShellV3() {
           .select("id");
         if (error) throw error;
         if (!affected || affected.length === 0) {
-          pushV3Toast(
-            "Couldn't archive this programme — the cloud write changed nothing. Your sign-in may have expired (reload and sign in again), or it isn't owned by this account. Nothing was changed.",
-            { tone: "error", duration: 9000 },
-          );
-          return;
+          // No cloud row — the common case is a LOCAL-ONLY programme (created
+          // while the cloud insert failed). Archiving one means removing its
+          // localStorage entry; only when there is no local copy either is
+          // this a genuine ownership/session failure.
+          if (!removeLocalProgram(idToDelete)) {
+            pushV3Toast(
+              "Couldn't archive this programme — the cloud write changed nothing. Your sign-in may have expired (reload and sign in again), or it isn't owned by this account. Nothing was changed.",
+              { tone: "error", duration: 9000 },
+            );
+            return;
+          }
         }
+      } else {
+        removeLocalProgram(idToDelete);
       }
       if (idToDelete === activeProgramId) {
         const remaining = programs.filter((p) => p.id !== idToDelete);
@@ -1848,14 +1873,27 @@ export default function AppShellV3() {
         const { data: affected, error } = await supabase.from("adam_programs").update(update).eq("id", idToRename).select("id");
         if (error) throw error;
         if (!affected || affected.length === 0) {
-          // Zero rows touched → the write silently no-op'd (not owned by this
-          // account, or never saved to the cloud). Report it instead of the
-          // misleading "renamed" success that hid this failure before.
-          pushV3Toast(
-            "Couldn't rename this programme — the cloud write changed nothing. Your sign-in may have expired (reload and sign in again), or it isn't owned by this account. The name wasn't changed.",
-            { tone: "error", duration: 9000 },
-          );
-          return;
+          // Zero rows touched → no cloud row. A LOCAL-ONLY programme (created
+          // while the cloud insert failed) is renamed in localStorage instead;
+          // otherwise report the failure honestly (session expired / not owned)
+          // rather than the misleading "renamed" success that hid this before.
+          let renamedLocally = false;
+          if (typeof localStorage !== "undefined") {
+            try {
+              const existing = JSON.parse(localStorage.getItem(LOCAL_PROGRAM_STORAGE_KEY) || "[]");
+              if (Array.isArray(existing) && existing.some((e) => e?.id === idToRename)) {
+                localStorage.setItem(LOCAL_PROGRAM_STORAGE_KEY, JSON.stringify(existing.map((e) => (e?.id === idToRename ? { ...e, name } : e))));
+                renamedLocally = true;
+              }
+            } catch { /* fall through to the error toast */ }
+          }
+          if (!renamedLocally) {
+            pushV3Toast(
+              "Couldn't rename this programme — the cloud write changed nothing. Your sign-in may have expired (reload and sign in again), or it isn't owned by this account. The name wasn't changed.",
+              { tone: "error", duration: 9000 },
+            );
+            return;
+          }
         }
       } else if (typeof localStorage !== "undefined") {
         const existing = JSON.parse(localStorage.getItem(LOCAL_PROGRAM_STORAGE_KEY) || "[]");

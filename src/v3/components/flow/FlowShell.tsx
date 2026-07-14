@@ -725,9 +725,12 @@ export default function FlowShell(props: FlowShellProps) {
           ) : null}
         </header>
 
-        {view !== "today" && waitingCount > 0 ? (
-          // Judgment stays visible from every view: one line naming the first
-          // waiting item, one tap to the Inbox. The queue itself lives there.
+        {view !== "today" && view !== "portfolio" && waitingCount > 0 ? (
+          // Judgment stays visible from every programme view: one line naming
+          // the first waiting item, one tap to the Inbox. The queue itself
+          // lives there. Portfolio is the exception — it is a cross-programme
+          // surface, and each of its cards already carries its own
+          // "N waiting" chip, so the single-programme banner reads as noise.
           <button type="button" className="v3fs-wait" onClick={() => { setView("today"); window.scrollTo({ top: 0 }); }}>
             <span className="v3fs-wait-n">{waitingCount}</span>
             <span className="v3fs-wait-t">

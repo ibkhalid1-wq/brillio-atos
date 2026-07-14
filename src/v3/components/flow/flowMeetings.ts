@@ -70,7 +70,10 @@ function baseMeetingKit(program: ProgramSummary, movementId: string): Omit<Meeti
     if (!filled(inputs.successMetric)) questions.push("Which single measure proves it worked? What is it today, and what should it become?");
     if (parseGridRows(readMovementInputs(program, "listen").interviewRoster).length === 0) questions.push("Whose working day changes? Name the people we must hear from.");
     if (!filled(inputs.targetFirstDemoDate)) questions.push("When should the first stakeholder watch their own workflow run — pick a date.");
-    questions.push("What must NOT change — hard boundaries, systems that stay, lines we don't cross?");
+    // Conditional like every other line: once constraints are on record the
+    // script stops re-asking them. (This was unconditional — the one question
+    // that reappeared forever no matter what the sponsor had already said.)
+    if (!filled(inputs.constraints)) questions.push("What must NOT change — hard boundaries, systems that stay, lines we don't cross?");
     if (done && questions.length <= 1) {
       questions.length = 0;
       questions.push(
@@ -366,30 +369,72 @@ const GAP_REPHRASE: Array<{ match: RegExp; ask: string }> = [
   { match: /budget|funding|cost envelope/i, ask: "What budget envelope backs this programme — and how should spend be tracked against it?" },
 ];
 
+// Field names that are the METHODOLOGY's plumbing, not a stakeholder's fact.
+// "What should go on record for interview transcripts?" is a question about
+// how the app files things — it must never reach a human. A gap naming one of
+// these fields stays operator-side (askableGap drops it, since the raw gap
+// says "input").
+const INTERNAL_FIELD = /transcript|record|phase|evidence|kit\b|roster|ledger|artifact|attest|conversation|capture|log\b|document/i;
+
 function rephraseGapAsAsk(gap: string): string {
   if (askableGap(gap)) return gap;
   const hit = GAP_REPHRASE.find((entry) => entry.match.test(gap));
   if (hit) return hit.ask;
   // No bespoke rule, but the gap names the field it wants ("… to the Budget
   // input"): ask the stakeholder for the FACT rather than dropping the ask —
-  // a gap shown on the artifact card must reach the follow-up script.
+  // a gap shown on the artifact card must reach the follow-up script. Fields
+  // that are methodology plumbing are NOT rephrased, so the plumbing filter
+  // keeps them off every script.
   const field = gap.match(/to the ([A-Za-z][\w ,&/-]{2,48}?) inputs?\b/i)?.[1];
-  if (field) return `What should go on record for ${field.trim().toLowerCase()}? Please give the specifics a document could cite.`;
+  if (field && !INTERNAL_FIELD.test(field)) {
+    return `Could you give us the specifics on ${field.trim().toLowerCase()} — the numbers, names or dates a document could cite?`;
+  }
   return gap;
+}
+
+/** Normalise a question for asked-and-answered comparison. */
+const normaliseAsk = (text: string): string => text.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+
+/**
+ * Every question that has ALREADY been asked over a link and answered — the
+ * union of questions on responded interview/follow-up packs. Once someone has
+ * answered a question, no script may ask it again: the answer lives in the
+ * record (quarantine → evidence), and re-asking is the fastest way to burn a
+ * stakeholder's goodwill.
+ */
+export function answeredScriptQuestions(program: ProgramSummary): Set<string> {
+  const packs = innerData(program).flowInterviewPacks;
+  const out = new Set<string>();
+  if (!Array.isArray(packs)) return out;
+  for (const pack of packs) {
+    if (!isRecord(pack) || typeof pack.respondedAt !== "string") continue;
+    if (Array.isArray(pack.questions)) {
+      for (const question of pack.questions) {
+        const key = normaliseAsk(String(question ?? ""));
+        if (key) out.add(key);
+      }
+    }
+  }
+  return out;
 }
 
 /**
  * The movement's open gaps as STAKEHOLDER questions — rephrased where the gap
- * was operator-worded, plumbing filtered out, capped. This is the one door
- * through which artifact gaps reach interview scripts, so per-person scripts
- * (the interviewee cards) and the movement kit always agree.
+ * was operator-worded, plumbing filtered out, asked-and-answered suppressed,
+ * capped. This is the one door through which artifact gaps reach interview
+ * scripts, so per-person scripts (the interviewee cards) and the movement kit
+ * always agree.
  */
 export function askableMovementGaps(program: ProgramSummary, movementId: string, cap = 8): string[] {
   // Stakeholder-facing: drop gate-checklist bookkeeping — an interviewee gets
   // real artifact questions and disputes, never "discovery kit generated".
   // The cap matches kitGaps' own ceiling so a gap shown on an artifact card is
   // ALSO on the follow-up script — one set of open questions, two surfaces.
-  return [...new Set(kitGaps(program, movementId, { gateLabels: false }).map(rephraseGapAsAsk))].filter(askableGap).slice(0, cap);
+  const answered = answeredScriptQuestions(program);
+  return [...new Set(kitGaps(program, movementId, { gateLabels: false }).map(rephraseGapAsAsk))]
+    .filter(askableGap)
+    .filter((ask) => !answered.has(normaliseAsk(ask)))
+    .slice(0, cap);
 }
 
 /**

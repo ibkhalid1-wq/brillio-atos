@@ -5935,6 +5935,12 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .react-flow__node.v3fs-onto-node{background:var(--fs-card);border:1.5px solid var(--fs-line);border-left:3.5px solid var(--v3-accent-2);border-radius:11px;
   padding:8px 12px 9px;width:auto;max-width:200px;box-shadow:var(--fs-shadow);font-family:var(--v3-font);transition:border-color .15s ease, box-shadow .15s ease}
 .react-flow__node.v3fs-onto-node.selected,.react-flow__node.v3fs-onto-node:focus{border-color:var(--v3-accent-2);box-shadow:var(--fs-lift)}
+/* Connection handles: invisible until the node is hovered, then a clear
+   grabbable dot — dragging it onto another entity draws a new relation. */
+.react-flow__node.v3fs-onto-node .react-flow__handle{width:10px;height:10px;border:2px solid var(--v3-accent-2);background:var(--fs-card);opacity:0;transition:opacity .15s ease}
+.react-flow__node.v3fs-onto-node:hover .react-flow__handle,
+.react-flow__node.v3fs-onto-node.selected .react-flow__handle{opacity:1}
+.v3fs-onto-hint{font-size:11.5px;color:var(--v3-text-secondary);margin:2px 0 6px}
 /* Focus mode: clicking an entity spotlights it + its neighbours; the rest dims. */
 .react-flow__node.v3fs-onto-node.related{border-left-color:var(--v3-accent-2);box-shadow:0 0 0 2px color-mix(in srgb,var(--v3-accent-2) 45%,transparent)}
 .react-flow__node.v3fs-onto-node.dimmed{opacity:.16;filter:saturate(.5);transition:opacity .2s ease}
