@@ -17,7 +17,8 @@
 -- or writes it until the app's dual-write/dual-read is enabled behind its flag.
 
 create table if not exists public.adam_program_texts (
-  program_id  uuid        not null references public.adam_programs (id) on delete cascade,
+  -- adam_programs.id is TEXT on this project, so the FK column must match.
+  program_id  text        not null references public.adam_programs (id) on delete cascade,
   field_key   text        not null,           -- e.g. 'sponsorConversation'
   movement_id text        not null default '', -- owning phase/movement, for scoping
   content     text        not null default '',

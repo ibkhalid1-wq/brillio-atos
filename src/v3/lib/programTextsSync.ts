@@ -25,26 +25,34 @@ import {
 
 const TEXTS_TABLE = "adam_program_texts";
 
-/** Flags are read from localStorage so the rollout can be staged per-browser
- * without a rebuild. Anything other than the literal "on" is OFF. */
-function flag(name: string): boolean {
-  if (typeof localStorage === "undefined") return false;
+/**
+ * Externalization is now ON by default (the `adam_program_texts` table is
+ * applied and the pipeline is verified). Each flag can still be forced OFF
+ * per-browser for an instant rollback by setting its localStorage key to the
+ * literal "off"; "on" forces it on; anything else uses the code default.
+ * Rollback order if ever needed: cutover → dual-read (dual-write can stay on).
+ */
+function flag(name: string, defaultOn: boolean): boolean {
+  if (typeof localStorage === "undefined") return defaultOn;
   try {
-    return localStorage.getItem(`atos:externalize:${name}`) === "on";
+    const value = localStorage.getItem(`atos:externalize:${name}`);
+    if (value === "on") return true;
+    if (value === "off") return false;
+    return defaultOn;
   } catch {
-    return false;
+    return defaultOn;
   }
 }
 
 export const externalization = {
   get dualWrite(): boolean {
-    return flag("dual-write");
+    return flag("dual-write", true);
   },
   get dualRead(): boolean {
-    return flag("dual-read");
+    return flag("dual-read", true);
   },
   get cutover(): boolean {
-    return flag("cutover");
+    return flag("cutover", true);
   },
   /** True when any part of the pipeline is live — cheap early-out for callers. */
   get anyOn(): boolean {
@@ -85,14 +93,19 @@ export async function persistExternalTexts(
     }
     // Keep the table in sync: drop rows for fields that are no longer
     // externalized (e.g. a transcript that shrank below the threshold), so a
-    // stale row can't merge outdated content back on read.
-    const keptKeys = texts.map((t) => t.fieldKey);
-    let orphans = supabase.from(TEXTS_TABLE).delete().eq("program_id", programId);
-    if (keptKeys.length) {
-      orphans = orphans.not("field_key", "in", `(${keptKeys.join(",")})`);
+    // stale row can't merge outdated content back on read. CRITICAL GUARD: only
+    // reconcile when this payload actually CARRIES externalizable texts. A
+    // payload with ZERO texts is more likely a failed hydrate (the transcripts
+    // weren't merged into memory) than a genuine "all transcripts deleted" —
+    // and blindly deleting would wipe the durable shadow copies. When there's
+    // nothing to keep, leave the table untouched.
+    if (texts.length) {
+      const keptKeys = texts.map((t) => t.fieldKey);
+      const { error: delError } = await supabase.from(TEXTS_TABLE)
+        .delete().eq("program_id", programId)
+        .not("field_key", "in", `(${keptKeys.join(",")})`);
+      if (delError) throw delError;
     }
-    const { error: delError } = await orphans;
-    if (delError) throw delError;
     // Only shrink the stored blob once cutover is on; until then keep the full
     // inline copy so dual-read parity can be verified and rollback stays trivial.
     return externalization.cutover ? inner : payload;

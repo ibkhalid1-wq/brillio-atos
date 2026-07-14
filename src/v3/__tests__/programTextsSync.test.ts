@@ -45,7 +45,41 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("programTextsSync — flags default OFF (inert)", () => {
+describe("programTextsSync — ON by default (no flags set)", () => {
+  it("persist externalizes and (cutover default-on) shrinks the blob", async () => {
+    const { supabase, calls } = mockSupabase();
+    const payload = sampleInner();
+    const out = await persistExternalTexts(supabase, "p1", payload) as any;
+    expect(calls.upsert).toHaveLength(1); // wrote the transcripts to the table
+    expect(out.phaseInputs.frame.sponsorConversation).toBeUndefined(); // stripped
+    expect(out.objective).toBe("Improve sales velocity"); // small fields untouched
+  });
+
+  it("hydrate reads the table and merges rows back", async () => {
+    const { supabase, calls } = mockSupabase({ rows: [{ field_key: "sponsorConversation", movement_id: "frame", content: big }] });
+    const shrunk = { objective: "x", phaseInputs: { frame: { sponsor: "Raj" } } };
+    const out = await hydrateExternalTexts(supabase, "p1", shrunk) as any;
+    expect(calls.select).toBe(1);
+    expect(out.phaseInputs.frame.sponsorConversation).toBe(big);
+  });
+
+  it("GUARD: a payload with no large texts never deletes the shadow rows", async () => {
+    const { supabase, calls } = mockSupabase();
+    // A failed hydrate would present transcripts as absent/small — must NOT wipe.
+    const payload = { objective: "x", phaseInputs: { listen: { interviewTranscripts: "short" } } };
+    await persistExternalTexts(supabase, "p1", payload);
+    expect(calls.upsert).toHaveLength(0);
+    expect(calls.delete).toHaveLength(0);
+  });
+});
+
+describe("programTextsSync — forced OFF per-browser (rollback) is inert", () => {
+  beforeEach(() => {
+    localStorage.setItem("atos:externalize:dual-write", "off");
+    localStorage.setItem("atos:externalize:dual-read", "off");
+    localStorage.setItem("atos:externalize:cutover", "off");
+  });
+
   it("persist returns the payload unchanged and touches no table", async () => {
     const { supabase, calls } = mockSupabase();
     const payload = sampleInner();
@@ -68,6 +102,7 @@ describe("programTextsSync — dual-write on", () => {
   beforeEach(() => localStorage.setItem("atos:externalize:dual-write", "on"));
 
   it("upserts the large fields and (no cutover) keeps them inline", async () => {
+    localStorage.setItem("atos:externalize:cutover", "off"); // cutover defaults on now — force off for this case
     const { supabase, calls } = mockSupabase();
     const payload = sampleInner();
     const out = await persistExternalTexts(supabase, "p1", payload) as any;
@@ -125,10 +160,14 @@ describe("programTextsSync — dual-read on", () => {
 });
 
 describe("externalization flag accessor", () => {
-  it("reflects localStorage and defaults off", () => {
+  it("defaults ON, and each flag can be forced off for rollback", () => {
+    expect(externalization.anyOn).toBe(true); // on by default now
+    expect(externalization.cutover).toBe(true);
+    localStorage.setItem("atos:externalize:dual-write", "off");
+    localStorage.setItem("atos:externalize:dual-read", "off");
+    localStorage.setItem("atos:externalize:cutover", "off");
     expect(externalization.anyOn).toBe(false);
-    localStorage.setItem("atos:externalize:dual-read", "on");
+    localStorage.setItem("atos:externalize:dual-read", "on"); // "on" forces on
     expect(externalization.dualRead).toBe(true);
-    expect(externalization.anyOn).toBe(true);
   });
 });
