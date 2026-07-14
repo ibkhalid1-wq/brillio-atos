@@ -450,6 +450,25 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
     expect(prakash?.questions.some((q) => /legal twice/.test(q))).toBe(true);
   });
 
+  it("a persona spoken-for by someone NOT interviewed still gets a Listen collect card", () => {
+    const p = programme({
+      phaseInputs: { frame: { sponsor: "Raj" } },
+      discoveryKit: {
+        interviews: [{ stakeholder: "Dana Ops", role: "Sales Ops", agenda: [] }],
+        personas: [
+          // "spoken for" by someone who is NOT an interviewee → must get a card.
+          { name: "Patient Experience and Enrollment", kind: "internal", spokenForBy: ["Nobody Interviewed"] },
+          // genuinely represented by an interviewee → no separate card needed.
+          { name: "Sales Persona", kind: "internal", spokenForBy: ["Dana Ops"] },
+        ],
+      },
+    });
+    const cards = resolveMovementStakeholders(p, "listen");
+    expect(cards.some((c) => /Patient Experience and Enrollment/i.test(c.role) || /Patient Experience and Enrollment/i.test(c.name))).toBe(true);
+    // The one genuinely covered by an interviewee is NOT duplicated as a card.
+    expect(cards.some((c) => /Sales Persona/i.test(c.role))).toBe(false);
+  });
+
   it("governed exceptions: log, read back per movement, and resolve — fingerprint-safe under _governedExceptions", () => {
     const added = withNewException([], { scope: "Cutover before Legal sign-off", justification: "Deadline immovable; risk accepted", basis: "Sponsor decision", reviewBy: "2026-08-01" }, "you");
     expect(added).toHaveLength(1);

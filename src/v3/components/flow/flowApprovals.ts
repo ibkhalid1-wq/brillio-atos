@@ -133,6 +133,42 @@ export function relevantApprovers(program: ProgramSummary, movementId: string): 
     .map((s) => ({ name: s.name, role: s.role, email: stakeholderEmail(program, s.name) || undefined }));
 }
 
+/**
+ * Backfill a responded pack's missing verdict from the artifact record.
+ *
+ * The edge writes an approver's verdict to BOTH the pack and
+ * `phaseArtifacts[movementId][artifactId].approval`. A pack that carries
+ * `respondedAt` but no `verdict` (an older pack, or one whose verdict reached
+ * the artifact record but never got mirrored onto the pack) would otherwise
+ * read forever as "in review, reply received" — stuck. When the recorded
+ * verdict belongs to this pack's approver, adopt it so the state resolves.
+ */
+export function reconcilePackVerdict(
+  inner: Record<string, unknown>,
+  movementId: string,
+  artifactId: string,
+  pack: FlowApprovalPack | undefined,
+): FlowApprovalPack | undefined {
+  if (!pack || pack.verdict || typeof pack.respondedAt !== "string") return pack;
+  const phaseArtifacts = isRecord(inner.phaseArtifacts) ? inner.phaseArtifacts as Record<string, unknown> : null;
+  const bucket = phaseArtifacts && isRecord(phaseArtifacts[movementId]) ? phaseArtifacts[movementId] as Record<string, unknown> : null;
+  const record = bucket && isRecord(bucket[artifactId]) ? bucket[artifactId] as Record<string, unknown> : null;
+  const approval = record && isRecord(record.approval) ? record.approval as Record<string, unknown> : null;
+  if (!approval) return pack;
+  const verdict = approval.verdict === "approved" || approval.verdict === "changes" ? approval.verdict : undefined;
+  if (!verdict) return pack;
+  const recordedApprover = isRecord(approval.approver) ? String((approval.approver as Record<string, unknown>).name ?? "").trim().toLowerCase() : "";
+  const packApprover = String(pack.approver?.name ?? "").trim().toLowerCase();
+  // Only adopt when it's the SAME approver (or the record names no approver).
+  if (recordedApprover && packApprover && recordedApprover !== packApprover) return pack;
+  return {
+    ...pack,
+    verdict,
+    comment: pack.comment ?? (typeof approval.comment === "string" ? approval.comment : undefined),
+    respondedAt: pack.respondedAt ?? (typeof approval.decidedAt === "string" ? approval.decidedAt : pack.respondedAt),
+  };
+}
+
 /** The LATEST approval pack per approver for one artifact — later sends
  * supersede earlier ones, answered or not, as that person's standing ask. */
 function latestPacksByApprover(inner: Record<string, unknown>, movementId: string, artifactId: string): Map<string, FlowApprovalPack> {
@@ -195,7 +231,7 @@ export function artifactApprovalRollup(program: ProgramSummary, movementId: stri
   const generatedAt = documentGeneratedAt(inner, artifactId);
   const approvers: ApproverState[] = relevantApprovers(program, movementId).map((approver) => ({
     ...approver,
-    ...packState(byApprover.get(approver.name.trim().toLowerCase()), generatedAt),
+    ...packState(reconcilePackVerdict(inner, movementId, artifactId, byApprover.get(approver.name.trim().toLowerCase())), generatedAt),
   }));
   // A sign-off that predates the current generation is HISTORY, not
   // validation — the document changed after they read it.
@@ -226,7 +262,7 @@ export function stakeholderApprovalItems(program: ProgramSummary, movementId: st
     .map((artifact) => ({
       artifactId: artifact.id,
       artifactTitle: artifact.title,
-      ...packState(latestPacksByApprover(inner, movementId, artifact.id).get(key), documentGeneratedAt(inner, artifact.id)),
+      ...packState(reconcilePackVerdict(inner, movementId, artifact.id, latestPacksByApprover(inner, movementId, artifact.id).get(key)), documentGeneratedAt(inner, artifact.id)),
     }));
 }
 

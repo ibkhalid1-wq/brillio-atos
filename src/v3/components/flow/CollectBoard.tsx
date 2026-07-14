@@ -826,7 +826,14 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
                           <button type="button" className="v3fs-btn" onClick={() => void copyApprovalLink(item)}>
                             {approvalCopied === item.artifactId ? "Copied ✓" : "⎘ Copy link"}
                           </button>
-                        ) : null}
+                        ) : (
+                          /* Reply received but the verdict never landed on the
+                             record — re-send a fresh link so it's never stuck. */
+                          <button type="button" className="v3fs-btn quiet" disabled={approvalBusy === item.artifactId}
+                            onClick={() => void sendApproval(item)} title="Their reply didn't record a verdict — send a fresh sign-off link">
+                            {approvalBusy === item.artifactId ? "…" : "↻ Re-request"}
+                          </button>
+                        )}
                       </>
                     ) : (
                       <button type="button" className="v3fs-btn pri" disabled={approvalBusy === item.artifactId}

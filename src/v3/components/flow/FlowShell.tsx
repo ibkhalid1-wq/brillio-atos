@@ -1940,11 +1940,15 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
   const personas = useMemo(() => {
     const rosterEntries = resolveMovementStakeholders(program, "listen");
     // Exclude personas already surfaced as roster rows — by ROLE and by NAME
-    // (a persona named identically to a person must never list twice).
-    const rosterRoles = new Set(rosterEntries.map((entry) => entry.role.trim().toLowerCase()).filter(Boolean));
-    const rosterNames = new Set(rosterEntries.map((entry) => entry.name.trim().toLowerCase()).filter(Boolean));
+    // (a persona named identically to a person must never list twice). Normalise
+    // the SAME way the roster does — strip a trailing "— TBC" — or a persona
+    // written "Patient Experience and Enrollment — TBC" slips past the role
+    // "Patient Experience and Enrollment" and lists twice.
+    const norm = (value: string) => value.trim().toLowerCase().replace(/\s*[—–−‑-]\s*tbc\s*$/i, "");
+    const rosterRoles = new Set(rosterEntries.map((entry) => norm(entry.role)).filter(Boolean));
+    const rosterNames = new Set(rosterEntries.map((entry) => norm(entry.name)).filter(Boolean));
     return kitPersonaDirectory(program).filter((persona) => {
-      const key = persona.name.trim().toLowerCase();
+      const key = norm(persona.name);
       return !rosterRoles.has(key) && !rosterNames.has(key);
     });
   }, [program]);

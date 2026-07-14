@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeAll } from "vitest";
 import {
   mintApprovalRequest, ingestApprovalResponse, artifactApprovalState,
-  approvalEvidenceEntries, listApprovalResponses, approvalLinkFor,
+  approvalEvidenceEntries, listApprovalResponses, approvalLinkFor, reconcilePackVerdict,
 } from "@/v3/components/flow/flowApprovals";
 import type { ProgramSummary } from "@/new/types";
 
@@ -94,5 +94,32 @@ describe("flowApprovals — record verdict", () => {
 
   it("ingest returns null for an unknown item", () => {
     expect(ingestApprovalResponse(withCharter(), "nope", "op")).toBeNull();
+  });
+});
+
+describe("flowApprovals — verdict reconciliation (unstick 'reply received')", () => {
+  const stuckPack = { id: "ap1", token: "t", artifactId: "charter", movementId: "frame",
+    artifactTitle: "Charter", approver: { name: "Raj Mamodia", role: "Executive Sponsor" },
+    createdAt: "2026-07-10T00:00:00Z", respondedAt: "2026-07-11T00:00:00Z" } as any; // no verdict
+  const inner = (verdictApprover: string, verdict = "approved") => ({
+    flowApprovalPacks: [stuckPack],
+    phaseArtifacts: { frame: { charter: { status: "approved",
+      approval: { approver: { name: verdictApprover, role: "Executive Sponsor" }, verdict, decidedAt: "2026-07-11T00:00:00Z" } } } },
+  });
+
+  it("backfills a responded-but-verdict-less pack from the artifact record (same approver)", () => {
+    const out = reconcilePackVerdict(inner("Raj Mamodia") as any, "frame", "charter", stuckPack);
+    expect(out?.verdict).toBe("approved");
+    expect(out?.respondedAt).toBe("2026-07-11T00:00:00Z");
+  });
+
+  it("does NOT adopt a verdict recorded for a DIFFERENT approver", () => {
+    const out = reconcilePackVerdict(inner("Someone Else") as any, "frame", "charter", stuckPack);
+    expect(out?.verdict).toBeUndefined();
+  });
+
+  it("leaves a pack that already carries a verdict untouched", () => {
+    const withVerdict = { ...stuckPack, verdict: "changes" };
+    expect(reconcilePackVerdict(inner("Raj Mamodia") as any, "frame", "charter", withVerdict)).toBe(withVerdict);
   });
 });

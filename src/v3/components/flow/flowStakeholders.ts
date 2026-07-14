@@ -210,8 +210,17 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
   const dismissedRoles = dismissedListenRoles(program);
   const personaRoles = personas
     .filter((persona) => String(persona.kind ?? "internal") !== "external")
-    .filter((persona) => persona.unrepresented === true
-      || !(Array.isArray(persona.spokenForBy) && persona.spokenForBy.map(String).filter((s) => s.trim()).length))
+    // "Represented" only counts when the person who speaks for the role is
+    // ACTUALLY being interviewed. A persona whose spokenForBy names someone with
+    // no interview entry has nobody on the record — so it must still get its own
+    // card, or the People page lists a role the Listen board never collects.
+    .filter((persona) => {
+      if (persona.unrepresented === true) return true;
+      const spokenFor = Array.isArray(persona.spokenForBy)
+        ? persona.spokenForBy.map(String).map((s) => s.trim().toLowerCase()).filter(Boolean) : [];
+      if (!spokenFor.length) return true;
+      return !spokenFor.some((speaker) => covered.has(speaker));
+    })
     .map((persona) => String(persona.name ?? "").trim())
     .filter((roleName) => roleName && !covered.has(roleName.toLowerCase()) && !dismissedRoles.has(roleName.toLowerCase()));
   const audienceRoster = [
