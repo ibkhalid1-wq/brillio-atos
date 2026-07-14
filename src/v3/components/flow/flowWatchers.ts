@@ -382,7 +382,7 @@ export function negatedClaimProposal(program: ProgramSummary): WatcherProposal |
   const entries = flowMovements().flatMap((movement) => movementEvidence(program, movement))
     .filter((entry) => entry.text && entry.text.length > 40)
     .filter((entry) => !/^operator\b|resolution/i.test(entry.who));
-  let found: Array<{ statement: string; between: string; positions: string }> = [];
+  const collected: Array<{ statement: string; between: string; positions: string }> = [];
   const seen = new Set<string>();
   for (const entry of entries) {
     for (const sentence of entry.text.split(/(?<=[.!?])\s+|\n+/)) {
@@ -402,20 +402,20 @@ export function negatedClaimProposal(program: ProgramSummary): WatcherProposal |
       const key = line.toLowerCase().slice(0, 80);
       if (seen.has(key)) continue;
       seen.add(key);
-      found.push({
+      collected.push({
         statement: line.slice(0, 140),
         between: `${entry.who.split(",")[0].trim() || "new evidence"} vs Transformation Charter (${hit.key})`,
         positions: `Evidence: "${line.slice(0, 90)}" · Charter still asserts: "${hit.text.replace(/\s+/g, " ").slice(0, 90)}"`,
       });
-      if (found.length >= 4) break;
+      if (collected.length >= 4) break;
     }
-    if (found.length >= 4) break;
+    if (collected.length >= 4) break;
   }
   // A dispute already filed OR already judged (even declined) must not re-surface
   // — filter per statement, so a fresh negation doesn't drag settled ones back
   // in with it. Handled centrally with the edge detector via the same set.
   const handled = handledContradictionStatements(program);
-  found = found.filter((entry) => !isContradictionHandled(handled, entry.statement));
+  const found = collected.filter((entry) => !isContradictionHandled(handled, entry.statement));
   if (!found.length) return null;
 
   const id = `watch-negated-${djb2(found.map((f) => f.statement.toLowerCase()).sort().join("|"))}`;
