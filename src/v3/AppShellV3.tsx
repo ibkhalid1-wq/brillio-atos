@@ -2675,8 +2675,27 @@ export default function AppShellV3() {
             // detector sweeps immediately; conflicts land back in this
             // Inbox as sponsor decisions.
             const target = activeProgram ? portalItemTargetMovement(activeProgram, itemId) : "listen";
+            const movement = activeProgram ? flowMovements().find((m) => m.id === target) : undefined;
+            // Snapshot the impacted movement's present artifacts BEFORE ingest —
+            // ingest doesn't change which are present, only their freshness.
+            const impacted = movement && activeProgram
+              ? movementArtifacts(activeProgram, movement).filter((a) => a.present).map((a) => a.id)
+              : [];
             await persistFlowMutation((program) => ingestPortalResponse(program, itemId, actor));
             void runProgramAgent({ agentId: "contradiction-detector", phaseId: target, triggeredBy: "trigger", skipPreSync: true });
+            // Auto-regenerate the IMPACTED movement's artifacts — new stakeholder
+            // evidence just landed, so the atlas/ontology (Listen), blueprint
+            // (Envision) or demo scripts (Show) redraw from it without waiting
+            // for the operator. Sequential (dependency order) and in the
+            // background, so the Inbox action returns immediately. Downstream
+            // movements stay put — only the portion this response touched runs.
+            if (impacted.length) {
+              void (async () => {
+                for (const artifactId of impacted) {
+                  await runProgramAgent({ agentId: artifactId, phaseId: target, triggeredBy: "trigger" });
+                }
+              })();
+            }
           }}
           onDismissPortalItem={async (itemId) => {
             const actor = currentUser?.email || "you";
