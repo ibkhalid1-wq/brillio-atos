@@ -1492,6 +1492,13 @@ Stakeholder-phrased gaps are PLAIN LANGUAGE: the stakeholder's own vocabulary,
 never the methodology's (entity, relation, cardinality, ontology, persona,
 workflow coverage, mapping). Ask about their business reality — "Can one client
 hold several active contracts at once?" — not about the model of it.
+Stakeholder-phrased gaps are ADDRESSED: always name WHO should answer — the
+person when known, else their role from the roster ("Ask Priya: …" / "Ask the
+Talent Acquisition SME: …") — and put the question in the SECOND person, as
+you would ask them across a table ("how do you hand a hire over to the bench?",
+not "how does the Talent Acquisition SME interact with the bench?"). The app
+routes each ask to the named person's card; an unaddressed question lands on
+EVERY stakeholder's script, which asks the wrong people the wrong things.
 
 ### Source priority order
 When information conflicts, always trust the higher-priority source and never let

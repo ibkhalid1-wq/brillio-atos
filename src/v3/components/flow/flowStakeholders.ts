@@ -52,21 +52,57 @@ function contradictionAsksFor(program: ProgramSummary, personName: string): stri
     .slice(0, 3);
 }
 
+/**
+ * Which rostered people an artifact ask is ADDRESSED to. A gap that names a
+ * person ("Ask Dan: …") or a role ("the Talent Acquisition SME's hand-off…")
+ * belongs on THAT card only — putting it on everyone's script asks the Legal
+ * SME about talent acquisition, which reads as noise and burns goodwill.
+ * Returns the matched roster keys; empty means the ask names no one and stays
+ * movement-wide.
+ */
+function askAudience(ask: string, roster: Array<{ name: string; role: string }>): Set<string> {
+  const text = ask.toLowerCase();
+  const matched = new Set<string>();
+  for (const person of roster) {
+    const name = person.name.trim().toLowerCase();
+    const role = person.role.trim().toLowerCase();
+    const first = name.split(/\s+/)[0] ?? "";
+    if ((name.length > 3 && text.includes(name))
+      || (first.length > 3 && text.includes(first))
+      || (role.length > 3 && text.includes(role))) {
+      matched.add(name);
+    }
+  }
+  return matched;
+}
+
 function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
   const kit = dataRoot(program).discoveryKit;
   const interviews = isRecord(kit) && Array.isArray(kit.interviews) ? kit.interviews.filter(isRecord) : [];
   // Listen's artifact gaps (ontology/atlas open questions) become follow-up
-  // asks on every interviewee's script — an artifact that says "we still don't
-  // know X" is a question for the people who can answer it.
+  // asks — ROUTED: an ask that names a person or role goes only to their
+  // card; an unaddressed ask is genuinely open and goes to everyone.
   const movementAsks = interviews.length ? askableMovementGaps(program, "listen") : [];
   const listen = flowMovements().find((movement) => movement.id === "listen");
   const evidence = listen ? movementEvidence(program, listen) : [];
+  // The routing roster: every interviewee plus the sponsor — a sponsor-
+  // addressed ask ("Ask the sponsor: …") must not spam the interviewees
+  // (it reaches the sponsor through Frame's card).
+  const sponsor = sponsorStakeholder(program);
+  const audienceRoster = [
+    ...interviews.map((interview) => ({ name: String(interview.stakeholder ?? "").trim(), role: String(interview.role ?? "").trim() })),
+    ...(sponsor ? [{ name: sponsor.name, role: sponsor.role }] : []),
+  ];
   return interviews.map((interview, index) => {
     const agenda = (Array.isArray(interview.agenda) ? interview.agenda : [])
       .flatMap((slot) => (isRecord(slot) && Array.isArray(slot.questions) ? slot.questions.map(String) : []))
       .filter(Boolean);
     const name = String(interview.stakeholder ?? "").trim();
     const key = name.toLowerCase();
+    const myAsks = movementAsks.filter((ask) => {
+      const audience = askAudience(ask, audienceRoster);
+      return audience.size === 0 || audience.has(key);
+    });
     // Heard already? Their turns are on the record. If so, the follow-up is only
     // what is STILL OPEN (disagreements + artifact gaps) — not the original
     // agenda they've answered, which is what left it "not getting cleared".
@@ -74,8 +110,8 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
       entry.who.toLowerCase().includes(key) || key.includes(entry.who.split(",")[0].trim().toLowerCase()));
     const asks = name ? contradictionAsksFor(program, name) : [];
     const questions = heard
-      ? [...new Set([...asks, ...movementAsks])]
-      : [...new Set([...asks, ...movementAsks, ...agenda])];
+      ? [...new Set([...asks, ...myAsks])]
+      : [...new Set([...asks, ...myAsks, ...agenda])];
     return {
       id: `iv-${index}`, name: name || `Interviewee ${index + 1}`, role: String(interview.role ?? ""),
       questions, isRole: !name,
