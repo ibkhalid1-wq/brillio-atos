@@ -2332,6 +2332,19 @@ export default function AppShellV3() {
   // must never be silently dropped.
   const persistFlowMutation = async (mutate: (program: NonNullable<typeof activeProgram>) => Record<string, unknown> | null) => {
     if (!activeProgram) return;
+    // Pre-hydration guard for EVERY Flow mutation. If the blob hasn't hydrated
+    // yet (metadata-only in memory), a mutation builds on an empty base — and
+    // some (a mint, a rename, an approval) write "substantive"-looking keys like
+    // phaseArtifacts, so updateProgramData's own guard wouldn't catch the near-
+    // empty payload and it would clobber the full cloud record. Refuse at the
+    // single chokepoint, kick a hydrate, and let the operator retry.
+    if (!hasSubstantiveProgramData(activeProgram.rawData)) {
+      window.dispatchEvent(new CustomEvent("atlas-v3-toast", {
+        detail: { message: "Still loading this programme — one moment, then try that again.", tone: "warning" },
+      }));
+      void hydratePrograms([activeProgram.id]);
+      return;
+    }
     try {
       const blob = mutate(activeProgram);
       if (!blob) return;

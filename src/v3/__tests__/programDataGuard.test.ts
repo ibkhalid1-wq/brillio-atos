@@ -37,6 +37,18 @@ describe("hasSubstantiveProgramData", () => {
     ).toBe(false);
   });
 
+  it("treats action side-channels (mints/attestations/approvals) as non-substantive", () => {
+    // A mint or an approval fired pre-hydration appends only a side-channel key;
+    // it must NOT make an otherwise-empty payload look like real content, or the
+    // near-empty blob would clobber the populated cloud row.
+    expect(hasSubstantiveProgramData({
+      flowAttestations: [{ ts: "x", action: "y" }],
+      flowInterviewPacks: [{ token: "t" }],
+      flowApprovalPacks: [{ token: "t", artifactId: "charter" }],
+      flowPortalInbox: [{ id: "i", kind: "approval" }],
+    })).toBe(false);
+  });
+
   it("returns true when phase inputs carry values", () => {
     expect(hasSubstantiveProgramData({ phaseInputs: { strategy: { industry: "Retail" } } })).toBe(true);
   });
