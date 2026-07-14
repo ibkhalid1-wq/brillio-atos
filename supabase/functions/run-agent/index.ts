@@ -858,7 +858,19 @@ const DEFAULT_OUTPUT_TOKENS = 4096;
 // run fails, the repair pass fails on the same ceiling, and the operator
 // retries the whole thing. Diagnosed live 2026-07-13: three consecutive
 // discovery-kit runs died "no parseable output" with the JSON cut mid-object.
-const LARGE_OUTPUT_AGENTS = new Set<string>(["discovery-kit", "demo-scripts"]);
+// Evidence-scaled documents ALL belong here, not just the roster-scaled two:
+// diagnosed live 2026-07-14 — Laila's ontology truncated at the 4096 default
+// (15+ entities with quotes exceed it), and the JSON-repair pass "fixed" the
+// cut stream by closing the array at the ~8 entities that survived, so the
+// run SUCCEEDED with an amputated document. The atlas collapsed the same way.
+// The enriched envision/show/ship schemas (constraint matrices, guardrails,
+// cutover runbooks) are also output-heavy now.
+const LARGE_OUTPUT_AGENTS = new Set<string>([
+  "discovery-kit", "demo-scripts",
+  "domain-ontology", "current-state-atlas",
+  "architecture-strategy", "agentic-blueprint",
+  "prototype-pack", "hardening-plan", "eval-suite",
+]);
 const LARGE_OUTPUT_TOKENS = 16384;
 
 /** Per-agent output-token budget — bounded JSON agents get a tighter ceiling,
