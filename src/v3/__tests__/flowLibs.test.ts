@@ -1435,6 +1435,21 @@ describe("gateChecklist — record and judgment rows close the loop", () => {
     expect(item.label).toBe("1 decision waiting in the Inbox");
     expect(gateChecklist(programme({}), movement, []).find((c) => c.id === "inbox")!.done).toBe(true);
   });
+
+  it("the Listen-plan row appears once there's a kit or ontology, and closes on confirmation", () => {
+    // Nothing to confirm yet — no plan row.
+    expect(gateChecklist(programme({}), movement, []).find((c) => c.id === "listen-plan")).toBeUndefined();
+    // A kit exists but the plan isn't confirmed — the row is present and unmet.
+    const unconfirmed = gateChecklist(programme({ discoveryKit: { title: "k" } }), movement, []).find((c) => c.id === "listen-plan")!;
+    expect(unconfirmed).toBeDefined();
+    expect(unconfirmed.done).toBe(false);
+    // Confirming (the fingerprint-safe frame flag) closes it.
+    const confirmed = gateChecklist(
+      programme({ discoveryKit: { title: "k" }, phaseInputs: { frame: { _listenCoverageConfirmed: "2026-07-14T00:00:00Z" } } }),
+      movement, [],
+    ).find((c) => c.id === "listen-plan")!;
+    expect(confirmed.done).toBe(true);
+  });
 });
 
 describe("track attribution — evidence carries its track", () => {

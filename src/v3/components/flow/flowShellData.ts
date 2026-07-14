@@ -759,6 +759,16 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
       { id: "metric", label: "Success measure set", done: frameFactOnRecord(program, "successMetric"), anchor: "input:successMetric", why: whyFromValue(inputs.successMetric) },
       { id: "demo-date", label: "First-demonstration date set", done: has("targetFirstDemoDate"), anchor: "input:targetFirstDemoDate", why: whyFromValue(inputs.targetFirstDemoDate) },
     );
+    // The discovery plan is a gate: once there's a kit or ontology to review,
+    // Frame doesn't close until the operator confirms who Listen will hear and
+    // the areas it will cover. Editing the plan re-opens this (clears the flag).
+    if (inner.discoveryKit || inner.domainOntology) {
+      items.push({
+        id: "listen-plan",
+        label: has("_listenCoverageConfirmed") ? "Listen plan confirmed" : "Confirm the Listen plan — who we'll hear and the areas we'll cover",
+        done: has("_listenCoverageConfirmed"),
+      });
+    }
   } else if (movement.id === "listen") {
     const coverage = listenCoverage(program);
     const contradictions = parseGridRows(inputs.contradictionLog);
