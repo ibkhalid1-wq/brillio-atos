@@ -75,6 +75,10 @@ interface Pack {
   seedScenario?: { scenario?: string; sourceQuote?: string; data?: string };
   /** Operator opt-in: agent beats run as LIVE agent calls, not simulations. */
   liveDemo?: boolean;
+  /** The BUILT prototype — the generated clickable app. When present it IS the
+   * pilot the stakeholder validates (closest to production); it renders in place
+   * of the interpreted walk. */
+  pilotHtml?: string;
   /** A projected REVIEW surface — workflow-agentify or ontology+atlas. When
    * present, the page renders the visual review instead of the plain form; its
    * composed response still submits through the interview `answers` path.
@@ -463,35 +467,44 @@ export default function FlowRespond({ token }: { token: string }) {
                   <span className="v3fs-hero-brand">ATOS Flow</span> · {state.pack.programme}
                 </h1>
                 <p className="v3fs-how">
-                  {greetName ? `${greetName} — ` : ""}this is your demonstration: your own
-                  workflow, running. Watch it, then record your verdict below.
+                  {greetName ? `${greetName} — ` : ""}this is the prototype we&rsquo;re building
+                  for you. Use it as you would the real thing, then tell us below whether it works.
                 </p>
                 {state.pack.openingQuote ? <blockquote className="v3fs-portal-quote">{state.pack.openingQuote}</blockquote> : null}
                 {state.pack.scenario ? <p className="v3fs-portal-intro">{state.pack.scenario}</p> : null}
               </header>
               <div className="v3fs-portal-qs">
-                {state.pack.demoUrl ? (
-                  <a className="v3fs-btn pri v3fs-portal-send" href={state.pack.demoUrl} target="_blank" rel="noreferrer">
-                    ▶ Open the prototype
-                  </a>
-                ) : null}
-                {state.pack.design ? <DemoWalker design={state.pack.design} script={state.pack.script}
-                  recipientArea={state.pack.recipientArea}
-                  phaseComments={phaseComments}
-                  onPhaseComment={(key, value) => setPhaseComments((prev) => ({ ...prev, [key]: value }))}
-                  beatVerdicts={beatVerdicts}
-                  onBeatVerdict={(key, value) => setBeatVerdicts((prev) => ({ ...prev, [key]: prev[key] === value ? "" : value }))}
-                  machines={state.pack.machines} fixtures={state.pack.fixtures} seedScenario={state.pack.seedScenario}
-                  onBeatRecord={(record) => setDemoRunRecords((prev) => [...prev, record])}
-                  fieldFlags={demoFieldFlags} onToggleFieldFlag={toggleFieldFlag}
-                  runLive={state.pack.liveDemo ? runLiveBeat : undefined} /> : null}
-                {state.pack.steps?.length ? (
-                  <div className="v3fs-portal-steps">
-                    {state.pack.steps.map((step, index) => (
-                      <div key={index} className="v3fs-portal-step"><b>{index + 1}</b><span>{step}</span></div>
-                    ))}
-                  </div>
-                ) : null}
+                {state.pack.pilotHtml ? (
+                  // The built prototype IS the experience — use it, then give a
+                  // verdict. No walk, no explorer: as close to production as we can
+                  // get you before we ship it.
+                  <PilotFrame pilotHtml={state.pack.pilotHtml} />
+                ) : (
+                  <>
+                    {state.pack.demoUrl ? (
+                      <a className="v3fs-btn pri v3fs-portal-send" href={state.pack.demoUrl} target="_blank" rel="noreferrer">
+                        ▶ Open the prototype
+                      </a>
+                    ) : null}
+                    {state.pack.design ? <DemoWalker design={state.pack.design} script={state.pack.script}
+                      recipientArea={state.pack.recipientArea}
+                      phaseComments={phaseComments}
+                      onPhaseComment={(key, value) => setPhaseComments((prev) => ({ ...prev, [key]: value }))}
+                      beatVerdicts={beatVerdicts}
+                      onBeatVerdict={(key, value) => setBeatVerdicts((prev) => ({ ...prev, [key]: prev[key] === value ? "" : value }))}
+                      machines={state.pack.machines} fixtures={state.pack.fixtures} seedScenario={state.pack.seedScenario}
+                      onBeatRecord={(record) => setDemoRunRecords((prev) => [...prev, record])}
+                      fieldFlags={demoFieldFlags} onToggleFieldFlag={toggleFieldFlag}
+                      runLive={state.pack.liveDemo ? runLiveBeat : undefined} /> : null}
+                    {state.pack.steps?.length ? (
+                      <div className="v3fs-portal-steps">
+                        {state.pack.steps.map((step, index) => (
+                          <div key={index} className="v3fs-portal-step"><b>{index + 1}</b><span>{step}</span></div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </>
+                )}
                 <div className="v3fs-portal-q">
                   <span>{state.pack.acceptanceAsk || "Does this run your workflow the way you need it to?"}</span>
                   <div className="v3fs-portal-verdicts" role="radiogroup" aria-label="Your verdict">
@@ -556,12 +569,11 @@ export default function FlowRespond({ token }: { token: string }) {
                 </div>
               </header>
               <div className="v3fs-portal-qs">
-                {state.pack.design ? (
-                  // A Show follow-up asks for demo feedback — the wireframe
-                  // walkthrough, narrated by their demo script, sits right
-                  // above the questions it informs. Beat taps + phase notes
-                  // ride the same walkthrough here as on a demo invite, so a
-                  // self-serve demo collects granular acceptance either way.
+                {state.pack.pilotHtml ? (
+                  // A Show follow-up: the built prototype itself, above the
+                  // questions it informs — use it, then answer.
+                  <PilotFrame pilotHtml={state.pack.pilotHtml} />
+                ) : state.pack.design ? (
                   <DemoWalker design={state.pack.design} script={state.pack.script}
                     recipientArea={state.pack.recipientArea}
                     phaseComments={phaseComments}
@@ -841,6 +853,18 @@ function FollowUpBanner({ stakeholder, submissions, changes }: {
  * it, watch each step's screen light up. Same renderer the design studio
  * uses, so what they walk IS the signed-off design.
  */
+/** The simplest possible validation surface: the BUILT prototype itself, in a
+ * sandboxed frame — the stakeholder uses it (close to production) and records a
+ * verdict below. No scenario runner, no screen explorer, no walk — just the
+ * pilot. Renders when the generated prototype (pilotHtml) is present. */
+function PilotFrame({ pilotHtml }: { pilotHtml: string }) {
+  return (
+    <div className="v3fs-portal-pilotwrap">
+      <iframe className="v3fs-portal-pilot" sandbox="allow-scripts allow-forms" srcDoc={pilotHtml} title="The prototype" />
+    </div>
+  );
+}
+
 function DemoWalker({ design, script, recipientArea, phaseComments, onPhaseComment, beatVerdicts, onBeatVerdict, machines, fixtures, seedScenario, onBeatRecord, fieldFlags, onToggleFieldFlag, runLive }: {
   design: NonNullable<Pack["design"]>; script?: Pack["script"]; recipientArea?: string;
   phaseComments?: Record<string, string>; onPhaseComment?: (key: string, value: string) => void;

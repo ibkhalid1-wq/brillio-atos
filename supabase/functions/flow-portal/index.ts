@@ -289,11 +289,16 @@ Deno.serve(async (req: Request) => {
         const design = designSlice();
         const script = scriptSlice();
         const recipientArea = recipientAreaSlice();
+        // The BUILT prototype (the generated clickable app) is the pilot the
+        // stakeholder validates — closest to production. When present it renders
+        // as the whole experience; the interpreted walk is the fallback.
+        const pilotHtml = isRecord(hit.inner.prototypeBuild) ? String((hit.inner.prototypeBuild as Record<string, unknown>).html ?? "") : "";
         return jsonResponse({
           ...(design ? { design } : {}),
           ...(script ? { script } : {}),
           ...(design ? runSlice() : {}),
           ...(recipientArea ? { recipientArea } : {}),
+          ...(pilotHtml ? { pilotHtml } : {}),
           kind: "demo",
           programme: hit.programName,
           stakeholder: String(hit.pack.stakeholder ?? "Stakeholder"),
@@ -410,6 +415,9 @@ Deno.serve(async (req: Request) => {
         ...(interviewScript ? { script: interviewScript } : {}),
         ...(interviewDesign ? runSlice() : {}),
         ...(interviewArea ? { recipientArea: interviewArea } : {}),
+        // A Show follow-up carries the built prototype so the pilot renders in
+        // place of the interpreted walk.
+        ...(isShowPack && isRecord(hit.inner.prototypeBuild) && String((hit.inner.prototypeBuild as Record<string, unknown>).html ?? "") ? { pilotHtml: String((hit.inner.prototypeBuild as Record<string, unknown>).html ?? "") } : {}),
         // Re-projection inputs (kind + area + the recipient name via `stakeholder`
         // above) and the live slices, so the client rebuilds the current review.
         // A Listen QUESTION pack ships reviewKind "listen-workflow" too, so the
