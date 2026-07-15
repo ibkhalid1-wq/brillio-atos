@@ -6458,6 +6458,39 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-envc-ents {display:block;margin-top:3px;font-size:11px;color:var(--v3-text-muted)}
 .v3fs-envc-count {display:inline-block;margin-top:5px;font-size:10px;font-weight:700;letter-spacing:.02em;color:var(--v3-accent-2)}
 .v3fs-envc-genexp {margin-top:12px}
+/* 3-act progress ribbon */
+.v3fs-envc-ribbon {display:flex;gap:8px;flex-wrap:wrap}
+.v3fs-envc-rstep {display:flex;align-items:center;gap:9px;flex:1 1 160px;padding:10px 14px;border:1px solid var(--fs-line);border-radius:12px;background:var(--fs-card);box-shadow:var(--v3-shadow-xs)}
+.v3fs-envc-rstep.done {border-color:color-mix(in srgb,var(--v3-green) 40%,var(--fs-line))}
+.v3fs-envc-rn {display:grid;place-items:center;width:22px;height:22px;flex:0 0 auto;border-radius:50%;font-size:11px;font-weight:700;
+  color:var(--v3-text-muted);background:var(--v3-surface-2);border:1px solid var(--fs-line)}
+.v3fs-envc-rstep.done .v3fs-envc-rn {color:#fff;background:var(--v3-green);border-color:var(--v3-green)}
+.v3fs-envc-rl {display:flex;flex-direction:column;font-size:12.5px;font-weight:650;color:var(--v3-text-primary);min-width:0}
+.v3fs-envc-rl em {font-style:normal;font-size:10.5px;font-weight:400;color:var(--v3-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* act-header "view →" link + area validation chip */
+.v3fs-envc-open {margin-left:auto;font-size:11px;font-weight:600}
+.v3fs-envc-ah {justify-content:flex-start}
+.v3fs-envc-avs {font-style:normal;margin-left:5px;font-size:9.5px;font-weight:750}
+.v3fs-envc-avs.ok {color:var(--v3-green)} .v3fs-envc-avs.part {color:var(--v3-amber)} .v3fs-envc-avs.open {color:var(--v3-text-muted)}
+/* KPI band → horizontal */
+.v3fs-envc-kpis {flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px}
+.v3fs-envc-kpis .lbl {flex:0 0 auto}
+/* per-workflow collapsible rows with a mode-mix bar */
+.v3fs-envc-wfs {display:flex;flex-direction:column;gap:6px}
+.v3fs-envc-wfrow {border:1px solid var(--fs-line);border-radius:11px;background:var(--v3-surface);overflow:hidden}
+.v3fs-envc-wfrow.open {border-color:color-mix(in srgb,var(--v3-accent-2) 25%,var(--fs-line))}
+.v3fs-envc-wfbtn {display:flex;align-items:center;gap:11px;width:100%;text-align:left;font:inherit;background:transparent;border:0;padding:10px 13px;cursor:pointer}
+.v3fs-envc-wfbtn:hover {background:var(--v3-surface-2)}
+.v3fs-envc-wfname {flex:0 1 auto;min-width:120px;font-size:12.5px;font-weight:650;color:var(--v3-text-primary);display:flex;align-items:center;gap:7px}
+.v3fs-envc-wfname .v3fs-envc-tag {font-style:normal}
+.v3fs-envc-mixbar {flex:1 1 90px;max-width:180px;height:7px;border-radius:4px;overflow:hidden;display:flex;background:var(--v3-surface-2)}
+.v3fs-envc-mixbar .a {background:var(--v3-green)} .v3fs-envc-mixbar .s {background:var(--v3-amber)} .v3fs-envc-mixbar .k {background:var(--v3-text-muted)}
+.v3fs-envc-mixn {flex:0 0 auto;font-size:10.5px;color:var(--v3-text-muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.v3fs-envc-chev {flex:0 0 auto;margin-left:auto;font-size:10px;color:var(--v3-text-muted)}
+.v3fs-envc-wfrow .v3fs-envc-steps {padding:2px 13px 12px}
+/* lens toggle */
+.v3fs-envc-lenswrap {margin-top:14px;border-top:1px solid var(--fs-line);padding-top:12px}
+.v3fs-envc-lenstoggle {font:inherit;font-size:12px;font-weight:600;color:var(--v3-accent-2);background:transparent;border:0;padding:2px 0;cursor:pointer}
 /* ── The PILOT: the design running as a working app ─────────────────────── */
 .v3fs-pilot {margin:12px 0;border:1px solid var(--fs-line);border-radius:16px;background:var(--fs-card);box-shadow:var(--v3-shadow-sm);overflow:hidden}
 .v3fs-pilot-nav {display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--fs-line);background:var(--v3-surface-2)}
