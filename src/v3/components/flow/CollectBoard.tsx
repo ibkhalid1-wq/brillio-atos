@@ -81,9 +81,21 @@ export function projectStakeholderReview(
   if (!kind) return null;
   const base = kind === "listen-workflow" ? projectListenWorkflowReview(program, name) : projectAgentifyReview(program, name);
   if (!base) return null;
+  // Area-specific link: the recipient sees only THEIR area's workflow AND
+  // ontology terms (alliances, delivery, …). Stamp the area so the surface
+  // opens scoped to it and can name it.
   if (primaryArea && primaryArea !== GENERAL_AREA) {
+    base.recipientArea = primaryArea;
     const scoped = base.workflows.filter((w) => w.area === primaryArea);
     if (scoped.length) base.workflows = scoped;
+    if (base.kind === "listen-workflow") {
+      const scopedTerms = base.terms.filter((t) => t.area === primaryArea);
+      if (scopedTerms.length) {
+        const keep = new Set(scopedTerms.map((t) => t.name.trim().toLowerCase()));
+        base.terms = scopedTerms;
+        base.relations = base.relations.filter((r) => keep.has(r.from.trim().toLowerCase()) && keep.has(r.to.trim().toLowerCase()));
+      }
+    }
   }
   // Fold their gap script into a listen-workflow review's question list (the
   // agentify surface has none) so the one link still asks it below the flow.

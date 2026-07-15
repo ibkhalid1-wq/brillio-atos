@@ -65,7 +65,7 @@ function AgentifySurface({ review, stakeholder, submitting, error, onSubmit, dra
   onSubmit: (answers: string) => void; draftKey?: string;
 }) {
   const [responses, setResponses] = usePersistentState<Record<string, { disposition?: string; comment?: string }>>(draftKey, "ag", {});
-  const [area, setArea] = useState("");
+  const [area, setArea] = useState(review.recipientArea ?? "");
   const areas = areasOf(review.workflows);
   const totalSteps = review.workflows.reduce((n, w) => n + w.steps.length, 0);
   const decided = Object.values(responses).filter((r) => r.disposition).length;
@@ -83,6 +83,9 @@ function AgentifySurface({ review, stakeholder, submitting, error, onSubmit, dra
         </p>
       </header>
       <AreaChips areas={areas} active={area} onPick={setArea} />
+      {review.recipientArea && area === review.recipientArea ? (
+        <p className="v3fs-rvw-scoped">This review covers your area — <b>{review.recipientArea}</b>.</p>
+      ) : null}
       <div className="v3fs-rvw">
         {review.workflows.map((workflow, wi) => area && workflow.area !== area ? null : (
           <section key={wi} className="v3fs-rvw-wf">
@@ -146,7 +149,7 @@ function OntologyAtlasSurface({ review, stakeholder, submitting, error, onSubmit
   const [termComments, setTermComments] = usePersistentState<Record<string, string>>(draftKey, "oaTerms", {});
   const [workflowComments, setWorkflowComments] = usePersistentState<Record<string, string>>(draftKey, "oaWf", {});
   const [overall, setOverall] = usePersistentState(draftKey, "oaOverall", "");
-  const [area, setArea] = useState("");
+  const [area, setArea] = useState(review.recipientArea ?? "");
   const areas = areasOf([...review.terms, ...review.workflows]);
   const touched = useMemo(() =>
     Object.values(termComments).some((v) => v.trim())
@@ -163,6 +166,9 @@ function OntologyAtlasSurface({ review, stakeholder, submitting, error, onSubmit
         <p className="v3fs-how">{stakeholder ? `${stakeholder} — ` : ""}{review.intro}</p>
       </header>
       <AreaChips areas={areas} active={area} onPick={setArea} />
+      {review.recipientArea && area === review.recipientArea ? (
+        <p className="v3fs-rvw-scoped">This review covers your area — <b>{review.recipientArea}</b>.</p>
+      ) : null}
       <div className="v3fs-rvw">
         {shownTerms.length ? (
           <section className="v3fs-rvw-wf">
@@ -284,7 +290,7 @@ function ListenWorkflowSurface({ review, stakeholder, submitting, error, onSubmi
     return { workflows, notedTerms, newTerms, answered, count };
   }, [review, wfSteps, narration, termNotes, answers, addedTerms]);
 
-  const [area, setArea] = useState("");
+  const [area, setArea] = useState(review.recipientArea ?? "");
   const areas = areasOf(review.workflows);
 
   const compose = () => composeListenWorkflowAnswers(review, {
@@ -299,6 +305,9 @@ function ListenWorkflowSurface({ review, stakeholder, submitting, error, onSubmi
         <p className="v3fs-how">{stakeholder ? `${stakeholder} — ` : ""}{review.intro}</p>
       </header>
       <AreaChips areas={areas} active={area} onPick={setArea} />
+      {review.recipientArea && area === review.recipientArea ? (
+        <p className="v3fs-rvw-scoped">This review covers your area — <b>{review.recipientArea}</b>.</p>
+      ) : null}
       <div className="v3fs-rvw">
         <div className="v3fs-rvw-section-h"><span className="v3fs-rvw-step-ic" aria-hidden="true">⇄</span>Your workflow — fix it, add steps, or mark what doesn&rsquo;t happen</div>
         {review.workflows.map((wf, wi) => area && wf.area !== area ? null : (

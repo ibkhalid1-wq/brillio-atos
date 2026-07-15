@@ -6947,6 +6947,9 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-rvw-send {align-self:flex-start;padding:11px 22px;font-size:14px}
 
 /* Area filter chips — filter the review's workflows/terms by business area. */
+.v3fs-rvw-scoped {margin:0 0 10px;font-size:12.5px;color:var(--v3-text-secondary);padding:8px 13px;border-radius:10px;
+  background:var(--fs-indigo-wash);border:1px solid color-mix(in srgb,var(--v3-accent-2) 22%,transparent)}
+.v3fs-rvw-scoped b {color:var(--v3-accent-2);font-weight:700}
 .v3fs-rvw-areas {display:flex;flex-wrap:wrap;gap:7px;margin:0 0 4px}
 .v3fs-rvw-area {padding:6px 13px;border:1px solid var(--fs-line);border-radius:99px;background:var(--v3-surface);
   font-size:12px;font-weight:600;color:var(--v3-text-secondary);cursor:pointer;transition:border-color .12s,background .12s,color .12s}
@@ -7038,8 +7041,11 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-addterm-add:hover {background:color-mix(in srgb,var(--v3-green) 8%,transparent);border-color:var(--v3-green)}
 
 /* ── Ontology MAP — a node-link diagram of the domain's terms ────────────────── */
+/* Consistent with the domain-ontology artifact graph: a bg-toned canvas with
+   fs-card nodes, matching border weights and lift-on-select. The area-hue left
+   accent is kept — on the area-scoped link it signals the recipient's world. */
 .v3fs-omap {border:1px solid var(--fs-line);border-radius:16px;background:var(--v3-surface);box-shadow:var(--fs-shadow);overflow:hidden}
-.v3fs-omap-scroll {overflow-x:auto;overflow-y:hidden;padding:14px}
+.v3fs-omap-scroll {overflow-x:auto;overflow-y:hidden;padding:14px;background:var(--v3-bg);border-bottom:1px solid var(--fs-line)}
 .v3fs-omap-canvas {position:relative;overflow:visible}
 .v3fs-omap-edges {position:absolute;inset:0;overflow:visible;pointer-events:none}
 .v3fs-omap-edge path {stroke:color-mix(in srgb,var(--v3-text-muted) 42%,transparent);stroke-width:1.5;transition:stroke .15s,stroke-width .15s}
@@ -7049,10 +7055,10 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-omap-edgelabel-bg {fill:var(--v3-surface);stroke:var(--v3-accent-2);stroke-width:.8;opacity:.96}
 .v3fs-omap-edgelabel {fill:var(--v3-accent-2);font-size:10px;font-weight:700}
 .v3fs-omap-node {position:absolute;display:flex;flex-direction:column;gap:3px;text-align:left;padding:9px 11px;
-  border:1px solid var(--fs-line);border-left:3px solid hsl(var(--hue,230) 60% 58%);border-radius:11px;
-  background:var(--fs-bg);cursor:pointer;overflow:hidden;transition:transform .12s,box-shadow .12s,border-color .12s;box-shadow:0 1px 2px rgba(15,23,42,.05)}
-.v3fs-omap-node:hover {transform:translateY(-2px);box-shadow:0 6px 16px rgba(15,23,42,.1)}
-.v3fs-omap-node.on {border-color:var(--v3-accent-2);box-shadow:0 0 0 3px color-mix(in srgb,var(--v3-accent-2) 16%,transparent)}
+  border:1.5px solid var(--fs-line);border-left:3.5px solid hsl(var(--hue,230) 55% 52%);border-radius:11px;
+  background:var(--fs-card);cursor:pointer;overflow:hidden;transition:transform .12s,box-shadow .12s,border-color .12s;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+.v3fs-omap-node:hover {transform:translateY(-2px);box-shadow:var(--fs-lift)}
+.v3fs-omap-node.on {border-color:var(--v3-accent-2);box-shadow:var(--fs-lift)}
 .v3fs-omap-node b {font-size:12.5px;font-weight:700;color:var(--v3-text);line-height:1.2}
 .v3fs-omap-node em {font-size:10.5px;font-style:normal;color:var(--v3-text-muted);line-height:1.35;overflow:hidden;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
