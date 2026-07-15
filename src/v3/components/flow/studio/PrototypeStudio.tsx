@@ -48,6 +48,15 @@ export default function PrototypeStudio({ doc, onChange }: StudioProps) {
         <div className="v3fs-proto-modes" role="group" aria-label="Prototype mode">
           <button type="button" className={mode === "preview" ? "on" : ""} onClick={() => setMode("preview")}>▶ Run it</button>
           <button type="button" className={mode === "edit" ? "on" : ""} onClick={() => setMode("edit")}>✎ Experience Designer</button>
+          {/* External build: the prototype is self-contained, so it runs anywhere —
+              download it to open standalone, share, or hand to a build team. */}
+          <button type="button" title="Download the self-contained prototype — runs in any browser, or hand it to a build team" onClick={() => {
+            const blob = new Blob([mode === "edit" ? draft : html], { type: "text/html" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url; a.download = "prototype.html"; a.click();
+            URL.revokeObjectURL(url);
+          }}>⬇ Export</button>
         </div>
       </div>
 

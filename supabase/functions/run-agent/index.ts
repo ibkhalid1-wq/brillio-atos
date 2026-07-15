@@ -1482,11 +1482,19 @@ BUILD TO THE DESIGN — do not invent a second one:
 - MAKE IT WALK: the primary flow is clickable end to end. Buttons advance workflow state per the workflow machines; an agent step visibly does its work (a status changes, a field fills, a record moves lane). HITL approval points are explicit buttons a human presses ("Approve", "Send back") — never auto-passed.
 - HONEST STUBS: anything the scope contract marks fakedForDemo is visibly a stub (a "simulated" tag), never presented as live.
 
+DESIGN SYSTEM & CRAFT — this must look like a PREMIUM, modern SaaS product (think the polish of Linear, Stripe, Vercel), not a wireframe or a bootstrap template:
+- TOKENS FIRST. Open the <style> with a :root design-token system and use it EVERYWHERE — never ad-hoc values. Derive it from the Experience Design's designIntent (personality, density, vocabulary): a restrained palette (one brand hue + tints via color-mix + a neutral with a slight hue bias, semantic good/warn/critical), a modular type scale (~1.2 ratio), a spacing scale (4/8-based), radii, and two elevation shadows. Deep, considered, cohesive — not primary-blue-on-white.
+- APP SHELL. A real product chrome: a left sidebar listing the screens (icon + label, active state), a top bar (product name + context + a primary action), and a content region with a page header (title + subtitle + actions). Responsive: the sidebar collapses on narrow widths.
+- COMPONENT VOCABULARY, consistent across every screen: cards with subtle borders + elevation, data tables with sticky headers and row hover, forms with proper labels/help/validation, status pills/badges (toned by semantic colour), metric tiles with a number + label + delta, empty/loading/populated/error states for every data region, toasts for actions. One coherent language, reused.
+- TYPOGRAPHY. A clear hierarchy (page title / section / body / caption), ~65ch measure for prose, tabular-nums for figures, balanced headings. System font stack only (no webfonts), but treated with real craft.
+- MOTION & POLISH. Tasteful micro-interactions (hover/active transitions ~150ms, a subtle state-change animation when an agent step completes), focus-visible rings, respect prefers-reduced-motion. Accessible contrast throughout.
+- FEEL REAL. Seeded with their data, in their vocabulary, at production density — a stakeholder should feel they are using the finished product, not previewing a mock.
+
 HARD OUTPUT RULES (enforced):
 - "html" is a SINGLE self-contained HTML document: one <style> block, one <script> block, NO external URLs, NO CDN links, NO web fonts, NO images by URL (inline SVG only if needed). It must render standalone in a sandboxed iframe with scripts allowed.
 - Navigation between screens is in-page (JS toggling sections or a simple hash router) — no server, no navigation away.
-- Clean, modern, LIGHT styling: system font stack, generous spacing, a single restrained accent, accessible contrast. Left/top nav lists the screens; the active screen shows.
-- Keep it LEAN enough to return whole — favour the demoable vertical slice with every screen present over exhaustive detail on each. Do not truncate; if space is tight, simplify per-screen depth, never drop screens.
+- Light theme by default (unless designIntent says otherwise), built entirely from the token system above.
+- Keep it LEAN enough to return whole — favour the demoable vertical slice with every screen present, styled to the SAME premium system, over exhaustive detail on one. Do not truncate; if space is tight, simplify per-screen depth, never drop screens or downgrade the craft.
 
 Return ONLY valid JSON:
 {
