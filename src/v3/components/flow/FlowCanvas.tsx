@@ -249,14 +249,12 @@ export default function FlowCanvas({ program, programs, runningAgentIds, agentEr
                 <div key="prototype-loop" className={`v3fs-step v3fs-loopstep${loopOn ? " on" : ""}${loopIsFrontier && !loopOn ? " v3fs-step-next" : ""}`}
                   role="group" aria-label="Prototype Loop">
                   <span className={`v3fs-sring ${loopTone}`} aria-hidden="true"><span className="v3fs-sdot v3fs-loopdot">⟳</span></span>
-                  <span className="v3fs-loop-body">
-                    <span className="v3fs-sname">Prototype Loop</span>
-                    <span className="v3fs-loop-meta">{ls.hasPrototype ? `iteration ${ls.round}` : "not built"}{ls.areasTotal ? ` · ${ls.areasConverged}/${ls.areasTotal} areas` : ""}{ls.converged ? " ✓" : ""}</span>
-                    <span className="v3fs-loop-modes" role="tablist" aria-label="Design or Validate">
-                      <button type="button" role="tab" aria-selected={active === "envision"} className={`v3fs-loopmode${active === "envision" ? " on" : ""}`} onClick={() => setActive("envision")}>✎ Design</button>
-                      <button type="button" role="tab" aria-selected={active === "show"} className={`v3fs-loopmode${active === "show" ? " on" : ""}`} onClick={() => setActive("show")}>◉ Validate</button>
-                    </span>
+                  <span className="v3fs-sname">Prototype</span>
+                  <span className="v3fs-loop-modes" role="tablist" aria-label="Design or Validate">
+                    <button type="button" role="tab" aria-selected={active === "envision"} className={`v3fs-loopmode${active === "envision" ? " on" : ""}`} onClick={() => setActive("envision")}>Design</button>
+                    <button type="button" role="tab" aria-selected={active === "show"} className={`v3fs-loopmode${active === "show" ? " on" : ""}`} onClick={() => setActive("show")}>Validate</button>
                   </span>
+                  <span className="v3fs-sstate loop">{ls.hasPrototype ? `iteration ${ls.round}` : "not built"}{ls.areasTotal ? ` · ${ls.areasConverged}/${ls.areasTotal} areas` : ""}{ls.converged ? " ✓" : ""}</span>
                 </div>
               );
             }

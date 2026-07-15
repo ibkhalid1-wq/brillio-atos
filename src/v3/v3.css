@@ -4685,20 +4685,23 @@ body:has(.v3fs-pack) .v3fs-appbar:focus-within {transform:none}
 .v3fs-sstate.done {color:var(--v3-green)}
 .v3fs-sstate.live,.v3fs-sstate.gen {color:var(--v3-accent-2)}
 .v3fs-sring.blue {--ring:var(--v3-accent)}
-/* The Prototype Loop node — Design ⇄ Validate folded into one wider spine stop,
-   the heart of the programme: ring + iteration/approval meter + a mode toggle. */
-.v3fs-loopstep {flex:2.1;min-width:230px;display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;
-  border:1px solid var(--fs-line);background:color-mix(in srgb,var(--v3-accent) 4%,transparent);transition:background .18s ease,box-shadow .18s ease}
-.v3fs-loopstep.on {background:var(--fs-card);box-shadow:0 8px 26px -14px rgba(23,26,46,.24);border-color:color-mix(in srgb,var(--v3-accent) 34%,transparent)}
-.v3fs-loopdot {font-size:17px;font-family:inherit;color:var(--v3-accent)}
-.v3fs-loop-body {display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
-.v3fs-loop-meta {font-size:10.5px;font-weight:650;letter-spacing:.01em;color:var(--v3-text-muted);font-variant-numeric:tabular-nums}
-.v3fs-loop-modes {display:inline-flex;gap:3px;margin-top:4px}
-.v3fs-loopmode {font:inherit;font-size:11.5px;font-weight:650;padding:4px 11px;border-radius:8px;border:1px solid var(--fs-line);
-  background:var(--fs-bg,transparent);color:var(--v3-text-secondary);cursor:pointer;transition:background .15s ease,color .15s ease}
-.v3fs-loopmode:hover {background:var(--fs-card)}
-.v3fs-loopmode.on {background:var(--v3-accent);border-color:var(--v3-accent);color:#fff}
-.v3fs-loopmode:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:2px}
+/* The Prototype Loop node — Design ⇄ Validate folded into one spine stop. Same
+   vertical rhythm as the other steps (ring · name · state), so it reads as a
+   native movement, not a bolted-on widget; the mode toggle sits where a step's
+   state word goes, and the iteration/area meter is its state line. */
+.v3fs-loopstep {flex:1.4;min-width:148px;display:flex;flex-direction:column;align-items:flex-start;gap:0;
+  padding:16px 14px 14px;border:none;background:none;border-radius:14px;transition:background .18s ease,box-shadow .18s ease}
+.v3fs-loopstep:hover {background:var(--fs-card)}
+.v3fs-loopstep.on {background:var(--fs-card);box-shadow:0 8px 26px -14px rgba(23,26,46,.24)}
+.v3fs-loopdot {font-size:16px;font-family:inherit;color:var(--v3-accent)}
+.v3fs-loop-modes {display:inline-flex;margin:5px 0 3px;border:1px solid var(--fs-line);border-radius:8px;overflow:hidden}
+.v3fs-loopmode {font:inherit;font-size:11px;font-weight:650;padding:3px 11px;border:0;background:transparent;
+  color:var(--v3-text-secondary);cursor:pointer;transition:background .15s ease,color .15s ease}
+.v3fs-loopmode + .v3fs-loopmode {border-left:1px solid var(--fs-line)}
+.v3fs-loopmode:hover {background:var(--fs-hover,color-mix(in srgb,var(--v3-accent) 8%,transparent))}
+.v3fs-loopmode.on {background:var(--v3-accent);color:#fff}
+.v3fs-loopmode:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:-2px}
+.v3fs-sstate.loop {color:var(--v3-text-muted);font-variant-numeric:tabular-nums}
 /* Phase-header mode toggle — echoes the rail's Design ⇄ Validate inside the loop phase. */
 .v3fs-loopmodes-h {display:inline-flex;gap:3px;padding:2px;border-radius:10px;background:var(--fs-card);border:1px solid var(--fs-line)}
 .v3fs-smeta {display:block;font-family:var(--v3-font-mono);font-size:9.5px;color:var(--v3-text-muted);margin-top:4px}
