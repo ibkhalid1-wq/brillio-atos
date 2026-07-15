@@ -320,10 +320,12 @@ Deno.serve(async (req: Request) => {
         .slice(0, 24);
       // Show links carry the walkthrough as the DEMO; Envision links carry it
       // as the STORYBOARD ("what we intend to build") beside the transformation
-      // review — design intent is validated in Envision, watched running in
-      // Show. Both ship the functional run slice when the design exists.
+      // The design/storyboard + demo run slice ships on SHOW packs only — that
+      // is where clients watch the built prototype run and validate it. Envision
+      // is the delivery team's build studio; its links are internal working
+      // links, not client demo pages.
       const isShowPack = String(hit.pack.movementId ?? "") === "show";
-      const wantsDesign = isShowPack || String(hit.pack.movementId ?? "") === "envision";
+      const wantsDesign = isShowPack;
       const interviewDesign = wantsDesign ? designSlice() : undefined;
       const interviewScript = wantsDesign ? scriptSlice() : undefined;
       const interviewArea = isShowPack ? recipientAreaSlice() : "";

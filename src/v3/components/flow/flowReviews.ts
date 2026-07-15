@@ -354,7 +354,12 @@ export function projectStakeholderReview(
   program: ProgramSummary, movementId: string, name: string,
   primaryArea: string | undefined, linkQuestions: string[],
 ): ListenWorkflowReview | AgentifyReview | null {
-  const kind = movementId === "listen" ? "listen-workflow" : movementId === "envision" ? "agentify" : null;
+  // Listen produces the current-state review AND captures the client's
+  // automation appetite (the "what would you most want automated?" signal).
+  // Envision is the delivery team's build studio — no client review is minted
+  // there; clients validate the built prototype in Show. So only Listen mints a
+  // stakeholder review link.
+  const kind = movementId === "listen" ? "listen-workflow" : null;
   if (!kind) return null;
   const base = kind === "listen-workflow" ? projectListenWorkflowReview(program, name) : projectAgentifyReview(program, name);
   if (!base) return null;
@@ -376,10 +381,20 @@ export function projectStakeholderReview(
   }
   // Fold their gap script into a listen-workflow review's question list (the
   // agentify surface has none) so the one link still asks it below the flow.
+  // ALSO capture the client's automation APPETITE here in Listen — the "what
+  // would you most want automated?" signal that feeds the delivery team's
+  // agentify decisions in Envision. It rides the current-state review because a
+  // client answers it best while looking at their own workflow.
   if (base.kind === "listen-workflow") {
-    const seen = new Set(base.questions.map((q) => q.trim().toLowerCase()));
-    const extra = linkQuestions.filter((q) => q.trim() && !seen.has(q.trim().toLowerCase()));
-    base.questions = [...extra, ...base.questions].slice(0, 10);
+    const APPETITE = "Looking at your workflow above: which steps would you most want an agent to run for you, and which must stay human? This is where we look to automate.";
+    const merged = [...linkQuestions, APPETITE, ...base.questions];
+    const seen = new Set<string>();
+    const deduped: string[] = [];
+    for (const q of merged) {
+      const k = q.trim().toLowerCase();
+      if (q.trim() && !seen.has(k)) { seen.add(k); deduped.push(q); }
+    }
+    base.questions = deduped.slice(0, 10);
   }
   return base;
 }
