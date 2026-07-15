@@ -12,7 +12,7 @@ import { useFocusTrap } from "@/v3/lib/useFocusTrap";
 import type { ProgramSummary } from "@/new/types";
 import { artifactDocument, falsifiedGap, flowMovements, locateQuote, movementEvidence, type ArtifactCardModel, type EvidenceEntry } from "@/v3/components/flow/flowShellData";
 import { groundingFor, citationGraph, resourceUri, artifactFabioType, SEMANTIC_CONTEXT } from "@/v3/components/flow/flowSemantics";
-import { readRoleBindings } from "@/v3/components/flow/flowStakeholders";
+import { readRoleBindings, readOperatorAsks, operatorAsksFor, resolveMovementStakeholders } from "@/v3/components/flow/flowStakeholders";
 import { artifactApprovalState } from "@/v3/components/flow/flowApprovals";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 import { partitionOntologyViolations } from "@/v3/components/flow/flowOntologyConstraints";
@@ -30,7 +30,7 @@ export interface ArtifactEditInput {
   doc: Record<string, unknown>;
 }
 
-export default function FlowArtifactStudio({ program, artifact, onClose, onRegenerate, onSaveDoc, onComment, onOpenInbox, onOpenArtifact, onSaveInputs, embedded, regenerating, header }: {
+export default function FlowArtifactStudio({ program, artifact, onClose, onRegenerate, onSaveDoc, onOpenInbox, onOpenArtifact, onSaveInputs, embedded, regenerating, header }: {
   program: ProgramSummary;
   artifact: ArtifactCardModel;
   onClose: () => void;
@@ -207,24 +207,43 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
     setReviewed((prev) => new Set(prev).add(key));
   };
 
-  // Anchored comments — discussion attached to THIS document, on the record.
-  const comments = useMemo(() => {
-    const raw = (program.rawData ?? {}) as Record<string, unknown>;
-    const inner = typeof raw.data === "object" && raw.data !== null ? (raw.data as Record<string, unknown>) : raw;
-    const list = Array.isArray(inner.flowComments) ? inner.flowComments : [];
-    return list
-      .filter((c): c is Record<string, unknown> => typeof c === "object" && c !== null)
-      .filter((c) => entry && c.fieldKey === entry.fieldKey);
-  }, [program.rawData, entry]);
-  const [commentText, setCommentText] = useState("");
-  const [commentBusy, setCommentBusy] = useState(false);
-  const addComment = async () => {
-    if (!entry || !onComment || !commentText.trim()) return;
-    setCommentBusy(true);
+  // The document is DERIVED — the operator can't edit it. The only way to change
+  // it is to ask the relevant stakeholder: their answer arrives as evidence and
+  // regenerates the document. This panel raises that question against the
+  // movement's own roster, storing it as an operator ask (fingerprint-safe)
+  // that travels on that person's link — the SAME channel the collect board uses.
+  const askRoster = useMemo(
+    () => resolveMovementStakeholders(program, artifact.movementId).filter((s) => (s.name || s.role).trim()),
+    [program, artifact.movementId],
+  );
+  const [askWho, setAskWho] = useState("");
+  const [askText, setAskText] = useState("");
+  const [askBusy, setAskBusy] = useState(false);
+  const [askDone, setAskDone] = useState("");
+  const askTarget = askWho || (askRoster[0] ? (askRoster[0].name || askRoster[0].role) : "");
+  const askExisting = useMemo(
+    () => (askTarget ? operatorAsksFor(program, artifact.movementId, askTarget) : []),
+    [program, artifact.movementId, askTarget],
+  );
+  const addAsk = async () => {
+    const q = askText.trim();
+    if (!q || !askTarget || !onSaveInputs) return;
+    setAskBusy(true);
     try {
-      await onComment({ fieldKey: entry.fieldKey, movementId: artifact.movementId, title: artifact.title, text: commentText });
-      setCommentText("");
-    } finally { setCommentBusy(false); }
+      const all = readOperatorAsks(program, artifact.movementId);
+      const key = askTarget.trim().toLowerCase();
+      const next = [...(all[key] ?? [])];
+      if (!next.some((existing) => existing.toLowerCase() === q.toLowerCase())) next.push(q);
+      all[key] = next;
+      await onSaveInputs(artifact.movementId, { _operatorAsks: JSON.stringify(all) }, {
+        attest: { action: `Question raised for ${askTarget}`, detail: q.slice(0, 120) },
+      });
+      setAskText("");
+      setAskDone(askTarget);
+      window.dispatchEvent(new CustomEvent("atlas-v3-toast", {
+        detail: { message: `Question sent to ${askTarget} — it travels on their link until answered.`, tone: "success", duration: 3200 },
+      }));
+    } finally { setAskBusy(false); }
   };
 
   const regenPending = useMemo(() => {
@@ -393,62 +412,42 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
             ) : null}
           </div>
         ) : null}
-        {lastChange ? (
-          <details className="v3fs-dv-changed">
+        {/* Request a change — the read-only document's ONE editing path: ask the
+            person who owns the answer. The question travels on their link and
+            regenerates the document when answered. Replaces direct hand-edits. */}
+        {onSaveInputs && askRoster.length ? (
+          <details className="v3fs-artask">
             <summary>
-              Review changes — {lastChange.rows.length} section{lastChange.rows.length === 1 ? "" : "s"} since {new Date(lastChange.ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+              <span className="v3fs-artask-l">✎ Request a change</span>
+              <span className="v3fs-artask-hint">Derived document — to change it, ask the stakeholder who owns the answer.</span>
             </summary>
-            {/* PR-style: each changed section reviewed on its own — keep the
-                new version, or revert that section to the prior snapshot
-                (an attested edit through the normal save path). */}
-            <div className="v3fs-review">
-              {changeRows.slice(0, 10).map((row) => (
-                <div key={row.label} className={`v3fs-review-row ${row.kind}`}>
-                  <span className={`v3fs-review-kind ${row.kind === "added" ? "add" : row.kind === "removed" ? "rm" : "rw"}`}>
-                    {row.kind}
-                  </span>
-                  <span className="v3fs-review-l">{row.label}</span>
-                  {row.key && reviewed.has(row.key) ? (
-                    <span className="v3fs-review-done">✓ reverted</span>
-                  ) : onSaveDoc && row.key && row.prevValue !== undefined && row.kind !== "added" ? (
-                    <button type="button" className="v3fs-a" title="Restore this section from the prior version — attested"
-                      onClick={() => void revertSection(row.key!, row.label, row.prevValue)}>↩ Revert section</button>
-                  ) : (
-                    <span className="v3fs-review-keep">{row.kind === "added" ? "new — keep" : "keep"}</span>
-                  )}
-                </div>
-              ))}
+            <div className="v3fs-artask-b">
+              <label className="v3fs-artask-row">
+                <span>Ask</span>
+                <select className="v3fs-artask-who" value={askTarget} onChange={(e) => { setAskWho(e.target.value); setAskDone(""); }} aria-label="Who to ask">
+                  {askRoster.map((s, i) => {
+                    const value = s.name || s.role;
+                    return <option key={`${value}-${i}`} value={value}>{s.name ? `${s.name}${s.role ? ` · ${s.role}` : ""}` : s.role}</option>;
+                  })}
+                </select>
+              </label>
+              {askExisting.length ? (
+                <ul className="v3fs-artask-q">
+                  {askExisting.map((q, i) => <li key={i}>{q}</li>)}
+                </ul>
+              ) : null}
+              <div className="v3fs-artask-add">
+                <input value={askText} onChange={(e) => setAskText(e.target.value)}
+                  placeholder={`Ask ${askTarget || "the owner"} what should change…`}
+                  aria-label="Your question"
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void addAsk(); } }} />
+                <button type="button" className="v3fs-btn" disabled={askBusy || !askText.trim() || !askTarget} onClick={() => void addAsk()}>
+                  {askBusy ? "Sending…" : "＋ Ask"}
+                </button>
+              </div>
+              {askDone ? <div className="v3fs-artask-done">✓ Sent to {askDone} — travels on their link until answered.</div> : null}
             </div>
           </details>
-        ) : null}
-        {onComment && entry ? (
-          <div className="v3fs-comments">
-            <div className="v3fs-comments-h">
-              Comments
-              {comments.length ? <span>{comments.filter((c) => !c.resolved).length} open · {comments.length} total</span> : <span>none yet</span>}
-            </div>
-            {comments.map((c) => (
-              <div key={String(c.id)} className={`v3fs-comment${c.resolved ? " resolved" : ""}`}>
-                <div className="v3fs-comment-g">
-                  <div className="v3fs-comment-t">{String(c.text ?? "")}</div>
-                  <div className="v3fs-comment-m">{String(c.by ?? "")} · {String(c.ts ?? "").slice(0, 10)}{c.resolved ? " · resolved" : ""}</div>
-                </div>
-                {!c.resolved ? (
-                  <button type="button" className="v3fs-a" title="Resolve — attested"
-                    onClick={() => void onComment({ fieldKey: entry.fieldKey, movementId: artifact.movementId, title: artifact.title, resolveId: String(c.id) })}>✓ Resolve</button>
-                ) : null}
-              </div>
-            ))}
-            <div className="v3fs-comments-add">
-              <input value={commentText} onChange={(e) => setCommentText(e.target.value)}
-                placeholder="Comment on this document — stays on the record"
-                aria-label="Add a comment"
-                onKeyDown={(e) => { if (e.key === "Enter") void addComment(); }} />
-              <button type="button" className="v3fs-btn" disabled={commentBusy || !commentText.trim()} onClick={() => void addComment()}>
-                {commentBusy ? "Saving…" : "Comment"}
-              </button>
-            </div>
-          </div>
         ) : null}
         {regenPending ? (
           <div className="v3fs-dv-band indigo">
@@ -590,6 +589,36 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
           )}
         </div>
 
+        {/* Review changes lives at the BOTTOM — the diff since the last version,
+            read after the document, not before it. */}
+        {lastChange ? (
+          <details className="v3fs-dv-changed v3fs-dv-changed-foot">
+            <summary>
+              Review changes — {lastChange.rows.length} section{lastChange.rows.length === 1 ? "" : "s"} since {new Date(lastChange.ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+            </summary>
+            {/* PR-style: each changed section reviewed on its own — keep the
+                new version, or revert that section to the prior snapshot
+                (an attested edit through the normal save path). */}
+            <div className="v3fs-review">
+              {changeRows.slice(0, 10).map((row) => (
+                <div key={row.label} className={`v3fs-review-row ${row.kind}`}>
+                  <span className={`v3fs-review-kind ${row.kind === "added" ? "add" : row.kind === "removed" ? "rm" : "rw"}`}>
+                    {row.kind}
+                  </span>
+                  <span className="v3fs-review-l">{row.label}</span>
+                  {row.key && reviewed.has(row.key) ? (
+                    <span className="v3fs-review-done">✓ reverted</span>
+                  ) : onSaveDoc && row.key && row.prevValue !== undefined && row.kind !== "added" ? (
+                    <button type="button" className="v3fs-a" title="Restore this section from the prior version — attested"
+                      onClick={() => void revertSection(row.key!, row.label, row.prevValue)}>↩ Revert section</button>
+                  ) : (
+                    <span className="v3fs-review-keep">{row.kind === "added" ? "new — keep" : "keep"}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </details>
+        ) : null}
         {evidenceOpen ? (
           <EvidenceReader entry={evidenceOpen} highlight={evidenceHighlight ?? undefined}
             onClose={() => { setEvidenceOpen(null); setEvidenceHighlight(null); }} />

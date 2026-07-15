@@ -139,7 +139,9 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
       // The tab order is Discovery first, then one tab per artifact — walk the
       // live set for the active movement so [ and ] cross every artifact.
       const mv = flowMovements().find((m) => m.id === active);
-      const keys: string[] = mv ? ["collect", ...movementArtifacts(program, mv).map((a) => `art:${a.id}`)] : ["collect"];
+      const keys: string[] = mv
+        ? ["collect", ...movementArtifacts(program, mv).map((a) => `art:${a.id}`), ...(mv.id === "ship" ? ["ship:lanes"] : [])]
+        : ["collect"];
       setMovementTab((prev) => {
         const stored = prev[active];
         const current = stored && keys.includes(stored) ? stored : keys[0];
@@ -367,7 +369,11 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
         // legacy value ("paper"/"plan"/"gate") or a since-removed artifact
         // falls back to the movement's default opening tab.
         const artTabKeys = artifacts.map((a) => `art:${a.id}`);
-        const validTabKeys = new Set<string>(["collect", ...artTabKeys]);
+        // Ship's cutover/ship plan (the compiled lanes board) is its OWN tab,
+        // separate from the Hardening plan artifact — the two were previously
+        // stacked on one tab. Only when the compile/toggle handlers exist.
+        const hasShipPlanTab = movement.id === "ship" && !!onCompileShipLanes && !!onToggleShipItem;
+        const validTabKeys = new Set<string>(["collect", ...artTabKeys, ...(hasShipPlanTab ? ["ship:lanes"] : [])]);
         const defaultTab: MovementTab = leadTab(movement.id) === "paper" && artifacts.length ? `art:${artifacts[0].id}` : "collect";
         const storedTab = movementTab[movement.id];
         const tabKey: MovementTab = storedTab && validTabKeys.has(storedTab) ? storedTab : defaultTab;
@@ -403,9 +409,19 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
           if (gaps) return { glyph: "!", text: `${gaps} gap${gaps === 1 ? "" : "s"}`, tone: "warn" };
           return { glyph: "✓", text: "", tone: "ok" };
         };
+        const shipPlanState = (() => {
+          if (!hasShipPlanTab) return null;
+          const lanes = listShipLanes(program);
+          if (!lanes.length) return { glyph: "○", text: "", tone: "dim" };
+          const prog = shipLaneProgress(lanes);
+          return prog.validationDone && prog.cutoverDone
+            ? { glyph: "✓", text: "", tone: "ok" }
+            : { glyph: "◔", text: "", tone: "warn" };
+        })();
         const tabDefs: Array<{ key: MovementTab; label: string; state: { glyph: string; text: string; tone: string } | null; show: boolean }> = [
           { key: "collect", label: "Discovery", state: collectState, show: true },
           ...artifacts.map((a) => ({ key: `art:${a.id}` as MovementTab, label: a.title, state: artifactTabState(a), show: true })),
+          ...(hasShipPlanTab ? [{ key: "ship:lanes" as MovementTab, label: "Ship plan", state: shipPlanState, show: true }] : []),
         ];
 
         return (
@@ -787,21 +803,24 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                   {railRead ? <EvidenceReader entry={railRead} onClose={() => setRailRead(null)} /> : null}
                 </div>
 
+                {/* Ship plan: the compiled cutover/validation lanes on their
+                    OWN tab, distinct from the Hardening plan artifact. */}
+                {hasShipPlanTab && tabKey === "ship:lanes" ? (
+                  <div className="v3fs-arttab">
+                    <ShipLanesBoard program={program} onCompile={onCompileShipLanes!} onToggle={onToggleShipItem!} onSetLane={onSetShipLane} />
+                  </div>
+                ) : null}
+
                 {/* One tab per artifact: the active artifact renders its own
                     view inline (the same studio as the overlay, embedded) with
                     a Regenerate control in its header. Only the active tab's
                     studio mounts — the views are heavy, so they don't all sit
-                    hidden. Movement-level operational surfaces that aren't a
-                    single artifact (Ship's cutover lanes, Show's demo tour)
-                    ride on the movement's first artifact tab. */}
+                    hidden. Show's demo tour rides on its first artifact tab. */}
                 {activeArtifact ? (() => {
                   const artifact = activeArtifact;
                   const isFirstArtifact = artifacts[0]?.id === artifact.id;
                   return (
                     <div className="v3fs-arttab" data-artifact={artifact.id}>
-                      {isFirstArtifact && movement.id === "ship" && onCompileShipLanes && onToggleShipItem ? (
-                        <ShipLanesBoard program={program} onCompile={onCompileShipLanes} onToggle={onToggleShipItem} onSetLane={onSetShipLane} />
-                      ) : null}
                       {isFirstArtifact && movement.id === "show" ? (() => {
                         const tour = demoAcceptance(program);
                         return tour.rows.length ? (
