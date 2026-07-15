@@ -30,11 +30,19 @@ export interface ArtifactEditInput {
   doc: Record<string, unknown>;
 }
 
-export default function FlowArtifactStudio({ program, artifact, onClose, onRegenerate, onSaveDoc, onComment, onOpenInbox, onOpenArtifact, onSaveInputs }: {
+export default function FlowArtifactStudio({ program, artifact, onClose, onRegenerate, onSaveDoc, onComment, onOpenInbox, onOpenArtifact, onSaveInputs, embedded, regenerating, header }: {
   program: ProgramSummary;
   artifact: ArtifactCardModel;
   onClose: () => void;
   onRegenerate?: () => void;
+  /** Render inline inside a movement tab (no backdrop, no dialog chrome, no
+   *  Close) rather than as a full-screen overlay. */
+  embedded?: boolean;
+  /** This artifact is currently regenerating — the header button shows a spinner. */
+  regenerating?: boolean;
+  /** Extra content rendered above the document body (e.g. Frame's Listen plan
+   *  merged into the Discovery Kit tab). */
+  header?: React.ReactNode;
   onSaveDoc?: (input: ArtifactEditInput) => Promise<void>;
   /** Add/resolve an anchored comment on this artifact (attested). */
   onComment?: (input: { fieldKey: string; movementId: string; title: string; text?: string; resolveId?: string }) => Promise<void>;
@@ -56,7 +64,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
   const approval = useMemo(() => artifactApprovalState(program, artifact.movementId, artifact.id), [program, artifact.movementId, artifact.id]);
 
   const dialogRef = React.useRef<HTMLDivElement | null>(null);
-  useFocusTrap(dialogRef);
+  useFocusTrap(embedded ? { current: null } : dialogRef);
   const [draft, setDraft] = useState<Record<string, unknown> | null>(storedDoc);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -76,10 +84,11 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
   }, [storedDoc, dirty]);
 
   useEffect(() => {
+    if (embedded) return;
     const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, embedded]);
 
   // ARTIFACTS ARE DERIVED, NOT AUTHORED (operator direction 2026-07-14):
   // every document is a generated view of the record, so operator hand-edits
@@ -315,14 +324,23 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
 
   return (
     <>
-      <div className="v3fs-doc-backdrop" onClick={onClose} aria-hidden="true" />
-      <div ref={dialogRef} tabIndex={-1} className={`v3fs-docview${studioActive ? " v3fs-studio" : ""}`} role="dialog" aria-modal="true" aria-label={artifact.title}>
+      {embedded ? null : <div className="v3fs-doc-backdrop" onClick={onClose} aria-hidden="true" />}
+      <div ref={dialogRef} tabIndex={embedded ? undefined : -1}
+        className={`${embedded ? "v3fs-artpanel" : "v3fs-docview"}${studioActive ? " v3fs-studio" : ""}`}
+        role={embedded ? undefined : "dialog"} aria-modal={embedded ? undefined : true} aria-label={artifact.title}>
         <header className="v3fs-docview-h">
           <div>
-            <div className="v3fs-dv-eyebrow">{movementName} · generated document</div>
+            <div className="v3fs-dv-eyebrow">{movementName} · {artifact.present ? "generated document" : "not generated yet"}</div>
             <h2>{artifact.title}</h2>
           </div>
           <div className="v3fs-docview-cta">
+            {onRegenerate ? (
+              <button type="button" className="v3fs-btn v3fs-btn-regen" disabled={!!regenerating}
+                onClick={() => { onRegenerate(); if (!embedded) onClose(); }}
+                title={artifact.present ? "Resynthesize this document from the latest evidence" : "Generate this document from the evidence on record"}>
+                {regenerating ? "Generating…" : artifact.present ? "↻ Regenerate" : "✦ Generate"}
+              </button>
+            ) : null}
             {entry ? (
               <div className="v3fs-dv-menuwrap">
                 <button type="button" className="v3fs-btn" aria-label="More actions" aria-expanded={menuOpen}
@@ -359,9 +377,10 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
             ) : approval.status === "changes" ? (
               <span className="v3fs-approval-pill changes">↺ Changes requested</span>
             ) : null}
-            <button type="button" className="v3fs-btn" onClick={onClose} aria-label="Close">Close</button>
+            {embedded ? null : <button type="button" className="v3fs-btn" onClick={onClose} aria-label="Close">Close</button>}
           </div>
         </header>
+        {header ? <div className="v3fs-artpanel-header">{header}</div> : null}
         {approval.status === "changes" && approval.comment ? (
           <div className="v3fs-approval-bar changes" role="status">↺ {approval.approver?.name ?? "Approver"} requested changes: &ldquo;{approval.comment}&rdquo;</div>
         ) : null}

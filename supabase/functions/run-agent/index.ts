@@ -1868,6 +1868,10 @@ function buildGroundingFacts(phaseRecord: Record<string, unknown>): string[] {
 interface CarryForwardDocument {
   fileName: string;
   intelligence: Record<string, unknown>;
+  /** The document's extracted full text — carried IN FULL to the synthesis
+   *  agents so an uploaded PDF's own words (not just its summary) ground the
+   *  ontology/atlas. Absent for non-synthesis agents to keep prompts lean. */
+  rawText?: string;
 }
 
 /**
@@ -1940,9 +1944,15 @@ function docEntityText(entity: unknown): string {
  * A document is in scope when its primaryPhase is at or before the target phase in
  * the ATOS sequence, or when it declares no known phase (treated as programme-wide).
  */
-function buildDocumentCarryForward(documents: CarryForwardDocument[], targetPhaseId: string): string {
+function buildDocumentCarryForward(documents: CarryForwardDocument[], targetPhaseId: string, includeFullText = false): string {
   const targetIndex = ATOS_PHASE_SEQUENCE.indexOf(targetPhaseId);
   const lines: string[] = [];
+  // Per-document ceiling on the full text — keep head AND tail so neither the
+  // opening context nor the closing detail of a long upload falls off.
+  const MAX_DOC_TEXT = 60_000;
+  const capText = (text: string): string => text.length > MAX_DOC_TEXT
+    ? `${text.slice(0, 42_000)}\n…[${(text.length - MAX_DOC_TEXT).toLocaleString()} chars elided]…\n${text.slice(-18_000)}`
+    : text;
   for (const doc of documents) {
     const intel = doc.intelligence;
     const primaryPhase = typeof intel.primaryPhase === "string" ? intel.primaryPhase : "";
@@ -1960,6 +1970,12 @@ function buildDocumentCarryForward(documents: CarryForwardDocument[], targetPhas
         if (text) lines.push(`insight${phaseTag} (${category}): ${text}`);
       }
     }
+    // The synthesis agents (ontology, atlas, blueprint…) read the upload's OWN
+    // WORDS in full — the summary alone caps the ontology at the entities the
+    // abstract happens to name, dropping actors/organisations/services that
+    // only the body describes. Non-synthesis agents keep just the summary.
+    const rawText = includeFullText && typeof doc.rawText === "string" ? doc.rawText.trim() : "";
+    if (rawText) lines.push(`=== ${doc.fileName}${phaseTag} — the full document text ===\n${capText(rawText)}`);
   }
   return lines.join("\n");
 }
@@ -2835,18 +2851,30 @@ function buildSpecialAgentInputContext(
         ...buildGroundingFacts(Object.keys(phaseInputs).length ? { ...frameInputs, ...phaseInputs } : frameInputs),
         ...kitRosterSeed,
       ],
-      documentCarryForward: buildDocumentCarryForward(options?.documents || [], formalSpec.phase),
+      // Synthesis agents read each uploaded document's FULL TEXT (not just its
+      // summary) so the ontology/atlas ground in the body, not the abstract.
+      documentCarryForward: buildDocumentCarryForward(
+        options?.documents || [], formalSpec.phase,
+        !!target && CONVERSATION_RECORD_AGENTS.has(target.agentId),
+      ),
       valueProjected: coerceNumber(inner.valueProjected ?? businessCase.projectedValue ?? valueRealizeData.projectedValue, 0),
       narrative,
       phases,
-      milestones: milestones.slice(0, 12),
-      risks: activeRaidEntries.slice(0, 10),
-      decisions: decisions.filter((d) => d.status !== "resolved").slice(0, 8),
-      stakeholders: stakeholderEntries.slice(0, 12),
+      // Generous ceilings, not tight samples: a program with 14 stakeholders
+      // must not have the 13th (the provider organisation, the payer) silently
+      // dropped before it reaches the ontology. The caps only guard against
+      // pathological blobs, well above any real programme's roster.
+      milestones: milestones.slice(0, 40),
+      risks: activeRaidEntries.slice(0, 40),
+      decisions: decisions.filter((d) => d.status !== "resolved").slice(0, 30),
+      stakeholders: stakeholderEntries.slice(0, 80),
       existingBusinessCase: businessCase,
       existingArtifacts: artifactsByPhase[formalSpec.phase] || [],
       priorPhaseArtifacts,
-    }, null, 2);
+    // Compact serialization: the pretty-print indent added ~30% to a context
+    // that already runs to hundreds of KB — pure whitespace tokens that slow
+    // every generation. The model parses compact JSON just as well.
+    });
   }
 
   // The Phase Transition Planner plans a downstream phase's inputs/artifacts.
@@ -8323,7 +8351,7 @@ Deno.serve(async (req) => {
     if (formalSpecForRun) {
       const { data: documentRows } = await auth.admin
         .from("adam_document_attachments")
-        .select("file_name, extracted_data")
+        .select("file_name, extracted_data, raw_text")
         .eq("program_id", request.programId);
       for (const row of (documentRows || []) as Array<Record<string, unknown>>) {
         const intel = row.extracted_data;
@@ -8331,6 +8359,9 @@ Deno.serve(async (req) => {
           carryForwardDocuments.push({
             fileName: typeof row.file_name === "string" ? row.file_name : "document",
             intelligence: intel,
+            // The synthesis agents ground in the upload's own words, not just its
+            // extracted summary — carried in full by buildDocumentCarryForward.
+            rawText: typeof row.raw_text === "string" ? row.raw_text : undefined,
           });
         }
       }

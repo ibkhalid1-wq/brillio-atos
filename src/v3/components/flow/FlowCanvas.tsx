@@ -10,10 +10,10 @@ import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 import {
   flowMovements, frontierMovementId, movementEvidence, movementArtifacts,
   gateReadiness, gateChecklist, listenCoverage, movementFacts, demoAcceptance,
-  spineRegenerationPlan, attestHeardRoster, artifactOpenGaps, readMovementInputs,
+  spineRegenerationPlan, attestHeardRoster, artifactOpenGaps,
   type ArtifactCardModel, type EvidenceEntry,
 } from "@/v3/components/flow/flowShellData";
-import { artifactApprovalRollup, type ApprovalStatus, type ApproverState } from "@/v3/components/flow/flowApprovals";
+import { artifactApprovalRollup } from "@/v3/components/flow/flowApprovals";
 import { gateAugmentations } from "@/v3/components/flow/flowCrossValidation";
 import { meetingKit } from "@/v3/components/flow/flowMeetings";
 import { listInterviewPacks, listDemoInvites, portalLinkFor } from "@/v3/components/flow/flowPortal";
@@ -136,17 +136,21 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
       if (event.key !== "[" && event.key !== "]") return;
       const target = event.target as HTMLElement | null;
       if (target && (/^(input|textarea|select)$/i.test(target.tagName) || target.isContentEditable)) return;
-      const stages: MovementTab[] = ["paper", "collect"];
+      // The tab order is Discovery first, then one tab per artifact — walk the
+      // live set for the active movement so [ and ] cross every artifact.
+      const mv = flowMovements().find((m) => m.id === active);
+      const keys: string[] = mv ? ["collect", ...movementArtifacts(program, mv).map((a) => `art:${a.id}`)] : ["collect"];
       setMovementTab((prev) => {
-        const current = prev[active] ?? leadTab(active);
+        const stored = prev[active];
+        const current = stored && keys.includes(stored) ? stored : keys[0];
         const step = event.key === "]" ? 1 : -1;
-        const next = stages[(stages.indexOf(current) + step + stages.length) % stages.length];
+        const next = keys[(keys.indexOf(current) + step + keys.length) % keys.length];
         return { ...prev, [active]: next };
       });
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [active]);
+  }, [active, program]);
 
   const toggle = (set: React.Dispatch<React.SetStateAction<Set<string>>>, id: string) =>
     set((current) => {
@@ -288,9 +292,9 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
             // Stale documents rebuild THEMSELVES now — no "regenerate, evidence
             // changed" prompt. A passive note while they catch up; the manual
             // regenerate stays available on the Paper tab as an option.
-            upNext.push({ icon: "↻", label: generating ? "Documents updating from the latest evidence…" : "Documents refreshing from the latest evidence", toTab: "paper" });
+            upNext.push({ icon: "↻", label: generating ? "Documents updating from the latest evidence…" : "Documents refreshing from the latest evidence", toTab: staleArtifacts[0] ? `art:${staleArtifacts[0].id}` : "collect" });
           } else if (missingArtifacts.length && evidence.length) {
-            upNext.push({ icon: "✦", label: `Generate the ${missingArtifacts[0].title}`, toTab: "paper", run: async () => onRunAgent(missingArtifacts[0].id, movement.id) });
+            upNext.push({ icon: "✦", label: `Generate the ${missingArtifacts[0].title}`, toTab: `art:${missingArtifacts[0].id}`, run: async () => onRunAgent(missingArtifacts[0].id, movement.id) });
           }
           if (unheard.length) {
             const who = unheard[0].name.split(",")[0].trim();
@@ -358,8 +362,16 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
         const hasPeople = sumStakeholders.length > 0;
         // Gate is no longer a stage — it opens as a modal — so a stored "gate"
         // pick falls back to the lead stage, and goTab("gate") opens the modal.
+        // Tab order: Discovery first, then one tab per artifact. The valid keys
+        // are the Discovery board plus `art:<id>` for each artifact; a stored
+        // legacy value ("paper"/"plan"/"gate") or a since-removed artifact
+        // falls back to the movement's default opening tab.
+        const artTabKeys = artifacts.map((a) => `art:${a.id}`);
+        const validTabKeys = new Set<string>(["collect", ...artTabKeys]);
+        const defaultTab: MovementTab = leadTab(movement.id) === "paper" && artifacts.length ? `art:${artifacts[0].id}` : "collect";
         const storedTab = movementTab[movement.id];
-        const tabKey: MovementTab = storedTab && storedTab !== "gate" ? storedTab : leadTab(movement.id);
+        const tabKey: MovementTab = storedTab && validTabKeys.has(storedTab) ? storedTab : defaultTab;
+        const activeArtifact = artifacts.find((a) => `art:${a.id}` === tabKey) ?? null;
         const goTab = (t: MovementTab) => {
           if (t === "gate") { setGateModalFor(movement.id); return; }
           setMovementTab((prev) => ({ ...prev, [movement.id]: t }));
@@ -372,16 +384,6 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
           : unheard.length
             ? { glyph: "●", text: `${unheard.length} waiting`, tone: "warn" }
             : { glyph: "✓", text: hasPeople ? `all ${sumWord}` : `${evidence.length} on record`, tone: "ok" };
-        const paperState = !artifacts.length ? null
-          : staleArtifacts.length
-            ? { glyph: "⟳", text: `${staleArtifacts.length} stale`, tone: "warn" }
-            : missingArtifacts.length
-              ? { glyph: "○", text: `${missingArtifacts.length} to generate`, tone: "dim" }
-              : sumDocsCurrent < artifacts.length
-                // Present and fresh, but the documents themselves declare open
-                // gaps — not "current" until the gaps close.
-                ? { glyph: "!", text: `${artifacts.length - sumDocsCurrent} with open gaps`, tone: "warn" }
-                : { glyph: "✓", text: "current", tone: "ok" };
         const gateState = isDone
           ? { glyph: "✓", text: "demonstrated", tone: "ok" }
           : readiness.kind === "ready"
@@ -389,16 +391,21 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
             : blockingChecks.length
               ? { glyph: "◔", text: `${sumChecksDone}/${blockingChecks.length}`, tone: readiness.tone === "amber" ? "warn" : "dim" }
               : { glyph: "○", text: "", tone: "dim" };
-        // Order: Artifacts first, then Discovery (the stakeholder evidence board,
-        // formerly Collect/Verify). The Gate is no longer a stage — it lives in
-        // the top-right button as a modal verdict. Frame carries a third tab, the
-        // Listen plan, after Discovery.
-        const planConfirmed = String(readMovementInputs(program, "frame")._listenCoverageConfirmed ?? "").trim().length > 0;
-        const planState = { glyph: planConfirmed ? "✓" : "◇", text: "", tone: planConfirmed ? "ok" : "dim" };
+        // Order: Discovery first (the stakeholder evidence board), then ONE TAB
+        // per artifact — each tab shows that artifact's own view and a
+        // Regenerate control. The Gate is not a stage — it lives in the
+        // top-right button as a modal verdict. For Frame the Listen plan is
+        // merged INTO the Discovery Kit tab (not a separate tab).
+        const artifactTabState = (a: typeof artifacts[number]): { glyph: string; text: string; tone: string } => {
+          if (!a.present) return { glyph: "○", text: "", tone: "dim" };
+          if (a.stale) return { glyph: "⟳", text: "stale", tone: "warn" };
+          const gaps = artifactOpenGaps(program, a.id).length;
+          if (gaps) return { glyph: "!", text: `${gaps} gap${gaps === 1 ? "" : "s"}`, tone: "warn" };
+          return { glyph: "✓", text: "", tone: "ok" };
+        };
         const tabDefs: Array<{ key: MovementTab; label: string; state: { glyph: string; text: string; tone: string } | null; show: boolean }> = [
-          { key: "paper", label: "Artifacts", state: paperState, show: artifacts.length > 0 },
           { key: "collect", label: "Discovery", state: collectState, show: true },
-          ...(movement.id === "frame" ? [{ key: "plan" as MovementTab, label: "Listen plan", state: planState, show: true }] : []),
+          ...artifacts.map((a) => ({ key: `art:${a.id}` as MovementTab, label: a.title, state: artifactTabState(a), show: true })),
         ];
 
         return (
@@ -443,7 +450,7 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                   {queue.map((item, index) => item.spine && onRunAgentAndWait ? (
                     <SpineQueueItem key="spine" plan={spine} primary={index === 0}
                       runningAgentIds={runningAgentIds} onRun={onRunAgentAndWait}
-                      onGo={() => goTab("paper")} />
+                      onGo={() => goTab(artifacts[0] ? `art:${artifacts[0].id}` : "collect")} />
                   ) : (
                     <UpNextButton key={item.label} item={item} primary={index === 0}
                       onGo={() => {
@@ -780,68 +787,66 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                   {railRead ? <EvidenceReader entry={railRead} onClose={() => setRailRead(null)} /> : null}
                 </div>
 
-                <div className={`v3fs-artgrid${tabKey === "paper" ? "" : " v3fs-tabhide"}`}>
-                  <div className="v3fs-colh gn">{generating ? "Generating…" : "Generated by ATOS"}</div>
-                  {movement.id === "ship" && onCompileShipLanes && onToggleShipItem ? (
-                    <ShipLanesBoard program={program} onCompile={onCompileShipLanes} onToggle={onToggleShipItem} onSetLane={onSetShipLane} />
-                  ) : null}
-                  {movement.id === "show" ? (() => {
-                    const tour = demoAcceptance(program);
-                    return tour.rows.length ? (
-                      <div className="v3fs-doc v3fs-tour">
-                        {tour.rows.slice(0, 4).map((row, i) => (
-                          <div key={i} className="v3fs-verd">
-                            <span className="v3fs-verd-w">{row.stakeholder || "—"}</span>
-                            <span className={`v3fs-vc ${/accepted/i.test(row.verdict ?? "") ? "acc" : "pen"}`}>{row.verdict || "Pending"}</span>
+                {/* One tab per artifact: the active artifact renders its own
+                    view inline (the same studio as the overlay, embedded) with
+                    a Regenerate control in its header. Only the active tab's
+                    studio mounts — the views are heavy, so they don't all sit
+                    hidden. Movement-level operational surfaces that aren't a
+                    single artifact (Ship's cutover lanes, Show's demo tour)
+                    ride on the movement's first artifact tab. */}
+                {activeArtifact ? (() => {
+                  const artifact = activeArtifact;
+                  const isFirstArtifact = artifacts[0]?.id === artifact.id;
+                  return (
+                    <div className="v3fs-arttab" data-artifact={artifact.id}>
+                      {isFirstArtifact && movement.id === "ship" && onCompileShipLanes && onToggleShipItem ? (
+                        <ShipLanesBoard program={program} onCompile={onCompileShipLanes} onToggle={onToggleShipItem} onSetLane={onSetShipLane} />
+                      ) : null}
+                      {isFirstArtifact && movement.id === "show" ? (() => {
+                        const tour = demoAcceptance(program);
+                        return tour.rows.length ? (
+                          <div className="v3fs-doc v3fs-tour">
+                            {tour.rows.slice(0, 4).map((row, i) => (
+                              <div key={i} className="v3fs-verd">
+                                <span className="v3fs-verd-w">{row.stakeholder || "—"}</span>
+                                <span className={`v3fs-vc ${/accepted/i.test(row.verdict ?? "") ? "acc" : "pen"}`}>{row.verdict || "Pending"}</span>
+                              </div>
+                            ))}
+                            {tour.rows.length > 4 ? <div className="v3fs-verd-more">+ {tour.rows.length - 4} more in Pulse</div> : null}
                           </div>
-                        ))}
-                        {tour.rows.length > 4 ? <div className="v3fs-verd-more">+ {tour.rows.length - 4} more in Pulse</div> : null}
-                      </div>
-                    ) : null;
-                  })() : null}
-                  {artifacts.map((artifact) => {
-                    // Approval rolls up from the STAKEHOLDER cards: an
-                    // artifact is approved when every relevant contributor
-                    // has approved it. The asks live on the collect board.
-                    const rollup = artifact.present ? artifactApprovalRollup(program, movement.id, artifact.id) : null;
-                    // The MATURITY LADDER — every document states where it is
-                    // on Draft → Grounded → Validated, so "generated ✓" never
-                    // masquerades as "done". Draft: partial evidence or stale;
-                    // Grounded: every voice heard at a current generation;
-                    // Validated: fresh sign-off from every contributor.
-                    const voices = sumStakeholders.filter((s) => !s.isRole).length;
-                    const voicesHeard = sumStakeholders.filter((s, i) => !s.isRole && evaluated[i].heard).length;
-                    const maturity = !artifact.present ? undefined
-                      : rollup?.overall === "approved"
-                        ? { label: "Validated", tone: "validated" as const, hint: `signed off by all ${rollup.total} contributor${rollup.total === 1 ? "" : "s"}` }
-                        : !artifact.stale && voices > 0 && voicesHeard >= voices
-                          ? { label: "Grounded", tone: "grounded" as const, hint: `every voice heard (${voices}) — ready for sign-off` }
-                          : { label: "Draft", tone: "draft" as const, hint: artifact.stale ? "evidence changed since generation — resynthesize" : voices > 0 ? `reads ${voicesHeard} of ${voices} voices` : undefined };
-                    return (
-                    <ArtifactDoc
-                      key={artifact.id}
-                      artifact={artifact}
-                      running={runningAgentIds.has(artifact.id)}
-                      evidenceNames={evidence.map((entry) => entry.who)}
-                      evidenceCount={evidence.length}
-                      lastError={agentErrors?.[artifact.id]}
-                      openGaps={artifactOpenGaps(program, artifact.id)}
-                      onGenerate={() => onRunAgent(artifact.id, movement.id)}
-                      onOpen={artifact.present ? () => setDocFor(artifact) : undefined}
-                      onGoEvidence={() => goTab("collect")}
-                      approvalRollup={rollup}
-                      maturity={maturity}
-                      onGoApprovals={() => goTab("collect")}
-                    />
-                    );
-                  })}
-                </div>
-
-                {movement.id === "frame" ? (
-                  <div className={tabKey === "plan" ? "" : "v3fs-tabhide"}>
-                    <FrameCoveragePlan program={program} onSaveInputs={onSaveInputs} />
-                  </div>
-                ) : null}
+                        ) : null;
+                      })() : null}
+                      {agentErrors?.[artifact.id] ? (
+                        <div className="v3fs-dv-band amber" role="alert"><span>Generation failed — {agentErrors[artifact.id]}</span></div>
+                      ) : null}
+                      <Suspense fallback={<div className="v3fs-artpanel-load">Opening {artifact.title}…</div>}>
+                        <FlowArtifactStudio
+                          embedded
+                          program={program}
+                          artifact={artifact}
+                          regenerating={runningAgentIds.has(artifact.id) || generating}
+                          onSaveInputs={onSaveInputs}
+                          onComment={onComment}
+                          onOpenArtifact={(artifactId) => {
+                            // Same movement → switch tab; otherwise open the overlay.
+                            if (artifacts.some((a) => a.id === artifactId)) { goTab(`art:${artifactId}`); return; }
+                            for (const m of flowMovements()) {
+                              const hit = movementArtifacts(program, m).find((a) => a.id === artifactId && a.present);
+                              if (hit) { setDocFor(hit); return; }
+                            }
+                          }}
+                          onClose={() => {}}
+                          onRegenerate={() => onRunAgent(artifact.id, movement.id)}
+                          onSaveDoc={onSaveArtifactDoc}
+                          onOpenInbox={onOpenInbox}
+                          header={movement.id === "frame" && artifact.id === "discovery-kit"
+                            ? <FrameCoveragePlan program={program} onSaveInputs={onSaveInputs} />
+                            : undefined}
+                        />
+                      </Suspense>
+                    </div>
+                  );
+                })() : null}
 
                 {gateModalFor === movement.id ? (
                 <div className="v3fs-gatemodal-scrim" role="dialog" aria-modal="true" aria-label={isLoop ? "Steady-state health" : "Gate"}
@@ -1156,136 +1161,6 @@ function ShipLanesBoard({ program, onCompile, onToggle, onSetLane }: {
           ))}
         </div>
       ))}
-    </div>
-  );
-}
-
-function ArtifactDoc({ artifact, running, evidenceNames, evidenceCount, lastError, openGaps, onGenerate, onOpen, onGoEvidence, approvalRollup, maturity, onGoApprovals }: {
-  artifact: ArtifactCardModel;
-  running: boolean;
-  evidenceNames: string[];
-  /** How many evidence items this movement holds — the card's provenance. */
-  evidenceCount?: number;
-  /** The last run died — its message stays on the card until the next try. */
-  lastError?: string;
-  /** The document's own declared gaps — readable on the CARD, and the same
-   * texts the follow-up scripts ask in Collect. One set, two surfaces. */
-  openGaps?: string[];
-  onGenerate: () => void;
-  onOpen?: () => void;
-  /** "evidence changed" chip → the Evidence tab, where the change lives. */
-  onGoEvidence?: () => void;
-  /** Sign-off ROLLUP: approval is asked per stakeholder on the collect board;
-   * the card only reports where the artifact stands across its contributors. */
-  approvalRollup?: { approvers: ApproverState[]; approvedCount: number; total: number; overall: ApprovalStatus } | null;
-  /** Where this document sits on the maturity ladder — Draft (partial
-   * evidence or stale) → Grounded (all voices, current) → Validated. */
-  maturity?: { label: string; tone: "draft" | "grounded" | "validated"; hint?: string };
-  /** The rollup chip → the Collect board, where the per-person asks live. */
-  onGoApprovals?: () => void;
-}) {
-  if (running) {
-    // Generation theater: show what ATOS is reading while it drafts, so the
-    // evidence → artifact transformation is visible, not a spinner.
-    return (
-      <div className="v3fs-doc gen">
-        <div className="v3fs-gen-line"><span className="v3fs-gdot" /> {artifact.title} — in progress</div>
-        {evidenceNames.length ? (
-          <>
-            <div className="v3fs-reading">Reading evidence</div>
-            <div className="v3fs-srcs">
-              {evidenceNames.slice(0, 6).map((name, index) => <span key={`${index}-${name}`}>{name.split(",")[0]} ✓</span>)}
-            </div>
-          </>
-        ) : null}
-        <div className="v3fs-doc-x">Reviewing the evidence and drafting the document…</div>
-      </div>
-    );
-  }
-  return (
-    <div className={`v3fs-doc${artifact.present ? "" : " ghost"}${onOpen ? " openable" : ""}`}>
-      <div className="v3fs-doc-t">
-        {/* A document leads with a toned paper tile, not a bare status dot —
-            the state colours the tile: green current, amber stale, dim absent. */}
-        <span className={`v3fs-doc-tile ${artifact.present ? (artifact.stale ? "stale" : "ok") : "none"}`} aria-hidden="true">¶</span>
-        {onOpen ? (
-          <button type="button" className="v3fs-doc-open" onClick={onOpen}>{artifact.title}</button>
-        ) : (
-          <b>{artifact.title}</b>
-        )}
-        {artifact.stale ? (
-          onGoEvidence
-            ? <button type="button" className="v3fs-stale-tag" title="See what changed — open the Evidence tab" onClick={onGoEvidence}>evidence changed →</button>
-            : <span className="v3fs-stale-tag">evidence changed</span>
-        ) : null}
-        {maturity ? (
-          <span className={`v3fs-doc-mat ${maturity.tone}`} title={maturity.hint}>
-            {maturity.tone === "validated" ? "✓ " : ""}{maturity.label}
-          </span>
-        ) : null}
-        {artifact.confidence != null ? <span className="v3fs-conf">{artifact.confidence}%</span> : null}
-      </div>
-      <div className="v3fs-doc-x">{artifact.excerpt ?? artifact.description}</div>
-      {maturity?.hint && maturity.tone !== "validated" ? (
-        <div className="v3fs-doc-mat-hint">{maturity.hint}</div>
-      ) : null}
-      {lastError ? (
-        <div className="v3fs-doc-err" role="alert">
-          ⚠ The last run failed: {lastError.slice(0, 160)} — try again.
-        </div>
-      ) : null}
-      {artifact.present && evidenceCount != null ? (
-        <div className="v3fs-doc-prov">
-          reads {evidenceCount} evidence item{evidenceCount === 1 ? "" : "s"}
-          {artifact.gaps ? ` · ${artifact.gaps} open gap${artifact.gaps === 1 ? "" : "s"}` : " · no open gaps"}
-        </div>
-      ) : null}
-      {artifact.present && openGaps?.length ? (
-        <details className="v3fs-doc-gaps">
-          <summary>Open gaps — {openGaps.length}</summary>
-          <ul>
-            {openGaps.map((gap, index) => <li key={index}>{gap}</li>)}
-          </ul>
-          <div className="v3fs-doc-gaps-note">
-            These land as questions on the follow-up scripts
-            {onGoEvidence ? <button type="button" className="v3fs-a" onClick={onGoEvidence}>→ Collect</button> : null}
-          </div>
-        </details>
-      ) : null}
-      <div className="v3fs-doc-foot">
-        {onOpen ? <button type="button" className="v3fs-a" onClick={onOpen}>Read</button> : null}
-        {/* The card's action mirrors its state: a stale document's regenerate
-            is THE thing to do (primary); a current one stays quiet. */}
-        {artifact.present && artifact.stale ? (
-          <button type="button" className="v3fs-btn pri v3fs-doc-regen" onClick={onGenerate}>↻ Regenerate — evidence changed</button>
-        ) : (
-          <button type="button" className="v3fs-a" onClick={onGenerate}>
-            {artifact.present ? "Regenerate" : "✦ Generate"}
-          </button>
-        )}
-      </div>
-      {/* Sign-off ROLLUP: the asks live on each contributor's card in Collect;
-          the artifact only reports where it stands across all of them. */}
-      {approvalRollup && approvalRollup.total > 0 ? (
-        approvalRollup.overall === "approved" ? (
-          <div className="v3fs-doc-appr ok">✓ Approved by all {approvalRollup.total} contributor{approvalRollup.total === 1 ? "" : "s"}</div>
-        ) : (
-          <div className={`v3fs-doc-appr ${approvalRollup.overall === "changes" ? "changes" : "wait"}`}>
-            <span>
-              {approvalRollup.overall === "changes" ? "↺ " : "◷ "}
-              Sign-off {approvalRollup.approvedCount}/{approvalRollup.total}
-              {(() => {
-                const open = approvalRollup.approvers.filter((a) => a.status !== "approved");
-                const named = open.slice(0, 3).map((a) => a.name.split(" ")[0]).join(", ");
-                return open.length ? ` — awaiting ${named}${open.length > 3 ? ` +${open.length - 3}` : ""}` : "";
-              })()}
-            </span>
-            {onGoApprovals ? (
-              <button type="button" className="v3fs-a" onClick={onGoApprovals}>→ request on their cards</button>
-            ) : null}
-          </div>
-        )
-      ) : null}
     </div>
   );
 }

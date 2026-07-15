@@ -6061,6 +6061,23 @@ details[open] > summary .v3fs-disc-c::after {display:none}
   .v3fs-go {display:none}
 }
 
+/* ── Per-artifact tab: the studio embedded inline in a movement tab ─────── */
+/* Each artifact now owns a tab; its view renders inline (not as the overlay
+   sheet). The panel reuses the studio's inner classes (header, body, grounding)
+   but flows in the page instead of a fixed full-height column. */
+.v3fs-arttab{display:flex;flex-direction:column;gap:16px;animation:v3fs-art-in .2s cubic-bezier(.2,.8,.3,1)}
+@keyframes v3fs-art-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.v3fs-artpanel{display:flex;flex-direction:column;background:var(--fs-card);border:1px solid var(--fs-line);border-radius:18px;overflow:hidden;box-shadow:0 1px 2px rgba(15,16,32,.04),0 12px 32px -20px rgba(15,16,32,.22)}
+.v3fs-artpanel .v3fs-docview-h{padding:20px 26px 16px;position:sticky;top:0;z-index:2;background:linear-gradient(var(--fs-card),color-mix(in srgb,var(--fs-card) 88%,transparent));backdrop-filter:blur(6px)}
+.v3fs-artpanel .v3fs-docview-h h2{font-size:20px}
+.v3fs-artpanel .v3fs-docview-b{overflow:visible;max-height:none;padding:24px 26px 30px}
+.v3fs-artpanel-header{padding:16px 26px;border-bottom:1px solid var(--fs-line);background:color-mix(in srgb,var(--v3-accent) 3%,var(--fs-card))}
+.v3fs-artpanel-load{padding:56px 26px;text-align:center;color:var(--v3-text-muted);font-size:13px}
+/* Prominent Regenerate/Generate control in the artifact header. */
+.v3fs-btn-regen{border-color:transparent;background:var(--v3-accent);color:#fff;font-weight:600;box-shadow:0 1px 2px rgba(15,16,32,.12)}
+.v3fs-btn-regen:hover:not(:disabled){background:color-mix(in srgb,var(--v3-accent) 88%,#000);color:#fff}
+.v3fs-btn-regen:disabled{opacity:.6;cursor:progress}
+
 /* ── The artifact studio: per-type WYSIWYG editors over generated docs ──── */
 .v3fs-docview.v3fs-studio{width:min(1120px,calc(100vw - 100px))}
 .v3fs-stu-sec{margin:0 0 22px}
