@@ -6772,8 +6772,13 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-lane-b .v3fs-ivc:hover, .v3fs-collect-col .v3fs-ivc:hover {box-shadow:0 12px 30px -18px rgba(20,20,45,.3)}
 /* Compact collection cards — tighter summary + body so more people fit the
    viewport and the AREA lanes lead the eye, not the cards. */
-.v3fs-ivc > summary {display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;cursor:pointer;list-style:none}
+/* Two-row grid: avatar spans down the left, name/role + chevron on the top row,
+   and the status + action pills get their OWN row underneath — so a wrapped role
+   in a narrow (grid) card can never collide with a pill. */
+.v3fs-ivc > summary {display:grid;grid-template-columns:auto minmax(0,1fr) auto;
+  grid-template-areas:"av who chev" "av act act";align-items:center;gap:7px 10px;padding:10px 12px;cursor:pointer;list-style:none}
 .v3fs-ivc > summary::-webkit-details-marker {display:none}
+.v3fs-ivc-actions {grid-area:act;display:flex;flex-wrap:wrap;align-items:center;gap:7px;min-width:0}
 .v3fs-ivc-who {display:flex;flex-direction:column;gap:1px;font-size:12.5px;font-weight:650;color:var(--v3-text-primary);min-width:0;letter-spacing:-.005em}
 .v3fs-ivc-who span {font-size:10.5px;font-weight:500;color:var(--v3-text-muted)}
 
@@ -7282,13 +7287,13 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-ivc-bind-row input:focus {outline:none;border-color:var(--v3-accent-2)}
 /* Status-toned initials tile — people read as people, and the board's
    status language (green/amber/indigo) carries through the avatar. */
-.v3fs-ivc-av {flex-shrink:0;width:33px;height:33px;border-radius:11px;display:grid;place-items:center;
+.v3fs-ivc-av {grid-area:av;align-self:start;flex-shrink:0;width:33px;height:33px;border-radius:11px;display:grid;place-items:center;
   font-size:11.5px;font-weight:750;letter-spacing:.02em;background:var(--fs-line);color:var(--v3-text-secondary)}
 .v3fs-ivc.heard .v3fs-ivc-av {background:color-mix(in srgb,var(--v3-green) 13%,transparent);color:var(--v3-green)}
 .v3fs-ivc.waiting .v3fs-ivc-av {background:color-mix(in srgb,var(--v3-accent-2) 11%,transparent);color:var(--v3-accent-2)}
 .v3fs-ivc.toreach .v3fs-ivc-av {background:var(--fs-line);color:var(--v3-text-muted)}
-.v3fs-ivc-who {flex:1}
-.v3fs-ivc-chev {flex-shrink:0;width:7px;height:7px;border-right:1.6px solid var(--v3-text-muted);border-bottom:1.6px solid var(--v3-text-muted);
+.v3fs-ivc-who {grid-area:who;min-width:0}
+.v3fs-ivc-chev {grid-area:chev;align-self:start;margin-top:5px;flex-shrink:0;width:7px;height:7px;border-right:1.6px solid var(--v3-text-muted);border-bottom:1.6px solid var(--v3-text-muted);
   transform:rotate(45deg);transition:transform .2s ease}
 .v3fs-ivc[open] .v3fs-ivc-chev {transform:rotate(225deg)}
 /* Wide card: sections sit side by side (feedback · questions · reach-out),

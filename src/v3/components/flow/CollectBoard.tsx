@@ -148,7 +148,6 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
   // card to another column and remounts it — never collapses it. Null until
   // the operator touches a card; the solo default is applied at render below.
   const [openIdsState, setOpenIdsState] = useState<Set<string> | null>(null);
-  const [allCollapsed, setAllCollapsed] = useState(false);
   // The area whose "invite everyone" is minting — disables that lane's button.
   const [inviteBusyArea, setInviteBusyArea] = useState<string | null>(null);
   // The movement-wide "invite all not-contacted" is minting.
@@ -193,11 +192,12 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
     if (open) next.add(id); else next.delete(id);
     return next;
   });
-  const toggleAll = () => {
-    const next = !allCollapsed;
-    setOpenIdsState(next ? new Set() : new Set(stakeholders.map((s) => s.id)));
-    setAllCollapsed(next);
-  };
+  // Derive the toggle from what's ACTUALLY open, not a separate flag — a roster
+  // starts fully collapsed, so a flag initialised to "not collapsed" mislabelled
+  // the button and made the first click a no-op. If anything is open, collapse
+  // all; otherwise expand all.
+  const anyOpen = stakeholders.some((s) => openIds.has(s.id));
+  const toggleAll = () => setOpenIdsState(anyOpen ? new Set() : new Set(stakeholders.map((s) => s.id)));
   // Listen · Envision · Show organize the board BY AREA once the programme spans
   // more than one — each area is a lane holding its own stakeholder cards, each
   // card carrying ONE link that bundles that person's questions and their
@@ -311,7 +311,7 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
             </button>
           ) : null}
           {stakeholders.length > 1 ? (
-            <button type="button" className="v3fs-btn quiet" onClick={toggleAll}>{allCollapsed ? "Expand all" : "Collapse all"}</button>
+            <button type="button" className="v3fs-btn quiet" onClick={toggleAll}>{anyOpen ? "Collapse all" : "Expand all"}</button>
           ) : null}
         </div>
       </div>
@@ -854,15 +854,19 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
             {(name || "?").split(/\s+/).slice(0, 2).map((word) => word[0]?.toUpperCase() ?? "").join("") || "?"}
           </span>
           <span className="v3fs-ivc-who">{name || "Stakeholder"}{role && role !== name ? <span>{role}</span> : null}</span>
-          <span className={`v3fs-ivc-st ${status}`}>{statusLabel}</span>
-          {!isRole && !email ? <span className="v3fs-ivc-noaddr" title="No email on file — open the card to add it">＋ email</span> : null}
-          {nextAction ? (
-            <button type="button" className="v3fs-ivc-next" title={`${nextAction} — opens ${first || name || "this"}'s card`}
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onOpenChange(true); }}>
-              {nextAction}<i aria-hidden="true">→</i>
-            </button>
-          ) : null}
           <span className="v3fs-ivc-chev" aria-hidden="true" />
+          {/* Status + actions on their OWN row (grid area) so they never overlap a
+              wrapped role in a narrow card. */}
+          <div className="v3fs-ivc-actions">
+            <span className={`v3fs-ivc-st ${status}`}>{statusLabel}</span>
+            {!isRole && !email ? <span className="v3fs-ivc-noaddr" title="No email on file — open the card to add it">＋ email</span> : null}
+            {nextAction ? (
+              <button type="button" className="v3fs-ivc-next" title={`${nextAction} — opens ${first || name || "this"}'s card`}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onOpenChange(true); }}>
+                {nextAction}<i aria-hidden="true">→</i>
+              </button>
+            ) : null}
+          </div>
         </summary>
         <div className="v3fs-ivc-b">
           {/* A role placeholder invites its person: bind a name (and email)
@@ -915,14 +919,15 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
               </div>
             </div>
           ) : heard && docsStale ? (
-            // Their answers are ON THE RECORD; the documents rebuild from them
-            // AUTOMATICALLY (autonomous regeneration) — no "regenerate first"
-            // prompt. A quiet "update now" stays as an option; whatever remains
+            // Their answers are ON THE RECORD, but the documents that draw on them
+            // (ontology, atlas, …) are now out of date. Auto-build is OFF by
+            // default, so nothing regenerates on its own — "Update now" is the
+            // action that rebuilds them with the new answers; whatever remains
             // open afterwards returns here as a fresh follow-up script.
             <div className="v3fs-ivc-sec">
               <div className="v3fs-ivc-sec-h">Answers on the record</div>
               <div className="v3fs-ivc-regen">
-                <p>{first}&rsquo;s answers are updating the documents automatically — anything still open returns here as a fresh script once they land.</p>
+                <p>{first}&rsquo;s answers are captured. The documents that draw on them are now out of date — <b>Update now</b> rebuilds them with what {first} said, then anything still open returns here as a fresh script.</p>
                 {onRegenerateStale ? (
                   <button type="button" className="v3fs-btn quiet" disabled={regenBusy} onClick={async () => {
                     setRegenBusy(true);
