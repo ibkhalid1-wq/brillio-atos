@@ -389,14 +389,15 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
             : blockingChecks.length
               ? { glyph: "◔", text: `${sumChecksDone}/${blockingChecks.length}`, tone: readiness.tone === "amber" ? "warn" : "dim" }
               : { glyph: "○", text: "", tone: "dim" };
-        // Order: Artifacts first, then Verify (formerly Collect). The Gate is no
-        // longer a stage — it lives in the top-right button as a modal verdict.
-        // Frame carries a third tab, the Listen plan, after Verify.
+        // Order: Artifacts first, then Discovery (the stakeholder evidence board,
+        // formerly Collect/Verify). The Gate is no longer a stage — it lives in
+        // the top-right button as a modal verdict. Frame carries a third tab, the
+        // Listen plan, after Discovery.
         const planConfirmed = String(readMovementInputs(program, "frame")._listenCoverageConfirmed ?? "").trim().length > 0;
         const planState = { glyph: planConfirmed ? "✓" : "◇", text: "", tone: planConfirmed ? "ok" : "dim" };
         const tabDefs: Array<{ key: MovementTab; label: string; state: { glyph: string; text: string; tone: string } | null; show: boolean }> = [
           { key: "paper", label: "Artifacts", state: paperState, show: artifacts.length > 0 },
-          { key: "collect", label: "Verify", state: collectState, show: true },
+          { key: "collect", label: "Discovery", state: collectState, show: true },
           ...(movement.id === "frame" ? [{ key: "plan" as MovementTab, label: "Listen plan", state: planState, show: true }] : []),
         ];
 

@@ -4684,16 +4684,33 @@ body:has(.v3fs-pack) .v3fs-appbar:focus-within {transform:none}
 .v3fs-state::before {content:"";width:7px;height:7px;border-radius:99px;background:currentColor;flex-shrink:0}
 
 /* Gate is the verdict, not a stage: a top-right button opening the modal. */
-.v3fs-gatebtn {margin-left:auto;display:inline-flex;align-items:center;gap:7px;font:inherit;font-size:12px;font-weight:600;
-  color:var(--v3-text);background:var(--v3-surface);border:1px solid var(--fs-line);border-radius:10px;padding:6px 13px;
-  cursor:pointer;transition:border-color .12s ease,box-shadow .12s ease;align-self:center}
-.v3fs-gatebtn:hover {border-color:var(--v3-accent-2);box-shadow:0 3px 10px -6px rgba(20,20,45,.3)}
+/* The Gate button — the verdict access point. A badge-style pill: a glyph, the
+   word, and a tone-tinted count chip inset on the right. It lifts on hover and,
+   when the gate is ready to record, wears a confident green so it reads as the
+   call to action. */
+.v3fs-gatebtn {margin-left:auto;align-self:center;display:inline-flex;align-items:center;gap:8px;
+  font:inherit;font-size:12px;font-weight:650;letter-spacing:.005em;color:var(--v3-text);
+  background:var(--v3-surface);border:1px solid var(--fs-line);border-radius:11px;padding:6px 7px 6px 13px;
+  cursor:pointer;box-shadow:0 1px 2px rgba(20,20,45,.05);
+  transition:transform .15s cubic-bezier(.4,0,.2,1),box-shadow .18s ease,border-color .18s ease,background .18s ease}
+.v3fs-gatebtn:hover {transform:translateY(-1px);border-color:color-mix(in srgb,var(--v3-accent-2) 32%,var(--fs-line));
+  box-shadow:0 10px 24px -12px rgba(20,20,45,.32)}
+.v3fs-gatebtn:active {transform:translateY(0);box-shadow:0 1px 2px rgba(20,20,45,.05)}
 .v3fs-gatebtn:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:2px}
-.v3fs-gatebtn.green {border-color:color-mix(in srgb,var(--v3-green) 42%,var(--fs-line))}
-.v3fs-gatebtn.amber {border-color:color-mix(in srgb,var(--v3-amber) 46%,var(--fs-line))}
 .v3fs-gatebtn-g {font-size:13px;line-height:1}
-.v3fs-gatebtn-g.ok {color:var(--v3-green)} .v3fs-gatebtn-g.warn {color:var(--v3-amber)} .v3fs-gatebtn-g.dim {color:var(--v3-text-muted)}
-.v3fs-gatebtn-n {font-size:11px;font-weight:700;color:var(--v3-text-muted);font-variant-numeric:tabular-nums}
+.v3fs-gatebtn-g.ok {color:var(--v3-green)} .v3fs-gatebtn-g.warn {color:var(--v3-amber)} .v3fs-gatebtn-g.dim {color:var(--v3-accent-2)}
+.v3fs-gatebtn-n {font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.35;
+  color:var(--v3-accent-2);background:color-mix(in srgb,var(--v3-accent-2) 11%,transparent);
+  border-radius:8px;padding:2px 8px}
+/* Amber — some criteria still open. */
+.v3fs-gatebtn.amber {border-color:color-mix(in srgb,var(--v3-amber) 34%,var(--fs-line))}
+.v3fs-gatebtn.amber .v3fs-gatebtn-n {color:var(--v3-amber);background:color-mix(in srgb,var(--v3-amber) 14%,transparent)}
+/* Green — ready to record: the button becomes the confident CTA. */
+.v3fs-gatebtn.green {border-color:color-mix(in srgb,var(--v3-green) 38%,var(--fs-line));
+  background:linear-gradient(180deg,color-mix(in srgb,var(--v3-green) 8%,var(--v3-surface)),var(--v3-surface) 70%)}
+.v3fs-gatebtn.green:hover {border-color:color-mix(in srgb,var(--v3-green) 55%,var(--fs-line));
+  box-shadow:0 10px 24px -12px color-mix(in srgb,var(--v3-green) 45%,rgba(20,20,45,.32))}
+.v3fs-gatebtn.green .v3fs-gatebtn-n {color:var(--v3-green);background:color-mix(in srgb,var(--v3-green) 15%,transparent)}
 
 /* Gate modal — the verdict ceremony, centred over a scrim. */
 .v3fs-gatemodal-scrim {position:fixed;inset:0;z-index:60;display:flex;align-items:flex-start;justify-content:center;
