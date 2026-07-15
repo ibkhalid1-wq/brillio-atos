@@ -296,6 +296,18 @@ Deno.serve(async (req: Request) => {
         architectureStrategy: isRecord(hit.inner.architectureStrategy) ? hit.inner.architectureStrategy : null,
         agenticBlueprint: isRecord(hit.inner.agenticBlueprint) ? hit.inner.agenticBlueprint : null,
       } : undefined;
+      // The recipient's REAL role (from the kit roster, self included) — lets the
+      // client compute their primary AREA from the live artifacts and scope the
+      // workflows/ontology/questions to it, even for packs with no stored area.
+      const recipientRole = isReviewPack
+        ? ((kitRecord && Array.isArray(kitRecord.interviews) ? kitRecord.interviews : [])
+            .filter(isRecord)
+            .map((iv) => ({
+              name: String(iv.stakeholder ?? "").replace(/\s*[—–−‑-]\s*TBC\s*$/i, "").trim().toLowerCase(),
+              role: String(iv.role ?? "").trim(),
+            }))
+            .find((p) => p.name && (p.name === selfKey || p.name.split(/\s+/)[0] === selfKey.split(/\s+/)[0]))?.role ?? "")
+        : "";
       return jsonResponse({
         kind: "interview",
         programme: hit.programName,
@@ -315,6 +327,7 @@ Deno.serve(async (req: Request) => {
           reviewKind: String(hit.pack.reviewKind ?? "").trim() || String(hit.pack.role ?? "").replace(/^review:/, ""),
           movementId: String(hit.pack.movementId ?? ""),
           ...(typeof hit.pack.recipientArea === "string" ? { recipientArea: hit.pack.recipientArea } : {}),
+          ...(recipientRole ? { recipientRole } : {}),
           liveArtifacts,
         } : {}),
         // A shareable review surface projected at mint — the FALLBACK when live

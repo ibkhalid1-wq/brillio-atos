@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ScreenCard } from "@/v3/components/flow/studio/ExperienceDesignStudio";
 import FlowReviewSurface from "@/v3/components/flow/FlowReviewSurface";
 import { projectStakeholderReview, type ReviewPayload } from "@/v3/components/flow/flowReviews";
+import { stakeholderPrimaryArea } from "@/v3/components/flow/flowAreas";
 import type { ProgramSummary } from "@/new/types";
 import { DictationButton, joinDictation } from "@/v3/components/flow/FlowDictation";
 
@@ -57,6 +58,9 @@ interface Pack {
   reviewKind?: string;
   movementId?: string;
   liveArtifacts?: Record<string, unknown>;
+  /** The recipient's real role — with their name, lets the page compute their
+   * primary AREA from the live artifacts to scope the review to their world. */
+  recipientRole?: string;
 }
 
 /** Rebuild the review from the CURRENT artifacts the edge shipped, so a link
@@ -67,8 +71,14 @@ function reprojectFromPack(pack: Pack): ReviewPayload | null {
   // Only the kinds projectStakeholderReview produces can be rebuilt live.
   if (pack.reviewKind !== "listen-workflow" && pack.reviewKind !== "agentify") return null;
   const program = { rawData: { data: pack.liveArtifacts } } as unknown as ProgramSummary;
+  // Scope to the recipient's AREA: prefer the value stored on the pack, else
+  // compute it from the live artifacts (atlas workflows + ontology entities) the
+  // same way the collect board does, so the link's workflows/ontology/questions
+  // narrow to their world even when no area was stamped at mint.
+  const area = (pack.recipientArea && pack.recipientArea.trim())
+    || stakeholderPrimaryArea(program, pack.stakeholder, pack.recipientRole);
   let fresh: ReviewPayload | null = null;
-  try { fresh = projectStakeholderReview(program, pack.movementId, pack.stakeholder, pack.recipientArea, []); }
+  try { fresh = projectStakeholderReview(program, pack.movementId, pack.stakeholder, area, []); }
   catch { return null; }
   if (!fresh) return null;
   // Keep the person's own question list (their gap script, minted once) — only
