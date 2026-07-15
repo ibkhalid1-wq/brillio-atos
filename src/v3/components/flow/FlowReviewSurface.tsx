@@ -69,8 +69,10 @@ function AreaChips({ areas, active, onPick }: { areas: string[]; active: string;
 /** The linked page's opening: a subtle Brillio·ATOS mark, the programme name,
  * a warm greeting, a one-line "what we're building + why", then plainly what we
  * need from this person and how to respond. Shared by every review surface. */
-function ReviewHeader({ stakeholder, programme, objective, intro }: {
+function ReviewHeader({ stakeholder, programme, objective, intro, areaLabel }: {
   stakeholder: string; programme?: string; objective?: string; intro: string;
+  /** The area(s) this review covers — a stakeholder can own more than one. */
+  areaLabel?: string;
 }) {
   const first = stakeholder ? stakeholder.split(/\s+/)[0] : "";
   // Just the core goal for the opener — drop measurement/timeline clauses (they
@@ -86,6 +88,7 @@ function ReviewHeader({ stakeholder, programme, objective, intro }: {
         We&rsquo;re building <b>{programme || "this programme"}</b> — an agentic solution{coreGoal ? <> built to {coreGoal.charAt(0).toLowerCase() + coreGoal.slice(1)}</> : ""}.
       </p>
       {intro ? <p className="v3fs-rvw-sub">{intro}</p> : null}
+      {areaLabel ? <p className="v3fs-rvw-scoped"><b>This covers {areaLabel}</b> — the workflows and terms in your world.</p> : null}
       <div className="v3fs-rvw-ask">
         <span className="lbl">What we need from you</span>
         Walk your workflow and the terms below — <b>confirm what&rsquo;s right, fix what&rsquo;s not, add what we missed</b>. Type or talk; it saves as you go, and nothing is final until the team reviews it.
@@ -108,6 +111,22 @@ function coveredByModel(q: string): boolean {
     || (/\bmap (out|the)\b/.test(s) && /\b(process|workflow|flow|cycle)\b/.test(s));
 }
 
+/** The area(s) a review covers — from its workflows/terms plus the recipient's
+ * stamped area — as a readable list, since a stakeholder can own more than one
+ * ("Sales", "Sales and Marketing", "Sales, Marketing, and Delivery"). */
+function coverageLabel(review: ReviewPayload): string {
+  const set = new Set<string>();
+  const wf = (review as { workflows?: Array<{ area?: string }> }).workflows;
+  const tm = (review as { terms?: Array<{ area?: string }> }).terms;
+  wf?.forEach((w) => w.area && set.add(w.area));
+  tm?.forEach((t) => t.area && set.add(t.area));
+  if (review.recipientArea) set.add(review.recipientArea);
+  const arr = [...set].sort((a, b) => (a === "General" ? 1 : b === "General" ? -1 : a.localeCompare(b)));
+  if (arr.length <= 1) return arr[0] ?? "";
+  if (arr.length === 2) return `${arr[0]} and ${arr[1]}`;
+  return `${arr.slice(0, -1).join(", ")}, and ${arr[arr.length - 1]}`;
+}
+
 function AgentifySurface({ review, stakeholder, programme, objective, submitting, error, onSubmit, draftKey }: {
   review: AgentifyReview; stakeholder: string; programme?: string; objective?: string; submitting: boolean; error: string | null;
   onSubmit: (answers: string) => void; draftKey?: string;
@@ -127,7 +146,7 @@ function AgentifySurface({ review, stakeholder, programme, objective, submitting
 
   return (
     <>
-      <ReviewHeader stakeholder={stakeholder} programme={programme} objective={objective} intro={review.intro} />
+      <ReviewHeader stakeholder={stakeholder} programme={programme} objective={objective} intro={review.intro} areaLabel={coverageLabel(review)} />
       <AreaChips areas={areas} active={area} onPick={setArea} />
       <div className="v3fs-rvw">
         {review.workflows.map((workflow, wi) => area && hasArea(review.workflows, area) && workflow.area !== area ? null : (
@@ -263,7 +282,7 @@ function OntologyAtlasSurface({ review, stakeholder, programme, objective, submi
 
   return (
     <>
-      <ReviewHeader stakeholder={stakeholder} programme={programme} objective={objective} intro={review.intro} />
+      <ReviewHeader stakeholder={stakeholder} programme={programme} objective={objective} intro={review.intro} areaLabel={coverageLabel(review)} />
       <AreaChips areas={areas} active={area} onPick={setArea} />
       <div className="v3fs-rvw">
         {shownTerms.length ? (
@@ -425,7 +444,7 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
 
   return (
     <>
-      <ReviewHeader stakeholder={stakeholder} programme={programme} objective={objective} intro={review.intro} />
+      <ReviewHeader stakeholder={stakeholder} programme={programme} objective={objective} intro={review.intro} areaLabel={coverageLabel(review)} />
       <AreaChips areas={areas} active={area} onPick={setArea} />
       <div className="v3fs-rvw">
         <div className="v3fs-rvw-section-h"><span className="v3fs-rvw-step-ic" aria-hidden="true">⇄</span>Your workflow — fix it, add steps, or mark what doesn&rsquo;t happen</div>
