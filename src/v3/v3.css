@@ -7102,53 +7102,44 @@ details[open] > summary .v3fs-disc-c::after {display:none}
   transition:background .12s,border-color .12s}
 .v3fs-addterm-add:hover {background:color-mix(in srgb,var(--v3-green) 8%,transparent);border-color:var(--v3-green)}
 
-/* ── Ontology MAP — a node-link diagram of the domain's terms ────────────────── */
-/* Consistent with the domain-ontology artifact graph: a bg-toned canvas with
-   fs-card nodes, matching border weights and lift-on-select. The area-hue left
-   accent is kept — on the area-scoped link it signals the recipient's world. */
-.v3fs-omap {border:1px solid var(--fs-line);border-radius:16px;background:var(--v3-surface);box-shadow:var(--fs-shadow);overflow:hidden}
-.v3fs-omap-scroll {overflow:auto;max-height:min(68vh,560px);padding:14px;background:var(--v3-bg);border-bottom:1px solid var(--fs-line);-webkit-overflow-scrolling:touch}
-.v3fs-omap-canvas {position:relative;overflow:visible}
-.v3fs-omap-edges {position:absolute;inset:0;overflow:visible;pointer-events:none}
-.v3fs-omap-edge path {stroke:color-mix(in srgb,var(--v3-text-muted) 38%,transparent);stroke-width:1.5;transition:stroke .15s,stroke-width .15s}
-.v3fs-omap-edge.on path {stroke:var(--v3-accent-2);stroke-width:2.2}
-.v3fs-omap-arrowhead {fill:color-mix(in srgb,var(--v3-text-muted) 50%,transparent)}
-.v3fs-omap-edge.on .v3fs-omap-arrowhead {fill:var(--v3-accent-2)}
-/* Relationship labels ride ON the connector between cards (never under them),
-   muted by default and lifting to the accent when either endpoint is selected. */
-.v3fs-omap-edgelabel-bg {fill:var(--fs-card);stroke:color-mix(in srgb,var(--v3-text-muted) 26%,transparent);stroke-width:.75;opacity:.97;transition:stroke .15s}
-.v3fs-omap-edge.on .v3fs-omap-edgelabel-bg {stroke:var(--v3-accent-2)}
-.v3fs-omap-edgelabel {fill:var(--v3-text-secondary);font-size:9.5px;font-weight:650;letter-spacing:.01em;transition:fill .15s}
-.v3fs-omap-edge.on .v3fs-omap-edgelabel {fill:var(--v3-accent-2);font-weight:700}
-.v3fs-omap-node {position:absolute;display:flex;flex-direction:column;gap:3px;text-align:left;padding:9px 11px;
-  border:1.5px solid var(--fs-line);border-left:3.5px solid hsl(var(--hue,230) 55% 52%);border-radius:11px;
-  background:var(--fs-card);cursor:pointer;overflow:hidden;transition:transform .12s,box-shadow .12s,border-color .12s;box-shadow:0 1px 2px rgba(15,23,42,.05)}
-.v3fs-omap-node:hover {transform:translateY(-2px);box-shadow:var(--fs-lift)}
-.v3fs-omap-node.on {border-color:var(--v3-accent-2);box-shadow:var(--fs-lift)}
-.v3fs-omap-node b {font-size:12.5px;font-weight:700;color:var(--v3-text);line-height:1.2}
-.v3fs-omap-node em {font-size:10.5px;font-style:normal;color:var(--v3-text-muted);line-height:1.35;overflow:hidden;
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-.v3fs-omap-sor {font-family:var(--v3-font-mono);font-size:8.5px;font-weight:700;color:hsl(var(--hue,230) 45% 45%);line-height:1.3;
-  background:hsl(var(--hue,230) 60% 58% / .12);border-radius:9px;padding:2px 7px;align-self:flex-start;max-width:100%;
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.v3fs-omap-sor-full {font-family:var(--v3-font-mono);font-size:11px !important;color:var(--v3-text-secondary) !important;line-height:1.45}
-.v3fs-omap-sor-full span {font-family:var(--v3-font-sans,inherit);font-size:9.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--v3-text-muted);margin-right:6px}
-.v3fs-omap-node.flagged {border-left-color:var(--v3-amber)}
-.v3fs-omap-flag {position:absolute;top:6px;right:7px;font-size:10px;color:var(--v3-amber)}
-.v3fs-omap-detail {border-top:1px solid var(--fs-line);padding:13px 16px;min-height:64px;display:flex;flex-direction:column;gap:7px;
-  background:color-mix(in srgb,var(--v3-accent-2) 3%,transparent)}
-.v3fs-omap-detail-h {display:flex;align-items:baseline;gap:9px}
-.v3fs-omap-detail-h b {font-size:14px;font-weight:750}
-.v3fs-omap-area {font-size:10px;font-weight:700;color:var(--v3-accent-2);background:var(--fs-indigo-wash);border-radius:99px;padding:2px 8px}
-.v3fs-omap-detail p {margin:0;font-size:12.5px;line-height:1.5;color:var(--v3-text-secondary)}
-.v3fs-omap-aka {font-style:italic;color:var(--v3-text-muted) !important;font-size:11px !important}
-.v3fs-omap-hint {margin:0;font-size:12px;color:var(--v3-text-muted);font-style:italic}
+/* ── Ontology LIST — readable term cards for the linked review page ──────────── */
+/* A flowing, responsive grid of full-content cards. Replaces the earlier
+   fixed-grid node-link map: on the narrow linked page that map clipped long
+   definitions and let its SVG edge labels overlap the cards. Here every term
+   shows its full definition, system of record, and relationships as inline
+   text; the area-hue left accent still signals the recipient's world. */
+.v3fs-olist {display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:13px;align-items:start}
+.v3fs-olist-card {display:flex;flex-direction:column;border:1px solid var(--fs-line);
+  border-left:4px solid hsl(var(--hue,230) 55% 52%);border-radius:14px;background:var(--fs-card);
+  box-shadow:0 1px 2px rgba(15,23,42,.05);overflow:hidden;transition:box-shadow .14s,border-color .14s}
+.v3fs-olist-card.on {border-color:var(--v3-accent-2);box-shadow:var(--fs-lift)}
+.v3fs-olist-card.flagged {border-left-color:var(--v3-amber)}
+.v3fs-olist-body {display:flex;flex-direction:column;gap:8px;align-items:stretch;text-align:left;width:100%;
+  padding:14px 15px 12px;background:none;border:none;cursor:pointer;font:inherit;color:inherit}
+.v3fs-olist-body:hover {background:color-mix(in srgb,var(--fs-indigo-wash) 55%,transparent)}
+.v3fs-olist-h {display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
+.v3fs-olist-h b {font-size:15px;font-weight:750;color:var(--v3-text);line-height:1.25}
+.v3fs-olist-area {font-size:9.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;
+  color:hsl(var(--hue,230) 45% 42%);background:hsl(var(--hue,230) 60% 58% / .14);border-radius:99px;padding:2px 9px}
+.v3fs-olist-flag {margin-left:auto;font-size:12px;color:var(--v3-amber)}
+.v3fs-olist-sor {font-family:var(--v3-font-mono);font-size:10px;font-weight:700;line-height:1.45;
+  color:hsl(var(--hue,230) 45% 45%);background:hsl(var(--hue,230) 60% 58% / .12);border-radius:8px;
+  padding:3px 9px;align-self:flex-start;max-width:100%}
+.v3fs-olist-def {font-size:12.5px;line-height:1.5;color:var(--v3-text-secondary)}
+.v3fs-olist-aka {font-size:11px;font-style:italic;color:var(--v3-text-muted)}
+.v3fs-olist-rels {display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+.v3fs-olist-rel {font-size:10.5px;line-height:1.35;color:var(--v3-text-secondary);background:var(--v3-bg);
+  border:1px solid var(--fs-line);border-radius:99px;padding:3px 9px}
+.v3fs-olist-rel em {font-style:normal;font-weight:700;color:var(--v3-accent-2)}
+.v3fs-olist-flagbtn {align-self:flex-start;margin:0 15px 12px;font:inherit;font-size:11px;font-weight:650;
+  color:var(--v3-text-muted);background:none;border:none;cursor:pointer;padding:0;transition:color .12s}
+.v3fs-olist-flagbtn:hover {color:var(--v3-accent-2)}
+.v3fs-olist-note {padding:0 15px 14px}
 .v3fs-omap-comment {width:100%;font-size:13px;font-family:inherit;border:1px solid var(--fs-line);border-radius:9px;padding:9px 12px;
   background:var(--v3-surface);color:var(--v3-text);margin-top:2px}
 .v3fs-omap-comment:focus {outline:none;border-color:var(--v3-accent-2);box-shadow:0 0 0 3px color-mix(in srgb,var(--v3-accent-2) 14%,transparent)}
 @media (prefers-reduced-motion:reduce){
-  .v3fs-omap-node,.v3fs-vflow-insert,.v3fs-omap-edge path {transition:none}
-  .v3fs-omap-node:hover {transform:none}
+  .v3fs-olist-card,.v3fs-olist-body,.v3fs-olist-flagbtn,.v3fs-vflow-insert {transition:none}
 }
 
 /* Listen workflow EDITOR — add/edit/remove steps with a live proposal preview. */

@@ -121,8 +121,13 @@ export function WorkflowFlow({ name, trigger, steps, onEdit, onEditMeta, onToggl
   );
 }
 
-/** The ontology as a node-link map. Deterministic grid layout; SVG curves for
- * relations; select a node to read and flag it. */
+/** The ontology as a readable, responsive set of term cards. Each card carries
+ * the term, its system of record, the FULL definition, and the relationships it
+ * takes part in (rendered as inline text, not overlapping SVG labels); tap a
+ * card to flag it and leave a note. Replaces the earlier fixed-grid node-link
+ * map — on the narrow linked page that map clipped long definitions and let its
+ * edge labels overlap the cards, so it "did not show clearly". A flowing card
+ * list reads cleanly at any width, never truncates, and scrolls with the page. */
 export function OntologyMap({ terms, relations, comments, onComment }: {
   terms: OntologyTerm[];
   relations: OntologyRelation[];
@@ -132,106 +137,68 @@ export function OntologyMap({ terms, relations, comments, onComment }: {
   const [selected, setSelected] = useState<number | null>(null);
   if (!terms.length) return null;
 
-  const cols = Math.min(4, Math.max(2, Math.ceil(Math.sqrt(terms.length))));
-  const rows = Math.ceil(terms.length / cols);
-  // Taller cells than the earlier 118px: a term with a long system-of-record
-  // (e.g. "Reference Catalog (current: SharePoint/Excel, target: new CRM)")
-  // pushed the definition past the old fixed height and clipped it mid-word. The
-  // extra room + the clamps in CSS keep both the SoR chip and the 2-line
-  // definition visible; the full text still lives in the detail panel on tap.
-  const CELL_W = 176, CELL_H = 140, PAD = 12;
-  const W = cols * CELL_W, H = rows * CELL_H;
-  const pos = (i: number) => ({ col: i % cols, row: Math.floor(i / cols) });
-  const center = (i: number) => { const { col, row } = pos(i); return { x: col * CELL_W + CELL_W / 2, y: row * CELL_H + CELL_H / 2 }; };
-  const indexOf = (name: string) => terms.findIndex((t) => t.name.trim().toLowerCase() === name.trim().toLowerCase());
-  const commented = new Set(Object.entries(comments).filter(([, v]) => v.trim()).map(([k]) => Number(k)));
-  // Route each relation BORDER to BORDER (plus a small gap) instead of centre to
-  // centre, so the line only spans the space BETWEEN two cards and never runs
-  // hidden underneath them. Clip the centre-to-centre ray to the node's rect.
-  const HW = (CELL_W - PAD) / 2, HH = (CELL_H - PAD) / 2, GAP = 7;
-  const borderPoint = (i: number, toward: { x: number; y: number }) => {
-    const c = center(i);
-    const dx = toward.x - c.x, dy = toward.y - c.y;
-    const len = Math.hypot(dx, dy) || 1;
-    const tx = dx !== 0 ? HW / Math.abs(dx) : Infinity;
-    const ty = dy !== 0 ? HH / Math.abs(dy) : Infinity;
-    const t = Math.min(tx, ty);
-    return { x: c.x + dx * t + (dx / len) * GAP, y: c.y + dy * t + (dy / len) * GAP };
+  const norm = (s: string) => s.trim().toLowerCase();
+  // Every relation this term takes part in, phrased FROM the term outward so it
+  // reads as a sentence: outgoing keeps the verb ("owns → Contact"), incoming
+  // flips to the passive so direction stays honest ("Account owns →").
+  const relsFor = (name: string): Array<{ label: string; other: string; incoming: boolean }> => {
+    const out: Array<{ label: string; other: string; incoming: boolean }> = [];
+    for (const rel of relations) {
+      if (!rel.relation) continue;
+      if (norm(rel.from) === norm(name) && rel.to) out.push({ label: rel.relation, other: rel.to, incoming: false });
+      else if (norm(rel.to) === norm(name) && rel.from) out.push({ label: rel.relation, other: rel.from, incoming: true });
+    }
+    return out;
   };
+  const commented = new Set(Object.entries(comments).filter(([, v]) => v.trim()).map(([k]) => Number(k)));
 
   return (
-    <div className="v3fs-omap">
-      <div className="v3fs-omap-scroll">
-      <div className="v3fs-omap-canvas" style={{ width: W, height: H }}>
-        <svg className="v3fs-omap-edges" viewBox={`0 0 ${W} ${H}`} width={W} height={H} aria-hidden="true">
-          <defs>
-            <marker id="omap-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-              <path d="M0,0 L10,5 L0,10 z" className="v3fs-omap-arrowhead" />
-            </marker>
-          </defs>
-          {relations.map((rel, ri) => {
-            const a = indexOf(rel.from), b = indexOf(rel.to);
-            if (a < 0 || b < 0 || a === b) return null;
-            const ca = center(a), cb = center(b);
-            const s = borderPoint(a, cb), e = borderPoint(b, ca);
-            const active = selected === a || selected === b;
-            // A gentle perpendicular bow so parallel relations don't overlap and
-            // the line reads as a considered connector, not a raw diagonal.
-            const dx = e.x - s.x, dy = e.y - s.y, len = Math.hypot(dx, dy) || 1;
-            const bow = Math.min(18, len * 0.16);
-            const mx = (s.x + e.x) / 2 - (dy / len) * bow, my = (s.y + e.y) / 2 + (dx / len) * bow;
-            return (
-              <g key={ri} className={`v3fs-omap-edge${active ? " on" : ""}`}>
-                <path d={`M ${s.x} ${s.y} Q ${mx} ${my} ${e.x} ${e.y}`} fill="none" markerEnd="url(#omap-arrow)" />
-                {rel.relation ? (
-                  <>
-                    <rect x={mx - rel.relation.length * 3.1 - 6} y={my - 9} width={rel.relation.length * 6.2 + 12} height={17} rx={8.5} className="v3fs-omap-edgelabel-bg" />
-                    <text x={mx} y={my + 3.5} textAnchor="middle" className="v3fs-omap-edgelabel">{rel.relation}</text>
-                  </>
-                ) : null}
-              </g>
-            );
-          })}
-        </svg>
-        {terms.map((term, i) => {
-          const { col, row } = pos(i);
-          return (
-            <button key={i} type="button"
-              className={`v3fs-omap-node${selected === i ? " on" : ""}${commented.has(i) ? " flagged" : ""}`}
-              style={{ left: col * CELL_W + PAD / 2, top: row * CELL_H + PAD / 2, width: CELL_W - PAD, height: CELL_H - PAD, ["--hue" as string]: areaHue(term.area) }}
-              onClick={() => setSelected((cur) => (cur === i ? null : i))}
-              title={term.definition || term.name}>
-              <b>{term.name}</b>
-              {term.systemOfRecord ? <span className="v3fs-omap-sor">{term.systemOfRecord}</span> : null}
-              {term.definition ? <em>{term.definition}</em> : null}
-              {commented.has(i) ? <span className="v3fs-omap-flag" aria-hidden="true">✎</span> : null}
+    <div className="v3fs-olist">
+      {terms.map((term, i) => {
+        const rels = relsFor(term.name);
+        const isSel = selected === i;
+        const isFlagged = commented.has(i);
+        return (
+          <div key={i} className={`v3fs-olist-card${isSel ? " on" : ""}${isFlagged ? " flagged" : ""}`}
+            style={{ ["--hue" as string]: areaHue(term.area) }}>
+            <button type="button" className="v3fs-olist-body" aria-expanded={isSel}
+              onClick={() => setSelected((cur) => (cur === i ? null : i))}>
+              <span className="v3fs-olist-h">
+                <b>{term.name}</b>
+                {term.area ? <span className="v3fs-olist-area">{term.area}</span> : null}
+                {isFlagged ? <span className="v3fs-olist-flag" aria-hidden="true">✎</span> : null}
+              </span>
+              {term.systemOfRecord ? <span className="v3fs-olist-sor">{term.systemOfRecord}</span> : null}
+              {term.definition ? <span className="v3fs-olist-def">{term.definition}</span> : null}
+              {term.aliases && term.aliases.length ? <span className="v3fs-olist-aka">also called: {term.aliases.join(", ")}</span> : null}
+              {rels.length ? (
+                <span className="v3fs-olist-rels">
+                  {rels.map((r, ri) => (
+                    <span key={ri} className="v3fs-olist-rel">
+                      {r.incoming ? <>{r.other} <em>{r.label}</em> ↦</> : <><em>{r.label}</em> ↦ {r.other}</>}
+                    </span>
+                  ))}
+                </span>
+              ) : null}
             </button>
-          );
-        })}
-      </div>
-      </div>
-      <div className="v3fs-omap-detail">
-        {selected != null && terms[selected] ? (
-          <>
-            <div className="v3fs-omap-detail-h">
-              <b>{terms[selected].name}</b>
-              {terms[selected].area ? <span className="v3fs-omap-area">{terms[selected].area}</span> : null}
-            </div>
-            {terms[selected].definition ? <p>{terms[selected].definition}</p> : null}
-            {terms[selected].systemOfRecord ? <p className="v3fs-omap-sor-full"><span>System of record</span> {terms[selected].systemOfRecord}</p> : null}
-            {terms[selected].aliases && terms[selected].aliases!.length ? <p className="v3fs-omap-aka">also called: {terms[selected].aliases!.join(", ")}</p> : null}
-            <div className="v3fs-rvw-field">
-              <input className="v3fs-omap-comment" value={comments[String(selected)] ?? ""}
-                onChange={(e) => onComment(selected, e.target.value)}
-                placeholder="Wrong, missing, or named differently? (optional)" autoFocus />
-              <DictationButton compact label="Speak this note"
-                onText={(spoken) => onComment(selected, joinDictation(comments[String(selected)] ?? "", spoken))} />
-            </div>
-          </>
-        ) : (
-          <p className="v3fs-omap-hint">Tap a term to read it and tell us if it&rsquo;s wrong or missing. Lines show how they connect.</p>
-        )}
-      </div>
+            {isSel ? (
+              <div className="v3fs-olist-note">
+                <div className="v3fs-rvw-field">
+                  <input className="v3fs-omap-comment" value={comments[String(i)] ?? ""}
+                    onChange={(e) => onComment(i, e.target.value)}
+                    placeholder="Wrong, missing, or named differently? (optional)" autoFocus />
+                  <DictationButton compact label="Speak this note"
+                    onText={(spoken) => onComment(i, joinDictation(comments[String(i)] ?? "", spoken))} />
+                </div>
+              </div>
+            ) : (
+              <button type="button" className="v3fs-olist-flagbtn" onClick={() => setSelected(i)}>
+                {isFlagged ? "Edit note" : "Flag or add a note"}
+              </button>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
