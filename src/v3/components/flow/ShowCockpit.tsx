@@ -86,12 +86,13 @@ export default function ShowCockpit({ program, onRunAgent }: {
 
       {/* ── VALIDATION ────────────────────────────────────────────────────── */}
       <section className="v3fs-envc-act">
-        <div className="v3fs-envc-ah"><span className="v3fs-envc-an">✓</span>Validation — every stakeholder&rsquo;s verdict</div>
-        {coverage.length > 1 ? (
+        <div className="v3fs-envc-ah"><span className="v3fs-envc-an">✓</span>Validation — each area signs off on its own</div>
+        {ls.areas.length > 1 ? (
           <div className="v3fs-showc-areas">
-            {coverage.map((r) => (
-              <span key={r.area} className={`v3fs-showc-area${r.validated && !r.waiting ? " ok" : r.validated ? " part" : " open"}`} title={`${r.validated} validated · ${r.waiting} waiting`}>
-                <b>{r.area}</b> {r.validated ? `✓${r.validated}` : ""}{r.waiting ? ` · ${r.waiting}◷` : ""}
+            {ls.areas.map((a) => (
+              <span key={a.area} className={`v3fs-showc-area${a.converged ? " ok" : a.objections ? " obj" : a.pending < a.total ? " part" : " open"}`}
+                title={`${a.accepted} accepted · ${a.changes} changes · ${a.objections} objection · ${a.pending} pending`}>
+                <b>{a.area}</b> {a.converged ? "✓ signed off" : `${a.accepted}/${a.total}${a.objections ? ` · ${a.objections}⚠` : a.pending ? ` · ${a.pending}◷` : ""}`}
               </span>
             ))}
           </div>

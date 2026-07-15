@@ -12,7 +12,7 @@ import { getMethodology, getPhaseDefinition, type PhaseDefinition } from "@/v3/l
 import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
 import { getFormalArtifactContent, getFormalArtifactConfidence, FORMAL_ARTIFACT_FIELD_KEYS } from "@/v3/lib/formalArtifacts";
 import { listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
-import { listFlowTracks, trackAcceptance } from "@/v3/components/flow/flowTracks";
+import { stakeholderPrimaryArea, GENERAL_AREA } from "@/v3/components/flow/flowAreas";
 
 /**
  * Find a quoted claim inside a source transcript, tolerantly: curly quotes
@@ -856,27 +856,36 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
     );
   } else if (movement.id === "show") {
     const tour = demoAcceptance(program);
-    // The loop CONVERGES on sponsor + majority: the sponsor accepts and a
-    // majority of voices accept. Open objections are LOGGED, not blocking — the
-    // team keeps iterating on them, but they don't hold the gate. Every voice
-    // heard still watches their workflow run.
+    // The loop converges PER AREA: every area signs off (a majority of its own
+    // voices accept, none left pending) AND the sponsor accepts. No area can be
+    // shipped over its objection; lone objections inside an accepted area are
+    // LOGGED, not blocking. Areas iterate in parallel, so this replaces both the
+    // flat global majority and the old every-track item (which contradicted it).
     const isStrict = (v?: string) => !!v && /accepted/i.test(v) && !/with changes/i.test(v);
-    const strictAccepted = tour.rows.filter((r) => isStrict(r.verdict)).length;
-    const majority = tour.total > 0 && strictAccepted * 2 >= tour.total;
     const sponsorName = String(readMovementInputs(program, "frame").sponsor ?? "").trim().toLowerCase();
     const sponsorRow = sponsorName ? tour.rows.find((r) => (r.stakeholder ?? "").trim().toLowerCase() === sponsorName) : undefined;
     const sponsorAccepted = sponsorRow ? isStrict(sponsorRow.verdict) : false;
-    const converged = tour.total > 0 && sponsorAccepted && majority;
     const objections = tour.rows.filter((r) => /objection/i.test(r.verdict ?? "")).length;
+    // Per-area rollup of the demo verdicts.
+    const areaAgg = new Map<string, { total: number; accepted: number; pending: number }>();
+    for (const r of tour.rows) {
+      const area = stakeholderPrimaryArea(program, String(r.stakeholder ?? "").trim()) || GENERAL_AREA;
+      const b = areaAgg.get(area) ?? { total: 0, accepted: 0, pending: 0 };
+      b.total += 1;
+      if (isStrict(r.verdict)) b.accepted += 1;
+      else if (!r.verdict || /pending/i.test(r.verdict)) b.pending += 1;
+      areaAgg.set(area, b);
+    }
+    const areaList = [...areaAgg.entries()].map(([area, b]) => ({ area, ok: b.total > 0 && b.pending === 0 && b.accepted * 2 >= b.total }));
+    const openAreas = areaList.filter((a) => !a.ok).map((a) => a.area);
+    const areasOk = areaList.length - openAreas.length;
+    const converged = areaList.length > 0 && openAreas.length === 0 && sponsorAccepted;
     const heard = parseGridRows(readMovementInputs(program, "listen").interviewRoster)
       .filter((row) => /heard/i.test(row.status ?? ""))
       .map((row) => String(row.name ?? "").trim())
       .filter(Boolean);
     const toured = new Set(tour.rows.map((row) => (row.stakeholder ?? "").trim().toLowerCase()));
     const missingVoices = heard.filter((name) => !toured.has(name.toLowerCase()));
-    const tracks = listFlowTracks(program);
-    const acceptedTracks = tracks.filter((track) => trackAcceptance(track).accepted);
-    const pendingTracks = tracks.filter((track) => !trackAcceptance(track).accepted);
     items.push(
       { id: "proto", label: "Prototype running somewhere named", done: has("prototypeLocation"), anchor: "input:prototypeLocation", why: whyFromValue(inputs.prototypeLocation) },
       {
@@ -890,25 +899,15 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
       },
       {
         id: "verdicts",
-        label: tour.total ? `Sponsor + majority approved (${strictAccepted}/${tour.total})` : "Sponsor + majority approved",
+        label: areaList.length ? `Every area approved + sponsor (${areasOk}/${areaList.length} areas)` : "Every area approved + sponsor",
         done: converged,
         anchor: "input:demoTour",
-        why: converged
-          ? `sponsor accepted + majority accepted${objections ? ` · ${objections} objection${objections === 1 ? "" : "s"} logged` : ""}`
-          : !sponsorAccepted ? "the sponsor's verdict isn't Accepted yet"
-            : `need a majority accepted — ${strictAccepted}/${tour.total}`,
+        why: !areaList.length ? undefined
+          : openAreas.length ? `still open: ${openAreas.slice(0, 2).join(", ")}${openAreas.length > 2 ? "…" : ""}`
+            : !sponsorAccepted ? "every area signed off — the sponsor's verdict is next"
+              : `every area signed off${objections ? ` · ${objections} objection${objections === 1 ? "" : "s"} logged` : ""}`,
       },
     );
-    if (tracks.length) {
-      items.push({
-        id: "tracks-accepted",
-        label: `Every track accepted (${acceptedTracks.length}/${tracks.length})`,
-        done: pendingTracks.length === 0,
-        why: pendingTracks.length
-          ? `still converging: ${pendingTracks.slice(0, 2).map((track) => track.name).join(", ")}${pendingTracks.length > 2 ? "…" : ""}`
-          : `all ${tracks.length} converged — two accepted passes or accepted-over-stable`,
-      });
-    }
   } else if (movement.id === "ship") {
     const lanesDoc = inner.shipLanes;
     const lanes = lanesDoc && typeof lanesDoc === "object" && Array.isArray((lanesDoc as Record<string, unknown>).lanes)

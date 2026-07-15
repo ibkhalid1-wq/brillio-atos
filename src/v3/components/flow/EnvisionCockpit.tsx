@@ -91,15 +91,22 @@ export default function EnvisionCockpit({ program, onSaveInputs, onRunAgent }: {
             <span className="v3fs-envc-inc-t">◀ Incoming from Show — {incoming.length} change{incoming.length === 1 ? "" : "s"} to fold in</span>
             <span className="v3fs-envc-inc-round">iteration {ls.round}</span>
           </div>
-          <ul className="v3fs-envc-inc-list">
-            {incoming.map((cr, i) => (
-              <li key={i} className={`v3fs-envc-inc-cr${cr.blocking ? " block" : ""}`}>
-                <b>{cr.stakeholder}</b>
-                <em>{cr.blocking ? "objection" : "change"}</em>
-                {cr.ask ? <span>{cr.ask}</span> : <span className="v3fs-envc-inc-noask">asked for a change — see their demo row</span>}
-              </li>
-            ))}
-          </ul>
+          {/* Grouped by area — parallel areas route their changes to their own
+              workspace slice, so the team can address one area without the others. */}
+          {[...new Set(incoming.map((c) => c.area))].map((area) => (
+            <div key={area} className="v3fs-envc-inc-area">
+              <div className="v3fs-envc-inc-al">{area}<em>{incoming.filter((c) => c.area === area).length}</em></div>
+              <ul className="v3fs-envc-inc-list">
+                {incoming.filter((c) => c.area === area).map((cr, i) => (
+                  <li key={i} className={`v3fs-envc-inc-cr${cr.blocking ? " block" : ""}`}>
+                    <b>{cr.stakeholder}</b>
+                    <em>{cr.blocking ? "objection" : "change"}</em>
+                    {cr.ask ? <span>{cr.ask}</span> : <span className="v3fs-envc-inc-noask">asked for a change — see their demo row</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
           {onSaveInputs ? (
             <button type="button" className="v3fs-btn pri v3fs-envc-inc-go" disabled={iterating} onClick={() => void newIteration()}>
               {iterating ? "Starting…" : `▶ Address & rebuild — start iteration ${ls.round + 1}`}

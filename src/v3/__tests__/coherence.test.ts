@@ -107,22 +107,35 @@ describe("Listen → Show approval chain", () => {
     expect(row.why).toContain("Priya Nair");
   });
 
-  it("the Show gate counts track convergence when tracks exist", () => {
+  it("the Show gate holds while any area (or the sponsor) is still pending", () => {
     const p = programme({
-      tracks: [
-        { id: "t1", name: "Quote Automation", showPasses: [{ ts: "a", verdict: "accepted" }, { ts: "b", verdict: "accepted" }], createdAt: "x" },
-        { id: "t2", name: "Contract Drafting", showPasses: [{ ts: "a", verdict: "rework" }], createdAt: "x" },
-      ],
-      phaseInputs: { show: { demoTour: JSON.stringify([]) } },
+      phaseInputs: {
+        frame: { sponsor: "Dan Reyes" },
+        show: { demoTour: JSON.stringify([
+          { stakeholder: "Dan Reyes", verdict: "Pending" },   // sponsor hasn't ruled
+          { stakeholder: "Maria", verdict: "Accepted" },
+        ]) },
+      },
     });
-    const row = gateChecklist(p, show(), []).find((c) => c.id === "tracks-accepted")!;
-    expect(row.label).toBe("Every track accepted (1/2)");
+    const row = gateChecklist(p, show(), []).find((c) => c.id === "verdicts")!;
+    expect(row.label).toContain("area");
     expect(row.done).toBe(false);
-    expect(row.why).toContain("Contract Drafting");
   });
 
-  it("no tracks → no track criterion (nothing phantom to satisfy)", () => {
-    expect(gateChecklist(programme({}), show(), []).some((c) => c.id === "tracks-accepted")).toBe(false);
+  it("the Show gate converges when every area signs off and the sponsor accepts", () => {
+    const p = programme({
+      phaseInputs: {
+        frame: { sponsor: "Dan Reyes" },
+        show: { demoTour: JSON.stringify([
+          { stakeholder: "Dan Reyes", verdict: "Accepted" },
+          { stakeholder: "Maria", verdict: "Accepted" },
+          { stakeholder: "Tom", verdict: "Objection" },     // a lone objection is logged, not blocking
+        ]) },
+      },
+    });
+    const row = gateChecklist(p, show(), []).find((c) => c.id === "verdicts")!;
+    expect(row.done).toBe(true);
+    expect(row.why).toContain("objection");
   });
 });
 
