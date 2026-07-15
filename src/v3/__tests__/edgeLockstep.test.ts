@@ -136,7 +136,7 @@ describe("evidence pipeline guards stay wired (2026-07-14 regression pins)", () 
     expect(block).toBeTruthy();
     for (const id of [
       "discovery-kit", "demo-scripts", "domain-ontology", "current-state-atlas",
-      "architecture-strategy", "agentic-blueprint", "experience-design", "prototype-pack", "hardening-plan", "eval-suite",
+      "architecture-strategy", "agentic-blueprint", "experience-design", "prototype-pack", "prototype-build", "hardening-plan", "eval-suite",
     ]) {
       expect(block![1]).toContain(`"${id}"`);
     }

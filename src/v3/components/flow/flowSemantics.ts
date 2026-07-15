@@ -35,6 +35,7 @@ const FABIO_TYPES: Record<string, string> = {
   "architecture-strategy": "fabio:Proposal",
   "agentic-blueprint": "fabio:Specification",
   "prototype-pack": "fabio:Specification",
+  "prototype-build": "fabio:SoftwareApplication",
   "demo-scripts": "fabio:Script",
   "hardening-plan": "fabio:WorkPlan",
   "eval-suite": "fabio:Protocol",

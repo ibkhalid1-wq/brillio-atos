@@ -1330,11 +1330,11 @@ export const ATOS_FLOW: MethodologyDefinition = {
     {
       id: "envision",
       displayName: "Envision",
-      description: "From the Atlas, candidate target architectures with trade-offs; one steering conversation picks the direction, which compiles into the Agentic Blueprint.",
-      requiredArtifacts: ["architecture-strategy", "experience-design", "agentic-blueprint"],
-      mandatoryExitCriteriaTemplates: ["Architecture direction chosen", "Agentic blueprint accepted"],
+      description: "The delivery team's build studio: from the Atlas, candidate architectures with trade-offs; one steering conversation picks the direction; the team designs the experience, compiles the Agentic Blueprint, and BUILDS a clickable prototype. Clients validate it in Show.",
+      requiredArtifacts: ["architecture-strategy", "experience-design", "agentic-blueprint", "prototype-pack", "prototype-build"],
+      mandatoryExitCriteriaTemplates: ["Architecture direction chosen", "Agentic blueprint accepted", "Prototype built"],
       entryGuards: ["Current-State Atlas synthesised"],
-      recommendedAgents: ["architecture-strategy", "experience-design", "agentic-blueprint"],
+      recommendedAgents: ["architecture-strategy", "experience-design", "agentic-blueprint", "prototype-pack", "prototype-build"],
       typicalDurationWeeks: { min: 1, max: 2 },
       dynamicSchema: true,
       movement: {
@@ -1343,8 +1343,9 @@ export const ATOS_FLOW: MethodologyDefinition = {
           "Two to three candidate architecture strategies from the Atlas — agentic patterns, integration map, build-vs-buy, risk",
           "The Agentic Blueprint compiled for the chosen direction — agents, tools, orchestration, data contracts, human-in-the-loop points, eval plan",
           "Ontology-driven data model for the Blueprint",
+          "A build pack and a clickable prototype assembled from the Experience Design — the runnable app the team refines and Show demonstrates",
         ],
-        readyWhen: "A direction is chosen from the candidates and the Blueprint survives its review conversation.",
+        readyWhen: "A direction is chosen, the Blueprint survives its review, and a clickable prototype is built and ready to demonstrate.",
       },
       inputFields: [
         {
@@ -1367,11 +1368,11 @@ export const ATOS_FLOW: MethodologyDefinition = {
     {
       id: "show",
       displayName: "Show",
-      description: "The Blueprint compiles into a working prototype; every stakeholder watches their own workflow run, scripted from their own words. The gate is the demo.",
-      requiredArtifacts: ["prototype-pack", "demo-scripts"],
+      description: "The prototype built in Envision is demonstrated; every stakeholder watches their own workflow run, scripted from their own words, and records a verdict. The gate is the demo.",
+      requiredArtifacts: ["demo-scripts"],
       mandatoryExitCriteriaTemplates: ["Every stakeholder saw their workflow run", "Demo acceptances recorded"],
-      entryGuards: ["Agentic Blueprint accepted", "Experience Design accepted"],
-      recommendedAgents: ["prototype-pack", "demo-scripts"],
+      entryGuards: ["Agentic Blueprint accepted", "Experience Design accepted", "Prototype built"],
+      recommendedAgents: ["demo-scripts"],
       typicalDurationWeeks: { min: 1, max: 3 },
       dynamicSchema: true,
       movement: {
@@ -1380,9 +1381,9 @@ export const ATOS_FLOW: MethodologyDefinition = {
           "React on the record — demo reactions are ingested as evidence",
         ],
         automations: [
-          "Prototype build pack compiled from the Blueprint — scaffold, agent wiring, seed data lifted from the discovery evidence",
           "A demo script per stakeholder, seeded with scenarios from their own transcript",
-          "Demo feedback ingestion — reactions become Blueprint diffs and a regenerated prototype",
+          "The clickable prototype built in Envision, served to each stakeholder on their own seeded data",
+          "Demo feedback ingestion — reactions become Blueprint diffs and a rebuilt prototype",
         ],
         readyWhen: "Every stakeholder has seen their workflow run and accepted — objections addressed or logged.",
       },
@@ -1408,9 +1409,7 @@ export const ATOS_FLOW: MethodologyDefinition = {
         { id: "prototypeLocation", label: "Prototype location", type: "text", required: false, placeholder: "Repo or environment URL", hint: "Where the running prototype lives — repo, sandbox, or environment." },
         { id: "demoFeedback", label: "Demo session transcripts", type: "transcript", required: false, usedByArtifacts: ["demo-scripts"], hint: "Recordings of the demo sessions — paste or reference. Reactions feed Blueprint diffs and the next prototype build. Header each session with the stakeholder's name so verdicts attribute." },
       ],
-      artifactInputFlow: {
-        "prototype-pack": ["prototypeLocation"],
-      },
+      artifactInputFlow: {},
     },
     {
       id: "ship",

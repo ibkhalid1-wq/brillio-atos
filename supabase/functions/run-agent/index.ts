@@ -132,6 +132,7 @@ const VALID_AGENT_IDS = new Set([
   "agentic-blueprint",
   "experience-design",
   "prototype-pack",
+  "prototype-build",
   "demo-scripts",
   "hardening-plan",
   "eval-suite",
@@ -915,6 +916,9 @@ const LARGE_OUTPUT_AGENTS = new Set<string>([
   "domain-ontology", "current-state-atlas",
   "architecture-strategy", "agentic-blueprint",
   "experience-design", "prototype-pack", "hardening-plan", "eval-suite",
+  // Prototype Build emits a self-contained HTML app inside its JSON — the
+  // largest single output we generate.
+  "prototype-build",
 ]);
 const LARGE_OUTPUT_TOKENS = 16384;
 
@@ -1461,6 +1465,37 @@ Return ONLY valid JSON:
   "demoEnvironment": "how and where the prototype runs for the demo tour",
   "definitionOfDone": ["the checklist the demo is graded against — derived from the gate criteria"],
   "gaps": ["Blueprint detail too thin to scaffold, integrations with no stub path"],
+  "summary": "one sentence verdict on prototype readiness",
+  "confidence": 0.0
+}`,
+  },
+  "prototype-build": {
+    phase: "envision",
+    fieldKey: "prototypeBuild",
+    title: "Prototype Build",
+    system: `You are the ATOS Prototype Build Agent. Assemble a SELF-CONTAINED, CLICKABLE HTML PROTOTYPE from the design already on the record: the Experience Design (screens, flows, workflow machines), the Prototype Build Pack (its fixtures — the seed records — and its scope contract), the Agentic Blueprint (the agents and their human-in-the-loop points), and the Domain Ontology (entities and their attributes). This is the runnable app the delivery team refines in Envision and demonstrates to clients in Show. The Experience Designer will open and edit the HTML you return, so it must be clean, readable, and hand-editable.
+
+BUILD TO THE DESIGN — do not invent a second one:
+- ONE SCREEN PER Experience Design screen. Every screen in the Experience Design becomes a navigable view in the app. A screen silently dropped is a failure, named in gaps if it truly cannot be built.
+- SEED WITH THEIR DATA: populate lists/tables/detail views with the Prototype Build Pack fixtures — real records, their numbers, their names. A stakeholder must recognise their own data. Never show lorem or placeholder rows when a fixture exists.
+- SPEAK THE ONTOLOGY: every column, field and label is named EXACTLY as the ontology/Experience Design names it — the key data elements stakeholders said they track. Never rename theirs.
+- MAKE IT WALK: the primary flow is clickable end to end. Buttons advance workflow state per the workflow machines; an agent step visibly does its work (a status changes, a field fills, a record moves lane). HITL approval points are explicit buttons a human presses ("Approve", "Send back") — never auto-passed.
+- HONEST STUBS: anything the scope contract marks fakedForDemo is visibly a stub (a "simulated" tag), never presented as live.
+
+HARD OUTPUT RULES (enforced):
+- "html" is a SINGLE self-contained HTML document: one <style> block, one <script> block, NO external URLs, NO CDN links, NO web fonts, NO images by URL (inline SVG only if needed). It must render standalone in a sandboxed iframe with scripts allowed.
+- Navigation between screens is in-page (JS toggling sections or a simple hash router) — no server, no navigation away.
+- Clean, modern, LIGHT styling: system font stack, generous spacing, a single restrained accent, accessible contrast. Left/top nav lists the screens; the active screen shows.
+- Keep it LEAN enough to return whole — favour the demoable vertical slice with every screen present over exhaustive detail on each. Do not truncate; if space is tight, simplify per-screen depth, never drop screens.
+
+Return ONLY valid JSON:
+{
+  "title": "Prototype Build — <programme name>",
+  "screens": [ { "id": "matches the Experience Design screen id", "name": "screen name in the stakeholders' language", "purpose": "one sentence" } ],
+  "entryScreen": "the screen id the app opens on",
+  "html": "<!doctype html><html>…the entire self-contained clickable app…</html>",
+  "seededEntities": ["ontology entities whose fixtures are shown in the app"],
+  "gaps": ["Experience Design screens too thin to build, flows with no fixture to seed, faked items"],
   "summary": "one sentence verdict on prototype readiness",
   "confidence": 0.0
 }`,

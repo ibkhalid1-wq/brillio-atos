@@ -33,6 +33,7 @@ export const FORMAL_ARTIFACT_FIELD_KEYS: Record<string, string> = {
   "agentic-blueprint": "agenticBlueprint",
   "experience-design": "experienceDesign",
   "prototype-pack": "prototypePack",
+  "prototype-build": "prototypeBuild",
   "demo-scripts": "demoScripts",
   "hardening-plan": "hardeningPlan",
   "eval-suite": "evalSuite",
@@ -66,18 +67,21 @@ export const FORMAL_ARTIFACT_PHASES: Record<string, string> = {
   "domain-ontology": "listen",
   "architecture-strategy": "envision",
   "agentic-blueprint": "envision",
-  // Experience Design authors the design intent — its home is Envision (the
-  // storyboard validated there), after Architecture Strategy. Show demonstrates
-  // it running (prototype pack + demo scripts + the pilot).
+  // Envision is the delivery team's build studio: Experience Design authors the
+  // design intent, the Prototype Build Pack specs it, and Prototype Build assembles
+  // the clickable app. Show demonstrates that built prototype and records verdicts.
   "experience-design": "envision",
-  "prototype-pack": "show",
+  "prototype-pack": "envision",
+  "prototype-build": "envision",
   "demo-scripts": "show",
   "hardening-plan": "ship",
   "eval-suite": "ship",
 };
 
 // Provenance/scoring fields that are not part of the readable document body.
-const SKIP_KEYS = new Set(["confidence", "generatedat", "title"]);
+// `html` is the Prototype Build's entire self-contained app — it renders in the
+// PrototypeStudio iframe, never as dumped preview text.
+const SKIP_KEYS = new Set(["confidence", "generatedat", "title", "html"]);
 
 function isSkippable(key: string): boolean {
   const k = key.toLowerCase();

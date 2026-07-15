@@ -200,6 +200,19 @@ export default function EnvisionCockpit({ program, onSaveInputs, onRunAgent }: {
           ) : null}
         </section>
       ) : null}
+
+      {/* ── BUILD ─────────────────────────────────────────────────────────── */}
+      {fs.hasDesign ? (
+        <section className="v3fs-envc-act">
+          <div className="v3fs-envc-ah"><span className="v3fs-envc-an">3</span>Build — the clickable prototype
+            {hasPrototype && onRunAgent ? <button type="button" className="v3fs-a v3fs-envc-open" onClick={() => onRunAgent("prototype-build", "envision")}>open the prototype →</button> : null}</div>
+          {hasPrototype ? (
+            <div className="v3fs-envc-built">✓ Prototype built — the delivery team&rsquo;s runnable app. The Experience Designer refines it here; Show demonstrates it to each stakeholder.</div>
+          ) : onRunAgent ? (
+            <button type="button" className="v3fs-btn v3fs-envc-genexp" onClick={() => onRunAgent("prototype-build", "envision")}>🖥 Build the clickable prototype from the design</button>
+          ) : null}
+        </section>
+      ) : null}
     </div>
   );
 }
