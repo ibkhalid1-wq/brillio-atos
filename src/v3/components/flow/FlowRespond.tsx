@@ -272,8 +272,18 @@ export default function FlowRespond({ token }: { token: string }) {
       })
       .filter(Boolean);
     if (extra.trim()) blocks.push(`Anything else:\n${extra.trim()}`);
+    // Demo-walkthrough signal from a Show follow-up: beat-by-beat acceptance
+    // taps and per-phase notes fold into the same attributed answer block.
+    const beatLines = Object.entries(beatVerdicts)
+      .filter(([, value]) => value === "ok" || value === "not")
+      .map(([key, value]) => `${value === "ok" ? "✓ Runs my workflow" : "✗ Not quite"} — ${key}`);
+    if (beatLines.length) blocks.push(`Demo walkthrough, beat by beat:\n${beatLines.join("\n")}`);
+    const phaseLines = Object.entries(phaseComments)
+      .filter(([, value]) => value.trim())
+      .map(([key, value]) => `• ${key}: ${value.trim()}`);
+    if (phaseLines.length) blocks.push(`Demo walkthrough, phase notes:\n${phaseLines.join("\n")}`);
     return blocks.join("\n\n");
-  }, [state, answers, extra, deferrals]);
+  }, [state, answers, extra, deferrals, beatVerdicts, phaseComments]);
 
   const answeredCount = useMemo(() => {
     if (state.phase !== "ready" || state.pack.kind === "demo") return 0;
@@ -435,9 +445,15 @@ export default function FlowRespond({ token }: { token: string }) {
                 {state.pack.design ? (
                   // A Show follow-up asks for demo feedback — the wireframe
                   // walkthrough, narrated by their demo script, sits right
-                  // above the questions it informs.
+                  // above the questions it informs. Beat taps + phase notes
+                  // ride the same walkthrough here as on a demo invite, so a
+                  // self-serve demo collects granular acceptance either way.
                   <DemoWalker design={state.pack.design} script={state.pack.script}
-                    recipientArea={state.pack.recipientArea} />
+                    recipientArea={state.pack.recipientArea}
+                    phaseComments={phaseComments}
+                    onPhaseComment={(key, value) => setPhaseComments((prev) => ({ ...prev, [key]: value }))}
+                    beatVerdicts={beatVerdicts}
+                    onBeatVerdict={(key, value) => setBeatVerdicts((prev) => ({ ...prev, [key]: prev[key] === value ? "" : value }))} />
                 ) : null}
                 {state.pack.questions.map((question, index) => (
                   <label key={index} className={`v3fs-portal-card${((answers[index] ?? "").trim() || (attachments[index] ?? []).length || deferrals[index]) ? " done" : ""}${deferrals[index] ? " deferred" : ""}`}>

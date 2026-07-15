@@ -129,23 +129,26 @@ export function movementValidationCoverage(program: ProgramSummary, movementId: 
     row[field] += 1;
     byArea.set(key, row);
   };
+  // Demo invites only exist for Show — count them first.
   if (movementId === "show") {
     for (const invite of listDemoInvites(program)) bump(invite.recipientArea, invite.respondedAt ? "validated" : "waiting");
-  } else {
-    for (const pack of listInterviewPacks(program)) {
-      const subs = pack.submissions ?? [];
-      // Validated any time they answered an Envision ask on this durable link.
-      if (subs.some((s) => s.movementId === "envision") || (pack.respondedAt && pack.movementId === "envision" && !subs.length)) {
-        bump(pack.recipientArea, "validated");
-        continue;
-      }
-      // Waiting only when the CURRENT ask is the Envision review and it's open.
-      if (pack.movementId !== "envision" || !pack.role.startsWith("review:")) continue;
-      const lastTs = subs.reduce((max, s) => (s.ts > max ? s.ts : max), "");
-      const askAt = pack.askUpdatedAt ?? pack.createdAt;
-      const open = subs.length === 0 ? !pack.respondedAt : askAt > lastTs;
-      if (open) bump(pack.recipientArea, "waiting");
+  }
+  // Durable links carry both movements' asks: a submission stamped with the
+  // movement validates it; an OPEN ask for the movement is waiting. Envision
+  // counts only review links (the transformation ask); Show counts any Show
+  // ask — the self-serve demo rides a Follow-up pack with the walkthrough.
+  for (const pack of listInterviewPacks(program)) {
+    const subs = pack.submissions ?? [];
+    if (subs.some((s) => s.movementId === movementId) || (pack.respondedAt && pack.movementId === movementId && !subs.length)) {
+      bump(pack.recipientArea, "validated");
+      continue;
     }
+    if (pack.movementId !== movementId) continue;
+    if (movementId === "envision" && !pack.role.startsWith("review:")) continue;
+    const lastTs = subs.reduce((max, s) => (s.ts > max ? s.ts : max), "");
+    const askAt = pack.askUpdatedAt ?? pack.createdAt;
+    const open = subs.length === 0 ? !pack.respondedAt : askAt > lastTs;
+    if (open) bump(pack.recipientArea, "waiting");
   }
   return [...byArea.values()].sort((a, b) => (a.area === "General" ? 1 : b.area === "General" ? -1 : a.area.localeCompare(b.area)));
 }

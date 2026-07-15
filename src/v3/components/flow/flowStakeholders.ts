@@ -716,11 +716,26 @@ function movementStakeholdersBase(program: ProgramSummary, movementId: string): 
     }
     return people;
   }
+  // ENVISION is validated by the people who OWN the workflows: everyone heard
+  // in Listen reviews their own transformation (the agentify link — each step
+  // agentify / assist / keep) AHEAD of the delivery personas, whose input still
+  // shapes the architecture. A future-state no client voice has confirmed is a
+  // design the programme can't stand on.
+  const envisionOwners: MovementStakeholder[] = movementId === "envision"
+    ? kitInterviews(program).map((s) => ({
+        ...s, id: `envision-${s.id}`,
+        questions: [
+          "Review each step of your workflow in the proposed agentic future — should an agent run it, assist you, or should it stay human?",
+          "Would the proposed agents take the right work off your team's plate — and what would they need to get it right?",
+        ],
+      }))
+    : [];
   const template = ROLE_TEMPLATES[movementId];
   if (template) {
     const sponsor = sponsorStakeholder(program);
     const bindings = readRoleBindings(program, movementId);
-    return template.map((entry, index) => {
+    const ownerNames = new Set(envisionOwners.map((s) => s.name.trim().toLowerCase()));
+    const personas = template.map((entry, index) => {
       // Bind the "Executive Sponsor" role to the real sponsor when known.
       if (/sponsor/i.test(entry.role) && sponsor) {
         return { id: `${movementId}-${index}`, name: sponsor.name, role: "Executive Sponsor", questions: entry.questions, isRole: false };
@@ -732,9 +747,10 @@ function movementStakeholdersBase(program: ProgramSummary, movementId: string): 
         return { id: `${movementId}-${index}`, name: bound.name, role: entry.role, questions: entry.questions, isRole: false };
       }
       return { id: `${movementId}-${index}`, name: entry.role, role: entry.role, questions: entry.questions, isRole: true };
-    });
+    }).filter((p) => !ownerNames.has(p.name.trim().toLowerCase()));
+    return [...envisionOwners, ...personas];
   }
-  return [];
+  return envisionOwners.length ? envisionOwners : [];
 }
 
 /**
