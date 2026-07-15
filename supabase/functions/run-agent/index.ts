@@ -1621,14 +1621,24 @@ conversation/transcript record — grounding facts only PREVIEW long fields
 every track, every speaker in it counts as evidence, not just the excerpts
 the facts show.
 
-### Regeneration is ADDITIVE
-When runMode is incremental_update or cascade_refresh, START from the existing
-document (existingArtifacts carries it) and MERGE the new evidence in — never
-rebuild from only the changed inputs. Every entity, relation, workflow, agent
-and interview already on the document STAYS unless the record now contradicts
-it; dropping coverage merely because the latest evidence didn't re-mention it
-is data loss, and a smaller document than the one on record is treated as a
-FAILED regeneration.
+### Regeneration IMPROVES, it does not rebuild
+When runMode is not initial_generation, the context carries "priorArtifact" — the
+CURRENT version of this very document, the one already on the record. You are
+IMPROVING it, not authoring a new one from scratch. START FROM priorArtifact and
+MERGE the new evidence in:
+- KEEP every entity, relation, workflow, agent, screen, interview, section and
+  hand-authored refinement already on priorArtifact unless the current inputs now
+  CONTRADICT it. Dropping coverage merely because the latest evidence didn't
+  re-mention it is data loss.
+- UPDATE only what the current inputs changed (see "changedInputs") and whatever
+  depends on it; leave everything else materially as it stands, including its
+  wording and ordering, so repeated runs converge instead of churning.
+- ADD what the new evidence introduces.
+- A regenerated document that is SMALLER or POORER than priorArtifact — fewer
+  entities, dropped sections, lost detail — is a FAILED regeneration. Never
+  discard the prior work; refine it.
+When no priorArtifact is present (initial_generation), author it fresh from the
+evidence.
 
 ### Gap phrasing — who closes it decides how it reads
 When you list a gap, decide who must CLOSE it:
@@ -2200,6 +2210,24 @@ function buildPrototypeRefineBrief(
  * generic blue) instead of honouring the governed one. Experience Design is the
  * SAME phase as Prototype Build (envision), so read it straight off the blob.
  */
+/**
+ * The prior version of an artifact, prepared for re-injection so a regeneration
+ * IMPROVES it rather than rebuilding from scratch. Strips internal/generation
+ * bookkeeping (underscore-prefixed keys, the heavy prototype `html`) that the
+ * model must not treat as content, and drops the doc entirely if it is
+ * pathologically large so it can never blow the context budget.
+ */
+function priorArtifactForContext(doc: Record<string, unknown>): Record<string, unknown> | null {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(doc)) {
+    if (k.startsWith("_") || k === "html") continue;
+    out[k] = v;
+  }
+  if (!Object.keys(out).length) return null;
+  try { if (JSON.stringify(out).length > 120_000) return null; } catch { return null; }
+  return out;
+}
+
 function buildUpstreamDesign(inner: Record<string, unknown>): Record<string, unknown> | null {
   const ed = isRecord(inner.experienceDesign) ? inner.experienceDesign as Record<string, unknown> : null;
   if (!ed) return null;
@@ -2933,6 +2961,21 @@ function buildSpecialAgentInputContext(
     const upstreamDesign = formalSpec.fieldKey === "prototypeBuild"
       ? buildUpstreamDesign(inner)
       : null;
+    // The CURRENT version of THIS artifact — so a regeneration IMPROVES it
+    // (additive merge) rather than rebuilding from scratch. The "Regeneration is
+    // ADDITIVE" discipline told the model to "start from the existing document",
+    // but existingArtifacts only ever carried metadata ({id,title,status}), so
+    // the prior body was never actually in context and every run re-derived from
+    // the evidence. Handing over the prior doc is what makes "improve" real —
+    // human edits and hard-won coverage survive, and the model updates only what
+    // the current inputs changed. The prototype has its own refine brief
+    // (priorHtml) and is excluded here to avoid shipping the HTML twice.
+    const priorArtifact = runMode !== "initial_generation"
+      && formalSpec.fieldKey !== "prototypeBuild"
+      && isRecord(inner[formalSpec.fieldKey])
+      && Object.keys(inner[formalSpec.fieldKey] as Record<string, unknown>).length > 0
+      ? priorArtifactForContext(inner[formalSpec.fieldKey] as Record<string, unknown>)
+      : null;
     // Cross-phase grounding: every phase except the first generates artifacts
     // with the approved artifacts from all earlier phases in context, so later
     // artifacts build on what came before instead of contradicting it. The
@@ -3022,6 +3065,7 @@ function buildSpecialAgentInputContext(
       priorPhaseArtifacts,
       ...(upstreamDesign ? { upstreamDesign } : {}),
       ...(prototypeRefineBrief ? { prototypeRefineBrief } : {}),
+      ...(priorArtifact ? { priorArtifact } : {}),
     // Compact serialization: the pretty-print indent added ~30% to a context
     // that already runs to hundreds of KB — pure whitespace tokens that slow
     // every generation. The model parses compact JSON just as well.
