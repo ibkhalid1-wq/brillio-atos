@@ -229,6 +229,41 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
       methodologyByIdRef.current[row.id] = base.methodology;
       return base;
     }
+    // Same blob-less window, wider blast radius: it is not only `methodology`
+    // that vanishes when `data` is undefined — the ENTIRE record does. After any
+    // external write (artifact generation via run-agent, or a sponsor approval
+    // via the flow-portal edge) the row's `updated_at` is bumped while this
+    // cache still holds the prior blob, so `data` is undefined here even though a
+    // complete, only-fractionally-stale record is in hand. Publishing a data-less
+    // summary in that window flashes an already-loaded programme to its empty
+    // "no data" shell before hydration restores it a beat later — the reported
+    // "fluctuates between no data and corrected state" symptom. Carry the last
+    // hydrated blob across the window instead, stamped with ITS `updated_at`
+    // (never the row's newer one). Persistence stays safe: a mutation during the
+    // window guards its write on that stale `updated_at`, so the CAS fails and
+    // persistFlowMutation re-reads fresh + rebases rather than clobbering the
+    // newer cloud blob. The next hydration swaps in the fresh blob + timestamp.
+    if (hydrated && hydrated.data != null) {
+      const carryKey = `${row.id}:${row.updated_at}:carry:${hydrated.updatedAt}`;
+      let carried = normalizationCache.current.get(carryKey);
+      if (!carried) {
+        carried = normalizeProgram({
+          id: row.id,
+          name: row.name,
+          client: row.client,
+          industry: row.industry,
+          updated_at: hydrated.updatedAt,
+          data: hydrated.data,
+        });
+        normalizationCache.current.set(carryKey, carried);
+        if (normalizationCache.current.size > 64) {
+          const firstKey = normalizationCache.current.keys().next().value;
+          if (firstKey) normalizationCache.current.delete(firstKey);
+        }
+      }
+      methodologyByIdRef.current[row.id] = carried.methodology;
+      return carried;
+    }
     const known = methodologyByIdRef.current[row.id];
     return known && known !== base.methodology ? { ...base, methodology: known } : base;
   }, []);
