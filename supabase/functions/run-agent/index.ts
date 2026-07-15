@@ -1702,12 +1702,18 @@ on identical inputs must produce substantially identical output — do not rephr
 content solely for stylistic variation or introduce unnecessary rewrites.
 
 ### Cross-phase continuity
-The context carries "priorPhaseArtifacts": the approved artifacts from every
-earlier phase. Treat them as the established programme baseline — build on their
-scope, decisions, roles, and terminology, and never contradict or silently
-restate them. They rank as reference material (below current structured inputs in
-the source priority order), so when current inputs conflict with a prior-phase
-artifact, follow the current inputs.
+The context carries "priorPhaseArtifacts" (the titles/status of every earlier
+phase's approved artifacts) AND "priorPhaseArtifactDocs" — the ACTUAL BODIES of
+those artifacts (the Ontology's entities, the Atlas's workflows, the Architecture
+decisions, the Experience Design's screens…). Build on their real content, not
+just their names: reuse the exact entities, terms, workflows, decisions and roles
+they establish, and never contradict, re-derive, or silently restate them. They
+are the established programme baseline. They rank as reference material (below
+current structured inputs in the source priority order), so when current inputs
+conflict with a prior-phase artifact, follow the current inputs. If a document you
+need is named in priorPhaseArtifacts but its body is absent from
+priorPhaseArtifactDocs (dropped for size), rely on the grounding facts rather than
+inventing its contents.
 
 ### Document carry-forward
 The context may carry "documentCarryForward": constraints, assumptions,
@@ -2225,6 +2231,40 @@ function priorArtifactForContext(doc: Record<string, unknown>): Record<string, u
   }
   if (!Object.keys(out).length) return null;
   try { if (JSON.stringify(out).length > 120_000) return null; } catch { return null; }
+  return out;
+}
+
+/**
+ * The BODIES of earlier-phase artifacts — so a generator builds on the real
+ * Ontology entities, Atlas workflows and Architecture decisions it is told to
+ * honour, not just their titles. `priorPhaseArtifacts` only ever carried
+ * metadata ({id,title,status}), so cross-phase grounding was nominal: the model
+ * re-derived every upstream doc from the raw evidence. Bodies are cleaned
+ * (internal keys stripped), and the SET is bounded to a total budget, nearest
+ * phase first, so a late-phase artifact with many ancestors can't blow context.
+ */
+function buildPriorPhaseArtifactDocs(
+  inner: Record<string, unknown>,
+  earlierPhaseIds: string[],
+): Array<{ phase: string; artifact: string; doc: Record<string, unknown> }> {
+  const TOTAL_BUDGET = 80_000;
+  const out: Array<{ phase: string; artifact: string; doc: Record<string, unknown> }> = [];
+  let used = 0;
+  // Nearest earlier phase first — if the budget is hit, the oldest docs drop.
+  for (const phaseId of [...earlierPhaseIds].reverse()) {
+    for (const spec of Object.values(FORMAL_ARTIFACT_AGENTS)) {
+      if (spec.phase !== phaseId) continue;
+      const body = isRecord(inner[spec.fieldKey]) ? inner[spec.fieldKey] as Record<string, unknown> : null;
+      if (!body || !Object.keys(body).length) continue;
+      const clean = priorArtifactForContext(body);
+      if (!clean) continue;
+      let size = 0;
+      try { size = JSON.stringify(clean).length; } catch { continue; }
+      if (used + size > TOTAL_BUDGET) continue;
+      used += size;
+      out.push({ phase: phaseId, artifact: spec.title, doc: clean });
+    }
+  }
   return out;
 }
 
@@ -2990,6 +3030,12 @@ function buildSpecialAgentInputContext(
       ? groundingSpine.slice(0, phaseIndex).flatMap((phaseId) =>
           (artifactsByPhase[phaseId] || []).map((artifact) => ({ ...artifact, phase: phaseId })))
       : [];
+    // The BODIES behind those earlier-phase titles — real cross-phase grounding,
+    // budget-bounded. Without it the model only saw the titles and re-derived
+    // each upstream doc from the raw evidence.
+    const priorPhaseArtifactDocs = phaseIndex > 0
+      ? buildPriorPhaseArtifactDocs(inner, groundingSpine.slice(0, phaseIndex))
+      : [];
     return JSON.stringify({
       artifact: formalSpec.title,
       phase: formalSpec.phase,
@@ -3063,6 +3109,7 @@ function buildSpecialAgentInputContext(
       existingBusinessCase: businessCase,
       existingArtifacts: artifactsByPhase[formalSpec.phase] || [],
       priorPhaseArtifacts,
+      ...(priorPhaseArtifactDocs.length ? { priorPhaseArtifactDocs } : {}),
       ...(upstreamDesign ? { upstreamDesign } : {}),
       ...(prototypeRefineBrief ? { prototypeRefineBrief } : {}),
       ...(priorArtifact ? { priorArtifact } : {}),
