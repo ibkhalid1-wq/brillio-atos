@@ -11,8 +11,11 @@
 import { useMemo, useState } from "react";
 import { projectFutureState, type FutureState, type FutureWorkflow } from "@/v3/components/flow/flowFutureState";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
-import { loopState, changeRequests } from "@/v3/components/flow/flowLoop";
+import { loopState, changeRequests, type ChangeRequest } from "@/v3/components/flow/flowLoop";
+import { readMovementInputs } from "@/v3/components/flow/flowShellData";
 import type { ProgramSummary } from "@/new/types";
+
+type ChangeRoute = "design" | "listen" | "frame";
 
 const MODE_LABEL: Record<string, string> = { agentify: "agent runs it", assist: "agent assists · you decide", keep: "stays human" };
 
@@ -38,8 +41,30 @@ export default function EnvisionCockpit({ program, onSaveInputs, onOpenArtifact 
   const [tradeaway, setTradeaway] = useState("");
   const [recording, setRecording] = useState(false);
   const [iterating, setIterating] = useState(false);
+  const [routed, setRouted] = useState<Record<string, ChangeRoute>>({});
   const ls = useMemo(() => loopState(program), [program]);
   const incoming = useMemo(() => changeRequests(program), [program]);
+  const crKey = (cr: ChangeRequest) => `${cr.stakeholder}::${cr.ask}`;
+
+  // Triage a change request. Not every "change" is a design fix: some tell us we
+  // got the CLIENT'S WORLD wrong (a current-state correction → Listen, which then
+  // cascades the ontology/workflows forward), and some are NEW REQUIREMENTS
+  // (→ Frame's scope). Only design fixes are addressed by the rebuild here.
+  const routeChange = async (cr: ChangeRequest, route: ChangeRoute) => {
+    if (route !== "design" && onSaveInputs) {
+      const note = `\n\n— ${cr.stakeholder} · from Show validation (iteration ${ls.round}) —\n${cr.ask || "(see their demo verdict)"}`;
+      if (route === "listen") {
+        const cur = String(readMovementInputs(program, "listen").interviewTranscripts ?? "");
+        await onSaveInputs("listen", { interviewTranscripts: (cur + note).trimStart() },
+          { attest: { action: `Current-state correction routed to Listen — ${cr.stakeholder}`, detail: cr.ask.slice(0, 140) } });
+      } else {
+        const cur = String(readMovementInputs(program, "frame").sponsorConversation ?? "");
+        await onSaveInputs("frame", { sponsorConversation: (cur + note).trimStart() },
+          { attest: { action: `New requirement routed to Frame scope — ${cr.stakeholder}`, detail: cr.ask.slice(0, 140) } });
+      }
+    }
+    setRouted((prev) => ({ ...prev, [crKey(cr)]: route }));
+  };
 
   // Start the next iteration: record the round bump (feedback → design), then
   // open the Prototype workspace so the team rebuilds to the changes.
@@ -98,13 +123,33 @@ export default function EnvisionCockpit({ program, onSaveInputs, onOpenArtifact 
             <div key={area} className="v3fs-envc-inc-area">
               <div className="v3fs-envc-inc-al">{area}<em>{incoming.filter((c) => c.area === area).length}</em></div>
               <ul className="v3fs-envc-inc-list">
-                {incoming.filter((c) => c.area === area).map((cr, i) => (
-                  <li key={i} className={`v3fs-envc-inc-cr${cr.blocking ? " block" : ""}`}>
-                    <b>{cr.stakeholder}</b>
-                    <em>{cr.blocking ? "objection" : "change"}</em>
-                    {cr.ask ? <span>{cr.ask}</span> : <span className="v3fs-envc-inc-noask">asked for a change — see their demo row</span>}
-                  </li>
-                ))}
+                {incoming.filter((c) => c.area === area).map((cr, i) => {
+                  const route = routed[crKey(cr)];
+                  return (
+                    <li key={i} className={`v3fs-envc-inc-cr${cr.blocking ? " block" : ""}${route ? ` routed-${route}` : ""}`}>
+                      <div className="v3fs-envc-inc-crtop">
+                        <b>{cr.stakeholder}</b>
+                        <em>{cr.blocking ? "objection" : "change"}</em>
+                        {cr.ask ? <span>{cr.ask}</span> : <span className="v3fs-envc-inc-noask">asked for a change — see their demo row</span>}
+                      </div>
+                      {/* Triage: not every change is a design fix. */}
+                      {route ? (
+                        <div className="v3fs-envc-inc-routed">
+                          {route === "design" ? "→ design fix — folds into the rebuild"
+                            : route === "listen" ? "→ current-state correction — sent to Listen; the model re-derives"
+                              : "→ new requirement — sent to Frame scope"}
+                        </div>
+                      ) : onSaveInputs ? (
+                        <div className="v3fs-envc-inc-triage" role="group" aria-label={`Route ${cr.stakeholder}'s change`}>
+                          <span className="lbl">This is a</span>
+                          <button type="button" onClick={() => void routeChange(cr, "design")}>design fix</button>
+                          <button type="button" onClick={() => void routeChange(cr, "listen")} title="We got their current-state model wrong — update the ontology/workflows and cascade forward">current-state correction</button>
+                          <button type="button" onClick={() => void routeChange(cr, "frame")} title="A new ask beyond the agreed scope">new requirement</button>
+                        </div>
+                      ) : null}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ))}
