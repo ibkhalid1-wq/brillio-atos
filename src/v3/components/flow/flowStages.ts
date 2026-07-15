@@ -17,8 +17,8 @@ export type MovementTab = "collect" | "paper" | "gate" | "plan" | (string & {});
 export const MOVEMENT_CAPTION: Record<string, string> = {
   frame: "Frame leads with the sponsor conversation — one recorded talk drafts the charter and the discovery kit.",
   listen: "Listen gathers each stakeholder's workflow, in their own words.",
-  envision: "Envision weighs the architecture options and frames the blueprint.",
-  show: "Show puts each stakeholder in front of their own workflow, running.",
+  envision: "Design — the delivery team shapes the architecture, experience and prototype.",
+  show: "Validate — stakeholders use the prototype and sign off, area by area, until it ships.",
   ship: "Ship leads with hardening — prove the evals, then cut over.",
   evolve: "Evolve keeps the system honest — the benefits pulse and the drift review.",
 };
