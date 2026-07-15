@@ -7118,8 +7118,8 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-rvw-wf.plain {border:none;background:none;overflow:visible}
 
 /* ── Workflow FLOW — the editable vertical flow diagram ─────────────────────── */
-.v3fs-vflow {border:1px solid var(--fs-line);border-radius:16px;background:var(--v3-surface);box-shadow:var(--fs-shadow);
-  padding:6px 6px 14px;overflow:hidden}
+.v3fs-vflow {border:1px solid var(--fs-line);border-radius:18px;background:var(--v3-surface);box-shadow:var(--v3-shadow-sm);
+  padding:6px 6px 16px;overflow:hidden}
 .v3fs-vflow-h {display:flex;align-items:center;gap:11px;padding:13px 15px 12px}
 .v3fs-vflow-start {display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;flex-shrink:0;
   border-radius:50%;background:var(--v3-accent-2);color:#fff;font-size:12px}
@@ -7139,13 +7139,16 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 /* the connector line runs THROUGH the rail, behind the dots */
 .v3fs-vflow-node:not(:last-child) .v3fs-vflow-rail::after {content:"";position:absolute;top:0;bottom:-8px;left:50%;
   width:2px;transform:translateX(-50%);background:linear-gradient(var(--v3-accent-2),color-mix(in srgb,var(--v3-accent-2) 30%,var(--fs-line)))}
-.v3fs-vflow-dot {position:relative;z-index:1;width:26px;height:26px;flex-shrink:0;align-self:flex-start;margin-top:8px;
+.v3fs-vflow-dot {position:relative;z-index:1;width:27px;height:27px;flex-shrink:0;align-self:flex-start;margin-top:8px;
   border-radius:50%;background:var(--v3-surface);border:2px solid var(--v3-accent-2);color:var(--v3-accent-2);
-  font-family:var(--v3-font-mono);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
-.v3fs-vflow-card {position:relative;margin:6px 0;padding:11px 13px;border:1px solid var(--fs-line);border-radius:12px;
-  background:var(--fs-bg);display:flex;flex-direction:column;gap:7px;transition:border-color .12s,box-shadow .12s}
-.v3fs-vflow-card:focus-within {border-color:var(--v3-accent-2);box-shadow:0 0 0 3px color-mix(in srgb,var(--v3-accent-2) 12%,transparent)}
-.v3fs-vflow-action {font-size:14.5px;font-family:inherit;color:var(--v3-text);border:none;background:transparent;padding:2px 2px 4px;font-weight:550}
+  font-family:var(--v3-font-mono);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 2px 6px -2px color-mix(in srgb,var(--v3-accent-2) 45%,transparent)}
+.v3fs-vflow-card {position:relative;margin:7px 0;padding:12px 14px;border:1px solid var(--fs-line);border-radius:13px;
+  background:var(--fs-card);display:flex;flex-direction:column;gap:8px;box-shadow:var(--v3-shadow-xs);
+  transition:border-color var(--v3-transition-fast),box-shadow var(--v3-transition-fast),transform var(--v3-transition-fast)}
+.v3fs-vflow-node:not(.removed):hover .v3fs-vflow-card {box-shadow:var(--v3-shadow-sm);transform:translateY(-1px)}
+.v3fs-vflow-card:focus-within {border-color:var(--v3-accent-2);box-shadow:0 0 0 3px color-mix(in srgb,var(--v3-accent-2) 12%,transparent),var(--v3-shadow-sm);transform:none}
+.v3fs-vflow-action {font-size:14.5px;font-family:inherit;color:var(--v3-text);border:none;background:transparent;padding:2px 2px 4px;font-weight:600;line-height:1.4;letter-spacing:-.01em}
 .v3fs-vflow-action:focus {outline:none}
 .v3fs-vflow-meta {display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .v3fs-vflow-actor,.v3fs-vflow-sys,.v3fs-vflow-ent {font-size:10.5px;font-weight:650;padding:2px 8px;border-radius:99px;line-height:1.5}
@@ -7202,9 +7205,10 @@ details[open] > summary .v3fs-disc-c::after {display:none}
    text; the area-hue left accent still signals the recipient's world. */
 .v3fs-olist {display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:13px;align-items:start}
 .v3fs-olist-card {display:flex;flex-direction:column;border:1px solid var(--fs-line);
-  border-left:4px solid hsl(var(--hue,230) 55% 52%);border-radius:14px;background:var(--fs-card);
-  box-shadow:0 1px 2px rgba(15,23,42,.05);overflow:hidden;transition:box-shadow .14s,border-color .14s}
-.v3fs-olist-card.on {border-color:var(--v3-accent-2);box-shadow:var(--fs-lift)}
+  border-left:4px solid hsl(var(--hue,230) 55% 52%);border-radius:15px;background:var(--fs-card);
+  box-shadow:var(--v3-shadow-xs);overflow:hidden;transition:box-shadow var(--v3-transition-fast),border-color var(--v3-transition-fast),transform var(--v3-transition-fast)}
+.v3fs-olist-card:hover {box-shadow:var(--v3-shadow-sm);transform:translateY(-1px)}
+.v3fs-olist-card.on {border-color:var(--v3-accent-2);box-shadow:var(--v3-shadow-md);transform:none}
 .v3fs-olist-card.flagged {border-left-color:var(--v3-amber)}
 .v3fs-olist-body {display:flex;flex-direction:column;gap:8px;align-items:stretch;text-align:left;width:100%;
   padding:14px 15px 12px;background:none;border:none;cursor:pointer;font:inherit;color:inherit}
