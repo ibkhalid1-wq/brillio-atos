@@ -66,7 +66,10 @@ export const FORMAL_ARTIFACT_PHASES: Record<string, string> = {
   "domain-ontology": "listen",
   "architecture-strategy": "envision",
   "agentic-blueprint": "envision",
-  "experience-design": "show",
+  // Experience Design authors the design intent — its home is Envision (the
+  // storyboard validated there), after Architecture Strategy. Show demonstrates
+  // it running (prototype pack + demo scripts + the pilot).
+  "experience-design": "envision",
   "prototype-pack": "show",
   "demo-scripts": "show",
   "hardening-plan": "ship",

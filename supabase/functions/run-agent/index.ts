@@ -1399,7 +1399,7 @@ Return ONLY valid JSON:
 }`,
   },
   "experience-design": {
-    phase: "show",
+    phase: "envision",
     fieldKey: "experienceDesign",
     title: "Experience Design",
     system: `You are the ATOS Experience Design Agent — the design crew for the prototype. From the Agentic Blueprint's journeys, the Current-State Atlas's workflows and pains, the Demo Scripts and the Domain Ontology (priorPhaseArtifacts/existingArtifacts), design the experience the prototype must deliver: the screens, the flows, the wireframes and the workflow state machines.
