@@ -38,7 +38,7 @@ function areaHue(area: string | undefined): number {
 
 /** The editable workflow, drawn as a vertical flow. Steps drag to reorder; the
  * actor and system are editable inline. */
-export function WorkflowFlow({ name, trigger, steps, onEdit, onEditMeta, onToggleRemove, onAdd, onReorder, stepComment, onStepComment }: {
+export function WorkflowFlow({ name, trigger, steps, onEdit, onEditMeta, onToggleRemove, onAdd, onReorder, stepComment, onStepComment, stepConfirmed, onToggleStepConfirm }: {
   name: string;
   trigger?: string;
   steps: FlowNode[];
@@ -51,6 +51,10 @@ export function WorkflowFlow({ name, trigger, steps, onEdit, onEditMeta, onToggl
    *  each step gains a "comment on this phase" field. */
   stepComment?: (index: number) => string;
   onStepComment?: (index: number, value: string) => void;
+  /** Tap-to-validate: whether the stakeholder confirmed this step is right, and
+   *  a toggle. The positive counterpart to "✕ doesn't happen". */
+  stepConfirmed?: (index: number) => boolean;
+  onToggleStepConfirm?: (index: number) => void;
 }) {
   const [drag, setDrag] = useState<number | null>(null);
   const [over, setOver] = useState<number | null>(null);
@@ -66,7 +70,7 @@ export function WorkflowFlow({ name, trigger, steps, onEdit, onEditMeta, onToggl
       <ol className="v3fs-vflow-list">
         {steps.map((node, si) => (
           <li key={si}
-            className={`v3fs-vflow-node${node.removed ? " removed" : ""}${node.added ? " added" : ""}${drag === si ? " dragging" : ""}${over === si && drag !== null && drag !== si ? " over" : ""}`}
+            className={`v3fs-vflow-node${node.removed ? " removed" : ""}${node.added ? " added" : ""}${stepConfirmed?.(si) ? " confirmed" : ""}${drag === si ? " dragging" : ""}${over === si && drag !== null && drag !== si ? " over" : ""}`}
             draggable={!node.removed}
             onDragStart={(e) => { setDrag(si); e.dataTransfer.effectAllowed = "move"; }}
             onDragEnd={() => { setDrag(null); setOver(null); }}
@@ -95,10 +99,17 @@ export function WorkflowFlow({ name, trigger, steps, onEdit, onEditMeta, onToggl
                   {(node.entities ?? []).slice(0, 4).map((ent) => <span key={ent} className="v3fs-vflow-ent">{ent}</span>)}
                 </div>
               ) : null}
-              <button type="button" className="v3fs-vflow-x" onClick={() => onToggleRemove(si)}
-                title={node.removed ? "Keep this step" : node.added ? "Delete" : "This step doesn't happen"}>
-                {node.removed ? "↺ keep" : node.added ? "✕" : "✕ doesn't happen"}
-              </button>
+              <div className="v3fs-vflow-vld">
+                {!node.removed && !node.added && onToggleStepConfirm ? (
+                  <button type="button" className={`v3fs-vld yes${stepConfirmed?.(si) ? " on" : ""}`}
+                    aria-pressed={!!stepConfirmed?.(si)} onClick={() => onToggleStepConfirm(si)}
+                    title="This step is right as shown">✓ Right</button>
+                ) : null}
+                <button type="button" className={`v3fs-vld no${node.removed ? " on" : ""}`} onClick={() => onToggleRemove(si)}
+                  title={node.removed ? "Keep this step" : node.added ? "Delete" : "This step doesn't happen"}>
+                  {node.removed ? "↺ keep" : node.added ? "✕ remove" : "✗ doesn't happen"}
+                </button>
+              </div>
               {!node.removed && onStepComment ? (
                 <div className="v3fs-vflow-note">
                   <input value={stepComment?.(si) ?? ""} placeholder="Comment on this phase (optional)"
@@ -128,11 +139,15 @@ export function WorkflowFlow({ name, trigger, steps, onEdit, onEditMeta, onToggl
  * map — on the narrow linked page that map clipped long definitions and let its
  * edge labels overlap the cards, so it "did not show clearly". A flowing card
  * list reads cleanly at any width, never truncates, and scrolls with the page. */
-export function OntologyMap({ terms, relations, comments, onComment }: {
+export function OntologyMap({ terms, relations, comments, onComment, confirmed, onToggleConfirm }: {
   terms: OntologyTerm[];
   relations: OntologyRelation[];
   comments: Record<string, string>;
   onComment: (index: number, value: string) => void;
+  /** Tap-to-validate: a term the stakeholder actively confirmed is right.
+   * Confirmation is signal too — silence stops meaning "maybe". */
+  confirmed?: Record<string, boolean>;
+  onToggleConfirm?: (index: number) => void;
 }) {
   const [selected, setSelected] = useState<number | null>(null);
   if (!terms.length) return null;
@@ -158,8 +173,9 @@ export function OntologyMap({ terms, relations, comments, onComment }: {
         const rels = relsFor(term.name);
         const isSel = selected === i;
         const isFlagged = commented.has(i);
+        const isConfirmed = !!confirmed?.[String(i)];
         return (
-          <div key={i} className={`v3fs-olist-card${isSel ? " on" : ""}${isFlagged ? " flagged" : ""}`}
+          <div key={i} className={`v3fs-olist-card${isSel ? " on" : ""}${isFlagged ? " flagged" : ""}${isConfirmed ? " confirmed" : ""}`}
             style={{ ["--hue" as string]: areaHue(term.area) }}>
             <button type="button" className="v3fs-olist-body" aria-expanded={isSel}
               onClick={() => setSelected((cur) => (cur === i ? null : i))}>
@@ -181,6 +197,18 @@ export function OntologyMap({ terms, relations, comments, onComment }: {
                 </span>
               ) : null}
             </button>
+            <div className="v3fs-vld-row">
+              {onToggleConfirm ? (
+                <button type="button" className={`v3fs-vld yes${isConfirmed ? " on" : ""}`} aria-pressed={isConfirmed}
+                  onClick={() => { onToggleConfirm(i); if (!isConfirmed) setSelected((cur) => (cur === i ? null : cur)); }}>
+                  ✓ Looks right
+                </button>
+              ) : null}
+              <button type="button" className={`v3fs-vld no${isFlagged || isSel ? " on" : ""}`} aria-pressed={isSel}
+                onClick={() => setSelected(isSel ? null : i)}>
+                {isFlagged ? "✎ Edit note" : "✗ Not quite"}
+              </button>
+            </div>
             {isSel ? (
               <div className="v3fs-olist-note">
                 <div className="v3fs-rvw-field">
@@ -191,11 +219,7 @@ export function OntologyMap({ terms, relations, comments, onComment }: {
                     onText={(spoken) => onComment(i, joinDictation(comments[String(i)] ?? "", spoken))} />
                 </div>
               </div>
-            ) : (
-              <button type="button" className="v3fs-olist-flagbtn" onClick={() => setSelected(i)}>
-                {isFlagged ? "Edit note" : "Flag or add a note"}
-              </button>
-            )}
+            ) : null}
           </div>
         );
       })}

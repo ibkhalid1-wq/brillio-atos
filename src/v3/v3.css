@@ -7205,6 +7205,24 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-olist-flagbtn {align-self:flex-start;margin:0 15px 12px;font:inherit;font-size:11px;font-weight:650;
   color:var(--v3-text-muted);background:none;border:none;cursor:pointer;padding:0;transition:color .12s}
 .v3fs-olist-flagbtn:hover {color:var(--v3-accent-2)}
+
+/* ── Tap-to-validate — one shared control language for steps AND terms ───────── */
+/* A green "✓ Looks right" confirm beside a muted "✗ Not quite" flag. Confirmation
+   is signal: it turns a stakeholder's silence into a validated model. */
+.v3fs-vld-row {display:flex;flex-wrap:wrap;gap:8px;padding:0 15px 13px}
+.v3fs-vflow-vld {display:flex;flex-wrap:wrap;gap:8px;margin-top:2px}
+.v3fs-vld {font:inherit;font-size:11.5px;font-weight:650;letter-spacing:-.005em;border-radius:99px;padding:5px 12px;cursor:pointer;
+  border:1px solid var(--fs-line);background:var(--fs-card);color:var(--v3-text-muted);
+  transition:background var(--v3-transition-fast),border-color var(--v3-transition-fast),color var(--v3-transition-fast)}
+.v3fs-vld.yes:hover {border-color:var(--v3-green);color:var(--v3-green)}
+.v3fs-vld.yes.on {background:var(--v3-green);border-color:var(--v3-green);color:#fff}
+.v3fs-vld.no:hover {border-color:var(--v3-amber);color:var(--v3-amber)}
+.v3fs-vld.no.on {background:var(--v3-amber-soft);border-color:var(--v3-amber);color:var(--v3-amber)}
+.v3fs-vld:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:2px}
+/* A confirmed card reads as settled — a green left accent, both surfaces alike. */
+.v3fs-olist-card.confirmed {border-left-color:var(--v3-green)}
+.v3fs-vflow-node.confirmed .v3fs-vflow-card {border-color:color-mix(in srgb,var(--v3-green) 42%,var(--fs-line));
+  background:color-mix(in srgb,var(--v3-green) 5%,var(--fs-card))}
 .v3fs-olist-note {padding:0 15px 14px}
 .v3fs-olist-input {width:100%;font-size:13px;font-family:inherit;border:1px solid var(--fs-line);border-radius:9px;padding:9px 12px;
   background:var(--v3-surface);color:var(--v3-text);margin-top:2px}

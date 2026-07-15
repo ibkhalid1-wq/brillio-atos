@@ -230,8 +230,9 @@ function OntologyAtlasSurface({ review, stakeholder, submitting, error, onSubmit
   return (
     <>
       <header className="v3fs-hero">
-        <h1 className="v3fs-hero-title"><span className="v3fs-hero-brand">ATOS Flow</span></h1>
-        <p className="v3fs-how">{stakeholder ? `${stakeholder} — ` : ""}{review.intro}</p>
+        <div className="v3fs-hero-eyebrow"><span className="v3fs-hero-brand">ATOS Flow</span></div>
+        <h1 className="v3fs-hero-title">{stakeholder ? `Hi ${stakeholder.split(" ")[0]}` : "Your review"}</h1>
+        <p className="v3fs-how">{review.intro}</p>
       </header>
       <AreaChips areas={areas} active={area} onPick={setArea} />
       {review.recipientArea && area === review.recipientArea ? (
@@ -312,6 +313,10 @@ function ListenWorkflowSurface({ review, stakeholder, submitting, error, onSubmi
   const [addedTerms, setAddedTerms] = usePersistentState<Array<{ name: string; note: string }>>(draftKey, "lwAdd", []);
   // A free-text comment per workflow phase/step, keyed `${wi}.${si}` (text + voice).
   const [stepNotes, setStepNotes] = usePersistentState<Record<string, string>>(draftKey, "lwStepNotes", {});
+  // Tap-to-validate: steps + terms the stakeholder actively confirmed are right.
+  // Confirmation is signal — it turns silence into a validated model, not "maybe".
+  const [stepConfirmed, setStepConfirmed] = usePersistentState<Record<string, boolean>>(draftKey, "lwStepOk", {});
+  const [termConfirmed, setTermConfirmed] = usePersistentState<Record<string, boolean>>(draftKey, "lwTermOk", {});
 
   const editStep = (wi: number, si: number, action: string) => setWfSteps((prev) =>
     prev.map((steps, i) => i !== wi ? steps : steps.map((s, j) => j !== si ? s : { ...s, action })));
@@ -356,24 +361,40 @@ function ListenWorkflowSurface({ review, stakeholder, submitting, error, onSubmi
     const newTerms = addedTerms.filter((t) => t.name.trim());
     const answered = review.questions.map((q, i) => ({ q, a: (answers[String(i)] ?? "").trim() })).filter((r) => r.a);
     const noted = Object.values(stepNotes).filter((v) => v.trim()).length;
+    const confirmedSteps = Object.values(stepConfirmed).filter(Boolean).length;
+    const confirmedTerms = Object.values(termConfirmed).filter(Boolean).length;
     const count = workflows.reduce((n, w) => n + w.changes.length + (w.reordered ? 1 : 0), 0)
-      + (narration.trim() ? 1 : 0) + notedTerms.length + newTerms.length + answered.length + noted;
-    return { workflows, notedTerms, newTerms, answered, count };
-  }, [review, wfSteps, narration, termNotes, answers, addedTerms, stepNotes]);
+      + (narration.trim() ? 1 : 0) + notedTerms.length + newTerms.length + answered.length + noted
+      + confirmedSteps + confirmedTerms;
+    return { workflows, notedTerms, newTerms, answered, confirmedSteps, confirmedTerms, count };
+  }, [review, wfSteps, narration, termNotes, answers, addedTerms, stepNotes, stepConfirmed, termConfirmed]);
 
   const [area, setArea] = useState(review.recipientArea ?? "");
   const areas = areasOf(review.workflows);
 
-  const compose = () => composeListenWorkflowAnswers(review, {
-    workflows: review.workflows.map((w, wi) => ({ name: w.name, steps: wfSteps[wi] ?? [], stepNotes, workflowIndex: wi })),
-    narration, termNotes, answers, addedTerms,
-  });
+  const compose = () => {
+    const base = composeListenWorkflowAnswers(review, {
+      workflows: review.workflows.map((w, wi) => ({ name: w.name, steps: wfSteps[wi] ?? [], stepNotes, workflowIndex: wi })),
+      narration, termNotes, answers, addedTerms,
+    });
+    // Fold the tap-to-validate confirmations into the same attributed evidence
+    // block — a confirmed step/term is a positive fact ("they said this is right"),
+    // not just the absence of a complaint.
+    const okSteps = review.workflows.flatMap((w, wi) =>
+      (wfSteps[wi] ?? []).map((s, si) => stepConfirmed[`${wi}.${si}`] ? `${w.name}: ${s.action}`.trim() : "").filter(Boolean));
+    const okTerms = review.terms.map((t, i) => termConfirmed[String(i)] ? t.name : "").filter(Boolean);
+    const lines: string[] = [];
+    if (okSteps.length) lines.push(`Confirmed accurate — workflow steps: ${okSteps.join("; ")}`);
+    if (okTerms.length) lines.push(`Confirmed accurate — terms: ${okTerms.join(", ")}`);
+    return [base, lines.join("\n")].filter(Boolean).join("\n\n");
+  };
 
   return (
     <>
       <header className="v3fs-hero">
-        <h1 className="v3fs-hero-title"><span className="v3fs-hero-brand">ATOS Flow</span></h1>
-        <p className="v3fs-how">{stakeholder ? `${stakeholder} — ` : ""}{review.intro}</p>
+        <div className="v3fs-hero-eyebrow"><span className="v3fs-hero-brand">ATOS Flow</span></div>
+        <h1 className="v3fs-hero-title">{stakeholder ? `Hi ${stakeholder.split(" ")[0]}` : "Your review"}</h1>
+        <p className="v3fs-how">{review.intro}</p>
       </header>
       <AreaChips areas={areas} active={area} onPick={setArea} />
       {review.recipientArea && area === review.recipientArea ? (
@@ -390,23 +411,20 @@ function ListenWorkflowSurface({ review, stakeholder, submitting, error, onSubmi
               onAdd={(at) => addStep(wi, at)}
               onReorder={(from, to) => reorderStep(wi, from, to)}
               stepComment={(si) => stepNotes[`${wi}.${si}`] ?? ""}
-              onStepComment={(si, v) => setStepNotes((p) => ({ ...p, [`${wi}.${si}`]: v }))} />
+              onStepComment={(si, v) => setStepNotes((p) => ({ ...p, [`${wi}.${si}`]: v }))}
+              stepConfirmed={(si) => !!stepConfirmed[`${wi}.${si}`]}
+              onToggleStepConfirm={(si) => setStepConfirmed((p) => ({ ...p, [`${wi}.${si}`]: !p[`${wi}.${si}`] }))} />
           </section>
         ))}
-
-        <section className="v3fs-rvw-wf">
-          <div className="v3fs-rvw-wf-h"><b>Describe any change in your own words</b></div>
-          <textarea className="v3fs-rvw-overall" rows={3} value={narration} onChange={(e) => setNarration(e.target.value)}
-            placeholder="e.g. Legal actually reviews the quote twice — once before pricing and again before it goes out." />
-          <DictationButton label="Speak your changes" onText={(spoken) => setNarration((cur) => joinDictation(cur, spoken))} />
-        </section>
 
         {review.terms.length ? (
           <>
             <div className="v3fs-rvw-section-h"><span className="v3fs-rvw-step-ic" aria-hidden="true">◉</span>The terms in your world — tap one to flag it</div>
             <section className="v3fs-rvw-wf plain">
               <OntologyMap terms={review.terms} relations={review.relations}
-                comments={termNotes} onComment={(i, v) => setTermNotes((p) => ({ ...p, [String(i)]: v }))} />
+                comments={termNotes} onComment={(i, v) => setTermNotes((p) => ({ ...p, [String(i)]: v }))}
+                confirmed={termConfirmed}
+                onToggleConfirm={(i) => setTermConfirmed((p) => ({ ...p, [String(i)]: !p[String(i)] }))} />
               <div className="v3fs-addterm">
                 {addedTerms.map((t, i) => (
                   <div key={i} className="v3fs-addterm-row">
@@ -428,19 +446,30 @@ function ListenWorkflowSurface({ review, stakeholder, submitting, error, onSubmi
           </>
         ) : null}
 
+        {review.questions.length ? (
+          <section className="v3fs-rvw-wf">
+            <div className="v3fs-rvw-wf-h"><b>A few things that shape the work</b><span className="v3fs-rvw-trigger">These don&rsquo;t change the steps — just good to know</span></div>
+            <div className="v3fs-rvw-belowqs">
+              {review.questions.map((q, i) => (
+                <label key={i} className="v3fs-rvw-bq">
+                  <span>{q}</span>
+                  <div className="v3fs-rvw-field">
+                    <textarea rows={2} value={answers[String(i)] ?? ""} onChange={(e) => setAnswers((p) => ({ ...p, [String(i)]: e.target.value }))} />
+                    <DictationButton compact label="Speak this answer" onText={(spoken) => setAnswers((p) => ({ ...p, [String(i)]: joinDictation(p[String(i)] ?? "", spoken) }))} />
+                  </div>
+                </label>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {/* Free-text catch-all sits LAST — after they've walked the model, so it
+            captures what the taps and questions didn't, not vague up-front input. */}
         <section className="v3fs-rvw-wf">
-          <div className="v3fs-rvw-wf-h"><b>A few things that shape the work</b><span className="v3fs-rvw-trigger">These don&rsquo;t change the steps — just good to know</span></div>
-          <div className="v3fs-rvw-belowqs">
-            {review.questions.map((q, i) => (
-              <label key={i} className="v3fs-rvw-bq">
-                <span>{q}</span>
-                <div className="v3fs-rvw-field">
-                  <textarea rows={2} value={answers[String(i)] ?? ""} onChange={(e) => setAnswers((p) => ({ ...p, [String(i)]: e.target.value }))} />
-                  <DictationButton compact label="Speak this answer" onText={(spoken) => setAnswers((p) => ({ ...p, [String(i)]: joinDictation(p[String(i)] ?? "", spoken) }))} />
-                </div>
-              </label>
-            ))}
-          </div>
+          <div className="v3fs-rvw-wf-h"><b>Anything we missed?</b><span className="v3fs-rvw-trigger">In your own words — optional</span></div>
+          <textarea className="v3fs-rvw-overall" rows={3} value={narration} onChange={(e) => setNarration(e.target.value)}
+            placeholder="e.g. Legal actually reviews the quote twice — once before pricing and again before it goes out." />
+          <DictationButton label="Speak it" onText={(spoken) => setNarration((cur) => joinDictation(cur, spoken))} />
         </section>
       </div>
 
