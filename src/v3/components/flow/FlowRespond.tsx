@@ -26,6 +26,9 @@ interface Pack {
   stakeholder: string;
   role: string;
   intro: string;
+  /** A plain-language programme objective (from the charter) — framing so the
+   * stakeholder knows WHAT the programme is for before they answer. */
+  objective?: string;
   questions: string[];
   /** The programme's cast — lets the respondent defer a question to the
    * person who actually owns the answer. */
@@ -284,6 +287,12 @@ export default function FlowRespond({ token }: { token: string }) {
     <div className="v3-shell v3fs-shell">
       <div className="v3fs-app">
         <div className="v3fs-wrap v3fs-portal">
+          {state.phase === "ready" && state.pack.kind !== "demo" && !state.pack.responded && state.pack.objective ? (
+            <aside className="v3fs-portal-objective">
+              <span className="lbl">About this programme</span>
+              <p>{state.pack.objective}</p>
+            </aside>
+          ) : null}
           {state.phase === "loading" ? (
             <div className="v3fs-quiet"><h2>One moment…</h2></div>
           ) : state.phase === "invalid" ? (

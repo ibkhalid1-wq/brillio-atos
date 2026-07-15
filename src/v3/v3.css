@@ -5773,6 +5773,17 @@ button.v3fs-stale-tag {font-family:inherit;border:none;cursor:pointer}
 .v3fs-portal-brandfoot .mark i {width:20px;height:20px;border-radius:6px;display:grid;place-items:center;color:#fff;font-size:11px;font-style:normal;
   background:linear-gradient(140deg, var(--v3-accent-2), var(--v3-accent-b, #3b2f72));box-shadow:0 2px 6px -2px color-mix(in srgb, var(--v3-accent-2) 55%, transparent)}
 .v3fs-portal-brandfoot small {font-size:11px;color:var(--v3-text-muted);display:inline-flex;align-items:center;gap:5px}
+/* Programme objective — a calm framing block so the stakeholder knows WHAT the
+   programme is for before they answer. Sits above the personal greeting. */
+.v3fs-portal-objective {margin:52px 0 0;padding:15px 20px;border-radius:16px;
+  background:linear-gradient(180deg, var(--fs-indigo-wash), color-mix(in srgb, var(--fs-indigo-wash) 35%, transparent));
+  border:1px solid color-mix(in srgb, var(--v3-accent-2) 16%, transparent)}
+.v3fs-portal-objective .lbl {display:block;font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--v3-accent-2);margin-bottom:7px}
+.v3fs-portal-objective p {margin:0;font-size:14px;line-height:1.6;color:var(--v3-text-secondary);text-wrap:pretty}
+/* When the objective leads, the following header no longer needs its full top pad. */
+.v3fs-portal-objective + header.v3fs-portal-head,
+.v3fs-portal-objective + .v3fs-hero,
+.v3fs-portal-objective + .v3fs-rvw {padding-top:24px;margin-top:0}
 /* Client-facing microsite: a warm Deep-Indigo glow crowns the page, settling
    into the canvas — reads as "prepared for you", not "an app minus its chrome". */
 .v3fs-shell:has(.v3fs-portal) {background:

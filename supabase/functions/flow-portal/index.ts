@@ -290,16 +290,38 @@ Deno.serve(async (req: Request) => {
       // fallback for very old packs. Slices are the review-relevant docs (the
       // reviewer sees them anyway), keeping the blast radius the same in spirit.
       const isReviewPack = String(hit.pack.role ?? "").startsWith("review:");
-      const liveArtifacts = isReviewPack ? {
+      // Old interview packs predate movementId storage. On this path hit.kind is
+      // always "interview", so a plain (non-review) pack IS a Listen discovery
+      // pack by construction — default it to "listen" when unstamped. If the guess
+      // is ever wrong, client re-projection fails gracefully and the plain
+      // questions render (and the pack's own questions survive into any review).
+      const packMovementId = String(hit.pack.movementId ?? "").trim()
+        || (isReviewPack ? "" : "listen");
+      const isListenPack = packMovementId === "listen";
+      // Listen packs — even plain QUESTION packs — ship the live atlas + ontology
+      // so the respond page rebuilds the SAME visual review a review pack gets:
+      // every Listen stakeholder validates their area's terms + workflows first,
+      // then answers. If their area has no model yet, the client falls back to the
+      // plain questions. Architecture/blueprint stay review-only (Envision docs).
+      const shipLive = isReviewPack || isListenPack;
+      const liveArtifacts = shipLive ? {
         currentStateAtlas: isRecord(hit.inner.currentStateAtlas) ? hit.inner.currentStateAtlas : null,
         domainOntology: isRecord(hit.inner.domainOntology) ? hit.inner.domainOntology : null,
-        architectureStrategy: isRecord(hit.inner.architectureStrategy) ? hit.inner.architectureStrategy : null,
-        agenticBlueprint: isRecord(hit.inner.agenticBlueprint) ? hit.inner.agenticBlueprint : null,
+        architectureStrategy: isReviewPack && isRecord(hit.inner.architectureStrategy) ? hit.inner.architectureStrategy : null,
+        agenticBlueprint: isReviewPack && isRecord(hit.inner.agenticBlueprint) ? hit.inner.agenticBlueprint : null,
       } : undefined;
+      // A plain-language programme objective for the stakeholder — the charter's
+      // business objective (client-appropriate: the goal, not the internal plan).
+      const charterDoc = isRecord(hit.inner.transformationCharter) ? hit.inner.transformationCharter : {};
+      const objective = [
+        charterDoc.businessObjective,
+        charterDoc.mandate,
+        Array.isArray(charterDoc.objectives) ? charterDoc.objectives[0] : "",
+      ].map((v) => String(v ?? "").trim()).find(Boolean)?.slice(0, 320) ?? "";
       // The recipient's REAL role (from the kit roster, self included) — lets the
       // client compute their primary AREA from the live artifacts and scope the
       // workflows/ontology/questions to it, even for packs with no stored area.
-      const recipientRole = isReviewPack
+      const recipientRole = shipLive
         ? ((kitRecord && Array.isArray(kitRecord.interviews) ? kitRecord.interviews : [])
             .filter(isRecord)
             .map((iv) => ({
@@ -316,16 +338,22 @@ Deno.serve(async (req: Request) => {
         intro: String(hit.pack.intro ?? ""),
         questions: Array.isArray(hit.pack.questions) ? hit.pack.questions.map(String).slice(0, 12) : [],
         roster,
+        ...(objective ? { objective } : {}),
         ...(interviewDesign ? { design: interviewDesign } : {}),
         ...(interviewScript ? { script: interviewScript } : {}),
         ...(interviewArea ? { recipientArea: interviewArea } : {}),
         // Re-projection inputs (kind + area + the recipient name via `stakeholder`
         // above) and the live slices, so the client rebuilds the current review.
-        ...(isReviewPack ? {
+        // A Listen QUESTION pack ships reviewKind "listen-workflow" too, so the
+        // client upgrades it to the visual review when its area has a model.
+        ...(shipLive ? {
           // Derive the kind from the "review:<kind>" role when not stored, so
           // links minted BEFORE dynamic projection existed also rebuild live.
-          reviewKind: String(hit.pack.reviewKind ?? "").trim() || String(hit.pack.role ?? "").replace(/^review:/, ""),
-          movementId: String(hit.pack.movementId ?? ""),
+          // A non-review Listen pack is a workflow review by construction.
+          reviewKind: isReviewPack
+            ? (String(hit.pack.reviewKind ?? "").trim() || String(hit.pack.role ?? "").replace(/^review:/, ""))
+            : "listen-workflow",
+          movementId: packMovementId,
           ...(typeof hit.pack.recipientArea === "string" ? { recipientArea: hit.pack.recipientArea } : {}),
           ...(recipientRole ? { recipientRole } : {}),
           liveArtifacts,
