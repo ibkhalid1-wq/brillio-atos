@@ -139,7 +139,7 @@ export function WorkflowFlow({ name, trigger, steps, onEdit, onEditMeta, onToggl
  * map — on the narrow linked page that map clipped long definitions and let its
  * edge labels overlap the cards, so it "did not show clearly". A flowing card
  * list reads cleanly at any width, never truncates, and scrolls with the page. */
-export function OntologyMap({ terms, relations, comments, onComment, confirmed, onToggleConfirm }: {
+export function OntologyMap({ terms, relations, comments, onComment, confirmed, onToggleConfirm, dataElements, onDataElements }: {
   terms: OntologyTerm[];
   relations: OntologyRelation[];
   comments: Record<string, string>;
@@ -148,6 +148,11 @@ export function OntologyMap({ terms, relations, comments, onComment, confirmed, 
    * Confirmation is signal too — silence stops meaning "maybe". */
   confirmed?: Record<string, boolean>;
   onToggleConfirm?: (index: number) => void;
+  /** The key data elements (fields) the stakeholder tracks about each term —
+   * the attributes that matter to them. Surfaces requirements straight from the
+   * people who live in the data. Free text per term (comma-separated). */
+  dataElements?: Record<string, string>;
+  onDataElements?: (index: number, value: string) => void;
 }) {
   const [selected, setSelected] = useState<number | null>(null);
   if (!terms.length) return null;
@@ -209,6 +214,18 @@ export function OntologyMap({ terms, relations, comments, onComment, confirmed, 
                 {isFlagged ? "✎ Edit note" : "✗ Not quite"}
               </button>
             </div>
+            {onDataElements ? (
+              <div className={`v3fs-olist-data${(dataElements?.[String(i)] ?? "").trim() ? " filled" : ""}`}>
+                <span className="lbl">Key things you track about {/^[aeiou]/i.test(term.name.trim()) ? "an" : "a"} {term.name.toLowerCase()}</span>
+                <div className="v3fs-rvw-field">
+                  <input className="v3fs-olist-input" value={dataElements?.[String(i)] ?? ""}
+                    onChange={(e) => onDataElements(i, e.target.value)}
+                    placeholder="e.g. stage, amount, close date, owner…" />
+                  <DictationButton compact label="Speak the fields"
+                    onText={(spoken) => onDataElements(i, joinDictation(dataElements?.[String(i)] ?? "", spoken))} />
+                </div>
+              </div>
+            ) : null}
             {isSel ? (
               <div className="v3fs-olist-note">
                 <div className="v3fs-rvw-field">

@@ -83,7 +83,7 @@ function ReviewHeader({ stakeholder, programme, objective, intro, area }: {
       {programme ? <div className="v3fs-rvw-prog">{programme}</div> : null}
       <h1 className="v3fs-rvw-hi">{first ? `Hi ${first},` : "Hi,"}</h1>
       <p className="v3fs-rvw-lede">
-        we&rsquo;re building <b>{programme || "this programme"}</b>{coreGoal ? <> — the goal is to {coreGoal.charAt(0).toLowerCase() + coreGoal.slice(1)}</> : ""}.
+        We&rsquo;re building <b>{programme || "this programme"}</b> — an agentic solution{coreGoal ? <> built to {coreGoal.charAt(0).toLowerCase() + coreGoal.slice(1)}</> : ""}.
       </p>
       {intro ? <p className="v3fs-rvw-sub">{intro}</p> : null}
       {area ? <p className="v3fs-rvw-scoped"><b>This covers {area}</b> — the workflows and terms in your world.</p> : null}
@@ -331,6 +331,8 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
   // Confirmation is signal — it turns silence into a validated model, not "maybe".
   const [stepConfirmed, setStepConfirmed] = usePersistentState<Record<string, boolean>>(draftKey, "lwStepOk", {});
   const [termConfirmed, setTermConfirmed] = usePersistentState<Record<string, boolean>>(draftKey, "lwTermOk", {});
+  // The key data elements (fields) the stakeholder tracks about each term.
+  const [termData, setTermData] = usePersistentState<Record<string, string>>(draftKey, "lwTermData", {});
 
   const editStep = (wi: number, si: number, action: string) => setWfSteps((prev) =>
     prev.map((steps, i) => i !== wi ? steps : steps.map((s, j) => j !== si ? s : { ...s, action })));
@@ -377,11 +379,12 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
     const noted = Object.values(stepNotes).filter((v) => v.trim()).length;
     const confirmedSteps = Object.values(stepConfirmed).filter(Boolean).length;
     const confirmedTerms = Object.values(termConfirmed).filter(Boolean).length;
+    const dataTerms = Object.values(termData).filter((v) => v.trim()).length;
     const count = workflows.reduce((n, w) => n + w.changes.length + (w.reordered ? 1 : 0), 0)
       + (narration.trim() ? 1 : 0) + notedTerms.length + newTerms.length + answered.length + noted
-      + confirmedSteps + confirmedTerms;
-    return { workflows, notedTerms, newTerms, answered, confirmedSteps, confirmedTerms, count };
-  }, [review, wfSteps, narration, termNotes, answers, addedTerms, stepNotes, stepConfirmed, termConfirmed]);
+      + confirmedSteps + confirmedTerms + dataTerms;
+    return { workflows, notedTerms, newTerms, answered, confirmedSteps, confirmedTerms, dataTerms, count };
+  }, [review, wfSteps, narration, termNotes, answers, addedTerms, stepNotes, stepConfirmed, termConfirmed, termData]);
 
   const [area, setArea] = useState(review.recipientArea ?? "");
   const areas = areasOf(review.workflows);
@@ -397,9 +400,13 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
     const okSteps = review.workflows.flatMap((w, wi) =>
       (wfSteps[wi] ?? []).map((s, si) => stepConfirmed[`${wi}.${si}`] ? `${w.name}: ${s.action}`.trim() : "").filter(Boolean));
     const okTerms = review.terms.map((t, i) => termConfirmed[String(i)] ? t.name : "").filter(Boolean);
+    // Key data elements the stakeholder tracks per term — the attributes that
+    // matter to them, straight into the record as requirements evidence.
+    const dataLines = review.terms.map((t, i) => (termData[String(i)] ?? "").trim() ? `${t.name}: ${termData[String(i)].trim()}` : "").filter(Boolean);
     const lines: string[] = [];
     if (okSteps.length) lines.push(`Confirmed accurate — workflow steps: ${okSteps.join("; ")}`);
     if (okTerms.length) lines.push(`Confirmed accurate — terms: ${okTerms.join(", ")}`);
+    if (dataLines.length) lines.push(`Key data elements they track — ${dataLines.join("; ")}`);
     return [base, lines.join("\n")].filter(Boolean).join("\n\n");
   };
 
@@ -431,7 +438,9 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
               <OntologyMap terms={review.terms} relations={review.relations}
                 comments={termNotes} onComment={(i, v) => setTermNotes((p) => ({ ...p, [String(i)]: v }))}
                 confirmed={termConfirmed}
-                onToggleConfirm={(i) => setTermConfirmed((p) => ({ ...p, [String(i)]: !p[String(i)] }))} />
+                onToggleConfirm={(i) => setTermConfirmed((p) => ({ ...p, [String(i)]: !p[String(i)] }))}
+                dataElements={termData}
+                onDataElements={(i, v) => setTermData((p) => ({ ...p, [String(i)]: v }))} />
               <div className="v3fs-addterm">
                 {addedTerms.map((t, i) => (
                   <div key={i} className="v3fs-addterm-row">
@@ -501,6 +510,7 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
             {narration.trim() ? <p className="v3fs-rvw-live-note">“{narration.trim()}”</p> : null}
             {proposal.newTerms.length ? <p className="v3fs-rvw-live-note add">{proposal.newTerms.length} new term{proposal.newTerms.length === 1 ? "" : "s"}</p> : null}
             {proposal.notedTerms.length ? <p className="v3fs-rvw-live-note">{proposal.notedTerms.length} term note{proposal.notedTerms.length === 1 ? "" : "s"}</p> : null}
+            {proposal.dataTerms ? <p className="v3fs-rvw-live-note add">key fields on {proposal.dataTerms} term{proposal.dataTerms === 1 ? "" : "s"}</p> : null}
             {proposal.answered.length ? <p className="v3fs-rvw-live-note">{proposal.answered.length} note{proposal.answered.length === 1 ? "" : "s"} on constraints</p> : null}
           </div>
         ) : <p className="v3fs-rvw-live-empty">Edit a step, add one, or describe a change — it appears here.</p>}
