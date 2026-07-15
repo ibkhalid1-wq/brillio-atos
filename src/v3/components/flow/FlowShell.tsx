@@ -1229,6 +1229,10 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
               <div className="v3fs-dec-top">
                 {item.kind === "demo-verdict" ? (
                   <span className={`v3fs-vc ${item.verdict === "rework" ? "pen" : "acc"}`}>{(item.verdict ?? "verdict").replace(/-/g, " ")}</span>
+                ) : item.kind === "question" ? (
+                  <span className="v3fs-tag ev">question · from the link</span>
+                ) : item.kind === "design-feedback" ? (
+                  <span className="v3fs-tag ev">design feedback</span>
                 ) : (
                   <span className="v3fs-tag ev">async response</span>
                 )}
@@ -1239,16 +1243,22 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
               <div className="v3fs-dec-rec-b">
                 {item.kind === "demo-verdict"
                   ? "confirming updates the tour ledger and the track's show record"
-                  : `${item.text.split(/\s+/).filter(Boolean).length.toLocaleString()} words${item.documents?.length ? ` · ${item.documents.length} document${item.documents.length === 1 ? "" : "s"} attached` : ""}`}
+                  : item.kind === "question"
+                    ? "a non-design question the app couldn't answer from the design — reply to them on their link, then dismiss"
+                    : item.kind === "design-feedback"
+                      ? "folds into the Show demo feedback — the Prototype Loop reads it to raise a change request"
+                      : `${item.text.split(/\s+/).filter(Boolean).length.toLocaleString()} words${item.documents?.length ? ` · ${item.documents.length} document${item.documents.length === 1 ? "" : "s"} attached` : ""}`}
               </div>
               <div className="v3fs-dec-cta">
-                <button type="button" className="v3fs-btn pri" disabled={busyId === item.id}
-                  onClick={() => void actOnItem(item.id, onIngestPortalItem)}>
-                  {busyId === item.id ? "Ingesting…" : item.kind === "demo-verdict" ? "Record the verdict" : "Ingest as evidence"}
-                </button>
+                {item.kind !== "question" ? (
+                  <button type="button" className="v3fs-btn pri" disabled={busyId === item.id}
+                    onClick={() => void actOnItem(item.id, onIngestPortalItem)}>
+                    {busyId === item.id ? "Ingesting…" : item.kind === "demo-verdict" ? "Record the verdict" : item.kind === "design-feedback" ? "Fold into design feedback" : "Ingest as evidence"}
+                  </button>
+                ) : null}
                 <button type="button" className="v3fs-btn" disabled={busyId === item.id}
                   onClick={() => void actOnItem(item.id, onDismissPortalItem)}>
-                  Dismiss
+                  {item.kind === "question" ? "Mark handled" : "Dismiss"}
                 </button>
               </div>
             </article>

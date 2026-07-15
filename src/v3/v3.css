@@ -6684,6 +6684,21 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-ask-row {display:flex;gap:8px}
 .v3fs-ask-row input {flex:1 1 auto;font:inherit;font-size:12.5px;border:1px solid var(--fs-line);border-radius:9px;padding:9px 12px;background:var(--v3-surface);color:var(--v3-text)}
 .v3fs-ask-row input:focus {outline:none;border-color:var(--v3-accent-2);box-shadow:0 0 0 3px color-mix(in srgb,var(--v3-accent-2) 14%,transparent)}
+/* Grounded design answer — evidence chips (who · when) + expandable quote. */
+.v3fs-ask-cites {display:flex;flex-direction:column;gap:5px;margin:7px 0 0}
+.v3fs-ask-cites-l {font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3fs-ask-chips {display:flex;flex-wrap:wrap;gap:5px}
+.v3fs-ask-chip {font:inherit;font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;cursor:pointer;
+  color:var(--v3-accent);background:color-mix(in srgb,var(--v3-accent) 9%,var(--fs-card));border:1px solid color-mix(in srgb,var(--v3-accent) 28%,transparent)}
+.v3fs-ask-chip.on {background:var(--v3-accent);color:#fff;border-color:var(--v3-accent)}
+.v3fs-ask-chip b {font-weight:800;margin-right:2px}
+.v3fs-ask-quote {margin:6px 0 0;padding:8px 11px;border-radius:10px;background:var(--v3-surface-2);border:1px solid var(--fs-line);
+  display:flex;flex-direction:column;gap:3px}
+.v3fs-ask-quote b {font-size:11px;color:var(--v3-text-primary)}
+.v3fs-ask-quote span {font-size:12px;font-style:italic;line-height:1.5;color:var(--v3-text-secondary)}
+.v3fs-ask-fb {display:flex;flex-direction:column;gap:5px;margin:8px 0 0}
+.v3fs-ask-fb label {font-size:11.5px;color:var(--v3-text-secondary);line-height:1.45}
+.v3fs-ask-fbdone {margin:8px 0 0;font-size:11.5px;font-weight:600;color:var(--v3-accent)}
 /* Portfolio pattern chips on Envision + card engagement read. */
 .v3fs-patterns {display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 12px;padding:9px 13px;
   border:1px solid var(--fs-line);border-radius:11px;background:var(--v3-surface-2)}

@@ -720,16 +720,32 @@ export default function FlowRespond({ token }: { token: string }) {
   );
 }
 
+interface AskCitation { id: string; who: string; when: string; quote: string; }
+interface AskTurn {
+  q: string;
+  a: string;
+  topic?: "design" | "other";
+  citations?: AskCitation[];
+  feedbackPrompt?: string;
+  /** Design turns invite feedback — tracked per turn. */
+  feedback?: string;
+  feedbackSent?: boolean;
+}
+
 /**
- * Ask the record — a stakeholder mid-review asks "why does this step stay
- * human?" and gets an answer grounded in the programme record (charter,
- * ontology, atlas, blueprint), with the evidence cited. Objections get
+ * Ask the record — a stakeholder asks a question on their link and the app
+ * TRIAGES it. A DESIGN question is answered here and now, grounded in the
+ * Experience Design and the discovery evidence (who said what, when, shown as
+ * chips), and invites their feedback so the question becomes a validation
+ * signal. Anything else is passed to the delivery team's inbox. Objections get
  * answered the moment they form instead of festering until demo day.
  */
 function AskTheRecord({ token }: { token: string }) {
   const [q, setQ] = useState("");
-  const [thread, setThread] = useState<Array<{ q: string; a: string }>>([]);
+  const [thread, setThread] = useState<AskTurn[]>([]);
   const [busy, setBusy] = useState(false);
+  const [openCite, setOpenCite] = useState<string | null>(null);
+
   const ask = async () => {
     const question = q.trim();
     if (!question || busy) return;
@@ -740,22 +756,87 @@ function AskTheRecord({ token }: { token: string }) {
         body: JSON.stringify({ token, ask: question }),
       });
       const body = await response.json().catch(() => ({}));
-      const answer = response.ok && typeof body.answer === "string"
-        ? body.answer
-        : (typeof body.error === "string" ? body.error : "Couldn't answer that right now — add it as a comment and the team will follow up.");
-      setThread((t) => [...t, { q: question, a: answer }].slice(-6));
+      let turn: AskTurn;
+      if (response.ok && body.topic === "design" && typeof body.answer === "string") {
+        turn = {
+          q: question, a: body.answer, topic: "design",
+          citations: Array.isArray(body.citations) ? body.citations.filter((c: unknown): c is AskCitation => !!c && typeof c === "object") : [],
+          feedbackPrompt: typeof body.feedbackPrompt === "string" ? body.feedbackPrompt : undefined,
+        };
+      } else if (response.ok && body.topic === "other") {
+        turn = { q: question, a: typeof body.message === "string" ? body.message : "Thanks — I've passed this to the delivery team, who'll follow up here.", topic: "other" };
+      } else {
+        turn = { q: question, a: typeof body.error === "string" ? body.error : "Couldn't answer that right now — add it as a comment and the team will follow up." };
+      }
+      setThread((t) => [...t, turn].slice(-6));
       setQ("");
     } catch {
       setThread((t) => [...t, { q: question, a: "Couldn't answer that right now — add it as a comment and the team will follow up." }].slice(-6));
     } finally { setBusy(false); }
   };
+
+  const sendFeedback = async (idx: number) => {
+    const turn = thread[idx];
+    const feedback = (turn.feedback ?? "").trim();
+    if (!feedback) return;
+    try {
+      await fetch(`${FUNCTIONS_BASE}/flow-portal`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, designFeedback: { question: turn.q, answer: turn.a, feedback } }),
+      });
+    } catch { /* best effort — the recap still shows it as sent */ }
+    setThread((t) => t.map((e, i) => i === idx ? { ...e, feedbackSent: true } : e));
+  };
+
   return (
     <aside className="v3fs-ask-record">
-      <div className="v3fs-ask-h"><span aria-hidden="true">✦</span> Questions? Ask — answers come from this programme&rsquo;s record.</div>
+      <div className="v3fs-ask-h"><span aria-hidden="true">✦</span> Questions? Ask — design answers come with the evidence behind them.</div>
       {thread.map((entry, i) => (
         <div key={i} className="v3fs-ask-turn">
           <p className="v3fs-ask-q">{entry.q}</p>
           <p className="v3fs-ask-a">{entry.a}</p>
+
+          {entry.topic === "design" && entry.citations && entry.citations.length > 0 ? (
+            <div className="v3fs-ask-cites">
+              <span className="v3fs-ask-cites-l">Grounded in</span>
+              <div className="v3fs-ask-chips">
+                {entry.citations.map((c) => {
+                  const key = `${i}:${c.id}`; const open = openCite === key;
+                  return (
+                    <button key={c.id} type="button" className={`v3fs-ask-chip${open ? " on" : ""}`}
+                      title={c.who} onClick={() => setOpenCite(open ? null : key)}>
+                      <b>{c.id}</b> {(c.who || "Source").split(",")[0]}{c.when ? ` · ${c.when.slice(0, 10)}` : ""}
+                    </button>
+                  );
+                })}
+              </div>
+              {(() => {
+                const active = entry.citations.find((c) => `${i}:${c.id}` === openCite);
+                return active ? (
+                  <blockquote className="v3fs-ask-quote">
+                    <b>{active.who}{active.when ? ` · ${active.when}` : ""}</b>
+                    <span>&ldquo;{active.quote}&rdquo;</span>
+                  </blockquote>
+                ) : null;
+              })()}
+            </div>
+          ) : null}
+
+          {entry.topic === "design" ? (
+            entry.feedbackSent ? (
+              <p className="v3fs-ask-fbdone">✓ Thanks — your feedback is on its way to the delivery team.</p>
+            ) : (
+              <div className="v3fs-ask-fb">
+                {entry.feedbackPrompt ? <label>{entry.feedbackPrompt}</label> : null}
+                <div className="v3fs-ask-row">
+                  <input value={entry.feedback ?? ""} placeholder="Your feedback on this…" maxLength={2000}
+                    onChange={(e) => { const v = e.target.value; setThread((t) => t.map((x, j) => j === i ? { ...x, feedback: v } : x)); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") void sendFeedback(i); }} />
+                  <button type="button" className="v3fs-btn" disabled={!(entry.feedback ?? "").trim()} onClick={() => void sendFeedback(i)}>Send feedback</button>
+                </div>
+              </div>
+            )
+          ) : null}
         </div>
       ))}
       <div className="v3fs-ask-row">

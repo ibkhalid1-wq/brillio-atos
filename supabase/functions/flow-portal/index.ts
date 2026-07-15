@@ -39,6 +39,94 @@ function jsonResponse(body: unknown, status = 200): Response {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+// ── Design grounding (portal Q&A) ────────────────────────────────────────────
+// When a stakeholder asks a DESIGN question on their link, we answer it grounded
+// in the Experience Design + the discovery evidence (who said what, when), and
+// cite the evidence as [E#]. Built here (not the client) because the linked page
+// only holds its own pack, never the full programme blob.
+interface PortalEvidence { id: string; who: string; when: string; quote: string; }
+
+const clipText = (s: string, n: number): string => { const t = s.trim(); return t.length > n ? `${t.slice(0, n - 1).trimEnd()}…` : t; };
+
+/** A prose summary of the Experience Design the question is likely about. */
+function designSummaryFor(inner: Record<string, unknown>): string {
+  const ed = isRecord(inner.experienceDesign) ? inner.experienceDesign : null;
+  if (!ed) return "";
+  const parts: string[] = [];
+  const intent = isRecord(ed.designIntent) ? ed.designIntent : {};
+  if (typeof intent.personality === "string" && intent.personality.trim()) parts.push(`Design intent: ${clipText(intent.personality, 220)}`);
+  const screens = Array.isArray(ed.screens) ? ed.screens.filter(isRecord) : [];
+  if (screens.length) {
+    parts.push(`Screens: ${screens.slice(0, 12).map((s) => `${String(s.name ?? "").trim()}${typeof s.purpose === "string" && s.purpose.trim() ? ` — ${clipText(s.purpose, 90)}` : ""}`).filter((l) => l.trim()).join("; ")}`);
+  }
+  const flows = Array.isArray(ed.flows) ? ed.flows.filter(isRecord) : [];
+  const pains = flows.map((f) => {
+    const p = isRecord(f.painAnswered) ? f.painAnswered : {};
+    return typeof p.quote === "string" && p.quote.trim() ? `${String(f.name ?? "").trim()} answers "${clipText(p.quote, 120)}"${typeof p.who === "string" && p.who.trim() ? ` — ${p.who}` : ""}` : "";
+  }).filter(Boolean);
+  if (pains.length) parts.push(`Flows and the pain each dissolves: ${pains.slice(0, 8).join("; ")}`);
+  return parts.join("\n");
+}
+
+/** Speaker-attributed excerpts from the Frame + Listen transcripts. Mirrors the
+ * client's transcript convention: blocks headed by "— Name, Role, Date —". */
+function extractPortalEvidence(inner: Record<string, unknown>): PortalEvidence[] {
+  const pi = isRecord(inner.phaseInputs) ? inner.phaseInputs : {};
+  const frame = isRecord(pi.frame) ? pi.frame : {};
+  const listen = isRecord(pi.listen) ? pi.listen : {};
+  const sources = [listen.interviewTranscripts, frame.sponsorConversation, listen.sponsorConversation, frame.interviewTranscripts]
+    .filter((s): s is string => typeof s === "string" && s.trim().length > 0);
+  const out: PortalEvidence[] = [];
+  const seen = new Set<string>();
+  for (const src of sources) {
+    // Split on speaker header lines, capturing the header text between the dashes.
+    const parts = src.split(/^\s*—\s*(.+?)\s*—\s*$/m);
+    for (let i = 1; i < parts.length; i += 2) {
+      const header = (parts[i] || "").trim();
+      const body = (parts[i + 1] || "").trim();
+      if (!header || body.length < 20) continue;
+      const dateM = header.match(/(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2})?)/);
+      const when = dateM ? dateM[1] : "";
+      const who = header.replace(/,?\s*\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2})?\s*$/, "").trim() || header;
+      const quote = clipText(body.replace(/\s+/g, " "), 240);
+      const key = `${who}|${quote.slice(0, 40)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ id: `E${out.length + 1}`, who, when, quote });
+      if (out.length >= 10) break;
+    }
+    if (out.length >= 10) break;
+  }
+  return out;
+}
+
+/** The evidence whose [E#] tag appears in the answer, first-mention order. */
+function citedEvidence(answer: string, evidence: PortalEvidence[]): PortalEvidence[] {
+  const cited: PortalEvidence[] = [];
+  const seen = new Set<string>();
+  const re = /\[(E\d+)\]/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(answer)) !== null) {
+    if (seen.has(m[1])) continue;
+    const hit = evidence.find((e) => e.id === m[1]);
+    if (hit) { seen.add(m[1]); cited.push(hit); }
+  }
+  return cited;
+}
+
+/** Parse a model reply that should be {"topic","answer"} JSON, tolerating fences. */
+function parseTriage(text: string): { topic: string; answer: string } {
+  const raw = text.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+  const start = raw.indexOf("{"); const end = raw.lastIndexOf("}");
+  if (start >= 0 && end > start) {
+    try {
+      const o = JSON.parse(raw.slice(start, end + 1)) as Record<string, unknown>;
+      return { topic: String(o.topic ?? "").toLowerCase(), answer: typeof o.answer === "string" ? o.answer : "" };
+    } catch { /* fall through */ }
+  }
+  return { topic: "", answer: "" };
+}
+
 /** Optional heads-up ping (Slack-compatible webhook). Fire-and-forget:
  * a missing SLACK_WEBHOOK_URL or a failed post never blocks the loop. */
 const SLACK_WEBHOOK_URL = Deno.env.get("SLACK_WEBHOOK_URL") || "";
@@ -544,36 +632,106 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      // GROUNDED Q&A: a stakeholder mid-review asks "why does this step stay
-      // human?" and gets an answer FROM THE RECORD — charter, ontology, atlas,
-      // blueprint — with the grounding made explicit. Read-only, capped.
+      // ASK ON YOUR LINK: a stakeholder asks a question. We CLASSIFY it —
+      //  • a DESIGN question (about the future system: its screens, flows, why a
+      //    step works this way) is answered right here, grounded in the
+      //    Experience Design + the discovery evidence, citing who said what and
+      //    when as [E#], and we invite their feedback so a question becomes a
+      //    validation signal.
+      //  • ANYTHING ELSE (scope, timeline, a fact, a complaint) can't be answered
+      //    from the design, so it is quarantined into the operator's Inbox and
+      //    the person is told the team will follow up.
       if (isRecord(body) && typeof body.ask === "string" && body.ask.trim()) {
         const hit = await loadPack(token);
         if ("reason" in hit) return jsonResponse({ error: hit.reason }, 404);
         const question = body.ask.trim().slice(0, 400);
-        const slice = (value: unknown, cap: number) => (isRecord(value) ? JSON.stringify(value).slice(0, cap) : "");
-        const record = [
-          `PROGRAMME: ${hit.programName}`,
-          `CHARTER: ${slice(hit.inner.transformationCharter, 2500)}`,
-          `DOMAIN ONTOLOGY: ${slice(hit.inner.domainOntology, 2500)}`,
-          `CURRENT-STATE ATLAS: ${slice(hit.inner.currentStateAtlas, 2500)}`,
-          `AGENTIC BLUEPRINT: ${slice(hit.inner.agenticBlueprint, 2500)}`,
-          `ARCHITECTURE: ${slice(hit.inner.architectureStrategy, 1500)}`,
-        ].filter((line) => !/: $/.test(line)).join("\n\n");
+        const design = designSummaryFor(hit.inner);
+        const evidence = extractPortalEvidence(hit.inner);
+        const evidenceBlock = evidence.length
+          ? evidence.map((e) => `[${e.id}] "${e.quote}" — ${e.who || "unattributed"}${e.when ? ` (${e.when})` : ""}`).join("\n")
+          : "(no attributed discovery evidence on record yet)";
         try {
           const result = await completeClaudeText({
-            system: `You answer a client stakeholder's question during their review of an agentic-system design. Answer ONLY from the programme record provided — 2-4 sentences, plain language, warm but precise. When the record contains a verbatim quote or constraint that grounds the answer, cite it ("your words on record: …"). If the record doesn't answer the question, say so honestly and suggest they add it as a comment for the team. Never invent facts, prices, or commitments.`,
-            messages: [{ role: "user", content: `THE PROGRAMME RECORD:\n${record}\n\nSTAKEHOLDER QUESTION: ${question}` }],
-            maxTokens: 300,
+            system: `You triage and answer a client stakeholder's question during their review of the future system's design. Decide the question's TOPIC:
+- "design": it is about the FUTURE SYSTEM being designed — a screen, a flow, why a step is automated or stays human, what the app does. Answer it in 2-4 warm, plain-language sentences grounded ONLY in the DESIGN and the EVIDENCE provided. When a point rests on a piece of evidence, cite it inline as [E#] using ONLY the ids listed, so the person sees who asked for it and when. Never invent facts, prices, commitments, or a citation.
+- "other": anything else — scope, timeline, budget, staffing, a fact about their business, a complaint, a request unrelated to the design. Do NOT answer it; set answer to "".
+Return ONLY JSON: {"topic":"design"|"other","answer":"..."}.`,
+            messages: [{ role: "user", content: `THE DESIGN:\n${design || "(no experience design on record yet)"}\n\nEVIDENCE (cite as [E#]):\n${evidenceBlock}\n\nSTAKEHOLDER QUESTION: ${question}` }],
+            maxTokens: 380,
             tier: "tier1",
             timeoutMs: 25_000,
           });
-          const answer = result.text.trim().slice(0, 1200);
-          if (!answer) return jsonResponse({ error: "No answer" }, 502);
-          return jsonResponse({ answer });
+          const { topic, answer } = parseTriage(result.text);
+          if (topic === "design" && answer.trim()) {
+            const cleaned = answer.trim().slice(0, 1200);
+            return jsonResponse({
+              topic: "design",
+              answer: cleaned,
+              citations: citedEvidence(cleaned, evidence),
+              feedbackPrompt: "Does that answer it? Tell us what you think of this part of the design — your feedback goes straight to the delivery team.",
+            });
+          }
+          // "other" (or an un-answerable design question) → quarantine to Inbox.
+          const now = new Date().toISOString();
+          for (let attempt = 0; attempt < 3; attempt++) {
+            const h = await loadPack(token);
+            if ("reason" in h) break;
+            const inbox = Array.isArray(h.inner.flowPortalInbox) ? (h.inner.flowPortalInbox as unknown[]).filter((x) => x != null) : [];
+            inbox.push({
+              id: crypto.randomUUID(), kind: "question",
+              stakeholder: String(h.pack.stakeholder ?? ""), role: String(h.pack.role ?? ""),
+              receivedAt: now, text: question,
+            });
+            const nextInner = { ...h.inner, flowPortalInbox: inbox.slice(-INBOX_CAP) };
+            const nextRaw = h.nested ? { ...h.raw, data: nextInner } : nextInner;
+            let upd = h.admin.from("adam_programs").update({ data: nextRaw, updated_at: now }).eq("id", h.programId);
+            upd = h.updatedAt ? upd.eq("updated_at", h.updatedAt) : upd.is("updated_at", null);
+            const { data: rows, error } = await upd.select("id");
+            if (error) break;
+            if (rows && rows.length > 0) {
+              notifyWebhook(`ATOS Flow — ${hit.programName}: ${String(hit.pack.stakeholder ?? "a stakeholder")} asked a question. It is waiting in the evidence inbox.`);
+              break;
+            }
+          }
+          return jsonResponse({ topic: "other", routed: true, message: "Thanks — that's one for the delivery team. I've passed it to them and they'll follow up with you here." });
         } catch {
           return jsonResponse({ error: "Couldn't answer that right now — add it as a comment and the team will follow up." }, 502);
         }
+      }
+
+      // DESIGN FEEDBACK: the stakeholder replies to an inline design answer with
+      // their feedback. Quarantined to the Inbox like any public-link content;
+      // the operator folds it into the design loop.
+      if (isRecord(body) && isRecord(body.designFeedback)) {
+        const hit = await loadPack(token);
+        if ("reason" in hit) return jsonResponse({ error: hit.reason }, 404);
+        const fb = body.designFeedback as Record<string, unknown>;
+        const feedback = String(fb.feedback ?? "").trim().slice(0, 2000);
+        if (feedback.length < 2) return jsonResponse({ error: "Add a little more." }, 400);
+        const aboutQ = String(fb.question ?? "").trim().slice(0, 400);
+        const now = new Date().toISOString();
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const h = await loadPack(token);
+          if ("reason" in h) return jsonResponse({ error: h.reason }, 404);
+          const inbox = Array.isArray(h.inner.flowPortalInbox) ? (h.inner.flowPortalInbox as unknown[]).filter((x) => x != null) : [];
+          inbox.push({
+            id: crypto.randomUUID(), kind: "design-feedback",
+            stakeholder: String(h.pack.stakeholder ?? ""), role: String(h.pack.role ?? ""),
+            receivedAt: now,
+            text: aboutQ ? `On "${aboutQ}": ${feedback}` : feedback,
+          });
+          const nextInner = { ...h.inner, flowPortalInbox: inbox.slice(-INBOX_CAP) };
+          const nextRaw = h.nested ? { ...h.raw, data: nextInner } : nextInner;
+          let upd = h.admin.from("adam_programs").update({ data: nextRaw, updated_at: now }).eq("id", h.programId);
+          upd = h.updatedAt ? upd.eq("updated_at", h.updatedAt) : upd.is("updated_at", null);
+          const { data: rows, error } = await upd.select("id");
+          if (error) return jsonResponse({ error: "Could not record that. Please try again." }, 500);
+          if (rows && rows.length > 0) {
+            notifyWebhook(`ATOS Flow — ${hit.programName}: ${String(hit.pack.stakeholder ?? "a stakeholder")} gave design feedback. It is waiting in the evidence inbox.`);
+            return jsonResponse({ ok: true });
+          }
+        }
+        return jsonResponse({ error: "The programme is busy right now — please try again." }, 409);
       }
 
       // Lightweight ENGAGEMENT telemetry: the respond page reports how far the

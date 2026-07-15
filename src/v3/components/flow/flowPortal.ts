@@ -58,7 +58,10 @@ export interface FlowPackSubmission {
 
 export interface FlowPortalItem {
   id: string;
-  kind: "interview" | "demo-verdict";
+  // "question" = a non-design question the person asked on their link, routed
+  // here for the operator to handle. "design-feedback" = their feedback on an
+  // inline design answer, to fold into the Show demo feedback.
+  kind: "interview" | "demo-verdict" | "question" | "design-feedback";
   stakeholder: string;
   role: string;
   receivedAt: string;
@@ -228,7 +231,10 @@ export function listPortalInbox(program: ProgramSummary): FlowPortalItem[] {
   // surface (listApprovalResponses) — keep them out of the interview/demo list.
   return list.filter(isRecord).filter((entry) => entry.kind !== "approval").map((entry): FlowPortalItem => ({
     id: String(entry.id ?? ""),
-    kind: entry.kind === "demo-verdict" ? "demo-verdict" : "interview",
+    kind: entry.kind === "demo-verdict" ? "demo-verdict"
+      : entry.kind === "question" ? "question"
+      : entry.kind === "design-feedback" ? "design-feedback"
+      : "interview",
     stakeholder: String(entry.stakeholder ?? "Stakeholder"),
     role: String(entry.role ?? ""),
     receivedAt: String(entry.receivedAt ?? ""),
@@ -631,9 +637,39 @@ export function ingestPortalResponse(program: ProgramSummary, itemId: string, ac
   const inbox = Array.isArray(inner.flowPortalInbox) ? (inner.flowPortalInbox as unknown[]) : [];
   const found = inbox.filter(isRecord).find((entry) => entry.id === itemId);
   if (!found) return null;
-  return found.kind === "demo-verdict"
-    ? ingestDemoVerdict(program, itemId, actor)
-    : ingestInterviewResponse(program, itemId, actor);
+  if (found.kind === "demo-verdict") return ingestDemoVerdict(program, itemId, actor);
+  // A "question" is the operator's to answer out of band — not evidence; it is
+  // resolved by Dismiss once handled, never folded into the record.
+  if (found.kind === "question") return null;
+  if (found.kind === "design-feedback") return ingestDesignFeedback(program, itemId, actor);
+  return ingestInterviewResponse(program, itemId, actor);
+}
+
+/**
+ * Fold a stakeholder's inline design feedback into the Show movement's demo
+ * feedback — the same channel the Prototype Loop reads to raise change requests
+ * — attributed and dated, without touching the Listen roster.
+ */
+function ingestDesignFeedback(program: ProgramSummary, itemId: string, _actor: string): Record<string, unknown> | null {
+  const { wrapper, inner, usesNestedData } = getProgramState((program.rawData ?? {}) as Record<string, unknown>);
+  const inbox = Array.isArray(inner.flowPortalInbox) ? (inner.flowPortalInbox as unknown[]) : [];
+  const item = inbox.filter(isRecord).find((entry) => entry.id === itemId);
+  if (!item) return null;
+  const stakeholder = String(item.stakeholder ?? "Stakeholder");
+  const role = String(item.role ?? "");
+  const text = String(item.text ?? "").trim();
+  if (!text) return null;
+  const today = new Date().toISOString().slice(0, 10);
+
+  const phaseInputs = isRecord(inner.phaseInputs) ? { ...(inner.phaseInputs as Record<string, unknown>) } : {};
+  const show = isRecord(phaseInputs.show) ? { ...(phaseInputs.show as Record<string, unknown>) } : {};
+  const header = `— ${[stakeholder, role, today].filter(Boolean).join(", ")} —`;
+  const existing = typeof show.demoFeedback === "string" ? show.demoFeedback as string : "";
+  show.demoFeedback = [existing.trimEnd(), `${header}\n${text}`].filter(Boolean).join("\n\n");
+  phaseInputs.show = show;
+
+  const nextInner = { ...inner, flowPortalInbox: inbox.filter((entry) => !isRecord(entry) || entry.id !== itemId), phaseInputs };
+  return usesNestedData ? { ...wrapper, data: nextInner } : nextInner;
 }
 
 function ingestInterviewResponse(program: ProgramSummary, itemId: string, actor: string): Record<string, unknown> | null {
