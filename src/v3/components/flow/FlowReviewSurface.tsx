@@ -69,8 +69,8 @@ function AreaChips({ areas, active, onPick }: { areas: string[]; active: string;
 /** The linked page's opening: a subtle Brillio·ATOS mark, the programme name,
  * a warm greeting, a one-line "what we're building + why", then plainly what we
  * need from this person and how to respond. Shared by every review surface. */
-function ReviewHeader({ stakeholder, programme, objective, intro, area }: {
-  stakeholder: string; programme?: string; objective?: string; intro: string; area?: string;
+function ReviewHeader({ stakeholder, programme, objective, intro }: {
+  stakeholder: string; programme?: string; objective?: string; intro: string;
 }) {
   const first = stakeholder ? stakeholder.split(/\s+/)[0] : "";
   // Just the core goal for the opener — drop measurement/timeline clauses (they
@@ -86,13 +86,26 @@ function ReviewHeader({ stakeholder, programme, objective, intro, area }: {
         We&rsquo;re building <b>{programme || "this programme"}</b> — an agentic solution{coreGoal ? <> built to {coreGoal.charAt(0).toLowerCase() + coreGoal.slice(1)}</> : ""}.
       </p>
       {intro ? <p className="v3fs-rvw-sub">{intro}</p> : null}
-      {area ? <p className="v3fs-rvw-scoped"><b>This covers {area}</b> — the workflows and terms in your world.</p> : null}
       <div className="v3fs-rvw-ask">
         <span className="lbl">What we need from you</span>
         Walk your workflow and the terms below — <b>confirm what&rsquo;s right, fix what&rsquo;s not, add what we missed</b>. Type or talk; it saves as you go, and nothing is final until the team reviews it.
       </div>
     </header>
   );
+}
+
+/** Questions the visual workflow + ontology already answer — once a stakeholder
+ * can edit their process directly above, asking them to "walk through a typical
+ * sales cycle" is redundant. Drop these from the questions list. */
+function coveredByModel(q: string): boolean {
+  const s = q.toLowerCase();
+  return /\bwalk (me |us )?through\b/.test(s)
+    || /\btalk (me|us) through\b/.test(s)
+    || /\bstep[- ]by[- ]step\b/.test(s)
+    || (/\btypical\b/.test(s) && /\b(cycle|process|workflow|work flow|journey|flow)\b/.test(s))
+    || (/\bdescribe (the|your)\b/.test(s) && /\b(process|workflow|work flow|cycle|flow|steps)\b/.test(s))
+    || (/\bhow (does|do)\b/.test(s) && /\b(work|flow|run|operate)\b/.test(s))
+    || (/\bmap (out|the)\b/.test(s) && /\b(process|workflow|flow|cycle)\b/.test(s));
 }
 
 function AgentifySurface({ review, stakeholder, programme, objective, submitting, error, onSubmit, draftKey }: {
@@ -114,7 +127,7 @@ function AgentifySurface({ review, stakeholder, programme, objective, submitting
 
   return (
     <>
-      <ReviewHeader stakeholder={stakeholder} programme={programme} objective={objective} intro={review.intro} area={review.recipientArea} />
+      <ReviewHeader stakeholder={stakeholder} programme={programme} objective={objective} intro={review.intro} />
       <AreaChips areas={areas} active={area} onPick={setArea} />
       <div className="v3fs-rvw">
         {review.workflows.map((workflow, wi) => area && hasArea(review.workflows, area) && workflow.area !== area ? null : (
@@ -250,7 +263,7 @@ function OntologyAtlasSurface({ review, stakeholder, programme, objective, submi
 
   return (
     <>
-      <ReviewHeader stakeholder={stakeholder} programme={programme} objective={objective} intro={review.intro} area={review.recipientArea} />
+      <ReviewHeader stakeholder={stakeholder} programme={programme} objective={objective} intro={review.intro} />
       <AreaChips areas={areas} active={area} onPick={setArea} />
       <div className="v3fs-rvw">
         {shownTerms.length ? (
@@ -412,7 +425,7 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
 
   return (
     <>
-      <ReviewHeader stakeholder={stakeholder} programme={programme} objective={objective} intro={review.intro} area={review.recipientArea} />
+      <ReviewHeader stakeholder={stakeholder} programme={programme} objective={objective} intro={review.intro} />
       <AreaChips areas={areas} active={area} onPick={setArea} />
       <div className="v3fs-rvw">
         <div className="v3fs-rvw-section-h"><span className="v3fs-rvw-step-ic" aria-hidden="true">⇄</span>Your workflow — fix it, add steps, or mark what doesn&rsquo;t happen</div>
@@ -462,22 +475,26 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
           </>
         ) : null}
 
-        {review.questions.length ? (
-          <section className="v3fs-rvw-wf">
-            <div className="v3fs-rvw-wf-h"><b>A few things that shape the work</b><span className="v3fs-rvw-trigger">These don&rsquo;t change the steps — just good to know</span></div>
-            <div className="v3fs-rvw-belowqs">
-              {review.questions.map((q, i) => (
-                <label key={i} className="v3fs-rvw-bq">
-                  <span>{q}</span>
-                  <div className="v3fs-rvw-field">
-                    <textarea rows={2} value={answers[String(i)] ?? ""} onChange={(e) => setAnswers((p) => ({ ...p, [String(i)]: e.target.value }))} />
-                    <DictationButton compact label="Speak this answer" onText={(spoken) => setAnswers((p) => ({ ...p, [String(i)]: joinDictation(p[String(i)] ?? "", spoken) }))} />
-                  </div>
-                </label>
-              ))}
-            </div>
-          </section>
-        ) : null}
+        {(() => {
+          // Only the questions the workflow + terms above DON'T already cover.
+          const shown = review.questions.map((q, i) => ({ q, i })).filter(({ q }) => !coveredByModel(q));
+          return shown.length ? (
+            <section className="v3fs-rvw-wf">
+              <div className="v3fs-rvw-wf-h"><b>A few things that shape the work</b><span className="v3fs-rvw-trigger">These don&rsquo;t change the steps — just good to know</span></div>
+              <div className="v3fs-rvw-belowqs">
+                {shown.map(({ q, i }) => (
+                  <label key={i} className="v3fs-rvw-bq">
+                    <span>{q}</span>
+                    <div className="v3fs-rvw-field">
+                      <textarea rows={2} value={answers[String(i)] ?? ""} onChange={(e) => setAnswers((p) => ({ ...p, [String(i)]: e.target.value }))} />
+                      <DictationButton compact label="Speak this answer" onText={(spoken) => setAnswers((p) => ({ ...p, [String(i)]: joinDictation(p[String(i)] ?? "", spoken) }))} />
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </section>
+          ) : null;
+        })()}
 
         {/* Free-text catch-all sits LAST — after they've walked the model, so it
             captures what the taps and questions didn't, not vague up-front input. */}
