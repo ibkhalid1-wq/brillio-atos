@@ -1,6 +1,7 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import type { AIConnectionStatus } from "@/v3/hooks/useAIStatus";
 import { parseDocumentToText } from "@/new/lib/parseDocumentToText";
+import type { ThreadMessage } from "@/hooks/useCopilotThread";
 
 const MAX_ATTACHMENT_CHARS = 20_000;
 
@@ -24,6 +25,11 @@ interface CoPilotSidebarProps {
   onRunAgent: (agentId: string, phaseId?: string) => void;
   onNavigate?: (view: string) => void;
   onSendMessage?: (message: string, attachments?: File[]) => void;
+  /** The conversation thread (from useCopilotThread) — user + assistant turns,
+   * assistant turns carry `citations` (the evidence, with who/when, they cited). */
+  messages?: ThreadMessage[];
+  /** A reply is streaming in. */
+  thinking?: boolean;
 }
 
 const QUICK_ACTIONS = [
@@ -43,13 +49,23 @@ export default function CoPilotSidebar({
   onOpenAISettings,
   onRunAgent,
   onSendMessage,
+  messages = [],
+  thinking = false,
 }: CoPilotSidebarProps) {
   const [inputText, setInputText] = useState("");
   const [attachments, setAttachments] = useState<File[]>([]);
   const [parsedDocs, setParsedDocs] = useState<ParsedAttachment[]>([]);
   const [parsing, setParsing] = useState(false);
+  const [openCite, setOpenCite] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const threadEndRef = useRef<HTMLDivElement>(null);
+  const hasThread = messages.length > 0;
+
+  // Keep the latest turn in view as tokens stream in.
+  useEffect(() => {
+    if (hasThread) threadEndRef.current?.scrollIntoView({ block: "end" });
+  }, [messages, hasThread]);
 
   const aiConnected = !aiStatus || aiStatus === "connected" || aiStatus === "checking";
   const phaseArg = activePhaseId ?? "program";
@@ -248,7 +264,92 @@ export default function CoPilotSidebar({
         {/* ── Scrollable body ── */}
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
 
-          {/* Quick actions */}
+          {/* Conversation thread — user + assistant turns; assistant answers
+              carry evidence citations (who said what, when). */}
+          {hasThread && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 18 }}>
+              {messages.map((m, i) => {
+                const isUser = m.role === "user";
+                const streaming = thinking && i === messages.length - 1 && m.role === "assistant";
+                return (
+                  <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: isUser ? "flex-end" : "flex-start", gap: 5 }}>
+                    <div
+                      style={{
+                        maxWidth: "88%",
+                        padding: "8px 11px",
+                        borderRadius: 12,
+                        fontSize: 13,
+                        lineHeight: 1.5,
+                        whiteSpace: "pre-wrap",
+                        wordBreak: "break-word",
+                        background: isUser ? "var(--v3-accent)" : "var(--v3-surface-2)",
+                        color: isUser ? "#fff" : "var(--v3-text-primary)",
+                        border: isUser ? "none" : "1px solid var(--v3-border-soft)",
+                      }}
+                    >
+                      {m.content || (streaming ? "…" : "")}
+                    </div>
+
+                    {/* Evidence citations — who said what, when. */}
+                    {!isUser && m.citations && m.citations.length > 0 && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4, maxWidth: "92%" }}>
+                        <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--v3-text-muted)" }}>
+                          Grounded in
+                        </span>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                          {m.citations.map((c) => {
+                            const key = `${i}:${c.id}`;
+                            const open = openCite === key;
+                            const whoName = c.who.split(",")[0].trim() || "Source";
+                            return (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => setOpenCite(open ? null : key)}
+                                title={c.who}
+                                style={{
+                                  display: "inline-flex", alignItems: "center", gap: 5,
+                                  padding: "3px 8px", borderRadius: 999, cursor: "pointer",
+                                  fontSize: 11, fontFamily: "var(--v3-font)",
+                                  background: open ? "var(--v3-accent)" : "color-mix(in srgb, var(--v3-accent) 9%, var(--v3-surface-2))",
+                                  color: open ? "#fff" : "var(--v3-accent)",
+                                  border: `1px solid color-mix(in srgb, var(--v3-accent) ${open ? 60 : 28}%, transparent)`,
+                                }}
+                              >
+                                <b style={{ fontWeight: 700 }}>{c.id}</b>
+                                <span style={{ fontWeight: 600 }}>{whoName}</span>
+                                {c.when ? <span style={{ opacity: 0.7 }}>· {c.when.slice(0, 10)}</span> : null}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {(() => {
+                          const active = m.citations.find((c) => `${i}:${c.id}` === openCite);
+                          if (!active) return null;
+                          return (
+                            <div style={{
+                              padding: "8px 11px", borderRadius: 10, fontSize: 12, lineHeight: 1.5,
+                              background: "var(--v3-surface-2)", border: "1px solid var(--v3-border-soft)",
+                              color: "var(--v3-text-secondary)",
+                            }}>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--v3-text-primary)", marginBottom: 3 }}>
+                                {active.who}{active.when ? ` · ${active.when}` : ""}
+                              </div>
+                              <div style={{ fontStyle: "italic" }}>&ldquo;{active.quote}&rdquo;</div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              <div ref={threadEndRef} />
+            </div>
+          )}
+
+          {/* Quick actions — the entry points before a conversation starts. */}
+          {!hasThread && (<>
           <p
             style={{
               margin: "0 0 10px",
@@ -299,9 +400,10 @@ export default function CoPilotSidebar({
               </button>
             ))}
           </div>
+          </>)}
 
           {/* Decision nudge */}
-          {openDecisionCount > 0 && (
+          {!hasThread && openDecisionCount > 0 && (
             <div
               style={{
                 padding: "10px 14px",

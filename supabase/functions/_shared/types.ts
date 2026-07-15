@@ -101,10 +101,28 @@ export interface ResumeAgentRequest {
   modifiedContent?: string;
 }
 
+/** One citable piece of evidence behind a Copilot answer (who said it, when). */
+export interface CopilotCitation {
+  id: string;
+  who: string;
+  when: string;
+  quote: string;
+  kind: string;
+}
+
 export interface CopilotThreadMessage {
   role: "user" | "assistant" | "system";
   content: string;
   timestamp: string;
+  /** Evidence the assistant answer cited inline as [E#], resolved for display. */
+  citations?: CopilotCitation[];
+}
+
+/** Design + evidence context the client assembles so the Copilot can answer
+ * design questions and attribute them to their source. */
+export interface CopilotGrounding {
+  design: string;
+  evidence: CopilotCitation[];
 }
 
 export interface CopilotChatRequest {
@@ -113,6 +131,7 @@ export interface CopilotChatRequest {
   memoryContext?: string;
   message: string;
   stream?: boolean;
+  grounding?: CopilotGrounding;
 }
 
 export interface AgentObservationRecord {

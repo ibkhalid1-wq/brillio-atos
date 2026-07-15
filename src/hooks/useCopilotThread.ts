@@ -1,11 +1,33 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
+import type { CopilotCitation, CopilotGrounding } from "@/v3/components/flow/flowCopilotGrounding";
 
 export interface ThreadMessage {
   role: "user" | "assistant" | "system";
   content: string;
   timestamp: string;
+  /** Evidence (who/when) the assistant answer cited inline as [E#]. */
+  citations?: CopilotCitation[];
+}
+
+function safeParseJson(text: string): Json | undefined {
+  try { return JSON.parse(text) as Json; } catch { return undefined; }
+}
+
+function normalizeCitations(raw: Json | undefined): CopilotCitation[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const list = raw
+    .filter((e): e is Record<string, Json> => typeof e === "object" && e !== null && !Array.isArray(e))
+    .map((e) => ({
+      id: typeof e.id === "string" ? e.id : "",
+      who: typeof e.who === "string" ? e.who : "",
+      when: typeof e.when === "string" ? e.when : "",
+      quote: typeof e.quote === "string" ? e.quote : "",
+      kind: typeof e.kind === "string" ? e.kind : "transcript",
+    }))
+    .filter((e) => e.id && e.quote);
+  return list.length ? list : undefined;
 }
 
 function normalizeMessages(raw: Json | null | undefined): ThreadMessage[] {
@@ -16,6 +38,7 @@ function normalizeMessages(raw: Json | null | undefined): ThreadMessage[] {
       role: entry.role === "assistant" || entry.role === "system" ? entry.role : "user",
       content: typeof entry.content === "string" ? entry.content : "",
       timestamp: typeof entry.timestamp === "string" ? entry.timestamp : new Date().toISOString(),
+      citations: normalizeCitations((entry as Record<string, Json>).citations),
     }))
     .filter((message) => message.content.trim().length > 0);
 }
@@ -43,7 +66,7 @@ async function getCurrentUserId(): Promise<string> {
   return data.user.id;
 }
 
-export function useCopilotThread(programId: string, workspaceId: string, memoryContext = "") {
+export function useCopilotThread(programId: string, workspaceId: string, memoryContext = "", grounding: CopilotGrounding | null = null) {
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [openQuestions, setOpenQuestions] = useState<string[]>([]);
@@ -112,6 +135,7 @@ export function useCopilotThread(programId: string, workspaceId: string, memoryC
             memoryContext,
             message: content.trim(),
             stream: true,
+            ...(grounding ? { grounding } : {}),
           }),
           signal: abortController.signal,
         });
@@ -152,6 +176,19 @@ export function useCopilotThread(programId: string, workspaceId: string, memoryC
           if (tokenValue.startsWith("[ERROR]")) {
             throw new Error(tokenValue.replace("[ERROR]", "").trim());
           }
+          if (tokenValue.startsWith("[CITATIONS]")) {
+            // Final frame: the evidence (who/when) the answer actually cited.
+            const citations = normalizeCitations(safeParseJson(tokenValue.slice("[CITATIONS]".length).trim()));
+            if (citations) {
+              setMessages((prev) => {
+                if (!prev.length) return prev;
+                const next = [...prev];
+                next[next.length - 1] = { ...next[next.length - 1], citations };
+                return next;
+              });
+            }
+            continue;
+          }
           let chunk = tokenValue;
           try {
             chunk = JSON.parse(tokenValue) as string;
@@ -179,7 +216,7 @@ export function useCopilotThread(programId: string, workspaceId: string, memoryC
       window.clearTimeout(timeoutId);
       setIsLoading(false);
     }
-  }, [memoryContext, programId, refreshThread, workspaceId]);
+  }, [grounding, memoryContext, programId, refreshThread, workspaceId]);
 
   const clearThread = useCallback(async () => {
     if (!programId || !workspaceId || !isSupabaseConfigured || !supabase) return;

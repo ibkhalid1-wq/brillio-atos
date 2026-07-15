@@ -5,7 +5,7 @@ import {
   toClaudeMessages,
   type FileAttachment,
 } from "../_shared/claudeClient.ts";
-import type { CopilotChatRequest, CopilotThreadMessage, JsonValue } from "../_shared/types.ts";
+import type { CopilotChatRequest, CopilotCitation, CopilotGrounding, CopilotThreadMessage, JsonValue } from "../_shared/types.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -191,11 +191,70 @@ function buildProgramStateDigest(inner: Record<string, JsonValue>): string {
   return sections.join("\n\n");
 }
 
+// ── Evidence grounding ──────────────────────────────────────────────────────
+// The client assembles a grounding pack (the Experience Design summary + the
+// discovery evidence, each tagged E1..En with who/when) and sends it with the
+// message. We fold it into the system prompt and instruct the model to cite the
+// evidence it leans on as [E#]. After the answer, resolveCitations() returns the
+// subset actually cited, so the sidebar can render who-said-what-when chips.
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizeGrounding(raw: unknown): CopilotGrounding | null {
+  if (!isRecord(raw)) return null;
+  const design = typeof raw.design === "string" ? raw.design : "";
+  const evidence: CopilotCitation[] = (Array.isArray(raw.evidence) ? raw.evidence : [])
+    .filter(isRecord)
+    .map((e) => ({
+      id: typeof e.id === "string" ? e.id : "",
+      who: typeof e.who === "string" ? e.who : "",
+      when: typeof e.when === "string" ? e.when : "",
+      quote: typeof e.quote === "string" ? e.quote : "",
+      kind: typeof e.kind === "string" ? e.kind : "transcript",
+    }))
+    .filter((e) => e.id && e.quote);
+  if (!design && !evidence.length) return null;
+  return { design, evidence };
+}
+
+function buildGroundingBlock(grounding: CopilotGrounding): string {
+  const parts: string[] = [];
+  if (grounding.design.trim()) {
+    parts.push(`The design under discussion (Experience Design):\n${grounding.design.trim()}`);
+  }
+  if (grounding.evidence.length) {
+    const rows = grounding.evidence.map((e) =>
+      `  [${e.id}] "${e.quote}" — ${e.who || "unattributed"}${e.when ? ` (${e.when})` : ""}`);
+    parts.push(
+      `Evidence behind the design — each item is tagged. When your answer rests on one, CITE IT INLINE as [E#] using ONLY these ids, and attribute the point to the person and date shown. Never invent a citation or a speaker.\n${rows.join("\n")}`,
+    );
+  }
+  return parts.join("\n\n");
+}
+
+/** The evidence items whose [E#] tag appears in the answer, in first-mention order. */
+function resolveCitations(text: string, grounding: CopilotGrounding | null): CopilotCitation[] {
+  if (!grounding?.evidence.length) return [];
+  const cited: CopilotCitation[] = [];
+  const seen = new Set<string>();
+  const re = /\[(E\d+)\]/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text)) !== null) {
+    const id = match[1];
+    if (seen.has(id)) continue;
+    const hit = grounding.evidence.find((e) => e.id === id);
+    if (hit) { seen.add(id); cited.push(hit); }
+  }
+  return cited;
+}
+
 function buildWorkspacePrompt(
   workspaceId: string,
   programContext: Record<string, JsonValue>,
   summary: string | null,
   memoryContext?: string,
+  grounding?: CopilotGrounding | null,
 ): string {
   const identity = (() => {
     if (workspaceId === "home") return "Transformation Advisor";
@@ -222,14 +281,18 @@ function buildWorkspacePrompt(
   );
   const digest = buildProgramStateDigest(inner);
 
+  const groundingBlock = grounding ? buildGroundingBlock(grounding) : "";
+
   return [
     `You are ATOS Copilot acting as the ${identity} for the "${workspaceId}" workspace.`,
     `Program name: ${programName}`,
     `Program objective: ${objective}`,
     digest ? `Current program state:\n${digest}` : "",
+    groundingBlock,
     summary ? `Thread summary: ${summary}` : "",
     memoryContext ? `Agent memory context:\n${memoryContext}` : "",
     "Ground every answer in the program state above — reference specific decisions, risks, gate readiness, and milestones by name when relevant. If the state lacks what's needed, say so rather than inventing it.",
+    groundingBlock ? "For questions about the DESIGN, ground the answer in the Experience Design and the tagged evidence, and cite the evidence you rely on as [E#] so the reader can see who said it and when." : "",
     "Be concise, specific, and action-oriented.",
   ].filter(Boolean).join("\n\n");
 }
@@ -301,11 +364,13 @@ Deno.serve(async (req) => {
     const programContext = (programRow.data && typeof programRow.data === "object" && !Array.isArray(programRow.data))
       ? programRow.data as Record<string, JsonValue>
       : {};
+    const grounding = normalizeGrounding((payload as { grounding?: unknown }).grounding);
     const systemPrompt = buildWorkspacePrompt(
       payload.workspaceId,
       programContext,
       existingThread?.summary || null,
       payload.memoryContext,
+      grounding,
     );
     const promptMessages = toClaudeMessages(nextMessages.slice(-20));
 
@@ -320,10 +385,12 @@ Deno.serve(async (req) => {
         temperature: 0.3,
         fileAttachment,
       });
+      const citations = resolveCitations(result.text, grounding);
       const assistantMessage: CopilotThreadMessage = {
         role: "assistant",
         content: result.text,
         timestamp: new Date().toISOString(),
+        ...(citations.length ? { citations } : {}),
       };
       const updatedMessages = [...nextMessages, assistantMessage];
       const openQuestions = extractOpenQuestions(result.text);
@@ -347,6 +414,7 @@ Deno.serve(async (req) => {
       return jsonResponse({
         message: assistantMessage,
         openQuestions,
+        citations,
       });
     }
 
@@ -367,10 +435,13 @@ Deno.serve(async (req) => {
               controller.enqueue(encoder.encode(`data: ${JSON.stringify(token)}\n\n`));
             });
 
+            const finalText = assistantContent.trim() || result.text;
+            const citations = resolveCitations(finalText, grounding);
             const assistantMessage: CopilotThreadMessage = {
               role: "assistant",
-              content: assistantContent.trim() || result.text,
+              content: finalText,
               timestamp: new Date().toISOString(),
+              ...(citations.length ? { citations } : {}),
             };
             let messagesToStore = [...nextMessages, assistantMessage];
             let summary = existingThread?.summary || null;
@@ -403,6 +474,9 @@ Deno.serve(async (req) => {
                 last_activity_at: new Date().toISOString(),
               }, { onConflict: "program_id,workspace_id,owner_id" });
 
+            if (citations.length) {
+              controller.enqueue(encoder.encode(`data: [CITATIONS] ${JSON.stringify(citations)}\n\n`));
+            }
             controller.enqueue(encoder.encode("data: [DONE]\n\n"));
           } catch (error) {
             controller.enqueue(encoder.encode(`data: [ERROR] ${(error instanceof Error ? error.message : "Unknown error")}\n\n`));
@@ -416,6 +490,7 @@ Deno.serve(async (req) => {
     return new Response(stream, {
       status: 200,
       headers: {
+        ...CORS_HEADERS,
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
         Connection: "keep-alive",

@@ -18,6 +18,7 @@ import { type ProgramSetupPatch, useProgramSetup } from "@/new/lib/useProgramSet
 import { usePrograms } from "@/new/lib/usePrograms";
 import { useProgramSnapshots } from "@/new/lib/useProgramSnapshots";
 import { useCopilotThread } from "@/hooks/useCopilotThread";
+import { buildCopilotGrounding } from "@/v3/components/flow/flowCopilotGrounding";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { drillKindMeta, type DrillKind } from "@/v3/components/flow/flowDrilldown";
 import { readMovementInputs, flowMovements, movementArtifacts, gateChecklist, gateReadiness, movementInputsFingerprint, autoBuildEnabled, artifactInputsReady } from "@/v3/components/flow/flowShellData";
@@ -1277,10 +1278,17 @@ export default function AppShellV3() {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- activeRuns is a recompute trigger for run-derived state
   }, [activeProgramId, activeRuns]);
 
-  const { sendMessage: sendCopilotMessage } = useCopilotThread(
+  // Design + evidence context so Copilot can answer questions about the design
+  // and cite who said what, when — recomputed when the programme blob changes.
+  const copilotGrounding = useMemo(
+    () => (activeProgram ? buildCopilotGrounding(activeProgram) : null),
+    [activeProgram],
+  );
+  const { sendMessage: sendCopilotMessage, messages: copilotMessages, isLoading: copilotThinking } = useCopilotThread(
     activeProgramId || "",
     copilotWorkspaceId,
     copilotMemoryContext,
+    copilotGrounding,
   );
 
   // Proactive triggers exist for the classic surfaces. Flow programmes run on
@@ -2834,6 +2842,8 @@ export default function AppShellV3() {
           aiStatus={aiStatus.status}
           onOpenAISettings={openAISettings}
           onRunAgent={handleRunAgent}
+          messages={copilotMessages}
+          thinking={copilotThinking}
           onSendMessage={activeProgramId ? async (msg) => {
             try {
               await sendCopilotMessage(msg);
