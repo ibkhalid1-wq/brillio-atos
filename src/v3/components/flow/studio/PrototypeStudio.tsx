@@ -6,10 +6,14 @@
  * edit mode to refine it — edits propose a change, they never silently
  * overwrite the record. Show demonstrates this same built prototype to clients.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { asArray, asRecord, asStrings, asText, type StudioProps } from "./StudioKit";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
-import { buildPrototypeProject, downloadPrototypeZip, projectSlug } from "./prototypeExport";
+import { buildPrototypeProject, downloadPrototypeZip, importPrototypeProject, projectSlug } from "./prototypeExport";
+
+function toast(message: string, tone: "info" | "error" = "info") {
+  window.dispatchEvent(new CustomEvent("atlas-v3-toast", { detail: { message, tone } }));
+}
 
 export default function PrototypeStudio({ doc, onChange, program }: StudioProps) {
   const html = asText(doc.html);
@@ -21,10 +25,25 @@ export default function PrototypeStudio({ doc, onChange, program }: StudioProps)
   const changed = asStrings(doc.changed);
   const [mode, setMode] = useState<"preview" | "edit">("preview");
   const [draft, setDraft] = useState(html);
+  const importRef = useRef<HTMLInputElement>(null);
 
   // Re-seed the editor when the underlying build changes (a rebuild lands, or
   // a proposed edit is confirmed and flows back into the doc).
   useEffect(() => { setDraft(html); }, [html]);
+
+  // Round-trip: bring an externally-edited project (.zip) or a single .html
+  // back in. Reassemble to one self-contained document, load it into the editor
+  // and switch to edit mode — the change is PROPOSED, not silently written.
+  const onImportFile = async (file: File) => {
+    try {
+      const { html: imported, warnings } = await importPrototypeProject(file);
+      setDraft(imported);
+      setMode("edit");
+      toast(warnings.length ? `Imported — ${warnings[0]} Review and Propose to apply.` : "Imported — review the change and Propose to apply.", warnings.length ? "error" : "info");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not import that file.", "error");
+    }
+  };
 
   if (!html) {
     return (
@@ -76,6 +95,12 @@ export default function PrototypeStudio({ doc, onChange, program }: StudioProps)
             });
             await downloadPrototypeZip(project, projectSlug(program?.name));
           }}>⬇ Project (.zip)</button>
+          {/* Round-trip: import an externally-edited project or single HTML. The
+              change is proposed via the editor, never silently overwritten. */}
+          <button type="button" title="Import an edited project (.zip) or a single .html file — reassembled and loaded to propose" onClick={() => importRef.current?.click()}>⬆ Import</button>
+          <input ref={importRef} type="file" accept=".zip,.html,.htm"
+            style={{ position: "fixed", top: "-9999px", left: "-9999px", opacity: 0, pointerEvents: "none" }}
+            onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void onImportFile(f); }} />
         </div>
       </div>
 

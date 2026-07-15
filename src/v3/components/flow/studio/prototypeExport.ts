@@ -118,6 +118,77 @@ export function projectSlug(programName?: string): string {
   return `${base || "prototype"}-prototype`;
 }
 
+/**
+ * The inverse of splitPrototypeHtml — fold an edited project back into ONE
+ * self-contained document. The `styles.css` <link> becomes an inline <style>
+ * and the `app.js` <script src> becomes an inline <script>, so the result
+ * renders standalone in the sandboxed preview again. If the index.html is
+ * already flattened (inline style/script), it passes through unchanged.
+ */
+export function reassemblePrototypeHtml(indexHtml: string, css: string, js: string): string {
+  if (typeof DOMParser === "undefined") return indexHtml;
+  const doc = new DOMParser().parseFromString(indexHtml, "text/html");
+  if (css) {
+    const link = Array.from(doc.querySelectorAll('link[rel="stylesheet"]'))
+      .find((l) => /(^|\/)styles\.css$/i.test(l.getAttribute("href") || ""));
+    const style = doc.createElement("style");
+    style.textContent = css;
+    if (link) link.replaceWith(style);
+    else (doc.head || doc.documentElement).appendChild(style);
+  }
+  if (js) {
+    const src = Array.from(doc.querySelectorAll("script[src]"))
+      .find((s) => /(^|\/)app\.js$/i.test(s.getAttribute("src") || ""));
+    const script = doc.createElement("script");
+    script.textContent = js;
+    if (src) src.replaceWith(script);
+    else (doc.body || doc.documentElement).appendChild(script);
+  }
+  return `<!doctype html>\n${doc.documentElement.outerHTML}\n`;
+}
+
+const MAX_IMPORT_BYTES = 800_000;
+
+/**
+ * Read an externally-edited prototype back in — either the `.zip` project this
+ * studio exports, or a single self-contained `.html`. Returns the reassembled,
+ * self-contained document plus any warnings (external URLs / unresolved local
+ * files that won't work in the sandboxed preview). It does NOT write anything —
+ * the caller loads it into the editor to propose the change.
+ */
+export async function importPrototypeProject(file: File): Promise<{ html: string; warnings: string[] }> {
+  const warnings: string[] = [];
+  const name = file.name.toLowerCase();
+  let html: string;
+  if (name.endsWith(".zip")) {
+    const zip = await JSZip.loadAsync(file);
+    const byBase = (base: string) => Object.values(zip.files)
+      .find((f) => !f.dir && (f.name.split("/").pop() || "").toLowerCase() === base);
+    const idx = byBase("index.html");
+    if (!idx) throw new Error("No index.html found in the zip.");
+    const indexHtml = await idx.async("string");
+    const cssEntry = byBase("styles.css");
+    const jsEntry = byBase("app.js");
+    const css = cssEntry ? await cssEntry.async("string") : "";
+    const js = jsEntry ? await jsEntry.async("string") : "";
+    html = reassemblePrototypeHtml(indexHtml, css, js);
+  } else if (name.endsWith(".html") || name.endsWith(".htm")) {
+    html = await file.text();
+  } else {
+    throw new Error("Import a .zip project or a single .html file.");
+  }
+  if (html.length > MAX_IMPORT_BYTES) {
+    throw new Error(`That prototype is too large (${Math.round(html.length / 1024)} KB) — keep it under ${MAX_IMPORT_BYTES / 1024} KB.`);
+  }
+  if (/<(?:link|script)[^>]+(?:href|src)=["']https?:\/\//i.test(html)) {
+    warnings.push("References external URLs — those won't load in the sandboxed preview. Inline them for a self-contained prototype.");
+  }
+  if (/<link[^>]+href=["'](?!https?:|data:|#)[^"']+\.css/i.test(html) || /<script[^>]+src=["'](?!https?:|data:)[^"']+\.js/i.test(html)) {
+    warnings.push("Still links to local files we couldn't inline (only styles.css and app.js are merged) — flatten extra files before import.");
+  }
+  return { html, warnings };
+}
+
 /** Zip the file map (under a top-level folder) and trigger a download. */
 export async function downloadPrototypeZip(files: Record<string, string>, baseName: string): Promise<void> {
   const zip = new JSZip();
