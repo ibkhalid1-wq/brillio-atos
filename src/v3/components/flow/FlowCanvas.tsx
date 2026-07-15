@@ -231,12 +231,14 @@ export default function FlowCanvas({ program, programs, runningAgentIds, agentEr
       <nav className="v3fs-stepper" aria-label="Movements" role="tablist">
         <div className="v3fs-stepper-rail" aria-hidden="true" />
         {(() => {
-          // Display numbers skip the folded Show, the unnumbered loop node, and
-          // the ∞ Evolve loop: Frame 1 · Listen 2 · [Loop] · Ship 3 · Evolve ∞.
+          // The Prototype Loop IS a numbered step now: Frame 1 · Listen 2 ·
+          // Prototype 3 · Ship 4 · Evolve ∞. Only the folded Show and the ∞
+          // Evolve loop are skipped; envision carries the loop node's number.
           let n = 0;
           const stepNum: Record<string, number | null> = {};
           for (const { movement } of rows) {
-            if (movement.id === "show" || movement.id === "envision" || movement.movement?.isLoop) { stepNum[movement.id] = null; continue; }
+            if (movement.id === "show") { stepNum[movement.id] = null; continue; }
+            if (movement.movement?.isLoop && movement.id !== "envision") { stepNum[movement.id] = null; continue; }
             n += 1; stepNum[movement.id] = n;
           }
           const ls = loopState(program);
@@ -249,8 +251,10 @@ export default function FlowCanvas({ program, programs, runningAgentIds, agentEr
               return (
                 <div key="prototype-loop" className={`v3fs-step v3fs-loopstep${loopOn ? " on" : ""}${loopIsFrontier && !loopOn ? " v3fs-step-next" : ""}`}
                   role="group" aria-label="Prototype Loop">
-                  <span className={`v3fs-sring ${loopTone}`} aria-hidden="true"><span className="v3fs-sdot v3fs-loopdot">⟳</span></span>
-                  <span className="v3fs-sname">Prototype</span>
+                  <span className={`v3fs-sring ${loopTone}`} style={{ "--pct": `${ls.areasTotal ? Math.round((100 * ls.areasConverged) / ls.areasTotal) : 0}%` } as React.CSSProperties} aria-hidden="true">
+                    <span className={`v3fs-sdot${ls.converged ? " done" : loopOn ? " live" : ""}`}>{ls.converged ? "✓" : (stepNum.envision ?? 3)}</span>
+                  </span>
+                  <span className="v3fs-sname">Prototype <span className="v3fs-loopmark" aria-hidden="true">⟳</span></span>
                   <span className="v3fs-loop-modes" role="tablist" aria-label="Design or Validate">
                     <button type="button" role="tab" aria-selected={active === "envision"} className={`v3fs-loopmode${active === "envision" ? " on" : ""}`} onClick={() => setActive("envision")}>Design</button>
                     <button type="button" role="tab" aria-selected={active === "show"} className={`v3fs-loopmode${active === "show" ? " on" : ""}`} onClick={() => setActive("show")}>Validate</button>

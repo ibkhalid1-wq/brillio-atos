@@ -4653,11 +4653,12 @@ body:has(.v3fs-pack) .v3fs-appbar:focus-within {transform:none}
    above the row would otherwise be clipped by the scroll container. The rail
    shifts down by the same amount to stay centred on the phase rings. */
 .v3fs-stepper {display:flex;align-items:stretch;gap:0;position:relative;overflow-x:auto;padding-top:30px;padding-bottom:6px}
-.v3fs-stepper-rail {position:absolute;top:63px;left:14px;right:14px;height:2px;background:var(--fs-line);z-index:0}
+.v3fs-stepper-rail {position:absolute;top:64px;left:24px;right:24px;height:2px;border-radius:2px;
+  background:linear-gradient(90deg,color-mix(in srgb,var(--fs-line) 60%,transparent),var(--fs-line) 12%,var(--fs-line) 88%,color-mix(in srgb,var(--fs-line) 60%,transparent));z-index:0}
 .v3fs-step {flex:1;min-width:126px;position:relative;background:none;border:none;font:inherit;cursor:pointer;
-  text-align:left;padding:16px 14px 14px;border-radius:14px;transition:background .18s ease,box-shadow .18s ease}
-.v3fs-step:hover {background:var(--fs-card)}
-.v3fs-step.on {background:var(--fs-card);box-shadow:0 8px 26px -14px rgba(23,26,46,.24)}
+  text-align:left;padding:16px 14px 14px;border-radius:14px;transition:background .2s ease,box-shadow .25s cubic-bezier(.2,.7,.3,1)}
+.v3fs-step:hover {background:var(--fs-card);box-shadow:0 6px 18px -14px rgba(23,26,46,.22)}
+.v3fs-step.on {background:var(--fs-card);box-shadow:0 14px 32px -18px rgba(23,26,46,.32),inset 0 0 0 1px color-mix(in srgb,var(--v3-accent) 12%,transparent)}
 /* "Continue here" — a refined pointer over the frontier phase when the operator
    has navigated away, nudging them back to where the work is. */
 .v3fs-step-next {background:color-mix(in srgb,var(--v3-accent) 6%,transparent)}
@@ -4670,16 +4671,19 @@ body:has(.v3fs-pack) .v3fs-appbar:focus-within {transform:none}
 .v3fs-step:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:2px}
 /* Progress ring around the movement number — the GATE ring, small: conic fill =
    gate criteria met, toned to match the Gate column's gauge (green/amber/dim). */
-.v3fs-sring {position:relative;z-index:1;display:inline-grid;place-items:center;width:40px;height:40px;border-radius:50%;
-  margin-bottom:9px;background:conic-gradient(var(--ring,var(--v3-text-muted)) var(--pct,0%), var(--fs-line) 0)}
+.v3fs-sring {position:relative;z-index:1;display:inline-grid;place-items:center;width:42px;height:42px;border-radius:50%;
+  margin-bottom:9px;background:conic-gradient(var(--ring,var(--v3-text-muted)) var(--pct,0%), var(--fs-line) 0);transition:transform .22s cubic-bezier(.2,.7,.3,1)}
+.v3fs-step:hover .v3fs-sring,.v3fs-loopstep:hover .v3fs-sring {transform:scale(1.06)}
 .v3fs-sring.green {--ring:var(--v3-green)}
 .v3fs-sring.amber {--ring:var(--v3-amber)}
 .v3fs-sring.dim {--ring:var(--v3-text-muted)}
-.v3fs-sdot {position:relative;z-index:1;display:grid;place-items:center;width:34px;height:34px;border-radius:50%;
+.v3fs-sdot {position:relative;z-index:1;display:grid;place-items:center;width:36px;height:36px;border-radius:50%;
   font-family:var(--v3-font-mono);font-size:13px;font-weight:750;border:2px solid var(--fs-card);
-  background:var(--fs-card);color:var(--v3-text-muted)}
+  background:var(--fs-card);color:var(--v3-text-muted);transition:background .2s ease,color .2s ease,box-shadow .2s ease}
 .v3fs-sdot.done {border-color:var(--v3-green);background:var(--v3-green);color:#fff}
-.v3fs-sdot.live {border-color:var(--v3-accent);background:var(--v3-accent);color:#fff;box-shadow:0 0 0 5px var(--v3-accent-soft)}
+.v3fs-sdot.live {border-color:var(--v3-accent);background:var(--v3-accent);color:#fff;box-shadow:0 0 0 5px var(--v3-accent-soft);animation:v3fs-livepulse 2.6s ease-in-out infinite}
+@keyframes v3fs-livepulse {0%,100%{box-shadow:0 0 0 4px var(--v3-accent-soft)}50%{box-shadow:0 0 0 8px color-mix(in srgb,var(--v3-accent) 10%,transparent)}}
+@media (prefers-reduced-motion:reduce){.v3fs-sdot.live{animation:none}}
 .v3fs-sname {display:block;font-size:14.5px;font-weight:650;letter-spacing:-.01em;color:var(--v3-text-primary)}
 .v3fs-sstate {display:block;font-size:11px;font-weight:550;color:var(--v3-text-muted);margin-top:1px}
 .v3fs-sstate.done {color:var(--v3-green)}
@@ -4691,9 +4695,11 @@ body:has(.v3fs-pack) .v3fs-appbar:focus-within {transform:none}
    state word goes, and the iteration/area meter is its state line. */
 .v3fs-loopstep {flex:1.4;min-width:148px;display:flex;flex-direction:column;align-items:flex-start;gap:0;
   padding:16px 14px 14px;border:none;background:none;border-radius:14px;transition:background .18s ease,box-shadow .18s ease}
-.v3fs-loopstep:hover {background:var(--fs-card)}
-.v3fs-loopstep.on {background:var(--fs-card);box-shadow:0 8px 26px -14px rgba(23,26,46,.24)}
+.v3fs-loopstep:hover {background:var(--fs-card);box-shadow:0 6px 18px -14px rgba(23,26,46,.22)}
+.v3fs-loopstep.on {background:var(--fs-card);box-shadow:0 14px 32px -18px rgba(23,26,46,.32),inset 0 0 0 1px color-mix(in srgb,var(--v3-accent) 12%,transparent)}
 .v3fs-loopdot {font-size:16px;font-family:inherit;color:var(--v3-accent)}
+/* The loop signifier next to the Prototype step name — a quiet accent, not a spinner. */
+.v3fs-loopmark {font-size:11px;color:var(--v3-accent-2);opacity:.7;margin-left:2px;vertical-align:1px}
 .v3fs-loop-modes {display:inline-flex;margin:5px 0 3px;border:1px solid var(--fs-line);border-radius:8px;overflow:hidden}
 .v3fs-loopmode {font:inherit;font-size:11px;font-weight:650;padding:3px 11px;border:0;background:transparent;
   color:var(--v3-text-secondary);cursor:pointer;transition:background .15s ease,color .15s ease}
