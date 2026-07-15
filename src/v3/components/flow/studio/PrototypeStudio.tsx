@@ -7,13 +7,16 @@
  * overwrite the record. Show demonstrates this same built prototype to clients.
  */
 import { useEffect, useState } from "react";
-import { asArray, asRecord, asText, type StudioProps } from "./StudioKit";
+import { asArray, asRecord, asStrings, asText, type StudioProps } from "./StudioKit";
 
 export default function PrototypeStudio({ doc, onChange }: StudioProps) {
   const html = asText(doc.html);
   const screens = asArray(doc.screens).map(asRecord);
   const summary = asText(doc.summary);
   const generatedAt = asText(doc.generatedAt);
+  // In refine mode the Build agent reports the screens/areas it actually
+  // edited this iteration — everything else was preserved from the prior build.
+  const changed = asStrings(doc.changed);
   const [mode, setMode] = useState<"preview" | "edit">("preview");
   const [draft, setDraft] = useState(html);
 
@@ -78,6 +81,16 @@ export default function PrototypeStudio({ doc, onChange }: StudioProps) {
           <iframe className="v3fs-proto-frame live" sandbox="allow-scripts allow-forms" srcDoc={draft} title="Live preview" />
         </div>
       )}
+
+      {changed.length ? (
+        <div className="v3fs-proto-refined" title="This iteration refined the prior prototype — only these screens/areas changed; everything else was preserved.">
+          <span className="v3fs-proto-refined-l">↻ Refined this iteration</span>
+          <div className="v3fs-proto-refined-chips">
+            {changed.slice(0, 10).map((c, i) => <span key={i} className="v3fs-proto-chip ch">{c}</span>)}
+            {changed.length > 10 ? <span className="v3fs-proto-chip more">+{changed.length - 10}</span> : null}
+          </div>
+        </div>
+      ) : null}
 
       {(summary || generatedAt) ? (
         <p className="v3fs-proto-sum">{summary}{generatedAt ? <em> · built {generatedAt.slice(0, 10)}</em> : null}</p>

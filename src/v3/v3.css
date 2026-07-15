@@ -6597,6 +6597,10 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-proto-src {width:100%;min-height:480px;flex:1;font-family:var(--v3-mono,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:11.5px;line-height:1.5;padding:10px 12px;border:1px solid var(--fs-line);border-radius:10px;background:var(--fs-card);color:var(--v3-text-primary);resize:vertical}
 .v3fs-proto-editactions {display:flex;gap:8px}
 .v3fs-proto-frame.live {min-height:480px}
+.v3fs-proto-refined {display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 12px;border:1px solid color-mix(in srgb, var(--v3-accent) 26%, var(--fs-line));border-radius:10px;background:color-mix(in srgb, var(--v3-accent) 5%, var(--fs-card))}
+.v3fs-proto-refined-l {font-size:11.5px;font-weight:700;color:var(--v3-accent);white-space:nowrap}
+.v3fs-proto-refined-chips {display:flex;gap:6px;flex-wrap:wrap;min-width:0}
+.v3fs-proto-chip.ch {background:color-mix(in srgb, var(--v3-accent) 12%, var(--fs-card));border-color:color-mix(in srgb, var(--v3-accent) 30%, var(--fs-line));color:var(--v3-accent)}
 .v3fs-proto-sum {font-size:11.5px;color:var(--v3-text-muted)}
 .v3fs-proto-sum em {font-style:normal;color:var(--v3-text-secondary)}
 @media (max-width:820px){.v3fs-proto-edit {grid-template-columns:1fr}}

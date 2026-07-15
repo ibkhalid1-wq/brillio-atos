@@ -1492,6 +1492,14 @@ DESIGN SYSTEM & CRAFT — this must look like a PREMIUM, modern SaaS product (th
 - MOTION & POLISH. Tasteful micro-interactions (hover/active transitions ~150ms, a subtle state-change animation when an agent step completes), focus-visible rings, respect prefers-reduced-motion. Accessible contrast throughout.
 - FEEL REAL. Seeded with their data, in their vocabulary, at production density — a stakeholder should feel they are using the finished product, not previewing a mock.
 
+REFINE MODE — when the context carries "prototypeRefineBrief", you are NOT building from scratch. A prior prototype already exists and the delivery loop is iterating on it. REFINE it, do not rebuild it:
+- The BASELINE is prototypeRefineBrief.priorHtml — the current, in-use prototype. START FROM IT. Every screen, component, fixture, label and interaction it contains that no change request touches must survive BYTE-FOR-BYTE. Stakeholders have already signed off on parts of this app; silently redrawing a screen they approved is a regression, not a refinement.
+- APPLY prototypeRefineBrief.openChangeRequests — each is a demo verdict asking for a change, tagged to the stakeholder and business area that raised it. Change ONLY the screens/areas those asks name, and make each change in the requester's own terms. An area with no open change request is FROZEN: leave it exactly as it was.
+- RECONCILE THE DESIGN SYSTEM: if the Experience Design now carries a "theme" the baseline predates (its <style> has no :root token block, or the tokens differ), introduce/replace the :root token block to match the current theme and let the existing component classes inherit it — RE-SKIN via tokens, never re-lay-out screens to restyle them.
+- SIZE: the refined document should be about the SAME SIZE as priorHtml. You are editing it, not expanding it. Do not re-author unchanged screens (that both risks regressions and blows the resource budget).
+- REPORT what moved: put every screen id / area you actually changed in "changed", and nothing you left alone. If you could not honour an ask, name it in "gaps" rather than silently dropping it.
+Refining rather than rebuilding is what preserves sign-off and keeps the product coherent as the loop turns. Only when NO prototypeRefineBrief is present do you assemble the app from scratch per the rules above.
+
 HARD OUTPUT RULES (enforced):
 - "html" is a SINGLE self-contained HTML document: one <style> block, one <script> block, NO external URLs, NO CDN links, NO web fonts, NO images by URL (inline SVG only if needed). It must render standalone in a sandboxed iframe with scripts allowed.
 - Navigation between screens is in-page (JS toggling sections or a simple hash router) — no server, no navigation away.
@@ -1504,6 +1512,7 @@ Return ONLY valid JSON:
   "screens": [ { "id": "matches the Experience Design screen id", "name": "screen name in the stakeholders' language", "purpose": "one sentence" } ],
   "entryScreen": "the screen id the app opens on",
   "html": "<!doctype html><html>…the entire self-contained clickable app…</html>",
+  "changed": ["in REFINE MODE: the screen ids / areas you actually edited this iteration — empty or omitted on an initial build"],
   "seededEntities": ["ontology entities whose fixtures are shown in the app"],
   "gaps": ["Experience Design screens too thin to build, flows with no fixture to seed, faked items"],
   "summary": "one sentence verdict on prototype readiness",
@@ -2139,6 +2148,47 @@ function getCurrentPhaseScope(programData: ProgramState, phaseId: string): strin
     );
   }
   return lines.join("\n");
+}
+
+/**
+ * The Prototype Build REFINE brief. On every run after the first, the Build
+ * agent PATCHES the prior prototype instead of rebuilding it from scratch — so
+ * it must receive the prior HTML verbatim plus the specific asks the demo
+ * raised. Screens no change request touches stay byte-stable, which (a)
+ * preserves signed-off areas across iterations, and (b) bounds the output to
+ * roughly the prior document's size, keeping the generation inside the edge
+ * function's resource budget. Returns null when there is no prior build (the
+ * initial from-scratch build is correct) or the run is an initial_generation.
+ */
+interface PrototypeRefineBrief {
+  mode: "refine";
+  round: number;
+  priorHtml: string;
+  openChangeRequests: Array<{ stakeholder: string; area: string; verdict: string; ask: string }>;
+}
+function buildPrototypeRefineBrief(
+  inner: Record<string, unknown>,
+  phaseInputsAll: Record<string, unknown>,
+  runMode: RunMode,
+): PrototypeRefineBrief | null {
+  if (runMode === "initial_generation") return null;
+  const prior = isRecord(inner.prototypeBuild) ? inner.prototypeBuild as Record<string, unknown> : null;
+  const priorHtml = prior && typeof prior.html === "string" ? prior.html : "";
+  if (!priorHtml.trim()) return null;
+  const showInputs = normalizeProgramData(phaseInputsAll.show as JsonValue | null);
+  const tourRaw = typeof showInputs.demoTour === "string" ? showInputs.demoTour : "";
+  const rows = tourRaw.trim().startsWith("[") ? safeJsonParse<unknown[]>(tourRaw, []) : [];
+  const openChangeRequests = rows
+    .filter(isRecord)
+    .filter((r) => /objection|with changes/i.test(typeof r.verdict === "string" ? r.verdict : ""))
+    .map((r) => ({
+      stakeholder: typeof r.stakeholder === "string" ? r.stakeholder.trim() || "—" : "—",
+      area: typeof r.area === "string" && r.area.trim() ? r.area.trim() : "General",
+      verdict: typeof r.verdict === "string" ? r.verdict : "",
+      ask: typeof r.reaction === "string" ? r.reaction.trim() : "",
+    }));
+  const round = Math.max(1, Math.round(Number(showInputs.iterationRound)) || 1);
+  return { mode: "refine", round, priorHtml, openChangeRequests };
 }
 
 function buildSpecialAgentInputContext(
@@ -2848,6 +2898,13 @@ function buildSpecialAgentInputContext(
     const changedInputs = runMode === "initial_generation"
       ? []
       : computeInputDelta(readPriorInputSnapshot(inner, formalSpec.fieldKey), buildFormalInputSnapshot(inner, formalSpec.phase));
+    // Prototype Build only: on every run after the first, hand the agent the
+    // prior HTML + the demo's open change requests so it REFINES (patches) the
+    // prototype rather than rebuilding it from scratch — preserving signed-off
+    // screens and bounding the output to the prior document's size.
+    const prototypeRefineBrief = formalSpec.fieldKey === "prototypeBuild"
+      ? buildPrototypeRefineBrief(inner, phaseInputsAll, runMode)
+      : null;
     // Cross-phase grounding: every phase except the first generates artifacts
     // with the approved artifacts from all earlier phases in context, so later
     // artifacts build on what came before instead of contradicting it. The
@@ -2935,6 +2992,7 @@ function buildSpecialAgentInputContext(
       existingBusinessCase: businessCase,
       existingArtifacts: artifactsByPhase[formalSpec.phase] || [],
       priorPhaseArtifacts,
+      ...(prototypeRefineBrief ? { prototypeRefineBrief } : {}),
     // Compact serialization: the pretty-print indent added ~30% to a context
     // that already runs to hundreds of KB — pure whitespace tokens that slow
     // every generation. The model parses compact JSON just as well.
