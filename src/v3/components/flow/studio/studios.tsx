@@ -836,7 +836,7 @@ export const STUDIO_REGISTRY: Record<string, StudioEntry> = {
   "domain-ontology": { fieldKey: flowFieldKey("domain-ontology"), docOrder: ["entities", "relations", "events", "standardAlignment", "ambiguities"], Component: OntologyStudio },
   "architecture-strategy": { fieldKey: flowFieldKey("architecture-strategy"), docOrder: ["candidates", "recommendation"], Component: StrategyStudio },
   "agentic-blueprint": { fieldKey: flowFieldKey("agentic-blueprint"), docOrder: ["agents", "journeys", "orchestration", "dataContracts", "hitlPoints", "evalPlan", "buildSequence", "tracks"], Component: BlueprintStudio },
-  "experience-design": { fieldKey: flowFieldKey("experience-design"), docOrder: ["designIntent", "screens", "flows", "workflowMachines"], Component: ExperienceDesignStudio },
+  "experience-design": { fieldKey: flowFieldKey("experience-design"), docOrder: ["designIntent", "theme", "screens", "flows", "workflowMachines"], Component: ExperienceDesignStudio },
   "prototype-pack": { fieldKey: flowFieldKey("prototype-pack"), docOrder: ["scaffold", "buildSlices", "seedScenarios", "stubbing"], Component: PrototypePackStudio },
   "prototype-build": { fieldKey: flowFieldKey("prototype-build"), docOrder: ["screens", "summary"], Component: PrototypeStudio },
   "demo-scripts": { fieldKey: flowFieldKey("demo-scripts"), docOrder: ["scripts", "tourSequence"], Component: DemoScriptsStudio },

@@ -101,6 +101,30 @@ export default function ExperienceDesignStudio({ doc }: StudioProps) {
         </Section>
       ) : null}
 
+      {(() => {
+        const theme = asRecord(doc.theme);
+        const swatches: Array<[string, string]> = [["brandHue", "Brand"], ["accent", "Accent"], ["neutral", "Neutral"], ["surface", "Surface"], ["good", "Good"], ["warn", "Warn"], ["critical", "Critical"]];
+        if (!swatches.some(([k]) => asText(theme[k]))) return null;
+        const str = (v: unknown) => (typeof v === "number" ? String(v) : asText(v));
+        return (
+          <Section label="Theme — the design system every prototype builds from" hint={asText(theme.personalityNote) || "governed tokens; the Experience Designer tunes them, and every area's prototype renders from the same system"}>
+            <div className="v3fs-wf-theme">
+              <div className="v3fs-wf-swatches">
+                {swatches.map(([k, l]) => asText(theme[k]) ? (
+                  <span key={k} className="v3fs-wf-swatch"><span className="sw" style={{ background: asText(theme[k]) }} /><b>{l}</b><em>{asText(theme[k])}</em></span>
+                ) : null)}
+              </div>
+              <div className="v3fs-wf-meta">
+                {asText(theme.fontStack) ? <span className="v3fs-wf-chip">font · {asText(theme.fontStack).split(",")[0].replace(/["']/g, "")}</span> : null}
+                {str(theme.radius) ? <span className="v3fs-wf-chip">radius {str(theme.radius)}px</span> : null}
+                {str(theme.spacingBase) ? <span className="v3fs-wf-chip">spacing {str(theme.spacingBase)}px</span> : null}
+                {asText(theme.density) ? <span className="v3fs-wf-chip">{asText(theme.density)}</span> : null}
+              </div>
+            </div>
+          </Section>
+        );
+      })()}
+
       <Section label={`Screens (${screens.length})`} hint="wireframes speak the ontology's vocabulary — click a screen for its states">
         <div className="v3fs-wf-grid">
           {screens.map((screen, index) => (

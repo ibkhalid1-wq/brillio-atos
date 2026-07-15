@@ -6347,6 +6347,13 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-wf-state{font-size:11.5px;display:flex;flex-direction:column;gap:1px}
 .v3fs-wf-state em{font-style:normal;font-size:9.5px;font-weight:750;letter-spacing:.05em;text-transform:uppercase;color:var(--v3-text-muted)}
 .v3fs-wf-intent p{margin:0 0 8px;font-size:13px;max-width:68ch}
+/* Governed theme — swatches of the design system the prototypes render from */
+.v3fs-wf-theme{display:flex;flex-direction:column;gap:9px}
+.v3fs-wf-swatches{display:flex;gap:8px;flex-wrap:wrap}
+.v3fs-wf-swatch{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--v3-text-secondary);padding:3px 9px 3px 3px;border:1px solid var(--fs-line);border-radius:999px;background:var(--fs-card)}
+.v3fs-wf-swatch .sw{width:18px;height:18px;border-radius:50%;border:1px solid color-mix(in srgb,var(--v3-text-primary) 12%,transparent);flex:none}
+.v3fs-wf-swatch b{color:var(--v3-text-primary);font-weight:700}
+.v3fs-wf-swatch em{font-style:normal;font-family:var(--v3-font-mono,ui-monospace,monospace);font-size:10px;color:var(--v3-text-muted);text-transform:uppercase}
 .v3fs-wf-flows{display:flex;flex-direction:column;gap:10px}
 .v3fs-wf-flow{border:1px solid var(--fs-line);border-radius:11px;padding:11px 14px;display:flex;flex-direction:column;gap:8px}
 .v3fs-wf-flow.on{border-color:color-mix(in srgb,var(--v3-accent-2) 45%,var(--fs-line))}
