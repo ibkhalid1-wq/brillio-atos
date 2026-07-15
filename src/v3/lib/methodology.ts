@@ -1414,10 +1414,10 @@ export const ATOS_FLOW: MethodologyDefinition = {
     {
       id: "ship",
       displayName: "Ship",
-      description: "Harden the accepted prototype into the production system — guardrails, an eval suite generated from the evidence trail, runbook, cutover.",
+      description: "Harden the approved prototype into the production system — guardrails, an eval suite generated from the evidence trail, runbook, cutover.",
       requiredArtifacts: ["hardening-plan", "eval-suite", "runbook"],
       mandatoryExitCriteriaTemplates: ["Eval suite green", "Cutover executed"],
-      entryGuards: ["Demo acceptances recorded"],
+      entryGuards: ["Prototype approved — sponsor + majority"],
       recommendedAgents: ["hardening-plan", "eval-suite", "runbook"],
       typicalDurationWeeks: { min: 2, max: 4 },
       dynamicSchema: true,

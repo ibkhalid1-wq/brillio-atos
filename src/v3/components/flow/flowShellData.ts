@@ -705,9 +705,11 @@ export function gateSignal(program: ProgramSummary, movement: PhaseDefinition, a
   if (movement.id === "show") {
     const { accepted, total } = demoAcceptance(program);
     if (total === 0) return { tone: "dim", text: "The demo tour ledger is empty" };
-    return accepted < total
-      ? { tone: "amber", text: `${accepted}/${total} demos accepted` }
-      : { tone: "green", text: `Every stakeholder accepted` };
+    // Convergence is sponsor + majority; short of it, report progress.
+    const majority = accepted * 2 >= total;
+    return majority
+      ? { tone: "green", text: `Sponsor + majority approved (${accepted}/${total})` }
+      : { tone: "amber", text: `${accepted}/${total} approved — need a majority` };
   }
   if (movement.id === "ship") {
     const lanes = listShipLanes(program);
@@ -854,9 +856,18 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
     );
   } else if (movement.id === "show") {
     const tour = demoAcceptance(program);
-    // Approval is BY STAKEHOLDER and BY TRACK, and both close the loop back
-    // to Listen: every voice heard must watch their workflow run, and every
-    // track must converge to acceptance.
+    // The loop CONVERGES on sponsor + majority: the sponsor accepts and a
+    // majority of voices accept. Open objections are LOGGED, not blocking — the
+    // team keeps iterating on them, but they don't hold the gate. Every voice
+    // heard still watches their workflow run.
+    const isStrict = (v?: string) => !!v && /accepted/i.test(v) && !/with changes/i.test(v);
+    const strictAccepted = tour.rows.filter((r) => isStrict(r.verdict)).length;
+    const majority = tour.total > 0 && strictAccepted * 2 >= tour.total;
+    const sponsorName = String(readMovementInputs(program, "frame").sponsor ?? "").trim().toLowerCase();
+    const sponsorRow = sponsorName ? tour.rows.find((r) => (r.stakeholder ?? "").trim().toLowerCase() === sponsorName) : undefined;
+    const sponsorAccepted = sponsorRow ? isStrict(sponsorRow.verdict) : false;
+    const converged = tour.total > 0 && sponsorAccepted && majority;
+    const objections = tour.rows.filter((r) => /objection/i.test(r.verdict ?? "")).length;
     const heard = parseGridRows(readMovementInputs(program, "listen").interviewRoster)
       .filter((row) => /heard/i.test(row.status ?? ""))
       .map((row) => String(row.name ?? "").trim())
@@ -877,7 +888,16 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
         anchor: "input:demoTour",
         why: missingVoices.length ? `still to see it: ${missingVoices.slice(0, 2).join(", ")}${missingVoices.length > 2 ? "…" : ""}` : undefined,
       },
-      { id: "verdicts", label: tour.total ? `Every stakeholder accepted (${tour.accepted}/${tour.total})` : "Every stakeholder accepted", done: tour.total > 0 && tour.accepted >= tour.total, anchor: "input:demoTour" },
+      {
+        id: "verdicts",
+        label: tour.total ? `Sponsor + majority approved (${strictAccepted}/${tour.total})` : "Sponsor + majority approved",
+        done: converged,
+        anchor: "input:demoTour",
+        why: converged
+          ? `sponsor accepted + majority accepted${objections ? ` · ${objections} objection${objections === 1 ? "" : "s"} logged` : ""}`
+          : !sponsorAccepted ? "the sponsor's verdict isn't Accepted yet"
+            : `need a majority accepted — ${strictAccepted}/${tour.total}`,
+      },
     );
     if (tracks.length) {
       items.push({
