@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { ScreenCard } from "@/v3/components/flow/studio/ExperienceDesignStudio";
 import FlowReviewSurface from "@/v3/components/flow/FlowReviewSurface";
-import type { ReviewPayload } from "@/v3/components/flow/flowReviews";
+import { projectStakeholderReview, type ReviewPayload } from "@/v3/components/flow/flowReviews";
+import type { ProgramSummary } from "@/new/types";
 import { DictationButton, joinDictation } from "@/v3/components/flow/FlowDictation";
 
 /**
@@ -47,8 +48,56 @@ interface Pack {
   recipientArea?: string;
   /** A projected REVIEW surface — workflow-agentify or ontology+atlas. When
    * present, the page renders the visual review instead of the plain form; its
-   * composed response still submits through the interview `answers` path. */
+   * composed response still submits through the interview `answers` path.
+   * FALLBACK only — a fresh review re-projected from `liveArtifacts` wins. */
   review?: ReviewPayload;
+  /** DYNAMIC LINKS: re-projection inputs. The edge ships the CURRENT artifact
+   * slices; the page rebuilds the review from them so a regeneration never
+   * orphans the link. reviewKind + movementId pick the projection. */
+  reviewKind?: string;
+  movementId?: string;
+  liveArtifacts?: Record<string, unknown>;
+}
+
+/** Rebuild the review from the CURRENT artifacts the edge shipped, so a link
+ * opened after a regeneration shows the latest workflows/ontology/blueprint.
+ * Falls back (null) to the frozen `pack.review` for old/edge-less packs. */
+function reprojectFromPack(pack: Pack): ReviewPayload | null {
+  if (!pack.liveArtifacts || !pack.movementId) return null;
+  // Only the kinds projectStakeholderReview produces can be rebuilt live.
+  if (pack.reviewKind !== "listen-workflow" && pack.reviewKind !== "agentify") return null;
+  const program = { rawData: { data: pack.liveArtifacts } } as unknown as ProgramSummary;
+  let fresh: ReviewPayload | null = null;
+  try { fresh = projectStakeholderReview(program, pack.movementId, pack.stakeholder, pack.recipientArea, []); }
+  catch { return null; }
+  if (!fresh) return null;
+  // Keep the person's own question list (their gap script, minted once) — only
+  // the structural content is refreshed.
+  if (fresh.kind === "listen-workflow" && Array.isArray(pack.questions) && pack.questions.length) {
+    fresh.questions = pack.questions;
+  }
+  return fresh;
+}
+
+/** A short structural signature of a review — names + step counts of what the
+ * respondent edits. Changes when a regeneration reshapes the content, so an
+ * on-device draft keyed by it is abandoned rather than misaligned. */
+function reviewSignature(review: ReviewPayload): string {
+  const parts: string[] = [review.kind];
+  const r = review as {
+    workflows?: Array<{ name?: string; steps?: unknown[] }>;
+    terms?: Array<{ name?: string }>;
+    architecture?: { candidates?: Array<{ name?: string }> };
+    blueprint?: { agents?: Array<{ name?: string }> };
+  };
+  for (const w of r.workflows ?? []) parts.push(`${w.name ?? ""}:${Array.isArray(w.steps) ? w.steps.length : 0}`);
+  for (const t of r.terms ?? []) parts.push(t.name ?? "");
+  for (const c of r.architecture?.candidates ?? []) parts.push(c.name ?? "");
+  for (const a of r.blueprint?.agents ?? []) parts.push(a.name ?? "");
+  const text = parts.join("|");
+  let h = 5381;
+  for (let i = 0; i < text.length; i += 1) h = ((h * 33) ^ text.charCodeAt(i)) >>> 0;
+  return h.toString(16);
 }
 
 type DemoVerdict = "accepted" | "accepted-with-changes" | "rework";
@@ -76,6 +125,17 @@ export default function FlowRespond({ token }: { token: string }) {
   const draftKey = `atos.respond.${token}`;
   const draft0 = readRespondDraft(draftKey);
   const [state, setState] = useState<PackState>({ phase: "loading" });
+  // The review shown — rebuilt LIVE from the current artifacts the edge shipped,
+  // falling back to the pack's frozen snapshot. Memoised so the surface's draft
+  // key is stable within a load.
+  const shownReview = useMemo<ReviewPayload | null>(
+    () => (state.phase === "ready" ? (reprojectFromPack(state.pack) ?? state.pack.review ?? null) : null),
+    [state],
+  );
+  // A regeneration can reshape the review while a draft is saved on-device; fold
+  // a structural signature into the review draft key so a changed structure
+  // starts fresh (a stale draft's step indices would misalign) — best-effort.
+  const reviewDraftKey = shownReview ? `${draftKey}.${reviewSignature(shownReview)}` : draftKey;
   const [answers, setAnswers] = useState<Record<number, string>>(draft0.answers ?? {});
   // Per-question deferral: "not me — this is for <name>". A deferred question
   // counts as handled here and is routed to that person's card on ingest.
@@ -237,9 +297,9 @@ export default function FlowRespond({ token }: { token: string }) {
                 team for a fresh link.
               </p>
             </div>
-          ) : state.pack.review ? (
-            <FlowReviewSurface review={state.pack.review} stakeholder={state.pack.stakeholder}
-              submitting={submitting} error={error} draftKey={draftKey}
+          ) : shownReview ? (
+            <FlowReviewSurface review={shownReview} stakeholder={state.pack.stakeholder}
+              submitting={submitting} error={error} draftKey={reviewDraftKey}
               onSubmit={(answers) => void submit({ answers })} />
           ) : state.pack.kind === "demo" ? (
             <>

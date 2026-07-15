@@ -16,7 +16,7 @@ import { resolveMovementStakeholders, readRoleBindings, readOperatorAsks, operat
 import { mapTranscriptSpeakers } from "@/v3/components/flow/flowTranscriptMap";
 import { AttachFileButton, TranscribeButton, copyTextFromAction } from "@/v3/components/flow/flowCapture";
 import { readGovernedExceptions, withNewException, withResolvedException } from "@/v3/components/flow/flowExceptions";
-import { projectAgentifyReview, projectListenWorkflowReview, reviewFallbackQuestions, type ListenWorkflowReview, type AgentifyReview } from "@/v3/components/flow/flowReviews";
+import { projectStakeholderReview, reviewFallbackQuestions } from "@/v3/components/flow/flowReviews";
 import { areaProgress, stakeholderPrimaryArea, programAreas, GENERAL_AREA, type AreaProgress } from "@/v3/components/flow/flowAreas";
 
 /** A movement's discovery, organized by stakeholder. One card per person or
@@ -67,45 +67,6 @@ export function stakeholderCollection(
   return { key, pack, mine, heard, status };
 }
 type StakeholderCollection = ReturnType<typeof stakeholderCollection>;
-
-/** The area-scoped visual review a stakeholder's ONE link carries on Listen /
- * Envision, with their gap script folded into a listen-workflow review's
- * questions. Shared by the card's link and the lane's "invite everyone", so
- * both mint identical packs. Null for Frame/Show (a plain questions link — the
- * edge folds a Show demo walkthrough onto it). */
-export function projectStakeholderReview(
-  program: ProgramSummary, movementId: string, name: string,
-  primaryArea: string | undefined, linkQuestions: string[],
-): ListenWorkflowReview | AgentifyReview | null {
-  const kind = movementId === "listen" ? "listen-workflow" : movementId === "envision" ? "agentify" : null;
-  if (!kind) return null;
-  const base = kind === "listen-workflow" ? projectListenWorkflowReview(program, name) : projectAgentifyReview(program, name);
-  if (!base) return null;
-  // Area-specific link: the recipient sees only THEIR area's workflow AND
-  // ontology terms (alliances, delivery, …). Stamp the area so the surface
-  // opens scoped to it and can name it.
-  if (primaryArea && primaryArea !== GENERAL_AREA) {
-    base.recipientArea = primaryArea;
-    const scoped = base.workflows.filter((w) => w.area === primaryArea);
-    if (scoped.length) base.workflows = scoped;
-    if (base.kind === "listen-workflow") {
-      const scopedTerms = base.terms.filter((t) => t.area === primaryArea);
-      if (scopedTerms.length) {
-        const keep = new Set(scopedTerms.map((t) => t.name.trim().toLowerCase()));
-        base.terms = scopedTerms;
-        base.relations = base.relations.filter((r) => keep.has(r.from.trim().toLowerCase()) && keep.has(r.to.trim().toLowerCase()));
-      }
-    }
-  }
-  // Fold their gap script into a listen-workflow review's question list (the
-  // agentify surface has none) so the one link still asks it below the flow.
-  if (base.kind === "listen-workflow") {
-    const seen = new Set(base.questions.map((q) => q.trim().toLowerCase()));
-    const extra = linkQuestions.filter((q) => q.trim() && !seen.has(q.trim().toLowerCase()));
-    base.questions = [...extra, ...base.questions].slice(0, 10);
-  }
-  return base;
-}
 
 const COLLECT_COLUMNS: Array<{ key: CollectStatus; label: string }> = [
   { key: "approved", label: "Approved" },

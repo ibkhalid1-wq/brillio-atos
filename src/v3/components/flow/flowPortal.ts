@@ -156,6 +156,17 @@ export function portalLinkFor(programId: string, holder: { token: string }): str
   return `${base}?flowRespond=${encodeURIComponent(`${programId}.${holder.token}`)}`;
 }
 
+/** Bound the interview-pack list without ever dropping a LIVE (unanswered)
+ *  review link — its shared token must keep resolving through regenerations, so
+ *  it is exempt from the recency cap; only answered/other packs are trimmed. */
+function capInterviewPacks(packs: unknown[]): unknown[] {
+  const isLiveReview = (p: unknown): boolean => isRecord(p)
+    && String(p.role ?? "").startsWith("review:") && typeof p.respondedAt !== "string";
+  const live = packs.filter(isLiveReview);
+  const others = packs.filter((p) => !isLiveReview(p));
+  return [...others.slice(-30), ...live].slice(-80);
+}
+
 function randomSecret(): string {
   const bytes = new Uint8Array(24);
   crypto.getRandomValues(bytes);
@@ -243,7 +254,7 @@ export function mintInterviewPacks(program: ProgramSummary, actor: string): Reco
   };
   return wrapProgramState(wrapper, {
     ...inner,
-    flowInterviewPacks: [...updatedExisting, ...additions].slice(-30),
+    flowInterviewPacks: capInterviewPacks([...updatedExisting, ...additions]),
     flowAttestations: [...log, attestation].slice(-200),
   }, usesNestedData);
 }
@@ -360,7 +371,7 @@ export function mintFollowUpPack(
   };
   return wrapProgramState(wrapper, {
     ...inner,
-    flowInterviewPacks: [...kept, pack].slice(-30),
+    flowInterviewPacks: capInterviewPacks([...kept, pack]),
     flowAttestations: [...log, attestation].slice(-200),
   }, usesNestedData);
 }
@@ -392,6 +403,12 @@ export function mintReviewPack(
   // Retire superseded unanswered review links; keep answered ones (the record).
   const kept = existing.filter((pack) => !(sameKind(pack) && typeof (pack as Record<string, unknown>).respondedAt !== "string"));
   const now = new Date().toISOString();
+  // Store the re-projection inputs (reviewKind + recipientArea) alongside the
+  // frozen review snapshot. The respond page rebuilds the review LIVE from the
+  // current record using these, so a later artifact regeneration never orphans
+  // the link — the `review` snapshot is only a fallback for old/edge-less packs.
+  const recipientArea = isRecord(input.review) && typeof input.review.recipientArea === "string"
+    ? input.review.recipientArea : undefined;
   const pack = {
     id: `pack-${randomSecret().slice(0, 10)}`,
     stakeholder: input.who.trim(),
@@ -402,6 +419,8 @@ export function mintReviewPack(
     createdAt: now,
     movementId: input.movementId,
     captureField: input.captureField,
+    reviewKind: input.reviewKind,
+    ...(recipientArea ? { recipientArea } : {}),
     review: input.review,
   };
   const log = Array.isArray(inner.flowAttestations) ? (inner.flowAttestations as unknown[]) : [];
@@ -411,7 +430,7 @@ export function mintReviewPack(
   };
   return wrapProgramState(wrapper, {
     ...inner,
-    flowInterviewPacks: [...kept, pack].slice(-30),
+    flowInterviewPacks: capInterviewPacks([...kept, pack]),
     flowAttestations: [...log, attestation].slice(-200),
   }, usesNestedData);
 }

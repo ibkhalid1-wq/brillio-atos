@@ -284,6 +284,18 @@ Deno.serve(async (req: Request) => {
       const interviewDesign = isShowPack ? designSlice() : undefined;
       const interviewScript = isShowPack ? scriptSlice() : undefined;
       const interviewArea = isShowPack ? recipientAreaSlice() : "";
+      // DYNAMIC LINKS: a review pack also ships the CURRENT artifact slices so the
+      // respond page rebuilds the review LIVE from the latest record — a later
+      // regeneration never orphans the link. The frozen `review` stays only as a
+      // fallback for very old packs. Slices are the review-relevant docs (the
+      // reviewer sees them anyway), keeping the blast radius the same in spirit.
+      const isReviewPack = String(hit.pack.role ?? "").startsWith("review:");
+      const liveArtifacts = isReviewPack ? {
+        currentStateAtlas: isRecord(hit.inner.currentStateAtlas) ? hit.inner.currentStateAtlas : null,
+        domainOntology: isRecord(hit.inner.domainOntology) ? hit.inner.domainOntology : null,
+        architectureStrategy: isRecord(hit.inner.architectureStrategy) ? hit.inner.architectureStrategy : null,
+        agenticBlueprint: isRecord(hit.inner.agenticBlueprint) ? hit.inner.agenticBlueprint : null,
+      } : undefined;
       return jsonResponse({
         kind: "interview",
         programme: hit.programName,
@@ -295,8 +307,16 @@ Deno.serve(async (req: Request) => {
         ...(interviewDesign ? { design: interviewDesign } : {}),
         ...(interviewScript ? { script: interviewScript } : {}),
         ...(interviewArea ? { recipientArea: interviewArea } : {}),
-        // A shareable review surface (workflow-agentify or ontology+atlas),
-        // projected client-side at mint and passed straight through.
+        // Re-projection inputs (kind + area + the recipient name via `stakeholder`
+        // above) and the live slices, so the client rebuilds the current review.
+        ...(isReviewPack ? {
+          reviewKind: String(hit.pack.reviewKind ?? ""),
+          movementId: String(hit.pack.movementId ?? ""),
+          ...(typeof hit.pack.recipientArea === "string" ? { recipientArea: hit.pack.recipientArea } : {}),
+          liveArtifacts,
+        } : {}),
+        // A shareable review surface projected at mint — the FALLBACK when live
+        // re-projection isn't possible (edge older than the pack, or no slices).
         ...(isRecord(hit.pack.review) ? { review: hit.pack.review } : {}),
         responded: typeof hit.pack.respondedAt === "string",
       });

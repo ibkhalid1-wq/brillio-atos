@@ -17,7 +17,7 @@
  * / Listen synthesis reads it like any other stakeholder input.
  */
 import type { ProgramSummary } from "@/new/types";
-import { workflowArea, entityArea } from "@/v3/components/flow/flowAreas";
+import { workflowArea, entityArea, GENERAL_AREA } from "@/v3/components/flow/flowAreas";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -261,6 +261,46 @@ export function projectListenWorkflowReview(program: ProgramSummary, persona: st
     relations: projectRelations(program, (relevant.length ? relevant : (oa?.terms ?? [])).slice(0, 16)),
     questions: NON_STRUCTURAL_QUESTIONS,
   };
+}
+
+/** The area-scoped visual review a stakeholder's ONE link carries on Listen /
+ * Envision, with their gap script folded into a listen-workflow review's
+ * questions. Shared by the card's mint AND the respond page's live re-projection
+ * — both build the identical review from the current record, so a regenerated
+ * artifact never orphans a link (the link rebuilds from the latest state).
+ * Null for Frame/Show (a plain questions link). */
+export function projectStakeholderReview(
+  program: ProgramSummary, movementId: string, name: string,
+  primaryArea: string | undefined, linkQuestions: string[],
+): ListenWorkflowReview | AgentifyReview | null {
+  const kind = movementId === "listen" ? "listen-workflow" : movementId === "envision" ? "agentify" : null;
+  if (!kind) return null;
+  const base = kind === "listen-workflow" ? projectListenWorkflowReview(program, name) : projectAgentifyReview(program, name);
+  if (!base) return null;
+  // Area-specific link: the recipient sees only THEIR area's workflow AND
+  // ontology terms (alliances, delivery, …). Stamp the area so the surface
+  // opens scoped to it and can name it.
+  if (primaryArea && primaryArea !== GENERAL_AREA) {
+    base.recipientArea = primaryArea;
+    const scoped = base.workflows.filter((w) => w.area === primaryArea);
+    if (scoped.length) base.workflows = scoped;
+    if (base.kind === "listen-workflow") {
+      const scopedTerms = base.terms.filter((t) => t.area === primaryArea);
+      if (scopedTerms.length) {
+        const keep = new Set(scopedTerms.map((t) => t.name.trim().toLowerCase()));
+        base.terms = scopedTerms;
+        base.relations = base.relations.filter((r) => keep.has(r.from.trim().toLowerCase()) && keep.has(r.to.trim().toLowerCase()));
+      }
+    }
+  }
+  // Fold their gap script into a listen-workflow review's question list (the
+  // agentify surface has none) so the one link still asks it below the flow.
+  if (base.kind === "listen-workflow") {
+    const seen = new Set(base.questions.map((q) => q.trim().toLowerCase()));
+    const extra = linkQuestions.filter((q) => q.trim() && !seen.has(q.trim().toLowerCase()));
+    base.questions = [...extra, ...base.questions].slice(0, 10);
+  }
+  return base;
 }
 
 /** One workflow's edited step list, as the surface holds it. Actor/system ride
