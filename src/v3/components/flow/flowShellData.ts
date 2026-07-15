@@ -581,6 +581,42 @@ export function artifactInputsReady(program: ProgramSummary, movementId: string,
   return mandateSeeds && filled(frame.sponsorConversation);
 }
 
+/** A rebuild the operator owes an artifact — derived, not stored. */
+export interface RebuildActionItem {
+  /** Stable key `${movementId}:${artifactId}` — this item exists exactly while
+   *  the artifact is stale, so no id needs persisting. */
+  id: string;
+  /** The agent to run (same id as the artifact). */
+  agentId: string;
+  movementId: string;
+  movementLabel: string;
+  /** The artifact's title. */
+  title: string;
+}
+
+/** The artifacts waiting on the operator to rebuild — the "regeneration is an
+ * agent run" actions that, with auto-build OFF, would otherwise sit scattered
+ * across movement tabs. Surfaced in the Inbox as ACTION ITEMS: confirming one
+ * runs its agent (not a blob write, so it can't ride the decision system).
+ *
+ * Empty when auto-build is ON (the proactive effect handles rebuilds) so the two
+ * paths never both fire. A gated (approved) movement is frozen and excluded.
+ * Present-and-stale only — a never-built artifact is initial authoring, offered
+ * on its own card, not a "rebuild". */
+export function listRebuildActionItems(program: ProgramSummary): RebuildActionItem[] {
+  if (autoBuildEnabled(program)) return [];
+  const items: RebuildActionItem[] = [];
+  for (const movement of flowMovements()) {
+    if (program.gateReviews?.[movement.id]?.status === "approved") continue;
+    for (const art of movementArtifacts(program, movement)) {
+      if (art.present && art.stale) {
+        items.push({ id: `${movement.id}:${art.id}`, agentId: art.id, movementId: movement.id, movementLabel: movement.displayName, title: art.title });
+      }
+    }
+  }
+  return items;
+}
+
 /** The open gaps a generated document declares about ITSELF ("we still don't
  * know X") — shown on the artifact card, and the same texts the follow-up
  * scripts ask stakeholders. One source, two surfaces. Falsified field-demand

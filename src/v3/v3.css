@@ -5295,6 +5295,17 @@ button.v3fs-stale-tag {font-family:inherit;border:none;cursor:pointer}
 .v3fs-tag {font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-radius:6px;padding:3px 8px;flex-shrink:0;min-width:64px;text-align:center;justify-content:center}
 .v3fs-tag.ev {background:var(--fs-blue-wash);color:var(--fs-quote)}
 .v3fs-tag.gn {background:var(--fs-indigo-wash);color:var(--v3-accent-2)}
+.v3fs-tag.reb {background:color-mix(in srgb, var(--v3-amber) 18%, transparent);color:var(--v3-amber)}
+/* Inbox rebuild action items — regenerations owed when auto-build is off. */
+.v3fs-rebuild {border-left:3px solid var(--v3-amber)}
+.v3fs-rebuild-list {list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+.v3fs-rebuild-list li {display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--fs-line);border-radius:11px;
+  background:var(--v3-surface-2);box-shadow:var(--v3-shadow-xs)}
+.v3fs-rebuild-mv {flex:0 0 auto;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--v3-accent-2);
+  background:var(--fs-indigo-wash);border-radius:6px;padding:3px 8px;min-width:62px;text-align:center}
+.v3fs-rebuild-t {flex:1 1 auto;font-size:13px;font-weight:550;letter-spacing:-.01em;color:var(--v3-text-primary);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v3fs-rebuild-list .v3fs-btn {flex:0 0 auto}
 .v3fs-empty {font-size:12.5px;color:var(--v3-text-muted);padding:10px 0}
 .v3fs-stats {display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:20px}
 .v3fs-stat {position:relative;background:var(--fs-card);border:1px solid var(--fs-line);border-radius:16px;padding:18px 22px;box-shadow:var(--fs-shadow)}

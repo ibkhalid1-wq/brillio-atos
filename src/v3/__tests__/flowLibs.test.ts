@@ -20,7 +20,7 @@ import { mintFollowUpPack, listInterviewPacks, visibleLinks } from "@/v3/compone
 import { trackAcceptance, trackBlockers, recordShowPass, listFlowTracks, type FlowTrack } from "@/v3/components/flow/flowTracks";
 import { setShipLane, toggleShipItem, listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 import { ingestPortalResponse, listPortalInbox } from "@/v3/components/flow/flowPortal";
-import { gateChecklist, gateReadiness, flowMovements, movementEvidence } from "@/v3/components/flow/flowShellData";
+import { gateChecklist, gateReadiness, flowMovements, movementEvidence, listRebuildActionItems } from "@/v3/components/flow/flowShellData";
 import { buildDrilldownFindings, drillRollupTarget, listChildDrilldowns, readDrillAnchor, listDrillAnchors } from "@/v3/components/flow/flowDrilldown";
 import { mapTranscriptSpeakers } from "@/v3/components/flow/flowTranscriptMap";
 import { gateApprovalIntegrity } from "@/v3/components/flow/flowGovernance";
@@ -370,6 +370,21 @@ describe("contradiction stickiness — a dispute is proposed once, whatever the 
       }],
     });
     expect(negatedClaimProposal(alreadyJudged)).toBeNull();
+  });
+});
+
+describe("rebuild action items — regenerations owed when auto-build is off", () => {
+  const staleInner = { phaseArtifacts: { listen: { "domain-ontology": { inputsFingerprint: "old" } } } };
+  it("surfaces a present-and-stale artifact as a rebuild item", () => {
+    const items = listRebuildActionItems(programme(staleInner));
+    expect(items.some((i) => i.agentId === "domain-ontology" && i.movementId === "listen")).toBe(true);
+  });
+  it("is empty when auto-build is on — the proactive effect handles rebuilds", () => {
+    expect(listRebuildActionItems(programme({ ...staleInner, _autoBuild: true }))).toHaveLength(0);
+  });
+  it("excludes a gated (approved) movement — its inputs are frozen", () => {
+    const p = { ...programme(staleInner), gateReviews: { listen: { status: "approved" } } } as never;
+    expect(listRebuildActionItems(p)).toHaveLength(0);
   });
 });
 
