@@ -20,9 +20,10 @@ function verdictTone(v: string): "ok" | "part" | "obj" | "pending" {
   return "pending";
 }
 
-export default function ShowCockpit({ program, onRunAgent }: {
+export default function ShowCockpit({ program, onOpenDesign }: {
   program: ProgramSummary;
-  onRunAgent?: (agentId: string, phaseId?: string) => void;
+  /** Switch to Design mode and open the Prototype workspace. */
+  onOpenDesign?: () => void;
 }) {
   const tour = useMemo(() => demoAcceptance(program), [program]);
   const coverage = useMemo(() => movementValidationCoverage(program, "show").filter((r) => r.validated || r.waiting), [program]);
@@ -79,7 +80,7 @@ export default function ShowCockpit({ program, onRunAgent }: {
         ) : (
           <div className="v3fs-showc-noproto">
             The prototype is built in Envision — Show demonstrates it.
-            {onRunAgent ? <button type="button" className="v3fs-a" onClick={() => onRunAgent("prototype-build", "envision")}> build it →</button> : null}
+            {onOpenDesign ? <button type="button" className="v3fs-a" onClick={onOpenDesign}> build it in Design →</button> : null}
           </div>
         )}
       </section>

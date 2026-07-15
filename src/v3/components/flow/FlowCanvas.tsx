@@ -457,10 +457,10 @@ export default function FlowCanvas({ program, programs, runningAgentIds, agentEr
                   validation state (Validate). Discovery below is pure data
                   collection. */}
               {movement.id === "envision" ? (
-                <EnvisionCockpit program={program} onSaveInputs={onSaveInputs} onRunAgent={onRunAgent} />
+                <EnvisionCockpit program={program} onSaveInputs={onSaveInputs} onOpenArtifact={(id) => goTab(`art:${id}` as MovementTab)} />
               ) : null}
               {movement.id === "show" ? (
-                <ShowCockpit program={program} onRunAgent={onRunAgent} />
+                <ShowCockpit program={program} onOpenDesign={() => { setActive("envision"); setMovementTab((prev) => ({ ...prev, envision: "art:prototype-build" as MovementTab })); }} />
               ) : null}
               {/* The stage bar draws the loop left to right — Collect → Paper →
                   Gate — each chip carrying its state as a glyph + meaning. */}

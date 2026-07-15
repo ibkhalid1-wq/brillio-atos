@@ -20,10 +20,11 @@ function modeMix(wf: FutureWorkflow): { agentify: number; assist: number; keep: 
   return wf.steps.reduce((m, s) => ({ ...m, [s.mode]: m[s.mode] + 1 }), { agentify: 0, assist: 0, keep: 0 } as Record<string, number>) as { agentify: number; assist: number; keep: number };
 }
 
-export default function EnvisionCockpit({ program, onSaveInputs, onRunAgent }: {
+export default function EnvisionCockpit({ program, onSaveInputs, onOpenArtifact }: {
   program: ProgramSummary;
   onSaveInputs?: (movementId: string, patch: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
-  onRunAgent?: (agentId: string, phaseId?: string) => void;
+  /** Open one of the Design workspaces (Architecture · Experience · Prototype). */
+  onOpenArtifact?: (artifactId: string) => void;
 }) {
   const fs = useMemo<FutureState>(() => projectFutureState(program), [program]);
   const hasPrototype = useMemo(() => {
@@ -48,7 +49,7 @@ export default function EnvisionCockpit({ program, onSaveInputs, onRunAgent }: {
     try {
       await onSaveInputs("show", { iterationRound: String(ls.round + 1) },
         { attest: { action: `Started prototype iteration ${ls.round + 1}`, detail: `${incoming.length} change request${incoming.length === 1 ? "" : "s"} from Show` } });
-      onRunAgent?.("prototype-build", "envision");
+      onOpenArtifact?.("prototype-build");
     } finally { setIterating(false); }
   };
 
@@ -128,7 +129,7 @@ export default function EnvisionCockpit({ program, onSaveInputs, onRunAgent }: {
       {/* ── DIRECTION ─────────────────────────────────────────────────────── */}
       {fs.direction.candidates.length ? (
         <section className="v3fs-envc-act">
-          <div className="v3fs-envc-ah"><span className="v3fs-envc-an">1</span>Direction{fs.hasArchitecture && onRunAgent ? <button type="button" className="v3fs-a v3fs-envc-open" onClick={() => onRunAgent("architecture-strategy", "envision")}>view the strategy →</button> : null}</div>
+          <div className="v3fs-envc-ah"><span className="v3fs-envc-an">1</span>Direction{fs.hasArchitecture && onOpenArtifact ? <button type="button" className="v3fs-a v3fs-envc-open" onClick={() => onOpenArtifact("architecture-strategy")}>view the strategy →</button> : null}</div>
           {fs.direction.chosen ? (
             <div className="v3fs-envc-chosen">✓ On the record: <b>{fs.direction.chosen}</b></div>
           ) : (
@@ -158,7 +159,7 @@ export default function EnvisionCockpit({ program, onSaveInputs, onRunAgent }: {
       {(fs.workflows.length || fs.agents.length) ? (
         <section className="v3fs-envc-act">
           <div className="v3fs-envc-ah"><span className="v3fs-envc-an">2</span>Design — the future state, at a glance
-            {fs.hasDesign && onRunAgent ? <button type="button" className="v3fs-a v3fs-envc-open" onClick={() => onRunAgent("experience-design", "envision")}>open the design →</button> : null}</div>
+            {fs.hasDesign && onOpenArtifact ? <button type="button" className="v3fs-a v3fs-envc-open" onClick={() => onOpenArtifact("experience-design")}>open the design →</button> : null}</div>
           {fs.areas.length > 1 ? (
             <div className="v3fs-envc-areas" role="group" aria-label="Filter by area">
               <button type="button" className={`v3fs-envc-area${area === "" ? " on" : ""}`} onClick={() => setArea("")}>All areas</button>
@@ -243,8 +244,8 @@ export default function EnvisionCockpit({ program, onSaveInputs, onRunAgent }: {
               ) : null}
             </div>
           ) : null}
-          {onRunAgent && !fs.hasDesign ? (
-            <button type="button" className="v3fs-btn v3fs-envc-genexp" onClick={() => onRunAgent("experience-design", "envision")}>✦ Generate the Experience Design to complete the picture</button>
+          {onOpenArtifact && !fs.hasDesign ? (
+            <button type="button" className="v3fs-btn v3fs-envc-genexp" onClick={() => onOpenArtifact("experience-design")}>✦ Open the Experience Design to complete the picture</button>
           ) : null}
         </section>
       ) : null}
@@ -253,11 +254,11 @@ export default function EnvisionCockpit({ program, onSaveInputs, onRunAgent }: {
       {fs.hasDesign ? (
         <section className="v3fs-envc-act">
           <div className="v3fs-envc-ah"><span className="v3fs-envc-an">3</span>Build — the clickable prototype
-            {hasPrototype && onRunAgent ? <button type="button" className="v3fs-a v3fs-envc-open" onClick={() => onRunAgent("prototype-build", "envision")}>open the prototype →</button> : null}</div>
+            {hasPrototype && onOpenArtifact ? <button type="button" className="v3fs-a v3fs-envc-open" onClick={() => onOpenArtifact("prototype-build")}>open the prototype →</button> : null}</div>
           {hasPrototype ? (
             <div className="v3fs-envc-built">✓ Prototype built — the delivery team&rsquo;s runnable app. The Experience Designer refines it here; Show demonstrates it to each stakeholder.</div>
-          ) : onRunAgent ? (
-            <button type="button" className="v3fs-btn v3fs-envc-genexp" onClick={() => onRunAgent("prototype-build", "envision")}>🖥 Build the clickable prototype from the design</button>
+          ) : onOpenArtifact ? (
+            <button type="button" className="v3fs-btn v3fs-envc-genexp" onClick={() => onOpenArtifact("prototype-build")}>🖥 Open the Prototype workspace to build it</button>
           ) : null}
         </section>
       ) : null}
