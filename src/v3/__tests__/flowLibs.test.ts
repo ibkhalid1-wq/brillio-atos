@@ -373,19 +373,32 @@ describe("contradiction stickiness — a dispute is proposed once, whatever the 
   });
 });
 
-describe("follow-up packs — one live ask per person per movement", () => {
-  it("a new follow-up retires the old unanswered one; answered packs stay", () => {
+describe("durable per-stakeholder link — one token, reused, never retired", () => {
+  it("a follow-up rides the person's ONE durable link and folds prior answers into the recap", () => {
     const p = programme({ flowInterviewPacks: [
-      { id: "old-unanswered", role: "Follow-up", stakeholder: "Sarah Okafor, COO", movementId: "frame", questions: ["Old q"], token: "t1", createdAt: "2026-07-01" },
+      // Sarah already holds a review link (earliest token) AND an answered
+      // follow-up from another movement — the durable model is one link per
+      // person, so both collapse onto the earliest token.
+      { id: "old-review", role: "review:agentify", stakeholder: "Sarah Okafor, COO", movementId: "listen", questions: ["Old q"], token: "t1", createdAt: "2026-07-01" },
       { id: "old-answered", role: "Follow-up", stakeholder: "Sarah Okafor, COO", movementId: "frame", questions: ["Answered q"], token: "t2", createdAt: "2026-07-02", respondedAt: "2026-07-03" },
-      { id: "discovery", stakeholder: "Sarah Okafor, COO", questions: ["Discovery q"], token: "t3", createdAt: "2026-07-01" },
     ] });
     const blob = mintFollowUpPack(p, { movementId: "frame", who: "Sarah Okafor, COO", questions: ["New q"], captureField: "sponsorConversation" }, "you")!;
-    const ids = (blob.flowInterviewPacks as Array<{ id: string }>).map((pack) => pack.id);
-    expect(ids).not.toContain("old-unanswered");
-    expect(ids).toContain("old-answered");
-    expect(ids).toContain("discovery");
-    expect(ids).toHaveLength(3); // answered + discovery + the new pack
+    const packs = blob.flowInterviewPacks as Array<Record<string, unknown>>;
+    // ONE durable pack, on the EARLIEST token (a link already shared keeps working).
+    expect(packs).toHaveLength(1);
+    expect(packs[0].token).toBe("t1");
+    expect(packs[0].questions).toEqual(["New q"]);
+    expect(packs[0].role).toBe("Follow-up");
+    // Her prior answer is preserved as recap history, not thrown away.
+    const subs = packs[0].submissions as Array<{ ts: string }>;
+    expect(subs.some((s) => s.ts === "2026-07-03")).toBe(true);
+  });
+
+  it("re-sending the identical ask is idempotent — the standing link stands", () => {
+    const p = programme({ flowInterviewPacks: [
+      { id: "d", role: "Follow-up", stakeholder: "Sarah", movementId: "frame", questions: ["New q"], token: "t", createdAt: "2026-07-01", askUpdatedAt: "2026-07-01" },
+    ] });
+    expect(mintFollowUpPack(p, { movementId: "frame", who: "Sarah", questions: ["New q"], captureField: "x" }, "you")).toBeNull();
   });
 
   it("surfaces show one link per person per state — newest wins", () => {

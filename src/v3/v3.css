@@ -5356,6 +5356,23 @@ button.v3fs-stale-tag {font-family:inherit;border:none;cursor:pointer}
   box-shadow:0 10px 22px -8px color-mix(in srgb, var(--v3-accent-2) 60%, transparent)}
 .v3fs-quiet h2 {font-size:25px;font-weight:600;letter-spacing:-.02em;line-height:1.2;text-wrap:balance;margin:0 0 10px}
 .v3fs-quiet p {font-size:14px;line-height:1.7;color:var(--v3-text-secondary);max-width:50ch;margin:0 auto}
+/* Durable-link recap: the read-only "here's what you sent" a returning
+   stakeholder sees once they're fully caught up. */
+.v3fs-recap-list {list-style:none;margin:22px auto 0;padding:0;max-width:42ch;display:flex;flex-direction:column;gap:8px;text-align:left}
+.v3fs-recap-list li {display:flex;gap:12px;align-items:baseline;padding:11px 14px;border:1px solid var(--fs-line);border-radius:12px;
+  background:var(--v3-surface-2);box-shadow:var(--v3-shadow-xs)}
+.v3fs-recap-list .when {flex:0 0 auto;font-size:11.5px;font-weight:650;color:var(--v3-accent-2);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.v3fs-recap-list .what {font-size:12.5px;line-height:1.5;color:var(--v3-text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Follow-up banner atop a link a stakeholder is returning to. */
+.v3fs-followup {margin:0 0 20px;padding:16px 20px;border:1px solid color-mix(in srgb, var(--v3-accent-2) 22%, var(--fs-line));
+  border-left:3px solid var(--v3-accent-2);border-radius:14px;background:var(--fs-indigo-wash, color-mix(in srgb, var(--v3-accent-2) 6%, var(--fs-card)));
+  box-shadow:var(--v3-shadow-xs)}
+.v3fs-followup-h {display:flex;align-items:center;gap:9px;margin-bottom:5px}
+.v3fs-followup-mark {display:grid;place-items:center;width:22px;height:22px;border-radius:7px;flex:0 0 auto;
+  color:#fff;font-size:12px;background:linear-gradient(140deg, var(--v3-accent-2), var(--v3-accent-b, #3b2f72));
+  box-shadow:0 3px 8px -3px color-mix(in srgb, var(--v3-accent-2) 55%, transparent)}
+.v3fs-followup-h b {font-size:14.5px;font-weight:700;letter-spacing:-.01em;color:var(--v3-text-primary)}
+.v3fs-followup p {margin:0;font-size:13px;line-height:1.6;color:var(--v3-text-secondary)}
 .v3fs-inbox {background:var(--fs-card);border:1px solid var(--fs-line);border-radius:18px;box-shadow:var(--fs-shadow);padding:22px 26px;display:flex;flex-direction:column;gap:14px}
 .v3fs-dec {border:1px solid var(--fs-line);border-left:3px solid var(--v3-amber);border-radius:14px;padding:16px 18px;background:var(--v3-surface-2)}
 .v3fs-dec-top {display:flex;align-items:center;gap:10px;margin-bottom:8px}

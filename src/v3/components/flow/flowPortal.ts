@@ -24,13 +24,30 @@ export interface FlowInterviewPack {
   /** Secret half of the response link (programId.secret). */
   token: string;
   createdAt: string;
-  respondedAt?: string;  /** Set on follow-up packs — the movement whose gaps it asks. */
+  respondedAt?: string;
+  /** When the current ASK was last changed (mint/refresh). A submission dated
+   * before this means there's a fresh follow-up to answer; a submission on or
+   * after it means the person is fully caught up (recap-only). */
+  askUpdatedAt?: string;
+  /** Every response this durable link has received — the recap the returning
+   * stakeholder sees, and the signal for whether a new ask is outstanding. */
+  submissions?: FlowPackSubmission[];
+  /** The movement whose ask this link currently carries. */
   movementId?: string;
   /** Where ingested answers land (defaults to interviewTranscripts). */
   captureField?: string;
   /** A projected REVIEW surface (workflow-agentify or ontology+atlas) served
    * beside the questions — the pack still answers through the interview path. */
   review?: unknown;
+}
+
+/** One recorded response on a durable per-stakeholder link. */
+export interface FlowPackSubmission {
+  ts: string;
+  movementId?: string;
+  kind: string;
+  /** A short human preview of what they sent (for the recap). */
+  preview: string;
 }
 
 export interface FlowPortalItem {
@@ -85,8 +102,61 @@ export function listInterviewPacks(program: ProgramSummary): FlowInterviewPack[]
     token: String(entry.token ?? ""),
     createdAt: String(entry.createdAt ?? ""),
     respondedAt: typeof entry.respondedAt === "string" ? entry.respondedAt : undefined,
+    askUpdatedAt: typeof entry.askUpdatedAt === "string" ? entry.askUpdatedAt : undefined,
+    submissions: Array.isArray(entry.submissions)
+      ? entry.submissions.filter(isRecord).map((s) => ({
+          ts: String(s.ts ?? ""), movementId: typeof s.movementId === "string" ? s.movementId : undefined,
+          kind: String(s.kind ?? "interview"), preview: String(s.preview ?? ""),
+        }))
+      : undefined,
     movementId: typeof entry.movementId === "string" ? entry.movementId : undefined,
   })).filter((pack) => pack.id && pack.token);
+}
+
+const normName = (name: string): string => name.trim().toLowerCase();
+
+/** A durable per-stakeholder link: EVERY ask a person receives rides one stable
+ * token, so a link shared once keeps working through every regeneration and
+ * movement. This collapses all of a stakeholder's packs to a single durable
+ * record — the earliest token wins (a link already in someone's inbox never
+ * breaks), submission history is folded together — and returns it alongside the
+ * untouched packs for everyone else. */
+function collapseDurable(existing: unknown[], who: string):
+  { durable: Record<string, unknown> | null; rest: unknown[] } {
+  const isMine = (p: unknown): p is Record<string, unknown> =>
+    isRecord(p) && normName(String(p.stakeholder ?? "")) === normName(who);
+  const mine = existing.filter(isMine);
+  const rest = existing.filter((p) => !isMine(p));
+  if (!mine.length) return { durable: null, rest };
+  // Earliest createdAt owns the durable token; ties break on id for determinism.
+  const ordered = [...mine].sort((a, b) =>
+    String(a.createdAt ?? "").localeCompare(String(b.createdAt ?? "")) || String(a.id ?? "").localeCompare(String(b.id ?? "")));
+  const base: Record<string, unknown> = { ...ordered[0] };
+  // Fold every historical response — explicit submissions, or a bare answered
+  // stamp on an older one-shot pack — into one recap history.
+  const submissions: Record<string, unknown>[] = [];
+  for (const p of ordered) {
+    if (Array.isArray(p.submissions)) { for (const s of p.submissions) if (isRecord(s)) submissions.push(s); }
+    else if (typeof p.respondedAt === "string" && p.respondedAt) {
+      submissions.push({ ts: p.respondedAt, movementId: p.movementId,
+        kind: String(p.role ?? "").startsWith("review:") ? "review" : p.role === "Follow-up" ? "follow-up" : "interview", preview: "" });
+    }
+  }
+  submissions.sort((a, b) => String(a.ts ?? "").localeCompare(String(b.ts ?? "")));
+  if (submissions.length) base.submissions = submissions.slice(-40);
+  return { durable: base, rest };
+}
+
+/** The answerable core of an ask — used to tell a genuine content change (a new
+ * follow-up worth re-asking) from an idempotent re-mint of the same thing. */
+function askSignature(pack: Record<string, unknown>): string {
+  return JSON.stringify({
+    role: String(pack.role ?? ""),
+    questions: Array.isArray(pack.questions) ? pack.questions.map(String) : [],
+    reviewKind: String(pack.reviewKind ?? ""),
+    movementId: String(pack.movementId ?? ""),
+    review: pack.review ?? null,
+  });
 }
 
 export function listPortalInbox(program: ProgramSummary): FlowPortalItem[] {
@@ -156,15 +226,17 @@ export function portalLinkFor(programId: string, holder: { token: string }): str
   return `${base}?flowRespond=${encodeURIComponent(`${programId}.${holder.token}`)}`;
 }
 
-/** Bound the interview-pack list without ever dropping a LIVE (unanswered)
- *  review link — its shared token must keep resolving through regenerations, so
- *  it is exempt from the recency cap; only answered/other packs are trimmed. */
+/** Bound the interview-pack list without ever dropping a DURABLE per-stakeholder
+ *  link — its shared token must keep resolving forever, so any pack that carries
+ *  the durable markers (askUpdatedAt / submissions) or is a live review link is
+ *  exempt from the recency cap; only legacy one-shot packs are trimmed. */
 function capInterviewPacks(packs: unknown[]): unknown[] {
-  const isLiveReview = (p: unknown): boolean => isRecord(p)
-    && String(p.role ?? "").startsWith("review:") && typeof p.respondedAt !== "string";
-  const live = packs.filter(isLiveReview);
-  const others = packs.filter((p) => !isLiveReview(p));
-  return [...others.slice(-30), ...live].slice(-80);
+  const isDurable = (p: unknown): boolean => isRecord(p) && (
+    typeof p.askUpdatedAt === "string" || Array.isArray(p.submissions)
+    || (String(p.role ?? "").startsWith("review:") && typeof p.respondedAt !== "string"));
+  const live = packs.filter(isDurable);
+  const others = packs.filter((p) => !isDurable(p));
+  return [...others.slice(-30), ...live].slice(-120);
 }
 
 function randomSecret(): string {
@@ -218,7 +290,11 @@ export function mintInterviewPacks(program: ProgramSummary, actor: string): Reco
   let refreshed = 0;
   const updatedExisting = existing.map((pack) => {
     const iv = byName.get(String(pack.stakeholder ?? "").trim().toLowerCase());
-    if (!iv || typeof pack.respondedAt === "string" || pack.role === "Follow-up") return pack;
+    // Leave answered, follow-up, AND review-carrying links alone — a review link
+    // holds a projected surface, not a plain agenda; blindly refreshing it would
+    // wipe that ask. Only plain discovery question packs track the kit agenda.
+    if (!iv || typeof pack.respondedAt === "string" || pack.role === "Follow-up"
+      || String(pack.role ?? "").startsWith("review:")) return pack;
     const questions = agendaQuestions(iv);
     const role = String(iv.role ?? "");
     if (JSON.stringify(pack.questions) === JSON.stringify(questions) && pack.role === role) return pack;
@@ -331,47 +407,46 @@ export function mintFollowUpPack(
   if (!input.who.trim() || !input.questions.length) return null;
   const { wrapper, inner, usesNestedData } = getProgramState((program.rawData ?? {}) as Record<string, unknown>);
   const existing = Array.isArray(inner.flowInterviewPacks) ? (inner.flowInterviewPacks as unknown[]) : [];
-  // Idempotent: re-sending the same gaps reuses the SAME link — the latest
-  // matching pack stands, no new secret is minted.
-  const wanted = input.questions.slice(0, 8).join("");
-  const duplicate = [...existing].reverse().filter(isRecord).find((pack) =>
-    String(pack.stakeholder ?? "").trim().toLowerCase() === input.who.trim().toLowerCase()
-    && String(pack.movementId ?? "") === input.movementId
-    && (Array.isArray(pack.questions) ? pack.questions.map(String).join("") : "") === wanted,
-  );
-  if (duplicate) return null;
-  // A NEW ask supersedes the old one: unanswered follow-up links for the
-  // same person and movement are retired (their links stop working), so the
-  // person only ever holds one live follow-up ask at a time. Answered packs
-  // stay — they are part of the record.
-  const kept = existing.filter((pack) => {
-    if (!isRecord(pack)) return true;
-    const sameTarget = String(pack.stakeholder ?? "").trim().toLowerCase() === input.who.trim().toLowerCase()
-      && String(pack.movementId ?? "") === input.movementId;
-    const unanswered = typeof pack.respondedAt !== "string";
-    return !(sameTarget && unanswered && String(pack.role ?? "") === "Follow-up");
-  });
   const now = new Date().toISOString();
-  const pack = {
-    id: `pack-${randomSecret().slice(0, 10)}`,
-    stakeholder: input.who.trim(),
+  // The follow-up ask rides the person's ONE durable link — a plain question
+  // pack (no review surface), superseding whatever ask stood before on the same
+  // token. Their prior answers stay in the recap; only these new gaps are open.
+  const askFields: Record<string, unknown> = {
     role: "Follow-up",
     intro: "A few points from our last conversation still need your detail — this takes minutes, in your own words.",
     questions: input.questions.slice(0, 8),
-    token: randomSecret(),
-    createdAt: now,
     movementId: input.movementId,
     captureField: input.captureField,
+    reviewKind: undefined,
+    review: undefined,
   };
+  const { durable, rest } = collapseDurable(existing, input.who);
+  let pack: Record<string, unknown>;
+  if (durable) {
+    const updated = { ...durable, ...askFields };
+    // Idempotent: re-sending the identical gaps stands — reuse the standing link.
+    if (askSignature(updated) === askSignature(durable)) return null;
+    updated.askUpdatedAt = now;
+    pack = updated;
+  } else {
+    pack = {
+      id: `pack-${randomSecret().slice(0, 10)}`,
+      stakeholder: input.who.trim(),
+      ...askFields,
+      token: randomSecret(),
+      createdAt: now,
+      askUpdatedAt: now,
+    };
+  }
   const log = Array.isArray(inner.flowAttestations) ? (inner.flowAttestations as unknown[]) : [];
   const attestation = {
     ts: now, agentId: actor, phaseId: input.movementId, tier: 2,
-    action: `Created a follow-up link — ${pack.stakeholder}`,
-    detail: pack.questions.slice(0, 3).join("; ").slice(0, 160),
+    action: `Created a follow-up link — ${String(pack.stakeholder ?? "")}`,
+    detail: input.questions.slice(0, 3).join("; ").slice(0, 160),
   };
   return wrapProgramState(wrapper, {
     ...inner,
-    flowInterviewPacks: capInterviewPacks([...kept, pack]),
+    flowInterviewPacks: capInterviewPacks([...rest, pack]),
     flowAttestations: [...log, attestation].slice(-200),
   }, usesNestedData);
 }
@@ -392,16 +467,6 @@ export function mintReviewPack(
   if (!input.who.trim() || !input.review) return null;
   const { wrapper, inner, usesNestedData } = getProgramState((program.rawData ?? {}) as Record<string, unknown>);
   const existing = Array.isArray(inner.flowInterviewPacks) ? (inner.flowInterviewPacks as unknown[]) : [];
-  const roleTag = `review:${input.reviewKind}`;
-  const sameKind = (pack: unknown): boolean => isRecord(pack)
-    && String(pack.stakeholder ?? "").trim().toLowerCase() === input.who.trim().toLowerCase()
-    && String(pack.movementId ?? "") === input.movementId
-    && String(pack.role ?? "") === roleTag;
-  // A standing, UNANSWERED review link for the same target stands — reuse it.
-  const standing = [...existing].reverse().find((pack) => sameKind(pack) && typeof (pack as Record<string, unknown>).respondedAt !== "string");
-  if (standing) return null;
-  // Retire superseded unanswered review links; keep answered ones (the record).
-  const kept = existing.filter((pack) => !(sameKind(pack) && typeof (pack as Record<string, unknown>).respondedAt !== "string"));
   const now = new Date().toISOString();
   // Store the re-projection inputs (reviewKind + recipientArea) alongside the
   // frozen review snapshot. The respond page rebuilds the review LIVE from the
@@ -409,28 +474,46 @@ export function mintReviewPack(
   // the link — the `review` snapshot is only a fallback for old/edge-less packs.
   const recipientArea = isRecord(input.review) && typeof input.review.recipientArea === "string"
     ? input.review.recipientArea : undefined;
-  const pack = {
-    id: `pack-${randomSecret().slice(0, 10)}`,
-    stakeholder: input.who.trim(),
-    role: roleTag,
+  // The ask this share sets on the person's ONE durable link. Reprojecting a
+  // fresh review supersedes the old ask on the SAME token — no new secret, so a
+  // link already in their inbox keeps working.
+  const askFields: Record<string, unknown> = {
+    role: `review:${input.reviewKind}`,
     intro: input.intro,
     questions: input.questions.slice(0, 8),
-    token: randomSecret(),
-    createdAt: now,
     movementId: input.movementId,
     captureField: input.captureField,
     reviewKind: input.reviewKind,
-    ...(recipientArea ? { recipientArea } : {}),
+    recipientArea: recipientArea ?? undefined,
     review: input.review,
   };
+  const { durable, rest } = collapseDurable(existing, input.who);
+  let pack: Record<string, unknown>;
+  if (durable) {
+    const updated = { ...durable, ...askFields };
+    // Idempotent: an identical re-share of the same content stands — the
+    // standing link is returned by the caller's fallback.
+    if (askSignature(updated) === askSignature(durable)) return null;
+    updated.askUpdatedAt = now;
+    pack = updated;
+  } else {
+    pack = {
+      id: `pack-${randomSecret().slice(0, 10)}`,
+      stakeholder: input.who.trim(),
+      ...askFields,
+      token: randomSecret(),
+      createdAt: now,
+      askUpdatedAt: now,
+    };
+  }
   const log = Array.isArray(inner.flowAttestations) ? (inner.flowAttestations as unknown[]) : [];
   const attestation = {
     ts: now, agentId: actor, phaseId: input.movementId, tier: 2,
-    action: `Shared a ${input.reviewKind === "agentify" ? "workflow agentification" : "ontology & current-state"} review — ${pack.stakeholder}`,
+    action: `Shared a ${input.reviewKind === "agentify" ? "workflow agentification" : "ontology & current-state"} review — ${String(pack.stakeholder ?? "")}`,
   };
   return wrapProgramState(wrapper, {
     ...inner,
-    flowInterviewPacks: capInterviewPacks([...kept, pack]),
+    flowInterviewPacks: capInterviewPacks([...rest, pack]),
     flowAttestations: [...log, attestation].slice(-200),
   }, usesNestedData);
 }

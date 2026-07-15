@@ -33,7 +33,16 @@ interface Pack {
   /** The programme's cast — lets the respondent defer a question to the
    * person who actually owns the answer. */
   roster?: Array<{ name: string; role: string }>;
+  /** True only when the person has answered AND nothing new is outstanding — the
+   * page shows a read-only recap rather than a dead end or a fresh form. */
   responded: boolean;
+  /** The durable link's recap: every response this person has already sent. */
+  submissions?: Array<{ ts: string; movementId?: string; kind: string; preview: string }>;
+  /** They've responded at least once on this link. */
+  answered?: boolean;
+  /** A new ask has been posted SINCE their last answer — they're returning to a
+   * genuine follow-up, so the surface renders with a "welcome back" framing. */
+  followUp?: boolean;
   /** Demo invites only. */
   openingQuote?: string;
   scenario?: string;
@@ -307,20 +316,18 @@ export default function FlowRespond({ token }: { token: string }) {
               <p>The team reviews everything before it enters the record. This link is now closed — if more detail occurs to you later, the team can send a fresh one.</p>
             </div>
           ) : state.pack.responded ? (
-            <div className="v3fs-quiet">
-              <div className="v3fs-quiet-mark" aria-hidden="true">✓</div>
-              <h2>This link has done its job.</h2>
-              <p>
-                Your {state.pack.kind === "demo" ? "verdict" : "answers"} are on the record — each link takes
-                one response, so nothing gets sent twice. If more detail comes to mind, ask the programme
-                team for a fresh link.
-              </p>
-            </div>
+            <RespondRecap stakeholder={state.pack.stakeholder} submissions={state.pack.submissions ?? []}
+              kind={state.pack.kind} />
           ) : shownReview ? (
-            <FlowReviewSurface review={shownReview} stakeholder={state.pack.stakeholder}
-              programme={state.pack.programme} objective={state.pack.objective}
-              submitting={submitting} error={error} draftKey={reviewDraftKey}
-              onSubmit={(answers) => void submit({ answers })} />
+            <>
+              {state.pack.followUp ? <FollowUpBanner stakeholder={state.pack.stakeholder}
+                submissions={state.pack.submissions ?? []} /> : null}
+              <FlowReviewSurface review={shownReview} stakeholder={state.pack.stakeholder}
+                programme={state.pack.programme} objective={state.pack.objective}
+                returning={!!state.pack.followUp}
+                submitting={submitting} error={error} draftKey={reviewDraftKey}
+                onSubmit={(answers) => void submit({ answers })} />
+            </>
           ) : state.pack.kind === "demo" ? (
             <>
               <header className="v3fs-hero">
@@ -391,9 +398,13 @@ export default function FlowRespond({ token }: { token: string }) {
             </>
           ) : (
             <>
+              {state.pack.followUp ? <FollowUpBanner stakeholder={state.pack.stakeholder}
+                submissions={state.pack.submissions ?? []} /> : null}
               <header className="v3fs-portal-head">
                 <div className="v3fs-hero-eyebrow">{state.pack.programme} <span>· ATOS Flow</span></div>
-                <h1 className="v3fs-portal-title">Hello{state.pack.stakeholder ? ` ${state.pack.stakeholder.split(" ")[0]}` : ""} — your perspective shapes what gets built.</h1>
+                <h1 className="v3fs-portal-title">{state.pack.stakeholder
+                  ? `Hello ${state.pack.stakeholder.split(" ")[0]} — your perspective shapes what gets built.`
+                  : "Your perspective shapes what gets built."}</h1>
                 <p className="v3fs-portal-sub">
                   These questions replace a scheduled discovery call. Answer in your own words, whenever suits you — skip anything that doesn&rsquo;t apply.
                 </p>
@@ -533,13 +544,77 @@ export default function FlowRespond({ token }: { token: string }) {
           )}
           {state.phase !== "loading" ? (
             <footer className="v3fs-portal-brandfoot">
-              <span className="mark"><i aria-hidden="true">◆</i> Brillio ATOS Flow</span>
+              <span className="mark"><i aria-hidden="true">◆</i> Brillio ATOS</span>
               <small>⛨ Your response is private to the programme team.</small>
             </footer>
           ) : null}
         </div>
       </div>
     </div>
+  );
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function fmtWhen(ts: string): string {
+  const d = new Date(ts);
+  return Number.isNaN(d.getTime()) ? "" : `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
+function labelForKind(kind: string): string {
+  return kind === "review" ? "Review submitted" : kind === "follow-up" ? "Follow-up answered" : "Answers sent";
+}
+
+type Submission = { ts: string; movementId?: string; kind: string; preview: string };
+
+/** What a stakeholder sees when they reopen a link they've fully answered — a
+ * warm recap of what they sent, not a dead end. The same durable link stays
+ * live, so if the team needs more, a fresh question simply appears here later. */
+function RespondRecap({ stakeholder, submissions, kind }: {
+  stakeholder: string; submissions: Submission[]; kind?: string;
+}) {
+  const first = stakeholder ? stakeholder.split(/\s+/)[0] : "";
+  return (
+    <div className="v3fs-quiet v3fs-recap">
+      <div className="v3fs-quiet-mark" aria-hidden="true">✓</div>
+      <h2>{first
+        ? `Thank you, ${first} — your ${kind === "demo" ? "verdict is" : "responses are"} in.`
+        : "Thank you — your responses are in."}</h2>
+      <p>
+        The programme team reviews everything before it enters the record. There&rsquo;s nothing more to
+        do right now — and this link stays yours: if we need anything else, a new question will appear
+        right here.
+      </p>
+      {submissions.length ? (
+        <ul className="v3fs-recap-list">
+          {submissions.slice().reverse().map((s, i) => (
+            <li key={i}>
+              {fmtWhen(s.ts) ? <span className="when">{fmtWhen(s.ts)}</span> : null}
+              <span className="what">{s.preview || labelForKind(s.kind)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+/** A calm banner atop a link a stakeholder is RETURNING to — acknowledges what
+ * they already sent and frames the page as a short follow-up, not a repeat. */
+function FollowUpBanner({ stakeholder, submissions }: { stakeholder: string; submissions: Submission[] }) {
+  const first = stakeholder ? stakeholder.split(/\s+/)[0] : "";
+  const last = submissions.length ? submissions[submissions.length - 1] : null;
+  const when = last ? fmtWhen(last.ts) : "";
+  return (
+    <aside className="v3fs-followup">
+      <div className="v3fs-followup-h">
+        <span className="v3fs-followup-mark" aria-hidden="true">↻</span>
+        <b>{first ? `Welcome back, ${first}.` : "Welcome back."}</b>
+      </div>
+      <p>
+        Your earlier {submissions.length > 1 ? "responses are" : "response is"} safely on the record
+        {when ? ` (last sent ${when})` : ""}. We&rsquo;ve moved a few things on since — have a look below and
+        add anything new. You won&rsquo;t need to repeat what you already told us.
+      </p>
+    </aside>
   );
 }
 

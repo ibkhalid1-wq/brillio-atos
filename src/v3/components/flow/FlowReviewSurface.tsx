@@ -69,10 +69,12 @@ function AreaChips({ areas, active, onPick }: { areas: string[]; active: string;
 /** The linked page's opening: a subtle Brillio·ATOS mark, the programme name,
  * a warm greeting, a one-line "what we're building + why", then plainly what we
  * need from this person and how to respond. Shared by every review surface. */
-function ReviewHeader({ stakeholder, programme, objective, intro, areaLabel }: {
+function ReviewHeader({ stakeholder, programme, objective, intro, areaLabel, returning }: {
   stakeholder: string; programme?: string; objective?: string; intro: string;
   /** The area(s) this review covers — a stakeholder can own more than one. */
   areaLabel?: string;
+  /** They've responded before and are returning to a follow-up — warm the greeting. */
+  returning?: boolean;
 }) {
   const first = stakeholder ? stakeholder.split(/\s+/)[0] : "";
   // Just the core goal for the opener — drop measurement/timeline clauses (they
@@ -83,7 +85,7 @@ function ReviewHeader({ stakeholder, programme, objective, intro, areaLabel }: {
     <header className="v3fs-rvw-top">
       <div className="v3fs-rvw-brandline"><span className="v3fs-rvw-mark" aria-hidden="true">◆</span>Brillio · ATOS</div>
       {programme ? <div className="v3fs-rvw-prog">{programme}</div> : null}
-      <h1 className="v3fs-rvw-hi">{first ? `Hi ${first},` : "Hi,"}</h1>
+      {first ? <h1 className="v3fs-rvw-hi">{returning ? `Welcome back, ${first}.` : `Hi ${first},`}</h1> : null}
       <p className="v3fs-rvw-lede">
         We&rsquo;re building <b>{programme || "this programme"}</b> — an agentic solution{coreGoal ? <> built to {coreGoal.charAt(0).toLowerCase() + coreGoal.slice(1)}</> : ""}.
       </p>
@@ -127,9 +129,9 @@ function coverageLabel(review: ReviewPayload): string {
   return `${arr.slice(0, -1).join(", ")}, and ${arr[arr.length - 1]}`;
 }
 
-function AgentifySurface({ review, stakeholder, programme, objective, submitting, error, onSubmit, draftKey }: {
+function AgentifySurface({ review, stakeholder, programme, objective, submitting, error, onSubmit, draftKey, returning }: {
   review: AgentifyReview; stakeholder: string; programme?: string; objective?: string; submitting: boolean; error: string | null;
-  onSubmit: (answers: string) => void; draftKey?: string;
+  onSubmit: (answers: string) => void; draftKey?: string; returning?: boolean;
 }) {
   const [responses, setResponses] = usePersistentState<Record<string, { disposition?: string; comment?: string }>>(draftKey, "ag", {});
   const [archResponse, setArchResponse] = usePersistentState(draftKey, "agArch", "");
@@ -146,7 +148,7 @@ function AgentifySurface({ review, stakeholder, programme, objective, submitting
 
   return (
     <>
-      <ReviewHeader stakeholder={stakeholder} programme={programme} objective={objective} intro={review.intro} areaLabel={coverageLabel(review)} />
+      <ReviewHeader stakeholder={stakeholder} programme={programme} objective={objective} intro={review.intro} areaLabel={coverageLabel(review)} returning={returning} />
       <AreaChips areas={areas} active={area} onPick={setArea} />
       <div className="v3fs-rvw">
         {review.workflows.map((workflow, wi) => area && hasArea(review.workflows, area) && workflow.area !== area ? null : (
@@ -263,9 +265,9 @@ function AgentifySurface({ review, stakeholder, programme, objective, submitting
   );
 }
 
-function OntologyAtlasSurface({ review, stakeholder, programme, objective, submitting, error, onSubmit, draftKey }: {
+function OntologyAtlasSurface({ review, stakeholder, programme, objective, submitting, error, onSubmit, draftKey, returning }: {
   review: OntologyAtlasReview; stakeholder: string; programme?: string; objective?: string; submitting: boolean; error: string | null;
-  onSubmit: (answers: string) => void; draftKey?: string;
+  onSubmit: (answers: string) => void; draftKey?: string; returning?: boolean;
 }) {
   const [termComments, setTermComments] = usePersistentState<Record<string, string>>(draftKey, "oaTerms", {});
   const [workflowComments, setWorkflowComments] = usePersistentState<Record<string, string>>(draftKey, "oaWf", {});
@@ -282,7 +284,7 @@ function OntologyAtlasSurface({ review, stakeholder, programme, objective, submi
 
   return (
     <>
-      <ReviewHeader stakeholder={stakeholder} programme={programme} objective={objective} intro={review.intro} areaLabel={coverageLabel(review)} />
+      <ReviewHeader stakeholder={stakeholder} programme={programme} objective={objective} intro={review.intro} areaLabel={coverageLabel(review)} returning={returning} />
       <AreaChips areas={areas} active={area} onPick={setArea} />
       <div className="v3fs-rvw">
         {shownTerms.length ? (
@@ -345,9 +347,9 @@ function OntologyAtlasSurface({ review, stakeholder, programme, objective, submi
   );
 }
 
-function ListenWorkflowSurface({ review, stakeholder, programme, objective, submitting, error, onSubmit, draftKey }: {
+function ListenWorkflowSurface({ review, stakeholder, programme, objective, submitting, error, onSubmit, draftKey, returning }: {
   review: ListenWorkflowReview; stakeholder: string; programme?: string; objective?: string; submitting: boolean; error: string | null;
-  onSubmit: (answers: string) => void; draftKey?: string;
+  onSubmit: (answers: string) => void; draftKey?: string; returning?: boolean;
 }) {
   const [wfSteps, setWfSteps] = usePersistentState<FlowNode[][]>(draftKey, "lwSteps",
     review.workflows.map((w) => w.steps.map((s) => ({
@@ -444,7 +446,7 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
 
   return (
     <>
-      <ReviewHeader stakeholder={stakeholder} programme={programme} objective={objective} intro={review.intro} areaLabel={coverageLabel(review)} />
+      <ReviewHeader stakeholder={stakeholder} programme={programme} objective={objective} intro={review.intro} areaLabel={coverageLabel(review)} returning={returning} />
       <AreaChips areas={areas} active={area} onPick={setArea} />
       <div className="v3fs-rvw">
         <div className="v3fs-rvw-section-h"><span className="v3fs-rvw-step-ic" aria-hidden="true">⇄</span>Your workflow — fix it, add steps, or mark what doesn&rsquo;t happen</div>
@@ -562,7 +564,7 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
   );
 }
 
-export default function FlowReviewSurface({ review, stakeholder, submitting, error, onSubmit, draftKey, programme, objective }: {
+export default function FlowReviewSurface({ review, stakeholder, submitting, error, onSubmit, draftKey, programme, objective, returning }: {
   review: ReviewPayload; stakeholder: string; submitting: boolean; error: string | null;
   onSubmit: (answers: string) => void;
   /** Persist the respondent's edits to their device under this key so they can
@@ -571,12 +573,14 @@ export default function FlowReviewSurface({ review, stakeholder, submitting, err
   /** The programme name + plain-language objective, for the branded opener. */
   programme?: string;
   objective?: string;
+  /** They've responded before — the opener says "Welcome back" instead of "Hi". */
+  returning?: boolean;
 }) {
   if (review.kind === "agentify") {
-    return <AgentifySurface review={review} stakeholder={stakeholder} programme={programme} objective={objective} submitting={submitting} error={error} onSubmit={onSubmit} draftKey={draftKey} />;
+    return <AgentifySurface review={review} stakeholder={stakeholder} programme={programme} objective={objective} submitting={submitting} error={error} onSubmit={onSubmit} draftKey={draftKey} returning={returning} />;
   }
   if (review.kind === "listen-workflow") {
-    return <ListenWorkflowSurface review={review} stakeholder={stakeholder} programme={programme} objective={objective} submitting={submitting} error={error} onSubmit={onSubmit} draftKey={draftKey} />;
+    return <ListenWorkflowSurface review={review} stakeholder={stakeholder} programme={programme} objective={objective} submitting={submitting} error={error} onSubmit={onSubmit} draftKey={draftKey} returning={returning} />;
   }
-  return <OntologyAtlasSurface review={review} stakeholder={stakeholder} programme={programme} objective={objective} submitting={submitting} error={error} onSubmit={onSubmit} draftKey={draftKey} />;
+  return <OntologyAtlasSurface review={review} stakeholder={stakeholder} programme={programme} objective={objective} submitting={submitting} error={error} onSubmit={onSubmit} draftKey={draftKey} returning={returning} />;
 }

@@ -95,11 +95,15 @@ async function loadPack(token: string): Promise<{ reason: string } | {
   const invite = pack ? undefined : invites.find((entry) => entry.token === secret);
   const approval = (pack || invite) ? undefined : approvals.find((entry) => entry.token === secret);
   if (!pack && !invite && !approval) return { reason: NO_LINK };
-  // Tokens expire: a link forwarded months later must not still open the
-  // programme. 30 days covers any realistic response window.
-  const created = Date.parse(String((pack ?? invite ?? approval)?.createdAt ?? ""));
-  if (Number.isFinite(created) && Date.now() - created > 30 * 86_400_000) return { reason: EXPIRED };
   const kind: "interview" | "demo" | "approval" = pack ? "interview" : invite ? "demo" : "approval";
+  // Interview packs are the DURABLE per-stakeholder link — one stable token that
+  // carries every ask across movements and shows the person their own recap, so
+  // it must never expire. Demo/approval links are one-shot and still age out
+  // after 30 days so a stale forwarded link can't reopen the programme.
+  if (kind !== "interview") {
+    const created = Date.parse(String((invite ?? approval)?.createdAt ?? ""));
+    if (Number.isFinite(created) && Date.now() - created > 30 * 86_400_000) return { reason: EXPIRED };
+  }
   return {
     admin, programId, programName: String(row.name ?? "the programme"),
     raw, inner, nested, kind, pack: (pack ?? invite ?? approval) as Record<string, unknown>,
@@ -330,6 +334,25 @@ Deno.serve(async (req: Request) => {
             }))
             .find((p) => p.name && (p.name === selfKey || p.name.split(/\s+/)[0] === selfKey.split(/\s+/)[0]))?.role ?? "")
         : "";
+      // Durable-link recap: every response this link has taken, plus whether the
+      // current ask post-dates the last answer (a real follow-up to respond to).
+      const rawSubs = (Array.isArray(hit.pack.submissions) ? hit.pack.submissions : [])
+        .filter(isRecord)
+        .map((s) => ({
+          ts: String(s.ts ?? ""), movementId: typeof s.movementId === "string" ? s.movementId : undefined,
+          kind: String(s.kind ?? "interview"), preview: String(s.preview ?? "").slice(0, 240),
+        }))
+        .filter((s) => s.ts);
+      // Legacy links answered before submission history existed carry only a bare
+      // respondedAt — fold it in so they show a recap, not a re-openable form.
+      if (!rawSubs.length && typeof hit.pack.respondedAt === "string" && hit.pack.respondedAt) {
+        rawSubs.push({ ts: hit.pack.respondedAt, movementId: typeof hit.pack.movementId === "string" ? hit.pack.movementId : undefined,
+          kind: String(hit.pack.role ?? "").startsWith("review:") ? "review" : hit.pack.role === "Follow-up" ? "follow-up" : "interview", preview: "" });
+      }
+      const interviewSubmissions = rawSubs.slice(-40);
+      const lastSubTs = interviewSubmissions.reduce((max, s) => (s.ts > max ? s.ts : max), "");
+      const askUpdatedAt = String(hit.pack.askUpdatedAt ?? hit.pack.createdAt ?? "");
+      const interviewFollowUp = interviewSubmissions.length > 0 && (!lastSubTs || askUpdatedAt > lastSubTs);
       return jsonResponse({
         kind: "interview",
         programme: hit.programName,
@@ -361,7 +384,15 @@ Deno.serve(async (req: Request) => {
         // A shareable review surface projected at mint — the FALLBACK when live
         // re-projection isn't possible (edge older than the pack, or no slices).
         ...(isRecord(hit.pack.review) ? { review: hit.pack.review } : {}),
-        responded: typeof hit.pack.respondedAt === "string",
+        // The durable link's recap + follow-up state. `submissions` is what the
+        // person already sent (shown read-only on return); `answered` is whether
+        // they've responded at all; `followUp` is true when the ask changed AFTER
+        // their last answer — a genuinely new thing to respond to. A spent link
+        // with nothing new shows a recap, never a dead-end error.
+        submissions: interviewSubmissions,
+        answered: interviewSubmissions.length > 0,
+        followUp: interviewFollowUp,
+        responded: interviewSubmissions.length > 0 && !interviewFollowUp,
       });
     }
 
@@ -375,7 +406,9 @@ Deno.serve(async (req: Request) => {
       if (isRecord(body) && isRecord(body.extract)) {
         const hit = await loadPack(token);
         if ("reason" in hit) return jsonResponse({ error: hit.reason }, 404);
-        if (typeof hit.pack.respondedAt === "string") {
+        // Interview links are durable — a returning stakeholder attaching a file
+        // to a follow-up answer is fine. One-shot demo/approval links stay closed.
+        if (hit.kind !== "interview" && typeof hit.pack.respondedAt === "string") {
           return jsonResponse({ error: "This link has already been used." }, 410);
         }
         const extract = body.extract as Record<string, unknown>;
@@ -424,10 +457,22 @@ Deno.serve(async (req: Request) => {
       for (let attempt = 0; attempt < 3; attempt++) {
         const hit = await loadPack(token);
         if ("reason" in hit) return jsonResponse({ error: hit.reason }, 404);
-        // One response per link: answering EXPIRES it. More to add later
-        // travels on a fresh link minted from the kit.
-        if (typeof hit.pack.respondedAt === "string") {
-          return jsonResponse({ error: "This link has already been used — your earlier answers are safely on the record." }, 410);
+        // Demo/approval links are one-shot — answering closes them. Interview
+        // links are the DURABLE per-stakeholder link: a response never closes it,
+        // it just adds to the recap. We only reject a repeat submission when
+        // there's nothing new to answer (the ask hasn't changed since their last
+        // response) — a genuine follow-up is always accepted.
+        if (hit.kind !== "interview") {
+          if (typeof hit.pack.respondedAt === "string") {
+            return jsonResponse({ error: "This link has already been used — your earlier answers are safely on the record." }, 410);
+          }
+        } else {
+          const prior = (Array.isArray(hit.pack.submissions) ? hit.pack.submissions : []).filter(isRecord);
+          const lastTs = prior.reduce((max, s) => (String(s.ts ?? "") > max ? String(s.ts ?? "") : max), "");
+          const askAt = String(hit.pack.askUpdatedAt ?? hit.pack.createdAt ?? "");
+          if (prior.length > 0 && (!lastTs || askAt <= lastTs)) {
+            return jsonResponse({ error: "Your answers are already on the record — there's nothing new to add right now. If we need more, a fresh question will appear on this same link." }, 409);
+          }
         }
 
         const stakeholder = String(hit.pack.stakeholder ?? "Stakeholder");
@@ -564,9 +609,18 @@ Deno.serve(async (req: Request) => {
             ...(deferrals.length ? { deferrals } : {}),
             ...(suggestedVoices.length ? { suggestedVoices } : {}),
           });
-          nextInner.flowInterviewPacks = (hit.inner.flowInterviewPacks as unknown[]).map((entry) =>
-            isRecord(entry) && entry.token === hit.pack.token ? { ...entry, respondedAt: now } : entry,
-          );
+          // Append to the durable link's recap instead of closing it — the person
+          // keeps the same link and sees what they've sent when they return.
+          const subKind = String(hit.pack.role ?? "").startsWith("review:") ? "review"
+            : hit.pack.role === "Follow-up" ? "follow-up" : "interview";
+          const preview = (answers || (deferrals.length ? `Routed ${deferrals.length} question${deferrals.length === 1 ? "" : "s"} to others` : "")
+            || (documents.length ? `${documents.length} document${documents.length === 1 ? "" : "s"} attached` : "Response sent")).slice(0, 240);
+          nextInner.flowInterviewPacks = (hit.inner.flowInterviewPacks as unknown[]).map((entry) => {
+            if (!isRecord(entry) || entry.token !== hit.pack.token) return entry;
+            const submissions = (Array.isArray(entry.submissions) ? entry.submissions.filter(isRecord) : [])
+              .concat([{ ts: now, movementId: entry.movementId, kind: subKind, preview }]).slice(-40);
+            return { ...entry, respondedAt: now, submissions };
+          });
           log.push({
             ts: now, agentId: "portal", phaseId: "listen", tier: 1,
             action: `Received an async interview response — ${stakeholder}`,
