@@ -1172,8 +1172,8 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
             <>
               <h2>Inbox is clear.</h2>
               <div className="v3fs-quiet-work">
-                {attention.slice(0, 4).map((item) => (
-                  <div key={item.movement} className="v3fs-quiet-row">
+                {attention.slice(0, 4).map((item, ai) => (
+                  <div key={`att-${item.movement}-${ai}`} className="v3fs-quiet-row">
                     <b>{item.movement}</b>
                     <span>{item.what}</span>
                   </div>
@@ -1224,8 +1224,8 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
               </ul>
             </article>
           ) : null}
-          {inbox.map((item) => (
-            <article key={item.id} className="v3fs-dec v3fs-evitem">
+          {inbox.map((item, ii) => (
+            <article key={`inbox-${item.id || ii}`} className="v3fs-dec v3fs-evitem">
               <div className="v3fs-dec-top">
                 {item.kind === "demo-verdict" ? (
                   <span className={`v3fs-vc ${item.verdict === "rework" ? "pen" : "acc"}`}>{(item.verdict ?? "verdict").replace(/-/g, " ")}</span>
@@ -1263,8 +1263,8 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
               </div>
             </article>
           ))}
-          {onRecordApproval ? approvals.map((item) => {
-            const id = String(item.id ?? "");
+          {onRecordApproval ? approvals.map((item, ai) => {
+            const id = String(item.id ?? "") || `appr-${ai}`;
             const approver = (item.approver && typeof item.approver === "object" ? item.approver : {}) as { name?: string; role?: string };
             const verdict = item.verdict === "approved" ? "approved" : "changes";
             const comment = String(item.comment ?? "").trim();
@@ -1355,8 +1355,8 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
               </div>
             </article>
           ))}
-          {coverageNames.map((cov) => (
-            <article key={`cov-${cov.name}`} className="v3fs-dec">
+          {coverageNames.map((cov, ci) => (
+            <article key={`cov-${cov.name || ci}`} className="v3fs-dec">
               <div className="v3fs-dec-top">
                 <span className="v3fs-vc pen">Identify person</span>
                 <span className="v3fs-dec-mv">{cov.domain || "Discovery Kit coverage"}</span>
