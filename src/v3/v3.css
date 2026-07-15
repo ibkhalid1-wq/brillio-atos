@@ -130,9 +130,11 @@
   --v3-dur-mid: 0.2s;
   --v3-dur-slow: 0.28s;
   /* Transition system */
-  --v3-transition-fast: 100ms cubic-bezier(0.4, 0, 0.2, 1);
-  --v3-transition-base: 150ms cubic-bezier(0.4, 0, 0.2, 1);
-  --v3-transition-slow: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  /* One expressive ease-out across the app (matches --v3-ease) so motion reads as
+     a single considered system rather than a mix of curves. */
+  --v3-transition-fast: 120ms cubic-bezier(0.22, 1, 0.36, 1);
+  --v3-transition-base: 170ms cubic-bezier(0.22, 1, 0.36, 1);
+  --v3-transition-slow: 260ms cubic-bezier(0.22, 1, 0.36, 1);
 
   /* Responsive sidebar widths */
   --v3-sidebar-phase: 220px;
@@ -241,26 +243,28 @@ textarea:-webkit-autofill {
   --v3-text-muted:     var(--color-text-muted);
 
   /* Shadows — softer on light backgrounds */
-  --v3-shadow-card:       0 8px 24px rgba(16, 24, 40, 0.06), 0 0 0 1px rgba(16, 24, 40, 0.08);
-  --v3-shadow-card-hover: 0 14px 34px rgba(16, 24, 40, 0.10), 0 0 0 1px rgba(16, 24, 40, 0.10);
-  --v3-shadow-sheet:      -12px 0 44px rgba(16, 24, 40, 0.14);
-  --v3-shadow-dropdown:   0 16px 44px rgba(16, 24, 40, 0.16), 0 0 0 1px rgba(16, 24, 40, 0.08);
+  --v3-shadow-card:       0 1px 2px rgba(33, 23, 71, 0.06), 0 8px 24px rgba(33, 23, 71, 0.07), 0 0 0 1px rgba(33, 23, 71, 0.06);
+  --v3-shadow-card-hover: 0 2px 4px rgba(33, 23, 71, 0.08), 0 14px 34px rgba(33, 23, 71, 0.11), 0 0 0 1px rgba(33, 23, 71, 0.08);
+  --v3-shadow-sheet:      -12px 0 44px rgba(33, 23, 71, 0.14);
+  --v3-shadow-dropdown:   0 4px 8px rgba(33, 23, 71, 0.08), 0 16px 44px rgba(33, 23, 71, 0.16), 0 0 0 1px rgba(33, 23, 71, 0.07);
   /* Light theme dot grid */
   --v3-dot-color: rgba(33, 23, 71, 0.04);
   /* Brillio favors solid indigo leadership over decorative gradients */
   --v3-gradient-primary: linear-gradient(135deg, #211747 0%, #211747 100%);
   --v3-gradient-primary-hover: linear-gradient(135deg, #160f30 0%, #160f30 100%);
-  /* Light theme elevation */
-  --v3-elev-1: 0 8px 24px rgba(23, 27, 43, 0.05), 0 0 0 1px rgba(23, 27, 43, 0.05);
-  --v3-elev-1-hover: 0 14px 34px rgba(23, 27, 43, 0.08), 0 0 0 1px rgba(23, 27, 43, 0.07);
-  --v3-elev-2: 0 18px 52px rgba(23, 27, 43, 0.12), 0 0 0 1px rgba(23, 27, 43, 0.06);
-  --v3-elev-3: 0 26px 68px rgba(23, 27, 43, 0.16), 0 0 0 1px rgba(23, 27, 43, 0.07);
-  --v3-shadow-sheet: -12px 0 44px rgba(23, 27, 43, 0.12);
-  /* Light theme named shadow scale */
-  --v3-shadow-xs: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
-  --v3-shadow-sm: 0 4px 8px rgba(0,0,0,0.10), 0 2px 4px rgba(0,0,0,0.06);
-  --v3-shadow-md: 0 8px 20px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.08);
-  --v3-shadow-lg: 0 16px 40px rgba(0,0,0,0.14), 0 8px 16px rgba(0,0,0,0.10);
+  /* Light theme elevation — Deep-Indigo-tinted, two-layer (crisp contact edge +
+     soft ambient) so surfaces read as physically lit rather than flatly dropped.
+     The brand hue in the shadow is what separates "clean" from "premium". */
+  --v3-elev-1: 0 1px 2px rgba(33, 23, 71, 0.06), 0 8px 22px rgba(33, 23, 71, 0.07), 0 0 0 1px rgba(33, 23, 71, 0.05);
+  --v3-elev-1-hover: 0 2px 4px rgba(33, 23, 71, 0.08), 0 14px 32px rgba(33, 23, 71, 0.11), 0 0 0 1px rgba(33, 23, 71, 0.07);
+  --v3-elev-2: 0 4px 8px rgba(33, 23, 71, 0.08), 0 18px 48px rgba(33, 23, 71, 0.14), 0 0 0 1px rgba(33, 23, 71, 0.06);
+  --v3-elev-3: 0 8px 16px rgba(33, 23, 71, 0.10), 0 28px 64px rgba(33, 23, 71, 0.18), 0 0 0 1px rgba(33, 23, 71, 0.07);
+  --v3-shadow-sheet: -12px 0 44px rgba(33, 23, 71, 0.14);
+  /* Light theme named shadow scale — same brand tint + contact/ambient layering */
+  --v3-shadow-xs: 0 1px 2px rgba(33, 23, 71, 0.06), 0 2px 5px rgba(33, 23, 71, 0.05);
+  --v3-shadow-sm: 0 2px 4px rgba(33, 23, 71, 0.07), 0 6px 16px rgba(33, 23, 71, 0.08);
+  --v3-shadow-md: 0 4px 8px rgba(33, 23, 71, 0.08), 0 14px 32px rgba(33, 23, 71, 0.11);
+  --v3-shadow-lg: 0 10px 20px rgba(33, 23, 71, 0.10), 0 28px 56px rgba(33, 23, 71, 0.14);
   /* Override legacy aliases for light theme */
   --v3-shadow-card: var(--v3-shadow-xs);
   --v3-shadow-card-hover: var(--v3-shadow-sm);
@@ -323,20 +327,20 @@ textarea:-webkit-autofill {
     --v3-text-primary:   #101828;
     --v3-text-secondary: #344054;
     --v3-text-muted:     #52607a;
-    /* Shadows */
-    --v3-shadow-xs: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
-    --v3-shadow-sm: 0 4px 8px rgba(0,0,0,0.10), 0 2px 4px rgba(0,0,0,0.06);
-    --v3-shadow-md: 0 8px 20px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.08);
-    --v3-shadow-lg: 0 16px 40px rgba(0,0,0,0.14), 0 8px 16px rgba(0,0,0,0.10);
-    --v3-shadow-card:       0 8px 24px rgba(16, 24, 40, 0.06), 0 0 0 1px rgba(16, 24, 40, 0.08);
-    --v3-shadow-card-hover: 0 14px 34px rgba(16, 24, 40, 0.10), 0 0 0 1px rgba(16, 24, 40, 0.10);
-    --v3-shadow-sheet:      -12px 0 44px rgba(16, 24, 40, 0.14);
-    --v3-shadow-dropdown:   0 16px 44px rgba(16, 24, 40, 0.16), 0 0 0 1px rgba(16, 24, 40, 0.08);
+    /* Shadows — Deep-Indigo-tinted, two-layer contact + ambient (mirrors [data-theme=light]) */
+    --v3-shadow-xs: 0 1px 2px rgba(33, 23, 71, 0.06), 0 2px 5px rgba(33, 23, 71, 0.05);
+    --v3-shadow-sm: 0 2px 4px rgba(33, 23, 71, 0.07), 0 6px 16px rgba(33, 23, 71, 0.08);
+    --v3-shadow-md: 0 4px 8px rgba(33, 23, 71, 0.08), 0 14px 32px rgba(33, 23, 71, 0.11);
+    --v3-shadow-lg: 0 10px 20px rgba(33, 23, 71, 0.10), 0 28px 56px rgba(33, 23, 71, 0.14);
+    --v3-shadow-card:       var(--v3-shadow-xs);
+    --v3-shadow-card-hover: var(--v3-shadow-sm);
+    --v3-shadow-sheet:      -12px 0 44px rgba(33, 23, 71, 0.14);
+    --v3-shadow-dropdown:   0 4px 8px rgba(33, 23, 71, 0.08), 0 16px 44px rgba(33, 23, 71, 0.16), 0 0 0 1px rgba(33, 23, 71, 0.06);
     /* Elevation */
-    --v3-elev-1: 0 8px 24px rgba(23, 27, 43, 0.05), 0 0 0 1px rgba(23, 27, 43, 0.05);
-    --v3-elev-1-hover: 0 14px 34px rgba(23, 27, 43, 0.08), 0 0 0 1px rgba(23, 27, 43, 0.07);
-    --v3-elev-2: 0 18px 52px rgba(23, 27, 43, 0.12), 0 0 0 1px rgba(23, 27, 43, 0.06);
-    --v3-elev-3: 0 26px 68px rgba(23, 27, 43, 0.16), 0 0 0 1px rgba(23, 27, 43, 0.07);
+    --v3-elev-1: 0 1px 2px rgba(33, 23, 71, 0.06), 0 8px 22px rgba(33, 23, 71, 0.07), 0 0 0 1px rgba(33, 23, 71, 0.05);
+    --v3-elev-1-hover: 0 2px 4px rgba(33, 23, 71, 0.08), 0 14px 32px rgba(33, 23, 71, 0.11), 0 0 0 1px rgba(33, 23, 71, 0.07);
+    --v3-elev-2: 0 4px 8px rgba(33, 23, 71, 0.08), 0 18px 48px rgba(33, 23, 71, 0.14), 0 0 0 1px rgba(33, 23, 71, 0.06);
+    --v3-elev-3: 0 8px 16px rgba(33, 23, 71, 0.10), 0 28px 64px rgba(33, 23, 71, 0.18), 0 0 0 1px rgba(33, 23, 71, 0.07);
     /* Dot grid & gradients */
     --v3-dot-color: rgba(33, 23, 71, 0.04);
     --v3-gradient-primary: linear-gradient(135deg, #211747 0%, #211747 100%);
@@ -449,7 +453,16 @@ select {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   letter-spacing: -0.005em;
+  text-rendering: optimizeLegibility;
+  /* Lined-up figures everywhere numbers sit together — counts, gauges, budgets,
+     timestamps. A hallmark of premium data UI; Outfit carries tnum cleanly. */
+  font-variant-numeric: tabular-nums;
 }
+
+/* Balanced headings / pretty paragraphs. :where() keeps specificity at 0 so it
+   never overrides an existing size or tracking — it only improves wrapping. */
+.v3-shell :where(h1, h2, h3, h4) { text-wrap: balance; }
+.v3-shell :where(p) { text-wrap: pretty; }
 
 /* ── Rail: stable flex placeholder (never changes width, so content never shifts) ── */
 
