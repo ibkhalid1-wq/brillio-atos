@@ -75,71 +75,6 @@ export interface AgentifyReview {
   terms?: OntologyTerm[];
 }
 
-/** The proposed FUTURE of one current-state step — how it runs agentically. */
-export interface FutureStep {
-  /** agentify: an agent runs it end to end · assist: an agent drafts/prepares,
-   *  the human decides · keep: it stays entirely human. */
-  mode: "agentify" | "assist" | "keep";
-  /** The blueprint agent proposed to take it (or assist), when one maps. */
-  agent?: string;
-  /** A human-approval moment survives in the future flow (HITL). */
-  hitl?: boolean;
-}
-
-/** Verbs that mark a step as judgement-bearing — an agent PREPARES these, a
- * human decides. Everything mechanical is proposed as fully agentified.
- * Stems (no trailing boundary) so "reviews", "negotiates", "approval" match. */
-const JUDGEMENT = /\b(approv|review|negotiat|decid|sign[- ]?off|meet|calls?\b|present|escalat|interview|relationship|judg|assess)/i;
-
-/** Loose workflow-name match — "Quote to Cash" finds an agent whose
- * replacesWorkflow is written "quote-to-cash flow" (shared token overlap). */
-function workflowMatches(agentTarget: string, workflowName: string): boolean {
-  const tokens = (text: string) => new Set(text.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 3));
-  const a = tokens(agentTarget);
-  const w = tokens(workflowName);
-  if (!a.size || !w.size) return false;
-  let hits = 0;
-  for (const token of a) if (w.has(token)) hits += 1;
-  return hits >= Math.min(2, Math.min(a.size, w.size));
-}
-
-/** The DRAFT future state, derived — never authored: per workflow, per step, the
- * proposed run mode, the blueprint agent that takes it, and whether a human
- * approval moment survives. The stakeholder's taps then confirm or correct this
- * proposal; the point is that they react to a concrete transformation of the
- * workflow THEY validated, not a blank question. */
-export function proposeFutureSteps(review: AgentifyReview): FutureStep[][] {
-  const agents = review.blueprint?.agents ?? [];
-  return review.workflows.map((workflow) => {
-    const owner = agents.find((agent) => agent.replacesWorkflow && workflowMatches(agent.replacesWorkflow, workflow.name));
-    return workflow.steps.map((step): FutureStep => {
-      const judgement = JUDGEMENT.test(step.action);
-      return {
-        mode: judgement ? "assist" : "agentify",
-        agent: owner?.name,
-        hitl: judgement || undefined,
-      };
-    });
-  });
-}
-
-/** What each blueprint agent actually takes over, grounded in the review's own
- * workflows: the confirmed steps it would run and the ontology terms (with the
- * attributes stakeholders track) it reads and writes. */
-export function blueprintAgentContext(review: AgentifyReview): Map<string, { steps: string[]; terms: OntologyTerm[] }> {
-  const out = new Map<string, { steps: string[]; terms: OntologyTerm[] }>();
-  for (const agent of review.blueprint?.agents ?? []) {
-    if (!agent.replacesWorkflow) continue;
-    const workflows = review.workflows.filter((workflow) => workflowMatches(agent.replacesWorkflow!, workflow.name));
-    if (!workflows.length) continue;
-    const steps = workflows.flatMap((workflow) => workflow.steps.map((step) => step.action)).filter(Boolean);
-    const touched = new Set(workflows.flatMap((workflow) => workflow.steps.flatMap((step) => (step.entities ?? []).map((e) => e.toLowerCase()))));
-    const terms = (review.terms ?? []).filter((term) => touched.has(term.name.toLowerCase()));
-    out.set(agent.name, { steps: steps.slice(0, 6), terms: terms.slice(0, 5) });
-  }
-  return out;
-}
-
 /**
  * A persona's workflow-agentification review — the Atlas workflows they act in,
  * their own steps flagged. With no persona (or an unmatched one) every workflow
@@ -353,15 +288,14 @@ export function projectListenWorkflowReview(program: ProgramSummary, persona: st
 export function projectStakeholderReview(
   program: ProgramSummary, movementId: string, name: string,
   primaryArea: string | undefined, linkQuestions: string[],
-): ListenWorkflowReview | AgentifyReview | null {
+): ListenWorkflowReview | null {
   // Listen produces the current-state review AND captures the client's
   // automation appetite (the "what would you most want automated?" signal).
   // Envision is the delivery team's build studio — no client review is minted
   // there; clients validate the built prototype in Show. So only Listen mints a
   // stakeholder review link.
-  const kind = movementId === "listen" ? "listen-workflow" : null;
-  if (!kind) return null;
-  const base = kind === "listen-workflow" ? projectListenWorkflowReview(program, name) : projectAgentifyReview(program, name);
+  if (movementId !== "listen") return null;
+  const base = projectListenWorkflowReview(program, name);
   if (!base) return null;
   // Area-specific link: the recipient sees only THEIR area's workflow AND
   // ontology terms (alliances, delivery, …). Stamp the area so the surface
@@ -464,7 +398,7 @@ export function composeListenWorkflowAnswers(
   return lines.join("\n").trim();
 }
 
-export type ReviewPayload = AgentifyReview | OntologyAtlasReview | ListenWorkflowReview;
+export type ReviewPayload = OntologyAtlasReview | ListenWorkflowReview;
 
 /** Distinct actors across the Atlas workflows — the personas whose workflow can
  * be shared for an agentification review, most-active first. */
@@ -482,46 +416,6 @@ export function atlasPersonas(program: ProgramSummary): string[] {
 }
 
 // ── compose responses → attributed evidence text ──────────────────────────────
-
-const DISPOSITION_LABEL: Record<string, string> = {
-  agentify: "Agentify", assist: "Agent assists", keep: "Stays human",
-};
-
-/** Turn a persona's per-step dispositions into an attributed evidence block. */
-export function composeAgentifyAnswers(
-  review: AgentifyReview,
-  responses: Record<string, { disposition?: string; comment?: string }>,
-  extras?: { architectureResponse?: string; blueprintResponse?: string; architectureVerdict?: "endorsed" | "concerns" },
-): string {
-  const lines: string[] = [`Workflow agentification review — ${review.persona}`, ""];
-  review.workflows.forEach((workflow, wi) => {
-    lines.push(`## ${workflow.name}`);
-    workflow.steps.forEach((step, si) => {
-      const key = `${wi}.${si}`;
-      const answer = responses[key];
-      const disposition = answer?.disposition ? DISPOSITION_LABEL[answer.disposition] ?? answer.disposition : "—";
-      const comment = answer?.comment?.trim();
-      lines.push(`- [${disposition}] ${step.action}${comment ? ` — ${comment}` : ""}`);
-    });
-    lines.push("");
-  });
-  const arch = extras?.architectureResponse?.trim();
-  if (review.architecture && (arch || extras?.architectureVerdict)) {
-    lines.push(`## On the proposed architecture${review.architecture.recommendation ? ` (recommended: ${review.architecture.recommendation})` : ""}`);
-    // The tap verdict is explicit signal — an endorsement is a positive fact on
-    // the record, not merely the absence of an objection.
-    if (extras?.architectureVerdict === "endorsed") lines.push("ENDORSED — this direction fits how the work runs.");
-    if (extras?.architectureVerdict === "concerns") lines.push("HAS CONCERNS:");
-    if (arch) lines.push(arch);
-    lines.push("");
-  }
-  const bp = extras?.blueprintResponse?.trim();
-  if (review.blueprint && bp) {
-    lines.push("## On the agentic blueprint");
-    lines.push(bp, "");
-  }
-  return lines.join("\n").trim();
-}
 
 /** Turn per-term and per-workflow comments into an attributed evidence block. */
 export function composeOntologyAtlasAnswers(
@@ -554,12 +448,6 @@ export function composeOntologyAtlasAnswers(
 /** A short human-readable fallback agenda so a review pack is never question-less
  * (drives the plain interview form if the rich review UI can't render). */
 export function reviewFallbackQuestions(review: ReviewPayload): string[] {
-  if (review.kind === "agentify") {
-    return [
-      "For each step of your workflow, should an agent take it over, assist you, or stay human — and why?",
-      "Which single step would help you most if it were automated?",
-    ];
-  }
   if (review.kind === "listen-workflow") {
     return [
       "Walk us through your workflow — what's right, what's wrong, and what steps are missing?",

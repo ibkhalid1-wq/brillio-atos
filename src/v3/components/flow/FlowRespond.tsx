@@ -100,7 +100,7 @@ interface Pack {
 function reprojectFromPack(pack: Pack): ReviewPayload | null {
   if (!pack.liveArtifacts || !pack.movementId) return null;
   // Only the kinds projectStakeholderReview produces can be rebuilt live.
-  if (pack.reviewKind !== "listen-workflow" && pack.reviewKind !== "agentify") return null;
+  if (pack.reviewKind !== "listen-workflow") return null;
   const program = { rawData: { data: pack.liveArtifacts } } as unknown as ProgramSummary;
   // Scope to the recipient's AREA: prefer the value stored on the pack, else
   // compute it from the live artifacts (atlas workflows + ontology entities) the
@@ -176,7 +176,14 @@ export default function FlowRespond({ token }: { token: string }) {
   // falling back to the pack's frozen snapshot. Memoised so the surface's draft
   // key is stable within a load.
   const shownReview = useMemo<ReviewPayload | null>(
-    () => (state.phase === "ready" ? (reprojectFromPack(state.pack) ?? state.pack.review ?? null) : null),
+    // Old Envision packs may carry a frozen "agentify" review — that surface is
+    // retired (Envision no longer mints client reviews), so such links degrade to
+    // question-only rather than rendering the wrong surface.
+    () => (state.phase === "ready"
+      ? (reprojectFromPack(state.pack)
+        ?? ((state.pack.review as { kind?: string } | undefined)?.kind === "agentify" ? null : state.pack.review)
+        ?? null)
+      : null),
     [state],
   );
   // A regeneration can reshape the review while a draft is saved on-device; fold

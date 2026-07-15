@@ -17,7 +17,7 @@ import { retroAttributionProposal, negatedClaimProposal } from "@/v3/components/
 import { rankEvidence, isNoiseEvidence, scoreEvidence } from "@/v3/components/flow/flowEvidenceRank";
 import { resolveMovementStakeholders, deliveryRoleDirectory, validateProgramRole, knownProgramRoles, readDirectoryPeople, unresolvedCoverageNames, knownPeopleNames, stripAskAddressee } from "@/v3/components/flow/flowStakeholders";
 import { mintFollowUpPack, mintReviewPack, listInterviewPacks, visibleLinks, movementValidationCoverage } from "@/v3/components/flow/flowPortal";
-import { proposeFutureSteps, blueprintAgentContext, reviewDiff, type AgentifyReview, type ReviewPayload } from "@/v3/components/flow/flowReviews";
+import { reviewDiff, type ReviewPayload } from "@/v3/components/flow/flowReviews";
 import { trackAcceptance, trackBlockers, recordShowPass, listFlowTracks, type FlowTrack } from "@/v3/components/flow/flowTracks";
 import { setShipLane, toggleShipItem, listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 import { ingestPortalResponse, listPortalInbox } from "@/v3/components/flow/flowPortal";
@@ -28,7 +28,7 @@ import { gateApprovalIntegrity } from "@/v3/components/flow/flowGovernance";
 import { validateOntologyConstraints, hasBlockingOntologyViolations, partitionOntologyViolations } from "@/v3/components/flow/flowOntologyConstraints";
 import { readMetricRegistry, metricConsistency, metricById } from "@/v3/components/flow/flowMetricRegistry";
 import { readGovernedExceptions, withNewException, withResolvedException, governedExceptionsForInbox } from "@/v3/components/flow/flowExceptions";
-import { projectAgentifyReview, projectOntologyAtlasReview, atlasPersonas, composeAgentifyAnswers, projectListenWorkflowReview, composeListenWorkflowAnswers } from "@/v3/components/flow/flowReviews";
+import { projectAgentifyReview, projectOntologyAtlasReview, atlasPersonas, projectListenWorkflowReview, composeListenWorkflowAnswers } from "@/v3/components/flow/flowReviews";
 import { gateAugmentations } from "@/v3/components/flow/flowCrossValidation";
 import { programAreas, workflowArea, inferArea, areaProgress, personaAreas, personaReadyToAdvance, stakeholderPrimaryArea } from "@/v3/components/flow/flowAreas";
 
@@ -525,28 +525,7 @@ describe("scenario runner — beat records, fixtures, metrics, the ✗ loop", ()
   });
 });
 
-describe("envision transformation — derived future state, agent grounding, diffs, coverage", () => {
-  const agentify: AgentifyReview = {
-    kind: "agentify", persona: "Avantika", intro: "",
-    workflows: [{ name: "Quote to Cash", steps: [
-      { action: "Create quote record in CPQ", actor: "rep", system: "CPQ", entities: ["Quote"], mine: true },
-      { action: "Legal reviews the quote terms", actor: "legal", entities: ["Quote"], mine: false },
-    ] }],
-    blueprint: { agents: [{ name: "Quote Agent", replacesWorkflow: "Quote to Cash" }] },
-    terms: [{ name: "Quote", attributes: ["amount", "discount", "SLA"] }],
-  };
-  it("proposes agentify for mechanical steps, assist + HITL for judgement steps, with the mapped agent", () => {
-    const [steps] = proposeFutureSteps(agentify);
-    expect(steps[0]).toEqual({ mode: "agentify", agent: "Quote Agent", hitl: undefined });
-    expect(steps[1].mode).toBe("assist");
-    expect(steps[1].hitl).toBe(true);
-  });
-  it("grounds an agent card in the confirmed steps and the terms + attributes it works with", () => {
-    const ctx = blueprintAgentContext(agentify).get("Quote Agent")!;
-    expect(ctx.steps).toContain("Create quote record in CPQ");
-    expect(ctx.terms[0].name).toBe("Quote");
-    expect(ctx.terms[0].attributes).toContain("SLA");
-  });
+describe("envision transformation — derived future state, diffs, coverage", () => {
   it("reviewDiff reports added steps and new terms in readable phrases", () => {
     const prior = { kind: "listen-workflow", workflows: [{ name: "Quote to Cash", steps: [{ action: "a" }] }], terms: [{ name: "Quote" }] } as unknown as ReviewPayload;
     const current = { kind: "listen-workflow", workflows: [{ name: "Quote to Cash", steps: [{ action: "a" }, { action: "b" }] }], terms: [{ name: "Quote" }, { name: "SLA" }] } as unknown as ReviewPayload;
@@ -1044,8 +1023,6 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
     expect(review!.workflows.map((w) => w.name)).toEqual(["Quote-to-Cash"]);
     expect(review!.workflows[0].steps[0].mine).toBe(true);   // "Sales Rep" == actor
     expect(review!.workflows[0].steps[1].mine).toBe(false);  // Finance's step
-    const text = composeAgentifyAnswers(review!, { "0.0": { disposition: "agentify", comment: "auto-price it" } });
-    expect(text).toMatch(/\[Agentify\] drafts the quote — auto-price it/);
   });
 
   it("areas: explicit area wins; otherwise inferred from the workflow name; distinct set with General last", () => {
