@@ -64,10 +64,28 @@ function isObsoleteAlignmentDecision(entry: Record<string, unknown>): boolean {
   return !!payload && Array.isArray(payload.ontologyAlignment);
 }
 
+// A track-plan decision whose tracks are ALL already on the board is a no-op:
+// confirming it merges nothing, so the click appears to do nothing and the card
+// lingers. Hide it (open ones only — a resolved one keeps its ledger row). The
+// edge now dedups at source; this heals blobs that already carry a stale one.
+function isNoopTrackDecision(entry: Record<string, unknown>, adoptedTrackIds: Set<string>): boolean {
+  if ((entry.status ?? "open") !== "open") return false;
+  const payload = isRecord(entry.payload) ? entry.payload : null;
+  const tracks = payload && Array.isArray(payload.tracks) ? payload.tracks.filter(isRecord) : null;
+  if (!tracks || !tracks.length) return false;
+  return tracks.every((t) => adoptedTrackIds.has(String(t.id ?? "")));
+}
+
 export function listFlowDecisions(program: ProgramSummary): FlowDecision[] {
-  const list = innerData(program).flowDecisions;
+  const inner = innerData(program);
+  const list = inner.flowDecisions;
   if (!Array.isArray(list)) return [];
-  return list.filter(isRecord).filter((entry) => !isObsoleteAlignmentDecision(entry)).map((entry): FlowDecision => ({
+  const adoptedTrackIds = new Set(
+    (Array.isArray(inner.tracks) ? inner.tracks.filter(isRecord) : []).map((t) => String(t.id ?? "")),
+  );
+  return list.filter(isRecord)
+    .filter((entry) => !isObsoleteAlignmentDecision(entry) && !isNoopTrackDecision(entry, adoptedTrackIds))
+    .map((entry): FlowDecision => ({
     id: String(entry.id ?? ""),
     tier: entry.tier === 3 ? 3 : 2,
     status: entry.status === "confirmed" || entry.status === "declined" ? entry.status : "open",

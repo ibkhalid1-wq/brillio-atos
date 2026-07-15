@@ -9592,19 +9592,31 @@ Deno.serve(async (req) => {
             createdAt: now,
             showPasses: [],
           }));
-          if (tracks.length) {
+          // Only propose tracks the board hasn't already adopted — without this
+          // dedup a re-run re-queues the SAME plan, and "Adopt the track plan"
+          // merges tracks that are already there, so the click does nothing
+          // visible and the card keeps coming back.
+          const adoptedTrackIds = (() => {
+            const inner = getInnerProgramData(nextProgramData);
+            const rows = Array.isArray(inner.tracks) ? (inner.tracks as JsonValue[]).filter(isRecord) : [];
+            return new Set(rows.map((t) => String(t.id ?? "")));
+          })();
+          const newTracks = tracks.filter((t) => !adoptedTrackIds.has(t.id));
+          if (newTracks.length) {
             nextProgramData = queueFlowDecision(nextProgramData, {
               tier: 2,
               agentId: request.agentId,
               movementId: request.phaseId || "envision",
               title: "Adopt the track plan",
-              summary: `${tracks.length} build track${tracks.length === 1 ? "" : "s"} proposed: ${tracks.map((t) => t.name).slice(0, 4).join(", ")}${tracks.length > 4 ? "…" : ""}.`,
+              summary: `${newTracks.length} build track${newTracks.length === 1 ? "" : "s"} proposed: ${newTracks.map((t) => t.name).slice(0, 4).join(", ")}${newTracks.length > 4 ? "…" : ""}.`,
               blocking: "The Tracks board stays empty until a plan is adopted.",
               recommendation: {
                 action: "Adopt the track plan",
                 rationale: "Each track is a demoable workstream over the shared data model; acceptance is earned through the show/refine loop, at least two cycles.",
                 band: "proposal — reversible, tracks merge additively",
               } as JsonValue,
+              // Carry the full plan so already-adopted tracks still refresh their
+              // metadata on confirm, while the summary counts only what's new.
               payload: { tracks: tracks as unknown as JsonValue } as JsonValue,
             });
           }

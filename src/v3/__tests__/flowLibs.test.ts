@@ -64,6 +64,17 @@ describe("flowDecisions.resolveFlowDecision", () => {
     expect(listOpenFlowDecisions(programme(blob))).toHaveLength(0);
   });
 
+  it("hides an open track decision whose tracks are all already adopted", () => {
+    const noop = { flowDecisions: [{ id: "d9", status: "open", tier: 2, movementId: "envision",
+      title: "Adopt the track plan", payload: { tracks: [{ id: "tr1", name: "Track One" }] } }],
+      tracks: [{ id: "tr1", name: "Track One", showPasses: [] }] };
+    expect(listOpenFlowDecisions(programme(noop))).toHaveLength(0);
+    const fresh = { flowDecisions: [{ id: "d9", status: "open", tier: 2, movementId: "envision",
+      title: "Adopt the track plan", payload: { tracks: [{ id: "trNEW", name: "New Track" }] } }],
+      tracks: [{ id: "tr1", name: "Track One", showPasses: [] }] };
+    expect(listOpenFlowDecisions(programme(fresh))).toHaveLength(1);
+  });
+
   it("re-adopting tracks never erases existing pass records", () => {
     const withExisting = structuredClone(base) as Record<string, unknown>;
     withExisting.tracks = [{ id: "tr1", name: "Track One", showPasses: [{ ts: "2026-01-01", verdict: "accepted" }] }];
