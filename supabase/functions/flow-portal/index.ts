@@ -310,7 +310,9 @@ Deno.serve(async (req: Request) => {
         // Re-projection inputs (kind + area + the recipient name via `stakeholder`
         // above) and the live slices, so the client rebuilds the current review.
         ...(isReviewPack ? {
-          reviewKind: String(hit.pack.reviewKind ?? ""),
+          // Derive the kind from the "review:<kind>" role when not stored, so
+          // links minted BEFORE dynamic projection existed also rebuild live.
+          reviewKind: String(hit.pack.reviewKind ?? "").trim() || String(hit.pack.role ?? "").replace(/^review:/, ""),
           movementId: String(hit.pack.movementId ?? ""),
           ...(typeof hit.pack.recipientArea === "string" ? { recipientArea: hit.pack.recipientArea } : {}),
           liveArtifacts,
