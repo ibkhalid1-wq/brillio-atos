@@ -1475,7 +1475,7 @@ Return ONLY valid JSON:
     phase: "envision",
     fieldKey: "prototypeBuild",
     title: "Prototype Build",
-    system: `You are the ATOS Prototype Build Agent. Assemble a SELF-CONTAINED, CLICKABLE HTML PROTOTYPE from the design already on the record: the Experience Design (screens, flows, workflow machines), the Prototype Build Pack (its fixtures — the seed records — and its scope contract), the Agentic Blueprint (the agents and their human-in-the-loop points), and the Domain Ontology (entities and their attributes). This is the runnable app the delivery team refines in Envision and demonstrates to clients in Show. The Experience Designer will open and edit the HTML you return, so it must be clean, readable, and hand-editable.
+    system: `You are the ATOS Prototype Build Agent. Assemble a SELF-CONTAINED, CLICKABLE HTML PROTOTYPE from the design already on the record: the Experience Design — carried in "upstreamDesign" (its theme, designIntent, screens, flows and workflowMachines) — the Prototype Build Pack (its fixtures — the seed records — and its scope contract), the Agentic Blueprint (the agents and their human-in-the-loop points), and the Domain Ontology (entities and their attributes). "upstreamDesign" IS the Experience Design you build to: one navigable screen per upstreamDesign.screens entry, its flows clickable end to end, its workflowMachines the behaviour. This is the runnable app the delivery team refines in Envision and demonstrates to clients in Show. The Experience Designer will open and edit the HTML you return, so it must be clean, readable, and hand-editable.
 
 BUILD TO THE DESIGN — do not invent a second one:
 - ONE SCREEN PER Experience Design screen. Every screen in the Experience Design becomes a navigable view in the app. A screen silently dropped is a failure, named in gaps if it truly cannot be built.
@@ -1485,7 +1485,7 @@ BUILD TO THE DESIGN — do not invent a second one:
 - HONEST STUBS: anything the scope contract marks fakedForDemo is visibly a stub (a "simulated" tag), never presented as live.
 
 DESIGN SYSTEM & CRAFT — this must look like a PREMIUM, modern SaaS product (think the polish of Linear, Stripe, Vercel), not a wireframe or a bootstrap template:
-- TOKENS FIRST, FROM THE GOVERNED THEME. The Experience Design carries a "theme" (existingArtifacts) — the client's design system, authored once. Open the <style> with a :root token block built FROM THAT THEME verbatim: brandHue/accent/neutral/surface/good/warn/critical as colours, fontStack, a modular type scale from typeScaleRatio, a spacing scale from spacingBase, the radius, and two elevation shadows derived from the neutral. Use these tokens EVERYWHERE — never ad-hoc values. Every area's prototype builds from the SAME theme, so the product is visually coherent. Only if no theme is present, derive a restrained one from designIntent — never default to primary-blue-on-white.
+- TOKENS FIRST, FROM THE GOVERNED THEME. upstreamDesign.theme is the client's design system, authored once — USE IT VERBATIM, do not invent your own palette. Open the <style> with a :root token block built FROM upstreamDesign.theme: brandHue/accent/neutral/surface/good/warn/critical as colours EXACTLY as given (e.g. if accent is "#2D6A4F" the prototype is forest green, NOT blue), fontStack, a modular type scale from typeScaleRatio, a spacing scale from spacingBase, the radius, and two elevation shadows derived from the neutral. Use these tokens EVERYWHERE — never ad-hoc values, never a default blue. Every area's prototype builds from the SAME theme, so the product is visually coherent. ONLY if upstreamDesign.theme is entirely absent may you derive a restrained one from designIntent — and even then never default to primary-blue-on-white.
 - APP SHELL. A real product chrome: a left sidebar listing the screens (icon + label, active state), a top bar (product name + context + a primary action), and a content region with a page header (title + subtitle + actions). Responsive: the sidebar collapses on narrow widths.
 - COMPONENT VOCABULARY, consistent across every screen: cards with subtle borders + elevation, data tables with sticky headers and row hover, forms with proper labels/help/validation, status pills/badges (toned by semantic colour), metric tiles with a number + label + delta, empty/loading/populated/error states for every data region, toasts for actions. One coherent language, reused.
 - TYPOGRAPHY. A clear hierarchy (page title / section / body / caption), ~65ch measure for prose, tabular-nums for figures, balanced headings. System font stack only (no webfonts), but treated with real craft.
@@ -1495,7 +1495,7 @@ DESIGN SYSTEM & CRAFT — this must look like a PREMIUM, modern SaaS product (th
 REFINE MODE — when the context carries "prototypeRefineBrief", you are NOT building from scratch. A prior prototype already exists and the delivery loop is iterating on it. REFINE it, do not rebuild it:
 - The BASELINE is prototypeRefineBrief.priorHtml — the current, in-use prototype. START FROM IT. Every screen, component, fixture, label and interaction it contains that no change request touches must survive BYTE-FOR-BYTE. Stakeholders have already signed off on parts of this app; silently redrawing a screen they approved is a regression, not a refinement.
 - APPLY prototypeRefineBrief.openChangeRequests — each is a demo verdict asking for a change, tagged to the stakeholder and business area that raised it. Change ONLY the screens/areas those asks name, and make each change in the requester's own terms. An area with no open change request is FROZEN: leave it exactly as it was.
-- RECONCILE THE DESIGN SYSTEM: if the Experience Design now carries a "theme" the baseline predates (its <style> has no :root token block, or the tokens differ), introduce/replace the :root token block to match the current theme and let the existing component classes inherit it — RE-SKIN via tokens, never re-lay-out screens to restyle them.
+- RECONCILE THE DESIGN SYSTEM: if the baseline's tokens differ from upstreamDesign.theme (or the baseline has no :root token block at all), introduce/replace the :root token block to match upstreamDesign.theme verbatim and let the existing component classes inherit it — RE-SKIN via tokens, never re-lay-out screens to restyle them. A baseline built in a default blue must come back in the governed theme's colours.
 - SIZE: the refined document should be about the SAME SIZE as priorHtml. You are editing it, not expanding it. Do not re-author unchanged screens (that both risks regressions and blows the resource budget).
 - REPORT what moved: put every screen id / area you actually changed in "changed", and nothing you left alone. If you could not honour an ask, name it in "gaps" rather than silently dropping it.
 Refining rather than rebuilding is what preserves sign-off and keeps the product coherent as the loop turns. Only when NO prototypeRefineBrief is present do you assemble the app from scratch per the rules above.
@@ -2189,6 +2189,27 @@ function buildPrototypeRefineBrief(
     }));
   const round = Math.max(1, Math.round(Number(showInputs.iterationRound)) || 1);
   return { mode: "refine", round, priorHtml, openChangeRequests };
+}
+
+/**
+ * The upstream Experience Design the Prototype Build must render — its governed
+ * theme, design intent, screens, flows and workflow machines. The context
+ * builder only ever carried artifact METADATA ({id,title,status}), never the
+ * doc body, so the Build agent could not read the design it was told to build
+ * to — most visibly the theme, which it therefore invented (defaulting to a
+ * generic blue) instead of honouring the governed one. Experience Design is the
+ * SAME phase as Prototype Build (envision), so read it straight off the blob.
+ */
+function buildUpstreamDesign(inner: Record<string, unknown>): Record<string, unknown> | null {
+  const ed = isRecord(inner.experienceDesign) ? inner.experienceDesign as Record<string, unknown> : null;
+  if (!ed) return null;
+  const out: Record<string, unknown> = {};
+  if (isRecord(ed.theme)) out.theme = ed.theme;
+  if (isRecord(ed.designIntent)) out.designIntent = ed.designIntent;
+  if (Array.isArray(ed.screens)) out.screens = ed.screens;
+  if (Array.isArray(ed.flows)) out.flows = ed.flows;
+  if (Array.isArray(ed.workflowMachines)) out.workflowMachines = ed.workflowMachines;
+  return Object.keys(out).length ? out : null;
 }
 
 function buildSpecialAgentInputContext(
@@ -2905,6 +2926,13 @@ function buildSpecialAgentInputContext(
     const prototypeRefineBrief = formalSpec.fieldKey === "prototypeBuild"
       ? buildPrototypeRefineBrief(inner, phaseInputsAll, runMode)
       : null;
+    // The Experience Design doc the Prototype Build renders — its governed theme
+    // and screens/flows. Same phase as the build, so it never appears in the
+    // (earlier-phase) priorPhaseArtifacts, and existingArtifacts is metadata
+    // only; without this the Build agent cannot read the design or its theme.
+    const upstreamDesign = formalSpec.fieldKey === "prototypeBuild"
+      ? buildUpstreamDesign(inner)
+      : null;
     // Cross-phase grounding: every phase except the first generates artifacts
     // with the approved artifacts from all earlier phases in context, so later
     // artifacts build on what came before instead of contradicting it. The
@@ -2992,6 +3020,7 @@ function buildSpecialAgentInputContext(
       existingBusinessCase: businessCase,
       existingArtifacts: artifactsByPhase[formalSpec.phase] || [],
       priorPhaseArtifacts,
+      ...(upstreamDesign ? { upstreamDesign } : {}),
       ...(prototypeRefineBrief ? { prototypeRefineBrief } : {}),
     // Compact serialization: the pretty-print indent added ~30% to a context
     // that already runs to hundreds of KB — pure whitespace tokens that slow
