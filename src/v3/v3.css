@@ -5350,10 +5350,12 @@ button.v3fs-stale-tag {font-family:inherit;border:none;cursor:pointer}
 .v3fs-dock button {position:relative}
 .v3fs-dock-n {position:absolute;top:4px;right:4px;min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:var(--v3-amber);color:#fff;font-size:9.5px;font-weight:800;line-height:16px;text-align:center;font-variant-numeric:tabular-nums}
 .v3fs-today {display:flex;flex-direction:column;gap:22px;margin-top:30px}
-.v3fs-quiet {background:var(--fs-card);border:1px solid var(--fs-line);border-radius:18px;box-shadow:var(--fs-shadow);padding:44px 30px;text-align:center}
-.v3fs-quiet-mark {font-size:26px;color:var(--v3-accent-2);opacity:.55;margin-bottom:12px}
-.v3fs-quiet h2 {font-size:24px;font-weight:500;letter-spacing:-.02em;margin:0 0 8px}
-.v3fs-quiet p {font-size:13.5px;line-height:1.65;color:var(--v3-text-muted);max-width:52ch;margin:0 auto 18px}
+.v3fs-quiet {background:var(--fs-card);border:1px solid var(--fs-line);border-radius:22px;box-shadow:var(--v3-shadow-md);padding:56px 36px;text-align:center;margin-top:28px}
+.v3fs-quiet-mark {display:grid;place-items:center;width:58px;height:58px;margin:0 auto 20px;border-radius:50%;
+  font-size:26px;color:#fff;background:linear-gradient(140deg, var(--v3-accent-2), var(--v3-accent-b, #3b2f72));
+  box-shadow:0 10px 22px -8px color-mix(in srgb, var(--v3-accent-2) 60%, transparent)}
+.v3fs-quiet h2 {font-size:25px;font-weight:600;letter-spacing:-.02em;line-height:1.2;text-wrap:balance;margin:0 0 10px}
+.v3fs-quiet p {font-size:14px;line-height:1.7;color:var(--v3-text-secondary);max-width:50ch;margin:0 auto}
 .v3fs-inbox {background:var(--fs-card);border:1px solid var(--fs-line);border-radius:18px;box-shadow:var(--fs-shadow);padding:22px 26px;display:flex;flex-direction:column;gap:14px}
 .v3fs-dec {border:1px solid var(--fs-line);border-left:3px solid var(--v3-amber);border-radius:14px;padding:16px 18px;background:var(--v3-surface-2)}
 .v3fs-dec-top {display:flex;align-items:center;gap:10px;margin-bottom:8px}
@@ -5762,17 +5764,30 @@ button.v3fs-stale-tag {font-family:inherit;border:none;cursor:pointer}
 .v3fs-async-who {flex:1;font-size:12.5px;font-weight:600}
 .v3fs-async-who span {display:block;font-family:var(--v3-font-mono);font-size:10px;font-weight:400;color:var(--v3-text-muted)}
 .v3fs-portal {max-width:640px}
-.v3fs-shell:has(.v3fs-portal) {background:linear-gradient(180deg, var(--fs-indigo-wash, #eef0fb) 0%, var(--fs-bg, #f7f7fa) 260px)}
+.v3fs-hero-brand {color:var(--v3-accent-2);font-weight:750}
+/* A quiet Brillio·ATOS signature closes every linked page — brand presence +
+   the reassurance that the response is private to the programme team. */
+.v3fs-portal-brandfoot {display:flex;flex-direction:column;align-items:center;gap:7px;margin:48px 0 30px;padding-top:26px;
+  border-top:1px solid var(--fs-line);text-align:center}
+.v3fs-portal-brandfoot .mark {display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:750;letter-spacing:-.01em;color:var(--v3-text-secondary)}
+.v3fs-portal-brandfoot .mark i {width:20px;height:20px;border-radius:6px;display:grid;place-items:center;color:#fff;font-size:11px;font-style:normal;
+  background:linear-gradient(140deg, var(--v3-accent-2), var(--v3-accent-b, #3b2f72));box-shadow:0 2px 6px -2px color-mix(in srgb, var(--v3-accent-2) 55%, transparent)}
+.v3fs-portal-brandfoot small {font-size:11px;color:var(--v3-text-muted);display:inline-flex;align-items:center;gap:5px}
+/* Client-facing microsite: a warm Deep-Indigo glow crowns the page, settling
+   into the canvas — reads as "prepared for you", not "an app minus its chrome". */
+.v3fs-shell:has(.v3fs-portal) {background:
+  radial-gradient(135% 400px at 50% -70px, color-mix(in srgb, var(--v3-accent-2) 14%, transparent), transparent 72%),
+  linear-gradient(180deg, var(--fs-indigo-wash, #eef0fb) 0%, var(--v3-bg, #f7f7fa) 340px)}
 .v3fs-portal-head {padding:64px 0 6px}
 .v3fs-portal-title {font-size:clamp(24px,4.5vw,32px);font-weight:750;letter-spacing:-.025em;line-height:1.18;color:var(--v3-text-primary);text-wrap:balance;margin:0}
 .v3fs-portal-sub {font-size:14px;line-height:1.65;color:var(--v3-text-secondary);margin:12px 0 0;max-width:52ch}
 .v3fs-portal-meta {display:flex;flex-wrap:wrap;gap:7px 18px;margin-top:18px;font-size:11.5px;color:var(--v3-text-muted)}
-.v3fs-portal-card {display:flex;flex-direction:column;gap:10px;position:relative;background:var(--fs-card);border:1px solid var(--fs-line);border-radius:16px;padding:20px 22px 16px;box-shadow:0 1px 2px rgba(15,16,32,.04);transition:border-color .2s ease, box-shadow .2s ease}
-.v3fs-portal-card:focus-within {border-color:var(--v3-accent-2);box-shadow:0 4px 18px -6px rgba(79,70,229,.18)}
+.v3fs-portal-card {display:flex;flex-direction:column;gap:10px;position:relative;background:var(--fs-card);border:1px solid var(--fs-line);border-radius:16px;padding:20px 22px 16px;box-shadow:var(--v3-shadow-xs);transition:border-color var(--v3-transition-base), box-shadow var(--v3-transition-base)}
+.v3fs-portal-card:focus-within {border-color:var(--v3-accent-2);box-shadow:0 0 0 3px color-mix(in srgb, var(--v3-accent-2) 12%, transparent), var(--v3-shadow-sm)}
 .v3fs-portal-card.done {border-color:color-mix(in srgb, var(--v3-green) 45%, var(--fs-line))}
 .v3fs-portal-qn {position:absolute;top:-11px;left:18px;display:grid;place-items:center}
 .v3fs-portal-qn b, .v3fs-portal-qn em {width:24px;height:24px;border-radius:99px;display:grid;place-items:center;font-size:11px;font-weight:700;font-style:normal}
-.v3fs-portal-qn b {background:var(--v3-accent-2);color:#fff;box-shadow:0 2px 6px -1px rgba(79,70,229,.4)}
+.v3fs-portal-qn b {background:var(--v3-accent-2);color:#fff;box-shadow:0 2px 6px -1px color-mix(in srgb, var(--v3-accent-2) 45%, transparent)}
 .v3fs-portal-qn em {display:none;background:var(--v3-green);color:#fff}
 .v3fs-portal-card.done .v3fs-portal-qn b {display:none}
 .v3fs-portal-card.done .v3fs-portal-qn em {display:grid}
@@ -7027,8 +7042,9 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-rvw-send {align-self:flex-start;padding:11px 22px;font-size:14px}
 
 /* Area filter chips — filter the review's workflows/terms by business area. */
-.v3fs-rvw-scoped {margin:0 0 10px;font-size:12.5px;color:var(--v3-text-secondary);padding:8px 13px;border-radius:10px;
+.v3fs-rvw-scoped {display:inline-flex;align-items:center;gap:8px;margin:0 0 12px;font-size:12.5px;color:var(--v3-text-secondary);padding:8px 16px;border-radius:99px;
   background:var(--fs-indigo-wash);border:1px solid color-mix(in srgb,var(--v3-accent-2) 22%,transparent)}
+.v3fs-rvw-scoped::before {content:"◆";color:var(--v3-accent-2);font-size:8px;opacity:.8}
 .v3fs-rvw-scoped b {color:var(--v3-accent-2);font-weight:700}
 
 /* Per-phase comment on a workflow step (text + voice) on the linked page. */
@@ -7063,8 +7079,8 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-rvw-area.on {border-color:var(--v3-accent-2);background:var(--fs-indigo-wash);color:var(--v3-accent-2)}
 
 /* Section headers between the visual blocks of a review. */
-.v3fs-rvw-section-h {display:flex;align-items:center;gap:9px;margin:10px 2px 2px;font-size:12px;font-weight:750;
-  letter-spacing:.02em;color:var(--v3-text-secondary)}
+.v3fs-rvw-section-h {display:flex;align-items:center;gap:10px;margin:20px 2px 8px;font-size:11px;font-weight:800;
+  letter-spacing:.11em;text-transform:uppercase;color:var(--v3-accent-2)}
 .v3fs-rvw-step-ic {display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:7px;
   background:var(--fs-indigo-wash);color:var(--v3-accent-2);font-size:12px}
 .v3fs-rvw-wf.plain {border:none;background:none;overflow:visible}

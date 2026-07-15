@@ -430,8 +430,8 @@ export default function FlowRespond({ token }: { token: string }) {
                             if (to) setDeferrals((current) => ({ ...current, [index]: to }));
                           }}>
                           <option value="">this is for someone else…</option>
-                          {(state.pack.roster ?? []).map((person) => (
-                            <option key={person.name} value={person.name}>{person.name}{person.role ? ` — ${person.role}` : ""}</option>
+                          {(state.pack.roster ?? []).map((person, i) => (
+                            <option key={`${person.name}-${i}`} value={person.name}>{person.name}{person.role ? ` — ${person.role}` : ""}</option>
                           ))}
                         </select>
                       </div>
@@ -521,6 +521,12 @@ export default function FlowRespond({ token }: { token: string }) {
               </div>
             </>
           )}
+          {state.phase !== "loading" ? (
+            <footer className="v3fs-portal-brandfoot">
+              <span className="mark"><i aria-hidden="true">◆</i> Brillio ATOS Flow</span>
+              <small>⛨ Your response is private to the programme team.</small>
+            </footer>
+          ) : null}
         </div>
       </div>
     </div>
