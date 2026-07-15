@@ -334,15 +334,16 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
           ) : null}
         </div>
       </div>
-      {/* Design-movement validation ledger: per area, how many stakeholders have
-          validated the Envision transformation / recorded a Show verdict, and how
-          many links still wait. An area with links out and ZERO validations is an
-          open flank on the design — same discipline as Listen's heard-count. */}
-      {(movementId === "envision" || movementId === "show") ? (() => {
+      {/* Show validation ledger: per area, how many stakeholders have recorded a
+          demo verdict on the prototype and how many links still wait. An area with
+          links out and ZERO verdicts is an open flank — same discipline as
+          Listen's heard-count. Validation is a SHOW activity; Envision is the
+          delivery team's build studio and carries no client-validation ledger. */}
+      {movementId === "show" ? (() => {
         const rows = movementValidationCoverage(program, movementId).filter((r) => r.validated || r.waiting);
         return rows.length ? (
           <div className="v3fs-valcov" role="note" aria-label="Validation coverage by area">
-            <span className="v3fs-valcov-l">{movementId === "show" ? "Demo verdicts" : "Future-state validation"}</span>
+            <span className="v3fs-valcov-l">Demo verdicts</span>
             {rows.map((r) => (
               <span key={r.area} className={`v3fs-valcov-chip${r.validated ? " ok" : r.waiting ? " open" : ""}`}
                 title={`${r.area}: ${r.validated} validated · ${r.waiting} waiting`}>

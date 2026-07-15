@@ -1111,16 +1111,17 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
         items.push({ movement: movement.displayName, what: readiness.detail ?? readiness.headline });
       }
     }
-    // Validation coverage for the design movements — an area with Envision/Show
-    // links out but ZERO validated responses is an open flank on the design,
-    // the same way an unheard voice is an open flank on discovery.
-    for (const movementId of ["envision", "show"] as const) {
-      const displayName = movements.find((m) => m.id === movementId)?.displayName ?? movementId;
-      for (const row of movementValidationCoverage(program, movementId)) {
+    // Show validation coverage — an area with demo links out but ZERO recorded
+    // verdicts is an open flank on validation, the same way an unheard voice is
+    // an open flank on discovery. Validation lives in SHOW; Envision is the
+    // delivery team's build studio and carries no client-validation coverage.
+    {
+      const displayName = movements.find((m) => m.id === "show")?.displayName ?? "Show";
+      for (const row of movementValidationCoverage(program, "show")) {
         if (row.validated === 0 && row.waiting > 0) {
           items.push({
             movement: displayName,
-            what: `${row.area}: ${movementId === "show" ? "demo verdict" : "future-state validation"} still open — ${row.waiting} link${row.waiting === 1 ? "" : "s"} waiting`,
+            what: `${row.area}: demo verdict still open — ${row.waiting} link${row.waiting === 1 ? "" : "s"} waiting`,
           });
         }
       }

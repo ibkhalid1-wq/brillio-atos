@@ -1,14 +1,16 @@
 /**
- * The Envision cockpit — the phase as a scannable OVERVIEW of three acts, not a
- * document dump: DIRECTION (choose the architecture, recorded), DESIGN (the one
- * future-state at a glance — per-workflow mode-mix, expandable to the detail,
- * with the experience↔agents lenses behind a toggle), and VALIDATION (the
- * collect board it sits above). Projected from the record; the full documents
- * live in the artifact tabs. Premium means legible at a glance, deep on demand.
+ * The Envision cockpit — the delivery team's build studio as a scannable
+ * OVERVIEW of three acts, not a document dump: DIRECTION (choose the
+ * architecture, recorded), DESIGN (the one future-state at a glance —
+ * per-workflow mode-mix, expandable to the detail, with the experience↔agents
+ * lenses behind a toggle), and BUILD (is the prototype assembled and ready to
+ * demonstrate). Projected from the record; the full documents live in the
+ * artifact tabs. Client validation happens in SHOW, not here. Premium means
+ * legible at a glance, deep on demand.
  */
 import { useMemo, useState } from "react";
 import { projectFutureState, type FutureState, type FutureWorkflow } from "@/v3/components/flow/flowFutureState";
-import { movementValidationCoverage } from "@/v3/components/flow/flowPortal";
+import { readMovementInputs } from "@/v3/components/flow/flowShellData";
 import type { ProgramSummary } from "@/new/types";
 
 const MODE_LABEL: Record<string, string> = { agentify: "agent runs it", assist: "agent assists · you decide", keep: "stays human" };
@@ -23,7 +25,10 @@ export default function EnvisionCockpit({ program, onSaveInputs, onRunAgent }: {
   onRunAgent?: (agentId: string, phaseId?: string) => void;
 }) {
   const fs = useMemo<FutureState>(() => projectFutureState(program), [program]);
-  const coverage = useMemo(() => movementValidationCoverage(program, "envision").filter((r) => r.validated || r.waiting), [program]);
+  const hasPrototype = useMemo(() => {
+    const inputs = readMovementInputs(program, "envision");
+    return Boolean(inputs.prototypeBuild || inputs.prototypePack);
+  }, [program]);
   const [focus, setFocus] = useState<{ kind: "agent" | "screen"; key: string } | null>(null);
   const [area, setArea] = useState("");
   const [openWf, setOpenWf] = useState<string | null>(null);
@@ -34,12 +39,10 @@ export default function EnvisionCockpit({ program, onSaveInputs, onRunAgent }: {
 
   if (!fs.hasArchitecture && !fs.hasDesign && !fs.hasBlueprint) return null;
 
-  const validatedAreas = coverage.filter((r) => r.validated > 0).length;
-  const openAreas = coverage.filter((r) => r.validated === 0 && r.waiting > 0);
   const acts = [
     { label: "Direction", done: !!fs.direction.chosen, hint: fs.direction.chosen || "choose the shape" },
     { label: "Design", done: fs.hasDesign && fs.hasBlueprint, hint: fs.hasDesign && fs.hasBlueprint ? "the future state" : "not yet complete" },
-    { label: "Validation", done: coverage.length > 0 && openAreas.length === 0, hint: coverage.length ? `${validatedAreas}/${coverage.length} areas` : "awaiting owners" },
+    { label: "Build", done: hasPrototype, hint: hasPrototype ? "prototype ready to show" : "assemble the prototype" },
   ];
 
   const agentLit = (name: string): boolean =>
@@ -52,7 +55,6 @@ export default function EnvisionCockpit({ program, onSaveInputs, onRunAgent }: {
   const workflows = inArea(fs.workflows);
   const agents = inArea(fs.agents);
   const screens = inArea(fs.screens);
-  const areaStatus = (a: string) => coverage.find((r) => r.area === a);
 
   const recordDirection = async () => {
     if (!onSaveInputs || !pick) return;
@@ -112,11 +114,11 @@ export default function EnvisionCockpit({ program, onSaveInputs, onRunAgent }: {
           {fs.areas.length > 1 ? (
             <div className="v3fs-envc-areas" role="group" aria-label="Filter by area">
               <button type="button" className={`v3fs-envc-area${area === "" ? " on" : ""}`} onClick={() => setArea("")}>All areas</button>
-              {fs.areas.map((a) => { const s = areaStatus(a); return (
+              {fs.areas.map((a) => (
                 <button key={a} type="button" className={`v3fs-envc-area${area === a ? " on" : ""}`} onClick={() => setArea((cur) => cur === a ? "" : a)}>
-                  {a}{s ? <em className={`v3fs-envc-avs ${s.validated && !s.waiting ? "ok" : s.validated ? "part" : "open"}`}>{s.validated ? `✓${s.validated}` : s.waiting ? `${s.waiting}◷` : ""}</em> : null}
+                  {a}
                 </button>
-              ); })}
+              ))}
             </div>
           ) : null}
           {fs.kpis.length ? (

@@ -13,7 +13,6 @@ import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
 import { getFormalArtifactContent, getFormalArtifactConfidence, FORMAL_ARTIFACT_FIELD_KEYS } from "@/v3/lib/formalArtifacts";
 import { listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 import { listFlowTracks, trackAcceptance } from "@/v3/components/flow/flowTracks";
-import { movementValidationCoverage } from "@/v3/components/flow/flowPortal";
 
 /**
  * Find a quoted claim inside a source transcript, tolerantly: curly quotes
@@ -846,24 +845,13 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
       { id: "direction", label: "Direction chosen on the record", done: has("directionDecision") || has("steeringConversation"), anchor: "input:directionDecision", why: whyFromValue(inputs.directionDecision) ?? whyFromTranscript(inputs.steeringConversation) },
       { id: "tracks", label: "Track plan adopted", done: Array.isArray(inner.tracks) && (inner.tracks as unknown[]).length > 0, why: Array.isArray(inner.tracks) && (inner.tracks as unknown[]).length ? `${(inner.tracks as unknown[]).length} tracks, confirmed by you` : undefined },
     );
-    // The future state must be VALIDATED by the people who own it: every area
-    // with a design gets an owner's transformation review. An area with links
-    // out but zero validations is an open flank — the design no client voice
-    // has confirmed. Only surfaces once there's a design to validate.
-    if (inner.experienceDesign || inner.agenticBlueprint) {
-      const cov = movementValidationCoverage(program, "envision").filter((r) => r.validated || r.waiting);
-      const open = cov.filter((r) => r.validated === 0 && r.waiting > 0);
-      if (cov.length) {
-        items.push({
-          id: "future-validated",
-          label: open.length
-            ? `Future-state validation open — ${open.map((r) => r.area).join(", ")}`
-            : "Future state validated by each area's owner",
-          done: open.length === 0,
-          why: open.length === 0 ? `${cov.reduce((n, r) => n + r.validated, 0)} area review${cov.reduce((n, r) => n + r.validated, 0) === 1 ? "" : "s"} on record` : undefined,
-        });
-      }
-    }
+    // Envision's job is to DESIGN and BUILD the prototype — the delivery team's
+    // deliverable. Client validation happens in Show, not here. The gate checks
+    // the design is complete and the prototype is built and ready to demonstrate.
+    items.push(
+      { id: "design", label: "Experience design accepted", done: Boolean(inner.experienceDesign), why: inner.experienceDesign ? "screens + flows on record" : undefined },
+      { id: "prototype-built", label: "Prototype built and ready to show", done: Boolean(inner.prototypeBuild || inner.prototypePack), why: (inner.prototypeBuild || inner.prototypePack) ? "runnable prototype assembled from the design" : undefined },
+    );
   } else if (movement.id === "show") {
     const tour = demoAcceptance(program);
     // Approval is BY STAKEHOLDER and BY TRACK, and both close the loop back

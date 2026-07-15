@@ -6470,8 +6470,6 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 /* act-header "view →" link + area validation chip */
 .v3fs-envc-open {margin-left:auto;font-size:11px;font-weight:600}
 .v3fs-envc-ah {justify-content:flex-start}
-.v3fs-envc-avs {font-style:normal;margin-left:5px;font-size:9.5px;font-weight:750}
-.v3fs-envc-avs.ok {color:var(--v3-green)} .v3fs-envc-avs.part {color:var(--v3-amber)} .v3fs-envc-avs.open {color:var(--v3-text-muted)}
 /* KPI band → horizontal */
 .v3fs-envc-kpis {flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px}
 .v3fs-envc-kpis .lbl {flex:0 0 auto}
