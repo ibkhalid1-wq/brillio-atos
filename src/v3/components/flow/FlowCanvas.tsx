@@ -4,6 +4,7 @@ import PhaseInputsPanel from "@/v3/components/PhaseInputsPanel";
 import { acceptedAgentPatterns } from "@/v3/components/flow/flowPatterns";
 import EnvisionCockpit from "@/v3/components/flow/EnvisionCockpit";
 import ShowCockpit from "@/v3/components/flow/ShowCockpit";
+import ProductOwnerCockpit from "@/v3/components/flow/ProductOwnerCockpit";
 import { loopState } from "@/v3/components/flow/flowLoop";
 // The artifact studio pulls React Flow and every WYSIWYG editor — a heavy
 // chunk only needed when a document is opened. Lazy-load it so it never
@@ -454,6 +455,12 @@ export default function FlowCanvas({ program, programs, runningAgentIds, agentEr
                   scannable overview of what's being designed (Design) or the
                   validation state (Validate). Discovery below is pure data
                   collection. */}
+              {/* The Product Owner view — across ALL areas — sits above the
+                  per-area Design/Validate cockpit. Only shows for multi-area
+                  programmes; the PO orchestrates, the areas iterate below. */}
+              {movement.id === "envision" || movement.id === "show" ? (
+                <ProductOwnerCockpit program={program} onOpenArea={() => setActive("show")} />
+              ) : null}
               {movement.id === "envision" ? (
                 <EnvisionCockpit program={program} onSaveInputs={onSaveInputs} onOpenArtifact={(id) => goTab(`art:${id}` as MovementTab)} />
               ) : null}
