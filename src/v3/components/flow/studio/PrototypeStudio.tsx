@@ -8,8 +8,10 @@
  */
 import { useEffect, useState } from "react";
 import { asArray, asRecord, asStrings, asText, type StudioProps } from "./StudioKit";
+import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
+import { buildPrototypeProject, downloadPrototypeZip, projectSlug } from "./prototypeExport";
 
-export default function PrototypeStudio({ doc, onChange }: StudioProps) {
+export default function PrototypeStudio({ doc, onChange, program }: StudioProps) {
   const html = asText(doc.html);
   const screens = asArray(doc.screens).map(asRecord);
   const summary = asText(doc.summary);
@@ -53,13 +55,27 @@ export default function PrototypeStudio({ doc, onChange }: StudioProps) {
           <button type="button" className={mode === "edit" ? "on" : ""} onClick={() => setMode("edit")}>✎ Experience Designer</button>
           {/* External build: the prototype is self-contained, so it runs anywhere —
               download it to open standalone, share, or hand to a build team. */}
-          <button type="button" title="Download the self-contained prototype — runs in any browser, or hand it to a build team" onClick={() => {
+          <button type="button" title="Download the self-contained prototype as a single HTML file — runs in any browser" onClick={() => {
             const blob = new Blob([mode === "edit" ? draft : html], { type: "text/html" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url; a.download = "prototype.html"; a.click();
             URL.revokeObjectURL(url);
-          }}>⬇ Export</button>
+          }}>⬇ HTML</button>
+          {/* Editable project: split the single document into a real directory
+              (index.html + styles.css + app.js + fixtures + tokens + README),
+              zipped — so a build team or a coding agent can work in it. */}
+          <button type="button" title="Download as an editable project (.zip) — separate HTML/CSS/JS + fixtures, tokens and a README, for a build team or coding agent" onClick={async () => {
+            const project = buildPrototypeProject({
+              html: mode === "edit" ? draft : html,
+              title: asText(doc.title),
+              programName: program?.name,
+              screens,
+              theme: program ? asRecord(readArtifactDoc(program, "experienceDesign")?.theme ?? {}) : null,
+              pack: program ? readArtifactDoc(program, "prototypePack") : null,
+            });
+            await downloadPrototypeZip(project, projectSlug(program?.name));
+          }}>⬇ Project (.zip)</button>
         </div>
       </div>
 
