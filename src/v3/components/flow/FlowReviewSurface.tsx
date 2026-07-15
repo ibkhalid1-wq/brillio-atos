@@ -69,19 +69,24 @@ function AreaChips({ areas, active, onPick }: { areas: string[]; active: string;
 /** The linked page's opening: a subtle Brillio·ATOS mark, the programme name,
  * a warm greeting, a one-line "what we're building + why", then plainly what we
  * need from this person and how to respond. Shared by every review surface. */
-function ReviewHeader({ stakeholder, programme, objective, intro }: {
-  stakeholder: string; programme?: string; objective?: string; intro: string;
+function ReviewHeader({ stakeholder, programme, objective, intro, area }: {
+  stakeholder: string; programme?: string; objective?: string; intro: string; area?: string;
 }) {
   const first = stakeholder ? stakeholder.split(/\s+/)[0] : "";
+  // Just the core goal for the opener — drop measurement/timeline clauses (they
+  // sit after an em-dash: "…satisfaction — measured against baselines — within
+  // 12 months"). A stakeholder wants the "why", not the KPI framing.
+  const coreGoal = objective ? objective.split(/\s+[—–]\s+/)[0].trim().replace(/[.\s]+$/, "") : "";
   return (
     <header className="v3fs-rvw-top">
-      <div className="v3fs-rvw-brandline"><span className="v3fs-rvw-mark" aria-hidden="true">◆</span>Brillio · ATOS Flow</div>
+      <div className="v3fs-rvw-brandline"><span className="v3fs-rvw-mark" aria-hidden="true">◆</span>Brillio · ATOS</div>
       {programme ? <div className="v3fs-rvw-prog">{programme}</div> : null}
       <h1 className="v3fs-rvw-hi">{first ? `Hi ${first},` : "Hi,"}</h1>
       <p className="v3fs-rvw-lede">
-        we&rsquo;re building <b>{programme || "this programme"}</b>{objective ? (() => { const o = objective.trim().replace(/[.\s]+$/, ""); return <> — the goal is to {o.charAt(0).toLowerCase() + o.slice(1)}</>; })() : ""}.
+        we&rsquo;re building <b>{programme || "this programme"}</b>{coreGoal ? <> — the goal is to {coreGoal.charAt(0).toLowerCase() + coreGoal.slice(1)}</> : ""}.
       </p>
       {intro ? <p className="v3fs-rvw-sub">{intro}</p> : null}
+      {area ? <p className="v3fs-rvw-scoped"><b>This covers {area}</b> — the workflows and terms in your world.</p> : null}
       <div className="v3fs-rvw-ask">
         <span className="lbl">What we need from you</span>
         Walk your workflow and the terms below — <b>confirm what&rsquo;s right, fix what&rsquo;s not, add what we missed</b>. Type or talk; it saves as you go, and nothing is final until the team reviews it.
@@ -109,11 +114,8 @@ function AgentifySurface({ review, stakeholder, programme, objective, submitting
 
   return (
     <>
-      <ReviewHeader stakeholder={stakeholder} programme={programme} objective={objective} intro={review.intro} />
+      <ReviewHeader stakeholder={stakeholder} programme={programme} objective={objective} intro={review.intro} area={review.recipientArea} />
       <AreaChips areas={areas} active={area} onPick={setArea} />
-      {review.recipientArea && area === review.recipientArea ? (
-        <p className="v3fs-rvw-scoped">This review covers your area — <b>{review.recipientArea}</b>.</p>
-      ) : null}
       <div className="v3fs-rvw">
         {review.workflows.map((workflow, wi) => area && hasArea(review.workflows, area) && workflow.area !== area ? null : (
           <section key={wi} className="v3fs-rvw-wf">
@@ -248,11 +250,8 @@ function OntologyAtlasSurface({ review, stakeholder, programme, objective, submi
 
   return (
     <>
-      <ReviewHeader stakeholder={stakeholder} programme={programme} objective={objective} intro={review.intro} />
+      <ReviewHeader stakeholder={stakeholder} programme={programme} objective={objective} intro={review.intro} area={review.recipientArea} />
       <AreaChips areas={areas} active={area} onPick={setArea} />
-      {review.recipientArea && area === review.recipientArea ? (
-        <p className="v3fs-rvw-scoped">This review covers your area — <b>{review.recipientArea}</b>.</p>
-      ) : null}
       <div className="v3fs-rvw">
         {shownTerms.length ? (
           <section className="v3fs-rvw-wf">
@@ -406,11 +405,8 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
 
   return (
     <>
-      <ReviewHeader stakeholder={stakeholder} programme={programme} objective={objective} intro={review.intro} />
+      <ReviewHeader stakeholder={stakeholder} programme={programme} objective={objective} intro={review.intro} area={review.recipientArea} />
       <AreaChips areas={areas} active={area} onPick={setArea} />
-      {review.recipientArea && area === review.recipientArea ? (
-        <p className="v3fs-rvw-scoped">This review covers your area — <b>{review.recipientArea}</b>.</p>
-      ) : null}
       <div className="v3fs-rvw">
         <div className="v3fs-rvw-section-h"><span className="v3fs-rvw-step-ic" aria-hidden="true">⇄</span>Your workflow — fix it, add steps, or mark what doesn&rsquo;t happen</div>
         {review.workflows.map((wf, wi) => area && hasArea(review.workflows, area) && wf.area !== area ? null : (

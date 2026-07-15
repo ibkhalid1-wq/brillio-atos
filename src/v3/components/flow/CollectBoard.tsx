@@ -148,6 +148,11 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
   // card to another column and remounts it — never collapses it. Null until
   // the operator touches a card; the solo default is applied at render below.
   const [openIdsState, setOpenIdsState] = useState<Set<string> | null>(null);
+  // Which AREA LANES are expanded. Null → per-lane default (incomplete open).
+  // "Expand all / Collapse all" drives this: collapse hides everything to the
+  // area headers; expand opens every lane to its stakeholder cards (kept
+  // collapsed — the scripts stay closed until a card is tapped).
+  const [openAreas, setOpenAreas] = useState<Set<string> | null>(null);
   // The area whose "invite everyone" is minting — disables that lane's button.
   const [inviteBusyArea, setInviteBusyArea] = useState<string | null>(null);
   // The movement-wide "invite all not-contacted" is minting.
@@ -248,6 +253,18 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
       return (b.toReach + b.waiting) - (a.toReach + a.waiting);
     });
   })() : [];
+  // Lane open/close, driven by the header's Expand all / Collapse all. Default
+  // (null) keeps the per-lane rule (an area still collecting opens itself).
+  const laneDefaultOpen = (l: { total: number; heard: number }) => l.total === 0 || l.heard < l.total;
+  const laneIsOpen = (area: string, dflt: boolean) => openAreas ? openAreas.has(area) : dflt;
+  const anyLaneOpen = openAreas ? laneData.some((l) => openAreas.has(l.area)) : laneData.some(laneDefaultOpen);
+  const toggleAllAreas = () => setOpenAreas(anyLaneOpen ? new Set() : new Set(laneData.map((l) => l.area)));
+  const setLaneOpen = (area: string, open: boolean) => setOpenAreas((prev) => {
+    const base = prev ?? new Set(laneData.filter(laneDefaultOpen).map((l) => l.area));
+    const next = new Set(base);
+    if (open) next.add(area); else next.delete(area);
+    return next;
+  });
 
   // "Invite everyone" — mint the ONE unified link for each person in an area who
   // hasn't been reached yet (skips anyone heard or already holding a link), so
@@ -311,7 +328,9 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
             </button>
           ) : null}
           {stakeholders.length > 1 ? (
-            <button type="button" className="v3fs-btn quiet" onClick={toggleAll}>{anyOpen ? "Collapse all" : "Expand all"}</button>
+            areaOrganized
+              ? <button type="button" className="v3fs-btn quiet" onClick={toggleAllAreas}>{anyLaneOpen ? "Collapse all" : "Expand all"}</button>
+              : <button type="button" className="v3fs-btn quiet" onClick={toggleAll}>{anyOpen ? "Collapse all" : "Expand all"}</button>
           ) : null}
         </div>
       </div>
@@ -321,7 +340,7 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
             <AreaLane key={lane.area} area={lane.area} row={lane.row} heard={lane.heard} total={lane.total} waiting={lane.waiting}
               accent={laneAccentAt(lane.area, i)} monogram={areaMonogram(lane.area)}
               readyLabel={movementId === "listen" ? "Ready to envision" : movementId === "envision" ? "Ready to show" : "All reviewed"}
-              defaultOpen={lane.total === 0 || lane.heard < lane.total}
+              open={laneIsOpen(lane.area, laneDefaultOpen(lane))} onToggle={(o) => setLaneOpen(lane.area, o)}
               toReach={lane.toReach} inviting={inviteBusyArea === lane.area}
               onInvite={canInvite && lane.toReach > 0 ? async () => {
                 setInviteBusyArea(lane.area);
@@ -352,7 +371,7 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
  * state; its body holds that area's stakeholder cards. Collapsible, so a
  * finished area folds away while the operator works the ones still open.
  */
-function AreaLane({ area, row, heard, total, waiting, ready, readyLabel, defaultOpen, toReach, accent, monogram, inviting, onInvite, children }: {
+function AreaLane({ area, row, heard, total, waiting, ready, readyLabel, open, onToggle, toReach, accent, monogram, inviting, onInvite, children }: {
   area: string;
   row?: AreaProgress;
   heard: number;
@@ -361,7 +380,9 @@ function AreaLane({ area, row, heard, total, waiting, ready, readyLabel, default
   waiting?: number;
   ready?: boolean;
   readyLabel: string;
-  defaultOpen: boolean;
+  /** Controlled open state — driven by the header's Expand/Collapse all. */
+  open: boolean;
+  onToggle: (open: boolean) => void;
   /** People in this area not yet reached — the count "invite everyone" covers. */
   toReach?: number;
   /** The area's identity colour + monogram for its tile and accent edge. */
@@ -376,7 +397,8 @@ function AreaLane({ area, row, heard, total, waiting, ready, readyLabel, default
   const pct = total ? Math.round((heard / total) * 100) : 0;
   const complete = ready ?? done;
   return (
-    <details className={`v3fs-lane${complete ? " ready" : ""}`} open={defaultOpen}
+    <details className={`v3fs-lane${complete ? " ready" : ""}`} open={open}
+      onToggle={(e) => { const o = (e.currentTarget as HTMLDetailsElement).open; if (o !== open) onToggle(o); }}
       style={accent ? ({ "--lane-accent": accent } as CSSProperties) : undefined}>
       <summary className="v3fs-lane-h">
         <span className="v3fs-lane-ic" aria-hidden="true">{monogram ?? "▦"}</span>
