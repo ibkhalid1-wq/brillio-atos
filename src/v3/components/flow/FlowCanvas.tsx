@@ -407,10 +407,22 @@ export default function FlowCanvas({ program, programs, runningAgentIds, agentEr
             className={["v3fs-ch open", isDone ? "done" : "", isLive ? "live" : ""].filter(Boolean).join(" ")}
           >
             <div className="v3fs-ch-h v3fs-ch-h-static">
-              <h2>{movement.displayName}</h2>
-              <span className={`v3fs-state ${generating ? "gen" : isDone ? "done" : isLive ? "live" : isLoop ? "loop" : "wait"}`}>
-                {generating ? "Generating" : isDone ? "Demonstrated" : isLive ? "In progress" : isLoop ? "Continuous" : "Upcoming"}
-              </span>
+              {movement.id === "envision" || movement.id === "show" ? (
+                <>
+                  <h2>Prototype Loop</h2>
+                  <div className="v3fs-loopmodes-h" role="tablist" aria-label="Design or Validate">
+                    <button type="button" role="tab" aria-selected={active === "envision"} className={`v3fs-loopmode${active === "envision" ? " on" : ""}`} onClick={() => setActive("envision")}>✎ Design</button>
+                    <button type="button" role="tab" aria-selected={active === "show"} className={`v3fs-loopmode${active === "show" ? " on" : ""}`} onClick={() => setActive("show")}>◉ Validate</button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h2>{movement.displayName}</h2>
+                  <span className={`v3fs-state ${generating ? "gen" : isDone ? "done" : isLive ? "live" : isLoop ? "loop" : "wait"}`}>
+                    {generating ? "Generating" : isDone ? "Demonstrated" : isLive ? "In progress" : isLoop ? "Continuous" : "Upcoming"}
+                  </span>
+                </>
+              )}
               {/* Gate is the verdict, not a stage — a top-right button opening
                   the modal, carrying its readiness glyph + count at a glance. */}
               <button type="button" className={`v3fs-gatebtn ${readiness.tone}`}
@@ -440,6 +452,16 @@ export default function FlowCanvas({ program, programs, runningAgentIds, agentEr
 
             {isOpen ? (
               <>
+              {/* The loop cockpit sits at the PHASE HOME, above the tabs — the
+                  scannable overview of what's being designed (Design) or the
+                  validation state (Validate). Discovery below is pure data
+                  collection. */}
+              {movement.id === "envision" ? (
+                <EnvisionCockpit program={program} onSaveInputs={onSaveInputs} onRunAgent={onRunAgent} />
+              ) : null}
+              {movement.id === "show" ? (
+                <ShowCockpit program={program} onRunAgent={onRunAgent} />
+              ) : null}
               {/* The stage bar draws the loop left to right — Collect → Paper →
                   Gate — each chip carrying its state as a glyph + meaning. */}
               <nav className="v3fs-mtabs" role="tablist" aria-label={`${movement.displayName} stages`}>
@@ -483,18 +505,6 @@ export default function FlowCanvas({ program, programs, runningAgentIds, agentEr
                           </div>
                         ) : null;
                       })() : null}
-                      {/* The Envision cockpit: DIRECTION (choose the architecture,
-                          recorded) + DESIGN (the one future-state — today→tomorrow,
-                          KPIs, experience↔agents) sit ABOVE the collect board, which
-                          is the VALIDATION act. The three-act phase, projected. */}
-                      {movement.id === "envision" ? (
-                        <EnvisionCockpit program={program} onSaveInputs={onSaveInputs} onRunAgent={onRunAgent} />
-                      ) : null}
-                      {/* The Show cockpit: the built PROTOTYPE, then per-stakeholder
-                          verdicts — the validation theater above the demo-link board. */}
-                      {movement.id === "show" ? (
-                        <ShowCockpit program={program} onRunAgent={onRunAgent} />
-                      ) : null}
                       {hasPeople ? (
                         <IntervieweeDiscovery program={program} movementId={movement.id}
                           captureField={meetingKit(program, movement.id)?.captureField ?? "interviewTranscripts"}
