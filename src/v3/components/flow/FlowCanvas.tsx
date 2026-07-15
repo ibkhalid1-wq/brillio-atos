@@ -4,6 +4,7 @@ import PhaseInputsPanel from "@/v3/components/PhaseInputsPanel";
 import { acceptedAgentPatterns } from "@/v3/components/flow/flowPatterns";
 import EnvisionCockpit from "@/v3/components/flow/EnvisionCockpit";
 import ShowCockpit from "@/v3/components/flow/ShowCockpit";
+import { loopState } from "@/v3/components/flow/flowLoop";
 // The artifact studio pulls React Flow and every WYSIWYG editor — a heavy
 // chunk only needed when a document is opened. Lazy-load it so it never
 // weighs on the initial Flow render.
@@ -223,52 +224,78 @@ export default function FlowCanvas({ program, programs, runningAgentIds, agentEr
 
   return (
     <div className="v3fs-flow v3fs-flow-spine">
-      {/* The horizontal spine — every movement's state at a glance; click to switch. */}
+      {/* The horizontal spine — every movement's state at a glance; click to
+          switch. Envision (Design) and Show (Validate) are folded into ONE
+          Prototype Loop node with a mode toggle + iteration/approval meter. */}
       <nav className="v3fs-stepper" aria-label="Movements" role="tablist">
         <div className="v3fs-stepper-rail" aria-hidden="true" />
-        {rows.map(({ movement, artifacts }, index) => {
-          const isDone = program.gateReviews?.[movement.id]?.status === "approved";
-          const generating = artifacts.some((a) => runningAgentIds.has(a.id));
-          const isLive = movement.id === frontier && !isDone;
-          const isLoop = !!movement.movement?.isLoop;
-          const isOn = movement.id === active;
-          const stateLabel = generating ? "Generating" : isDone ? "Demonstrated" : isLive ? "In progress" : isLoop ? "Continuous" : "Upcoming";
-          // The spine ring is the GATE ring, small — same source and colour as
-          // the Gate column's gauge: gate criteria met / total, toned by
-          // readiness. One source of truth, every phase.
-          const stepChecks = [...gateChecklist(program, movement, artifacts), ...gateAugmentations(program, movement.id)];
-          const stepReadiness = gateReadiness(program, movement, artifacts, stepChecks);
-          const stepDone = stepChecks.filter((c) => c.done).length;
-          const pct = stepChecks.length ? Math.round((100 * stepDone) / stepChecks.length) : (stepReadiness.tone === "green" ? 100 : 0);
-          // "Where to go" — point at the frontier phase, but only when the
-          // operator has wandered off it; on the frontier itself the highlight
-          // already says "you're here", so the arrow would be noise.
-          const isFrontier = movement.id === frontier;
-          const pointHere = isFrontier && active !== frontier && !isDone;
-          return (
-            <button key={movement.id} type="button" role="tab" aria-selected={isOn}
-              className={`v3fs-step${isOn ? " on" : ""}${pointHere ? " v3fs-step-next" : ""}`}
-              onClick={() => setActive(movement.id)}>
-              {pointHere ? (
-                <span className="v3fs-spoint" role="status" aria-label={`Continue in ${movement.displayName}`}>
-                  <span className="v3fs-spoint-t">Continue here</span>
-                  <span className="v3fs-spoint-a" aria-hidden="true">▾</span>
+        {(() => {
+          // Display numbers skip the folded Show, the unnumbered loop node, and
+          // the ∞ Evolve loop: Frame 1 · Listen 2 · [Loop] · Ship 3 · Evolve ∞.
+          let n = 0;
+          const stepNum: Record<string, number | null> = {};
+          for (const { movement } of rows) {
+            if (movement.id === "show" || movement.id === "envision" || movement.movement?.isLoop) { stepNum[movement.id] = null; continue; }
+            n += 1; stepNum[movement.id] = n;
+          }
+          const ls = loopState(program);
+          const loopOn = active === "envision" || active === "show";
+          const loopTone = ls.converged ? "green" : ls.court === "design" ? "amber" : ls.hasPrototype ? "blue" : "";
+          const loopIsFrontier = frontier === "envision" || frontier === "show";
+          return rows.map(({ movement, artifacts }) => {
+            if (movement.id === "show") return null; // folded into the loop node
+            if (movement.id === "envision") {
+              return (
+                <div key="prototype-loop" className={`v3fs-step v3fs-loopstep${loopOn ? " on" : ""}${loopIsFrontier && !loopOn ? " v3fs-step-next" : ""}`}
+                  role="group" aria-label="Prototype Loop">
+                  <span className={`v3fs-sring ${loopTone}`} aria-hidden="true"><span className="v3fs-sdot v3fs-loopdot">⟳</span></span>
+                  <span className="v3fs-loop-body">
+                    <span className="v3fs-sname">Prototype Loop</span>
+                    <span className="v3fs-loop-meta">{ls.hasPrototype ? `iteration ${ls.round}` : "not built"}{ls.total ? ` · ${ls.accepted}/${ls.total} approve` : ""}{ls.converged ? " ✓" : ""}</span>
+                    <span className="v3fs-loop-modes" role="tablist" aria-label="Design or Validate">
+                      <button type="button" role="tab" aria-selected={active === "envision"} className={`v3fs-loopmode${active === "envision" ? " on" : ""}`} onClick={() => setActive("envision")}>✎ Design</button>
+                      <button type="button" role="tab" aria-selected={active === "show"} className={`v3fs-loopmode${active === "show" ? " on" : ""}`} onClick={() => setActive("show")}>◉ Validate</button>
+                    </span>
+                  </span>
+                </div>
+              );
+            }
+            const isDone = program.gateReviews?.[movement.id]?.status === "approved";
+            const generating = artifacts.some((a) => runningAgentIds.has(a.id));
+            const isLive = movement.id === frontier && !isDone;
+            const isLoop = !!movement.movement?.isLoop;
+            const isOn = movement.id === active;
+            const stateLabel = generating ? "Generating" : isDone ? "Demonstrated" : isLive ? "In progress" : isLoop ? "Continuous" : "Upcoming";
+            const stepChecks = [...gateChecklist(program, movement, artifacts), ...gateAugmentations(program, movement.id)];
+            const stepReadiness = gateReadiness(program, movement, artifacts, stepChecks);
+            const stepDone = stepChecks.filter((c) => c.done).length;
+            const pct = stepChecks.length ? Math.round((100 * stepDone) / stepChecks.length) : (stepReadiness.tone === "green" ? 100 : 0);
+            const isFrontier = movement.id === frontier;
+            const pointHere = isFrontier && active !== frontier && !isDone;
+            return (
+              <button key={movement.id} type="button" role="tab" aria-selected={isOn}
+                className={`v3fs-step${isOn ? " on" : ""}${pointHere ? " v3fs-step-next" : ""}`}
+                onClick={() => setActive(movement.id)}>
+                {pointHere ? (
+                  <span className="v3fs-spoint" role="status" aria-label={`Continue in ${movement.displayName}`}>
+                    <span className="v3fs-spoint-t">Continue here</span>
+                    <span className="v3fs-spoint-a" aria-hidden="true">▾</span>
+                  </span>
+                ) : null}
+                <span className={`v3fs-sring ${stepReadiness.tone}`} style={{ "--pct": `${pct}%` } as React.CSSProperties}
+                  title={`Gate ${stepDone}/${stepChecks.length} — ${stepReadiness.headline}`} aria-hidden="true">
+                  <span className={`v3fs-sdot${isDone ? " done" : isLive ? " live" : ""}`}>
+                    {isDone ? "✓" : isLoop ? "∞" : stepNum[movement.id]}
+                  </span>
                 </span>
-              ) : null}
-              <span className={`v3fs-sring ${stepReadiness.tone}`} style={{ "--pct": `${pct}%` } as React.CSSProperties}
-                title={`Gate ${stepDone}/${stepChecks.length} — ${stepReadiness.headline}`} aria-hidden="true">
-                <span className={`v3fs-sdot${isDone ? " done" : isLive ? " live" : ""}`}>
-                  {isDone ? "✓" : isLoop ? "∞" : index + 1}
-                </span>
-              </span>
-              <span className="v3fs-sname">{movement.displayName}</span>
-              {/* "Upcoming" ×4 is noise — only states that MEAN something get a word. */}
-              {stateLabel === "Upcoming"
-                ? <span className="v3fs-sstate wait" aria-hidden="true">&nbsp;</span>
-                : <span className={`v3fs-sstate ${generating ? "gen" : isDone ? "done" : isLive ? "live" : "wait"}`}>{stateLabel}</span>}
-            </button>
-          );
-        })}
+                <span className="v3fs-sname">{movement.displayName}</span>
+                {stateLabel === "Upcoming"
+                  ? <span className="v3fs-sstate wait" aria-hidden="true">&nbsp;</span>
+                  : <span className={`v3fs-sstate ${generating ? "gen" : isDone ? "done" : isLive ? "live" : "wait"}`}>{stateLabel}</span>}
+              </button>
+            );
+          });
+        })()}
       </nav>
       {rows.filter(({ movement }) => movement.id === active).map(({ movement, artifacts, evidence }, index) => {
         void index;

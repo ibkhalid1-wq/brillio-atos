@@ -409,7 +409,7 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
     .filter((card) => !(isSponsorCard(card.name, card.role) && card.questions.length === 0));
 }
 
-function sponsorStakeholder(program: ProgramSummary): MovementStakeholder | null {
+export function sponsorStakeholder(program: ProgramSummary): MovementStakeholder | null {
   const frame = isRecord(dataRoot(program).phaseInputs) ? (dataRoot(program).phaseInputs as Record<string, Record<string, unknown>>).frame : undefined;
   const sponsor = frame && typeof frame.sponsor === "string" ? frame.sponsor.trim() : "";
   if (!sponsor) return null;
