@@ -1703,16 +1703,16 @@ content solely for stylistic variation or introduce unnecessary rewrites.
 
 ### Cross-phase continuity
 The context carries "priorPhaseArtifacts" (the titles/status of every earlier
-phase's approved artifacts) AND "priorPhaseArtifactDocs" — the ACTUAL BODIES of
-those artifacts (the Ontology's entities, the Atlas's workflows, the Architecture
-decisions, the Experience Design's screens…). Build on their real content, not
-just their names: reuse the exact entities, terms, workflows, decisions and roles
-they establish, and never contradict, re-derive, or silently restate them. They
-are the established programme baseline. They rank as reference material (below
-current structured inputs in the source priority order), so when current inputs
-conflict with a prior-phase artifact, follow the current inputs. If a document you
-need is named in priorPhaseArtifacts but its body is absent from
-priorPhaseArtifactDocs (dropped for size), rely on the grounding facts rather than
+phase's approved artifacts) AND "upstreamArtifactDocs" — the ACTUAL BODIES of the
+upstream artifacts THIS document is built from (the Ontology's entities, the
+Atlas's workflows, the Architecture decisions, the Experience Design's screens…).
+Build on their real content, not just their names: reuse the exact entities,
+terms, workflows, decisions and roles they establish, and never contradict,
+re-derive, or silently restate them. They are the established programme baseline.
+They rank as reference material (below current structured inputs in the source
+priority order), so when current inputs conflict with an upstream artifact, follow
+the current inputs. If a document you need is named in priorPhaseArtifacts but its
+body is absent from upstreamArtifactDocs, rely on the grounding facts rather than
 inventing its contents.
 
 ### Document carry-forward
@@ -2235,35 +2235,58 @@ function priorArtifactForContext(doc: Record<string, unknown>): Record<string, u
 }
 
 /**
- * The BODIES of earlier-phase artifacts — so a generator builds on the real
- * Ontology entities, Atlas workflows and Architecture decisions it is told to
- * honour, not just their titles. `priorPhaseArtifacts` only ever carried
- * metadata ({id,title,status}), so cross-phase grounding was nominal: the model
- * re-derived every upstream doc from the raw evidence. Bodies are cleaned
- * (internal keys stripped), and the SET is bounded to a total budget, nearest
- * phase first, so a late-phase artifact with many ancestors can't blow context.
+ * Which upstream artifacts each generator ACTUALLY consumes. We inject exactly
+ * these bodies (from any phase — same-phase dependencies like blueprint←design
+ * included), instead of every earlier-phase doc. Measured on a live programme:
+ * the old phase-window approach fed eval-suite ~109KB (then truncated it
+ * arbitrarily to a budget); its real dependencies are ~26KB, and the same-phase
+ * Experience Design the blueprint needs (16KB) was never injected at all.
  */
-function buildPriorPhaseArtifactDocs(
+const UPSTREAM_ARTIFACT_DEPS: Record<string, readonly string[]> = {
+  currentStateAtlas: ["domainOntology"],
+  architectureStrategy: ["currentStateAtlas", "domainOntology"],
+  experienceDesign: ["architectureStrategy", "currentStateAtlas", "domainOntology"],
+  agenticBlueprint: ["architectureStrategy", "experienceDesign", "domainOntology"],
+  prototypePack: ["agenticBlueprint", "experienceDesign"],
+  // prototypeBuild also consumes experienceDesign — carried by upstreamDesign
+  // (theme/screens-trimmed), so it's not duplicated here.
+  prototypeBuild: ["prototypePack", "agenticBlueprint", "domainOntology"],
+  demoScripts: ["experienceDesign", "agenticBlueprint", "domainOntology"],
+  hardeningPlan: ["agenticBlueprint"],
+  evalSuite: ["agenticBlueprint", "hardeningPlan"],
+};
+
+function fieldKeyTitle(fieldKey: string): string {
+  for (const spec of Object.values(FORMAL_ARTIFACT_AGENTS)) if (spec.fieldKey === fieldKey) return spec.title;
+  return fieldKey;
+}
+
+/**
+ * The cleaned BODIES of the upstream artifacts this generator depends on — real
+ * cross-artifact grounding. Without it the model saw only the titles
+ * (priorPhaseArtifacts is metadata-only) and re-derived each upstream doc from
+ * the raw evidence. Total-capped as a backstop; the dependency lists keep it
+ * small in practice.
+ */
+function buildUpstreamArtifactDocs(
   inner: Record<string, unknown>,
-  earlierPhaseIds: string[],
-): Array<{ phase: string; artifact: string; doc: Record<string, unknown> }> {
-  const TOTAL_BUDGET = 80_000;
-  const out: Array<{ phase: string; artifact: string; doc: Record<string, unknown> }> = [];
+  fieldKey: string,
+): Array<{ artifact: string; fieldKey: string; doc: Record<string, unknown> }> {
+  const deps = UPSTREAM_ARTIFACT_DEPS[fieldKey];
+  if (!deps || !deps.length) return [];
+  const TOTAL_BUDGET = 90_000;
+  const out: Array<{ artifact: string; fieldKey: string; doc: Record<string, unknown> }> = [];
   let used = 0;
-  // Nearest earlier phase first — if the budget is hit, the oldest docs drop.
-  for (const phaseId of [...earlierPhaseIds].reverse()) {
-    for (const spec of Object.values(FORMAL_ARTIFACT_AGENTS)) {
-      if (spec.phase !== phaseId) continue;
-      const body = isRecord(inner[spec.fieldKey]) ? inner[spec.fieldKey] as Record<string, unknown> : null;
-      if (!body || !Object.keys(body).length) continue;
-      const clean = priorArtifactForContext(body);
-      if (!clean) continue;
-      let size = 0;
-      try { size = JSON.stringify(clean).length; } catch { continue; }
-      if (used + size > TOTAL_BUDGET) continue;
-      used += size;
-      out.push({ phase: phaseId, artifact: spec.title, doc: clean });
-    }
+  for (const dep of deps) {
+    const body = isRecord(inner[dep]) ? inner[dep] as Record<string, unknown> : null;
+    if (!body || !Object.keys(body).length) continue;
+    const clean = priorArtifactForContext(body);
+    if (!clean) continue;
+    let size = 0;
+    try { size = JSON.stringify(clean).length; } catch { continue; }
+    if (used + size > TOTAL_BUDGET) continue;
+    used += size;
+    out.push({ artifact: fieldKeyTitle(dep), fieldKey: dep, doc: clean });
   }
   return out;
 }
@@ -3030,12 +3053,11 @@ function buildSpecialAgentInputContext(
       ? groundingSpine.slice(0, phaseIndex).flatMap((phaseId) =>
           (artifactsByPhase[phaseId] || []).map((artifact) => ({ ...artifact, phase: phaseId })))
       : [];
-    // The BODIES behind those earlier-phase titles — real cross-phase grounding,
-    // budget-bounded. Without it the model only saw the titles and re-derived
-    // each upstream doc from the raw evidence.
-    const priorPhaseArtifactDocs = phaseIndex > 0
-      ? buildPriorPhaseArtifactDocs(inner, groundingSpine.slice(0, phaseIndex))
-      : [];
+    // The BODIES of the upstream artifacts this generator actually depends on —
+    // real cross-artifact grounding, dependency-driven (so same-phase deps like
+    // blueprint←experience-design work) and lean. Without it the model saw only
+    // the titles and re-derived each upstream doc from the raw evidence.
+    const upstreamArtifactDocs = buildUpstreamArtifactDocs(inner, formalSpec.fieldKey);
     return JSON.stringify({
       artifact: formalSpec.title,
       phase: formalSpec.phase,
@@ -3109,7 +3131,7 @@ function buildSpecialAgentInputContext(
       existingBusinessCase: businessCase,
       existingArtifacts: artifactsByPhase[formalSpec.phase] || [],
       priorPhaseArtifacts,
-      ...(priorPhaseArtifactDocs.length ? { priorPhaseArtifactDocs } : {}),
+      ...(upstreamArtifactDocs.length ? { upstreamArtifactDocs } : {}),
       ...(upstreamDesign ? { upstreamDesign } : {}),
       ...(prototypeRefineBrief ? { prototypeRefineBrief } : {}),
       ...(priorArtifact ? { priorArtifact } : {}),
