@@ -10,10 +10,9 @@ import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 import {
   flowMovements, frontierMovementId, movementEvidence, movementArtifacts,
   gateReadiness, gateChecklist, listenCoverage, movementFacts, demoAcceptance,
-  spineRegenerationPlan, attestHeardRoster, artifactOpenGaps,
+  attestHeardRoster, artifactOpenGaps,
   type ArtifactCardModel, type EvidenceEntry,
 } from "@/v3/components/flow/flowShellData";
-import { artifactApprovalRollup } from "@/v3/components/flow/flowApprovals";
 import { gateAugmentations } from "@/v3/components/flow/flowCrossValidation";
 import { meetingKit } from "@/v3/components/flow/flowMeetings";
 import { listInterviewPacks, listDemoInvites, portalLinkFor } from "@/v3/components/flow/flowPortal";
@@ -24,7 +23,7 @@ import { listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 import { listFlowTracks, trackAcceptance } from "@/v3/components/flow/flowTracks";
 import { safePrompt } from "@/v3/components/flow/flowCapture";
 import { MOVEMENT_CAPTION, leadTab, type MovementTab } from "@/v3/components/flow/flowStages";
-import { SpineQueueItem, UpNextButton, useSpineRunning, type UpNextItem } from "@/v3/components/flow/flowUpNext";
+import { useSpineRunning } from "@/v3/components/flow/flowUpNext";
 import { IntervieweeDiscovery, stakeholderCollection } from "@/v3/components/flow/CollectBoard";
 import MeetingKitCard from "@/v3/components/flow/MeetingKitCard";
 import FrameCoveragePlan from "@/v3/components/flow/FrameCoveragePlan";
@@ -154,6 +153,27 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
     return () => window.removeEventListener("keydown", onKey);
   }, [active, program]);
 
+  // AUTO-ACCEPT heard voices: any roster voice that has evidence on record is
+  // marked Heard automatically — no manual "attest N voices" step. attestHeard-
+  // Roster returns null once every evidence-backed voice is already Heard, so
+  // the write fires once and then settles (the persisted roster no longer
+  // proposes a change on the next render).
+  useEffect(() => {
+    const listen = flowMovements().find((m) => m.id === "listen");
+    if (!listen) return;
+    const heardNames = [...new Set(movementEvidence(program, listen).map((e) => e.who).filter(Boolean))];
+    if (!heardNames.length) return;
+    const proposal = attestHeardRoster(program, heardNames);
+    if (!proposal) return;
+    void onSaveInputs("listen", { interviewRoster: proposal.value }, {
+      silent: true,
+      attest: {
+        action: `Roster auto-attested — ${proposal.attested.length} voice${proposal.attested.length === 1 ? "" : "s"} Heard on evidence`,
+        detail: proposal.attested.join(", ").slice(0, 140),
+      },
+    });
+  }, [program, onSaveInputs]);
+
   const toggle = (set: React.Dispatch<React.SetStateAction<Set<string>>>, id: string) =>
     set((current) => {
       const next = new Set(current);
@@ -189,7 +209,6 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
     [program, movements],
   );
 
-  const spine = useMemo(() => spineRegenerationPlan(program), [program]);
 
   // Anchored drill-downs — "◇ deep dive" chips on the objects they zoom into.
   const anchoredChildren = useMemo(() => (relatedPrograms ?? [])
@@ -281,85 +300,11 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
         const sumDocsCurrent = artifacts.filter((a) => a.present && !a.stale && a.gaps === 0).length;
         const sumChecksDone = blockingChecks.filter((c) => c.done).length;
         const staleArtifacts = artifacts.filter((a) => a.present && a.stale);
-        const missingArtifacts = artifacts.filter((a) => !a.present);
-        // The "Up next" queue — the loop's frontier, ranked. Stale paper first
-        // (it poisons everything downstream), then generation, then the voices
-        // still to hear, then roster attestation, then the gate itself. Capped
-        // at three: a queue, not a backlog. The system states its opinion of
-        // the next move so the operator never hunts.
-        const spineOwnsRegen = spine.length >= 2 && !!onRunAgentAndWait;
-        const upNext: UpNextItem[] = [];
-        if (!isDone) {
-          if (spineOwnsRegen || staleArtifacts.length) {
-            // Stale documents rebuild THEMSELVES now — no "regenerate, evidence
-            // changed" prompt. A passive note while they catch up; the manual
-            // regenerate stays available on the Paper tab as an option.
-            upNext.push({ icon: "↻", label: generating ? "Documents updating from the latest evidence…" : "Documents refreshing from the latest evidence", toTab: staleArtifacts[0] ? `art:${staleArtifacts[0].id}` : "collect" });
-          } else if (missingArtifacts.length && evidence.length) {
-            upNext.push({ icon: "✦", label: `Generate the ${missingArtifacts[0].title}`, toTab: `art:${missingArtifacts[0].id}`, run: async () => onRunAgent(missingArtifacts[0].id, movement.id) });
-          }
-          if (unheard.length) {
-            const who = unheard[0].name.split(",")[0].trim();
-            upNext.push({ icon: "✉", label: unheard.length === 1 ? `Collect from ${who}` : `Collect from ${who} +${unheard.length - 1} more`, toTab: "collect" });
-          }
-          if (coverage && coverage.total > 0 && coverage.done < coverage.total) {
-            // Evidence has landed for people the roster hasn't attested —
-            // propose the flip. Two-step (arm → confirm) because attestation
-            // is the operator's judgment, and the write lands attested.
-            const heardNames = sumStakeholders.filter((_, i) => evaluated[i].heard).map((s) => s.name);
-            const proposal = attestHeardRoster(program, heardNames);
-            if (proposal) {
-              upNext.push({
-                icon: "✓",
-                label: `Attest ${proposal.attested.length === 1 ? proposal.attested[0].split(",")[0] : `${proposal.attested.length} heard voices`} in the roster`,
-                confirm: `Confirm — marks ${proposal.attested.length === 1 ? proposal.attested[0].split(",")[0] : `${proposal.attested.length} voices`} as Heard`,
-                toTab: "gate",
-                run: async () => onSaveInputs("listen", { interviewRoster: proposal.value }, {
-                  attest: {
-                    action: `Roster attested — ${proposal.attested.length} voice${proposal.attested.length === 1 ? "" : "s"} marked Heard`,
-                    detail: proposal.attested.join(", ").slice(0, 140),
-                  },
-                }),
-              });
-            }
-          }
-          if (!staleArtifacts.length && !missingArtifacts.length && !unheard.length) {
-            // VALIDATE: documents are current AND every voice is in — only then
-            // is the loop's next stage the contributors' sign-off. While anyone
-            // is still unheard (a whole area may be pending), collecting them
-            // outranks validating, so this stays quiet. Named, so the operator
-            // knows who to nudge.
-            const awaiting = artifacts
-              .filter((a) => a.present)
-              .map((a) => artifactApprovalRollup(program, movement.id, a.id))
-              .filter((r) => r.total > 0 && r.overall !== "approved");
-            if (awaiting.length) {
-              const names = [...new Set(awaiting.flatMap((r) => r.approvers
-                .filter((ap) => ap.status !== "approved" || ap.preDatesDocument)
-                .map((ap) => ap.name.split(" ")[0])))].slice(0, 3);
-              upNext.push({
-                icon: "✍",
-                label: names.length ? `Validate — request sign-off from ${names.join(", ")}` : "Validate — request contributor sign-off",
-                toTab: "collect",
-              });
-            }
-          }
-          {
-            // Decisions waiting in the Inbox target this movement — the
-            // cross-surface work flows through the same queue.
-            const inboxCheck = checks.find((c) => c.inbox && !c.done);
-            if (inboxCheck && onOpenInbox) {
-              upNext.push({ icon: "◫", label: inboxCheck.label, openInbox: true });
-            }
-          }
-          if (readiness.kind === "ready" && onRecordGate) {
-            upNext.push({ icon: "⚑", label: "Record the gate — demonstrated", toTab: "gate" });
-          }
-          if (!upNext.length && blockingChecks.length && sumChecksDone < blockingChecks.length) {
-            upNext.push({ icon: "○", label: "Review the open gate criteria", toTab: "gate" });
-          }
-        }
-        const queue = upNext.slice(0, 3);
+        // The "Up next" queue is gone — actions live where they belong: stale
+        // documents show Regenerate on their own tab, generation on the artifact
+        // tab, collection on Discovery, the gate on its button, the Inbox on the
+        // rail. Heard voices are auto-attested on evidence (see the effect
+        // above), so no confirm step remains.
         // Which stage is showing — the operator's pick, else the movement's lead.
         const hasPeople = sumStakeholders.length > 0;
         // Gate is no longer a stage — it opens as a modal — so a stored "gate"
@@ -444,10 +389,9 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                 {blockingChecks.length ? <span className="v3fs-gatebtn-n">{sumChecksDone}/{blockingChecks.length}</span> : null}
               </button>
             </div>
-            {/* The header band: gate gauge, the movement's one-line brief, and
-                the ranked "Up next" queue — one place for state and the verbs
-                that move it. The spine regeneration lives in the queue with
-                live progress, not in a separate banner. */}
+            {/* The header band: gate gauge and the movement's one-line brief.
+                The "Up next" queue was removed — actions live on their own
+                surfaces (the artifact tab, Discovery, the Gate button). */}
             <div className="v3fs-movebar" role="status">
               {blockingChecks.length ? (
                 <button type="button" className={`v3fs-mgauge ${readiness.tone}`} style={{ "--pct": `${gaugePct}%` } as React.CSSProperties}
@@ -460,23 +404,6 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                   ? <div className="v3fs-movebar-cap">{MOVEMENT_CAPTION[movement.id]}</div>
                   : <div className="v3fs-movebar-cap">{sumHeard}/{sumStakeholders.length} {sumWord} · {sumDocsCurrent}/{artifacts.length} artifacts current</div>}
               </div>
-              {queue.length ? (
-                <div className="v3fs-upnext" aria-label="Up next">
-                  <span className="v3fs-upnext-l">Up next</span>
-                  {queue.map((item, index) => item.spine && onRunAgentAndWait ? (
-                    <SpineQueueItem key="spine" plan={spine} primary={index === 0}
-                      runningAgentIds={runningAgentIds} onRun={onRunAgentAndWait}
-                      onGo={() => goTab(artifacts[0] ? `art:${artifacts[0].id}` : "collect")} />
-                  ) : (
-                    <UpNextButton key={item.label} item={item} primary={index === 0}
-                      onGo={() => {
-                        if (item.openInbox) onOpenInbox?.();
-                        else if (item.anchor) openEditor(movement.id, item.anchor);
-                        else if (item.toTab) goTab(item.toTab);
-                      }} />
-                  ))}
-                </div>
-              ) : null}
             </div>
 
             {isOpen ? (
@@ -537,6 +464,7 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                           kit={meetingKit(program, movement.id)}
                           movementId={movement.id}
                           hasEvidence={evidence.length > 0}
+                          generating={generating || spineRunning}
                           docsStale={artifacts.some((artifact) => artifact.present && artifact.stale)}
                           onRegenerateStale={onRunAgentAndWait ? async () => {
                             for (const artifact of artifacts.filter((entry) => entry.present && entry.stale)) {

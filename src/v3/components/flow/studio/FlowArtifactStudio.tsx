@@ -353,7 +353,11 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
             <h2>{artifact.title}</h2>
           </div>
           <div className="v3fs-docview-cta">
-            {onRegenerate ? (
+            {/* Regenerate shows ONLY when the document is stale — new evidence
+                landed, or an upstream artifact was regenerated (both flip the
+                inputs fingerprint). A current document offers no button; an
+                ungenerated one offers Generate. */}
+            {onRegenerate && (!artifact.present || artifact.stale || regenerating) ? (
               <button type="button" className="v3fs-btn v3fs-btn-regen" disabled={!!regenerating}
                 onClick={() => { onRegenerate(); if (!embedded) onClose(); }}
                 title={artifact.present ? "Resynthesize this document from the latest evidence" : "Generate this document from the evidence on record"}>

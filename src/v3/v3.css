@@ -5849,6 +5849,14 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 /* Meeting kit: the conversation, handed to you — script + capture in place. */
 .v3fs-kit {border:1px solid var(--fs-line);border-left:3px solid var(--v3-accent-b);border-radius:14px;background:var(--fs-card);margin-bottom:14px}
 .v3fs-kit-ghost {font-size:12px;line-height:1.6;color:var(--v3-text-muted);border:1px dashed var(--fs-line);border-radius:12px;padding:12px 14px;margin-bottom:14px}
+/* Generation-in-progress ghost — a live, calmer state (solid indigo-wash, a
+   spinner) that replaces the static "generate the previous step" hint. */
+.v3fs-kit-gen {display:flex;align-items:center;gap:10px;border-style:solid;border-color:color-mix(in srgb,var(--v3-accent-2) 22%,transparent);
+  background:var(--fs-indigo-wash);color:var(--v3-accent-2);font-weight:500}
+.v3fs-kit-spin {width:14px;height:14px;flex-shrink:0;border-radius:99px;border:2px solid color-mix(in srgb,var(--v3-accent-2) 30%,transparent);
+  border-top-color:var(--v3-accent-2);animation:v3fs-kit-spin .7s linear infinite}
+@keyframes v3fs-kit-spin {to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.v3fs-kit-spin{animation:none}}
 .v3fs-kit summary {list-style:none;display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;user-select:none}
 .v3fs-kit summary::-webkit-details-marker {display:none}
 .v3fs-kit-t {flex:1;font-size:13px;font-weight:700}
@@ -6702,10 +6710,12 @@ details[open] > summary .v3fs-disc-c::after {display:none}
   transition:box-shadow .18s ease,border-color .18s ease}
 .v3fs-ivc.heard {border-color:color-mix(in srgb, var(--v3-green) 34%, var(--fs-line))}
 .v3fs-lane-b .v3fs-ivc:hover, .v3fs-collect-col .v3fs-ivc:hover {box-shadow:0 12px 30px -18px rgba(20,20,45,.3)}
-.v3fs-ivc > summary {display:flex;align-items:center;justify-content:space-between;gap:11px;padding:12px 15px;cursor:pointer;list-style:none}
+/* Compact collection cards — tighter summary + body so more people fit the
+   viewport and the AREA lanes lead the eye, not the cards. */
+.v3fs-ivc > summary {display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;cursor:pointer;list-style:none}
 .v3fs-ivc > summary::-webkit-details-marker {display:none}
-.v3fs-ivc-who {display:flex;flex-direction:column;gap:2px;font-size:13.5px;font-weight:650;color:var(--v3-text-primary);min-width:0;letter-spacing:-.005em}
-.v3fs-ivc-who span {font-size:11px;font-weight:500;color:var(--v3-text-muted)}
+.v3fs-ivc-who {display:flex;flex-direction:column;gap:1px;font-size:12.5px;font-weight:650;color:var(--v3-text-primary);min-width:0;letter-spacing:-.005em}
+.v3fs-ivc-who span {font-size:10.5px;font-weight:500;color:var(--v3-text-muted)}
 
 /* "No address" hint on a collection card's collapsed row — quiet amber, the
    operator sees the missing contact without opening the card. */
@@ -6739,7 +6749,7 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-ivc-appr-st.ok {background:color-mix(in srgb,var(--v3-green) 14%,transparent);color:var(--v3-green)}
 .v3fs-ivc-appr-st.wait {background:var(--fs-indigo-wash);color:var(--v3-accent-2)}
 .v3fs-ivc-appr-st.changes {background:color-mix(in srgb,var(--v3-amber) 14%,transparent);color:var(--v3-amber)}
-.v3fs-ivc-b {display:flex;flex-direction:column;gap:10px;padding:2px 14px 14px}
+.v3fs-ivc-b {display:flex;flex-direction:column;gap:8px;padding:2px 12px 11px}
 .v3fs-ivc-script summary {font-size:11.5px;font-weight:600;color:var(--v3-accent-2);cursor:pointer}
 .v3fs-ivc-script ol {margin:6px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 .v3fs-ivc-script li {font-size:12px;line-height:1.5;color:var(--v3-text-secondary)}
@@ -6857,18 +6867,23 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-lane:hover::before {top:0;bottom:0}
 .v3fs-lane.ready {border-color:color-mix(in srgb,var(--v3-green) 32%,var(--fs-line))}
 .v3fs-lane.ready::before {background:var(--v3-green)}
+/* AREA lanes lead the board — a stronger, always-tinted header band with a
+   larger monogram tile and a bigger area name, so alliances/delivery/etc. read
+   as section headers, not rows. */
 .v3fs-lane-h {display:grid;grid-template-columns:auto 1fr auto auto auto;align-items:center;gap:16px;
-  padding:16px 22px;cursor:pointer;list-style:none;user-select:none;transition:background .14s ease}
+  padding:15px 22px;cursor:pointer;list-style:none;user-select:none;transition:background .14s ease;
+  background:linear-gradient(color-mix(in srgb,var(--lane-accent) 8%,var(--fs-card)),color-mix(in srgb,var(--lane-accent) 4%,var(--fs-card)));
+  border-bottom:1px solid color-mix(in srgb,var(--lane-accent) 16%,transparent)}
 .v3fs-lane-h::-webkit-details-marker {display:none}
-.v3fs-lane-h:hover {background:color-mix(in srgb,var(--lane-accent) 4%,transparent)}
-.v3fs-lane[open] > .v3fs-lane-h {background:color-mix(in srgb,var(--lane-accent) 3%,transparent)}
-.v3fs-lane-ic {display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;flex-shrink:0;
-  border-radius:12px;background:color-mix(in srgb,var(--lane-accent) 12%,var(--v3-surface));color:var(--lane-accent);
-  font-size:12.5px;font-weight:800;letter-spacing:.02em}
-.v3fs-lane.ready .v3fs-lane-ic {background:color-mix(in srgb,var(--v3-green) 12%,transparent);color:var(--v3-green)}
-.v3fs-lane-id {display:flex;flex-direction:column;gap:3px;min-width:0}
-.v3fs-lane-id b {font-size:15px;font-weight:700;letter-spacing:-.015em;color:var(--v3-text)}
-.v3fs-lane-id span {font-size:11px;font-weight:500;color:var(--v3-text-muted);letter-spacing:.01em}
+.v3fs-lane-h:hover {background:color-mix(in srgb,var(--lane-accent) 11%,var(--fs-card))}
+.v3fs-lane:not([open]) > .v3fs-lane-h {border-bottom-color:transparent}
+.v3fs-lane-ic {display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;flex-shrink:0;
+  border-radius:12px;background:var(--lane-accent);color:#fff;
+  font-size:14px;font-weight:800;letter-spacing:.02em;box-shadow:0 2px 6px -2px color-mix(in srgb,var(--lane-accent) 60%,transparent)}
+.v3fs-lane.ready .v3fs-lane-ic {background:var(--v3-green);color:#fff}
+.v3fs-lane-id {display:flex;flex-direction:column;gap:2px;min-width:0}
+.v3fs-lane-id b {font-size:17px;font-weight:750;letter-spacing:-.02em;color:var(--v3-text);text-transform:none}
+.v3fs-lane-id span {font-size:11px;font-weight:600;color:color-mix(in srgb,var(--lane-accent) 70%,var(--v3-text-muted));letter-spacing:.02em;text-transform:uppercase}
 .v3fs-lane-prog {display:flex;align-items:center;gap:9px;font-size:11px;font-weight:700;color:var(--v3-text-muted);font-variant-numeric:tabular-nums}
 .v3fs-lane-bar {width:72px;height:5px;border-radius:99px;background:color-mix(in srgb,var(--v3-text-muted) 16%,transparent);overflow:hidden}
 .v3fs-lane-bar > span {display:block;height:100%;background:var(--lane-accent);border-radius:99px;transition:width .35s cubic-bezier(.4,0,.2,1)}

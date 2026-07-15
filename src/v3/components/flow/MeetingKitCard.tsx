@@ -12,10 +12,13 @@ import { listInterviewPacks, listDemoInvites, portalLinkFor, visibleLinks } from
 import { listFlowTracks } from "@/v3/components/flow/flowTracks";
 import { AttachFileButton, TranscribeButton, safePrompt, copyTextFromAction } from "@/v3/components/flow/flowCapture";
 
-export default function MeetingKitCard({ kit, movementId, hasEvidence, program, docsStale, onRegenerateStale, onSaveInputs, onScheduleFollowUp, onMintFollowUp, onMintPacks, onMintDemoInvites, onCaptured }: {
+export default function MeetingKitCard({ kit, movementId, hasEvidence, generating, program, docsStale, onRegenerateStale, onSaveInputs, onScheduleFollowUp, onMintFollowUp, onMintPacks, onMintDemoInvites, onCaptured }: {
   kit: MeetingKit | null;
   movementId: string;
   hasEvidence: boolean;
+  /** This movement's documents are generating right now — the ghost shows a
+   *  live progress message instead of the "generate the previous step" hint. */
+  generating?: boolean;
   /** Mint Listen's response links from the Discovery Kit. */
   onMintPacks?: () => Promise<void>;
   /** Mint Show's demo links from the Demo Scripts. */
@@ -84,7 +87,19 @@ export default function MeetingKitCard({ kit, movementId, hasEvidence, program, 
   };
 
   if (!kit) {
-    return hasEvidence ? null : (
+    if (hasEvidence) return null;
+    // While this movement's documents are generating, the script isn't built
+    // yet — say so with a live progress state instead of the "generate the
+    // previous step" hint (which is the true empty state when nothing runs).
+    if (generating) {
+      return (
+        <div className="v3fs-kit v3fs-kit-ghost v3fs-kit-gen" role="status" aria-live="polite">
+          <span className="v3fs-kit-spin" aria-hidden="true" />
+          Building this conversation from the record — the script and who to sit with appear the moment the documents land.
+        </div>
+      );
+    }
+    return (
       <div className="v3fs-kit v3fs-kit-ghost">
         Generate the previous step’s document first — this conversation’s script is built from it.
       </div>

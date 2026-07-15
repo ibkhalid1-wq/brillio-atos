@@ -1891,6 +1891,14 @@ const CONVERSATION_RECORD_AGENTS = new Set<string>([
   // Envision synthesis grounds in the same record — it carries the agentify
   // dispositions (what stakeholders asked to automate) that these agents honour.
   "architecture-strategy", "agentic-blueprint",
+  // Show + Ship synthesis agents whose OWN prompts demand the verbatim record:
+  // experience-design maps each pain quote to a screen; demo-scripts opens each
+  // walkthrough with the stakeholder's own words; hardening-plan anchors to the
+  // demo feedback; eval-suite traces cases to stated expectations and accepted
+  // demo behaviours. Without the record they could only see the summary.
+  "experience-design", "demo-scripts", "prototype-pack", "hardening-plan", "eval-suite",
+  // Stage-gate synthesis parallels (non-Flow methodologies).
+  "requirements-catalog", "runbook",
 ]);
 
 function buildConversationRecord(inner: Record<string, unknown>): string {
@@ -1898,8 +1906,10 @@ function buildConversationRecord(inner: Record<string, unknown>): string {
   const parts: string[] = [];
   // "envision" carries the agentify review — stakeholders' Keep / Assist /
   // Agentify disposition on each of their workflow steps — so the architecture
-  // and blueprint agents can honour what people asked to automate.
-  for (const phaseId of ["frame", "listen", "strategy", "discovery", "envision"]) {
+  // and blueprint agents can honour what people asked to automate. "show"
+  // carries the demo feedback + acceptance verdicts that hardening-plan and
+  // eval-suite must anchor to.
+  for (const phaseId of ["frame", "listen", "strategy", "discovery", "envision", "show"]) {
     const record = normalizeProgramData(phaseInputs[phaseId] as JsonValue | null);
     for (const [fieldId, value] of Object.entries(record)) {
       if (fieldId === "savedAt" || fieldId.startsWith("_")) continue;
