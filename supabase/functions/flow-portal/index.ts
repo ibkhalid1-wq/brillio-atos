@@ -224,15 +224,35 @@ Deno.serve(async (req: Request) => {
           })),
         };
       };
+      // The recipient's business AREA — lets the walker default to their own
+      // area's flow and name it ("This demo covers your area — X"), the Show
+      // parallel to Listen's area-scoped reviews. Prefer the value stamped on the
+      // invite; fall back to the matched demo script's area (Show follow-up packs
+      // carry no invite). Empty/General → no scoping (a graceful no-op).
+      const recipientAreaSlice = (): string => {
+        const stamped = String(hit.pack.recipientArea ?? "").trim();
+        if (stamped) return stamped;
+        const doc = hit.inner.demoScripts;
+        if (!isRecord(doc) || !Array.isArray(doc.scripts)) return "";
+        const key = String(hit.pack.stakeholder ?? "").trim().toLowerCase();
+        const script = (doc.scripts as unknown[]).filter(isRecord).find((entry) => {
+          const name = String(entry.stakeholder ?? "").trim().toLowerCase();
+          return name && (name === key || name.split(/\s+/)[0] === key.split(/\s+/)[0]);
+        });
+        const area = script ? String(script.area ?? "").trim() : "";
+        return area && area !== "General" ? area : "";
+      };
       if (hit.kind === "demo") {
         const showInputs = isRecord(hit.inner.phaseInputs) && isRecord((hit.inner.phaseInputs as Record<string, unknown>).show)
           ? (hit.inner.phaseInputs as Record<string, Record<string, unknown>>).show
           : {};
         const design = designSlice();
         const script = scriptSlice();
+        const recipientArea = recipientAreaSlice();
         return jsonResponse({
           ...(design ? { design } : {}),
           ...(script ? { script } : {}),
+          ...(recipientArea ? { recipientArea } : {}),
           kind: "demo",
           programme: hit.programName,
           stakeholder: String(hit.pack.stakeholder ?? "Stakeholder"),
@@ -263,6 +283,7 @@ Deno.serve(async (req: Request) => {
       const isShowPack = String(hit.pack.movementId ?? "") === "show";
       const interviewDesign = isShowPack ? designSlice() : undefined;
       const interviewScript = isShowPack ? scriptSlice() : undefined;
+      const interviewArea = isShowPack ? recipientAreaSlice() : "";
       return jsonResponse({
         kind: "interview",
         programme: hit.programName,
@@ -273,6 +294,7 @@ Deno.serve(async (req: Request) => {
         roster,
         ...(interviewDesign ? { design: interviewDesign } : {}),
         ...(interviewScript ? { script: interviewScript } : {}),
+        ...(interviewArea ? { recipientArea: interviewArea } : {}),
         // A shareable review surface (workflow-agentify or ontology+atlas),
         // projected client-side at mint and passed straight through.
         ...(isRecord(hit.pack.review) ? { review: hit.pack.review } : {}),

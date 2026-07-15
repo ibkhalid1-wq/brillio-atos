@@ -47,6 +47,12 @@ function areasOf(items: Array<{ area?: string }>): string[] {
   return [...set].sort((a, b) => a === "General" ? 1 : b === "General" ? -1 : a.localeCompare(b));
 }
 
+/** Does this collection actually hold anything in the selected area? Used to
+ *  filter GRACEFULLY — a stakeholder scoped to "Alliances" whose workflows we
+ *  mapped under other areas still sees them, rather than an empty page. */
+const hasArea = (items: Array<{ area?: string }>, area: string): boolean =>
+  !!area && items.some((it) => it.area === area);
+
 /** Area filter chips — hidden below two areas (nothing to filter). */
 function AreaChips({ areas, active, onPick }: { areas: string[]; active: string; onPick: (area: string) => void }) {
   if (areas.length < 2) return null;
@@ -65,10 +71,13 @@ function AgentifySurface({ review, stakeholder, submitting, error, onSubmit, dra
   onSubmit: (answers: string) => void; draftKey?: string;
 }) {
   const [responses, setResponses] = usePersistentState<Record<string, { disposition?: string; comment?: string }>>(draftKey, "ag", {});
+  const [archResponse, setArchResponse] = usePersistentState(draftKey, "agArch", "");
+  const [bpResponse, setBpResponse] = usePersistentState(draftKey, "agBp", "");
   const [area, setArea] = useState(review.recipientArea ?? "");
   const areas = areasOf(review.workflows);
   const totalSteps = review.workflows.reduce((n, w) => n + w.steps.length, 0);
   const decided = Object.values(responses).filter((r) => r.disposition).length;
+  const hasInput = decided > 0 || archResponse.trim().length > 0 || bpResponse.trim().length > 0;
   const setDisposition = (key: string, disposition: string) =>
     setResponses((prev) => ({ ...prev, [key]: { ...prev[key], disposition } }));
   const setComment = (key: string, comment: string) =>
@@ -87,7 +96,7 @@ function AgentifySurface({ review, stakeholder, submitting, error, onSubmit, dra
         <p className="v3fs-rvw-scoped">This review covers your area — <b>{review.recipientArea}</b>.</p>
       ) : null}
       <div className="v3fs-rvw">
-        {review.workflows.map((workflow, wi) => area && workflow.area !== area ? null : (
+        {review.workflows.map((workflow, wi) => area && hasArea(review.workflows, area) && workflow.area !== area ? null : (
           <section key={wi} className="v3fs-rvw-wf">
             <div className="v3fs-rvw-wf-h">
               <b>{workflow.name}</b>
@@ -127,14 +136,73 @@ function AgentifySurface({ review, stakeholder, submitting, error, onSubmit, dra
             </ol>
           </section>
         ))}
+        {/* The architecture decision — the candidates weighed and the one we
+            recommend — shown WITH the question so the stakeholder reacts to the
+            actual direction, not an abstraction. */}
+        {review.architecture && review.architecture.candidates.length ? (
+          <section className="v3fs-rvw-wf v3fs-rvw-arch">
+            <div className="v3fs-rvw-wf-h">
+              <b>The architecture we&rsquo;re proposing</b>
+              <span className="v3fs-rvw-trigger">Does this direction fit how your work really runs?</span>
+            </div>
+            <div className="v3fs-arch-cands">
+              {review.architecture.candidates.map((c, i) => (
+                <div key={i} className={`v3fs-arch-cand${c.recommended ? " rec" : ""}`}>
+                  <div className="v3fs-arch-cand-h">
+                    <b>{c.name}</b>
+                    {c.shape ? <span className="v3fs-arch-shape">{c.shape}</span> : null}
+                    {c.recommended ? <span className="v3fs-arch-badge">✓ Recommended</span> : null}
+                  </div>
+                  {c.description ? <p>{c.description}</p> : null}
+                </div>
+              ))}
+            </div>
+            <div className="v3fs-rvw-field">
+              <textarea className="v3fs-rvw-overall" rows={2} value={archResponse}
+                onChange={(e) => setArchResponse(e.target.value)}
+                placeholder="Anything about this direction we&rsquo;ve got wrong, or a risk we&rsquo;ve missed? (type or record)" />
+              <DictationButton compact label="Speak your response"
+                onText={(spoken) => setArchResponse(joinDictation(archResponse, spoken))} />
+            </div>
+          </section>
+        ) : null}
+        {/* The agentic blueprint slice for this stakeholder — the agents that
+            would take over their workflows — with a written or recorded reply. */}
+        {review.blueprint && review.blueprint.agents.length ? (
+          <section className="v3fs-rvw-wf v3fs-rvw-bp">
+            <div className="v3fs-rvw-wf-h">
+              <b>The agents we&rsquo;d build</b>
+              <span className="v3fs-rvw-trigger">Would these take the right work off your plate?</span>
+            </div>
+            <ul className="v3fs-bp-agents">
+              {review.blueprint.agents.map((a, i) => (
+                <li key={i} className="v3fs-bp-agent">
+                  <div className="v3fs-bp-agent-h">
+                    <b>{a.name}</b>
+                    {a.autonomyLevel ? <span className="v3fs-bp-auto">{a.autonomyLevel}</span> : null}
+                  </div>
+                  {a.purpose ? <p>{a.purpose}</p> : null}
+                  {a.replacesWorkflow ? <span className="v3fs-bp-replaces">↳ takes over: {a.replacesWorkflow}</span> : null}
+                </li>
+              ))}
+            </ul>
+            <div className="v3fs-rvw-field">
+              <textarea className="v3fs-rvw-overall" rows={2} value={bpResponse}
+                onChange={(e) => setBpResponse(e.target.value)}
+                placeholder="Your response — what should these agents do differently, or not do at all? (type or record)" />
+              <DictationButton compact label="Record your response"
+                onText={(spoken) => setBpResponse(joinDictation(bpResponse, spoken))} />
+            </div>
+          </section>
+        ) : null}
       </div>
       <div className="v3fs-rvw-foot">
         <div className="v3fs-rvw-progress"><span style={{ width: `${totalSteps ? Math.round((decided / totalSteps) * 100) : 0}%` }} /></div>
         <span className="v3fs-rvw-count">{decided} of {totalSteps} steps marked</span>
-        {draftKey && decided ? <p className="v3fs-rvw-saved">✓ Saved on this device — you can close this and come back</p> : null}
+        {draftKey && hasInput ? <p className="v3fs-rvw-saved">✓ Saved on this device — you can close this and come back</p> : null}
         {error ? <p className="v3fs-portal-err">{error}</p> : null}
-        <button type="button" className="v3fs-btn pri v3fs-rvw-send" disabled={submitting || !decided}
-          onClick={() => onSubmit(composeAgentifyAnswers(review, responses))}>
+        <button type="button" className="v3fs-btn pri v3fs-rvw-send" disabled={submitting || !hasInput}
+          onClick={() => onSubmit(composeAgentifyAnswers(review, responses, { architectureResponse: archResponse, blueprintResponse: bpResponse }))}>
           {submitting ? "Sending…" : "Send my review"}
         </button>
       </div>
@@ -156,8 +224,8 @@ function OntologyAtlasSurface({ review, stakeholder, submitting, error, onSubmit
     || Object.values(workflowComments).some((v) => v.trim())
     || overall.trim().length > 0,
     [termComments, workflowComments, overall]);
-  const shownTerms = area ? review.terms.filter((t) => t.area === area) : review.terms;
-  const shownWorkflows = area ? review.workflows.filter((w) => w.area === area) : review.workflows;
+  const shownTerms = area && hasArea(review.terms, area) ? review.terms.filter((t) => t.area === area) : review.terms;
+  const shownWorkflows = area && hasArea(review.workflows, area) ? review.workflows.filter((w) => w.area === area) : review.workflows;
 
   return (
     <>
@@ -174,7 +242,7 @@ function OntologyAtlasSurface({ review, stakeholder, submitting, error, onSubmit
           <section className="v3fs-rvw-wf">
             <div className="v3fs-rvw-wf-h"><b>The terms we heard</b><span className="v3fs-rvw-trigger">Your world, in your words</span></div>
             <div className="v3fs-rvw-terms">
-              {review.terms.map((term, i) => area && term.area !== area ? null : (
+              {review.terms.map((term, i) => area && hasArea(review.terms, area) && term.area !== area ? null : (
                 <div key={i} className="v3fs-rvw-term">
                   <div className="v3fs-rvw-term-h">
                     <b>{term.name}</b>
@@ -194,7 +262,7 @@ function OntologyAtlasSurface({ review, stakeholder, submitting, error, onSubmit
           <section className="v3fs-rvw-wf">
             <div className="v3fs-rvw-wf-h"><b>The workflows we mapped</b><span className="v3fs-rvw-trigger">Does this match how it really runs?</span></div>
             <div className="v3fs-rvw-terms">
-              {review.workflows.map((workflow, i) => area && workflow.area !== area ? null : (
+              {review.workflows.map((workflow, i) => area && hasArea(review.workflows, area) && workflow.area !== area ? null : (
                 <div key={i} className="v3fs-rvw-term">
                   <div className="v3fs-rvw-term-h">
                     <b>{workflow.name}</b>
@@ -242,6 +310,8 @@ function ListenWorkflowSurface({ review, stakeholder, submitting, error, onSubmi
   const [termNotes, setTermNotes] = usePersistentState<Record<string, string>>(draftKey, "lwTerms", {});
   const [answers, setAnswers] = usePersistentState<Record<string, string>>(draftKey, "lwAns", {});
   const [addedTerms, setAddedTerms] = usePersistentState<Array<{ name: string; note: string }>>(draftKey, "lwAdd", []);
+  // A free-text comment per workflow phase/step, keyed `${wi}.${si}` (text + voice).
+  const [stepNotes, setStepNotes] = usePersistentState<Record<string, string>>(draftKey, "lwStepNotes", {});
 
   const editStep = (wi: number, si: number, action: string) => setWfSteps((prev) =>
     prev.map((steps, i) => i !== wi ? steps : steps.map((s, j) => j !== si ? s : { ...s, action })));
@@ -285,16 +355,17 @@ function ListenWorkflowSurface({ review, stakeholder, submitting, error, onSubmi
     const notedTerms = review.terms.map((t, i) => ({ name: t.name, note: (termNotes[String(i)] ?? "").trim() })).filter((r) => r.note);
     const newTerms = addedTerms.filter((t) => t.name.trim());
     const answered = review.questions.map((q, i) => ({ q, a: (answers[String(i)] ?? "").trim() })).filter((r) => r.a);
+    const noted = Object.values(stepNotes).filter((v) => v.trim()).length;
     const count = workflows.reduce((n, w) => n + w.changes.length + (w.reordered ? 1 : 0), 0)
-      + (narration.trim() ? 1 : 0) + notedTerms.length + newTerms.length + answered.length;
+      + (narration.trim() ? 1 : 0) + notedTerms.length + newTerms.length + answered.length + noted;
     return { workflows, notedTerms, newTerms, answered, count };
-  }, [review, wfSteps, narration, termNotes, answers, addedTerms]);
+  }, [review, wfSteps, narration, termNotes, answers, addedTerms, stepNotes]);
 
   const [area, setArea] = useState(review.recipientArea ?? "");
   const areas = areasOf(review.workflows);
 
   const compose = () => composeListenWorkflowAnswers(review, {
-    workflows: review.workflows.map((w, wi) => ({ name: w.name, steps: wfSteps[wi] ?? [] })),
+    workflows: review.workflows.map((w, wi) => ({ name: w.name, steps: wfSteps[wi] ?? [], stepNotes, workflowIndex: wi })),
     narration, termNotes, answers, addedTerms,
   });
 
@@ -310,14 +381,16 @@ function ListenWorkflowSurface({ review, stakeholder, submitting, error, onSubmi
       ) : null}
       <div className="v3fs-rvw">
         <div className="v3fs-rvw-section-h"><span className="v3fs-rvw-step-ic" aria-hidden="true">⇄</span>Your workflow — fix it, add steps, or mark what doesn&rsquo;t happen</div>
-        {review.workflows.map((wf, wi) => area && wf.area !== area ? null : (
+        {review.workflows.map((wf, wi) => area && hasArea(review.workflows, area) && wf.area !== area ? null : (
           <section key={wi} className="v3fs-rvw-wf plain">
             <WorkflowFlow name={wf.name} trigger={wf.trigger} steps={wfSteps[wi] ?? []}
               onEdit={(si, action) => editStep(wi, si, action)}
               onEditMeta={(si, field, value) => editMeta(wi, si, field, value)}
               onToggleRemove={(si) => toggleRemove(wi, si)}
               onAdd={(at) => addStep(wi, at)}
-              onReorder={(from, to) => reorderStep(wi, from, to)} />
+              onReorder={(from, to) => reorderStep(wi, from, to)}
+              stepComment={(si) => stepNotes[`${wi}.${si}`] ?? ""}
+              onStepComment={(si, v) => setStepNotes((p) => ({ ...p, [`${wi}.${si}`]: v }))} />
           </section>
         ))}
 

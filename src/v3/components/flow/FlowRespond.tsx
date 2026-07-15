@@ -42,6 +42,9 @@ interface Pack {
   /** THEIR demo script — narrates the walk: opening quote, scenario,
    * per-beat talk track and callbacks, closing acceptance ask. */
   script?: { openingQuote?: string; scenario?: string; acceptanceAsk?: string; steps?: Array<{ beat?: string; say?: string; callback?: string }> };
+  /** The recipient's business area — the demo walker opens on their own area's
+   * flow and names it, the Show parallel to the Listen reviews' area scoping. */
+  recipientArea?: string;
   /** A projected REVIEW surface — workflow-agentify or ontology+atlas. When
    * present, the page renders the visual review instead of the plain form; its
    * composed response still submits through the interview `answers` path. */
@@ -258,6 +261,7 @@ export default function FlowRespond({ token }: { token: string }) {
                   </a>
                 ) : null}
                 {state.pack.design ? <DemoWalker design={state.pack.design} script={state.pack.script}
+                  recipientArea={state.pack.recipientArea}
                   phaseComments={phaseComments}
                   onPhaseComment={(key, value) => setPhaseComments((prev) => ({ ...prev, [key]: value }))} /> : null}
                 {state.pack.steps?.length ? (
@@ -324,7 +328,8 @@ export default function FlowRespond({ token }: { token: string }) {
                   // A Show follow-up asks for demo feedback — the wireframe
                   // walkthrough, narrated by their demo script, sits right
                   // above the questions it informs.
-                  <DemoWalker design={state.pack.design} script={state.pack.script} />
+                  <DemoWalker design={state.pack.design} script={state.pack.script}
+                    recipientArea={state.pack.recipientArea} />
                 ) : null}
                 {state.pack.questions.map((question, index) => (
                   <label key={index} className={`v3fs-portal-card${((answers[index] ?? "").trim() || (attachments[index] ?? []).length || deferrals[index]) ? " done" : ""}${deferrals[index] ? " deferred" : ""}`}>
@@ -459,18 +464,31 @@ export default function FlowRespond({ token }: { token: string }) {
  * it, watch each step's screen light up. Same renderer the design studio
  * uses, so what they walk IS the signed-off design.
  */
-function DemoWalker({ design, script, phaseComments, onPhaseComment }: {
-  design: NonNullable<Pack["design"]>; script?: Pack["script"];
+function DemoWalker({ design, script, recipientArea, phaseComments, onPhaseComment }: {
+  design: NonNullable<Pack["design"]>; script?: Pack["script"]; recipientArea?: string;
   phaseComments?: Record<string, string>; onPhaseComment?: (key: string, value: string) => void;
 }) {
-  const [flowIndex, setFlowIndex] = useState(0);
-  const [stepIndex, setStepIndex] = useState(0);
-  const flows = design.flows ?? [];
+  const flows = useMemo(() => design.flows ?? [], [design]);
   const screens = design.screens ?? [];
+  // The recipient's OWN flow — the one tagged with their area (alliances,
+  // delivery, …). The served flows already arrive persona-first, so this is
+  // normally index 0; area matching keeps the default on their world even when
+  // persona affinity was ambiguous. Falls back to the first flow when nothing
+  // carries their area — a graceful no-op for a single-area programme.
+  const ownFlowIndex = useMemo(() => {
+    if (!recipientArea) return 0;
+    const i = flows.findIndex((f) => String(f.area ?? "") === recipientArea);
+    return i >= 0 ? i : 0;
+  }, [flows, recipientArea]);
+  const [flowIndex, setFlowIndex] = useState(ownFlowIndex);
+  const [stepIndex, setStepIndex] = useState(0);
   const flow = flows[flowIndex];
-  // Their demo script narrates the FIRST flow (persona-first ordering puts
-  // theirs there): beat-by-beat talk track + the callback to their own words.
-  const narration = flowIndex === 0 ? script?.steps?.[stepIndex] : undefined;
+  // Their demo script narrates their OWN flow: beat-by-beat talk track + the
+  // callback to their own words. The opening quote / scenario / acceptance ask
+  // also frame that flow, not whichever one they browse to next.
+  const onOwnFlow = flowIndex === ownFlowIndex;
+  const narration = onOwnFlow ? script?.steps?.[stepIndex] : undefined;
+  const scopedToArea = !!recipientArea && flows.some((f) => String(f.area ?? "") === recipientArea);
   const steps = Array.isArray(flow?.steps) ? (flow.steps as Array<Record<string, unknown>>) : [];
   const step = steps[stepIndex];
   const screenId = String(step?.screen ?? "").toLowerCase();
@@ -479,10 +497,13 @@ function DemoWalker({ design, script, phaseComments, onPhaseComment }: {
   if (!flows.length || !screens.length) return null;
   return (
     <div className="v3fs-demo-walk">
-      {script?.openingQuote && flowIndex === 0 ? (
+      {scopedToArea ? (
+        <p className="v3fs-rvw-scoped">This demo covers your area — <b>{recipientArea}</b>.</p>
+      ) : null}
+      {script?.openingQuote && onOwnFlow ? (
         <blockquote className="v3fs-wf-pain">“{script.openingQuote}”</blockquote>
       ) : null}
-      {script?.scenario && flowIndex === 0 ? (
+      {script?.scenario && onOwnFlow ? (
         <p className="v3fs-demo-scenario">{script.scenario}</p>
       ) : null}
       <div className="v3fs-demo-walk-h">
@@ -523,7 +544,7 @@ function DemoWalker({ design, script, phaseComments, onPhaseComment }: {
           {narration.callback ? <em>↩ {narration.callback}</em> : null}
         </div>
       ) : null}
-      {flowIndex === 0 && stepIndex >= steps.length - 1 && script?.acceptanceAsk ? (
+      {onOwnFlow && stepIndex >= steps.length - 1 && script?.acceptanceAsk ? (
         <div className="v3fs-demo-ask">{script.acceptanceAsk}</div>
       ) : null}
       <div className="v3fs-wf-walknav">

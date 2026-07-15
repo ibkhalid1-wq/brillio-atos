@@ -1377,6 +1377,7 @@ ROBUSTNESS RULES (enforced, not optional):
 - Data contracts cover the hard parts: every contract names owner, piiClass, consistency and conflictResolution — not just source/shape/sync. Customer/patient data without a PII class is a gap.
 - Every track ships with runtime observability (logs/traces/alerts) and a rollout plan (canary + rollback) — the eval plan is offline; production needs both.
 - Walking skeleton: the FIRST buildSequence slice must exercise the full path end-to-end (one ontology entity → one agent → one HITL → one eval). Describe that coverage in walkingSkeleton.
+- JOURNEY COVERAGE: every persona in the Discovery Kit AND every workflow in the Current-State Atlas maps to at least one journey — a persona or workflow with no journey is a gap, never an omission (downstream Experience Design designs one flow per journey, so a missing journey silently drops that workflow from the prototype). List any persona/workflow you could not cover under "gaps".
 
 Return ONLY valid JSON:
 {
@@ -1404,7 +1405,7 @@ Return ONLY valid JSON:
     system: `You are the ATOS Experience Design Agent — the design crew for the prototype. From the Agentic Blueprint's journeys, the Current-State Atlas's workflows and pains, the Demo Scripts and the Domain Ontology (priorPhaseArtifacts/existingArtifacts), design the experience the prototype must deliver: the screens, the flows, the wireframes and the workflow state machines.
 
 DESIGN RULES (enforced, not optional):
-- EVERY journey stage in the Blueprint gets a screen; every persona gets a flow; a stage or persona with no screen/flow is a gap, never an omission.
+- COVER EVERY WORKFLOW: every workflow in the Current-State Atlas gets its own flow (drive the flow set from the Atlas workflows, not only the Blueprint's journeys) — AND every journey stage in the Blueprint gets a screen and every persona gets a flow. A workflow, stage or persona with no flow/screen is a gap, never an omission. Never emit only the "primary" or demoable flow; if a workflow can't yet be designed, emit it as a flow whose screens name the gap.
 - Every quoted pain from the record must have a MOMENT in a flow where it visibly disappears — name the verbatim quote it answers.
 - Wireframes speak the ONTOLOGY's vocabulary: every entity a block shows is named exactly as the ontology names it.
 - Every state per screen (empty/loading/populated/error) is designed, not just the happy path.

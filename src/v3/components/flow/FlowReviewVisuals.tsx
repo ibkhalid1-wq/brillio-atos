@@ -38,7 +38,7 @@ function areaHue(area: string | undefined): number {
 
 /** The editable workflow, drawn as a vertical flow. Steps drag to reorder; the
  * actor and system are editable inline. */
-export function WorkflowFlow({ name, trigger, steps, onEdit, onEditMeta, onToggleRemove, onAdd, onReorder }: {
+export function WorkflowFlow({ name, trigger, steps, onEdit, onEditMeta, onToggleRemove, onAdd, onReorder, stepComment, onStepComment }: {
   name: string;
   trigger?: string;
   steps: FlowNode[];
@@ -47,6 +47,10 @@ export function WorkflowFlow({ name, trigger, steps, onEdit, onEditMeta, onToggl
   onToggleRemove: (index: number) => void;
   onAdd: (afterIndex: number) => void;
   onReorder: (from: number, to: number) => void;
+  /** Read/write a free-text note on a phase/step (text + voice). When provided,
+   *  each step gains a "comment on this phase" field. */
+  stepComment?: (index: number) => string;
+  onStepComment?: (index: number, value: string) => void;
 }) {
   const [drag, setDrag] = useState<number | null>(null);
   const [over, setOver] = useState<number | null>(null);
@@ -95,6 +99,14 @@ export function WorkflowFlow({ name, trigger, steps, onEdit, onEditMeta, onToggl
                 title={node.removed ? "Keep this step" : node.added ? "Delete" : "This step doesn't happen"}>
                 {node.removed ? "↺ keep" : node.added ? "✕" : "✕ doesn't happen"}
               </button>
+              {!node.removed && onStepComment ? (
+                <div className="v3fs-vflow-note">
+                  <input value={stepComment?.(si) ?? ""} placeholder="Comment on this phase (optional)"
+                    onChange={(e) => onStepComment(si, e.target.value)} aria-label={`Comment on step ${si + 1}`} />
+                  <DictationButton compact label="Speak this comment"
+                    onText={(spoken) => onStepComment(si, joinDictation(stepComment?.(si) ?? "", spoken))} />
+                </div>
+              ) : null}
             </div>
             <button type="button" className="v3fs-vflow-insert" onClick={() => onAdd(si)} aria-label="Add a step after this one">
               <span>＋</span>
@@ -128,6 +140,19 @@ export function OntologyMap({ terms, relations, comments, onComment }: {
   const center = (i: number) => { const { col, row } = pos(i); return { x: col * CELL_W + CELL_W / 2, y: row * CELL_H + CELL_H / 2 }; };
   const indexOf = (name: string) => terms.findIndex((t) => t.name.trim().toLowerCase() === name.trim().toLowerCase());
   const commented = new Set(Object.entries(comments).filter(([, v]) => v.trim()).map(([k]) => Number(k)));
+  // Route each relation BORDER to BORDER (plus a small gap) instead of centre to
+  // centre, so the line only spans the space BETWEEN two cards and never runs
+  // hidden underneath them. Clip the centre-to-centre ray to the node's rect.
+  const HW = (CELL_W - PAD) / 2, HH = (CELL_H - PAD) / 2, GAP = 7;
+  const borderPoint = (i: number, toward: { x: number; y: number }) => {
+    const c = center(i);
+    const dx = toward.x - c.x, dy = toward.y - c.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const tx = dx !== 0 ? HW / Math.abs(dx) : Infinity;
+    const ty = dy !== 0 ? HH / Math.abs(dy) : Infinity;
+    const t = Math.min(tx, ty);
+    return { x: c.x + dx * t + (dx / len) * GAP, y: c.y + dy * t + (dy / len) * GAP };
+  };
 
   return (
     <div className="v3fs-omap">
@@ -142,17 +167,21 @@ export function OntologyMap({ terms, relations, comments, onComment }: {
           {relations.map((rel, ri) => {
             const a = indexOf(rel.from), b = indexOf(rel.to);
             if (a < 0 || b < 0 || a === b) return null;
-            const p1 = center(a), p2 = center(b);
+            const ca = center(a), cb = center(b);
+            const s = borderPoint(a, cb), e = borderPoint(b, ca);
             const active = selected === a || selected === b;
-            const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
-            const curve = `M ${p1.x} ${p1.y} Q ${mx} ${my - 26} ${p2.x} ${p2.y}`;
+            // A gentle perpendicular bow so parallel relations don't overlap and
+            // the line reads as a considered connector, not a raw diagonal.
+            const dx = e.x - s.x, dy = e.y - s.y, len = Math.hypot(dx, dy) || 1;
+            const bow = Math.min(18, len * 0.16);
+            const mx = (s.x + e.x) / 2 - (dy / len) * bow, my = (s.y + e.y) / 2 + (dx / len) * bow;
             return (
               <g key={ri} className={`v3fs-omap-edge${active ? " on" : ""}`}>
-                <path d={curve} fill="none" markerEnd="url(#omap-arrow)" />
-                {active ? (
+                <path d={`M ${s.x} ${s.y} Q ${mx} ${my} ${e.x} ${e.y}`} fill="none" markerEnd="url(#omap-arrow)" />
+                {rel.relation ? (
                   <>
-                    <rect x={mx - rel.relation.length * 3.2 - 6} y={my - 34} width={rel.relation.length * 6.4 + 12} height={16} rx={8} className="v3fs-omap-edgelabel-bg" />
-                    <text x={mx} y={my - 22} textAnchor="middle" className="v3fs-omap-edgelabel">{rel.relation}</text>
+                    <rect x={mx - rel.relation.length * 3.1 - 6} y={my - 9} width={rel.relation.length * 6.2 + 12} height={17} rx={8.5} className="v3fs-omap-edgelabel-bg" />
+                    <text x={mx} y={my + 3.5} textAnchor="middle" className="v3fs-omap-edgelabel">{rel.relation}</text>
                   </>
                 ) : null}
               </g>

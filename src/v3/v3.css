@@ -5139,7 +5139,7 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
    pipeline — it's the source of truth, not a stage. It gets its own identity:
    an accent left edge and a cooler tinted ground so it reads as a panel apart,
    never as a fourth tab. */
-.v3fs-recrail {height:calc(100vh - 96px);max-height:100%;display:flex;flex-direction:column;overflow:hidden;
+.v3fs-recrail {height:100%;min-height:calc(100vh - 96px);display:flex;flex-direction:column;overflow:hidden;
   border:1px solid color-mix(in srgb,var(--v3-accent-2) 22%,var(--fs-line));
   border-left:3px solid var(--v3-accent-2);border-radius:14px;padding:14px 16px;
   background:linear-gradient(180deg,color-mix(in srgb,var(--v3-accent-2) 7%,var(--fs-card)),var(--fs-card) 62%)}
@@ -5153,7 +5153,7 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-recrail-ctx .v3fs-coverage {margin-top:2px}
 /* Hover-revealed: the panel floats over the board from the right edge,
    FULL-HEIGHT — the open rail aligns with the strip it replaces. */
-.v3fs-recrail.floating {position:absolute;top:0;right:0;width:min(370px,86vw);height:calc(100vh - 96px);max-height:none;
+.v3fs-recrail.floating {position:absolute;top:0;right:0;bottom:0;width:min(370px,86vw);height:auto;min-height:calc(100vh - 96px);max-height:none;
   background:var(--fs-card);z-index:40;
   box-shadow:-20px 0 52px -26px rgba(15,16,32,.4), 0 20px 56px -28px rgba(15,16,32,.35)}
 @media (prefers-reduced-motion: no-preference) {
@@ -6977,6 +6977,32 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-rvw-scoped {margin:0 0 10px;font-size:12.5px;color:var(--v3-text-secondary);padding:8px 13px;border-radius:10px;
   background:var(--fs-indigo-wash);border:1px solid color-mix(in srgb,var(--v3-accent-2) 22%,transparent)}
 .v3fs-rvw-scoped b {color:var(--v3-accent-2);font-weight:700}
+
+/* Per-phase comment on a workflow step (text + voice) on the linked page. */
+.v3fs-vflow-note {display:flex;align-items:center;gap:7px;margin-top:8px}
+.v3fs-vflow-note input {flex:1;min-width:0;font:inherit;font-size:12.5px;color:var(--v3-text);
+  border:1px solid var(--fs-line);border-radius:8px;padding:6px 10px;background:var(--v3-surface)}
+.v3fs-vflow-note input:focus {outline:none;border-color:var(--v3-accent-2);box-shadow:0 0 0 3px color-mix(in srgb,var(--v3-accent-2) 12%,transparent)}
+
+/* Envision link: the architecture candidates + the recommended one, and the
+   agentic-blueprint agents — each with a written/recorded response below. */
+.v3fs-rvw-arch .v3fs-arch-cands {display:grid;gap:10px;margin:2px 0 12px}
+.v3fs-arch-cand {border:1px solid var(--fs-line);border-radius:12px;padding:12px 14px;background:var(--v3-surface)}
+.v3fs-arch-cand.rec {border-color:color-mix(in srgb,var(--v3-green) 45%,var(--fs-line));background:color-mix(in srgb,var(--v3-green) 5%,var(--v3-surface))}
+.v3fs-arch-cand-h {display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:4px}
+.v3fs-arch-cand-h b {font-size:14px;font-weight:700;letter-spacing:-.01em}
+.v3fs-arch-shape {font-family:var(--v3-font-mono);font-size:10px;font-weight:700;color:var(--v3-accent-2);
+  background:var(--fs-indigo-wash);border-radius:99px;padding:2px 9px}
+.v3fs-arch-badge {font-size:10.5px;font-weight:700;color:var(--v3-green);background:color-mix(in srgb,var(--v3-green) 13%,transparent);border-radius:99px;padding:2px 9px;margin-left:auto}
+.v3fs-arch-cand p {margin:0;font-size:12.5px;line-height:1.55;color:var(--v3-text-secondary)}
+.v3fs-bp-agents {list-style:none;margin:2px 0 12px;padding:0;display:grid;gap:9px}
+.v3fs-bp-agent {border:1px solid var(--fs-line);border-left:3px solid var(--v3-accent-2);border-radius:11px;padding:10px 13px;background:var(--v3-surface)}
+.v3fs-bp-agent-h {display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.v3fs-bp-agent-h b {font-size:13.5px;font-weight:700}
+.v3fs-bp-auto {font-family:var(--v3-font-mono);font-size:9.5px;font-weight:700;color:var(--v3-accent-b);
+  background:color-mix(in srgb,var(--v3-accent-b) 12%,transparent);border-radius:99px;padding:2px 8px;text-transform:uppercase;letter-spacing:.04em}
+.v3fs-bp-agent p {margin:3px 0 2px;font-size:12.5px;line-height:1.5;color:var(--v3-text-secondary)}
+.v3fs-bp-replaces {font-size:11.5px;color:var(--v3-text-muted);font-style:italic}
 .v3fs-rvw-areas {display:flex;flex-wrap:wrap;gap:7px;margin:0 0 4px}
 .v3fs-rvw-area {padding:6px 13px;border:1px solid var(--fs-line);border-radius:99px;background:var(--v3-surface);
   font-size:12px;font-weight:600;color:var(--v3-text-secondary);cursor:pointer;transition:border-color .12s,background .12s,color .12s}
@@ -7075,12 +7101,16 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-omap-scroll {overflow-x:auto;overflow-y:hidden;padding:14px;background:var(--v3-bg);border-bottom:1px solid var(--fs-line)}
 .v3fs-omap-canvas {position:relative;overflow:visible}
 .v3fs-omap-edges {position:absolute;inset:0;overflow:visible;pointer-events:none}
-.v3fs-omap-edge path {stroke:color-mix(in srgb,var(--v3-text-muted) 42%,transparent);stroke-width:1.5;transition:stroke .15s,stroke-width .15s}
+.v3fs-omap-edge path {stroke:color-mix(in srgb,var(--v3-text-muted) 38%,transparent);stroke-width:1.5;transition:stroke .15s,stroke-width .15s}
 .v3fs-omap-edge.on path {stroke:var(--v3-accent-2);stroke-width:2.2}
-.v3fs-omap-arrowhead {fill:color-mix(in srgb,var(--v3-text-muted) 55%,transparent)}
+.v3fs-omap-arrowhead {fill:color-mix(in srgb,var(--v3-text-muted) 50%,transparent)}
 .v3fs-omap-edge.on .v3fs-omap-arrowhead {fill:var(--v3-accent-2)}
-.v3fs-omap-edgelabel-bg {fill:var(--v3-surface);stroke:var(--v3-accent-2);stroke-width:.8;opacity:.96}
-.v3fs-omap-edgelabel {fill:var(--v3-accent-2);font-size:10px;font-weight:700}
+/* Relationship labels ride ON the connector between cards (never under them),
+   muted by default and lifting to the accent when either endpoint is selected. */
+.v3fs-omap-edgelabel-bg {fill:var(--fs-card);stroke:color-mix(in srgb,var(--v3-text-muted) 26%,transparent);stroke-width:.75;opacity:.97;transition:stroke .15s}
+.v3fs-omap-edge.on .v3fs-omap-edgelabel-bg {stroke:var(--v3-accent-2)}
+.v3fs-omap-edgelabel {fill:var(--v3-text-secondary);font-size:9.5px;font-weight:650;letter-spacing:.01em;transition:fill .15s}
+.v3fs-omap-edge.on .v3fs-omap-edgelabel {fill:var(--v3-accent-2);font-weight:700}
 .v3fs-omap-node {position:absolute;display:flex;flex-direction:column;gap:3px;text-align:left;padding:9px 11px;
   border:1.5px solid var(--fs-line);border-left:3.5px solid hsl(var(--hue,230) 55% 52%);border-radius:11px;
   background:var(--fs-card);cursor:pointer;overflow:hidden;transition:transform .12s,box-shadow .12s,border-color .12s;box-shadow:0 1px 2px rgba(15,23,42,.05)}
