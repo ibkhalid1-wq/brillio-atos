@@ -250,14 +250,16 @@ export default function FlowCanvas({ program, programs, runningAgentIds, agentEr
             if (movement.id === "envision") {
               return (
                 <div key="prototype-loop" className={`v3fs-step v3fs-loopstep${loopOn ? " on" : ""}${loopIsFrontier && !loopOn ? " v3fs-step-next" : ""}`}
-                  role="group" aria-label="Prototype Loop">
+                  role="tab" aria-selected={loopOn} tabIndex={0} aria-label="Prototype Loop"
+                  onClick={() => { if (!loopOn) setActive("envision"); }}
+                  onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) { e.preventDefault(); setActive("envision"); } }}>
                   <span className={`v3fs-sring ${loopTone}`} style={{ "--pct": `${ls.areasTotal ? Math.round((100 * ls.areasConverged) / ls.areasTotal) : 0}%` } as React.CSSProperties} aria-hidden="true">
                     <span className={`v3fs-sdot${ls.converged ? " done" : loopOn ? " live" : ""}`}>{ls.converged ? "✓" : (stepNum.envision ?? 3)}</span>
                   </span>
                   <span className="v3fs-sname">Prototype <span className="v3fs-loopmark" aria-hidden="true">⟳</span></span>
                   <span className="v3fs-loop-modes" role="tablist" aria-label="Design or Validate">
-                    <button type="button" role="tab" aria-selected={active === "envision"} className={`v3fs-loopmode${active === "envision" ? " on" : ""}`} onClick={() => setActive("envision")}>Design</button>
-                    <button type="button" role="tab" aria-selected={active === "show"} className={`v3fs-loopmode${active === "show" ? " on" : ""}`} onClick={() => setActive("show")}>Validate</button>
+                    <button type="button" role="tab" aria-selected={active === "envision"} className={`v3fs-loopmode${active === "envision" ? " on" : ""}`} onClick={(e) => { e.stopPropagation(); setActive("envision"); }}>Design</button>
+                    <button type="button" role="tab" aria-selected={active === "show"} className={`v3fs-loopmode${active === "show" ? " on" : ""}`} onClick={(e) => { e.stopPropagation(); setActive("show"); }}>Validate</button>
                   </span>
                   <span className="v3fs-sstate loop">{ls.hasPrototype ? `iteration ${ls.round}` : "not built"}{ls.areasTotal ? ` · ${ls.areasConverged}/${ls.areasTotal} areas` : ""}{ls.converged ? " ✓" : ""}</span>
                 </div>
