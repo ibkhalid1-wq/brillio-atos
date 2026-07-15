@@ -10,7 +10,7 @@ import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 import {
   flowMovements, movementEvidence, movementArtifacts, gateChecklist, gateReadiness, listenCoverage,
   demoAcceptance, daysToFirstDemo, wordsOfEvidence, readContradictions, parseGridRows, readMovementInputs,
-  contradictionLogWithout,
+  contradictionLogWithout, autoBuildEnabled,
 } from "@/v3/components/flow/flowShellData";
 import {
   listOpenFlowDecisions, listFlowAttestations, describeDecisionChanges,
@@ -695,17 +695,6 @@ export default function FlowShell(props: FlowShellProps) {
           <button type="button" role="menuitem" onClick={() => { setSwitcherOpen(false); props.onCreateProgram(); }}>＋ New programme</button>
           <button type="button" role="menuitem" onClick={() => { setSwitcherOpen(false); setDrillOpen(true); }}>◇ Drill into this programme →</button>
           <button type="button" role="menuitem" onClick={() => { setSwitcherOpen(false); props.onOpenSetup(); }}>Programme setup</button>
-          {props.onToggleAutoBuild ? (
-            <>
-              <div className="v3fs-switcher-sep" />
-              <button type="button" role="menuitemcheckbox" aria-checked={!!props.autoBuildOn}
-                className={props.autoBuildOn ? "on" : ""}
-                title="When on, ATOS generates an artifact automatically as soon as its inputs arrive — otherwise it waits for you to press Generate."
-                onClick={() => { setSwitcherOpen(false); props.onToggleAutoBuild?.(); }}>
-                {props.autoBuildOn ? "☑" : "☐"} Auto-build artifacts on input
-              </button>
-            </>
-          ) : null}
         </div>
       ) : null}
 
@@ -799,6 +788,8 @@ export default function FlowShell(props: FlowShellProps) {
             onToggleAgentHalt={props.onToggleAgentHalt}
             onSetMovementBudget={props.onSetMovementBudget}
             onRestoreSnapshot={props.onRestoreSnapshot}
+            autoBuildOn={props.autoBuildOn}
+            onToggleAutoBuild={props.onToggleAutoBuild}
           />
         ) : view === "portfolio" ? (
           <FlowPortfolio
@@ -1360,7 +1351,7 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
 
 /* ── Mission Control: the fleet, the budgets, the levers, the trail ──────── */
 
-function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggleAgentHalt, onSetMovementBudget, onRestoreSnapshot, aiStatus, onOpenAISettings }: {
+function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggleAgentHalt, onSetMovementBudget, onRestoreSnapshot, aiStatus, onOpenAISettings, autoBuildOn, onToggleAutoBuild }: {
   program: ProgramSummary;
   fleet: FlowShellProps["fleet"];
   loadMovementSpend: FlowShellProps["loadMovementSpend"];
@@ -1370,6 +1361,8 @@ function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggle
   onRestoreSnapshot?: (data: Record<string, unknown>) => Promise<void>;
   aiStatus?: string;
   onOpenAISettings?: () => void;
+  autoBuildOn?: boolean;
+  onToggleAutoBuild?: () => void;
 }) {
   const movements = useMemo(() => flowMovements(), []);
   const governance = readFlowGovernance(program);
@@ -1556,6 +1549,21 @@ function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggle
             {governance.haltAll ? "Resume" : "Halt"}
           </button>
         </div>
+        {onToggleAutoBuild ? (
+          <div className="v3fs-guard-row">
+            <div className="v3fs-row-g">
+              <div className="v3fs-row-n">Auto-build artifacts on input</div>
+              <div className="v3fs-row-m">off by default — evidence stales the affected artifacts and waits for you to press Regenerate. When on, ATOS regenerates them automatically as soon as their inputs arrive.</div>
+            </div>
+            <button type="button" role="switch" aria-checked={!!(autoBuildOn ?? autoBuildEnabled(program))}
+              className={`v3fs-switch${(autoBuildOn ?? autoBuildEnabled(program)) ? " on" : ""}`} disabled={busy}
+              title={(autoBuildOn ?? autoBuildEnabled(program)) ? "Turn off hands-off generation" : "Turn on hands-off generation"}
+              onClick={() => void act(async () => { onToggleAutoBuild?.(); })}>
+              <span className="v3fs-switch-dot" aria-hidden="true" />
+              <span className="v3fs-switch-lbl">{(autoBuildOn ?? autoBuildEnabled(program)) ? "On" : "Off"}</span>
+            </button>
+          </div>
+        ) : null}
         <details className="v3fs-disc v3fs-disc-sm">
           <summary>
             <span className="v3fs-disc-l">Per-agent halts{governance.haltedAgents.length ? <em>{governance.haltedAgents.length} held</em> : null}</span>

@@ -134,7 +134,12 @@ export function OntologyMap({ terms, relations, comments, onComment }: {
 
   const cols = Math.min(4, Math.max(2, Math.ceil(Math.sqrt(terms.length))));
   const rows = Math.ceil(terms.length / cols);
-  const CELL_W = 172, CELL_H = 118, PAD = 12;
+  // Taller cells than the earlier 118px: a term with a long system-of-record
+  // (e.g. "Reference Catalog (current: SharePoint/Excel, target: new CRM)")
+  // pushed the definition past the old fixed height and clipped it mid-word. The
+  // extra room + the clamps in CSS keep both the SoR chip and the 2-line
+  // definition visible; the full text still lives in the detail panel on tap.
+  const CELL_W = 176, CELL_H = 140, PAD = 12;
   const W = cols * CELL_W, H = rows * CELL_H;
   const pos = (i: number) => ({ col: i % cols, row: Math.floor(i / cols) });
   const center = (i: number) => { const { col, row } = pos(i); return { x: col * CELL_W + CELL_W / 2, y: row * CELL_H + CELL_H / 2 }; };
@@ -213,6 +218,7 @@ export function OntologyMap({ terms, relations, comments, onComment }: {
               {terms[selected].area ? <span className="v3fs-omap-area">{terms[selected].area}</span> : null}
             </div>
             {terms[selected].definition ? <p>{terms[selected].definition}</p> : null}
+            {terms[selected].systemOfRecord ? <p className="v3fs-omap-sor-full"><span>System of record</span> {terms[selected].systemOfRecord}</p> : null}
             {terms[selected].aliases && terms[selected].aliases!.length ? <p className="v3fs-omap-aka">also called: {terms[selected].aliases!.join(", ")}</p> : null}
             <div className="v3fs-rvw-field">
               <input className="v3fs-omap-comment" value={comments[String(selected)] ?? ""}
