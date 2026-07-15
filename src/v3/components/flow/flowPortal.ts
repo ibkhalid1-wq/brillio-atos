@@ -463,7 +463,7 @@ export function mintDemoInvites(program: ProgramSummary, actor: string): Record<
  */
 export function mintFollowUpPack(
   program: ProgramSummary,
-  input: { movementId: string; who: string; questions: string[]; captureField: string },
+  input: { movementId: string; who: string; questions: string[]; captureField: string; unnamed?: boolean },
   actor: string,
 ): Record<string, unknown> | null {
   if (!input.who.trim() || !input.questions.length) return null;
@@ -481,6 +481,7 @@ export function mintFollowUpPack(
     captureField: input.captureField,
     reviewKind: undefined,
     review: undefined,
+    unnamed: input.unnamed || undefined,
   };
   const { durable, rest } = collapseDurable(existing, input.who);
   let pack: Record<string, unknown>;
@@ -523,7 +524,7 @@ export function mintFollowUpPack(
  */
 export function mintReviewPack(
   program: ProgramSummary,
-  input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string },
+  input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string; unnamed?: boolean },
   actor: string,
 ): Record<string, unknown> | null {
   if (!input.who.trim() || !input.review) return null;
@@ -548,6 +549,8 @@ export function mintReviewPack(
     reviewKind: input.reviewKind,
     recipientArea: recipientArea ?? undefined,
     review: input.review,
+    // A link minted for an UNBOUND role placeholder greets nobody by name.
+    unnamed: input.unnamed || undefined,
   };
   const { durable, rest } = collapseDurable(existing, input.who);
   let pack: Record<string, unknown>;

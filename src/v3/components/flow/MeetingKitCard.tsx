@@ -34,7 +34,7 @@ export default function MeetingKitCard({ kit, movementId, hasEvidence, generatin
   program: ProgramSummary;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
   onScheduleFollowUp?: (movementId: string, who: string, date: string) => Promise<void>;
-  onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
+  onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string; unnamed?: boolean }) => Promise<string | null>;
 }) {
   const [capture, setCapture] = useState("");
   const [busy, setBusy] = useState(false);

@@ -396,6 +396,9 @@ Deno.serve(async (req: Request) => {
         kind: "interview",
         programme: hit.programName,
         stakeholder: String(hit.pack.stakeholder ?? "Stakeholder"),
+        // A role-placeholder link (no person bound to the role yet) must never
+        // greet the role title as a first name — the client skips the greeting.
+        ...(hit.pack.unnamed === true ? { unnamed: true } : {}),
         role: String(hit.pack.role ?? ""),
         intro: String(hit.pack.intro ?? ""),
         questions: Array.isArray(hit.pack.questions) ? hit.pack.questions.map(String).slice(0, 12) : [],

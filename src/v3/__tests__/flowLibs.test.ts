@@ -374,6 +374,58 @@ describe("contradiction stickiness — a dispute is proposed once, whatever the 
   });
 });
 
+describe("pilot interpreter — seeded store, machine transitions, forms, metrics", () => {
+  const fixtures = [
+    { entity: "Claim", records: [{ label: "CLM-1", values: { reserve: "$8,400" } }, { label: "CLM-2", values: { reserve: "$2,100" } }] },
+    { entity: "Policy", records: [{ label: "POL-1", values: { deductible: "$500" } }] },
+  ];
+  const machinesRaw = [{ name: "Claim Lifecycle", states: ["Received", "Verified", "Settled"], transitions: [
+    { from: "Received", to: "Verified", on: "verify coverage", actor: "Coverage Agent" },
+    { from: "Verified", to: "Settled", on: "approve settlement", actor: "Adjuster" },
+  ] }];
+  it("binds machines to entities and seeds records at the first state", async () => {
+    const { initPilotMachines, initPilotStore } = await import("@/v3/components/flow/flowPilot");
+    const machines = initPilotMachines(machinesRaw, fixtures);
+    expect(machines[0].entity).toBe("Claim");
+    const store = initPilotStore(fixtures, machines);
+    expect(store).toHaveLength(3);
+    expect(store.find((r) => r.label === "CLM-1")?.state).toBe("Received");
+    expect(store.find((r) => r.label === "POL-1")?.state).toBeUndefined();
+  });
+  it("advances a record through agent then human transitions, logging who acted", async () => {
+    const { initPilotMachines, initPilotStore, pendingTransitions, isAgentTransition, applyPilotTransition } = await import("@/v3/components/flow/flowPilot");
+    const machines = initPilotMachines(machinesRaw, fixtures);
+    let record = initPilotStore(fixtures, machines)[0];
+    const [agentStep] = pendingTransitions(record, machines);
+    expect(isAgentTransition(agentStep)).toBe(true);
+    record = applyPilotTransition(record, agentStep, "simulated");
+    expect(record.state).toBe("Verified");
+    const [humanStep] = pendingTransitions(record, machines);
+    expect(isAgentTransition(humanStep)).toBe(false);
+    record = applyPilotTransition(record, humanStep, "human");
+    expect(record.state).toBe("Settled");
+    expect(record.log.some((l) => l.actor === "you")).toBe(true);
+    expect(pendingTransitions(record, machines)).toHaveLength(0);
+  });
+  it("creates a form record at the machine's first state, marked as the stakeholder's own", async () => {
+    const { initPilotMachines, createPilotRecord, formFieldsFor } = await import("@/v3/components/flow/flowPilot");
+    const machines = initPilotMachines(machinesRaw, fixtures);
+    expect(formFieldsFor("Claim", {}, fixtures)).toEqual(["reserve"]);
+    const record = createPilotRecord("Claim", { reserve: "$1,000" }, machines, 9);
+    expect(record.state).toBe("Received");
+    expect(record.mine).toBe(true);
+  });
+  it("metric blocks compute live values from the store, grouped by state when varied", async () => {
+    const { initPilotMachines, initPilotStore, applyPilotTransition, metricValue, pendingTransitions } = await import("@/v3/components/flow/flowPilot");
+    const machines = initPilotMachines(machinesRaw, fixtures);
+    const store = initPilotStore(fixtures, machines);
+    expect(metricValue({ entity: "Claim" }, store)).toBe("2");
+    const advanced = store.map((r, i) => i === 0 ? applyPilotTransition(r, pendingTransitions(r, machines)[0], "simulated") : r);
+    expect(metricValue({ entity: "Claim" }, advanced)).toContain("1 Received");
+    expect(metricValue({ entity: "Claim" }, advanced)).toContain("1 Verified");
+  });
+});
+
 describe("scenario runner — beat records, fixtures, metrics, the ✗ loop", () => {
   it("parseFixtures reads structured rows and tolerates the legacy string shape", async () => {
     const { parseFixtures } = await import("@/v3/components/flow/flowDemoRun");
@@ -526,6 +578,14 @@ describe("durable per-stakeholder link — one token, reused, never retired", ()
     // Her prior answer is preserved as recap history, not thrown away.
     const subs = packs[0].submissions as Array<{ ts: string }>;
     expect(subs.some((s) => s.ts === "2026-07-03")).toBe(true);
+  });
+
+  it("a link minted for an unbound role placeholder is stamped unnamed", () => {
+    const p = programme({});
+    const blob = mintReviewPack(p, { movementId: "envision", who: "Solution Architect", role: "Reviewer", captureField: "x",
+      reviewKind: "agentify", review: { kind: "agentify" }, questions: ["q"], intro: "i", unnamed: true }, "you")!;
+    const pack = (blob.flowInterviewPacks as Array<Record<string, unknown>>)[0];
+    expect(pack.unnamed).toBe(true);
   });
 
   it("re-sending the identical ask is idempotent — the standing link stands", () => {

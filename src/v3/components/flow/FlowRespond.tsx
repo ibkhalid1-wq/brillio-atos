@@ -9,6 +9,7 @@ import {
 import { stakeholderPrimaryArea } from "@/v3/components/flow/flowAreas";
 import type { ProgramSummary } from "@/new/types";
 import { DictationButton, joinDictation } from "@/v3/components/flow/FlowDictation";
+import PilotApp from "@/v3/components/flow/PilotApp";
 
 /**
  * The public async-interview page — what a stakeholder sees when they open a
@@ -47,6 +48,9 @@ interface Pack {
   /** A new ask has been posted SINCE their last answer — they're returning to a
    * genuine follow-up, so the surface renders with a "welcome back" framing. */
   followUp?: boolean;
+  /** The link belongs to a ROLE PLACEHOLDER (no person bound yet) — every
+   * greeting skips the name; "Solution Architect" is never a first name. */
+  unnamed?: boolean;
   /** Demo invites only. */
   openingQuote?: string;
   scenario?: string;
@@ -165,6 +169,9 @@ export default function FlowRespond({ token }: { token: string }) {
   const draftKey = `atos.respond.${token}`;
   const draft0 = readRespondDraft(draftKey);
   const [state, setState] = useState<PackState>({ phase: "loading" });
+  // The name greetings use — BLANK for a role-placeholder link, so every
+  // surface (opener, banners, recap, demo) skips the greeting cleanly.
+  const greetName = state.phase === "ready" && !state.pack.unnamed ? state.pack.stakeholder : "";
   // The review shown — rebuilt LIVE from the current artifacts the edge shipped,
   // falling back to the pack's frozen snapshot. Memoised so the surface's draft
   // key is stable within a load.
@@ -410,14 +417,14 @@ export default function FlowRespond({ token }: { token: string }) {
               <p>The team reviews everything before it enters the record. This link is now closed — if more detail occurs to you later, the team can send a fresh one.</p>
             </div>
           ) : state.pack.responded ? (
-            <RespondRecap stakeholder={state.pack.stakeholder} submissions={state.pack.submissions ?? []}
+            <RespondRecap stakeholder={greetName} submissions={state.pack.submissions ?? []}
               kind={state.pack.kind} />
           ) : shownReview ? (
             <>
-              {state.pack.followUp ? <FollowUpBanner stakeholder={state.pack.stakeholder}
+              {state.pack.followUp ? <FollowUpBanner stakeholder={greetName}
                 submissions={state.pack.submissions ?? []}
                 changes={state.pack.priorReview ? reviewDiff(state.pack.priorReview, shownReview) : undefined} /> : null}
-              <FlowReviewSurface review={shownReview} stakeholder={state.pack.stakeholder}
+              <FlowReviewSurface review={shownReview} stakeholder={greetName}
                 programme={state.pack.programme} objective={state.pack.objective}
                 returning={!!state.pack.followUp}
                 submitting={submitting} error={error} draftKey={reviewDraftKey}
@@ -449,7 +456,7 @@ export default function FlowRespond({ token }: { token: string }) {
                   <span className="v3fs-hero-brand">ATOS Flow</span> · {state.pack.programme}
                 </h1>
                 <p className="v3fs-how">
-                  {state.pack.stakeholder ? `${state.pack.stakeholder} — ` : ""}this is your demonstration: your own
+                  {greetName ? `${greetName} — ` : ""}this is your demonstration: your own
                   workflow, running. Watch it, then record your verdict below.
                 </p>
                 {state.pack.openingQuote ? <blockquote className="v3fs-portal-quote">{state.pack.openingQuote}</blockquote> : null}
@@ -525,12 +532,12 @@ export default function FlowRespond({ token }: { token: string }) {
             </>
           ) : (
             <>
-              {state.pack.followUp ? <FollowUpBanner stakeholder={state.pack.stakeholder}
+              {state.pack.followUp ? <FollowUpBanner stakeholder={greetName}
                 submissions={state.pack.submissions ?? []} /> : null}
               <header className="v3fs-portal-head">
                 <div className="v3fs-hero-eyebrow">{state.pack.programme} <span>· ATOS Flow</span></div>
-                <h1 className="v3fs-portal-title">{state.pack.stakeholder
-                  ? `Hello ${state.pack.stakeholder.split(" ")[0]} — your perspective shapes what gets built.`
+                <h1 className="v3fs-portal-title">{greetName
+                  ? `Hello ${greetName.split(" ")[0]} — your perspective shapes what gets built.`
                   : "Your perspective shapes what gets built."}</h1>
                 <p className="v3fs-portal-sub">
                   These questions replace a scheduled discovery call. Answer in your own words, whenever suits you — skip anything that doesn&rsquo;t apply.
@@ -852,6 +859,9 @@ function DemoWalker({ design, script, recipientArea, phaseComments, onPhaseComme
   const [runActor, setRunActor] = useState("");
   const [metrics, setMetrics] = useState<string[]>([]);
   const [explore, setExplore] = useState(false);
+  // PILOT mode: the design runs as a working app — seeded queues, real forms,
+  // agents working records forward, HITL chips on the records that wait for you.
+  const [pilotMode, setPilotMode] = useState(false);
   const runRef = useRef(0);
   // The recipient's OWN flow — the one tagged with their area (alliances,
   // delivery, …). The served flows already arrive persona-first, so this is
@@ -964,16 +974,27 @@ function DemoWalker({ design, script, recipientArea, phaseComments, onPhaseComme
         {runState === "working" || runState === "approval" ? (
           <button type="button" className="v3fs-btn quiet" onClick={stopRun}>Stop</button>
         ) : null}
-        <button type="button" className={`v3fs-btn${explore ? " pri" : ""}`} onClick={() => { stopRun(); setExplore((e) => !e); }}>
+        <button type="button" className={`v3fs-btn${explore ? " pri" : ""}`} onClick={() => { stopRun(); setPilotMode(false); setExplore((e) => !e); }}>
           {explore ? "← Back to the walk" : "⌗ Explore the screens"}
         </button>
+        {(machines?.length ?? 0) > 0 && seeded.length > 0 ? (
+          <button type="button" className={`v3fs-btn${pilotMode ? " pri" : ""}`} onClick={() => { stopRun(); setExplore(false); setPilotMode((v) => !v); }}
+            title="Use the future system on seeded data — file records, watch the agents work, approve what's yours">
+            {pilotMode ? "← Back to the walk" : "🖥 Open the pilot"}
+          </button>
+        ) : null}
       </div>
       {metrics.length ? (
         <div className="v3fs-demo-ticker" aria-live="polite">
           {metrics.map((m, i) => <span key={i} className="v3fs-demo-metric">⏱ {m}</span>)}
         </div>
       ) : null}
-      {explore ? (
+      {pilotMode ? (
+        <PilotApp screens={screens} fixtures={seeded} machines={machines}
+          onBeatRecord={onBeatRecord} fieldFlags={fieldFlags} onToggleFieldFlag={onToggleFieldFlag}
+          runLive={runLive} />
+      ) : null}
+      {explore && !pilotMode ? (
         // App mode: every screen, freely browsable, seeded with their data.
         <div className="v3fs-demo-grid">
           {screens.map((sc, i) => (
@@ -984,7 +1005,7 @@ function DemoWalker({ design, script, recipientArea, phaseComments, onPhaseComme
           ))}
         </div>
       ) : null}
-      <div className={explore ? "v3fs-demo-hidden" : undefined}>
+      <div className={explore || pilotMode ? "v3fs-demo-hidden" : undefined}>
       <div className="v3fs-wf-walk">
         {steps.map((s, i) => (
           <button key={i} type="button" className={`v3fs-wf-step${i === stepIndex ? " on" : ""}`}

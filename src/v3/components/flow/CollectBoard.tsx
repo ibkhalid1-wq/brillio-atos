@@ -124,10 +124,10 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
   regenerating?: boolean;
   onRegenerateStale?: () => Promise<void>;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
-  onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
+  onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string; unnamed?: boolean }) => Promise<string | null>;
   /** Mint a shareable REVIEW link (workflow-agentify or ontology+atlas) — the
    * projected payload is built on the client and stored on the pack. */
-  onMintReview?: (input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string }) => Promise<string | null>;
+  onMintReview?: (input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string; unnamed?: boolean }) => Promise<string | null>;
   onMintPacks?: () => Promise<void>;
   onScheduleFollowUp?: (movementId: string, who: string, date: string) => Promise<void>;
   /** Mint a sign-off link for ONE stakeholder × artifact — approval lives on
@@ -593,10 +593,10 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
   approvalItems?: StakeholderApprovalItem[];
   onSendForApproval?: (input: { artifactId: string; movementId: string; artifactTitle: string; approver: { name: string; role: string; email?: string }; snapshot?: string }) => Promise<string | null>;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
-  onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
+  onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string; unnamed?: boolean }) => Promise<string | null>;
   /** Mint the ONE unified link for Listen/Envision — their questions folded into
    * a projected visual review (their workflow + the domain terms). */
-  onMintReview?: (input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string }) => Promise<string | null>;
+  onMintReview?: (input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string; unnamed?: boolean }) => Promise<string | null>;
   /** Put the meeting on the programme calendar (attested) — the .ics download
    * is the invite; this is the record of it. */
   onScheduleFollowUp?: (movementId: string, who: string, date: string) => Promise<void>;
@@ -794,14 +794,14 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
           movementId, who: name, role: role || "Reviewer", captureField,
           reviewKind: reviewForLink.kind, review: reviewForLink,
           questions: linkQuestions.length ? linkQuestions : reviewFallbackQuestions(reviewForLink),
-          intro: reviewForLink.intro,
+          intro: reviewForLink.intro, unnamed: isRole,
         });
         if (link) setMintedLink(link);
         else setLinkNote("Could not create the link — try again.");
         return link;
       }
       if (onMintFollowUp && linkQuestions.length) {
-        const link = await onMintFollowUp({ movementId, who: name, questions: linkQuestions, captureField });
+        const link = await onMintFollowUp({ movementId, who: name, questions: linkQuestions, captureField, unnamed: isRole });
         if (link) setMintedLink(link);
         else setLinkNote("Could not create the link — try again.");
         return link;

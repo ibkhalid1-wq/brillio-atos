@@ -52,8 +52,8 @@ interface FlowCanvasProps {
   /** Put a gap-closing follow-up on the calendar. */
   onScheduleFollowUp?: (movementId: string, who: string, date: string) => Promise<void>;
   /** Mint a follow-up link (async form of the meeting); resolves to the URL. */
-  onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
-  onMintReview?: (input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string }) => Promise<string | null>;
+  onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string; unnamed?: boolean }) => Promise<string | null>;
+  onMintReview?: (input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string; unnamed?: boolean }) => Promise<string | null>;
   /** Persist a studio edit to an artifact document (attested). */
   onSaveArtifactDoc?: (input: ArtifactEditInput) => Promise<void>;
   /** Send an artifact to a chosen approver — mints a no-login link. */

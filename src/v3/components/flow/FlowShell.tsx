@@ -102,8 +102,8 @@ interface FlowShellProps {
   /** Put a gap-closing follow-up on the calendar. */
   onScheduleFollowUp: (movementId: string, who: string, date: string) => Promise<void>;
   /** Mint a follow-up link (ATOS asks the gaps itself); resolves to the URL. */
-  onMintFollowUp: (input: { movementId: string; who: string; questions: string[]; captureField: string }) => Promise<string | null>;
-  onMintReview: (input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string }) => Promise<string | null>;
+  onMintFollowUp: (input: { movementId: string; who: string; questions: string[]; captureField: string; unnamed?: boolean }) => Promise<string | null>;
+  onMintReview: (input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string; unnamed?: boolean }) => Promise<string | null>;
   /** Mint a shareable sponsor brief (dated board-pack snapshot); resolves to the URL. */
   onMintBrief: () => Promise<string | null>;
   /** Send an artifact to a chosen approver — mints a no-login link, returns it. */
