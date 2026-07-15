@@ -10,7 +10,7 @@
  */
 import { useMemo, useState } from "react";
 import { projectFutureState, type FutureState, type FutureWorkflow } from "@/v3/components/flow/flowFutureState";
-import { readMovementInputs } from "@/v3/components/flow/flowShellData";
+import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 import type { ProgramSummary } from "@/new/types";
 
 const MODE_LABEL: Record<string, string> = { agentify: "agent runs it", assist: "agent assists · you decide", keep: "stays human" };
@@ -26,8 +26,7 @@ export default function EnvisionCockpit({ program, onSaveInputs, onRunAgent }: {
 }) {
   const fs = useMemo<FutureState>(() => projectFutureState(program), [program]);
   const hasPrototype = useMemo(() => {
-    const inputs = readMovementInputs(program, "envision");
-    return Boolean(inputs.prototypeBuild || inputs.prototypePack);
+    return Boolean(readArtifactDoc(program, "prototypeBuild") || readArtifactDoc(program, "prototypePack"));
   }, [program]);
   const [focus, setFocus] = useState<{ kind: "agent" | "screen"; key: string } | null>(null);
   const [area, setArea] = useState("");

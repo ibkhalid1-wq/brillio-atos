@@ -3,6 +3,7 @@ import type { ProgramSummary } from "@/new/types";
 import PhaseInputsPanel from "@/v3/components/PhaseInputsPanel";
 import { acceptedAgentPatterns } from "@/v3/components/flow/flowPatterns";
 import EnvisionCockpit from "@/v3/components/flow/EnvisionCockpit";
+import ShowCockpit from "@/v3/components/flow/ShowCockpit";
 // The artifact studio pulls React Flow and every WYSIWYG editor — a heavy
 // chunk only needed when a document is opened. Lazy-load it so it never
 // weighs on the initial Flow render.
@@ -461,6 +462,11 @@ export default function FlowCanvas({ program, programs, runningAgentIds, agentEr
                           is the VALIDATION act. The three-act phase, projected. */}
                       {movement.id === "envision" ? (
                         <EnvisionCockpit program={program} onSaveInputs={onSaveInputs} onRunAgent={onRunAgent} />
+                      ) : null}
+                      {/* The Show cockpit: the built PROTOTYPE, then per-stakeholder
+                          verdicts — the validation theater above the demo-link board. */}
+                      {movement.id === "show" ? (
+                        <ShowCockpit program={program} onRunAgent={onRunAgent} />
                       ) : null}
                       {hasPeople ? (
                         <IntervieweeDiscovery program={program} movementId={movement.id}
