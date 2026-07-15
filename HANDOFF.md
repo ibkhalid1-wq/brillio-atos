@@ -102,7 +102,11 @@ supabase/functions/
   → gate recomputes.
 - **Async loop**: minted links (`?flowRespond=`) → flow-portal quarantines into
   `flowPortalInbox` → operator ingests in the Inbox → becomes evidence. Nothing enters the
-  record unreviewed.
+  record unreviewed. Review links (ontology / workflow / blueprint) **re-project live from
+  the current record** each time they open — flow-portal ships the live artifacts and the
+  recipient's role, the client rebuilds the review scoped to that recipient's own area
+  (`FlowRespond.tsx` / `flowReviews.ts`). So regeneration never invalidates a link: the
+  recipient always reviews today's artifacts, never a frozen snapshot.
 - **Conflict loop**: contradictions (edge-detected in Atlas runs, watcher-detected across
   evidence) are stripped from documents and queued as `contradictionEntries` decisions —
   routed to the sponsor, resolution recorded with what/who/when. CI pins this routing.
@@ -129,7 +133,7 @@ supabase/functions/
 
 ## Testing & CI
 
-- `npx vitest run` — 821 tests / 48 files. The load-bearing suites:
+- `npx vitest run` — 903 tests / 53 files. The load-bearing suites:
   - `flowLibs.test.ts` — gate verdicts pinned word-for-word, decision resolution, briefs, locateQuote
   - `coherence.test.ts` — cross-surface invariants (every decision family has a preview, checklist groups)
   - `edgeLockstep.test.ts` — client/edge parity by parsing both sources (fingerprints,

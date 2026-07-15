@@ -7135,9 +7135,9 @@ details[open] > summary .v3fs-disc-c::after {display:none}
   color:var(--v3-text-muted);background:none;border:none;cursor:pointer;padding:0;transition:color .12s}
 .v3fs-olist-flagbtn:hover {color:var(--v3-accent-2)}
 .v3fs-olist-note {padding:0 15px 14px}
-.v3fs-omap-comment {width:100%;font-size:13px;font-family:inherit;border:1px solid var(--fs-line);border-radius:9px;padding:9px 12px;
+.v3fs-olist-input {width:100%;font-size:13px;font-family:inherit;border:1px solid var(--fs-line);border-radius:9px;padding:9px 12px;
   background:var(--v3-surface);color:var(--v3-text);margin-top:2px}
-.v3fs-omap-comment:focus {outline:none;border-color:var(--v3-accent-2);box-shadow:0 0 0 3px color-mix(in srgb,var(--v3-accent-2) 14%,transparent)}
+.v3fs-olist-input:focus {outline:none;border-color:var(--v3-accent-2);box-shadow:0 0 0 3px color-mix(in srgb,var(--v3-accent-2) 14%,transparent)}
 @media (prefers-reduced-motion:reduce){
   .v3fs-olist-card,.v3fs-olist-body,.v3fs-olist-flagbtn,.v3fs-vflow-insert {transition:none}
 }

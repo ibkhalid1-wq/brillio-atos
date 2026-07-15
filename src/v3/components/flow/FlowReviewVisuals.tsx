@@ -184,7 +184,7 @@ export function OntologyMap({ terms, relations, comments, onComment }: {
             {isSel ? (
               <div className="v3fs-olist-note">
                 <div className="v3fs-rvw-field">
-                  <input className="v3fs-omap-comment" value={comments[String(i)] ?? ""}
+                  <input className="v3fs-olist-input" value={comments[String(i)] ?? ""}
                     onChange={(e) => onComment(i, e.target.value)}
                     placeholder="Wrong, missing, or named differently? (optional)" autoFocus />
                   <DictationButton compact label="Speak this note"
