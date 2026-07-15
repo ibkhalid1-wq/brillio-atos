@@ -1434,9 +1434,10 @@ When an Experience Design exists (existingArtifacts), BUILD TO IT: its screens a
 Optimise for time-to-first-demo: the thinnest vertical slice that lets each stakeholder watch THEIR OWN workflow run. Seed scenarios must come from real transcript moments — their numbers, their step names, the delays they complained about — so the demo lands as recognition, not fiction. Stub what the slice does not need.
 
 ROBUSTNESS RULES (enforced, not optional):
+- COVER EVERY WORKFLOW: buildSlices must ACCOUNT for every workflow in the Current-State Atlas (and every Experience Design flow, if one exists) — not only the primary or demoable one. Order the slices time-to-first-demo (the FIRST slice is the thinnest walking skeleton that lets a stakeholder watch their own workflow run), but every Atlas workflow appears in some slice's "demonstrates", or is named explicitly in gaps. A workflow silently absent from buildSlices is a failure, never an omission.
 - The scope contract is explicit three-way: inScope / outOfScope / fakedForDemo — every faked item says WHY it is faked. This is what stops the demo silently over-promising.
 - The walkthrough is a NUMBERED CLICK-PATH, not prose: screen → action → expected result → the evidence that says it must behave that way. It doubles as the demo's test script.
-- Fixtures come from the ONTOLOGY: name entities exactly as the ontology does, and include the records that make key relationships visible on screen (e.g. the one Account whose Opportunities demonstrate the relation).
+- COVER THE ONTOLOGY: fixtures name entities exactly as the ontology does, and EVERY entity in the Domain Ontology gets seed records — not just the ones behind key relationships. An ontology entity with no fixtures is a gap, never an omission. Still include the records that make key relationships visible on screen (e.g. the one Account whose Opportunities demonstrate the relation).
 - The interface inventory enumerates STATES per screen (empty / loading / populated / error) — robustness lives in the states, not the happy path.
 - Every assumption the build depends on carries an owner and a resolve-by moment.
 - definitionOfDone is derived from the movement's gate criteria — the pack may not disagree with the gate.
