@@ -2,6 +2,7 @@ import { Fragment, Suspense, lazy, useEffect, useMemo, useRef, useState } from "
 import type { ProgramSummary } from "@/new/types";
 import PhaseInputsPanel from "@/v3/components/PhaseInputsPanel";
 import { acceptedAgentPatterns } from "@/v3/components/flow/flowPatterns";
+import EnvisionCockpit from "@/v3/components/flow/EnvisionCockpit";
 // The artifact studio pulls React Flow and every WYSIWYG editor — a heavy
 // chunk only needed when a document is opened. Lazy-load it so it never
 // weighs on the initial Flow render.
@@ -454,6 +455,13 @@ export default function FlowCanvas({ program, programs, runningAgentIds, agentEr
                           </div>
                         ) : null;
                       })() : null}
+                      {/* The Envision cockpit: DIRECTION (choose the architecture,
+                          recorded) + DESIGN (the one future-state — today→tomorrow,
+                          KPIs, experience↔agents) sit ABOVE the collect board, which
+                          is the VALIDATION act. The three-act phase, projected. */}
+                      {movement.id === "envision" ? (
+                        <EnvisionCockpit program={program} onSaveInputs={onSaveInputs} onRunAgent={onRunAgent} />
+                      ) : null}
                       {hasPeople ? (
                         <IntervieweeDiscovery program={program} movementId={movement.id}
                           captureField={meetingKit(program, movement.id)?.captureField ?? "interviewTranscripts"}

@@ -6394,6 +6394,70 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-demo-field:not(:disabled):hover {border-color:color-mix(in srgb,var(--v3-amber) 55%,var(--fs-line))}
 .v3fs-demo-field em {font-style:normal;font-size:9.5px;font-weight:750;letter-spacing:.03em;text-transform:uppercase;color:var(--v3-text-muted);margin-right:4px}
 .v3fs-demo-field.flagged {border-color:var(--v3-amber);color:var(--v3-amber);background:var(--v3-amber-soft)}
+/* ── The Envision cockpit: Direction · Design · (Validation below) ──────── */
+.v3fs-envc {display:flex;flex-direction:column;gap:16px;margin-bottom:18px}
+.v3fs-envc-act {border:1px solid var(--fs-line);border-radius:16px;background:var(--fs-card);box-shadow:var(--v3-shadow-sm);padding:16px 18px}
+.v3fs-envc-ah {display:flex;align-items:center;gap:10px;font-size:14px;font-weight:700;letter-spacing:-.01em;color:var(--v3-text-primary);margin-bottom:12px}
+.v3fs-envc-an {display:grid;place-items:center;width:22px;height:22px;border-radius:7px;flex:0 0 auto;font-size:12px;color:#fff;
+  background:linear-gradient(140deg,var(--v3-accent-2),var(--v3-accent-b,#3b2f72))}
+.v3fs-envc-chosen {font-size:12.5px;color:var(--v3-green);background:color-mix(in srgb,var(--v3-green) 10%,transparent);
+  border:1px solid color-mix(in srgb,var(--v3-green) 35%,var(--fs-line));border-radius:9px;padding:7px 12px;margin-bottom:12px}
+.v3fs-envc-chosen b {color:var(--v3-text-primary)}
+.v3fs-envc-cands {display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
+.v3fs-envc-cand {text-align:left;font:inherit;border:1px solid var(--fs-line);border-radius:12px;background:var(--v3-surface);padding:12px 14px;cursor:pointer;
+  transition:border-color var(--v3-transition-fast),box-shadow var(--v3-transition-fast)}
+.v3fs-envc-cand:hover {box-shadow:var(--v3-shadow-xs)}
+.v3fs-envc-cand.on {border-color:var(--v3-accent-2);box-shadow:0 0 0 3px color-mix(in srgb,var(--v3-accent-2) 12%,transparent)}
+.v3fs-envc-cand.rec {border-left:3px solid var(--v3-green)}
+.v3fs-envc-candh {display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+.v3fs-envc-candh b {font-size:13px;font-weight:650;color:var(--v3-text-primary)}
+.v3fs-envc-shape {font-size:10px;font-family:var(--v3-font-mono);color:var(--v3-accent-2)}
+.v3fs-envc-recbadge {font-size:9.5px;font-weight:750;letter-spacing:.03em;text-transform:uppercase;color:var(--v3-green)}
+.v3fs-envc-cand p {margin:0;font-size:12px;line-height:1.5;color:var(--v3-text-secondary)}
+.v3fs-envc-decide {margin-top:12px;display:flex;flex-direction:column;gap:8px}
+.v3fs-envc-decide label span {display:block;font-size:12px;color:var(--v3-text-secondary);margin-bottom:5px}
+.v3fs-envc-decide label em {font-style:normal;color:var(--v3-text-muted)}
+.v3fs-envc-decide textarea {width:100%;font:inherit;font-size:12.5px;border:1px solid var(--fs-line);border-radius:9px;padding:8px 11px;background:var(--v3-surface);color:var(--v3-text);resize:vertical}
+.v3fs-envc-decide textarea:focus {outline:none;border-color:var(--v3-accent-2);box-shadow:0 0 0 3px color-mix(in srgb,var(--v3-accent-2) 12%,transparent)}
+.v3fs-envc-decide .v3fs-btn {align-self:flex-start}
+.v3fs-envc-areas {display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.v3fs-envc-area {font:inherit;font-size:11.5px;font-weight:600;color:var(--v3-text-secondary);background:var(--v3-surface);border:1px solid var(--fs-line);border-radius:8px;padding:4px 11px;cursor:pointer}
+.v3fs-envc-area.on {border-color:var(--v3-accent-2);color:var(--v3-accent-2);background:var(--fs-indigo-wash)}
+.v3fs-envc-kpis {display:flex;flex-direction:column;gap:5px;margin-bottom:14px;padding:10px 13px;border-radius:11px;background:var(--v3-surface-2);border:1px solid var(--fs-line)}
+.v3fs-envc-kpis .lbl {font-size:9.5px;font-weight:750;letter-spacing:.06em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3fs-envc-kpi {font-size:12px;color:var(--v3-text-secondary);font-variant-numeric:tabular-nums}
+.v3fs-envc-wf {margin-bottom:12px}
+.v3fs-envc-wfh {display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.v3fs-envc-wfh b {font-size:13px;font-weight:650;color:var(--v3-text-primary)}
+.v3fs-envc-tag {font-size:9.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--v3-accent-2);background:var(--fs-indigo-wash);border-radius:6px;padding:2px 7px}
+.v3fs-envc-steps {list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px}
+.v3fs-envc-step {display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;padding:7px 11px;border-radius:9px;border:1px solid var(--fs-line);background:var(--v3-surface)}
+.v3fs-envc-step.agentify {border-left:3px solid var(--v3-green)}
+.v3fs-envc-step.assist {border-left:3px solid var(--v3-amber)}
+.v3fs-envc-step.keep {border-left:3px solid var(--v3-text-muted)}
+.v3fs-envc-act-txt {flex:1 1 200px;font-size:12.5px;color:var(--v3-text-primary)}
+.v3fs-envc-arrow {flex:0 0 auto;color:var(--v3-accent-2);font-weight:700}
+.v3fs-envc-mode {flex:1 1 200px;font-size:12px;color:var(--v3-text-secondary)}
+.v3fs-envc-mode b {color:var(--v3-text-primary);font-weight:650}
+.v3fs-envc-hitl {font-style:normal;color:var(--v3-amber);font-weight:650}
+.v3fs-envc-lenses {display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+@media (max-width:640px){.v3fs-envc-lenses{grid-template-columns:1fr}}
+.v3fs-envc-lensh {font-size:11px;font-weight:700;letter-spacing:.03em;color:var(--v3-text-secondary);margin-bottom:8px}
+.v3fs-envc-lensh span {font-weight:400;color:var(--v3-text-muted)}
+.v3fs-envc-lensh .v3fs-a {margin-left:6px}
+.v3fs-envc-agent, .v3fs-envc-screen {display:block;width:100%;text-align:left;font:inherit;border:1px solid var(--fs-line);border-radius:11px;
+  background:var(--v3-surface);padding:10px 12px;margin-bottom:7px;cursor:pointer;transition:border-color var(--v3-transition-fast),box-shadow var(--v3-transition-fast),opacity var(--v3-transition-fast)}
+.v3fs-envc-agent:hover, .v3fs-envc-screen:hover {box-shadow:var(--v3-shadow-xs)}
+.v3fs-envc-agent.lit, .v3fs-envc-screen.lit {border-color:var(--v3-accent-2);box-shadow:0 0 0 3px color-mix(in srgb,var(--v3-accent-2) 14%,transparent)}
+.v3fs-envc-agent.dim, .v3fs-envc-screen.dim {opacity:.4}
+.v3fs-envc-agenth {display:flex;align-items:center;gap:8px}
+.v3fs-envc-agenth b {font-size:12.5px;font-weight:650;color:var(--v3-text-primary)}
+.v3fs-envc-auto {font-size:9px;font-family:var(--v3-font-mono);color:var(--v3-amber)}
+.v3fs-envc-agent p {margin:4px 0 0;font-size:11.5px;line-height:1.45;color:var(--v3-text-secondary)}
+.v3fs-envc-screen b {font-size:12.5px;font-weight:650;color:var(--v3-text-primary)}
+.v3fs-envc-ents {display:block;margin-top:3px;font-size:11px;color:var(--v3-text-muted)}
+.v3fs-envc-count {display:inline-block;margin-top:5px;font-size:10px;font-weight:700;letter-spacing:.02em;color:var(--v3-accent-2)}
+.v3fs-envc-genexp {margin-top:12px}
 /* ── The PILOT: the design running as a working app ─────────────────────── */
 .v3fs-pilot {margin:12px 0;border:1px solid var(--fs-line);border-radius:16px;background:var(--fs-card);box-shadow:var(--v3-shadow-sm);overflow:hidden}
 .v3fs-pilot-nav {display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--fs-line);background:var(--v3-surface-2)}
