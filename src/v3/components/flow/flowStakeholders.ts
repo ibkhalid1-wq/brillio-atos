@@ -144,8 +144,13 @@ function askAudience(ask: string, roster: RosterAudienceEntry[]): Set<string> {
     }
     return matched;
   }
-  // Unaddressed gap: fall back to literal name/role containment.
+  // Unaddressed gap: route by (a) literal name/role containment, or (b) the
+  // DOMAIN the gap's content names — its subject tokens overlapping the person's
+  // role + coverage-map domain. So an atlas open question about "partner-
+  // influenced opportunities" reaches the Alliances voice, and "sales-to-
+  // delivery hand-off" reaches Sales and Delivery — not every SME's script.
   const text = ask.toLowerCase();
+  const contentToks = domainTokens(ask);
   for (const person of roster) {
     const name = person.name.trim().toLowerCase();
     const role = person.role.trim().toLowerCase();
@@ -154,7 +159,11 @@ function askAudience(ask: string, roster: RosterAudienceEntry[]): Set<string> {
       || (first.length >= 3 && text.includes(first))
       || (role.length > 3 && text.includes(role))) {
       matched.add(name);
+      continue;
     }
+    const personToks = domainTokens(person.role);
+    if (person.coverage) for (const token of person.coverage) personToks.add(token);
+    for (const token of contentToks) { if (personToks.has(token)) { matched.add(name); break; } }
   }
   return matched;
 }
@@ -306,6 +315,12 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
     // Sponsor intentionally excluded — see the note above: their discovery asks
     // fall through to the stakeholders who own the work.
   ];
+  // With a coverage map we can ROUTE unaddressed gaps by domain, so an ask that
+  // fits no one's domain is a movement-wide open question kept on the artifact —
+  // not blanketed onto every SME's script. Without a map (early programmes, a
+  // lone interviewee) there's no domain split, so an unplaceable gap still
+  // reaches everyone rather than vanishing.
+  const canRouteByDomain = audienceRoster.some((entry) => entry.coverage && entry.coverage.size > 0);
   const personaCards: MovementStakeholder[] = personaRoles.map((roleName, index) => {
     const bound = listenBindings[roleName];
     const name = bound?.name ?? "";
@@ -314,7 +329,10 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
       const to = deferralByAsk.get(normAsk(ask));
       if (to && !matchesTarget(to, name, roleName)) return false;
       const audience = askAudience(ask, audienceRoster);
-      return audience.size === 0 || audience.has(key) || audience.has(name.toLowerCase());
+      // Route to THIS card when the ask names or is about this person's domain.
+      // An ask that fits nobody: kept on the artifact when we can route by
+      // domain, else falls through to everyone.
+      return audience.has(key) || audience.has(name.toLowerCase()) || (audience.size === 0 && !canRouteByDomain);
     }).map(stripAskAddressee);
     return {
       id: `persona-${index}`,
@@ -351,7 +369,10 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
     const myAsks = movementAsks.filter((ask) => {
       if (isDeferredElsewhere(ask)) return false;
       const audience = askAudience(ask, audienceRoster);
-      return audience.size === 0 || audience.has(key);
+      // Only asks that name or fit this person's domain land on their script; an
+      // ask that fits no one is kept on the artifact when we can route by domain,
+      // else (no coverage map to split by) falls through to everyone.
+      return audience.has(key) || (audience.size === 0 && !canRouteByDomain);
     }).map(stripAskAddressee);
     // Heard already? Their turns are on the record. If so, the follow-up is only
     // what is STILL OPEN (disagreements + artifact gaps) — not the original

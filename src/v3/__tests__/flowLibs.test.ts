@@ -1216,6 +1216,34 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
     expect(vimal.questions).toContain("What systems feed a quote?"); // agenda kept
   });
 
+  it("with a coverage map, an atlas open question routes to the domain owner — not every SME", () => {
+    const p = programme({
+      currentStateAtlas: { openQuestions: [
+        "How are partner opportunities attributed today?",
+        "What is the marketing lead hand-off SLA?",
+      ] },
+      discoveryKit: {
+        coverageMap: [
+          { domain: "Alliances and partner management", coveredBy: ["Tara Alliance"] },
+          { domain: "Marketing and lead generation", coveredBy: ["Sam Marketer"] },
+        ],
+        interviews: [
+          { stakeholder: "Tara Alliance", role: "Alliances SME", agenda: [{ questions: ["Alliance agenda q"] }] },
+          { stakeholder: "Sam Marketer", role: "Marketing SME", agenda: [{ questions: ["Marketing agenda q"] }] },
+        ],
+      },
+    });
+    const people = resolveMovementStakeholders(p, "listen");
+    const tara = people.find((s) => /Tara/.test(s.name))!;
+    const sam = people.find((s) => /Sam/.test(s.name))!;
+    // The partner question reaches Alliances only — NOT the Marketing SME.
+    expect(tara.questions.some((q) => /partner/i.test(q))).toBe(true);
+    expect(sam.questions.some((q) => /partner/i.test(q))).toBe(false);
+    // The marketing/lead question reaches Marketing only — NOT the Alliances SME.
+    expect(sam.questions.some((q) => /marketing lead hand-off/i.test(q))).toBe(true);
+    expect(tara.questions.some((q) => /marketing lead hand-off/i.test(q))).toBe(false);
+  });
+
   it("genuine plumbing gaps (ledger/regenerate) still never reach a stakeholder script", () => {
     const kit = meetingKit(framed(["Regenerate the artifact ledger after the evidence changed."]), "frame")!;
     expect(kit.followUp).toBe(false);

@@ -7104,9 +7104,14 @@ details[open] > summary .v3fs-disc-c::after {display:none}
    across every movement's board. */
 .v3fs-collect-col .v3fs-ivc-b {display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px 26px;align-items:start}
 .v3fs-collect-col .v3fs-ivc-cap {grid-column:1/-1;border-top:1px solid color-mix(in srgb,var(--fs-line) 70%,transparent);padding-top:12px}
-.v3fs-ivc-sec {display:flex;flex-direction:column;gap:7px}
-.v3fs-ivc-sec-h {font-size:9.5px;font-weight:750;letter-spacing:.07em;text-transform:uppercase;color:var(--v3-text-muted)}
-.v3fs-ivc-sec-note {display:block;text-transform:none;letter-spacing:0;font-weight:500;font-size:10.5px;color:var(--v3-text-muted);margin-top:3px}
+.v3fs-ivc-sec {display:flex;flex-direction:column;gap:6px}
+/* Section headers lead each block — accent-toned with a leading tick so they
+   stand out from the muted body, kept compact (a tight caption line). */
+.v3fs-ivc-sec-h {position:relative;padding-left:16px;font-size:10px;font-weight:800;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--v3-accent-b)}
+.v3fs-ivc-sec-h::before {content:"";position:absolute;left:0;top:4px;width:11px;height:2px;border-radius:2px;background:var(--v3-accent-2)}
+.v3fs-ivc-sec-note {display:block;text-transform:none;letter-spacing:0;font-weight:500;font-size:10.5px;
+  color:var(--v3-text-muted);margin-top:2px}
 .v3fs-ivc-fb {display:flex;flex-direction:column;gap:6px;max-height:172px;overflow-y:auto;padding-right:2px}
 .v3fs-ivc-fb-row {display:flex;flex-direction:column;gap:5px;width:100%;text-align:left;font:inherit;border:1px solid var(--fs-line);
   border-radius:9px;background:var(--fs-card);padding:8px 10px;cursor:pointer;transition:background .13s,border-color .13s}
