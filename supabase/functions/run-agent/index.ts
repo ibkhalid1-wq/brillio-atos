@@ -4,6 +4,7 @@ import {
 } from "../_shared/claudeClient.ts";
 import { estimateCostUsd, resolveAgentTier } from "../_shared/modelCatalog.ts";
 import { logger } from "../_shared/logger.ts";
+import { stakeholderPrimaryArea, GENERAL_AREA } from "../_shared/flowAreas.ts";
 import {
   splitExternalTexts,
   mergeExternalTexts,
@@ -6027,6 +6028,52 @@ function applyCompletionEstimateResultToProgramData(programData: ProgramState, p
   }));
 }
 
+/**
+ * The Atlas workflows + Ontology entities the area model scores against — read
+ * from the program blob so the tagger classifies flows/scripts by the SAME
+ * grounding the client uses. Empty arrays when the programme has no atlas yet.
+ */
+function areaGrounding(programData: ProgramState): {
+  workflows: Record<string, unknown>[];
+  entities: Record<string, unknown>[];
+} {
+  const inner = getInnerProgramData(programData);
+  const atlas = isRecord(inner.currentStateAtlas) ? inner.currentStateAtlas : null;
+  const ontology = isRecord(inner.domainOntology) ? inner.domainOntology : null;
+  const workflows = atlas && Array.isArray(atlas.workflows) ? atlas.workflows.filter(isRecord) : [];
+  const entities = ontology && Array.isArray(ontology.entities) ? ontology.entities.filter(isRecord) : [];
+  return { workflows, entities };
+}
+
+/**
+ * Tag experience-design flows (by persona) and demo scripts (by stakeholder/
+ * role) with their business `area`, so the Show demo surface can default a
+ * recipient to their own area's flow and name it — the Show-phase parallel to
+ * how Listen reviews scope by `recipientArea`. Deterministic and idempotent: an
+ * explicit area already on the record wins, and a General result is left off so
+ * a single-area programme stays a graceful no-op. Mutates `result` in place.
+ */
+function tagArtifactAreas(programData: ProgramState, fieldKey: string, result: Record<string, unknown>): void {
+  if (fieldKey !== "experienceDesign" && fieldKey !== "demoScripts") return;
+  const { workflows, entities } = areaGrounding(programData);
+  if (!workflows.length && !entities.length) return;
+  const str = (v: unknown): string => (typeof v === "string" ? v : "");
+  const stamp = (target: Record<string, unknown>, name: string, role?: string): void => {
+    if (str(target.area).trim()) return; // explicit area wins
+    const area = stakeholderPrimaryArea(workflows, entities, name, role);
+    if (area && area !== GENERAL_AREA) target.area = area;
+  };
+  if (fieldKey === "experienceDesign" && Array.isArray(result.flows)) {
+    for (const flow of result.flows) {
+      if (isRecord(flow)) stamp(flow, str(flow.persona));
+    }
+  } else if (fieldKey === "demoScripts" && Array.isArray(result.scripts)) {
+    for (const script of result.scripts) {
+      if (isRecord(script)) stamp(script, str(script.stakeholder), str(script.role) || undefined);
+    }
+  }
+}
+
 function applyProgramSupportArtifact(
   programData: ProgramState,
   phaseId: string,
@@ -9380,6 +9427,11 @@ Deno.serve(async (req) => {
             formalResult = { ...formalResult, interviews: [...currentInterviews, ...personaAdds] };
           }
         }
+        // Tag experience-design flows / demo scripts with their business area so
+        // the Show demo can default a recipient to their own area's flow — done
+        // on the finalized result so BOTH the direct-apply and the propose-then-
+        // confirm (held) paths below carry the tags. Idempotent.
+        tagArtifactAreas(contextProgramData, spec.fieldKey, formalResult);
         // ── Regeneration guard ─────────────────────────────────────────────
         // Documents are data; the studio lets humans edit that data. A doc
         // whose editedAt postdates its generatedAt carries human work — a

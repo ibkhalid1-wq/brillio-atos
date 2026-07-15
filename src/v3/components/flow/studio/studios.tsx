@@ -15,7 +15,7 @@ import StrategyBoard from "./StrategyBoard";
 import ExperienceDesignStudio from "./ExperienceDesignStudio";
 import {
   Section, TextField, TextArea, SelectField, ChipsField, StringListEditor, TableEditor,
-  asArray, asRecord, asText, asStrings, type StudioProps,
+  asArray, asRecord, asText, asStrings, useStudioLocked, type StudioProps,
 } from "./StudioKit";
 import { FORMAL_ARTIFACT_FIELD_KEYS } from "@/v3/lib/formalArtifacts";
 
@@ -29,19 +29,20 @@ function CardList({ items, render, onAdd, onRemove, addLabel, itemLabel }: {
   addLabel: string;
   itemLabel: (item: Record<string, unknown>, index: number) => string;
 }) {
+  const locked = useStudioLocked();
   return (
     <div className="v3fs-stu-cards">
       {items.map((item, index) => (
         <details key={index} className="v3fs-stu-card" open={items.length <= 2}>
           <summary>
             <span className="v3fs-stu-card-t">{itemLabel(item, index)}</span>
-            <button type="button" className="v3fs-stu-x" aria-label="Remove"
-              onClick={(e) => { e.preventDefault(); onRemove(index); }}>×</button>
+            {locked ? null : <button type="button" className="v3fs-stu-x" aria-label="Remove"
+              onClick={(e) => { e.preventDefault(); onRemove(index); }}>×</button>}
           </summary>
           <div className="v3fs-stu-card-b">{render(item, index)}</div>
         </details>
       ))}
-      <button type="button" className="v3fs-a" onClick={onAdd}>＋ {addLabel}</button>
+      {locked ? null : <button type="button" className="v3fs-a" onClick={onAdd}>＋ {addLabel}</button>}
     </div>
   );
 }
@@ -238,6 +239,7 @@ function DiscoveryKitStudio({ doc, onChange, program }: StudioProps) {
 const SEVERITIES = ["high", "medium", "low"];
 
 function AtlasStudio({ doc, onChange, onOpenArtifact, program }: StudioProps) {
+  const locked = useStudioLocked();
   const patch = patchOf(doc, onChange);
   const pains = useListOps(doc, onChange, "painHeatmap");
   return (
@@ -249,18 +251,18 @@ function AtlasStudio({ doc, onChange, onOpenArtifact, program }: StudioProps) {
         <div className="v3fs-stu-heat">
           {pains.items.map((pain, index) => (
             <div key={index} className={`v3fs-stu-heat-row sev-${asText(pain.severity) || "medium"}`}>
-              <select value={asText(pain.severity) || "medium"} aria-label="Severity"
+              <select value={asText(pain.severity) || "medium"} aria-label="Severity" disabled={locked}
                 onChange={(e) => pains.set(index, { severity: e.target.value })}>
                 {SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
-              <input value={asText(pain.area)} placeholder="Area" aria-label="Area"
+              <input value={asText(pain.area)} placeholder="Area" aria-label="Area" disabled={locked}
                 onChange={(e) => pains.set(index, { area: e.target.value })} />
-              <input value={asText(pain.pain)} placeholder="The pain" aria-label="Pain" style={{ flexGrow: 2 }}
+              <input value={asText(pain.pain)} placeholder="The pain" aria-label="Pain" style={{ flexGrow: 2 }} disabled={locked}
                 onChange={(e) => pains.set(index, { pain: e.target.value })} />
-              <button type="button" className="v3fs-stu-x" aria-label="Remove" onClick={() => pains.remove(index)}>×</button>
+              {locked ? null : <button type="button" className="v3fs-stu-x" aria-label="Remove" onClick={() => pains.remove(index)}>×</button>}
             </div>
           ))}
-          <button type="button" className="v3fs-a" onClick={() => pains.add({ area: "", pain: "", severity: "medium", voicedBy: [] })}>＋ Add pain</button>
+          {locked ? null : <button type="button" className="v3fs-a" onClick={() => pains.add({ area: "", pain: "", severity: "medium", voicedBy: [] })}>＋ Add pain</button>}
         </div>
       </Section>
       <Section label="Systems inventory">
@@ -287,6 +289,7 @@ function AtlasStudio({ doc, onChange, onOpenArtifact, program }: StudioProps) {
 const SCORE_KEYS = ["fitToWorkflows", "timeToFirstDemo", "operability", "cost"] as const;
 
 function StrategyStudio({ doc, onChange }: StudioProps) {
+  const locked = useStudioLocked();
   const patch = patchOf(doc, onChange);
   const candidates = useListOps(doc, onChange, "candidates");
   const recommendation = asRecord(doc.recommendation);
@@ -318,7 +321,7 @@ function StrategyStudio({ doc, onChange }: StudioProps) {
                 {SCORE_KEYS.map((key) => (
                   <label key={key}>
                     <span>{key.replace(/([A-Z])/g, " $1").toLowerCase()}</span>
-                    <input inputMode="numeric" value={asText(asRecord(candidate.scores)[key])}
+                    <input inputMode="numeric" value={asText(asRecord(candidate.scores)[key])} disabled={locked}
                       onChange={(e) => candidates.set(index, { scores: { ...asRecord(candidate.scores), [key]: e.target.value.replace(/[^0-9.]/g, "") } })} />
                   </label>
                 ))}

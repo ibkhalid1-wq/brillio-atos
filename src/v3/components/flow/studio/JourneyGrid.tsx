@@ -7,7 +7,7 @@
  * every mirror.
  */
 import { useMemo, useState } from "react";
-import { TextField, SelectField, asArray, asRecord, asText, type StudioProps } from "./StudioKit";
+import { TextField, SelectField, asArray, asRecord, asText, useStudioLocked, type StudioProps } from "./StudioKit";
 
 const JOURNEY_LANES: Array<{ key: string; label: string }> = [
   { key: "customer", label: "Customer" },
@@ -17,6 +17,7 @@ const JOURNEY_LANES: Array<{ key: string; label: string }> = [
 ];
 
 export default function JourneyGrid({ doc, onChange }: StudioProps) {
+  const locked = useStudioLocked();
   const journeys = useMemo(() => asArray(doc.journeys).map(asRecord), [doc.journeys]);
   const [active, setActive] = useState(0);
   const journey = journeys[Math.min(active, Math.max(0, journeys.length - 1))];
@@ -38,10 +39,10 @@ export default function JourneyGrid({ doc, onChange }: StudioProps) {
             <em>{asText(entry.persona) === "user" ? "user" : "customer"}</em>
           </button>
         ))}
-        <button type="button" className="v3fs-a"
+        {locked ? null : <button type="button" className="v3fs-a"
           onClick={() => { writeJourneys([...journeys, { name: `Journey ${journeys.length + 1}`, persona: "customer", stages: [] }]); setActive(journeys.length); }}>
           ＋ journey
-        </button>
+        </button>}
       </div>
       {!journey ? (
         <div className="v3fs-stu-empty">No journeys yet — add one, or regenerate the Blueprint and they arrive grounded in the Atlas’s workflows.</div>
@@ -59,18 +60,18 @@ export default function JourneyGrid({ doc, onChange }: StudioProps) {
                   <th className="v3fs-jny-lane" aria-label="Lane" />
                   {stages.map((stage, index) => (
                     <th key={index}>
-                      <input value={asText(stage.name)} placeholder={`Stage ${index + 1}`} aria-label="Stage name"
+                      <input value={asText(stage.name)} placeholder={`Stage ${index + 1}`} aria-label="Stage name" disabled={locked}
                         onChange={(event) => patchStage(index, { name: event.target.value })} />
-                      <button type="button" className="v3fs-a" aria-label="Remove stage"
-                        onClick={() => patchJourney({ stages: stages.filter((_, i) => i !== index) })}>×</button>
+                      {locked ? null : <button type="button" className="v3fs-a" aria-label="Remove stage"
+                        onClick={() => patchJourney({ stages: stages.filter((_, i) => i !== index) })}>×</button>}
                     </th>
                   ))}
-                  <th className="v3fs-jny-add">
+                  {locked ? null : <th className="v3fs-jny-add">
                     <button type="button" className="v3fs-a"
                       onClick={() => patchJourney({ stages: [...stages, { name: "", customer: "", user: "", agent: "", systems: "" }] })}>
                       ＋ stage
                     </button>
-                  </th>
+                  </th>}
                 </tr>
               </thead>
               <tbody>
@@ -79,7 +80,7 @@ export default function JourneyGrid({ doc, onChange }: StudioProps) {
                     <th className="v3fs-jny-lane">{lane.label}</th>
                     {stages.map((stage, index) => (
                       <td key={index}>
-                        <textarea rows={2} value={asText(stage[lane.key])}
+                        <textarea rows={2} value={asText(stage[lane.key])} disabled={locked}
                           aria-label={`${lane.label} at ${asText(stage.name) || `stage ${index + 1}`}`}
                           onChange={(event) => patchStage(index, { [lane.key]: event.target.value })} />
                       </td>

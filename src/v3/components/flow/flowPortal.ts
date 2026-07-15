@@ -58,6 +58,8 @@ export interface FlowDemoInvite {
   scenario: string;
   steps: string[];
   acceptanceAsk: string;
+  /** The recipient's business area — the demo opens scoped to their own flow. */
+  recipientArea?: string;
   token: string;
   createdAt: string;
   respondedAt?: string;
@@ -124,6 +126,7 @@ export function listDemoInvites(program: ProgramSummary): FlowDemoInvite[] {
     scenario: String(entry.scenario ?? ""),
     steps: Array.isArray(entry.steps) ? entry.steps.map(String).filter(Boolean) : [],
     acceptanceAsk: String(entry.acceptanceAsk ?? ""),
+    recipientArea: typeof entry.recipientArea === "string" ? entry.recipientArea : undefined,
     token: String(entry.token ?? ""),
     createdAt: String(entry.createdAt ?? ""),
     respondedAt: typeof entry.respondedAt === "string" ? entry.respondedAt : undefined,
@@ -255,6 +258,12 @@ export function mintInterviewPacks(program: ProgramSummary, actor: string): Reco
  * re-demo resolver, so both waves carry identical shape. */
 export function buildDemoInviteFromScript(script: Record<string, unknown>, now: string): Record<string, unknown> {
   const steps = Array.isArray(script.steps) ? (script.steps as unknown[]).filter(isRecord) : [];
+  // The recipient's business area — the generator tags each demo script with it
+  // (via the same model that tags the experience-design flows), so the served
+  // pack can default the walker to their own area's flow and name it, the
+  // Show-phase parallel to how Listen reviews scope by area. Omitted for an
+  // untagged/General script so a single-area programme stays a graceful no-op.
+  const recipientArea = String(script.area ?? "").trim();
   return {
     id: `demo-${randomSecret().slice(0, 10)}`,
     stakeholder: String(script.stakeholder ?? "Stakeholder"),
@@ -263,6 +272,7 @@ export function buildDemoInviteFromScript(script: Record<string, unknown>, now: 
     scenario: String(script.scenario ?? ""),
     steps: steps.map((step) => [step.beat, step.show].filter(Boolean).map(String).join(" — ")).filter(Boolean).slice(0, 8),
     acceptanceAsk: String(script.acceptanceAsk ?? "Does this run your workflow the way you need it to?"),
+    ...(recipientArea && recipientArea !== "General" ? { recipientArea } : {}),
     token: randomSecret(),
     createdAt: now,
   };

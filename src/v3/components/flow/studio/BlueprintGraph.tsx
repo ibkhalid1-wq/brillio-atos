@@ -9,9 +9,10 @@ import { useEffect, useMemo } from "react";
 import { ReactFlow, Background, Controls, MarkerType, useNodesState, type Node, type Edge } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { FLOATING_EDGE_TYPES, layeredPositions } from "./graphKit";
-import { asArray, asRecord, asText, asStrings, type StudioProps } from "./StudioKit";
+import { asArray, asRecord, asText, asStrings, useStudioLocked, type StudioProps } from "./StudioKit";
 
 export default function BlueprintGraph({ doc }: Pick<StudioProps, "doc">) {
+  const locked = useStudioLocked();
   const agents = useMemo(() => asArray(doc.agents).map(asRecord), [doc.agents]);
   const orchestration = asRecord(doc.orchestration);
   const hitl = useMemo(() => asArray(doc.hitlPoints).map(asRecord), [doc.hitlPoints]);
@@ -100,7 +101,7 @@ export default function BlueprintGraph({ doc }: Pick<StudioProps, "doc">) {
         edges={edges}
         edgeTypes={FLOATING_EDGE_TYPES}
         onNodesChange={onNodesChange}
-        nodesDraggable
+        nodesDraggable={!locked}
         nodesConnectable={false}
         fitView
         fitViewOptions={{ padding: 0.2, minZoom: 0.1 }}

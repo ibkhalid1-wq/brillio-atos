@@ -6086,6 +6086,18 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-btn-regen:hover:not(:disabled){background:color-mix(in srgb,var(--v3-accent) 88%,#000);color:#fff}
 .v3fs-btn-regen:disabled{opacity:.6;cursor:progress}
 
+/* Locked studio fields — a derived document is read-only, so its inputs read
+   as static text (no editable chrome, default cursor), not greyed-out/broken. */
+.v3fs-docview-b input:disabled,
+.v3fs-docview-b textarea:disabled,
+.v3fs-docview-b select:disabled{
+  background:transparent;border-color:transparent;color:var(--v3-text);opacity:1;cursor:default;
+  -webkit-text-fill-color:var(--v3-text);padding-left:0;padding-right:0}
+.v3fs-docview-b select:disabled{appearance:none}
+.v3fs-docview-b .v3fs-stu-field input:disabled,
+.v3fs-docview-b .v3fs-stu-field textarea:disabled,
+.v3fs-docview-b .v3fs-stu-field select:disabled{border-bottom:1px solid var(--fs-line);padding-left:2px}
+
 /* ── Request a change: the read-only document's ask-a-stakeholder panel ──── */
 .v3fs-artask{margin:0 26px 4px;border:1px solid var(--fs-line);border-radius:12px;background:color-mix(in srgb,var(--v3-accent) 3%,var(--fs-card))}
 .v3fs-docview .v3fs-artask{margin:0 36px 8px}

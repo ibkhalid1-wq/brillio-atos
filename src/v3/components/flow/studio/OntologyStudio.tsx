@@ -14,7 +14,7 @@ import { FLOATING_EDGE_TYPES, layeredPositions } from "./graphKit";
 import "@xyflow/react/dist/style.css";
 import {
   Section, TextField, TextArea, SelectField, ChipsField, StringListEditor, TableEditor,
-  asArray, asRecord, asText, asStrings, type StudioProps,
+  asArray, asRecord, asText, asStrings, useStudioLocked, type StudioProps,
 } from "./StudioKit";
 
 import { ONTOLOGY_CARDINALITIES } from "@/v3/components/flow/flowOntologyConstraints";
@@ -35,6 +35,7 @@ function seedPositions(ids: string[], relations: Array<Record<string, unknown>>)
 }
 
 export default function OntologyStudio({ doc, onChange }: StudioProps) {
+  const locked = useStudioLocked();
   const entities = useMemo(() => asArray(doc.entities).map(asRecord), [doc.entities]);
   const relations = useMemo(() => asArray(doc.relations).map(asRecord), [doc.relations]);
   const ids = useMemo(() => entities.map(entityId), [entities]);
@@ -217,14 +218,14 @@ export default function OntologyStudio({ doc, onChange }: StudioProps) {
           minZoom={0.1}
           maxZoom={2.5}
           proOptions={{ hideAttribution: true }}
-          nodesConnectable
-          nodesDraggable
+          nodesConnectable={!locked}
+          nodesDraggable={!locked}
         >
           <Background gap={22} size={1} />
           <Controls showInteractive={false} />
         </ReactFlow>
         <div className="v3fs-onto-toolbar">
-          <button type="button" className="v3fs-btn" onClick={addEntity}>＋ Add entity</button>
+          {locked ? null : <button type="button" className="v3fs-btn" onClick={addEntity}>＋ Add entity</button>}
           <button type="button" className="v3fs-btn" onClick={rearrange} title="Re-apply the layered layout — shortest connectors, fewest crossings">⌗ Arrange</button>
           {/* The honest inventory: what the DOCUMENT holds, regardless of what
               the viewport or focus mode currently shows. If this reads low,
@@ -259,18 +260,18 @@ export default function OntologyStudio({ doc, onChange }: StudioProps) {
             {/* Explicit relation creation — same result as dragging node-to-
                 node on the canvas, but discoverable: pick the target entity
                 and the new relation opens in this panel to be named. */}
-            <SelectField label="Add relation to…" value=""
+            {locked ? null : <SelectField label="Add relation to…" value=""
               options={["", ...ids.filter((entityName) => entityName !== asText(selectedEntity.name))]}
               onChange={(target) => {
                 if (!target) return;
                 const next = [...relations, { from: asText(selectedEntity.name), relation: "relates to", to: target, cardinality: "unknown" }];
                 patch({ relations: next });
                 setSelected({ kind: "relation", index: next.length - 1 });
-              }} />
-            <p className="v3fs-onto-hint">…or drag from this entity’s edge dot to another entity on the canvas.</p>
-            <button type="button" className="v3fs-btn danger" onClick={() => deleteEntity(selectedEntityIndex)}>
+              }} />}
+            {locked ? null : <p className="v3fs-onto-hint">…or drag from this entity’s edge dot to another entity on the canvas.</p>}
+            {locked ? null : <button type="button" className="v3fs-btn danger" onClick={() => deleteEntity(selectedEntityIndex)}>
               Delete entity
-            </button>
+            </button>}
           </>
         ) : selectedRelation && selected?.kind === "relation" ? (
           <>
@@ -279,9 +280,9 @@ export default function OntologyStudio({ doc, onChange }: StudioProps) {
               onChange={(next) => updateRelation(selected.index, { relation: next })} />
             <SelectField label="Cardinality" value={asText(selectedRelation.cardinality) || "unknown"} options={CARDINALITIES}
               onChange={(next) => updateRelation(selected.index, { cardinality: next })} />
-            <button type="button" className="v3fs-btn danger" onClick={() => deleteRelation(selected.index)}>
+            {locked ? null : <button type="button" className="v3fs-btn danger" onClick={() => deleteRelation(selected.index)}>
               Delete relation
-            </button>
+            </button>}
           </>
         ) : (
           <div className="v3fs-stu-empty">

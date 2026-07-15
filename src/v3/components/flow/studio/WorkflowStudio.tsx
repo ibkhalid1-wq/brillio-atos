@@ -9,7 +9,7 @@
  */
 import React, { useCallback, useMemo, useState } from "react";
 import {
-  TextField, ChipsField, asArray, asRecord, asText, asStrings, type StudioProps,
+  TextField, ChipsField, asArray, asRecord, asText, asStrings, useStudioLocked, type StudioProps,
 } from "./StudioKit";
 import { workflowArea, programAreas, GENERAL_AREA } from "@/v3/components/flow/flowAreas";
 
@@ -43,6 +43,7 @@ function painForStep(step: Record<string, unknown>, pains: Array<Record<string, 
 }
 
 export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program }: StudioProps) {
+  const locked = useStudioLocked();
   const workflows = useMemo(() => asArray(doc.workflows).map(asRecord), [doc.workflows]);
   const pains = useMemo(() => asArray(doc.painHeatmap).map(asRecord), [doc.painHeatmap]);
   const [active, setActive] = useState(0);
@@ -151,7 +152,7 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program 
             <span className="v3fs-wf-unmapped">not mapped yet</span>
           </div>
         ))}
-        <button type="button" className="v3fs-a" onClick={addWorkflow}>＋ workflow</button>
+        {locked ? null : <button type="button" className="v3fs-a" onClick={addWorkflow}>＋ workflow</button>}
       </div>
 
       {!workflow ? (
@@ -209,6 +210,7 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program 
             </div>
           )}
 
+          {locked ? null : (
           <div className="v3fs-wf-bar">
             <button type="button" className="v3fs-btn" onClick={addStep}>＋ Step{selected != null ? " after selected" : ""}</button>
             {selected != null ? (
@@ -219,6 +221,7 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program 
               </>
             ) : <span className="v3fs-wf-hint">Select a step to edit it</span>}
           </div>
+          )}
           {selected != null && steps[selected] ? (
             <div className="v3fs-wf-inspector">
               <TextField label="Persona (lane)" value={asText(steps[selected].actor)} onChange={(next) => patchStep(selected, { actor: next })} />
@@ -240,11 +243,11 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program 
               <ChipsField label="Hand-offs" values={asStrings(workflow.handoffs)} onChange={(next) => patchWorkflow({ handoffs: next })} />
               <ChipsField label="Failure modes" values={asStrings(workflow.failureModes)} onChange={(next) => patchWorkflow({ failureModes: next })} />
             </div>
-            <button type="button" className="v3fs-btn danger" onClick={() => {
+            {locked ? null : <button type="button" className="v3fs-btn danger" onClick={() => {
               writeWorkflows(workflows.filter((_, index) => index !== active));
               setActive(Math.max(0, active - 1));
               setSelected(null);
-            }}>Remove this workflow</button>
+            }}>Remove this workflow</button>}
           </div>
         </>
       )}

@@ -6,6 +6,16 @@
  */
 import React from "react";
 
+/**
+ * When true, every studio primitive renders its controls disabled and hides its
+ * add/remove affordances — the document is DERIVED and read-only, so a field
+ * must not accept a click or a keystroke (a no-op onChange still let the caret
+ * in, which read as editable). FlowArtifactStudio provides this around the
+ * studio whenever edits are locked.
+ */
+export const StudioLockContext = React.createContext(false);
+export const useStudioLocked = (): boolean => React.useContext(StudioLockContext);
+
 export const asArray = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
 export const asRecord = (value: unknown): Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
@@ -27,10 +37,11 @@ export function Section({ label, hint, children }: { label: string; hint?: strin
 export function TextField({ label, value, onChange, placeholder }: {
   label?: string; value: string; onChange: (next: string) => void; placeholder?: string;
 }) {
+  const locked = useStudioLocked();
   return (
     <label className="v3fs-stu-field">
       {label ? <span className="v3fs-stu-fl">{label}</span> : null}
-      <input value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
+      <input value={value} placeholder={placeholder} disabled={locked} onChange={(e) => onChange(e.target.value)} />
     </label>
   );
 }
@@ -38,10 +49,11 @@ export function TextField({ label, value, onChange, placeholder }: {
 export function TextArea({ label, value, onChange, rows = 3, placeholder }: {
   label?: string; value: string; onChange: (next: string) => void; rows?: number; placeholder?: string;
 }) {
+  const locked = useStudioLocked();
   return (
     <label className="v3fs-stu-field">
       {label ? <span className="v3fs-stu-fl">{label}</span> : null}
-      <textarea value={value} rows={rows} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
+      <textarea value={value} rows={rows} placeholder={placeholder} disabled={locked} onChange={(e) => onChange(e.target.value)} />
     </label>
   );
 }
@@ -49,11 +61,12 @@ export function TextArea({ label, value, onChange, rows = 3, placeholder }: {
 export function SelectField({ label, value, options, onChange }: {
   label?: string; value: string; options: string[]; onChange: (next: string) => void;
 }) {
+  const locked = useStudioLocked();
   const known = options.includes(value) ? options : [value, ...options];
   return (
     <label className="v3fs-stu-field">
       {label ? <span className="v3fs-stu-fl">{label}</span> : null}
-      <select value={value} onChange={(e) => onChange(e.target.value)}>
+      <select value={value} disabled={locked} onChange={(e) => onChange(e.target.value)}>
         {known.map((option) => <option key={option} value={option}>{option || "—"}</option>)}
       </select>
     </label>
@@ -64,6 +77,7 @@ export function SelectField({ label, value, options, onChange }: {
 export function StringListEditor({ label, values, onChange, placeholder, addLabel }: {
   label?: string; values: string[]; onChange: (next: string[]) => void; placeholder?: string; addLabel?: string;
 }) {
+  const locked = useStudioLocked();
   const set = (index: number, next: string) => onChange(values.map((v, i) => (i === index ? next : v)));
   const remove = (index: number) => onChange(values.filter((_, i) => i !== index));
   return (
@@ -71,11 +85,11 @@ export function StringListEditor({ label, values, onChange, placeholder, addLabe
       {label ? <span className="v3fs-stu-fl">{label}</span> : null}
       {values.map((value, index) => (
         <div key={index} className="v3fs-stu-list-row">
-          <input value={value} placeholder={placeholder} onChange={(e) => set(index, e.target.value)} />
-          <button type="button" className="v3fs-stu-x" aria-label="Remove" onClick={() => remove(index)}>×</button>
+          <input value={value} placeholder={placeholder} disabled={locked} onChange={(e) => set(index, e.target.value)} />
+          {locked ? null : <button type="button" className="v3fs-stu-x" aria-label="Remove" onClick={() => remove(index)}>×</button>}
         </div>
       ))}
-      <button type="button" className="v3fs-a" onClick={() => onChange([...values, ""])}>＋ {addLabel ?? "Add"}</button>
+      {locked ? null : <button type="button" className="v3fs-a" onClick={() => onChange([...values, ""])}>＋ {addLabel ?? "Add"}</button>}
     </div>
   );
 }
@@ -97,6 +111,7 @@ export function TableEditor({ columns, rows, onChange, addLabel, emptyHint }: {
   addLabel?: string;
   emptyHint?: string;
 }) {
+  const locked = useStudioLocked();
   const setCell = (index: number, key: string, next: string) =>
     onChange(rows.map((row, i) => (i === index ? { ...row, [key]: next } : row)));
   const remove = (index: number) => onChange(rows.filter((_, i) => i !== index));
@@ -118,23 +133,23 @@ export function TableEditor({ columns, rows, onChange, addLabel, emptyHint }: {
               const options = col.options ?? [];
               const known = options.includes(value) ? options : [value, ...options];
               return (
-                <select key={col.key} style={style} value={value} aria-label={col.label}
+                <select key={col.key} style={style} value={value} aria-label={col.label} disabled={locked}
                   onChange={(e) => setCell(index, col.key, e.target.value)}>
                   {known.map((option) => <option key={option} value={option}>{option || "—"}</option>)}
                 </select>
               );
             }
             if (col.kind === "textarea") {
-              return <textarea key={col.key} style={style} rows={2} value={value} aria-label={col.label}
+              return <textarea key={col.key} style={style} rows={2} value={value} aria-label={col.label} disabled={locked}
                 onChange={(e) => setCell(index, col.key, e.target.value)} />;
             }
-            return <input key={col.key} style={style} value={value} aria-label={col.label}
+            return <input key={col.key} style={style} value={value} aria-label={col.label} disabled={locked}
               onChange={(e) => setCell(index, col.key, e.target.value)} />;
           })}
-          <button type="button" className="v3fs-stu-x v3fs-stu-xcol" aria-label="Remove row" onClick={() => remove(index)}>×</button>
+          {locked ? null : <button type="button" className="v3fs-stu-x v3fs-stu-xcol" aria-label="Remove row" onClick={() => remove(index)}>×</button>}
         </div>
       ))}
-      <button type="button" className="v3fs-a" onClick={add}>＋ {addLabel ?? "Add row"}</button>
+      {locked ? null : <button type="button" className="v3fs-a" onClick={add}>＋ {addLabel ?? "Add row"}</button>}
     </div>
   );
 }

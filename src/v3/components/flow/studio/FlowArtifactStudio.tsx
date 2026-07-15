@@ -20,6 +20,7 @@ import { listOpenFlowDecisions, listFlowAttestations, docSectionDiff } from "@/v
 import { buildPrototypePrompt } from "@/v3/components/flow/flowBuildPrompt";
 import { listSnapshots } from "@/v3/lib/blobSnapshots";
 import { STUDIO_REGISTRY } from "./studios";
+import { StudioLockContext } from "./StudioKit";
 import DocumentView from "./DocumentView";
 import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 
@@ -501,16 +502,21 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
                 capture the correction as evidence on its owner&rsquo;s collect card, then resynthesize.
                 Role bindings and sign-offs still work here.
               </div>
-              <entry.Component doc={draft}
-                onChange={canEdit ? (next) => { setDraft(next); setDirty(true); } : () => { /* derived — edits don't land */ }}
-                onOpenArtifact={onOpenArtifact} program={program}
-                onBindRole={onSaveInputs ? async (movementId, role, name, email) => {
-                  const bindings = readRoleBindings(program, movementId);
-                  bindings[role] = email ? { name, email } : { name };
-                  await onSaveInputs(movementId, { _roleBindings: JSON.stringify(bindings) }, {
-                    attest: { action: `Role bound — ${role} → ${name}`, detail: email || undefined },
-                  });
-                } : undefined} />
+              {/* Locked when edits are disabled — the studio's own inputs and
+                  add/remove/drag affordances go read-only, so a field can't be
+                  clicked into or typed (a no-op onChange had let the caret in). */}
+              <StudioLockContext.Provider value={!canEdit}>
+                <entry.Component doc={draft}
+                  onChange={canEdit ? (next) => { setDraft(next); setDirty(true); } : () => { /* derived — edits don't land */ }}
+                  onOpenArtifact={onOpenArtifact} program={program}
+                  onBindRole={onSaveInputs ? async (movementId, role, name, email) => {
+                    const bindings = readRoleBindings(program, movementId);
+                    bindings[role] = email ? { name, email } : { name };
+                    await onSaveInputs(movementId, { _roleBindings: JSON.stringify(bindings) }, {
+                      attest: { action: `Role bound — ${role} → ${name}`, detail: email || undefined },
+                    });
+                  } : undefined} />
+              </StudioLockContext.Provider>
             </>
           ) : (
             <>
