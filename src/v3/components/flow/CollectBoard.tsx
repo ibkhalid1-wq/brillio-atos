@@ -11,7 +11,7 @@ import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 import { flowMovements, movementEvidence, evidenceStamp, locateQuote, readMovementInputs, contradictionLogWithout, artifactDocument } from "@/v3/components/flow/flowShellData";
 import { relevantApprovers, stakeholderApprovalItems, approvalLinkFor, type StakeholderApprovalItem } from "@/v3/components/flow/flowApprovals";
 import { buildMeetingIcs, mailtoLink, stakeholderEmail } from "@/v3/components/flow/flowMeetings";
-import { listInterviewPacks, portalLinkFor } from "@/v3/components/flow/flowPortal";
+import { listInterviewPacks, portalLinkFor, movementValidationCoverage } from "@/v3/components/flow/flowPortal";
 import { resolveMovementStakeholders, readRoleBindings, readOperatorAsks, operatorAsksFor, type MovementStakeholder } from "@/v3/components/flow/flowStakeholders";
 import { mapTranscriptSpeakers } from "@/v3/components/flow/flowTranscriptMap";
 import { AttachFileButton, TranscribeButton, copyTextFromAction } from "@/v3/components/flow/flowCapture";
@@ -334,6 +334,24 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
           ) : null}
         </div>
       </div>
+      {/* Design-movement validation ledger: per area, how many stakeholders have
+          validated the Envision transformation / recorded a Show verdict, and how
+          many links still wait. An area with links out and ZERO validations is an
+          open flank on the design — same discipline as Listen's heard-count. */}
+      {(movementId === "envision" || movementId === "show") ? (() => {
+        const rows = movementValidationCoverage(program, movementId).filter((r) => r.validated || r.waiting);
+        return rows.length ? (
+          <div className="v3fs-valcov" role="note" aria-label="Validation coverage by area">
+            <span className="v3fs-valcov-l">{movementId === "show" ? "Demo verdicts" : "Future-state validation"}</span>
+            {rows.map((r) => (
+              <span key={r.area} className={`v3fs-valcov-chip${r.validated ? " ok" : r.waiting ? " open" : ""}`}
+                title={`${r.area}: ${r.validated} validated · ${r.waiting} waiting`}>
+                <b>{r.area}</b> {r.validated ? `✓${r.validated}` : ""}{r.waiting ? ` · ${r.waiting} waiting` : ""}
+              </span>
+            ))}
+          </div>
+        ) : null;
+      })() : null}
       {areaOrganized ? (
         <div className="v3fs-lanes">
           {laneData.map((lane, i) => (

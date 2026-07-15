@@ -12,6 +12,7 @@
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import {
   composeAgentifyAnswers, composeOntologyAtlasAnswers, composeListenWorkflowAnswers,
+  proposeFutureSteps, blueprintAgentContext,
   type AgentifyReview, type OntologyAtlasReview, type ListenWorkflowReview, type ReviewPayload,
 } from "@/v3/components/flow/flowReviews";
 import { WorkflowFlow, OntologyMap, type FlowNode } from "@/v3/components/flow/FlowReviewVisuals";
@@ -136,11 +137,18 @@ function AgentifySurface({ review, stakeholder, programme, objective, submitting
   const [responses, setResponses] = usePersistentState<Record<string, { disposition?: string; comment?: string }>>(draftKey, "ag", {});
   const [archResponse, setArchResponse] = usePersistentState(draftKey, "agArch", "");
   const [bpResponse, setBpResponse] = usePersistentState(draftKey, "agBp", "");
+  // Tap verdict on the architecture direction — endorsement is explicit signal.
+  const [archVerdict, setArchVerdict] = usePersistentState<"" | "endorsed" | "concerns">(draftKey, "agArchV", "");
   const [area, setArea] = useState(review.recipientArea ?? "");
   const areas = areasOf(review.workflows);
+  // The DERIVED future state: per step, the proposed run mode + the blueprint
+  // agent that takes it. The stakeholder reacts to a concrete transformation of
+  // the workflow they validated in Listen — never a blank question.
+  const future = useMemo(() => proposeFutureSteps(review), [review]);
+  const agentContext = useMemo(() => blueprintAgentContext(review), [review]);
   const totalSteps = review.workflows.reduce((n, w) => n + w.steps.length, 0);
   const decided = Object.values(responses).filter((r) => r.disposition).length;
-  const hasInput = decided > 0 || archResponse.trim().length > 0 || bpResponse.trim().length > 0;
+  const hasInput = decided > 0 || archResponse.trim().length > 0 || bpResponse.trim().length > 0 || archVerdict !== "";
   const setDisposition = (key: string, disposition: string) =>
     setResponses((prev) => ({ ...prev, [key]: { ...prev[key], disposition } }));
   const setComment = (key: string, comment: string) =>
@@ -155,29 +163,51 @@ function AgentifySurface({ review, stakeholder, programme, objective, submitting
           <section key={wi} className="v3fs-rvw-wf">
             <div className="v3fs-rvw-wf-h">
               <b>{workflow.name}</b>
-              {workflow.trigger ? <span className="v3fs-rvw-trigger">Starts when: {workflow.trigger}</span> : null}
+              <span className="v3fs-rvw-trigger">{workflow.trigger ? `Starts when: ${workflow.trigger} · ` : ""}How each step transforms</span>
             </div>
             <ol className="v3fs-rvw-steps">
               {workflow.steps.map((step, si) => {
                 const key = `${wi}.${si}`;
                 const chosen = responses[key]?.disposition;
+                const proposed = future[wi]?.[si];
+                const proposedKey = proposed?.mode === "agentify" ? "agentify" : proposed?.mode === "assist" ? "assist" : "keep";
+                const agentName = proposed?.agent ?? "An agent";
                 return (
-                  <li key={si} className={`v3fs-rvw-step${step.mine ? " mine" : ""}`}>
+                  <li key={si} className={`v3fs-rvw-step v3fs-tf-step${step.mine ? " mine" : ""}`}>
                     <div className="v3fs-rvw-step-a">
                       <span className="v3fs-rvw-num" aria-hidden="true">{si + 1}</span>
                       <div className="v3fs-rvw-step-body">
                         <span className="v3fs-rvw-action">{step.action}</span>
                         <span className="v3fs-rvw-meta">
+                          <span className="v3fs-tf-now">today:</span>
                           {step.actor ? <span className={step.mine ? "you" : ""}>{step.mine ? "you" : step.actor}</span> : null}
                           {step.system ? <span>· {step.system}</span> : null}
                         </span>
                       </div>
                     </div>
+                    {/* The proposed future of THIS step — derived from the blueprint,
+                        never a blank ask. Their taps confirm or correct it. */}
+                    {proposed ? (
+                      <div className="v3fs-tf-future">
+                        <span className="v3fs-tf-arrow" aria-hidden="true">→</span>
+                        <span className="v3fs-tf-prop">
+                          {proposed.mode === "assist"
+                            ? <><b>{agentName}</b> prepares this — <b>you decide</b></>
+                            : <><b>{agentName}</b> runs this end to end</>}
+                        </span>
+                        {proposed.hitl ? <span className="v3fs-tf-hitl" title="A human approval moment stays in the flow">⛨ you approve</span> : null}
+                      </div>
+                    ) : null}
+                    {step.evidence ? (
+                      <div className="v3fs-tf-heard" title={step.evidence}>↩ heard: “{step.evidence.length > 90 ? `${step.evidence.slice(0, 90)}…` : step.evidence}”</div>
+                    ) : null}
                     <div className="v3fs-rvw-seg" role="group" aria-label={`How should this step run: ${step.action}`}>
                       {DISPOSITIONS.map((d) => (
                         <button key={d.key} type="button" title={d.hint}
-                          className={`v3fs-rvw-opt ${d.key}${chosen === d.key ? " on" : ""}`}
-                          onClick={() => setDisposition(key, d.key)}>{d.label}</button>
+                          className={`v3fs-rvw-opt ${d.key}${chosen === d.key ? " on" : ""}${!chosen && d.key === proposedKey ? " sug" : ""}`}
+                          onClick={() => setDisposition(key, d.key)}>
+                          {d.label}{!chosen && d.key === proposedKey ? <em className="v3fs-tf-sug"> · proposed</em> : null}
+                        </button>
                       ))}
                     </div>
                     {chosen ? (
@@ -212,13 +242,29 @@ function AgentifySurface({ review, stakeholder, programme, objective, submitting
                 </div>
               ))}
             </div>
-            <div className="v3fs-rvw-field">
-              <textarea className="v3fs-rvw-overall" rows={2} value={archResponse}
-                onChange={(e) => setArchResponse(e.target.value)}
-                placeholder="Anything about this direction we&rsquo;ve got wrong, or a risk we&rsquo;ve missed? (type or record)" />
-              <DictationButton compact label="Speak your response"
-                onText={(spoken) => setArchResponse(joinDictation(archResponse, spoken))} />
+            {/* Tap verdict first — endorsement is signal, not the absence of a
+                complaint. Concerns opens the written/spoken response. */}
+            <div className="v3fs-tf-endorse" role="radiogroup" aria-label="Your verdict on the architecture direction">
+              <button type="button" role="radio" aria-checked={archVerdict === "endorsed"}
+                className={`v3fs-tf-endbtn ok${archVerdict === "endorsed" ? " on" : ""}`}
+                onClick={() => setArchVerdict((v) => v === "endorsed" ? "" : "endorsed")}>
+                ✓ Endorse this direction
+              </button>
+              <button type="button" role="radio" aria-checked={archVerdict === "concerns"}
+                className={`v3fs-tf-endbtn no${archVerdict === "concerns" ? " on" : ""}`}
+                onClick={() => setArchVerdict((v) => v === "concerns" ? "" : "concerns")}>
+                ✗ I have concerns
+              </button>
             </div>
+            {archVerdict === "concerns" || archResponse.trim() ? (
+              <div className="v3fs-rvw-field">
+                <textarea className="v3fs-rvw-overall" rows={2} value={archResponse}
+                  onChange={(e) => setArchResponse(e.target.value)}
+                  placeholder="What about this direction worries you, or what have we missed? (type or record)" />
+                <DictationButton compact label="Speak your response"
+                  onText={(spoken) => setArchResponse(joinDictation(archResponse, spoken))} />
+              </div>
+            ) : null}
           </section>
         ) : null}
         {/* The agentic blueprint slice for this stakeholder — the agents that
@@ -230,16 +276,40 @@ function AgentifySurface({ review, stakeholder, programme, objective, submitting
               <span className="v3fs-rvw-trigger">Would these take the right work off your plate?</span>
             </div>
             <ul className="v3fs-bp-agents">
-              {review.blueprint.agents.map((a, i) => (
-                <li key={i} className="v3fs-bp-agent">
-                  <div className="v3fs-bp-agent-h">
-                    <b>{a.name}</b>
-                    {a.autonomyLevel ? <span className="v3fs-bp-auto">{a.autonomyLevel}</span> : null}
-                  </div>
-                  {a.purpose ? <p>{a.purpose}</p> : null}
-                  {a.replacesWorkflow ? <span className="v3fs-bp-replaces">↳ takes over: {a.replacesWorkflow}</span> : null}
-                </li>
-              ))}
+              {review.blueprint.agents.map((a, i) => {
+                const ctx = agentContext.get(a.name);
+                return (
+                  <li key={i} className="v3fs-bp-agent">
+                    <div className="v3fs-bp-agent-h">
+                      <b>{a.name}</b>
+                      {a.autonomyLevel ? <span className="v3fs-bp-auto">{a.autonomyLevel}</span> : null}
+                    </div>
+                    {a.purpose ? <p>{a.purpose}</p> : null}
+                    {/* Grounded in THEIR validated model: the confirmed steps this
+                        agent takes over, and the terms + tracked fields it works
+                        with — their own data vocabulary from Listen. */}
+                    {ctx?.steps.length ? (
+                      <div className="v3fs-bp-takes">
+                        <span className="lbl">Takes over your steps</span>
+                        <ul>{ctx.steps.slice(0, 3).map((s, j) => <li key={j}>{s}</li>)}</ul>
+                        {ctx.steps.length > 3 ? <em>+ {ctx.steps.length - 3} more</em> : null}
+                      </div>
+                    ) : a.replacesWorkflow ? <span className="v3fs-bp-replaces">↳ takes over: {a.replacesWorkflow}</span> : null}
+                    {ctx?.terms.length ? (
+                      <div className="v3fs-bp-data">
+                        <span className="lbl">Works with your data</span>
+                        <div className="v3fs-bp-data-terms">
+                          {ctx.terms.map((t, j) => (
+                            <span key={j} className="v3fs-bp-term">
+                              <b>{t.name}</b>{t.attributes?.length ? <span> — {t.attributes.slice(0, 4).join(", ")}{t.attributes.length > 4 ? "…" : ""}</span> : null}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </li>
+                );
+              })}
             </ul>
             <div className="v3fs-rvw-field">
               <textarea className="v3fs-rvw-overall" rows={2} value={bpResponse}
@@ -257,7 +327,10 @@ function AgentifySurface({ review, stakeholder, programme, objective, submitting
         {draftKey && hasInput ? <p className="v3fs-rvw-saved">✓ Saved on this device — you can close this and come back</p> : null}
         {error ? <p className="v3fs-portal-err">{error}</p> : null}
         <button type="button" className="v3fs-btn pri v3fs-rvw-send" disabled={submitting || !hasInput}
-          onClick={() => onSubmit(composeAgentifyAnswers(review, responses, { architectureResponse: archResponse, blueprintResponse: bpResponse }))}>
+          onClick={() => onSubmit(composeAgentifyAnswers(review, responses, {
+            architectureResponse: archResponse, blueprintResponse: bpResponse,
+            ...(archVerdict ? { architectureVerdict: archVerdict } : {}),
+          }))}>
           {submitting ? "Sending…" : "Send my review"}
         </button>
       </div>

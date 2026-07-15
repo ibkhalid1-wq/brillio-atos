@@ -69,6 +69,75 @@ export interface AgentifyReview {
   /** The agentic blueprint slice relevant to this stakeholder — the agents that
    *  would take over the workflows they act in. They respond in words or voice. */
   blueprint?: { agents: BlueprintAgentBrief[] };
+  /** The ontology terms (with their tracked attributes) the chosen workflows
+   *  touch — lets agent cards say exactly which of THEIR data each agent works
+   *  with, closing the loop on the key-data-elements capture from Listen. */
+  terms?: OntologyTerm[];
+}
+
+/** The proposed FUTURE of one current-state step — how it runs agentically. */
+export interface FutureStep {
+  /** agentify: an agent runs it end to end · assist: an agent drafts/prepares,
+   *  the human decides · keep: it stays entirely human. */
+  mode: "agentify" | "assist" | "keep";
+  /** The blueprint agent proposed to take it (or assist), when one maps. */
+  agent?: string;
+  /** A human-approval moment survives in the future flow (HITL). */
+  hitl?: boolean;
+}
+
+/** Verbs that mark a step as judgement-bearing — an agent PREPARES these, a
+ * human decides. Everything mechanical is proposed as fully agentified.
+ * Stems (no trailing boundary) so "reviews", "negotiates", "approval" match. */
+const JUDGEMENT = /\b(approv|review|negotiat|decid|sign[- ]?off|meet|calls?\b|present|escalat|interview|relationship|judg|assess)/i;
+
+/** Loose workflow-name match — "Quote to Cash" finds an agent whose
+ * replacesWorkflow is written "quote-to-cash flow" (shared token overlap). */
+function workflowMatches(agentTarget: string, workflowName: string): boolean {
+  const tokens = (text: string) => new Set(text.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 3));
+  const a = tokens(agentTarget);
+  const w = tokens(workflowName);
+  if (!a.size || !w.size) return false;
+  let hits = 0;
+  for (const token of a) if (w.has(token)) hits += 1;
+  return hits >= Math.min(2, Math.min(a.size, w.size));
+}
+
+/** The DRAFT future state, derived — never authored: per workflow, per step, the
+ * proposed run mode, the blueprint agent that takes it, and whether a human
+ * approval moment survives. The stakeholder's taps then confirm or correct this
+ * proposal; the point is that they react to a concrete transformation of the
+ * workflow THEY validated, not a blank question. */
+export function proposeFutureSteps(review: AgentifyReview): FutureStep[][] {
+  const agents = review.blueprint?.agents ?? [];
+  return review.workflows.map((workflow) => {
+    const owner = agents.find((agent) => agent.replacesWorkflow && workflowMatches(agent.replacesWorkflow, workflow.name));
+    return workflow.steps.map((step): FutureStep => {
+      const judgement = JUDGEMENT.test(step.action);
+      return {
+        mode: judgement ? "assist" : "agentify",
+        agent: owner?.name,
+        hitl: judgement || undefined,
+      };
+    });
+  });
+}
+
+/** What each blueprint agent actually takes over, grounded in the review's own
+ * workflows: the confirmed steps it would run and the ontology terms (with the
+ * attributes stakeholders track) it reads and writes. */
+export function blueprintAgentContext(review: AgentifyReview): Map<string, { steps: string[]; terms: OntologyTerm[] }> {
+  const out = new Map<string, { steps: string[]; terms: OntologyTerm[] }>();
+  for (const agent of review.blueprint?.agents ?? []) {
+    if (!agent.replacesWorkflow) continue;
+    const workflows = review.workflows.filter((workflow) => workflowMatches(agent.replacesWorkflow!, workflow.name));
+    if (!workflows.length) continue;
+    const steps = workflows.flatMap((workflow) => workflow.steps.map((step) => step.action)).filter(Boolean);
+    const touched = new Set(workflows.flatMap((workflow) => workflow.steps.flatMap((step) => (step.entities ?? []).map((e) => e.toLowerCase()))));
+    const terms = (review.terms ?? []).filter((term) => touched.has(term.name.toLowerCase()));
+    out.set(agent.name, { steps: steps.slice(0, 6), terms: terms.slice(0, 5) });
+  }
+  return out;
 }
 
 /**
@@ -131,21 +200,32 @@ export function projectAgentifyReview(program: ProgramSummary, persona: string):
   const mineAgents = allAgents.filter((a) => a.replacesWorkflow && chosenNames.has(a.replacesWorkflow.trim().toLowerCase()));
   const blueprintAgents = (mineAgents.length ? mineAgents : allAgents).slice(0, 10);
 
+  // The ontology terms the chosen workflows touch, WITH the attributes
+  // stakeholders track — so agent cards can say "works with Opportunity
+  // (SLA, stage, amount)" in their own field names.
+  const finalWorkflows = chosen.slice(0, 8);
+  const touched = new Set(finalWorkflows.flatMap((w) => w.steps.flatMap((s) => (s.entities ?? []).map((e) => e.toLowerCase()))));
+  const oaTerms = projectOntologyAtlasReview(program)?.terms ?? [];
+  const terms = oaTerms.filter((t) => touched.has(t.name.toLowerCase())).slice(0, 12);
+
   return {
     kind: "agentify",
     persona: persona || "You",
     intro: persona
-      ? `Here is the current workflow as we heard it. For each step, tell us whether a software agent should take it over, assist you, or stay entirely human — and why.`
-      : `Here is the current workflow as we heard it. For each step, tell us whether a software agent should take it over, assist, or stay human — and why.`,
-    workflows: chosen.slice(0, 8),
+      ? `Below is your workflow as you confirmed it — and beside each step, how we propose it runs in the agentic future. Confirm what's right, correct what's not.`
+      : `Below is the workflow as confirmed — and beside each step, how we propose it runs in the agentic future. Confirm what's right, correct what's not.`,
+    workflows: finalWorkflows,
     ...(architecture && architecture.candidates.length ? { architecture } : {}),
     ...(blueprintAgents.length ? { blueprint: { agents: blueprintAgents } } : {}),
+    ...(terms.length ? { terms } : {}),
   };
 }
 
 // ── ontology + atlas ──────────────────────────────────────────────────────────
 
-export interface OntologyTerm { name: string; definition?: string; aliases?: string[]; systemOfRecord?: string; area?: string }
+export interface OntologyTerm { name: string; definition?: string; aliases?: string[]; systemOfRecord?: string; area?: string;
+  /** The key attributes stakeholders track about this term — their own field names. */
+  attributes?: string[] }
 export interface OntologyRelation { from: string; relation: string; to: string }
 export interface AtlasStage { name: string; owner?: string; trigger?: string; steps: string[]; area?: string }
 export interface OntologyAtlasReview {
@@ -193,6 +273,7 @@ export function projectOntologyAtlasReview(program: ProgramSummary): OntologyAtl
       aliases: strs(entity.aliases).slice(0, 4),
       systemOfRecord: str(entity.systemOfRecord) || undefined,
       area: entityArea(entity, program),
+      attributes: strs(entity.attributes).slice(0, 8),
     })).filter((term) => term.name).slice(0, 40)
     : [];
   const workflows: AtlasStage[] = atlas && Array.isArray(atlas.workflows)
@@ -395,7 +476,7 @@ const DISPOSITION_LABEL: Record<string, string> = {
 export function composeAgentifyAnswers(
   review: AgentifyReview,
   responses: Record<string, { disposition?: string; comment?: string }>,
-  extras?: { architectureResponse?: string; blueprintResponse?: string },
+  extras?: { architectureResponse?: string; blueprintResponse?: string; architectureVerdict?: "endorsed" | "concerns" },
 ): string {
   const lines: string[] = [`Workflow agentification review — ${review.persona}`, ""];
   review.workflows.forEach((workflow, wi) => {
@@ -410,9 +491,14 @@ export function composeAgentifyAnswers(
     lines.push("");
   });
   const arch = extras?.architectureResponse?.trim();
-  if (review.architecture && arch) {
+  if (review.architecture && (arch || extras?.architectureVerdict)) {
     lines.push(`## On the proposed architecture${review.architecture.recommendation ? ` (recommended: ${review.architecture.recommendation})` : ""}`);
-    lines.push(arch, "");
+    // The tap verdict is explicit signal — an endorsement is a positive fact on
+    // the record, not merely the absence of an objection.
+    if (extras?.architectureVerdict === "endorsed") lines.push("ENDORSED — this direction fits how the work runs.");
+    if (extras?.architectureVerdict === "concerns") lines.push("HAS CONCERNS:");
+    if (arch) lines.push(arch);
+    lines.push("");
   }
   const bp = extras?.blueprintResponse?.trim();
   if (review.blueprint && bp) {
@@ -469,4 +555,40 @@ export function reviewFallbackQuestions(review: ReviewPayload): string[] {
     "Where is a domain term wrong, missing, or named differently by your team?",
     "Where does a mapped workflow not match how the work really runs?",
   ];
+}
+
+/** What changed between the review a stakeholder LAST saw and the one they're
+ * looking at now — readable phrases for the follow-up "what changed" band.
+ * Structural only (workflows/steps/terms by name); comment-level nuance rides
+ * the review itself. Capped so the band stays a glance, not a report. */
+export function reviewDiff(prior: ReviewPayload, current: ReviewPayload): string[] {
+  type AnyReview = {
+    workflows?: Array<{ name?: string; steps?: Array<string | { action?: string }> }>;
+    terms?: Array<{ name?: string }>;
+  };
+  const stepsOf = (w: { steps?: Array<string | { action?: string }> }): Set<string> =>
+    new Set((w.steps ?? []).map((s) => (typeof s === "string" ? s : String(s.action ?? ""))).filter(Boolean).map((s) => s.toLowerCase()));
+  const wfMap = (r: AnyReview) => new Map((r.workflows ?? []).filter((w) => w.name).map((w) => [String(w.name).toLowerCase(), w]));
+  const p = prior as AnyReview, c = current as AnyReview;
+  const out: string[] = [];
+  const pw = wfMap(p), cw = wfMap(c);
+  for (const [key, wf] of cw) {
+    const prev = pw.get(key);
+    if (!prev) { out.push(`New workflow: ${wf.name}`); continue; }
+    const before = stepsOf(prev), after = stepsOf(wf);
+    const added = [...after].filter((s) => !before.has(s)).length;
+    const removed = [...before].filter((s) => !after.has(s)).length;
+    if (added || removed) {
+      const parts = [added ? `${added} step${added === 1 ? "" : "s"} added` : "", removed ? `${removed} removed` : ""].filter(Boolean);
+      out.push(`${wf.name}: ${parts.join(", ")}`);
+    }
+  }
+  for (const [key, wf] of pw) if (!cw.has(key)) out.push(`Workflow removed: ${wf.name}`);
+  const termNames = (r: AnyReview) => new Set((r.terms ?? []).map((t) => String(t.name ?? "").toLowerCase()).filter(Boolean));
+  const pt = termNames(p), ct = termNames(c);
+  const newTerms = (c.terms ?? []).filter((t) => t.name && !pt.has(String(t.name).toLowerCase())).map((t) => String(t.name));
+  const goneTerms = (p.terms ?? []).filter((t) => t.name && !ct.has(String(t.name).toLowerCase())).map((t) => String(t.name));
+  if (newTerms.length) out.push(`New term${newTerms.length === 1 ? "" : "s"}: ${newTerms.slice(0, 4).join(", ")}${newTerms.length > 4 ? "…" : ""}`);
+  if (goneTerms.length) out.push(`Term${goneTerms.length === 1 ? "" : "s"} removed: ${goneTerms.slice(0, 4).join(", ")}${goneTerms.length > 4 ? "…" : ""}`);
+  return out.slice(0, 6);
 }

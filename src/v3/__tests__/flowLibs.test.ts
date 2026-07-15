@@ -16,7 +16,8 @@ import { routeAttachedDocument, buildRoutedBlocks } from "@/v3/components/flow/f
 import { retroAttributionProposal, negatedClaimProposal } from "@/v3/components/flow/flowWatchers";
 import { rankEvidence, isNoiseEvidence, scoreEvidence } from "@/v3/components/flow/flowEvidenceRank";
 import { resolveMovementStakeholders, deliveryRoleDirectory, validateProgramRole, knownProgramRoles, readDirectoryPeople, unresolvedCoverageNames, knownPeopleNames, stripAskAddressee } from "@/v3/components/flow/flowStakeholders";
-import { mintFollowUpPack, listInterviewPacks, visibleLinks } from "@/v3/components/flow/flowPortal";
+import { mintFollowUpPack, mintReviewPack, listInterviewPacks, visibleLinks, movementValidationCoverage } from "@/v3/components/flow/flowPortal";
+import { proposeFutureSteps, blueprintAgentContext, reviewDiff, type AgentifyReview, type ReviewPayload } from "@/v3/components/flow/flowReviews";
 import { trackAcceptance, trackBlockers, recordShowPass, listFlowTracks, type FlowTrack } from "@/v3/components/flow/flowTracks";
 import { setShipLane, toggleShipItem, listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 import { ingestPortalResponse, listPortalInbox } from "@/v3/components/flow/flowPortal";
@@ -370,6 +371,68 @@ describe("contradiction stickiness — a dispute is proposed once, whatever the 
       }],
     });
     expect(negatedClaimProposal(alreadyJudged)).toBeNull();
+  });
+});
+
+describe("envision transformation — derived future state, agent grounding, diffs, coverage", () => {
+  const agentify: AgentifyReview = {
+    kind: "agentify", persona: "Avantika", intro: "",
+    workflows: [{ name: "Quote to Cash", steps: [
+      { action: "Create quote record in CPQ", actor: "rep", system: "CPQ", entities: ["Quote"], mine: true },
+      { action: "Legal reviews the quote terms", actor: "legal", entities: ["Quote"], mine: false },
+    ] }],
+    blueprint: { agents: [{ name: "Quote Agent", replacesWorkflow: "Quote to Cash" }] },
+    terms: [{ name: "Quote", attributes: ["amount", "discount", "SLA"] }],
+  };
+  it("proposes agentify for mechanical steps, assist + HITL for judgement steps, with the mapped agent", () => {
+    const [steps] = proposeFutureSteps(agentify);
+    expect(steps[0]).toEqual({ mode: "agentify", agent: "Quote Agent", hitl: undefined });
+    expect(steps[1].mode).toBe("assist");
+    expect(steps[1].hitl).toBe(true);
+  });
+  it("grounds an agent card in the confirmed steps and the terms + attributes it works with", () => {
+    const ctx = blueprintAgentContext(agentify).get("Quote Agent")!;
+    expect(ctx.steps).toContain("Create quote record in CPQ");
+    expect(ctx.terms[0].name).toBe("Quote");
+    expect(ctx.terms[0].attributes).toContain("SLA");
+  });
+  it("reviewDiff reports added steps and new terms in readable phrases", () => {
+    const prior = { kind: "listen-workflow", workflows: [{ name: "Quote to Cash", steps: [{ action: "a" }] }], terms: [{ name: "Quote" }] } as unknown as ReviewPayload;
+    const current = { kind: "listen-workflow", workflows: [{ name: "Quote to Cash", steps: [{ action: "a" }, { action: "b" }] }], terms: [{ name: "Quote" }, { name: "SLA" }] } as unknown as ReviewPayload;
+    const diff = reviewDiff(prior, current);
+    expect(diff.some((d) => /Quote to Cash: 1 step added/.test(d))).toBe(true);
+    expect(diff.some((d) => /New term: SLA/.test(d))).toBe(true);
+  });
+  it("superseding an ANSWERED review ask stamps priorReview — the diff baseline", () => {
+    const p = programme({ flowInterviewPacks: [{
+      id: "d", stakeholder: "Avantika", role: "review:agentify", movementId: "envision",
+      questions: ["q"], token: "t", createdAt: "2026-07-01", askUpdatedAt: "2026-07-01",
+      submissions: [{ ts: "2026-07-02", movementId: "envision", kind: "review", preview: "" }],
+      review: { kind: "agentify", old: true }, reviewKind: "agentify",
+    }] });
+    const blob = mintReviewPack(p, { movementId: "envision", who: "Avantika", role: "Reviewer", captureField: "x",
+      reviewKind: "agentify", review: { kind: "agentify", fresh: true }, questions: ["q"], intro: "i" }, "you")!;
+    const pack = (blob.flowInterviewPacks as Array<Record<string, unknown>>)[0];
+    expect((pack.priorReview as Record<string, unknown>).old).toBe(true);
+    expect((pack.review as Record<string, unknown>).fresh).toBe(true);
+  });
+  it("movementValidationCoverage counts validated submissions and open asks per area", () => {
+    const p = programme({
+      flowInterviewPacks: [
+        { id: "a", stakeholder: "A", role: "review:agentify", movementId: "envision", recipientArea: "Sales", questions: [], token: "t1", createdAt: "2026-07-01", askUpdatedAt: "2026-07-01",
+          submissions: [{ ts: "2026-07-02", movementId: "envision", kind: "review", preview: "" }] },
+        { id: "b", stakeholder: "B", role: "review:agentify", movementId: "envision", recipientArea: "Marketing", questions: [], token: "t2", createdAt: "2026-07-01" },
+      ],
+      flowDemoInvites: [
+        { id: "d1", stakeholder: "A", recipientArea: "Sales", token: "t3", createdAt: "2026-07-01", respondedAt: "2026-07-03" },
+        { id: "d2", stakeholder: "B", recipientArea: "Sales", token: "t4", createdAt: "2026-07-01" },
+      ],
+    });
+    const env = movementValidationCoverage(p, "envision");
+    expect(env.find((r) => r.area === "Sales")).toEqual({ area: "Sales", validated: 1, waiting: 0 });
+    expect(env.find((r) => r.area === "Marketing")).toEqual({ area: "Marketing", validated: 0, waiting: 1 });
+    const show = movementValidationCoverage(p, "show");
+    expect(show.find((r) => r.area === "Sales")).toEqual({ area: "Sales", validated: 1, waiting: 1 });
   });
 });
 

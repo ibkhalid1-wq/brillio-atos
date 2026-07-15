@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ScreenCard } from "@/v3/components/flow/studio/ExperienceDesignStudio";
 import FlowReviewSurface from "@/v3/components/flow/FlowReviewSurface";
-import { projectStakeholderReview, type ReviewPayload } from "@/v3/components/flow/flowReviews";
+import { projectStakeholderReview, reviewDiff, type ReviewPayload } from "@/v3/components/flow/flowReviews";
 import { stakeholderPrimaryArea } from "@/v3/components/flow/flowAreas";
 import type { ProgramSummary } from "@/new/types";
 import { DictationButton, joinDictation } from "@/v3/components/flow/FlowDictation";
@@ -64,6 +64,9 @@ interface Pack {
    * composed response still submits through the interview `answers` path.
    * FALLBACK only — a fresh review re-projected from `liveArtifacts` wins. */
   review?: ReviewPayload;
+  /** The review as it stood when this person LAST answered — the baseline for
+   * the "what changed since your last visit" band on a follow-up. */
+  priorReview?: ReviewPayload;
   /** DYNAMIC LINKS: re-projection inputs. The edge ships the CURRENT artifact
    * slices; the page rebuilds the review from them so a regeneration never
    * orphans the link. reviewKind + movementId pick the projection. */
@@ -138,6 +141,7 @@ interface RespondDraft {
   verdict?: DemoVerdict | null;
   comment?: string;
   phaseComments?: Record<string, string>;
+  beatVerdicts?: Record<string, string>;
 }
 function readRespondDraft(key: string): RespondDraft {
   try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) as RespondDraft : {}; } catch { return {}; }
@@ -178,12 +182,16 @@ export default function FlowRespond({ token }: { token: string }) {
   const [comment, setComment] = useState(draft0.comment ?? "");
   // Per-phase demo comments, keyed by flow · step — folded into the verdict.
   const [phaseComments, setPhaseComments] = useState<Record<string, string>>(draft0.phaseComments ?? {});
+  // Per-beat acceptance taps (✓ runs my workflow / ✗ not quite) — granular
+  // signal folded into the verdict, so acceptance isn't one button at the end.
+  const [beatVerdicts, setBeatVerdicts] = useState<Record<string, string>>(draft0.beatVerdicts ?? {});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Persist the draft as they type; clear it once the link is submitted or spent.
   const hasDraft = !!(Object.keys(answers).length || extra.trim() || Object.keys(deferrals).length
-    || filledVoices.length || verdict || comment.trim() || Object.keys(phaseComments).length);
+    || filledVoices.length || verdict || comment.trim() || Object.keys(phaseComments).length
+    || Object.keys(beatVerdicts).length);
   useEffect(() => {
     try {
       if (state.phase === "sent") {
@@ -194,9 +202,9 @@ export default function FlowRespond({ token }: { token: string }) {
         }
         return;
       }
-      if (hasDraft) localStorage.setItem(draftKey, JSON.stringify({ answers, deferrals, extra, suggestedVoices, verdict, comment, phaseComments }));
+      if (hasDraft) localStorage.setItem(draftKey, JSON.stringify({ answers, deferrals, extra, suggestedVoices, verdict, comment, phaseComments, beatVerdicts }));
     } catch { /* private mode / quota — draft-save is best-effort */ }
-  }, [draftKey, state.phase, hasDraft, answers, deferrals, extra, suggestedVoices, verdict, comment, phaseComments]);
+  }, [draftKey, state.phase, hasDraft, answers, deferrals, extra, suggestedVoices, verdict, comment, phaseComments, beatVerdicts]);
 
   useEffect(() => {
     let alive = true;
@@ -321,7 +329,8 @@ export default function FlowRespond({ token }: { token: string }) {
           ) : shownReview ? (
             <>
               {state.pack.followUp ? <FollowUpBanner stakeholder={state.pack.stakeholder}
-                submissions={state.pack.submissions ?? []} /> : null}
+                submissions={state.pack.submissions ?? []}
+                changes={state.pack.priorReview ? reviewDiff(state.pack.priorReview, shownReview) : undefined} /> : null}
               <FlowReviewSurface review={shownReview} stakeholder={state.pack.stakeholder}
                 programme={state.pack.programme} objective={state.pack.objective}
                 returning={!!state.pack.followUp}
@@ -350,7 +359,9 @@ export default function FlowRespond({ token }: { token: string }) {
                 {state.pack.design ? <DemoWalker design={state.pack.design} script={state.pack.script}
                   recipientArea={state.pack.recipientArea}
                   phaseComments={phaseComments}
-                  onPhaseComment={(key, value) => setPhaseComments((prev) => ({ ...prev, [key]: value }))} /> : null}
+                  onPhaseComment={(key, value) => setPhaseComments((prev) => ({ ...prev, [key]: value }))}
+                  beatVerdicts={beatVerdicts}
+                  onBeatVerdict={(key, value) => setBeatVerdicts((prev) => ({ ...prev, [key]: prev[key] === value ? "" : value }))} /> : null}
                 {state.pack.steps?.length ? (
                   <div className="v3fs-portal-steps">
                     {state.pack.steps.map((step, index) => (
@@ -382,12 +393,18 @@ export default function FlowRespond({ token }: { token: string }) {
                 <button type="button" className="v3fs-btn pri v3fs-portal-send"
                   disabled={submitting || !verdict}
                   onClick={() => {
-                    // Fold the per-phase notes into the verdict comment so the
-                    // operator reads phase-by-phase feedback beside the overall.
+                    // Fold the per-phase notes AND per-beat acceptance taps into
+                    // the verdict comment so the operator reads granular signal
+                    // beside the overall — a ✓ beat is a positive fact.
                     const phaseLines = Object.entries(phaseComments)
                       .filter(([, value]) => value.trim())
                       .map(([key, value]) => `• ${key}: ${value.trim()}`);
-                    const full = [comment.trim(), phaseLines.length ? `Phase-by-phase:\n${phaseLines.join("\n")}` : ""]
+                    const beatLines = Object.entries(beatVerdicts)
+                      .filter(([, value]) => value === "ok" || value === "not")
+                      .map(([key, value]) => `${value === "ok" ? "✓ Runs my workflow" : "✗ Not quite"} — ${key}`);
+                    const full = [comment.trim(),
+                      beatLines.length ? `Beat-by-beat:\n${beatLines.join("\n")}` : "",
+                      phaseLines.length ? `Phase-by-phase:\n${phaseLines.join("\n")}` : ""]
                       .filter(Boolean).join("\n\n");
                     void submit({ verdict, comment: full });
                   }}>
@@ -599,7 +616,11 @@ function RespondRecap({ stakeholder, submissions, kind }: {
 
 /** A calm banner atop a link a stakeholder is RETURNING to — acknowledges what
  * they already sent and frames the page as a short follow-up, not a repeat. */
-function FollowUpBanner({ stakeholder, submissions }: { stakeholder: string; submissions: Submission[] }) {
+function FollowUpBanner({ stakeholder, submissions, changes }: {
+  stakeholder: string; submissions: Submission[];
+  /** Structural "what changed since your last visit" phrases — from reviewDiff. */
+  changes?: string[];
+}) {
   const first = stakeholder ? stakeholder.split(/\s+/)[0] : "";
   const last = submissions.length ? submissions[submissions.length - 1] : null;
   const when = last ? fmtWhen(last.ts) : "";
@@ -614,6 +635,14 @@ function FollowUpBanner({ stakeholder, submissions }: { stakeholder: string; sub
         {when ? ` (last sent ${when})` : ""}. We&rsquo;ve moved a few things on since — have a look below and
         add anything new. You won&rsquo;t need to repeat what you already told us.
       </p>
+      {changes?.length ? (
+        <div className="v3fs-followup-diff">
+          <span className="lbl">What changed since your last visit</span>
+          <div className="v3fs-followup-chips">
+            {changes.map((change, i) => <span key={i} className="v3fs-followup-chip">{change}</span>)}
+          </div>
+        </div>
+      ) : null}
     </aside>
   );
 }
@@ -625,9 +654,12 @@ function FollowUpBanner({ stakeholder, submissions }: { stakeholder: string; sub
  * it, watch each step's screen light up. Same renderer the design studio
  * uses, so what they walk IS the signed-off design.
  */
-function DemoWalker({ design, script, recipientArea, phaseComments, onPhaseComment }: {
+function DemoWalker({ design, script, recipientArea, phaseComments, onPhaseComment, beatVerdicts, onBeatVerdict }: {
   design: NonNullable<Pack["design"]>; script?: Pack["script"]; recipientArea?: string;
   phaseComments?: Record<string, string>; onPhaseComment?: (key: string, value: string) => void;
+  /** Per-beat acceptance taps — granular signal, so the final verdict is built
+   * from what they confirmed beat by beat, not one button at the end. */
+  beatVerdicts?: Record<string, string>; onBeatVerdict?: (key: string, value: "ok" | "not") => void;
 }) {
   const flows = useMemo(() => design.flows ?? [], [design]);
   const screens = design.screens ?? [];
@@ -688,17 +720,32 @@ function DemoWalker({ design, script, recipientArea, phaseComments, onPhaseComme
       </div>
       {screen ? <ScreenCard screen={screen} active onClick={() => { /* focused already */ }} /> : null}
       {step && String(step.outcome ?? "") ? <div className="v3fs-wf-outcome">→ {String(step.outcome)}</div> : null}
-      {onPhaseComment ? (() => {
+      {(() => {
         const key = `${String(flow?.name ?? "Flow")} · step ${stepIndex + 1}${step?.action ? ` (${String(step.action)})` : ""}`;
+        const verdict = beatVerdicts?.[key];
         return (
-          <label className="v3fs-demo-phasec">
-            <span>Comment on this phase (optional)</span>
-            <textarea rows={2} value={phaseComments?.[key] ?? ""}
-              onChange={(event) => onPhaseComment(key, event.target.value)}
-              placeholder="Does this phase run the way you need it to?" />
-          </label>
+          <>
+            {onBeatVerdict ? (
+              <div className="v3fs-demo-beatv" role="radiogroup" aria-label={`Does this beat run your workflow: ${key}`}>
+                <button type="button" role="radio" aria-checked={verdict === "ok"}
+                  className={`v3fs-beatv-btn ok${verdict === "ok" ? " on" : ""}`}
+                  onClick={() => onBeatVerdict(key, "ok")}>✓ Runs my workflow</button>
+                <button type="button" role="radio" aria-checked={verdict === "not"}
+                  className={`v3fs-beatv-btn no${verdict === "not" ? " on" : ""}`}
+                  onClick={() => onBeatVerdict(key, "not")}>✗ Not quite</button>
+              </div>
+            ) : null}
+            {onPhaseComment ? (
+              <label className="v3fs-demo-phasec">
+                <span>{verdict === "not" ? "What's off in this phase?" : "Comment on this phase (optional)"}</span>
+                <textarea rows={2} value={phaseComments?.[key] ?? ""}
+                  onChange={(event) => onPhaseComment(key, event.target.value)}
+                  placeholder="Does this phase run the way you need it to?" />
+              </label>
+            ) : null}
+          </>
         );
-      })() : null}
+      })()}
       {narration && (narration.say || narration.callback) ? (
         <div className="v3fs-demo-say">
           {narration.say ? <p>{narration.say}</p> : null}

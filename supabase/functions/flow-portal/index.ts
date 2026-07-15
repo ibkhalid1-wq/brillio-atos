@@ -384,6 +384,9 @@ Deno.serve(async (req: Request) => {
         // A shareable review surface projected at mint — the FALLBACK when live
         // re-projection isn't possible (edge older than the pack, or no slices).
         ...(isRecord(hit.pack.review) ? { review: hit.pack.review } : {}),
+        // On a follow-up, the review they LAST saw — the client diffs it against
+        // the live review to render "what changed since your last visit".
+        ...(interviewFollowUp && isRecord(hit.pack.priorReview) ? { priorReview: hit.pack.priorReview } : {}),
         // The durable link's recap + follow-up state. `submissions` is what the
         // person already sent (shown read-only on return); `answered` is whether
         // they've responded at all; `followUp` is true when the ask changed AFTER

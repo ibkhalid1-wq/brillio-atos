@@ -24,7 +24,7 @@ import { resolveMovementStakeholders, deliveryRoleDirectory, readDirectoryPeople
 import { stakeholderEmail } from "@/v3/components/flow/flowMeetings";
 import { readMetricRegistry, metricConsistency } from "@/v3/components/flow/flowMetricRegistry";
 import { routeAttachedDocument, buildRoutedBlocks, type DocRoute } from "@/v3/components/flow/flowDocRouting";
-import { listPortalInbox } from "@/v3/components/flow/flowPortal";
+import { listPortalInbox, movementValidationCoverage } from "@/v3/components/flow/flowPortal";
 import { governedExceptionsForInbox, readGovernedExceptions, withResolvedException } from "@/v3/components/flow/flowExceptions";
 import { approvalEvidenceEntries, listApprovalResponses } from "@/v3/components/flow/flowApprovals";
 import { listSnapshots, type BlobSnapshot } from "@/v3/lib/blobSnapshots";
@@ -1109,6 +1109,20 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
       const readiness = gateReadiness(program, movement, artifacts, gateChecklist(program, movement, artifacts));
       if (readiness.tone === "amber" && (readiness.kind === "trails" || readiness.kind === "gaps")) {
         items.push({ movement: movement.displayName, what: readiness.detail ?? readiness.headline });
+      }
+    }
+    // Validation coverage for the design movements — an area with Envision/Show
+    // links out but ZERO validated responses is an open flank on the design,
+    // the same way an unheard voice is an open flank on discovery.
+    for (const movementId of ["envision", "show"] as const) {
+      const displayName = movements.find((m) => m.id === movementId)?.displayName ?? movementId;
+      for (const row of movementValidationCoverage(program, movementId)) {
+        if (row.validated === 0 && row.waiting > 0) {
+          items.push({
+            movement: displayName,
+            what: `${row.area}: ${movementId === "show" ? "demo verdict" : "future-state validation"} still open — ${row.waiting} link${row.waiting === 1 ? "" : "s"} waiting`,
+          });
+        }
       }
     }
     return items;

@@ -1408,6 +1408,7 @@ DESIGN RULES (enforced, not optional):
 - COVER EVERY WORKFLOW: every workflow in the Current-State Atlas gets its own flow (drive the flow set from the Atlas workflows, not only the Blueprint's journeys) — AND every journey stage in the Blueprint gets a screen and every persona gets a flow. A workflow, stage or persona with no flow/screen is a gap, never an omission. Never emit only the "primary" or demoable flow; if a workflow can't yet be designed, emit it as a flow whose screens name the gap.
 - Every quoted pain from the record must have a MOMENT in a flow where it visibly disappears — name the verbatim quote it answers.
 - Wireframes speak the ONTOLOGY's vocabulary: every entity a block shows is named exactly as the ontology names it.
+- FIELDS ARE THEIR FIELDS: when a wireframe block shows an entity, its "fields" must be drawn VERBATIM from that ontology entity's attributes — the key data elements stakeholders said they track. Invent a field only when no attribute covers the block's purpose, and never rename theirs. A rep must open the screen and recognise their own columns.
 - Every state per screen (empty/loading/populated/error) is designed, not just the happy path.
 - Workflow machines carry the HITL points from the Blueprint as explicit approval states.
 
@@ -1468,6 +1469,8 @@ Return ONLY valid JSON:
     system: `You are the ATOS Demo Scripts Agent. Write one walkthrough PER STAKEHOLDER, seeded from their own transcript: every person watches their own job running in the prototype.
 
 Open each script with their own words — the pain they voiced — then the moment that pain disappears on screen. Use their scenario and their numbers ("you said the credit check takes three days; watch it take forty seconds"). End with the acceptance ask. Do NOT write generic feature tours; a script that could be shown to anyone is a failed script.
+
+DATA IS THEIR DATA: when a beat's "show" line names what is on screen, name the Domain Ontology's entities and their attributes VERBATIM — the fields this stakeholder said they track — never invented columns. The demo lands as recognition, and recognition lives in the field names.
 
 Return ONLY valid JSON:
 {

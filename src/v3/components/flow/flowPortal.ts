@@ -34,6 +34,8 @@ export interface FlowInterviewPack {
   submissions?: FlowPackSubmission[];
   /** The movement whose ask this link currently carries. */
   movementId?: string;
+  /** The recipient's business area (stamped on area-scoped review links). */
+  recipientArea?: string;
   /** Where ingested answers land (defaults to interviewTranscripts). */
   captureField?: string;
   /** A projected REVIEW surface (workflow-agentify or ontology+atlas) served
@@ -110,7 +112,42 @@ export function listInterviewPacks(program: ProgramSummary): FlowInterviewPack[]
         }))
       : undefined,
     movementId: typeof entry.movementId === "string" ? entry.movementId : undefined,
+    recipientArea: typeof entry.recipientArea === "string" ? entry.recipientArea : undefined,
   })).filter((pack) => pack.id && pack.token);
+}
+
+/** Per-area validation coverage for a design movement: how many stakeholders
+ * validated its ask (Envision transformation review / Show demo verdict) and
+ * how many links are still waiting. The Envision/Show parallel to Listen's
+ * heard-count — an area with links out but zero validations is an open flank. */
+export interface AreaValidation { area: string; validated: number; waiting: number }
+export function movementValidationCoverage(program: ProgramSummary, movementId: "envision" | "show"): AreaValidation[] {
+  const byArea = new Map<string, AreaValidation>();
+  const bump = (area: string | undefined, field: "validated" | "waiting") => {
+    const key = (area ?? "").trim() || "General";
+    const row = byArea.get(key) ?? { area: key, validated: 0, waiting: 0 };
+    row[field] += 1;
+    byArea.set(key, row);
+  };
+  if (movementId === "show") {
+    for (const invite of listDemoInvites(program)) bump(invite.recipientArea, invite.respondedAt ? "validated" : "waiting");
+  } else {
+    for (const pack of listInterviewPacks(program)) {
+      const subs = pack.submissions ?? [];
+      // Validated any time they answered an Envision ask on this durable link.
+      if (subs.some((s) => s.movementId === "envision") || (pack.respondedAt && pack.movementId === "envision" && !subs.length)) {
+        bump(pack.recipientArea, "validated");
+        continue;
+      }
+      // Waiting only when the CURRENT ask is the Envision review and it's open.
+      if (pack.movementId !== "envision" || !pack.role.startsWith("review:")) continue;
+      const lastTs = subs.reduce((max, s) => (s.ts > max ? s.ts : max), "");
+      const askAt = pack.askUpdatedAt ?? pack.createdAt;
+      const open = subs.length === 0 ? !pack.respondedAt : askAt > lastTs;
+      if (open) bump(pack.recipientArea, "waiting");
+    }
+  }
+  return [...byArea.values()].sort((a, b) => (a.area === "General" ? 1 : b.area === "General" ? -1 : a.area.localeCompare(b.area)));
 }
 
 const normName = (name: string): string => name.trim().toLowerCase();
@@ -495,6 +532,11 @@ export function mintReviewPack(
     // standing link is returned by the caller's fallback.
     if (askSignature(updated) === askSignature(durable)) return null;
     updated.askUpdatedAt = now;
+    // The review they LAST saw becomes the baseline for the follow-up's
+    // "what changed since your last visit" band — only meaningful when they
+    // actually answered the superseded ask.
+    const answeredBefore = Array.isArray(durable.submissions) && durable.submissions.length > 0;
+    if (answeredBefore && isRecord(durable.review)) updated.priorReview = durable.review;
     pack = updated;
   } else {
     pack = {
