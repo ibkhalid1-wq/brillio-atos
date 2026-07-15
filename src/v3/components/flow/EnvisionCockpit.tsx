@@ -11,6 +11,7 @@
 import { useMemo, useState } from "react";
 import { projectFutureState, type FutureState, type FutureWorkflow } from "@/v3/components/flow/flowFutureState";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
+import { loopState, changeRequests } from "@/v3/components/flow/flowLoop";
 import type { ProgramSummary } from "@/new/types";
 
 const MODE_LABEL: Record<string, string> = { agentify: "agent runs it", assist: "agent assists · you decide", keep: "stays human" };
@@ -35,6 +36,21 @@ export default function EnvisionCockpit({ program, onSaveInputs, onRunAgent }: {
   const [pick, setPick] = useState("");
   const [tradeaway, setTradeaway] = useState("");
   const [recording, setRecording] = useState(false);
+  const [iterating, setIterating] = useState(false);
+  const ls = useMemo(() => loopState(program), [program]);
+  const incoming = useMemo(() => changeRequests(program), [program]);
+
+  // Start the next iteration: record the round bump (feedback → design), then
+  // open the Prototype workspace so the team rebuilds to the changes.
+  const newIteration = async () => {
+    if (!onSaveInputs) return;
+    setIterating(true);
+    try {
+      await onSaveInputs("show", { iterationRound: String(ls.round + 1) },
+        { attest: { action: `Started prototype iteration ${ls.round + 1}`, detail: `${incoming.length} change request${incoming.length === 1 ? "" : "s"} from Show` } });
+      onRunAgent?.("prototype-build", "envision");
+    } finally { setIterating(false); }
+  };
 
   if (!fs.hasArchitecture && !fs.hasDesign && !fs.hasBlueprint) return null;
 
@@ -66,6 +82,32 @@ export default function EnvisionCockpit({ program, onSaveInputs, onRunAgent }: {
 
   return (
     <div className="v3fs-envc">
+      {/* ── INCOMING FROM SHOW ────────────────────────────────────────────────
+          The loop closing: change requests stakeholders raised on the prototype,
+          waiting for the team to fold into the design and rebuild. */}
+      {incoming.length ? (
+        <section className="v3fs-envc-incoming" aria-label="Incoming from Show">
+          <div className="v3fs-envc-inc-h">
+            <span className="v3fs-envc-inc-t">◀ Incoming from Show — {incoming.length} change{incoming.length === 1 ? "" : "s"} to fold in</span>
+            <span className="v3fs-envc-inc-round">iteration {ls.round}</span>
+          </div>
+          <ul className="v3fs-envc-inc-list">
+            {incoming.map((cr, i) => (
+              <li key={i} className={`v3fs-envc-inc-cr${cr.blocking ? " block" : ""}`}>
+                <b>{cr.stakeholder}</b>
+                <em>{cr.blocking ? "objection" : "change"}</em>
+                {cr.ask ? <span>{cr.ask}</span> : <span className="v3fs-envc-inc-noask">asked for a change — see their demo row</span>}
+              </li>
+            ))}
+          </ul>
+          {onSaveInputs ? (
+            <button type="button" className="v3fs-btn pri v3fs-envc-inc-go" disabled={iterating} onClick={() => void newIteration()}>
+              {iterating ? "Starting…" : `▶ Address & rebuild — start iteration ${ls.round + 1}`}
+            </button>
+          ) : null}
+        </section>
+      ) : null}
+
       {/* Three-act progress at a glance. */}
       <div className="v3fs-envc-ribbon">
         {acts.map((a, i) => (

@@ -69,6 +69,30 @@ export function loopState(program: ProgramSummary): LoopState {
   return { round, total, accepted, changes, objections, pending, sponsorAccepted, majority, converged, hasPrototype, openRequests, court };
 }
 
+/** A stakeholder's demo verdict that asks for a change — the unit that flows
+ * back from Validate (Show) into Design (Envision). */
+export interface ChangeRequest {
+  stakeholder: string;
+  /** "Accepted with changes" | "Objection". */
+  verdict: string;
+  /** What they asked for — the reaction text on their demo row. */
+  ask: string;
+  blocking: boolean;
+}
+
+/** The open change requests the stakeholders raised on the current prototype —
+ * Design's incoming work. Objections are blocking; "with changes" are not. */
+export function changeRequests(program: ProgramSummary): ChangeRequest[] {
+  return demoAcceptance(program).rows
+    .filter((r) => /objection|with changes/i.test(r.verdict ?? ""))
+    .map((r) => ({
+      stakeholder: (r.stakeholder ?? "").trim() || "—",
+      verdict: r.verdict ?? "",
+      ask: (r.reaction ?? "").trim(),
+      blocking: /objection/i.test(r.verdict ?? ""),
+    }));
+}
+
 /** One-line status for the loop node / headers. */
 export function loopHeadline(s: LoopState): string {
   if (!s.total && !s.hasPrototype) return "Design the prototype";

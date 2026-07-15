@@ -10,6 +10,7 @@ import { useMemo, useState } from "react";
 import { demoAcceptance } from "@/v3/components/flow/flowShellData";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 import { movementValidationCoverage } from "@/v3/components/flow/flowPortal";
+import { loopState } from "@/v3/components/flow/flowLoop";
 import type { ProgramSummary } from "@/new/types";
 
 function verdictTone(v: string): "ok" | "part" | "obj" | "pending" {
@@ -30,6 +31,7 @@ export default function ShowCockpit({ program, onRunAgent }: {
     return pb ? String(pb.html ?? "") : "";
   }, [program]);
   const [showProto, setShowProto] = useState(false);
+  const ls = useMemo(() => loopState(program), [program]);
 
   if (!tour.total && !html && !coverage.length) return null;
 
@@ -38,7 +40,7 @@ export default function ShowCockpit({ program, onRunAgent }: {
   const acts = [
     { label: "Prototype", done: !!html, hint: html ? "built & ready" : "not built yet" },
     { label: "Toured", done: tour.total > 0 && pending === 0, hint: tour.total ? `${tour.total - pending}/${tour.total} seen` : "no demos yet" },
-    { label: "Accepted", done: tour.total > 0 && tour.accepted >= tour.total, hint: tour.total ? `${tour.accepted}/${tour.total} accepted` : "awaiting verdicts" },
+    { label: "Approved", done: ls.converged, hint: tour.total ? `${ls.accepted}/${ls.total}${ls.converged ? " · sponsor+majority ✓" : " · need sponsor+majority"}` : "awaiting verdicts" },
   ];
 
   return (
@@ -51,6 +53,20 @@ export default function ShowCockpit({ program, onRunAgent }: {
           </div>
         ))}
       </div>
+
+      {/* Loop status — which court the ball is in this iteration. */}
+      {ls.hasPrototype ? (
+        <div className={`v3fs-showc-loop ${ls.court}`} role="status">
+          <span className="v3fs-showc-loop-r">Iteration {ls.round}</span>
+          <span className="v3fs-showc-loop-t">
+            {ls.court === "converged"
+              ? "✓ Approved — sponsor + majority accepted. Ready to ship."
+              : ls.court === "design"
+                ? `${ls.openRequests} change${ls.openRequests === 1 ? "" : "s"} sent back to Design — rebuild, then re-share the prototype.`
+                : `Awaiting verdicts — ${ls.accepted}/${ls.total} approved so far.`}
+          </span>
+        </div>
+      ) : null}
 
       {/* ── THE PROTOTYPE ─────────────────────────────────────────────────── */}
       <section className="v3fs-envc-act">
