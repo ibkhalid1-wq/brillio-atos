@@ -11,7 +11,7 @@ import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 import { flowMovements, movementEvidence, evidenceStamp, locateQuote, readMovementInputs, contradictionLogWithout, artifactDocument } from "@/v3/components/flow/flowShellData";
 import { relevantApprovers, stakeholderApprovalItems, approvalLinkFor, type StakeholderApprovalItem } from "@/v3/components/flow/flowApprovals";
 import { buildMeetingIcs, mailtoLink, stakeholderEmail } from "@/v3/components/flow/flowMeetings";
-import { listInterviewPacks, portalLinkFor, movementValidationCoverage } from "@/v3/components/flow/flowPortal";
+import { listInterviewPacks, portalLinkFor, movementValidationCoverage, engagementLabel } from "@/v3/components/flow/flowPortal";
 import { resolveMovementStakeholders, readRoleBindings, readOperatorAsks, operatorAsksFor, type MovementStakeholder } from "@/v3/components/flow/flowStakeholders";
 import { mapTranscriptSpeakers } from "@/v3/components/flow/flowTranscriptMap";
 import { AttachFileButton, TranscribeButton, copyTextFromAction } from "@/v3/components/flow/flowCapture";
@@ -1134,6 +1134,11 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
                       aria-label={`Response link for ${name}`} />
                     {copiedTick ? <span className="v3fs-ivc-linkok">✓</span> : null}
                   </span>
+                ) : null}
+                {/* Engagement read: where the demo/review loses this person —
+                    opened-but-silent is a different follow-up than never-opened. */}
+                {pack && engagementLabel(pack) ? (
+                  <span className="v3fs-ivc-engage" title="From the link's own progress pings">👁 {engagementLabel(pack)}</span>
                 ) : null}
                 {/* Send appears only once a link EXISTS — you copy/create the
                     link first, then send it. Sending before a link is minted

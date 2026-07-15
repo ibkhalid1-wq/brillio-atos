@@ -274,6 +274,26 @@ export function resolveFlowDecision(
     if (additions.length) nextInner = { ...nextInner, ontologyAlignment: [...current, ...additions].slice(-60) };
   }
 
+  // Distilled-feedback family (demo-fix and kin): confirming APPENDS an
+  // attributed block into a movement's input field. The write is
+  // fingerprint-visible, so the impacted artifacts go stale and the rebuild
+  // loop (Inbox action item / auto-build) carries the change from there —
+  // the decision applies a blob write; regeneration stays an agent run.
+  if (resolution === "confirmed" && payload && isRecord(payload.phaseInputAppend)) {
+    const append = payload.phaseInputAppend as Record<string, unknown>;
+    const movementId = String(append.movementId ?? "").trim();
+    const field = String(append.field ?? "").trim();
+    const text = String(append.text ?? "").trim();
+    if (movementId && field && !field.startsWith("_") && text) {
+      const phaseInputs = isRecord(nextInner.phaseInputs) ? { ...(nextInner.phaseInputs as Record<string, unknown>) } : {};
+      const bucket = isRecord(phaseInputs[movementId]) ? { ...(phaseInputs[movementId] as Record<string, unknown>) } : {};
+      const existing = typeof bucket[field] === "string" ? (bucket[field] as string) : "";
+      bucket[field] = [existing.trimEnd(), text].filter(Boolean).join("\n\n");
+      phaseInputs[movementId] = bucket;
+      nextInner = { ...nextInner, phaseInputs };
+    }
+  }
+
   // Regenerated documents the guard held back (the mirror was hand-edited):
   // confirming REPLACES the mirror with the fresh generation — that is the
   // decision being made — and lands the matching ledger stub so presence,
@@ -462,6 +482,16 @@ export function describeDecisionChanges(program: ProgramSummary, decision: FlowD
   if (!payload) return [];
   const inner = innerData(program);
   const changes: DecisionChange[] = [];
+
+  if (isRecord(payload.phaseInputAppend)) {
+    const append = payload.phaseInputAppend as Record<string, unknown>;
+    const text = String(append.text ?? "");
+    changes.push({
+      target: `${String(append.movementId ?? "movement")} inputs — ${String(append.field ?? "field")}`,
+      effect: "the distilled feedback appends to the inputs; the impacted artifacts go stale for rebuild",
+      rows: text.split("\n").filter((line) => line.trim()).slice(0, 6),
+    });
+  }
 
   if (Array.isArray(payload.ontologyAlignment)) {
     const current = Array.isArray(inner.ontologyAlignment) ? (inner.ontologyAlignment as unknown[]) : [];

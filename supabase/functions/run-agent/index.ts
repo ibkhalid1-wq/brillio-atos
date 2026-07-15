@@ -1439,6 +1439,7 @@ ROBUSTNESS RULES (enforced, not optional):
 - The scope contract is explicit three-way: inScope / outOfScope / fakedForDemo — every faked item says WHY it is faked. This is what stops the demo silently over-promising.
 - The walkthrough is a NUMBERED CLICK-PATH, not prose: screen → action → expected result → the evidence that says it must behave that way. It doubles as the demo's test script.
 - COVER THE ONTOLOGY: fixtures name entities exactly as the ontology does, and EVERY entity in the Domain Ontology gets seed records — not just the ones behind key relationships. An ontology entity with no fixtures is a gap, never an omission. Still include the records that make key relationships visible on screen (e.g. the one Account whose Opportunities demonstrate the relation).
+- FIXTURES ARE ROWS: each fixture's records are STRUCTURED — a short label plus values keyed by the entity's attributes VERBATIM, with realistic values drawn from the evidence (their numbers, their names, their systems). These rows are exactly what the demo screens display, so a stakeholder must recognise their own data in them. 2–3 records per entity.
 - The interface inventory enumerates STATES per screen (empty / loading / populated / error) — robustness lives in the states, not the happy path.
 - Every assumption the build depends on carries an owner and a resolve-by moment.
 - definitionOfDone is derived from the movement's gate criteria — the pack may not disagree with the gate.
@@ -1450,7 +1451,7 @@ Return ONLY valid JSON:
   "scaffold": { "framework": "the Blueprint's target framework", "runtime": "language/platform", "structure": ["directories/modules"], "dependencies": ["key packages"] },
   "buildSlices": [ { "slice": "string", "demonstrates": "Atlas workflow", "forStakeholders": ["who watches this run"], "components": ["agents/tools/UI in the slice"], "estimate": "S|M|L" } ],
   "walkthrough": [ { "step": 1, "screen": "where you are", "action": "what you click/type", "expect": "what must happen", "groundedIn": "the evidence/quote that says why" } ],
-  "fixtures": [ { "entity": "ontology entity, named exactly", "records": "the named seed records to load", "showsRelation": "the relationship this data makes visible, or null" } ],
+  "fixtures": [ { "entity": "ontology entity, named exactly", "records": [ { "label": "short display name of this seed record (e.g. 'CLM-4817 — 2019 Toyota Camry')", "values": { "<entity attribute, verbatim>": "realistic value drawn from the evidence — their numbers, their names" } } ], "showsRelation": "the relationship this data makes visible, or null" } ],
   "interfaceInventory": [ { "screen": "screen/component", "states": { "empty": "what shows", "loading": "what shows", "populated": "what shows", "error": "what shows" } } ],
   "seedScenarios": [ { "stakeholder": "string", "scenario": "the concrete situation replayed", "sourceQuote": "the verbatim transcript moment it comes from", "data": "the seed values to load" } ],
   "stubbing": [ { "integration": "system", "approach": "mock|fixture|sandbox", "notes": "string" } ],

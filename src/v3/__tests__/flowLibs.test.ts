@@ -374,6 +374,62 @@ describe("contradiction stickiness — a dispute is proposed once, whatever the 
   });
 });
 
+describe("scenario runner — beat records, fixtures, metrics, the ✗ loop", () => {
+  it("parseFixtures reads structured rows and tolerates the legacy string shape", async () => {
+    const { parseFixtures } = await import("@/v3/components/flow/flowDemoRun");
+    const out = parseFixtures([
+      { entity: "Claim", records: [{ label: "CLM-4817", values: { reserve: "$8,400", status: "Open" } }] },
+      { entity: "Policy", records: "One active policy, POL-2201, $500 deductible" },
+      { entity: "", records: [] },
+    ]);
+    expect(out).toHaveLength(2);
+    expect(out[0].records[0].values.reserve).toBe("$8,400");
+    expect(out[1].records[0].label).toContain("POL-2201");
+  });
+  it("stepMetric extracts honest before→after pairs and refuses to invent", async () => {
+    const { stepMetric } = await import("@/v3/components/flow/flowDemoRun");
+    expect(stepMetric("you said the credit check takes... was 2 days, watch it take 40 seconds")).toBe("2 days → 40 seconds");
+    expect(stepMetric("from 14 days to 4 days against baseline")).toBe("14 days → 4 days");
+    expect(stepMetric("the agent verifies coverage")).toBeNull();
+  });
+  it("beat records roundtrip through the sentinel fold and strip cleanly", async () => {
+    const { foldBeatRecords, parseBeatRecords, stripBeatSentinel } = await import("@/v3/components/flow/flowDemoRun");
+    const records = [{ ts: "t", flow: "F", step: 0, action: "a", executor: "simulated" as const, actor: "Agent", outcome: "done", verdict: "not" as const }];
+    const folded = foldBeatRecords(records);
+    expect(parseBeatRecords(folded)).toHaveLength(1);
+    expect(parseBeatRecords(folded)[0].verdict).toBe("not");
+    expect(stripBeatSentinel(folded)).not.toContain("[[DEMO-RUN-RECORDS]]");
+    expect(stripBeatSentinel(folded)).toContain("✗ F · step 1: a");
+  });
+  it("transitionForStep maps a step to its machine transition by token overlap", async () => {
+    const { transitionForStep } = await import("@/v3/components/flow/flowDemoRun");
+    const machines = [{ transitions: [{ from: "Received", to: "Coverage Verified", on: "verify coverage against policy", actor: "Coverage Agent" }] }];
+    expect(transitionForStep(machines, "Verify coverage and check the policy")?.actor).toBe("Coverage Agent");
+    expect(transitionForStep(machines, "Send a birthday card")).toBeNull();
+  });
+  it("phaseInputAppend decisions append into the movement inputs on confirm", () => {
+    const p = programme({ flowDecisions: [{
+      id: "demo-fix-1", tier: 2, status: "open", agentId: "demo-run", movementId: "show",
+      title: "t", summary: "s", blocking: "", recommendation: null, createdAt: "2026-07-15",
+      payload: { phaseInputAppend: { movementId: "show", field: "demoFeedback", text: "✗ step 2 wrong" } },
+    }], phaseInputs: { show: { demoFeedback: "earlier note" } } });
+    const blob = resolveFlowDecision(p, "demo-fix-1", "confirmed", "you")!;
+    const bucket = (blob.phaseInputs as Record<string, Record<string, string>>).show;
+    expect(bucket.demoFeedback).toBe("earlier note\n\n✗ step 2 wrong");
+  });
+  it("ingesting a response with ✗ beats queues the design-fix proposal", async () => {
+    const { foldBeatRecords } = await import("@/v3/components/flow/flowDemoRun");
+    const text = `Fine overall.\n\n${foldBeatRecords([{ ts: "t", flow: "F", step: 1, action: "estimate", executor: "simulated", actor: "A", outcome: "o", verdict: "not" }])}`;
+    const p = programme({
+      flowPortalInbox: [{ id: "item-1", kind: "interview", stakeholder: "Maria", role: "Follow-up", receivedAt: "t", text }],
+      flowInterviewPacks: [{ id: "pk", stakeholder: "Maria", movementId: "show", captureField: "demoFeedback", token: "t", createdAt: "2026-07-01" }],
+    });
+    const blob = ingestPortalResponse(p, "item-1", "you")!;
+    const decisions = (blob.flowDecisions as Array<Record<string, unknown>>);
+    expect(decisions.some((d) => String(d.id).startsWith("demo-fix-"))).toBe(true);
+  });
+});
+
 describe("envision transformation — derived future state, agent grounding, diffs, coverage", () => {
   const agentify: AgentifyReview = {
     kind: "agentify", persona: "Avantika", intro: "",

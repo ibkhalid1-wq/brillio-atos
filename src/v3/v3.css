@@ -6353,6 +6353,67 @@ details[open] > summary .v3fs-disc-c::after {display:none}
   transition:border-color var(--v3-transition-fast),background var(--v3-transition-fast),color var(--v3-transition-fast)}
 .v3fs-beatv-btn.ok.on {border-color:var(--v3-green);background:color-mix(in srgb,var(--v3-green) 13%,transparent);color:var(--v3-green)}
 .v3fs-beatv-btn.no.on {border-color:var(--v3-amber);background:var(--v3-amber-soft);color:var(--v3-amber)}
+/* ── The scenario runner: the demo EXECUTES ─────────────────────────────── */
+.v3fs-demo-scn {margin:10px 0 2px;padding:11px 14px;border:1px solid color-mix(in srgb,var(--v3-accent-2) 18%,var(--fs-line));
+  border-radius:11px;background:var(--fs-indigo-wash, color-mix(in srgb,var(--v3-accent-2) 6%,transparent))}
+.v3fs-demo-scn .lbl {display:block;font-size:9.5px;font-weight:750;letter-spacing:.06em;text-transform:uppercase;color:var(--v3-accent-2);margin-bottom:4px}
+.v3fs-demo-scn p {margin:0;font-size:12.5px;line-height:1.55;color:var(--v3-text-secondary)}
+.v3fs-demo-scn em {display:block;margin-top:5px;font-size:11px;font-style:italic;color:var(--v3-text-muted)}
+.v3fs-demo-runctl {display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 4px}
+.v3fs-demo-ticker {display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 2px}
+.v3fs-demo-metric {font-size:11px;font-weight:650;color:var(--v3-green);background:color-mix(in srgb,var(--v3-green) 11%,transparent);
+  border:1px solid color-mix(in srgb,var(--v3-green) 35%,var(--fs-line));border-radius:7px;padding:3px 9px;font-variant-numeric:tabular-nums}
+.v3fs-demo-live {display:flex;align-items:center;gap:9px;margin:10px 0;padding:10px 14px;border-radius:10px;font-size:12.5px;font-weight:600;
+  color:var(--v3-accent-2);background:var(--fs-indigo-wash, color-mix(in srgb,var(--v3-accent-2) 7%,transparent));
+  border:1px dashed color-mix(in srgb,var(--v3-accent-2) 40%,var(--fs-line))}
+.v3fs-demo-pulse {width:9px;height:9px;border-radius:50%;background:var(--v3-accent-2);animation:v3fs-pulse 1.1s ease-in-out infinite}
+@keyframes v3fs-pulse {0%,100%{opacity:.35;transform:scale(.85)}50%{opacity:1;transform:scale(1.15)}}
+@media (prefers-reduced-motion: reduce){.v3fs-demo-pulse{animation:none}}
+.v3fs-demo-approvebox {margin:10px 0;padding:14px 16px;border-radius:12px;border:1px solid color-mix(in srgb,var(--v3-amber) 55%,var(--fs-line));
+  background:var(--v3-amber-soft);box-shadow:var(--v3-shadow-xs)}
+.v3fs-demo-approvebox b {display:block;font-size:13px;color:var(--v3-amber);margin-bottom:4px}
+.v3fs-demo-approvebox p {margin:0 0 10px;font-size:12.5px;line-height:1.55;color:var(--v3-text-secondary)}
+.v3fs-demo-donebar {margin:10px 0;padding:10px 14px;border-radius:10px;font-size:12.5px;font-weight:600;color:var(--v3-green);
+  background:color-mix(in srgb,var(--v3-green) 10%,transparent);border:1px solid color-mix(in srgb,var(--v3-green) 40%,var(--fs-line))}
+.v3fs-demo-hidden {display:none}
+.v3fs-demo-grid {display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin:12px 0}
+.v3fs-demo-cell {display:flex;flex-direction:column;gap:8px}
+/* Seeded-data overlay: their records under the wireframe, tappable per field. */
+.v3fs-demo-data {margin:10px 0;padding:11px 13px;border:1px solid var(--fs-line);border-radius:11px;background:var(--v3-surface-2)}
+.v3fs-demo-data > .lbl {display:block;font-size:9.5px;font-weight:750;letter-spacing:.06em;text-transform:uppercase;color:var(--v3-accent-2);margin-bottom:7px}
+.v3fs-demo-fx {margin-bottom:8px}
+.v3fs-demo-fx:last-child {margin-bottom:0}
+.v3fs-demo-fx > b {display:block;font-size:12px;font-weight:650;color:var(--v3-text-primary);margin-bottom:4px}
+.v3fs-demo-fxrow {display:flex;flex-direction:column;gap:4px;padding:7px 9px;border:1px solid var(--fs-line);border-radius:9px;background:var(--fs-card);margin-bottom:5px}
+.v3fs-demo-fxlabel {font-size:12px;font-weight:600;color:var(--v3-text-primary)}
+.v3fs-demo-fxfields {display:flex;flex-wrap:wrap;gap:5px}
+.v3fs-demo-field {font:inherit;font-size:11px;line-height:1.4;color:var(--v3-text-secondary);background:var(--v3-surface);
+  border:1px solid var(--fs-line);border-radius:7px;padding:2px 8px;cursor:pointer;font-variant-numeric:tabular-nums;
+  transition:border-color var(--v3-transition-fast),color var(--v3-transition-fast)}
+.v3fs-demo-field:disabled {cursor:default}
+.v3fs-demo-field:not(:disabled):hover {border-color:color-mix(in srgb,var(--v3-amber) 55%,var(--fs-line))}
+.v3fs-demo-field em {font-style:normal;font-size:9.5px;font-weight:750;letter-spacing:.03em;text-transform:uppercase;color:var(--v3-text-muted);margin-right:4px}
+.v3fs-demo-field.flagged {border-color:var(--v3-amber);color:var(--v3-amber);background:var(--v3-amber-soft)}
+/* Ask the record — grounded Q&A on any linked page. */
+.v3fs-ask-record {margin:26px 0 0;padding:16px 20px;border:1px solid var(--fs-line);border-radius:14px;background:var(--fs-card);box-shadow:var(--v3-shadow-xs)}
+.v3fs-ask-h {font-size:12.5px;font-weight:650;color:var(--v3-text-primary);margin-bottom:10px}
+.v3fs-ask-h span {color:var(--v3-accent-2)}
+.v3fs-ask-turn {margin-bottom:10px}
+.v3fs-ask-q {margin:0 0 4px;font-size:12.5px;font-weight:650;color:var(--v3-text-primary)}
+.v3fs-ask-a {margin:0;padding:9px 12px;border-radius:10px;font-size:12.5px;line-height:1.6;color:var(--v3-text-secondary);
+  background:var(--fs-indigo-wash, color-mix(in srgb,var(--v3-accent-2) 6%,transparent));border:1px solid color-mix(in srgb,var(--v3-accent-2) 15%,var(--fs-line))}
+.v3fs-ask-row {display:flex;gap:8px}
+.v3fs-ask-row input {flex:1 1 auto;font:inherit;font-size:12.5px;border:1px solid var(--fs-line);border-radius:9px;padding:9px 12px;background:var(--v3-surface);color:var(--v3-text)}
+.v3fs-ask-row input:focus {outline:none;border-color:var(--v3-accent-2);box-shadow:0 0 0 3px color-mix(in srgb,var(--v3-accent-2) 14%,transparent)}
+/* Portfolio pattern chips on Envision + card engagement read. */
+.v3fs-patterns {display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 12px;padding:9px 13px;
+  border:1px solid var(--fs-line);border-radius:11px;background:var(--v3-surface-2)}
+.v3fs-patterns-l {font-size:10px;font-weight:750;letter-spacing:.05em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3fs-pattern-chip {font-size:11.5px;color:var(--v3-text-secondary);background:var(--fs-card);border:1px solid color-mix(in srgb,var(--v3-green) 35%,var(--fs-line));border-radius:8px;padding:3px 9px}
+.v3fs-pattern-chip b {font-weight:650;color:var(--v3-text-primary)}
+.v3fs-pattern-chip em {font-style:normal;font-size:10.5px;color:var(--v3-green)}
+.v3fs-ivc-engage {font-size:11px;color:var(--v3-text-muted);white-space:nowrap}
+.v3fs-envision-story {margin-top:14px}
 .v3fs-demo-phasec{display:flex;flex-direction:column;gap:5px;margin-top:10px;font-size:11.5px;font-weight:650;color:var(--v3-text-secondary)}
 .v3fs-demo-phasec textarea{font-size:12.5px;font-family:inherit;border:1px solid var(--fs-line);border-radius:8px;padding:8px 11px;background:var(--v3-surface);color:var(--v3-text);resize:vertical;line-height:1.5}
 .v3fs-demo-phasec textarea:focus{outline:none;border-color:var(--v3-accent-2);box-shadow:0 0 0 3px color-mix(in srgb,var(--v3-accent-2) 14%,transparent)}

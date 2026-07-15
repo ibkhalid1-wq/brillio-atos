@@ -1,7 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ScreenCard } from "@/v3/components/flow/studio/ExperienceDesignStudio";
 import FlowReviewSurface from "@/v3/components/flow/FlowReviewSurface";
 import { projectStakeholderReview, reviewDiff, type ReviewPayload } from "@/v3/components/flow/flowReviews";
+import {
+  parseFixtures, fixturesForEntities, screenEntities, stepMetric, transitionForStep, isAgentActor, foldBeatRecords,
+  type DemoBeatRecord, type DemoFixture,
+} from "@/v3/components/flow/flowDemoRun";
 import { stakeholderPrimaryArea } from "@/v3/components/flow/flowAreas";
 import type { ProgramSummary } from "@/new/types";
 import { DictationButton, joinDictation } from "@/v3/components/flow/FlowDictation";
@@ -59,6 +63,14 @@ interface Pack {
   /** The recipient's business area — the demo walker opens on their own area's
    * flow and names it, the Show parallel to the Listen reviews' area scoping. */
   recipientArea?: string;
+  /** The FUNCTIONAL demo slice: the experience design's state machines (what
+   * the scenario runner executes), the prototype pack's seeded fixtures (the
+   * rows the screens display), and THEIR seed scenario. */
+  machines?: Array<Record<string, unknown>>;
+  fixtures?: unknown[];
+  seedScenario?: { scenario?: string; sourceQuote?: string; data?: string };
+  /** Operator opt-in: agent beats run as LIVE agent calls, not simulations. */
+  liveDemo?: boolean;
   /** A projected REVIEW surface — workflow-agentify or ontology+atlas. When
    * present, the page renders the visual review instead of the plain form; its
    * composed response still submits through the interview `answers` path.
@@ -142,6 +154,8 @@ interface RespondDraft {
   comment?: string;
   phaseComments?: Record<string, string>;
   beatVerdicts?: Record<string, string>;
+  demoRunRecords?: DemoBeatRecord[];
+  demoFieldFlags?: Record<string, string>;
 }
 function readRespondDraft(key: string): RespondDraft {
   try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) as RespondDraft : {}; } catch { return {}; }
@@ -185,13 +199,18 @@ export default function FlowRespond({ token }: { token: string }) {
   // Per-beat acceptance taps (✓ runs my workflow / ✗ not quite) — granular
   // signal folded into the verdict, so acceptance isn't one button at the end.
   const [beatVerdicts, setBeatVerdicts] = useState<Record<string, string>>(draft0.beatVerdicts ?? {});
+  // The scenario run's REPLAYABLE beat records — (transition, executor,
+  // outcome) per step watched — plus field-level flags raised on the seeded
+  // screens. Both fold into the answer; the records travel structured too.
+  const [demoRunRecords, setDemoRunRecords] = useState<DemoBeatRecord[]>(draft0.demoRunRecords ?? []);
+  const [demoFieldFlags, setDemoFieldFlags] = useState<Record<string, string>>(draft0.demoFieldFlags ?? {});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Persist the draft as they type; clear it once the link is submitted or spent.
   const hasDraft = !!(Object.keys(answers).length || extra.trim() || Object.keys(deferrals).length
     || filledVoices.length || verdict || comment.trim() || Object.keys(phaseComments).length
-    || Object.keys(beatVerdicts).length);
+    || Object.keys(beatVerdicts).length || demoRunRecords.length || Object.keys(demoFieldFlags).length);
   useEffect(() => {
     try {
       if (state.phase === "sent") {
@@ -202,9 +221,9 @@ export default function FlowRespond({ token }: { token: string }) {
         }
         return;
       }
-      if (hasDraft) localStorage.setItem(draftKey, JSON.stringify({ answers, deferrals, extra, suggestedVoices, verdict, comment, phaseComments, beatVerdicts }));
+      if (hasDraft) localStorage.setItem(draftKey, JSON.stringify({ answers, deferrals, extra, suggestedVoices, verdict, comment, phaseComments, beatVerdicts, demoRunRecords, demoFieldFlags }));
     } catch { /* private mode / quota — draft-save is best-effort */ }
-  }, [draftKey, state.phase, hasDraft, answers, deferrals, extra, suggestedVoices, verdict, comment, phaseComments, beatVerdicts]);
+  }, [draftKey, state.phase, hasDraft, answers, deferrals, extra, suggestedVoices, verdict, comment, phaseComments, beatVerdicts, demoRunRecords, demoFieldFlags]);
 
   useEffect(() => {
     let alive = true;
@@ -261,6 +280,62 @@ export default function FlowRespond({ token }: { token: string }) {
     }
   };
 
+  // Engagement telemetry — lightweight, anonymous-to-content pings so the
+  // operator sees where a demo loses people: opened, and the furthest beat
+  // reached. Never carries answer content; best-effort.
+  const progressRef = useRef(-1);
+  useEffect(() => {
+    if (state.phase !== "ready" || state.pack.responded) return;
+    const maxStep = demoRunRecords.reduce((max, r) => Math.max(max, r.step + 1), 0);
+    if (maxStep <= progressRef.current) return;
+    progressRef.current = Math.max(0, maxStep);
+    const firstFlowSteps = state.pack.design?.flows?.[0]?.steps;
+    const totalSteps = Array.isArray(firstFlowSteps) ? firstFlowSteps.length : 0;
+    void fetch(`${FUNCTIONS_BASE}/flow-portal`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, progress: { maxStep, totalSteps } }),
+    }).catch(() => { /* telemetry never blocks the page */ });
+  }, [state, demoRunRecords, token]);
+
+  // Toggle a field-level flag on a seeded screen ("this field is wrong").
+  const toggleFieldFlag = (key: string) => setDemoFieldFlags((prev) => {
+    const next = { ...prev };
+    if (key in next) delete next[key]; else next[key] = "";
+    return next;
+  });
+
+  // LIVE agent execution for a demo beat — only offered when the operator
+  // opted in (pack.liveDemo). The edge runs ONE blueprint agent against the
+  // seed data and returns the outcome; any failure falls back to simulation.
+  const runLiveBeat = async (input: { flow: string; step: number; action: string; actor: string }): Promise<{ outcome: string } | null> => {
+    try {
+      const response = await fetch(`${FUNCTIONS_BASE}/flow-portal`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, demoRun: input }),
+      });
+      const body = await response.json().catch(() => ({}));
+      return response.ok && typeof body.outcome === "string" ? { outcome: body.outcome.slice(0, 240) } : null;
+    } catch { return null; }
+  };
+
+  // The scenario run distilled for the record: readable beat lines with the
+  // stakeholder's verdicts attached, the structured trail between sentinels,
+  // and any field-level flags raised on the seeded screens.
+  const demoRunBlock = useMemo(() => {
+    const blocks: string[] = [];
+    if (demoRunRecords.length) {
+      const withVerdicts = demoRunRecords.map((r) => {
+        const key = `${r.flow} · step ${r.step + 1}${r.action ? ` (${r.action})` : ""}`;
+        const v = beatVerdicts[key];
+        return v === "ok" || v === "not" ? { ...r, verdict: v as "ok" | "not" } : r;
+      });
+      blocks.push(foldBeatRecords(withVerdicts));
+    }
+    const flags = Object.entries(demoFieldFlags);
+    if (flags.length) blocks.push(`Screen data flagged:\n${flags.map(([k, note]) => `• ${k}${note ? ` — ${note}` : ""}`).join("\n")}`);
+    return blocks.join("\n\n");
+  }, [demoRunRecords, beatVerdicts, demoFieldFlags]);
+
   const composed = useMemo(() => {
     if (state.phase !== "ready") return "";
     // Demo packs carry no questions — this memo only serves the interview view.
@@ -282,8 +357,9 @@ export default function FlowRespond({ token }: { token: string }) {
       .filter(([, value]) => value.trim())
       .map(([key, value]) => `• ${key}: ${value.trim()}`);
     if (phaseLines.length) blocks.push(`Demo walkthrough, phase notes:\n${phaseLines.join("\n")}`);
+    if (demoRunBlock) blocks.push(demoRunBlock);
     return blocks.join("\n\n");
-  }, [state, answers, extra, deferrals, beatVerdicts, phaseComments]);
+  }, [state, answers, extra, deferrals, beatVerdicts, phaseComments, demoRunBlock]);
 
   const answeredCount = useMemo(() => {
     if (state.phase !== "ready" || state.pack.kind === "demo") return 0;
@@ -345,7 +421,26 @@ export default function FlowRespond({ token }: { token: string }) {
                 programme={state.pack.programme} objective={state.pack.objective}
                 returning={!!state.pack.followUp}
                 submitting={submitting} error={error} draftKey={reviewDraftKey}
-                onSubmit={(answers) => void submit({ answers })} />
+                onSubmit={(answers) => void submit({ answers: [answers, demoRunBlock].filter(Boolean).join("\n\n") })} />
+              {/* ENVISION carries the STORYBOARD: once an experience design
+                  exists, the transformation review is followed by a walk of
+                  what we intend to build — validated here, while it's still
+                  cheap to change. Show then demonstrates it running. */}
+              {state.pack.design && state.pack.movementId === "envision" ? (
+                <section className="v3fs-rvw-wf plain v3fs-envision-story">
+                  <div className="v3fs-rvw-wf-h">
+                    <b>The storyboard — what we intend to build</b>
+                    <span className="v3fs-rvw-trigger">Walk it; flag anything that&rsquo;s off before we build it</span>
+                  </div>
+                  <DemoWalker design={state.pack.design} script={state.pack.script}
+                    recipientArea={state.pack.recipientArea}
+                    beatVerdicts={beatVerdicts}
+                    onBeatVerdict={(key, value) => setBeatVerdicts((prev) => ({ ...prev, [key]: prev[key] === value ? "" : value }))}
+                    machines={state.pack.machines} fixtures={state.pack.fixtures} seedScenario={state.pack.seedScenario}
+                    onBeatRecord={(record) => setDemoRunRecords((prev) => [...prev, record])}
+                    fieldFlags={demoFieldFlags} onToggleFieldFlag={toggleFieldFlag} />
+                </section>
+              ) : null}
             </>
           ) : state.pack.kind === "demo" ? (
             <>
@@ -371,7 +466,11 @@ export default function FlowRespond({ token }: { token: string }) {
                   phaseComments={phaseComments}
                   onPhaseComment={(key, value) => setPhaseComments((prev) => ({ ...prev, [key]: value }))}
                   beatVerdicts={beatVerdicts}
-                  onBeatVerdict={(key, value) => setBeatVerdicts((prev) => ({ ...prev, [key]: prev[key] === value ? "" : value }))} /> : null}
+                  onBeatVerdict={(key, value) => setBeatVerdicts((prev) => ({ ...prev, [key]: prev[key] === value ? "" : value }))}
+                  machines={state.pack.machines} fixtures={state.pack.fixtures} seedScenario={state.pack.seedScenario}
+                  onBeatRecord={(record) => setDemoRunRecords((prev) => [...prev, record])}
+                  fieldFlags={demoFieldFlags} onToggleFieldFlag={toggleFieldFlag}
+                  runLive={state.pack.liveDemo ? runLiveBeat : undefined} /> : null}
                 {state.pack.steps?.length ? (
                   <div className="v3fs-portal-steps">
                     {state.pack.steps.map((step, index) => (
@@ -414,7 +513,8 @@ export default function FlowRespond({ token }: { token: string }) {
                       .map(([key, value]) => `${value === "ok" ? "✓ Runs my workflow" : "✗ Not quite"} — ${key}`);
                     const full = [comment.trim(),
                       beatLines.length ? `Beat-by-beat:\n${beatLines.join("\n")}` : "",
-                      phaseLines.length ? `Phase-by-phase:\n${phaseLines.join("\n")}` : ""]
+                      phaseLines.length ? `Phase-by-phase:\n${phaseLines.join("\n")}` : "",
+                      demoRunBlock]
                       .filter(Boolean).join("\n\n");
                     void submit({ verdict, comment: full });
                   }}>
@@ -453,7 +553,11 @@ export default function FlowRespond({ token }: { token: string }) {
                     phaseComments={phaseComments}
                     onPhaseComment={(key, value) => setPhaseComments((prev) => ({ ...prev, [key]: value }))}
                     beatVerdicts={beatVerdicts}
-                    onBeatVerdict={(key, value) => setBeatVerdicts((prev) => ({ ...prev, [key]: prev[key] === value ? "" : value }))} />
+                    onBeatVerdict={(key, value) => setBeatVerdicts((prev) => ({ ...prev, [key]: prev[key] === value ? "" : value }))}
+                    machines={state.pack.machines} fixtures={state.pack.fixtures} seedScenario={state.pack.seedScenario}
+                    onBeatRecord={(record) => setDemoRunRecords((prev) => [...prev, record])}
+                    fieldFlags={demoFieldFlags} onToggleFieldFlag={toggleFieldFlag}
+                    runLive={state.pack.liveDemo ? runLiveBeat : undefined} />
                 ) : null}
                 {state.pack.questions.map((question, index) => (
                   <label key={index} className={`v3fs-portal-card${((answers[index] ?? "").trim() || (attachments[index] ?? []).length || deferrals[index]) ? " done" : ""}${deferrals[index] ? " deferred" : ""}`}>
@@ -575,6 +679,9 @@ export default function FlowRespond({ token }: { token: string }) {
               </div>
             </>
           )}
+          {state.phase === "ready" && !state.pack.responded ? (
+            <AskTheRecord token={token} />
+          ) : null}
           {state.phase !== "loading" ? (
             <footer className="v3fs-portal-brandfoot">
               <span className="mark"><i aria-hidden="true">◆</i> Brillio ATOS</span>
@@ -584,6 +691,56 @@ export default function FlowRespond({ token }: { token: string }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Ask the record — a stakeholder mid-review asks "why does this step stay
+ * human?" and gets an answer grounded in the programme record (charter,
+ * ontology, atlas, blueprint), with the evidence cited. Objections get
+ * answered the moment they form instead of festering until demo day.
+ */
+function AskTheRecord({ token }: { token: string }) {
+  const [q, setQ] = useState("");
+  const [thread, setThread] = useState<Array<{ q: string; a: string }>>([]);
+  const [busy, setBusy] = useState(false);
+  const ask = async () => {
+    const question = q.trim();
+    if (!question || busy) return;
+    setBusy(true);
+    try {
+      const response = await fetch(`${FUNCTIONS_BASE}/flow-portal`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, ask: question }),
+      });
+      const body = await response.json().catch(() => ({}));
+      const answer = response.ok && typeof body.answer === "string"
+        ? body.answer
+        : (typeof body.error === "string" ? body.error : "Couldn't answer that right now — add it as a comment and the team will follow up.");
+      setThread((t) => [...t, { q: question, a: answer }].slice(-6));
+      setQ("");
+    } catch {
+      setThread((t) => [...t, { q: question, a: "Couldn't answer that right now — add it as a comment and the team will follow up." }].slice(-6));
+    } finally { setBusy(false); }
+  };
+  return (
+    <aside className="v3fs-ask-record">
+      <div className="v3fs-ask-h"><span aria-hidden="true">✦</span> Questions? Ask — answers come from this programme&rsquo;s record.</div>
+      {thread.map((entry, i) => (
+        <div key={i} className="v3fs-ask-turn">
+          <p className="v3fs-ask-q">{entry.q}</p>
+          <p className="v3fs-ask-a">{entry.a}</p>
+        </div>
+      ))}
+      <div className="v3fs-ask-row">
+        <input value={q} placeholder="e.g. Why does the denial step stay human?" maxLength={400}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") void ask(); }} />
+        <button type="button" className="v3fs-btn pri" disabled={busy || !q.trim()} onClick={() => void ask()}>
+          {busy ? "Thinking…" : "Ask"}
+        </button>
+      </div>
+    </aside>
   );
 }
 
@@ -670,15 +827,32 @@ function FollowUpBanner({ stakeholder, submissions, changes }: {
  * it, watch each step's screen light up. Same renderer the design studio
  * uses, so what they walk IS the signed-off design.
  */
-function DemoWalker({ design, script, recipientArea, phaseComments, onPhaseComment, beatVerdicts, onBeatVerdict }: {
+function DemoWalker({ design, script, recipientArea, phaseComments, onPhaseComment, beatVerdicts, onBeatVerdict, machines, fixtures, seedScenario, onBeatRecord, fieldFlags, onToggleFieldFlag, runLive }: {
   design: NonNullable<Pack["design"]>; script?: Pack["script"]; recipientArea?: string;
   phaseComments?: Record<string, string>; onPhaseComment?: (key: string, value: string) => void;
   /** Per-beat acceptance taps — granular signal, so the final verdict is built
    * from what they confirmed beat by beat, not one button at the end. */
   beatVerdicts?: Record<string, string>; onBeatVerdict?: (key: string, value: "ok" | "not") => void;
+  /** The functional slice: state machines to execute, seeded fixtures to show. */
+  machines?: Array<Record<string, unknown>>; fixtures?: unknown[]; seedScenario?: Pack["seedScenario"];
+  /** Replayable beat records flow up as the scenario runs. */
+  onBeatRecord?: (record: DemoBeatRecord) => void;
+  /** Field-level flags on the seeded screens ("this field is wrong"). */
+  fieldFlags?: Record<string, string>; onToggleFieldFlag?: (key: string) => void;
+  /** When the operator opted in, agent beats execute as LIVE agent calls. */
+  runLive?: (input: { flow: string; step: number; action: string; actor: string }) => Promise<{ outcome: string } | null>;
 }) {
   const flows = useMemo(() => design.flows ?? [], [design]);
   const screens = design.screens ?? [];
+  const seeded = useMemo<DemoFixture[]>(() => parseFixtures(fixtures), [fixtures]);
+  // Scenario RUN state: the machine plays the flow — agent beats animate (or
+  // execute live), HITL beats pause until the stakeholder approves. Every beat
+  // lands as a replayable record via onBeatRecord.
+  const [runState, setRunState] = useState<"idle" | "working" | "approval" | "done">("idle");
+  const [runActor, setRunActor] = useState("");
+  const [metrics, setMetrics] = useState<string[]>([]);
+  const [explore, setExplore] = useState(false);
+  const runRef = useRef(0);
   // The recipient's OWN flow — the one tagged with their area (alliances,
   // delivery, …). The served flows already arrive persona-first, so this is
   // normally index 0; area matching keeps the default on their world even when
@@ -703,6 +877,59 @@ function DemoWalker({ design, script, recipientArea, phaseComments, onPhaseComme
   const screenId = String(step?.screen ?? "").toLowerCase();
   const screen = screens.find((s) =>
     String(s.id ?? "").toLowerCase() === screenId || String(s.name ?? "").toLowerCase() === screenId);
+
+  // ── The scenario engine ────────────────────────────────────────────────────
+  // Plays the flow beat by beat: agent transitions animate with honest labels
+  // (or execute LIVE when the operator opted in); HITL transitions pause until
+  // the stakeholder clicks Approve — they perform the judgement moment the
+  // design reserves for them. Every beat lands as a replayable record.
+  const reducedMotion = typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const runBeat = async (i: number, token: number) => {
+    if (token !== runRef.current) return;
+    const list = Array.isArray(flow?.steps) ? (flow.steps as Array<Record<string, unknown>>) : [];
+    if (i >= list.length) { setRunState("done"); return; }
+    setStepIndex(i);
+    const s = list[i] ?? {};
+    const action = String(s.action ?? "");
+    const hitl = String(s.hitl ?? "");
+    const t = transitionForStep(machines ?? [], action);
+    const actor = t?.actor && isAgentActor(t.actor) ? t.actor : (t?.actor || "The agent");
+    if (hitl) {
+      setRunActor(hitl);
+      setRunState("approval");
+      return; // the Approve button records the human beat and continues
+    }
+    setRunActor(actor);
+    setRunState("working");
+    let executor: DemoBeatRecord["executor"] = "simulated";
+    let outcome = String(s.outcome ?? t?.to ?? "done");
+    if (runLive) {
+      const live = await runLive({ flow: String(flow?.name ?? ""), step: i, action, actor });
+      if (token !== runRef.current) return;
+      if (live?.outcome) { outcome = live.outcome; executor = "live-agent"; }
+    } else if (!reducedMotion) {
+      await new Promise((r) => setTimeout(r, 1200));
+      if (token !== runRef.current) return;
+    }
+    const narr = onOwnFlow ? script?.steps?.[i] : undefined;
+    const metric = stepMetric(`${narr?.say ?? ""} ${narr?.callback ?? ""} ${outcome}`);
+    if (metric) setMetrics((m) => (m.includes(metric) ? m : [...m, metric]));
+    onBeatRecord?.({ ts: new Date().toISOString(), flow: String(flow?.name ?? "Flow"), step: i, action, executor, actor, outcome, hitl: false });
+    void runBeat(i + 1, token);
+  };
+  const startRun = () => { runRef.current += 1; setExplore(false); setMetrics([]); void runBeat(0, runRef.current); };
+  const stopRun = () => { runRef.current += 1; setRunState("idle"); };
+  const approveBeat = () => {
+    const list = Array.isArray(flow?.steps) ? (flow.steps as Array<Record<string, unknown>>) : [];
+    const s = list[stepIndex] ?? {};
+    onBeatRecord?.({
+      ts: new Date().toISOString(), flow: String(flow?.name ?? "Flow"), step: stepIndex,
+      action: String(s.action ?? ""), executor: "human", actor: "you",
+      outcome: String(s.outcome ?? "approved"), hitl: true,
+    });
+    void runBeat(stepIndex + 1, runRef.current);
+  };
+
   if (!flows.length || !screens.length) return null;
   return (
     <div className="v3fs-demo-walk">
@@ -724,6 +951,40 @@ function DemoWalker({ design, script, recipientArea, phaseComments, onPhaseComme
           </select>
         ) : <span>{String(flow?.name ?? "")}</span>}
       </div>
+      {seedScenario?.scenario ? (
+        <div className="v3fs-demo-scn">
+          <span className="lbl">Your scenario</span>
+          <p>{seedScenario.scenario}</p>
+          {seedScenario.sourceQuote ? <em>↩ “{seedScenario.sourceQuote}”</em> : null}
+        </div>
+      ) : null}
+      <div className="v3fs-demo-runctl">
+        <button type="button" className="v3fs-btn pri" disabled={runState === "working" || runState === "approval"}
+          onClick={startRun}>{runState === "working" || runState === "approval" ? "Running…" : "▶ Run this scenario"}</button>
+        {runState === "working" || runState === "approval" ? (
+          <button type="button" className="v3fs-btn quiet" onClick={stopRun}>Stop</button>
+        ) : null}
+        <button type="button" className={`v3fs-btn${explore ? " pri" : ""}`} onClick={() => { stopRun(); setExplore((e) => !e); }}>
+          {explore ? "← Back to the walk" : "⌗ Explore the screens"}
+        </button>
+      </div>
+      {metrics.length ? (
+        <div className="v3fs-demo-ticker" aria-live="polite">
+          {metrics.map((m, i) => <span key={i} className="v3fs-demo-metric">⏱ {m}</span>)}
+        </div>
+      ) : null}
+      {explore ? (
+        // App mode: every screen, freely browsable, seeded with their data.
+        <div className="v3fs-demo-grid">
+          {screens.map((sc, i) => (
+            <div key={i} className="v3fs-demo-cell">
+              <ScreenCard screen={sc} active={false} onClick={() => setExplore(false)} />
+              <SeededData screen={sc} fixtures={seeded} fieldFlags={fieldFlags} onToggleFieldFlag={onToggleFieldFlag} />
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <div className={explore ? "v3fs-demo-hidden" : undefined}>
       <div className="v3fs-wf-walk">
         {steps.map((s, i) => (
           <button key={i} type="button" className={`v3fs-wf-step${i === stepIndex ? " on" : ""}`}
@@ -734,7 +995,21 @@ function DemoWalker({ design, script, recipientArea, phaseComments, onPhaseComme
           </button>
         ))}
       </div>
+      {runState === "working" ? (
+        <div className="v3fs-demo-live"><span className="v3fs-demo-pulse" aria-hidden="true" />⚙ {runActor}: {String(step?.action ?? "")}…</div>
+      ) : null}
+      {runState === "approval" ? (
+        <div className="v3fs-demo-approvebox">
+          <b>⛨ Your approval moment</b>
+          <p>{runActor || "This step waits for your judgement — the agent has prepared it."}</p>
+          <button type="button" className="v3fs-btn pri" onClick={approveBeat}>✓ Approve &amp; continue</button>
+        </div>
+      ) : null}
+      {runState === "done" ? (
+        <div className="v3fs-demo-donebar">✓ Scenario complete — every agent beat ran, every approval was yours.</div>
+      ) : null}
       {screen ? <ScreenCard screen={screen} active onClick={() => { /* focused already */ }} /> : null}
+      {screen ? <SeededData screen={screen} fixtures={seeded} fieldFlags={fieldFlags} onToggleFieldFlag={onToggleFieldFlag} /> : null}
       {step && String(step.outcome ?? "") ? <div className="v3fs-wf-outcome">→ {String(step.outcome)}</div> : null}
       {(() => {
         const key = `${String(flow?.name ?? "Flow")} · step ${stepIndex + 1}${step?.action ? ` (${String(step.action)})` : ""}`;
@@ -776,6 +1051,52 @@ function DemoWalker({ design, script, recipientArea, phaseComments, onPhaseComme
         <span>{stepIndex + 1} of {steps.length}</span>
         <button type="button" className="v3fs-btn pri" disabled={stepIndex >= steps.length - 1} onClick={() => setStepIndex((i) => Math.min(steps.length - 1, i + 1))}>Next →</button>
       </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The seeded-data overlay — the rows the future system would show, rendered
+ * under the wireframe from the prototype pack's fixtures. Every field chip is
+ * TAPPABLE: "this field is wrong / shouldn't be here" lands as a field-level
+ * flag on the record, the Show-phase twin of Listen's data-elements capture.
+ */
+function SeededData({ screen, fixtures, fieldFlags, onToggleFieldFlag }: {
+  screen: Record<string, unknown>; fixtures: DemoFixture[];
+  fieldFlags?: Record<string, string>; onToggleFieldFlag?: (key: string) => void;
+}) {
+  const matches = fixturesForEntities(fixtures, screenEntities(screen));
+  if (!matches.length) return null;
+  return (
+    <div className="v3fs-demo-data">
+      <span className="lbl">Seeded with your data{onToggleFieldFlag ? " — tap a field if it's wrong" : ""}</span>
+      {matches.map((fx) => (
+        <div key={fx.entity} className="v3fs-demo-fx">
+          <b>{fx.entity}</b>
+          {fx.records.map((r, i) => (
+            <div key={i} className="v3fs-demo-fxrow">
+              <span className="v3fs-demo-fxlabel">{r.label}</span>
+              {Object.keys(r.values).length ? (
+                <span className="v3fs-demo-fxfields">
+                  {Object.entries(r.values).slice(0, 6).map(([k, v]) => {
+                    const key = `${fx.entity}.${k}`;
+                    const flagged = !!fieldFlags && key in fieldFlags;
+                    return (
+                      <button key={k} type="button" className={`v3fs-demo-field${flagged ? " flagged" : ""}`}
+                        disabled={!onToggleFieldFlag}
+                        title={flagged ? "Flagged — tap to clear" : "Tap if this field is wrong or shouldn't be here"}
+                        onClick={() => onToggleFieldFlag?.(key)}>
+                        <em>{k}</em> {v}{flagged ? " ✗" : ""}
+                      </button>
+                    );
+                  })}
+                </span>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ))}
     </div>
   );
 }

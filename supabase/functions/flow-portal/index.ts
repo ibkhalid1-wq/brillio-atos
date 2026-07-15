@@ -14,6 +14,7 @@
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
 import { extractDocumentText, extractRelevant } from "../_shared/extractText.ts";
+import { completeClaudeText } from "../_shared/claudeClient.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -206,6 +207,41 @@ Deno.serve(async (req: Request) => {
           .slice(0, 12);
         return flows.length && screens.length ? { flows, screens } : undefined;
       };
+      // The FUNCTIONAL demo slice: the state machines the scenario runner
+      // executes, the prototype pack's seeded fixtures (their records, their
+      // field names) that populate the screens, THEIR seed scenario, and the
+      // operator's live-agent opt-in. Everything capped and stripped.
+      const runSlice = (): Record<string, unknown> => {
+        const xd = hit.inner.experienceDesign;
+        const machines = isRecord(xd) && Array.isArray((xd as Record<string, unknown>).workflowMachines)
+          ? ((xd as Record<string, unknown>).workflowMachines as unknown[]).filter(isRecord).slice(0, 6)
+          : [];
+        const proto = hit.inner.prototypePack;
+        const fixtures = isRecord(proto) && Array.isArray((proto as Record<string, unknown>).fixtures)
+          ? ((proto as Record<string, unknown>).fixtures as unknown[]).filter(isRecord).slice(0, 12)
+          : [];
+        const scenarios = isRecord(proto) && Array.isArray((proto as Record<string, unknown>).seedScenarios)
+          ? ((proto as Record<string, unknown>).seedScenarios as unknown[]).filter(isRecord)
+          : [];
+        const holderKey = String(hit.pack.stakeholder ?? "").trim().toLowerCase();
+        const scenario = scenarios.find((s) => {
+          const name = String(s.stakeholder ?? "").trim().toLowerCase();
+          return name && (name === holderKey || name.split(/\s+/)[0] === holderKey.split(/\s+/)[0]);
+        });
+        const showBucket = isRecord(hit.inner.phaseInputs) && isRecord((hit.inner.phaseInputs as Record<string, unknown>).show)
+          ? (hit.inner.phaseInputs as Record<string, Record<string, unknown>>).show
+          : {};
+        return {
+          ...(machines.length ? { machines } : {}),
+          ...(fixtures.length ? { fixtures } : {}),
+          ...(scenario ? { seedScenario: {
+            scenario: String(scenario.scenario ?? "").slice(0, 400),
+            sourceQuote: String(scenario.sourceQuote ?? "").slice(0, 300),
+            ...(typeof scenario.data === "string" ? { data: scenario.data.slice(0, 400) } : {}),
+          } } : {}),
+          ...(showBucket._liveDemoAgents === "on" ? { liveDemo: true } : {}),
+        };
+      };
       // THEIR demo script narrates the walk: opening quote, scenario, the
       // per-beat talk track and callbacks, and the closing acceptance ask.
       const scriptSlice = (): Record<string, unknown> | undefined => {
@@ -256,6 +292,7 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({
           ...(design ? { design } : {}),
           ...(script ? { script } : {}),
+          ...(design ? runSlice() : {}),
           ...(recipientArea ? { recipientArea } : {}),
           kind: "demo",
           programme: hit.programName,
@@ -281,12 +318,14 @@ Deno.serve(async (req: Request) => {
         }))
         .filter((person) => person.name && person.name.toLowerCase() !== selfKey)
         .slice(0, 24);
-      // Show-movement links (follow-ups asking for demo feedback) carry the
-      // wireframe walkthrough — narrated by their demo script — beside the
-      // questions.
+      // Show links carry the walkthrough as the DEMO; Envision links carry it
+      // as the STORYBOARD ("what we intend to build") beside the transformation
+      // review — design intent is validated in Envision, watched running in
+      // Show. Both ship the functional run slice when the design exists.
       const isShowPack = String(hit.pack.movementId ?? "") === "show";
-      const interviewDesign = isShowPack ? designSlice() : undefined;
-      const interviewScript = isShowPack ? scriptSlice() : undefined;
+      const wantsDesign = isShowPack || String(hit.pack.movementId ?? "") === "envision";
+      const interviewDesign = wantsDesign ? designSlice() : undefined;
+      const interviewScript = wantsDesign ? scriptSlice() : undefined;
       const interviewArea = isShowPack ? recipientAreaSlice() : "";
       // DYNAMIC LINKS: a review pack also ships the CURRENT artifact slices so the
       // respond page rebuilds the review LIVE from the latest record — a later
@@ -364,6 +403,7 @@ Deno.serve(async (req: Request) => {
         ...(objective ? { objective } : {}),
         ...(interviewDesign ? { design: interviewDesign } : {}),
         ...(interviewScript ? { script: interviewScript } : {}),
+        ...(interviewDesign ? runSlice() : {}),
         ...(interviewArea ? { recipientArea: interviewArea } : {}),
         // Re-projection inputs (kind + area + the recipient name via `stakeholder`
         // above) and the live slices, so the client rebuilds the current review.
@@ -452,6 +492,101 @@ Deno.serve(async (req: Request) => {
           if (!error) sourceKey = key;
         } catch { /* extraction still succeeds without the original */ }
         return jsonResponse({ ...result, ...(sourceKey ? { sourceKey } : {}), refined });
+      }
+
+      // LIVE demo-beat execution: run ONE blueprint agent step against the
+      // seed data. Operator opt-in only (show._liveDemoAgents === "on"),
+      // read-only — nothing is stored, the outcome returns to the runner and
+      // lands on the record only when the stakeholder submits their response.
+      if (isRecord(body) && isRecord(body.demoRun)) {
+        const hit = await loadPack(token);
+        if ("reason" in hit) return jsonResponse({ error: hit.reason }, 404);
+        const showBucket = isRecord(hit.inner.phaseInputs) && isRecord((hit.inner.phaseInputs as Record<string, unknown>).show)
+          ? (hit.inner.phaseInputs as Record<string, Record<string, unknown>>).show : {};
+        if (showBucket._liveDemoAgents !== "on") {
+          return jsonResponse({ error: "Live demo agents are not enabled for this programme." }, 403);
+        }
+        const run = body.demoRun as Record<string, unknown>;
+        const action = String(run.action ?? "").slice(0, 200);
+        const actor = String(run.actor ?? "").slice(0, 80);
+        if (!action) return jsonResponse({ error: "Missing step" }, 400);
+        const bp = isRecord(hit.inner.agenticBlueprint) ? hit.inner.agenticBlueprint as Record<string, unknown> : {};
+        const agents = Array.isArray(bp.agents) ? (bp.agents as unknown[]).filter(isRecord).slice(0, 12) : [];
+        const agent = agents.find((a) => String(a.name ?? "").trim().toLowerCase() === actor.trim().toLowerCase()) ?? agents[0];
+        const proto = isRecord(hit.inner.prototypePack) ? hit.inner.prototypePack as Record<string, unknown> : {};
+        const seed = Array.isArray(proto.fixtures) ? JSON.stringify(proto.fixtures).slice(0, 4000) : "[]";
+        try {
+          const result = await completeClaudeText({
+            system: `You are "${agent ? String(agent.name) : actor || "the workflow agent"}"${agent && agent.purpose ? ` — ${String(agent.purpose)}` : ""}, running ONE step of an agentic-system demonstration for a stakeholder watching live. Execute the step against the seed data and report the outcome in ONE short sentence (max 30 words) — concrete, grounded in the actual seed values (use their record labels and numbers). Never make a judgement call reserved for a human (denials, approvals, negotiations) — prepare it and say so.`,
+            messages: [{ role: "user", content: `Step to execute: ${action}\n\nSeed data (the demo records):\n${seed}` }],
+            maxTokens: 120,
+            tier: "tier1",
+            timeoutMs: 20_000,
+          });
+          const outcome = result.text.trim().replace(/\s+/g, " ").slice(0, 240);
+          if (!outcome) return jsonResponse({ error: "No outcome" }, 502);
+          return jsonResponse({ outcome });
+        } catch {
+          return jsonResponse({ error: "The live agent could not run this beat." }, 502);
+        }
+      }
+
+      // GROUNDED Q&A: a stakeholder mid-review asks "why does this step stay
+      // human?" and gets an answer FROM THE RECORD — charter, ontology, atlas,
+      // blueprint — with the grounding made explicit. Read-only, capped.
+      if (isRecord(body) && typeof body.ask === "string" && body.ask.trim()) {
+        const hit = await loadPack(token);
+        if ("reason" in hit) return jsonResponse({ error: hit.reason }, 404);
+        const question = body.ask.trim().slice(0, 400);
+        const slice = (value: unknown, cap: number) => (isRecord(value) ? JSON.stringify(value).slice(0, cap) : "");
+        const record = [
+          `PROGRAMME: ${hit.programName}`,
+          `CHARTER: ${slice(hit.inner.transformationCharter, 2500)}`,
+          `DOMAIN ONTOLOGY: ${slice(hit.inner.domainOntology, 2500)}`,
+          `CURRENT-STATE ATLAS: ${slice(hit.inner.currentStateAtlas, 2500)}`,
+          `AGENTIC BLUEPRINT: ${slice(hit.inner.agenticBlueprint, 2500)}`,
+          `ARCHITECTURE: ${slice(hit.inner.architectureStrategy, 1500)}`,
+        ].filter((line) => !/: $/.test(line)).join("\n\n");
+        try {
+          const result = await completeClaudeText({
+            system: `You answer a client stakeholder's question during their review of an agentic-system design. Answer ONLY from the programme record provided — 2-4 sentences, plain language, warm but precise. When the record contains a verbatim quote or constraint that grounds the answer, cite it ("your words on record: …"). If the record doesn't answer the question, say so honestly and suggest they add it as a comment for the team. Never invent facts, prices, or commitments.`,
+            messages: [{ role: "user", content: `THE PROGRAMME RECORD:\n${record}\n\nSTAKEHOLDER QUESTION: ${question}` }],
+            maxTokens: 300,
+            tier: "tier1",
+            timeoutMs: 25_000,
+          });
+          const answer = result.text.trim().slice(0, 1200);
+          if (!answer) return jsonResponse({ error: "No answer" }, 502);
+          return jsonResponse({ answer });
+        } catch {
+          return jsonResponse({ error: "Couldn't answer that right now — add it as a comment and the team will follow up." }, 502);
+        }
+      }
+
+      // Lightweight ENGAGEMENT telemetry: the respond page reports how far the
+      // holder got (opened, furthest beat) so the operator can see where a demo
+      // loses people. Best-effort single write, no CAS retry — losing one ping
+      // is fine; quarantined content never rides this path.
+      if (isRecord(body) && isRecord(body.progress)) {
+        const hit = await loadPack(token);
+        if ("reason" in hit) return jsonResponse({ error: hit.reason }, 404);
+        if (hit.kind !== "interview") return jsonResponse({ ok: true });
+        const progress = body.progress as Record<string, unknown>;
+        const now = new Date().toISOString();
+        const nextPacks = (hit.inner.flowInterviewPacks as unknown[]).map((entry) => {
+          if (!isRecord(entry) || entry.token !== hit.pack.token) return entry;
+          const prev = isRecord(entry.engagement) ? entry.engagement as Record<string, unknown> : {};
+          return { ...entry, engagement: {
+            openedAt: typeof prev.openedAt === "string" ? prev.openedAt : now,
+            lastSeenAt: now,
+            maxStep: Math.max(Number(prev.maxStep ?? 0) || 0, Math.min(Number(progress.maxStep ?? 0) || 0, 99)),
+            totalSteps: Math.min(Number(progress.totalSteps ?? 0) || 0, 99) || (Number(prev.totalSteps ?? 0) || 0),
+          } };
+        });
+        const nextInner = { ...hit.inner, flowInterviewPacks: nextPacks };
+        const nextRaw = hit.nested ? { ...hit.raw, data: nextInner } : nextInner;
+        await hit.admin.from("adam_programs").update({ data: nextRaw, updated_at: now }).eq("id", hit.programId);
+        return jsonResponse({ ok: true });
       }
 
       // Compare-and-set with reload-and-retry: a run finishing between our

@@ -1,6 +1,7 @@
 import { Fragment, Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import PhaseInputsPanel from "@/v3/components/PhaseInputsPanel";
+import { acceptedAgentPatterns } from "@/v3/components/flow/flowPatterns";
 // The artifact studio pulls React Flow and every WYSIWYG editor — a heavy
 // chunk only needed when a document is opened. Lazy-load it so it never
 // weighs on the initial Flow render.
@@ -35,6 +36,8 @@ interface FlowCanvasProps {
    * until the next attempt, so a dead run can never pass for a quiet one. */
   agentErrors?: Record<string, string>;
   onRunAgent: (agentId: string, phaseId?: string) => void;
+  /** The full portfolio — for cross-programme accepted-agent patterns. */
+  programs?: ProgramSummary[];
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
   /** Mint async-interview response links from the Discovery Kit (Listen). */
   onMintPacks?: () => Promise<void>;
@@ -83,7 +86,7 @@ interface FlowCanvasProps {
  * one-line brief, and the ranked "Up next" queue. Nothing locks; editing
  * unfolds in place via the shared inputs panel.
  */
-export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onSetShipLane, onScheduleFollowUp, onMintFollowUp, onMintReview, onSaveArtifactDoc, onSendForApproval, onOpenInbox, onRecordShowPass, onRecordGate, onReopenGate, onRunAgentAndWait, relatedPrograms, onSelectProgram, onComment }: FlowCanvasProps) {
+export default function FlowCanvas({ program, programs, runningAgentIds, agentErrors, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onSetShipLane, onScheduleFollowUp, onMintFollowUp, onMintReview, onSaveArtifactDoc, onSendForApproval, onOpenInbox, onRecordShowPass, onRecordGate, onReopenGate, onRunAgentAndWait, relatedPrograms, onSelectProgram, onComment }: FlowCanvasProps) {
   const movements = useMemo(() => flowMovements(), []);
   // A spine regeneration in flight — the collect cards suppress their script
   // until it lands (a script off a half-regenerated kit is inaccurate).
@@ -435,6 +438,22 @@ export default function FlowCanvas({ program, runningAgentIds, agentErrors, onRu
                     return (
                   <div className={`v3fs-collect-wrap${railPin ? " pinned" : ""}`}>
                     <div className="v3fs-collect-main">
+                      {/* The portfolio flywheel: agent designs ACCEPTED in other
+                          programmes surface as seeded candidates while this
+                          one envisions — proven patterns, not blank paper. */}
+                      {movement.id === "envision" && programs?.length ? (() => {
+                        const patterns = acceptedAgentPatterns(programs, program.id);
+                        return patterns.length ? (
+                          <div className="v3fs-patterns" role="note" aria-label="Accepted agent patterns from your portfolio">
+                            <span className="v3fs-patterns-l">Proven in your portfolio</span>
+                            {patterns.slice(0, 5).map((p, i) => (
+                              <span key={i} className="v3fs-pattern-chip" title={`${p.purpose ?? ""}${p.autonomyLevel ? ` · ${p.autonomyLevel}` : ""}`}>
+                                <b>{p.name}</b> <em>accepted in {p.programme}</em>
+                              </span>
+                            ))}
+                          </div>
+                        ) : null;
+                      })() : null}
                       {hasPeople ? (
                         <IntervieweeDiscovery program={program} movementId={movement.id}
                           captureField={meetingKit(program, movement.id)?.captureField ?? "interviewTranscripts"}

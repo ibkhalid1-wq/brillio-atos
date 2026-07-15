@@ -202,6 +202,7 @@ describe("Inbox previews ↔ resolver families (no silent confirms)", () => {
       { flowGovernance: { haltAll: false } },
       { rosterAdditions: [{ name: "Alex Kim", role: "CFO" }] },
       { contradictionEntries: [{ statement: "s", between: "a vs b", positions: "p" }] },
+      { phaseInputAppend: { movementId: "show", field: "demoFeedback", text: "✗ step 2" } },
     ];
     for (const payload of samples) {
       const changes = describeDecisionChanges(programme({}), decision(payload));

@@ -14,6 +14,7 @@
  */
 import type { ProgramSummary } from "@/new/types";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
+import { parseBeatRecords } from "@/v3/components/flow/flowDemoRun";
 
 export interface FlowInterviewPack {
   id: string;
@@ -36,6 +37,9 @@ export interface FlowInterviewPack {
   movementId?: string;
   /** The recipient's business area (stamped on area-scoped review links). */
   recipientArea?: string;
+  /** Link engagement — where the demo/review loses people: when it was first
+   * opened and the furthest beat walked. Stamped by the respond page's pings. */
+  engagement?: { openedAt?: string; lastSeenAt?: string; maxStep?: number; totalSteps?: number };
   /** Where ingested answers land (defaults to interviewTranscripts). */
   captureField?: string;
   /** A projected REVIEW surface (workflow-agentify or ontology+atlas) served
@@ -113,7 +117,25 @@ export function listInterviewPacks(program: ProgramSummary): FlowInterviewPack[]
       : undefined,
     movementId: typeof entry.movementId === "string" ? entry.movementId : undefined,
     recipientArea: typeof entry.recipientArea === "string" ? entry.recipientArea : undefined,
+    engagement: isRecord(entry.engagement) ? {
+      openedAt: typeof entry.engagement.openedAt === "string" ? entry.engagement.openedAt : undefined,
+      lastSeenAt: typeof entry.engagement.lastSeenAt === "string" ? entry.engagement.lastSeenAt : undefined,
+      maxStep: typeof entry.engagement.maxStep === "number" ? entry.engagement.maxStep : undefined,
+      totalSteps: typeof entry.engagement.totalSteps === "number" ? entry.engagement.totalSteps : undefined,
+    } : undefined,
   })).filter((pack) => pack.id && pack.token);
+}
+
+/** "opened 2d ago · walked 4/7 beats" — the one-line engagement read for a
+ * waiting link, so the operator sees where the demo loses people. */
+export function engagementLabel(pack: FlowInterviewPack): string {
+  const e = pack.engagement;
+  if (!e?.openedAt) return "";
+  const days = Math.max(0, Math.floor((Date.now() - Date.parse(e.lastSeenAt ?? e.openedAt)) / 86_400_000));
+  const when = days === 0 ? "today" : days === 1 ? "1d ago" : `${days}d ago`;
+  const walked = e.maxStep && e.totalSteps ? ` · walked ${Math.min(e.maxStep, e.totalSteps)}/${e.totalSteps} beats`
+    : e.maxStep ? ` · walked ${e.maxStep} beat${e.maxStep === 1 ? "" : "s"}` : "";
+  return `opened ${when}${walked}`;
 }
 
 /** Per-area validation coverage for a design movement: how many stakeholders
@@ -722,6 +744,34 @@ function ingestInterviewResponse(program: ProgramSummary, itemId: string, actor:
       : pack,
   );
 
+  // A scenario run's ✗ beats and flagged screen fields distil into a DESIGN-FIX
+  // proposal: confirming appends the distilled feedback to Show's demoFeedback
+  // input (fingerprint-visible → the Experience Design goes stale → the rebuild
+  // loop carries it). "You flagged this Wednesday, here it is fixed Friday" —
+  // the ✗ tap becomes a change, not a comment that dies in a transcript.
+  const beats = parseBeatRecords(text);
+  const flaggedBeats = beats.filter((b) => b.verdict === "not");
+  const flaggedFields = text.match(/Screen data flagged:\n((?:• .*\n?)+)/)?.[1]?.split("\n").map((l) => l.trim()).filter(Boolean) ?? [];
+  let decisions = Array.isArray(inner.flowDecisions) ? (inner.flowDecisions as unknown[]) : [];
+  if (flaggedBeats.length || flaggedFields.length) {
+    const summaryLines = [
+      ...flaggedBeats.map((b) => `✗ ${b.flow} · step ${b.step + 1}: ${b.action}${b.note ? ` — "${b.note}"` : ""}`),
+      ...flaggedFields,
+    ].slice(0, 12);
+    const decisionId = `demo-fix-${itemId.slice(0, 10)}`;
+    if (!decisions.filter(isRecord).some((d) => d.id === decisionId)) {
+      decisions = [...decisions, {
+        id: decisionId, tier: 2, status: "open", agentId: "demo-run", movementId: "show",
+        title: `Fold ${stakeholder}'s demo feedback into the design`,
+        summary: `${flaggedBeats.length ? `${flaggedBeats.length} beat${flaggedBeats.length === 1 ? "" : "s"} flagged ✗` : "Screen fields flagged"} in their scenario run. Confirming appends the distilled feedback to Show's inputs — the Experience Design goes stale and the rebuild carries the change.`,
+        blocking: "", recommendation: null,
+        createdAt: new Date().toISOString(),
+        payload: { phaseInputAppend: { movementId: "show", field: "demoFeedback",
+          text: `— Demo feedback distilled from ${stakeholder}'s scenario run, ${today} —\n${summaryLines.join("\n")}` } },
+      }].slice(-40);
+    }
+  }
+
   const words = text ? text.split(/\s+/).length : 0;
   const log = Array.isArray(inner.flowAttestations) ? (inner.flowAttestations as unknown[]) : [];
   const attestation = {
@@ -731,13 +781,14 @@ function ingestInterviewResponse(program: ProgramSummary, itemId: string, actor:
       ? `${words.toLocaleString()} words into the interview transcripts; roster marked Heard.`
       : `${words.toLocaleString()} words into ${targetMovement}'s conversation record.`}${deferrals.length
       ? ` ${deferrals.length} question${deferrals.length === 1 ? "" : "s"} deferred → ${[...new Set(deferrals.map((entry) => String(entry.to ?? "")))].join(", ")}.`
-      : ""}`,
+      : ""}${flaggedBeats.length || flaggedFields.length ? " Demo feedback distilled into a design-fix proposal." : ""}`,
   };
 
   return wrapProgramState(wrapper, {
     ...inner,
     phaseInputs,
     flowInterviewPacks: nextPacks,
+    flowDecisions: decisions,
     flowPortalInbox: inbox.filter((entry) => !(isRecord(entry) && entry.id === itemId)),
     flowAttestations: [...log, attestation].slice(-200),
   }, usesNestedData);
