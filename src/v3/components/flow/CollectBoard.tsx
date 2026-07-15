@@ -151,6 +151,8 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
   const [allCollapsed, setAllCollapsed] = useState(false);
   // The area whose "invite everyone" is minting — disables that lane's button.
   const [inviteBusyArea, setInviteBusyArea] = useState<string | null>(null);
+  // The movement-wide "invite all not-contacted" is minting.
+  const [inviteAllBusy, setInviteAllBusy] = useState(false);
   const boardRef = useRef<HTMLDivElement>(null);
   if (!stakeholders.length) return null;
   // Sign-off state per relevant approver (evidence contributors): drives the
@@ -228,11 +230,22 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
     }
     const order = [...programAreas(program)];
     for (const a of groups.keys()) if (!order.includes(a)) order.push(a);
-    return order.filter((a) => groups.has(a)).map((area) => {
+    const lanes = order.filter((a) => groups.has(a)).map((area) => {
       const list = groups.get(area)!.slice().sort((a, b) => STATUS_RANK[a.coll.status] - STATUS_RANK[b.coll.status]);
       const heard = list.filter((e) => e.coll.heard && !e.s.questions.length).length;
       const toReach = list.filter((e) => e.coll.status === "toreach").length;
-      return { area, row: areaRows.get(area), list, heard, total: list.length, toReach };
+      const waiting = list.filter((e) => e.coll.status === "waiting").length;
+      return { area, row: areaRows.get(area), list, heard, total: list.length, toReach, waiting };
+    });
+    // Float the areas that still need the operator to the top: General last, then
+    // complete areas below in-progress ones, then most-open-work first. The eye
+    // lands on what's blocked instead of scrolling past finished lanes.
+    return lanes.sort((a, b) => {
+      const gen = (a.area === GENERAL_AREA ? 1 : 0) - (b.area === GENERAL_AREA ? 1 : 0);
+      if (gen) return gen;
+      const done = (a.total > 0 && a.heard >= a.total ? 1 : 0) - (b.total > 0 && b.heard >= b.total ? 1 : 0);
+      if (done) return done;
+      return (b.toReach + b.waiting) - (a.toReach + a.waiting);
     });
   })() : [];
 
@@ -256,18 +269,47 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
     }
   };
   const canInvite = !!(onMintReview || onMintFollowUp);
+  // Whole-movement coverage — the header meter and count read from the SAME
+  // evaluated set the lanes do, so header and lanes can never disagree.
+  const cov = {
+    heard: evaluated.filter((e) => e.coll.heard && !e.s.questions.length).length,
+    waiting: evaluated.filter((e) => e.coll.status === "waiting").length,
+    toReach: evaluated.filter((e) => e.coll.status === "toreach" && !e.s.isRole).length,
+    total: stakeholders.length,
+  };
+  const covPct = (n: number) => (cov.total ? Math.round((n / cov.total) * 100) : 0);
+  const inviteAll = async () => {
+    setInviteAllBusy(true);
+    try { await inviteArea(evaluated); } finally { setInviteAllBusy(false); }
+  };
 
   return (
     <div className="v3fs-ch-collect">
       <div className="v3fs-collect-h">
         <div className="v3fs-colh ev">{areaOrganized ? "Data collection — by area" : "Stakeholder data collection"}</div>
-        <span className="v3fs-collect-count"
-          title={movementId === "listen"
-            ? "Counted from collected evidence and responded links. The gate's coverage ledger is separate — voices are attested heard or waived in the roster."
-            : "Counted from collected evidence and responded links."}>
-          {heardCount} of {stakeholders.length} {word}
-        </span>
+        {stakeholders.length > 1 ? (
+          <div className="v3fs-cov" title={`${cov.heard} heard · ${cov.waiting} waiting on a reply · ${cov.toReach} still to reach`}>
+            <div className="v3fs-cov-bar" aria-hidden="true">
+              <span className="heard" style={{ width: `${covPct(cov.heard)}%` }} />
+              <span className="waiting" style={{ width: `${covPct(cov.waiting)}%` }} />
+            </div>
+            <span className="v3fs-cov-count"><b>{heardCount}</b> of {stakeholders.length} {word}</span>
+          </div>
+        ) : (
+          <span className="v3fs-collect-count"
+            title={movementId === "listen"
+              ? "Counted from collected evidence and responded links. The gate's coverage ledger is separate — voices are attested heard or waived in the roster."
+              : "Counted from collected evidence and responded links."}>
+            {heardCount} of {stakeholders.length} {word}
+          </span>
+        )}
         <div className="v3fs-collect-tools">
+          {canInvite && cov.toReach > 0 ? (
+            <button type="button" className="v3fs-btn pri" disabled={inviteAllBusy} onClick={() => void inviteAll()}
+              title={`Create the collect-feedback link for all ${cov.toReach} people not yet contacted`}>
+              {inviteAllBusy ? "Creating links…" : `✳ Invite ${cov.toReach} not contacted`}
+            </button>
+          ) : null}
           {stakeholders.length > 1 ? (
             <button type="button" className="v3fs-btn quiet" onClick={toggleAll}>{allCollapsed ? "Expand all" : "Collapse all"}</button>
           ) : null}
@@ -276,7 +318,7 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
       {areaOrganized ? (
         <div className="v3fs-lanes">
           {laneData.map((lane, i) => (
-            <AreaLane key={lane.area} area={lane.area} row={lane.row} heard={lane.heard} total={lane.total}
+            <AreaLane key={lane.area} area={lane.area} row={lane.row} heard={lane.heard} total={lane.total} waiting={lane.waiting}
               accent={laneAccentAt(lane.area, i)} monogram={areaMonogram(lane.area)}
               readyLabel={movementId === "listen" ? "Ready to envision" : movementId === "envision" ? "Ready to show" : "All reviewed"}
               defaultOpen={lane.total === 0 || lane.heard < lane.total}
@@ -310,11 +352,13 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
  * state; its body holds that area's stakeholder cards. Collapsible, so a
  * finished area folds away while the operator works the ones still open.
  */
-function AreaLane({ area, row, heard, total, ready, readyLabel, defaultOpen, toReach, accent, monogram, inviting, onInvite, children }: {
+function AreaLane({ area, row, heard, total, waiting, ready, readyLabel, defaultOpen, toReach, accent, monogram, inviting, onInvite, children }: {
   area: string;
   row?: AreaProgress;
   heard: number;
   total: number;
+  /** Awaiting-reply count — the amber middle segment of the coverage meter. */
+  waiting?: number;
   ready?: boolean;
   readyLabel: string;
   defaultOpen: boolean;
@@ -340,9 +384,12 @@ function AreaLane({ area, row, heard, total, ready, readyLabel, defaultOpen, toR
           <b>{area}</b>
           {row ? <span>{row.workflows} workflow{row.workflows === 1 ? "" : "s"} · {row.entities} term{row.entities === 1 ? "" : "s"}</span> : null}
         </div>
-        <div className="v3fs-lane-prog" title={`${heard} of ${total} heard in ${area}`}>
-          <div className="v3fs-lane-bar"><span style={{ width: `${pct}%` }} /></div>
-          <span>{total ? `${heard}/${total}` : "—"}</span>
+        <div className="v3fs-lane-prog" title={`${heard} heard · ${waiting ?? 0} waiting · ${toReach ?? 0} to reach in ${area}`}>
+          <div className="v3fs-lane-meter" aria-hidden="true">
+            <span className="heard" style={{ width: `${pct}%` }} />
+            <span className="waiting" style={{ width: `${total ? Math.round(((waiting ?? 0) / total) * 100) : 0}%` }} />
+          </div>
+          <span className="v3fs-lane-sum">{total ? <><b>{heard}</b>/{total}</> : "—"}{waiting ? <em> · {waiting} waiting</em> : null}</span>
         </div>
         <span className={`v3fs-lane-st${complete ? " ready" : ""}`}>
           <i aria-hidden="true">{complete ? "●" : "◔"}</i>{complete ? readyLabel : "Collecting"}
@@ -636,11 +683,21 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
   // as a contradiction with the answered link.
   const apprDone = approvalItems?.filter((item) => item.status === "approved").length ?? 0;
   const apprTotal = approvalItems?.length ?? 0;
+  // One calm status ladder: To reach → Invited → Follow-up open → Heard (plus the
+  // approval states). "Invited · update" replaces the old "Link outdated" — same
+  // meaning (their link predates the current script), stated without alarm.
   const statusLabel = status === "approved" ? "Approved"
-    : status === "pending-approval" ? `Pending approval${apprTotal > 1 ? ` · ${apprDone}/${apprTotal}` : ""}`
+    : status === "pending-approval" ? `Pending${apprTotal > 1 ? ` · ${apprDone}/${apprTotal}` : ""}`
       : status === "heard" ? "Heard"
         : heard ? "Follow-up open"
-          : pack ? (packMatches ? "Link sent" : "Link outdated") : "To reach";
+          : pack ? (packMatches ? "Invited" : "Invited · update") : "To reach";
+  // The row's ONE next move, surfaced so the operator acts without opening every
+  // card. It opens the card focused on that action (the working controls — mint,
+  // copy, capture — live in the body); the label alone makes the board scannable.
+  const nextAction = status === "toreach" ? "Send link"
+    : (status === "waiting" && !heard) ? "Copy link"
+      : (heard && stakeholder.questions.length) ? "Follow up"
+        : null;
   const [capture, setCapture] = useState("");
   const [busy, setBusy] = useState(false);
   const [date, setDate] = useState("");
@@ -798,7 +855,13 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
           </span>
           <span className="v3fs-ivc-who">{name || "Stakeholder"}{role && role !== name ? <span>{role}</span> : null}</span>
           <span className={`v3fs-ivc-st ${status}`}>{statusLabel}</span>
-          {!isRole && !email ? <span className="v3fs-ivc-noaddr" title="No email on file — open the card to add it">✉ no address</span> : null}
+          {!isRole && !email ? <span className="v3fs-ivc-noaddr" title="No email on file — open the card to add it">＋ email</span> : null}
+          {nextAction ? (
+            <button type="button" className="v3fs-ivc-next" title={`${nextAction} — opens ${first || name || "this"}'s card`}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onOpenChange(true); }}>
+              {nextAction}<i aria-hidden="true">→</i>
+            </button>
+          ) : null}
           <span className="v3fs-ivc-chev" aria-hidden="true" />
         </summary>
         <div className="v3fs-ivc-b">

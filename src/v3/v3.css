@@ -6753,7 +6753,9 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 
 /* "No address" hint on a collection card's collapsed row — quiet amber, the
    operator sees the missing contact without opening the card. */
-.v3fs-ivc-noaddr { font-size: 10.5px; letter-spacing: .02em; color: var(--v3-amber, #b58a2c); background: color-mix(in srgb, var(--v3-amber, #b58a2c) 12%, transparent); border: 1px solid color-mix(in srgb, var(--v3-amber, #b58a2c) 30%, transparent); border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+/* Missing email is a quiet, fixable affordance — not a warning. Muted neutral,
+   reads as "add one here", not "something is wrong". */
+.v3fs-ivc-noaddr { font-size: 10.5px; font-weight: 600; letter-spacing: .01em; color: var(--v3-text-muted); background: var(--fs-line); border: 1px solid transparent; border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
 
 .v3fs-ivc-st {flex-shrink:0;display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:650;padding:3px 10px;border-radius:99px;letter-spacing:.02em}
 .v3fs-ivc-st::before {content:"";width:5px;height:5px;border-radius:99px;background:currentColor;opacity:.9}
@@ -6922,6 +6924,35 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-lane-bar {width:72px;height:5px;border-radius:99px;background:color-mix(in srgb,var(--v3-text-muted) 16%,transparent);overflow:hidden}
 .v3fs-lane-bar > span {display:block;height:100%;background:var(--lane-accent);border-radius:99px;transition:width .35s cubic-bezier(.4,0,.2,1)}
 .v3fs-lane.ready .v3fs-lane-bar > span {background:var(--v3-green)}
+
+/* ── Discovery refinement: segmented coverage meters, action-forward rows ────── */
+/* A segmented meter reads the WHOLE picture at a glance: green heard, indigo
+   waiting-on-a-reply, the muted remainder still to reach. Used both on the
+   movement-wide coverage header and per area lane. */
+.v3fs-cov {display:flex;align-items:center;gap:10px;margin-left:2px}
+.v3fs-cov-bar, .v3fs-lane-meter {display:flex;height:6px;border-radius:99px;overflow:hidden;
+  background:color-mix(in srgb,var(--v3-text-muted) 15%,transparent)}
+.v3fs-cov-bar {width:132px}
+.v3fs-lane-meter {width:72px;height:5px}
+.v3fs-cov-bar > span, .v3fs-lane-meter > span {display:block;height:100%;transition:width .4s cubic-bezier(.22,1,.36,1)}
+.v3fs-cov-bar > .heard, .v3fs-lane-meter > .heard {background:var(--v3-green)}
+.v3fs-cov-bar > .waiting, .v3fs-lane-meter > .waiting {background:color-mix(in srgb,var(--v3-accent-2) 55%,transparent)}
+.v3fs-cov-count {font-size:12px;font-weight:600;color:var(--v3-text-secondary);white-space:nowrap;font-variant-numeric:tabular-nums}
+.v3fs-cov-count b {font-weight:750;color:var(--v3-text-primary)}
+.v3fs-lane-sum {white-space:nowrap}
+.v3fs-lane-sum b {color:var(--v3-text-secondary);font-weight:750}
+.v3fs-lane-sum em {font-style:normal;font-weight:600;color:color-mix(in srgb,var(--v3-accent-2) 80%,var(--v3-text-muted))}
+.v3fs-lane.ready .v3fs-lane-meter > .heard {background:var(--v3-green)}
+
+/* The row's next move, surfaced. Quiet by default; on hover it fills with the
+   accent so the primary action reads as clickable without shouting. */
+.v3fs-ivc-next {flex-shrink:0;display:inline-flex;align-items:center;gap:5px;font:inherit;font-size:11px;font-weight:650;
+  letter-spacing:-.005em;color:var(--v3-accent-2);background:var(--fs-indigo-wash);border:1px solid transparent;
+  border-radius:99px;padding:4px 11px;cursor:pointer;transition:background var(--v3-transition-fast),color var(--v3-transition-fast),transform var(--v3-transition-fast)}
+.v3fs-ivc-next i {font-style:normal;transition:transform var(--v3-transition-fast)}
+.v3fs-ivc-next:hover {background:var(--v3-accent-2);color:#fff}
+.v3fs-ivc-next:hover i {transform:translateX(2px)}
+.v3fs-ivc-next:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:2px}
 /* "Collecting" is the calm resting state — indigo-tinted, not an amber alarm.
    Only genuine attention states elsewhere carry amber. */
 .v3fs-lane-st {display:inline-flex;align-items:center;gap:6px;white-space:nowrap;font-size:11px;font-weight:650;
