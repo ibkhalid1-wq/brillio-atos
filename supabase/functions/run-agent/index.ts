@@ -1496,7 +1496,7 @@ HARD OUTPUT RULES (enforced):
 - "html" is a SINGLE self-contained HTML document: one <style> block, one <script> block, NO external URLs, NO CDN links, NO web fonts, NO images by URL (inline SVG only if needed). It must render standalone in a sandboxed iframe with scripts allowed.
 - Navigation between screens is in-page (JS toggling sections or a simple hash router) — no server, no navigation away.
 - Light theme by default (unless designIntent says otherwise), built entirely from the token system above.
-- Keep it LEAN enough to return whole — favour the demoable vertical slice with every screen present, styled to the SAME premium system, over exhaustive detail on one. Do not truncate; if space is tight, simplify per-screen depth, never drop screens or downgrade the craft.
+- COMPACT IS MANDATORY (the whole document must fit in ~12KB and return whole). Premium comes from the token system + a tight, REUSED component-class library — define each component's CSS ONCE under <style> and apply it with classes everywhere; NEVER repeat inline styles or hand-style each element. Keep per-screen markup lean (a representative few rows/fields, not exhaustive lists). Fully build the PRIMARY screens; secondary screens can be lighter but must use the same classes. Prefer terse, semantic markup and short JS. If you approach the size limit, trim per-screen CONTENT depth — never drop screens, never inline-duplicate styles, never downgrade the design system. Do not emit comments or whitespace padding.
 
 Return ONLY valid JSON:
 {
