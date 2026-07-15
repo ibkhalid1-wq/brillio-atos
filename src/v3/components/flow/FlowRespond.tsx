@@ -287,7 +287,7 @@ export default function FlowRespond({ token }: { token: string }) {
     <div className="v3-shell v3fs-shell">
       <div className="v3fs-app">
         <div className="v3fs-wrap v3fs-portal">
-          {state.phase === "ready" && state.pack.kind !== "demo" && !state.pack.responded && state.pack.objective ? (
+          {state.phase === "ready" && state.pack.kind !== "demo" && !state.pack.responded && !shownReview && state.pack.objective ? (
             <aside className="v3fs-portal-objective">
               <span className="lbl">About this programme</span>
               <p>{state.pack.objective}</p>
@@ -318,6 +318,7 @@ export default function FlowRespond({ token }: { token: string }) {
             </div>
           ) : shownReview ? (
             <FlowReviewSurface review={shownReview} stakeholder={state.pack.stakeholder}
+              programme={state.pack.programme} objective={state.pack.objective}
               submitting={submitting} error={error} draftKey={reviewDraftKey}
               onSubmit={(answers) => void submit({ answers })} />
           ) : state.pack.kind === "demo" ? (

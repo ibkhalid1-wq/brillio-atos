@@ -66,8 +66,32 @@ function AreaChips({ areas, active, onPick }: { areas: string[]; active: string;
   );
 }
 
-function AgentifySurface({ review, stakeholder, submitting, error, onSubmit, draftKey }: {
-  review: AgentifyReview; stakeholder: string; submitting: boolean; error: string | null;
+/** The linked page's opening: a subtle Brillio·ATOS mark, the programme name,
+ * a warm greeting, a one-line "what we're building + why", then plainly what we
+ * need from this person and how to respond. Shared by every review surface. */
+function ReviewHeader({ stakeholder, programme, objective, intro }: {
+  stakeholder: string; programme?: string; objective?: string; intro: string;
+}) {
+  const first = stakeholder ? stakeholder.split(/\s+/)[0] : "";
+  return (
+    <header className="v3fs-rvw-top">
+      <div className="v3fs-rvw-brandline"><span className="v3fs-rvw-mark" aria-hidden="true">◆</span>Brillio · ATOS Flow</div>
+      {programme ? <div className="v3fs-rvw-prog">{programme}</div> : null}
+      <h1 className="v3fs-rvw-hi">{first ? `Hi ${first},` : "Hi,"}</h1>
+      <p className="v3fs-rvw-lede">
+        we&rsquo;re building <b>{programme || "this programme"}</b>{objective ? (() => { const o = objective.trim().replace(/[.\s]+$/, ""); return <> — the goal is to {o.charAt(0).toLowerCase() + o.slice(1)}</>; })() : ""}.
+      </p>
+      {intro ? <p className="v3fs-rvw-sub">{intro}</p> : null}
+      <div className="v3fs-rvw-ask">
+        <span className="lbl">What we need from you</span>
+        Walk your workflow and the terms below — <b>confirm what&rsquo;s right, fix what&rsquo;s not, add what we missed</b>. Type or talk; it saves as you go, and nothing is final until the team reviews it.
+      </div>
+    </header>
+  );
+}
+
+function AgentifySurface({ review, stakeholder, programme, objective, submitting, error, onSubmit, draftKey }: {
+  review: AgentifyReview; stakeholder: string; programme?: string; objective?: string; submitting: boolean; error: string | null;
   onSubmit: (answers: string) => void; draftKey?: string;
 }) {
   const [responses, setResponses] = usePersistentState<Record<string, { disposition?: string; comment?: string }>>(draftKey, "ag", {});
@@ -85,12 +109,7 @@ function AgentifySurface({ review, stakeholder, submitting, error, onSubmit, dra
 
   return (
     <>
-      <header className="v3fs-hero">
-        <h1 className="v3fs-hero-title"><span className="v3fs-hero-brand">ATOS Flow</span></h1>
-        <p className="v3fs-how">
-          {stakeholder ? `${stakeholder} — ` : ""}{review.intro}
-        </p>
-      </header>
+      <ReviewHeader stakeholder={stakeholder} programme={programme} objective={objective} intro={review.intro} />
       <AreaChips areas={areas} active={area} onPick={setArea} />
       {review.recipientArea && area === review.recipientArea ? (
         <p className="v3fs-rvw-scoped">This review covers your area — <b>{review.recipientArea}</b>.</p>
@@ -210,8 +229,8 @@ function AgentifySurface({ review, stakeholder, submitting, error, onSubmit, dra
   );
 }
 
-function OntologyAtlasSurface({ review, stakeholder, submitting, error, onSubmit, draftKey }: {
-  review: OntologyAtlasReview; stakeholder: string; submitting: boolean; error: string | null;
+function OntologyAtlasSurface({ review, stakeholder, programme, objective, submitting, error, onSubmit, draftKey }: {
+  review: OntologyAtlasReview; stakeholder: string; programme?: string; objective?: string; submitting: boolean; error: string | null;
   onSubmit: (answers: string) => void; draftKey?: string;
 }) {
   const [termComments, setTermComments] = usePersistentState<Record<string, string>>(draftKey, "oaTerms", {});
@@ -229,11 +248,7 @@ function OntologyAtlasSurface({ review, stakeholder, submitting, error, onSubmit
 
   return (
     <>
-      <header className="v3fs-hero">
-        <div className="v3fs-hero-eyebrow"><span className="v3fs-hero-brand">ATOS Flow</span></div>
-        <h1 className="v3fs-hero-title">{stakeholder ? `Hi ${stakeholder.split(" ")[0]}` : "Your review"}</h1>
-        <p className="v3fs-how">{review.intro}</p>
-      </header>
+      <ReviewHeader stakeholder={stakeholder} programme={programme} objective={objective} intro={review.intro} />
       <AreaChips areas={areas} active={area} onPick={setArea} />
       {review.recipientArea && area === review.recipientArea ? (
         <p className="v3fs-rvw-scoped">This review covers your area — <b>{review.recipientArea}</b>.</p>
@@ -299,8 +314,8 @@ function OntologyAtlasSurface({ review, stakeholder, submitting, error, onSubmit
   );
 }
 
-function ListenWorkflowSurface({ review, stakeholder, submitting, error, onSubmit, draftKey }: {
-  review: ListenWorkflowReview; stakeholder: string; submitting: boolean; error: string | null;
+function ListenWorkflowSurface({ review, stakeholder, programme, objective, submitting, error, onSubmit, draftKey }: {
+  review: ListenWorkflowReview; stakeholder: string; programme?: string; objective?: string; submitting: boolean; error: string | null;
   onSubmit: (answers: string) => void; draftKey?: string;
 }) {
   const [wfSteps, setWfSteps] = usePersistentState<FlowNode[][]>(draftKey, "lwSteps",
@@ -391,11 +406,7 @@ function ListenWorkflowSurface({ review, stakeholder, submitting, error, onSubmi
 
   return (
     <>
-      <header className="v3fs-hero">
-        <div className="v3fs-hero-eyebrow"><span className="v3fs-hero-brand">ATOS Flow</span></div>
-        <h1 className="v3fs-hero-title">{stakeholder ? `Hi ${stakeholder.split(" ")[0]}` : "Your review"}</h1>
-        <p className="v3fs-how">{review.intro}</p>
-      </header>
+      <ReviewHeader stakeholder={stakeholder} programme={programme} objective={objective} intro={review.intro} />
       <AreaChips areas={areas} active={area} onPick={setArea} />
       {review.recipientArea && area === review.recipientArea ? (
         <p className="v3fs-rvw-scoped">This review covers your area — <b>{review.recipientArea}</b>.</p>
@@ -509,18 +520,21 @@ function ListenWorkflowSurface({ review, stakeholder, submitting, error, onSubmi
   );
 }
 
-export default function FlowReviewSurface({ review, stakeholder, submitting, error, onSubmit, draftKey }: {
+export default function FlowReviewSurface({ review, stakeholder, submitting, error, onSubmit, draftKey, programme, objective }: {
   review: ReviewPayload; stakeholder: string; submitting: boolean; error: string | null;
   onSubmit: (answers: string) => void;
   /** Persist the respondent's edits to their device under this key so they can
    * close a long review and return. FlowRespond clears it on submit. */
   draftKey?: string;
+  /** The programme name + plain-language objective, for the branded opener. */
+  programme?: string;
+  objective?: string;
 }) {
   if (review.kind === "agentify") {
-    return <AgentifySurface review={review} stakeholder={stakeholder} submitting={submitting} error={error} onSubmit={onSubmit} draftKey={draftKey} />;
+    return <AgentifySurface review={review} stakeholder={stakeholder} programme={programme} objective={objective} submitting={submitting} error={error} onSubmit={onSubmit} draftKey={draftKey} />;
   }
   if (review.kind === "listen-workflow") {
-    return <ListenWorkflowSurface review={review} stakeholder={stakeholder} submitting={submitting} error={error} onSubmit={onSubmit} draftKey={draftKey} />;
+    return <ListenWorkflowSurface review={review} stakeholder={stakeholder} programme={programme} objective={objective} submitting={submitting} error={error} onSubmit={onSubmit} draftKey={draftKey} />;
   }
-  return <OntologyAtlasSurface review={review} stakeholder={stakeholder} submitting={submitting} error={error} onSubmit={onSubmit} draftKey={draftKey} />;
+  return <OntologyAtlasSurface review={review} stakeholder={stakeholder} programme={programme} objective={objective} submitting={submitting} error={error} onSubmit={onSubmit} draftKey={draftKey} />;
 }

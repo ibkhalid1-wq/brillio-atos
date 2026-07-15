@@ -7063,6 +7063,21 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-rvw-scoped::before {content:"◆";color:var(--v3-accent-2);font-size:8px;opacity:.8}
 .v3fs-rvw-scoped b {color:var(--v3-accent-2);font-weight:700}
 
+/* ── Linked-page opener — brand · programme · greeting · what we need ────────── */
+.v3fs-rvw-top {padding:46px 0 2px}
+.v3fs-rvw-brandline {display:inline-flex;align-items:center;gap:8px;font-size:11px;font-weight:750;letter-spacing:.03em;color:var(--v3-text-muted)}
+.v3fs-rvw-mark {width:18px;height:18px;border-radius:5px;display:grid;place-items:center;color:#fff;font-size:9px;
+  background:linear-gradient(140deg, var(--v3-accent-2), var(--v3-accent-b, #3b2f72));box-shadow:0 2px 6px -2px color-mix(in srgb, var(--v3-accent-2) 55%, transparent)}
+.v3fs-rvw-prog {margin-top:16px;font-size:12px;font-weight:800;letter-spacing:.11em;text-transform:uppercase;color:var(--v3-accent-2)}
+.v3fs-rvw-hi {font-family:var(--v3-font);font-size:clamp(27px,4.6vw,35px);font-weight:750;letter-spacing:-.025em;line-height:1.08;margin:5px 0 0;color:var(--v3-text-primary);text-wrap:balance}
+.v3fs-rvw-lede {margin:13px 0 0;font-size:15px;line-height:1.6;color:var(--v3-text-primary);max-width:58ch;text-wrap:pretty}
+.v3fs-rvw-lede b {font-weight:750;color:var(--v3-accent-2)}
+.v3fs-rvw-sub {margin:9px 0 0;font-size:13.5px;line-height:1.62;color:var(--v3-text-secondary);max-width:58ch;text-wrap:pretty}
+.v3fs-rvw-ask {margin:20px 0 6px;padding:15px 18px;border-radius:14px;background:var(--fs-card);border:1px solid var(--fs-line);
+  box-shadow:var(--v3-shadow-xs);font-size:13.5px;line-height:1.6;color:var(--v3-text-secondary)}
+.v3fs-rvw-ask .lbl {display:block;font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--v3-accent-2);margin-bottom:7px}
+.v3fs-rvw-ask b {font-weight:700;color:var(--v3-text-primary)}
+
 /* Per-phase comment on a workflow step (text + voice) on the linked page. */
 .v3fs-vflow-note {display:flex;align-items:center;gap:7px;margin-top:8px}
 .v3fs-vflow-note input {flex:1;min-width:0;font:inherit;font-size:12.5px;color:var(--v3-text);
