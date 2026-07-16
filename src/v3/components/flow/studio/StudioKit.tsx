@@ -22,6 +22,26 @@ export const asRecord = (value: unknown): Record<string, unknown> =>
 export const asText = (value: unknown): string => (typeof value === "string" ? value : value == null ? "" : String(value));
 export const asStrings = (value: unknown): string[] => asArray(value).map(asText);
 
+/**
+ * The shared premium empty-state — one vocabulary for "this panel has nothing
+ * yet" across every phase: a soft accent icon medallion, a title, a one-line
+ * hint, and an optional action row. Use it for WHOLE-PANEL emptiness (a studio
+ * body with no content); small inline "nothing here" notes stay compact with
+ * .v3fs-empty / .v3fs-stu-empty. Mirrors the CSS class .v3fs-emptc.
+ */
+export function EmptyState({ icon, title, hint, action }: {
+  icon: string; title: string; hint?: string; action?: React.ReactNode;
+}) {
+  return (
+    <div className="v3fs-emptc">
+      <span className="v3fs-emptc-i" aria-hidden="true">{icon}</span>
+      <b className="v3fs-emptc-t">{title}</b>
+      {hint ? <p className="v3fs-emptc-h">{hint}</p> : null}
+      {action ? <div className="v3fs-emptc-a">{action}</div> : null}
+    </div>
+  );
+}
+
 export function Section({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <section className="v3fs-stu-sec">

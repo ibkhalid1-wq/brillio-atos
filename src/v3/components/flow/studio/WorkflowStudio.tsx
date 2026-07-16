@@ -9,7 +9,7 @@
  */
 import React, { useCallback, useMemo, useState } from "react";
 import {
-  TextField, ChipsField, asArray, asRecord, asText, asStrings, useStudioLocked, type StudioProps,
+  TextField, ChipsField, asArray, asRecord, asText, asStrings, useStudioLocked, EmptyState, type StudioProps,
 } from "./StudioKit";
 import { workflowArea, programAreas, GENERAL_AREA } from "@/v3/components/flow/flowAreas";
 
@@ -156,7 +156,7 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program 
       </div>
 
       {!workflow ? (
-        <div className="v3fs-stu-empty">No workflows on record yet — add one, or regenerate the Atlas once transcripts are in.</div>
+        <EmptyState icon="🔀" title="No workflows on record yet" hint="Add one above, or regenerate the Current-State Atlas once the SME transcripts are in." />
       ) : (
         <>
           {steps.length === 0 ? (

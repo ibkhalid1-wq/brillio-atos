@@ -48,10 +48,10 @@ export default function PrototypeStudio({ doc, onChange, program }: StudioProps)
   if (!html) {
     return (
       <div className="v3fs-proto empty">
-        <div className="v3fs-proto-emptyc">
-          <span className="v3fs-proto-emptyi" aria-hidden="true">🖥</span>
-          <b>No prototype built yet</b>
-          <p>The Prototype Build assembles the Experience Design, the Blueprint&rsquo;s agents and the seed fixtures into a clickable app. Use <em>Rebuild</em> above to build it — then the Experience Designer can refine it here.</p>
+        <div className="v3fs-emptc">
+          <span className="v3fs-emptc-i" aria-hidden="true">🖥</span>
+          <b className="v3fs-emptc-t">No prototype built yet</b>
+          <p className="v3fs-emptc-h">The Prototype Build assembles the Experience Design, the Blueprint&rsquo;s agents and the seed fixtures into a clickable app. Use <em>Rebuild</em> above to build it — then the Experience Designer can refine it here.</p>
         </div>
       </div>
     );

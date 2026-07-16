@@ -20,7 +20,7 @@ import { listOpenFlowDecisions, listFlowAttestations, docSectionDiff } from "@/v
 import { buildPrototypePrompt } from "@/v3/components/flow/flowBuildPrompt";
 import { listSnapshots } from "@/v3/lib/blobSnapshots";
 import { STUDIO_REGISTRY } from "./studios";
-import { StudioLockContext } from "./StudioKit";
+import { StudioLockContext, EmptyState } from "./StudioKit";
 import DocumentView from "./DocumentView";
 import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 
@@ -534,7 +534,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
                   onOpenFullEditor={canEdit ? () => setEditing(true) : undefined} />
               ) : (
                 <>
-                  {blocks.length === 0 ? <p className="v3fs-empty">No document body yet — generate it first.</p> : null}
+                  {blocks.length === 0 ? <EmptyState icon="📄" title="Not generated yet" hint="Use ✦ Generate above to synthesize this document from the evidence on record." /> : null}
                   {blocks.map((lines, blockIndex) => (
                     <div key={blockIndex} className="v3fs-docview-blk">
                       {lines.map((line, lineIndex) =>

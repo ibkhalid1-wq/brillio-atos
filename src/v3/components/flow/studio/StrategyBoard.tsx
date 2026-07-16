@@ -6,7 +6,7 @@
  * remain the full editor.
  */
 import { useMemo } from "react";
-import { asArray, asRecord, asText, asStrings, type StudioProps } from "./StudioKit";
+import { asArray, asRecord, asText, asStrings, EmptyState, type StudioProps } from "./StudioKit";
 
 const SCORE_DIMS: Array<{ key: string; label: string }> = [
   { key: "fitToWorkflows", label: "Fit to workflows" },
@@ -25,7 +25,7 @@ export default function StrategyBoard({ doc, onChange }: StudioProps) {
   };
 
   if (!candidates.length) {
-    return <div className="v3fs-stu-empty">No candidates yet — add them below, or regenerate the Strategy.</div>;
+    return <EmptyState icon="🏛" title="No architecture candidates yet" hint="Add them below, or regenerate the Architecture Strategy to derive options from the Atlas and Ontology." />;
   }
   return (
     <div className="v3fs-strat">

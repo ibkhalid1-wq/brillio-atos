@@ -9,7 +9,7 @@ import { useEffect, useMemo } from "react";
 import { ReactFlow, Background, Controls, MarkerType, useNodesState, type Node, type Edge } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { FLOATING_EDGE_TYPES, layeredPositions } from "./graphKit";
-import { asArray, asRecord, asText, asStrings, useStudioLocked, type StudioProps } from "./StudioKit";
+import { asArray, asRecord, asText, asStrings, useStudioLocked, EmptyState, type StudioProps } from "./StudioKit";
 
 export default function BlueprintGraph({ doc }: Pick<StudioProps, "doc">) {
   const locked = useStudioLocked();
@@ -92,7 +92,7 @@ export default function BlueprintGraph({ doc }: Pick<StudioProps, "doc">) {
   })), [flows]);
 
   if (!agents.length) {
-    return <div className="v3fs-stu-empty">No agents yet — add them below, or regenerate the Blueprint.</div>;
+    return <EmptyState icon="🧩" title="No agents yet" hint="Add them below, or regenerate the Blueprint to derive them from the Atlas and Ontology." />;
   }
   return (
     <div className="v3fs-bp-canvas">
