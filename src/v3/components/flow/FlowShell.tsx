@@ -1504,36 +1504,57 @@ function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggle
             const spineIndex = (agentId: string) => movementOf.get(agentId) ?? movements.length;
             roster.sort((a, b) => spineIndex(a) - spineIndex(b) || order[stateOf(a)] - order[stateOf(b)] || a.localeCompare(b));
             const runningCount = roster.filter((agentId) => stateOf(agentId) === "running").length;
+            const renderAgent = (agentId: string) => {
+              const state = stateOf(agentId);
+              const run = runByAgent.get(agentId);
+              const halted = governance.haltedAgents.includes(agentId);
+              const movementName = movements[movementOf.get(agentId) ?? -1]?.displayName ?? "Programme-wide";
+              return (
+                <div key={agentId} className="v3fs-row">
+                  {state === "running"
+                    ? <span className="v3fs-gdot" aria-hidden="true" />
+                    : <span className={`v3fs-fdot ${state}`} aria-hidden="true" />}
+                  <div className="v3fs-row-g">
+                    <div className="v3fs-row-n">{agentId}</div>
+                    <div className="v3fs-row-m">
+                      {state === "running" ? [movementName, run?.status || "running"].filter(Boolean).join(" · ")
+                        : state === "held" ? `${movementName} · held — new runs are blocked`
+                          : `${movementName} · ready`}
+                    </div>
+                  </div>
+                  <span className="v3fs-tag gn">tier {flowAgentTier(agentId)}</span>
+                  <button type="button" className={`v3fs-btn${halted ? " pri" : ""}`} disabled={busy}
+                    title={halted ? "Resume — allow this agent to run again"
+                      : state === "running" ? "Hold — the current run finishes; new runs are blocked until resumed"
+                        : "Hold — block this agent's runs until resumed"}
+                    onClick={() => void act(() => onToggleAgentHalt(agentId, !halted))}>
+                    {halted ? "Resume" : "Hold"}
+                  </button>
+                </div>
+              );
+            };
+            // Grouped by PHASE into collapsible sections — the fleet reads as the
+            // methodology spine, each phase's agents folded until you open it.
+            const groupIdx = [...new Set(roster.map(spineIndex))].sort((a, b) => a - b);
+            const groupLabel = (idx: number) => movements[idx]?.displayName ?? "Programme-wide";
             return (
               <>
                 {runningCount === 0 ? <div className="v3fs-empty">The fleet is idle — every agent below is ready to run.</div> : null}
-                {roster.map((agentId) => {
-                  const state = stateOf(agentId);
-                  const run = runByAgent.get(agentId);
-                  const halted = governance.haltedAgents.includes(agentId);
-                  const movementName = movements[movementOf.get(agentId) ?? -1]?.displayName ?? "Programme-wide";
+                {groupIdx.map((idx) => {
+                  const group = roster.filter((a) => spineIndex(a) === idx);
+                  const running = group.filter((a) => stateOf(a) === "running").length;
+                  const held = group.filter((a) => stateOf(a) === "held").length;
                   return (
-                    <div key={agentId} className="v3fs-row">
-                      {state === "running"
-                        ? <span className="v3fs-gdot" aria-hidden="true" />
-                        : <span className={`v3fs-fdot ${state}`} aria-hidden="true" />}
-                      <div className="v3fs-row-g">
-                        <div className="v3fs-row-n">{agentId}</div>
-                        <div className="v3fs-row-m">
-                          {state === "running" ? [movementName, run?.status || "running"].filter(Boolean).join(" · ")
-                            : state === "held" ? `${movementName} · held — new runs are blocked`
-                              : `${movementName} · ready`}
-                        </div>
-                      </div>
-                      <span className="v3fs-tag gn">tier {flowAgentTier(agentId)}</span>
-                      <button type="button" className={`v3fs-btn${halted ? " pri" : ""}`} disabled={busy}
-                        title={halted ? "Resume — allow this agent to run again"
-                          : state === "running" ? "Hold — the current run finishes; new runs are blocked until resumed"
-                            : "Hold — block this agent's runs until resumed"}
-                        onClick={() => void act(() => onToggleAgentHalt(agentId, !halted))}>
-                        {halted ? "Resume" : "Hold"}
-                      </button>
-                    </div>
+                    <details key={idx} className="v3fs-ctl-group">
+                      <summary className="v3fs-ctl-group-h">
+                        <span className="v3fs-ctl-group-t">{groupLabel(idx)}</span>
+                        <span className="v3fs-ctl-group-n">{group.length}</span>
+                        {running ? <span className="v3fs-ctl-group-run">● {running} running</span> : null}
+                        {held ? <span className="v3fs-ctl-group-held">{held} held</span> : null}
+                        <span className="v3fs-ctl-group-caret" aria-hidden="true">▾</span>
+                      </summary>
+                      <div className="v3fs-ctl-group-b">{group.map(renderAgent)}</div>
+                    </details>
                   );
                 })}
               </>
@@ -2053,6 +2074,12 @@ const peopleIdentity = (value: string): string =>
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 
+// Phase order for grouping delivery roles on the People page.
+const PHASE_RANK = (where: string) => {
+  const i = ["frame", "listen", "envision", "show", "ship", "evolve"].indexOf(where.trim().toLowerCase());
+  return i < 0 ? 99 : i;
+};
+
 function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { program: ProgramSummary; onSaveInputs?: FlowShellProps["onSaveInputs"]; onRenamePerson?: FlowShellProps["onRenamePerson"]; onGoInbox?: () => void }) {
   const [q, setQ] = useState("");
   const query = q.trim().toLowerCase();
@@ -2429,39 +2456,18 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
           <h3>People</h3>
           <span>everyone the programme collects from — {unresolved ? `${unresolved} role${unresolved === 1 ? "" : "s"} to clarify; ` : ""}{missing ? `${missing} without an address; ` : ""}edit names, emails and roles inline</span>
         </div>
+        {/* People organized under collapsible PHASE / source sections. */}
+        {!addedShown.length && !rosterShown.length && !rolesShown.length && !personasShown.length ? (
+          <div className="v3fs-empty">Nothing matches that search.</div>
+        ) : null}
+        {rosterShown.length ? (
+        <details className="v3fs-ppl-group">
+          <summary className="v3fs-ppl-group-h"><span className="v3fs-ppl-group-t">Discovery roster</span><span className="v3fs-ppl-group-n">{rosterShown.length}</span><span className="v3fs-ppl-group-caret" aria-hidden="true">▾</span></summary>
         <table className="v3fs-dir">
           <thead><tr><th>Where</th><th>Role</th><th>Person</th><th>Email</th><th>Status</th></tr></thead>
           <tbody>
-            {addedShown.map((row) => (
-              <tr key={row.id} className={busyRow === row.id ? "busy" : undefined}>
-                <td>{row.movementId.charAt(0).toUpperCase() + row.movementId.slice(1)} · added</td>
-                <td>
-                  {/* Switch role: a known role resolves; an unknown one is sent
-                      back to the Inbox. The current role is always an option. */}
-                  <select className="v3fs-dir-in" defaultValue={row.role} aria-label={`Role for ${row.name}`}
-                    key={`role-${row.id}-${row.role}`} disabled={!onSaveInputs || busyRow === row.id}
-                    onChange={(e) => { if (e.target.value !== row.role) void editAdded(row.id, { role: e.target.value }); }}>
-                    {!roleOptions.some((r) => r === row.role) ? <option value={row.role}>{row.role}{row.roleResolved ? "" : " (unclear)"}</option> : null}
-                    {roleOptions.map((r) => <option key={r} value={r}>{r}</option>)}
-                  </select>
-                </td>
-                <td>
-                  <input className="v3fs-dir-in" defaultValue={row.name} aria-label={`Name for ${row.name}`}
-                    key={`name-${row.id}-${row.name}`} disabled={!onSaveInputs || busyRow === row.id}
-                    onBlur={(e) => { if (e.target.value.trim() && e.target.value.trim() !== row.name) void editAdded(row.id, { name: e.target.value }); }} />
-                </td>
-                <td>
-                  <input className="v3fs-dir-in" type="email" placeholder="add email" defaultValue={row.email ?? ""} aria-label={`Email for ${row.name}`}
-                    key={`email-${row.id}-${row.email ?? ""}`} disabled={!onSaveInputs || busyRow === row.id}
-                    onBlur={(e) => { if (e.target.value.trim() !== (row.email ?? "")) void editAdded(row.id, { email: e.target.value }); }} />
-                </td>
-                <td><span className={`v3fs-vc ${row.roleResolved ? "acc" : "pen"}`}>{row.roleResolved ? "Added" : "Role unclear"}</span></td>
-              </tr>
-            ))}
             {rosterShown.map((row, i) => (
               row.isRole ? (
-                // A role placeholder: the kit knows the programme must hear
-                // this ROLE but no person is named yet — bind them right here.
                 <tr key={`r-${i}`} className={busyRow === `bind:${row.role}` ? "busy" : undefined}>
                   <td>{row.where}</td>
                   <td>{row.role}</td>
@@ -2506,7 +2512,17 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
               </tr>
               )
             ))}
-            {rolesShown.map((row, i) => (
+          </tbody>
+        </table>
+        </details>
+        ) : null}
+        {rolesShown.length ? (
+        <details className="v3fs-ppl-group">
+          <summary className="v3fs-ppl-group-h"><span className="v3fs-ppl-group-t">Delivery roles</span><span className="v3fs-ppl-group-n">{rolesShown.length}</span><span className="v3fs-ppl-group-caret" aria-hidden="true">▾</span></summary>
+        <table className="v3fs-dir">
+          <thead><tr><th>Where</th><th>Role</th><th>Person</th><th>Email</th><th>Status</th></tr></thead>
+          <tbody>
+            {[...rolesShown].sort((a, b) => PHASE_RANK(a.where) - PHASE_RANK(b.where)).map((row, i) => (
               <tr key={`d-${i}`} className={row.name && busyRow === `${row.where.toLowerCase()}:${row.name}` ? "busy" : undefined}>
                 <td>{row.where}</td>
                 <td>{row.role}</td>
@@ -2527,10 +2543,17 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
                 <td><span className={`v3fs-vc ${row.name ? "acc" : "pen"}`}>{row.name ? "Bound" : "Open"}</span></td>
               </tr>
             ))}
+          </tbody>
+        </table>
+        </details>
+        ) : null}
+        {personasShown.length ? (
+        <details className="v3fs-ppl-group">
+          <summary className="v3fs-ppl-group-h"><span className="v3fs-ppl-group-t">Discovery-kit personas</span><span className="v3fs-ppl-group-n">{personasShown.length}</span><span className="v3fs-ppl-group-caret" aria-hidden="true">▾</span></summary>
+        <table className="v3fs-dir">
+          <thead><tr><th>Where</th><th>Role</th><th>Person</th><th>Email</th><th>Status</th></tr></thead>
+          <tbody>
             {personasShown.map((persona) => (
-              // The kit's persona cast — roles the discovery inventoried that
-              // aren't roster rows above: external actors and represented
-              // roles. Removable; a removal is attested and survives regens.
               <tr key={`p-${persona.name}`} className={busyRow === `role-rm:${persona.name}` ? "busy" : undefined}>
                 <td>Discovery Kit · persona</td>
                 <td>{persona.name}</td>
@@ -2550,11 +2573,46 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
                 </td>
               </tr>
             ))}
-            {!rosterShown.length && !rolesShown.length && !addedShown.length && !personasShown.length ? (
-              <tr><td colSpan={5}><div className="v3fs-empty">Nothing matches that search.</div></td></tr>
-            ) : null}
           </tbody>
         </table>
+        </details>
+        ) : null}
+        {addedShown.length ? (
+        <details className="v3fs-ppl-group">
+          <summary className="v3fs-ppl-group-h"><span className="v3fs-ppl-group-t">Added people</span><span className="v3fs-ppl-group-n">{addedShown.length}</span><span className="v3fs-ppl-group-caret" aria-hidden="true">▾</span></summary>
+        <table className="v3fs-dir">
+          <thead><tr><th>Where</th><th>Role</th><th>Person</th><th>Email</th><th>Status</th></tr></thead>
+          <tbody>
+            {addedShown.map((row) => (
+              <tr key={row.id} className={busyRow === row.id ? "busy" : undefined}>
+                <td>{row.movementId.charAt(0).toUpperCase() + row.movementId.slice(1)} · added</td>
+                <td>
+                  {/* Switch role: a known role resolves; an unknown one is sent
+                      back to the Inbox. The current role is always an option. */}
+                  <select className="v3fs-dir-in" defaultValue={row.role} aria-label={`Role for ${row.name}`}
+                    key={`role-${row.id}-${row.role}`} disabled={!onSaveInputs || busyRow === row.id}
+                    onChange={(e) => { if (e.target.value !== row.role) void editAdded(row.id, { role: e.target.value }); }}>
+                    {!roleOptions.some((r) => r === row.role) ? <option value={row.role}>{row.role}{row.roleResolved ? "" : " (unclear)"}</option> : null}
+                    {roleOptions.map((r) => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </td>
+                <td>
+                  <input className="v3fs-dir-in" defaultValue={row.name} aria-label={`Name for ${row.name}`}
+                    key={`name-${row.id}-${row.name}`} disabled={!onSaveInputs || busyRow === row.id}
+                    onBlur={(e) => { if (e.target.value.trim() && e.target.value.trim() !== row.name) void editAdded(row.id, { name: e.target.value }); }} />
+                </td>
+                <td>
+                  <input className="v3fs-dir-in" type="email" placeholder="add email" defaultValue={row.email ?? ""} aria-label={`Email for ${row.name}`}
+                    key={`email-${row.id}-${row.email ?? ""}`} disabled={!onSaveInputs || busyRow === row.id}
+                    onBlur={(e) => { if (e.target.value.trim() !== (row.email ?? "")) void editAdded(row.id, { email: e.target.value }); }} />
+                </td>
+                <td><span className={`v3fs-vc ${row.roleResolved ? "acc" : "pen"}`}>{row.roleResolved ? "Added" : "Role unclear"}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        </details>
+        ) : null}
       </div>
     </div>
   );
@@ -2881,30 +2939,49 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
               onClick={() => onGoFlow()}>↻ regenerate in Flow</button>
           ) : null}
         </div>
-        {artifactLedger.map((artifact) => (
-          <div key={`${artifact.movementId}:${artifact.id}`}
-            className={`v3fs-row v3fs-art-row ${artifact.present ? (artifact.stale ? "stale" : "ok") : "missing"}${artifact.present ? " v3fs-row-open" : ""}`}
-            role={artifact.present ? "button" : undefined}
-            tabIndex={artifact.present ? 0 : undefined}
-            onClick={artifact.present ? () => setDocFor(artifact) : undefined}
-            onKeyDown={artifact.present ? (event) => { if (event.key === "Enter" || event.key === " ") setDocFor(artifact); } : undefined}>
-            <span className="v3fs-art-stripe" aria-hidden="true" />
-            <div className="v3fs-row-g">
-              <div className="v3fs-row-n">{artifact.title}</div>
-              <div className="v3fs-row-m">
-                {artifact.present
-                  ? artifact.stale
-                    ? "evidence changed — regenerate"
-                    : artifact.confidence != null ? `current · confidence ${artifact.confidence}%` : "current"
-                  : `not yet generated — runs in ${label(artifact.movementId)} once its inputs land`}
+        {/* Grouped by PHASE into collapsible sections — the ledger reads as the
+            methodology's shape, not a flat wall. Within a phase, stale-first. */}
+        {movements.map((m) => {
+          const group = artifactLedger.filter((a) => a.movementId === m.id);
+          if (!group.length) return null;
+          const groupStale = group.filter((a) => a.present && a.stale).length;
+          const groupCurrent = group.filter((a) => a.present && !a.stale).length;
+          return (
+            <details key={m.id} className="v3fs-lib-group">
+              <summary className="v3fs-lib-group-h">
+                <span className="v3fs-lib-group-t">{m.displayName}</span>
+                <span className="v3fs-lib-group-n">{groupCurrent}/{group.length}</span>
+                {groupStale ? <span className="v3fs-lib-group-stale">{groupStale} stale</span> : null}
+                <span className="v3fs-lib-group-caret" aria-hidden="true">▾</span>
+              </summary>
+              <div className="v3fs-lib-group-b">
+                {group.map((artifact) => (
+                  <div key={`${artifact.movementId}:${artifact.id}`}
+                    className={`v3fs-row v3fs-art-row ${artifact.present ? (artifact.stale ? "stale" : "ok") : "missing"}${artifact.present ? " v3fs-row-open" : ""}`}
+                    role={artifact.present ? "button" : undefined}
+                    tabIndex={artifact.present ? 0 : undefined}
+                    onClick={artifact.present ? () => setDocFor(artifact) : undefined}
+                    onKeyDown={artifact.present ? (event) => { if (event.key === "Enter" || event.key === " ") setDocFor(artifact); } : undefined}>
+                    <span className="v3fs-art-stripe" aria-hidden="true" />
+                    <div className="v3fs-row-g">
+                      <div className="v3fs-row-n">{artifact.title}</div>
+                      <div className="v3fs-row-m">
+                        {artifact.present
+                          ? artifact.stale
+                            ? "evidence changed — regenerate"
+                            : artifact.confidence != null ? `current · confidence ${artifact.confidence}%` : "current"
+                          : `not yet generated — runs in ${label(artifact.movementId)} once its inputs land`}
+                      </div>
+                    </div>
+                    <span className={`v3fs-art-badge ${artifact.present ? (artifact.stale ? "stale" : "ok") : "missing"}`}>
+                      {artifact.present ? (artifact.stale ? "Stale" : "Current") : "Missing"}
+                    </span>
+                  </div>
+                ))}
               </div>
-            </div>
-            <span className={`v3fs-art-badge ${artifact.present ? (artifact.stale ? "stale" : "ok") : "missing"}`}>
-              {artifact.present ? (artifact.stale ? "Stale" : "Current") : "Missing"}
-            </span>
-            <span className="v3fs-tag gn">{label(artifact.movementId)}</span>
-          </div>
-        ))}
+            </details>
+          );
+        })}
       </div>
       {docFor ? <Suspense fallback={null}><FlowArtifactStudio program={program} artifact={docFor} onClose={() => setDocFor(null)} onSaveDoc={onSaveArtifactDoc} onSaveInputs={onSaveInputs} onComment={onComment} onOpenInbox={onOpenInbox}
         header={docFor.id === "discovery-kit" ? <FrameCoveragePlan program={program} onSaveInputs={onSaveInputs} /> : undefined}

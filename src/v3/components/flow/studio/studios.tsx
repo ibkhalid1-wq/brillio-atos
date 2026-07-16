@@ -15,7 +15,7 @@ import StrategyBoard from "./StrategyBoard";
 import ExperienceDesignStudio from "./ExperienceDesignStudio";
 import PrototypeStudio from "./PrototypeStudio";
 import {
-  Section, TextField, TextArea, SelectField, ChipsField, StringListEditor, TableEditor,
+  Section, CollapsibleCard, TextField, TextArea, SelectField, ChipsField, StringListEditor, TableEditor,
   asArray, asRecord, asText, asStrings, useStudioLocked, type StudioProps,
 } from "./StudioKit";
 import { FORMAL_ARTIFACT_FIELD_KEYS } from "@/v3/lib/formalArtifacts";
@@ -448,13 +448,13 @@ function BlueprintStudio({ doc, onChange, program }: StudioProps) {
           </ul>
         </div>
       ) : null}
-      <Section label="The orchestration — agents and what flows between them" hint="edges are derived: outputs feeding inputs; drag to arrange">
+      <CollapsibleCard label="Orchestration map" hint="agents and what flows between them — edges are derived: outputs feeding inputs">
         <BlueprintGraph doc={doc} />
-      </Section>
-      <Section label="Journeys — the orchestrated experience" hint="stages across, lanes down: customer · user · agent · systems">
+      </CollapsibleCard>
+      <CollapsibleCard label="Journeys" hint="the orchestrated experience — stages across, lanes down: customer · user · agent · systems">
         <JourneyGrid doc={doc} onChange={onChange} />
-      </Section>
-      <Section label="Agents" hint="each replaces an Atlas workflow">
+      </CollapsibleCard>
+      <CollapsibleCard label="Agents" badge={agents.items.length || undefined} hint="each replaces an Atlas workflow">
         <CardList
           items={agents.items}
           itemLabel={(a) => `${asText(a.name) || "Agent"} · ${asText(a.autonomyLevel) || "autonomy"}`}
@@ -480,16 +480,16 @@ function BlueprintStudio({ doc, onChange, program }: StudioProps) {
             </>
           )}
         />
-      </Section>
-      <Section label="Orchestration">
+      </CollapsibleCard>
+      <CollapsibleCard label="Orchestration pattern" defaultOpen={false}>
         <TextField label="Pattern" value={asText(orchestration.pattern)}
           onChange={(next) => patch({ orchestration: { ...orchestration, pattern: next } })} />
         <TextArea label="How work flows" rows={2} value={asText(orchestration.description)}
           onChange={(next) => patch({ orchestration: { ...orchestration, description: next } })} />
         <TextField label="State lives in" value={asText(orchestration.stateManagement)}
           onChange={(next) => patch({ orchestration: { ...orchestration, stateManagement: next } })} />
-      </Section>
-      <Section label="Data contracts" hint="ontology entities and their systems of record">
+      </CollapsibleCard>
+      <CollapsibleCard label="Data contracts" badge={asArray(doc.dataContracts).length || undefined} defaultOpen={false} hint="ontology entities and their systems of record">
         <TableEditor
           columns={[
             { key: "entity", label: "Entity" },
@@ -501,8 +501,8 @@ function BlueprintStudio({ doc, onChange, program }: StudioProps) {
           onChange={(next) => patch({ dataContracts: next })}
           addLabel="Add contract"
         />
-      </Section>
-      <Section label="Human-in-the-loop points">
+      </CollapsibleCard>
+      <CollapsibleCard label="Human-in-the-loop points" badge={asArray(doc.hitlPoints).length || undefined} defaultOpen={false}>
         <TableEditor
           columns={[
             { key: "where", label: "Where" },
@@ -513,8 +513,8 @@ function BlueprintStudio({ doc, onChange, program }: StudioProps) {
           onChange={(next) => patch({ hitlPoints: next })}
           addLabel="Add HITL point"
         />
-      </Section>
-      <Section label="Eval plan" hint="what must hold, and its pass bar">
+      </CollapsibleCard>
+      <CollapsibleCard label="Eval plan" badge={asArray(doc.evalPlan).length || undefined} defaultOpen={false} hint="what must hold, and its pass bar">
         <TableEditor
           columns={[
             { key: "behaviour", label: "Behaviour", grow: 2 },
@@ -525,11 +525,11 @@ function BlueprintStudio({ doc, onChange, program }: StudioProps) {
           onChange={(next) => patch({ evalPlan: next })}
           addLabel="Add behaviour"
         />
-      </Section>
-      <Section label="Build sequence" hint="the first slice must be demoable">
+      </CollapsibleCard>
+      <CollapsibleCard label="Build sequence" badge={asStrings(doc.buildSequence).length || undefined} defaultOpen={false} hint="the first slice must be demoable">
         <StringListEditor values={asStrings(doc.buildSequence)} onChange={(next) => patch({ buildSequence: next })} addLabel="Add slice" />
-      </Section>
-      <Section label="Track plan" hint="adopting tracks happens through the Inbox decision — edits here reshape the proposal">
+      </CollapsibleCard>
+      <CollapsibleCard label="Track plan" badge={asArray(doc.tracks).length || undefined} defaultOpen={false} hint="adopting tracks happens through the Inbox decision — edits here reshape the proposal">
         <TableEditor
           columns={[
             { key: "name", label: "Track" },
@@ -540,10 +540,12 @@ function BlueprintStudio({ doc, onChange, program }: StudioProps) {
           onChange={(next) => patch({ tracks: next })}
           addLabel="Add track"
         />
-      </Section>
-      <Section label="Gaps">
-        <StringListEditor values={asStrings(doc.gaps)} onChange={(next) => patch({ gaps: next })} addLabel="Add gap" />
-      </Section>
+      </CollapsibleCard>
+      {asStrings(doc.gaps).length ? (
+        <CollapsibleCard label="Gaps" badge={asStrings(doc.gaps).length} defaultOpen={false}>
+          <StringListEditor values={asStrings(doc.gaps)} onChange={(next) => patch({ gaps: next })} addLabel="Add gap" />
+        </CollapsibleCard>
+      ) : null}
     </>
   );
 }
@@ -670,7 +672,7 @@ function HardeningStudio({ doc, onChange }: StudioProps) {
   const cutover = asRecord(doc.cutoverPlan);
   return (
     <>
-      <Section label="Workstreams">
+      <CollapsibleCard label="Workstreams" badge={workstreams.items.length || undefined}>
         <CardList
           items={workstreams.items}
           itemLabel={(w) => asText(w.area) || "Workstream"}
@@ -697,8 +699,8 @@ function HardeningStudio({ doc, onChange }: StudioProps) {
             </>
           )}
         />
-      </Section>
-      <Section label="Guardrails">
+      </CollapsibleCard>
+      <CollapsibleCard label="Guardrails" badge={asArray(doc.guardrails).length || undefined} defaultOpen={false}>
         <TableEditor
           columns={[
             { key: "risk", label: "Risk", grow: 1.6 },
@@ -709,8 +711,8 @@ function HardeningStudio({ doc, onChange }: StudioProps) {
           onChange={(next) => patch({ guardrails: next })}
           addLabel="Add guardrail"
         />
-      </Section>
-      <Section label="Cutover plan">
+      </CollapsibleCard>
+      <CollapsibleCard label="Cutover plan" defaultOpen={false}>
         <SelectField label="Approach" value={asText(cutover.approach) || "parallel-run"}
           options={["big-bang", "parallel-run", "phased"]}
           onChange={(next) => patch({ cutoverPlan: { ...cutover, approach: next } })} />
@@ -718,13 +720,15 @@ function HardeningStudio({ doc, onChange }: StudioProps) {
           onChange={(next) => patch({ cutoverPlan: { ...cutover, steps: next } })} addLabel="Add step" />
         <TextArea label="Rollback" rows={2} value={asText(cutover.rollback)}
           onChange={(next) => patch({ cutoverPlan: { ...cutover, rollback: next } })} />
-      </Section>
-      <Section label="Runbook seeds">
+      </CollapsibleCard>
+      <CollapsibleCard label="Runbook seeds" badge={asStrings(doc.runbookSeeds).length || undefined} defaultOpen={false}>
         <StringListEditor values={asStrings(doc.runbookSeeds)} onChange={(next) => patch({ runbookSeeds: next })} addLabel="Add" />
-      </Section>
-      <Section label="Gaps">
-        <StringListEditor values={asStrings(doc.gaps)} onChange={(next) => patch({ gaps: next })} addLabel="Add gap" />
-      </Section>
+      </CollapsibleCard>
+      {asStrings(doc.gaps).length ? (
+        <CollapsibleCard label="Gaps" badge={asStrings(doc.gaps).length} defaultOpen={false}>
+          <StringListEditor values={asStrings(doc.gaps)} onChange={(next) => patch({ gaps: next })} addLabel="Add gap" />
+        </CollapsibleCard>
+      ) : null}
     </>
   );
 }
@@ -733,7 +737,7 @@ function EvalSuiteStudio({ doc, onChange }: StudioProps) {
   const patch = patchOf(doc, onChange);
   return (
     <>
-      <Section label="Eval cases" hint="behaviour, inputs, pass bar">
+      <CollapsibleCard label="Eval cases" badge={asArray(doc.evalCases).length || undefined} hint="behaviour, inputs, pass bar">
         <TableEditor
           columns={[
             { key: "id", label: "ID", grow: 0.5 },
@@ -747,8 +751,8 @@ function EvalSuiteStudio({ doc, onChange }: StudioProps) {
           onChange={(next) => patch({ evalCases: next })}
           addLabel="Add case"
         />
-      </Section>
-      <Section label="Guardrail probes" hint="what must never happen">
+      </CollapsibleCard>
+      <CollapsibleCard label="Guardrail probes" badge={asArray(doc.guardrailProbes).length || undefined} defaultOpen={false} hint="what must never happen">
         <TableEditor
           columns={[
             { key: "probe", label: "Probe", grow: 2 },
@@ -758,10 +762,12 @@ function EvalSuiteStudio({ doc, onChange }: StudioProps) {
           onChange={(next) => patch({ guardrailProbes: next })}
           addLabel="Add probe"
         />
-      </Section>
-      <Section label="Gaps">
-        <StringListEditor values={asStrings(doc.gaps)} onChange={(next) => patch({ gaps: next })} addLabel="Add gap" />
-      </Section>
+      </CollapsibleCard>
+      {asStrings(doc.gaps).length ? (
+        <CollapsibleCard label="Gaps" badge={asStrings(doc.gaps).length} defaultOpen={false}>
+          <StringListEditor values={asStrings(doc.gaps)} onChange={(next) => patch({ gaps: next })} addLabel="Add gap" />
+        </CollapsibleCard>
+      ) : null}
     </>
   );
 }
@@ -773,7 +779,7 @@ function RunbookStudio({ doc, onChange }: StudioProps) {
   const incidents = useListOps(doc, onChange, "incidentResponse");
   return (
     <>
-      <Section label="Routine operations">
+      <CollapsibleCard label="Routine operations" badge={asArray(doc.routineOperations).length || undefined}>
         <TableEditor
           columns={[
             { key: "task", label: "Task", grow: 1.4 },
@@ -785,8 +791,8 @@ function RunbookStudio({ doc, onChange }: StudioProps) {
           onChange={(next) => patch({ routineOperations: next })}
           addLabel="Add task"
         />
-      </Section>
-      <Section label="Monitoring">
+      </CollapsibleCard>
+      <CollapsibleCard label="Monitoring" badge={asArray(doc.monitoring).length || undefined} defaultOpen={false}>
         <TableEditor
           columns={[
             { key: "signal", label: "Signal", grow: 1.4 },
@@ -797,8 +803,8 @@ function RunbookStudio({ doc, onChange }: StudioProps) {
           onChange={(next) => patch({ monitoring: next })}
           addLabel="Add signal"
         />
-      </Section>
-      <Section label="Incident response">
+      </CollapsibleCard>
+      <CollapsibleCard label="Incident response" badge={incidents.items.length || undefined} defaultOpen={false}>
         <CardList
           items={incidents.items}
           itemLabel={(i) => `${asText(i.scenario) || "Scenario"} · ${asText(i.severity) || "severity"}`}
@@ -818,10 +824,12 @@ function RunbookStudio({ doc, onChange }: StudioProps) {
             </>
           )}
         />
-      </Section>
-      <Section label="Gaps">
-        <StringListEditor values={asStrings(doc.gaps)} onChange={(next) => patch({ gaps: next })} addLabel="Add gap" />
-      </Section>
+      </CollapsibleCard>
+      {asStrings(doc.gaps).length ? (
+        <CollapsibleCard label="Gaps" badge={asStrings(doc.gaps).length} defaultOpen={false}>
+          <StringListEditor values={asStrings(doc.gaps)} onChange={(next) => patch({ gaps: next })} addLabel="Add gap" />
+        </CollapsibleCard>
+      ) : null}
     </>
   );
 }

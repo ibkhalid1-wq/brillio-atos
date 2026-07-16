@@ -30,6 +30,7 @@ import { listFlowTracks, trackAcceptance } from "@/v3/components/flow/flowTracks
 import { safePrompt } from "@/v3/components/flow/flowCapture";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 import PrototypeCommandBar from "@/v3/components/flow/PrototypeCommandBar";
+import { openPrototypeInBrowser } from "@/v3/components/flow/studio/PrototypeStudio";
 import { MOVEMENT_CAPTION, leadTab, type MovementTab } from "@/v3/components/flow/flowStages";
 import { useSpineRunning } from "@/v3/components/flow/flowUpNext";
 import { IntervieweeDiscovery, stakeholderCollection } from "@/v3/components/flow/CollectBoard";
@@ -1274,13 +1275,20 @@ function PrototypeTab({ html, regenerating, onRefine }: {
 }) {
   return (
     <div className="v3fs-prototab">
+      {/* Consistent with the Design-side Prototype Build studio: a header bar
+          with the running-app framing + Open-in-browser, the same sandboxed
+          iframe, then the refine command line. */}
       <div className="v3fs-prototab-head">
-        <span className="v3fs-prototab-t">The prototype</span>
-        <span className="v3fs-prototab-sub">The running app every stakeholder validates — walk it here, or refine it below.</span>
+        <div className="v3fs-prototab-headtext">
+          <span className="v3fs-prototab-t">The prototype</span>
+          <span className="v3fs-prototab-sub">The running app every stakeholder validates — walk it here, or open it full-screen.</span>
+        </div>
+        <button type="button" className="v3fs-proto-open" title="Open the running prototype in a new browser tab"
+          onClick={() => openPrototypeInBrowser(html)}>↗ Open in browser</button>
       </div>
       <iframe className="v3fs-prototab-frame" sandbox="allow-scripts allow-forms" srcDoc={html} title="Prototype" />
       {/* Command line — the delivery team refines & polishes the prototype in
-          plain language (type or dictate). Shared with the Design-side studio. */}
+          plain language. Shared with the Design-side studio. */}
       <PrototypeCommandBar onRefine={onRefine} regenerating={regenerating} />
       {regenerating ? <div className="v3fs-protocmd-note" role="status">Rebuilding the prototype with your changes — the refined build replaces the current one when it lands.</div> : null}
     </div>

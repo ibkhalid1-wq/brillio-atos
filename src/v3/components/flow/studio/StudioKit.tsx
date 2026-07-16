@@ -54,6 +54,28 @@ export function Section({ label, hint, children }: { label: string; hint?: strin
   );
 }
 
+/**
+ * A collapsible section CARD — a premium `<details>` with a title, optional
+ * hint + count badge, and a rotating caret. Studios use these so the operator
+ * can fold the sections they aren't working on and navigate a long document by
+ * its section headers. Shares the `.v3fs-edcard` styling.
+ */
+export function CollapsibleCard({ label, hint, badge, defaultOpen = false, children }: {
+  label: string; hint?: string; badge?: React.ReactNode; defaultOpen?: boolean; children: React.ReactNode;
+}) {
+  return (
+    <details className="v3fs-edcard" {...(defaultOpen ? { open: true } : {})}>
+      <summary className="v3fs-edcard-h">
+        <span className="v3fs-edcard-t">{label}</span>
+        {badge != null && badge !== false ? <span className="v3fs-edcard-badge">{badge}</span> : null}
+        {hint ? <span className="v3fs-edcard-hint">{hint}</span> : null}
+        <span className="v3fs-edcard-caret" aria-hidden="true">▾</span>
+      </summary>
+      <div className="v3fs-edcard-b">{children}</div>
+    </details>
+  );
+}
+
 export function TextField({ label, value, onChange, placeholder }: {
   label?: string; value: string; onChange: (next: string) => void; placeholder?: string;
 }) {

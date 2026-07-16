@@ -2223,7 +2223,7 @@ function buildPrototypeRefineBrief(
   // fingerprint-safe on Envision inputs. A direct design directive — top priority.
   const envisionInputs = normalizeProgramData(phaseInputsAll.envision as JsonValue | null);
   const designInstruction = typeof envisionInputs._prototypeRefine === "string"
-    ? envisionInputs._prototypeRefine.trim().slice(0, 2000)
+    ? envisionInputs._prototypeRefine.trim().slice(0, 60000)
     : "";
   return { mode: "refine", round, priorHtml, openChangeRequests, designInstruction };
 }

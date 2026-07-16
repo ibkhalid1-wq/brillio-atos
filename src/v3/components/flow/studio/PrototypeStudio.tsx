@@ -16,6 +16,18 @@ function toast(message: string, tone: "info" | "error" = "info") {
   window.dispatchEvent(new CustomEvent("atlas-v3-toast", { detail: { message, tone } }));
 }
 
+/** Open the self-contained prototype HTML in a real browser tab via a blob URL
+ *  — the running app gets its own address to walk full-screen, share, or open
+ *  on another device. Shared by the Design (Build) and Validate prototype tabs. */
+export function openPrototypeInBrowser(html: string) {
+  if (!html.trim()) { toast("No prototype to open yet — build it first.", "error"); return; }
+  const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+  const win = window.open(url, "_blank", "noopener");
+  if (!win) { toast("Pop-up blocked — allow pop-ups to open the prototype in a new tab.", "error"); }
+  // Revoke after the new tab has had time to load the document.
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
 export default function PrototypeStudio({ doc, onChange, program, onRefinePrototype, refining }: StudioProps) {
   const html = asText(doc.html);
   const screens = asArray(doc.screens).map(asRecord);
@@ -69,6 +81,9 @@ export default function PrototypeStudio({ doc, onChange, program, onRefineProtot
         <div className="v3fs-proto-modes" role="group" aria-label="Prototype mode">
           <button type="button" className={mode === "preview" ? "on" : ""} onClick={() => setMode("preview")}>▶ Run it</button>
           <button type="button" className={mode === "edit" ? "on" : ""} onClick={() => setMode("edit")}>✎ Experience Designer</button>
+          {/* Open the running prototype in a real browser tab (its own URL), so it
+              can be walked full-screen, shared, or opened on another device. */}
+          <button type="button" title="Open the running prototype in a new browser tab" onClick={() => openPrototypeInBrowser(mode === "edit" ? draft : html)}>↗ Open in browser</button>
           {/* External build: the prototype is self-contained, so it runs anywhere —
               download it to open standalone, share, or hand to a build team. */}
           <button type="button" title="Download the self-contained prototype as a single HTML file — runs in any browser" onClick={() => {
