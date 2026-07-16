@@ -408,9 +408,27 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
       questions, isRole: !name,
     };
   });
+  // Collapse duplicate ROLE PLACEHOLDERS. The kit can name the same role in both
+  // its interviews and its personas (or twice within interviews), and each becomes
+  // its own unbound "Role — TBC" card — so the same role was listed two-to-four
+  // times on the People page and the collect board. Keep the FIRST card for a role
+  // (interview cards precede persona cards, so the one carrying the discovery
+  // agenda wins) and fold any later duplicate's still-open questions into it, so
+  // collapsing loses no ask. NAMED people are never collapsed here — two different
+  // people can share a role, and same-person-twice is handled by name dedup.
+  const placeholderByRole = new Map<string, MovementStakeholder>();
+  const collapsed: MovementStakeholder[] = [];
+  for (const card of [...interviewCards, ...personaCards]) {
+    const roleKey = card.role.trim().toLowerCase();
+    if (!card.isRole || !roleKey) { collapsed.push(card); continue; }
+    const existing = placeholderByRole.get(roleKey);
+    if (existing) { existing.questions = [...new Set([...existing.questions, ...card.questions])]; continue; }
+    placeholderByRole.set(roleKey, card);
+    collapsed.push(card);
+  }
   // A dismissed role's placeholder card leaves the board too — but a NAMED
   // person is never dropped by a role dismissal (people outrank roles).
-  return [...interviewCards, ...personaCards]
+  return collapsed
     .filter((card) => !(card.isRole && dismissedRoles.has(card.role.trim().toLowerCase())))
     // The sponsor is a Listen arbiter — their card exists ONLY to resolve
     // conflicts. With no open conflicts there's nothing to ask, so the card

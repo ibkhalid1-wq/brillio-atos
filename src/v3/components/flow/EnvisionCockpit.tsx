@@ -114,10 +114,11 @@ export default function EnvisionCockpit({ program, areaFilter, onSaveInputs, onO
   const bizAreas = sel.filter((a) => a !== DESIGN_TEAM);
   const filtering = externalControlled && sel.length > 0;
   // The DIRECTION act (architecture strategy, direction, blueprint) is the
-  // delivery team's cross-cutting work — it lives "under the Design-team tile":
-  // shown when unfiltered or that tile is selected. The per-area DESIGN/BUILD
-  // acts show when unfiltered or a business area is selected.
-  const showDirection = !filtering || designTeamSel;
+  // delivery team's cross-cutting work — it belongs to the Design team ALONE, so
+  // it shows ONLY when the Design-team tile is selected (never in the unfiltered
+  // or business-area views). The per-area DESIGN/BUILD acts show when unfiltered
+  // or a business area is selected.
+  const showDirection = designTeamSel;
   const showDesignBuild = !filtering || bizAreas.length > 0;
   const activeAreas = externalControlled ? bizAreas : (area ? [area] : []);
   const inArea = <T extends { area?: string }>(items: T[]) => (activeAreas.length ? items.filter((i) => activeAreas.includes(i.area ?? "General")) : items);
@@ -188,16 +189,6 @@ export default function EnvisionCockpit({ program, areaFilter, onSaveInputs, onO
           ) : null}
         </section>
       ) : null}
-
-      {/* Three-act progress at a glance. */}
-      <div className="v3fs-envc-ribbon">
-        {acts.map((a, i) => (
-          <div key={a.label} className={`v3fs-envc-rstep${a.done ? " done" : ""}`}>
-            <span className="v3fs-envc-rn">{a.done ? "✓" : i + 1}</span>
-            <span className="v3fs-envc-rl">{a.label}<em>{a.hint}</em></span>
-          </div>
-        ))}
-      </div>
 
       {/* ── DIRECTION ─────────────────────────────────────────────────────── */}
       {fs.direction.candidates.length && showDirection ? (

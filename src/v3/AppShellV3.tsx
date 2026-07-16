@@ -2011,7 +2011,7 @@ export default function AppShellV3() {
     }
   }, [activeProgram, refreshPrograms, currentUser?.email]);
 
-  const handleSavePhaseInputs = useCallback(async (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; clearReviewDefId?: string; staleDefId?: string; attest?: { action: string; detail?: string } }) => {
+  const handleSavePhaseInputs = useCallback(async (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; clearReviewDefId?: string; staleDefId?: string; attest?: { action: string; detail?: string }; extraInputs?: Record<string, Record<string, string>> }) => {
     if (!activeProgram) return;
     const silent = opts?.silent === true;
     // Hard freeze: once a phase clears its stage gate its inputs are locked, so no
@@ -2035,6 +2035,19 @@ export default function AppShellV3() {
       // hard-coded here. Computed against the prior bucket, before the merge.
       const changedFields = changedInputFields(existing[phaseId], inputs);
       existing[phaseId] = mergePhaseInputBucket(existing[phaseId], inputs);
+      // Atomic multi-bucket write. A plan edit must touch several movements at
+      // once — Frame's listenPlan plus a `planRev` stamp into Listen/Envision/Show
+      // to shift their input fingerprints and stale the downstream artifacts. Doing
+      // that as sequential onSaveInputs calls made each successive write race the
+      // optimistic-version check of its own predecessor (ConflictError flood). Fold
+      // every extra bucket into THIS single payload so one write, one version check.
+      // These extras only merge inputs (their fingerprint shift does the staling);
+      // the primary phase alone runs the stale-flag machinery below.
+      if (opts?.extraInputs) {
+        for (const [xPhase, xInputs] of Object.entries(opts.extraInputs)) {
+          existing[xPhase] = mergePhaseInputBucket(existing[xPhase], xInputs);
+        }
+      }
       const artifactBuckets = typeof cloned.inner.phaseArtifacts === "object" && cloned.inner.phaseArtifacts !== null
         ? { ...(cloned.inner.phaseArtifacts as Record<string, Record<string, Record<string, unknown>>>) }
         : {};

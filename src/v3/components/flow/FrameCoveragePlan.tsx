@@ -15,7 +15,7 @@
 import { useMemo, useState, useRef, useEffect } from "react";
 import type { ProgramSummary } from "@/new/types";
 import { resolveMovementStakeholders, readDirectoryPeople, validateProgramRole, dismissedListenRoles } from "@/v3/components/flow/flowStakeholders";
-import { programAreas, GENERAL_AREA, stakeholderPrimaryArea, readRoleAliases, roleAliasKey, displayRole } from "@/v3/components/flow/flowAreas";
+import { programAreas, GENERAL_AREA, stakeholderPrimaryArea, roleAliasKey, displayRole } from "@/v3/components/flow/flowAreas";
 import { areaAccent } from "@/v3/components/flow/CollectBoard";
 import { readMovementInputs } from "@/v3/components/flow/flowShellData";
 import { TranscribeButton } from "@/v3/components/flow/flowCapture";
@@ -55,7 +55,7 @@ function monogram(label: string): string {
 
 export default function FrameCoveragePlan({ program, onSaveInputs }: {
   program: ProgramSummary;
-  onSaveInputs?: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean }) => Promise<void> | void;
+  onSaveInputs?: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; extraInputs?: Record<string, Record<string, string>> }) => Promise<void> | void;
 }) {
   const [roleInput, setRoleInput] = useState("");
   const [areaInput, setAreaInput] = useState("");
@@ -139,15 +139,26 @@ export default function FrameCoveragePlan({ program, onSaveInputs }: {
   // so it shifts each movement's input fingerprint and marks their artifacts
   // stale — the Listen model and the whole Prototype now require regeneration
   // against the new plan. The edge re-stamps it on regen, clearing the flag.
-  const writePlan = async (next: Partial<PlanOverlay>) => {
+  // ONE atomic write. The Frame bucket carries the new plan + reset confirmation;
+  // the planRev stamp rides into Listen/Envision/Show via `extraInputs` so all
+  // four buckets land in a SINGLE optimistic-version check. (Sequential writes
+  // raced their own predecessor's version → ConflictError flood.) `listenExtra`
+  // lets a caller fold Listen-bucket inputs — directory people, dismissals — into
+  // the same write instead of a separate racing call.
+  const writePlan = async (next: Partial<PlanOverlay>, listenExtra?: Record<string, string>) => {
     const merged: PlanOverlay = { roles: plan.roles, areas: plan.areas, coverage: plan.coverage, dismissedAreas: plan.dismissedAreas, ...next };
     let h = 0; const s = JSON.stringify(merged);
     for (let i = 0; i < s.length; i += 1) h = (h * 31 + s.charCodeAt(i)) >>> 0;
     const rev = h.toString(16);
-    await onSaveInputs?.("frame", { listenPlan: JSON.stringify(merged), _listenCoverageConfirmed: "" }, { silent: true });
-    for (const phase of ["listen", "envision", "show"]) {
-      await onSaveInputs?.(phase, { planRev: rev }, { silent: true });
-    }
+    await onSaveInputs?.(
+      "frame",
+      { listenPlan: JSON.stringify(merged), _listenCoverageConfirmed: "" },
+      { silent: true, extraInputs: {
+        listen: { planRev: rev, ...(listenExtra ?? {}) },
+        envision: { planRev: rev },
+        show: { planRev: rev },
+      } },
+    );
   };
   // Rewrite every coverage list (used when a role is renamed or removed so the
   // explicit assignments follow it).
@@ -169,46 +180,54 @@ export default function FrameCoveragePlan({ program, onSaveInputs }: {
     if (roles.some((r) => r.label.trim().toLowerCase() === role.toLowerCase())) { setRoleInput(""); return; }
     setBusy(true);
     try {
-      await onSaveInputs("listen", { _directoryPeople: JSON.stringify([...readDirectoryPeople(program), dirEntry(role)]) }, { silent: true });
-      await writePlan({ roles: [...plan.roles, role], areas: plan.areas });
+      // Single write: the new directory person rides the same call as the plan
+      // update (via listenExtra), so they never race each other's version check.
+      await writePlan(
+        { roles: [...plan.roles, role], areas: plan.areas },
+        { _directoryPeople: JSON.stringify([...readDirectoryPeople(program), dirEntry(role)]) },
+      );
       setRoleInput("");
     } finally { setBusy(false); }
   };
 
+  // Rename a role. A rename is COSMETIC — it must not fire the plan's stale
+  // cascade (planRev) or race the same movement bucket. So it does at most two
+  // writes to DIFFERENT buckets: the Listen bucket carries the durable display
+  // alias plus, if the role is an added directory person, its renamed entry;
+  // the Frame bucket keeps plan.roles/coverage labelled the same. No cascade.
   const renameRole = async (from: string, to: string) => {
     const next = to.trim();
-    if (busy || !onSaveInputs || !next || next.toLowerCase() === from.toLowerCase()) { setEdit(null); return; }
+    const key = from.trim().toLowerCase();
+    const currentDisplay = displayRole(program, from).trim().toLowerCase();
+    if (busy || !onSaveInputs || !next || next.toLowerCase() === currentDisplay) { setEdit(null); return; }
     setBusy(true);
     try {
-      const key = from.trim().toLowerCase();
-      const isAdded = roles.some((r) => r.label.trim().toLowerCase() === key && r.added);
-      if (isAdded) {
-        // Operator-added person: a true rename of the directory entry.
-        const dir = readDirectoryPeople(program).map((p) =>
-          p.movementId === "listen" && p.name.trim().toLowerCase() === key
-            ? { ...p, name: next, role: next, roleResolved: validateProgramRole(program, next).known }
-            : p);
-        await onSaveInputs("listen", { _directoryPeople: JSON.stringify(dir) }, { silent: true });
-        await writePlan({
+      // Listen bucket — set the display alias AND rename any matching directory
+      // person, in ONE write so they never clobber each other.
+      const rawAliases = readMovementInputs(program, "listen")._roleAliases;
+      let store: Record<string, unknown> = {};
+      if (typeof rawAliases === "string") { try { store = JSON.parse(rawAliases) as Record<string, unknown>; } catch { store = {}; } }
+      const existing = (store[roleAliasKey(from)] && typeof store[roleAliasKey(from)] === "object") ? store[roleAliasKey(from)] as Record<string, unknown> : {};
+      store[roleAliasKey(from)] = { ...existing, from, rename: next };
+      const dir = readDirectoryPeople(program).map((p) =>
+        p.movementId === "listen" && p.name.trim().toLowerCase() === key
+          ? { ...p, name: next, role: next, roleResolved: validateProgramRole(program, next).known }
+          : p);
+      // Frame bucket — keep the plan's own role/coverage labels consistent. Folded
+      // into the SAME write as the Listen alias/directory update (via extraInputs)
+      // so the two never race each other's optimistic-version check. As an extra
+      // bucket it skips the stale machinery — a cosmetic rename must not cascade.
+      const extra: Record<string, Record<string, string>> = {};
+      if (plan.roles.some((r) => r.trim().toLowerCase() === key) || Object.values(plan.coverage).some((list) => list.some((r) => r.trim().toLowerCase() === key))) {
+        const merged: PlanOverlay = {
           roles: plan.roles.map((r) => (r.trim().toLowerCase() === key ? next : r)),
+          areas: plan.areas,
           coverage: remapCoverageRoles((list) => list.map((r) => (r.trim().toLowerCase() === key ? next : r))),
-        });
-      } else {
-        // Seeded role (from the kit / ontology): rename via a durable alias, so
-        // the new label shows everywhere and survives regeneration — the same
-        // mechanism as People → Remap a role. The original label stays the key.
-        const aliases = readRoleAliases(program);
-        const existing = aliases[roleAliasKey(from)] ?? {};
-        const rawAliases = readMovementInputs(program, "listen")._roleAliases;
-        const store: Record<string, unknown> = (() => {
-          if (typeof rawAliases === "string") { try { return JSON.parse(rawAliases) as Record<string, unknown>; } catch { return {}; } }
-          return {};
-        })();
-        store[roleAliasKey(from)] = { ...existing, from, rename: next };
-        await onSaveInputs("listen", { _roleAliases: JSON.stringify(store) }, { silent: true });
-        // Re-stamp the plan so the kit refreshes against the rename.
-        await writePlan({});
+          dismissedAreas: plan.dismissedAreas,
+        };
+        extra.frame = { listenPlan: JSON.stringify(merged), _listenCoverageConfirmed: "" };
       }
+      await onSaveInputs("listen", { _roleAliases: JSON.stringify(store), _directoryPeople: JSON.stringify(dir) }, { silent: true, ...(Object.keys(extra).length ? { extraInputs: extra } : {}) });
     } finally { setBusy(false); setEdit(null); }
   };
 
@@ -225,14 +244,19 @@ export default function FrameCoveragePlan({ program, onSaveInputs }: {
       const dismissed = new Set(dismissedListenRoles(program));
       dismissed.add(key);
       if (name && name.trim()) dismissed.add(name.trim().toLowerCase());
-      await onSaveInputs("listen", {
-        _directoryPeople: JSON.stringify(dir),
-        _dismissedListenRoles: JSON.stringify([...dismissed]),
-      }, { silent: true });
-      await writePlan({
-        roles: plan.roles.filter((r) => r.trim().toLowerCase() !== key),
-        coverage: remapCoverageRoles((list) => list.filter((r) => r.trim().toLowerCase() !== key)),
-      });
+      // Single write: the Listen dismissal/directory drop rides writePlan's own
+      // call (via listenExtra) alongside the planRev cascade — removing a role
+      // moves scope, so the downstream artifacts SHOULD stale.
+      await writePlan(
+        {
+          roles: plan.roles.filter((r) => r.trim().toLowerCase() !== key),
+          coverage: remapCoverageRoles((list) => list.filter((r) => r.trim().toLowerCase() !== key)),
+        },
+        {
+          _directoryPeople: JSON.stringify(dir),
+          _dismissedListenRoles: JSON.stringify([...dismissed]),
+        },
+      );
     } finally { setBusy(false); }
   };
 

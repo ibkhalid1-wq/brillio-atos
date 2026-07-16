@@ -63,7 +63,7 @@ interface FlowShellProps {
   onOpenSetup: () => void;
   onOpenCopilot: () => void;
   onRunAgent: (agentId: string, phaseId?: string) => void;
-  onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
+  onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string }; extraInputs?: Record<string, Record<string, string>> }) => Promise<void>;
   /** Rename a person across the roster + contact bindings (People page). */
   onRenamePerson?: (oldName: string, newName: string) => Promise<void>;
   /** Resolve an open decision (confirm applies its prepared payload). */
@@ -2117,6 +2117,22 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
   // placeholders (no name) are never collapsed — a role awaiting a person still
   // needs to show. This kills the "same person listed 2–4 times" class.
   const dedup = useMemo(() => {
+    // A role STAND-IN is a row that names no real person: an unbound placeholder,
+    // or an entry whose "name" is just the role echoed back (an operator-added
+    // "GTM Sales" that stands for the role, not a person). People outrank roles —
+    // so once a role has a REAL named holder, its leftover stand-in rows are noise.
+    // Collapsing them kills the "same role listed twice" the People page showed
+    // (a named "Head of IT" beside an unbound "IT Architect"; "Prakash T M" beside
+    // a bare "GTM Sales") without ever hiding a genuine second person in that role.
+    const isStandIn = (name: string, role: string) => {
+      const n = peopleIdentity(name);
+      return !n || n === peopleIdentity(role);
+    };
+    const covered = new Set<string>();
+    for (const r of roster) if (!r.isRole && !isStandIn(r.name, r.role)) covered.add(peopleIdentity(r.role));
+    for (const r of roles) if (r.name && !isStandIn(r.name, r.role)) covered.add(peopleIdentity(r.role));
+    for (const p of added) if (!isStandIn(p.name, p.role)) covered.add(peopleIdentity(p.role));
+
     const seen = new Set<string>();
     const claim = (name: string) => {
       const k = peopleIdentity(name);
@@ -2125,9 +2141,26 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
       seen.add(k);
       return true;
     };
-    const rosterD = roster.filter((r) => r.isRole || claim(r.name));
-    const addedD = added.filter((p) => claim(p.name));
-    const rolesD = roles.filter((r) => !r.name || claim(r.name));
+    // Keep at most ONE stand-in per role, and none once a real person owns it.
+    // Evaluated in render order (added → roster → roles) so the first stand-in
+    // for a role wins and the rest — the second "Legal", the leftover unbound
+    // placeholder beside a bound person — drop.
+    const seenStandInRole = new Set<string>();
+    const keepStandIn = (role: string) => {
+      const rk = peopleIdentity(role);
+      if (!rk || covered.has(rk) || seenStandInRole.has(rk)) return false;
+      seenStandInRole.add(rk);
+      return true;
+    };
+    const addedD = added.filter((p) => (isStandIn(p.name, p.role) ? keepStandIn(p.role) : claim(p.name)));
+    const rosterD = roster.filter((r) => {
+      if (r.isRole || isStandIn(r.name, r.role)) return keepStandIn(r.role);
+      return claim(r.name);
+    });
+    const rolesD = roles.filter((r) => {
+      if (!r.name || isStandIn(r.name, r.role)) return keepStandIn(r.role);
+      return claim(r.name);
+    });
     return { rosterD, addedD, rolesD };
   }, [roster, added, roles]);
   // Remove a ROLE from the cast (operator judgement, attested). Named people
