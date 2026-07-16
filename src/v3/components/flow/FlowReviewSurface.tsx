@@ -81,7 +81,9 @@ function ReviewHeader({ stakeholder, programme, objective, intro, areaLabel, ret
     <header className="v3fs-rvw-top">
       <div className="v3fs-rvw-brandline"><span className="v3fs-rvw-mark" aria-hidden="true">◆</span>Brillio · ATOS</div>
       {programme ? <div className="v3fs-rvw-prog">{programme}</div> : null}
-      {first ? <h1 className="v3fs-rvw-hi">{returning ? `Welcome back, ${first}.` : `Hi ${first},`}</h1> : null}
+      {/* On a return visit the FollowUpBanner above carries the "Welcome back"
+          greeting — don't say it twice; a first visit greets here. */}
+      {first && !returning ? <h1 className="v3fs-rvw-hi">Hi {first},</h1> : null}
       <p className="v3fs-rvw-lede">
         We&rsquo;re building <b>{programme || "this programme"}</b> — an agentic solution{coreGoal ? <> built to {coreGoal.charAt(0).toLowerCase() + coreGoal.slice(1)}</> : ""}.
       </p>

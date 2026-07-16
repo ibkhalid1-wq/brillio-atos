@@ -308,8 +308,10 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
   };
   const edited = draft && typeof draft.editedAt === "string" ? String(draft.editedAt).slice(0, 10) : null;
 
-  // Grounding lives in the colophon with the rest of the provenance.
-  const groundingDisclosure = grounding.length ? (
+  // Grounding lives in the colophon with the rest of the provenance. The
+  // Discovery Kit is a plan the operator shapes, not an evidence-grounded
+  // synthesis — its "Grounded in" disclosure is noise there, so hide it.
+  const groundingDisclosure = grounding.length && artifact.id !== "discovery-kit" ? (
         <details className="v3fs-disc v3fs-disc-sm v3fs-ground">
           <summary>
             <span className="v3fs-disc-l">Grounded in<em>{grounding.length}</em></span>
@@ -521,7 +523,10 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
           ) : (
             <>
               {groundingDisclosure}
-              {draft ? (
+              {/* The Discovery Kit reads as the Listen plan (the `header` above)
+                  plus "About this document" — the generated document body is
+                  hidden here; the plan is the operator's working surface. */}
+              {artifact.id === "discovery-kit" ? null : draft ? (
                 <DocumentView key={typeof draft.editedAt === "string" ? String(draft.editedAt) : "unedited"}
                   // Falsified field-demand gaps (the field demonstrably holds
                   // content) are suppressed here too — the document view, the
@@ -530,6 +535,10 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
                     ? { ...draft, gaps: (draft.gaps as unknown[]).map(String).filter((gap) => gap && !falsifiedGap(program, gap)) }
                     : draft}
                   order={entry?.docOrder}
+                  // The Discovery Kit's interview questions are asked and edited
+                  // in the Listen phase — hide that section here so the kit reads
+                  // as the plan (coverage + cast), not a duplicate of the scripts.
+                  hideKeys={artifact.id === "discovery-kit" ? new Set(["interviews"]) : undefined}
                   onPatch={canEdit ? (key, value) => { setDraft({ ...draft, [key]: value }); setDirty(true); } : undefined}
                   onOpenFullEditor={canEdit ? () => setEditing(true) : undefined} />
               ) : (

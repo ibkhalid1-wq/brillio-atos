@@ -81,9 +81,11 @@ export function WorkflowFlow({ name, trigger, steps, onEdit, onEditMeta, onToggl
               <span className="v3fs-vflow-dot" aria-hidden="true">{node.added ? "+" : node.removed ? "×" : si + 1}</span>
             </div>
             <div className="v3fs-vflow-card">
-              <input className="v3fs-vflow-action" value={node.action} disabled={node.removed}
+              <textarea className="v3fs-vflow-action" value={node.action} disabled={node.removed} rows={1}
                 placeholder={node.added ? "Describe the step we missed…" : ""}
-                onChange={(e) => onEdit(si, e.target.value)} aria-label={`Step ${si + 1}`} />
+                ref={(el) => { if (el) { el.style.height = "auto"; el.style.height = `${el.scrollHeight}px`; } }}
+                onChange={(e) => { e.target.style.height = "auto"; e.target.style.height = `${e.target.scrollHeight}px`; onEdit(si, e.target.value); }}
+                aria-label={`Step ${si + 1}`} />
               {!node.removed ? (
                 <div className="v3fs-vflow-meta">
                   <label className="v3fs-vflow-metaf actor">

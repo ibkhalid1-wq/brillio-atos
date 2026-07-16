@@ -14,24 +14,37 @@
  */
 import { useMemo, useState, useRef, useEffect } from "react";
 import type { ProgramSummary } from "@/new/types";
-import { resolveMovementStakeholders, readDirectoryPeople, validateProgramRole } from "@/v3/components/flow/flowStakeholders";
-import { programAreas, GENERAL_AREA } from "@/v3/components/flow/flowAreas";
+import { resolveMovementStakeholders, readDirectoryPeople, validateProgramRole, dismissedListenRoles } from "@/v3/components/flow/flowStakeholders";
+import { programAreas, GENERAL_AREA, stakeholderPrimaryArea, readRoleAliases, roleAliasKey, displayRole } from "@/v3/components/flow/flowAreas";
+import { areaAccent } from "@/v3/components/flow/CollectBoard";
 import { readMovementInputs } from "@/v3/components/flow/flowShellData";
 import { TranscribeButton } from "@/v3/components/flow/flowCapture";
 
-interface PlanOverlay { roles: string[]; areas: string[] }
+/** The operator's plan overlay. `coverage` is the EXPLICIT who↔area assignment
+ * (area label → role labels) — set only for areas the operator has hand-curated;
+ * every other area falls back to the derived (title-inferred) match. */
+interface PlanOverlay { roles: string[]; areas: string[]; coverage: Record<string, string[]>; dismissedAreas: string[] }
 type EditTarget = { kind: "role" | "area"; key: string } | null;
 
 function readPlan(program: ProgramSummary): PlanOverlay {
   const raw = readMovementInputs(program, "frame").listenPlan;
-  if (typeof raw !== "string" || !raw.trim()) return { roles: [], areas: [] };
+  const empty: PlanOverlay = { roles: [], areas: [], coverage: {}, dismissedAreas: [] };
+  if (typeof raw !== "string" || !raw.trim()) return empty;
   try {
     const p = JSON.parse(raw) as Record<string, unknown>;
+    const cov: Record<string, string[]> = {};
+    if (p.coverage && typeof p.coverage === "object" && !Array.isArray(p.coverage)) {
+      for (const [k, v] of Object.entries(p.coverage as Record<string, unknown>)) {
+        if (Array.isArray(v)) cov[k] = v.map(String).map((s) => s.trim()).filter(Boolean);
+      }
+    }
     return {
       roles: Array.isArray(p.roles) ? p.roles.map(String).map((s) => s.trim()).filter(Boolean) : [],
       areas: Array.isArray(p.areas) ? p.areas.map(String).map((s) => s.trim()).filter(Boolean) : [],
+      coverage: cov,
+      dismissedAreas: Array.isArray(p.dismissedAreas) ? p.dismissedAreas.map(String).map((s) => s.trim()).filter(Boolean) : [],
     };
-  } catch { return { roles: [], areas: [] }; }
+  } catch { return empty; }
 }
 
 function monogram(label: string): string {
@@ -72,12 +85,47 @@ export default function FrameCoveragePlan({ program, onSaveInputs }: {
   }, [program, directoryNames]);
 
   const plan = useMemo(() => readPlan(program), [program]);
+  const areaNorm = (a: string) => a.trim().toLowerCase();
   const areas = useMemo(() => {
+    const dismissed = new Set(plan.dismissedAreas.map(areaNorm));
     const derived = programAreas(program).filter((a) => a && a !== GENERAL_AREA);
     const seen = new Set(derived.map((a) => a.toLowerCase()));
     const extra = plan.areas.filter((a) => !seen.has(a.toLowerCase()));
-    return [...derived.map((a) => ({ label: a, added: false })), ...extra.map((a) => ({ label: a, added: true }))];
-  }, [program, plan.areas]);
+    // Operator-dismissed areas leave the plan entirely.
+    return [...derived.map((a) => ({ label: a, added: false })), ...extra.map((a) => ({ label: a, added: true }))]
+      .filter((a) => !dismissed.has(areaNorm(a.label)));
+  }, [program, plan.areas, plan.dismissedAreas]);
+
+  // The RELATIONSHIP between the two panels: which roles cover each area. Each
+  // role's primary area is resolved once, then token-matched to the plan areas
+  // (so "Vertical Sales" covers "Sales" and "Sales & Marketing"). An area no one
+  // covers is flagged — the gap the plan exists to close.
+  const areaTokens = (a: string) => new Set(
+    a.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t && !["and", "the", "of", "amp"].includes(t)));
+  const rolePrimary = useMemo(
+    () => roles.map((r) => ({ label: r.label, area: stakeholderPrimaryArea(program, r.name || r.label, r.label) })),
+    [program, roles],
+  );
+  const areaCoverage = useMemo(() => areas.map((a) => {
+    // An area the operator has hand-curated uses its EXPLICIT list (even if
+    // empty — a deliberate "no one"); otherwise fall back to the title-inferred
+    // match. `explicit` drives whether the row shows remove-controls.
+    const explicit = plan.coverage[a.label];
+    if (explicit) return { area: a.label, roles: explicit, explicit: true, added: a.added };
+    const at = areaTokens(a.label);
+    const covering = rolePrimary.filter((rp) => [...areaTokens(rp.area)].some((t) => at.has(t))).map((rp) => rp.label);
+    return { area: a.label, roles: [...new Set(covering)], explicit: false, added: a.added };
+  }), [areas, rolePrimary, plan.coverage]);
+  // The current covering roles of an area (explicit or inferred) — the base for
+  // an edit, so unassigning from an inferred area materialises it correctly.
+  const areaRolesNow = (area: string): string[] => areaCoverage.find((a) => a.area === area)?.roles ?? [];
+  // Role-first projection: each person and the AREAS they cover. This is the
+  // view — rows are roles, columns are their areas — inverted from the
+  // area-keyed store so the same coverage powers both.
+  const roleCoverage = useMemo(
+    () => roles.map((r) => ({ role: r, areas: areaCoverage.filter((ac) => ac.roles.includes(r.label)).map((ac) => ac.area) })),
+    [roles, areaCoverage],
+  );
 
   const confirmedAt = String(readMovementInputs(program, "frame")._listenCoverageConfirmed ?? "").trim();
   const confirmed = confirmedAt.length > 0;
@@ -85,8 +133,30 @@ export default function FrameCoveragePlan({ program, onSaveInputs }: {
 
   // Persist a plan change to the fingerprinted `listenPlan` field — this is what
   // stales the Discovery Kit — and re-open confirmation, since the scope moved.
-  const writePlan = (next: PlanOverlay) =>
-    onSaveInputs?.("frame", { listenPlan: JSON.stringify(next), _listenCoverageConfirmed: "" }, { silent: true });
+  // Accepts a PARTIAL overlay merged onto the current plan, so a coverage edit
+  // never has to restate roles/areas (and vice-versa). It ALSO stamps a
+  // `planRev` into the Listen, Envision and Show buckets: a non-underscore key,
+  // so it shifts each movement's input fingerprint and marks their artifacts
+  // stale — the Listen model and the whole Prototype now require regeneration
+  // against the new plan. The edge re-stamps it on regen, clearing the flag.
+  const writePlan = async (next: Partial<PlanOverlay>) => {
+    const merged: PlanOverlay = { roles: plan.roles, areas: plan.areas, coverage: plan.coverage, dismissedAreas: plan.dismissedAreas, ...next };
+    let h = 0; const s = JSON.stringify(merged);
+    for (let i = 0; i < s.length; i += 1) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    const rev = h.toString(16);
+    await onSaveInputs?.("frame", { listenPlan: JSON.stringify(merged), _listenCoverageConfirmed: "" }, { silent: true });
+    for (const phase of ["listen", "envision", "show"]) {
+      await onSaveInputs?.(phase, { planRev: rev }, { silent: true });
+    }
+  };
+  // Rewrite every coverage list (used when a role is renamed or removed so the
+  // explicit assignments follow it).
+  const remapCoverageRoles = (fn: (roles: string[]) => string[]): Record<string, string[]> =>
+    Object.fromEntries(Object.entries(plan.coverage).map(([area, list]) => [area, fn(list)]));
+  // Assign / unassign a role to an area — the direct edit of the relationship.
+  // The first edit of a derived row materialises its inferred set, then curates.
+  const setAreaRoles = (area: string, nextRoles: string[]) =>
+    void writePlan({ coverage: { ...plan.coverage, [area]: [...new Set(nextRoles)] } });
 
   const dirEntry = (role: string) => ({
     id: `dp-${Date.now().toString(36)}-${role.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 8)}`,
@@ -111,23 +181,58 @@ export default function FrameCoveragePlan({ program, onSaveInputs }: {
     setBusy(true);
     try {
       const key = from.trim().toLowerCase();
-      const dir = readDirectoryPeople(program).map((p) =>
-        p.movementId === "listen" && p.name.trim().toLowerCase() === key
-          ? { ...p, name: next, role: next, roleResolved: validateProgramRole(program, next).known }
-          : p);
-      await onSaveInputs("listen", { _directoryPeople: JSON.stringify(dir) }, { silent: true });
-      await writePlan({ roles: plan.roles.map((r) => (r.trim().toLowerCase() === key ? next : r)), areas: plan.areas });
+      const isAdded = roles.some((r) => r.label.trim().toLowerCase() === key && r.added);
+      if (isAdded) {
+        // Operator-added person: a true rename of the directory entry.
+        const dir = readDirectoryPeople(program).map((p) =>
+          p.movementId === "listen" && p.name.trim().toLowerCase() === key
+            ? { ...p, name: next, role: next, roleResolved: validateProgramRole(program, next).known }
+            : p);
+        await onSaveInputs("listen", { _directoryPeople: JSON.stringify(dir) }, { silent: true });
+        await writePlan({
+          roles: plan.roles.map((r) => (r.trim().toLowerCase() === key ? next : r)),
+          coverage: remapCoverageRoles((list) => list.map((r) => (r.trim().toLowerCase() === key ? next : r))),
+        });
+      } else {
+        // Seeded role (from the kit / ontology): rename via a durable alias, so
+        // the new label shows everywhere and survives regeneration — the same
+        // mechanism as People → Remap a role. The original label stays the key.
+        const aliases = readRoleAliases(program);
+        const existing = aliases[roleAliasKey(from)] ?? {};
+        const rawAliases = readMovementInputs(program, "listen")._roleAliases;
+        const store: Record<string, unknown> = (() => {
+          if (typeof rawAliases === "string") { try { return JSON.parse(rawAliases) as Record<string, unknown>; } catch { return {}; } }
+          return {};
+        })();
+        store[roleAliasKey(from)] = { ...existing, from, rename: next };
+        await onSaveInputs("listen", { _roleAliases: JSON.stringify(store) }, { silent: true });
+        // Re-stamp the plan so the kit refreshes against the rename.
+        await writePlan({});
+      }
     } finally { setBusy(false); setEdit(null); }
   };
 
-  const removeRole = async (label: string) => {
+  const removeRole = async (label: string, name?: string) => {
     if (busy || !onSaveInputs) return;
     setBusy(true);
     try {
       const key = label.trim().toLowerCase();
+      // Drop any operator-added directory person by this name…
       const dir = readDirectoryPeople(program).filter((p) => !(p.movementId === "listen" && p.name.trim().toLowerCase() === key));
-      await onSaveInputs("listen", { _directoryPeople: JSON.stringify(dir) }, { silent: true });
-      await writePlan({ roles: plan.roles.filter((r) => r.trim().toLowerCase() !== key), areas: plan.areas });
+      // …AND dismiss the role, so a SEEDED role (from the kit or ontology — e.g.
+      // "Customer Success Manager") also leaves the cast and regeneration won't
+      // resurrect it. Dismiss both its role label and its person name.
+      const dismissed = new Set(dismissedListenRoles(program));
+      dismissed.add(key);
+      if (name && name.trim()) dismissed.add(name.trim().toLowerCase());
+      await onSaveInputs("listen", {
+        _directoryPeople: JSON.stringify(dir),
+        _dismissedListenRoles: JSON.stringify([...dismissed]),
+      }, { silent: true });
+      await writePlan({
+        roles: plan.roles.filter((r) => r.trim().toLowerCase() !== key),
+        coverage: remapCoverageRoles((list) => list.filter((r) => r.trim().toLowerCase() !== key)),
+      });
     } finally { setBusy(false); }
   };
 
@@ -146,14 +251,22 @@ export default function FrameCoveragePlan({ program, onSaveInputs }: {
     setBusy(true);
     try {
       const key = from.trim().toLowerCase();
-      await writePlan({ roles: plan.roles, areas: plan.areas.map((a) => (a.trim().toLowerCase() === key ? next : a)) });
+      // The coverage map is keyed by the area's LABEL — follow the rename.
+      const cov = { ...plan.coverage };
+      if (Object.prototype.hasOwnProperty.call(cov, from)) { cov[next] = cov[from]; delete cov[from]; }
+      await writePlan({ areas: plan.areas.map((a) => (a.trim().toLowerCase() === key ? next : a)), coverage: cov });
     } finally { setBusy(false); setEdit(null); }
   };
 
   const removeArea = async (label: string) => {
     if (busy || !onSaveInputs) return;
     setBusy(true);
-    try { await writePlan({ roles: plan.roles, areas: plan.areas.filter((a) => a.trim().toLowerCase() !== label.trim().toLowerCase()) }); }
+    const cov = { ...plan.coverage };
+    delete cov[label];
+    // Drop from the operator-added list AND record it as dismissed, so an
+    // ontology-DERIVED area can be deleted too (it won't re-derive into the plan).
+    const dismissed = [...new Set([...plan.dismissedAreas, label.trim()])];
+    try { await writePlan({ areas: plan.areas.filter((a) => a.trim().toLowerCase() !== label.trim().toLowerCase()), coverage: cov, dismissedAreas: dismissed }); }
     finally { setBusy(false); }
   };
 
@@ -184,101 +297,136 @@ export default function FrameCoveragePlan({ program, onSaveInputs }: {
         </div>
       </header>
 
-      <div className="v3fs-plan-grid">
-        {/* Roles ------------------------------------------------------------- */}
-        <div className="v3fs-plan-panel">
-          <div className="v3fs-plan-panel-h">
-            <span className="v3fs-plan-panel-t">Who we&apos;ll hear</span>
-            <span className="v3fs-plan-count">{roles.length}<i>roles</i></span>
-          </div>
-          {roles.length ? (
-            <ul className="v3fs-plan-roles">
-              {roles.map((r, i) => {
-                const editing = edit?.kind === "role" && edit.key === r.label;
-                return (
-                  <li key={i} className={r.added ? "added" : ""}>
-                    <span className="v3fs-plan-mono" aria-hidden="true">{monogram(r.label)}</span>
-                    {editing ? (
-                      <input ref={editRef} className="v3fs-plan-editin" value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)} onBlur={commitEdit}
-                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitEdit(); } if (e.key === "Escape") setEdit(null); }} />
-                    ) : (
-                      <span className="v3fs-plan-roletext">
-                        <span className="v3fs-plan-role">{r.label}</span>
-                        {r.name ? <span className="v3fs-plan-name">{r.name}</span> : null}
+      {/* ONE consolidated view, role-first: each PERSON we'll hear as a row and
+          the AREAS they cover as chips. Full CRUD — rename/remove a person on
+          their row, add below; areas are managed in the strip and assigned
+          inline from the ONTOLOGY's areas, so every assignment stays bound to
+          the model. */}
+      <div className="v3fs-plan-panel v3fs-plan-cov v3fs-plan-cov2">
+        <div className="v3fs-plan-panel-h">
+          <span className="v3fs-plan-panel-t">Coverage — who we&rsquo;ll hear, and the areas they cover</span>
+          <span className="v3fs-plan-count">{roleCoverage.filter((r) => !r.areas.length).length}<i>unassigned</i></span>
+        </div>
+        <p className="v3fs-plan-covsub">Each person we&rsquo;ll hear and the areas they cover. Assign areas inline — the picker offers the ontology&rsquo;s areas, so the plan stays bound to the model. Rename or remove a person on their row; manage areas in the strip below.</p>
+        <div className="v3fs-covmap v3fs-covmap-role" role="table" aria-label="Coverage — roles and the areas they cover">
+          <div className="v3fs-covmap-h" role="row"><span>Role</span><span>Areas we&rsquo;ll cover</span></div>
+          {roleCoverage.map(({ role: r, areas: covered }, i) => {
+            const editingRole = edit?.kind === "role" && edit.key === r.label;
+            const availableAreas = areas.map((a) => a.label).filter((l) => !covered.includes(l));
+            return (
+              <div key={i} className={`v3fs-covmap-row${covered.length ? "" : " thin"}`} role="row">
+                <span className="v3fs-covmap-area v3fs-covmap-rolecell">
+                  {editingRole ? (
+                    <input ref={editRef} className="v3fs-plan-editin" value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)} onBlur={commitEdit}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitEdit(); } if (e.key === "Escape") setEdit(null); }} />
+                  ) : (
+                    <>
+                      <span className="v3fs-plan-mono" aria-hidden="true">{monogram(displayRole(program, r.label))}</span>
+                      <span className="v3fs-covmap-roletext">
+                        <span className="v3fs-covmap-arean">{displayRole(program, r.label)}</span>
+                        {r.name ? <em className="v3fs-covmap-rolesub">{r.name}</em> : null}
                       </span>
-                    )}
-                    {r.added ? (
-                      !editing ? (
-                        <span className="v3fs-plan-acts">
-                          <button type="button" className="v3fs-plan-act" aria-label={`Rename ${r.label}`} disabled={busy}
-                            onClick={() => startEdit("role", r.label)}>✎</button>
-                          <button type="button" className="v3fs-plan-act del" aria-label={`Remove ${r.label}`} disabled={busy}
-                            onClick={() => void removeRole(r.label)}>×</button>
+                      {covered.length ? null : <em className="v3fs-covmap-flag">unassigned</em>}
+                      {onSaveInputs ? (
+                        <span className="v3fs-covmap-areaacts">
+                          {/* Rename ANY role; a seeded role renames via a durable
+                              alias, an added person renames the directory entry. */}
+                          <button type="button" className="v3fs-plan-act" aria-label={`Rename ${displayRole(program, r.label)}`} disabled={busy} onClick={() => { setEdit({ kind: "role", key: r.label }); setEditValue(displayRole(program, r.label)); }}>✎</button>
+                          <button type="button" className="v3fs-plan-act del" aria-label={`Remove ${displayRole(program, r.label)}`} disabled={busy} onClick={() => void removeRole(r.label, r.name)}>×</button>
                         </span>
-                      ) : null
-                    ) : (
-                      <span className="v3fs-plan-src">from discovery</span>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <p className="v3fs-plan-empty">Roles seed from the ontology&apos;s people once the mandate is captured.</p>
-          )}
-          <div className="v3fs-plan-add">
-            <input className="v3fs-plan-addin" placeholder="Add a role — e.g. Head of Billing" value={roleInput}
-              onChange={(e) => setRoleInput(e.target.value)} disabled={busy}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void addRole(roleInput); } }} />
-            <TranscribeButton onText={(t) => setRoleInput(t.replace(/\s+/g, " ").trim())} />
-            <button type="button" className="v3fs-plan-addbtn" disabled={busy || !roleInput.trim()} onClick={() => void addRole(roleInput)}>Add</button>
-          </div>
+                      ) : null}
+                    </>
+                  )}
+                </span>
+                <span className="v3fs-covmap-people">
+                  {covered.map((a, j) => (
+                    <span key={j} className={`v3fs-covmap-chip areachip${onSaveInputs ? " editable" : ""}`}>
+                      <i className="v3fs-covmap-dot" style={{ background: areaAccent(a) }} aria-hidden="true" />
+                      {a}
+                      {onSaveInputs ? (
+                        <button type="button" className="v3fs-covmap-x" disabled={busy}
+                          aria-label={`Remove ${a} from ${r.label}`}
+                          onClick={() => setAreaRoles(a, areaRolesNow(a).filter((x) => x !== r.label))}>×</button>
+                      ) : null}
+                    </span>
+                  ))}
+                  {!covered.length ? <span className="v3fs-covmap-none">no areas yet</span> : null}
+                  {onSaveInputs && availableAreas.length ? (
+                    <select className="v3fs-covmap-add" value="" disabled={busy}
+                      aria-label={`Assign an area to ${r.label}`}
+                      onChange={(e) => { if (e.target.value) setAreaRoles(e.target.value, [...areaRolesNow(e.target.value), r.label]); }}>
+                      <option value="">+ area</option>
+                      {availableAreas.map((a) => <option key={a} value={a}>{a}</option>)}
+                    </select>
+                  ) : null}
+                </span>
+              </div>
+            );
+          })}
+          {/* Add a person — a new row we'll hear. */}
+          {onSaveInputs ? (
+            <div className="v3fs-covmap-row addrow" role="row">
+              <span className="v3fs-covmap-area">
+                <input className="v3fs-plan-addin" placeholder="＋ Add a person — e.g. Head of Billing" value={roleInput}
+                  onChange={(e) => setRoleInput(e.target.value)} disabled={busy}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void addRole(roleInput); } }} />
+              </span>
+              <span className="v3fs-covmap-people">
+                <TranscribeButton onText={(t) => setRoleInput(t.replace(/\s+/g, " ").trim())} />
+                <button type="button" className="v3fs-plan-addbtn" disabled={busy || !roleInput.trim()} onClick={() => void addRole(roleInput)}>Add person</button>
+              </span>
+            </div>
+          ) : null}
         </div>
 
-        {/* Areas ------------------------------------------------------------- */}
-        <div className="v3fs-plan-panel">
-          <div className="v3fs-plan-panel-h">
-            <span className="v3fs-plan-panel-t">What we&apos;ll cover</span>
-            <span className="v3fs-plan-count">{areas.length}<i>areas</i></span>
+        {/* Areas strip — area CRUD. Ontology-derived areas are bound to the model
+            (marked); operator-added areas can be renamed or removed. */}
+        <div className="v3fs-plan-roster">
+          <div className="v3fs-plan-roster-h">
+            <span className="v3fs-plan-roster-t">Areas we&rsquo;ll cover</span>
+            <span className="v3fs-plan-count">{areas.length}</span>
           </div>
           {areas.length ? (
-            <ul className="v3fs-plan-chips">
+            <div className="v3fs-plan-roster-chips">
               {areas.map((a, i) => {
-                const editing = edit?.kind === "area" && edit.key === a.label;
+                const editingArea = edit?.kind === "area" && edit.key === a.label;
                 return (
-                  <li key={i} className={`v3fs-plan-chip${a.added ? " added" : ""}`}>
-                    {editing ? (
+                  <span key={i} className={`v3fs-plan-rchip areachip${a.added ? " added" : ""}`}>
+                    {editingArea ? (
                       <input ref={editRef} className="v3fs-plan-editin chip" value={editValue}
                         onChange={(e) => setEditValue(e.target.value)} onBlur={commitEdit}
                         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitEdit(); } if (e.key === "Escape") setEdit(null); }} />
                     ) : (
                       <>
-                        <span>{a.label}</span>
-                        {a.added ? (
-                          <span className="v3fs-plan-chipacts">
-                            <button type="button" className="v3fs-plan-act" aria-label={`Rename ${a.label}`} disabled={busy}
-                              onClick={() => startEdit("area", a.label)}>✎</button>
-                            <button type="button" className="v3fs-plan-act del" aria-label={`Remove ${a.label}`} disabled={busy}
-                              onClick={() => void removeArea(a.label)}>×</button>
+                        <i className="v3fs-covmap-dot" style={{ background: areaAccent(a.label) }} aria-hidden="true" />
+                        <span className="v3fs-plan-rchip-l">{a.label}</span>
+                        {!a.added ? <span className="v3fs-plan-src" title="From the ontology">ontology</span> : null}
+                        {onSaveInputs ? (
+                          <span className="v3fs-plan-rchip-acts">
+                            {/* Rename only operator-added areas; DELETE works for any. */}
+                            {a.added ? <button type="button" className="v3fs-plan-act" aria-label={`Rename ${a.label}`} disabled={busy} onClick={() => startEdit("area", a.label)}>✎</button> : null}
+                            <button type="button" className="v3fs-plan-act del" aria-label={`Remove ${a.label}`} disabled={busy} onClick={() => void removeArea(a.label)}>×</button>
                           </span>
                         ) : null}
                       </>
                     )}
-                  </li>
+                  </span>
                 );
               })}
-            </ul>
+            </div>
           ) : (
             <p className="v3fs-plan-empty">Areas appear once the ontology names them.</p>
           )}
-          <div className="v3fs-plan-add">
-            <input className="v3fs-plan-addin" placeholder="Add an area — e.g. Fraud" value={areaInput}
-              onChange={(e) => setAreaInput(e.target.value)} disabled={busy}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void addArea(areaInput); } }} />
-            <TranscribeButton onText={(t) => setAreaInput(t.replace(/\s+/g, " ").trim())} />
-            <button type="button" className="v3fs-plan-addbtn" disabled={busy || !areaInput.trim()} onClick={() => void addArea(areaInput)}>Add</button>
-          </div>
+          {onSaveInputs ? (
+            <div className="v3fs-plan-add">
+              <input className="v3fs-plan-addin" placeholder="Add an area — e.g. Fraud" value={areaInput}
+                onChange={(e) => setAreaInput(e.target.value)} disabled={busy}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void addArea(areaInput); } }} />
+              <TranscribeButton onText={(t) => setAreaInput(t.replace(/\s+/g, " ").trim())} />
+              <button type="button" className="v3fs-plan-addbtn" disabled={busy || !areaInput.trim()} onClick={() => void addArea(areaInput)}>Add</button>
+            </div>
+          ) : null}
         </div>
       </div>
 

@@ -263,8 +263,18 @@ export function projectListenWorkflowReview(program: ProgramSummary, persona: st
   const agentify = projectAgentifyReview(program, persona);
   if (!agentify) return null;
   const oa = projectOntologyAtlasReview(program);
-  const touched = new Set(agentify.workflows.flatMap((w) => w.steps.flatMap((s) => (s.entities ?? []).map((e) => e.toLowerCase()))));
-  const relevant = (oa?.terms ?? []).filter((t) => touched.size === 0 || touched.has(t.name.toLowerCase()));
+  // Filter the ontology to the terms THIS workflow actually touches, matched
+  // normalised (lower-cased, de-punctuated, singularised) so a step entity
+  // "Partners" or "Co-Sell Deals" still lines up with the terms "Partner" /
+  // "Co-Sell Deal" instead of falling through to the whole ontology.
+  const norm = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "").replace(/s$/, "");
+  const touched = new Set(
+    agentify.workflows.flatMap((w) => w.steps.flatMap((s) => (s.entities ?? []).map((e) => norm(e)))).filter(Boolean),
+  );
+  const relevant = (oa?.terms ?? []).filter((t) => touched.size === 0 || touched.has(norm(t.name)));
+  // Only fall back to the full ontology when the workflow names NO entities at
+  // all; once it touches some, the term list stays scoped to them.
+  const scopedTerms = (touched.size > 0 && relevant.length ? relevant : (oa?.terms ?? [])).slice(0, 16);
   return {
     kind: "listen-workflow",
     persona: persona || "You",
@@ -273,8 +283,8 @@ export function projectListenWorkflowReview(program: ProgramSummary, persona: st
       name: w.name, trigger: w.trigger, area: w.area,
       steps: w.steps.map((s) => ({ action: s.action, actor: s.actor, system: s.system, entities: s.entities })),
     })),
-    terms: (relevant.length ? relevant : (oa?.terms ?? [])).slice(0, 16),
-    relations: projectRelations(program, (relevant.length ? relevant : (oa?.terms ?? [])).slice(0, 16)),
+    terms: scopedTerms,
+    relations: projectRelations(program, scopedTerms),
     questions: NON_STRUCTURAL_QUESTIONS,
   };
 }

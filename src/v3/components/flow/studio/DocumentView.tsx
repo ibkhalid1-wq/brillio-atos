@@ -232,9 +232,13 @@ function ValueBlock({ k, value, depth, nested }: { k: string; value: unknown; de
   return <section className="v3fs-dv-sec">{label}<p className="v3fs-dv-p">{s}</p></section>;
 }
 
-export default function DocumentView({ doc, order, onPatch, onOpenFullEditor }: {
+export default function DocumentView({ doc, order, hideKeys, onPatch, onOpenFullEditor }: {
   doc: Record<string, unknown>;
   order?: string[];
+  /** Top-level sections to omit from this read view (lowercased keys) — e.g. the
+   * Discovery Kit hides "interviews" because those questions are asked, and
+   * edited, in the Listen phase, not here. */
+  hideKeys?: Set<string>;
   /** Present when the document is editable in place — patches one key. */
   onPatch?: (key: string, value: unknown) => void;
   /** Hand-off for sections too rich for the inline editor. */
@@ -248,7 +252,7 @@ export default function DocumentView({ doc, order, onPatch, onOpenFullEditor }: 
     return i === -1 ? (order?.length ?? 0) : i;
   };
   const entries = Object.entries(doc)
-    .filter(([k, v]) => !HIDDEN_KEYS.has(k.toLowerCase()) && !k.startsWith("_") && v !== null && v !== undefined && v !== "")
+    .filter(([k, v]) => !HIDDEN_KEYS.has(k.toLowerCase()) && !hideKeys?.has(k.toLowerCase()) && !k.startsWith("_") && v !== null && v !== undefined && v !== "")
     .map(([k, v], i) => ({ k, v, i }))
     .sort((a, b) => rank(a.k) - rank(b.k) || a.i - b.i)
     .map(({ k, v }) => [k, v] as [string, unknown]);

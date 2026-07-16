@@ -21,6 +21,8 @@ import {
 } from "@/v3/components/flow/flowTracks";
 import { readFlowGovernance, flowAgentTier } from "@/v3/components/flow/flowGovernance";
 import { resolveMovementStakeholders, deliveryRoleDirectory, readDirectoryPeople, validateProgramRole, readRoleBindings, knownProgramRoles, unresolvedCoverageNames, kitPersonaDirectory, readSuggestedVoices } from "@/v3/components/flow/flowStakeholders";
+import { programAreas, GENERAL_AREA, readRoleAliases, roleAliasKey } from "@/v3/components/flow/flowAreas";
+import FrameCoveragePlan from "@/v3/components/flow/FrameCoveragePlan";
 import { stakeholderEmail } from "@/v3/components/flow/flowMeetings";
 import { readMetricRegistry, metricConsistency } from "@/v3/components/flow/flowMetricRegistry";
 import { routeAttachedDocument, buildRoutedBlocks, type DocRoute } from "@/v3/components/flow/flowDocRouting";
@@ -2045,6 +2047,19 @@ function FlowPortfolio({ programs, activeId, onSelectProgram, onHydratePrograms,
 /* ── Library: everything the programme knows ─────────────────────────────── */
 
 /* ── People — the programme-wide directory, its own destination ─────────── */
+/** One normalized identity for a person or role, used to dedup the People page
+ * across its four sources. Strips a trailing "— TBC", parentheticals, and
+ * slashes, then collapses to lowercase alphanumerics — so "Sales / Head of
+ * Sales", "Sales (Head of Sales)" and "sales head of sales" are one identity,
+ * and "Recruitment Ops — TBC" matches "Recruitment Ops". */
+const peopleIdentity = (value: string): string =>
+  value.trim().toLowerCase()
+    .replace(/\s*[—–−‑-]\s*tbc\s*$/i, "")
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/[/|]+/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
 function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { program: ProgramSummary; onSaveInputs?: FlowShellProps["onSaveInputs"]; onRenamePerson?: FlowShellProps["onRenamePerson"]; onGoInbox?: () => void }) {
   const [q, setQ] = useState("");
   const query = q.trim().toLowerCase();
@@ -2076,20 +2091,45 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
   // internal and external, spoken-for or not — so no role lives only inside
   // the kit document. Roles already surfaced as roster rows are not repeated.
   const personas = useMemo(() => {
-    const rosterEntries = resolveMovementStakeholders(program, "listen");
-    // Exclude personas already surfaced as roster rows — by ROLE and by NAME
-    // (a persona named identically to a person must never list twice). Normalise
-    // the SAME way the roster does — strip a trailing "— TBC" — or a persona
-    // written "Patient Experience and Enrollment — TBC" slips past the role
-    // "Patient Experience and Enrollment" and lists twice.
-    const norm = (value: string) => value.trim().toLowerCase().replace(/\s*[—–−‑-]\s*tbc\s*$/i, "");
-    const rosterRoles = new Set(rosterEntries.map((entry) => norm(entry.role)).filter(Boolean));
-    const rosterNames = new Set(rosterEntries.map((entry) => norm(entry.name)).filter(Boolean));
-    return kitPersonaDirectory(program).filter((persona) => {
-      const key = norm(persona.name);
-      return !rosterRoles.has(key) && !rosterNames.has(key);
-    });
+    // Exclude any persona already surfaced elsewhere — as a roster row, a
+    // delivery role, or an operator-added person — matched by ROLE and by NAME
+    // through the ONE shared identity so "Patient Experience and Enrollment —
+    // TBC", "Patient Experience and Enrollment" and "Patient Experience &
+    // Enrollment" all collapse to a single row.
+    const known = new Set<string>();
+    for (const e of resolveMovementStakeholders(program, "listen")) {
+      if (e.role) known.add(peopleIdentity(e.role));
+      if (e.name) known.add(peopleIdentity(e.name));
+    }
+    for (const r of deliveryRoleDirectory(program)) {
+      known.add(peopleIdentity(r.role));
+      if (r.bound?.name) known.add(peopleIdentity(r.bound.name));
+    }
+    for (const p of readDirectoryPeople(program)) {
+      if (p.role) known.add(peopleIdentity(p.role));
+      if (p.name) known.add(peopleIdentity(p.name));
+    }
+    return kitPersonaDirectory(program).filter((persona) => !known.has(peopleIdentity(persona.name)));
   }, [program]);
+  // Cross-source dedup for NAMED people: the same person must appear once, in
+  // their richest row. The Listen roster (carries heard-state + email) outranks
+  // a delivery-role binding, which outranks an operator-added row. Role
+  // placeholders (no name) are never collapsed — a role awaiting a person still
+  // needs to show. This kills the "same person listed 2–4 times" class.
+  const dedup = useMemo(() => {
+    const seen = new Set<string>();
+    const claim = (name: string) => {
+      const k = peopleIdentity(name);
+      if (!k) return true;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    };
+    const rosterD = roster.filter((r) => r.isRole || claim(r.name));
+    const addedD = added.filter((p) => claim(p.name));
+    const rolesD = roles.filter((r) => !r.name || claim(r.name));
+    return { rosterD, addedD, rolesD };
+  }, [roster, added, roles]);
   // Remove a ROLE from the cast (operator judgement, attested). Named people
   // are never removed this way — people outrank roles.
   const removeRole = async (role: string) => {
@@ -2133,6 +2173,45 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
       setLastAdd({ name, resolved });
       setForm({ name: "", role: "", email: "", movementId: form.movementId });
     } finally { setAddBusy(false); }
+  };
+
+  // ── Role remap (alias) ────────────────────────────────────────────────────
+  // Correct a synthesized role: rename it and/or pin it to a business area. The
+  // remap persists as `_roleAliases` and is honoured across every phase (the
+  // area drives stakeholderPrimaryArea; the rename drives the display), surviving
+  // regeneration — the durable answer to "the Customer Success role is called
+  // Vertical Sales and maps to Sales" that a free-text note could never deliver.
+  const roleAliases = useMemo(() => readRoleAliases(program), [program]);
+  const canonicalAreas = useMemo(() => {
+    const set = new Set<string>(programAreas(program));
+    for (const a of ["Sales", "Marketing", "Finance", "People", "Legal & Compliance", "Support", "Operations", "Product & Engineering", "Clinical"]) set.add(a);
+    set.delete(GENERAL_AREA);
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [program]);
+  const [aliasForm, setAliasForm] = useState({ role: "", rename: "", area: "" });
+  const [aliasBusy, setAliasBusy] = useState(false);
+  const saveRoleAlias = async () => {
+    const role = aliasForm.role.trim();
+    const rename = aliasForm.rename.trim();
+    const area = aliasForm.area.trim();
+    if (!onSaveInputs || !role || (!rename && !area)) return;
+    const next = { ...readRoleAliases(program) };
+    next[roleAliasKey(role)] = { from: role, ...(rename ? { rename } : {}), ...(area ? { area } : {}) };
+    setAliasBusy(true);
+    try {
+      await onSaveInputs("listen", { _roleAliases: JSON.stringify(next) }, {
+        attest: { action: `Role remapped — ${role}${rename ? ` → ${rename}` : ""}${area ? ` · ${area}` : ""}` },
+      });
+      setAliasForm({ role: "", rename: "", area: "" });
+    } finally { setAliasBusy(false); }
+  };
+  const removeRoleAlias = async (key: string) => {
+    if (!onSaveInputs) return;
+    const next = { ...readRoleAliases(program) };
+    delete next[key];
+    setAliasBusy(true);
+    try { await onSaveInputs("listen", { _roleAliases: JSON.stringify(next) }, { attest: { action: "Role remap cleared" } }); }
+    finally { setAliasBusy(false); }
   };
 
   // ── Inline editing ──────────────────────────────────────────────────────
@@ -2184,11 +2263,11 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
 
   const match = (row: { name: string; role: string; where: string; email?: string | null }) =>
     !query || `${row.name} ${row.role} ${row.where} ${row.email ?? ""}`.toLowerCase().includes(query);
-  const rosterShown = roster.filter(match);
-  const rolesShown = roles.filter(match);
+  const rosterShown = dedup.rosterD.filter(match);
+  const rolesShown = dedup.rolesD.filter(match);
   const personasShown = personas.filter((persona) => match({ name: persona.spokenForBy.join(", "), role: persona.name, where: "Discovery Kit persona" }));
-  const addedShown = added.filter((p) => match({ name: p.name, role: p.role, where: "Added", email: p.email ?? "" }));
-  const missing = roster.filter((r) => !r.isRole && !r.email).length + roles.filter((r) => r.bound && !r.email && !r.isSponsor).length;
+  const addedShown = dedup.addedD.filter((p) => match({ name: p.name, role: p.role, where: "Added", email: p.email ?? "" }));
+  const missing = dedup.rosterD.filter((r) => !r.isRole && !r.email).length + dedup.rolesD.filter((r) => r.bound && !r.email && !r.isSponsor).length;
   // Bind a Listen role placeholder to a real person, right from this page —
   // same store the collect card's bind box writes (`_roleBindings` on Listen).
   const bindListenRole = async (role: string, name: string) => {
@@ -2260,6 +2339,35 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
             <p className="v3fs-addp-note">{lastAdd.resolved
               ? `${lastAdd.name} added — role recognised.`
               : <>{lastAdd.name} added — their role needs clarification. {onGoInbox ? <button type="button" className="v3fs-a" onClick={() => onGoInbox()}>Clarify in the Inbox →</button> : "Clarify it in the Inbox."}</>}</p>
+          ) : null}
+        </div>
+      ) : null}
+      {onSaveInputs ? (
+        <div className="v3fs-panel v3fs-panel-wide">
+          <div className="v3fs-ph"><h3>Remap a role</h3><span>correct a synthesized role — rename it and/or map it to the right area. Applies across every phase and survives regeneration.</span></div>
+          <div className="v3fs-addp">
+            <input placeholder="Role to correct (e.g. Customer Success Manager)" aria-label="Role to correct" list="v3fs-role-alias-opts"
+              value={aliasForm.role} onChange={(event) => setAliasForm({ ...aliasForm, role: event.target.value })} />
+            <datalist id="v3fs-role-alias-opts">{roleOptions.map((r) => <option key={r} value={r} />)}</datalist>
+            <input placeholder="Rename to (optional, e.g. Vertical Sales)" aria-label="Rename to"
+              value={aliasForm.rename} onChange={(event) => setAliasForm({ ...aliasForm, rename: event.target.value })} />
+            <select value={aliasForm.area} aria-label="Map to area" onChange={(event) => setAliasForm({ ...aliasForm, area: event.target.value })}>
+              <option value="">Keep current area</option>
+              {canonicalAreas.map((a) => <option key={a} value={a}>{a}</option>)}
+            </select>
+            <button type="button" className="v3fs-btn pri"
+              disabled={aliasBusy || !aliasForm.role.trim() || (!aliasForm.rename.trim() && !aliasForm.area.trim())}
+              onClick={() => void saveRoleAlias()}>{aliasBusy ? "Saving…" : "Remap role"}</button>
+          </div>
+          {Object.keys(roleAliases).length ? (
+            <div className="v3fs-alias-list">
+              {Object.entries(roleAliases).map(([key, a]) => (
+                <span key={key} className="v3fs-alias-chip">
+                  <b>{a.from || key}</b>{a.rename ? ` → ${a.rename}` : ""}{a.area ? ` · ${a.area}` : ""}
+                  <button type="button" className="v3fs-alias-x" onClick={() => void removeRoleAlias(key)} aria-label={`Clear remap for ${a.from || key}`}>✕</button>
+                </span>
+              ))}
+            </div>
           ) : null}
         </div>
       ) : null}
@@ -2689,7 +2797,11 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
         {evidence.length === 0 ? <div className="v3fs-empty">{q ? "Nothing matches that search." : "No evidence captured yet. Add the first conversation in Frame or Listen."}</div> : null}
         {(() => {
           const openEntry = (entry: typeof evidence[number]) => {
-            if (entry.kind === "document" && entry.sourceKey) {
+            // Text-based evidence (transcripts, Word, extracted documents) reads
+            // in the formatted modal — the original file is downloadable from
+            // there. Only a document whose text COULDN'T be extracted falls
+            // straight through to a download.
+            if (entry.kind === "document" && entry.sourceKey && !entry.text.trim()) {
               void supabase.functions.invoke("flow-extract", { body: { download: entry.sourceKey } })
                 .then((result: { data: unknown }) => {
                   const url = (result.data as { url?: string } | null)?.url;
@@ -2769,6 +2881,7 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
         ))}
       </div>
       {docFor ? <Suspense fallback={null}><FlowArtifactStudio program={program} artifact={docFor} onClose={() => setDocFor(null)} onSaveDoc={onSaveArtifactDoc} onSaveInputs={onSaveInputs} onComment={onComment} onOpenInbox={onOpenInbox}
+        header={docFor.id === "discovery-kit" ? <FrameCoveragePlan program={program} onSaveInputs={onSaveInputs} /> : undefined}
         onOpenArtifact={(artifactId) => {
           for (const m of flowMovements()) {
             const hit = movementArtifacts(program, m).find((a) => a.id === artifactId && a.present);
@@ -2778,6 +2891,14 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
       {evFor ? (
         <EvidenceReader entry={evFor} highlight={claimHighlight} targets={tagTargets}
           onTag={onTagClaim ? (target, quote) => onTagClaim({ quote, who: evFor.who, movementId: evFor.movementId, target }) : undefined}
+          onDownload={evFor.sourceKey ? () => {
+            const key = evFor.sourceKey;
+            void supabase.functions.invoke("flow-extract", { body: { download: key } })
+              .then((result: { data: unknown }) => {
+                const url = (result.data as { url?: string } | null)?.url;
+                if (url) window.open(url, "_blank");
+              }).catch(() => { /* download best-effort */ });
+          } : undefined}
           onClose={() => { setEvFor(null); setClaimHighlight(undefined); }} />
       ) : null}
     </div>

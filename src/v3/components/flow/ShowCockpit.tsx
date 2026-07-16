@@ -20,8 +20,11 @@ function verdictTone(v: string): "ok" | "part" | "obj" | "pending" {
   return "pending";
 }
 
-export default function ShowCockpit({ program, onOpenDesign }: {
+export default function ShowCockpit({ program, areaFilter = [], onOpenDesign }: {
   program: ProgramSummary;
+  /** Areas selected on the phase-home board — the per-area sign-off strip
+   * highlights these and dims the rest. Empty = all. */
+  areaFilter?: string[];
   /** Switch to Design mode and open the Prototype workspace. */
   onOpenDesign?: () => void;
 }) {
@@ -90,12 +93,15 @@ export default function ShowCockpit({ program, onOpenDesign }: {
         <div className="v3fs-envc-ah"><span className="v3fs-envc-an">✓</span>Validation — each area signs off on its own</div>
         {ls.areas.length > 1 ? (
           <div className="v3fs-showc-areas">
-            {ls.areas.map((a) => (
-              <span key={a.area} className={`v3fs-showc-area${a.converged ? " ok" : a.objections ? " obj" : a.pending < a.total ? " part" : " open"}`}
+            {ls.areas.map((a) => {
+              const dim = areaFilter.length > 0 && !areaFilter.includes(a.area);
+              return (
+              <span key={a.area} className={`v3fs-showc-area${a.converged ? " ok" : a.objections ? " obj" : a.pending < a.total ? " part" : " open"}${dim ? " dim" : ""}`}
                 title={`${a.accepted} accepted · ${a.changes} changes · ${a.objections} objection · ${a.pending} pending`}>
                 <b>{a.area}</b> {a.converged ? "✓ signed off" : `${a.accepted}/${a.total}${a.objections ? ` · ${a.objections}⚠` : a.pending ? ` · ${a.pending}◷` : ""}`}
               </span>
-            ))}
+              );
+            })}
           </div>
         ) : null}
         {tour.rows.length ? (

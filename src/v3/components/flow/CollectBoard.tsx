@@ -17,7 +17,7 @@ import { mapTranscriptSpeakers } from "@/v3/components/flow/flowTranscriptMap";
 import { AttachFileButton, TranscribeButton, copyTextFromAction } from "@/v3/components/flow/flowCapture";
 import { readGovernedExceptions, withNewException, withResolvedException } from "@/v3/components/flow/flowExceptions";
 import { projectStakeholderReview, reviewFallbackQuestions } from "@/v3/components/flow/flowReviews";
-import { areaProgress, stakeholderPrimaryArea, programAreas, GENERAL_AREA, type AreaProgress } from "@/v3/components/flow/flowAreas";
+import { areaProgress, stakeholderPrimaryArea, programAreas, GENERAL_AREA, displayRole, type AreaProgress } from "@/v3/components/flow/flowAreas";
 
 /** A movement's discovery, organized by stakeholder. One card per person or
  * role: their script, their link/meeting channels, their captured evidence, a
@@ -111,10 +111,13 @@ export function areaMonogram(area: string): string {
  * into columns by collection state (Heard · Awaiting · To reach), each card the
  * person's quote, dated feedback trail (click → transcript), follow-ups,
  * meeting, and link channels. Driven by resolveMovementStakeholders. */
-export function IntervieweeDiscovery({ program, movementId, captureField, docsStale, regenerating, onRegenerateStale, onSaveInputs, onMintFollowUp, onMintReview, onScheduleFollowUp, onSendForApproval, onFocusPerson, onCaptured, onDocumentCaptured }: {
+export function IntervieweeDiscovery({ program, movementId, captureField, areaFilter, docsStale, regenerating, onRegenerateStale, onSaveInputs, onMintFollowUp, onMintReview, onScheduleFollowUp, onSendForApproval, onFocusPerson, onCaptured, onDocumentCaptured }: {
   program: ProgramSummary;
   movementId: string;
   captureField: string;
+  /** Area cards on the phase home act as a filter — when non-empty, only these
+   * areas' lanes show. Empty = every area. */
+  areaFilter?: string[];
   /** A required document trails the evidence — cards offer the regenerate
    * instead of re-asking "still open" items that may already be answered. */
   docsStale?: boolean;
@@ -235,7 +238,18 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
     }
     const order = [...programAreas(program)];
     for (const a of groups.keys()) if (!order.includes(a)) order.push(a);
-    const lanes = order.filter((a) => groups.has(a)).map((area) => {
+    // The phase-home area cards filter the board. Matching is token-tolerant, not
+    // exact: a lane keyed by a person's PRIMARY area ("Sales") should surface when
+    // the operator taps a compound card ("Sales & Marketing"), and vice-versa —
+    // the two surfaces derive area labels differently, so exact-string matching
+    // would leave most cards filtering to nothing. Share one significant token.
+    const areaTokens = (a: string) => new Set(
+      a.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t && !["and", "the", "of", "amp"].includes(t)));
+    const selTokens = new Set((areaFilter ?? []).flatMap((a) => [...areaTokens(a)]));
+    const filtered = areaFilter && areaFilter.length
+      ? order.filter((a) => [...areaTokens(a)].some((t) => selTokens.has(t)))
+      : order;
+    const lanes = filtered.filter((a) => groups.has(a)).map((area) => {
       const list = groups.get(area)!.slice().sort((a, b) => STATUS_RANK[a.coll.status] - STATUS_RANK[b.coll.status]);
       const heard = list.filter((e) => e.coll.heard && !e.s.questions.length).length;
       const toReach = list.filter((e) => e.coll.status === "toreach").length;
@@ -355,6 +369,11 @@ export function IntervieweeDiscovery({ program, movementId, captureField, docsSt
       })() : null}
       {areaOrganized ? (
         <div className="v3fs-lanes">
+          {laneData.length === 0 && areaFilter && areaFilter.length ? (
+            <div className="v3fs-lanes-empty" role="note">
+              No people are filed under {areaFilter.join(" · ")}. Tap the area card again above to clear the filter.
+            </div>
+          ) : null}
           {laneData.map((lane, i) => (
             <AreaLane key={lane.area} area={lane.area} row={lane.row} heard={lane.heard} total={lane.total} waiting={lane.waiting}
               accent={laneAccentAt(lane.area, i)} monogram={areaMonogram(lane.area)}
@@ -825,6 +844,16 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
     window.setTimeout(() => setCopiedTick(false), 2400);
   };
   const sendLink = async () => { if (!email) return; const link = await ensureLink(); if (link) window.location.href = mailtoLink(email, { stakeholder: name, programmeName: program.name, link }); };
+  // Preview: see exactly what THEY see. Opens the person's own response page in
+  // a new tab — minting the link first if one doesn't exist yet — so the
+  // operator can proof the projected review/questions before sending.
+  const previewLink = async () => {
+    const win = window.open("about:blank", "_blank");
+    const link = await ensureLink();
+    if (link && win) win.location.href = link;
+    else if (link) window.open(link, "_blank");
+    else win?.close();
+  };
 
   const save = async () => {
     const text = capture.trim();
@@ -894,7 +923,7 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
           <span className={`v3fs-ivc-av ${status}`} aria-hidden="true">
             {(name || "?").split(/\s+/).slice(0, 2).map((word) => word[0]?.toUpperCase() ?? "").join("") || "?"}
           </span>
-          <span className="v3fs-ivc-who">{name || "Stakeholder"}{role && role !== name ? <span>{role}</span> : null}</span>
+          <span className="v3fs-ivc-who">{name || "Stakeholder"}{role && role !== name ? <span>{displayRole(program, role)}</span> : null}</span>
           <span className="v3fs-ivc-chev" aria-hidden="true" />
           {/* Status + actions on their OWN row (grid area) so they never overlap a
               wrapped role in a narrow card. */}
@@ -1146,6 +1175,13 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
                     would email a draft with nothing in it. */}
                 {email && (effectiveLink ?? linkShown) ? (
                   <button type="button" className="v3fs-btn pri" disabled={linkBusy} title={`Opens a draft to ${email}`} onClick={() => void sendLink()}>✉ Send link</button>
+                ) : null}
+                {/* Proof what they'll see — opens their own response page, minting
+                    the link first if needed. */}
+                {(onMintReview || onMintFollowUp) ? (
+                  <button type="button" className="v3fs-btn" disabled={linkBusy}
+                    title={`Open ${first || name || "their"} response page in a new tab — see exactly what they'll see`}
+                    onClick={() => void previewLink()}>👁 Preview</button>
                 ) : null}
                 <button type="button" className="v3fs-btn" title={`Pick a date — schedules the meeting and downloads the invite for ${name}`}
                   onClick={() => {

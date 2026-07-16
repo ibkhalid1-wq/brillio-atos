@@ -11,6 +11,7 @@ import type { ProgramSummary } from "@/new/types";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { meetingKit, askableMovementGaps, sponsorLinkQuestions } from "@/v3/components/flow/flowMeetings";
 import { readContradictions, flowMovements, movementEvidence, readMovementInputs, parseGridRows, deferredAsks } from "@/v3/components/flow/flowShellData";
+import { stakeholderPrimaryArea, areaHasModel } from "@/v3/components/flow/flowAreas";
 
 export interface MovementStakeholder {
   /** Stable key for React + pack matching. */
@@ -386,12 +387,20 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
     });
     const asks = name ? contradictionAsksFor(program, name) : [];
     const routedToMe = deferredFor(name, roleLabel);
+    // Coverage-based "heard": if this person's business AREA is already modelled
+    // on the Atlas — even when the captured evidence names no individual (a bulk
+    // document, a whole-team transcript) — treat their planned agenda as
+    // addressed. Their still-open items (contradictions, routed asks, area gaps)
+    // remain below; only the discovery agenda clears, so we stop re-asking for
+    // information the record already holds.
+    const primaryArea = name || roleLabel ? stakeholderPrimaryArea(program, name || roleLabel, roleLabel) : "";
+    const agendaAddressed = heard || (!!primaryArea && areaHasModel(program, primaryArea));
     // The sponsor's Listen card is arbiter-only: conflicts to resolve, nothing
     // else. The discovery agenda that would sit here reaches the process owners
     // through their own cards (the sponsor is off the routing roster).
     const questions = isSponsorCard(name, roleLabel)
       ? sponsorConflictAsks(program)
-      : heard
+      : agendaAddressed
         ? [...new Set([...asks, ...routedToMe, ...myAsks])]
         : [...new Set([...asks, ...routedToMe, ...myAsks, ...agenda.filter((question) => !isDeferredElsewhere(question))])];
     return {

@@ -12,7 +12,7 @@
  * field always wins once a regeneration sets it.
  */
 import type { ProgramSummary } from "@/new/types";
-import { flowMovements, movementEvidence, demoAcceptance } from "@/v3/components/flow/flowShellData";
+import { flowMovements, movementEvidence, demoAcceptance, readMovementInputs } from "@/v3/components/flow/flowShellData";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -42,6 +42,41 @@ export function inferArea(text: string): string | null {
   const t = str(text);
   for (const { area, re } of AREA_KEYWORDS) if (re.test(t)) return area;
   return null;
+}
+
+/** An operator-declared correction to a synthesized role: rename it and/or pin
+ * it to a business area. Keyed by the normalized ORIGINAL role. This is how "the
+ * Customer Success role is called Vertical Sales and maps to Sales" becomes
+ * durable data the whole spine honors — surviving regeneration — rather than a
+ * free-text note the discovery-kit generator ignores. Stored on Listen inputs
+ * (`_roleAliases`), the same place `_roleBindings` lives. */
+export interface RoleAlias { rename?: string; area?: string; from?: string; }
+/** Normalized role-alias key — case/punctuation-insensitive. */
+export const roleAliasKey = (role: string): string =>
+  role.trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+export function readRoleAliases(program: ProgramSummary): Record<string, RoleAlias> {
+  const raw = readMovementInputs(program, "listen")._roleAliases;
+  let obj: unknown = raw;
+  if (typeof raw === "string") { try { obj = JSON.parse(raw); } catch { return {}; } }
+  if (!isRecord(obj)) return {};
+  const out: Record<string, RoleAlias> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (!isRecord(value)) continue;
+    const rename = str(value.rename).trim();
+    const area = str(value.area).trim();
+    const from = str(value.from).trim();
+    if (rename || area) out[key] = { rename: rename || undefined, area: area || undefined, from: from || undefined };
+  }
+  return out;
+}
+/** The alias for a specific role, if one is on record. */
+export function roleAliasFor(program: ProgramSummary, role: string | undefined): RoleAlias | null {
+  if (!role || !role.trim()) return null;
+  return readRoleAliases(program)[roleAliasKey(role)] ?? null;
+}
+/** The display label for a role — its operator-declared rename, else itself. */
+export function displayRole(program: ProgramSummary, role: string): string {
+  return roleAliasFor(program, role)?.rename || role;
 }
 
 function atlasWorkflows(program: ProgramSummary): Record<string, unknown>[] {
@@ -86,13 +121,43 @@ export function entityArea(entity: Record<string, unknown>, program: ProgramSumm
   return GENERAL_AREA;
 }
 
+/** The business domains the Discovery Kit declared it would cover — the
+ * "what we'll cover" areas, stored on discoveryKit.coverageMap[].domain. These
+ * are the SOURCE OF TRUTH the phases align to: they carry forward even before a
+ * Listen workflow or ontology term happens to name that domain. */
+export function kitCoverageDomains(program: ProgramSummary): string[] {
+  const raw = (program.rawData ?? {}) as Record<string, unknown>;
+  const inner = isRecord(raw.data) ? raw.data : raw;
+  const kit = isRecord(inner.discoveryKit) ? inner.discoveryKit : null;
+  const map = kit && Array.isArray(kit.coverageMap) ? kit.coverageMap.filter(isRecord) : [];
+  return map.map((row) => str(row.domain).trim()).filter(Boolean);
+}
+
+/** Normalized area identity — case/punctuation-insensitive, so "Sales &
+ * Marketing" and "sales and marketing" collapse to one key. */
+export const areaKey = (area: string): string =>
+  area.toLowerCase().replace(/\band\b|&/g, " ").replace(/[^a-z0-9]+/g, " ").trim();
+
 /** The programme's distinct areas — General sorts last, the rest alphabetical.
- * Empty when there's no atlas/ontology yet. */
+ * Unions the modeled areas (Atlas workflows + Ontology entities) with the
+ * Discovery Kit's declared coverage domains, so the kit's "what we'll cover"
+ * aligns every downstream phase. A domain already modeled (same normalized
+ * label) is not duplicated — the modeled label wins. */
 export function programAreas(program: ProgramSummary): string[] {
-  const set = new Set<string>();
-  for (const workflow of atlasWorkflows(program)) set.add(workflowArea(workflow));
-  for (const entity of ontologyEntities(program)) set.add(entityArea(entity, program));
-  return [...set].sort((a, b) => {
+  const byKey = new Map<string, string>();
+  const add = (label: string) => {
+    const l = label.trim();
+    if (!l) return;
+    const k = areaKey(l);
+    if (!k || byKey.has(k)) return;
+    byKey.set(k, l);
+  };
+  // Modeled areas first — they own the canonical label…
+  for (const workflow of atlasWorkflows(program)) add(workflowArea(workflow));
+  for (const entity of ontologyEntities(program)) add(entityArea(entity, program));
+  // …then the kit's declared coverage, adding any domain not yet modeled.
+  for (const domain of kitCoverageDomains(program)) add(domain);
+  return [...byKey.values()].sort((a, b) => {
     if (a === GENERAL_AREA) return 1;
     if (b === GENERAL_AREA) return -1;
     return a.localeCompare(b);
@@ -145,6 +210,11 @@ function labelsOverlap(a: string, b: string): boolean {
  * Scoring (not first-match) stops a Sales SME landing in a Marketing workflow
  * that merely happens to include a sales actor. */
 export function stakeholderPrimaryArea(program: ProgramSummary, name: string, role?: string): string {
+  // An operator-declared role→area remap wins over everything — it's a
+  // deliberate correction ("the Customer Success role maps to Sales"). Check the
+  // role AND the name, since a synthesized "role" sometimes arrives as the name.
+  const alias = roleAliasFor(program, role) ?? roleAliasFor(program, name);
+  if (alias?.area) return alias.area;
   const workflows = atlasWorkflows(program);
   const labels = [role, name].filter((v): v is string => !!v && v.trim().length > 0).map((v) => v.trim().toLowerCase());
   if (!labels.length) return GENERAL_AREA;
@@ -194,6 +264,23 @@ export function stakeholderPrimaryArea(program: ProgramSummary, name: string, ro
   // The ontology/atlas-grounded matches above always win when they exist.
   if (top === 0 && inferred) return inferred;
   return best;
+}
+
+/** True when an area has substantial current-state coverage on the record — at
+ * least two of its workflows are captured on the Atlas. Used to treat a
+ * discovery agenda as ADDRESSED for that area's SME even when the evidence names
+ * no individual (a bulk document, a whole-team transcript): the area IS modelled,
+ * so we stop re-asking the planned agenda. Still-open items (contradictions,
+ * routed asks, artifact gaps) stay on their script — only the agenda clears. */
+export function areaHasModel(program: ProgramSummary, area: string): boolean {
+  if (!area || area === GENERAL_AREA) return false;
+  // "Modelled" = the area is on the Atlas AND in the Ontology (≥1 workflow AND
+  // ≥1 term). Even a thin footprint means the captured evidence produced a
+  // current-state model for the area — enough to treat that area's discovery
+  // agenda as addressed. An area with no workflow or no term isn't modelled yet.
+  const hasWorkflow = atlasWorkflows(program).some((w) => workflowArea(w) === area);
+  if (!hasWorkflow) return false;
+  return ontologyEntities(program).some((e) => entityArea(e, program) === area);
 }
 
 /** The areas whose Listen voices are all heard — ready to move to Envision/Show

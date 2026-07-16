@@ -37,3 +37,6 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+
+# Shareable env template (public VITE_ values; keep out of git anyway)
+.env.local.shared

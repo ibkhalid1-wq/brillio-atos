@@ -143,6 +143,34 @@ function DiscoveryKitStudio({ doc, onChange, program }: StudioProps) {
           generator deepens that domain&rsquo;s questions (the new kit lands in the Inbox to confirm).
           {thinCount ? <> <b>{thinCount} domain{thinCount === 1 ? "" : "s"} flagged thin.</b></> : null}
         </p>
+        {/* At-a-glance relationship: each area we'll cover ← the people we'll hear
+            from on it. A thin or uncovered area stands out, so the gap is obvious
+            before the editable table below. */}
+        {(() => {
+          const rows = asArray(doc.coverageMap).map(asRecord);
+          if (!rows.length) return null;
+          return (
+            <div className="v3fs-covmap" role="table" aria-label="Who we'll hear, by area we'll cover">
+              <div className="v3fs-covmap-h" role="row"><span>Area we&rsquo;ll cover</span><span>Who we&rsquo;ll hear</span></div>
+              {rows.map((raw, i) => {
+                const row = asRecord(raw);
+                const domain = asText(row.domain) || "—";
+                const people = Array.isArray(row.coveredBy) ? asStrings(row.coveredBy)
+                  : asText(row.coveredBy).split(",").map((s) => s.trim()).filter(Boolean);
+                const thin = row.thin === true || people.length === 0;
+                return (
+                  <div key={i} className={`v3fs-covmap-row${thin ? " thin" : ""}`} role="row">
+                    <span className="v3fs-covmap-area">{domain}{thin ? <em className="v3fs-covmap-flag">{people.length ? "thin" : "uncovered"}</em> : null}</span>
+                    <span className="v3fs-covmap-people">
+                      {people.length ? people.map((p, j) => <span key={j} className="v3fs-covmap-chip">{p}</span>)
+                        : <span className="v3fs-covmap-none">no one assigned yet</span>}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
         <TableEditor
           columns={[{ key: "domain", label: "Domain" }, { key: "coveredBy", label: "Covered by (comma-separated)", grow: 1.6 }, { key: "thin", label: "Coverage", kind: "select", options: [WELL_COVERED, THIN_COVERAGE] }]}
           rows={asArray(doc.coverageMap).map(asRecord).map((row) => ({ ...row, coveredBy: Array.isArray(row.coveredBy) ? asStrings(row.coveredBy).join(", ") : asText(row.coveredBy), thin: row.thin === true ? THIN_COVERAGE : WELL_COVERED }))}

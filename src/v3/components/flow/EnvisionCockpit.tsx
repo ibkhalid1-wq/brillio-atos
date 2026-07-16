@@ -13,6 +13,7 @@ import { projectFutureState, type FutureState, type FutureWorkflow } from "@/v3/
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 import { loopState, changeRequests, type ChangeRequest } from "@/v3/components/flow/flowLoop";
 import { readMovementInputs } from "@/v3/components/flow/flowShellData";
+import { DESIGN_TEAM } from "@/v3/components/flow/ProductOwnerCockpit";
 import type { ProgramSummary } from "@/new/types";
 
 type ChangeRoute = "design" | "listen" | "frame";
@@ -23,8 +24,12 @@ function modeMix(wf: FutureWorkflow): { agentify: number; assist: number; keep: 
   return wf.steps.reduce((m, s) => ({ ...m, [s.mode]: m[s.mode] + 1 }), { agentify: 0, assist: 0, keep: 0 } as Record<string, number>) as { agentify: number; assist: number; keep: number };
 }
 
-export default function EnvisionCockpit({ program, onSaveInputs, onOpenArtifact }: {
+export default function EnvisionCockpit({ program, areaFilter, onSaveInputs, onOpenArtifact }: {
   program: ProgramSummary;
+  /** When provided, the phase-home area board controls the area filter — the
+   * cockpit scopes its future-state to these areas (empty = all) and hides its
+   * own "Filter by area" chip row so there's one filter, not two. */
+  areaFilter?: string[];
   onSaveInputs?: (movementId: string, patch: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
   /** Open one of the Design workspaces (Architecture · Experience · Prototype). */
   onOpenArtifact?: (artifactId: string) => void;
@@ -34,6 +39,10 @@ export default function EnvisionCockpit({ program, onSaveInputs, onOpenArtifact 
     return Boolean(readArtifactDoc(program, "prototypeBuild") || readArtifactDoc(program, "prototypePack"));
   }, [program]);
   const [focus, setFocus] = useState<{ kind: "agent" | "screen"; key: string } | null>(null);
+  // Progressive disclosure: the three acts (Direction · Design · Build) are an
+  // ACCORDION. null = auto-open the current (first not-done) act; done acts stay
+  // collapsed so the phase home reads as a scannable summary, not a wall.
+  const [openAct, setOpenAct] = useState<string | null>(null);
   const [area, setArea] = useState("");
   const [openWf, setOpenWf] = useState<string | null>(null);
   const [showLenses, setShowLenses] = useState(false);
@@ -85,6 +94,10 @@ export default function EnvisionCockpit({ program, onSaveInputs, onOpenArtifact 
     { label: "Design", done: fs.hasDesign && fs.hasBlueprint, hint: fs.hasDesign && fs.hasBlueprint ? "the future state" : "not yet complete" },
     { label: "Build", done: hasPrototype, hint: hasPrototype ? "prototype ready to show" : "assemble the prototype" },
   ];
+  // The act to show expanded: the operator's explicit pick, else the first that
+  // isn't done (the work in front of you). "" is a valid pick meaning all closed.
+  const effectiveOpen = openAct ?? (acts.find((a) => !a.done)?.label ?? "");
+  const toggleAct = (label: string) => setOpenAct(effectiveOpen === label ? "" : label);
 
   const agentLit = (name: string): boolean =>
     focus?.kind === "agent" ? focus.key === name : focus?.kind === "screen" ? !!fs.screens.find((s) => s.id === focus.key)?.agentNames.includes(name) : false;
@@ -92,7 +105,22 @@ export default function EnvisionCockpit({ program, onSaveInputs, onOpenArtifact 
     focus?.kind === "screen" ? focus.key === id : focus?.kind === "agent" ? !!fs.agents.find((a) => a.name === focus.key)?.screenIds.includes(id) : false;
   const dim = (lit: boolean) => (focus ? (lit ? "" : " dim") : "");
 
-  const inArea = <T extends { area?: string }>(items: T[]) => (area ? items.filter((i) => (i.area ?? "General") === area) : items);
+  // Area scope: when the phase-home board controls the filter (areaFilter is
+  // passed), use its selection (empty = all); otherwise fall back to this
+  // cockpit's own single-area chip selection.
+  const externalControlled = areaFilter !== undefined;
+  const sel = areaFilter ?? [];
+  const designTeamSel = sel.includes(DESIGN_TEAM);
+  const bizAreas = sel.filter((a) => a !== DESIGN_TEAM);
+  const filtering = externalControlled && sel.length > 0;
+  // The DIRECTION act (architecture strategy, direction, blueprint) is the
+  // delivery team's cross-cutting work — it lives "under the Design-team tile":
+  // shown when unfiltered or that tile is selected. The per-area DESIGN/BUILD
+  // acts show when unfiltered or a business area is selected.
+  const showDirection = !filtering || designTeamSel;
+  const showDesignBuild = !filtering || bizAreas.length > 0;
+  const activeAreas = externalControlled ? bizAreas : (area ? [area] : []);
+  const inArea = <T extends { area?: string }>(items: T[]) => (activeAreas.length ? items.filter((i) => activeAreas.includes(i.area ?? "General")) : items);
   const workflows = inArea(fs.workflows);
   const agents = inArea(fs.agents);
   const screens = inArea(fs.screens);
@@ -172,10 +200,17 @@ export default function EnvisionCockpit({ program, onSaveInputs, onOpenArtifact 
       </div>
 
       {/* ── DIRECTION ─────────────────────────────────────────────────────── */}
-      {fs.direction.candidates.length ? (
-        <section className="v3fs-envc-act">
-          <div className="v3fs-envc-ah"><span className="v3fs-envc-an">1</span>Direction{fs.hasArchitecture && onOpenArtifact ? <button type="button" className="v3fs-a v3fs-envc-open" onClick={() => onOpenArtifact("architecture-strategy")}>view the strategy →</button> : null}</div>
-          {fs.direction.chosen ? (
+      {fs.direction.candidates.length && showDirection ? (
+        <section className={`v3fs-envc-act${effectiveOpen === "Direction" ? " open" : ""}`}>
+          <div className="v3fs-envc-ah">
+            <button type="button" className="v3fs-envc-ahbtn" aria-expanded={effectiveOpen === "Direction"} onClick={() => toggleAct("Direction")}>
+              <span className="v3fs-envc-an">1</span>Direction
+              {fs.direction.chosen ? <span className="v3fs-envc-ahsum done">✓ {fs.direction.chosen}</span> : <span className="v3fs-envc-ahsum todo">choose the shape</span>}
+              <span className="v3fs-envc-ahchev" aria-hidden="true">{effectiveOpen === "Direction" ? "▾" : "▸"}</span>
+            </button>
+            {fs.hasArchitecture && onOpenArtifact ? <button type="button" className="v3fs-a v3fs-envc-open" onClick={() => onOpenArtifact("architecture-strategy")}>view the strategy →</button> : null}
+          </div>
+          {effectiveOpen !== "Direction" ? null : fs.direction.chosen ? (
             <div className="v3fs-envc-chosen">✓ On the record: <b>{fs.direction.chosen}</b></div>
           ) : (
             <>
@@ -201,11 +236,18 @@ export default function EnvisionCockpit({ program, onSaveInputs, onOpenArtifact 
       ) : null}
 
       {/* ── DESIGN ────────────────────────────────────────────────────────── */}
-      {(fs.workflows.length || fs.agents.length) ? (
-        <section className="v3fs-envc-act">
-          <div className="v3fs-envc-ah"><span className="v3fs-envc-an">2</span>Design — the future state, at a glance
-            {fs.hasDesign && onOpenArtifact ? <button type="button" className="v3fs-a v3fs-envc-open" onClick={() => onOpenArtifact("experience-design")}>open the design →</button> : null}</div>
-          {fs.areas.length > 1 ? (
+      {(fs.workflows.length || fs.agents.length) && showDesignBuild ? (
+        <section className={`v3fs-envc-act${effectiveOpen === "Design" ? " open" : ""}`}>
+          <div className="v3fs-envc-ah">
+            <button type="button" className="v3fs-envc-ahbtn" aria-expanded={effectiveOpen === "Design"} onClick={() => toggleAct("Design")}>
+              <span className="v3fs-envc-an">2</span>Design
+              <span className={`v3fs-envc-ahsum ${fs.hasDesign && fs.hasBlueprint ? "done" : "todo"}`}>{fs.hasDesign && fs.hasBlueprint ? "the future state, at a glance" : "not yet complete"}</span>
+              <span className="v3fs-envc-ahchev" aria-hidden="true">{effectiveOpen === "Design" ? "▾" : "▸"}</span>
+            </button>
+            {fs.hasDesign && onOpenArtifact ? <button type="button" className="v3fs-a v3fs-envc-open" onClick={() => onOpenArtifact("experience-design")}>open the design →</button> : null}
+          </div>
+          {effectiveOpen === "Design" ? (<>
+          {!externalControlled && fs.areas.length > 1 ? (
             <div className="v3fs-envc-areas" role="group" aria-label="Filter by area">
               <button type="button" className={`v3fs-envc-area${area === "" ? " on" : ""}`} onClick={() => setArea("")}>All areas</button>
               {fs.areas.map((a) => (
@@ -292,15 +334,22 @@ export default function EnvisionCockpit({ program, onSaveInputs, onOpenArtifact 
           {onOpenArtifact && !fs.hasDesign ? (
             <button type="button" className="v3fs-btn v3fs-envc-genexp" onClick={() => onOpenArtifact("experience-design")}>✦ Open the Experience Design to complete the picture</button>
           ) : null}
+          </>) : null}
         </section>
       ) : null}
 
       {/* ── BUILD ─────────────────────────────────────────────────────────── */}
-      {fs.hasDesign ? (
-        <section className="v3fs-envc-act">
-          <div className="v3fs-envc-ah"><span className="v3fs-envc-an">3</span>Build — the clickable prototype
-            {hasPrototype && onOpenArtifact ? <button type="button" className="v3fs-a v3fs-envc-open" onClick={() => onOpenArtifact("prototype-build")}>open the prototype →</button> : null}</div>
-          {hasPrototype ? (
+      {fs.hasDesign && showDesignBuild ? (
+        <section className={`v3fs-envc-act${effectiveOpen === "Build" ? " open" : ""}`}>
+          <div className="v3fs-envc-ah">
+            <button type="button" className="v3fs-envc-ahbtn" aria-expanded={effectiveOpen === "Build"} onClick={() => toggleAct("Build")}>
+              <span className="v3fs-envc-an">3</span>Build
+              <span className={`v3fs-envc-ahsum ${hasPrototype ? "done" : "todo"}`}>{hasPrototype ? "prototype ready to show" : "assemble the prototype"}</span>
+              <span className="v3fs-envc-ahchev" aria-hidden="true">{effectiveOpen === "Build" ? "▾" : "▸"}</span>
+            </button>
+            {hasPrototype && onOpenArtifact ? <button type="button" className="v3fs-a v3fs-envc-open" onClick={() => onOpenArtifact("prototype-build")}>open the prototype →</button> : null}
+          </div>
+          {effectiveOpen !== "Build" ? null : hasPrototype ? (
             <div className="v3fs-envc-built">✓ Prototype built — the delivery team&rsquo;s runnable app. The Experience Designer refines it here; Show demonstrates it to each stakeholder.</div>
           ) : onOpenArtifact ? (
             <button type="button" className="v3fs-btn v3fs-envc-genexp" onClick={() => onOpenArtifact("prototype-build")}>🖥 Open the Prototype workspace to build it</button>

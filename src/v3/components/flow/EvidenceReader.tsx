@@ -9,7 +9,7 @@ import { useFocusTrap } from "@/v3/lib/useFocusTrap";
 import { safePrompt } from "@/v3/components/flow/flowCapture";
 import { flowMovements, locateQuote, type EvidenceEntry } from "@/v3/components/flow/flowShellData";
 
-export default function EvidenceReader({ entry, highlight, targets, onTag, onClose }: {
+export default function EvidenceReader({ entry, highlight, targets, onTag, onClose, onDownload }: {
   entry: EvidenceEntry;
   /** A quoted claim to locate and mark inside the source text. */
   highlight?: string;
@@ -17,6 +17,10 @@ export default function EvidenceReader({ entry, highlight, targets, onTag, onClo
   targets?: Array<{ kind: string; refId: string; label: string }>;
   onTag?: (target: { kind: string; refId: string; label: string }, quote: string) => Promise<void>;
   onClose: () => void;
+  /** Fetch + open the ORIGINAL uploaded file. Shown when the evidence came from
+   *  a document upload (entry.sourceKey) — the reader shows the extracted text,
+   *  this button gets the original .docx/.pdf/etc. */
+  onDownload?: () => void;
 }) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   useFocusTrap(dialogRef);
@@ -77,6 +81,7 @@ export default function EvidenceReader({ entry, highlight, targets, onTag, onClo
             </span>
           </div>
           <div className="v3fs-docview-cta">
+            {onDownload ? <button type="button" className="v3fs-btn" onClick={onDownload} title="Download the original uploaded file">⬇ Download original</button> : null}
             <button type="button" className="v3fs-btn" onClick={onClose} aria-label="Close">Close</button>
           </div>
         </header>

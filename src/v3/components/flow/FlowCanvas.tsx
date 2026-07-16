@@ -5,6 +5,7 @@ import { acceptedAgentPatterns } from "@/v3/components/flow/flowPatterns";
 import EnvisionCockpit from "@/v3/components/flow/EnvisionCockpit";
 import ShowCockpit from "@/v3/components/flow/ShowCockpit";
 import ProductOwnerCockpit from "@/v3/components/flow/ProductOwnerCockpit";
+import ListenCockpit from "@/v3/components/flow/ListenCockpit";
 import { loopState } from "@/v3/components/flow/flowLoop";
 // The artifact studio pulls React Flow and every WYSIWYG editor — a heavy
 // chunk only needed when a document is opened. Lazy-load it so it never
@@ -135,6 +136,10 @@ export default function FlowCanvas({ program, programs, runningAgentIds, agentEr
   // The active stage per movement — falls back to the movement's lead stage
   // until the operator picks one.
   const [movementTab, setMovementTab] = useState<Record<string, MovementTab>>({});
+  // Area filter per movement: the area cards on the phase home (Listen cockpit /
+  // Prototype orchestration board) act as a filter for everything below —
+  // clicking a card toggles its area into the set; an empty set shows all areas.
+  const [areaFilter, setAreaFilter] = useState<Record<string, string[]>>({});
   // [ and ] walk the loop's stages backward/forward — keyboard-first, and the
   // bracket keys don't collide with the shell's 1–5 view shortcuts.
   useEffect(() => {
@@ -364,6 +369,15 @@ export default function FlowCanvas({ program, programs, runningAgentIds, agentEr
           if (t === "gate") { setGateModalFor(movement.id); return; }
           setMovementTab((prev) => ({ ...prev, [movement.id]: t }));
         };
+        // The phase-home area cards act as a filter for everything below. The
+        // selection is a set; toggling a card adds/removes its area; clearing
+        // every card (empty set) shows all areas again.
+        const selAreas = areaFilter[movement.id] ?? [];
+        const toggleArea = (area: string) => setAreaFilter((prev) => {
+          const cur = prev[movement.id] ?? [];
+          const next = cur.includes(area) ? cur.filter((a) => a !== area) : [...cur, area];
+          return { ...prev, [movement.id]: next };
+        });
         const gaugePct = blockingChecks.length ? Math.round((100 * sumChecksDone) / blockingChecks.length) : (readiness.tone === "green" ? 100 : 0);
         // Stage chips read as a sentence — glyph + meaning per stage ("● 3
         // waiting → ⟳ 2 stale → ◔ 8/11"), so the bar IS the loop's state.
@@ -413,13 +427,7 @@ export default function FlowCanvas({ program, programs, runningAgentIds, agentEr
           >
             <div className="v3fs-ch-h v3fs-ch-h-static">
               {movement.id === "envision" || movement.id === "show" ? (
-                <>
-                  <h2>Prototype Loop</h2>
-                  <div className="v3fs-loopmodes-h" role="tablist" aria-label="Design or Validate">
-                    <button type="button" role="tab" aria-selected={active === "envision"} className={`v3fs-loopmode${active === "envision" ? " on" : ""}`} onClick={() => setActive("envision")}>✎ Design</button>
-                    <button type="button" role="tab" aria-selected={active === "show"} className={`v3fs-loopmode${active === "show" ? " on" : ""}`} onClick={() => setActive("show")}>◉ Validate</button>
-                  </div>
-                </>
+                <h2>Prototype Loop</h2>
               ) : (
                 <>
                   <h2>{movement.displayName}</h2>
@@ -464,14 +472,44 @@ export default function FlowCanvas({ program, programs, runningAgentIds, agentEr
               {/* The Product Owner view — across ALL areas — sits above the
                   per-area Design/Validate cockpit. Only shows for multi-area
                   programmes; the PO orchestrates, the areas iterate below. */}
+              {/* One ORCHESTRATION band leads the Prototype home: the area board
+                  (loop state per area) with the Design/Validate cockpit folded
+                  under it, so it reads as a single surface — not two competing
+                  dashboards. The stage tabs + studios below open on demand. */}
               {movement.id === "envision" || movement.id === "show" ? (
-                <ProductOwnerCockpit program={program} onOpenArea={() => setActive("show")} />
+                <div className="v3fs-loopswitch" role="tablist" aria-label="Design or Validate">
+                  <button type="button" role="tab" aria-selected={active === "envision"}
+                    className={`v3fs-loopswitch-b${active === "envision" ? " on" : ""}`} onClick={() => setActive("envision")}>
+                    <span className="v3fs-loopswitch-i" aria-hidden="true">✎</span>
+                    <span className="v3fs-loopswitch-t">Design<em>the team shapes the prototype</em></span>
+                  </button>
+                  <button type="button" role="tab" aria-selected={active === "show"}
+                    className={`v3fs-loopswitch-b${active === "show" ? " on" : ""}`} onClick={() => setActive("show")}>
+                    <span className="v3fs-loopswitch-i" aria-hidden="true">◉</span>
+                    <span className="v3fs-loopswitch-t">Validate<em>clients sign off on it</em></span>
+                  </button>
+                </div>
               ) : null}
-              {movement.id === "envision" ? (
-                <EnvisionCockpit program={program} onSaveInputs={onSaveInputs} onOpenArtifact={(id) => goTab(`art:${id}` as MovementTab)} />
+              {movement.id === "envision" || movement.id === "show" ? (
+                <section className="v3fs-protohome" aria-label="Prototype orchestration">
+                  <ProductOwnerCockpit program={program} selected={selAreas} onToggleArea={toggleArea} />
+                  {movement.id === "envision" ? (
+                    <EnvisionCockpit program={program} areaFilter={selAreas} onSaveInputs={onSaveInputs} onOpenArtifact={(id) => goTab(`art:${id}` as MovementTab)} />
+                  ) : null}
+                  {movement.id === "show" ? (
+                    <ShowCockpit program={program} areaFilter={selAreas} onOpenDesign={() => { setActive("envision"); setMovementTab((prev) => ({ ...prev, envision: "art:prototype-build" as MovementTab })); }} />
+                  ) : null}
+                </section>
               ) : null}
-              {movement.id === "show" ? (
-                <ShowCockpit program={program} onOpenDesign={() => { setActive("envision"); setMovementTab((prev) => ({ ...prev, envision: "art:prototype-build" as MovementTab })); }} />
+              {/* Listen's phase home: the same scannable overview the Prototype
+                  Loop has, but for listening — area as the primary axis, Collect
+                  and Model state per area, and the open contradictions as a
+                  first-class "To reconcile" strip. Discovery/Ontology/Atlas
+                  detail lives on the tabs below. */}
+              {movement.id === "listen" ? (
+                <section className="v3fs-protohome" aria-label="Listen orchestration">
+                  <ListenCockpit program={program} selected={selAreas} onToggleArea={toggleArea} />
+                </section>
               ) : null}
               {/* The stage bar draws the loop left to right — Collect → Paper →
                   Gate — each chip carrying its state as a glyph + meaning. */}
@@ -518,6 +556,7 @@ export default function FlowCanvas({ program, programs, runningAgentIds, agentEr
                       })() : null}
                       {hasPeople ? (
                         <IntervieweeDiscovery program={program} movementId={movement.id}
+                          areaFilter={selAreas}
                           captureField={meetingKit(program, movement.id)?.captureField ?? "interviewTranscripts"}
                           docsStale={staleArtifacts.length > 0}
                           regenerating={spineRunning || generating}
@@ -668,7 +707,9 @@ export default function FlowCanvas({ program, programs, runningAgentIds, agentEr
                       return (
                         <div className="v3fs-ivc-fb">
                           {rows.map((entry, i) => (
-                            <button key={entry.id ?? i} type="button" className="v3fs-ivc-fb-row" onClick={() => setRailRead(entry)} title="Read in full">
+                            // Evidence ids are content hashes — two identical excerpts collide,
+                            // so pair the id with the index to keep the React key unique.
+                            <button key={`${entry.id ?? "ev"}-${i}`} type="button" className="v3fs-ivc-fb-row" onClick={() => setRailRead(entry)} title="Read in full">
                               <span className="v3fs-ivc-fb-top">
                                 <span className="v3fs-ivc-fb-m">{entry.who.split(",")[0].trim()}</span>
                                 {entry.kind === "document" ? <span className="v3fs-ivc-fb-kind">doc</span> : null}

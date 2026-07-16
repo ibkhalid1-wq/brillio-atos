@@ -6,7 +6,7 @@ import {
   parseFixtures, fixturesForEntities, screenEntities, stepMetric, transitionForStep, isAgentActor, foldBeatRecords,
   type DemoBeatRecord, type DemoFixture,
 } from "@/v3/components/flow/flowDemoRun";
-import { stakeholderPrimaryArea } from "@/v3/components/flow/flowAreas";
+import { stakeholderPrimaryArea, hasMultipleAreas } from "@/v3/components/flow/flowAreas";
 import type { ProgramSummary } from "@/new/types";
 import { DictationButton, joinDictation } from "@/v3/components/flow/FlowDictation";
 import PilotApp from "@/v3/components/flow/PilotApp";
@@ -183,11 +183,41 @@ export default function FlowRespond({ token }: { token: string }) {
     // Old Envision packs may carry a frozen "agentify" review — that surface is
     // retired (Envision no longer mints client reviews), so such links degrade to
     // question-only rather than rendering the wrong surface.
-    () => (state.phase === "ready"
-      ? (reprojectFromPack(state.pack)
+    () => {
+      if (state.phase !== "ready") return null;
+      const chosen = reprojectFromPack(state.pack)
         ?? ((state.pack.review as { kind?: string } | undefined)?.kind === "agentify" ? null : state.pack.review)
-        ?? null)
-      : null),
+        ?? null;
+      if (!chosen) return null;
+      // Blanket-review guard: a listen-workflow review is meant to be scoped to
+      // THIS recipient's business area — projectStakeholderReview stamps
+      // `recipientArea` only when it actually narrows to one. When the person
+      // can't be filed under a single area (a person-named stakeholder vs
+      // role-named actors, a General fallback, or a compound area label that
+      // doesn't match a workflow tag), no narrowing happens, recipientArea stays
+      // blank, and the surface falls open to the WHOLE model — so on a multi-area
+      // programme every unplaceable stakeholder sees the identical everything
+      // review. Detect that and fall back to their stored, per-person questions,
+      // which were scoped at mint and remain distinct.
+      // The review's true scope is the set of areas its workflows AND terms span.
+      // projectStakeholderReview stamps recipientArea even when it can't actually
+      // filter (e.g. the person's area label — "Alliances" — matches no workflow
+      // tag like "Sales / Alliances"), so recipientArea alone lies. When the
+      // content still spans more than one area on a multi-area programme, this
+      // recipient wasn't scoped — every unplaceable stakeholder gets the same
+      // everything-review — so fall back to their stored, per-person questions.
+      const rv = chosen as { workflows?: Array<{ area?: string }>; terms?: Array<{ area?: string }> };
+      if (state.pack.liveArtifacts) {
+        const areaSpan = new Set(
+          [...(rv.workflows ?? []), ...(rv.terms ?? [])].map((x) => String(x.area ?? "").trim()).filter(Boolean),
+        );
+        if (areaSpan.size > 1) {
+          const program = { rawData: { data: state.pack.liveArtifacts } } as unknown as ProgramSummary;
+          if (hasMultipleAreas(program)) return null;
+        }
+      }
+      return chosen;
+    },
     [state],
   );
   // A regeneration can reshape the review while a draft is saved on-device; fold
@@ -553,17 +583,28 @@ export default function FlowRespond({ token }: { token: string }) {
           ) : (
             <>
               {state.pack.followUp ? <FollowUpBanner stakeholder={greetName}
-                submissions={state.pack.submissions ?? []} /> : null}
+                submissions={state.pack.submissions ?? []} newCount={state.pack.questions.length} /> : null}
               <header className="v3fs-portal-head">
                 <div className="v3fs-hero-eyebrow">{state.pack.programme} <span>· ATOS Flow</span></div>
-                <h1 className="v3fs-portal-title">{greetName
-                  ? `Hello ${greetName.split(" ")[0]} — your perspective shapes what gets built.`
-                  : "Your perspective shapes what gets built."}</h1>
-                <p className="v3fs-portal-sub">
-                  These questions replace a scheduled discovery call. Answer in your own words, whenever suits you — skip anything that doesn&rsquo;t apply.
-                </p>
+                {/* On a follow-up the banner above already greets and frames the
+                    visit — the header stays lean so a returning voice isn't
+                    re-onboarded ("replaces a discovery call" is a first-time line). */}
+                {state.pack.followUp ? (
+                  <p className="v3fs-portal-sub">
+                    Same as before — answer in your own words, whenever suits you. Skip anything that doesn&rsquo;t apply.
+                  </p>
+                ) : (
+                  <>
+                    <h1 className="v3fs-portal-title">{greetName
+                      ? `Hello ${greetName.split(" ")[0]} — your perspective shapes what gets built.`
+                      : "Your perspective shapes what gets built."}</h1>
+                    <p className="v3fs-portal-sub">
+                      These questions replace a scheduled discovery call. Answer in your own words, whenever suits you — skip anything that doesn&rsquo;t apply.
+                    </p>
+                  </>
+                )}
                 <div className="v3fs-portal-meta">
-                  <span>✎ {state.pack.questions.length} questions — answer any</span>
+                  <span>✎ {state.pack.questions.length} {state.pack.followUp ? (state.pack.questions.length === 1 ? "new question" : "new questions") : "questions"} — answer any</span>
                   <span>⏱ ~{Math.max(5, Math.round(state.pack.questions.length * 1.5))} minutes</span>
                   <span>⛨ Reviewed by the team before anything enters the record</span>
                 </div>
@@ -843,6 +884,7 @@ function AskTheRecord({ token }: { token: string }) {
         <input value={q} placeholder="e.g. Why does the denial step stay human?" maxLength={400}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") void ask(); }} />
+        <DictationButton compact label="Speak your question" onText={(spoken) => setQ((cur) => joinDictation(cur, spoken))} />
         <button type="button" className="v3fs-btn pri" disabled={busy || !q.trim()} onClick={() => void ask()}>
           {busy ? "Thinking…" : "Ask"}
         </button>
@@ -896,14 +938,23 @@ function RespondRecap({ stakeholder, submissions, kind }: {
 
 /** A calm banner atop a link a stakeholder is RETURNING to — acknowledges what
  * they already sent and frames the page as a short follow-up, not a repeat. */
-function FollowUpBanner({ stakeholder, submissions, changes }: {
+function FollowUpBanner({ stakeholder, submissions, changes, newCount }: {
   stakeholder: string; submissions: Submission[];
   /** Structural "what changed since your last visit" phrases — from reviewDiff. */
   changes?: string[];
+  /** How many NEW questions have appeared since they last answered (discovery). */
+  newCount?: number;
 }) {
   const first = stakeholder ? stakeholder.split(/\s+/)[0] : "";
   const last = submissions.length ? submissions[submissions.length - 1] : null;
   const when = last ? fmtWhen(last.ts) : "";
+  // Name what's actually new so the return feels purposeful, not a vague "we've
+  // changed things". Discovery knows the count; reviews list the changes below.
+  const whatsNew = newCount && newCount > 0
+    ? `${newCount} new ${newCount === 1 ? "question has" : "questions have"} come up since — ${newCount === 1 ? "it’s" : "they’re"} below.`
+    : changes?.length
+      ? "Here’s exactly what moved since — the rest is unchanged."
+      : "There’s a short update below.";
   return (
     <aside className="v3fs-followup">
       <div className="v3fs-followup-h">
@@ -911,9 +962,8 @@ function FollowUpBanner({ stakeholder, submissions, changes }: {
         <b>{first ? `Welcome back, ${first}.` : "Welcome back."}</b>
       </div>
       <p>
-        Your earlier {submissions.length > 1 ? "responses are" : "response is"} safely on the record
-        {when ? ` (last sent ${when})` : ""}. We&rsquo;ve moved a few things on since — have a look below and
-        add anything new. You won&rsquo;t need to repeat what you already told us.
+        Your earlier {submissions.length > 1 ? "answers are" : "answer is"} safely on the record
+        {when ? ` — last sent ${when}` : ""}. {whatsNew} Nothing to repeat; just add what&rsquo;s new.
       </p>
       {changes?.length ? (
         <div className="v3fs-followup-diff">
