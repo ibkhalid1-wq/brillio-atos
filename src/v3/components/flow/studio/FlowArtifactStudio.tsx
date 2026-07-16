@@ -511,6 +511,13 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
                 <entry.Component doc={draft}
                   onChange={canEdit ? (next) => { setDraft(next); setDirty(true); } : () => { /* derived — edits don't land */ }}
                   onOpenArtifact={onOpenArtifact} program={program}
+                  refining={regenerating}
+                  onRefinePrototype={onSaveInputs && onRegenerate ? async (instruction) => {
+                    // Stash the design-team's command (fingerprint-safe) and re-run
+                    // the prototype-build agent — the refined build replaces this one.
+                    await onSaveInputs("envision", { _prototypeRefine: instruction }, { silent: true });
+                    onRegenerate();
+                  } : undefined}
                   onBindRole={onSaveInputs ? async (movementId, role, name, email) => {
                     const bindings = readRoleBindings(program, movementId);
                     bindings[role] = email ? { name, email } : { name };

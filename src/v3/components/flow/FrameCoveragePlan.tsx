@@ -331,7 +331,56 @@ export default function FrameCoveragePlan({ program, onSaveInputs }: {
           <span className="v3fs-plan-panel-t">Coverage — who we&rsquo;ll hear, and the areas they cover</span>
           <span className="v3fs-plan-count">{roleCoverage.filter((r) => !r.areas.length).length}<i>unassigned</i></span>
         </div>
-        <p className="v3fs-plan-covsub">Each person we&rsquo;ll hear and the areas they cover. Assign areas inline — the picker offers the ontology&rsquo;s areas, so the plan stays bound to the model. Rename or remove a person on their row; manage areas in the strip below.</p>
+        {/* Areas strip — area CRUD, FIRST so the scope of areas reads before the
+            who-covers-what table below. Ontology-derived areas are bound to the
+            model (marked); operator-added areas can be renamed or removed. */}
+        <div className="v3fs-plan-roster">
+          <div className="v3fs-plan-roster-h">
+            <span className="v3fs-plan-roster-t">Areas we&rsquo;ll cover</span>
+            <span className="v3fs-plan-count">{areas.length}</span>
+          </div>
+          {areas.length ? (
+            <div className="v3fs-plan-roster-chips">
+              {areas.map((a, i) => {
+                const editingArea = edit?.kind === "area" && edit.key === a.label;
+                return (
+                  <span key={i} className={`v3fs-plan-rchip areachip${a.added ? " added" : ""}`}>
+                    {editingArea ? (
+                      <input ref={editRef} className="v3fs-plan-editin chip" value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)} onBlur={commitEdit}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitEdit(); } if (e.key === "Escape") setEdit(null); }} />
+                    ) : (
+                      <>
+                        <i className="v3fs-covmap-dot" style={{ background: areaAccent(a.label) }} aria-hidden="true" />
+                        <span className="v3fs-plan-rchip-l">{a.label}</span>
+                        {!a.added ? <span className="v3fs-plan-src" title="From the ontology">ontology</span> : null}
+                        {onSaveInputs ? (
+                          <span className="v3fs-plan-rchip-acts">
+                            {/* Rename only operator-added areas; DELETE works for any. */}
+                            {a.added ? <button type="button" className="v3fs-plan-act" aria-label={`Rename ${a.label}`} disabled={busy} onClick={() => startEdit("area", a.label)}>✎</button> : null}
+                            <button type="button" className="v3fs-plan-act del" aria-label={`Remove ${a.label}`} disabled={busy} onClick={() => void removeArea(a.label)}>×</button>
+                          </span>
+                        ) : null}
+                      </>
+                    )}
+                  </span>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="v3fs-plan-empty">Areas appear once the ontology names them.</p>
+          )}
+          {onSaveInputs ? (
+            <div className="v3fs-plan-add">
+              <input className="v3fs-plan-addin" placeholder="Add an area — e.g. Fraud" value={areaInput}
+                onChange={(e) => setAreaInput(e.target.value)} disabled={busy}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void addArea(areaInput); } }} />
+              <TranscribeButton onText={(t) => setAreaInput(t.replace(/\s+/g, " ").trim())} />
+              <button type="button" className="v3fs-plan-addbtn" disabled={busy || !areaInput.trim()} onClick={() => void addArea(areaInput)}>Add</button>
+            </div>
+          ) : null}
+        </div>
+        <p className="v3fs-plan-covsub">Each person we&rsquo;ll hear and the areas they cover. Assign areas inline — the picker offers the ontology&rsquo;s areas, so the plan stays bound to the model. Rename or remove a person on their row; manage areas in the strip above.</p>
         <div className="v3fs-covmap v3fs-covmap-role" role="table" aria-label="Coverage — roles and the areas they cover">
           <div className="v3fs-covmap-h" role="row"><span>Role</span><span>Areas we&rsquo;ll cover</span></div>
           {roleCoverage.map(({ role: r, areas: covered }, i) => {
@@ -404,54 +453,6 @@ export default function FrameCoveragePlan({ program, onSaveInputs }: {
           ) : null}
         </div>
 
-        {/* Areas strip — area CRUD. Ontology-derived areas are bound to the model
-            (marked); operator-added areas can be renamed or removed. */}
-        <div className="v3fs-plan-roster">
-          <div className="v3fs-plan-roster-h">
-            <span className="v3fs-plan-roster-t">Areas we&rsquo;ll cover</span>
-            <span className="v3fs-plan-count">{areas.length}</span>
-          </div>
-          {areas.length ? (
-            <div className="v3fs-plan-roster-chips">
-              {areas.map((a, i) => {
-                const editingArea = edit?.kind === "area" && edit.key === a.label;
-                return (
-                  <span key={i} className={`v3fs-plan-rchip areachip${a.added ? " added" : ""}`}>
-                    {editingArea ? (
-                      <input ref={editRef} className="v3fs-plan-editin chip" value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)} onBlur={commitEdit}
-                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitEdit(); } if (e.key === "Escape") setEdit(null); }} />
-                    ) : (
-                      <>
-                        <i className="v3fs-covmap-dot" style={{ background: areaAccent(a.label) }} aria-hidden="true" />
-                        <span className="v3fs-plan-rchip-l">{a.label}</span>
-                        {!a.added ? <span className="v3fs-plan-src" title="From the ontology">ontology</span> : null}
-                        {onSaveInputs ? (
-                          <span className="v3fs-plan-rchip-acts">
-                            {/* Rename only operator-added areas; DELETE works for any. */}
-                            {a.added ? <button type="button" className="v3fs-plan-act" aria-label={`Rename ${a.label}`} disabled={busy} onClick={() => startEdit("area", a.label)}>✎</button> : null}
-                            <button type="button" className="v3fs-plan-act del" aria-label={`Remove ${a.label}`} disabled={busy} onClick={() => void removeArea(a.label)}>×</button>
-                          </span>
-                        ) : null}
-                      </>
-                    )}
-                  </span>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="v3fs-plan-empty">Areas appear once the ontology names them.</p>
-          )}
-          {onSaveInputs ? (
-            <div className="v3fs-plan-add">
-              <input className="v3fs-plan-addin" placeholder="Add an area — e.g. Fraud" value={areaInput}
-                onChange={(e) => setAreaInput(e.target.value)} disabled={busy}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void addArea(areaInput); } }} />
-              <TranscribeButton onText={(t) => setAreaInput(t.replace(/\s+/g, " ").trim())} />
-              <button type="button" className="v3fs-plan-addbtn" disabled={busy || !areaInput.trim()} onClick={() => void addArea(areaInput)}>Add</button>
-            </div>
-          ) : null}
-        </div>
       </div>
 
       <footer className="v3fs-plan-foot">

@@ -322,6 +322,33 @@ function StrategyStudio({ doc, onChange }: StudioProps) {
   const patch = patchOf(doc, onChange);
   const candidates = useListOps(doc, onChange, "candidates");
   const recommendation = asRecord(doc.recommendation);
+  const gaps = asStrings(doc.gaps);
+  const tradedAway = asText(recommendation.tradedAway);
+
+  // READ-ONLY (derived) view — the decision board already presents every
+  // candidate with its scores, strengths, risks and the crowned recommendation,
+  // so the verbose candidate/recommendation EDIT forms below just repeat it. Here
+  // we show only the board, the trade-off it accepted, and any open questions.
+  if (locked) {
+    return (
+      <>
+        <Section label="The decision — candidates side by side" hint="scores, strengths, risks; the recommendation is crowned">
+          <StrategyBoard doc={doc} onChange={onChange} />
+        </Section>
+        {tradedAway ? (
+          <Section label="Traded away" hint="what the chosen direction gives up">
+            <p className="v3fs-strat-traded">{tradedAway}</p>
+          </Section>
+        ) : null}
+        {gaps.length ? (
+          <Section label="Open questions" hint="still unresolved on this direction">
+            <ul className="v3fs-strat-gaps">{gaps.map((g, i) => <li key={i}>{g}</li>)}</ul>
+          </Section>
+        ) : null}
+      </>
+    );
+  }
+
   return (
     <>
       <Section label="The decision — candidates side by side" hint="scores, strengths, risks; crown the recommendation">

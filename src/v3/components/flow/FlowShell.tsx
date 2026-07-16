@@ -43,6 +43,12 @@ interface FlowShellProps {
   program: ProgramSummary;
   programs: ProgramSummary[];
   runningAgentIds: Set<string>;
+  /** Agents in flight OR queued for regeneration — Regenerate controls hide when
+   *  their artifact is in this set. */
+  regenActiveIds?: Set<string>;
+  /** Enqueue an artifact regeneration (ordered, de-duplicated) instead of firing
+   *  it immediately. */
+  onEnqueueRegen?: (agentId: string, phaseId: string, label: string) => void;
   /** Per-artifact failure residue from the last run — shown on the card. */
   agentErrors?: Record<string, string>;
   onSelectProgram: (id: string) => void;
@@ -754,21 +760,8 @@ export default function FlowShell(props: FlowShellProps) {
           ) : null}
         </header>
 
-        {view !== "today" && view !== "portfolio" && waitingCount > 0 ? (
-          // Judgment stays visible from every programme view: one line naming
-          // the first waiting item, one tap to the Inbox. The queue itself
-          // lives there. Portfolio is the exception — it is a cross-programme
-          // surface, and each of its cards already carries its own
-          // "N waiting" chip, so the single-programme banner reads as noise.
-          <button type="button" className="v3fs-wait" onClick={() => { setView("today"); window.scrollTo({ top: 0 }); }}>
-            <span className="v3fs-wait-n">{waitingCount}</span>
-            <span className="v3fs-wait-t">
-              Waiting on you — {openDecisions[0]?.title ?? `${portalInbox[0]?.stakeholder ?? "a stakeholder"}'s response`}
-              {waitingCount > 1 ? ` · ${waitingCount - 1} more` : ""}
-            </span>
-            <span className="v3fs-wait-go">Review →</span>
-          </button>
-        ) : null}
+        {/* The "Waiting on you" banner was removed from every view — the Inbox
+            (nav item) already carries the waiting count, so the ribbon was noise. */}
 
         <ViewBoundary view={view}>
         {view === "today" ? (
@@ -777,7 +770,7 @@ export default function FlowShell(props: FlowShellProps) {
             onRunAgent={props.onRunAgent} runningAgentIds={props.runningAgentIds}
             onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
         ) : view === "flow" ? (
-          <FlowCanvas program={program} programs={props.programs} runningAgentIds={props.runningAgentIds} agentErrors={props.agentErrors} relatedPrograms={[...(drillParent ? [drillParent] : []), ...listChildDrilldowns(program, props.programs).map((c) => c.child)]} onSelectProgram={props.onSelectProgram} onComment={props.onComment} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} onCompileShipLanes={props.onCompileShipLanes} onToggleShipItem={props.onToggleShipItem} onSetShipLane={props.onSetShipLane} onScheduleFollowUp={props.onScheduleFollowUp} onMintFollowUp={props.onMintFollowUp} onMintReview={props.onMintReview} onRecordShowPass={props.onRecordShowPass} onSaveArtifactDoc={props.onSaveArtifactDoc} onRecordGate={props.onRecordGate} onReopenGate={props.onReopenGate} onRunAgentAndWait={props.onRunAgentAndWait} onSendForApproval={props.onSendForApproval} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }}
+          <FlowCanvas program={program} programs={props.programs} runningAgentIds={props.runningAgentIds} regenActiveIds={props.regenActiveIds} onEnqueueRegen={props.onEnqueueRegen} agentErrors={props.agentErrors} relatedPrograms={[...(drillParent ? [drillParent] : []), ...listChildDrilldowns(program, props.programs).map((c) => c.child)]} onSelectProgram={props.onSelectProgram} onComment={props.onComment} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} onCompileShipLanes={props.onCompileShipLanes} onToggleShipItem={props.onToggleShipItem} onSetShipLane={props.onSetShipLane} onScheduleFollowUp={props.onScheduleFollowUp} onMintFollowUp={props.onMintFollowUp} onMintReview={props.onMintReview} onRecordShowPass={props.onRecordShowPass} onSaveArtifactDoc={props.onSaveArtifactDoc} onRecordGate={props.onRecordGate} onReopenGate={props.onReopenGate} onRunAgentAndWait={props.onRunAgentAndWait} onSendForApproval={props.onSendForApproval} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }}
           />
         ) : view === "people" ? (
           <FlowPeople program={program} onSaveInputs={props.onSaveInputs} onRenamePerson={props.onRenamePerson} onGoInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} />

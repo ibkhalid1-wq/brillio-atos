@@ -6,7 +6,7 @@
  * remain the full editor.
  */
 import { useMemo } from "react";
-import { asArray, asRecord, asText, asStrings, EmptyState, type StudioProps } from "./StudioKit";
+import { asArray, asRecord, asText, asStrings, EmptyState, useStudioLocked, type StudioProps } from "./StudioKit";
 
 const SCORE_DIMS: Array<{ key: string; label: string }> = [
   { key: "fitToWorkflows", label: "Fit to workflows" },
@@ -16,6 +16,7 @@ const SCORE_DIMS: Array<{ key: string; label: string }> = [
 ];
 
 export default function StrategyBoard({ doc, onChange }: StudioProps) {
+  const locked = useStudioLocked();
   const candidates = useMemo(() => asArray(doc.candidates).map(asRecord), [doc.candidates]);
   const recommendation = asRecord(doc.recommendation);
   const recommended = asText(recommendation.candidate);
@@ -61,7 +62,7 @@ export default function StrategyBoard({ doc, onChange }: StudioProps) {
                   {asStrings(candidate.risks).slice(0, 3).map((item) => <li key={item}>{item}</li>)}
                 </ul>
               ) : null}
-              {!isRec ? (
+              {!isRec && !locked ? (
                 <button type="button" className="v3fs-btn" onClick={() => recommend(name)}>Recommend</button>
               ) : null}
             </div>

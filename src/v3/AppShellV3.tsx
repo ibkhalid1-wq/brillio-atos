@@ -22,6 +22,8 @@ import { buildCopilotGrounding } from "@/v3/components/flow/flowCopilotGrounding
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { drillKindMeta, type DrillKind } from "@/v3/components/flow/flowDrilldown";
 import { readMovementInputs, flowMovements, movementArtifacts, gateChecklist, gateReadiness, movementInputsFingerprint, autoBuildEnabled, artifactInputsReady } from "@/v3/components/flow/flowShellData";
+import { useRegenQueue } from "@/v3/hooks/useRegenQueue";
+import RegenStatusBar from "@/v3/components/flow/RegenStatusBar";
 import { gateAugmentations } from "@/v3/components/flow/flowCrossValidation";
 import type {   ProgramSummary } from "@/new/types";
 import { buildCrossPhaseContext } from "@/lib/adamOrchestrator";
@@ -1259,6 +1261,46 @@ export default function AppShellV3() {
       }),
     [runProgramAgent, activePhaseId],
   );
+
+  // The methodology's generate order for the regen queue: flatten every
+  // movement × its artifacts. Lower index = generated earlier, so the queue
+  // rebuilds upstream documents before the downstream ones that depend on them.
+  const regenOrderIndex = useCallback((agentId: string) => {
+    if (!activeProgram) return 9999;
+    let i = 0;
+    for (const m of flowMovements()) {
+      for (const a of movementArtifacts(activeProgram, m)) {
+        if (a.id === agentId) return i;
+        i += 1;
+      }
+    }
+    return 9999;
+  }, [activeProgram]);
+  const regenQueue = useRegenQueue({ runningAgentIds, runAgent: handleRunAgent, orderIndex: regenOrderIndex });
+  // Everything a Regenerate control must treat as "already asked for" — in
+  // flight OR waiting in the queue — so it hides itself and never double-books.
+  const regenActiveIds = useMemo(() => {
+    const s = new Set(runningAgentIds);
+    for (const id of regenQueue.queuedIds) s.add(id);
+    return s;
+  }, [runningAgentIds, regenQueue.queuedIds]);
+  // Artifact id → human title, for labelling both the queue and the running set.
+  const artifactLabelMap = useMemo(() => {
+    const m = new Map<string, string>();
+    if (activeProgram) for (const mv of flowMovements()) for (const a of movementArtifacts(activeProgram, mv)) m.set(a.id, a.title);
+    return m;
+  }, [activeProgram]);
+  // The persistent bottom bar's rows: artifacts running NOW (generate-ordered)
+  // then the queued ones. Non-artifact background agents (e.g. the contradiction
+  // sweep) are excluded — the bar is about artifact regeneration.
+  const regenBarItems = useMemo(() => {
+    const running = [...runningAgentIds]
+      .filter((id) => artifactLabelMap.has(id))
+      .sort((a, b) => regenOrderIndex(a) - regenOrderIndex(b))
+      .map((id) => ({ agentId: id, label: artifactLabelMap.get(id) as string, status: "running" as const }));
+    const queued = regenQueue.queue.map((q) => ({ agentId: q.agentId, label: q.label || artifactLabelMap.get(q.agentId) || q.agentId, status: "queued" as const }));
+    return [...running, ...queued];
+  }, [runningAgentIds, artifactLabelMap, regenOrderIndex, regenQueue.queue]);
 
   // Classic-era hooks: called for their sync side-effects; Flow surfaces none of their actions.
   useMilestones(activeProgramId || "", activeProgram?.rawData || {}, refreshPrograms);
@@ -2568,6 +2610,8 @@ export default function AppShellV3() {
           programs={programs}
           jumpToFlowNonce={flowJumpNonce}
           runningAgentIds={runningAgentIds}
+          regenActiveIds={regenActiveIds}
+          onEnqueueRegen={(agentId, phaseId, label) => regenQueue.enqueue(agentId, phaseId, label)}
           onSelectProgram={(id) => setActiveProgramId(id)}
           onCreateProgram={() => void handleCreateProgram()}
           onDrillDown={(anchor) => void handleDrillDown(anchor)}
@@ -2824,6 +2868,7 @@ export default function AppShellV3() {
             await persistFlowMutation((program) => dismissPortalResponse(program, itemId, actor));
           }}
         />
+        <RegenStatusBar items={regenBarItems} />
         {setupWizardOverlay}
         {aiSettingsOpen ? (
           <>

@@ -4,7 +4,7 @@ import PhaseInputsPanel from "@/v3/components/PhaseInputsPanel";
 import { acceptedAgentPatterns } from "@/v3/components/flow/flowPatterns";
 import EnvisionCockpit from "@/v3/components/flow/EnvisionCockpit";
 import ShowCockpit from "@/v3/components/flow/ShowCockpit";
-import ProductOwnerCockpit from "@/v3/components/flow/ProductOwnerCockpit";
+import ProductOwnerCockpit, { DESIGN_TEAM } from "@/v3/components/flow/ProductOwnerCockpit";
 import ListenCockpit from "@/v3/components/flow/ListenCockpit";
 import { loopState } from "@/v3/components/flow/flowLoop";
 // The artifact studio pulls React Flow and every WYSIWYG editor — a heavy
@@ -28,6 +28,8 @@ import { gateApprovalIntegrity } from "@/v3/components/flow/flowGovernance";
 import { listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 import { listFlowTracks, trackAcceptance } from "@/v3/components/flow/flowTracks";
 import { safePrompt } from "@/v3/components/flow/flowCapture";
+import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
+import PrototypeCommandBar from "@/v3/components/flow/PrototypeCommandBar";
 import { MOVEMENT_CAPTION, leadTab, type MovementTab } from "@/v3/components/flow/flowStages";
 import { useSpineRunning } from "@/v3/components/flow/flowUpNext";
 import { IntervieweeDiscovery, stakeholderCollection } from "@/v3/components/flow/CollectBoard";
@@ -37,6 +39,10 @@ import FrameCoveragePlan from "@/v3/components/flow/FrameCoveragePlan";
 interface FlowCanvasProps {
   program: ProgramSummary;
   runningAgentIds: Set<string>;
+  /** Artifacts in flight OR queued for regeneration — controls hide when set. */
+  regenActiveIds?: Set<string>;
+  /** Enqueue a regeneration (ordered, de-duplicated) rather than firing it now. */
+  onEnqueueRegen?: (agentId: string, phaseId: string, label: string) => void;
   /** Per-artifact failure residue from the last run — shown on the card
    * until the next attempt, so a dead run can never pass for a quiet one. */
   agentErrors?: Record<string, string>;
@@ -91,7 +97,15 @@ interface FlowCanvasProps {
  * one-line brief, and the ranked "Up next" queue. Nothing locks; editing
  * unfolds in place via the shared inputs panel.
  */
-export default function FlowCanvas({ program, programs, runningAgentIds, agentErrors, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onSetShipLane, onScheduleFollowUp, onMintFollowUp, onMintReview, onSaveArtifactDoc, onSendForApproval, onOpenInbox, onRecordShowPass, onRecordGate, onReopenGate, onRunAgentAndWait, relatedPrograms, onSelectProgram, onComment }: FlowCanvasProps) {
+export default function FlowCanvas({ program, programs, runningAgentIds, regenActiveIds, onEnqueueRegen, agentErrors, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onSetShipLane, onScheduleFollowUp, onMintFollowUp, onMintReview, onSaveArtifactDoc, onSendForApproval, onOpenInbox, onRecordShowPass, onRecordGate, onReopenGate, relatedPrograms, onSelectProgram, onComment }: FlowCanvasProps) {
+  // A regeneration is "active" for an artifact when it's in flight OR queued. All
+  // Regenerate controls check this to hide themselves; enqueueRegen is the single
+  // ordered/de-duplicated path (falls back to an immediate run if unwired).
+  const regenActive = (id: string) => regenActiveIds?.has(id) ?? runningAgentIds.has(id);
+  const enqueueRegen = (agentId: string, phaseId: string, label: string) => {
+    if (onEnqueueRegen) onEnqueueRegen(agentId, phaseId, label);
+    else onRunAgent(agentId, phaseId);
+  };
   const movements = useMemo(() => flowMovements(), []);
   // A spine regeneration in flight — the collect cards suppress their script
   // until it lands (a script off a half-regenerated kit is inaccurate).
@@ -222,6 +236,36 @@ export default function FlowCanvas({ program, programs, runningAgentIds, agentEr
   );
 
 
+  // Phases whose artifacts have gone stale — almost always because an EARLIER
+  // phase was regenerated and the change cascaded downstream (a fingerprint
+  // shift), leaving a later document built on inputs that have since moved. The
+  // spine surfaces these as "regeneration required" so nothing silently drifts.
+  // Envision + Show fold into the single "Prototype" node the spine shows.
+  const staleGroups = useMemo(() => {
+    // A stale artifact ALREADY queued or running has left the "still required"
+    // set — drop it, so requesting a regen removes its banner entry immediately.
+    const active = (id: string) => regenActiveIds?.has(id) ?? runningAgentIds.has(id);
+    const raw = rows
+      .map(({ movement, artifacts }) => ({ movement, stale: artifacts.filter((a) => a.present && a.stale && !active(a.id)) }))
+      .filter((entry) => entry.stale.length > 0);
+    const loop = raw.filter((e) => e.movement.id === "envision" || e.movement.id === "show");
+    const groups = raw
+      .filter((e) => e.movement.id !== "envision" && e.movement.id !== "show")
+      .map((e) => ({ key: e.movement.id, label: e.movement.displayName, items: e.stale.map((a) => ({ movementId: e.movement.id, artifact: a })) }));
+    if (loop.length) {
+      groups.push({ key: "prototype", label: "Prototype", items: loop.flatMap((e) => e.stale.map((a) => ({ movementId: e.movement.id, artifact: a }))) });
+    }
+    return groups;
+  }, [rows, regenActiveIds, runningAgentIds]);
+  const totalStale = staleGroups.reduce((n, g) => n + g.items.length, 0);
+  // Enqueue one phase's stale artifacts. The queue orders them by the
+  // methodology's generate order and de-duplicates, so clicking several phases
+  // (or a phase twice) never scrambles the order or double-books a run. The
+  // items leave the banner the moment they're queued.
+  const regenGroup = (_key: string, items: { movementId: string; artifact: ArtifactCardModel }[]) => {
+    for (const it of items) enqueueRegen(it.artifact.id, it.movementId, it.artifact.title);
+  };
+
   // Anchored drill-downs — "◇ deep dive" chips on the objects they zoom into.
   const anchoredChildren = useMemo(() => (relatedPrograms ?? [])
     .map((p) => ({ p, anchor: readDrillAnchor(p) }))
@@ -247,6 +291,8 @@ export default function FlowCanvas({ program, programs, runningAgentIds, agentEr
             n += 1; stepNum[movement.id] = n;
           }
           const ls = loopState(program);
+          // Stale artifacts across the folded loop (Envision + Show) — the spine
+          // marker for the Prototype node.
           const loopOn = active === "envision" || active === "show";
           const loopTone = ls.converged ? "green" : ls.court === "design" ? "amber" : ls.hasPrototype ? "blue" : "";
           const loopIsFrontier = frontier === "envision" || frontier === "show";
@@ -262,11 +308,10 @@ export default function FlowCanvas({ program, programs, runningAgentIds, agentEr
                     <span className={`v3fs-sdot${ls.converged ? " done" : loopOn ? " live" : ""}`}>{ls.converged ? "✓" : (stepNum.envision ?? 3)}</span>
                   </span>
                   <span className="v3fs-sname">Prototype <span className="v3fs-loopmark" aria-hidden="true">⟳</span></span>
-                  <span className="v3fs-loop-modes" role="tablist" aria-label="Design or Validate">
-                    <button type="button" role="tab" aria-selected={active === "envision"} className={`v3fs-loopmode${active === "envision" ? " on" : ""}`} onClick={(e) => { e.stopPropagation(); setActive("envision"); }}>Design</button>
-                    <button type="button" role="tab" aria-selected={active === "show"} className={`v3fs-loopmode${active === "show" ? " on" : ""}`} onClick={(e) => { e.stopPropagation(); setActive("show"); }}>Validate</button>
-                  </span>
-                  <span className="v3fs-sstate loop">{ls.hasPrototype ? `iteration ${ls.round}` : "not built"}{ls.areasTotal ? ` · ${ls.areasConverged}/${ls.areasTotal} areas` : ""}{ls.converged ? " ✓" : ""}</span>
+                  {/* The Design/Validate toggle and the iteration meter were removed
+                      from the spine node — the toggle lives on the Prototype page
+                      itself (the loop switch), so the spine stays a plain step. */}
+                  <span className={`v3fs-sstate ${loopOn ? "live" : ls.converged ? "done" : "wait"}`}>{ls.converged ? "Converged" : loopOn ? "In progress" : "Continuous"}</span>
                 </div>
               );
             }
@@ -307,6 +352,26 @@ export default function FlowCanvas({ program, programs, runningAgentIds, agentEr
           });
         })()}
       </nav>
+      {/* Regeneration required — a downstream document is stale because an
+          upstream phase moved. Prompt on the spine with a per-phase regen. */}
+      {staleGroups.length ? (
+        <div className="v3fs-regenbar" role="status" aria-label="Regeneration required">
+          <span className="v3fs-regenbar-ico" aria-hidden="true">⟳</span>
+          <span className="v3fs-regenbar-txt">
+            <b>Regeneration required</b>
+            <em>An upstream change left {totalStale} downstream document{totalStale === 1 ? "" : "s"} built on inputs that have since moved — regenerate to bring {totalStale === 1 ? "it" : "them"} current.</em>
+          </span>
+          <span className="v3fs-regenbar-acts">
+            {staleGroups.map((g) => (
+              <button key={g.key} type="button" className="v3fs-regenbar-btn"
+                disabled={spineRunning}
+                onClick={() => regenGroup(g.key, g.items)}>
+                ⟳ {g.label}<i className="v3fs-regenbar-n">{g.items.length}</i>
+              </button>
+            ))}
+          </span>
+        </div>
+      ) : null}
       {rows.filter(({ movement }) => movement.id === active).map(({ movement, artifacts, evidence }, index) => {
         void index;
         const isOpen = true;
@@ -355,12 +420,27 @@ export default function FlowCanvas({ program, programs, runningAgentIds, agentEr
         // are the Discovery board plus `art:<id>` for each artifact; a stored
         // legacy value ("paper"/"plan"/"gate") or a since-removed artifact
         // falls back to the movement's default opening tab.
-        const artTabKeys = artifacts.map((a) => `art:${a.id}`);
+        // Architecture Strategy is a SOLUTION-level artifact owned by the design
+        // team, not per-area work — so its tab shows only when the Design-team
+        // tile is selected (like the Direction act). Excluded from the valid keys
+        // otherwise, so a stored "architecture-strategy" tab falls back cleanly.
+        const dtSel = (areaFilter[movement.id] ?? []).includes(DESIGN_TEAM);
+        const tabVisible = (id: string) => id !== "architecture-strategy" || dtSel;
+        const artTabKeys = artifacts.filter((a) => tabVisible(a.id)).map((a) => `art:${a.id}`);
         // Ship's cutover/ship plan (the compiled lanes board) is its OWN tab,
         // separate from the Hardening plan artifact — the two were previously
         // stacked on one tab. Only when the compile/toggle handlers exist.
         const hasShipPlanTab = movement.id === "ship" && !!onCompileShipLanes && !!onToggleShipItem;
-        const validTabKeys = new Set<string>(["collect", ...artTabKeys, ...(hasShipPlanTab ? ["ship:lanes"] : [])]);
+        // Under Validate (Show), the built prototype gets its OWN tab — the client
+        // opens the running app there rather than an inline collapsible. It reads
+        // the same prototype-build doc the delivery team assembled in Design.
+        const protoHtml = (() => {
+          if (movement.id !== "show") return "";
+          const pb = readArtifactDoc(program, "prototypeBuild");
+          return pb ? String(pb.html ?? "") : "";
+        })();
+        const hasProtoTab = movement.id === "show" && !!protoHtml;
+        const validTabKeys = new Set<string>(["collect", ...artTabKeys, ...(hasProtoTab ? ["proto"] : []), ...(hasShipPlanTab ? ["ship:lanes"] : [])]);
         const defaultTab: MovementTab = leadTab(movement.id) === "paper" && artifacts.length ? `art:${artifacts[0].id}` : "collect";
         const storedTab = movementTab[movement.id];
         const tabKey: MovementTab = storedTab && validTabKeys.has(storedTab) ? storedTab : defaultTab;
@@ -416,7 +496,8 @@ export default function FlowCanvas({ program, programs, runningAgentIds, agentEr
         })();
         const tabDefs: Array<{ key: MovementTab; label: string; state: { glyph: string; text: string; tone: string } | null; show: boolean }> = [
           { key: "collect", label: "Discovery", state: collectState, show: true },
-          ...artifacts.map((a) => ({ key: `art:${a.id}` as MovementTab, label: a.title, state: artifactTabState(a), show: true })),
+          ...(hasProtoTab ? [{ key: "proto" as MovementTab, label: "Prototype", state: { glyph: "▶", text: "", tone: "ok" }, show: true }] : []),
+          ...artifacts.map((a) => ({ key: `art:${a.id}` as MovementTab, label: a.title, state: artifactTabState(a), show: tabVisible(a.id) })),
           ...(hasShipPlanTab ? [{ key: "ship:lanes" as MovementTab, label: "Ship plan", state: shipPlanState, show: true }] : []),
         ];
 
@@ -497,7 +578,7 @@ export default function FlowCanvas({ program, programs, runningAgentIds, agentEr
                     <EnvisionCockpit program={program} areaFilter={selAreas} onSaveInputs={onSaveInputs} onOpenArtifact={(id) => goTab(`art:${id}` as MovementTab)} />
                   ) : null}
                   {movement.id === "show" ? (
-                    <ShowCockpit program={program} areaFilter={selAreas} onOpenDesign={() => { setActive("envision"); setMovementTab((prev) => ({ ...prev, envision: "art:prototype-build" as MovementTab })); }} />
+                    <ShowCockpit program={program} onOpenDesign={() => { setActive("envision"); setMovementTab((prev) => ({ ...prev, envision: "art:prototype-build" as MovementTab })); }} />
                   ) : null}
                 </section>
               ) : null}
@@ -558,13 +639,11 @@ export default function FlowCanvas({ program, programs, runningAgentIds, agentEr
                         <IntervieweeDiscovery program={program} movementId={movement.id}
                           areaFilter={selAreas}
                           captureField={meetingKit(program, movement.id)?.captureField ?? "interviewTranscripts"}
-                          docsStale={staleArtifacts.length > 0}
+                          docsStale={staleArtifacts.some((a) => !regenActive(a.id))}
                           regenerating={spineRunning || generating}
-                          onRegenerateStale={onRunAgentAndWait ? async () => {
-                            for (const artifact of staleArtifacts) {
-                              await onRunAgentAndWait(artifact.id, movement.id);
-                            }
-                          } : undefined}
+                          onRegenerateStale={async () => {
+                            for (const artifact of staleArtifacts) enqueueRegen(artifact.id, movement.id, artifact.title);
+                          }}
                           onSaveInputs={onSaveInputs} onMintFollowUp={onMintFollowUp} onMintReview={onMintReview}
                           onMintPacks={movement.id === "listen" ? onMintPacks : undefined}
                           onScheduleFollowUp={onScheduleFollowUp}
@@ -585,12 +664,10 @@ export default function FlowCanvas({ program, programs, runningAgentIds, agentEr
                           movementId={movement.id}
                           hasEvidence={evidence.length > 0}
                           generating={generating || spineRunning}
-                          docsStale={artifacts.some((artifact) => artifact.present && artifact.stale)}
-                          onRegenerateStale={onRunAgentAndWait ? async () => {
-                            for (const artifact of artifacts.filter((entry) => entry.present && entry.stale)) {
-                              await onRunAgentAndWait(artifact.id, movement.id);
-                            }
-                          } : undefined}
+                          docsStale={artifacts.some((artifact) => artifact.present && artifact.stale && !regenActive(artifact.id))}
+                          onRegenerateStale={async () => {
+                            for (const artifact of artifacts.filter((entry) => entry.present && entry.stale)) enqueueRegen(artifact.id, movement.id, artifact.title);
+                          }}
                           program={program}
                           onSaveInputs={onSaveInputs}
                           onScheduleFollowUp={onScheduleFollowUp}
@@ -853,6 +930,20 @@ export default function FlowCanvas({ program, programs, runningAgentIds, agentEr
                   {railRead ? <EvidenceReader entry={railRead} onClose={() => setRailRead(null)} /> : null}
                 </div>
 
+                {/* Prototype tab (Validate): the built app, full-width, with a
+                    command line the delivery team uses to refine it — a plain-
+                    language instruction that regenerates the prototype-build. */}
+                {hasProtoTab && tabKey === "proto" ? (
+                  <div className="v3fs-arttab">
+                    <PrototypeTab html={protoHtml}
+                      regenerating={runningAgentIds.has("prototype-build") || spineRunning}
+                      onRefine={async (instruction) => {
+                        await onSaveInputs("envision", { _prototypeRefine: instruction }, { silent: true });
+                        onRunAgent("prototype-build", "envision");
+                      }} />
+                  </div>
+                ) : null}
+
                 {/* Ship plan: the compiled cutover/validation lanes on their
                     OWN tab, distinct from the Hardening plan artifact. */}
                 {hasShipPlanTab && tabKey === "ship:lanes" ? (
@@ -893,7 +984,7 @@ export default function FlowCanvas({ program, programs, runningAgentIds, agentEr
                           embedded
                           program={program}
                           artifact={artifact}
-                          regenerating={runningAgentIds.has(artifact.id) || generating}
+                          regenerating={regenActive(artifact.id) || generating}
                           onSaveInputs={onSaveInputs}
                           onComment={onComment}
                           onOpenArtifact={(artifactId) => {
@@ -905,7 +996,7 @@ export default function FlowCanvas({ program, programs, runningAgentIds, agentEr
                             }
                           }}
                           onClose={() => {}}
-                          onRegenerate={() => onRunAgent(artifact.id, movement.id)}
+                          onRegenerate={() => enqueueRegen(artifact.id, movement.id, artifact.title)}
                           onSaveDoc={onSaveArtifactDoc}
                           onOpenInbox={onOpenInbox}
                           header={movement.id === "frame" && artifact.id === "discovery-kit"
@@ -1168,6 +1259,32 @@ function TrackPassRecorder({ trackId, person, onRecord }: {
  * mint from the Discovery Kit's per-stakeholder packs; what comes back waits
  * in Today's evidence inbox until ingested.
  */
+/**
+ * The Prototype tab under Validate: the built app full-width, plus a command
+ * line the delivery team uses to refine it. A plain-language instruction is
+ * stashed on Envision's inputs (`_prototypeRefine`, fingerprint-safe) and the
+ * prototype-build agent re-runs — the refined build replaces the current one.
+ */
+function PrototypeTab({ html, regenerating, onRefine }: {
+  html: string;
+  regenerating: boolean;
+  onRefine: (instruction: string) => Promise<void> | void;
+}) {
+  return (
+    <div className="v3fs-prototab">
+      <div className="v3fs-prototab-head">
+        <span className="v3fs-prototab-t">The prototype</span>
+        <span className="v3fs-prototab-sub">The running app every stakeholder validates — walk it here, or refine it below.</span>
+      </div>
+      <iframe className="v3fs-prototab-frame" sandbox="allow-scripts allow-forms" srcDoc={html} title="Prototype" />
+      {/* Command line — the delivery team refines & polishes the prototype in
+          plain language (type or dictate). Shared with the Design-side studio. */}
+      <PrototypeCommandBar onRefine={onRefine} regenerating={regenerating} />
+      {regenerating ? <div className="v3fs-protocmd-note" role="status">Rebuilding the prototype with your changes — the refined build replaces the current one when it lands.</div> : null}
+    </div>
+  );
+}
+
 function ShipLanesBoard({ program, onCompile, onToggle, onSetLane }: {
   program: ProgramSummary;
   onCompile: () => Promise<void>;

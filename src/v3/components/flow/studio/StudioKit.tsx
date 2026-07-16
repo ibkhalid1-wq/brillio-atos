@@ -198,4 +198,9 @@ export interface StudioProps {
   program?: import("@/new/types").ProgramSummary;
   /** Bind a delivery role to a person (attested `_roleBindings` write). */
   onBindRole?: (movementId: string, role: string, name: string, email: string) => Promise<void>;
+  /** Refine & polish the prototype from a plain-language instruction (the
+   *  Prototype Build studio's command bar) — stashes it and re-runs the build. */
+  onRefinePrototype?: (instruction: string) => Promise<void> | void;
+  /** This artifact is regenerating — the studio's command bar shows progress. */
+  refining?: boolean;
 }

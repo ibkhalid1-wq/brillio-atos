@@ -10,12 +10,13 @@ import { useEffect, useRef, useState } from "react";
 import { asArray, asRecord, asStrings, asText, type StudioProps } from "./StudioKit";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 import { buildPrototypeProject, downloadPrototypeZip, importPrototypeProject, projectSlug } from "./prototypeExport";
+import PrototypeCommandBar from "@/v3/components/flow/PrototypeCommandBar";
 
 function toast(message: string, tone: "info" | "error" = "info") {
   window.dispatchEvent(new CustomEvent("atlas-v3-toast", { detail: { message, tone } }));
 }
 
-export default function PrototypeStudio({ doc, onChange, program }: StudioProps) {
+export default function PrototypeStudio({ doc, onChange, program, onRefinePrototype, refining }: StudioProps) {
   const html = asText(doc.html);
   const screens = asArray(doc.screens).map(asRecord);
   const summary = asText(doc.summary);
@@ -63,12 +64,8 @@ export default function PrototypeStudio({ doc, onChange, program }: StudioProps)
   return (
     <div className="v3fs-proto">
       <div className="v3fs-proto-bar">
-        <div className="v3fs-proto-screens">
-          {screens.slice(0, 8).map((s, i) => (
-            <span key={i} className="v3fs-proto-chip" title={asText(s.purpose)}>{asText(s.name) || asText(s.id) || `Screen ${i + 1}`}</span>
-          ))}
-          {screens.length > 8 ? <span className="v3fs-proto-chip more">+{screens.length - 8}</span> : null}
-        </div>
+        {/* The static screen-name chips were removed — they were non-interactive
+            labels that did nothing. Navigation lives inside the running prototype. */}
         <div className="v3fs-proto-modes" role="group" aria-label="Prototype mode">
           <button type="button" className={mode === "preview" ? "on" : ""} onClick={() => setMode("preview")}>▶ Run it</button>
           <button type="button" className={mode === "edit" ? "on" : ""} onClick={() => setMode("edit")}>✎ Experience Designer</button>
@@ -103,6 +100,10 @@ export default function PrototypeStudio({ doc, onChange, program }: StudioProps)
             onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void onImportFile(f); }} />
         </div>
       </div>
+
+      {/* Refine & polish command bar — the delivery team refines the build in
+          plain language (type or dictate); it re-runs the prototype-build agent. */}
+      {onRefinePrototype ? <PrototypeCommandBar onRefine={onRefinePrototype} regenerating={refining} compact /> : null}
 
       {mode === "preview" ? (
         <iframe className="v3fs-proto-frame" sandbox="allow-scripts allow-forms" srcDoc={source} title="Prototype" />

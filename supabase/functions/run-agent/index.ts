@@ -1491,10 +1491,12 @@ DESIGN SYSTEM & CRAFT — this must look like a PREMIUM, modern SaaS product (th
 - TYPOGRAPHY. A clear hierarchy (page title / section / body / caption), ~65ch measure for prose, tabular-nums for figures, balanced headings. System font stack only (no webfonts), but treated with real craft.
 - MOTION & POLISH. Tasteful micro-interactions (hover/active transitions ~150ms, a subtle state-change animation when an agent step completes), focus-visible rings, respect prefers-reduced-motion. Accessible contrast throughout.
 - FEEL REAL. Seeded with their data, in their vocabulary, at production density — a stakeholder should feel they are using the finished product, not previewing a mock.
+- THE PREMIUM BAR. The result should be indistinguishable from a shipped, well-funded product: a considered spacing rhythm (generous but consistent, all from the spacing scale), quiet borders and layered elevation rather than heavy lines, restrained accent use (colour earns attention — most of the UI is neutral), aligned optical grids, and refined detail on the small things (button/input states, table zebra/hover, pill contrast, iconography weight). No default-bootstrap look, no cramped or lopsided layouts, no clashing accents. When in doubt, make it calmer and more spacious, not busier.
 
 REFINE MODE — when the context carries "prototypeRefineBrief", you are NOT building from scratch. A prior prototype already exists and the delivery loop is iterating on it. REFINE it, do not rebuild it:
 - The BASELINE is prototypeRefineBrief.priorHtml — the current, in-use prototype. START FROM IT. Every screen, component, fixture, label and interaction it contains that no change request touches must survive BYTE-FOR-BYTE. Stakeholders have already signed off on parts of this app; silently redrawing a screen they approved is a regression, not a refinement.
-- APPLY prototypeRefineBrief.openChangeRequests — each is a demo verdict asking for a change, tagged to the stakeholder and business area that raised it. Change ONLY the screens/areas those asks name, and make each change in the requester's own terms. An area with no open change request is FROZEN: leave it exactly as it was.
+- HIGHEST PRIORITY — prototypeRefineBrief.designInstruction: when present, this is a DIRECT command the delivery team typed on the Prototype command line (e.g. "make the dashboard a card grid, add a sticky header, tighten spacing"). Apply it faithfully and thoroughly across the whole app where it makes sense — it is a design directive from the builders themselves, not a single stakeholder's ask, so it OUTRANKS the demo change requests. It may span the entire prototype (global polish, layout, spacing, theme) rather than one screen; carry it everywhere it applies while still preserving the app's content, data fixtures and flows. This is your lever for making the prototype more refined, modern and premium.
+- APPLY prototypeRefineBrief.openChangeRequests — each is a demo verdict asking for a change, tagged to the stakeholder and business area that raised it. Change ONLY the screens/areas those asks name, and make each change in the requester's own terms. An area with no open change request is FROZEN: leave it exactly as it was (unless designInstruction is a global polish that legitimately touches it).
 - RECONCILE THE DESIGN SYSTEM: if the baseline's tokens differ from upstreamDesign.theme (or the baseline has no :root token block at all), introduce/replace the :root token block to match upstreamDesign.theme verbatim and let the existing component classes inherit it — RE-SKIN via tokens, never re-lay-out screens to restyle them. A baseline built in a default blue must come back in the governed theme's colours.
 - SIZE: the refined document should be about the SAME SIZE as priorHtml. You are editing it, not expanding it. Do not re-author unchanged screens (that both risks regressions and blows the resource budget).
 - REPORT what moved: put every screen id / area you actually changed in "changed", and nothing you left alone. If you could not honour an ask, name it in "gaps" rather than silently dropping it.
@@ -2181,6 +2183,10 @@ interface PrototypeRefineBrief {
   round: number;
   priorHtml: string;
   openChangeRequests: Array<{ stakeholder: string; area: string; verdict: string; ask: string }>;
+  /** A direct, plain-language refinement the DELIVERY TEAM typed on the Prototype
+   * tab's command line (Envision `_prototypeRefine`) — a design instruction, not a
+   * stakeholder demo verdict. Highest-priority ask this iteration. */
+  designInstruction: string;
 }
 function buildPrototypeRefineBrief(
   inner: Record<string, unknown>,
@@ -2204,7 +2210,13 @@ function buildPrototypeRefineBrief(
       ask: typeof r.reaction === "string" ? r.reaction.trim() : "",
     }));
   const round = Math.max(1, Math.round(Number(showInputs.iterationRound)) || 1);
-  return { mode: "refine", round, priorHtml, openChangeRequests };
+  // The delivery team's command-line refine instruction (Prototype tab), stored
+  // fingerprint-safe on Envision inputs. A direct design directive — top priority.
+  const envisionInputs = normalizeProgramData(phaseInputsAll.envision as JsonValue | null);
+  const designInstruction = typeof envisionInputs._prototypeRefine === "string"
+    ? envisionInputs._prototypeRefine.trim().slice(0, 2000)
+    : "";
+  return { mode: "refine", round, priorHtml, openChangeRequests, designInstruction };
 }
 
 /**
