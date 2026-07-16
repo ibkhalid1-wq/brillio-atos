@@ -75,7 +75,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
   // The graph-first documents open straight into their studio — the diagram
   // IS the document there, so the graphical view leads. Prose-first
   // documents keep the typeset reading view as the default.
-  const GRAPH_FIRST = ["domain-ontology", "current-state-atlas", "architecture-strategy", "agentic-blueprint", "experience-design"];
+  const GRAPH_FIRST = ["domain-ontology", "current-state-atlas", "architecture-strategy", "agentic-blueprint", "experience-design", "prototype-build"];
   const [editing, setEditing] = useState(() => GRAPH_FIRST.includes(artifact.id));
 
   // A regenerate or portal write can refresh the programme under the open
@@ -91,15 +91,17 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose, embedded]);
 
-  // ARTIFACTS ARE DERIVED, NOT AUTHORED (operator direction 2026-07-14):
-  // every document is a generated view of the record, so operator hand-edits
-  // are disabled — a change must arrive as EVIDENCE (capture the correction
-  // from its owner on the collect board) and land through resynthesis, where
-  // the shrink guard, grounding rules and contributor sign-off all apply.
-  // The studios still open (the diagram IS the document for graph-first
-  // artifacts) but read-only: edits don't dirty, and there is no Save.
-  const EDITS_LOCKED = true;
-  const canEdit = !EDITS_LOCKED && !!entry && !!draft && !!onSaveDoc;
+  // EDITABILITY SPLITS BY OWNERSHIP (operator direction 2026-07-16):
+  // The Prototype Loop's OWN working documents — architecture, experience,
+  // blueprint, prototype — are AUTHORED DIRECTLY by the delivery team, so their
+  // studios are fully editable with a Save. Everything derived from stakeholder
+  // evidence (discovery kit, ontology, atlas, demo scripts, ship/hardening)
+  // stays derived and read-only: a change there must arrive as EVIDENCE and
+  // land through resynthesis, where the shrink guard, grounding and sign-off
+  // all apply.
+  const DESIGN_TEAM_ARTIFACTS = ["architecture-strategy", "experience-design", "agentic-blueprint", "prototype-build"];
+  const editsLocked = !DESIGN_TEAM_ARTIFACTS.includes(artifact.id);
+  const canEdit = !editsLocked && !!entry && !!draft && !!onSaveDoc;
   const studioActive = !!entry && !!draft && editing;
 
   // Write-time ontology gate (F-004): while editing the domain ontology, the
@@ -497,13 +499,13 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
 
           {studioActive && entry && draft ? (
             <>
-              {/* Derived-document contract: the studio renders, edits don't
-                  land. A change enters as EVIDENCE and returns via resynthesis. */}
-              <div className="v3fs-derived-note" role="note">
-                <b>Derived from the record.</b> Content edits are disabled — to change this document,
-                capture the correction as evidence on its owner&rsquo;s collect card, then resynthesize.
-                Role bindings and sign-offs still work here.
-              </div>
+              {/* Derived artifacts read-only: a compact marker, not a paragraph.
+                  Design-team artifacts (editable) show nothing here. */}
+              {!canEdit ? (
+                <div className="v3fs-derived-chip" role="note">
+                  <span aria-hidden="true">↻</span> Derived from the record — capture a correction as evidence to change it
+                </div>
+              ) : null}
               {/* Locked when edits are disabled — the studio's own inputs and
                   add/remove/drag affordances go read-only, so a field can't be
                   clicked into or typed (a no-op onChange had let the caret in). */}

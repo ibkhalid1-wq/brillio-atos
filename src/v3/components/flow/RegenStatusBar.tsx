@@ -25,7 +25,7 @@ const RegenStatusBar: FC<{ items: RegenStatusItem[] }> = ({ items }) => {
       </span>
       <div className="v3fs-regenstatus-chips">
         {items.map((it) => (
-          <span key={it.agentId} className={`v3fs-regenstatus-chip ${it.status}`} title={it.status === "running" ? "Regenerating now" : "Waiting its turn"}>
+          <span key={`${it.agentId}-${it.status}`} className={`v3fs-regenstatus-chip ${it.status}`} title={it.status === "running" ? "Regenerating now" : "Waiting its turn"}>
             {it.status === "running"
               ? <i className="v3fs-regenstatus-run" aria-hidden="true" />
               : <span className="v3fs-regenstatus-wait" aria-hidden="true">◷</span>}

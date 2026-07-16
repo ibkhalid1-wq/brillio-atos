@@ -1,13 +1,13 @@
 /**
- * Experience Design studio — the wireframe renderer. The design crew's JSON
- * (screens with region/block wireframes, persona flows, workflow machines)
- * renders as a visual design document: skeleton screens you can read at a
- * glance, and a FLOW WALKER that steps a chosen persona journey through its
- * screens — the seed of the interpretive prototype. Derived from the record,
- * read-only by contract: changes arrive as evidence and resynthesis.
+ * Experience Design studio — the design crew's working surface. The screens
+ * (region/block wireframes), persona flows and workflow machines render as a
+ * visual, DIRECTLY EDITABLE design document: the delivery team tunes the
+ * governed theme, filters the design to one workflow at a time, reads every
+ * flow's steps inline, and marks which steps should be AGENTIFIED — the signal
+ * the Agentic Blueprint is built to deliver.
  */
 import React, { useMemo, useState } from "react";
-import { Section, asArray, asRecord, asText, asStrings, type StudioProps } from "./StudioKit";
+import { Section, asArray, asRecord, asText, asStrings, useStudioLocked, type StudioProps } from "./StudioKit";
 
 const BLOCK_GLYPH: Record<string, string> = {
   list: "☰", table: "▦", form: "✎", detail: "¶", metric: "◔", action: "▸", timeline: "⋯",
@@ -72,20 +72,49 @@ export function ScreenCard({ screen, active, onClick }: { screen: Record<string,
   );
 }
 
-export default function ExperienceDesignStudio({ doc }: StudioProps) {
+/** The seven governed theme tokens, editable as live colour wells. */
+const THEME_SWATCHES: Array<[string, string]> = [
+  ["brandHue", "Brand"], ["accent", "Accent"], ["neutral", "Neutral"], ["surface", "Surface"],
+  ["good", "Good"], ["warn", "Warn"], ["critical", "Critical"],
+];
+
+export default function ExperienceDesignStudio({ doc, onChange }: StudioProps) {
+  const locked = useStudioLocked();
   const intent = asRecord(doc.designIntent);
+  const theme = asRecord(doc.theme);
   const screens = useMemo(() => asArray(doc.screens).map(asRecord), [doc.screens]);
   const flows = useMemo(() => asArray(doc.flows).map(asRecord), [doc.flows]);
   const machines = asArray(doc.workflowMachines).map(asRecord);
   const [focusScreen, setFocusScreen] = useState<string | null>(null);
-  // The FLOW WALKER: pick a flow, step through it — each step spotlights its
-  // screen above, so the journey reads as the demo it will become.
-  const [walkFlow, setWalkFlow] = useState<number | null>(null);
-  const [walkStep, setWalkStep] = useState(0);
-  const steps = walkFlow != null ? asArray(flows[walkFlow]?.steps).map(asRecord) : [];
-  const currentStep = steps[walkStep];
-  const activeScreenId = walkFlow != null && currentStep ? asText(currentStep.screen) : focusScreen;
-  const focused = screens.find((s) => asText(s.id) === activeScreenId || asText(s.name) === activeScreenId);
+
+  // The workflow FILTER replaces the old walk/stop stepper: pick a workflow /
+  // journey to focus the whole design on it; "All" shows everything. Grounded
+  // in the journeys the flows already name.
+  const journeys = useMemo(() => {
+    const set = new Set<string>();
+    flows.forEach((f) => { const j = asText(f.journey) || asText(f.name); if (j) set.add(j); });
+    return [...set];
+  }, [flows]);
+  const [filter, setFilter] = useState<string>("");
+  const flowInFilter = (f: Record<string, unknown>) => !filter || asText(f.journey) === filter || asText(f.name) === filter;
+  const screenInFilter = (s: Record<string, unknown>) => !filter || asText(s.journey) === filter;
+  const shownScreens = screens.filter(screenInFilter);
+  const focused = shownScreens.find((s) => asText(s.id) === focusScreen || asText(s.name) === focusScreen);
+
+  // Direct edits — this is the delivery team's own document.
+  const patch = (next: Record<string, unknown>) => onChange({ ...doc, ...next });
+  const setTheme = (key: string, value: string) => patch({ theme: { ...theme, [key]: value } });
+  const setStep = (flowIndex: number, stepIndex: number, changes: Record<string, unknown>) => {
+    patch({
+      flows: flows.map((f, i) => {
+        if (i !== flowIndex) return f;
+        const steps = asArray(f.steps).map(asRecord).map((s, j) => (j === stepIndex ? { ...s, ...changes } : s));
+        return { ...f, steps };
+      }),
+    });
+  };
+  const str = (v: unknown) => (typeof v === "number" ? String(v) : asText(v));
+  const hexOf = (v: unknown) => { const s = asText(v).trim(); return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(s) ? s : "#6455b8"; };
 
   return (
     <>
@@ -101,38 +130,66 @@ export default function ExperienceDesignStudio({ doc }: StudioProps) {
         </Section>
       ) : null}
 
-      {(() => {
-        const theme = asRecord(doc.theme);
-        const swatches: Array<[string, string]> = [["brandHue", "Brand"], ["accent", "Accent"], ["neutral", "Neutral"], ["surface", "Surface"], ["good", "Good"], ["warn", "Warn"], ["critical", "Critical"]];
-        if (!swatches.some(([k]) => asText(theme[k]))) return null;
-        const str = (v: unknown) => (typeof v === "number" ? String(v) : asText(v));
-        return (
-          <Section label="Theme — the design system every prototype builds from" hint={asText(theme.personalityNote) || "governed tokens; the Experience Designer tunes them, and every area's prototype renders from the same system"}>
-            <div className="v3fs-wf-theme">
-              <div className="v3fs-wf-swatches">
-                {swatches.map(([k, l]) => asText(theme[k]) ? (
-                  <span key={k} className="v3fs-wf-swatch"><span className="sw" style={{ background: asText(theme[k]) }} /><b>{l}</b><em>{asText(theme[k])}</em></span>
-                ) : null)}
-              </div>
-              <div className="v3fs-wf-meta">
-                {asText(theme.fontStack) ? <span className="v3fs-wf-chip">font · {asText(theme.fontStack).split(",")[0].replace(/["']/g, "")}</span> : null}
-                {str(theme.radius) ? <span className="v3fs-wf-chip">radius {str(theme.radius)}px</span> : null}
-                {str(theme.spacingBase) ? <span className="v3fs-wf-chip">spacing {str(theme.spacingBase)}px</span> : null}
-                {asText(theme.density) ? <span className="v3fs-wf-chip">{asText(theme.density)}</span> : null}
-              </div>
+      {THEME_SWATCHES.some(([k]) => asText(theme[k])) || !locked ? (
+        <Section label="Theme — the design system every prototype builds from" hint={asText(theme.personalityNote) || "governed tokens; tune them here and every prototype renders from the same system"}>
+          <div className="v3fs-wf-theme">
+            <div className="v3fs-wf-swatches editable">
+              {THEME_SWATCHES.map(([k, l]) => (
+                <label key={k} className="v3fs-wf-swatch">
+                  {locked
+                    ? <span className="sw" style={{ background: asText(theme[k]) || "transparent" }} />
+                    : <input className="sw" type="color" value={hexOf(theme[k])} aria-label={`${l} colour`}
+                        onChange={(e) => setTheme(k, e.target.value)} />}
+                  <b>{l}</b>
+                  {locked
+                    ? <em>{asText(theme[k]) || "—"}</em>
+                    : <input className="v3fs-wf-hex" value={asText(theme[k])} placeholder="#hex"
+                        onChange={(e) => setTheme(k, e.target.value)} aria-label={`${l} hex`} />}
+                </label>
+              ))}
             </div>
-          </Section>
-        );
-      })()}
+            <div className="v3fs-wf-tokens">
+              {locked ? (
+                <div className="v3fs-wf-meta">
+                  {asText(theme.fontStack) ? <span className="v3fs-wf-chip">font · {asText(theme.fontStack).split(",")[0].replace(/["']/g, "")}</span> : null}
+                  {str(theme.radius) ? <span className="v3fs-wf-chip">radius {str(theme.radius)}px</span> : null}
+                  {str(theme.spacingBase) ? <span className="v3fs-wf-chip">spacing {str(theme.spacingBase)}px</span> : null}
+                  {asText(theme.density) ? <span className="v3fs-wf-chip">{asText(theme.density)}</span> : null}
+                </div>
+              ) : (
+                <>
+                  <label className="v3fs-wf-token"><span>Font stack</span>
+                    <input value={asText(theme.fontStack)} placeholder="'Inter', sans-serif" onChange={(e) => setTheme("fontStack", e.target.value)} /></label>
+                  <label className="v3fs-wf-token sm"><span>Radius</span>
+                    <input inputMode="numeric" value={str(theme.radius)} onChange={(e) => setTheme("radius", e.target.value.replace(/[^0-9.]/g, ""))} /></label>
+                  <label className="v3fs-wf-token sm"><span>Spacing</span>
+                    <input inputMode="numeric" value={str(theme.spacingBase)} onChange={(e) => setTheme("spacingBase", e.target.value.replace(/[^0-9.]/g, ""))} /></label>
+                  <label className="v3fs-wf-token"><span>Density</span>
+                    <input value={asText(theme.density)} placeholder="comfortable" onChange={(e) => setTheme("density", e.target.value)} /></label>
+                </>
+              )}
+            </div>
+          </div>
+        </Section>
+      ) : null}
 
-      <Section label={`Screens (${screens.length})`} hint="wireframes speak the ontology's vocabulary — click a screen for its states">
+      {journeys.length > 1 ? (
+        <div className="v3fs-wf-filter" role="tablist" aria-label="Focus a workflow">
+          <button type="button" role="tab" aria-selected={!filter} className={`v3fs-wf-filter-b${!filter ? " on" : ""}`} onClick={() => setFilter("")}>All workflows</button>
+          {journeys.map((j) => (
+            <button key={j} type="button" role="tab" aria-selected={filter === j} className={`v3fs-wf-filter-b${filter === j ? " on" : ""}`} onClick={() => setFilter(j)}>{j}</button>
+          ))}
+        </div>
+      ) : null}
+
+      <Section label={`Screens (${shownScreens.length})`} hint="wireframes speak the ontology's vocabulary — click a screen for its states">
         <div className="v3fs-wf-grid">
-          {screens.map((screen, index) => (
+          {shownScreens.map((screen, index) => (
             <ScreenCard key={index} screen={screen}
               active={!!focused && screen === focused}
-              onClick={() => { setWalkFlow(null); setFocusScreen(asText(screen.id) || asText(screen.name)); }} />
+              onClick={() => setFocusScreen(asText(screen.id) || asText(screen.name))} />
           ))}
-          {!screens.length ? <div className="v3fs-empty">No screens yet — generate the Experience Design from the Blueprint and Atlas.</div> : null}
+          {!shownScreens.length ? <div className="v3fs-empty">No screens in this workflow{filter ? "" : " yet"}.</div> : null}
         </div>
         {focused ? (
           <div className="v3fs-wf-detail">
@@ -151,40 +208,45 @@ export default function ExperienceDesignStudio({ doc }: StudioProps) {
         ) : null}
       </Section>
 
-      <Section label={`Flows (${flows.length})`} hint="each flow names the verbatim pain it dissolves — walk it to preview the demo">
+      <Section label="Workflows" hint="every flow's steps, in order — mark the steps an agent should run">
         <div className="v3fs-wf-flows">
-          {flows.map((flow, index) => {
+          {flows.map((flow, index) => ({ flow, index })).filter(({ flow }) => flowInFilter(flow)).map(({ flow, index }) => {
             const pain = asRecord(flow.painAnswered);
-            const walking = walkFlow === index;
+            const steps = asArray(flow.steps).map(asRecord);
+            const agentified = steps.filter((s) => s.agentify).length;
             return (
-              <div key={index} className={`v3fs-wf-flow${walking ? " on" : ""}`}>
+              <div key={index} className="v3fs-wf-flow">
                 <div className="v3fs-wf-flow-h">
                   <b>{asText(flow.name) || `Flow ${index + 1}`}</b>
                   <span>{[asText(flow.persona), asText(flow.journey)].filter(Boolean).join(" · ")}</span>
-                  <button type="button" className="v3fs-btn" onClick={() => {
-                    if (walking) { setWalkFlow(null); return; }
-                    setWalkFlow(index); setWalkStep(0); setFocusScreen(null);
-                  }}>{walking ? "Stop" : "▶ Walk"}</button>
+                  {agentified ? <span className="v3fs-wf-agcount" title="steps marked to agentify">⚡ {agentified}/{steps.length}</span> : null}
                 </div>
                 {asText(pain.quote) ? (
                   <blockquote className="v3fs-wf-pain">“{asText(pain.quote)}”{asText(pain.who) ? <cite> — {asText(pain.who)}</cite> : null}</blockquote>
                 ) : null}
-                {walking ? (
-                  <div className="v3fs-wf-walk">
-                    {steps.map((step, i) => (
-                      <button key={i} type="button" className={`v3fs-wf-step${i === walkStep ? " on" : ""}`} onClick={() => setWalkStep(i)}>
-                        <b>{i + 1}</b>
-                        <span>{asText(step.action)}</span>
-                        {asText(step.hitl) ? <em title={asText(step.hitl)}>⛨ approval</em> : null}
+                <ol className="v3fs-wf-steps">
+                  {steps.map((step, si) => (
+                    <li key={si} className={`v3fs-wf-stepr${step.agentify ? " ag" : ""}`}>
+                      <span className="v3fs-wf-stepr-n">{si + 1}</span>
+                      <span className="v3fs-wf-stepr-body">
+                        <span className="v3fs-wf-stepr-act">{asText(step.action)}</span>
+                        {asText(step.outcome) ? <span className="v3fs-wf-stepr-out">→ {asText(step.outcome)}</span> : null}
+                      </span>
+                      {asText(step.hitl) ? <em className="v3fs-wf-stepr-hitl" title={asText(step.hitl)}>⛨ approval</em> : null}
+                      <button type="button" className={`v3fs-wf-agentify${step.agentify ? " on" : ""}`} disabled={locked}
+                        aria-pressed={!!step.agentify}
+                        title={step.agentify ? "Marked to agentify — the Blueprint builds an agent for this step" : "Mark this step to be run by an agent"}
+                        onClick={() => setStep(index, si, { agentify: !step.agentify })}>
+                        ⚡ {step.agentify ? "Agentify" : "Agentify?"}
                       </button>
-                    ))}
-                    {currentStep ? <div className="v3fs-wf-outcome">→ {asText(currentStep.outcome)}</div> : null}
-                  </div>
-                ) : null}
+                    </li>
+                  ))}
+                  {!steps.length ? <li className="v3fs-wf-stepr empty">No steps on this flow yet.</li> : null}
+                </ol>
               </div>
             );
           })}
-          {!flows.length ? <div className="v3fs-empty">No flows yet.</div> : null}
+          {!flows.filter(flowInFilter).length ? <div className="v3fs-empty">No workflows{filter ? " in this filter" : " yet"}.</div> : null}
         </div>
       </Section>
 

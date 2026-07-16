@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700;800&display=swap');
 
 :root {
   --color-canvas: #0f1117;
@@ -64,7 +64,11 @@
   --v3-text-muted: var(--color-text-muted);
 
   --v3-font: "Outfit", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --v3-font-mono: "SF Mono", "Fira Code", monospace;
+  /* A guaranteed, web-loaded premium mono. SF Mono / ui-monospace lead so Apple
+     machines keep the crisp system face; IBM Plex Mono is the loaded fallback so
+     Windows/Linux get the SAME refined data voice instead of Courier — the mono
+     labels, counts and timestamps now read consistently on every machine. */
+  --v3-font-mono: ui-monospace, "SF Mono", "SFMono-Regular", "IBM Plex Mono", Menlo, "Cascadia Mono", monospace;
   --v3-weight-light: 300;
   --v3-weight-regular: 400;
   --v3-weight-medium: 500;
@@ -454,6 +458,11 @@ select {
   -moz-osx-font-smoothing: grayscale;
   letter-spacing: -0.005em;
   text-rendering: optimizeLegibility;
+  /* Explicit OpenType: kerning, standard + contextual ligatures on everywhere,
+     so the type renders identically across engines instead of leaning on each
+     browser's optimizeLegibility defaults. Optical sizing follows the face. */
+  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+  font-optical-sizing: auto;
   /* Lined-up figures everywhere numbers sit together — counts, gauges, budgets,
      timestamps. A hallmark of premium data UI; Outfit carries tnum cleanly. */
   font-variant-numeric: tabular-nums;
@@ -6385,6 +6394,10 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .react-flow__node.v3fs-onto-node.selected .react-flow__handle{opacity:1}
 .v3fs-onto-hint{font-size:11.5px;color:var(--v3-text-secondary);margin:2px 0 6px}
 .v3fs-derived-note{font-size:12px;line-height:1.55;color:var(--v3-text-secondary);border:1px solid var(--fs-line);border-left:3px solid var(--v3-accent-2);border-radius:10px;padding:9px 14px;margin:10px 22px 4px;background:var(--fs-indigo-wash)}
+/* Compact read-only marker for derived artifacts — a quiet inline chip, not a
+   paragraph. Design-team (editable) artifacts render no marker at all. */
+.v3fs-derived-chip{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:600;letter-spacing:.005em;color:var(--v3-text-muted);background:var(--fs-line);border-radius:999px;padding:4px 12px;margin:8px 22px 2px}
+.v3fs-derived-chip span{color:var(--v3-accent-2);font-weight:700}
 /* ── Experience Design studio: wireframes as skeleton screens ──────────── */
 .v3fs-wf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
 .v3fs-wf-screen{display:flex;flex-direction:column;gap:8px;text-align:left;font:inherit;cursor:pointer;
@@ -6434,6 +6447,40 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-wf-swatch .sw{width:18px;height:18px;border-radius:50%;border:1px solid color-mix(in srgb,var(--v3-text-primary) 12%,transparent);flex:none}
 .v3fs-wf-swatch b{color:var(--v3-text-primary);font-weight:700}
 .v3fs-wf-swatch em{font-style:normal;font-family:var(--v3-font-mono,ui-monospace,monospace);font-size:10px;color:var(--v3-text-muted);text-transform:uppercase}
+/* Editable theme — colour wells + token inputs the delivery team tunes. */
+.v3fs-wf-swatches.editable{gap:10px}
+.v3fs-wf-swatches.editable .v3fs-wf-swatch{padding:4px 8px 4px 4px}
+.v3fs-wf-swatch input.sw{width:22px;height:22px;padding:0;border:1px solid color-mix(in srgb,var(--v3-text-primary) 14%,transparent);border-radius:6px;background:none;cursor:pointer}
+.v3fs-wf-swatch input.sw::-webkit-color-swatch-wrapper{padding:2px}
+.v3fs-wf-swatch input.sw::-webkit-color-swatch{border:none;border-radius:4px}
+.v3fs-wf-hex{width:74px;font-family:var(--v3-font-mono,ui-monospace,monospace);font-size:10.5px;text-transform:uppercase;color:var(--v3-text-secondary);border:1px solid var(--fs-line);border-radius:6px;padding:2px 6px;background:var(--fs-bg,transparent)}
+.v3fs-wf-hex:focus{outline:none;border-color:var(--v3-accent-2)}
+.v3fs-wf-tokens{display:flex;flex-wrap:wrap;gap:10px}
+.v3fs-wf-token{display:flex;flex-direction:column;gap:3px;font-size:10px;font-weight:650;letter-spacing:.03em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3fs-wf-token input{font:inherit;font-size:12px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--v3-text-primary);border:1px solid var(--fs-line);border-radius:8px;padding:6px 10px;background:var(--fs-bg,var(--fs-card));min-width:150px}
+.v3fs-wf-token.sm input{min-width:64px}
+.v3fs-wf-token input:focus{outline:none;border-color:var(--v3-accent-2);box-shadow:0 0 0 3px color-mix(in srgb,var(--v3-accent-2) 14%,transparent)}
+/* Workflow FILTER — the focused lens that replaced the old walk/stop stepper. */
+.v3fs-wf-filter{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 2px}
+.v3fs-wf-filter-b{font:inherit;font-size:11.5px;font-weight:600;cursor:pointer;border:1px solid var(--fs-line);border-radius:999px;padding:5px 13px;background:var(--fs-card);color:var(--v3-text-secondary);transition:background .14s ease,border-color .14s ease,color .14s ease}
+.v3fs-wf-filter-b:hover{border-color:color-mix(in srgb,var(--v3-accent-2) 34%,var(--fs-line))}
+.v3fs-wf-filter-b.on{background:var(--v3-accent);border-color:var(--v3-accent);color:#fff;font-weight:700}
+/* Workflow steps — the flow's steps inline, each with an Agentify toggle. */
+.v3fs-wf-agcount{font-size:10.5px;font-weight:700;color:var(--v3-accent-2);background:var(--fs-indigo-wash);border-radius:999px;padding:2px 9px;flex:none}
+.v3fs-wf-steps{list-style:none;margin:2px 0 0;padding:0;display:flex;flex-direction:column;gap:5px}
+.v3fs-wf-stepr{display:flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid var(--fs-line);border-radius:9px;background:var(--fs-bg,var(--fs-card))}
+.v3fs-wf-stepr.ag{border-color:color-mix(in srgb,var(--v3-accent-2) 42%,var(--fs-line));background:color-mix(in srgb,var(--v3-accent-2) 6%,transparent)}
+.v3fs-wf-stepr.empty{color:var(--v3-text-muted);font-size:11.5px;justify-content:center;border-style:dashed}
+.v3fs-wf-stepr-n{flex:none;width:20px;height:20px;display:grid;place-items:center;border-radius:6px;font-family:var(--v3-font-mono,ui-monospace,monospace);font-size:10.5px;font-weight:700;color:var(--v3-text-muted);background:var(--fs-line)}
+.v3fs-wf-stepr.ag .v3fs-wf-stepr-n{background:var(--v3-accent);color:#fff}
+.v3fs-wf-stepr-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.v3fs-wf-stepr-act{font-size:12.5px;font-weight:600;color:var(--v3-text-primary);line-height:1.35}
+.v3fs-wf-stepr-out{font-size:11px;color:var(--v3-text-muted);line-height:1.4}
+.v3fs-wf-stepr-hitl{flex:none;font-style:normal;font-size:9.5px;font-weight:650;color:var(--v3-amber);background:var(--v3-amber-soft);border-radius:999px;padding:2px 8px}
+.v3fs-wf-agentify{flex:none;font:inherit;font-size:10.5px;font-weight:650;cursor:pointer;border:1px solid var(--fs-line);border-radius:999px;padding:4px 11px;background:var(--fs-card);color:var(--v3-text-muted);transition:background .14s ease,border-color .14s ease,color .14s ease}
+.v3fs-wf-agentify:hover:not(:disabled){border-color:color-mix(in srgb,var(--v3-accent-2) 44%,var(--fs-line));color:var(--v3-accent-2)}
+.v3fs-wf-agentify.on{background:var(--v3-accent);border-color:var(--v3-accent);color:#fff}
+.v3fs-wf-agentify:disabled{opacity:.55;cursor:default}
 .v3fs-wf-flows{display:flex;flex-direction:column;gap:10px}
 .v3fs-wf-flow{border:1px solid var(--fs-line);border-radius:11px;padding:11px 14px;display:flex;flex-direction:column;gap:8px}
 .v3fs-wf-flow.on{border-color:color-mix(in srgb,var(--v3-accent-2) 45%,var(--fs-line))}
@@ -7454,8 +7501,11 @@ details[open] > summary .v3fs-disc-c::after {display:none}
   grid-template-areas:"av who chev" "av act act";align-items:center;gap:7px 10px;padding:10px 12px;cursor:pointer;list-style:none}
 .v3fs-ivc > summary::-webkit-details-marker {display:none}
 .v3fs-ivc-actions {grid-area:act;display:flex;flex-wrap:wrap;align-items:center;gap:7px;min-width:0}
-.v3fs-ivc-who {display:flex;flex-direction:column;gap:1px;font-size:12.5px;font-weight:650;color:var(--v3-text-primary);min-width:0;letter-spacing:-.005em}
-.v3fs-ivc-who span {font-size:10.5px;font-weight:500;color:var(--v3-text-muted)}
+/* Card header hierarchy: the name reads as the display line — a touch larger,
+   tighter tracking, full display weight — and the role sits beneath it as a
+   quiet, letter-spaced eyebrow. Two distinct type roles, not two similar lines. */
+.v3fs-ivc-who {display:flex;flex-direction:column;gap:2px;font-size:13px;font-weight:680;color:var(--v3-text-primary);min-width:0;line-height:1.25;letter-spacing:-.012em}
+.v3fs-ivc-who span {font-size:9.5px;font-weight:650;color:var(--v3-text-muted);letter-spacing:.06em;text-transform:uppercase;line-height:1.3}
 
 /* "No address" hint on a collection card's collapsed row — quiet amber, the
    operator sees the missing contact without opening the card. */

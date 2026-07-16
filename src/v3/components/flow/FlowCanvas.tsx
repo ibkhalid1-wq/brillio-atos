@@ -4,7 +4,7 @@ import PhaseInputsPanel from "@/v3/components/PhaseInputsPanel";
 import { acceptedAgentPatterns } from "@/v3/components/flow/flowPatterns";
 import EnvisionCockpit from "@/v3/components/flow/EnvisionCockpit";
 import ShowCockpit from "@/v3/components/flow/ShowCockpit";
-import ProductOwnerCockpit, { DESIGN_TEAM } from "@/v3/components/flow/ProductOwnerCockpit";
+import ProductOwnerCockpit from "@/v3/components/flow/ProductOwnerCockpit";
 import ListenCockpit from "@/v3/components/flow/ListenCockpit";
 import { loopState } from "@/v3/components/flow/flowLoop";
 // The artifact studio pulls React Flow and every WYSIWYG editor — a heavy
@@ -424,9 +424,11 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
         // team, not per-area work — so its tab shows only when the Design-team
         // tile is selected (like the Direction act). Excluded from the valid keys
         // otherwise, so a stored "architecture-strategy" tab falls back cleanly.
-        const dtSel = (areaFilter[movement.id] ?? []).includes(DESIGN_TEAM);
-        const tabVisible = (id: string) => id !== "architecture-strategy" || dtSel;
-        const artTabKeys = artifacts.filter((a) => tabVisible(a.id)).map((a) => `art:${a.id}`);
+        // Design artifacts are solution-level documents — every one is always a
+        // tab (no per-area gating). The area toggles don't apply to them, so the
+        // orchestration band (with its area tiles) shows only on the Discovery
+        // tab below, where collection genuinely is per-area.
+        const artTabKeys = artifacts.map((a) => `art:${a.id}`);
         // Ship's cutover/ship plan (the compiled lanes board) is its OWN tab,
         // separate from the Hardening plan artifact — the two were previously
         // stacked on one tab. Only when the compile/toggle handlers exist.
@@ -497,7 +499,7 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
         const tabDefs: Array<{ key: MovementTab; label: string; state: { glyph: string; text: string; tone: string } | null; show: boolean }> = [
           { key: "collect", label: "Discovery", state: collectState, show: true },
           ...(hasProtoTab ? [{ key: "proto" as MovementTab, label: "Prototype", state: { glyph: "▶", text: "", tone: "ok" }, show: true }] : []),
-          ...artifacts.map((a) => ({ key: `art:${a.id}` as MovementTab, label: a.title, state: artifactTabState(a), show: tabVisible(a.id) })),
+          ...artifacts.map((a) => ({ key: `art:${a.id}` as MovementTab, label: a.title, state: artifactTabState(a), show: true })),
           ...(hasShipPlanTab ? [{ key: "ship:lanes" as MovementTab, label: "Ship plan", state: shipPlanState, show: true }] : []),
         ];
 
@@ -571,7 +573,7 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
                   </button>
                 </div>
               ) : null}
-              {movement.id === "envision" || movement.id === "show" ? (
+              {(movement.id === "envision" || movement.id === "show") && tabKey === "collect" ? (
                 <section className="v3fs-protohome" aria-label="Prototype orchestration">
                   <ProductOwnerCockpit program={program} selected={selAreas} onToggleArea={toggleArea} />
                   {movement.id === "envision" ? (
