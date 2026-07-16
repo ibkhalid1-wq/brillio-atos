@@ -7,11 +7,15 @@
  */
 import { useState } from "react";
 
-export default function PrototypeCommandBar({ onRefine, regenerating, compact }: {
+export default function PrototypeCommandBar({ onRefine, regenerating, compact, placeholder, busyLabel }: {
   onRefine: (instruction: string) => Promise<void> | void;
   regenerating?: boolean;
   /** Tighter padding for the in-studio bar. */
   compact?: boolean;
+  /** Override the input placeholder (design tabs word it per artifact). */
+  placeholder?: string;
+  /** Override the regenerating-state button label (default "Polishing…"). */
+  busyLabel?: string;
 }) {
   const [cmd, setCmd] = useState("");
   const [busy, setBusy] = useState(false);
@@ -25,10 +29,10 @@ export default function PrototypeCommandBar({ onRefine, regenerating, compact }:
     <form className={`v3fs-protocmd${compact ? " compact" : ""}`} onSubmit={(e) => { e.preventDefault(); void submit(); }}>
       <span className="v3fs-protocmd-caret" aria-hidden="true">›</span>
       <input className="v3fs-protocmd-in" value={cmd} disabled={busy || regenerating}
-        placeholder="Refine &amp; polish — e.g. &ldquo;make the dashboard a card grid, add a sticky header, tighten the spacing&rdquo;"
-        onChange={(e) => setCmd(e.target.value)} aria-label="Refine and polish the prototype" />
+        placeholder={placeholder ?? "Refine & polish — e.g. “make the dashboard a card grid, add a sticky header, tighten the spacing”"}
+        onChange={(e) => setCmd(e.target.value)} aria-label="Refine this document with an instruction" />
       <button type="submit" className="v3fs-protocmd-btn" disabled={busy || regenerating || !cmd.trim()}>
-        {regenerating ? "Polishing…" : busy ? "Sending…" : "Refine ↵"}
+        {regenerating ? (busyLabel ?? "Polishing…") : busy ? "Sending…" : "Refine ↵"}
       </button>
     </form>
   );

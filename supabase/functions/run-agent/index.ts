@@ -1642,6 +1642,15 @@ MERGE the new evidence in:
 When no priorArtifact is present (initial_generation), author it fresh from the
 evidence.
 
+### Delivery-team command line — refineInstruction
+When the context carries "refineInstruction", it is a direct, plain-language
+command the DELIVERY TEAM typed on THIS document's command line — a design
+directive from the builders themselves, not a stakeholder's evidence. Treat it
+as the HIGHEST-PRIORITY guidance for this run: apply it faithfully and
+thoroughly across the document wherever it makes sense, while still preserving
+everything the current inputs don't change (see the Regeneration discipline
+above). It refines this document; it never rebuilds it from scratch.
+
 ### Gap phrasing — who closes it decides how it reads
 When you list a gap, decide who must CLOSE it:
 - Missing information a STAKEHOLDER must supply (objectives, success measures,
@@ -3029,6 +3038,14 @@ function buildSpecialAgentInputContext(
     const prototypeRefineBrief = formalSpec.fieldKey === "prototypeBuild"
       ? buildPrototypeRefineBrief(inner, phaseInputsAll, runMode)
       : null;
+    // Design-tab command line: a plain-language refine instruction the delivery
+    // team typed for THIS artifact, stashed fingerprint-safe on its phase inputs
+    // as `_refine_<fieldKey>`. Honoured as the highest-priority guidance this run
+    // (see FORMAL_ARTIFACT_DISCIPLINE). The prototype build has its own brief.
+    const refineInstruction = runMode !== "initial_generation" && formalSpec.fieldKey !== "prototypeBuild"
+      && typeof phaseInputs[`_refine_${formalSpec.fieldKey}`] === "string"
+      ? (phaseInputs[`_refine_${formalSpec.fieldKey}`] as string).trim().slice(0, 2000)
+      : "";
     // The Experience Design doc the Prototype Build renders — its governed theme
     // and screens/flows. Same phase as the build, so it never appears in the
     // (earlier-phase) priorPhaseArtifacts, and existingArtifacts is metadata
@@ -3146,6 +3163,7 @@ function buildSpecialAgentInputContext(
       ...(upstreamArtifactDocs.length ? { upstreamArtifactDocs } : {}),
       ...(upstreamDesign ? { upstreamDesign } : {}),
       ...(prototypeRefineBrief ? { prototypeRefineBrief } : {}),
+      ...(refineInstruction ? { refineInstruction } : {}),
       ...(priorArtifact ? { priorArtifact } : {}),
     // Compact serialization: the pretty-print indent added ~30% to a context
     // that already runs to hundreds of KB — pure whitespace tokens that slow

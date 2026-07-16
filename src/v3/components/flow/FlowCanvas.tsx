@@ -311,7 +311,7 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
                   {/* The Design/Validate toggle and the iteration meter were removed
                       from the spine node — the toggle lives on the Prototype page
                       itself (the loop switch), so the spine stays a plain step. */}
-                  <span className={`v3fs-sstate ${loopOn ? "live" : ls.converged ? "done" : "wait"}`}>{ls.converged ? "Converged" : loopOn ? "In progress" : "Continuous"}</span>
+                  <span className={`v3fs-sstate ${loopOn ? "live" : ls.converged ? "done" : "wait"}`}>{ls.converged ? "Converged" : loopOn ? "In progress" : " "}</span>
                 </div>
               );
             }

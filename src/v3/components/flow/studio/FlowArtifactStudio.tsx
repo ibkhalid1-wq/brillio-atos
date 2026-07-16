@@ -19,6 +19,7 @@ import { partitionOntologyViolations } from "@/v3/components/flow/flowOntologyCo
 import { listOpenFlowDecisions, listFlowAttestations, docSectionDiff } from "@/v3/components/flow/flowDecisions";
 import { buildPrototypePrompt } from "@/v3/components/flow/flowBuildPrompt";
 import { listSnapshots } from "@/v3/lib/blobSnapshots";
+import PrototypeCommandBar from "@/v3/components/flow/PrototypeCommandBar";
 import { STUDIO_REGISTRY } from "./studios";
 import { StudioLockContext, EmptyState } from "./StudioKit";
 import DocumentView from "./DocumentView";
@@ -30,6 +31,14 @@ export interface ArtifactEditInput {
   title: string;
   doc: Record<string, unknown>;
 }
+
+// Per-artifact command-line placeholders — the design tabs that carry a refine
+// command bar (the Prototype Build tab uses its own `_prototypeRefine` bar).
+const REFINE_PLACEHOLDER: Record<string, string> = {
+  "architecture-strategy": "Refine the strategy — e.g. “add a crew-of-specialists candidate and score it against the others”",
+  "experience-design": "Refine the experience — e.g. “tighten the pricing screen, add an approvals inbox to the flow”",
+  "agentic-blueprint": "Refine the blueprint — e.g. “split the orchestrator into two agents and add a HITL gate on payouts”",
+};
 
 export default function FlowArtifactStudio({ program, artifact, onClose, onRegenerate, onSaveDoc, onOpenInbox, onOpenArtifact, onSaveInputs, embedded, regenerating, header }: {
   program: ProgramSummary;
@@ -421,10 +430,11 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
             ) : null}
           </div>
         ) : null}
-        {/* Request a change — the read-only document's ONE editing path: ask the
+        {/* Request a change — the DERIVED document's ONE editing path: ask the
             person who owns the answer. The question travels on their link and
-            regenerates the document when answered. Replaces direct hand-edits. */}
-        {onSaveInputs && askRoster.length ? (
+            regenerates the document when answered. Editable design-team artifacts
+            are authored directly, so they don't show this. */}
+        {!canEdit && onSaveInputs && askRoster.length ? (
           <details className="v3fs-artask">
             <summary>
               <span className="v3fs-artask-l">✎ Request a change</span>
@@ -505,6 +515,18 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
                 <div className="v3fs-derived-chip" role="note">
                   <span aria-hidden="true">↻</span> Derived from the record — capture a correction as evidence to change it
                 </div>
+              ) : null}
+              {/* Command line on every design tab: a plain-language instruction
+                  the delivery team types to have the agent refine THIS document.
+                  Stashed fingerprint-safe as `_refine_<fieldKey>` on the phase and
+                  re-run. The Prototype Build tab has its own (`_prototypeRefine`). */}
+              {REFINE_PLACEHOLDER[artifact.id] && onSaveInputs && onRegenerate ? (
+                <PrototypeCommandBar compact regenerating={regenerating} busyLabel="Regenerating…"
+                  placeholder={REFINE_PLACEHOLDER[artifact.id]}
+                  onRefine={async (instruction) => {
+                    await onSaveInputs(artifact.movementId, { [`_refine_${entry.fieldKey}`]: instruction }, { silent: true });
+                    onRegenerate();
+                  }} />
               ) : null}
               {/* Locked when edits are disabled — the studio's own inputs and
                   add/remove/drag affordances go read-only, so a field can't be

@@ -19,6 +19,7 @@ import {
   asArray, asRecord, asText, asStrings, useStudioLocked, type StudioProps,
 } from "./StudioKit";
 import { FORMAL_ARTIFACT_FIELD_KEYS } from "@/v3/lib/formalArtifacts";
+import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 
 /* ── shared card-list scaffolding ─────────────────────────────────────────── */
 
@@ -407,12 +408,46 @@ function StrategyStudio({ doc, onChange }: StudioProps) {
   );
 }
 
-function BlueprintStudio({ doc, onChange }: StudioProps) {
+function BlueprintStudio({ doc, onChange, program }: StudioProps) {
   const patch = patchOf(doc, onChange);
   const agents = useListOps(doc, onChange, "agents");
   const orchestration = asRecord(doc.orchestration);
+  // Alignment with the Experience Design's agentic DIRECTION: the steps the
+  // delivery team marked ⚡ Agentify there are the demand the Blueprint must
+  // deliver. Surface them so the two artifacts read as one decision — and so a
+  // marked step with no agent shows as a gap to close.
+  const agentified = React.useMemo(() => {
+    const ed = program ? readArtifactDoc(program, "experienceDesign") : null;
+    const marks = ed ? asRecord(ed.agentifyMarks) : {};
+    return Object.values(marks).map(asRecord)
+      .map((m) => ({ flow: asText(m.workflow) || asText(m.area) || "Workflow", action: asText(m.action) }))
+      .filter((m) => m.action);
+  }, [program]);
+  const agentNames = agents.items.map((a) => asText(a.name).toLowerCase()).filter(Boolean);
   return (
     <>
+      {agentified.length ? (
+        <div className="v3fs-bp-direction" role="note">
+          <div className="v3fs-bp-direction-h">
+            <span className="v3fs-bp-direction-i" aria-hidden="true">⚡</span>
+            <b>Agentic direction — from Experience Design</b>
+            <span className="v3fs-bp-direction-n">{agentified.length} step{agentified.length === 1 ? "" : "s"} to agentify</span>
+          </div>
+          <p className="v3fs-bp-direction-lead">These are the steps the delivery team marked to agentify. The Blueprint below must field an agent for each — build to this direction.</p>
+          <ul className="v3fs-bp-direction-list">
+            {agentified.slice(0, 12).map((s, i) => {
+              const covered = agentNames.some((n) => n && s.action.toLowerCase().includes(n));
+              return (
+                <li key={i} className={covered ? "ok" : "open"}>
+                  <span className="v3fs-bp-direction-flow">{s.flow}</span>
+                  <span className="v3fs-bp-direction-act">{s.action}</span>
+                  <span className={`v3fs-bp-direction-tag ${covered ? "ok" : "open"}`}>{covered ? "✓ agent" : "no agent yet"}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
       <Section label="The orchestration — agents and what flows between them" hint="edges are derived: outputs feeding inputs; drag to arrange">
         <BlueprintGraph doc={doc} />
       </Section>

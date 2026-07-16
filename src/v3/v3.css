@@ -6481,6 +6481,44 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-wf-agentify:hover:not(:disabled){border-color:color-mix(in srgb,var(--v3-accent-2) 44%,var(--fs-line));color:var(--v3-accent-2)}
 .v3fs-wf-agentify.on{background:var(--v3-accent);border-color:var(--v3-accent);color:#fff}
 .v3fs-wf-agentify:disabled{opacity:.55;cursor:default}
+/* ── Agentify tree — the Listen workflows by area, each step with a suggest /
+   approve / mark control. An expandable area → workflow → steps structure. ── */
+.v3fs-agtree{display:flex;flex-direction:column;gap:10px}
+.v3fs-agtree-area{border:1px solid var(--fs-line);border-radius:14px;background:var(--fs-card);overflow:hidden;box-shadow:var(--fs-shadow)}
+.v3fs-agtree-area > summary{display:flex;align-items:center;gap:11px;padding:12px 15px;cursor:pointer;list-style:none;user-select:none;transition:background .14s ease}
+.v3fs-agtree-area > summary::-webkit-details-marker{display:none}
+.v3fs-agtree-area > summary:hover{background:color-mix(in srgb,var(--v3-accent-2) 5%,transparent)}
+.v3fs-agtree-tw{flex:none;width:30px;height:30px;display:grid;place-items:center;border-radius:9px;background:var(--v3-accent);color:#fff;
+  font-size:11px;font-weight:800;letter-spacing:.02em}
+.v3fs-agtree-area > summary b{font-size:14px;font-weight:750;letter-spacing:-.01em}
+.v3fs-agtree-meta{font-size:11px;color:var(--v3-text-muted);font-variant-numeric:tabular-nums}
+.v3fs-agtree-n{flex:none;font-size:10.5px;font-weight:700;border-radius:999px;padding:2px 9px;white-space:nowrap}
+.v3fs-agtree-n.ag{color:#fff;background:var(--v3-accent)}
+.v3fs-agtree-n.sug{color:var(--v3-accent-2);background:var(--fs-indigo-wash)}
+.v3fs-agtree-caret{margin-left:auto;color:var(--v3-text-muted);font-size:11px;transition:transform .18s ease}
+.v3fs-agtree-area[open] > summary .v3fs-agtree-caret{transform:rotate(180deg)}
+.v3fs-agtree-n + .v3fs-agtree-caret{margin-left:6px}
+.v3fs-agtree-body{padding:2px 13px 13px;display:flex;flex-direction:column;gap:11px;animation:v3fs-disc-in .18s ease}
+.v3fs-agtree-wf{border:1px solid var(--fs-line);border-radius:11px;background:var(--fs-bg,transparent);overflow:hidden}
+.v3fs-agtree-wf-h{display:flex;align-items:baseline;gap:9px;padding:9px 12px;border-bottom:1px solid var(--fs-line);background:color-mix(in srgb,var(--v3-text-primary) 2.5%,transparent)}
+.v3fs-agtree-wf-h b{font-size:12.5px;font-weight:700}
+.v3fs-agtree-wf-h span{font-size:10.5px;color:var(--v3-text-muted)}
+.v3fs-agtree-steps{list-style:none;margin:0;padding:8px 10px;display:flex;flex-direction:column;gap:5px}
+.v3fs-agtree-step{display:flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid transparent;border-radius:9px;transition:background .14s ease,border-color .14s ease}
+.v3fs-agtree-step.sug{background:color-mix(in srgb,var(--v3-accent-2) 5%,transparent);border-color:color-mix(in srgb,var(--v3-accent-2) 22%,var(--fs-line))}
+.v3fs-agtree-step.ag{background:color-mix(in srgb,var(--v3-accent-2) 8%,transparent);border-color:color-mix(in srgb,var(--v3-accent-2) 42%,var(--fs-line))}
+.v3fs-agtree-step-n{flex:none;width:20px;height:20px;display:grid;place-items:center;border-radius:6px;font-family:var(--v3-font-mono,ui-monospace,monospace);
+  font-size:10.5px;font-weight:700;color:var(--v3-text-muted);background:var(--fs-line)}
+.v3fs-agtree-step.ag .v3fs-agtree-step-n{background:var(--v3-accent);color:#fff}
+.v3fs-agtree-step-body{flex:1;min-width:0;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 9px}
+.v3fs-agtree-step-act{font-size:12.5px;font-weight:600;color:var(--v3-text-primary);line-height:1.35}
+.v3fs-agtree-step-hitl{flex:none;font-style:normal;font-size:9.5px;font-weight:650;color:var(--v3-amber);background:var(--v3-amber-soft);border-radius:999px;padding:2px 8px}
+.v3fs-agtree-suggest{flex:none;display:inline-flex;align-items:center;gap:8px}
+.v3fs-agtree-suggest-l{font-size:10px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--v3-accent-2)}
+.v3fs-agtree-approve{flex:none;font:inherit;font-size:11px;font-weight:700;cursor:pointer;border:1px solid transparent;border-radius:999px;padding:4px 13px;
+  color:#fff;background:var(--v3-accent-2);transition:filter .12s ease}
+.v3fs-agtree-approve:hover:not(:disabled){filter:brightness(1.08)}
+.v3fs-agtree-approve:disabled{opacity:.5;cursor:default}
 .v3fs-wf-flows{display:flex;flex-direction:column;gap:10px}
 .v3fs-wf-flow{border:1px solid var(--fs-line);border-radius:11px;padding:11px 14px;display:flex;flex-direction:column;gap:8px}
 .v3fs-wf-flow.on{border-color:color-mix(in srgb,var(--v3-accent-2) 45%,var(--fs-line))}
@@ -6883,6 +6921,29 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-protocmd-btn:focus-visible {outline:2px solid #fff;outline-offset:2px}
 .v3fs-protocmd-note {font-size:12px;color:var(--v3-accent);font-weight:600}
 .v3fs-protocmd.compact {margin-top:4px;padding:6px 10px}
+/* The design-tab command bar sits at the top of an editable studio — give it
+   air below so it reads as a header control, not part of the first section. */
+.v3fs-docview-b > .v3fs-protocmd.compact {margin:2px 0 14px}
+
+/* Blueprint ⇄ Experience Design alignment band: the ⚡ agentify direction the
+   delivery team set, surfaced so the two artifacts read as one decision. */
+.v3fs-bp-direction {border:1px solid color-mix(in srgb,var(--v3-accent-2) 34%,var(--fs-line));border-left:3px solid var(--v3-accent-2);
+  border-radius:12px;background:color-mix(in srgb,var(--v3-accent-2) 5%,transparent);padding:12px 15px;margin-bottom:16px}
+.v3fs-bp-direction-h {display:flex;align-items:center;gap:9px}
+.v3fs-bp-direction-i {font-size:14px;line-height:1;color:var(--v3-accent-2)}
+.v3fs-bp-direction-h b {font-size:12.5px;font-weight:700;letter-spacing:-.005em}
+.v3fs-bp-direction-n {margin-left:auto;font-size:10.5px;font-weight:700;letter-spacing:.02em;color:var(--v3-accent-2);
+  background:var(--fs-indigo-wash);border-radius:999px;padding:2px 10px;white-space:nowrap}
+.v3fs-bp-direction-lead {margin:7px 0 10px;font-size:11.5px;line-height:1.55;color:var(--v3-text-muted);max-width:74ch}
+.v3fs-bp-direction-list {list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px}
+.v3fs-bp-direction-list li {display:flex;align-items:center;gap:10px;padding:6px 10px;border:1px solid var(--fs-line);border-radius:8px;background:var(--fs-card)}
+.v3fs-bp-direction-list li.open {border-color:color-mix(in srgb,var(--v3-amber) 40%,var(--fs-line))}
+.v3fs-bp-direction-flow {flex:none;font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--v3-text-muted);
+  min-width:96px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v3fs-bp-direction-act {flex:1;min-width:0;font-size:12.5px;font-weight:600;color:var(--v3-text-primary);line-height:1.35}
+.v3fs-bp-direction-tag {flex:none;font-size:9.5px;font-weight:700;letter-spacing:.02em;border-radius:999px;padding:2px 9px;white-space:nowrap}
+.v3fs-bp-direction-tag.ok {color:var(--v3-green);background:color-mix(in srgb,var(--v3-green) 14%,transparent)}
+.v3fs-bp-direction-tag.open {color:var(--v3-amber);background:var(--v3-amber-soft)}
 /* Mic button inside the dark command bar — live dictation, red while recording. */
 .v3fs-protocmd-mic {flex:none;display:inline-grid;place-items:center;width:30px;height:30px;border-radius:8px;cursor:pointer;
   font-size:14px;line-height:1;color:#fff;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);transition:background .12s,transform .12s}

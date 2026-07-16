@@ -8,6 +8,7 @@
  */
 import React, { useMemo, useState } from "react";
 import { Section, asArray, asRecord, asText, asStrings, useStudioLocked, type StudioProps } from "./StudioKit";
+import { projectFutureState, type FutureWorkflow } from "@/v3/components/flow/flowFutureState";
 
 const BLOCK_GLYPH: Record<string, string> = {
   list: "☰", table: "▦", form: "✎", detail: "¶", metric: "◔", action: "▸", timeline: "⋯",
@@ -78,7 +79,7 @@ const THEME_SWATCHES: Array<[string, string]> = [
   ["good", "Good"], ["warn", "Warn"], ["critical", "Critical"],
 ];
 
-export default function ExperienceDesignStudio({ doc, onChange }: StudioProps) {
+export default function ExperienceDesignStudio({ doc, onChange, program }: StudioProps) {
   const locked = useStudioLocked();
   const intent = asRecord(doc.designIntent);
   const theme = asRecord(doc.theme);
@@ -87,32 +88,47 @@ export default function ExperienceDesignStudio({ doc, onChange }: StudioProps) {
   const machines = asArray(doc.workflowMachines).map(asRecord);
   const [focusScreen, setFocusScreen] = useState<string | null>(null);
 
-  // The workflow FILTER replaces the old walk/stop stepper: pick a workflow /
-  // journey to focus the whole design on it; "All" shows everything. Grounded
-  // in the journeys the flows already name.
+  // The Screens filter — focus the wireframes on one journey. The Workflows
+  // section below has its own area grouping (the Listen workflows), so it isn't
+  // driven by this filter.
   const journeys = useMemo(() => {
     const set = new Set<string>();
     flows.forEach((f) => { const j = asText(f.journey) || asText(f.name); if (j) set.add(j); });
     return [...set];
   }, [flows]);
   const [filter, setFilter] = useState<string>("");
-  const flowInFilter = (f: Record<string, unknown>) => !filter || asText(f.journey) === filter || asText(f.name) === filter;
   const screenInFilter = (s: Record<string, unknown>) => !filter || asText(s.journey) === filter;
   const shownScreens = screens.filter(screenInFilter);
   const focused = shownScreens.find((s) => asText(s.id) === focusScreen || asText(s.name) === focusScreen);
 
+  // The Listen workflows, grouped by area, with a per-step agentic SUGGESTION
+  // (from the future-state projection) the delivery team approves — plus a
+  // manual mark for steps the suggestion didn't flag. Marks persist on this doc
+  // as `agentifyMarks` (a map keyed by workflow::action), so the Blueprint reads
+  // one agreed direction.
+  const future = useMemo(() => (program ? projectFutureState(program) : null), [program]);
+  const marks = asRecord(doc.agentifyMarks);
+  const markKey = (workflow: string, action: string) => `${workflow}::${action}`;
+  const isMarked = (key: string) => Object.prototype.hasOwnProperty.call(marks, key);
+  const toggleMark = (workflow: string, area: string, action: string, suggested: boolean) => {
+    const key = markKey(workflow, action);
+    const next = { ...marks };
+    if (isMarked(key)) delete next[key];
+    else next[key] = { workflow, area, action, suggested };
+    patch({ agentifyMarks: next });
+  };
+  const workflowsByArea = useMemo(() => {
+    const map = new Map<string, FutureWorkflow[]>();
+    (future?.workflows ?? []).forEach((w) => {
+      if (!map.has(w.area)) map.set(w.area, []);
+      map.get(w.area)!.push(w);
+    });
+    return [...map.entries()];
+  }, [future]);
+
   // Direct edits — this is the delivery team's own document.
   const patch = (next: Record<string, unknown>) => onChange({ ...doc, ...next });
   const setTheme = (key: string, value: string) => patch({ theme: { ...theme, [key]: value } });
-  const setStep = (flowIndex: number, stepIndex: number, changes: Record<string, unknown>) => {
-    patch({
-      flows: flows.map((f, i) => {
-        if (i !== flowIndex) return f;
-        const steps = asArray(f.steps).map(asRecord).map((s, j) => (j === stepIndex ? { ...s, ...changes } : s));
-        return { ...f, steps };
-      }),
-    });
-  };
   const str = (v: unknown) => (typeof v === "number" ? String(v) : asText(v));
   const hexOf = (v: unknown) => { const s = asText(v).trim(); return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(s) ? s : "#6455b8"; };
 
@@ -208,46 +224,71 @@ export default function ExperienceDesignStudio({ doc, onChange }: StudioProps) {
         ) : null}
       </Section>
 
-      <Section label="Workflows" hint="every flow's steps, in order — mark the steps an agent should run">
-        <div className="v3fs-wf-flows">
-          {flows.map((flow, index) => ({ flow, index })).filter(({ flow }) => flowInFilter(flow)).map(({ flow, index }) => {
-            const pain = asRecord(flow.painAnswered);
-            const steps = asArray(flow.steps).map(asRecord);
-            const agentified = steps.filter((s) => s.agentify).length;
-            return (
-              <div key={index} className="v3fs-wf-flow">
-                <div className="v3fs-wf-flow-h">
-                  <b>{asText(flow.name) || `Flow ${index + 1}`}</b>
-                  <span>{[asText(flow.persona), asText(flow.journey)].filter(Boolean).join(" · ")}</span>
-                  {agentified ? <span className="v3fs-wf-agcount" title="steps marked to agentify">⚡ {agentified}/{steps.length}</span> : null}
-                </div>
-                {asText(pain.quote) ? (
-                  <blockquote className="v3fs-wf-pain">“{asText(pain.quote)}”{asText(pain.who) ? <cite> — {asText(pain.who)}</cite> : null}</blockquote>
-                ) : null}
-                <ol className="v3fs-wf-steps">
-                  {steps.map((step, si) => (
-                    <li key={si} className={`v3fs-wf-stepr${step.agentify ? " ag" : ""}`}>
-                      <span className="v3fs-wf-stepr-n">{si + 1}</span>
-                      <span className="v3fs-wf-stepr-body">
-                        <span className="v3fs-wf-stepr-act">{asText(step.action)}</span>
-                        {asText(step.outcome) ? <span className="v3fs-wf-stepr-out">→ {asText(step.outcome)}</span> : null}
-                      </span>
-                      {asText(step.hitl) ? <em className="v3fs-wf-stepr-hitl" title={asText(step.hitl)}>⛨ approval</em> : null}
-                      <button type="button" className={`v3fs-wf-agentify${step.agentify ? " on" : ""}`} disabled={locked}
-                        aria-pressed={!!step.agentify}
-                        title={step.agentify ? "Marked to agentify — the Blueprint builds an agent for this step" : "Mark this step to be run by an agent"}
-                        onClick={() => setStep(index, si, { agentify: !step.agentify })}>
-                        ⚡ {step.agentify ? "Agentify" : "Agentify?"}
-                      </button>
-                    </li>
-                  ))}
-                  {!steps.length ? <li className="v3fs-wf-stepr empty">No steps on this flow yet.</li> : null}
-                </ol>
-              </div>
-            );
-          })}
-          {!flows.filter(flowInFilter).length ? <div className="v3fs-empty">No workflows{filter ? " in this filter" : " yet"}.</div> : null}
-        </div>
+      <Section label="Workflows to agentify" hint="the Listen workflows by area — approve a suggested step, or mark your own">
+        {!workflowsByArea.length ? (
+          <div className="v3fs-empty">No workflows yet — generate the Current-State Atlas in Listen, and its workflows appear here.</div>
+        ) : (
+          <div className="v3fs-agtree">
+            {workflowsByArea.map(([area, list]) => {
+              const areaSteps = list.reduce((n, w) => n + w.steps.length, 0);
+              const areaMarked = list.reduce((n, w) => n + w.steps.filter((s) => isMarked(markKey(w.name, s.action))).length, 0);
+              const areaSuggested = list.reduce((n, w) => n + w.steps.filter((s) => s.mode === "agentify" && !isMarked(markKey(w.name, s.action))).length, 0);
+              return (
+                <details key={area} className="v3fs-agtree-area" open>
+                  <summary>
+                    <span className="v3fs-agtree-tw" aria-hidden="true">{(area || "·").slice(0, 2).toUpperCase()}</span>
+                    <b>{area}</b>
+                    <span className="v3fs-agtree-meta">{list.length} workflow{list.length === 1 ? "" : "s"} · {areaSteps} steps</span>
+                    {areaMarked ? <span className="v3fs-agtree-n ag" title="steps set to agentify">⚡ {areaMarked}</span> : null}
+                    {areaSuggested ? <span className="v3fs-agtree-n sug" title="suggested, awaiting approval">✨ {areaSuggested}</span> : null}
+                    <span className="v3fs-agtree-caret" aria-hidden="true">▾</span>
+                  </summary>
+                  <div className="v3fs-agtree-body">
+                    {list.map((w) => (
+                      <div key={w.name} className="v3fs-agtree-wf">
+                        <div className="v3fs-agtree-wf-h">
+                          <b>{w.name}</b>
+                          {w.trigger ? <span>on {w.trigger}</span> : null}
+                        </div>
+                        <ol className="v3fs-agtree-steps">
+                          {w.steps.map((step, si) => {
+                            const key = markKey(w.name, step.action);
+                            const marked = isMarked(key);
+                            const suggested = step.mode === "agentify";
+                            return (
+                              <li key={si} className={`v3fs-agtree-step${marked ? " ag" : suggested ? " sug" : ""}`}>
+                                <span className="v3fs-agtree-step-n">{si + 1}</span>
+                                <span className="v3fs-agtree-step-body">
+                                  <span className="v3fs-agtree-step-act">{step.action}</span>
+                                  {step.hitl ? <em className="v3fs-agtree-step-hitl" title="a judgement step — a human decides, an agent can assist">⛨ human decides</em> : null}
+                                </span>
+                                {marked ? (
+                                  <button type="button" className="v3fs-wf-agentify on" disabled={locked}
+                                    aria-pressed="true" title="Set to agentify — the Blueprint builds an agent for this step. Click to remove."
+                                    onClick={() => toggleMark(w.name, w.area, step.action, suggested)}>⚡ Agentify</button>
+                                ) : suggested ? (
+                                  <span className="v3fs-agtree-suggest">
+                                    <span className="v3fs-agtree-suggest-l" title="the future-state projection suggests an agent can run this step">✨ Suggested</span>
+                                    <button type="button" className="v3fs-agtree-approve" disabled={locked}
+                                      onClick={() => toggleMark(w.name, w.area, step.action, true)}>Approve</button>
+                                  </span>
+                                ) : (
+                                  <button type="button" className="v3fs-wf-agentify" disabled={locked}
+                                    aria-pressed="false" title="Mark this step to be run by an agent"
+                                    onClick={() => toggleMark(w.name, w.area, step.action, false)}>⚡ Agentify?</button>
+                                )}
+                              </li>
+                            );
+                          })}
+                        </ol>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              );
+            })}
+          </div>
+        )}
       </Section>
 
       {machines.length ? (
