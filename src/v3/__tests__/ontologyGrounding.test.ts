@@ -27,7 +27,7 @@ const js = ts.transpileModule(
   `return { reconcileVotedOntology, resolveProvisionalPacks, ontologyVocabularySteering, ontologyNameKey, ontologyStandardKey, ONTOLOGY_VOTE_N, ONTOLOGY_VOTE_THRESHOLD, ONTOLOGY_MENU_VERBS };`,
   { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.None } },
 ).outputText;
-type ResolvedPack = { vocabulary: string; entities: Array<{ name: string; uri: string; aliases: string[]; core?: boolean }>; relations: Array<{ from: string; verb: string; to: string }> };
+type ResolvedPack = { vocabulary: string; entities: Array<{ name: string; uri: string; definition?: string; aliases: string[]; core?: boolean }>; relations: Array<{ from: string; verb: string; to: string }> };
 const sandbox = new Function(js)() as {
   reconcileVotedOntology: (drafts: Array<Record<string, unknown>>, opts: Record<string, unknown>) => Record<string, unknown>;
   resolveProvisionalPacks: (steering: string) => ResolvedPack[];
@@ -56,34 +56,38 @@ const ALL_PACKS = [...new Map(
 
 const MANDATE = "Accelerate clinical trial recruitment through an AI-powered CRM that improves patient identification, engagement, and enrollment, reducing time-to-enrollment by 30% and increasing enrollment conversion by 20%.";
 
-// Grounding facts, built exactly as the runner builds them — the REAL clinical
-// steering (FHIR with the research module + schema.org fallback).
+// Grounding facts, built exactly as the runner builds them.
+function groundingFor(resolved: ResolvedPack[], mandate: string, sponsor = "the sponsor") {
+  const allowedUris = new Set<string>();
+  const packClasses = new Map<string, string>();
+  const uriToClass = new Map<string, string>();
+  for (const pack of resolved) {
+    for (const entity of pack.entities) {
+      for (const alias of [entity.name, ...entity.aliases]) {
+        const k = sandbox.ontologyNameKey(alias);
+        if (k && !packClasses.has(k)) packClasses.set(k, entity.name);
+      }
+      if (entity.uri) {
+        allowedUris.add(sandbox.ontologyStandardKey(entity.uri));
+        uriToClass.set(sandbox.ontologyStandardKey(entity.uri), entity.name);
+      }
+    }
+  }
+  const packAssociations = new Set(resolved.flatMap((pack) => pack.relations.map((r) => `${r.from} ${r.verb} ${r.to}`)));
+  const coreClasses = new Set<string>();
+  for (const entity of resolved[0].entities) if (entity.core) coreClasses.add(entity.name);
+  const packEntityByClass = new Map<string, { name: string; uri: string; definition: string; vocabulary: string }>();
+  for (const pack of resolved) {
+    for (const entity of pack.entities) {
+      if (!packEntityByClass.has(entity.name)) packEntityByClass.set(entity.name, { name: entity.name, uri: entity.uri, definition: String(entity.definition ?? ""), vocabulary: pack.vocabulary });
+    }
+  }
+  return { threshold: 3, total: 5, mandate, sponsor, programName: "test", allowedUris, packClasses, uriToClass, packAssociations, coreClasses, packEntityByClass };
+}
+// The REAL clinical steering (FHIR with the research module + schema.org fallback).
 const packs = packsFor("Life Sciences & Pharma", "Clinical");
-const allowedUris = new Set<string>();
-const packClasses = new Map<string, string>();
-const uriToClass = new Map<string, string>();
-for (const pack of packs) {
-  for (const entity of pack.entities) {
-    for (const alias of [entity.name, ...entity.aliases]) {
-      const k = sandbox.ontologyNameKey(alias);
-      if (k && !packClasses.has(k)) packClasses.set(k, entity.name);
-    }
-    if (entity.uri) {
-      allowedUris.add(sandbox.ontologyStandardKey(entity.uri));
-      uriToClass.set(sandbox.ontologyStandardKey(entity.uri), entity.name);
-    }
-  }
-}
-const packAssociations = new Set(packs.flatMap((pack) => pack.relations.map((r) => `${r.from} ${r.verb} ${r.to}`)));
-const coreClasses = new Set<string>();
-for (const entity of packs[0].entities as Array<{ name: string; core?: boolean }>) if (entity.core) coreClasses.add(entity.name);
-const packEntityByClass = new Map<string, { name: string; uri: string; definition: string; vocabulary: string }>();
-for (const pack of packs) {
-  for (const entity of pack.entities as Array<{ name: string; uri: string; definition?: string }>) {
-    if (!packEntityByClass.has(entity.name)) packEntityByClass.set(entity.name, { name: entity.name, uri: entity.uri, definition: String(entity.definition ?? ""), vocabulary: pack.vocabulary });
-  }
-}
-const OPTS = { threshold: 3, total: 5, mandate: MANDATE, sponsor: "david burns", programName: "test", allowedUris, packClasses, uriToClass, packAssociations, coreClasses, packEntityByClass };
+const OPTS = groundingFor(packs, MANDATE, "david burns");
+const allowedUris = OPTS.allowedUris;
 
 type Draft = Record<string, unknown>;
 function draft(entities: Array<[name: string, uri?: string]>, relations: Array<[string, string, string]> = []): Draft {
@@ -235,6 +239,74 @@ describe("steering-selected cores — the same vocabulary carries different back
   it("Banking keeps the account backbone and does not assert insurance classes", () => {
     expect(coresOf(packsFor("Banking")[0])).toEqual(["Client", "Account", "Financial Institution"]);
   });
+});
+
+describe("disconnected entities are asked about, never silent", () => {
+  it("a mandate-named CRM object with no pack relations derives a sponsor ask", () => {
+    const opts = groundingFor(packs, MANDATE + " Track each marketing campaign.", "david burns");
+    const withCampaign = draft([...BASE, ["Campaign"]], CHAIN);
+    const doc = sandbox.reconcileVotedOntology(Array.from({ length: 5 }, () => JSON.parse(JSON.stringify(withCampaign))), opts);
+    expect(names(doc)).toContain("Campaign");
+    expect((doc.gaps as string[]).some((g) => g.includes('"Campaign" stands alone'))).toBe(true);
+  });
+});
+
+describe("CRM robustness — a CRM-focused mandate in every industry, sector and segment", () => {
+  // The demo pattern: every vertical's flagship use case is CRM-shaped
+  // (acquire, engage, retain a party; convert a funnel). These invariants must
+  // hold no matter which pack is primary: the party and the funnel objects
+  // assert (mandate floor), the funnel chain survives the acid test, alignment
+  // never leaves the packs, the output is deterministic, and nothing floats
+  // silently — an entity is either connected or asked about.
+  const CRM_CASES: Array<{ industry: string; segment?: string; party: string }> = [
+    { industry: "Financial Services", party: "Client" },
+    { industry: "Banking", segment: "Retail Banking", party: "Client" },
+    { industry: "Banking", segment: "Capital Markets", party: "Client" },
+    { industry: "Banking", segment: "Payments", party: "Client" },
+    { industry: "Insurance", party: "Policyholder" },
+    { industry: "Healthcare", party: "Patient" },
+    { industry: "Life Sciences & Pharma", segment: "Clinical", party: "Patient" },
+    { industry: "Life Sciences & Pharma", segment: "Commercial", party: "Customer" },
+    { industry: "Retail & Consumer Goods", party: "Customer" },
+    { industry: "Manufacturing", party: "Customer" },
+    { industry: "Automotive", segment: "Dealer & Commerce", party: "Customer" },
+    { industry: "Energy & Utilities", segment: "Energy Retail", party: "Customer" },
+    { industry: "Telecommunications", party: "Subscriber" },
+    { industry: "Media & Entertainment", party: "Subscriber" },
+    { industry: "Technology & Software", party: "Customer" },
+    { industry: "Transportation & Logistics", party: "Customer" },
+    { industry: "Public Sector & Government", segment: "Citizen Services", party: "Citizen" },
+    { industry: "Education", party: "Student" },
+    { industry: "Travel & Hospitality", party: "Guest" },
+    { industry: "Professional Services", party: "Client" },
+    { industry: "Other", party: "Customer" },
+  ];
+  for (const c of CRM_CASES) {
+    it(`${c.industry}${c.segment ? " · " + c.segment : ""} (${c.party})`, () => {
+      const resolved = packsFor(c.industry, c.segment);
+      const mandate = `Improve ${c.party.toLowerCase()} acquisition, engagement, and retention through a CRM that converts each lead into an opportunity, increasing conversion by 20%.`;
+      const opts = groundingFor(resolved, mandate);
+      const crmDraft = () => draft([[c.party], ["Lead"], ["Opportunity"]], [["Lead", "leads to", "Opportunity"]]);
+      const drafts = Array.from({ length: 5 }, crmDraft);
+      const doc = sandbox.reconcileVotedOntology(drafts.map((d) => JSON.parse(JSON.stringify(d))), opts);
+      const doc2 = sandbox.reconcileVotedOntology(drafts.map((d) => JSON.parse(JSON.stringify(d))), opts);
+      expect(doc).toEqual(doc2); // deterministic
+      // party + funnel objects assert via the mandate floor, whatever the pack
+      for (const n of [c.party, "Lead", "Opportunity"]) expect(names(doc), n).toContain(n);
+      // the funnel chain survives the acid test
+      expect(rels(doc)).toContain("Lead leads to Opportunity");
+      // alignment never leaves the packs
+      for (const row of doc.standardAlignment as Array<{ standard: string }>) {
+        expect(opts.allowedUris.has(sandbox.ontologyStandardKey(row.standard)), row.standard).toBe(true);
+      }
+      // nothing floats silently: every asserted entity is in a relation or asked about
+      const related = new Set((doc.relations as Array<{ from: string; to: string }>).flatMap((r) => [r.from, r.to]));
+      const gapText = (doc.gaps as string[]).join(" ");
+      for (const n of names(doc)) {
+        expect(related.has(n) || gapText.includes(`"${n}"`), `${n} floats silently`).toBe(true);
+      }
+    });
+  }
 });
 
 describe("care-operations depth — the generic FHIR pack", () => {

@@ -6633,6 +6633,7 @@ const PROVISIONAL_BACKBONE_PACKS: Record<string, ProvisionalPack> = {
       { name: "Condition", uri: "http://hl7.org/fhir/Condition", definition: "A diagnosis or clinical condition", aliases: ["diagnosis", "disease", "indication"] },
       { name: "Coverage", uri: "http://hl7.org/fhir/Coverage", definition: "Insurance or payment coverage", aliases: ["insurance", "payer"] },
       { name: "Observation", uri: "http://hl7.org/fhir/Observation", definition: "A measurement or assertion about a patient", aliases: ["lab result", "screening result", "assessment"] },
+      { name: "Communication", uri: "http://hl7.org/fhir/Communication", definition: "A clinical or administrative communication with a patient — outreach, reminder or message", aliases: ["communication", "outreach", "message", "reminder", "notification"] },
     ],
     relations: [
       { from: "Practitioner", verb: "is part of", to: "Organization" },
@@ -6646,6 +6647,7 @@ const PROVISIONAL_BACKBONE_PACKS: Record<string, ProvisionalPack> = {
       { from: "Coverage", verb: "applies to", to: "Patient" },
       { from: "Encounter", verb: "applies to", to: "Patient" },
       { from: "Observation", verb: "applies to", to: "Patient" },
+      { from: "Communication", verb: "applies to", to: "Patient" },
     ],
   },
   gs1: {
@@ -6808,7 +6810,7 @@ const PROVISIONAL_BACKBONE_PACKS: Record<string, ProvisionalPack> = {
   schema: {
     vocabulary: "schema.org",
     entities: [
-      { core: true, name: "Person", uri: "https://schema.org/Person", definition: "An individual", aliases: ["person", "user", "individual", "customer"] },
+      { core: true, name: "Person", uri: "https://schema.org/Person", definition: "An individual", aliases: ["person", "user", "individual", "customer", "prospect"] },
       { core: true, name: "Organization", uri: "https://schema.org/Organization", definition: "A company or organisation", aliases: ["organisation", "company", "vendor", "supplier", "partner"] },
       { name: "Product", uri: "https://schema.org/Product", definition: "A product", aliases: ["product", "goods"] },
       { name: "Service", uri: "https://schema.org/Service", definition: "A service", aliases: ["service", "offering"] },
@@ -7261,11 +7263,22 @@ function reconcileVotedOntology(
     })
     .sort((a, b) => ontologyCompare(a.name, b.name));
 
-  // ── Gaps: DERIVED from the vote, not voted as prose. Below-consensus concepts
-  // become "is this in scope?" asks; low-agreement survivors become "confirm"
-  // asks. Deterministic and sponsor-addressed. ──
+  // ── CRM robustness: a mandate-named object the standards do not model
+  // (Lead, Campaign, Case…) can survive the vote with no pack association to
+  // ride on — a real node, silently unconnected. Never present that silently:
+  // derive the sponsor ask for how it links into the model. ──
+  const related = new Set(relations.flatMap((r) => [String(r.from), String(r.to)]));
+  const disconnected = entities.length > 1
+    ? entities.map((e) => String(e.name ?? "")).filter((n) => n && !related.has(n)).sort(ontologyCompare)
+    : [];
+
+  // ── Gaps: DERIVED from the vote, not voted as prose. Disconnected entities
+  // lead (they are visible nodes); below-consensus concepts become "is this in
+  // scope?" asks; low-agreement survivors become "confirm" asks. Deterministic
+  // and sponsor-addressed. ──
   const ask = sponsor ? `Ask ${sponsor}: ` : "Ask the sponsor: ";
   const gaps = [
+    ...disconnected.map((n) => `${ask}"${n}" stands alone in the model — which existing entity does it relate to, and how?`),
     ...ungrounded.sort(ontologyCompare).map((n) => ask + 'drafts modelled "' + n + '" but it is neither named by the mandate nor a class of the industry standard - is it part of this process?'),
     ...extendedDemoted.sort(ontologyCompare).map((n) => ask + 'the industry standard models "' + n + '" - does it play a part in this process, and who owns it?'),
     ...belowConsensus.sort(ontologyCompare).map((n) => `${ask}some drafts modelled "${n}" and others did not — is it part of this process, and who owns it?`),
