@@ -290,6 +290,35 @@ describe("client vocabulary — extend, never edit, sanitised on read", () => {
   });
 });
 
+describe("candidates — the demoted standard classes behind the gaps, as structured ghosts", () => {
+  it("an extended-demoted pack class becomes a candidate with its would-be relations to ASSERTED entities", () => {
+    const withConsent = draft([...BASE, ["Consent", "http://hl7.org/fhir/Consent"]], CHAIN);
+    const doc = sandbox.reconcileVotedOntology(Array.from({ length: 5 }, () => JSON.parse(JSON.stringify(withConsent))), { ...OPTS });
+    const cands = doc.candidates as Array<{ name: string; definition: string; vocabulary: string; reason: string; relations: Array<{ from: string; relation: string; to: string }> }>;
+    const consent = cands.find((c) => c.name === "Consent");
+    expect(consent).toBeTruthy();
+    expect(consent!.reason).toBe("extended");
+    expect(consent!.definition).toContain("consent");
+    expect(consent!.relations).toContainEqual({ from: "Consent", relation: "applies to", to: "Patient" });
+  });
+
+  it("an ungrounded invention never earns a candidate, even at 5/5", () => {
+    const bad = draft([...BASE, ["Telemetry Log", "http://hl7.org/fhir/CarePlan"]], CHAIN);
+    const doc = sandbox.reconcileVotedOntology(Array.from({ length: 5 }, () => JSON.parse(JSON.stringify(bad))), { ...OPTS });
+    expect((doc.candidates as Array<{ name: string }>).map((c) => c.name)).not.toContain("Telemetry Log");
+  });
+
+  it("candidates are deterministic, capped, and never duplicate an asserted entity", () => {
+    const drafts = Array.from({ length: 5 }, () => draft(BASE, CHAIN));
+    const a = sandbox.reconcileVotedOntology(drafts.map((d) => JSON.parse(JSON.stringify(d))), { ...OPTS });
+    const b = sandbox.reconcileVotedOntology(drafts.map((d) => JSON.parse(JSON.stringify(d))), { ...OPTS });
+    expect(a.candidates).toEqual(b.candidates);
+    const cands = a.candidates as Array<{ name: string }>;
+    expect(cands.length).toBeLessThanOrEqual(8);
+    for (const c of cands) expect(names(a)).not.toContain(c.name);
+  });
+});
+
 describe("disconnected entities are asked about, never silent", () => {
   it("a mandate-named CRM object with no pack relations derives a sponsor ask", () => {
     const opts = groundingFor(packs, MANDATE + " Track each marketing campaign.", "david burns");

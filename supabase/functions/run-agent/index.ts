@@ -7331,11 +7331,63 @@ function reconcileVotedOntology(
     ...lowAgreement.sort(ontologyCompare).map((n) => `${ask}confirm "${n}" is a distinct part of the process today, and name the system that records it.`),
   ].slice(0, 8);
 
+  // ── Candidates: the demoted STANDARD classes behind the gap questions, as
+  // structured data — so the diagram can draw them as dashed "to confirm"
+  // ghosts with the associations they would ride on. Pack-grounded only: an
+  // ungrounded invention that failed the acid test never earns a node, even a
+  // dashed one. Deterministic, additive — doc.entities is untouched, so no
+  // downstream reader (areas, atlas, agents) sees an unconfirmed class.
+  const candidates: Array<Record<string, unknown>> = [];
+  if (packClasses && packEntityByClass) {
+    const candNameByClass = new Map<string, string>();
+    for (const [entityName, cls] of classByName) if (!candNameByClass.has(cls)) candNameByClass.set(cls, entityName);
+    const candClassNames = [...packEntityByClass.keys()].sort((a, z) => z.length - a.length);
+    const seenCls = new Set<string>();
+    const demoted: Array<[string, string]> = [
+      ...extendedDemoted.sort(ontologyCompare).map((n) => [n, "extended"] as [string, string]),
+      ...belowConsensus.sort(ontologyCompare).map((n) => [n, "below-consensus"] as [string, string]),
+    ];
+    for (const [demotedName, reason] of demoted) {
+      const cls = packClasses.get(ontologyNameKey(demotedName));
+      if (!cls || seenCls.has(cls) || candNameByClass.has(cls)) continue; // off-pack, duplicate, or already asserted
+      seenCls.add(cls);
+      const pe = packEntityByClass.get(cls);
+      const candRelations: Array<{ from: string; relation: string; to: string }> = [];
+      if (packAssociations) {
+        for (const assoc of [...packAssociations].sort(ontologyCompare)) {
+          const fromCls = candClassNames.find((c) => assoc.startsWith(c + " "));
+          const toCls = candClassNames.find((c) => assoc.endsWith(" " + c));
+          if (!fromCls || !toCls || (fromCls !== cls && toCls !== cls)) continue;
+          const verb = assoc.slice(fromCls.length + 1, assoc.length - toCls.length - 1);
+          // keep only associations that land on an ASSERTED entity, rendered
+          // with the entity's display name
+          if (fromCls === cls) {
+            const to = candNameByClass.get(toCls);
+            if (to) candRelations.push({ from: cls, relation: verb, to });
+          } else {
+            const from = candNameByClass.get(fromCls);
+            if (from) candRelations.push({ from, relation: verb, to: cls });
+          }
+        }
+      }
+      candidates.push({
+        name: cls,
+        definition: pe?.definition ?? "",
+        vocabulary: pe?.vocabulary ?? "",
+        uri: pe?.uri || null,
+        reason,
+        relations: candRelations,
+      });
+    }
+    candidates.sort((a, b) => ontologyCompare(String(a.name), String(b.name)));
+  }
+
   const solid = entities.length - lowAgreement.length;
   return {
     title: `Domain Ontology — ${programName}`,
     entities,
     relations,
+    candidates: candidates.slice(0, 8),
     events,
     standardAlignment: standardAlignment.sort((a, b) => ontologyCompare(String(a.entity), String(b.entity))),
     ambiguities: [] as unknown[],
