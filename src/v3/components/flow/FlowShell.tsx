@@ -41,6 +41,12 @@ import {
 } from "@/v3/components/flow/flowDrilldown";
 
 interface FlowShellProps {
+  /** Shell chrome. "next" is the reimagined navigation (rail folded into a
+   * ⌘K workbench, plain-language top bar) shown behind the ?ui=next toggle;
+   * "classic" (default) is today's rail. Both wrap the SAME view components. */
+  chrome?: "classic" | "next";
+  /** Leave the reimagined chrome — flips the app back to the classic rail. */
+  onExitNextChrome?: () => void;
   program: ProgramSummary;
   programs: ProgramSummary[];
   runningAgentIds: Set<string>;
@@ -182,7 +188,7 @@ function DockIcon({ id }: { id: string }) {
 }
 
 /* ── Global search — programmes + this programme's evidence & artifacts ───── */
-function FlowSearch({ programs, program, onSelectProgram, onGoView, onCreateProgram, onOpenDrill, onSponsor, onClose }: {
+function FlowSearch({ programs, program, onSelectProgram, onGoView, onCreateProgram, onOpenDrill, onSponsor, onClose, workbench }: {
   programs: ProgramSummary[];
   program: ProgramSummary;
   onSelectProgram: (id: string) => void;
@@ -191,6 +197,9 @@ function FlowSearch({ programs, program, onSelectProgram, onGoView, onCreateProg
   onOpenDrill?: () => void;
   onSponsor?: () => void;
   onClose: () => void;
+  /** Reimagined chrome opens this as the "Workbench": the six cross-cutting
+   * homes that used to sit in the rail, browsable without typing. */
+  workbench?: boolean;
 }) {
   const [q, setQ] = useState("");
   useEffect(() => {
@@ -239,7 +248,28 @@ function FlowSearch({ programs, program, onSelectProgram, onGoView, onCreateProg
           <kbd>Esc</kbd>
         </div>
         <div className="v3fs-cmd-body">
-          {!query ? (
+          {workbench && !query ? (
+            <>
+              <div className="v3fs-cmd-grp">Workbench</div>
+              {([
+                ["today", "Inbox", "Responses and decisions waiting on you"],
+                ["flow", "Flow", "The work — the live programme, movement by movement"],
+                ["library", "Library", "Every conversation and document"],
+                ["people", "People", "Everyone the programme collects from"],
+                ["pulse", "Overview", "The steering view — for the sponsor"],
+                ["grounding", "Standards", "The industry standards the map is built on"],
+                ["mission", "Settings", "Agents, governance and preferences"],
+              ] as Array<[FlowView, string, string]>).map(([id, label, sub]) => (
+                <button key={id} type="button" className="v3fs-cmd-row" onClick={() => { onGoView(id); onClose(); }}>
+                  <span className="v3fs-cmd-tag">Go to</span>
+                  <span className="v3fs-cmd-row-t">{label}</span>
+                  <span className="v3fs-cmd-row-s">{sub}</span>
+                </button>
+              ))}
+              <div className="v3fs-cmd-hint">Or type to search programmes, evidence and artifacts.</div>
+            </>
+          ) : null}
+          {!query && !workbench ? (
             <div className="v3fs-cmd-hint">Search across every programme, plus this programme&rsquo;s evidence and artifacts.</div>
           ) : null}
           {actionHits.length ? <div className="v3fs-cmd-grp">Actions</div> : null}
@@ -451,8 +481,13 @@ export default function FlowShell(props: FlowShellProps) {
   // Land where the work is: Today only when something waits on the user's
   // judgment (decisions / quarantined evidence); the canvas otherwise, where
   // the spine pointer takes over. Today stays one badge-tap away.
+  // Reimagined chrome (?ui=next): the rail folds into a ⌘K workbench and the
+  // shell leads with the work. The classic rail is unchanged when off.
+  const next = props.chrome === "next";
   const [view, setView] = useState<FlowView>(() =>
-    listOpenFlowDecisions(program).length + listPortalInbox(program).length + governedExceptionsForInbox(program).length > 0 ? "today" : "flow",
+    // Next chrome always opens on the work (Flow); classic opens on the Inbox
+    // when something is waiting, else the work.
+    !next && listOpenFlowDecisions(program).length + listPortalInbox(program).length + governedExceptionsForInbox(program).length > 0 ? "today" : "flow",
   );
   // A freshly-created programme should open on the work — the shell bumps this
   // nonce after setup saves so we jump to the canvas regardless of the view the
@@ -579,7 +614,8 @@ export default function FlowShell(props: FlowShellProps) {
   }
 
   return (
-    <div className="v3fs-app">
+    <div className={`v3fs-app${next ? " v3fs-next" : ""}`}>
+      {next ? null : (
       <nav className="v3fs-dock" aria-label="Primary">
         <button type="button" className="v3fs-brand" data-tip="Switch programme" onClick={() => setSwitcherOpen((v) => !v)} aria-label="Switch programme" aria-expanded={switcherOpen}>
           {(program.name || "F").slice(0, 1).toUpperCase()}
@@ -619,6 +655,7 @@ export default function FlowShell(props: FlowShellProps) {
         {/* Sponsor view stays reachable from Pulse and the command palette —
             it earns no standing dock slot. */}
       </nav>
+      )}
 
       {/* The app bar — ONE slim strip, not floating islands. Portfolio sits
           left as the "up and out" of the current programme; the centre is a
@@ -668,6 +705,12 @@ export default function FlowShell(props: FlowShellProps) {
           <kbd>⌘K</kbd>
         </button>
         <div className="v3fs-appbar-r">
+          {next ? (
+            <button type="button" className="v3fs-appbar-nav v3fs-appbar-wb" title="Workbench — Inbox, Library, People, Overview, Standards, Settings (⌘K)" aria-label="Workbench"
+              onClick={() => setSearchOpen(true)}>
+              <span aria-hidden="true">⌘</span><span>Workbench</span><kbd>K</kbd>
+            </button>
+          ) : null}
           <button type="button" className="v3fs-appbar-nav" title="Help — how ATOS Flow works" aria-label="Help"
             onClick={() => setHelpOpen(true)}>
             <DockIcon id="help" /><span>Help</span>
@@ -675,10 +718,16 @@ export default function FlowShell(props: FlowShellProps) {
           <button type="button" className="v3fs-appbar-cp" title="Copilot" aria-label="Copilot" onClick={props.onOpenCopilot}>
             <DockIcon id="copilot" /><span>Copilot</span>
           </button>
+          {next && props.onExitNextChrome ? (
+            <button type="button" className="v3fs-appbar-nav v3fs-appbar-exitnext" title="Switch back to the classic navigation" aria-label="Exit reimagined UI"
+              onClick={props.onExitNextChrome}>
+              <span>◇ Reimagined</span>
+            </button>
+          ) : null}
         </div>
       </header>
       {searchOpen ? (
-        <FlowSearch programs={props.programs} program={program}
+        <FlowSearch programs={props.programs} program={program} workbench={next}
           onSelectProgram={(id) => { props.onSelectProgram(id); setSearchOpen(false); }}
           onGoView={(v) => { setView(v); window.scrollTo({ top: 0 }); setSearchOpen(false); }}
           onCreateProgram={() => { setSearchOpen(false); props.onCreateProgram(); }}

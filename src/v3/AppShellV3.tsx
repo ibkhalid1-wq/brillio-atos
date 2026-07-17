@@ -832,6 +832,17 @@ export default function AppShellV3() {
   // the Flow board (FlowShell owns the view state; this is the signal in).
   const [flowJumpNonce, setFlowJumpNonce] = useState(0);
   const [adamCopilotSidebarOpen, setAdamCopilotSidebarOpen] = useState(false);
+  // Reimagined UI toggle: ?ui=next in the URL (persisted) or the stored flag
+  // turns on the "next" shell chrome. ?ui=classic clears it. Lets us A/B the
+  // reimagined navigation against today's rail in the same running app.
+  const [uiNext, setUiNext] = useState<boolean>(() => {
+    try {
+      const p = new URLSearchParams(window.location.search).get("ui");
+      if (p === "next") { localStorage.setItem("atos.ui", "next"); return true; }
+      if (p === "classic") { localStorage.removeItem("atos.ui"); return false; }
+      return localStorage.getItem("atos.ui") === "next";
+    } catch { return false; }
+  });
   const [toasts, setToasts] = useState<ShellToast[]>([]);
   const [currentUser, setCurrentUser] = useState<{ id: string; email?: string } | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
@@ -2606,6 +2617,8 @@ export default function AppShellV3() {
     return (
       <div className="v3-shell v3fs-shell">
         <FlowShell
+          chrome={uiNext ? "next" : "classic"}
+          onExitNextChrome={() => { try { localStorage.removeItem("atos.ui"); } catch { /* ignore */ } setUiNext(false); }}
           program={activeProgram}
           programs={programs}
           jumpToFlowNonce={flowJumpNonce}
