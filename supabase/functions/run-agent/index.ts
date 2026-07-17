@@ -6469,12 +6469,12 @@ const INDUSTRY_VOCABULARY_STEERING: Record<string, string> = {
   "banking": `Primary: ${VOCAB_FIBO}. Fall back to ${VOCAB_SCHEMA} for generic commerce entities.`,
   "insurance": `Primary: ${VOCAB_FIBO} — it covers insurance contracts and parties; ACORD has no public URI namespace, so align ACORD concepts by name in definitions only. Fall back to ${VOCAB_SCHEMA}.`,
   "healthcare": `Primary: ${VOCAB_FHIR}. Fall back to ${VOCAB_SCHEMA}.`,
-  "life sciences & pharma": `Primary: ${VOCAB_FHIR} for clinical entities; use ${VOCAB_GS1} for product/serialisation/supply-chain entities. Fall back to ${VOCAB_SCHEMA}.`,
+  "life sciences & pharma": `Primary: ${VOCAB_FHIR} for clinical entities — including the ResearchStudy/ResearchSubject research module; use ${VOCAB_GS1} for product/serialisation/supply-chain entities. Fall back to ${VOCAB_SCHEMA}.`,
   "retail & consumer goods": `Primary: ${VOCAB_GS1}. Fall back to ${VOCAB_SCHEMA}.`,
   "manufacturing": `Primary: ${VOCAB_GS1} for product/logistics entities. Fall back to ${VOCAB_SCHEMA}.`,
   "automotive": `Primary: ${VOCAB_GS1} for product/logistics entities; ${VOCAB_SCHEMA} carries the automotive types (Vehicle, Car…).`,
   "energy & utilities": `Primary: ${VOCAB_CIM} for grid/asset/measurement entities. Fall back to ${VOCAB_SCHEMA}.`,
-  "telecommunications": `Use ${VOCAB_SCHEMA} — TM Forum SID has no public URI namespace; align SID concepts by name in definitions only.`,
+  "telecommunications": `Primary: TM Forum SID (no public URI namespace — align SID concepts by name in definitions only). Fall back to ${VOCAB_SCHEMA}.`,
   "media & entertainment": `Primary: ${VOCAB_EBU} for content/asset/rights entities. Fall back to ${VOCAB_SCHEMA}.`,
   "technology & software": `Use ${VOCAB_SCHEMA} (SoftwareApplication, Order, Invoice, Quotation…).`,
   "transportation & logistics": `Primary: ${VOCAB_GS1} (incl. EPCIS concepts). Fall back to ${VOCAB_SCHEMA}.`,
@@ -6490,7 +6490,7 @@ const INDUSTRY_VOCABULARY_STEERING: Record<string, string> = {
 // src/v3/lib/methodology.ts; keep the two in lockstep.
 const INDUSTRY_SEGMENT_STEERING: Record<string, Record<string, string>> = {
   "life sciences & pharma": {
-    "clinical": `Primary: ${VOCAB_FHIR}. Fall back to ${VOCAB_SCHEMA}.`,
+    "clinical": `Primary: ${VOCAB_FHIR} — including the ResearchStudy/ResearchSubject research module. Fall back to ${VOCAB_SCHEMA}.`,
     "manufacturing & supply": `Primary: ${VOCAB_GS1} (serialisation, lots, EPCIS events). Fall back to ${VOCAB_SCHEMA}.`,
     "commercial": `Use ${VOCAB_SCHEMA} (accounts, contracts, orders); ${VOCAB_GS1} only for product identifiers.`,
   },
@@ -6626,8 +6626,8 @@ const PROVISIONAL_BACKBONE_PACKS: Record<string, ProvisionalPack> = {
       { core: true, name: "Patient", uri: "http://hl7.org/fhir/Patient", definition: "A person receiving or registered to receive care", aliases: ["patient", "subject"] },
       { core: true, name: "Practitioner", uri: "http://hl7.org/fhir/Practitioner", definition: "A clinician or professional delivering care", aliases: ["clinician", "doctor", "physician", "investigator", "nurse"] },
       { core: true, name: "Organization", uri: "http://hl7.org/fhir/Organization", definition: "A provider, sponsor or site organisation", aliases: ["organisation", "sponsor organization", "hospital", "site", "clinic", "provider organisation"] },
-      { core: true, name: "ResearchStudy", uri: "http://hl7.org/fhir/ResearchStudy", definition: "A clinical study or trial", aliases: ["clinical trial", "trial", "study", "research study"] },
-      { core: true, name: "ResearchSubject", uri: "http://hl7.org/fhir/ResearchSubject", definition: "A patient's participation in a study", aliases: ["trial participant", "enrollee", "study subject"] },
+      { name: "ResearchStudy", uri: "http://hl7.org/fhir/ResearchStudy", definition: "A clinical study or trial", aliases: ["clinical trial", "trial", "study", "research study"] },
+      { name: "ResearchSubject", uri: "http://hl7.org/fhir/ResearchSubject", definition: "A patient's participation in a study", aliases: ["trial participant", "enrollee", "study subject"] },
       { name: "Encounter", uri: "http://hl7.org/fhir/Encounter", definition: "An interaction between a patient and care providers", aliases: ["visit", "consultation"] },
       { name: "Appointment", uri: "http://hl7.org/fhir/Appointment", definition: "A scheduled visit", aliases: ["appointment", "screening visit"] },
       { name: "Consent", uri: "http://hl7.org/fhir/Consent", definition: "A patient's recorded consent", aliases: ["informed consent", "consent form"] },
@@ -6671,10 +6671,14 @@ const PROVISIONAL_BACKBONE_PACKS: Record<string, ProvisionalPack> = {
       { core: true, name: "Account", uri: "", definition: "A financial account", aliases: ["account", "bank account"] },
       { name: "Financial Product", uri: "", definition: "A product or service the institution offers", aliases: ["financial product", "deposit", "card"] },
       { name: "Loan", uri: "", definition: "A credit arrangement", aliases: ["loan", "mortgage", "credit"] },
-      { name: "Contract", uri: "", definition: "A binding agreement", aliases: ["contract", "agreement", "policy"] },
+      { name: "Contract", uri: "", definition: "A binding agreement", aliases: ["contract", "agreement"] },
       { name: "Transaction", uri: "", definition: "A financial transaction", aliases: ["transaction"] },
       { name: "Payment", uri: "", definition: "A transfer of funds", aliases: ["payment", "settlement", "transfer"] },
       { core: true, name: "Financial Institution", uri: "", definition: "The bank, insurer or lender itself", aliases: ["bank", "insurer", "lender", "institution"] },
+      { name: "Policy", uri: "", definition: "An insurance policy — the contract of cover", aliases: ["policy", "insurance policy", "cover"] },
+      { name: "Claim", uri: "", definition: "A claim for loss or benefit against a policy", aliases: ["claim", "insurance claim"] },
+      { name: "Insured Party", uri: "", definition: "The party a policy covers", aliases: ["insured", "policyholder", "policy holder", "insured party"] },
+      { name: "Premium", uri: "", definition: "The consideration paid for policy cover", aliases: ["premium"] },
     ],
     relations: [
       { from: "Financial Institution", verb: "manages", to: "Account" },
@@ -6682,6 +6686,10 @@ const PROVISIONAL_BACKBONE_PACKS: Record<string, ProvisionalPack> = {
       { from: "Account", verb: "applies to", to: "Client" },
       { from: "Payment", verb: "applies to", to: "Account" },
       { from: "Contract", verb: "applies to", to: "Client" },
+      { from: "Financial Institution", verb: "manages", to: "Policy" },
+      { from: "Policy", verb: "applies to", to: "Insured Party" },
+      { from: "Claim", verb: "applies to", to: "Policy" },
+      { from: "Premium", verb: "applies to", to: "Policy" },
     ],
   },
   cim: {
@@ -6770,6 +6778,18 @@ const PROVISIONAL_BACKBONE_PACKS: Record<string, ProvisionalPack> = {
       { name: "SoftwareApplication", uri: "https://schema.org/SoftwareApplication", definition: "A software system", aliases: ["software", "application", "platform", "app", "crm", "system"] },
       { name: "Event", uri: "https://schema.org/Event", definition: "An event", aliases: ["event"] },
       { name: "Reservation", uri: "https://schema.org/Reservation", definition: "A reservation or booking", aliases: ["reservation", "booking"] },
+      // The classes the steering table PROMISES by name (automotive, education,
+      // travel, public-sector citizen services) — a promised class missing here
+      // could never be aligned, because the pack is authoritative.
+      { name: "Vehicle", uri: "https://schema.org/Vehicle", definition: "A vehicle", aliases: ["vehicle", "car", "automobile"] },
+      { name: "Course", uri: "https://schema.org/Course", definition: "A course or programme of study", aliases: ["course", "training course", "curriculum"] },
+      { name: "EducationalOrganization", uri: "https://schema.org/EducationalOrganization", definition: "A school, college or university", aliases: ["school", "university", "college"] },
+      { name: "LearningResource", uri: "https://schema.org/LearningResource", definition: "Material used for learning", aliases: ["learning resource", "learning material", "course content"] },
+      { name: "Flight", uri: "https://schema.org/Flight", definition: "A flight", aliases: ["flight"] },
+      { name: "LodgingBusiness", uri: "https://schema.org/LodgingBusiness", definition: "A lodging provider such as a hotel", aliases: ["hotel", "lodging", "resort"] },
+      { name: "Trip", uri: "https://schema.org/Trip", definition: "A trip or journey", aliases: ["trip", "itinerary", "journey"] },
+      { name: "GovernmentService", uri: "https://schema.org/GovernmentService", definition: "A service provided by government to citizens", aliases: ["government service", "public service", "citizen service"] },
+      { name: "GovernmentOrganization", uri: "https://schema.org/GovernmentOrganization", definition: "A government organisation", aliases: ["government organisation", "government agency", "public authority"] },
     ],
     relations: [
       { from: "Organization", verb: "produces", to: "Product" },
@@ -6777,22 +6797,64 @@ const PROVISIONAL_BACKBONE_PACKS: Record<string, ProvisionalPack> = {
       { from: "Offer", verb: "applies to", to: "Product" },
       { from: "Invoice", verb: "applies to", to: "Order" },
       { from: "Person", verb: "is part of", to: "Organization" },
+      { from: "Organization", verb: "produces", to: "Vehicle" },
+      { from: "EducationalOrganization", verb: "conducts", to: "Course" },
+      { from: "LearningResource", verb: "is part of", to: "Course" },
+      { from: "Person", verb: "participates in", to: "Course" },
+      { from: "Flight", verb: "is part of", to: "Trip" },
+      { from: "Reservation", verb: "applies to", to: "Trip" },
+      { from: "Reservation", verb: "applies to", to: "Flight" },
+      { from: "Reservation", verb: "applies to", to: "LodgingBusiness" },
+      { from: "GovernmentOrganization", verb: "runs", to: "GovernmentService" },
+      { from: "GovernmentService", verb: "applies to", to: "Person" },
     ],
   },
 };
 
-/** Deterministic pack selection: the steering table names the vocabularies —
- * primary first, schema.org fallback nearly always second. */
+// Steering-selected pack VARIANTS: cores are a function of the steering, so a
+// vocabulary shared across industries can carry different backbones. Healthcare
+// gets FHIR's generic care cores; only a steering that names the research
+// module (Life Sciences clinical) asserts ResearchStudy/ResearchSubject into
+// every ontology. Likewise FIBO: when the steering says it covers insurance
+// contracts, Policy/Claim/Insured Party become the cores and Account (a
+// banking backbone class, odd in a claims ontology) stops being one.
+PROVISIONAL_BACKBONE_PACKS.fhirClinical = {
+  vocabulary: "HL7 FHIR",
+  entities: PROVISIONAL_BACKBONE_PACKS.fhir.entities.map((e) =>
+    e.name === "ResearchStudy" || e.name === "ResearchSubject" ? { ...e, core: true } : e),
+  relations: PROVISIONAL_BACKBONE_PACKS.fhir.relations,
+};
+PROVISIONAL_BACKBONE_PACKS.fiboInsurance = {
+  vocabulary: "FIBO",
+  entities: PROVISIONAL_BACKBONE_PACKS.fibo.entities.map((e) =>
+    e.name === "Policy" || e.name === "Claim" || e.name === "Insured Party" ? { ...e, core: true }
+      : e.name === "Account" ? { ...e, core: false }
+      : e),
+  relations: PROVISIONAL_BACKBONE_PACKS.fibo.relations,
+};
+
+/** Deterministic pack selection: the packs ride in the SAME ORDER the steering
+ * mentions the vocabularies — the FIRST named vocabulary is the primary whose
+ * cores are always asserted. (A fixed check order used to decide this, which
+ * asserted CIM/ORG/GS1 cores into segments whose steering declares schema.org
+ * primary — energy retail, citizen services, life-sciences commercial.) */
 function resolveProvisionalPacks(steering: string): ProvisionalPack[] {
-  const packs: ProvisionalPack[] = [];
-  if (steering.includes("HL7 FHIR")) packs.push(PROVISIONAL_BACKBONE_PACKS.fhir);
-  if (steering.includes("FIBO")) packs.push(PROVISIONAL_BACKBONE_PACKS.fibo);
-  if (steering.includes("GS1")) packs.push(PROVISIONAL_BACKBONE_PACKS.gs1);
-  if (steering.includes("IEC CIM")) packs.push(PROVISIONAL_BACKBONE_PACKS.cim);
-  if (steering.includes("EBUCore")) packs.push(PROVISIONAL_BACKBONE_PACKS.ebucore);
-  if (steering.includes("W3C Organization")) packs.push(PROVISIONAL_BACKBONE_PACKS.org);
-  if (steering.includes("TM Forum SID")) packs.push(PROVISIONAL_BACKBONE_PACKS.sid);
-  if (steering.includes("schema.org") || !packs.length) packs.push(PROVISIONAL_BACKBONE_PACKS.schema);
+  const triggers: Array<[string, ProvisionalPack]> = [
+    ["HL7 FHIR", steering.includes("ResearchStudy") ? PROVISIONAL_BACKBONE_PACKS.fhirClinical : PROVISIONAL_BACKBONE_PACKS.fhir],
+    ["FIBO", steering.includes("insurance contracts") ? PROVISIONAL_BACKBONE_PACKS.fiboInsurance : PROVISIONAL_BACKBONE_PACKS.fibo],
+    ["GS1", PROVISIONAL_BACKBONE_PACKS.gs1],
+    ["IEC CIM", PROVISIONAL_BACKBONE_PACKS.cim],
+    ["EBUCore", PROVISIONAL_BACKBONE_PACKS.ebucore],
+    ["W3C Organization", PROVISIONAL_BACKBONE_PACKS.org],
+    ["TM Forum SID", PROVISIONAL_BACKBONE_PACKS.sid],
+    ["schema.org", PROVISIONAL_BACKBONE_PACKS.schema],
+  ];
+  const packs = triggers
+    .map(([phrase, pack]) => ({ at: steering.indexOf(phrase), pack }))
+    .filter((t) => t.at >= 0)
+    .sort((a, b) => a.at - b.at)
+    .map((t) => t.pack);
+  if (!packs.includes(PROVISIONAL_BACKBONE_PACKS.schema)) packs.push(PROVISIONAL_BACKBONE_PACKS.schema);
   return packs;
 }
 

@@ -15,29 +15,38 @@ import ts from "typescript";
 
 const EDGE = readFileSync(resolve(__dirname, "../../../supabase/functions/run-agent/index.ts"), "utf8");
 
-// ── Extract the voted-ensemble section (pure code, no Deno APIs) and eval it. ──
-const start = EDGE.indexOf("// ─── Voted provisional ontology");
+// ── Extract the steering tables + voted-ensemble section (pure code, no Deno
+// APIs) and eval it. Starting at the VOCAB constants means the tests exercise
+// the REAL steering table text — a steering edit that breaks pack resolution
+// fails here, not in a live batch. ──
+const start = EDGE.indexOf("const VOCAB_FIBO");
 const end = EDGE.indexOf("/** True when a Listen conversation is on record");
 const section = EDGE.slice(start, end);
 const js = ts.transpileModule(
   `const isRecord = (v: unknown) => typeof v === "object" && v !== null && !Array.isArray(v);\n${section}\n` +
-  `return { reconcileVotedOntology, resolveProvisionalPacks, ontologyNameKey, ontologyStandardKey, ONTOLOGY_VOTE_N, ONTOLOGY_VOTE_THRESHOLD, ONTOLOGY_MENU_VERBS };`,
+  `return { reconcileVotedOntology, resolveProvisionalPacks, ontologyVocabularySteering, ontologyNameKey, ontologyStandardKey, ONTOLOGY_VOTE_N, ONTOLOGY_VOTE_THRESHOLD, ONTOLOGY_MENU_VERBS };`,
   { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.None } },
 ).outputText;
+type ResolvedPack = { vocabulary: string; entities: Array<{ name: string; uri: string; aliases: string[]; core?: boolean }>; relations: Array<{ from: string; verb: string; to: string }> };
 const sandbox = new Function(js)() as {
   reconcileVotedOntology: (drafts: Array<Record<string, unknown>>, opts: Record<string, unknown>) => Record<string, unknown>;
-  resolveProvisionalPacks: (steering: string) => Array<{ vocabulary: string; entities: Array<{ name: string; uri: string; aliases: string[] }>; relations: Array<{ from: string; verb: string; to: string }> }>;
+  resolveProvisionalPacks: (steering: string) => ResolvedPack[];
+  ontologyVocabularySteering: (industry: unknown, segment?: unknown) => string;
   ontologyNameKey: (name: unknown) => string;
   ontologyStandardKey: (uri: unknown) => string;
   ONTOLOGY_VOTE_N: number;
   ONTOLOGY_VOTE_THRESHOLD: number;
   ONTOLOGY_MENU_VERBS: string[];
 };
+const packsFor = (industry: string, segment?: string) =>
+  sandbox.resolveProvisionalPacks(sandbox.ontologyVocabularySteering(industry, segment));
+const coresOf = (pack: ResolvedPack) => pack.entities.filter((e) => e.core).map((e) => e.name);
 
 const MANDATE = "Accelerate clinical trial recruitment through an AI-powered CRM that improves patient identification, engagement, and enrollment, reducing time-to-enrollment by 30% and increasing enrollment conversion by 20%.";
 
-// Grounding facts, built exactly as the runner builds them (FHIR + schema.org).
-const packs = sandbox.resolveProvisionalPacks("Primary: HL7 FHIR (URIs under http://hl7.org/fhir/). Fall back to schema.org (URIs under https://schema.org/).");
+// Grounding facts, built exactly as the runner builds them — the REAL clinical
+// steering (FHIR with the research module + schema.org fallback).
+const packs = packsFor("Life Sciences & Pharma", "Clinical");
 const allowedUris = new Set<string>();
 const packClasses = new Map<string, string>();
 const uriToClass = new Map<string, string>();
@@ -167,13 +176,61 @@ describe("bucket merge — mixed alignment presence never duplicates a concept",
 });
 
 describe("TM Forum SID pack — telecom depth", () => {
-  const sidPacks = sandbox.resolveProvisionalPacks("Use schema.org (URIs under https://schema.org/) — TM Forum SID has no public URI namespace; align SID concepts by name in definitions only.");
+  const sidPacks = packsFor("Telecommunications");
   it("SID resolves as the PRIMARY pack for the telecom steering", () => {
     expect(sidPacks[0].vocabulary).toBe("TM Forum SID");
   });
   it("SID cores carry the telecom backbone", () => {
-    const cores = (sidPacks[0].entities as Array<{ name: string; core?: boolean }>).filter((e) => e.core).map((e) => e.name);
-    expect(cores).toEqual(["Customer", "Product", "Service", "Agreement"]);
+    expect(coresOf(sidPacks[0])).toEqual(["Customer", "Product", "Service", "Agreement"]);
+  });
+});
+
+describe("pack resolution follows the steering's declared primary", () => {
+  it("a segment whose steering declares schema.org primary gets schema.org cores, not the specialist pack's", () => {
+    // These three segments used to inherit the specialist pack as primary from
+    // the resolver's fixed check order — asserting Meter/Asset (energy retail),
+    // OrganizationalUnit (citizen services) or Product (LS commercial) cores
+    // into mandates the steering scoped to plain commerce/services.
+    expect(packsFor("Energy & Utilities", "Energy Retail")[0].vocabulary).toBe("schema.org");
+    expect(packsFor("Public Sector & Government", "Citizen Services")[0].vocabulary).toBe("schema.org");
+    expect(packsFor("Life Sciences & Pharma", "Commercial")[0].vocabulary).toBe("schema.org");
+  });
+  it("the specialist pack still rides second for its scoped entities", () => {
+    expect(packsFor("Energy & Utilities", "Energy Retail").map((p) => p.vocabulary)).toContain("IEC CIM");
+    expect(packsFor("Public Sector & Government", "Citizen Services").map((p) => p.vocabulary)).toContain("W3C ORG");
+  });
+  it("declared-primary segments are untouched", () => {
+    expect(packsFor("Energy & Utilities", "Grid Operations")[0].vocabulary).toBe("IEC CIM");
+    expect(packsFor("Public Sector & Government", "Organisation & Governance")[0].vocabulary).toBe("W3C ORG");
+    expect(packsFor("Healthcare")[0].vocabulary).toBe("HL7 FHIR");
+    expect(packsFor("Banking")[0].vocabulary).toBe("FIBO");
+  });
+});
+
+describe("steering-selected cores — the same vocabulary carries different backbones", () => {
+  it("Healthcare gets FHIR's generic care cores, never the research module", () => {
+    expect(coresOf(packsFor("Healthcare")[0])).toEqual(["Patient", "Practitioner", "Organization"]);
+  });
+  it("Life Sciences clinical asserts the research module as core", () => {
+    expect(coresOf(packsFor("Life Sciences & Pharma", "Clinical")[0]))
+      .toEqual(["Patient", "Practitioner", "Organization", "ResearchStudy", "ResearchSubject"]);
+  });
+  it("Insurance cores are policy-centric — Account (a banking class) is not one", () => {
+    const cores = coresOf(packsFor("Insurance")[0]);
+    for (const c of ["Client", "Financial Institution", "Policy", "Claim", "Insured Party"]) expect(cores).toContain(c);
+    expect(cores).not.toContain("Account");
+  });
+  it("Banking keeps the account backbone and does not assert insurance classes", () => {
+    expect(coresOf(packsFor("Banking")[0])).toEqual(["Client", "Account", "Financial Institution"]);
+  });
+});
+
+describe("the schema pack carries every class the steering table promises", () => {
+  it("automotive dealer, education, travel and citizen-service classes are alignable facts", () => {
+    const schemaNames = new Set(packsFor("Other")[0].entities.map((e) => e.name));
+    for (const promised of ["Vehicle", "Course", "EducationalOrganization", "LearningResource", "Flight", "LodgingBusiness", "Reservation", "GovernmentService", "GovernmentOrganization"]) {
+      expect(schemaNames.has(promised), promised).toBe(true);
+    }
   });
 });
 
