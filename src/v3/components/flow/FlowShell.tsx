@@ -47,6 +47,8 @@ interface FlowShellProps {
   chrome?: "classic" | "next";
   /** Leave the reimagined chrome — flips the app back to the classic rail. */
   onExitNextChrome?: () => void;
+  /** Enter the reimagined chrome from the classic rail (the visible toggle). */
+  onEnterNextChrome?: () => void;
   program: ProgramSummary;
   programs: ProgramSummary[];
   runningAgentIds: Set<string>;
@@ -719,9 +721,15 @@ export default function FlowShell(props: FlowShellProps) {
             <DockIcon id="copilot" /><span>Copilot</span>
           </button>
           {next && props.onExitNextChrome ? (
-            <button type="button" className="v3fs-appbar-nav v3fs-appbar-exitnext" title="Switch back to the classic navigation" aria-label="Exit reimagined UI"
+            <button type="button" className="v3fs-appbar-nav v3fs-appbar-exitnext on" title="You're in the reimagined UI — click to switch back to the classic navigation" aria-label="Exit reimagined UI"
               onClick={props.onExitNextChrome}>
-              <span>◇ Reimagined</span>
+              <span>◆ Reimagined</span>
+            </button>
+          ) : null}
+          {!next && props.onEnterNextChrome ? (
+            <button type="button" className="v3fs-appbar-nav v3fs-appbar-exitnext" title="Preview the reimagined UI (?ui=next)" aria-label="Try the reimagined UI"
+              onClick={props.onEnterNextChrome}>
+              <span>◇ Try Reimagined</span>
             </button>
           ) : null}
         </div>

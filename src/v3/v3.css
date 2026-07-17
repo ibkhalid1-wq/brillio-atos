@@ -4616,8 +4616,10 @@ body:has(.v3fs-pack) .v3fs-appbar:focus-within {transform:none}
 .v3fs-appbar button.v3fs-appbar-cp:hover {background:var(--v3-accent-2);color:#fff}
 /* ── Reimagined chrome (?ui=next): rail folded into the ⌘K Workbench ── */
 .v3fs-appbar-wb kbd {font-family:var(--mono, ui-monospace);font-size:11px;color:var(--v3-text-muted);border:1px solid var(--fs-line);border-radius:5px;padding:0 5px}
-.v3fs-appbar-exitnext {font-size:11.5px;font-weight:600;color:var(--v3-accent-2)!important}
-.v3fs-appbar-exitnext:hover {border-color:var(--v3-accent-2)}
+.v3fs-appbar-exitnext {font-size:11.5px;font-weight:650;color:var(--v3-accent)!important;border-color:color-mix(in srgb, var(--v3-accent) 40%, var(--fs-line))}
+.v3fs-appbar-exitnext:hover {border-color:var(--v3-accent);background:color-mix(in srgb, var(--v3-accent) 8%, transparent)}
+.v3fs-appbar-exitnext.on {color:#fff!important;background:var(--v3-accent);border-color:var(--v3-accent)}
+.v3fs-appbar-exitnext.on:hover {filter:brightness(1.08)}
 /* The dock is a floating pill, not a column — with it gone the content is
    already full-width and centred, so next chrome needs no layout reflow. */
 /* Content clears the fixed bar (sponsor lens has no bar, keeps its own top). */

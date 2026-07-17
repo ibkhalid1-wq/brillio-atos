@@ -2619,6 +2619,7 @@ export default function AppShellV3() {
         <FlowShell
           chrome={uiNext ? "next" : "classic"}
           onExitNextChrome={() => { try { localStorage.removeItem("atos.ui"); } catch { /* ignore */ } setUiNext(false); }}
+          onEnterNextChrome={() => { try { localStorage.setItem("atos.ui", "next"); } catch { /* ignore */ } setUiNext(true); }}
           program={activeProgram}
           programs={programs}
           jumpToFlowNonce={flowJumpNonce}
