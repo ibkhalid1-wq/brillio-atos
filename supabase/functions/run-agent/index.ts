@@ -7403,7 +7403,7 @@ function ontologyListenEvidenceOnRecord(inner: Record<string, unknown>): boolean
   const phaseInputs = normalizeProgramData(inner.phaseInputs as JsonValue | null);
   const listen = normalizeProgramData(phaseInputs.listen as JsonValue | null);
   return Object.entries(listen).some(([key, value]) =>
-    key !== "savedAt" && !key.startsWith("_")
+    key !== "savedAt" && key !== "clientVocabulary" && !key.startsWith("_")
     && typeof value === "string" && !value.trim().startsWith("[")
     && value.trim().length >= 400);
 }
