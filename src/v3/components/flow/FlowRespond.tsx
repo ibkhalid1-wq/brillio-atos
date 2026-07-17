@@ -993,10 +993,18 @@ function FollowUpBanner({ stakeholder, submissions, changes, newCount }: {
  * back on this page. Renders when the generated prototype (pilotHtml) is
  * present. */
 function PilotFrame({ pilotHtml }: { pilotHtml: string }) {
-  // One URL per html payload, alive for the page's lifetime so the link can be
-  // clicked (or middle-clicked) more than once; revoked on unmount.
-  const url = useMemo(() => URL.createObjectURL(new Blob([pilotHtml], { type: "text/html" })), [pilotHtml]);
-  useEffect(() => () => URL.revokeObjectURL(url), [url]);
+  // The blob URL is minted AT CLICK TIME, inside the user gesture — a URL
+  // created at render and held in an href goes dead the moment anything
+  // revokes it (React StrictMode's simulated unmount did exactly that in dev,
+  // yielding "your file could not be accessed"). Click-time creation is the
+  // same proven pattern as the studio's "Open in browser"; each click gets a
+  // fresh URL, revoked a minute later once the tab has loaded it.
+  const openPilot = () => {
+    const url = URL.createObjectURL(new Blob([pilotHtml], { type: "text/html" }));
+    const win = window.open(url, "_blank", "noopener");
+    if (!win) window.location.assign(url); // pop-up blocked: open in this tab instead
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  };
   return (
     <div className="v3fs-portal-pilotlink">
       <span className="v3fs-portal-pilotlink-i" aria-hidden="true">🖥</span>
@@ -1004,9 +1012,9 @@ function PilotFrame({ pilotHtml }: { pilotHtml: string }) {
         <b>The prototype is ready for you to try</b>
         <p>It opens full-screen in a new tab — click through it exactly as you would the real product, then come back to this page and record your verdict below.</p>
       </div>
-      <a className="v3fs-btn pri v3fs-portal-send" href={url} target="_blank" rel="noreferrer">
+      <button type="button" className="v3fs-btn pri v3fs-portal-send" onClick={openPilot}>
         ↗ Open the prototype
-      </a>
+      </button>
     </div>
   );
 }
