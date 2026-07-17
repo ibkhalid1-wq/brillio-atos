@@ -6934,26 +6934,7 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-showc-loop.converged .v3fs-showc-loop-r {background:var(--v3-green)}
 .v3fs-showc-loop.design .v3fs-showc-loop-r {background:var(--v3-amber)}
 .v3fs-showc-loop-t {min-width:0}
-.v3fs-showc-protohint {font-size:12px;color:var(--v3-green)}
 .v3fs-showc-noproto {font-size:12px;color:var(--v3-text-muted)}
-.v3fs-showc-areas {display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
-.v3fs-showc-area {font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;background:var(--fs-card);border:1px solid var(--fs-line);color:var(--v3-text-secondary)}
-.v3fs-showc-area.ok {border-color:color-mix(in srgb,var(--v3-green) 40%,transparent);color:var(--v3-green)}
-.v3fs-showc-area.part {border-color:color-mix(in srgb,var(--v3-amber) 44%,transparent);color:var(--v3-amber)}
-.v3fs-showc-area.open {color:var(--v3-text-muted)}
-.v3fs-showc-area.obj {border-color:color-mix(in srgb,var(--v3-red,#d64545) 44%,transparent);color:var(--v3-red,#d64545)}
-.v3fs-showc-area b {font-weight:700}
-.v3fs-showc-verdicts {display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none}
-.v3fs-showc-v {display:flex;align-items:baseline;gap:10px;padding:8px 12px;border:1px solid var(--fs-line);border-left-width:3px;border-radius:9px;background:var(--fs-card);font-size:12.5px}
-.v3fs-showc-v b {color:var(--v3-text-primary);min-width:120px}
-.v3fs-showc-v em {font-style:normal;font-weight:650;font-size:11px}
-.v3fs-showc-v span {color:var(--v3-text-muted);font-size:11.5px}
-.v3fs-showc-v.ok {border-left-color:var(--v3-green)} .v3fs-showc-v.ok em {color:var(--v3-green)}
-.v3fs-showc-v.part {border-left-color:var(--v3-amber)} .v3fs-showc-v.part em {color:var(--v3-amber)}
-.v3fs-showc-v.obj {border-left-color:var(--v3-red,#d64545)} .v3fs-showc-v.obj em {color:var(--v3-red,#d64545)}
-.v3fs-showc-v.pending {border-left-color:var(--fs-line)} .v3fs-showc-v.pending em {color:var(--v3-text-muted)}
-.v3fs-showc-empty {font-size:12px;color:var(--v3-text-muted)}
-.v3fs-showc-obj {margin-top:8px;font-size:12px;font-weight:600;color:var(--v3-red,#d64545)}
 /* Prototype Build studio — iframe render + Experience Designer editor */
 .v3fs-proto {display:flex;flex-direction:column;gap:10px;min-height:0}
 .v3fs-proto.empty {align-items:center;justify-content:center;padding:8px 20px} /* inner uses shared .v3fs-emptc */

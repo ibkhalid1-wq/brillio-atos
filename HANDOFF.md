@@ -7,7 +7,11 @@ was true at handoff; verify against the code where it matters, the code wins.
 
 **ATOS Flow** runs a consulting engagement as a closed evidence loop:
 
-> **Frame → Listen → Envision → Show → Ship → Evolve (∞)**
+> **Frame → Listen → Prototype → Ship → Evolve (∞)**
+
+The six methodology *movements* are still frame · listen · envision · show · ship · evolve;
+the UI collapses **Envision + Show** into one **Prototype** phase — a Design ⇄ Validate loop
+(design the prototype, clients sign off per area, change requests fold back until convergence).
 
 Stakeholder conversations are captured as evidence; AI agents compile evidence into
 formal documents (charter, ontology, atlas, architecture, blueprint, demo scripts…);
@@ -57,7 +61,8 @@ src/v3/components/flow/
   FlowShell.tsx                 dock (views: Inbox/Flow/Library/Pulse/Control/Portfolio),
                                 hero, switcher, Today/Inbox surface, Library (facets,
                                 person-grouped evidence, artifact ledger), Pulse, Control
-  FlowCanvas.tsx                the six movements, each rendered as the loop's three
+  FlowCanvas.tsx                the phases (Envision+Show fold into one Prototype loop),
+                                each rendered as the loop's three
                                 STAGES — Collect → Paper → Gate — under a header carrying
                                 the gate gauge, the movement brief, and the ranked
                                 "Up next" queue; [ ] cycles stages
@@ -133,7 +138,7 @@ supabase/functions/
 
 ## Testing & CI
 
-- `npx vitest run` — 903 tests / 53 files. The load-bearing suites:
+- `npx vitest run` — 927 tests / 53 files. The load-bearing suites:
   - `flowLibs.test.ts` — gate verdicts pinned word-for-word, decision resolution, briefs, locateQuote
   - `coherence.test.ts` — cross-surface invariants (every decision family has a preview, checklist groups)
   - `edgeLockstep.test.ts` — client/edge parity by parsing both sources (fingerprints,

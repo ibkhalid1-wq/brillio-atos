@@ -14,7 +14,11 @@ Powered by **ATOS™** — Agentic Transformation Operating System.
 
 ATOS Flow runs a consulting engagement as a closed evidence loop:
 
-> **Frame → Listen → Envision → Show → Ship → Evolve (∞)**
+> **Frame → Listen → Prototype → Ship → Evolve (∞)**
+>
+> *Prototype is a **Design ⇄ Validate** loop — the delivery team shapes the prototype,
+> clients sign off area by area, and change requests fold back in until every area
+> converges (the Envision + Show movements, under the hood).*
 
 Stakeholder conversations are captured as evidence; AI agents compile that evidence into
 formal artifacts (charter, domain ontology, current-state atlas, architecture strategy,
@@ -63,20 +67,21 @@ are set as Supabase function secrets, never shipped to the client. See HANDOFF.m
 ```
 src/main.jsx                     entry → lazy-loads the Flow shell
 src/v3/AppShellV3.tsx            shell: auth, programme state, realtime, persist chokepoint
-src/v3/components/flow/          the six movements, evidence loop, artifact studios,
+src/v3/components/flow/          the phases (Prototype = the Envision⇄Show loop),
+                                 evidence loop, artifact studios,
                                  derivations (flowShellData.ts), decisions, portal, briefs
 src/new/ · src/lib/ · src/hooks/ programme state, agent runs, setup wizard (still load-bearing)
 supabase/functions/              edge: run-agent, flow-portal, flow-transcribe, and more
 ```
 
-~209 TypeScript/TSX source files. **One JSONB blob per programme** (`adam_programs.data`)
+~225 TypeScript/TSX source files. **One JSONB blob per programme** (`adam_programs.data`)
 is the whole data model; nearly everything else is derived from it on render. The five
 architectural rules that keep this honest are in HANDOFF.md → *Architecture in five rules*.
 
 ## Testing & CI
 
 ```bash
-npx vitest run     # 903 tests / 53 files
+npx vitest run     # 927 tests / 53 files
 ```
 
 Load-bearing suites: `flowLibs.test.ts` (gate verdicts pinned word-for-word),

@@ -829,19 +829,6 @@ export function readGapRoutes(program: ProgramSummary, movementId: string): Reco
 }
 
 /**
- * A gap rewritten to honour the operator's redirect — the addressee replaced
- * with (or cleared to) the stakeholder/role the overlay names. With no override
- * the gap is returned verbatim, so the generator's own "Ask the <who>:" address
- * stands.
- */
-export function applyGapRoute(gap: string, routes: Record<string, string>): string {
-  const who = routes[gapRouteKey(gap)];
-  if (who === undefined) return gap;
-  const text = stripAskAddressee(gap);
-  return who ? `Ask the ${who}: ${text}` : text;
-}
-
-/**
  * People a respondent named as "who else should we speak with?" on their link —
  * stored fingerprint-safe under Listen's `_suggestedVoices`. Surfaced on the
  * People page for the operator to ADD (→ a real collection card) or dismiss;
