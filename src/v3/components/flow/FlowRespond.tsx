@@ -984,14 +984,29 @@ function FollowUpBanner({ stakeholder, submissions, changes, newCount }: {
  * it, watch each step's screen light up. Same renderer the design studio
  * uses, so what they walk IS the signed-off design.
  */
-/** The simplest possible validation surface: the BUILT prototype itself, in a
- * sandboxed frame — the stakeholder uses it (close to production) and records a
- * verdict below. No scenario runner, no screen explorer, no walk — just the
- * pilot. Renders when the generated prototype (pilotHtml) is present. */
+/** The simplest possible validation surface: the BUILT prototype itself. It
+ * used to render INSIDE the page in a sandboxed iframe — cramped, double-
+ * scrollbarred, and fragile in the webviews mail clients open links in. The
+ * linked page now hands the stakeholder a real link instead: the
+ * self-contained HTML gets its own blob URL and opens FULL-SCREEN in a new
+ * tab, the way they'd experience the shipped product; the verdict is recorded
+ * back on this page. Renders when the generated prototype (pilotHtml) is
+ * present. */
 function PilotFrame({ pilotHtml }: { pilotHtml: string }) {
+  // One URL per html payload, alive for the page's lifetime so the link can be
+  // clicked (or middle-clicked) more than once; revoked on unmount.
+  const url = useMemo(() => URL.createObjectURL(new Blob([pilotHtml], { type: "text/html" })), [pilotHtml]);
+  useEffect(() => () => URL.revokeObjectURL(url), [url]);
   return (
-    <div className="v3fs-portal-pilotwrap">
-      <iframe className="v3fs-portal-pilot" sandbox="allow-scripts allow-forms" srcDoc={pilotHtml} title="The prototype" />
+    <div className="v3fs-portal-pilotlink">
+      <span className="v3fs-portal-pilotlink-i" aria-hidden="true">🖥</span>
+      <div className="v3fs-portal-pilotlink-t">
+        <b>The prototype is ready for you to try</b>
+        <p>It opens full-screen in a new tab — click through it exactly as you would the real product, then come back to this page and record your verdict below.</p>
+      </div>
+      <a className="v3fs-btn pri v3fs-portal-send" href={url} target="_blank" rel="noreferrer">
+        ↗ Open the prototype
+      </a>
     </div>
   );
 }
