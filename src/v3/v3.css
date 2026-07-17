@@ -6385,7 +6385,10 @@ details[open] > summary .v3fs-disc-c::after {display:none}
    inspector is a strip beneath it; the element tables follow. */
 .v3fs-onto{display:flex;flex-direction:column;gap:14px}
 .v3fs-onto-canvas{position:relative;height:440px;border:1px solid var(--fs-line);border-radius:14px;overflow:hidden;background:var(--v3-bg)}
-.v3fs-onto-toolbar{position:absolute;left:12px;top:12px;z-index:5;display:flex;gap:7px}
+/* The graph viewport is inset below the toolbar band, so fitView/arrange can
+   never place nodes under the buttons. */
+.v3fs-onto-flowwrap{position:absolute;inset:52px 0 0 0}
+.v3fs-onto-toolbar{position:absolute;left:12px;right:12px;top:12px;z-index:5;display:flex;gap:7px;flex-wrap:wrap;align-items:center}
 .v3fs-onto-panel{border:1px solid var(--v3-border-soft);border-radius:12px;padding:13px 15px;background:var(--v3-surface-2);display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px 14px;align-items:start}
 .v3fs-onto-panel .v3fs-stu-sec-h{grid-column:1 / -1}
 .v3fs-onto-panel .v3fs-stu-empty{grid-column:1 / -1}

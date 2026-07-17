@@ -344,6 +344,9 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
   return (
     <div className="v3fs-onto">
       <div className="v3fs-onto-canvas">
+        {/* The flow viewport starts BELOW the toolbar band, so an arranged
+            graph can never slide under the buttons. */}
+        <div className="v3fs-onto-flowwrap">
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -365,6 +368,7 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
           <Background gap={22} size={1} />
           <Controls showInteractive={false} />
         </ReactFlow>
+        </div>
         <div className="v3fs-onto-toolbar">
           {locked ? null : <button type="button" className="v3fs-btn" onClick={addEntity}>＋ Add entity</button>}
           <button type="button" className="v3fs-btn" onClick={() => void rearrange()} title="Re-apply the routed layout — no overlaps, edges steered around entities, fewest crossings">⌗ Arrange</button>
