@@ -1001,8 +1001,13 @@ function PilotFrame({ pilotHtml }: { pilotHtml: string }) {
   // fresh URL, revoked a minute later once the tab has loaded it.
   const openPilot = () => {
     const url = URL.createObjectURL(new Blob([pilotHtml], { type: "text/html" }));
-    const win = window.open(url, "_blank", "noopener");
-    if (!win) window.location.assign(url); // pop-up blocked: open in this tab instead
+    // Anchor-click, not window.open: with the noopener feature, window.open
+    // returns null EVEN ON SUCCESS (per spec), so any "blocked" fallback keyed
+    // on the return value double-fires — a new tab AND a same-tab navigation.
+    // A synthetic anchor click inside the user gesture opens exactly one tab.
+    const a = document.createElement("a");
+    a.href = url; a.target = "_blank"; a.rel = "noopener";
+    document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   };
   return (

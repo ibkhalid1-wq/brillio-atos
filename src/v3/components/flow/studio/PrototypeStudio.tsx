@@ -22,8 +22,12 @@ function toast(message: string, tone: "info" | "error" = "info") {
 export function openPrototypeInBrowser(html: string) {
   if (!html.trim()) { toast("No prototype to open yet — build it first.", "error"); return; }
   const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
-  const win = window.open(url, "_blank", "noopener");
-  if (!win) { toast("Pop-up blocked — allow pop-ups to open the prototype in a new tab.", "error"); }
+  // Anchor-click, not window.open: with the noopener feature, window.open
+  // returns null EVEN ON SUCCESS (per spec), so the old "pop-up blocked"
+  // toast fired on every successful open.
+  const a = document.createElement("a");
+  a.href = url; a.target = "_blank"; a.rel = "noopener";
+  document.body.appendChild(a); a.click(); a.remove();
   // Revoke after the new tab has had time to load the document.
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
