@@ -2,7 +2,7 @@
   "name": "brillio-atos",
   "private": true,
   "version": "1.0.0",
-  "description": "Brillio ATOS\u2122 \u2014 Agentic Transformation Operating System. AI-Native Transformation Platform.",
+  "description": "Brillio ATOS™ — Agentic Transformation Operating System. AI-Native Transformation Platform.",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -23,6 +23,7 @@
     "cmdk": "^1.1.1",
     "diff": "^9.0.0",
     "dompurify": "^3.4.10",
+    "elkjs": "^0.11.1",
     "framer-motion": "^12.40.0",
     "jszip": "^3.10.1",
     "lucide-react": "^0.511.0",

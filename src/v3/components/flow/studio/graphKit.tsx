@@ -57,6 +57,116 @@ export function FloatingStepEdge({ id, source, target, markerEnd, label, selecte
 
 export const FLOATING_EDGE_TYPES = { floating: FloatingStepEdge };
 
+// ─── Routed edges (ELK) ───────────────────────────────────────────────────────
+// A "routed" edge follows a PRECOMPUTED polyline (ELK's orthogonal routing,
+// which steers around nodes and minimises crossings) instead of pointing
+// straight at its target. The points live on edge.data and are only valid for
+// the node positions ELK produced them with — callers drop the routes (edges
+// fall back to "floating") the moment a node is dragged or the doc changes.
+
+type RoutePoint = { x: number; y: number };
+
+function roundedOrthPath(points: RoutePoint[], radius = 8): string {
+  let d = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 1; i < points.length - 1; i += 1) {
+    const prev = points[i - 1], corner = points[i], next = points[i + 1];
+    const inLen = Math.hypot(corner.x - prev.x, corner.y - prev.y);
+    const outLen = Math.hypot(next.x - corner.x, next.y - corner.y);
+    const r = Math.min(radius, inLen / 2, outLen / 2);
+    const inX = corner.x - ((corner.x - prev.x) / (inLen || 1)) * r;
+    const inY = corner.y - ((corner.y - prev.y) / (inLen || 1)) * r;
+    const outX = corner.x + ((next.x - corner.x) / (outLen || 1)) * r;
+    const outY = corner.y + ((next.y - corner.y) / (outLen || 1)) * r;
+    d += ` L ${inX} ${inY} Q ${corner.x} ${corner.y} ${outX} ${outY}`;
+  }
+  const last = points[points.length - 1];
+  return `${d} L ${last.x} ${last.y}`;
+}
+
+/** The point halfway along the polyline BY LENGTH — where the label sits. */
+function polylineMidpoint(points: RoutePoint[]): RoutePoint {
+  let total = 0;
+  for (let i = 1; i < points.length; i += 1) total += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+  let remaining = total / 2;
+  for (let i = 1; i < points.length; i += 1) {
+    const seg = Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+    if (seg >= remaining) {
+      const t = seg ? remaining / seg : 0;
+      return { x: points[i - 1].x + (points[i].x - points[i - 1].x) * t, y: points[i - 1].y + (points[i].y - points[i - 1].y) * t };
+    }
+    remaining -= seg;
+  }
+  return points[Math.floor(points.length / 2)];
+}
+
+export function RoutedEdge({ id, data, markerEnd, label, selected }: EdgeProps) {
+  const points = ((data as { points?: RoutePoint[] } | undefined)?.points) ?? [];
+  if (points.length < 2) return null;
+  const mid = polylineMidpoint(points);
+  return (
+    <>
+      <BaseEdge id={id} path={roundedOrthPath(points)} markerEnd={markerEnd}
+        style={selected ? { stroke: "var(--v3-accent-2)", strokeWidth: 2 } : undefined} />
+      {label ? (
+        <EdgeLabelRenderer>
+          <div className={`v3fs-onto-elabel${selected ? " on" : ""}`}
+            style={{ transform: `translate(-50%,-50%) translate(${mid.x}px,${mid.y}px)` }}>
+            {label}
+          </div>
+        </EdgeLabelRenderer>
+      ) : null}
+    </>
+  );
+}
+
+export const ROUTED_EDGE_TYPES = { ...FLOATING_EDGE_TYPES, routed: RoutedEdge };
+
+/**
+ * The full ELK layered layout: node positions AND orthogonal edge routes that
+ * steer around nodes with crossing minimisation — strictly better than
+ * layeredPositions wherever the caller can render routed edges. Loaded on
+ * demand (elkjs is ~350KB gzipped, its own lazy chunk); callers should fall
+ * back to layeredPositions when the import fails.
+ */
+export async function elkGraphLayout(
+  nodes: Array<{ id: string; width: number; height: number }>,
+  edges: Array<{ id: string; source: string; target: string }>,
+): Promise<{ positions: Record<string, RoutePoint>; routes: Record<string, RoutePoint[]> }> {
+  const { default: ELK } = await import("elkjs/lib/elk.bundled.js");
+  const elk = new ELK();
+  const graph: import("elkjs").ElkNode = {
+    id: "root",
+    layoutOptions: {
+      "elk.algorithm": "layered",
+      "elk.direction": "DOWN",
+      // Deterministic tie-breaking: same graph → same layout, run to run.
+      "elk.randomSeed": "1",
+      "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
+      "elk.spacing.nodeNode": "48",
+      "elk.layered.spacing.nodeNodeBetweenLayers": "90",
+      "elk.spacing.edgeNode": "24",
+      "elk.spacing.edgeEdge": "16",
+      "elk.layered.spacing.edgeNodeBetweenLayers": "24",
+      "elk.layered.spacing.edgeEdgeBetweenLayers": "12",
+      "elk.edgeRouting": "ORTHOGONAL",
+      "elk.layered.nodePlacement.strategy": "BRANDES_KOEPF",
+      "elk.layered.crossingMinimization.strategy": "LAYER_SWEEP",
+    },
+    children: nodes.map((node) => ({ id: node.id, width: node.width, height: node.height })),
+    edges: edges.map((edge) => ({ id: edge.id, sources: [edge.source], targets: [edge.target] })),
+  };
+  const out = await elk.layout(graph);
+  const positions: Record<string, RoutePoint> = {};
+  for (const child of out.children ?? []) positions[child.id] = { x: child.x ?? 0, y: child.y ?? 0 };
+  const routes: Record<string, RoutePoint[]> = {};
+  for (const edge of out.edges ?? []) {
+    const section = edge.sections?.[0];
+    if (!section) continue;
+    routes[edge.id] = [section.startPoint, ...(section.bendPoints ?? []), section.endPoint];
+  }
+  return { positions, routes };
+}
+
 /**
  * A layered (Sugiyama-style) layout: entities fall into rows by BFS distance
  * from the best-connected hub, then each row is re-ordered by the MEDIAN of its
