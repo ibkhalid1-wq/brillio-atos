@@ -1281,7 +1281,13 @@ Return ONLY valid JSON:
     title: "Current-State Atlas",
     system: `You are the ATOS Current-State Atlas Agent. Synthesise EVERY discovery transcript into the current-state picture: the workflows as they actually run, the pain heatmap, and the contradictions between stakeholders.
 
-PROVISIONAL SEED: when no discovery transcripts exist yet but the Frame MANDATE does (the sponsor's conversation and the charter's objective/scope in groundingFacts), do NOT return an empty atlas — draft a PROVISIONAL current-state from the mandate: the obvious workflows the objective implies (for "streamline customer onboarding and compliance": an onboarding workflow, a compliance-check workflow), each step's evidence marked "from the sponsor mandate — to confirm in interviews", and gaps naming whom to hear. Once interviews arrive, they replace the seed with the real picture.
+PROVISIONAL SEED: when no discovery transcripts exist yet but the Frame MANDATE does (the sponsor's conversation and the charter's objective/scope in groundingFacts), do NOT return an empty atlas — draft a PROVISIONAL current-state from the mandate, under the discipline below. Once interviews arrive, they replace the seed with the real picture.
+
+PROVISIONAL WORKFLOWS: one workflow per process stage the mandate names, named with the mandate's own wording (the same nouns the Domain Ontology in upstreamArtifactDocs uses — "Patient Identification", never a synonym). A single-step workflow is a FAILURE: each provisional workflow carries the 3-6 steps this INDUSTRY's standard practice implies for that stage — you know how clinical trial recruitment, loan origination, or order fulfilment actually runs in this industry; write that standard skeleton as the provisional current state. For clinical-trial patient identification that means: define eligibility criteria from the protocol; screen medical records / registries / referrals against them; compile and pre-screen the candidate list — each step marked "industry-standard practice — to confirm in interviews" as its evidence. Do NOT invent client-specific details (named systems, durations, local quirks) — those are exactly what interviews establish; leave step.system and step.duration null and raise the open question instead.
+
+PROVISIONAL ACTORS: every step's actor comes from the CLOSED CAST — the Discovery Kit's personas (its full body rides in upstreamArtifactDocs: personas, interviews and coverage domains). Pick the persona whose domain owns the step ("Clinical Operations Lead", "Clinical Site Coordinator") and suffix nothing — the "to confirm" already lives on the evidence. NEVER write "Unclear", "Unknown", "possibly X or Y", or invent a role the kit doesn't carry; if genuinely no persona fits a step, use the closest persona AND raise an openQuestion asking who really does it. Every kit persona still acts in at least one workflow.
+
+CURRENT-STATE ONLY: the atlas describes the business AS IT RUNS TODAY. The solution the mandate proposes to build (the "AI-powered CRM", the new platform) does not exist yet — it must NOT appear in any workflow step, the systemsInventory, the painHeatmap, or the summary. systemsInventory lists only systems the evidence actually names; with none named, leave it empty and ask what systems support each stage today under openQuestions. Two runs over the same mandate must produce the same workflows, stage for stage, with the same actors.
 
 Ground every workflow step and pain point in what a stakeholder actually said — carry a verbatim quote with attribution wherever possible. Never invent a step or a hand-off; where the transcripts leave one unclear, record it under "openQuestions" instead. Where two stakeholders describe the same process differently, that is a finding — record it under "contradictions" with a suggested follow-up, never silently pick a side.
 
@@ -2277,7 +2283,10 @@ function priorArtifactForContext(doc: Record<string, unknown>): Record<string, u
  * Experience Design the blueprint needs (16KB) was never injected at all.
  */
 const UPSTREAM_ARTIFACT_DEPS: Record<string, readonly string[]> = {
-  currentStateAtlas: ["domainOntology"],
+  // The Atlas names every step's actor from the Discovery Kit's personas — the
+  // kit BODY must ride along or the instruction points at data the context
+  // doesn't carry and every actor degenerates to "Unclear — to confirm".
+  currentStateAtlas: ["domainOntology", "discoveryKit"],
   architectureStrategy: ["currentStateAtlas", "domainOntology"],
   experienceDesign: ["architectureStrategy", "currentStateAtlas", "domainOntology"],
   agenticBlueprint: ["architectureStrategy", "experienceDesign", "domainOntology"],
