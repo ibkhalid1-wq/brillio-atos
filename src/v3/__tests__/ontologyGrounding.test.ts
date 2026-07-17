@@ -41,6 +41,18 @@ const sandbox = new Function(js)() as {
 const packsFor = (industry: string, segment?: string) =>
   sandbox.resolveProvisionalPacks(sandbox.ontologyVocabularySteering(industry, segment));
 const coresOf = (pack: ResolvedPack) => pack.entities.filter((e) => e.core).map((e) => e.name);
+// Every distinct pack (variants included) reachable from the steering table.
+const ALL_INDUSTRIES: Array<[string, string?]> = [
+  ["Financial Services"], ["Banking"], ["Banking", "Capital Markets"], ["Insurance"],
+  ["Healthcare"], ["Life Sciences & Pharma", "Clinical"], ["Life Sciences & Pharma", "Manufacturing & Supply"],
+  ["Retail & Consumer Goods"], ["Manufacturing"], ["Automotive"], ["Energy & Utilities"],
+  ["Telecommunications"], ["Media & Entertainment"], ["Technology & Software"],
+  ["Transportation & Logistics"], ["Public Sector & Government"], ["Education"],
+  ["Travel & Hospitality"], ["Professional Services"], ["Other"],
+];
+const ALL_PACKS = [...new Map(
+  ALL_INDUSTRIES.flatMap(([i, s]) => packsFor(i, s)).map((p) => [`${p.vocabulary}|${coresOf(p).join(",")}`, p]),
+).values()];
 
 const MANDATE = "Accelerate clinical trial recruitment through an AI-powered CRM that improves patient identification, engagement, and enrollment, reducing time-to-enrollment by 30% and increasing enrollment conversion by 20%.";
 
@@ -225,6 +237,45 @@ describe("steering-selected cores — the same vocabulary carries different back
   });
 });
 
+describe("care-operations depth — the generic FHIR pack", () => {
+  const hcPacks = packsFor("Healthcare");
+  it("carries ServiceRequest so a referral mandate can align and connect", () => {
+    const sr = hcPacks[0].entities.find((e) => e.name === "ServiceRequest");
+    expect(sr?.aliases).toContain("referral");
+    const assocs = hcPacks[0].relations.map((r) => `${r.from} ${r.verb} ${r.to}`);
+    expect(assocs).toContain("ServiceRequest applies to Patient");
+    expect(assocs).toContain("Practitioner produces ServiceRequest");
+  });
+  it("carries NO research classes — a hospital-ops sponsor is never asked about ResearchStudy", () => {
+    const names = hcPacks[0].entities.map((e) => e.name);
+    expect(names).not.toContain("ResearchStudy");
+    expect(names).not.toContain("ResearchSubject");
+  });
+  it("the clinical variant still carries the research module with its relations", () => {
+    const cl = packsFor("Life Sciences & Pharma", "Clinical")[0];
+    expect(coresOf(cl)).toContain("ResearchStudy");
+    expect(cl.relations.map((r) => `${r.from} ${r.verb} ${r.to}`)).toContain("Patient participates in ResearchStudy");
+  });
+});
+
+describe("industry pack depth", () => {
+  it("Manufacturing runs on ISA-95 as primary with production cores; GS1 rides second", () => {
+    const m = packsFor("Manufacturing");
+    expect(m[0].vocabulary).toBe("ISA-95");
+    expect(coresOf(m[0])).toEqual(["Equipment", "Material Lot", "Production Request"]);
+    expect(m.map((p) => p.vocabulary)).toContain("GS1");
+  });
+  it("FIBO carries capital-markets classes", () => {
+    const names = packsFor("Banking", "Capital Markets")[0].entities.map((e) => e.name);
+    for (const c of ["Financial Instrument", "Trade", "Portfolio"]) expect(names).toContain(c);
+  });
+  it("EBUCore carries publication classes with real URIs", () => {
+    const media = packsFor("Media & Entertainment")[0];
+    expect(media.entities.find((e) => e.name === "PublicationEvent")?.uri).toContain("ebucore#PublicationEvent");
+    expect(media.entities.find((e) => e.name === "PublicationChannel")?.uri).toContain("ebucore#PublicationChannel");
+  });
+});
+
 describe("the schema pack carries every class the steering table promises", () => {
   it("automotive dealer, education, travel and citizen-service classes are alignable facts", () => {
     const schemaNames = new Set(packsFor("Other")[0].entities.map((e) => e.name));
@@ -271,9 +322,17 @@ describe("prompt ↔ reconciler lockstep", () => {
   it("every pack URI is namespace-valid against ONTOLOGY_VOCAB_PREFIXES", () => {
     const prefixBlock = EDGE.match(/ONTOLOGY_VOCAB_PREFIXES = \[([\s\S]*?)\];/);
     const prefixes = [...prefixBlock![1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
-    for (const pack of packs) {
+    for (const pack of ALL_PACKS) {
       for (const entity of pack.entities) {
-        if (entity.uri) expect(prefixes.some((p) => entity.uri.startsWith(p)), `${entity.name}: ${entity.uri}`).toBe(true);
+        if (entity.uri) expect(prefixes.some((p) => entity.uri.startsWith(p)), `${pack.vocabulary} ${entity.name}: ${entity.uri}`).toBe(true);
+      }
+    }
+  });
+
+  it("every pack association verb is on the closed menu", () => {
+    for (const pack of ALL_PACKS) {
+      for (const r of pack.relations) {
+        expect(sandbox.ONTOLOGY_MENU_VERBS, `${pack.vocabulary}: ${r.from} ${r.verb} ${r.to}`).toContain(r.verb);
       }
     }
   });

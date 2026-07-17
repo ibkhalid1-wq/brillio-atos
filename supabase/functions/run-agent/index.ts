@@ -6450,11 +6450,11 @@ function toCamelCaseId(id: string): string {
 // ─── Ontology vocabulary steering ────────────────────────────────────────────
 // Deterministic mapping from the setup wizard's industry options to the
 // standards vocabulary the ontology should align to. Prose-only steering left
-// the choice to model judgment; this table decides it. Only vocabularies with
-// REAL public URI namespaces are named — ONTOLOGY_VOCAB_PREFIXES below rejects
-// everything else, so a fabricated deep link never reaches the inbox. Sectors
-// whose standards have no public linked-data namespace (TM Forum SID, ACORD)
-// steer to the nearest real vocabulary instead of a fake URI.
+// the choice to model judgment; this table decides it. Standards WITHOUT a
+// public linked-data namespace (TM Forum SID, ISA-95, ACORD) are still named
+// and ride as name-aligned backbone packs — but they never mint URIs:
+// ONTOLOGY_VOCAB_PREFIXES below rejects any namespace not listed, so a
+// fabricated deep link never reaches the inbox.
 
 const VOCAB_FIBO = "FIBO (URIs under https://spec.edmcouncil.org/fibo/ontology/)";
 const VOCAB_FHIR = "HL7 FHIR (URIs under http://hl7.org/fhir/)";
@@ -6471,7 +6471,7 @@ const INDUSTRY_VOCABULARY_STEERING: Record<string, string> = {
   "healthcare": `Primary: ${VOCAB_FHIR}. Fall back to ${VOCAB_SCHEMA}.`,
   "life sciences & pharma": `Primary: ${VOCAB_FHIR} for clinical entities — including the ResearchStudy/ResearchSubject research module; use ${VOCAB_GS1} for product/serialisation/supply-chain entities. Fall back to ${VOCAB_SCHEMA}.`,
   "retail & consumer goods": `Primary: ${VOCAB_GS1}. Fall back to ${VOCAB_SCHEMA}.`,
-  "manufacturing": `Primary: ${VOCAB_GS1} for product/logistics entities. Fall back to ${VOCAB_SCHEMA}.`,
+  "manufacturing": `Primary: ISA-95 (IEC 62264) for production/equipment/material entities (no public URI namespace — align ISA-95 concepts by name in definitions only); use ${VOCAB_GS1} for product/logistics identifiers. Fall back to ${VOCAB_SCHEMA}.`,
   "automotive": `Primary: ${VOCAB_GS1} for product/logistics entities; ${VOCAB_SCHEMA} carries the automotive types (Vehicle, Car…).`,
   "energy & utilities": `Primary: ${VOCAB_CIM} for grid/asset/measurement entities. Fall back to ${VOCAB_SCHEMA}.`,
   "telecommunications": `Primary: TM Forum SID (no public URI namespace — align SID concepts by name in definitions only). Fall back to ${VOCAB_SCHEMA}.`,
@@ -6626,10 +6626,9 @@ const PROVISIONAL_BACKBONE_PACKS: Record<string, ProvisionalPack> = {
       { core: true, name: "Patient", uri: "http://hl7.org/fhir/Patient", definition: "A person receiving or registered to receive care", aliases: ["patient", "subject"] },
       { core: true, name: "Practitioner", uri: "http://hl7.org/fhir/Practitioner", definition: "A clinician or professional delivering care", aliases: ["clinician", "doctor", "physician", "investigator", "nurse"] },
       { core: true, name: "Organization", uri: "http://hl7.org/fhir/Organization", definition: "A provider, sponsor or site organisation", aliases: ["organisation", "sponsor organization", "hospital", "site", "clinic", "provider organisation"] },
-      { name: "ResearchStudy", uri: "http://hl7.org/fhir/ResearchStudy", definition: "A clinical study or trial", aliases: ["clinical trial", "trial", "study", "research study"] },
-      { name: "ResearchSubject", uri: "http://hl7.org/fhir/ResearchSubject", definition: "A patient's participation in a study", aliases: ["trial participant", "enrollee", "study subject"] },
       { name: "Encounter", uri: "http://hl7.org/fhir/Encounter", definition: "An interaction between a patient and care providers", aliases: ["visit", "consultation"] },
       { name: "Appointment", uri: "http://hl7.org/fhir/Appointment", definition: "A scheduled visit", aliases: ["appointment", "screening visit"] },
+      { name: "ServiceRequest", uri: "http://hl7.org/fhir/ServiceRequest", definition: "A request for a service to be performed — a referral or an order", aliases: ["referral", "service request", "order", "care request"] },
       { name: "Consent", uri: "http://hl7.org/fhir/Consent", definition: "A patient's recorded consent", aliases: ["informed consent", "consent form"] },
       { name: "Condition", uri: "http://hl7.org/fhir/Condition", definition: "A diagnosis or clinical condition", aliases: ["diagnosis", "disease", "indication"] },
       { name: "Coverage", uri: "http://hl7.org/fhir/Coverage", definition: "Insurance or payment coverage", aliases: ["insurance", "payer"] },
@@ -6637,10 +6636,14 @@ const PROVISIONAL_BACKBONE_PACKS: Record<string, ProvisionalPack> = {
     ],
     relations: [
       { from: "Practitioner", verb: "is part of", to: "Organization" },
-      { from: "Organization", verb: "conducts", to: "ResearchStudy" },
-      { from: "Patient", verb: "participates in", to: "ResearchStudy" },
-      { from: "ResearchSubject", verb: "is part of", to: "ResearchStudy" },
+      { from: "Practitioner", verb: "produces", to: "ServiceRequest" },
+      { from: "ServiceRequest", verb: "applies to", to: "Patient" },
+      { from: "Practitioner", verb: "conducts", to: "Encounter" },
+      { from: "Appointment", verb: "applies to", to: "Patient" },
+      { from: "Appointment", verb: "leads to", to: "Encounter" },
       { from: "Consent", verb: "applies to", to: "Patient" },
+      { from: "Condition", verb: "applies to", to: "Patient" },
+      { from: "Coverage", verb: "applies to", to: "Patient" },
       { from: "Encounter", verb: "applies to", to: "Patient" },
       { from: "Observation", verb: "applies to", to: "Patient" },
     ],
@@ -6679,6 +6682,9 @@ const PROVISIONAL_BACKBONE_PACKS: Record<string, ProvisionalPack> = {
       { name: "Claim", uri: "", definition: "A claim for loss or benefit against a policy", aliases: ["claim", "insurance claim"] },
       { name: "Insured Party", uri: "", definition: "The party a policy covers", aliases: ["insured", "policyholder", "policy holder", "insured party"] },
       { name: "Premium", uri: "", definition: "The consideration paid for policy cover", aliases: ["premium"] },
+      { name: "Financial Instrument", uri: "", definition: "A tradable instrument — a security, bond, equity or derivative", aliases: ["instrument", "security", "bond", "equity", "share", "derivative"] },
+      { name: "Trade", uri: "", definition: "An executed transaction in a financial instrument", aliases: ["trade", "execution", "deal"] },
+      { name: "Portfolio", uri: "", definition: "A collection of holdings managed together", aliases: ["portfolio", "holdings", "book"] },
     ],
     relations: [
       { from: "Financial Institution", verb: "manages", to: "Account" },
@@ -6690,6 +6696,10 @@ const PROVISIONAL_BACKBONE_PACKS: Record<string, ProvisionalPack> = {
       { from: "Policy", verb: "applies to", to: "Insured Party" },
       { from: "Claim", verb: "applies to", to: "Policy" },
       { from: "Premium", verb: "applies to", to: "Policy" },
+      { from: "Financial Institution", verb: "conducts", to: "Trade" },
+      { from: "Trade", verb: "applies to", to: "Financial Instrument" },
+      { from: "Financial Instrument", verb: "is part of", to: "Portfolio" },
+      { from: "Portfolio", verb: "applies to", to: "Client" },
     ],
   },
   cim: {
@@ -6701,12 +6711,19 @@ const PROVISIONAL_BACKBONE_PACKS: Record<string, ProvisionalPack> = {
       { name: "Measurement", uri: "", definition: "A measured value", aliases: ["measurement", "reading", "meter reading"] },
       { core: true, name: "Customer", uri: "", definition: "A consumer of the service", aliases: ["customer", "consumer"] },
       { name: "Work Order", uri: "", definition: "Scheduled work on an asset", aliases: ["work order", "maintenance order"] },
+      { name: "Generating Unit", uri: "", definition: "A unit that generates power", aliases: ["generating unit", "generator", "power plant", "plant"] },
+      { name: "Substation", uri: "", definition: "A grid substation", aliases: ["substation"] },
+      { name: "Outage", uri: "", definition: "A planned or unplanned service interruption", aliases: ["outage", "interruption", "planned outage"] },
     ],
     relations: [
       { from: "Meter", verb: "measures", to: "Usage Point" },
       { from: "Measurement", verb: "applies to", to: "Meter" },
       { from: "Work Order", verb: "applies to", to: "Asset" },
       { from: "Usage Point", verb: "applies to", to: "Customer" },
+      { from: "Asset", verb: "is part of", to: "Substation" },
+      { from: "Outage", verb: "applies to", to: "Asset" },
+      { from: "Outage", verb: "applies to", to: "Generating Unit" },
+      { from: "Work Order", verb: "applies to", to: "Generating Unit" },
     ],
   },
   ebucore: {
@@ -6715,12 +6732,14 @@ const PROVISIONAL_BACKBONE_PACKS: Record<string, ProvisionalPack> = {
       { core: true, name: "MediaResource", uri: "http://www.ebu.ch/metadata/ontologies/ebucore#MediaResource", definition: "A piece of media content", aliases: ["media resource", "content", "video", "programme", "media asset"] },
       { core: true, name: "Agent", uri: "http://www.ebu.ch/metadata/ontologies/ebucore#Agent", definition: "A person or organisation contributing to content", aliases: ["contributor", "producer", "talent"] },
       { name: "Rights", uri: "http://www.ebu.ch/metadata/ontologies/ebucore#Rights", definition: "Rights attached to content", aliases: ["rights", "licence", "license"] },
-      { name: "Publication", uri: "", definition: "A publication or broadcast of content", aliases: ["publication", "broadcast", "release"] },
+      { name: "PublicationEvent", uri: "http://www.ebu.ch/metadata/ontologies/ebucore#PublicationEvent", definition: "A publication or broadcast of content on a channel", aliases: ["publication", "broadcast", "release", "airing"] },
+      { name: "PublicationChannel", uri: "http://www.ebu.ch/metadata/ontologies/ebucore#PublicationChannel", definition: "The channel or platform content is published on", aliases: ["channel", "platform", "outlet"] },
     ],
     relations: [
       { from: "Rights", verb: "applies to", to: "MediaResource" },
       { from: "Agent", verb: "produces", to: "MediaResource" },
-      { from: "Publication", verb: "applies to", to: "MediaResource" },
+      { from: "PublicationEvent", verb: "applies to", to: "MediaResource" },
+      { from: "PublicationEvent", verb: "is part of", to: "PublicationChannel" },
     ],
   },
   org: {
@@ -6736,6 +6755,27 @@ const PROVISIONAL_BACKBONE_PACKS: Record<string, ProvisionalPack> = {
       { from: "OrganizationalUnit", verb: "is part of", to: "Organization" },
       { from: "Site", verb: "is part of", to: "Organization" },
       { from: "Membership", verb: "applies to", to: "Organization" },
+    ],
+  },
+  isa95: {
+    vocabulary: "ISA-95",
+    // ISA-95 (IEC 62264) publishes no linked-data URIs — name-aligned like SID.
+    entities: [
+      { core: true, name: "Equipment", uri: "", definition: "A machine, line or plant asset used in production", aliases: ["equipment", "machine", "asset", "production line", "line"] },
+      { core: true, name: "Material Lot", uri: "", definition: "An identifiable quantity of material — a lot or batch", aliases: ["material lot", "lot", "batch"] },
+      { core: true, name: "Production Request", uri: "", definition: "A request to produce — a production or work order", aliases: ["production request", "production order", "work order"] },
+      { name: "Material Definition", uri: "", definition: "A definition of a material used or produced", aliases: ["material", "raw material", "component"] },
+      { name: "Personnel", uri: "", definition: "A person or role performing production work", aliases: ["personnel", "operator", "worker", "crew"] },
+      { name: "Process Segment", uri: "", definition: "A step of the production process", aliases: ["process segment", "process step", "operation", "production step"] },
+      { name: "Production Schedule", uri: "", definition: "The schedule of production requests", aliases: ["production schedule", "schedule", "production plan"] },
+    ],
+    relations: [
+      { from: "Production Request", verb: "produces", to: "Material Lot" },
+      { from: "Production Request", verb: "is part of", to: "Production Schedule" },
+      { from: "Production Request", verb: "applies to", to: "Process Segment" },
+      { from: "Process Segment", verb: "applies to", to: "Equipment" },
+      { from: "Personnel", verb: "participates in", to: "Process Segment" },
+      { from: "Material Lot", verb: "applies to", to: "Material Definition" },
     ],
   },
   sid: {
@@ -6812,17 +6852,27 @@ const PROVISIONAL_BACKBONE_PACKS: Record<string, ProvisionalPack> = {
 };
 
 // Steering-selected pack VARIANTS: cores are a function of the steering, so a
-// vocabulary shared across industries can carry different backbones. Healthcare
-// gets FHIR's generic care cores; only a steering that names the research
-// module (Life Sciences clinical) asserts ResearchStudy/ResearchSubject into
-// every ontology. Likewise FIBO: when the steering says it covers insurance
-// contracts, Policy/Claim/Insured Party become the cores and Account (a
-// banking backbone class, odd in a claims ontology) stops being one.
+// vocabulary shared across industries can carry different backbones. The
+// generic FHIR pack carries NO research classes at all — a hospital-ops
+// mandate must never be asked whether ResearchStudy "plays a part"; only a
+// steering that names the research module (Life Sciences clinical) brings
+// ResearchStudy/ResearchSubject in, as cores. Likewise FIBO: when the
+// steering says it covers insurance contracts, Policy/Claim/Insured Party
+// become the cores and Account (a banking backbone class, odd in a claims
+// ontology) stops being one.
 PROVISIONAL_BACKBONE_PACKS.fhirClinical = {
   vocabulary: "HL7 FHIR",
-  entities: PROVISIONAL_BACKBONE_PACKS.fhir.entities.map((e) =>
-    e.name === "ResearchStudy" || e.name === "ResearchSubject" ? { ...e, core: true } : e),
-  relations: PROVISIONAL_BACKBONE_PACKS.fhir.relations,
+  entities: [
+    ...PROVISIONAL_BACKBONE_PACKS.fhir.entities,
+    { core: true, name: "ResearchStudy", uri: "http://hl7.org/fhir/ResearchStudy", definition: "A clinical study or trial", aliases: ["clinical trial", "trial", "study", "research study"] },
+    { core: true, name: "ResearchSubject", uri: "http://hl7.org/fhir/ResearchSubject", definition: "A patient's participation in a study", aliases: ["trial participant", "enrollee", "study subject"] },
+  ],
+  relations: [
+    ...PROVISIONAL_BACKBONE_PACKS.fhir.relations,
+    { from: "Organization", verb: "conducts", to: "ResearchStudy" },
+    { from: "Patient", verb: "participates in", to: "ResearchStudy" },
+    { from: "ResearchSubject", verb: "is part of", to: "ResearchStudy" },
+  ],
 };
 PROVISIONAL_BACKBONE_PACKS.fiboInsurance = {
   vocabulary: "FIBO",
@@ -6845,6 +6895,7 @@ function resolveProvisionalPacks(steering: string): ProvisionalPack[] {
     ["GS1", PROVISIONAL_BACKBONE_PACKS.gs1],
     ["IEC CIM", PROVISIONAL_BACKBONE_PACKS.cim],
     ["EBUCore", PROVISIONAL_BACKBONE_PACKS.ebucore],
+    ["ISA-95", PROVISIONAL_BACKBONE_PACKS.isa95],
     ["W3C Organization", PROVISIONAL_BACKBONE_PACKS.org],
     ["TM Forum SID", PROVISIONAL_BACKBONE_PACKS.sid],
     ["schema.org", PROVISIONAL_BACKBONE_PACKS.schema],
