@@ -1324,6 +1324,7 @@ STANDARD-GROUNDED DEPTH: the input context's vocabularySteering names this indus
 PROVISIONAL DETERMINISM: the standard BOUNDS a provisional ontology as well as deepening it. With no discovery conversations on record, every entity must come from exactly one of two sources — (a) a BUSINESS noun the mandate EXPLICITLY names, or (b) a backbone concept of the steered reference model that the mandate's core process DIRECTLY involves (the actor's organisation, the thing requested/exchanged). Nothing else qualifies: a concept that is merely plausible for the domain (an activity log, a communication record, a supporting document type the mandate never mentions) is a GAP QUESTION, never an entity. When torn between entity and gap, choose gap. Two EXCLUSIONS override everything, including the floor below:
 - OUTCOME MEASURES and KPIs (a time-to-X, a conversion rate, an NPS score) are NEVER entities. They are success metrics the charter and KPI baselines track — not things the business's process creates, moves, or stores. Do not model them, do not relate them, do not raise gaps about them here.
 - The SOLUTION the mandate proposes to build or introduce (the "AI-powered CRM", the new platform or tool) is NEVER an entity. The ontology models the business domain as it exists; the proposed system belongs to the Architecture Strategy and the Blueprint. An EXISTING system where an entity's data lives today is recorded as that entity's systemOfRecord field — also never as an entity of its own.
+This includes the solution's CAPABILITIES: the phrases after "by using / through / via" that describe what the tool will do ("AI-driven customer health monitoring", "next-best-action recommendations") are the INSTRUMENT of the mandate, not its domain - never entities.
 The exclusions remove the METRIC and the TOOL — never the business SUBJECT. In "accelerate clinical trial recruitment", the Clinical Trial is a domain entity (the thing patients are recruited into) and so are the stages; only the proposed CRM and the numeric targets are excluded.
 The closed set cuts BOTH ways — it is also a floor: every BUSINESS noun the mandate explicitly names as an actor, a process stage, or a domain object MUST appear as an entity; dropping a mandate-named business noun is exactly as wrong as inventing one. Two runs over the same mandate and industry must produce the SAME entity list — treat the closed set (mandate business nouns ∪ directly-involved standard backbone, minus the exclusions) as the whole universe until interviews widen it.
 
@@ -6729,6 +6730,33 @@ const PROVISIONAL_BACKBONE_PACKS: Record<string, ProvisionalPack> = {
       { from: "Membership", verb: "applies to", to: "Organization" },
     ],
   },
+  sid: {
+    vocabulary: "TM Forum SID",
+    // SID publishes no linked-data URIs (uri: "" throughout — name-aligned,
+    // exactly as the steering promises), but its backbone still rides as
+    // FACTS: class names, aliases, cores and associations.
+    entities: [
+      { core: true, name: "Customer", uri: "", definition: "A party that buys or subscribes to the provider's products and services", aliases: ["customer", "subscriber", "account holder"] },
+      { core: true, name: "Product", uri: "", definition: "A marketable offering a customer buys", aliases: ["product", "plan", "bundle", "offering", "tariff"] },
+      { core: true, name: "Service", uri: "", definition: "A capability delivered to the customer (voice, data, TV, broadband)", aliases: ["service"] },
+      { core: true, name: "Agreement", uri: "", definition: "The contract between the customer and the provider", aliases: ["agreement", "contract", "subscription"] },
+      { name: "Customer Order", uri: "", definition: "An order a customer places for products", aliases: ["order", "customer order"] },
+      { name: "Resource", uri: "", definition: "The physical or logical network resource realising a service", aliases: ["resource", "network resource", "network element"] },
+      { name: "Bill", uri: "", definition: "An invoice for products and services delivered", aliases: ["bill", "invoice", "billing"] },
+      { name: "Trouble Ticket", uri: "", definition: "A record of a customer-reported problem", aliases: ["trouble ticket", "ticket", "complaint"] },
+      { name: "Customer Interaction", uri: "", definition: "A contact between the customer and the provider, on any channel", aliases: ["interaction", "touchpoint", "contact"] },
+    ],
+    relations: [
+      { from: "Customer", verb: "participates in", to: "Agreement" },
+      { from: "Agreement", verb: "applies to", to: "Product" },
+      { from: "Service", verb: "is part of", to: "Product" },
+      { from: "Resource", verb: "supports", to: "Service" },
+      { from: "Customer Order", verb: "applies to", to: "Product" },
+      { from: "Bill", verb: "applies to", to: "Customer" },
+      { from: "Trouble Ticket", verb: "applies to", to: "Customer" },
+      { from: "Customer Interaction", verb: "applies to", to: "Customer" },
+    ],
+  },
   schema: {
     vocabulary: "schema.org",
     entities: [
@@ -6763,6 +6791,7 @@ function resolveProvisionalPacks(steering: string): ProvisionalPack[] {
   if (steering.includes("IEC CIM")) packs.push(PROVISIONAL_BACKBONE_PACKS.cim);
   if (steering.includes("EBUCore")) packs.push(PROVISIONAL_BACKBONE_PACKS.ebucore);
   if (steering.includes("W3C Organization")) packs.push(PROVISIONAL_BACKBONE_PACKS.org);
+  if (steering.includes("TM Forum SID")) packs.push(PROVISIONAL_BACKBONE_PACKS.sid);
   if (steering.includes("schema.org") || !packs.length) packs.push(PROVISIONAL_BACKBONE_PACKS.schema);
   return packs;
 }
@@ -6841,6 +6870,33 @@ function reconcileVotedOntology(
     }
   });
 
+  // Merge name-keyed buckets into URI-keyed buckets that share a name: when
+  // some drafts aligned "Customer" (URI bucket) and others did not (name
+  // bucket), the SAME concept must vote as one — split, both halves can clear
+  // the threshold and the doc asserts a duplicate entity.
+  {
+    const uriBucketByNameKey = new Map<string, string>();
+    for (const [bKey, b] of [...buckets.entries()].sort((x, y) => ontologyCompare(x[0], y[0]))) {
+      if (!bKey.startsWith("u:")) continue;
+      for (const n of [...b.names, ...b.aliases]) {
+        const nk = ontologyNameKey(n);
+        if (nk && !uriBucketByNameKey.has(nk)) uriBucketByNameKey.set(nk, bKey);
+      }
+    }
+    for (const [bKey, b] of [...buckets.entries()].sort((x, y) => ontologyCompare(x[0], y[0]))) {
+      if (!bKey.startsWith("n:")) continue;
+      const target = uriBucketByNameKey.get(bKey.slice(2));
+      if (!target) continue;
+      const tb = buckets.get(target)!;
+      for (const d of b.docs) tb.docs.add(d);
+      tb.names.push(...b.names);
+      tb.aliases.push(...b.aliases);
+      tb.uris.push(...b.uris);
+      tb.rows.push(...b.rows);
+      buckets.delete(bKey);
+    }
+  }
+
   const isMandateWord = (name: string) => mandate.includes(` ${ontologyNameKey(name).replace(/ /g, " ")} `);
   // Naming priority: (1) the mandate's own wording wins (keeps "Clinical Trial"
   // over the FHIR class), (2) else, for a concept the standard names, the
@@ -6905,8 +6961,13 @@ function reconcileVotedOntology(
       const modalUriKey = b.uris.length
         ? ontologyStandardKey(ontologyModal(b.uris, (u) => ontologyStandardKey(u), (a, z) => ontologyCompare(a, z)))
         : "";
-      const cls = (modalUriKey ? uriToClass?.get(modalUriKey) : undefined)
-        ?? [...b.names, ...b.aliases].map((n) => packClasses?.get(ontologyNameKey(n))).find(Boolean);
+      // Name/alias match FIRST (packClasses is first-wins on the PRIMARY pack),
+      // URI second: a draft that aligned "Customer" to the schema.org fallback
+      // (Person) must still resolve to the primary pack's Customer class — via
+      // the URI it resolved to Person, the core looked uncovered, and the
+      // reconciler synthesised a duplicate "Customer".
+      const cls = [...b.names, ...b.aliases].map((n) => packClasses?.get(ontologyNameKey(n))).find(Boolean)
+        ?? (modalUriKey ? uriToClass?.get(modalUriKey) : undefined);
       if (packClasses && !mandateConcept && !wordsGrounded && !packGrounded) { ungrounded.push(name); return; }
       // CORE vs EXTENDED, by POLICY not by vote: an extended pack class is a
       // real standard fact but not automatically in this mandate's scope — the

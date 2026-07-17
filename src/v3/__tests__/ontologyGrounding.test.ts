@@ -154,6 +154,29 @@ describe("the acid test is enforced in code", () => {
   });
 });
 
+describe("bucket merge — mixed alignment presence never duplicates a concept", () => {
+  it("drafts that aligned Patient and drafts that did not still vote as ONE Patient", () => {
+    const aligned = draft(BASE, CHAIN); // Patient carries its FHIR URI
+    const unaligned = draft(BASE.map(([n]) => [n] as [string]), CHAIN); // no alignment rows at all
+    const doc = sandbox.reconcileVotedOntology(
+      [aligned, JSON.parse(JSON.stringify(aligned)), JSON.parse(JSON.stringify(aligned)), unaligned, JSON.parse(JSON.stringify(unaligned))],
+      { ...OPTS },
+    );
+    expect(names(doc).filter((n) => n === "Patient")).toHaveLength(1);
+  });
+});
+
+describe("TM Forum SID pack — telecom depth", () => {
+  const sidPacks = sandbox.resolveProvisionalPacks("Use schema.org (URIs under https://schema.org/) — TM Forum SID has no public URI namespace; align SID concepts by name in definitions only.");
+  it("SID resolves as the PRIMARY pack for the telecom steering", () => {
+    expect(sidPacks[0].vocabulary).toBe("TM Forum SID");
+  });
+  it("SID cores carry the telecom backbone", () => {
+    const cores = (sidPacks[0].entities as Array<{ name: string; core?: boolean }>).filter((e) => e.core).map((e) => e.name);
+    expect(cores).toEqual(["Customer", "Product", "Service", "Agreement"]);
+  });
+});
+
 describe("core/extended policy — the asserted set is (mandate, steering), not a vote", () => {
   it("an EXTENDED pack class demotes to a gap even at 5/5 consensus", () => {
     const withConsent = draft([...BASE, ["Consent", "http://hl7.org/fhir/Consent"]], CHAIN);
