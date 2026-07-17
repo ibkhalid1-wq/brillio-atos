@@ -920,6 +920,66 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
     expect(prakash?.questions.some((q) => /legal twice/.test(q))).toBe(true);
   });
 
+  it("an operator gap-redirect reroutes a derived gap to the chosen stakeholder", () => {
+    const p = programme({
+      phaseInputs: {
+        frame: {
+          sponsor: "Raj Mamodia",
+          sponsorConversation: "— Raj Mamodia —\nplenty of words on the record here for the kit trigger",
+          businessObjective: "obj", industry: "Banking", successMetric: "cycle", targetFirstDemoDate: "2026-07-25",
+        },
+        listen: {
+          interviewRoster: JSON.stringify([{ name: "Priya", status: "Heard" }]),
+          interviewTranscripts: "— Priya, Data Lead, 2026-07-14 —\nplenty of words about the data model and systems of record here and more besides.",
+          // Operator redirected this gap from the generator's "Legal SME" to "Data Team".
+          _gapRoutes: JSON.stringify({ "which system is the system of record for contracts?": "Data Team" }),
+        },
+      },
+      domainOntology: { entities: [], gaps: ["Ask the Legal SME: Which system is the system of record for contracts?"] },
+    });
+    const gaps = kitGaps(p, "listen", { gateLabels: false });
+    expect(gaps.some((g) => /Ask the Data Team:/.test(g))).toBe(true);
+    expect(gaps.some((g) => /Ask the Legal SME:/.test(g))).toBe(false);
+  });
+
+  it("an operator redirect reroutes an atlas OPEN QUESTION, not just a gap", () => {
+    const p = programme({
+      phaseInputs: {
+        frame: {
+          sponsor: "Raj Mamodia",
+          sponsorConversation: "— Raj Mamodia —\nplenty of words on the record here for the kit trigger",
+          businessObjective: "obj", industry: "Banking", successMetric: "cycle", targetFirstDemoDate: "2026-07-25",
+        },
+        listen: {
+          interviewRoster: JSON.stringify([{ name: "Priya", status: "Heard" }]),
+          interviewTranscripts: "— Priya, Data Lead, 2026-07-14 —\nplenty of words about the data model and systems of record here and more besides.",
+          _gapRoutes: JSON.stringify({ "how is churn measured across products?": "Analytics Lead" }),
+        },
+      },
+      currentStateAtlas: { openQuestions: ["How is churn measured across products?"], gaps: [] },
+    });
+    expect(kitGaps(p, "listen", { gateLabels: false }).some((g) => /Ask the Analytics Lead: How is churn measured across products\?/.test(g))).toBe(true);
+  });
+
+  it("clearing a gap-redirect leaves the generator's own addressee untouched", () => {
+    const p = programme({
+      phaseInputs: {
+        frame: {
+          sponsor: "Raj Mamodia",
+          sponsorConversation: "— Raj Mamodia —\nplenty of words on the record here for the kit trigger",
+          businessObjective: "obj", industry: "Banking", successMetric: "cycle", targetFirstDemoDate: "2026-07-25",
+        },
+        listen: {
+          interviewRoster: JSON.stringify([{ name: "Priya", status: "Heard" }]),
+          interviewTranscripts: "— Priya, Data Lead, 2026-07-14 —\nplenty of words about the data model and systems of record here and more besides.",
+          _gapRoutes: JSON.stringify({}),
+        },
+      },
+      domainOntology: { entities: [], gaps: ["Ask the Legal SME: Which system is the system of record for contracts?"] },
+    });
+    expect(kitGaps(p, "listen", { gateLabels: false }).some((g) => /Ask the Legal SME:/.test(g))).toBe(true);
+  });
+
   it("a persona spoken-for by someone NOT interviewed still gets a Listen collect card", () => {
     const p = programme({
       phaseInputs: { frame: { sponsor: "Raj" } },

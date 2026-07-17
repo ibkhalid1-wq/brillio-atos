@@ -14,6 +14,7 @@ import BlueprintGraph from "./BlueprintGraph";
 import StrategyBoard from "./StrategyBoard";
 import ExperienceDesignStudio from "./ExperienceDesignStudio";
 import PrototypeStudio from "./PrototypeStudio";
+import { GapRoutingEditor } from "./GapRoutingEditor";
 import {
   Section, CollapsibleCard, TextField, TextArea, SelectField, ChipsField, StringListEditor, TableEditor,
   asArray, asRecord, asText, asStrings, useStudioLocked, type StudioProps,
@@ -268,7 +269,7 @@ function DiscoveryKitStudio({ doc, onChange, program }: StudioProps) {
 
 const SEVERITIES = ["high", "medium", "low"];
 
-function AtlasStudio({ doc, onChange, onOpenArtifact, program }: StudioProps) {
+function AtlasStudio({ doc, onChange, onOpenArtifact, program, gapRoutes, onRouteGap }: StudioProps) {
   const locked = useStudioLocked();
   const patch = patchOf(doc, onChange);
   const pains = useListOps(doc, onChange, "painHeatmap");
@@ -304,11 +305,13 @@ function AtlasStudio({ doc, onChange, onOpenArtifact, program }: StudioProps) {
           emptyHint="No systems captured."
         />
       </Section>
-      <Section label="Open questions">
-        <StringListEditor values={asStrings(doc.openQuestions)} onChange={(next) => patch({ openQuestions: next })} addLabel="Add question" />
+      <Section label="Open questions" hint="redirect each to the stakeholder or role who can answer it">
+        <GapRoutingEditor values={asStrings(doc.openQuestions)} onChange={(next) => patch({ openQuestions: next })} program={program}
+          movementId="listen" gapRoutes={gapRoutes} onRoute={onRouteGap} addLabel="Add question" placeholder="the open question" emptyHint="No open questions." />
       </Section>
-      <Section label="Gaps">
-        <StringListEditor values={asStrings(doc.gaps)} onChange={(next) => patch({ gaps: next })} addLabel="Add gap" />
+      <Section label="Gaps" hint="redirect each gap to the stakeholder or role who can close it">
+        <GapRoutingEditor values={asStrings(doc.gaps)} onChange={(next) => patch({ gaps: next })} program={program}
+          movementId="listen" gapRoutes={gapRoutes} onRoute={onRouteGap} addLabel="Add gap" emptyHint="No gaps." />
       </Section>
     </>
   );

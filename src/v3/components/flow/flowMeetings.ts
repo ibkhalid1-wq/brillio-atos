@@ -253,6 +253,36 @@ function baseMeetingKit(program: ProgramSummary, movementId: string): Omit<Meeti
  * document ("the charter cannot be considered ready because…"). These are the
  * follow-up's agenda.
  */
+// The "Ask the <who>: <text>" grammar, in lockstep with flowStakeholders'
+// askAddressee/stripAskAddressee/gapRouteKey — kept local so this module stays
+// independent of flowStakeholders (which imports FROM here).
+const GAP_ASK_RE = /^\s*ask\s+(?:the\s+)?[^:：—–-]{2,60}?\s*[:：—–-]\s+(.*)$/is;
+function gapQuestion(gap: string): string {
+  const match = gap.match(GAP_ASK_RE);
+  return (match ? match[1] : gap).trim();
+}
+/** The operator's gap → stakeholder/role redirects for a movement, keyed by the
+ *  gap's bare question. Mirrors readGapRoutes in flowStakeholders. */
+function readGapRedirects(program: ProgramSummary, movementId: string): Record<string, string> {
+  const raw = readMovementInputs(program, movementId)._gapRoutes;
+  if (typeof raw !== "string" || !raw.trim()) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const out: Record<string, string> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (typeof value === "string") out[key.trim().toLowerCase()] = value.trim();
+    }
+    return out;
+  } catch { return {}; }
+}
+/** A gap rewritten to honour the operator's redirect (or verbatim when none). */
+function applyGapRedirect(gap: string, routes: Record<string, string>): string {
+  const who = routes[gapQuestion(gap).replace(/\s+/g, " ").toLowerCase()];
+  if (who === undefined) return gap;
+  return who ? `Ask the ${who}: ${gapQuestion(gap)}` : gapQuestion(gap);
+}
+
 export function kitGaps(program: ProgramSummary, movementId: string, opts?: { gateLabels?: boolean }): string[] {
   // Gate-checklist labels ("Business objective captured") are bookkeeping —
   // useful to the operator (they gate whether a follow-up still matters), but
@@ -263,11 +293,16 @@ export function kitGaps(program: ProgramSummary, movementId: string, opts?: { ga
   const movement = flowMovements().find((entry) => entry.id === movementId);
   if (!movement) return [];
   const gaps: string[] = [];
+  // Operator gap-redirects (the ontology/atlas Gaps + Open-questions tables):
+  // WHO a derived question is asked of is an operator judgement, stored as an
+  // overlay under the movement's inputs. Applied wherever the movement's
+  // questions are gathered so a redirected item reaches the chosen stakeholder.
+  const gapRoutes = readGapRedirects(program, movementId);
   // Whatever the movement's documents still ASK — unresolved ambiguities,
   // open questions — is conversation work: it lands on the follow-up script
   // (the askable filter strips anything operator-phrased downstream).
   for (const issue of movementOpenIssues(program, movement)) {
-    gaps.push(issue.text);
+    gaps.push(applyGapRedirect(issue.text, gapRoutes));
   }
   // Open contradictions route to the SPONSOR: two accounts disagree and
   // someone with authority arbitrates. Each open row becomes an ask on the
@@ -310,7 +345,8 @@ export function kitGaps(program: ProgramSummary, movementId: string, opts?: { ga
       // Falsified field-demands (the field is demonstrably filled) drop here
       // too — the scripts, the cards, and the gate read one truth.
       gaps.push(...doc.gaps.map(String).filter(Boolean)
-        .filter((gap) => !falsifiedGap(program, gap)).slice(0, 4));
+        .filter((gap) => !falsifiedGap(program, gap))
+        .map((gap) => applyGapRedirect(gap, gapRoutes)).slice(0, 4));
     }
   }
   if (gateLabels) {

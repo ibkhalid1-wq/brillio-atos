@@ -7,31 +7,22 @@
  * where four squads can drift into four different products. Read-only projection;
  * the PO steers by opening an area or triaging its backlog in the loop below.
  */
-import { useMemo, useState, type CSSProperties } from "react";
+import { useMemo, useState } from "react";
 import { loopState, changeRequests, type AreaLoop } from "@/v3/components/flow/flowLoop";
 import { projectFutureState } from "@/v3/components/flow/flowFutureState";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
-import { areaAccent, areaMonogram } from "@/v3/components/flow/CollectBoard";
 import type { ProgramSummary } from "@/new/types";
 
 const asStrings = (value: unknown): string[] =>
   Array.isArray(value) ? value.map((v) => String(v ?? "").trim()).filter(Boolean) : [];
 
-/** A special board tile (not a business area) that scopes the design below to the
- * delivery team's cross-cutting work — architecture direction, strategy, the
- * agentic blueprint — rather than one business area's future state. */
+/** A label (not a business area) for the delivery team's cross-cutting work —
+ * architecture direction, strategy, the agentic blueprint. Kept as a shared
+ * constant the Envision cockpit reads to show the solution-level Direction act. */
 export const DESIGN_TEAM = "Design team";
 
-function areaTone(a: AreaLoop): string {
-  return a.converged ? "ok" : a.objections ? "obj" : a.pending < a.total ? "part" : "open";
-}
-
-export default function ProductOwnerCockpit({ program, selected = [], onToggleArea }: {
+export default function ProductOwnerCockpit({ program }: {
   program: ProgramSummary;
-  /** Areas currently used as a filter — the selected lanes. Empty = show all. */
-  selected?: string[];
-  /** Toggle an area lane into/out of the filter set for everything below. */
-  onToggleArea?: (area: string) => void;
 }) {
   const ls = useMemo(() => loopState(program), [program]);
   const reqs = useMemo(() => changeRequests(program), [program]);
@@ -54,6 +45,10 @@ export default function ProductOwnerCockpit({ program, selected = [], onToggleAr
 
   // Only meaningful once there are multiple parallel areas to orchestrate.
   if (areas.length < 2) return null;
+  // With the area board removed, the cockpit only earns its space when it has
+  // something to say — this iteration's changelog or an open backlog. A fresh
+  // loop with neither renders nothing rather than a bare header.
+  if (!refined.length && !reqs.length) return null;
 
   return (
     <section className={`v3fs-po${open ? " open" : ""}`} aria-label="Product Owner — across all areas">
@@ -74,72 +69,14 @@ export default function ProductOwnerCockpit({ program, selected = [], onToggleAr
               </div>
             </div>
           ) : null}
-          {onToggleArea ? (
-            <div className="v3fs-lc-filterhint" role="note">
-              {selected.length
-                ? <>Filtering to <b>{selected.join(" · ")}</b> — <button type="button" className="v3fs-lc-clearf" onClick={() => selected.forEach((a) => onToggleArea(a))}>clear</button></>
-                : "Tap an area to filter everything below · tap again to clear"}
-            </div>
-          ) : null}
-          {/* Program board — every area's loop at a glance, and the filter for
-              the Design/Validate detail below. */}
-          <div className="v3fs-po-board">
-            {/* The delivery team's own tile — filters the design below to the
-                cross-cutting architecture / direction / blueprint work. */}
-            {onToggleArea ? (() => {
-              const isSel = selected.includes(DESIGN_TEAM);
-              const dim = selected.length > 0 && !isSel;
-              return (
-                <button type="button" className={`v3fs-po-lane v3fs-po-lane-design${isSel ? " sel" : ""}${dim ? " dim" : ""}`}
-                  aria-pressed={isSel} onClick={() => onToggleArea(DESIGN_TEAM)}
-                  title={isSel ? "Remove the Design-team filter" : "Show the delivery team's architecture, direction & blueprint"}>
-                  <div className="v3fs-po-lane-h">
-                    <span className="v3fs-po-lane-ic" aria-hidden="true">✎</span>
-                    <b>Design team</b>
-                  </div>
-                  <div className="v3fs-po-lane-f">architecture · direction · blueprint</div>
-                </button>
-              );
-            })() : null}
-            {areas.map((a) => {
-              const isSel = selected.includes(a.area);
-              const dim = selected.length > 0 && !isSel;
-              return (
-              <button key={a.area} type="button" className={`v3fs-po-lane ${areaTone(a)}${isSel ? " sel" : ""}${dim ? " dim" : ""}`}
-                aria-pressed={isSel} onClick={() => onToggleArea?.(a.area)} style={{ "--lane-accent": areaAccent(a.area) } as CSSProperties}
-                title={isSel ? `Remove ${a.area} from the filter` : `Filter everything below to ${a.area}`}>
-                <div className="v3fs-po-lane-h">
-                  <span className="v3fs-po-lane-ic" aria-hidden="true">{areaMonogram(a.area)}</span>
-                  <b>{a.area}</b>
-                  <span className="v3fs-po-lane-n">{a.converged ? "✓" : `${a.accepted}/${a.total}`}</span>
-                </div>
-                <div className="v3fs-po-bar" aria-hidden="true">
-                  {a.accepted ? <span className="ok" style={{ flex: a.accepted }} /> : null}
-                  {a.changes ? <span className="part" style={{ flex: a.changes }} /> : null}
-                  {a.objections ? <span className="obj" style={{ flex: a.objections }} /> : null}
-                  {a.pending ? <span className="pend" style={{ flex: a.pending }} /> : null}
-                </div>
-                <div className="v3fs-po-lane-f">
-                  {a.converged ? "ready to ship"
-                    : a.objections ? `${a.objections} objection${a.objections === 1 ? "" : "s"}`
-                      : a.changes ? `${a.changes} change${a.changes === 1 ? "" : "s"} to fold`
-                        : a.pending ? `${a.pending} awaiting verdict` : "no verdicts yet"}
-                </div>
-              </button>
-              );
-            })}
-          </div>
-
-          {/* Unified backlog — every open change request across areas, scoped to
-              the filter when areas are selected. */}
+          {/* Unified backlog — every open change request across areas. */}
           {(() => {
-            const shownReqs = selected.length ? reqs.filter((r) => selected.includes(r.area)) : reqs;
-            const areaCount = new Set(shownReqs.map((r) => r.area)).size;
-            return shownReqs.length ? (
+            const areaCount = new Set(reqs.map((r) => r.area)).size;
+            return reqs.length ? (
             <div className="v3fs-po-backlog">
-              <span className="v3fs-po-bk-l">Backlog — {shownReqs.length} open across {areaCount} area{areaCount === 1 ? "" : "s"}</span>
+              <span className="v3fs-po-bk-l">Backlog — {reqs.length} open across {areaCount} area{areaCount === 1 ? "" : "s"}</span>
               <ul>
-                {shownReqs.slice(0, 10).map((r, i) => (
+                {reqs.slice(0, 10).map((r, i) => (
                   <li key={i} className={r.blocking ? "block" : ""}>
                     <em>{r.area}</em><b>{r.stakeholder}</b><span>{r.ask || (r.blocking ? "objection" : "a change")}</span>
                   </li>

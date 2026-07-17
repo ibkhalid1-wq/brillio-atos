@@ -14,16 +14,10 @@
 import { useMemo, useState } from "react";
 import { areaProgress } from "@/v3/components/flow/flowAreas";
 import { readContradictions } from "@/v3/components/flow/flowShellData";
-import { areaAccent, areaMonogram } from "@/v3/components/flow/CollectBoard";
 import type { ProgramSummary } from "@/new/types";
-import type { CSSProperties } from "react";
 
-export default function ListenCockpit({ program, selected = [], onToggleArea }: {
+export default function ListenCockpit({ program }: {
   program: ProgramSummary;
-  /** Areas currently used as a filter — the selected cards. Empty = show all. */
-  selected?: string[];
-  /** Toggle an area card into/out of the filter set. */
-  onToggleArea?: (area: string) => void;
 }) {
   const rows = useMemo(() => areaProgress(program), [program]);
   const disputes = useMemo(() => readContradictions(program, true), [program]);
@@ -36,13 +30,6 @@ export default function ListenCockpit({ program, selected = [], onToggleArea }: 
   const ready = rows.filter((r) => r.listenReady).length;
   const heardTotal = rows.reduce((n, r) => n + r.heard.length, 0);
   const personaTotal = rows.reduce((n, r) => n + r.personas.length, 0);
-  // Order: areas with the most open work first (voices still to hear), the
-  // areas already ready to envision last — the eye lands on what's unfinished.
-  const ordered = [...rows].sort((a, b) => {
-    const rd = (a.listenReady ? 1 : 0) - (b.listenReady ? 1 : 0);
-    if (rd) return rd;
-    return (b.personas.length - b.heard.length) - (a.personas.length - a.heard.length);
-  });
 
   return (
     <section className={`v3fs-po v3fs-lc${open ? " open" : ""}`} aria-label="Listening — across all areas">
@@ -56,59 +43,6 @@ export default function ListenCockpit({ program, selected = [], onToggleArea }: 
       </button>
       {open ? (
         <div className="v3fs-po-body">
-          {/* COLLECT + MODEL, by area — one lane per business domain. The header
-              row toggles the area into the filter for everything below. */}
-          {onToggleArea ? (
-            <div className="v3fs-lc-filterhint" role="note">
-              {selected.length
-                ? <>Filtering to <b>{selected.join(" · ")}</b> — <button type="button" className="v3fs-lc-clearf" onClick={() => selected.forEach((a) => onToggleArea(a))}>clear</button></>
-                : "Tap an area to filter everything below · tap again to clear"}
-            </div>
-          ) : null}
-          <div className="v3fs-po-board">
-            {ordered.map((r) => {
-              const accent = areaAccent(r.area);
-              const heardPct = r.personas.length ? Math.round((r.heard.length / r.personas.length) * 100) : 0;
-              const modelled = r.workflows > 0 && r.entities > 0;
-              const tone = r.listenReady ? "ok" : r.heard.length ? "part" : "open";
-              const isSel = selected.includes(r.area);
-              const dim = selected.length > 0 && !isSel;
-              // The WHOLE card is the filter toggle (no nested controls remain),
-              // so clicking anywhere on it filters the board below.
-              const Tag = onToggleArea ? "button" : "div";
-              const inner = (
-                <>
-                  <div className="v3fs-lc-lane-h">
-                    <span className="v3fs-lc-ic" aria-hidden="true">{areaMonogram(r.area)}</span>
-                    <b>{r.area}</b>
-                    <span className="v3fs-lc-vn" title={`${r.heard.length} of ${r.personas.length} voices in ${r.area} heard`}>
-                      {r.personas.length ? <>{r.heard.length}/{r.personas.length}</> : "—"}
-                    </span>
-                  </div>
-                  {/* COLLECT — the voices bar. */}
-                  <div className="v3fs-lc-bar" aria-hidden="true">
-                    <span className="heard" style={{ width: `${heardPct}%` }} />
-                  </div>
-                  <div className="v3fs-lc-lane-f">
-                    {r.listenReady ? "● ready to envision"
-                      : r.personas.length > r.heard.length ? `${r.personas.length - r.heard.length} voice${r.personas.length - r.heard.length === 1 ? "" : "s"} still to hear`
-                        : modelled ? "model forming" : "collecting"}
-                  </div>
-                </>
-              );
-              return (
-                <Tag key={r.area} type={onToggleArea ? "button" : undefined}
-                  className={`v3fs-lc-lane ${tone}${isSel ? " sel" : ""}${dim ? " dim" : ""}${onToggleArea ? " v3fs-lc-lane-btn" : ""}`}
-                  style={{ "--lane-accent": accent } as CSSProperties}
-                  aria-pressed={onToggleArea ? isSel : undefined}
-                  onClick={onToggleArea ? () => onToggleArea(r.area) : undefined}
-                  title={onToggleArea ? (isSel ? `Remove ${r.area} from the filter` : `Filter everything below to ${r.area}`) : undefined}>
-                  {inner}
-                </Tag>
-              );
-            })}
-          </div>
-
           {/* RECONCILE — the open contradictions, first-class. The record can't
               be trusted while two accounts still disagree; this strip is where
               they surface, not a row buried in the Atlas. */}

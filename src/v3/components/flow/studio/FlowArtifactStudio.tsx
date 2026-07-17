@@ -12,7 +12,7 @@ import { useFocusTrap } from "@/v3/lib/useFocusTrap";
 import type { ProgramSummary } from "@/new/types";
 import { artifactDocument, falsifiedGap, flowMovements, locateQuote, movementEvidence, type ArtifactCardModel, type EvidenceEntry } from "@/v3/components/flow/flowShellData";
 import { groundingFor, citationGraph, resourceUri, artifactFabioType, SEMANTIC_CONTEXT } from "@/v3/components/flow/flowSemantics";
-import { readRoleBindings, readOperatorAsks, operatorAsksFor, resolveMovementStakeholders } from "@/v3/components/flow/flowStakeholders";
+import { readRoleBindings, readOperatorAsks, operatorAsksFor, resolveMovementStakeholders, readGapRoutes, gapRouteKey } from "@/v3/components/flow/flowStakeholders";
 import { artifactApprovalState } from "@/v3/components/flow/flowApprovals";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 import { partitionOntologyViolations } from "@/v3/components/flow/flowOntologyConstraints";
@@ -529,6 +529,20 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
                     bindings[role] = email ? { name, email } : { name };
                     await onSaveInputs(movementId, { _roleBindings: JSON.stringify(bindings) }, {
                       attest: { action: `Role bound — ${role} → ${name}`, detail: email || undefined },
+                    });
+                  } : undefined}
+                  gapRoutes={readGapRoutes(program, artifact.movementId)}
+                  onRouteGap={onSaveInputs ? async (gap, who) => {
+                    // WHO a derived gap is asked of is an operator judgement — persist
+                    // it as an overlay (the document stays read-only) so the follow-up
+                    // router redirects the gap to the stakeholder the operator chose.
+                    // Clearing the field DELETES the override, restoring the generator's
+                    // own addressee rather than accumulating an empty redirect.
+                    const routes = readGapRoutes(program, artifact.movementId);
+                    const key = gapRouteKey(gap);
+                    if (who.trim()) routes[key] = who.trim(); else delete routes[key];
+                    await onSaveInputs(artifact.movementId, { _gapRoutes: JSON.stringify(routes) }, {
+                      attest: { action: who.trim() ? `Gap redirected to ${who.trim()}` : "Gap redirect cleared", detail: key.slice(0, 120) },
                     });
                   } : undefined} />
               </StudioLockContext.Provider>

@@ -6,10 +6,11 @@
  * flow's steps inline, and marks which steps should be AGENTIFIED — the signal
  * the Agentic Blueprint is built to deliver.
  */
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import { asArray, asRecord, asText, asStrings, useStudioLocked, TextField, TextArea, StringListEditor, ChipsField, TableEditor, CollapsibleCard as EdCard, type StudioProps } from "./StudioKit";
 import { projectFutureState, type FutureWorkflow } from "@/v3/components/flow/flowFutureState";
+import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 
 const WF_REGIONS = ["header", "nav", "main", "aside", "footer"] as const;
 const WF_BLOCK_KINDS = ["list", "table", "form", "detail", "metric", "action", "timeline"];
@@ -21,14 +22,26 @@ function emptyScreen(): Record<string, unknown> {
   };
 }
 
+interface Block { kind: string; label: string; entity: string; fields: string[] }
+type Regions = Record<string, Block[]>;
+const SCRD_STATES = ["empty", "loading", "populated", "error"] as const;
+type ScrdState = typeof SCRD_STATES[number];
+
+const toBlock = (r: Record<string, unknown>): Block => ({
+  kind: asText(r.kind) || "detail", label: asText(r.label), entity: asText(r.entity), fields: asStrings(r.fields),
+});
+
 /**
- * The GUI screen designer — a modal to design ONE screen: its identity, the
- * states it renders, its wireframe (regions → blocks) with a live skeleton
- * preview, and the workflow STEPS it serves. Edits a draft; Cancel discards,
- * Save applies. Every screen should bind to at least one workflow step.
+ * The GUI screen designer — a canvas-first modal to design ONE screen. Three
+ * panes: a PALETTE of block kinds to drop in, an editable CANVAS (a device
+ * frame with click-to-select and drag-to-reorder blocks, and a state toggle),
+ * and a contextual INSPECTOR that shows the screen's identity + workflow
+ * bindings when nothing is selected, or the block's properties (ontology-aware
+ * entity → fields pickers) when a block is. Edits a draft; Cancel discards
+ * (guarding unsaved changes), Save applies. Esc cancels, ⌘/Ctrl+Enter saves.
  */
-function ScreenDesigner({ screen, program, onSave, onClose }: {
-  screen: Record<string, unknown>; program?: ProgramSummary;
+function ScreenDesigner({ screen, program, allScreens, onSave, onClose }: {
+  screen: Record<string, unknown>; program?: ProgramSummary; allScreens: Array<Record<string, unknown>>;
   onSave: (next: Record<string, unknown>) => void; onClose: () => void;
 }) {
   const [name, setName] = useState(asText(screen.name));
@@ -39,29 +52,76 @@ function ScreenDesigner({ screen, program, onSave, onClose }: {
   const [entities, setEntities] = useState(asStrings(screen.entities));
   const [primaryActions, setPrimaryActions] = useState(asStrings(screen.primaryActions));
   const st0 = asRecord(screen.states);
-  const [states, setStates] = useState({ empty: asText(st0.empty), loading: asText(st0.loading), populated: asText(st0.populated), error: asText(st0.error) });
-  const [regions, setRegions] = useState<Record<string, Array<Record<string, unknown>>>>(() => {
-    const map: Record<string, Array<Record<string, unknown>>> = {};
+  const [states, setStates] = useState<Record<ScrdState, string>>({
+    empty: asText(st0.empty), loading: asText(st0.loading), populated: asText(st0.populated), error: asText(st0.error),
+  });
+  const [regions, setRegions] = useState<Regions>(() => {
+    const map: Regions = {};
     asArray(screen.wireframe).map(asRecord).forEach((r) => {
       const reg = asText(r.region) || "main";
-      map[reg] = [...(map[reg] ?? []), ...asArray(r.blocks).map(asRecord)];
+      map[reg] = [...(map[reg] ?? []), ...asArray(r.blocks).map(asRecord).map(toBlock)];
     });
     return map;
   });
   const [bindings, setBindings] = useState<Array<{ workflow: string; action: string }>>(
     asArray(screen.stepBindings).map(asRecord).map((b) => ({ workflow: asText(b.workflow), action: asText(b.action) })).filter((b) => b.action));
 
-  const future = useMemo(() => (program ? projectFutureState(program) : null), [program]);
+  const [sel, setSel] = useState<{ region: string; index: number } | null>(null);
+  const [activeState, setActiveState] = useState<ScrdState>("populated");
+  const [drag, setDrag] = useState<{ region: string; index: number } | null>(null);
 
-  const setBlock = (region: string, i: number, changes: Record<string, unknown>) =>
+  const future = useMemo(() => (program ? projectFutureState(program) : null), [program]);
+  // Ontology entities → their field names, so the block inspector offers real
+  // entities and checkable fields instead of free text.
+  const ontology = useMemo(() => {
+    const od = program ? readArtifactDoc(program, "domainOntology") : null;
+    return asArray(od?.entities).map(asRecord)
+      .map((e) => ({ name: asText(e.name), attributes: asStrings(e.attributes) }))
+      .filter((e) => e.name);
+  }, [program]);
+
+  const setBlock = (region: string, i: number, changes: Partial<Block>) =>
     setRegions((prev) => ({ ...prev, [region]: (prev[region] ?? []).map((b, j) => (j === i ? { ...b, ...changes } : b)) }));
-  const addBlock = (region: string) =>
-    setRegions((prev) => ({ ...prev, [region]: [...(prev[region] ?? []), { kind: "detail", label: "", entity: "", fields: [] }] }));
-  const removeBlock = (region: string, i: number) =>
+  const addBlock = (region: string, kind: string) => {
+    setRegions((prev) => {
+      const next = [...(prev[region] ?? []), { kind, label: "", entity: "", fields: [] } as Block];
+      setSel({ region, index: next.length - 1 });
+      return { ...prev, [region]: next };
+    });
+  };
+  const removeBlock = (region: string, i: number) => {
     setRegions((prev) => ({ ...prev, [region]: (prev[region] ?? []).filter((_, j) => j !== i) }));
+    setSel(null);
+  };
+  const moveBlock = (from: { region: string; index: number }, toRegion: string, toIndex: number) => {
+    setRegions((prev) => {
+      const src = [...(prev[from.region] ?? [])];
+      const [moved] = src.splice(from.index, 1);
+      if (!moved) return prev;
+      const next: Regions = { ...prev, [from.region]: src };
+      const dst = from.region === toRegion ? src : [...(next[toRegion] ?? [])];
+      const at = Math.max(0, Math.min(toIndex, dst.length));
+      dst.splice(at, 0, moved);
+      next[toRegion] = dst;
+      setSel({ region: toRegion, index: at });
+      return next;
+    });
+  };
+
   const isBound = (w: string, a: string) => bindings.some((b) => b.workflow === w && b.action === a);
   const toggleBind = (w: string, a: string) =>
     setBindings((prev) => (isBound(w, a) ? prev.filter((b) => !(b.workflow === w && b.action === a)) : [...prev, { workflow: w, action: a }]));
+  // Coverage — how many of a workflow's steps ANY screen (other screens plus
+  // this draft) already serves, so the designer sees the gaps it's filling.
+  const coverageFor = (w: FutureWorkflow) => {
+    const covered = new Set<string>();
+    allScreens.forEach((s, i) => {
+      if (editMatches(s, screen, i)) return; // skip the screen we're editing; use live draft instead
+      asArray(s.stepBindings).map(asRecord).forEach((b) => { if (asText(b.workflow) === w.name) covered.add(asText(b.action)); });
+    });
+    bindings.forEach((b) => { if (b.workflow === w.name) covered.add(b.action); });
+    return w.steps.filter((s) => covered.has(s.action)).length;
+  };
 
   const assemble = (): Record<string, unknown> => ({
     ...screen,
@@ -70,87 +130,214 @@ function ScreenDesigner({ screen, program, onSave, onClose }: {
     wireframe: WF_REGIONS.filter((r) => (regions[r] ?? []).length).map((r) => ({ region: r, blocks: regions[r] })),
     stepBindings: bindings,
   });
-  const preview = assemble();
+
+  // Dirty-guard — snapshot the incoming screen once; compare on close.
+  const baseline = useRef(JSON.stringify({
+    name: asText(screen.name), purpose: asText(screen.purpose), journey: asText(screen.journey), stage: asText(screen.stage),
+    personas: asStrings(screen.personas), entities: asStrings(screen.entities), primaryActions: asStrings(screen.primaryActions),
+    states: { empty: asText(st0.empty), loading: asText(st0.loading), populated: asText(st0.populated), error: asText(st0.error) },
+    regions: (() => { const m: Regions = {}; asArray(screen.wireframe).map(asRecord).forEach((r) => { const reg = asText(r.region) || "main"; m[reg] = [...(m[reg] ?? []), ...asArray(r.blocks).map(asRecord).map(toBlock)]; }); return m; })(),
+    bindings: asArray(screen.stepBindings).map(asRecord).map((b) => ({ workflow: asText(b.workflow), action: asText(b.action) })).filter((b) => b.action),
+  }));
+  const dirty = () => JSON.stringify({ name, purpose, journey, stage, personas, entities, primaryActions, states, regions, bindings }) !== baseline.current;
+  const tryClose = () => { if (!dirty() || window.confirm("Discard unsaved changes to this screen?")) onClose(); };
+  const save = () => { if (name.trim()) onSave(assemble()); };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); tryClose(); }
+      else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); save(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  const selBlock = sel ? (regions[sel.region] ?? [])[sel.index] : undefined;
+  const selEntity = selBlock ? ontology.find((e) => e.name === selBlock.entity) : undefined;
+  const stateNote = states[activeState];
 
   return (
-    <div className="v3fs-scrd-scrim" role="dialog" aria-modal="true" aria-label="Screen designer" onClick={onClose}>
+    <div className="v3fs-scrd-scrim" role="dialog" aria-modal="true" aria-label="Screen designer" onClick={tryClose}>
       <div className="v3fs-scrd" onClick={(e) => e.stopPropagation()}>
         <div className="v3fs-scrd-h">
-          <input className="v3fs-scrd-name" value={name} placeholder="Screen name" aria-label="Screen name" onChange={(e) => setName(e.target.value)} />
-          <button type="button" className="v3fs-scrd-x" aria-label="Close" onClick={onClose}>✕</button>
+          <input className="v3fs-scrd-name" value={name} placeholder="Untitled screen" aria-label="Screen name" onChange={(e) => setName(e.target.value)} autoFocus />
+          <span className="v3fs-scrd-kbd" aria-hidden="true"><kbd>⌘</kbd><kbd>↵</kbd> save · <kbd>esc</kbd> cancel</span>
+          <button type="button" className="v3fs-scrd-x" aria-label="Close" onClick={tryClose}>✕</button>
         </div>
+
         <div className="v3fs-scrd-body">
-          <div className="v3fs-scrd-form">
-            <div className="v3fs-scrd-sec">
-              <b className="v3fs-scrd-sl">Identity</b>
-              <TextArea label="Purpose" rows={2} value={purpose} onChange={setPurpose} placeholder="one sentence — what this screen is for" />
-              <div className="v3fs-stu-grid2">
-                <TextField label="Journey" value={journey} onChange={setJourney} />
-                <TextField label="Stage" value={stage} onChange={setStage} />
-              </div>
-              <ChipsField label="Personas" values={personas} onChange={setPersonas} />
-              <ChipsField label="Entities shown" values={entities} onChange={setEntities} />
-              <StringListEditor label="Primary actions" values={primaryActions} onChange={setPrimaryActions} addLabel="action" />
-            </div>
-            <div className="v3fs-scrd-sec">
-              <b className="v3fs-scrd-sl">States</b>
-              {(["empty", "loading", "populated", "error"] as const).map((k) => (
-                <TextField key={k} label={k} value={states[k]} onChange={(v) => setStates((prev) => ({ ...prev, [k]: v }))} />
+          {/* PALETTE — drag a tile onto a region, or click to add to the selected region. */}
+          <div className="v3fs-scrd-palette">
+            <b className="v3fs-scrd-pl">Blocks</b>
+            <p className="v3fs-scrd-pal-hint">Drag onto the canvas, or click to add.</p>
+            <div className="v3fs-scrd-pal-grid">
+              {WF_BLOCK_KINDS.map((k) => (
+                <button key={k} type="button" className="v3fs-scrd-pal" draggable
+                  onDragStart={(e) => { e.dataTransfer.setData("text/scrd-kind", k); e.dataTransfer.effectAllowed = "copy"; }}
+                  onClick={() => addBlock(sel?.region ?? "main", k)} title={`Add a ${k} block`}>
+                  <span className="v3fs-scrd-pal-ic" aria-hidden="true">{BLOCK_GLYPH[k] ?? "¶"}</span>
+                  <span className="v3fs-scrd-pal-l">{k}</span>
+                </button>
               ))}
-            </div>
-            <div className="v3fs-scrd-sec">
-              <b className="v3fs-scrd-sl">Wireframe — regions &amp; blocks</b>
-              {WF_REGIONS.map((region) => (
-                <div key={region} className="v3fs-scrd-region">
-                  <div className="v3fs-scrd-region-h"><span>{region}</span>
-                    <button type="button" className="v3fs-a" onClick={() => addBlock(region)}>＋ block</button></div>
-                  {(regions[region] ?? []).map((block, i) => (
-                    <div key={i} className="v3fs-scrd-block">
-                      <select value={asText(block.kind) || "detail"} aria-label="Block kind" onChange={(e) => setBlock(region, i, { kind: e.target.value })}>
-                        {WF_BLOCK_KINDS.map((k) => <option key={k} value={k}>{k}</option>)}
-                      </select>
-                      <input value={asText(block.label)} placeholder="label" aria-label="Block label" onChange={(e) => setBlock(region, i, { label: e.target.value })} />
-                      <input value={asText(block.entity)} placeholder="entity" aria-label="Block entity" onChange={(e) => setBlock(region, i, { entity: e.target.value })} />
-                      <input value={asStrings(block.fields).join(", ")} placeholder="fields (comma-separated)" aria-label="Block fields"
-                        onChange={(e) => setBlock(region, i, { fields: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} />
-                      <button type="button" className="v3fs-stu-x" aria-label="Remove block" onClick={() => removeBlock(region, i)}>×</button>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-            <div className="v3fs-scrd-sec">
-              <b className="v3fs-scrd-sl">Bound workflow steps <em className="v3fs-scrd-req">— at least one</em></b>
-              {future && future.workflows.length ? future.workflows.map((w) => (
-                <div key={w.name} className="v3fs-scrd-wf">
-                  <div className="v3fs-scrd-wf-n">{w.name}</div>
-                  {w.steps.map((step, si) => (
-                    <label key={si} className="v3fs-scrd-step">
-                      <input type="checkbox" checked={isBound(w.name, step.action)} onChange={() => toggleBind(w.name, step.action)} />
-                      <span>{step.action}</span>
-                    </label>
-                  ))}
-                </div>
-              )) : <div className="v3fs-empty">No workflows yet — generate the Current-State Atlas in Listen.</div>}
             </div>
           </div>
-          <div className="v3fs-scrd-preview">
-            <b className="v3fs-scrd-sl">Live preview</b>
-            <ScreenCard screen={preview} active={false} onClick={() => { /* preview only */ }} />
+
+          {/* CANVAS — the device frame; states toggle; selectable/draggable blocks. */}
+          <div className="v3fs-scrd-canvaswrap">
+            <div className="v3fs-scrd-states" role="tablist" aria-label="Screen state">
+              {SCRD_STATES.map((s) => (
+                <button key={s} type="button" role="tab" aria-selected={activeState === s}
+                  className={`v3fs-scrd-state${activeState === s ? " on" : ""}`} onClick={() => setActiveState(s)}>{s}</button>
+              ))}
+            </div>
+            <div className="v3fs-scrd-canvas" onClick={() => setSel(null)}>
+              <div className="v3fs-scrd-device">
+                <div className="v3fs-scrd-device-bar" aria-hidden="true"><i /><i /><i /><span>{name.trim() || "Untitled screen"}</span></div>
+                {stateNote ? <div className={`v3fs-scrd-statebanner ${activeState}`}>{activeState}: {stateNote}</div> : null}
+                {WF_REGIONS.map((region) => {
+                  const blocks = regions[region] ?? [];
+                  return (
+                    <div key={region} className={`v3fs-scrd-cregion ${region}`}
+                      onDragOver={(e) => { if (e.dataTransfer.types.includes("text/scrd-kind") || drag) e.preventDefault(); }}
+                      onDrop={(e) => {
+                        e.preventDefault(); e.stopPropagation();
+                        const kind = e.dataTransfer.getData("text/scrd-kind");
+                        if (kind) addBlock(region, kind);
+                        else if (drag) moveBlock(drag, region, blocks.length);
+                        setDrag(null);
+                      }}>
+                      <div className="v3fs-scrd-cregion-h">
+                        <span>{region}</span>
+                        <button type="button" className="v3fs-scrd-cadd" aria-label={`Add block to ${region}`}
+                          onClick={(e) => { e.stopPropagation(); addBlock(region, "detail"); }}>＋</button>
+                      </div>
+                      {blocks.length ? blocks.map((block, i) => (
+                        <button key={i} type="button" draggable
+                          className={`v3fs-scrd-cblock ${block.kind}${sel?.region === region && sel.index === i ? " sel" : ""}`}
+                          onClick={(e) => { e.stopPropagation(); setSel({ region, index: i }); }}
+                          onDragStart={(e) => { setDrag({ region, index: i }); e.dataTransfer.effectAllowed = "move"; }}
+                          onDragEnd={() => setDrag(null)}
+                          onDragOver={(e) => { if (drag) { e.preventDefault(); e.stopPropagation(); } }}
+                          onDrop={(e) => { if (drag) { e.preventDefault(); e.stopPropagation(); moveBlock(drag, region, i); setDrag(null); } }}>
+                          <span className="v3fs-scrd-cblock-ic" aria-hidden="true">{BLOCK_GLYPH[block.kind] ?? "¶"}</span>
+                          <span className="v3fs-scrd-cblock-l">{block.label || block.kind}</span>
+                          {block.entity ? <em className="v3fs-scrd-cblock-e">{block.entity}</em> : null}
+                        </button>
+                      )) : <div className="v3fs-scrd-cempty">drop a block here</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* INSPECTOR — block properties when a block is selected, else the screen's. */}
+          <div className="v3fs-scrd-inspect">
+            {selBlock ? (
+              <>
+                <div className="v3fs-scrd-ihead">
+                  <b className="v3fs-scrd-pl">Block</b>
+                  <button type="button" className="v3fs-scrd-idel" onClick={() => removeBlock(sel!.region, sel!.index)}>Delete</button>
+                </div>
+                <label className="v3fs-stu-field">
+                  <span className="v3fs-stu-fl">Kind</span>
+                  <select value={selBlock.kind} onChange={(e) => setBlock(sel!.region, sel!.index, { kind: e.target.value })}>
+                    {WF_BLOCK_KINDS.map((k) => <option key={k} value={k}>{k}</option>)}
+                  </select>
+                </label>
+                <TextField label="Label" value={selBlock.label} onChange={(v) => setBlock(sel!.region, sel!.index, { label: v })} placeholder="what this block shows" />
+                <label className="v3fs-stu-field">
+                  <span className="v3fs-stu-fl">Region</span>
+                  <select value={sel!.region} onChange={(e) => moveBlock({ region: sel!.region, index: sel!.index }, e.target.value, (regions[e.target.value] ?? []).length)}>
+                    {WF_REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </label>
+                <label className="v3fs-stu-field">
+                  <span className="v3fs-stu-fl">Entity</span>
+                  <select value={selBlock.entity} onChange={(e) => setBlock(sel!.region, sel!.index, { entity: e.target.value, fields: [] })}>
+                    <option value="">— none —</option>
+                    {ontology.map((e) => <option key={e.name} value={e.name}>{e.name}</option>)}
+                    {selBlock.entity && !ontology.some((e) => e.name === selBlock.entity) ? <option value={selBlock.entity}>{selBlock.entity}</option> : null}
+                  </select>
+                </label>
+                {selEntity && selEntity.attributes.length ? (
+                  <div className="v3fs-scrd-fields">
+                    <span className="v3fs-stu-fl">Fields</span>
+                    {selEntity.attributes.map((f) => {
+                      const on = selBlock.fields.includes(f);
+                      return (
+                        <label key={f} className="v3fs-scrd-fld">
+                          <input type="checkbox" checked={on} onChange={() => setBlock(sel!.region, sel!.index, { fields: on ? selBlock.fields.filter((x) => x !== f) : [...selBlock.fields, f] })} />
+                          <span>{f}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <ChipsField label="Fields" values={selBlock.fields} onChange={(v) => setBlock(sel!.region, sel!.index, { fields: v })} placeholder="field names" />
+                )}
+              </>
+            ) : (
+              <>
+                <b className="v3fs-scrd-pl">Screen</b>
+                <TextArea label="Purpose" rows={2} value={purpose} onChange={setPurpose} placeholder="one sentence — what this screen is for" />
+                <div className="v3fs-stu-grid2">
+                  <TextField label="Journey" value={journey} onChange={setJourney} />
+                  <TextField label="Stage" value={stage} onChange={setStage} />
+                </div>
+                <ChipsField label="Personas" values={personas} onChange={setPersonas} />
+                <ChipsField label="Entities shown" values={entities} onChange={setEntities} />
+                <StringListEditor label="Primary actions" values={primaryActions} onChange={setPrimaryActions} addLabel="action" />
+                <label className="v3fs-stu-field">
+                  <span className="v3fs-stu-fl">Note for “{activeState}” state</span>
+                  <textarea rows={2} value={stateNote} placeholder={`what the ${activeState} state shows`}
+                    onChange={(e) => setStates((prev) => ({ ...prev, [activeState]: e.target.value }))} />
+                </label>
+                <div className="v3fs-scrd-bind">
+                  <span className="v3fs-stu-fl">Bound workflow steps <em className="v3fs-scrd-req">— at least one</em></span>
+                  {future && future.workflows.length ? future.workflows.map((w) => {
+                    const cov = coverageFor(w);
+                    return (
+                      <div key={w.name} className="v3fs-scrd-wf">
+                        <div className="v3fs-scrd-wf-n">{w.name}
+                          <em className={`v3fs-scrd-cov${cov >= w.steps.length ? " full" : ""}`}>{cov}/{w.steps.length}</em>
+                        </div>
+                        {w.steps.map((step, si) => (
+                          <label key={si} className="v3fs-scrd-step">
+                            <input type="checkbox" checked={isBound(w.name, step.action)} onChange={() => toggleBind(w.name, step.action)} />
+                            <span>{step.action}</span>
+                          </label>
+                        ))}
+                      </div>
+                    );
+                  }) : <div className="v3fs-empty">No workflows yet — generate the Current-State Atlas in Listen.</div>}
+                </div>
+              </>
+            )}
           </div>
         </div>
+
         <div className="v3fs-scrd-foot">
           <span className={`v3fs-scrd-hint${bindings.length ? "" : " warn"}`}>
             {bindings.length ? `Bound to ${bindings.length} workflow step${bindings.length === 1 ? "" : "s"}` : "⚠ Not bound to any workflow step yet"}
           </span>
           <div className="v3fs-scrd-actions">
-            <button type="button" className="v3fs-btn" onClick={onClose}>Cancel</button>
-            <button type="button" className="v3fs-btn pri" disabled={!name.trim()} onClick={() => onSave(assemble())}>Save screen</button>
+            <button type="button" className="v3fs-btn" onClick={tryClose}>Cancel</button>
+            <button type="button" className="v3fs-btn pri" disabled={!name.trim()} onClick={save}>Save screen</button>
           </div>
         </div>
       </div>
     </div>
   );
+}
+
+/** True when `s` (the i-th of allScreens) is the same screen we're editing —
+ *  match by id when present, else by object identity / name, so coverage never
+ *  double-counts the draft. */
+function editMatches(s: Record<string, unknown>, editing: Record<string, unknown>, _i: number): boolean {
+  const eid = asText(editing.id), sid = asText(s.id);
+  if (eid && sid) return eid === sid;
+  return s === editing || (!!asText(editing.name) && asText(s.name) === asText(editing.name));
 }
 
 const BLOCK_GLYPH: Record<string, string> = {
@@ -506,6 +693,7 @@ export default function ExperienceDesignStudio({ doc, onChange, program }: Studi
         <ScreenDesigner
           screen={editScreen === "new" ? emptyScreen() : (screens[editScreen] ?? emptyScreen())}
           program={program}
+          allScreens={screens}
           onSave={saveScreen}
           onClose={() => setEditScreen(null)} />
       ) : null}

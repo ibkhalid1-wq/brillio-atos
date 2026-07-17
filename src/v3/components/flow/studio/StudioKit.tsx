@@ -225,4 +225,12 @@ export interface StudioProps {
   onRefinePrototype?: (instruction: string) => Promise<void> | void;
   /** This artifact is regenerating — the studio's command bar shows progress. */
   refining?: boolean;
+  /** Operator gap→stakeholder redirects for this movement (the Gaps table's
+   *  second column). Present even when the document is read-only: the gap TEXT
+   *  is derived, but WHO it's asked of is an operator judgement kept as an
+   *  overlay. Keyed by the gap's bare question (gapRouteKey). */
+  gapRoutes?: Record<string, string>;
+  /** Redirect one gap to a stakeholder/role (attested `_gapRoutes` write); ""
+   *  clears the addressee (movement-wide). Absent ⇒ the Gaps table is read-only. */
+  onRouteGap?: (gap: string, who: string) => void | Promise<void>;
 }

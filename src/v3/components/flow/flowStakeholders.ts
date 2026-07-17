@@ -797,6 +797,51 @@ export function operatorAsksFor(program: ProgramSummary, movementId: string, who
 }
 
 /**
+ * The stable key a gap-redirect is stored under — the gap's QUESTION, addressee
+ * stripped and normalised. Keying on the bare question means changing WHO a gap
+ * is asked of doesn't change its identity, and a regenerated document whose gap
+ * keeps the same wording keeps its operator redirect.
+ */
+export function gapRouteKey(gap: string): string {
+  return stripAskAddressee(gap).replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+/**
+ * Gap → stakeholder/role redirects the OPERATOR set on a derived artifact's
+ * gaps (ontology, atlas). The document itself is read-only — its gaps arrive by
+ * resynthesis — but WHO a gap is asked of is an operator judgement, so it lives
+ * as an overlay under the movement's inputs (`_gapRoutes`, underscore ⇒
+ * fingerprint-safe). Keyed by gapRouteKey; the value is the redirect target, or
+ * "" to make the gap movement-wide (no named addressee).
+ */
+export function readGapRoutes(program: ProgramSummary, movementId: string): Record<string, string> {
+  const raw = readMovementInputs(program, movementId)._gapRoutes;
+  if (typeof raw !== "string" || !raw.trim()) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const out: Record<string, string> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (typeof value === "string") out[key.trim().toLowerCase()] = value.trim();
+    }
+    return out;
+  } catch { return {}; }
+}
+
+/**
+ * A gap rewritten to honour the operator's redirect — the addressee replaced
+ * with (or cleared to) the stakeholder/role the overlay names. With no override
+ * the gap is returned verbatim, so the generator's own "Ask the <who>:" address
+ * stands.
+ */
+export function applyGapRoute(gap: string, routes: Record<string, string>): string {
+  const who = routes[gapRouteKey(gap)];
+  if (who === undefined) return gap;
+  const text = stripAskAddressee(gap);
+  return who ? `Ask the ${who}: ${text}` : text;
+}
+
+/**
  * People a respondent named as "who else should we speak with?" on their link —
  * stored fingerprint-safe under Listen's `_suggestedVoices`. Surfaced on the
  * People page for the operator to ADD (→ a real collection card) or dismiss;

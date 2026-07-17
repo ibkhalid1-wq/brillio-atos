@@ -13,11 +13,12 @@ import {
 import { FLOATING_EDGE_TYPES, layeredPositions } from "./graphKit";
 import "@xyflow/react/dist/style.css";
 import {
-  Section, TextField, TextArea, SelectField, ChipsField, StringListEditor, TableEditor,
+  Section, TextField, TextArea, SelectField, ChipsField, TableEditor,
   asArray, asRecord, asText, asStrings, useStudioLocked, type StudioProps,
 } from "./StudioKit";
 
 import { ONTOLOGY_CARDINALITIES } from "@/v3/components/flow/flowOntologyConstraints";
+import { GapRoutingEditor } from "./GapRoutingEditor";
 
 type Selection = { kind: "entity"; id: string } | { kind: "relation"; index: number } | null;
 
@@ -34,7 +35,7 @@ function seedPositions(ids: string[], relations: Array<Record<string, unknown>>)
   return layeredPositions(ids, relations.map((relation) => ({ from: String(relation.from ?? ""), to: String(relation.to ?? "") })));
 }
 
-export default function OntologyStudio({ doc, onChange }: StudioProps) {
+export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRouteGap }: StudioProps) {
   const locked = useStudioLocked();
   const entities = useMemo(() => asArray(doc.entities).map(asRecord), [doc.entities]);
   const relations = useMemo(() => asArray(doc.relations).map(asRecord), [doc.relations]);
@@ -305,34 +306,12 @@ export default function OntologyStudio({ doc, onChange }: StudioProps) {
             emptyHint="No business events captured yet."
           />
         </Section>
-        <Section label="Ambiguities" hint="terms teams use differently">
-          <TableEditor
-            columns={[
-              { key: "term", label: "Term" },
-              { key: "resolution", label: "Resolution", grow: 2 },
-            ]}
-            rows={asArray(doc.ambiguities).map(asRecord)}
-            onChange={(next) => patch({ ambiguities: next })}
-            addLabel="Add ambiguity"
-            emptyHint="No ambiguities logged."
-          />
-        </Section>
-        <Section label="Standards alignment" hint="entities mapped to public vocabularies — adopted via the Inbox">
-          <TableEditor
-            columns={[
-              { key: "entity", label: "Entity" },
-              { key: "standard", label: "Standard URI", grow: 2 },
-              { key: "vocabulary", label: "Vocabulary" },
-              { key: "relation", label: "Relation" },
-            ]}
-            rows={asArray(doc.standardAlignment).map(asRecord)}
-            onChange={(next) => patch({ standardAlignment: next })}
-            addLabel="Add mapping"
-            emptyHint="No standard mappings adopted yet."
-          />
-        </Section>
-        <Section label="Gaps" hint="entities referenced but never defined">
-          <StringListEditor values={asStrings(doc.gaps)} onChange={(next) => patch({ gaps: next })} addLabel="Add gap" />
+        {/* Ambiguities (duplicated the open Gaps) and Standards alignment are
+            hidden from the studio — the Gaps table below is the one place open
+            questions get triaged and redirected. */}
+        <Section label="Gaps" hint="entities referenced but never defined — redirect each to the stakeholder or role who can close it">
+          <GapRoutingEditor values={asStrings(doc.gaps)} onChange={(next) => patch({ gaps: next })} program={program}
+            movementId="listen" gapRoutes={gapRoutes} onRoute={onRouteGap} addLabel="Add gap" emptyHint="No gaps." />
         </Section>
       </div>
     </div>

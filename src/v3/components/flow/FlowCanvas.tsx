@@ -151,10 +151,6 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
   // The active stage per movement — falls back to the movement's lead stage
   // until the operator picks one.
   const [movementTab, setMovementTab] = useState<Record<string, MovementTab>>({});
-  // Area filter per movement: the area cards on the phase home (Listen cockpit /
-  // Prototype orchestration board) act as a filter for everything below —
-  // clicking a card toggles its area into the set; an empty set shows all areas.
-  const [areaFilter, setAreaFilter] = useState<Record<string, string[]>>({});
   // [ and ] walk the loop's stages backward/forward — keyboard-first, and the
   // bracket keys don't collide with the shell's 1–5 view shortcuts.
   useEffect(() => {
@@ -452,15 +448,9 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
           if (t === "gate") { setGateModalFor(movement.id); return; }
           setMovementTab((prev) => ({ ...prev, [movement.id]: t }));
         };
-        // The phase-home area cards act as a filter for everything below. The
-        // selection is a set; toggling a card adds/removes its area; clearing
-        // every card (empty set) shows all areas again.
-        const selAreas = areaFilter[movement.id] ?? [];
-        const toggleArea = (area: string) => setAreaFilter((prev) => {
-          const cur = prev[movement.id] ?? [];
-          const next = cur.includes(area) ? cur.filter((a) => a !== area) : [...cur, area];
-          return { ...prev, [movement.id]: next };
-        });
+        // Area filtering was removed with the phase-home filter cards — every
+        // per-area surface below now shows all areas (empty selection).
+        const selAreas: string[] = [];
         const gaugePct = blockingChecks.length ? Math.round((100 * sumChecksDone) / blockingChecks.length) : (readiness.tone === "green" ? 100 : 0);
         // Stage chips read as a sentence — glyph + meaning per stage ("● 3
         // waiting → ⟳ 2 stale → ◔ 8/11"), so the bar IS the loop's state.
@@ -576,9 +566,9 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
               ) : null}
               {(movement.id === "envision" || movement.id === "show") && tabKey === "collect" ? (
                 <section className="v3fs-protohome" aria-label="Prototype orchestration">
-                  <ProductOwnerCockpit program={program} selected={selAreas} onToggleArea={toggleArea} />
+                  <ProductOwnerCockpit program={program} />
                   {movement.id === "envision" ? (
-                    <EnvisionCockpit program={program} areaFilter={selAreas} onSaveInputs={onSaveInputs} onOpenArtifact={(id) => goTab(`art:${id}` as MovementTab)} />
+                    <EnvisionCockpit program={program} onSaveInputs={onSaveInputs} onOpenArtifact={(id) => goTab(`art:${id}` as MovementTab)} />
                   ) : null}
                   {movement.id === "show" ? (
                     <ShowCockpit program={program} onOpenDesign={() => { setActive("envision"); setMovementTab((prev) => ({ ...prev, envision: "art:prototype-build" as MovementTab })); }} />
@@ -592,7 +582,7 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
                   detail lives on the tabs below. */}
               {movement.id === "listen" ? (
                 <section className="v3fs-protohome" aria-label="Listen orchestration">
-                  <ListenCockpit program={program} selected={selAreas} onToggleArea={toggleArea} />
+                  <ListenCockpit program={program} />
                 </section>
               ) : null}
               {/* The stage bar draws the loop left to right — Collect → Paper →

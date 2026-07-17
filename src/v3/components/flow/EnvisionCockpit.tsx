@@ -11,17 +11,12 @@ import { useMemo, useState } from "react";
 import { projectFutureState, type FutureState } from "@/v3/components/flow/flowFutureState";
 import { loopState, changeRequests, type ChangeRequest } from "@/v3/components/flow/flowLoop";
 import { readMovementInputs } from "@/v3/components/flow/flowShellData";
-import { DESIGN_TEAM } from "@/v3/components/flow/ProductOwnerCockpit";
 import type { ProgramSummary } from "@/new/types";
 
 type ChangeRoute = "design" | "listen" | "frame";
 
-export default function EnvisionCockpit({ program, areaFilter, onSaveInputs, onOpenArtifact }: {
+export default function EnvisionCockpit({ program, onSaveInputs, onOpenArtifact }: {
   program: ProgramSummary;
-  /** When provided, the phase-home area board controls the area filter — the
-   * cockpit scopes its future-state to these areas (empty = all) and hides its
-   * own "Filter by area" chip row so there's one filter, not two. */
-  areaFilter?: string[];
   onSaveInputs?: (movementId: string, patch: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
   /** Open one of the Design workspaces (Architecture · Experience · Prototype). */
   onOpenArtifact?: (artifactId: string) => void;
@@ -80,10 +75,9 @@ export default function EnvisionCockpit({ program, areaFilter, onSaveInputs, onO
   const effectiveOpen = openAct ?? (fs.direction.chosen ? "" : "Direction");
   const toggleAct = (label: string) => setOpenAct(effectiveOpen === label ? "" : label);
 
-  // The DIRECTION act (architecture strategy) is a SOLUTION-level decision owned
-  // by the Design team, not per-area work — so it shows ONLY when the Design-team
-  // tile is selected (never in the unfiltered or business-area views).
-  const showDirection = (areaFilter ?? []).includes(DESIGN_TEAM);
+  // The DIRECTION act (architecture strategy) is a SOLUTION-level decision — it
+  // shows whenever there are candidate directions to choose between.
+  const showDirection = fs.direction.candidates.length > 0;
 
   const recordDirection = async () => {
     if (!onSaveInputs || !pick) return;
